@@ -48,19 +48,18 @@ fn watch_demo_replays_real_hook_decisions() {
     let t = text(&o);
     assert!(o.status.success(), "{t}");
     for s in [
-        "adage watch · harbor-dispatch",
+        "adage watch  harbor-dispatch",
         "demo",
-        "→ lookup-incident [F]",
-        "withheld lookup-incident [F]",
+        "→ ◠ lookup-incident          FIRE",
+        "○ would fire lookup-incident (withheld)",
         "✓ followed lookup-incident",
         "✗ ignored lookup-incident",
-        "→ dead-end-npm-test [I]",
-        "■ stop-request",
-        "✓ met codegen-after-registry",
-        "(control)",
-        "conditioned harbor-dispatch/incidents: read-linked-files prime→fire",
-        "+ hooks cc",
-        "+ auto-learn on",
+        "→ ◠ dead-end-npm-test        INHIBIT",
+        "■ finish line: asked the agent to continue",
+        "✓ finish line met codegen-after-registry",
+        "read-linked-files         prime → fire",
+        "hooks claude",
+        "auto-condition",
     ] {
         assert!(t.contains(s), "the demo frame lacks {s:?}:\n{t}");
     }
@@ -75,7 +74,9 @@ fn watch_once_on_a_fresh_machine_and_doctor_watch_alias() {
     let t = text(&o);
     assert!(o.status.success(), "{t}");
     assert!(
-        t.contains("adage watch · work") && t.contains("No hook activity yet") && t.contains("Nothing conditioned yet"),
+        t.contains("adage watch  work")
+            && t.contains("No traces yet for work")
+            && t.contains("Nothing conditioned yet"),
         "{t}"
     );
     assert_eq!(t.lines().count(), 20);
@@ -87,7 +88,7 @@ fn watch_once_on_a_fresh_machine_and_doctor_watch_alias() {
         assert!(!o.status.success() && text(&o).contains("needs a terminal"), "{}", text(&o));
     }
     let o = run(&root, &root.join("work"), &["watch", "--bogus"]);
-    assert!(!o.status.success() && text(&o).contains("usage: adage watch"));
+    assert!(!o.status.success() && text(&o).contains("unexpected argument '--bogus'"), "{}", text(&o));
 }
 
 #[test]
@@ -95,12 +96,12 @@ fn bare_adage_prints_the_status_card_and_help_prints_usage() {
     let (_d, root) = world();
     let o = run(&root, &root, &[]);
     let t = text(&o);
-    assert!(o.status.success() && t.starts_with("adage ") && !t.contains("usage: adage"), "{t}");
+    assert!(o.status.success() && t.starts_with("adage ") && !t.contains("Usage: adage"), "{t}");
     assert!(t.contains("adage doctor"), "{t}");
     let o = run(&root, &root, &["--help"]);
     let t = text(&o);
     assert!(
-        o.status.success() && t.contains("usage: adage") && t.contains("watch") && t.contains("status card"),
+        o.status.success() && t.contains("Usage: adage") && t.contains("watch") && t.contains("status card"),
         "{t}"
     );
 }
@@ -114,7 +115,7 @@ fn init_without_a_terminal_keeps_the_printed_report() {
         .output()
         .unwrap();
     let t = text(&o);
-    assert!(o.status.success() && t.contains("1. Harnesses") && t.contains("4. Sense"), "{t}");
+    assert!(o.status.success() && t.contains("1  Harnesses") && t.contains("4  Sense your traces"), "{t}");
     let o = run(&root, &root.join("work"), &["init", "--nope"]);
-    assert!(!o.status.success() && text(&o).contains("[--yes | --print]"));
+    assert!(!o.status.success() && text(&o).contains("unexpected argument '--nope'"), "{}", text(&o));
 }

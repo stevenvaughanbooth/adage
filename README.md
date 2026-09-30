@@ -123,15 +123,15 @@ on real and generated repositories include:
 
 | Reflex | Learned from | At runtime |
 | --- | --- | --- |
-| **Look the item up** | Agents passing a value from the prompt to the same command; the value's type (`W-2042`, `#482`, a UUID) is learned from the values themselves | 🟢/🟡 "Work item details are looked up with: `python3 scripts/wi-lookup W-2042`" |
-| **Read what it lists** | Agents reading, one turn at a time, the files a lookup listed | 🟡 "That result lists these files … read them together in one turn" |
-| **Avoid a dead end** | A command that fails with the same signature, followed by one that works | 🔴 "Running `python3 -m unittest` fails (…). Use this instead: `make test`" |
-| **Regenerate after an edit** | A regenerate step that follows edits to a path pattern | 🟢 after the edit, and once at Stop if still unmet: "changes to `schema/*.json` must be followed by `make gen`" |
-| **Steps in order** | Commands run one after another after edits to a path pattern | 🟢/🟡 "changes to `registry/*.csv` are followed by these steps, in order: `make gen`, `make check`" |
-| **Check the part you edited** | A command naming the directory an edit touched | 🟢/🟡 after an edit under `packages/ledger/`: `make -C packages/ledger check` |
-| **Run the repository's checks** | The checks agents run after editing a kind of file, in the repo-wide form some of them ran (their `cargo test -p <crate>` and `cargo test --workspace --locked -j4` runs are one `cargo test --workspace --locked`) | 🟡 after an edit to `crates/**/*.rs`: `cargo clippy --workspace --all-targets --locked -- -D warnings`, and `cargo fmt --all` owed as a finish line |
-| **Sync the environment** | A dependency step after a dependency file changes | 🟡 after review, once `requirements.txt` changes: `make deps then make check` |
-| **Start like others did** | Prompts that mean the same thing whose sessions ran the same command first | 🟢/🟡 "Requests like this one usually start by running: `make test`" (the embedding model is bundled) |
+| **Look the item up** | Agents passing a value from the prompt to the same command; the value's type (`W-2042`, `#482`, a UUID) is learned from the values themselves | fire/prime: "Work item details are looked up with: `python3 scripts/wi-lookup W-2042`" |
+| **Read what it lists** | Agents reading, one turn at a time, the files a lookup listed | prime: "That result lists these files … read them together in one turn" |
+| **Avoid a dead end** | A command that fails with the same signature, followed by one that works | inhibit: "Running `python3 -m unittest` fails (…). Use this instead: `make test`" |
+| **Regenerate after an edit** | A regenerate step that follows edits to a path pattern | fire: after the edit, and once at Stop if still unmet: "changes to `schema/*.json` must be followed by `make gen`" |
+| **Steps in order** | Commands run one after another after edits to a path pattern | fire/prime: "changes to `registry/*.csv` are followed by these steps, in order: `make gen`, `make check`" |
+| **Check the part you edited** | A command naming the directory an edit touched | fire/prime: after an edit under `packages/ledger/`: `make -C packages/ledger check` |
+| **Run the repository's checks** | The checks agents run after editing a kind of file, in the repo-wide form some of them ran (their `cargo test -p <crate>` and `cargo test --workspace --locked -j4` runs are one `cargo test --workspace --locked`) | prime: after an edit to `crates/**/*.rs`: `cargo clippy --workspace --all-targets --locked -- -D warnings`, and `cargo fmt --all` owed as a finish line |
+| **Sync the environment** | A dependency step after a dependency file changes | prime: after review, once `requirements.txt` changes: `make deps then make check` |
+| **Start like others did** | Prompts that mean the same thing whose sessions ran the same command first | fire/prime: "Requests like this one usually start by running: `make test`" (the embedding model is bundled) |
 
 Every reflex carries its evidence (distinct traces, Wilson lower bound), an effect class that caps
 how strongly it may be directed, and typed slot contracts: a value from the prompt reaches a directive
@@ -333,11 +333,12 @@ line what to install.
 `adage --help` lists every command; `adage <command> --help` its options.
 
 ```bash
-adage init             # guided setup at a terminal: hooks, model, first conditioning, auto-conditioning
+adage init             # guided setup at a terminal: hooks, model, first conditioning, live conditioning
 adage sense            # read-only: which reflexes your traces would form, per repository
 adage condition        # form them: read your agents' traces, bind instincts, compile the index
 adage watch            # in a split pane: Adage's health, hook activity and conditioning, live
-adage map              # the map of your reflexes at http://127.0.0.1:8765 (read-only, loopback only)
+adage map              # the map of your reflexes in the browser (read-only, loopback only)
+adage ui               # the full terminal app: reflexes, map, health, settings
 adage doctor           # check binary, data dir, index, tracks, model, hooks, kill switches
 adage review           # reflexes waiting for your decision, with evidence and the exact directive text
 ```
@@ -362,7 +363,8 @@ prompts shown only as short redacted snippets. With no history yet, plain `adage
 inside a repository binds available instincts from its files; `--instincts-only` requests that
 explicitly. `doctor` exits
 non-zero only when a check fails. From a source checkout, `cargo build --release --locked -p
-adage-cli -p adage-exec -p adage-train` builds all three into `target/release/`.
+adage-cli -p adage-exec -p adage-train` builds all three into `target/release/`. Every command
+ends with the next one to run; `--plain` drops colour and glyphs, and `NO_COLOR` is honoured.
 
 Manual `sense` and `condition` discover existing Claude Code history (`CLAUDE_CONFIG_DIR/projects`,
 else `~/.claude/projects`), Codex history (`CODEX_HOME/sessions`, else `~/.codex/sessions`), and
@@ -383,42 +385,53 @@ execution policy and local approval described in [execution](docs/execution.md).
 60×20 and grows with the pane:
 
 ```text
- adage watch · harbor-dispatch · gen 44876069                         LIVE
-+ adage 0.1.0  + hooks cc  + 4 reflexes  + auto-learn on  - no model
-+ fail-open 0
- activity · harbor-dispatch ────────────────────────────────────────────
-12:04:00 ●d76f0f cc prompt  → lookup-incident [F]
-12:04:01 ◌19b2cf cc prompt  withheld lookup-incident [F]
-12:04:02 ●d76f0f cc tools   → read-linked-files [P]  ✓ followed lookup-i
-12:04:05 ●bc0c7d cc tools   ✗ ignored lookup-incident
-12:04:06 ●bc0c7d cc failure → dead-end-npm-test [I]
-12:04:07 ●bc0c7d cc stop    ■ stop-request
-12:04:08 ●bc0c7d cc tools   ✓ met codegen-after-registry
- conditioning ──────────────────────────────────────────────────────────
-12:04 auto-learn: 27/28 sessions used, 730ms, 2 changes, gen 44876069
-12:04   conditioned incidents: read-linked-files prime→fire (13 of 17 s
- q quit · p pause · f all repos · v hide quiet · ? help
+ adage watch  harbor-dispatch · demo           LIVE  FIRE 4  PRIME 1  INHIBIT 1
+─ now ──────────────────────────────────────────────────────────────────────────
+ 04:22:53 bc0c7d cc  tools    ✗ ignored lookup-incident
+ 04:22:53 19b2cf cc  stop     ○ would ask the agent to continue (withheld)
+ 04:22:53 d76f0f cc  tools    → ◠ codegen-after-regist… FIRE       npm run code…
+ 04:22:53 bc0c7d cc  failure  → ◠ dead-end-npm-test     INHIBIT    npm run check
+ 04:22:53 d76f0f cc  tools    ✓ finish line met codegen-after-registry
+ 04:22:53 bc0c7d cc  stop     ■ finish line: asked the agent to continue
+─ conditioning ─────────────────────────────────────────────────────────────────
+ ◆ 04:22 auto-condition · 27/28 traces used · 0.73 s · 2 changes
+   ◠ read-linked-files   prime → fire       13/17 · lb 0.53
+   ◠ lookup-incident     evidence           24/25 → 25/26
+   ○ 4 reflexes wait for review · adage review
+─ health ───────────────────────────────────────────────────────────────────────
+ + hooks claude    + 4 reflexes    + auto-condition
+ + embedding model bundled    + no fail-open errors
+────────────────────────────────────────────────────────────────────────────────
+ p pause · f scope · / filter · enter inspect · m open map · ? keys      q quit
 ```
 
-- **Top:** health lamps, re-checked every few seconds: the binary, hooks that run for this
-  repository, its reflexes in the index, auto-learn, the embedding model, recent fail-open errors.
-- **Middle:** every hook call as it happens, from the session spools: time, session, harness, event,
-  and what Adage did: a directive (→, coloured by strength), withheld in a control session (◌),
-  followed ✓ or ignored ✗, a finish line met, or a stop request.
-- **Bottom:** what conditioning changed, from `learn.log`, manual or automatic; its title says
-  *conditioning now…* while a background learner holds this repository's lock.
+(`NO_COLOR` output, as above; in colour the strengths are lamps.)
 
-Keys: `q` quits, `p` pauses, `f` switches between this repository and all of them, `v` hides events
-where Adage said nothing, `↑`/`↓` scroll, `?` shows help. `NO_COLOR` is honoured: strengths are then
-spelled out by initial (`[F]` fire, `[P]` prime, `[I]` inhibit), as above.
+- **Now:** every hook call as it happens, from the trace spools: time, session, harness, event,
+  and what Adage did: a directive (→, with its strength: fire, prime or inhibit), withheld in a
+  control session (○), followed ✓ or ignored ✗, a finish line met, or a stop request. `Enter`
+  inspects the selected row: the exact directive text and its evidence.
+- **Conditioning:** what conditioning changed, from `learn.log`, manual or automatic, and how many
+  reflexes wait for your review.
+- **Health:** lamps re-checked every few seconds: hooks that run for this repository, its reflexes
+  in the index, live conditioning (`auto-condition`), the embedding model, recent fail-open
+  errors; each problem names the command that fixes it.
 
-`adage ui` is the full-screen app, with four tabs:
+Keys: `q` quits, `p` pauses, `f` switches between this repository and all of them, `/` filters by
+trace, reflex or command, `Enter` inspects, `m` shows how to open the map, `v` hides events where
+Adage said nothing, `↑`/`↓` scroll (`G` back to the newest), `?` lists every key. `NO_COLOR` is
+honoured: strengths are then spelled out (`FIRE`, `PRIME`, `INHIBIT`), and `--plain` drops glyphs
+too.
+
+`adage ui` is the full-screen app (plain `adage` prints the status card above). `:` or `ctrl-k`
+opens a command palette over every action and reflex; `?` lists the keys. Its tabs:
 
 | Tab | What it does |
 | --- | --- |
 | **Live** | the watch view, larger |
-| **Reflexes** | every installed reflex by track: strength, trigger and step, evidence (traces, Wilson lower bound), live counts, and the exact directive text. Review decisions (`a`pprove, `e`xtinguish, `w`eaken, `s`trengthen, pi`n`, dismiss `x`) ask first, then run exactly what `adage review` runs, with the same ceilings |
-| **Health** | every doctor check, live, including live conditioning's. `Enter` fixes the selected one where a key can: register hooks (confirming the exact file and diff), fetch the model (with progress), condition this repository now (what a background learner runs: `adage condition --auto --repo-root`), turn auto-learn on, open the settings, or open the fail-open log |
+| **Reflexes** | every instinct and reflex by track, with a fuzzy `/` filter: strength, stage, trigger and step, evidence (traces, Wilson lower bound), live counts, and the exact directive text. Review decisions (`a`pprove, `e`xtinguish, `w`eaken, `s`trengthen, pi`n`, dismiss `x`) ask first, then run exactly what `adage review` runs, with the same ceilings, and show the equivalent command |
+| **Map** | stimulus → reflex → response as a layered graph in the terminal; `adage map` opens the same in the browser |
+| **Health** | every doctor check, live, including live conditioning's. `Enter` fixes the selected one where a key can: register hooks (confirming the exact file and diff), fetch the model (with progress), condition this repository now (what a background learner runs: `adage condition --auto --repo-root`), turn live conditioning on, open the settings, or open the fail-open log |
 | **Settings** | every `adage config` key with its value and where it came from (default, file, or environment); `Enter` edits, `Space` toggles, and `adage config set`'s validation and agent-session refusal apply |
 
 `adage watch --demo` and `adage ui --demo` replay a small scripted scenario (three sessions of the
@@ -479,9 +492,9 @@ per repository. The file contract for tools that follow it live is
 
 ```bash
 adage config                                  # every key, its value, and where it came from
-adage config set learn.auto false             # stop learning automatically (ADAGE_AUTO_LEARN=0 also works)
+adage config set learn.auto false             # stop live conditioning (ADAGE_AUTO_LEARN=0 also works)
 adage config set learn.thresholds demo        # lower evidence bars, for small histories
-adage config set learn.min_interval_secs 300  # learn each repository at most every 5 minutes
+adage config set learn.min_interval_secs 300  # condition each repository at most every 5 minutes
 ```
 
 | Key | Default | |
@@ -555,8 +568,8 @@ python3 demo/run.py all                  # train (no Adage) → condition → he
 python3 demo/dashboard/serve.py          # live dashboard at http://127.0.0.1:8765
 ```
 
-The map page lives with the binary (`crates/adage-cli/assets/brain.html`); `adage map` serves it
-without the Python server.
+For your own repositories, `adage map` opens the live map of instincts and reflexes in the
+browser; it is served by the binary, no Python needed.
 
 See [demo/SANDBOX.md](demo/SANDBOX.md). `python3 demo/sandbox/selfcheck.py` proves every work item
 fails untouched and passes with its reference solution.
@@ -581,6 +594,11 @@ fails untouched and passes with its reference solution.
 | `crates/adage-eval` | `adage eval`: offline replay of recorded sessions through the runtime, scored against what agents did; the L0 bench; safety oracle; property tests |
 | `crates/adage-cli` | The `adage` binary |
 | `crates/adage-sim` | Harness simulator: seeded mock histories (`sim/fixtures/`) and native hook payloads for Claude Code, OpenCode, and Codex |
+| `crates/adage-term` | The terminal design system: tokens, capability detection, theme, glyphs and the output grammar every command prints through |
+| `xtask` | `cargo xtask tokens [--check]`: generates the terminal palette and the web map's CSS variables from the design tokens |
+| `design/` | The design tokens (`design/tokens/adage.tokens.json`, W3C DTCG), the single source for every surface ([style guide](docs/design/style.md)) |
+| `web/map` | The map web app `adage map` serves, embedded in the binary |
+| `web/site` | The public website |
 | `plugin/claude-code` | The Claude Code plugin |
 | `plugin/claude-code-exec` | The `adage-exec` plugin, which serves hooks once `adage delegate on` |
 | `plugin/opencode` | The OpenCode plugin (installed by `adage install opencode`) |
@@ -600,7 +618,7 @@ documentation and source and verified end to end by the harness simulator (condi
 harness's mock history, replay a held-out session through its native hooks in both arms), but not
 yet run against a live installation — see [docs/harnesses.md](docs/harnesses.md#verification). Reflexes travel
 as signed packs (`adage share` / `adage add`) and are reviewed with `adage review`. Intent families use static
-embeddings (`adage models fetch`; everything else works without the model). Hardened against an
+embeddings (a model bundled in the binary; everything else works without one). Hardened against an
 adversarial review (tracks are untrusted input; effects re-derived; bounded hot path; symlink-safe
 paths). Team depots and lockfiles are designed but not yet built. See the implementation plan.
 

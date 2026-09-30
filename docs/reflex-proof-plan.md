@@ -57,6 +57,10 @@ infrastructure; reuse it rather than starting another advisory benchmark. Its re
 include 3/30 negative deliveries at the first edit. Inspect current run artifacts before using
 its README's status sentence: training artifacts have landed since its original preparation.
 
+The subsequent UX push `52c256b` is integrated into the PR. Preserve its clap grammar, design
+tokens, tab components, palette and web assets. L4 extends those surfaces and the same grant
+service; it does not restore the retired help module, old TUI layout or text snapshots.
+
 ### L1. Establish a reproducible release candidate
 
 Finish CI on the integrated revision: formatting, warnings-denied lint, full workspace tests,

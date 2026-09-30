@@ -16,6 +16,7 @@
 
 use adage_store::config::{self, KEYS};
 use adage_store::Paths;
+use adage_term::{Line, Out, Role};
 use anyhow::{anyhow, bail, Result};
 use serde_json::json;
 
@@ -25,7 +26,9 @@ pub fn run(args: &[String], paths: &Paths) -> Result<()> {
         Some("get") => {
             let Some(key) = args.get(1) else { bail!("usage: adage config get <key>") };
             let loaded = config::load(paths);
-            let (value, _) = loaded.get(key).ok_or_else(|| anyhow!("unknown key {key}; `adage config` lists them"))?;
+            let (value, _) = loaded
+                .get(key)
+                .ok_or_else(|| crate::hint(format!("unknown key {key}"), "`adage config` lists every key"))?;
             println!("{value}");
             Ok(())
         }
@@ -39,11 +42,18 @@ pub fn run(args: &[String], paths: &Paths) -> Result<()> {
                 crate::share::require_person(&format!("config set {key}"))?;
             }
             let stored = config::set(paths, key, value).map_err(|e| anyhow!(e))?;
-            println!("adage config: {key} = {stored} (in {})", paths.config().display());
+            let mut o = Out::stdout();
+            o.header("config set", &[key])?;
+            o.blank()?;
+            o.kv("value", Line::new().text(stored))?;
+            o.kv("stored in", Line::new().text(crate::detect::tilde(&paths.config())))?;
             let loaded = config::load(paths);
             if let Some((v, src @ config::Source::Env(_))) = loaded.get(key) {
-                println!("note: {src} overrides it, so the effective value is {v}");
+                o.blank()?;
+                o.warn(&format!("{src} overrides it, so the effective value is {v}"))?;
             }
+            o.blank()?;
+            o.next("adage config", "every setting and where it comes from")?;
             Ok(())
         }
         Some(other) => {
@@ -70,15 +80,32 @@ fn show(paths: &Paths, as_json: bool) -> Result<()> {
         );
         return Ok(());
     }
-    println!("adage config ({})", paths.config().display());
+    let mut o = Out::stdout();
+    o.header("config", &[&crate::detect::tilde(&paths.config())])?;
+    o.blank()?;
+    let w = KEYS.iter().map(|k| k.name.len()).max().unwrap_or(24) + 2;
     for k in KEYS {
         let (value, source) = &loaded.values[k.name];
         let shown = if value.is_empty() { "\"\"" } else { value };
-        println!("  {:<24} = {:<18} ({source})", k.name, shown);
-        println!("  {:<24}   {}", "", k.doc);
+        let src = source.to_string();
+        let src = if src == "default" { src } else { format!("from {src}") };
+        o.line(&Line::new().text(k.name).pad_to(w).bold(Role::Ink, shown).pad_to(w + 20).faint(src))?;
+        o.line(&Line::new().pad_to(w).quiet(doc(k.doc)))?;
     }
     for p in &loaded.problems {
-        println!("warning: {p}");
+        o.blank()?;
+        o.warn(p)?;
     }
+    o.blank()?;
+    o.next("adage config set <key> <value>", "change one")?;
     Ok(())
+}
+
+/// A key's description in the lexicon's words (the stored description, as `--json` prints it, is
+/// unchanged).
+fn doc(d: &str) -> String {
+    crate::words::prose(d)
+        .replace("learn automatically", "condition automatically")
+        .replace("automatic learn ", "automatic conditioning run ")
+        .replace("to learn from", "to condition from")
 }

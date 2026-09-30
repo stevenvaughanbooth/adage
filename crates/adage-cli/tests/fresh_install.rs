@@ -229,7 +229,8 @@ fn b3_status_and_watch_show_the_bundled_model() {
     let o = w.run_in(&repo, &["status"], "", &[]);
     let t = text(&o);
     assert!(o.status.success(), "{t}");
-    assert!(t.contains("intent model: potion-base-8m-i8") && t.contains("(bundled in this binary)"), "{t}");
+    assert!(t.contains("intent model") && t.contains("potion-base-8m-i8"), "{t}");
+    assert!(t.contains("(bundled in this binary)"), "{t}");
     assert!(!t.contains("not installed") && !t.contains("models fetch"), "{t}");
 
     let o = w.run_in(&repo, &["watch", "--once", "--size", "110x30"], "", &[]);
@@ -434,12 +435,16 @@ fn b11_an_unwritable_data_directory_is_said_once_and_clearly() {
     assert!(!o.status.success() && t.contains("blocker/home/.claude"), "{t}");
 }
 
-/// L2: `adage graph --serve` is gone, with no alias: refused, not silently ignored.
+/// L2: `adage graph --serve` is gone, with no alias: refused, not silently ignored, and the
+/// refusal names what replaced it (a usage error, exit 2).
 #[test]
 fn l2_graph_refuses_unknown_options() {
     let w = World::new();
     let o = w.run(&["graph", "--serve"]);
-    assert!(!o.status.success() && text(&o).contains("unknown option `--serve`"), "{}", text(&o));
+    assert_eq!(o.status.code(), Some(2), "{}", text(&o));
+    assert!(text(&o).contains("`adage graph --serve` is now `adage map`"), "{}", text(&o));
+    let o = w.run(&["graph", "--bogus"]);
+    assert!(!o.status.success() && text(&o).contains("unexpected argument '--bogus'"), "{}", text(&o));
     let o = w.run(&["graph", "--json", "--events", "5"]);
     assert!(o.status.success(), "{}", text(&o));
 }

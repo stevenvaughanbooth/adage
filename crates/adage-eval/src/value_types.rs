@@ -468,8 +468,8 @@ pub fn render_text(r: &Report) -> String {
         }
         if let Some(e) = &b.end_to_end {
             s.push_str(&format!(
-                "    end to end (engine graph): {} · sessions {}/{} · fresh {}/{} · controls fired {}/{} · unsafe {}\n",
-                e.route.as_deref().unwrap_or("no lookup route"),
+                "    end to end (engine graph): {} · traces {}/{} · fresh {}/{} · controls fired {}/{} · unsafe {}\n",
+                e.route.as_deref().unwrap_or("no lookup reflex"),
                 e.sessions_bound,
                 e.sessions,
                 e.fresh_bound,
@@ -510,7 +510,9 @@ pub fn render_text(r: &Report) -> String {
     }
     s.push_str(&row("all", &r.all));
     if let (Some(rec), Some(bad)) = (r.all.e2e_recall, r.all.e2e_unsafe) {
-        s.push_str(&format!("end to end (learn with engine graph, then the hook): recall {rec:.3}, unsafe {bad}\n"));
+        s.push_str(&format!(
+            "end to end (condition with engine graph, then the hook): recall {rec:.3}, unsafe {bad}\n"
+        ));
     }
     s.push_str(
         "targets (Track G §4.4): accept >= 0.99, reject = 1.00, recall on non-X-123 shapes >= 0.95, unsafe = 0\n",

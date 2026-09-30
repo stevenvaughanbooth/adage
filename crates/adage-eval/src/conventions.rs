@@ -912,18 +912,18 @@ pub fn render_text(r: &RoutesReport) -> String {
     );
     match &r.index_file {
         Some(f) => {
-            let _ = writeln!(s, "scored the given index {f}: nothing was learned from this dataset's sessions");
+            let _ = writeln!(s, "scored the given index {f}: nothing was conditioned on this dataset's traces");
         }
         None => {
             let _ = writeln!(
                 s,
-                "learned from {} train sessions ({} test sessions unused)",
+                "conditioned on {} train traces ({} test traces unused)",
                 r.train_sessions, r.test_sessions
             );
             s.push_str(&crate::leakage_text(r.split_note.as_deref(), &r.task_overlap_ids, r.leaky));
         }
     }
-    let _ = writeln!(s, "index {} with {} routes", r.index_generation, r.learned_routes);
+    let _ = writeln!(s, "index {} with {}", r.index_generation, crate::count(r.learned_routes, "reflex"));
     for x in &r.routes {
         let verdict = match (x.matches.is_empty(), x.partial.is_empty(), x.narrow.is_empty()) {
             (false, _, _) => format!("= {}", x.matches.join(", ")),
@@ -947,7 +947,7 @@ pub fn render_text(r: &RoutesReport) -> String {
     let _ = writeln!(s, "\nconventions");
     for c in &r.conventions {
         let found = match (c.evaluable, c.matched_by.is_empty()) {
-            (false, _) => "not learnable offline (no model)".to_string(),
+            (false, _) => "cannot be conditioned offline (no intent model)".to_string(),
             (true, true) if !c.narrowly_by.is_empty() => {
                 format!("MISSED (too narrow: {})", c.narrowly_by.join(", "))
             }
@@ -958,7 +958,7 @@ pub fn render_text(r: &RoutesReport) -> String {
     }
     let _ = writeln!(
         s,
-        "\nroute precision {}/{} {:.1}% (95% CI {}); route recall {}/{} {:.1}% (95% CI {}); F1 {:.3}",
+        "\nreflex precision {}/{} {:.1}% (95% CI {}); reflex recall {}/{} {:.1}% (95% CI {}); F1 {:.3}",
         r.true_routes,
         r.learned_routes,
         r.precision * 100.0,
@@ -971,7 +971,7 @@ pub fn render_text(r: &RoutesReport) -> String {
     );
     let none = || "none".to_string();
     let list = |v: &[String]| if v.is_empty() { none() } else { v.join(", ") };
-    let _ = writeln!(s, "false routes: {}", list(&r.false_routes));
+    let _ = writeln!(s, "false reflexes: {}", list(&r.false_routes));
     if !r.narrow_routes.is_empty() {
         let _ = writeln!(s, "too narrow (fail-safe, counted true, not recalled): {}", r.narrow_routes.join(", "));
     }
@@ -1158,11 +1158,11 @@ mod tests {
         let r = run(&dir, &opts).unwrap();
         let t = render_text(&r);
         assert!(t.contains("scored the given index"), "{t}");
-        assert!(!t.contains("train sessions") && !t.contains("LEAKY") && !t.contains("\nengine "), "{t}");
+        assert!(!t.contains("train traces") && !t.contains("LEAKY") && !t.contains("\nengine "), "{t}");
         assert_eq!((r.train_sessions, r.leaky), (0, false));
-        // Learning from the split still says so.
+        // Conditioning on the split still says so.
         let r = run(&dir, &crate::Options { split: Some("round1".into()), ..Default::default() }).unwrap();
-        assert!(render_text(&r).contains("learned from 12 train sessions"));
+        assert!(render_text(&r).contains("conditioned on 12 train traces"));
     }
 
     #[test]

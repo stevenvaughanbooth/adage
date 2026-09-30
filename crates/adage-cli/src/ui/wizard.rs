@@ -1,30 +1,43 @@
-//! The interactive `adage init`: a guided setup that asks before each step.
+//! The interactive `adage init`: a guided setup, inline in the terminal (no full screen), that
+//! asks before each step and leaves its record in the scrollback.
 //!
-//! 1. Harnesses: what is installed here (read-only).
-//! 2. Hooks, per harness found: the exact file and diff for this repository (Tab: user scope);
-//!    written only on `y`, through `adage install --write`'s own code.
-//! 3. The embedding model (optional): fetched with progress.
-//! 4. A first `adage condition`.
-//! 5. Auto-learn: `learn.auto = true` in `config.toml` (`adage config set`), if it is off.
-//! 6. The doctor's summary, and where to go next (`adage watch` in a split pane).
+//! ```text
+//! ┌  adage init · acme-billing
+//! │
+//! │  Adage ships with instincts and forms reflexes from your traces.
+//! │  Nothing is written without asking. Fail-open: if Adage errors, your agent proceeds.
+//! │
+//! ◇  Harnesses · claude-code, codex                ← finished steps, in the scrollback
+//! ◇  Hooks · claude-code · wrote ~/.claude/settings.json
+//! ◆  Embedding model                               ← the active step, live
+//! │  Ready: potion-base-8m (bundled).
+//! │  › Continue
+//! └  ↑↓ choose · enter confirm · q stop
+//! ```
 //!
-//! `n` skips a step, `q` stops; what was done is printed when the wizard exits.
+//! Steps: harnesses (read-only); hooks, per harness found (the exact file and diff first; this
+//! repository or every repository); the embedding model (bundled in adage, so usually nothing
+//! to do; offered for download only when none is usable); a first `adage condition`;
+//! auto-condition; then the doctor's summary and what to run next. `y` takes the first choice,
+//! `n` skips, `q` (or esc) stops: nothing already done is undone, and nothing else is written.
 
 use super::app::install_confirm;
 use super::health::{self, Health};
 use super::jobs::{self, Job};
 use super::term::{self, Term};
-use super::theme::{Lamp, Theme};
+use super::theme::Theme;
 use super::view::Ctx;
 use crate::detect::{self, Detected, Registration};
 use crate::doctor::Status;
 use crate::install::Plan;
 use adage_store::config;
+use adage_term::Glyph;
 use anyhow::Result;
 use ratatui::crossterm::event::{KeyCode, KeyModifiers};
-use ratatui::layout::{Constraint, Layout};
+use ratatui::layout::Rect;
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Gauge, Paragraph, Wrap};
+use ratatui::widgets::{Paragraph, Widget};
 use ratatui::Frame;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -51,14 +64,14 @@ pub struct Step {
 }
 
 impl Step {
-    fn title(&self) -> String {
+    pub fn title(&self) -> String {
         match &self.kind {
             Kind::Harnesses => "Harnesses".into(),
-            Kind::Hooks(h) => format!("Hooks: {h}"),
+            Kind::Hooks(h) => format!("Hooks · {h}"),
             Kind::Model => "Embedding model".into(),
-            Kind::Learn => "First conditioning".into(),
-            Kind::AutoLearn => "Auto-learn".into(),
-            Kind::Finish => "Summary".into(),
+            Kind::Learn => "Condition from past traces".into(),
+            Kind::AutoLearn => "Auto-condition".into(),
+            Kind::Finish => "Ready".into(),
         }
     }
 }
@@ -90,7 +103,11 @@ pub struct Wizard {
     pub output: Vec<String>,
     pub health: Option<Health>,
     pub scroll: u16,
+    /// How far the body can scroll, as last drawn (the body's length is known only then).
+    pub max_scroll: std::cell::Cell<u16>,
     pub has_repo: bool,
+    /// The highlighted choice of the current step.
+    pub choice: usize,
 }
 
 impl Wizard {
@@ -116,12 +133,39 @@ impl Wizard {
             output: vec![],
             health: None,
             scroll: 0,
+            max_scroll: Default::default(),
             has_repo,
+            choice: 0,
         }
     }
 
     pub fn current(&self) -> &Kind {
         &self.steps[self.cur].kind
+    }
+
+    /// The current step's choices; the last one of a step that can be skipped is the skip.
+    pub fn choices(&self) -> Vec<String> {
+        if !self.output.is_empty() {
+            return vec!["Continue".into()];
+        }
+        match self.current() {
+            Kind::Harnesses => vec!["Continue".into()],
+            Kind::Hooks(h) => {
+                let mut v = Vec::new();
+                if self.has_repo {
+                    v.push("For this repository".to_string());
+                }
+                v.push(format!("For this user · every repository you open with {h}"));
+                v.push(format!("Skip {h}"));
+                v
+            }
+            Kind::Model if self.model.is_some() => vec!["Continue".into()],
+            Kind::Model => vec!["Fetch it · SHA-256 verified".into(), "Skip for now".into()],
+            Kind::Learn => vec!["Condition now".into(), "Skip · it runs by itself as traces end".into()],
+            Kind::AutoLearn if self.auto_learn.as_ref().is_some_and(|(on, _)| *on) => vec!["Keep it on".into()],
+            Kind::AutoLearn => vec!["Turn it on".into(), "Leave it off".into()],
+            Kind::Finish => vec!["Done".into()],
+        }
     }
 
     /// Record the current step's outcome and move on. Returns the command the next step needs to
@@ -130,6 +174,7 @@ impl Wizard {
         self.steps[self.cur].status = status;
         self.output.clear();
         self.scroll = 0;
+        self.choice = 0;
         if self.cur + 1 < self.steps.len() {
             self.cur += 1;
         }
@@ -143,39 +188,76 @@ impl Wizard {
         }
     }
 
+    /// The scope the hooks step's highlighted choice stands for.
+    fn scope_of_choice(&self) -> &'static str {
+        if self.has_repo && self.choice == 0 {
+            "project"
+        } else {
+            "user"
+        }
+    }
+
     pub fn key(&mut self, code: KeyCode, mods: KeyModifiers) -> Option<Cmd> {
-        if code == KeyCode::Char('c') && mods.contains(KeyModifiers::CONTROL) || code == KeyCode::Char('q') {
+        if code == KeyCode::Char('c') && mods.contains(KeyModifiers::CONTROL)
+            || matches!(code, KeyCode::Char('q') | KeyCode::Esc)
+        {
             return Some(Cmd::Quit);
         }
         if self.progress.is_some() {
             return None; // a job is running
         }
-        let yes = matches!(code, KeyCode::Char('y') | KeyCode::Enter);
-        let no = matches!(code, KeyCode::Char('n') | KeyCode::Char('s'));
+        let n = self.choices().len();
+        let hooks = matches!(self.current(), Kind::Hooks(_)) && self.output.is_empty();
         match code {
-            KeyCode::Up | KeyCode::Char('k') => self.scroll = self.scroll.saturating_sub(1),
-            KeyCode::Down | KeyCode::Char('j') => self.scroll = self.scroll.saturating_add(1),
-            KeyCode::PageUp => self.scroll = self.scroll.saturating_sub(10),
-            KeyCode::PageDown => self.scroll = self.scroll.saturating_add(10),
+            KeyCode::Up | KeyCode::Char('k') if self.choice > 0 => {
+                self.choice -= 1;
+                if hooks && self.choice < n - 1 && self.scope_of_choice() != self.scope {
+                    self.scope = self.scope_of_choice();
+                    return Some(Cmd::Replan);
+                }
+                return None;
+            }
+            KeyCode::Down | KeyCode::Char('j') if self.choice + 1 < n => {
+                self.choice += 1;
+                if hooks && self.choice < n - 1 && self.scope_of_choice() != self.scope {
+                    self.scope = self.scope_of_choice();
+                    return Some(Cmd::Replan);
+                }
+                return None;
+            }
+            KeyCode::PageUp => {
+                self.scroll = self.scroll.saturating_sub(5);
+                return None;
+            }
+            KeyCode::PageDown => {
+                self.scroll = self.scroll.saturating_add(5).min(self.max_scroll.get());
+                return None;
+            }
             _ => {}
         }
+        // `y` is the first choice, `n` the skip, Enter the highlighted one.
+        let skip = n > 1
+            && (code == KeyCode::Char('n')
+                || code == KeyCode::Char('s')
+                || (code == KeyCode::Enter && self.choice == n - 1));
+        let yes = !skip && (code == KeyCode::Char('y') || code == KeyCode::Enter);
         // A step that has run shows its result; any answer moves on.
-        let ran = !self.output.is_empty();
-        if ran && (yes || no) && *self.current() != Kind::Finish {
+        if !self.output.is_empty() && (yes || skip || code == KeyCode::Char('n')) && *self.current() != Kind::Finish {
             let s = self.steps[self.cur].status.clone();
             return self.advance(if s == StepStatus::Todo { StepStatus::Done(String::new()) } else { s });
         }
         match self.current().clone() {
-            Kind::Harnesses if yes => self.advance(StepStatus::Done(String::new())),
-            Kind::Hooks(_) if code == KeyCode::Tab => {
+            Kind::Harnesses if yes => self.advance(StepStatus::Done(self.found_names())),
+            Kind::Hooks(_) if code == KeyCode::Tab && self.has_repo => {
                 self.scope = if self.scope == "project" { "user" } else { "project" };
+                self.choice = if self.scope == "project" { 0 } else { 1 };
                 Some(Cmd::Replan)
             }
+            Kind::Hooks(_) if skip => self.advance(StepStatus::Skipped),
             Kind::Hooks(_) if yes => match &self.plan {
                 Some(Ok(p)) => Some(Cmd::Install(Box::new(p.clone()))),
                 _ => None,
             },
-            Kind::Hooks(_) if no => self.advance(StepStatus::Skipped),
             Kind::Model if yes && self.model.is_some() => {
                 let m = self.model.clone().unwrap_or_default();
                 self.advance(StepStatus::Done(format!("{m} ready")))
@@ -185,98 +267,144 @@ impl Wizard {
             // Already on (by default, in the file, or ADAGE_AUTO_LEARN): nothing to write.
             Kind::AutoLearn if yes && self.auto_learn.as_ref().is_some_and(|(on, _)| *on) => {
                 let src = self.auto_learn.as_ref().map(|(_, s)| s.clone()).unwrap_or_default();
-                self.advance(StepStatus::Done(format!("already on ({src})")))
+                self.advance(StepStatus::Done(format!("on ({src})")))
             }
             Kind::AutoLearn if yes => Some(Cmd::AutoLearn),
-            Kind::Model | Kind::Learn | Kind::AutoLearn if no => self.advance(StepStatus::Skipped),
-            Kind::Finish if yes || code == KeyCode::Esc => Some(Cmd::Quit),
+            Kind::Model | Kind::Learn | Kind::AutoLearn if skip => self.advance(StepStatus::Skipped),
+            Kind::Finish if yes => Some(Cmd::Quit),
             _ => None,
         }
     }
 
-    /// What was done, for the terminal after the wizard exits.
+    fn found_names(&self) -> String {
+        let found: Vec<&str> = self.detected.iter().filter(|d| d.found()).map(|d| d.harness).collect();
+        if found.is_empty() {
+            "none found".into()
+        } else {
+            found.join(", ")
+        }
+    }
+
+    /// What was done, as plain lines (as it reads in the scrollback).
+    #[cfg(test)]
     pub fn report(&self) -> Vec<String> {
-        let mut out = vec!["adage init:".to_string()];
+        let t = Theme::with_color(false);
+        let mut out: Vec<String> = Vec::new();
         for s in &self.steps {
-            if matches!(s.kind, Kind::Harnesses | Kind::Finish) {
+            if s.kind == Kind::Finish {
                 continue;
             }
-            let (mark, note) = match &s.status {
-                StepStatus::Todo => ("·", "not reached".to_string()),
-                StepStatus::Done(n) => ("✓", n.clone()),
-                StepStatus::Skipped => ("–", "skipped".to_string()),
-                StepStatus::Failed(e) => ("✗", e.clone()),
-            };
-            let note = if note.is_empty() { String::new() } else { format!(": {note}") };
-            out.push(format!("  {mark} {}{note}", s.title()));
+            out.extend(record(s, &t).iter().map(line_text));
         }
-        if let Some(h) = &self.health {
-            out.push(format!(
-                "adage doctor: {} passed, {} warning(s), {} failure(s)",
-                h.count(Status::Pass),
-                h.count(Status::Warn),
-                h.count(Status::Fail)
-            ));
-        }
-        out.push("Run `adage watch` in a split pane to see Adage work live; `adage ui` for everything else.".into());
+        out.extend(finish_card(self, &t, true, 100).iter().map(line_text));
         out
     }
 }
 
-// ---------------------------------------------------------------------------------------------
-// Drawing
+#[cfg(test)]
+fn line_text(l: &Line) -> String {
+    l.spans.iter().map(|s| s.content.as_ref()).collect::<String>().trim_end().to_string()
+}
 
-fn detail(w: &Wizard, t: &Theme) -> Vec<Line<'static>> {
-    let dim = |s: &str| Line::from(Span::styled(s.to_string(), t.dim()));
+// ---------------------------------------------------------------------------------------------
+// The rail
+
+fn rail<'a>(t: &Theme, active: bool) -> Span<'a> {
+    Span::styled(format!("{}  ", t.glyph(Glyph::Rail)), if active { t.accent() } else { t.dim() })
+}
+
+/// Wrap `text` to `width` columns (by words; long words are left whole).
+fn wrap(text: &str, width: usize) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut cur = String::new();
+    for w in text.split(' ') {
+        if !cur.is_empty() && cur.chars().count() + 1 + w.chars().count() > width {
+            out.push(std::mem::take(&mut cur));
+        }
+        if !cur.is_empty() {
+            cur.push(' ');
+        }
+        cur.push_str(w);
+    }
+    if !cur.is_empty() || out.is_empty() {
+        out.push(cur);
+    }
+    out
+}
+
+/// The opening lines, printed once into the scrollback.
+pub fn header(ctx: &Ctx) -> Vec<Line<'static>> {
+    let t = &ctx.theme;
+    vec![
+        Line::from(vec![
+            Span::styled(t.ch("┌  ", "+  "), t.dim()),
+            Span::styled("adage init", t.title()),
+            Span::styled(format!(" · {}", ctx.label), t.dim()),
+        ]),
+        Line::from(rail(t, false)),
+        Line::from(vec![rail(t, false), Span::raw("Adage ships with instincts and forms reflexes from your traces.")]),
+        Line::from(vec![
+            rail(t, false),
+            Span::styled(
+                "Nothing is written without asking. Fail-open: if Adage errors, your agent proceeds normally.",
+                t.dim(),
+            ),
+        ]),
+        Line::from(rail(t, false)),
+    ]
+}
+
+/// A finished step as it stays in the scrollback: `◇  Title · what happened`.
+pub fn record(s: &Step, t: &Theme) -> Vec<Line<'static>> {
+    let (mark, style, note) = match &s.status {
+        StepStatus::Done(n) => (t.glyph(Glyph::Done), t.green(), n.clone()),
+        StepStatus::Skipped => (t.glyph(Glyph::Done), t.dim(), "skipped".to_string()),
+        StepStatus::Failed(e) => (t.glyph(Glyph::Fail), t.red(), e.clone()),
+        StepStatus::Todo => (t.glyph(Glyph::Sep), t.dim(), "not reached".to_string()),
+    };
+    let mut first = vec![Span::styled(format!("{mark}  "), style), Span::styled(s.title(), t.bold())];
+    if !note.is_empty() {
+        first.push(Span::styled(format!(" · {note}"), t.dim()));
+    }
+    vec![Line::from(first)]
+}
+
+/// The body of the active step, before its choices.
+fn body(w: &Wizard, t: &Theme, width: usize) -> Vec<Line<'static>> {
+    let text = |s: &str, style: Style| -> Vec<Line<'static>> {
+        wrap(s, width).into_iter().map(|l| Line::from(Span::styled(l, style))).collect()
+    };
+    let plain = Style::default();
     let mut out: Vec<Line> = Vec::new();
     match w.current() {
         Kind::Harnesses => {
-            out.push(Line::raw("Adage directs your coding agents through their harness's hooks. Found here:"));
-            out.push(Line::raw(""));
             for d in &w.detected {
                 if d.found() {
                     out.push(Line::from(vec![
-                        Span::styled("● ", t.green()),
-                        Span::styled(format!("{:<12}", d.harness), t.bold()),
-                        Span::raw(d.evidence.join("; ")),
+                        Span::styled(format!("{} ", t.glyph(Glyph::Lamp)), t.green()),
+                        Span::styled(format!("{:<13}", d.harness), t.bold()),
+                        Span::styled(d.evidence.join("; "), t.dim()),
                     ]));
                 } else {
                     out.push(Line::from(vec![
-                        Span::styled("○ ", t.dim()),
-                        Span::styled(format!("{:<12}", d.harness), t.dim()),
+                        Span::styled(format!("{} ", t.glyph(Glyph::Off)), t.dim()),
+                        Span::styled(format!("{:<13}", d.harness), t.dim()),
                         Span::styled("not found", t.dim()),
                     ]));
                 }
             }
-            out.push(Line::raw(""));
             if !w.detected.iter().any(|d| d.found()) {
-                out.push(dim(
-                    "No harness found: the hook steps are skipped. Install one, then run `adage init` again.",
-                ));
+                out.push(Line::raw(""));
+                out.extend(text("No harness found, so there are no hooks to install. Install Claude Code, Codex or OpenCode, then run `adage init` again; the other steps still help.", t.dim()));
             }
-            out.push(dim("Nothing is written without asking. y or Enter continues; q stops."));
         }
         Kind::Hooks(h) => {
-            let mine: Vec<&Registration> = w.registrations.iter().filter(|r| r.harness == *h).collect();
-            for r in &mine {
-                out.push(Line::from(Span::styled(
-                    format!("Already registered in {}", detect::tilde(&r.location)),
-                    t.green(),
-                )));
+            for r in w.registrations.iter().filter(|r| r.harness == *h) {
+                out.extend(text(&format!("Already registered in {}.", detect::tilde(&r.location)), t.green()));
             }
-            let scope = if w.scope == "project" { "this repository" } else { "every repository (user scope)" };
-            out.push(Line::from(vec![
-                Span::raw(format!("Register Adage's hooks with {h} for ")),
-                Span::styled(scope.to_string(), t.bold()),
-                Span::raw(":"),
-            ]));
-            out.push(Line::raw(""));
             match &w.plan {
-                None => out.push(dim("planning…")),
-                Some(Err(e)) => {
-                    out.push(Line::from(Span::styled(e.clone(), t.red())));
-                    out.push(dim("Tab switches scope; n skips."));
-                }
+                None => out.push(Line::from(Span::styled("planning…", t.dim()))),
+                Some(Err(e)) => out.extend(text(e, t.red())),
                 Some(Ok(p)) => out.extend(
                     install_confirm(p, t)
                         .into_iter()
@@ -285,72 +413,65 @@ fn detail(w: &Wizard, t: &Theme) -> Vec<Line<'static>> {
             }
         }
         Kind::Model => match &w.model {
-            Some(m) => {
-                out.push(Line::raw(format!("The embedding model is ready: {m} (installed, or bundled in adage).")))
-            }
-            None => {
-                out.push(Line::raw("Optional: the static embedding model (potion-base-8M, 31 MB, SHA-256 verified)."));
-                out.push(Line::raw("With it, `adage condition` groups prompts that mean the same thing into intent"));
-                out.push(Line::raw(
-                    "families and learns what each usually starts with. Everything else works without it.",
-                ));
-            }
+            Some(m) => out.extend(text(
+                &format!("Ready: {m}. Prompts that mean the same thing (\"run the tests\", \"check my change\") share a reflex."),
+                plain,
+            )),
+            None => out.extend(text(
+                "No usable embedding model (none installed, and none bundled in this adage). With one, prompts that mean the same thing (\"run the tests\", \"check my change\") share a reflex. Everything else works without it.",
+                plain,
+            )),
         },
-        Kind::Learn => {
-            out.push(Line::raw("Condition this repository from its existing Claude Code history, Codex history"));
-            out.push(Line::raw("when registered, and configured OpenCode exports. Bind instincts from its files,"));
-            out.push(Line::raw("learn reflexes, write tracks, and compile the index"));
-            out.push(Line::raw("hooks read. It reads transcripts; it never runs anything they contain."));
-        }
+        Kind::Learn => out.extend(text(
+            "Condition this repository from existing Claude Code history, Codex history when registered, and configured OpenCode exports. Bind instincts from its files, learn reflexes, and compile the index hooks read. It only reads transcripts; it never runs anything they contain.",
+            plain,
+        )),
         Kind::AutoLearn => {
+            out.extend(text(
+                "Condition in the background whenever an agent's trace ends, so reflexes keep up with how your agents work.",
+                plain,
+            ));
             let now = match &w.auto_learn {
-                Some((true, src)) => format!("on ({src}): y keeps it so"),
-                Some((false, src)) => format!("off ({src})"),
-                None => "unknown".to_string(),
+                Some((true, src)) => format!("Now: on ({src})."),
+                Some((false, src)) => format!("Now: off ({src}). Turning it on sets learn.auto = true in {}.", w.config_path),
+                None => String::new(),
             };
-            out.push(Line::raw("Condition automatically after agent sessions end, so reflexes keep up with how your"));
-            out.push(Line::raw("agents work. This sets `learn.auto = true` in:"));
-            out.push(Line::from(Span::styled(format!("  {}", w.config_path), t.bold())));
-            out.push(dim(&format!("Now: {now}.")));
+            if !now.is_empty() {
+                out.extend(text(&now, t.dim()));
+            }
         }
         Kind::Finish => match &w.health {
-            None => out.push(dim("running `adage doctor`…")),
+            None => out.push(Line::from(Span::styled("running `adage doctor`…", t.dim()))),
             Some(h) => {
-                out.push(Line::from(Span::styled(
-                    format!(
-                        "adage doctor: {} passed, {} warning(s), {} failure(s)",
-                        h.count(Status::Pass),
-                        h.count(Status::Warn),
-                        h.count(Status::Fail)
+                let (p, wn, f) = (h.count(Status::Pass), h.count(Status::Warn), h.count(Status::Fail));
+                out.push(Line::from(vec![
+                    Span::styled(
+                        format!("{} ", t.glyph(if f > 0 { Glyph::Fail } else { Glyph::Ok })),
+                        if f > 0 { t.red() } else { t.green() },
                     ),
-                    t.bold(),
-                )));
+                    Span::styled(format!("adage doctor · {p} passed · {wn} to look at · {f} failing"), t.bold()),
+                ]));
+                // Each finding and its fix, wrapped under their own text rather than cut off.
+                let mut found = Vec::new();
                 for c in h.checks.iter().filter(|c| c.status != Status::Pass) {
-                    let lamp = if c.status == Status::Fail { Lamp::Fail } else { Lamp::Warn };
-                    out.push(Line::from(vec![
-                        Span::styled(format!("{} ", t.lamp_mark(lamp)), t.lamp(lamp)),
-                        Span::styled(format!("{}: ", c.check), t.bold()),
-                        Span::raw(c.detail.clone()),
+                    let style = if c.status == Status::Fail { t.red() } else { t.yellow() };
+                    found.push(Line::from(vec![
+                        Span::styled("! ", style),
+                        Span::styled(format!("{}  ", c.label), t.bold()),
+                        Span::styled(c.detail.clone(), t.dim()),
                     ]));
-                    if let Some(f) = &c.fix {
-                        out.push(dim(&format!("    fix: {f}")));
+                    if let Some(fx) = &c.fix {
+                        found.push(Line::from(vec![Span::styled("  fix ", t.dim()), Span::styled(fx.clone(), t.dim())]));
                     }
                 }
-                out.push(Line::raw(""));
-                out.push(Line::from(vec![
-                    Span::raw("Next: run "),
-                    Span::styled("adage watch", t.accent().patch(t.bold())),
-                    Span::raw(" in a split pane to see Adage work live, and "),
-                    Span::styled("adage ui", t.accent().patch(t.bold())),
-                    Span::raw(" for reflexes, review, health and settings."),
-                ]));
+                out.extend(super::view::wrap_hanging(t.lines(found), width as u16, true));
             }
         },
     }
     if !w.output.is_empty() {
         out.push(Line::raw(""));
         for l in &w.output {
-            out.push(Line::from(Span::styled(l.clone(), t.dim())));
+            out.extend(text(l, t.dim()));
         }
     }
     out
@@ -358,92 +479,285 @@ fn detail(w: &Wizard, t: &Theme) -> Vec<Line<'static>> {
 
 fn hint(w: &Wizard) -> &'static str {
     if w.progress.is_some() {
-        return "working…";
+        return "working… q stops";
     }
-    if !w.output.is_empty() {
-        return "y or Enter continues · q stops";
-    }
-    match w.current() {
-        Kind::Harnesses => "y continue · q stop",
-        Kind::Hooks(_) => "y install · Tab this repository / user scope · n skip · ↑ ↓ scroll · q stop",
-        Kind::Model => "y fetch · n skip · q stop",
-        Kind::Learn => "y condition now · n skip · q stop",
-        Kind::AutoLearn => "y turn it on · n skip · q stop",
-        Kind::Finish => "Enter or q exits",
+    if w.choices().len() > 1 {
+        if matches!(w.current(), Kind::Hooks(_)) && w.output.is_empty() {
+            "↑↓ choose · enter confirm · PgUp/PgDn diff · q stop"
+        } else {
+            "↑↓ choose · enter confirm · q stop"
+        }
+    } else if *w.current() == Kind::Finish {
+        "enter finishes"
+    } else {
+        "enter continues · q stop"
     }
 }
 
+/// The active step, drawn in the inline viewport.
 pub fn draw(f: &mut Frame, w: &Wizard, ctx: &Ctx) {
-    let t = &ctx.theme;
     let area = f.area();
-    let [title, body, keys] =
-        Layout::vertical([Constraint::Length(1), Constraint::Min(5), Constraint::Length(1)]).areas(area);
-    f.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled(" adage init ", t.title()),
-            Span::styled(format!("· set Adage up for {}", ctx.label), t.dim()),
-        ])),
-        title,
-    );
-    let left_w = if area.width >= 80 { 24 } else { 18 };
-    let [steps, main] = Layout::horizontal([Constraint::Length(left_w), Constraint::Min(20)]).areas(body);
-    let lines: Vec<Line> = w
-        .steps
-        .iter()
-        .enumerate()
-        .map(|(i, s)| {
-            let (mark, style) = match &s.status {
-                _ if i == w.cur => ("▸", t.accent().patch(t.bold())),
-                StepStatus::Done(_) => ("✓", t.green()),
-                StepStatus::Skipped => ("–", t.dim()),
-                StepStatus::Failed(_) => ("✗", t.red()),
-                StepStatus::Todo => ("·", t.dim()),
-            };
-            Line::from(vec![Span::styled(format!(" {mark} "), style), Span::styled(s.title(), style)])
-        })
-        .collect();
-    let block = Block::default().borders(Borders::RIGHT).border_style(t.dim());
-    let inner = block.inner(steps);
-    f.render_widget(block, steps);
-    f.render_widget(Paragraph::new(lines), inner);
+    render(area, f.buffer_mut(), w, ctx);
+}
 
-    let main = main.inner(ratatui::layout::Margin { horizontal: 1, vertical: 0 });
-    let (main, gauge) = if w.progress.is_some() {
-        let [a, b] = Layout::vertical([Constraint::Min(3), Constraint::Length(2)]).areas(main);
-        (a, Some(b))
-    } else {
-        (main, None)
-    };
-    f.render_widget(
-        Paragraph::new(detail(w, t))
-            .block(Block::default().title(Span::styled(w.steps[w.cur].title(), t.title())))
-            .wrap(Wrap { trim: false })
-            .scroll((w.scroll, 0)),
-        main,
-    );
-    if let (Some(g), Some((status, ratio))) = (gauge, &w.progress) {
-        f.render_widget(Gauge::default().gauge_style(t.accent()).ratio(*ratio).label(status.clone()), g);
+fn render(area: Rect, buf: &mut ratatui::buffer::Buffer, w: &Wizard, ctx: &Ctx) {
+    let t = &ctx.theme;
+    let width = (area.width as usize).saturating_sub(4).max(20);
+    let mut lines: Vec<Line> = vec![Line::from(vec![
+        Span::styled(format!("{}  ", t.glyph(Glyph::Active)), t.accent()),
+        Span::styled(w.steps[w.cur].title(), t.bold()),
+    ])];
+    // The body scrolls (PgUp/PgDn) inside what is left once the choices and hint are placed.
+    let choices = w.choices();
+    let fixed = 1 + 1 + if choices.len() > 1 || w.progress.is_some() { choices.len() + 1 } else { 0 } + 2;
+    let room = (area.height as usize).saturating_sub(fixed);
+    let b = body(w, t, width);
+    w.max_scroll.set(b.len().saturating_sub(room) as u16);
+    let start = (w.scroll as usize).min(b.len().saturating_sub(room));
+    for l in b.into_iter().skip(start).take(room) {
+        let mut spans = vec![rail(t, true)];
+        spans.extend(l.spans);
+        lines.push(Line::from(spans));
     }
-    f.render_widget(Paragraph::new(Span::styled(format!(" {}", hint(w)), t.dim())), keys);
+    if let Some((status, ratio)) = &w.progress {
+        let bar_w = width.clamp(10, 40);
+        let done = ((*ratio).clamp(0.0, 1.0) * bar_w as f64).round() as usize;
+        lines.push(Line::from(rail(t, true)));
+        lines.push(Line::from(vec![
+            rail(t, true),
+            Span::styled(t.ch("━", "=").repeat(done), t.accent()),
+            Span::styled(t.ch("─", "-").repeat(bar_w - done), t.dim()),
+            Span::styled(format!("  {status}"), t.dim()),
+        ]));
+    } else if choices.len() > 1 {
+        lines.push(Line::from(rail(t, true)));
+        for (i, c) in choices.iter().enumerate() {
+            let sel = i == w.choice;
+            lines.push(Line::from(vec![
+                rail(t, true),
+                Span::styled(if sel { format!("{} ", t.glyph(Glyph::Pointer)) } else { "  ".into() }, t.accent()),
+                Span::styled(c.clone(), if sel { t.bold() } else { t.dim() }),
+            ]));
+        }
+    }
+    lines.push(Line::from(rail(t, true)));
+    lines.push(Line::from(vec![Span::styled(t.ch("└  ", "+  "), t.accent()), Span::styled(hint(w), t.dim())]));
+    Paragraph::new(t.lines(lines)).render(area, buf);
+}
+
+/// The closing lines, printed into the scrollback when the flow ends.
+pub fn finish_card(w: &Wizard, t: &Theme, completed: bool, cols: usize) -> Vec<Line<'static>> {
+    let mut out = vec![Line::from(Span::styled(t.glyph(Glyph::Rail), t.dim()))];
+    if !completed {
+        out.push(Line::from(vec![
+            Span::styled(t.ch("└  ", "+  "), t.dim()),
+            Span::styled("Stopped.", t.bold()),
+            Span::styled(
+                " Steps already done stay done; nothing else was changed. `adage init` picks up again any time.",
+                t.dim(),
+            ),
+        ]));
+        return out;
+    }
+    let failing = w.health.as_ref().map_or(0, |h| h.count(Status::Fail));
+    // Without hooks, agents never hear from Adage: "ready" would be a promise it cannot keep.
+    let unhooked: Vec<String> = w
+        .health
+        .as_ref()
+        .map(|h| {
+            h.checks
+                .iter()
+                .filter(|c| c.check.starts_with("hooks: ") && c.status != Status::Pass)
+                .map(|c| c.check.trim_start_matches("hooks: ").to_string())
+                .collect()
+        })
+        .unwrap_or_default();
+    let (mark, mark_style, title, why) = if failing > 0 {
+        (t.glyph(Glyph::Fail), t.red(), "Set up, with problems to fix.", " Each one and its fix is below.".to_string())
+    } else if !unhooked.is_empty() {
+        (
+            "!",
+            t.yellow(),
+            "Almost ready.",
+            format!(
+                " Hooks are not registered with {}, so agents there don't hear from Adage yet.",
+                unhooked.join(", ")
+            ),
+        )
+    } else {
+        (
+            t.glyph(Glyph::Ok),
+            t.green(),
+            "Ready.",
+            " Your agents' next traces get Adage's instincts, and reflexes as they form.".to_string(),
+        )
+    };
+    out.push(Line::from(vec![
+        Span::styled(t.ch("└  ", "+  "), t.dim()),
+        Span::styled(format!("{mark} "), mark_style),
+        Span::styled(title, t.bold()),
+        Span::raw(why),
+    ]));
+    // The doctor's findings stay in the scrollback, each with its fix.
+    if let Some(h) = &w.health {
+        for c in h.checks.iter().filter(|c| c.status != Status::Pass) {
+            let style = if c.status == Status::Fail { t.red() } else { t.yellow() };
+            out.push(Line::from(vec![
+                Span::styled("   ! ", style),
+                Span::styled(format!("{}  ", c.label), t.bold()),
+                Span::styled(c.detail.clone(), t.dim()),
+            ]));
+            if let Some(fx) = &c.fix {
+                out.push(Line::from(vec![Span::styled("       fix ", t.dim()), Span::styled(fx.clone(), t.dim())]));
+            }
+        }
+    }
+    out.push(Line::raw(""));
+    let mut next: Vec<(String, &str)> = Vec::new();
+    if failing > 0 {
+        next.push(("adage doctor".into(), "what needs fixing, and how"));
+    }
+    if let Some(h) = unhooked.first() {
+        next.push((format!("adage install {h} --write"), "registers the hooks (or run `adage init` again)"));
+    }
+    next.push(("adage watch".into(), "live pane for a split terminal"));
+    next.push(("adage map".into(), "explore reflexes in the browser"));
+    next.push(("adage ui".into(), "review, health and settings in one place"));
+    out.extend(next_lines(&next, t, cols));
+    out
+}
+
+/// The `next` rows: a command column, then each description wrapped to `cols` under its own
+/// first line. The column is as wide as the longest command when that leaves the descriptions
+/// room; otherwise a longer command takes a line of its own, its description on the next line
+/// in the same column as the others. Narrower still, descriptions go under their commands.
+fn next_lines(rows: &[(String, &str)], t: &Theme, cols: usize) -> Vec<Line<'static>> {
+    const LEAD: usize = 9; // `   next  `
+    let longest = rows.iter().map(|(c, _)| c.chars().count()).max().unwrap_or(0).max(14);
+    let cmd_w = if cols.saturating_sub(LEAD + longest + 2) >= 36 { longest } else { 14 };
+    let (indent, room) = match cols.saturating_sub(LEAD + cmd_w + 2) {
+        room if room >= 20 => (LEAD + cmd_w + 2, room),
+        _ => (LEAD + 2, cols.saturating_sub(LEAD + 2).max(20)),
+    };
+    let mut out = Vec::new();
+    for (k, (cmd, why)) in rows.iter().enumerate() {
+        let lead = Span::styled(if k == 0 { "   next  " } else { "         " }, t.accent().patch(t.bold()));
+        let mut parts = wrap(why, room).into_iter();
+        let beside = indent > LEAD + 2 && cmd.chars().count() <= cmd_w;
+        if beside {
+            let first = parts.next().unwrap_or_default();
+            out.push(Line::from(vec![
+                lead,
+                Span::styled(format!("{cmd:<cmd_w$}"), t.command()),
+                Span::styled(format!("  {first}"), t.dim()),
+            ]));
+        } else {
+            out.push(Line::from(vec![lead, Span::styled(cmd.clone(), t.command())]));
+        }
+        for p in parts {
+            out.push(Line::from(vec![Span::raw(" ".repeat(indent)), Span::styled(p, t.dim())]));
+        }
+    }
+    out
 }
 
 // ---------------------------------------------------------------------------------------------
 // Runtime
 
+/// Height of the inline viewport: enough for a hooks diff and its choices.
+const VIEW_HEIGHT: u16 = 18;
+
+/// The terminal's width, for text printed into the scrollback.
+fn cols(t: &Term) -> usize {
+    t.terminal.size().map(|s| s.width).unwrap_or(80).max(20) as usize
+}
+
+fn insert(t: &mut Term, lines: Vec<Line<'static>>, theme: &Theme) -> Result<()> {
+    if lines.is_empty() {
+        return Ok(());
+    }
+    let cols = cols(t);
+    let lines: Vec<Line<'static>> = theme.lines(lines).into_iter().flat_map(|l| fold(l, cols)).collect();
+    let h = lines.len() as u16;
+    t.terminal.insert_before(h, |buf| {
+        Paragraph::new(lines).render(buf.area, buf);
+    })?;
+    Ok(())
+}
+
+/// Fold a line wider than `cols` at word boundaries; continuation lines keep the line's indent
+/// (its leading rail or mark column), so wrapped text stays aligned in the scrollback.
+fn fold(line: Line<'static>, cols: usize) -> Vec<Line<'static>> {
+    if line.width() <= cols {
+        return vec![line];
+    }
+    // The first span is the rail or mark (`│  `, `└  `, `   ! `): continuation lines indent past it.
+    let indent = line.spans.first().map_or(0, |s| s.content.chars().count()).min(cols / 2);
+    let pad = if line.spans.first().is_some_and(|s| s.content.starts_with(['│', '|'])) {
+        line.spans[0].clone()
+    } else {
+        Span::raw(" ".repeat(indent))
+    };
+    let mut out: Vec<Line<'static>> = Vec::new();
+    let mut cur: Vec<Span<'static>> = Vec::new();
+    let mut w = 0usize;
+    for span in line.spans {
+        let style = span.style;
+        for word in span.content.split_inclusive(' ') {
+            let ww = word.chars().count();
+            if w + word.trim_end().chars().count() > cols && w > indent {
+                out.push(Line::from(std::mem::take(&mut cur)));
+                cur.push(pad.clone());
+                w = indent;
+            }
+            cur.push(Span::styled(word.to_string(), style));
+            w += ww;
+        }
+    }
+    if !cur.is_empty() {
+        out.push(Line::from(cur));
+    }
+    out
+}
+
+/// What hooks embed with, when it is a model: an installed one, or the one bundled in adage
+/// (`potion-base-8m (bundled)`). `None` for the hashed fallback.
+fn usable_model(ctx: &Ctx) -> Option<String> {
+    let (embedder, _) = crate::status_card::embeddings(&ctx.paths);
+    (embedder != "hashed fallback").then_some(embedder)
+}
+
 pub fn run(ctx: Ctx) -> Result<()> {
     let mut w = Wizard::new(detect::harnesses(), detect::registrations(ctx.root.as_deref()), ctx.root.is_some());
-    w.model = adage_intent::model::resolve_static(&ctx.paths.models(), false).map(|m| m.id);
+    w.model = usable_model(&ctx);
     let loaded = config::load(&ctx.paths);
     w.auto_learn = loaded.get("learn.auto").map(|(_, src)| (loaded.config.learn_auto, src.to_string()));
     w.config_path = detect::tilde(&ctx.paths.config());
     let mut job: Option<(Job, Kind)> = None;
-    let mut t = Term::enter()?;
+    let rows = ratatui::crossterm::terminal::size().map(|(_, h)| h).unwrap_or(24);
+    let mut t = Term::inline(VIEW_HEIGHT.min(rows.saturating_sub(2)).max(8)).map_err(|e| {
+        anyhow::anyhow!(
+            "this terminal could not run the interactive setup ({e:#}); `adage init --print` shows every step as text"
+        )
+    })?;
+    insert(&mut t, header(&ctx), &ctx.theme)?;
     let replan = |w: &mut Wizard| {
         if let Kind::Hooks(h) = w.current().clone() {
+            // A new plan starts at its top: the file it writes, then the diff.
+            w.scroll = 0;
             w.plan = Some(crate::install::plan(h, w.scope, ctx.root.as_deref(), None).map_err(|e| format!("{e:#}")));
         }
     };
+    // Every step that finishes goes into the scrollback, above the viewport.
+    let mut recorded = 0usize;
+    let completed;
     loop {
+        while recorded < w.cur && recorded < w.steps.len() {
+            if w.steps[recorded].status != StepStatus::Todo {
+                insert(&mut t, record(&w.steps[recorded], &ctx.theme), &ctx.theme)?;
+            }
+            recorded += 1;
+        }
         if let Some((j, kind)) = job.as_mut() {
             match j.poll() {
                 Some(done) => {
@@ -452,7 +766,7 @@ pub fn run(ctx: Ctx) -> Result<()> {
                     w.progress = None;
                     match (kind, done) {
                         (Kind::Model, Ok(lines)) => {
-                            w.model = adage_intent::model::resolve_static(&ctx.paths.models(), false).map(|m| m.id);
+                            w.model = usable_model(&ctx);
                             let note = lines.first().cloned().unwrap_or_default();
                             w.advance(StepStatus::Done(note));
                         }
@@ -460,7 +774,7 @@ pub fn run(ctx: Ctx) -> Result<()> {
                             let summary = lines.first().cloned().unwrap_or_default();
                             w.steps[w.cur].status = StepStatus::Done(summary);
                             let n = lines.len();
-                            w.output = lines.into_iter().skip(n.saturating_sub(24)).collect();
+                            w.output = lines.into_iter().skip(n.saturating_sub(12)).collect();
                         }
                         (_, Err(e)) => {
                             w.steps[w.cur].status = StepStatus::Failed(e.clone());
@@ -476,7 +790,10 @@ pub fn run(ctx: Ctx) -> Result<()> {
         let Some(k) = term::next_key()? else { continue };
         let Some(cmd) = w.key(k.code, k.modifiers) else { continue };
         let next = match cmd {
-            Cmd::Quit => break,
+            Cmd::Quit => {
+                completed = *w.current() == Kind::Finish;
+                break;
+            }
             Cmd::Replan => {
                 replan(&mut w);
                 None
@@ -486,9 +803,11 @@ pub fn run(ctx: Ctx) -> Result<()> {
                 None
             }
             Cmd::Install(p) => match crate::install::apply_backed_up(&p) {
-                Ok(_) => {
+                Ok(backup) => {
                     w.registrations = detect::registrations(ctx.root.as_deref());
-                    w.advance(StepStatus::Done(format!("wrote {}", detect::tilde(&p.target))))
+                    let kept =
+                        backup.map(|b| format!(" (previous version in {})", detect::tilde(&b))).unwrap_or_default();
+                    w.advance(StepStatus::Done(format!("wrote {}{kept}", detect::tilde(&p.target))))
                 }
                 Err(e) => {
                     w.plan = Some(Err(format!("not written: {e:#}")));
@@ -502,7 +821,7 @@ pub fn run(ctx: Ctx) -> Result<()> {
             }
             Cmd::Learn => {
                 job = Some((jobs::learn_now(ctx.paths.clone(), ctx.root.clone()), Kind::Learn));
-                w.progress = Some(("reading transcripts…".into(), 0.1));
+                w.progress = Some(("reading traces…".into(), 0.1));
                 None
             }
             // `adage config set`'s own guard and validation.
@@ -511,7 +830,7 @@ pub fn run(ctx: Ctx) -> Result<()> {
             {
                 Ok(_) => {
                     w.auto_learn = Some((true, "file".into()));
-                    w.advance(StepStatus::Done(format!("learn.auto = true in {}", w.config_path)))
+                    w.advance(StepStatus::Done(format!("on · learn.auto = true in {}", w.config_path)))
                 }
                 Err(e) => w.advance(StepStatus::Failed(format!("{e:#}"))),
             },
@@ -522,10 +841,17 @@ pub fn run(ctx: Ctx) -> Result<()> {
             _ => {}
         }
     }
-    drop(t);
-    for l in w.report() {
-        println!("{l}");
+    // The steps not yet in the scrollback (the last ones), then the closing card.
+    while recorded < w.steps.len() {
+        if w.steps[recorded].kind != Kind::Finish && w.steps[recorded].status != StepStatus::Todo {
+            insert(&mut t, record(&w.steps[recorded], &ctx.theme), &ctx.theme)?;
+        }
+        recorded += 1;
     }
+    let card = finish_card(&w, &ctx.theme, completed, cols(&t));
+    insert(&mut t, card, &ctx.theme)?;
+    t.close_inline()?;
+    drop(t);
     for n in super::take_notices() {
         eprintln!("{n}");
     }

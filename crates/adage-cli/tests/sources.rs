@@ -49,6 +49,19 @@ fn adage(home: &Path, args: &[&str]) -> (String, String, bool) {
 }
 
 #[test]
+fn a_missing_explicit_directory_is_an_error_in_both_commands() {
+    let home = home_with_history();
+    let missing = home.path().join("missing-history");
+    for command in ["condition", "sense"] {
+        for flag in ["--claude-projects", "--codex-sessions"] {
+            let (_, err, ok) = adage(home.path(), &[command, flag, missing.to_str().unwrap()]);
+            assert!(!ok && err.contains("is not a directory"), "{command} {flag}: {err}");
+            assert!(!home.path().join("adage/tracks").exists(), "no default history is published");
+        }
+    }
+}
+
+#[test]
 fn an_empty_explicit_source_never_falls_back_to_claude_history() {
     let home = home_with_history();
     let empty = tempfile::tempdir().unwrap();
@@ -58,7 +71,7 @@ fn an_empty_explicit_source_never_falls_back_to_claude_history() {
     assert!(!home.path().join("adage/tracks").exists(), "nothing was learned from the fallback");
 
     let (out, _, _) = adage(home.path(), &["sense", "--codex-sessions", empty.path().to_str().unwrap()]);
-    assert!(out.contains("0 session(s)"), "sense read only the named source:\n{out}");
+    assert!(out.contains("0 traces"), "sense read only the named source:\n{out}");
     assert!(!out.contains("Claude Code history"), "{out}");
 }
 
@@ -69,7 +82,15 @@ fn codex_history_is_learned_and_sensed_with_its_harness() {
     let s = sessions.to_str().unwrap();
     let (out, err, ok) = adage(home.path(), &["sense", "--demo", "--codex-sessions", s]);
     assert!(ok, "{err}");
-    assert!(out.contains("Codex rollout(s)") && out.contains("(codex)"), "{out}");
+    assert!(out.contains("Codex rollout(s)"), "{out}");
+    let (out, err, ok) = adage(home.path(), &["sense", "--demo", "--codex-sessions", s, "--json"]);
+    assert!(ok, "{err}");
+    let report: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert!(report["repos"].as_array().unwrap().iter().any(|repo| repo["harnesses"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|h| h == "codex")));
 
     let (_, err, ok) = adage(home.path(), &["condition", "--demo", "--codex-sessions", s]);
     assert!(ok, "{err}");
@@ -138,11 +159,10 @@ fn configured_sources_are_shared_by_preview_and_learning_and_explicit_sources_re
     let v: serde_json::Value = serde_json::from_str(&out).unwrap();
     assert_eq!(v["sessions"], 0);
     let (_, err, ok) = adage(home.path(), &["condition", "--claude-projects", empty.path().to_str().unwrap()]);
-    assert!(!ok && err.contains("in the sources given"), "{err}");
+    assert!(!ok && err.contains("the sources you named hold no traces"), "{err}");
     let (out, err, ok) = adage(home.path(), &["sense", "--transcripts", "--json"]);
-    assert!(ok, "{err}");
-    let v: serde_json::Value = serde_json::from_str(&out).unwrap();
-    assert_eq!(v["sessions"], 0, "an empty explicit list never falls back");
+    assert!(!ok && err.contains("--transcripts"), "an empty explicit list is a usage error: {err}");
+    assert!(out.is_empty(), "an empty explicit list never falls back to a default source report");
 }
 
 #[test]
@@ -166,7 +186,7 @@ fn no_default_history_binds_real_repository_instincts_but_explicit_empty_still_f
     assert!(err.contains("binding this repository's instincts"), "{err}");
     let empty = tempfile::tempdir().unwrap();
     let (_, err, ok) = adage(home.path(), &["condition", "--claude-projects", empty.path().to_str().unwrap()]);
-    assert!(!ok && err.contains("in the sources given"), "{err}");
+    assert!(!ok && err.contains("the sources you named hold no traces"), "{err}");
     let (_, err, ok) = adage(home.path(), &["condition", "--no-instincts"]);
     assert!(!ok && err.contains("no traces found"), "{err}");
 }

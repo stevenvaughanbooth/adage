@@ -160,7 +160,7 @@ pub const KEYS: &[Key] = &[
         kind: Kind::Thresholds,
         default: "default",
         env: None,
-        doc: "evidence bars for `adage condition` and automatic learning: default, or demo (lower)",
+        doc: "evidence bars for `adage condition` and automatic conditioning: default, or demo (lower)",
         guarded: true,
     },
     Key {
@@ -184,7 +184,7 @@ pub const KEYS: &[Key] = &[
         kind: Kind::Dir,
         default: "",
         env: None,
-        doc: "a directory of `opencode export` files automatic learning reads (\"\" = none)",
+        doc: "a directory of `opencode export` files automatic conditioning reads (\"\" = none)",
         guarded: true,
     },
     Key {
@@ -192,7 +192,7 @@ pub const KEYS: &[Key] = &[
         kind: Kind::Bool,
         default: "true",
         env: None,
-        doc: "keep parsed transcripts in cache/sessions so re-learning parses only what changed",
+        doc: "keep parsed traces in cache/sessions so conditioning again parses only what changed",
         guarded: false,
     },
     Key {

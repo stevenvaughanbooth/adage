@@ -275,11 +275,34 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### Seeing it
 
-- `adage watch` (a live pane), `adage ui` (the full-screen app: live feed, reflexes and review,
-  health fixes, settings), the interactive `adage init` wizard, `adage map` (the map in a
-  browser, read-only, loopback only), `adage doctor` (every check, with fixes), `adage status`,
-  `adage report` and `adage graph`. `adage --help` groups every command; `adage <command> --help`
-  shows its options and never runs it.
+- `adage watch` (a live pane), `adage ui` (the full-screen app), the interactive `adage init`
+  wizard, `adage map`, `adage doctor` (every check, with fixes), `adage status`, `adage report`
+  and `adage graph`. Plain `adage` prints the status card; `adage ui` opens the app.
+- **The terminal UI.** `adage watch` shows what happens now, what conditioning changed and the
+  health lamps, each problem naming the command that fixes it; `Enter` inspects a row's exact
+  directive text and evidence. `adage ui` has Live, Reflexes (with a fuzzy filter and review
+  decisions), Map (stimulus → reflex → response in the terminal), Health and Settings tabs, and a
+  command palette (`:` or `ctrl-k`) over every action and reflex. Under `NO_COLOR` strengths are
+  spelled out (`FIRE`, `PRIME`, `INHIBIT`); `--plain` also drops glyphs, and `ADAGE_ASCII=1`
+  keeps colour with ASCII glyphs.
+- **The map.** `adage map` serves a web app from the binary (`web/map`, embedded): the reflex
+  graph, live evidence as hooks fire (server-sent events), and a "How it works" walkthrough. It
+  listens on 127.0.0.1 only and is read-only.
+- **The command line is parsed by clap.** `adage --help` groups every command; `adage <command>
+  --help` shows its options and never runs it. A mistyped command gets a suggestion,
+  `adage completions <shell>` prints shell completions, `--plain` works everywhere, and usage
+  errors exit with status 2. `adage status` uses the shared output grammar and has `--json`.
+
+### Design system
+
+- **One design system for every surface** (docs/design/style.md). Colours, type (Bricolage
+  Grotesque, Hanken Grotesk, Red Hat Mono), spacing, motion and terminal glyphs are defined once
+  in `design/tokens/adage.tokens.json` (W3C DTCG); `cargo xtask tokens` generates the terminal
+  palette (`adage-term`) and the web map's CSS variables, and `cargo xtask tokens --check` and
+  `cargo test` fail if either is stale or any text colour is below 4.5:1 contrast. The
+  `adage-term` crate detects what the terminal can do (colour depth, UTF-8, light or dark ground;
+  `ADAGE_COLOR`, `ADAGE_THEME` and `ADAGE_ASCII` override it) and provides the output grammar
+  every command prints through. Terminal frames and printed output are pinned by insta snapshots.
 
 ### Evals
 
@@ -300,4 +323,5 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   by `os`/`cpu` (all three binaries in it); nothing is downloaded at install time.
 - A Claude Code plugin marketplace with two plugins (`adage`, and `adage-exec` for execution);
   each uses a bundled, checksum-verified binary, else the one on `PATH`, and never downloads.
+- A public website (`web/site`).
 - Apache-2.0, with a generated NOTICE of third-party licenses; `SECURITY.md`, `CONTRIBUTING.md`.

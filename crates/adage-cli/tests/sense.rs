@@ -128,20 +128,20 @@ fn senses_history_per_repository_and_writes_nothing() {
     history(&w);
     let out = w.ok(&["sense", "--demo"]);
     for s in [
-        "Read-only",
-        "7 session(s) in 2 repository(ies)",
-        "acme-billing — 6 sessions, 12 prompts",
-        "turns before first edit   median 3",
+        "read-only",
+        "7 traces · 2 repositories",
+        "acme-billing · 6 traces · 12 prompts",
+        "first edit  median 3 turns",
         "exec python3 scripts/wi-lookup",
-        "a work item in 6 sessions (W-####)",
-        "dead-end candidates",
+        "a work item in 6 traces (W-####)",
+        "dead ends   candidates",
         "exec python3 -m pytest tests   then worked: exec make test",
-        "6 of 6 sessions editing schema/*.json then ran exec make gen",
+        "6 of 6 traces editing schema/*.json then ran exec make gen",
         "candidates only, nothing is written",
-        "new       learned/lookup-work-item",
+        "new       ◠ learned/lookup-work-item",
         "learned/finish-line-",
         "learned/dead-end-",
-        "prompt intents            0 usable (potion-base-8m-i8@b9c0e329a2ce)",
+        "intent      0 families usable (potion-base-8m-i8@b9c0e329a2ce)",
     ] {
         assert!(out.contains(s), "report lacks {s:?}:\n{out}");
     }
@@ -176,7 +176,7 @@ fn senses_history_per_repository_and_writes_nothing() {
     assert_eq!(v["repos"][0]["repo"], "other");
     let v: Value = serde_json::from_str(&w.ok(&["sense", "--json", "--since", "30"])).unwrap();
     assert_eq!(v["sessions"], 6);
-    assert!(w.run(&["sense", "--since", "soon"]).status.code() == Some(1));
+    assert!(w.run(&["sense", "--since", "soon"]).status.code() == Some(2), "a usage error");
 }
 
 #[test]
@@ -203,5 +203,5 @@ fn candidates_are_compared_with_installed_tracks() {
 fn an_empty_history_says_how_to_point_it_elsewhere() {
     let w = World::new();
     let out = w.ok(&["sense"]);
-    assert!(out.contains("No traces to sense"), "{out}");
+    assert!(out.contains("No traces to sense in that source"), "{out}");
 }

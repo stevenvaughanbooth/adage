@@ -280,12 +280,12 @@ fn queue_lists_each_reason_with_evidence_and_directive() {
 
     let t = w.ok(&["review"]);
     for s in [
-        "5 reflex(es) await a decision",
-        "why        new:",
+        "5 reflexes wait for a decision",
+        "why         new:",
         "Wilson lower bound",
         "example values: item = W-1234",
         "adage review <approve|extinguish|weaken|pin> acme/work-items lookup",
-        "(imported)",
+        " · imported",
     ] {
         assert!(t.contains(s), "listing lacks {s:?}:\n{t}");
     }

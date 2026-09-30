@@ -10,6 +10,7 @@
 //!   savings: ~$0.034 and 3.1 turns per session, API-list equivalent (95% CI $0.011–$0.058)
 //!            ≈ $1.87 over 55 sessions, vs 6 where Adage stayed quiet (priced as of 2026-06-24)
 //!   1 install step waits for you → adage review
+//!   » today: adage: 2 new reflexes active.
 //!   embeddings: potion-base-8m-i8 (bundled) · adage ui · adage map · adage doctor
 //! ```
 //!
@@ -206,21 +207,56 @@ fn repo_lines(paths: &Paths, repo: &str, root: &Path, index: &Index, now: u64) -
         }
     }
 
-    // What waits for a person.
-    let dir = paths.tracks().join(adage_learn::slug(repo));
-    let nascent = adage_tracks::io::read_all(&dir)
-        .unwrap_or_default()
-        .iter()
-        .flat_map(|t| t.routes.iter())
-        .filter(|r| r.state == adage_tracks::RouteState::Nascent)
-        .count();
-    if nascent > 0 {
+    // What waits for a person: install steps, and quiet reflexes (their uplift is below the bar,
+    // so they wait for a person too, but they are not install steps).
+    let (steps, quiet) = waiting(paths, repo);
+    if steps > 0 {
         out.push(format!(
             "{} for you → adage review",
-            if nascent == 1 { "1 install step waits".to_string() } else { format!("{nascent} install steps wait") }
+            if steps == 1 { "1 install step waits".to_string() } else { format!("{steps} install steps wait") }
         ));
     }
+    if quiet > 0 {
+        out.push(format!(
+            "{} quiet: agents already do {}, so {} for you to approve → adage review",
+            plural(quiet, "reflex", "reflexes"),
+            if quiet == 1 { "it" } else { "them" },
+            if quiet == 1 { "it waits" } else { "they wait" }
+        ));
+    }
+    if let Some(n) = notice_today(paths, repo, now) {
+        out.push(format!("» today: {n}"));
+    }
     out
+}
+
+/// Nascent reflexes in the repository's tracks: install steps, and quiet ones (kept quiet by
+/// their uplift: `crate::evidence::quiet_line`).
+pub fn waiting(paths: &Paths, repo: &str) -> (usize, usize) {
+    let dir = paths.tracks().join(adage_learn::slug(repo));
+    let mut out = (0, 0);
+    for t in adage_tracks::io::read_all(&dir).unwrap_or_default() {
+        for r in t.routes.iter().filter(|r| r.state == adage_tracks::RouteState::Nascent) {
+            if crate::evidence::quiet_line(r).is_some() {
+                out.1 += 1;
+            } else {
+                out.0 += 1;
+            }
+        }
+    }
+    out
+}
+
+/// The notice shown at session start for `repo` in the last day (`ui.notices`), if one was:
+/// the text of `<slug>.notice.json` when `<slug>.notice-shown.json` records it shown.
+pub fn notice_today(paths: &Paths, repo: &str, now: u64) -> Option<String> {
+    if !adage_store::config::load(paths).config.ui_notices {
+        return None;
+    }
+    let q = Queue::new(paths, repo);
+    let shown: adage_hook::autolearn::Shown = read_json(&q.shown())?;
+    let n: adage_hook::autolearn::Notice = read_json(&q.notice())?;
+    (n.id == shown.id && now.saturating_sub(shown.at) < 86_400_000 && !n.text.is_empty()).then_some(n.text)
 }
 
 /// What hooks and the learner embed with, in a few words: `potion-base-8m (bundled)`, an
@@ -300,4 +336,42 @@ pub fn card(paths: &Paths, cwd: Option<&Path>) -> String {
     }
     s.push_str(&format!("  embeddings: {embed} · adage ui · adage map · adage doctor\n"));
     s
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use adage_hook::autolearn::{Notice, Shown};
+
+    #[test]
+    fn quiet_reflexes_are_not_install_steps_and_todays_notice_shows() {
+        let d = tempfile::tempdir().unwrap();
+        let paths = Paths::at(d.path());
+        let repo = "harbor-dispatch";
+        let mut t = crate::ui::demo::track(0);
+        t.routes[0].state = adage_tracks::RouteState::Nascent;
+        t.routes[0].evidence.uplift = Some(adage_tracks::Uplift { mean: 0.04, gated: true, ..Default::default() });
+        t.routes[1].state = adage_tracks::RouteState::Nascent;
+        adage_tracks::io::write(&paths.tracks().join(adage_learn::slug(repo)).join("learned"), &t).unwrap();
+        assert_eq!(waiting(&paths, repo), (1, 1), "one install step, one quiet reflex");
+
+        let now = 1_790_165_040_000;
+        let q = Queue::new(&paths, repo);
+        std::fs::create_dir_all(paths.learn_queue()).unwrap();
+        let n = Notice {
+            id: "n1".into(),
+            text: "adage: 2 new reflexes active.".into(),
+            kind: "reflexes".into(),
+            at: now - 60_000,
+            basis: serde_json::Value::Null,
+            baseline: serde_json::Value::Null,
+        };
+        crate::autolearn::write_json(&q.notice(), &n).unwrap();
+        assert_eq!(notice_today(&paths, repo, now), None, "composed, not shown yet");
+        crate::autolearn::write_json(&q.shown(), &Shown { id: "n1".into(), at: now - 30_000 }).unwrap();
+        assert_eq!(notice_today(&paths, repo, now).as_deref(), Some("adage: 2 new reflexes active."));
+        assert_eq!(notice_today(&paths, repo, now + 2 * 86_400_000), None, "yesterday's is not today's");
+        std::fs::write(paths.config(), "[ui]\nnotices = \"off\"\n").unwrap();
+        assert_eq!(notice_today(&paths, repo, now), None, "ui.notices = off");
+    }
 }

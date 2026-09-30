@@ -14,6 +14,7 @@ use crate::redact;
 use crate::share::list_files;
 use adage_pack::Pack;
 use adage_store::Paths;
+use adage_term::{Line, Out};
 use adage_tracks::{index, io, RouteState};
 use anyhow::{bail, Context, Result};
 use std::collections::BTreeSet;
@@ -89,6 +90,8 @@ pub fn share(name: &str, out: &Path, key: Option<&Path>, args: &[String], paths:
         None => None,
     };
     let cwd_root = std::env::current_dir().ok().and_then(|d| adage_core::repo::find_root(&d));
+    let mut notes: Vec<String> = Vec::new();
+    let mut vendored: Vec<(String, String, String)> = Vec::new();
     let mut skipped: Vec<(String, String)> = Vec::new();
     let mut not_included: Vec<(String, &'static str)> = Vec::new();
     let (pack, from) = match resolve(paths, name)? {
@@ -110,12 +113,12 @@ pub fn share(name: &str, out: &Path, key: Option<&Path>, args: &[String], paths:
             });
             if let Some(r) = given_root.as_deref() {
                 if !adage_pack::bind::local_keys(r).contains(&track.manifest.scope.repo) {
-                    println!(
-                        "adage share: pinning {}'s scripts against {} (--repo-root; its own key differs from the track's {})",
+                    notes.push(format!(
+                        "pinning {}'s scripts against {} (--repo-root; its own key differs from the track's {})",
                         track.manifest.track.name,
                         r.display(),
                         track.manifest.scope.repo
-                    );
+                    ));
                 }
             }
             let up = adage_pack::convert::from_track(&track, root)
@@ -139,9 +142,7 @@ pub fn share(name: &str, out: &Path, key: Option<&Path>, args: &[String], paths:
             .or(cwd_root.as_deref())
             .context("--vendor reads the scripts from a repository: run it inside one, or pass --repo-root <dir>")?;
         let v = adage_pack::vendor::vendor(&pack, root).context("refusing to vendor")?;
-        for (route, path, sha) in &v.scripts {
-            println!("adage share: vendored {path} (reflex {route}) as scripts/sha256-{}…", &sha[..12]);
-        }
+        vendored.extend(v.scripts.iter().map(|(route, path, sha)| (route.clone(), path.clone(), sha.clone())));
         pack = v.pack;
     }
     let attest: Vec<String> = args.windows(2).filter(|w| w[0] == "--attest").map(|w| w[1].clone()).collect();
@@ -207,23 +208,17 @@ pub fn share(name: &str, out: &Path, key: Option<&Path>, args: &[String], paths:
         }
     }
     if !findings.is_empty() {
-        eprintln!("adage share: the redaction check found {} problem(s); nothing was written:", findings.len());
-        for f in &findings {
-            eprintln!("  {}:{}  {}  {}", f.file, f.line, f.kind, f.excerpt);
-        }
-        bail!("refusing to share {name}: generalise or remove the flagged text, then share again");
+        return Err(crate::share::redaction_refusal(name, &findings));
     }
     if !flags.is_empty() && !ack {
-        eprintln!(
-            "adage share: {} vendored script line(s) need your acknowledgement; nothing was written:",
-            flags.len()
-        );
-        for (rel, f) in &flags {
-            eprintln!("  {rel}:{}  {}  {}", f.line, f.kind, f.excerpt);
-        }
-        bail!(
-            "refusing to share {name}: these scripts reach beyond the repository. Review them, then re-run with --ack-scripts"
-        );
+        return Err(crate::refusal(
+            format!(
+                "refusing to share {name}: {} reach beyond the repository; nothing was written",
+                crate::words::count(flags.len(), "vendored script line")
+            ),
+            flags.iter().map(|(rel, f)| format!("{rel}:{} · {} · {}", f.line, f.kind, f.excerpt)).collect(),
+            "review them, then run the same `adage share` with --ack-scripts",
+        ));
     }
 
     if out.exists() && (!out.is_dir() || std::fs::read_dir(out)?.next().is_some()) {
@@ -246,69 +241,103 @@ pub fn share(name: &str, out: &Path, key: Option<&Path>, args: &[String], paths:
     std::fs::rename(&stage, out)?;
 
     let m = &pack.manifest;
-    println!("adage share: pack {} @ {}  (from {})\n", m.pack.name, m.pack.version, from.display());
-    println!("Included — exactly these files, plus {}:", adage_pack::validate::SIG);
-    for (rel, bytes) in &files {
-        println!("  {rel:<48} {:>7} bytes", bytes.len());
+    let mut o = Out::stdout();
+    o.header("share", &[&format!("pack {}@{}", m.pack.name, m.pack.version), &format!("from {}", from.display())])?;
+    for n in &notes {
+        o.note(n)?;
     }
-    println!("\nReflexes (templates, types and aggregate statistics only):");
+    o.blank()?;
+    o.section(&format!("Included: exactly these files, plus {}", adage_pack::validate::SIG))?;
+    for (rel, bytes) in &files {
+        o.line(&Line::new().text(format!("  {rel:<48} ")).faint(format!("{:>7} bytes", bytes.len())))?;
+    }
+    o.blank()?;
+    o.section("Reflexes: templates, types and aggregate statistics only")?;
     for r in &pack.routes {
         let exec = r.exec.as_ref().map(|x| format!("{:?}", x.level)).unwrap_or_else(|| "E0".into());
-        let support = r.evidence.as_ref().map(|e| format!("  [{}/{} traces]", e.support, e.opportunities));
-        println!(
-            "  {:<24} {:<10} {:<6} exec {exec}{}",
-            r.id,
-            r.shape.as_str(),
-            format!("{:?}", r.strength).to_lowercase(),
-            support.unwrap_or_default()
-        );
+        let mut l = Line::new()
+            .text(format!("  {:<24} {:<10} ", r.id, r.shape.as_str()))
+            .strength(crate::words::strength(r.strength))
+            .pad_to(48)
+            .quiet(format!("exec {exec}"));
+        if let Some(e) = r.evidence.as_ref() {
+            l = l.sep().quiet(format!("{}/{} traces", e.support, e.opportunities));
+        }
+        o.line(&l)?;
+    }
+    if !vendored.is_empty() {
+        o.blank()?;
+        o.section("Vendored (--vendor): the script's bytes travel in the pack")?;
+        for (route, path, sha) in &vendored {
+            o.line(
+                &Line::new()
+                    .text(format!("  {path} (reflex {route})"))
+                    .sep()
+                    .faint(format!("scripts/sha256-{}…", &sha[..12.min(sha.len())])),
+            )?;
+        }
     }
     if !skipped.is_empty() {
-        println!("\nNot carried:");
+        o.blank()?;
+        o.section("Not carried")?;
         for (id, why) in &skipped {
-            println!("  {id:<24} {why}");
+            o.line(&Line::new().text(format!("  {id:<24} ")).quiet(crate::words::prose(why)))?;
         }
     }
     if !not_included.is_empty() {
-        println!("\nNot included:");
+        o.blank()?;
+        o.section("Not included")?;
         for (rel, why) in &not_included {
-            println!("  {rel:<40} {why}");
+            o.line(&Line::new().text(format!("  {rel:<40} ")).quiet(why.to_string()))?;
         }
     }
     if !pack.attestations.is_empty() {
-        println!("\nAttestations (recipients see them as self-reported by you; they grant nothing):");
+        o.blank()?;
+        o.section("Attestations: recipients see them as self-reported by you; they grant nothing")?;
         for (id, a) in &pack.attestations {
-            println!("  {id:<24} {}", adage_pack::attest::summary(a));
+            o.line(&Line::new().text(format!("  {id:<24} ")).quiet(adage_pack::attest::summary(a)))?;
         }
     }
     if !flags.is_empty() {
-        println!("\nAcknowledged (--ack-scripts):");
+        o.blank()?;
+        o.section("Acknowledged (--ack-scripts)")?;
         for (rel, f) in &flags {
-            println!("  {rel}:{}  {}  {}", f.line, f.kind, f.excerpt);
+            o.line(&Line::new().text(format!("  {rel}:{}  {}  ", f.line, f.kind)).quiet(f.excerpt.clone()))?;
         }
     }
-    println!("\nChecked: no absolute paths, home-directory paths, or secret-looking strings in any file.");
-    println!("Never included: approvals, review.yaml, proposals, trust.json, session state.");
-    println!("Digest:  sha256 {digest}");
+    o.blank()?;
+    o.kv(
+        "checked",
+        Line::new().text("no absolute paths, home-directory paths, or secret-looking strings in any file"),
+    )?;
+    o.kv("never sent", Line::new().quiet("approvals, review.yaml, proposals, trust.json, session state"))?;
+    o.kv("digest", Line::new().quiet(format!("sha256 {digest}")))?;
     let how = match signed.method {
         adage_sign::Method::Agent => "via ssh-agent",
         adage_sign::Method::KeyFile => "with key file",
     };
-    println!(
-        "Signed:  {} ({}, {how}), namespace {}",
-        adage_sign::fingerprint(&signed.key),
-        signed.key.algorithm(),
-        adage_sign::PACK_NAMESPACE
-    );
-    println!("Wrote:   {}", out.display());
+    o.kv(
+        "signed",
+        Line::new().text(format!(
+            "{} ({}, {how}), namespace {}",
+            adage_sign::fingerprint(&signed.key),
+            signed.key.algorithm(),
+            adage_sign::PACK_NAMESPACE
+        )),
+    )?;
+    o.kv("wrote", Line::new().text(out.display().to_string()))?;
     let principal = Some(signed.key.comment())
         .filter(|c| !c.is_empty() && !c.contains(char::is_whitespace))
         .unwrap_or("adage-signer");
-    println!(
-        "\nRecipients trust this signer for packs with a line in <repo>/.adage/trusted-signers or $ADAGE_HOME/trusted-signers:\n  {principal} namespaces=\"{}\" {}",
+    o.blank()?;
+    o.note("Recipients trust this signer for packs with a line in <repo>/.adage/trusted-signers or $ADAGE_HOME/trusted-signers:")?;
+    o.line(&Line::new().text(format!(
+        "  {principal} namespaces=\"{}\" {}",
         adage_sign::PACK_NAMESPACE,
         adage_sign::key_line(&signed.key)
-    );
+    )))?;
+    o.blank()?;
+    o.next(&format!("adage add {}", out.display()), "on the recipient's machine, once they trust the signer")?;
     Ok(())
 }
 

@@ -98,7 +98,7 @@ impl ExecE1 {
 
     pub fn text(&self) -> String {
         format!(
-            "exec E1 (offline estimate): {} of {} sessions triggered a prefetchable lookup; the agent ran it itself in {} ({} calls E1 would have replaced); turns saved beyond E0: {} ({:.2} per triggered session)\n",
+            "exec E1 (offline estimate): {} of {} traces triggered a prefetchable lookup; the agent ran it itself in {} ({} calls E1 would have replaced); turns saved beyond E0: {} ({:.2} per triggered trace)\n",
             self.triggered_sessions,
             self.sessions,
             self.replaced_sessions,

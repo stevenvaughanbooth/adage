@@ -30,20 +30,22 @@ pub fn require_person(cmd: &str) -> Result<()> {
     // Every harness's marker, not only Claude Code's: an OpenCode or Codex agent must not be able
     // to share, trust, or review either.
     if let Some(var) = crate::install::AGENT_ENV.iter().find(|v| std::env::var_os(v).is_some_and(|x| !x.is_empty())) {
-        bail!(
-            "`adage {cmd}` is a decision for a person (it changes what is shared, trusted or \
-             configured), so it will not run inside an agent session ({var} is set). Run it \
-             yourself, in a terminal."
-        );
+        return Err(crate::hint(
+            format!(
+                "`adage {cmd}` is a decision for a person (it changes what is shared, trusted or \
+                 configured), so it will not run inside an agent session ({var} is set)"
+            ),
+            format!("run `adage {cmd}` yourself, in a terminal"),
+        ));
     }
     if std::env::var("ADAGE_ALLOW_NONINTERACTIVE").as_deref() == Ok("1") {
         return Ok(());
     }
     if !std::io::stdin().is_terminal() {
-        bail!(
-            "`adage {cmd}` needs a person at a terminal (stdin is not a terminal). For CI, set \
-             ADAGE_ALLOW_NONINTERACTIVE=1."
-        );
+        return Err(crate::hint(
+            format!("`adage {cmd}` needs a person at a terminal (stdin is not a terminal)"),
+            "run it from a terminal; for CI, set ADAGE_ALLOW_NONINTERACTIVE=1",
+        ));
     }
     Ok(())
 }
@@ -137,7 +139,10 @@ pub(crate) fn find_track(root: &Path, name: &str) -> Result<PathBuf> {
     if p.join("track.toml").is_file() {
         return Ok(p.to_path_buf());
     }
-    bail!("no installed track named {name:?} in {} (see `adage status`)", root.display())
+    Err(crate::hint(
+        format!("no installed track named {name:?} in {}", root.display()),
+        "use a track's name as `adage status` shows it (without @version), or pass a track directory",
+    ))
 }
 
 pub fn describe_step(step: &Step) -> String {
@@ -162,6 +167,29 @@ pub fn describe_step(step: &Step) -> String {
     }
 }
 
+/// The redaction check's findings as an error: one cause per finding; nothing was written.
+pub(crate) fn redaction_refusal(name: &str, findings: &[crate::redact::Finding]) -> anyhow::Error {
+    let causes = findings
+        .iter()
+        .map(|f| {
+            let at = if f.line > 0 { format!("{}:{}", f.file, f.line) } else { f.file.clone() };
+            if f.excerpt.is_empty() {
+                format!("{at} · {}", f.kind)
+            } else {
+                format!("{at} · {} · {}", f.kind, f.excerpt)
+            }
+        })
+        .collect();
+    crate::refusal(
+        format!(
+            "refusing to share {name}: the redaction check found {}; nothing was written",
+            crate::words::count(findings.len(), "problem")
+        ),
+        causes,
+        "generalise or remove the flagged text, then share again",
+    )
+}
+
 const USAGE: &str = "usage: adage share <track-or-pack> --out <dir> [--key <path>] [--vendor] [--attest <results.jsonl>]... [--ack-scripts] [--repo-root <dir>]";
 
 pub fn share(args: &[String], paths: &Paths) -> Result<()> {
@@ -169,5 +197,11 @@ pub fn share(args: &[String], paths: &Paths) -> Result<()> {
     let name = args.first().filter(|a| !a.starts_with("--")).context(USAGE)?;
     let out = PathBuf::from(crate::flag(args, "--out").context(USAGE)?);
     let key = crate::flag(args, "--key").map(PathBuf::from);
+    if let Some(k) = key.as_deref().filter(|k| !k.is_file()) {
+        return Err(crate::hint(
+            format!("no signing key at {}", k.display()),
+            "pass --key <private key file> (e.g. ~/.ssh/id_ed25519), or leave it out to sign with ssh-agent",
+        ));
+    }
     crate::share_pack::share(name, &out, key.as_deref(), args, paths)
 }

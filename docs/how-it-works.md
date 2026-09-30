@@ -1,7 +1,7 @@
 # How Adage works
 
 This is the product behavior reference for the README, CLI, TUI and launch copy.
-Updated 2026-09-29 against the launch worktree, with main `d4f7e60` integrated.
+Updated 2026-09-29 against the launch worktree, with main's UX push `52c256b` integrated.
 Implementation changes must update this page and the relevant operational guide in the same change.
 The older numbered [architecture document](Adage%20%E2%80%94%20Architecture.md) is a historical
 implementation snapshot, not the current feature checklist.
@@ -108,7 +108,8 @@ unknown and pauses E2 application in that worktree. Inspect before explicitly ac
 acknowledgement confirms neither success nor rollback and does not retry the action. See
 [execution.md](execution.md) for recovery commands and the limits of this guarantee.
 
-The TUI shows mode, trigger, action and latest E2 outcome before the evidence details. Its
+The redesigned Reflexes tab shows mode, trigger, action and latest E2 outcome before the evidence
+details, using the shared terminal design system and the new tab layout. Its
 evidence-review approval does not grant execution; execution grants and recovery currently use
 the CLI's person-gated controls. “Automatic” means eligible under the displayed grant and
 configuration, not that the trigger fired or a control session will execute it.

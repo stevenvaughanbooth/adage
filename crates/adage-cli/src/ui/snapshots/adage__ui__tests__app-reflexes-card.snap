@@ -1,0 +1,49 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+expression: text
+---
+ adage    1 Live   2 Reflexes (3)  3 Map   4 Health (2)  5 Settings                                                            harbor-dispatch · LIVE
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ / filter reflexes, commands, files                     │  ▤ card-carrier-rules
+ FIRE 3  PRIME 6  INHIBIT 1  ◌ quiet 1  all states ▾    │  mode     Suggest · No execution grant
+                                                        │  when     a prompt means: add a carrier rule
+ ▾ harbor-dispatch/incidents@0.3.0                      │  do       procedure card: 3 file(s), from 4 session(s)
+   F ◠ lookup-incident         firm     24/25           │  PRIME · forming · harbor-dispatch/learned@0.3.0 · procedure card
+   F ◠ read-linked-files       firm     13/17           │
+   I ◠ dead-end-npm-test       firm     11/43           │  ADVISORY PREVIEW (EXAMPLE VALUES)
+                                                        │    (no preview: the reflex has no directive text)
+ ▾ harbor-dispatch/intents@0.3.0                        │
+   P ◠ start-with-npm-check    forming  6/9             │  EVIDENCE
+                                                        │    from conditioning: a family of 4 similar traces, 3 passed the project's checks
+ ▾ harbor-dispatch/learned@0.3.0                        │    live since installed: fired 0 · followed 0 · ignored 0 · finish line met 0
+▌  P ▤ card-carrier-rules      forming  4 traces        │
+   P ◠ tests-after-rules-edit  firm     value           │  PROCEDURE CARD
+                                                        │    files, in the order they were first edited
+ ▾ @imported/@bound/harbor-skills@0.3.0 · pack          │      1 registry/carriers.csv      4/4 traces
+   F ◈ release-notes-s2-chang… firm     –               │      2 src/dispatch/rules_<x>.ts  4/4 traces
+                                                        │      3 test/rules.test.ts         3/4 traces
+ ▾ nascent · waits for review                           │    commands
+   ○ ◠ regen-openapi-client    nascent  3/4             │      ✓ npm run codegen            4/4 traces · verified on a clean checkout
+                                                        │      ○ npm run check              3/4 traces · not replayed
+ ▾ quiet · agents already do this; approve to deliver   │    avoid
+   ◌ ◠ read-before-edit-9a1c   quiet    21/23           │      ✗ npm test                   HARBOR_ENV is not set
+                                                        │    finish with  npm run check
+ ▾ instincts · adage/finish-line@0.1.0                  │    match  a prompt at similarity ≥ 0.81 gets it once
+   P ◉ finish-line/regenerate  firm     –               │    grey zone  0.71–0.81: at the first edit of one of these files instead
+                                                        │    prime at most, never strengthened · first-hand only, never shared
+ ▸ extinguished · 1                                     │
+                                                        │  LIFECYCLE
+                                                        │    ○ nascent ──── ● forming ──── ○ firm
+                                                        │    ceiling prime · effect observe
+                                                        │
+                                                        │  ACTIONS
+                                                        │    s strengthen   w weaken   x extinguish   a approve   n pin   m dismiss
+                                                        │    d delegate   t traces (0)   o open in map
+                                                        │    same as adage review weaken harbor-dispatch/learned card-carrier-rules from any shell
+                                                        │
+                                                        │
+                                                        │
+                                                        │
+                                                        │
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ? keys · : palette · / filter · j/k move · enter expand · tab next tab                                                                        q quit

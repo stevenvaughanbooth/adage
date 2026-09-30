@@ -1,50 +1,23 @@
 //! `adage` — agent traces become reflexes.
 //!
-//! ```text
-//! adage                              the status card: reflexes, learning, savings, what waits for you
-//! adage hook <claude|opencode|codex> <Event>   hook client (reads the harness payload on stdin)
-//! adage init [--repo <path>] [--yes | --print]  first run: a guided wizard at a terminal; else detect
-//!                                    harnesses, show hook snippets, offer the model, sense
-//! adage sense [--repo <key>] [--since <days>] [--json]   read-only: which reflexes your traces would form
-//! adage doctor [--json]              check the binary, data directory, index, tracks, model, hooks
-//! adage watch [--repo <path>] [--demo]  a live pane: health lights, hook activity, what Adage conditions
-//! adage savings [--repo <path>] [--json]   what Adage saves here, measured against quiet sessions
-//! adage ui                           the full-screen app: live feed, reflexes and review, health fixes, settings
-//! adage condition [options]          mine traces into reflexes, bind instincts, compile the index
-//! adage condition --auto --repo-root <path>   condition one repository quietly (what hooks start)
-//! adage condition --instincts-only [--repo-path <dir>] [--repo <key>]  bind Adage's instincts for
-//!                                    a repository from its files alone, with no traces (day 0)
-//! adage train <SKILL.md> | accept <name> | plan | --plan | report   compile a skill into reflexes
-//! adage config [get <key> | set <key> <value>] [--json]   settings in $ADAGE_HOME/config.toml
-//! adage status                       installed tracks, reflexes, strengths, and evidence
-//! adage report [--json]              directives emitted, followed, and ignored, from spools
-//! adage graph [--json] [--events <n>] situations → reflexes → steps → agent responses, with live counts
-//! adage map [--port <n>]             serve the map at http://127.0.0.1:<n>/ (default 8765)
-//! adage graph --learned --dump <repo> [--transcripts <file>...] [--json]   the graph engine's trace facts
-//! adage hooks-config <adage-path>    print a Claude Code hooks settings block (exec form)
-//! adage install <claude-code|opencode|codex> [--print|--write] [--scope project|user]
-//!                                    print (default) or write a harness's hook registration
-//! adage share <track-or-pack> --out <dir> [--key <path>] [--vendor] [--attest <results.jsonl>] [--ack-scripts] [--repo-root <dir>]
-//!                                    redaction-check, build and sign a pack (namespace adage-pack)
-//! adage add <dir> [--trust]          verify a signed pack, install it,
-//!                                    and bind it to this repository at forming
-//! adage review [--json]              reflexes awaiting a person's decision, with evidence and directive text
-//! adage review delegate <track> <reflex> --level e1|e2 [--raw] [--fields ..] [--outputs <glob>]   approve an E1 prefetch or an E2 action (a person)
-//! adage review revoke <track> <reflex>   withdraw that grant
-//! adage delegate on|off|status       hooks call adage-exec (E1 prefetch, E2 actions) or adage; grants per repository
-//! adage delegate rewrites on|off     rewrites to the project's environment (PreToolUse), alone
-//! adage review <approve|extinguish|weaken|strengthen|pin|dismiss> <track> <reflex> [--by <name>]
-//! adage models fetch|install <dir>|status   the embedding model for intent families (optional)
-//! adage eval <dataset> [--split ..] [--json]  offline replay eval of what Adage would have said
-//! adage version
-//! ```
+//! The command-line grammar (every command, flag and help text) is `cli.rs`; `adage --help`
+//! prints it, grouped. `adage hook <claude|opencode|codex> <Event>` is the hook client and is
+//! dispatched here before anything else, on the fast path. Output goes through `adage_term`
+//! (docs/design/style.md); words follow docs/lexicon.md.
+//!
+//! Bare `adage` prints the status card (`status_card.rs`); `adage ui` opens the app.
+//!
 //! Environment: `ADAGE_HOME` (data directory), `ADAGE_ARM` (`treated`|`control`, overrides
 //! assignment), `ADAGE_CONTROL` (control share; overrides `runtime.control`, default 0.1),
 //! `ADAGE_AUTO_LEARN` (`0`/`1`; overrides `learn.auto`), `ADAGE_DISABLE=1` (kill switch),
-//! `ADAGE_ALLOW_NONINTERACTIVE=1` (let `share` and `add` run without a terminal, for CI).
+//! `ADAGE_ALLOW_NONINTERACTIVE=1` (let `share` and `add` run without a terminal, for CI);
+//! output: `NO_COLOR`, `ADAGE_COLOR=never|16|256|truecolor`, `ADAGE_THEME=day|night`,
+//! `ADAGE_ASCII=1` (or `--plain` for both).
 
 mod add;
 mod autolearn;
+mod cli;
+mod condition_out;
 mod config;
 mod detect;
 mod doctor;
@@ -52,13 +25,13 @@ mod evidence;
 mod exec;
 use adage_hook::failopen;
 mod graph;
-mod help;
 mod history;
 use adage_hook::harness;
 mod hook;
 mod init;
 mod install;
 mod learnlog;
+mod map;
 mod models;
 mod packs;
 mod proposal;
@@ -67,55 +40,91 @@ mod reimport;
 mod review;
 mod savings;
 mod sense;
-mod serve;
 mod share;
 mod share_pack;
 mod status_card;
 mod train;
 mod tty;
 mod ui;
+mod words;
 
 // Commands run on the hook's stack size (`adage_hook::STACK`).
 use adage_hook::on_big_stack;
 use adage_learn::{Inputs, LearnConfig};
 use adage_store::Paths;
-use adage_tracks::{io, Strength};
+use adage_tracks::io;
 use anyhow::{bail, Result};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    // `--help` is never an argument: answered before anything runs (the hook included).
-    if let Some(cmd) = args.first().filter(|c| help::wants(c, &args[1..])) {
-        match help::command(cmd) {
-            Some(h) => print!("{h}"),
-            None => print!("{}", help::all()),
-        }
-        return;
-    }
     if args.first().map(String::as_str) == Some("hook") {
         // Fail open, always: no panic, error, or timeout may block or disturb the agent.
         hook::main(args.get(1).cloned().unwrap_or_default(), args.get(2).cloned().unwrap_or_default());
     }
     match on_big_stack(move || run(&args)) {
         Some(Ok(())) => {}
+        // The reader went away (`adage status | head`): nothing is wrong, and there is no one to tell.
+        Some(Err(e))
+            if e.chain().any(|c| {
+                c.downcast_ref::<std::io::Error>().is_some_and(|io| io.kind() == std::io::ErrorKind::BrokenPipe)
+            }) =>
+        {
+            std::process::exit(0)
+        }
         Some(Err(e)) => {
-            eprintln!("adage: {e:#}");
+            // `error  what failed`, then each cause (adage_term::Out::error).
+            let causes: Vec<String> = e.chain().skip(1).map(|c| c.to_string()).collect();
+            let mut help = e.chain().find_map(|c| c.downcast_ref::<Hint>()).map(|h| h.help.clone());
             // A bare permission error names no path: say which directory to check.
             let denied = e.chain().any(|c| {
                 c.downcast_ref::<std::io::Error>().is_some_and(|io| io.kind() == std::io::ErrorKind::PermissionDenied)
             });
-            if denied {
-                eprintln!(
-                    "adage: a file could not be written or read; Adage keeps its data in {} (ADAGE_HOME), and `adage doctor` checks it",
+            if help.is_none() && denied {
+                help = Some(format!(
+                    "a file could not be written or read; Adage keeps its data in {} (ADAGE_HOME), and `adage doctor` checks it",
                     detect::tilde(&Paths::from_env().root)
-                );
+                ));
+            }
+            let mut err = adage_term::Out::stderr();
+            if err.error(&e.to_string(), &causes, help.as_deref()).is_err() {
+                eprintln!("adage: {e:#}");
             }
             std::process::exit(1);
         }
         None => std::process::exit(1),
     }
+}
+
+/// An error that knows the next step: `main` prints `help` as its `╰─ help` line.
+#[derive(Debug)]
+pub(crate) struct Hint {
+    what: String,
+    help: String,
+}
+
+impl std::fmt::Display for Hint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.what)
+    }
+}
+
+impl std::error::Error for Hint {}
+
+/// `what` failed; `help` says what to run instead.
+pub(crate) fn hint(what: impl Into<String>, help: impl Into<String>) -> anyhow::Error {
+    anyhow::Error::new(Hint { what: what.into(), help: help.into() })
+}
+
+/// `what` failed for each of `causes` (printed as `├─ cause` lines); `help` says what to do.
+pub(crate) fn refusal(what: impl Into<String>, mut causes: Vec<String>, help: impl Into<String>) -> anyhow::Error {
+    let Some(last) = causes.pop() else { return hint(what, help) };
+    let mut e = hint(last, help);
+    for c in causes.into_iter().rev() {
+        e = e.context(c);
+    }
+    e.context(what.into())
 }
 
 /// Create the data directory if need be and check that it can be written, with one clear message
@@ -124,7 +133,7 @@ pub(crate) fn writable_data_dir(paths: &Paths) -> Result<()> {
     let at = detect::tilde(&paths.root);
     let fix = "set ADAGE_HOME to a writable directory (`adage doctor` checks it)";
     if let Err(e) = std::fs::create_dir_all(&paths.root) {
-        bail!("cannot create the data directory {at} ({}); {fix}", io_reason(&e));
+        return Err(hint(format!("cannot create the data directory {at} ({})", io_reason(&e)), fix));
     }
     let probe = paths.root.join(format!(".adage-probe-{}", std::process::id()));
     match std::fs::OpenOptions::new().write(true).create(true).truncate(true).open(&probe) {
@@ -132,7 +141,7 @@ pub(crate) fn writable_data_dir(paths: &Paths) -> Result<()> {
             let _ = std::fs::remove_file(&probe);
             Ok(())
         }
-        Err(e) => bail!("cannot write in the data directory {at} ({}); {fix}", io_reason(&e)),
+        Err(e) => Err(hint(format!("cannot write in the data directory {at} ({})", io_reason(&e)), fix)),
     }
 }
 
@@ -147,73 +156,134 @@ fn flag(args: &[String], name: &str) -> Option<String> {
 }
 
 fn run(args: &[String]) -> Result<()> {
+    // `--plain` anywhere: no colour and ASCII glyphs, for screen readers and logs. It is read here
+    // and removed, so command modules never see it.
+    let plain = args.iter().any(|a| a == "--plain");
+    let args: Vec<String> = args.iter().filter(|a| *a != "--plain").cloned().collect();
+    if plain {
+        std::env::set_var("ADAGE_COLOR", "never");
+        std::env::set_var("ADAGE_ASCII", "1");
+    }
+    // clap validates the whole command line and prints help, versions and usage errors (with a
+    // suggestion for a typo); each command then reads its own flags from the raw arguments
+    // (`cli.rs` explains why, and tests that the two agree).
+    let theme = adage_term::Theme::stdout();
+    if let Some(now) = cli::renamed(&args) {
+        let was = cli::renamed_from(&args);
+        let mut e = adage_term::Out::stderr();
+        e.error(&format!("`adage {was}` is now `{now}`"), &[], Some(&format!("see `{now} --help`")))?;
+        std::process::exit(2);
+    }
+    let matches = match cli::command(&theme)
+        .try_get_matches_from(std::iter::once("adage".to_string()).chain(args.clone()))
+    {
+        Ok(m) => m,
+        // Help and version are not errors: clap prints them as they are.
+        Err(e) if !e.use_stderr() || e.kind() == clap::error::ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand => {
+            e.exit()
+        }
+        // Usage errors in the output grammar, with clap's suggestions; exit code 2 as clap's.
+        Err(e) => {
+            let (message, items) = cli::usage_error(&e, &args);
+            let items: Vec<(&str, &str)> = items.iter().map(|(l, t)| (*l, t.as_str())).collect();
+            if adage_term::Out::stderr().error_items(&message, &items).is_err() {
+                e.exit()
+            }
+            std::process::exit(e.exit_code());
+        }
+    };
     let paths = Paths::from_env();
     // Root commits `condition` and `sense` find are left for hooks (repository keys).
     adage_core::repo::use_cache(paths.repo_keys());
-    match args.first().map(String::as_str) {
-        Some("condition") if args.iter().any(|a| a == "--auto") => autolearn::run_auto(&args[1..], &paths),
-        Some("condition") if args.iter().any(|a| a == "--instincts-only") => instincts_only(&args[1..], &paths),
-        Some("condition") => condition(&args[1..], &paths),
-        Some("train") => train::train(&args[1..], &paths),
-        Some("config") => config::run(&args[1..], &paths),
-        Some("status") => status(&paths),
-        Some("report") => report(&paths, args.iter().any(|a| a == "--json")),
-        Some("share") => share::share(&args[1..], &paths),
-        Some("add") => add::add(&args[1..], &paths),
-        Some("review") if matches!(args.get(1).map(String::as_str), Some("delegate" | "revoke")) => {
-            exec::review(&args[1], &args[2..], &paths)
+    let rest = args.get(1..).unwrap_or(&[]);
+    let sub = matches.subcommand();
+    let has = |f: &str| rest.iter().any(|a| a == f);
+    match sub.map(|(name, _)| name) {
+        Some("condition") if has("--auto") => autolearn::run_auto(rest, &paths),
+        Some("condition") if has("--instincts-only") => instincts_only(rest, &paths),
+        Some("condition") => condition(rest, &paths),
+        Some("train") => train::train(rest, &paths),
+        Some("savings") => savings::run(rest, &paths),
+        Some("config") => config::run(rest, &paths),
+        Some("status") => status(&paths, has("--json")),
+        Some("report") => report(&paths, has("--json")),
+        Some("share") => share::share(rest, &paths),
+        Some("add") => add::add(rest, &paths),
+        Some("review") => {
+            // `review.rs` takes the lexicon's verbs as they are; execution grants are `exec.rs`'s.
+            match sub.and_then(|(_, m)| m.subcommand_name()) {
+                Some(v @ ("delegate" | "revoke")) => {
+                    let at = rest.iter().position(|a| a == v).map_or(1, |p| p + 1);
+                    exec::review(v, &rest[at..], &paths)
+                }
+                _ => review::review(rest, &paths),
+            }
         }
-        Some("review") => review::review(&args[1..], &paths),
-        Some("delegate") => exec::delegate(&args[1..], &paths),
-        Some("map") => serve::serve(&args[1..], &paths),
-        Some("graph") => graph::graph(&args[1..], &paths),
-        Some("eval") => adage_eval::cli::run(&args[1..]),
-        Some("models") => models::run(&args[1..], &paths),
-        Some("sense") => sense::sense(&args[1..], &paths),
-        Some("init") => init::init(&args[1..], &paths),
-        Some("doctor") => doctor::doctor(&args[1..], &paths),
-        Some("watch") => ui::watch(&args[1..], &paths),
-        Some("ui") => ui::app(&args[1..], &paths),
-        Some("savings") => savings::run(&args[1..], &paths),
-        // Bare `adage` prints the status card, wherever it runs (a terminal, a pipe, `!adage` in
-        // Claude Code); `adage ui` opens the app and `--help` shows the usage.
-        None => status_card::run(&paths),
+        Some("delegate") => exec::delegate(rest, &paths),
+        Some("map") => map::run(rest, &paths),
+        Some("graph") => graph::graph(rest, &paths),
+        Some("eval") => adage_eval::cli::run(rest),
+        Some("models") => models::run(rest, &paths),
+        Some("sense") => sense::sense(rest, &paths),
+        Some("init") => init::init(rest, &paths),
+        Some("doctor") => doctor::doctor(rest, &paths),
+        Some("watch") => ui::watch(rest, &paths),
+        Some("ui") => ui::app(rest, &paths),
         Some("hooks-config") => {
-            let bin = args.get(1).cloned().unwrap_or_else(|| "adage".into());
+            let bin = rest.first().cloned().unwrap_or_else(|| "adage".into());
             println!("{}", serde_json::to_string_pretty(&harness::claude::settings(&bin))?);
             Ok(())
         }
-        Some("install") => install::install(&args[1..]),
-        Some("version") | Some("--version") => {
+        Some("install") => install::install(rest),
+        Some("completions") => {
+            let shell = *sub.and_then(|(_, m)| m.get_one::<clap_complete::Shell>("shell")).expect("required");
+            clap_complete::generate(
+                shell,
+                &mut cli::command(&adage_term::Theme::plain()),
+                "adage",
+                &mut std::io::stdout(),
+            );
+            Ok(())
+        }
+        Some("version") => {
             println!("adage {}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
-        Some("help") if args.len() > 1 => match help::command(&args[1]) {
-            Some(h) => {
-                print!("{h}");
-                Ok(())
-            }
-            None => bail!("unknown command `{}`: `adage --help` lists them", args[1]),
-        },
-        Some("help" | "--help" | "-h") => {
-            print!("{}", help::all());
-            Ok(())
-        }
-        Some(cmd) => bail!("unknown command `{cmd}`: `adage --help` lists them"),
+        // Bare `adage` prints the status card, wherever it runs (a terminal, a pipe, `!adage` in
+        // Claude Code); `adage ui` opens the app and `--help` shows the usage.
+        None => status_card::run(&paths),
+        Some(other) => bail!("unknown command `{other}`: `adage --help` lists them"),
     }
 }
 
 /// `adage condition [--transcripts <file>...] [--claude-projects <dir>] [--codex-sessions <dir>] [--cwd-prefix <path>]
-///               [--outcomes <json>] [--repo <key>] [--demo] [--no-cache] [--json]`
+///               [--outcomes <json>] [--repo <key>] [--demo] [--no-cache] [--no-instincts] [--json]`
 ///
 /// Thresholds: `--demo`, else `learn.thresholds` (`adage config`). Parses are cached under
 /// `$ADAGE_HOME/cache/sessions` unless `--no-cache` or `learn.parse_cache = false` (the result is
 /// the same).
+/// Source directories a person named must exist: an empty result would say "no traces" when the
+/// path is simply wrong.
+pub(crate) fn check_dirs(dirs: &[(&str, Option<&std::path::Path>)]) -> Result<()> {
+    for (flag, dir) in dirs {
+        if let Some(d) = dir.filter(|d| !d.is_dir()) {
+            return Err(hint(
+                format!("{} is not a directory ({flag})", d.display()),
+                format!("check the path; {flag} takes a directory of traces"),
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn condition(args: &[String], paths: &Paths) -> Result<()> {
     let started = std::time::Instant::now();
     let settings = adage_store::config::load(paths).config;
     let explicit =
         args.iter().any(|a| matches!(a.as_str(), "--transcripts" | "--codex-sessions" | "--claude-projects"));
+    let (cp, cs) =
+        (flag(args, "--claude-projects").map(PathBuf::from), flag(args, "--codex-sessions").map(PathBuf::from));
+    check_dirs(&[("--claude-projects", cp.as_deref()), ("--codex-sessions", cs.as_deref())])?;
     let mut transcripts: Vec<PathBuf> = Vec::new();
     let mut i = 0;
     while i < args.len() {
@@ -228,7 +298,10 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
         i += 1;
     }
     if let Some(missing) = transcripts.iter().find(|p| !p.is_file()) {
-        bail!("--transcripts {}: no such file. Name transcript files (Claude Code .jsonl, an `opencode export`, a Codex rollout)", missing.display());
+        return Err(hint(
+            format!("{} is not a transcript file", missing.display()),
+            "pass files that exist, or a directory with --claude-projects <dir> or --codex-sessions <dir>",
+        ));
     }
     // Explicit sources replace defaults, including when they contain no sessions.
     if let Some(dir) = flag(args, "--codex-sessions")
@@ -237,7 +310,9 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
     {
         let (found, compressed) = adage_learn::codex::discover(&dir);
         if compressed > 0 {
-            eprintln!("adage condition: skipped {compressed} compressed Codex rollouts (.jsonl.zst); decompress them with `zstd -d` to include them");
+            let n = words::count(compressed, "compressed Codex rollout");
+            let _ = adage_term::Out::stderr()
+                .warn(&format!("skipped {n} (.jsonl.zst); decompress them with `zstd -d` to include them"));
         }
         transcripts.extend(found);
     }
@@ -267,22 +342,24 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
             if let Some(root) = std::env::current_dir().ok().and_then(|d| adage_core::repo::find_root(&d)) {
                 let own = adage_core::repo::repo_key_cached(&root, &paths.repo_keys());
                 if flag(args, "--repo").as_deref().is_none_or(|r| r.trim() == own) {
-                    eprintln!(
-                        "adage condition: no past traces found; binding this repository's instincts from its files"
-                    );
+                    adage_term::Out::stderr()
+                        .note("no past traces found; binding this repository's instincts from its files")?;
                     return instincts_only(args, paths);
                 }
             }
         }
-        bail!(
-            "no traces found{}. Point it at your history with --claude-projects <dir>, --codex-sessions <dir> \
-             or --transcripts <file>..., or run `adage condition --instincts-only` for instincts alone",
-            if explicit || flag(args, "--claude-projects").is_some() {
-                " in the sources given"
-            } else {
-                " in the configured history sources"
-            }
-        );
+        let source = if let Some(p) = flag(args, "--cwd-prefix") {
+            format!("none has a working directory under {p}")
+        } else if explicit || args.iter().any(|a| a == "--claude-projects") {
+            "the sources you named hold no traces".to_string()
+        } else {
+            "no traces in the configured history sources".to_string()
+        };
+        return Err(hint(
+            format!("no traces found: {source}"),
+            "name a source: adage condition --transcripts <file>… (or --claude-projects <dir>, --codex-sessions <dir>), \
+             or run `adage condition --instincts-only` for instincts alone",
+        ));
     }
     let outcomes: BTreeMap<String, bool> = match flag(args, "--outcomes") {
         Some(p) => serde_json::from_str(&std::fs::read_to_string(p)?)?,
@@ -347,90 +424,28 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
         })
         .collect();
     if let Err(e) = log_learn(paths, &rep, &changes, started.elapsed().as_millis() as u64) {
-        eprintln!("adage condition: could not write {}: {e}", paths.learn_log().display());
+        let _ = adage_term::Out::stderr().warn(&format!("could not write {}: {e}", paths.learn_log().display()));
     }
     if args.iter().any(|a| a == "--json") {
         println!("{}", serde_json::to_string_pretty(&rep)?);
     } else {
-        println!(
-            "adage condition: {} traces read, {} used, {} steered (what their directives named is not evidence)",
-            rep.sessions_read, rep.sessions_used, rep.sessions_steered
-        );
-        println!("thresholds: {}", rep.thresholds);
-        match &rep.intent_model {
-            Some(m) => println!("prompt intents: {m}"),
-            None => println!("prompt intents: skipped (no embedding model; `adage models fetch` enables them)"),
-        }
-        for (repo, rr) in &rep.repos {
-            println!("\n{repo} — {} traces, {} usable prompt intents", rr.sessions, rr.intent_families);
-            for t in &rr.tracks {
-                println!("  {} @ {} ({})", t.name, t.version, t.change);
-                for r in &t.routes {
-                    println!("    · {r}");
-                }
-            }
-            if let Some(ir) = &rr.instincts {
-                print_instincts(ir);
-            }
-            let e = &rr.engine;
-            println!(
-                "  conditioned: {} traces, {} patterns selected, {} reflexes compiled, {} kept ({} with a context trigger)",
-                e.sessions, e.reflexes, e.compiled, e.routes, e.contexts
-            );
-            for c in changes.get(repo).into_iter().flatten() {
-                println!("  changed: {}: {}", c.route, c.summary);
-            }
-        }
-        let nascent = rep
-            .repos
-            .values()
-            .flat_map(|rr| rr.tracks.iter())
-            .flat_map(|t| t.routes.iter())
-            .filter(|l| l.contains(" NASCENT: "))
-            .count();
-        if nascent > 0 {
-            println!(
-                "\n{nascent} nascent reflex(es) formed but not delivered: each waits for a person. Review them with `adage review`."
-            );
-        }
-        if !rep.conflicts.is_empty() {
-            println!("\ninterlocking: {} conflict(s) resolved", rep.conflicts.len());
-            for c in &rep.conflicts {
-                println!("  {}", c.describe());
-            }
-        }
-        println!("\nindex generation {}", rep.index_generation);
+        let run = condition_out::Run {
+            command: "condition",
+            report: &rep,
+            after: &after,
+            changes: &changes,
+            elapsed_ms: started.elapsed().as_millis() as u64,
+            waiting: waiting(paths),
+        };
+        condition_out::render(&mut adage_term::Out::stdout(), &run)?;
     }
     Ok(())
 }
 
-/// What binding instincts did for one repository, for the text output of `adage condition`.
-fn print_instincts(ir: &adage_learn::instincts::InstinctReport) {
-    match &ir.not_bound {
-        Some(why) => println!("  instincts: none bound ({why})"),
-        None => println!(
-            "  instincts: {} bound, {} advice, {} awaiting approval in `adage review`{}{}",
-            ir.bound,
-            ir.advice,
-            ir.nascent,
-            if ir.extinguished.is_empty() {
-                String::new()
-            } else {
-                format!(", {} extinguished automatically", ir.extinguished.len())
-            },
-            if ir.confirmed.is_empty() {
-                String::new()
-            } else {
-                format!(", {} confirmed by traces", ir.confirmed.len())
-            }
-        ),
-    }
-}
-
-/// `adage condition --instincts-only [--repo-path <dir>] [--repo <key>] [--json]`: bind a repository's instincts
-/// from its declared files, with no sessions (day 0), and compile the index. The repository is
-/// `--repo-path` (default: the current directory), resolved to its root; its key is `--repo <key>` when
-/// given (as `adage condition --repo` keys reflexes), else derived from the root.
+/// `adage condition --instincts-only [--repo-path <dir>] [--repo <key>] [--json]`: bind a repository's
+/// instincts from its declared files, with no sessions (day 0), and compile the index. The repository
+/// is `--repo-path` (default: the current directory), resolved to its root; its key is `--repo <key>`
+/// when given (as `adage condition --repo` keys reflexes), else derived from the root.
 pub(crate) fn instincts_only(args: &[String], paths: &Paths) -> Result<()> {
     let started = std::time::Instant::now();
     let dir = match flag(args, "--repo-path").or_else(|| flag(args, "--repo-root")) {
@@ -457,32 +472,28 @@ pub(crate) fn instincts_only(args: &[String], paths: &Paths) -> Result<()> {
     let changes: BTreeMap<&String, Vec<adage_learn::diff::Change>> =
         rep.repos.keys().map(|r| (r, adage_learn::diff::diff(&before, &after))).collect();
     if let Err(e) = log_learn(paths, &rep, &changes, started.elapsed().as_millis() as u64) {
-        eprintln!("adage condition: could not write {}: {e}", paths.learn_log().display());
+        let _ = adage_term::Out::stderr().warn(&format!("could not write {}: {e}", paths.learn_log().display()));
     }
     if args.iter().any(|a| a == "--json") {
         println!("{}", serde_json::to_string_pretty(&rep)?);
         return Ok(());
     }
-    for (repo, rr) in &rep.repos {
-        println!("adage condition --instincts-only: {repo}");
-        for t in &rr.tracks {
-            println!("  {} @ {} ({})", t.name, t.version, t.change);
-            for r in &t.routes {
-                println!("    · {r}");
-            }
-        }
-        if let Some(ir) = &rr.instincts {
-            print_instincts(ir);
-            for s in ir.skipped.iter().take(12) {
-                println!("    not bound: {s}");
-            }
-        }
-        for c in changes.get(repo).into_iter().flatten() {
-            println!("  changed: {}: {}", c.route, c.summary);
-        }
-    }
-    println!("\nindex generation {}", rep.index_generation);
+    let after: BTreeMap<String, adage_learn::diff::Snapshot> = BTreeMap::from([(repo.clone(), after)]);
+    let run = condition_out::Run {
+        command: "condition --instincts-only",
+        report: &rep,
+        after: &after,
+        changes: &changes,
+        elapsed_ms: started.elapsed().as_millis() as u64,
+        waiting: waiting(paths),
+    };
+    condition_out::render(&mut adage_term::Out::stdout(), &run)?;
     Ok(())
+}
+
+/// Reflexes that wait for a decision in `adage review`.
+fn waiting(paths: &Paths) -> usize {
+    review::standings(paths).map(|s| s.values().filter(|s| !s.reasons.is_empty()).count()).unwrap_or(0)
 }
 
 /// Append one `learn.log` line per repository this `adage condition` learned (`crate::learnlog`), or
@@ -516,53 +527,158 @@ fn log_learn(
     Ok(())
 }
 
-fn status(paths: &Paths) -> Result<()> {
-    let tracks = io::read_all_dirs(&paths.tracks())?;
+/// `adage status [--json]`: the reflexes and instincts in effect, with strength and evidence.
+fn status(paths: &Paths, json: bool) -> Result<()> {
+    use adage_term::{Glyph, Line, Out, Role};
+    let dirs = io::read_all_dirs(&paths.tracks())?;
+    // The evidence each strength was decided on (`evidence::describe`), with its reasons.
+    let whys: Vec<_> = dirs.iter().map(|(dir, _)| adage_tracks::why::load(dir)).collect();
+    let tracks: Vec<adage_tracks::Track> = dirs.into_iter().map(|(_, t)| t).collect();
     let has_intents =
-        tracks.iter().any(|(_, t)| t.routes.iter().any(|r| matches!(r.trigger, adage_tracks::Trigger::Intent { .. })));
+        tracks.iter().any(|t| t.routes.iter().any(|r| matches!(r.trigger, adage_tracks::Trigger::Intent { .. })));
     // What hooks embed prompts with: the installed model, else the one bundled in this binary, else
     // the hashed fallback (`model::resolve`, as hooks, doctor and the status card choose it).
-    let r = adage_intent::model::resolve(&paths.models(), false);
-    match &r.source {
-        adage_intent::model::Source::Hashed { why } if has_intents && r.selected != "hashed" => {
-            println!("intent model: none ({why}), so intent reflexes will not fire (`adage models status` says why)")
+    let resolved = adage_intent::model::resolve(&paths.models(), false);
+    let hashed = match &resolved.source {
+        adage_intent::model::Source::Hashed { why } => Some(why.clone()),
+        _ => None,
+    };
+    let model = hashed.is_none().then(|| resolved.embedder.id().to_string());
+    let origin = |t: &adage_tracks::Track| {
+        if adage_tracks::index::is_imported(t) {
+            "imported"
+        } else if adage_tracks::index::is_instinct_track(t) {
+            "instincts"
+        } else {
+            "conditioned"
         }
-        _ => println!("intent model: {}", r.describe()),
-    }
-    if tracks.is_empty() {
-        println!("no tracks installed in {}", paths.tracks().display());
+    };
+    let instinct =
+        |t: &adage_tracks::Track, r: &adage_tracks::Route| r.is_instinct() || adage_tracks::index::is_instinct_track(t);
+    if json {
+        let tracks: Vec<serde_json::Value> = tracks
+            .iter()
+            .enumerate()
+            .map(|(i, t)| {
+                serde_json::json!({
+                    "track": t.manifest.track.name,
+                    "version": t.manifest.track.version,
+                    "repo": t.manifest.scope.repo,
+                    "origin": origin(t),
+                    "reflexes": t.routes.iter().map(|r| serde_json::json!({
+                        "id": r.id,
+                        "kind": if instinct(t, r) { "instinct" } else { "reflex" },
+                        "strength": r.strength,
+                        "lifecycle": words::lifecycle(r.state),
+                        "support": r.evidence.support,
+                        "opportunities": r.evidence.opportunities,
+                        "rate": r.evidence.rate,
+                        "lower_bound": r.evidence.lower_bound,
+                        "effect": r.effect.as_str(),
+                        "evidence": evidence::describe(r, whys[i].get(&r.id)),
+                        "uplift": r.evidence.uplift.as_ref().map(|u| u.line()),
+                        "obligation": evidence::obligation(r),
+                    })).collect::<Vec<_>>(),
+                })
+            })
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&serde_json::json!({ "intent_model": model, "tracks": tracks }))?);
         return Ok(());
     }
-    for (dir, t) in tracks {
-        // The evidence each strength was decided on (`evidence::describe`), with its reasons.
-        let whys = adage_tracks::why::load(&dir);
-        let origin = if adage_tracks::index::is_imported(&t) {
-            "  (imported)"
-        } else if adage_tracks::index::is_instinct_track(&t) {
-            "  (instincts: Adage's built-in defaults, from the repository's files)"
-        } else {
-            ""
-        };
-        println!("{} @ {}  [{}]{origin}", t.manifest.track.name, t.manifest.track.version, t.manifest.scope.repo);
+    let mut o = Out::stdout();
+    let (mut n_reflex, mut n_instinct) = (0, 0);
+    for t in &tracks {
         for r in &t.routes {
-            let (dot, word) = match r.strength {
-                Strength::Fire => ("🟢", "fire"),
-                Strength::Prime => ("🟡", "prime"),
-                Strength::Inhibit => ("🔴", "inhibit"),
-            };
-            println!(
-                "  {dot} {word:<7} {:<22} {}  {}",
-                r.id,
-                r.effect.as_str(),
-                evidence::describe(r, whys.get(&r.id))
-            );
-            if let Some(u) = &r.evidence.uplift {
-                println!("            uplift: {}", u.line());
-            }
-            if let Some(o) = evidence::obligation(r) {
-                println!("            {o}");
+            if instinct(t, r) {
+                n_instinct += 1;
+            } else {
+                n_reflex += 1;
             }
         }
+    }
+    o.header(
+        "status",
+        &[
+            &words::count(tracks.len(), "track"),
+            &words::count(n_reflex, "reflex"),
+            &words::count(n_instinct, "instinct"),
+        ],
+    )?;
+    o.blank()?;
+    match &hashed {
+        Some(why) if has_intents && resolved.selected != "hashed" => o.kv(
+            "intent model",
+            Line::new()
+                .push(Role::Prime, "none")
+                .sep()
+                .quiet(format!("{why}; intent reflexes will not fire (`adage models status` says why)")),
+        )?,
+        _ => o.kv("intent model", Line::new().text(resolved.describe()))?,
+    }
+    if tracks.is_empty() {
+        o.blank()?;
+        o.note(&format!("No tracks yet in {}.", paths.tracks().display()))?;
+        o.blank()?;
+        o.next("adage condition", "form reflexes from your agents' past traces")?;
+        return Ok(());
+    }
+    let id_w =
+        tracks.iter().flat_map(|t| t.routes.iter().map(|r| r.id.chars().count())).max().unwrap_or(16).clamp(16, 34);
+    for (t, whys) in tracks.iter().zip(&whys) {
+        o.blank()?;
+        let mut head = Line::new()
+            .bold(Role::Ink, t.manifest.track.name.clone())
+            .faint(format!("@{}", t.manifest.track.version))
+            .sep()
+            .quiet(t.manifest.scope.repo.clone());
+        if origin(t) != "conditioned" {
+            head = head.sep().quiet(origin(t));
+        }
+        o.line(&head)?;
+        for r in &t.routes {
+            let e = &r.evidence;
+            let glyph = if instinct(t, r) { Glyph::Instinct } else { Glyph::Reflex };
+            // The evidence its strength was decided on: counts, or (a valued reflex, often a
+            // desire path no trace took yet) the value estimate on a line of its own.
+            let evidence = evidence::describe(r, whys.get(&r.id));
+            let valued = evidence.starts_with("value:");
+            let mut l = Line::new()
+                .text("  ")
+                .strength(words::strength(r.strength))
+                .pad_to(13)
+                .glyph(Role::Accent, glyph)
+                .text(" ")
+                .text(r.id.clone())
+                .pad_to(16 + id_w);
+            l = if valued { l.faint("valued") } else { l.extend(words::evidence(e)) };
+            if r.state != adage_tracks::RouteState::Firm {
+                l = l.sep().quiet(words::lifecycle(r.state));
+            }
+            o.line(&l)?;
+            let detail = |text: String| Line::new().text(" ".repeat(16)).quiet(text);
+            if valued {
+                o.line(&detail(evidence))?;
+            }
+            if let Some(u) = &e.uplift {
+                o.line(&detail(format!("uplift: {}", u.line())))?;
+            }
+            if let Some(ob) = evidence::obligation(r) {
+                o.line(&detail(ob))?;
+            }
+        }
+    }
+    // Nascent reflexes, and new or changed ones nobody has decided on yet.
+    let waiting = waiting(paths);
+    o.blank()?;
+    if waiting > 0 {
+        let why = if waiting == 1 {
+            "1 reflex waits for a decision".to_string()
+        } else {
+            format!("{waiting} reflexes wait for a decision")
+        };
+        o.next("adage review", &why)?;
+    } else {
+        o.next("adage report", "what Adage told agents, and what they did")?;
     }
     Ok(())
 }
@@ -593,11 +709,48 @@ fn report(paths: &Paths, json: bool) -> Result<()> {
     }
     if json {
         println!("{}", serde_json::json!({ "sessions": sessions, "totals": totals }));
-    } else {
-        println!("{sessions} sessions");
-        for (k, v) in totals {
-            println!("  {k:<16} {v}");
-        }
+        return Ok(());
     }
+    use adage_term::{Line, Out, Role};
+    let mut o = Out::stdout();
+    o.header("report", &[&words::count(sessions, "trace")])?;
+    o.blank()?;
+    if totals.is_empty() {
+        o.note("Nothing to report yet: hooks record a trace each time an agent works in a repository.")?;
+        o.blank()?;
+        return Ok(o.next("adage doctor", "check that hooks are installed")?);
+    }
+    let n = |k: &str| totals.get(k).copied().unwrap_or(0);
+    o.kv(
+        "directives",
+        Line::new()
+            .text(format!("{} sent", n("directives")))
+            .sep()
+            .quiet(format!("{} withheld (control)", n("would_have"))),
+    )?;
+    // Judgements, in the lexicon's words: what agents did with what Adage said.
+    let known = ["directives", "would_have", "stop_requests"];
+    for (k, v) in totals.iter().filter(|(k, _)| !known.contains(&k.as_str())) {
+        let role = match k.as_str() {
+            "followed" | "met" | "hit_avoided" => Role::Fire,
+            "ignored" | "derailed" | "followed_failed" | "misfired" => Role::Inhibit,
+            _ => Role::Ink,
+        };
+        // Older spools spell these `followed_failed` and `derailed`.
+        let label = match k.as_str() {
+            "followed_failed" => "misfired".to_string(),
+            "derailed" => "ignored".to_string(),
+            _ => words::prose(&k.replace('_', " ")),
+        };
+        o.kv(&label, Line::new().push(role, v.to_string()))?;
+    }
+    if n("stop_requests") > 0 {
+        o.kv(
+            "stop requests",
+            Line::new().text(n("stop_requests").to_string()).sep().quiet("finish lines held at Stop"),
+        )?;
+    }
+    o.blank()?;
+    o.next("adage status", "the reflexes behind these numbers")?;
     Ok(())
 }

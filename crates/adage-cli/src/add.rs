@@ -28,6 +28,7 @@ use adage_pack::Pack;
 use adage_sign::PublicKey;
 use adage_sign::{allowed_signers, fingerprint, key_line, PACK_NAMESPACE};
 use adage_store::Paths;
+use adage_term::{Glyph, Line, Out, Role};
 use adage_tracks::{io, Index, RouteState, Strength, Track};
 use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
@@ -151,20 +152,37 @@ fn decide(
         let hash = file_hash.as_deref().unwrap_or_default();
         match adage_sign::verify(msg, namespace, pem, s, now) {
             Ok(e) if pin_matches => {
-                return Ok(Decision { how: format!("{} in {} (approved, sha256 {})", e.principals.join(","), p.display(), &hash[..16]), record: None })
+                return Ok(Decision {
+                    how: format!("{} in {} (approved, sha256 {})", e.principals.join(","), p.display(), &hash[..16]),
+                    record: None,
+                })
             }
             Ok(e) if trust => {
                 approve(&mut store);
                 return Ok(Decision {
-                    how: format!("{} in {} — file approved now with --trust (sha256 {})", e.principals.join(","), p.display(), &hash[..16]),
+                    how: format!(
+                        "{} in {} — file approved now with --trust (sha256 {})",
+                        e.principals.join(","),
+                        p.display(),
+                        &hash[..16]
+                    ),
                     record: Some(store),
                 });
             }
-            Ok(_) => bail!(
-                "refusing: {} lists this signer, but that file {} on this machine. Review it, then re-run with --trust to approve it (sha256 {hash}).",
-                p.display(),
-                if store.repos.contains_key(repo) { "has changed since it was approved" } else { "has not been approved" }
-            ),
+            Ok(_) => {
+                return Err(crate::hint(
+                    format!(
+                        "refusing: {} lists this signer, but that file {} on this machine",
+                        p.display(),
+                        if store.repos.contains_key(repo) {
+                            "has changed since it was approved"
+                        } else {
+                            "has not been approved"
+                        }
+                    ),
+                    format!("review it, then run the same `adage add` with --trust to approve it (sha256 {hash})"),
+                ))
+            }
             Err(e) if adage_sign::lists_key(s, signer) => bail!("refusing: {e:#} ({})", p.display()),
             Err(_) => {}
         }
@@ -180,11 +198,13 @@ fn decide(
         approve(&mut store);
         return Ok(Decision { how: format!("approved now with --trust for {repo}"), record: Some(store) });
     }
-    bail!(
-        "refusing: unknown signer {fp} for {repo}. Confirm the fingerprint with the pack's author, then re-run \
-         with --trust, or add their key to {}.",
-        personal.display()
-    )
+    Err(crate::hint(
+        format!("refusing: unknown signer {fp} for {repo}"),
+        format!(
+            "confirm the fingerprint with the pack's author, then run the same `adage add` with --trust, or add their key to {}",
+            personal.display()
+        ),
+    ))
 }
 
 pub fn add(args: &[String], paths: &Paths) -> Result<()> {
@@ -196,18 +216,22 @@ pub fn add(args: &[String], paths: &Paths) -> Result<()> {
     if src.join(adage_pack::validate::MANIFEST).is_file() {
         return add_pack(&src, paths, trust, cwd_root.as_deref());
     }
-    if src.join("track.toml").is_file() {
-        bail!(
-            "{} is a track directory, not a pack. Packs are the only format `adage add` installs: \
-             ask its author to run `adage share <track> --out <dir>` and send you that directory.",
-            src.display()
-        );
+    if !src.is_dir() {
+        return Err(crate::hint(
+            format!("{} does not exist, or is not a directory", src.display()),
+            "pass the directory `adage share --out <dir>` wrote",
+        ));
     }
-    bail!(
-        "{} is not a pack (no {}). Point `adage add` at the directory `adage share --out` wrote.",
-        src.display(),
-        adage_pack::validate::MANIFEST
-    )
+    if src.join("track.toml").is_file() {
+        return Err(crate::hint(
+            format!("{} is a track directory, not a pack", src.display()),
+            "packs are the only format `adage add` installs: ask its author to run `adage share <track> --out <dir>` and send you that directory",
+        ));
+    }
+    Err(crate::hint(
+        format!("{} is not a pack (no {})", src.display(), adage_pack::validate::MANIFEST),
+        "point `adage add` at the directory `adage share --out` wrote",
+    ))
 }
 
 /// The repository key trust decisions are pinned to: the pack's repository this `add` runs in, or
@@ -308,21 +332,40 @@ fn add_pack(src: &Path, paths: &Paths, trust: bool, cwd_root: Option<&Path>) -> 
     let index = recompile(paths)?;
 
     let m = &pack.manifest;
-    println!("adage add: pack {} @ {}  from {}", m.pack.name, m.pack.version, src.display());
-    println!("  signature  good, namespace {PACK_NAMESPACE}, key {}", fingerprint(&signer));
-    println!("  trusted    {}", decision.how);
-    println!("  digest     sha256 {digest}");
-    println!("  installed  {}", dest.display());
+    let mut o = Out::stdout();
+    o.header("add", &[&format!("pack {}@{}", m.pack.name, m.pack.version), &format!("from {}", src.display())])?;
+    o.blank()?;
+    o.kv("signature", Line::new().text(format!("good, namespace {PACK_NAMESPACE}, key {}", fingerprint(&signer))))?;
+    o.kv("trusted", Line::new().text(decision.how.clone()))?;
+    o.kv("digest", Line::new().quiet(format!("sha256 {digest}")))?;
+    o.kv("installed", Line::new().text(dest.display().to_string()))?;
     if !pack.scripts.is_empty() {
-        println!(
-            "  scripts    {} vendored script(s) in {} (read-only; {} new); nothing runs them without an approval on this machine",
-            pack.scripts.len(),
-            packs::cas_dir(paths).display(),
-            cas.len()
-        );
+        o.kv(
+            "scripts",
+            Line::new().text(format!(
+                "{} in {} (read-only; {} new); nothing runs them without an approval on this machine",
+                crate::words::count(pack.scripts.len(), "vendored script"),
+                packs::cas_dir(paths).display(),
+                cas.len()
+            )),
+        )?;
     }
-    print_bound(&pack, &bound, &local_effects(&pack));
-    println!("index generation {}, {} reflexes", index.generation, index.routes.len());
+    print_bound(&mut o, &pack, &bound, &local_effects(&pack))?;
+    finish(&mut o, &index)
+}
+
+/// The index row and what to run next, after an install.
+fn finish<W: std::io::Write>(o: &mut Out<W>, index: &Index) -> Result<()> {
+    o.kv(
+        "index",
+        Line::new()
+            .text(format!("gen {}", &index.generation[..index.generation.len().min(8)]))
+            .sep()
+            .quiet(crate::words::count(index.routes.len(), "reflex")),
+    )?;
+    o.blank()?;
+    o.next("adage review", "imported reflexes wait for your decision")?;
+    o.also("adage status", "every reflex in effect")?;
     Ok(())
 }
 
@@ -344,61 +387,92 @@ fn recompile(paths: &Paths) -> Result<Index> {
     Ok(index)
 }
 
-fn print_bound(pack: &Pack, bound: &[Bound], effects: &BTreeMap<String, adage_core::Effect>) {
+fn print_bound<W: std::io::Write>(
+    o: &mut Out<W>,
+    pack: &Pack,
+    bound: &[Bound],
+    effects: &BTreeMap<String, adage_core::Effect>,
+) -> Result<()> {
     if bound.is_empty() {
-        println!(
-            "  bound      nowhere yet: run `adage add` again inside a repository this pack applies to ({})",
-            describe_applicability(&pack.manifest.applicability)
-        );
-        return;
+        o.kv(
+            "bound",
+            Line::new().text(format!(
+                "nowhere yet: run `adage add` again inside a repository this pack applies to ({})",
+                describe_applicability(&pack.manifest.applicability)
+            )),
+        )?;
+        return Ok(());
     }
     for b in bound {
         let binding = &b.binding;
         if let Applies::No(why) = &binding.applies {
-            println!("  repo       {}: not applicable ({why})", binding.repo);
+            o.kv("repo", Line::new().text(format!("{}: not applicable ({why})", binding.repo)))?;
             continue;
         }
         if let Some(d) = &b.dir {
-            println!("  bound      {}", d.display());
+            o.kv("bound", Line::new().text(d.display().to_string()))?;
         }
-        println!(
-            "  repo       {}: {} live, {} inert; imported at forming, never fire on import (O2):",
-            binding.repo,
-            binding.live().count(),
-            binding.inert().count()
-        );
+        o.kv(
+            "repo",
+            Line::new()
+                .text(binding.repo.clone())
+                .sep()
+                .quiet(format!("{} live, {} inert", binding.live().count(), binding.inert().count()))
+                .sep()
+                .quiet("imported as forming: nothing fires on import"),
+        )?;
         let routes = b.track.as_ref().map(|t| t.routes.as_slice()).unwrap_or_default();
+        // `  ● prime  ◠ read-linked-files  read up to 5 files … · effect observe · exec up to E0`,
+        // aligned as `adage status` aligns its rows.
+        let id_w = binding.routes.iter().map(|r| r.id.chars().count()).max().unwrap_or(16).clamp(16, 34);
+        let row = |glyph: Glyph, id: &str| {
+            Line::new().pad_to(13).glyph(Role::Accent, glyph).text(" ").text(id.to_string()).pad_to(17 + id_w)
+        };
         for r in &binding.routes {
             match &r.status {
                 Status::Live { max_level } => {
                     let Some(rt) = routes.iter().find(|x| x.id == r.id) else { continue };
-                    let strength = format!("{:?}", rt.strength).to_lowercase();
                     let before = b.was.get(&r.id).copied().unwrap_or(rt.strength);
-                    let note = if before != rt.strength {
-                        format!(" (was {})", format!("{before:?}").to_lowercase())
-                    } else {
-                        String::new()
-                    };
                     let effect = effects.get(&r.id).map(|e| e.as_str()).unwrap_or("?");
-                    let nascent = if rt.state == RouteState::Nascent { " · nascent until approved" } else { "" };
-                    println!(
-                        "    {:<22} {strength}{note:<12} {}  [effect {effect} · exec up to {max_level:?}{nascent}]",
-                        r.id,
-                        crate::share::describe_step(&rt.step)
-                    );
+                    let mut l = Line::new()
+                        .text("  ")
+                        .strength(crate::words::strength(rt.strength))
+                        .extend(row(Glyph::Reflex, &r.id))
+                        .text(crate::share::describe_step(&rt.step))
+                        .sep()
+                        .faint(format!("effect {effect}, exec up to {max_level:?}"));
+                    if before != rt.strength {
+                        l = l.sep().quiet(format!("was {}", crate::words::strength(before).word()));
+                    }
+                    if rt.state == RouteState::Nascent {
+                        l = l.sep().quiet("nascent until approved");
+                    }
+                    o.line(&l)?;
                 }
-                Status::Inert { reason } => println!("    {:<22} inert: {reason}", r.id),
+                Status::Inert { reason } => o.line(
+                    &Line::new()
+                        .text("  ")
+                        .glyph(Role::Ink3, Glyph::Off)
+                        .faint(" inert")
+                        .extend(row(Glyph::Reflex, &r.id))
+                        .faint(reason.clone()),
+                )?,
             }
         }
         if !b.kept.is_empty() {
-            let kept: Vec<String> = b.kept.iter().map(|(id, d)| format!("{id} ({})", d.as_str())).collect();
-            println!("  kept       your review decisions: {}", kept.join(", "));
+            let kept: Vec<String> =
+                b.kept.iter().map(|(id, d)| format!("{id} ({})", crate::words::prose(d.as_str()))).collect();
+            o.kv("kept", Line::new().text(format!("your review decisions: {}", kept.join(", "))))?;
         }
         for id in &b.proposed {
-            println!("  proposed   {id} is pinned here and the new version differs; see `adage review`");
+            o.kv(
+                "proposed",
+                Line::new().text(format!("{id} is pinned here and the new version differs; see `adage review`")),
+            )?;
         }
     }
-    println!("  approvals  none: a pack can only request execution; nothing here grants it");
+    o.kv("approvals", Line::new().text("none: a pack can only request execution; nothing here grants it"))?;
+    Ok(())
 }
 
 fn describe_applicability(a: &adage_pack::Applicability) -> String {

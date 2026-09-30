@@ -85,7 +85,7 @@ def main():
         delivered_ids = [r["route"]["id"] for r in entries if r["route"]["id"] in delivered]
         delivered_learned_ids = [r["route"]["id"] for r in entries
             if r["route"]["id"] in delivered_ids and (r["track"].endswith("/learned") or r["route"]["id"].startswith("card-"))]
-        assert "9 session(s)" in preview, "init must discover this repository's past history"
+        assert "9 traces" in preview, "init must discover this repository's past history"
         assert reports and reports[-1]["sessions_read"] == 9, "the unrelated repository must remain excluded"
         assert delivered_learned_ids, "a learned artifact must reach the registered hook"
         result = {
@@ -100,7 +100,7 @@ def main():
             "inputs": hashes, "cwd_rebase_for_isolated_discovery": True,
             "installer_tested": False, "registration_fixture": "production install --print output",
             "wizard_learner_argv": ["condition", "--auto", "--repo-root", "<isolated checkout>"],
-            "init_preview_detected_history": "9 session(s)" in preview,
+            "init_preview_detected_history": "9 traces" in preview,
             "learning_logs": reports,
             "index_route_count": len(entries), "learned_track_route_count": len(learned),
             "routes": [{"id": r["route"]["id"], "track_kind": r["track"].rsplit("/", 1)[-1],

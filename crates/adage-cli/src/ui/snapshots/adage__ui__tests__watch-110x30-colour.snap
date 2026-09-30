@@ -1,0 +1,34 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+expression: text
+---
+[magenta b] adage[/][b] watch[/][d]  harbor-dispatch · gen 8216e29f · claude[/]             [green]● [/]live   [green]● [/][d]fire 1[/]   [yellow]● [/][d]prime 1[/]   [red]● [/][d]inhibit 1[/]
+
+[darkgray]─ [/][b d]now[/][darkgray] ────────────────────────────────────────────────────────────────────────────────────────────────────────[/]
+
+
+
+
+
+ [darkgray]12:04:00[/]  [d]00a11c[/]  [d]claude   [/]  prompt   [magenta]→ ◠ [/]lookup-incident          [green]● fire     [/][d]bin/fetch-incident INC-2045[/]
+ [darkgray]12:04:01[/]  [darkgray i]00c4a1[/]  [darkgray i]claude   [/]  [darkgray i]prompt  [/] [darkgray i]○ would fire lookup-incident (withheld)[/]
+ [darkgray]12:04:02[/]  [d]00a11c[/]  [d]claude   [/]  tools    [magenta]→ ◠ [/]read-linked-files        [yellow]● prime    [/][d]That result lists these files:…[/]
+                                       [green]✓ [/][d]followed [/]lookup-incident
+ [darkgray]12:04:03[/]  [d]000b0b[/]  [d]claude   [/]  tools    [darkgray]· 1 call, nothing to say[/]
+ [darkgray]12:04:04[/]  [d]000b0b[/]  [d]claude   [/]  failure  [magenta]→ ◠ [/]dead-end-npm-test        [red]● inhibit  [/][d]npm run check[/]
+ [darkgray]12:04:05[/]  [d]000b0b[/]  [d]claude   [/]  tools    [red]✗ [/][d]ignored [/]lookup-incident
+ [darkgray]12:04:06[/]  [darkgray i]00c4a1[/]  [darkgray i]claude   [/]  [darkgray i]tools   [/] [darkgray i]○ found lookup-incident unaided[/]
+ [darkgray]12:04:07[/]  [d]000b0b[/]  [d]claude   [/]  stop     [yellow b]■ [/]finish line: asked the agent to continue
+ [darkgray]12:04:08[/]  [d]00a11c[/]  [d]claude   [/]  tools    [green]✓ [/][d]finish line met [/]codegen-after-registry
+
+[darkgray]─ [/][b d]conditioning[/][darkgray] ───────────────────────────────────────────────────────────────────────────────────────────────[/]
+[magenta] ◆ [/][darkgray]12:04 [/]auto-condition harbor-dispatch[d] · 24/25 traces used · 0.73 s · 2 changes · gen 8216e29f[/]
+   [magenta]◠ [/][b]lookup-incident           [/][d]prime → [/][green b]fire       [/][d]24/25 · lb 0.80[/][darkgray]   harbor-dispatch/incidents[/]
+   [magenta]◠ [/][b]dead-end-npm-test         [/][d]new · [/][red b]inhibit      [/][d]6/7[/][darkgray]   harbor-dispatch/incidents[/]
+[red] ✗ [/][darkgray]12:04 [/][red]conditioning failed for harbor-dispatch (io): tracks directory is not writable[/]
+[darkgray]   ○ [/][d]1 reflex waits for review · [/][lightmagenta]adage review[/]
+
+[darkgray]─ [/][b d]health[/][darkgray] ─────────────────────────────────────────────────────────────────────────────────────────────────────[/]
+ [green]✓ [/][d]hooks claude[/]    [green]✓ [/][d]4 reflexes[/]    [green]✓ [/][d]auto-condition[/]    [yellow]! [/][d]no model[/][darkgray] · [/][lightmagenta]adage models fetch[/]
+[darkgray]──────────────────────────────────────────────────────────────────────────────────────────────────────────────[/]
+ [lightmagenta b]p[/][darkgray] pause · [/][lightmagenta b]f[/][darkgray] scope · [/][lightmagenta b]/[/][darkgray] filter · [/][lightmagenta b]enter[/][darkgray] inspect · [/][lightmagenta b]m[/][darkgray] open map · [/][lightmagenta b]?[/][darkgray] keys[/]                                    [lightmagenta b]q[/][darkgray] quit [/]

@@ -147,7 +147,7 @@ fn assert_instinct_text(t: &str) {
 fn claude_code_instinct_golden() {
     let w = World::new();
     let out = w.bind();
-    assert!(out.contains(&format!("{TRACK} @ 0.1.0 (created)")), "{out}");
+    assert!(out.contains(&format!("{TRACK}@0.1.0 · created")), "{out}");
     let cwd = w.repo();
     let with = |ev: &str, extra: Value| {
         let mut b =
@@ -275,7 +275,7 @@ fn codex_instinct_golden() {
 fn doctor_review_and_pack_approval() {
     let w = World::new().with_pnpm();
     let out = w.bind();
-    assert!(out.contains("awaiting approval"), "{out}");
+    assert!(out.contains("wait for review"), "{out}");
     // doctor counts what is bound per repository.
     let (d, _, _) = w.run(&["doctor", "--json"], b"");
     let v: Value = serde_json::from_str(&d).unwrap();
@@ -301,10 +301,10 @@ fn doctor_review_and_pack_approval() {
     // `pnpm install`; `npm install` refuses nothing here, so it binds nothing.
     assert_eq!(nascent.len(), 4, "npm ci and yarn install → pnpm install: {q:#}");
     let text = w.ok(&["review"]);
-    assert!(text.contains("(instinct U1 (from Makefile))"), "{text}");
+    assert!(text.contains(" · instinct U1 (from Makefile)"), "{text}");
     // Approving one environment step approves the pack's for this repository.
     let out = w.ok(&["review", "approve", TRACK, nascent[0]]);
-    assert!(out.contains(&format!("approved   pack core's environment steps for {KEY}")), "{out}");
+    assert!(out.contains(&format!("approved    pack core's environment steps for {KEY}")), "{out}");
     let yaml = std::fs::read_to_string(w.p(&format!("adage/tracks/{TRACK}/review.yaml"))).unwrap();
     assert!(yaml.contains("packs:") && yaml.contains("core:"), "{yaml}");
     // Re-binding keeps both in service.
@@ -315,7 +315,7 @@ fn doctor_review_and_pack_approval() {
     assert_eq!(install, 4, "every environment step is delivered after pack approval");
     // An extinguished instinct stays extinguished across re-binds.
     let out = w.ok(&["review", "extinguish", TRACK, "finish-line-e7e809"]);
-    assert!(out.contains("extinguished"), "{out}");
+    assert!(out.contains("→ extinguished"), "{out}");
     w.bind();
     let idx = std::fs::read_to_string(w.p("adage/index.json")).unwrap();
     assert!(!idx.contains("finish-line-e7e809"), "an extinguish decision holds");
@@ -363,7 +363,7 @@ fn followed_and_failed_instincts_extinguish_at_the_next_learn() {
         .collect();
     assert_eq!(spools.matches("misfired").count(), 3, "{spools}");
     let out = w.bind();
-    assert!(out.contains("1 extinguished automatically"), "{out}");
+    assert!(out.contains("1 extinguished after failing"), "{out}");
     assert!(out.contains("extinguished automatically: agents followed it and it failed"), "{out}");
     let yaml = std::fs::read_to_string(w.p(&format!("adage/tracks/{TRACK}/review.yaml"))).unwrap();
     assert!(yaml.contains("extinguished") && yaml.contains("adage: misfired 3 times"), "{yaml}");

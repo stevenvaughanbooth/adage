@@ -22,6 +22,7 @@
 
 use adage_intent::model::{self, Spec};
 use adage_store::Paths;
+use adage_term::{Line, Out, Role};
 use anyhow::{bail, Context, Result};
 use std::path::Path;
 
@@ -39,18 +40,24 @@ pub fn run(args: &[String], paths: &Paths) -> Result<()> {
                 args.get(1).context("usage: adage models use <auto|hashed|potion-base-8m|potion-code-16m-v2>")?;
             let which = which.trim().to_lowercase();
             if !matches!(which.as_str(), "auto" | "hashed") && model::spec(&which).is_none() {
-                bail!("unknown model {which:?}; use auto, hashed, or one of: {}", keys());
+                return Err(crate::hint(
+                    format!("unknown model {which:?}"),
+                    format!("use auto, hashed, or one of: {}", keys()),
+                ));
             }
             let before = embedder_id(paths);
             std::fs::create_dir_all(paths.models())?;
             adage_store::config::write_atomic(&paths.models().join(model::ACTIVE_FILE), which.as_bytes())?;
             let r = model::resolve(&paths.models(), false);
-            println!("embedding with {}", r.describe());
-            print!("{}", switched(paths, &before));
+            let mut o = Out::stdout();
+            o.header("models use", &[&which])?;
+            o.blank()?;
+            o.kv("embedding", Line::new().text(r.describe()))?;
+            switched_notes(&mut o, &switched(paths, &before))?;
             Ok(())
         }
         Some("status") | None => {
-            print!("{}", status_text(paths));
+            render_status(&mut Out::stdout(), paths)?;
             Ok(())
         }
         Some(other) => {
@@ -64,49 +71,76 @@ fn keys() -> String {
 }
 
 /// What `adage models status` prints: what this process embeds with, then every known model.
-pub fn status_text(paths: &Paths) -> String {
+fn render_status<W: std::io::Write>(o: &mut Out<W>, paths: &Paths) -> std::io::Result<()> {
     let root = paths.models();
     let r = model::resolve(&root, false);
-    let mut s = format!("embeddings: {}\n", r.describe());
+    let source = match r.source {
+        model::Source::Installed { .. } => "installed",
+        model::Source::Bundled => "bundled",
+        model::Source::Hashed { .. } => "hashed fallback",
+    };
+    o.header("models", &[source])?;
+    o.blank()?;
+    let role = if matches!(r.source, model::Source::Hashed { .. }) { Role::Prime } else { Role::Ink };
+    o.kv("embeddings", Line::new().push(role, r.describe()))?;
     if matches!(r.source, model::Source::Bundled) {
         match model::bundled_verified() {
-            Ok(()) => s.push_str("  bundled table and vocabulary match their pinned SHA-256\n"),
-            Err(e) => s.push_str(&format!("  {e:#}\n")),
+            Ok(()) => o.kv("", Line::new().quiet("bundled table and vocabulary match their pinned SHA-256"))?,
+            Err(e) => o.kv("", Line::new().push(Role::Inhibit, format!("{e:#}")))?,
         }
     }
+    o.blank()?;
     for spec in model::SPECS {
         let dir = root.join(spec.key);
-        let line = match model::status_of(&dir) {
-            Ok(m) => format!("installed, {} x {}, checksums verified", m.vocab_size, m.dim),
-            Err(_) if !dir.join("manifest.json").exists() => {
-                format!("not installed (`adage models fetch {}`, {:.0} MB)", spec.key, spec.bytes() as f64 / 1e6)
-            }
-            Err(e) => format!("installed but unusable: {e:#}"),
+        let state = match model::status_of(&dir) {
+            Ok(m) => Line::new()
+                .push(Role::Fire, "installed")
+                .sep()
+                .quiet(format!("{} x {}, checksums verified", m.vocab_size, m.dim)),
+            Err(_) if !dir.join("manifest.json").exists() => Line::new()
+                .faint("not installed")
+                .sep()
+                .cmd(format!("adage models fetch {}", spec.key))
+                .quiet(format!(" ({:.0} MB)", spec.bytes() as f64 / 1e6)),
+            Err(e) => Line::new().push(Role::Inhibit, format!("installed but unusable: {e:#}")),
         };
-        s.push_str(&format!("  {:<20} {} ({}): {line}\n", spec.key, spec.id(), spec.licence));
+        let w = model::SPECS.iter().map(|s| s.key.len()).max().unwrap_or(0) + 2;
+        o.line(&Line::new().text(spec.key).pad_to(w).extend(state).sep().faint(format!(
+            "{} ({})",
+            spec.id(),
+            spec.licence
+        )))?;
     }
     if let Some(f) = fetch_failed(paths) {
-        s.push_str(&format!(
-            "  last download failed: {}\n",
+        o.blank()?;
+        o.warn(&format!(
+            "last download failed: {}",
             explain(
                 f["class"].as_str().unwrap_or("error"),
                 f["host"].as_str().unwrap_or("the model host"),
                 f["detail"].as_str().unwrap_or("")
             )
-        ));
+        ))?;
     }
-    s
+    Ok(())
 }
 
 /// The spec of a key given on the command line (the default model when none is).
 fn spec_arg(key: Option<&str>) -> Result<&'static Spec> {
     match key {
         None => Ok(&model::BASE_8M),
-        Some(k) => model::spec(k).with_context(|| format!("unknown model {k:?}; known: {}", keys())),
+        Some(k) => model::spec(k)
+            .ok_or_else(|| crate::hint(format!("unknown model {k:?}"), format!("known models: {}", keys()))),
     }
 }
 
 fn install(dir: &Path, key: Option<&str>, paths: &Paths) -> Result<()> {
+    if !dir.is_dir() {
+        return Err(crate::hint(
+            format!("{} is not a directory", dir.display()),
+            "download model.safetensors, tokenizer.json and config.json into one directory (or unpack the npm package), or run `adage models fetch`",
+        ));
+    }
     // Without a key: the known model whose pinned table is in `dir`.
     let spec = match key {
         Some(_) => spec_arg(key)?,
@@ -119,25 +153,50 @@ fn install(dir: &Path, key: Option<&str>, paths: &Paths) -> Result<()> {
     let before = embedder_id(paths);
     let m = model::install_spec(spec, dir, &paths.models())?;
     let _ = std::fs::remove_file(paths.models().join(FETCH_FAILED));
-    println!("installed {} into {}", m.id, paths.models().join(spec.key).display());
-    print!("{}", switched(paths, &before));
+    let mut o = Out::stdout();
+    o.header("models install", &[spec.key, "SHA-256 verified"])?;
+    o.blank()?;
+    installed(&mut o, &m.id, spec, paths, &before)
+}
+
+/// The rows after a model is installed, and what changed for reflexes learned with another one.
+fn installed<W: std::io::Write>(o: &mut Out<W>, id: &str, spec: &Spec, paths: &Paths, before: &str) -> Result<()> {
+    o.kv("installed", Line::new().text(id))?;
+    o.kv("in", Line::new().text(crate::detect::tilde(&paths.models().join(spec.key))))?;
+    switched_notes(o, &switched(paths, before))?;
+    o.blank()?;
+    if spec.key != model::BUNDLED_SPEC.key && model::selection(&paths.models()) != spec.key {
+        o.next(&format!("adage models use {}", spec.key), "makes hooks and the learner embed with it")?;
+    } else {
+        o.next("adage condition", "forms intent families from your traces")?;
+    }
+    Ok(())
+}
+
+/// Each line [`switched`] returned, as a note.
+fn switched_notes<W: std::io::Write>(o: &mut Out<W>, text: &str) -> std::io::Result<()> {
+    if text.is_empty() {
+        return Ok(());
+    }
+    o.blank()?;
+    for l in text.lines() {
+        o.note(l)?;
+    }
     Ok(())
 }
 
 fn fetch(key: Option<&str>, paths: &Paths) -> Result<()> {
     let spec = spec_arg(key)?;
     let before = embedder_id(paths);
+    let mut o = Out::stdout();
+    let _ = o.header("models fetch", &[spec.key, "pinned, SHA-256 verified"]);
+    let _ = o.blank();
     let m = fetch_spec(spec, paths, &mut |p| {
         if p.file_done == 0 {
-            println!("fetching {} ({} bytes)", p.url, p.file_bytes);
+            let _ = o.kv("fetching", Line::new().text(p.url).sep().quiet(format!("{} bytes", p.file_bytes)));
         }
     })?;
-    println!("installed {} into {}", m, paths.models().join(spec.key).display());
-    if spec.key != model::BUNDLED_SPEC.key && model::selection(&paths.models()) != spec.key {
-        println!("`adage models use {}` makes hooks and the learner embed with it.", spec.key);
-    }
-    print!("{}", switched(paths, &before));
-    Ok(())
+    installed(&mut o, &m, spec, paths, &before)
 }
 
 /// The id of the model hooks embed prompts with now.

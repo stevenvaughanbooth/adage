@@ -1,7 +1,8 @@
 # Reflex proof: current evidence
 
 Isolated branch `codex/reflex-proof`, original base main `acdb0a4acd875be56821469aaeadeb29b8d6d493`;
-main `d4f7e60` integrated before opening the PR. Historical measurements retain their original
+main `d4f7e60` integrated before opening the PR, then UX main `52c256b` merged into that PR.
+Historical measurements retain their original
 source checksums. The [launch sequence](../../docs/reflex-proof-plan.md#launch-sequence-after-this-pr)
 incorporates the advisory results and showcase work subsequently landed on main.
 Protocol and six decision gates: [design plan](../../docs/reflex-proof-plan.md).
@@ -23,7 +24,19 @@ The current product reference is [How Adage works](../../docs/how-it-works.md).
 
 ## Validation
 
-After integrating main: workspace formatting and warnings-denied all-target lint passed;
+UX integration preserves main's clap CLI, terminal design system, redesigned tabs, palette,
+card/quiet views and embedded web map. Execution authority and receipt details use the new
+Reflexes tab; obsolete text snapshots are removed in favor of reviewed insta snapshots.
+The web sources and embedded assets are unchanged from UX main. The onboarding proof now
+expects the new "traces" terminology, with the same nine training sessions and held-out check.
+On the resolved UX merge, 99 CLI unit tests (including 41 UI tests), 3 real-hook action/pack
+tests, 8 first-run tests, 7 background-learning tests, 7 history-source tests, accepted-pack
+integration, 58 executor unit tests and 8 shared-hook tests passed. Formatting, all-target
+warnings-denied lint and the generated-token/contrast check passed. The full native-platform
+matrix and the previously documented debug startup timing limitation are not cleared by these
+targeted checks.
+
+Earlier, after integrating `d4f7e60`: workspace formatting and warnings-denied all-target lint passed;
 50 CLI unit tests, 3 action/pack tests, 6 source tests, accepted-pack integration, 58 executor
 unit tests and 8 shared-hook tests passed. The paid-runner/accounting suite passed all 50 tests;
 npm launcher, session-start shell tests and plugin metadata checks passed. This does not replace

@@ -118,7 +118,7 @@ jobs:
         run: python3 -m unittest evals/live/test_runner.py evals/live/test_budget.py
 
       # Generated sandboxes (evals/gen): determinism, schema, the self-check of the smoke suite, and
-      # the scripted rehearsal's `adage learn` check (uses target/debug/adage, built above). The
+      # the scripted rehearsal's `adage condition` check (uses target/debug/adage, built above). The
       # node-npm bundles are checked with the runner's Node and skipped if it has none.
       - name: procedural sandbox generator
         run: python3 -m unittest discover evals/gen

@@ -40,21 +40,47 @@ pub enum Status {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Check {
+    /// A stable identifier (the UI and tools match on it); `label` is what people read.
     pub check: String,
+    /// The check's name in the lexicon's words (`auto-condition`, not `auto-learn`).
+    pub label: String,
     pub status: Status,
     pub detail: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fix: Option<String>,
 }
 
+/// A check's name as people read it.
+pub fn label(check: &str) -> String {
+    if let Some(rest) = check.strip_prefix("auto-learn") {
+        return format!("auto-condition{rest}");
+    }
+    match check {
+        "session spools" => "trace spools".into(),
+        other => other.into(),
+    }
+}
+
 fn pass(check: &str, detail: impl Into<String>) -> Check {
-    Check { check: check.into(), status: Status::Pass, detail: detail.into(), fix: None }
+    Check { check: check.into(), label: label(check), status: Status::Pass, detail: detail.into(), fix: None }
 }
 fn warn(check: &str, detail: impl Into<String>, fix: impl Into<String>) -> Check {
-    Check { check: check.into(), status: Status::Warn, detail: detail.into(), fix: Some(fix.into()) }
+    Check {
+        check: check.into(),
+        label: label(check),
+        status: Status::Warn,
+        detail: detail.into(),
+        fix: Some(fix.into()),
+    }
 }
 fn fail(check: &str, detail: impl Into<String>, fix: impl Into<String>) -> Check {
-    Check { check: check.into(), status: Status::Fail, detail: detail.into(), fix: Some(fix.into()) }
+    Check {
+        check: check.into(),
+        label: label(check),
+        status: Status::Fail,
+        detail: detail.into(),
+        fix: Some(fix.into()),
+    }
 }
 
 fn sha256_file(p: &Path) -> Option<String> {
@@ -536,7 +562,7 @@ fn spools(paths: &Paths) -> Check {
         sessions += usize::from(e.path().extension().is_some_and(|x| x == "spool"));
     }
     let mb = bytes as f64 / (1 << 20) as f64;
-    let detail = format!("{sessions} session spool(s), {mb:.1} MB in {}", detect::tilde(&paths.sessions()));
+    let detail = format!("{sessions} trace spool(s), {mb:.1} MB in {}", detect::tilde(&paths.sessions()));
     if bytes > SPOOL_WARN_BYTES {
         warn(
             "session spools",
@@ -655,7 +681,8 @@ fn live_learning(paths: &Paths) -> Vec<Check> {
         let held = adage_store::lock::is_held(&file(".lock")).unwrap_or(false);
         let repo = &req.repo;
         match last.get(repo) {
-            Some(l) if l["kind"] == "condition_error" => {
+            // `learn_error`: learn.log lines written before the lexicon's rename.
+            Some(l) if l["kind"] == "condition_error" || l["kind"] == "learn_error" => {
                 let ts = l["ts"].as_u64().unwrap_or(0);
                 let what = l["error"].as_str().unwrap_or("unknown error").to_string();
                 failed.push(format!("{repo} ({}, {}: {what})", ago(now, ts), l["class"].as_str().unwrap_or("?")));
@@ -730,6 +757,26 @@ fn live_learning(paths: &Paths) -> Vec<Check> {
     out
 }
 
+/// Whether `PreToolUse` rewrites are on: `runtime.rewrite`, and the `exec/rewrite-off` marker an
+/// older `adage delegate off` wrote (either one turns them off). It passes either way; its fix is
+/// the switch the other way.
+pub fn rewrites_check(paths: &Paths) -> Check {
+    let on = adage_store::config::load(paths).config.runtime_rewrite;
+    let marker = adage_hook::rewrite_off(paths).exists();
+    let (detail, fix) = match (on, marker) {
+        (true, false) => ("python tests → .venv (on)".to_string(), "adage delegate rewrites off"),
+        (false, _) => (
+            "off (runtime.rewrite = false): commands run as the agent wrote them".to_string(),
+            "adage delegate rewrites on",
+        ),
+        (true, true) => (
+            "off (the exec/rewrite-off marker): commands run as the agent wrote them".to_string(),
+            "adage delegate rewrites on",
+        ),
+    };
+    Check { fix: Some(fix.into()), ..pass("rewrites", detail) }
+}
+
 /// Every check, in display order, for the repository at `repo_root` (if any). `adage watch` and
 /// `adage ui` re-run these every few seconds.
 pub fn checks(paths: &Paths, repo_root: Option<&Path>) -> Vec<Check> {
@@ -748,10 +795,60 @@ pub fn checks(paths: &Paths, repo_root: Option<&Path>) -> Vec<Check> {
     checks.extend(hooks_checks(repo_root, exe.as_deref()));
     checks.extend(plugin_check(repo_root, exe.as_deref()));
     checks.push(kill_switches(repo_root));
+    checks.push(rewrites_check(paths));
     checks.push(spools(paths));
     checks.push(fail_open(paths));
     checks.extend(live_learning(paths));
+    // What people read is in the lexicon's words; the check ids stay as they are.
+    for c in &mut checks {
+        c.detail = crate::words::prose(&c.detail);
+        c.fix = c.fix.as_deref().map(crate::words::prose);
+    }
     checks
+}
+
+/// `adage doctor`'s report in the output grammar: a lamp row per check, its fix as a command
+/// under it, and `next` for the first thing to fix.
+pub fn render<W: std::io::Write>(o: &mut adage_term::Out<W>, checks: &[Check]) -> std::io::Result<()> {
+    use adage_term::{Glyph, Line, Role};
+    let count = |s: Status| checks.iter().filter(|c| c.status == s).count();
+    let (p, w, f) = (count(Status::Pass), count(Status::Warn), count(Status::Fail));
+    let summary = format!("{p} passed · {w} to look at · {f} failing");
+    o.header("doctor", &[&summary])?;
+    o.blank()?;
+    let name_w = checks.iter().map(|c| c.label.chars().count()).max().unwrap_or(10).clamp(10, 26);
+    for c in checks {
+        let (role, glyph, word) = match c.status {
+            Status::Pass => (Role::Fire, Glyph::Ok, "PASS"),
+            Status::Warn => (Role::Prime, Glyph::Lamp, "WARN"),
+            Status::Fail => (Role::Inhibit, Glyph::Fail, "FAIL"),
+        };
+        let mark = if o.theme.color() { Line::new().glyph(role, glyph) } else { Line::new().push(role, word) };
+        o.line(
+            &Line::new()
+                .text("  ")
+                .extend(mark)
+                .pad_to(8)
+                .text(c.label.clone())
+                .pad_to(10 + name_w)
+                .quiet(c.detail.clone()),
+        )?;
+        if let Some(fix) = &c.fix {
+            o.line(&Line::new().pad_to(10 + name_w).faint("fix ").push(Role::Command, fix.clone()))?;
+        }
+    }
+    o.blank()?;
+    // The first failing check's fix, else the first warning's; else what to do next.
+    let first =
+        checks.iter().find(|c| c.status == Status::Fail).or_else(|| checks.iter().find(|c| c.status == Status::Warn));
+    match first.and_then(|c| c.fix.as_ref().map(|fx| (c, fx))) {
+        Some((c, fx)) => {
+            let cmd = fx.split('`').nth(1).filter(|s| s.starts_with("adage ")).unwrap_or(fx);
+            o.next(cmd, &format!("fixes {}", c.label))?
+        }
+        None => o.next("adage status", "everything checks out; see the reflexes in effect")?,
+    }
+    Ok(())
 }
 
 pub fn doctor(args: &[String], paths: &Paths) -> Result<()> {
@@ -770,22 +867,34 @@ pub fn doctor(args: &[String], paths: &Paths) -> Result<()> {
             serde_json::to_string_pretty(&json!({ "checks": checks, "summary": { "pass": p, "warn": w, "fail": f } }))?
         );
     } else {
-        println!("adage doctor");
-        for c in &checks {
-            let tag = match c.status {
-                Status::Pass => "pass",
-                Status::Warn => "WARN",
-                Status::Fail => "FAIL",
-            };
-            println!("  {tag}  {:<26} {}", c.check, c.detail);
-            if let Some(fix) = &c.fix {
-                println!("        {:<26} fix: {fix}", "");
-            }
-        }
-        println!("\n{p} passed, {w} warning(s), {f} failure(s)");
+        render(&mut adage_term::Out::stdout(), &checks)?;
     }
     if f > 0 {
         bail!("{f} check(s) failed");
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rewrites_say_their_state_and_the_switch_the_other_way() {
+        let d = tempfile::tempdir().unwrap();
+        let paths = Paths::at(d.path());
+        let c = rewrites_check(&paths);
+        assert_eq!((c.status, c.detail.as_str()), (Status::Pass, "python tests → .venv (on)"));
+        assert_eq!(c.fix.as_deref(), Some("adage delegate rewrites off"));
+        // The older marker turns them off whatever the setting says.
+        let marker = adage_hook::rewrite_off(&paths);
+        std::fs::create_dir_all(marker.parent().unwrap()).unwrap();
+        std::fs::write(&marker, "").unwrap();
+        let c = rewrites_check(&paths);
+        assert!(c.detail.starts_with("off (the exec/rewrite-off marker)"), "{}", c.detail);
+        assert_eq!(c.fix.as_deref(), Some("adage delegate rewrites on"));
+        std::fs::remove_file(&marker).unwrap();
+        std::fs::write(paths.config(), "[runtime]\nrewrite = false\n").unwrap();
+        assert!(rewrites_check(&paths).detail.starts_with("off (runtime.rewrite = false)"));
+    }
 }

@@ -296,15 +296,15 @@ fn finish_line_sandbox_make_gen_as_an_e2_action_from_the_hook() {
     assert!(!home.join("approvals.json").exists());
     let out = ok(adage(&home, &repo, &allow));
     for want in [
-        "level:    E2",
-        "argv:     make gen",
-        "effect:   regenerate, approved (the classifier says regenerate)",
-        "runs:     from the hook, when an edit matches registry/*.csv",
-        "action:   regenerate; staged in a writable overlay",
-        &format!("outputs:  {generated} (only these may change"),
-        &format!("diff:     {generated} (Modified)"),
+        "level       E2",
+        "argv        make gen",
+        "effect      regenerate, approved (the classifier says regenerate)",
+        "runs        from the hook, when an edit matches registry/*.csv",
+        "action      regenerate; staged in a writable overlay",
+        &format!("outputs     {generated} (only these may change"),
+        &format!("diff        {generated} (Modified)"),
         "+         'ZZQ': {'minor_units': 3, 'name': 'Adage Test Unit'},",
-        "Recorded in",
+        "recorded    ",
     ] {
         assert!(out.contains(want), "delegate output lacks {want:?}:\n{out}");
     }
@@ -527,7 +527,7 @@ fn vendored_scripts_and_attestations_round_trip() {
     results(&good, None);
     let out = ok(share(&["--vendor", "--attest", good.to_str().unwrap()], "out"));
     let sha = adage_pack::digest::sha256_hex(COUNT.as_bytes());
-    assert!(out.contains("vendored scripts/count.py (reflex count-lines)"), "{out}");
+    assert!(out.contains("scripts/count.py (reflex count-lines)"), "{out}");
     assert!(out.contains("gen-smoke-1"), "{out}");
     let pack = adage_pack::Pack::load(&base.join("out")).unwrap();
     assert_eq!(pack.scripts.keys().collect::<Vec<_>>(), vec![&sha]);
@@ -541,7 +541,7 @@ fn vendored_scripts_and_attestations_round_trip() {
     )
     .unwrap();
     let out = ok(adage(&recipient, &recipient_repo, &["add", base.join("out").to_str().unwrap()]));
-    assert!(out.contains("1 vendored script(s)"), "{out}");
+    assert!(out.contains("1 vendored script "), "{out}");
     let cas = recipient.join("cas").join(&sha);
     assert_eq!(std::fs::read_to_string(&cas).unwrap(), COUNT);
     assert_eq!(std::fs::metadata(&cas).unwrap().permissions().mode() & 0o777, 0o444, "read-only");
@@ -554,7 +554,7 @@ fn vendored_scripts_and_attestations_round_trip() {
     // (d) review shows the attestation as self-reported by the signer.
     let fp = adage_sign::fingerprint(&pk);
     let out = ok(adage(&recipient, &recipient_repo, &["review"]));
-    assert!(out.contains("acme/billing carries 1 attestation(s), self-reported by its signer"), "{out}");
+    assert!(out.contains("acme/billing carries 1 attestation, self-reported by its signer"), "{out}");
     assert!(out.contains(&format!("self-reported by signer {fp}")), "{out}");
     assert!(out.contains("arms record · tier l2 · suite gen-smoke · run 0123456789abcdef"), "{out}");
     assert!(out.contains("deltas turns_saved +0.620 · harm canary_actions 0"), "{out}");
@@ -578,16 +578,16 @@ fn vendored_scripts_and_attestations_round_trip() {
     }
     let out = ok(adage(&recipient, &recipient_repo, &allow));
     for want in [
-        "argv:     python3 scripts/sha256-",
-        &format!("script:   vendored (L-vendor) sha256 {sha}"),
+        "argv        python3 scripts/sha256-",
+        &format!("script      vendored (L-vendor) sha256 {sha}"),
         "its shebang is ignored); never approved automatically. Its full text:",
         "    | import pathlib",
         "    | pathlib.Path('out/count.txt').write_text(f'{n}\\n')",
-        "automatic: no (",
+        "automatic   no (",
         "the route runs scripts (L-ref or L-vendor)",
-        "attested: gen-smoke-1: arms record · tier l2",
+        "attested    gen-smoke-1: arms record · tier l2",
         "A vendored script is code from the pack's signer",
-        "diff:     out/count.txt (Created)",
+        "diff        out/count.txt (Created)",
         "    + 2",
     ] {
         assert!(out.contains(want), "delegate output lacks {want:?}:\n{out}");

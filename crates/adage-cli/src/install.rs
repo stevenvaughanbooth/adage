@@ -51,7 +51,7 @@ fn env_dir(var: &str, home_rel: &str) -> Result<PathBuf> {
 }
 
 /// A harness's registration for one binary: what to write, and where each scope puts it.
-struct Registration {
+pub(crate) struct Registration {
     content: String,
     project_rel: &'static str,
     user_path: fn() -> Result<PathBuf>,
@@ -144,6 +144,16 @@ pub(crate) fn apply(p: &Plan) -> Result<()> {
     write_atomic(&p.target, &p.after)
 }
 
+/// Print one harness's registration to stdout, as it would be written; returns it.
+pub(crate) fn print_only(harness: &str, bin: Option<PathBuf>) -> Result<Registration> {
+    let reg = registration(harness, &hook_binary(bin)?)?;
+    print!("{}", reg.content);
+    if !reg.content.ends_with('\n') {
+        println!();
+    }
+    Ok(reg)
+}
+
 /// [`apply`], first keeping the file's previous version in `<file>.adage-bak` (`adage init` and
 /// `adage ui`, which show the diff first). Returns the backup's path, when one was made.
 pub(crate) fn apply_backed_up(p: &Plan) -> Result<Option<PathBuf>> {
@@ -191,63 +201,90 @@ pub fn install(args: &[String]) -> Result<()> {
     }
 
     if !write {
-        let reg = registration(harness, &hook_binary(bin)?)?;
-        let content = reg.content;
-        print!("{content}");
-        if !content.ends_with('\n') {
-            println!();
-        }
+        let reg = print_only(harness, bin)?;
         let target = if scope == "user" {
             (reg.user_path)()?.display().to_string()
         } else {
             format!("<repo>/{}", reg.project_rel)
         };
-        eprintln!(
-            "adage install: printed only. `adage install {harness} --write --scope {scope}` would write {target}"
-        );
+        // The registration goes to stdout, so it can be piped; this goes to stderr.
+        let mut e = adage_term::Out::stderr();
+        e.line(
+            &adage_term::Line::new().faint(format!("adage install: printed only; nothing was written to {target}")),
+        )?;
+        e.next(&format!("adage install {harness} --write --scope {scope}"), "writes it")?;
         return Ok(());
     }
 
     require_person()?;
     let repo = flag(args, "--repo").map(PathBuf::from);
     let p = plan(harness, &scope, repo.as_deref(), bin)?;
+    use adage_term::{Line, Role};
+    let mut o = adage_term::Out::stdout();
+    let target = p.target.display().to_string();
     if p.before.as_deref() == Some(p.after.as_str()) {
-        println!("adage install: {} already registers these hooks; nothing to write", p.target.display());
+        o.header("install", &[harness, &scope, "already registered"])?;
+        o.blank()?;
+        o.kv("checked", Line::new().text(target.clone()))?;
+        o.note(&format!("{target} already registers these hooks; nothing to write."))?;
+        o.blank()?;
+        o.next("adage doctor", "checks that the hooks are registered and healthy")?;
         return Ok(());
     }
     // What changes, before anything is written.
+    o.header("install", &[harness, &scope])?;
+    o.blank()?;
     let verb = if p.before.is_some() { "would change" } else { "would be created" };
-    println!("adage install: {} {verb}:", p.target.display());
+    o.line(&Line::new().text(format!("{target} {verb}:")))?;
     for l in line_diff(p.before.as_deref().unwrap_or(""), &p.after).lines() {
-        println!("  {l}");
+        let role = if l.starts_with('+') {
+            Role::Fire
+        } else if l.starts_with('-') {
+            Role::Inhibit
+        } else {
+            Role::Ink3
+        };
+        o.line(&Line::new().text("  ").push(role, l.to_string()))?;
     }
+    o.flush()?;
     let yes = args.iter().any(|a| a == "--yes" || a == "-y");
     if !yes && std::io::stdin().is_terminal() {
         use std::io::Write;
         print!("Write it? [y/N] ");
         let _ = std::io::stdout().flush();
         if !confirmed(&mut std::io::stdin().lock()) {
-            println!("adage install: nothing written");
+            o.blank()?;
+            o.note("nothing written")?;
             return Ok(());
         }
     }
     let backup = write_with_backup(&p)?;
-    println!("adage install: wrote {}", p.target.display());
+    o.blank()?;
+    o.kv("wrote", Line::new().text(target))?;
     if let Some(b) = backup {
-        println!("  the previous version is in {}", b.display());
+        o.kv("backup", Line::new().quiet("the previous version is in ").text(b.display().to_string()))?;
     }
     if harness == "codex" {
-        println!("Codex asks you to review new hooks before they run: open /hooks in Codex to approve them.");
+        o.blank()?;
+        o.note("Codex asks you to review new hooks before they run: open /hooks in Codex to approve them.")?;
     }
+    o.blank()?;
+    o.next("adage doctor", "checks that the hooks are registered and healthy")?;
     Ok(())
 }
 
 fn require_person() -> Result<()> {
     if let Some(v) = AGENT_ENV.iter().find(|v| std::env::var_os(v).is_some()) {
-        bail!("`adage install --write` changes what runs in your agent's sessions, so it will not run inside one ({v} is set). Run it yourself, in a terminal.");
+        return Err(crate::hint(
+            format!("`adage install --write` changes what runs in your agent's sessions, so it will not run inside one ({v} is set)"),
+            "run it yourself, in a terminal",
+        ));
     }
     if std::env::var("ADAGE_ALLOW_NONINTERACTIVE").as_deref() != Ok("1") && !std::io::stdin().is_terminal() {
-        bail!("`adage install --write` needs a person at a terminal (stdin is not a terminal); use the printed snippet instead, or set ADAGE_ALLOW_NONINTERACTIVE=1");
+        return Err(crate::hint(
+            "`adage install --write` needs a person at a terminal (stdin is not a terminal)",
+            "use the printed snippet instead, or set ADAGE_ALLOW_NONINTERACTIVE=1",
+        ));
     }
     Ok(())
 }
