@@ -1,0 +1,71 @@
+
+running 64 tests
+test cards::tests::an_edit_is_quoted_as_a_whole_hunk ... ok
+test cards::tests::commands_are_normalised_to_their_head ... ok
+test cards::tests::a_created_file_named_after_its_task_has_a_role ... ok
+test cards::tests::redirects_are_writes_and_names_anti_unify_by_shape ... ok
+test cases::tests::areas_are_monorepo_packages ... ok
+test cases::tests::task_groups_are_transitive_and_deterministic ... ok
+test codex::tests::exit_codes_from_every_output_shape ... ok
+test codex::tests::argv_and_context ... ok
+test bridge::tests::prompts_are_anchored_to_bridged_steps ... ok
+test cards::tests::commands_are_productive_and_test_runs_group_by_runner ... ok
+test diff::tests::each_kind_of_change_is_reported_once ... ok
+test cases::tests::passing_runs_are_read_from_their_output ... ok
+test cards::tests::secrets_and_secret_files_are_not_quotable ... ok
+test import::tests::a_directive_is_read_for_what_it_named_and_where ... ok
+test graph::tests::a_trace_steered_to_the_lookup_is_no_evidence_for_it ... ok
+test import::tests::a_question_is_a_request_for_help_only_with_a_help_phrase ... ok
+test import::tests::a_session_is_exposed_only_to_what_its_directives_named ... ok
+test graph::tests::learns_a_lookup_for_an_id_shape_the_ticket_detector_misses ... ok
+test graph::tests::the_effect_ceiling_drops_a_slot_that_may_never_be_directed ... ok
+test graph::tests::two_values_form_a_lookup_only_on_outcome_lift_and_with_a_literal_prefix ... ok
+test import::tests::every_prompt_is_kept_and_anchored_to_the_steps_it_served ... ok
+test effects::tests::a_script_the_traces_show_only_reading_is_observe ... ok
+test import::tests::sub_agent_traces_are_found_and_removed_worktrees_keep_their_repository ... ok
+test instincts::tests::extinction_rules ... ok
+test ledger::tests::a_real_session_prices_to_what_claude_code_reported ... ok
+test ledger::tests::an_unknown_model_is_tokens_only ... ok
+test graph::tests::a_rare_step_that_successful_traces_took_forms_a_prime_reflex ... ok
+test effects::tests::writes_network_and_unused_output_keep_it_environment ... ok
+test ledger::tests::cache_writes_are_priced_by_their_ttl ... ok
+test ledger::tests::claude_usage_is_deduplicated_by_message_and_priced ... ok
+test ledger::tests::timestamps_parse ... ok
+test import::tests::only_hook_output_marks_a_session_steered ... ok
+test opencode::tests::civil_dates ... ok
+test ledger::tests::the_ledger_replaces_by_session_and_skips_unchanged_files ... ok
+test outcome::tests::test_families_and_environments ... ok
+test outcome::tests::test_paths ... ok
+test scope::tests::only_a_file_whose_directory_lists_without_it_is_gone ... ok
+test outcome::tests::env_failures_are_typed ... ok
+test scope::tests::slugs_and_containment ... ok
+test instincts::tests::a_binding_is_stale_for_another_checkout_or_changed_files ... ok
+test testmap::tests::prefixes_drop_targets_and_options ... ok
+test testmap::tests::the_map_names_tests_by_name_history_and_traces ... ok
+test tests::the_summary_marks_nascent_reflexes_and_says_how_to_review_them ... ok
+test scope::tests::only_this_repositorys_transcripts_are_listed ... ok
+test value::tests::a_fitted_cell_replaces_the_research_constant ... ok
+test value::tests::a_procedure_card_is_never_gated ... ok
+test value::tests::beta_kappa_by_moments ... ok
+test value::tests::assess_quiets_what_agents_already_do ... ok
+test value::tests::control_judgements_and_follows_count ... ok
+test value::tests::judgements_value_an_instinct ... ok
+test value::tests::kinds_follow_the_shape_and_the_moment ... ok
+test value::tests::priors_pool_down_the_levels ... ok
+test value::tests::strength_follows_the_value ... ok
+test value::tests::uplift_is_follow_minus_unaided ... ok
+test tests::repository_slugs_preserve_valid_names_and_repair_invalid_track_paths ... ok
+test value::tests::value_scales_with_uplift ... ok
+test outcome::tests::executed_tests_reads_the_report_not_the_exit_code ... ok
+test claims::tests::a_claimed_verify_step_compiles_when_traces_run_it_after_their_edits ... ok
+test import::tests::a_failed_chain_fails_at_its_last_step_only ... ok
+test ledger::tests::fixtures_of_every_harness_summarise ... ok
+test import::tests::outcome_proxies_are_read_from_how_the_transcript_ends ... ok
+test engine::execution_equivalence_tests::independently_executable_check_survives_a_common_later_action ... ok
+test instincts::tests::binds_writes_and_hands_over_to_a_learned_route ... ok
+test engine::execution_equivalence_tests::verbosity_variants_certify_only_with_five_genuine_sessions ... ok
+
+test result: ok. 64 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.71s
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.05s
+     Running unittests src/lib.rs (target/debug/deps/adage_learn-395c482066d7141f)

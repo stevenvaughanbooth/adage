@@ -1,0 +1,53 @@
+
+running 45 tests
+test compile::stable::tests::ids_are_stable ... ok
+test compile::ids::tests::ids_depend_on_content_only ... ok
+test compile::outcome_gate_tests::a_significant_lift_compiles_at_prime_and_never_above_the_ceiling ... ok
+test compile::variants::tests::repo_wide_forms ... ok
+test compile::variants::tests::narrowings_are_covered_by_the_repo_wide_form ... ok
+test compile::variants::tests::the_covering_variant_is_one_agents_ran ... ok
+test embed::tests::words_split ... ok
+test embed::tests::arts_share_directories_and_extensions ... ok
+test compile::variants::tests::equivalent_pytest_support_unions_identities_not_literal_counts ... ok
+test compile::glob::tests::least_general_precise_glob ... ok
+test embed::tests::hashed_acts_are_unit_deterministic_and_structural ... ok
+test flow::tests::literal_and_rare_flows_are_not_slots ... ok
+test flow::tests::outputs_and_paths_are_sources ... ok
+test flow::tests::prompt_flow_to_positional ... ok
+test flow::tests::sub_token_flow_records_the_affix ... ok
+test mine::closed::tests::containment_respects_targets_levels_and_edges ... ok
+test proto::tests::close_nodes_share_a_prototype_and_cannot_links_hold ... ok
+test compile::stable::tests::a_runners_exit_status_line_is_not_the_signature ... ok
+test proto::tests::hashed_embeddings_group_paths_of_one_directory ... ok
+test select::tests::globs ... ok
+test proto::tests::epochs_round_trip_and_assign_new_nodes ... ok
+test stats::tests::beta_quantiles_known_values ... ok
+test stats::tests::incomplete_beta_known_values ... ok
+test select::tests::identities ... ok
+test stats::tests::ln_gamma_matches_factorials ... ok
+test compile::stable::tests::runners_and_signatures ... ok
+test types::anti::tests::pointwise_prefix_dash ... ok
+test stats::tests::wilson_parity_values ... ok
+test types::lattice::tests::constant_prefix_is_kept_from_two_values ... ok
+test types::anti::tests::union_of_two_trackers ... ok
+test types::lattice::tests::lengths_are_exact ... ok
+test types::lattice::tests::three_four_digit_values_are_a_class ... ok
+test types::anti::tests::star_folding ... ok
+test types::skeleton::tests::skeletons_of_the_design_examples ... ok
+test types::tests::word_like_types_are_rejected ... ok
+test types::tests::learns_and_ids_are_stable_under_widening ... ok
+test types::tests::negatives_force_the_least_general_type_or_rejection ... ok
+test compile::intent::tests::a_command_given_the_prompts_item_id_is_the_lookups_not_an_intents ... ok
+test facts::tests::a_session_becomes_an_event_graph ... ok
+test events::tests::converts_a_session_with_flows_and_same_artifact_edges ... ok
+test embed::tests::a_model_fills_the_potion_half ... ok
+test cache::tests::hits_are_what_computing_gives_and_files_are_private ... ok
+test compile::outcome_gate_tests::corpus_retains_unique_successful_literal_session_ids ... ok
+test facts::tests::same_bytes_for_any_order_and_thread_count ... ok
+test facts::tests::bounds_hold ... ok
+
+test result: ok. 45 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.30s
+
+   Compiling adage-graph v0.1.0 (/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/crates/adage-graph)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.26s
+     Running unittests src/lib.rs (target/debug/deps/adage_graph-629577febee06a19)

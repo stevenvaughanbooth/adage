@@ -289,6 +289,7 @@ mod tests {
     fn exec(i: u32, cmd: &str, effect: Effect) -> StepObs {
         let action = CanonicalAction::Exec { argv: cmd.split(' ').map(str::to_string).collect(), cwd: "/r".into() };
         StepObs {
+            project_pytest_root_cwd: false,
             turn: i,
             key: adage_core::keys::template_key(&action),
             norm: adage_core::Normalized { action, effect, mutating: false, confidence: 1.0, note: String::new() },

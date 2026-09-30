@@ -115,6 +115,14 @@ is added. Compound shell commands currently cannot supply execution-certificate 
 exit code alone cannot establish each segment's outcome. Predictive contexts that fail the recount
 are discarded rather than becoming advisory directives.
 
+For direct project-Python pytest commands, the compiler can combine successful sessions that differ
+only in output verbosity (`-q`, `-v`, or their repeated/long forms). It unions session identities,
+retains a command that actually succeeded, and preserves interpreter, targets, selector values,
+other flags and argument order. This new pooling requires native per-tool root-cwd evidence;
+unknown cwd or an earlier/same-turn unknown shell command disables it. Activation chains and older
+cached/importer data do not supply that provenance. This deliberately narrow action equivalence
+does not turn related task embeddings into permission to run arbitrary commands.
+
 The route records these observational counts in `evidence.execution`. They do not grant execution
 or prove savings. These candidates stay silent in ordinary advisory mode and become eligible
 only through the existing execution review and local grant. Actual avoided agent work still

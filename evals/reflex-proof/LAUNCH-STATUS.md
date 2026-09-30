@@ -2,8 +2,52 @@
 
 Status: **real-repository CPU action-elimination gate pending**. The generated lookup mechanism
 passes; it does not establish that automatic verification helps complete coding tasks.
+The [frozen transfer preparation](harness/results/20260930-transfer-preparation/FINDINGS.md)
+retains a zero-spend approval failure and its narrow pytest-cache fix. The replacement eight-session
+comparison is ready and waits for human execution grants; no live transfer result is claimed.
 This page is the launch evidence index. Preserve earlier reports, failed attempts and protocols
 when a later experiment supersedes them.
+
+The [cold-start pilot and fixed replication](harness/results/20260930-cold-start-replication/FINDINGS.md)
+completed sixteen assignments on four distinct Marshmallow tasks, twice per arm. Shipped instincts
+passed **8/8 outputs versus 6/8**, with **8.8% lower reported cost** ($1.7720458 versus $1.9429724)
+and **10.5% fewer observed model requests** (272 versus 304). Three cost regressions and both
+baseline failures remain in the totals. The reversed-order replication alone saved only 0.6%,
+had equal request counts and passed all four tasks in both arms. The intervention is advisory
+project-Python context; this is not learned automatic execution or a general savings estimate.
+
+The [cross-session learning-curve pilot](harness/LEARNING-CURVE.md) completed 15 distinct native
+training sessions and checkpoints at 0/3/5/10/15 sessions. **Every checkpoint produced zero executable
+candidates.** Training cost $3.7549221; independent hidden checks and full-suite grading passed 12/15
+tasks. All 19 offline base/gold controls pass after correcting one reference implementation.
+The [complete native record](harness/results/20260930-learning-curve-native/report.json) preserves
+every assignment, checkpoint and failure. A development replay with narrow command equivalence also
+produced zero candidates. No held-out automatic arm ran, and there is no real-coding CPU savings
+percentage to publish. The updated harness passes 72 tests; the equivalence change passes 188 focused
+Rust tests. These test counts establish contracts, not product efficacy.
+
+The separate [guided development check](harness/results/20260930-guided-demonstrations/FINDINGS.md)
+then completed five explicitly instructed demonstrations: all eventually ran the prescribed test
+command successfully, 4/5 passed independent grading, and zero executable candidates compiled.
+Mining closure absorbs the test action into longer continuations; advisory contrast rejects many
+of those before execution eligibility. Even after fixing that admission gap, the common last-edit
+trigger has at most three qualifying sessions because intervening edits or verification stop the
+recount. This is a concrete integration blocker, not evidence that more paid runs alone will solve it.
+All 78 current harness tests pass. No grant or automatic held-out arm was created for this check.
+
+The [execution-prefix integration](harness/results/20260930-execution-prefix-integration/FINDINGS.md)
+now clears the mining gap: replaying the frozen guided histories compiles nine candidates instead
+of zero. The best candidates still have only 4/5 qualifying continuations, so none receives an
+execution certificate. The frozen organic replay also remains uncertified. Final validation passes
+120 affected Rust tests and 81 harness tests. All original results remain unchanged.
+
+The [cumulative guided follow-up](harness/results/20260930-cumulative-guided/FINDINGS.md) now
+certifies four triggers for one pytest routine from all ten native demonstrations, with nine
+supporting sessions and 9/10 qualifying continuations. Three triggers are learned sequence contexts.
+New task quality is 5/5, cumulative quality 9/10. This clears real-history learning/certification,
+but does not establish live automatic savings. The subsequent eight-assignment transfer comparison
+is frozen and prepared; its exact execution grants require the person's own terminal. Current
+harness validation passes 84 tests.
 
 | Gate | Evidence | Current conclusion |
 | --- | --- | --- |
@@ -109,8 +153,17 @@ The user authorized **$60 for this task**. Measured spend so far is **$4.3605710
 
 One startup-censored attempt has no reported terminal cost. The human explicitly approved charging
 its entire $0.50 reservation; its actual bill remains unknown. The ledger records this separately
-from measured provider costs. Admission charges total **$4.8605710**, leaving **$55.1394290** under
-the $60 task cap before further reservations. This approval does not cover future unknown bills.
+from measured provider costs. The earlier planning snapshot reported **$4.8605710**, leaving
+**$55.1394290** under the $60 task cap. The authoritative ledger's corresponding prior admission
+total is $4.8039968, a $0.0565742 reconciliation difference; retain the earlier snapshot as history.
+The [48-attempt accounting snapshot](harness/results/20260930-guided-demonstrations/budget-snapshot.json)
+includes all 48 attempts through the natural, cold-start, diagnostic and guided runs: **$10.7000678
+measured provider cost + $0.50 approved conservative charge = $11.2000678 admission spend**,
+leaving **$48.7999322**. All attempts are settled or explicitly cap-charged; none are outstanding.
+The [62-attempt snapshot](harness/results/20260930-cumulative-guided/budget-snapshot.json), after
+the cold replication and cumulative guided study, records **$13.2920411 measured + $0.50 approved
+conservative charge = $13.7920411 admission spend**, leaving **$46.2079589**. No paid transfer
+sessions had started at this snapshot. This approval does not cover future unknown bills.
 Historical experiments elsewhere in the repository are separate from this task's ledger. Each new
 experiment must reserve full session caps durably before dispatch; a new unknown cost blocks further
 paid work. Human approval of a reflex is separate from evaluation spending authorization and applies

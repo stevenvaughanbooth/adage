@@ -121,6 +121,29 @@ pub fn action_glob_ok(g: &str) -> bool {
         && !first.starts_with('[')
 }
 
+/// Cache declarations additionally support pytest's conventional hidden cache directory.
+/// This exception never applies to outputs or to arbitrary hidden paths.
+pub fn cache_glob_ok(g: &str) -> bool {
+    action_glob_ok(g) || g == ".pytest_cache/**"
+}
+
+#[cfg(test)]
+mod cache_glob_tests {
+    use super::{action_glob_ok, cache_glob_ok};
+
+    #[test]
+    fn pytest_cache_exception_does_not_authorize_hidden_outputs_or_other_hidden_paths() {
+        assert!(cache_glob_ok(".pytest_cache/**"));
+        assert!(!action_glob_ok(".pytest_cache/**"));
+        assert!(cache_glob_ok("tests/__pycache__/**"));
+        for glob in
+            [".env", ".codex/**", ".git/**", ".GIT/**", ".pytest_cache/../.git/**", ".*/**", "**/__pycache__/**"]
+        {
+            assert!(!cache_glob_ok(glob), "{glob}");
+        }
+    }
+}
+
 /// Lowercase hex SHA-256.
 pub fn sha256_hex_ok(s: &str) -> bool {
     s.len() == 64 && s.bytes().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
@@ -939,7 +962,8 @@ fn validate_route(
             if globs.len() > MAX_ACTION_GLOBS {
                 bail!("exec {what}: at most {MAX_ACTION_GLOBS} globs");
             }
-            if let Some(g) = globs.iter().find(|g| !action_glob_ok(g)) {
+            let valid_glob = if what == "cache" { cache_glob_ok } else { action_glob_ok };
+            if let Some(g) = globs.iter().find(|g| !valid_glob(g)) {
                 bail!("exec {what}: {g:?} is not a repository-relative glob outside .git");
             }
             unique(globs, &format!("exec {what}"))?;

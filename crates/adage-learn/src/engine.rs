@@ -182,6 +182,8 @@ impl Want {
     fn hit(&self, st: &crate::import::StepObs) -> bool {
         ok_parts(st).iter().any(|(lit, e)| {
             *lit == self.command
+                || (st.project_pytest_root_cwd
+                    && adage_core::execution_equivalence::project_pytest_equivalent(&self.command, lit))
                 || self.shape.as_ref().is_some_and(|w| {
                     compile::variants::shape(lit).is_some_and(|v| compile::variants::covers(w, &v, *e == self.effect))
                 })
@@ -559,6 +561,12 @@ fn execution_evidence(r: &Route, ss: &[&Session], cfg: &LearnConfig) -> Result<E
         _ => return Err("execution candidate has unsupported input bindings".into()),
     };
     let net = adage_tracks::context::CtxNet::of([r]);
+    // New verbosity pooling cannot borrow a success from another/unknown cwd. Exact historical
+    // command behavior stays unchanged when the evidence contains no different equivalent spelling.
+    let pooled_pytest =
+        ss.iter().flat_map(|s| &s.steps).flat_map(ok_parts).any(|(lit, _)| {
+            lit != *command && adage_core::execution_equivalence::project_pytest_equivalent(command, &lit)
+        });
     let symbols = adage_runtime::context::Symbols::new(&net);
     let (mut opportunities, mut successful) = (0, 0);
     let mut support = BTreeSet::new();
@@ -610,6 +618,7 @@ fn execution_evidence(r: &Route, ss: &[&Session], cfg: &LearnConfig) -> Result<E
                         .or_else(|| next.call.input.get("cmd"))
                         .and_then(serde_json::Value::as_str);
                     hit = next.turn > st.turn
+                        && (!pooled_pytest || next.project_pytest_root_cwd)
                         && raw.is_some_and(adage_tracks::io::safe_command)
                         && !adage_core::outcome::misfired(&next.call.output)
                         && !adage_core::outcome::tests_failed(&next.call.output);
@@ -1194,4 +1203,135 @@ pub fn verdict(why: Option<&Why>, counts: &BTreeMap<String, Counts>, cfg: &Learn
 
 fn is_zero(n: &usize) -> bool {
     *n == 0
+}
+
+#[cfg(test)]
+mod execution_equivalence_tests {
+    use super::*;
+    use serde_json::json;
+
+    /// Synthetic contracts with production thresholds; never pilot evidence.
+    fn routine(commands: &[&str]) -> Index {
+        routine_cwd(commands, "root")
+    }
+
+    fn routine_cwd(commands: &[&str], mode: &str) -> Index {
+        let temp = tempfile::tempdir().unwrap();
+        let mut transcripts = Vec::new();
+        for (i, command) in commands.iter().enumerate() {
+            let sid = format!("equivalent-{i}");
+            let cwd = "/fixture/equivalent";
+            let mut lines = vec![json!({"type":"user", "sessionId":sid, "cwd":cwd,
+                "message":{"content":format!("Implement independent feature {i}")}})];
+            let mut calls = Vec::new();
+            if mode == "prior-shell" {
+                calls.push(("Bash", json!({"command":"cd sub"})));
+            }
+            calls.push(("Write", json!({"file_path":format!("{cwd}/tests/test_a.py"), "content":"pass"})));
+            calls.push(("Bash", json!({"command":command})));
+            if mode.starts_with("trailing-action") {
+                calls.push(("Bash", json!({"command":".venv/bin/python -c \"print(1)\""})));
+            }
+            if mode == "same-turn-shell" {
+                calls.push(("Bash", json!({"command":"cd sub"})));
+            }
+            for (turn, (tool, input)) in calls.into_iter().enumerate() {
+                let id = format!("tool-{turn}");
+                let message_turn = if mode == "same-turn-shell" && turn == 2 { 1 } else { turn };
+                let recorded_cwd = match mode {
+                    "subdir" => json!(format!("{cwd}/sub")),
+                    "unknown" => serde_json::Value::Null,
+                    _ => json!(cwd),
+                };
+                lines.push(json!({"type":"assistant", "sessionId":sid, "cwd":recorded_cwd,
+                    "message":{"id":format!("turn-{message_turn}"), "model":"fixture", "content":[
+                        {"type":"tool_use", "id":id, "name":tool, "input":input}]}}));
+                let failed = mode == "trailing-action-failure" && i == 0 && turn == 1;
+                lines.push(json!({"type":"user", "sessionId":sid, "cwd":cwd,
+                    "message":{"content":[{"type":"tool_result", "tool_use_id":id, "is_error":failed,
+                        "content":if failed {"1 failed"} else {"1 passed"}}]}}));
+            }
+            let path = temp.path().join(format!("{sid}.jsonl"));
+            std::fs::write(&path, lines.iter().map(|v| v.to_string()).collect::<Vec<_>>().join("\n")).unwrap();
+            transcripts.push(path);
+        }
+        let inputs = crate::Inputs {
+            transcripts,
+            repo_override: Some("equivalent".into()),
+            outcomes: BTreeMap::new(),
+            models: None,
+            cache: None,
+            only_repo: None,
+        };
+        let index = temp.path().join("index.json");
+        crate::learn(&inputs, &temp.path().join("tracks"), &index, &LearnConfig::default()).unwrap();
+        Index::load(&index)
+    }
+
+    #[test]
+    fn independently_executable_check_survives_a_common_later_action() {
+        let command = ".venv/bin/python -m pytest tests/test_a.py -q";
+        let commands = [command; 5];
+        let index = routine_cwd(&commands, "trailing-action");
+        let certified: Vec<_> = index.routes.iter().filter(|r| r.route.evidence.execution.is_some()).collect();
+        assert!(!certified.is_empty(), "closure must not absorb the independently executable check");
+        for r in certified {
+            assert_eq!(r.route.step, Step::Run { command: command.into() });
+            let ev = r.route.evidence.execution.as_ref().unwrap();
+            assert_eq!((ev.sessions, ev.successful, ev.opportunities), (5, 5, 5));
+        }
+        for (commands, mode) in [(&commands[..4], "trailing-action"), (&commands[..], "trailing-action-failure")] {
+            let index = routine_cwd(commands, mode);
+            assert!(
+                !index.routes.iter().any(|r| r.route.evidence.execution.is_some()),
+                "prefix admission must preserve independent support and success recount: {mode}"
+            );
+        }
+    }
+
+    #[test]
+    fn verbosity_variants_certify_only_with_five_genuine_sessions() {
+        let commands = [
+            ".venv/bin/python -m pytest tests/test_a.py -q",
+            ".venv/bin/python -m pytest tests/test_a.py -qq",
+            ".venv/bin/python -m pytest tests/test_a.py -v",
+            ".venv/bin/python -m pytest tests/test_a.py -vv",
+            ".venv/bin/python -m pytest tests/test_a.py --quiet",
+        ];
+        let index = routine(&commands);
+        let route =
+            index.routes.iter().find(|r| r.route.evidence.execution.is_some()).expect("equivalent direct successes");
+        let ev = route.route.evidence.execution.as_ref().unwrap();
+        assert_eq!((ev.sessions, ev.successful, ev.opportunities), (5, 5, 5));
+        assert!(
+            matches!(&route.route.step, Step::Run { command } if commands.contains(&command.as_str())),
+            "the selected command was actually observed"
+        );
+        assert!(!routine(&commands[..4]).routes.iter().any(|r| r.route.evidence.execution.is_some()));
+        for mode in ["subdir", "unknown", "prior-shell", "same-turn-shell"] {
+            assert!(
+                !routine_cwd(&commands, mode).routes.iter().any(|r| r.route.evidence.execution.is_some()),
+                "native cwd missing, non-root or possibly changed: {mode}"
+            );
+        }
+        let mut compound = commands;
+        compound[4] = "source .venv/bin/activate && python -m pytest tests/test_a.py -q";
+        assert!(
+            !routine(&compound).routes.iter().any(|r| r.route.evidence.execution.is_some()),
+            "activation is not newly admitted"
+        );
+        for different in [
+            ".venv/bin/python -m pytest tests/test_a.py -x",
+            ".venv/bin/python -m pytest tests/test_a.py -s",
+            ".venv/bin/python -m pytest tests/test_b.py -q",
+            ".venv/bin/python -m pytest tests/test_a.py -k one",
+            "other/bin/python -m pytest tests/test_a.py -q",
+            ".venv/bin/python -m pytest tests/test_a.py -q && true",
+            ".venv/bin/python -m pytest tests/test_a.py -q | tail",
+        ] {
+            let mut mixed = commands;
+            mixed[4] = different;
+            assert!(!routine(&mixed).routes.iter().any(|r| r.route.evidence.execution.is_some()), "{different}");
+        }
+    }
 }

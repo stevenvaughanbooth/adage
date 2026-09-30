@@ -67,8 +67,9 @@ pub enum Read {
 /// The version of the parsed session's format. Bumped whenever [`Session`] gains or changes what
 /// a parse records, so an entry written before is never read as if it had it, even by a build
 /// whose executable happens to match (format 2: per-prompt import, `Session::prompts` and
-/// `StepObs::prompt`, Track G G0; format 3: `Session::ending`, the outcome proxies).
-pub const SESSION_FORMAT: u32 = 3;
+/// `StepObs::prompt`, Track G G0; format 3: `Session::ending`, the outcome proxies;
+/// format 4: native root-cwd provenance for direct-pytest verbosity pooling).
+pub const SESSION_FORMAT: u32 = 4;
 
 /// The identity of this parser: a cache written by any other build is not trusted.
 fn parser_id() -> String {

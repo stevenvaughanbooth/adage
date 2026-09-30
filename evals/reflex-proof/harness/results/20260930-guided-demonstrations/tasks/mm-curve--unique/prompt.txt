@@ -1,0 +1,5 @@
+Add a new validator to marshmallow: `marshmallow.validate.Unique(*, error=None)`, which succeeds if the input sequence has no duplicate elements. Its default error message is `Must not contain duplicates.`; a custom `error` message may interpolate `{input}`. Examples of valid input: `[1, 2, 3]`. Examples of invalid input: `[1, 2, 1]`.
+
+Follow the conventions of the existing validators, include tests and a docstring, and add a changelog entry.
+
+Repository workflow for this instruction-guided demonstration: after implementing the code, tests, and documentation, run `.venv/bin/python -m pytest tests/test_validate.py -q` from the repository root. Report its actual result; do not claim success if it fails.

@@ -2,6 +2,7 @@
 //! data-driven command table), effect classes, typed spans, and repository identity.
 
 pub mod action;
+pub mod execution_equivalence;
 pub mod gitignore;
 pub mod gitobj;
 pub mod judge;

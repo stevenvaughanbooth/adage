@@ -1,0 +1,44 @@
+id: dead-end-9aeb2e
+summary: 'Instinct U3: this repository declares one test command'
+trigger:
+  on: after_failure
+  command: exec pytest
+  signature: tox -e py
+step:
+  do: run
+  command: tox -e py
+slots: []
+effect: verify
+strength: prime
+state: forming
+exit:
+- when: intent_changes
+evidence:
+  opportunities: 0
+  support: 0
+  days: 0
+  successes: 0
+  deviations_failed: 0
+  rate: 0.0
+  lower_bound: 0.0
+  median_position: 0.0
+  turns_saved: 0.0
+  provenance: instinct:core@0.1.0
+  models: []
+  origin:
+    kind: instinct
+    pack: core
+    version: 0.1.0
+    instinct: U3
+    ecosystem: Python
+    declared: tox.ini
+  by_origin:
+    declared: 1
+  uplift:
+    kind: avoid
+    p_follow: 0.944
+    p_self: 0.29
+    mean: 0.654
+    lower: 0.3812
+    prior_self: 0.29
+authored: false

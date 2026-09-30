@@ -1,0 +1,17 @@
+{
+  "training_cost_usd": 3.7549221,
+  "native_probe_cost_usd": 0.0259818,
+  "historical_cpu_evaluation_charges_usd": 4.860571,
+  "paid_heldout_calls": 0,
+  "production_replay_paid_calls": 0,
+  "training_quality_passed": 12,
+  "training_quality_total": 15,
+  "harness_tests_passed": 72,
+  "focused_rust_tests_passed": 188,
+  "rust_test_scope": "core 62; graph 45; learner 63; compiler integration 10; routine execution 8",
+  "full_property_suite": "not completed; no claim of passing",
+  "release_build": "passed",
+  "platform": "macOS arm64",
+  "codex_remaining_last_observed_percent": 17,
+  "claim": "No real-coding CPU action elimination established. Original and revised development learners both returned zero execution candidates."
+}

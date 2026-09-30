@@ -120,6 +120,9 @@ pub struct ActStats {
     /// Per literal, the traces in which a run of it succeeded.
     #[serde(default)]
     pub literal_ok: BTreeMap<String, u32>,
+    /// Distinct successful native-root-cwd session identities for equivalent-argv unions.
+    #[serde(default)]
+    pub literal_ok_ids: BTreeMap<String, BTreeSet<String>>,
     /// The highest effect class of its runs.
     pub effect: Option<Effect>,
     /// Failure signatures of its failed runs.
@@ -191,6 +194,7 @@ impl Corpus {
             let mut keys: BTreeSet<String> = BTreeSet::new();
             let mut ok_keys: BTreeSet<String> = BTreeSet::new();
             let mut ok_lits: BTreeSet<(String, String)> = BTreeSet::new();
+            let mut root_cwd_lits: BTreeSet<(String, String)> = BTreeSet::new();
             let mut runners: BTreeSet<String> = BTreeSet::new();
             let mut passed: BTreeSet<String> = BTreeSet::new();
             for (i, st) in a.session.steps.iter().enumerate().take(input::MAX_STEPS) {
@@ -204,6 +208,9 @@ impl Corpus {
                         let lit = stable::shell_join(argv);
                         if !*failed {
                             ok_lits.insert((key.clone(), lit.clone()));
+                            if a.meta.get(i).is_some_and(|m| m.project_pytest_root_cwd) {
+                                root_cwd_lits.insert((key.clone(), lit.clone()));
+                            }
                         }
                         e.literals.entry(lit).or_insert_with(|| (argv.clone(), 0)).1 += 1;
                         let eff = a
@@ -247,7 +254,11 @@ impl Corpus {
                 c.acts.get_mut(&k).expect("seen").ok_sessions += 1;
             }
             for (k, l) in ok_lits {
-                *c.acts.get_mut(&k).expect("seen").literal_ok.entry(l).or_default() += 1;
+                let stats = c.acts.get_mut(&k).expect("seen");
+                if root_cwd_lits.contains(&(k.clone(), l.clone())) {
+                    stats.literal_ok_ids.entry(l.clone()).or_default().insert(a.session.id.clone());
+                }
+                *stats.literal_ok.entry(l).or_default() += 1;
             }
             for r in runners {
                 *c.runners.entry(r).or_default() += 1;
@@ -364,6 +375,36 @@ mod outcome_gate_tests {
     use super::*;
     use adage_tracks::lift::OutcomeLift;
     use adage_tracks::Strength;
+
+    #[test]
+    fn corpus_retains_unique_successful_literal_session_ids() {
+        let session = |id: &str, failed| {
+            input::Annotated::bare(input::Session {
+                id: id.into(),
+                prompts: vec![],
+                steps: vec![
+                    input::Step::Exec {
+                        argv: ".venv/bin/python -m pytest tests/test_a.py -q"
+                            .split_whitespace()
+                            .map(str::to_string)
+                            .collect(),
+                        output: "".into(),
+                        failed,
+                    };
+                    2
+                ],
+            })
+        };
+        let mut sessions = [session("a", false), session("a", false), session("b", false), session("c", true)];
+        let unknown = Corpus::of(&sessions, &[]);
+        assert!(unknown.acts.values().all(|a| a.literal_ok_ids.is_empty()), "no metadata is not root-cwd evidence");
+        for session in &mut sessions {
+            session.meta = vec![input::StepMeta { project_pytest_root_cwd: true, ..Default::default() }; 2];
+        }
+        let corpus = Corpus::of(&sessions, &[]);
+        let ids = corpus.acts.values().next().unwrap().literal_ok_ids.values().next().unwrap();
+        assert_eq!(ids, &BTreeSet::from(["a".into(), "b".into()]));
+    }
 
     fn lift(with: (usize, usize), without: (usize, usize)) -> OutcomeLift {
         let v = |(p, f): (usize, usize)| {

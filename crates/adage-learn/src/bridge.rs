@@ -44,6 +44,7 @@ fn push(n: &Normalized, step: &StepObs, out: &mut Vec<(input::Step, input::StepM
         prompt: step.prompt,
         effect: effect.as_str().to_string(),
         key,
+        project_pytest_root_cwd: step.project_pytest_root_cwd,
     };
     match action {
         CanonicalAction::Exec { argv, .. } => out.push((
@@ -169,6 +170,7 @@ mod tests {
 
     fn step(turn: u32, prompt: u16, action: CanonicalAction, rel: Option<&str>, failed: bool) -> StepObs {
         StepObs {
+            project_pytest_root_cwd: false,
             turn,
             key: template_key(&action),
             norm: Normalized { action, effect: Effect::Observe, mutating: false, confidence: 1.0, note: String::new() },

@@ -194,8 +194,19 @@ $ make check
     <h2 class="display reveal" id="ev-h">Measured against a control, <span class="soft">not a vibe.</span></h2>
     <p class="lede reveal">Real agents, headless, on sandbox repositories whose conventions they cannot guess and on real open-source repositories. The same work, with and without Adage, scored by hidden tests. The comparisons below measure advice and procedure cards; they do not measure automatic CPU action replacement.</p>
 
+    <article class="trial current-proof reveal" aria-labelledby="cold-proof-h">
+      <header><p class="kicker">Latest · cold-start pilot + replication · September 30, 2026</p><h3 id="cold-proof-h">Cold-start value, measured twice.</h3><p>Shipped instincts · Claude Haiku 4.5 · Marshmallow · four coding tasks, two runs per arm</p></header>
+      <dl class="stats">
+        <div><dt>Reported API cost</dt><dd><span class="now">8.8% lower</span><small>$1.9430 agent alone · $1.7720 with instincts</small></dd></div>
+        <div><dt>Observed model requests</dt><dd><span class="now">10.5% fewer</span><small>304 agent alone · 272 with instincts</small></dd></div>
+        <div><dt>Outputs passing independent checks</dt><dd><span class="now">8/8</span><small>with instincts · 6/8 agent alone</small></dd></div>
+      </dl>
+      <p class="note">No training sessions or learned routes. Shipped advisory hints point test runs toward the repository's Python environment. All sixteen outcomes are included; three of eight task pairs cost more with instincts.</p>
+      <p class="note">The first run saved 16.3%; the reversed-order repeat saved only 0.6%, with equal request counts and all tasks passing in both arms. This small, single-repository pilot is not a general savings estimate. It does not demonstrate automatic CPU action replacement or measure GPU savings.</p>
+      <p class="note"><a href="https://github.com/stevenvaughanbooth/adage/blob/0584c9e/evals/reflex-proof/harness/results/20260930-cold-start-replication/FINDINGS.md">Read the methodology and limitations →</a> <span aria-hidden="true">·</span> <a href="/evidence/cold-start.json">Inspect all sixteen outcomes</a></p>
+    </article>
     <article class="trial current-proof reveal" aria-labelledby="current-proof-h">
-      <header><p class="kicker">Latest · shipped product validation</p><h3 id="current-proof-h">A new task family. A real repository.</h3><p>Claude Haiku 4.5 · unjs/ufo · 16 paired sessions in 8 task clusters · pre-registered protocol</p></header>
+      <header><p class="kicker">Learned procedure cards · shipped product validation</p><h3 id="current-proof-h">A new task family. A real repository.</h3><p>Claude Haiku 4.5 · unjs/ufo · 16 paired sessions in 8 task clusters · pre-registered protocol</p></header>
       <dl class="stats">
         <div><dt>Estimated cost change</dt><dd><span class="now">−10.3%</span><small>90% interval: −20.1% to +2.0%</small></dd></div>
         <div><dt>Hidden checks passed</dt><dd><span class="now">16/16</span><small>with Adage · 15/16 without</small></dd></div>

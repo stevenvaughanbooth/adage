@@ -51,6 +51,9 @@ pub struct StepMeta {
     /// Canonical template key (`exec make gen`, `read {path}`); empty when unknown.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub key: String,
+    /// Native root-cwd provenance for direct-pytest verbosity pooling; absent is unknown.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub project_pytest_root_cwd: bool,
 }
 
 /// A session with its per-step metadata (`meta[i]` describes `session.steps[i]`; shorter or

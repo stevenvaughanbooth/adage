@@ -716,7 +716,7 @@ mod tests {
     }
 
     fn meta(turn: u32, prompt: u16, effect: &str, key: &str) -> StepMeta {
-        StepMeta { turn, prompt, effect: effect.into(), key: key.into() }
+        StepMeta { project_pytest_root_cwd: false, turn, prompt, effect: effect.into(), key: key.into() }
     }
 
     fn sample() -> Annotated {

@@ -1,0 +1,993 @@
+{
+  "checkpoints": [
+    {
+      "attempt_sha256": "791fa1ffd53ab8e2d6bb4c67319c7be1a8c154f6ab4cf458292610c9ca23eed9",
+      "binary_sha256": "f2bce687b75972b297cf7fa1cd4d2e0c678c0f52443b50d6e7642ea3e0c22689",
+      "condition_elapsed_ms": 763.8,
+      "engine": {
+        "github.com/marshmallow-code/marshmallow": {
+          "compiled": 0,
+          "contexts": 0,
+          "intent_families": 0,
+          "reflexes": 0,
+          "routes": 0,
+          "sessions": 0
+        }
+      },
+      "execution_candidates": [],
+      "route_count": 25,
+      "routes_by_track": {
+        "github-com-marshmallow-code-marshmallow/instincts": 25
+      },
+      "sessions": 0,
+      "sessions_read": 0,
+      "sessions_steered": 0,
+      "status": "completed"
+    },
+    {
+      "attempt_sha256": "1a8f2e1df3b1d6f9cf377a784136e1fd0e977bee1a35387efa9d9487f50c3946",
+      "binary_sha256": "f2bce687b75972b297cf7fa1cd4d2e0c678c0f52443b50d6e7642ea3e0c22689",
+      "condition_elapsed_ms": 304.769,
+      "engine": {
+        "github.com/marshmallow-code/marshmallow": {
+          "card": {
+            "command": ".venv/bin/python -m pytest",
+            "sessions": 5,
+            "useful": 0
+          },
+          "card_families": 1,
+          "cards": 1,
+          "compiled": 0,
+          "contexts": 0,
+          "dropped": [
+            {
+              "pattern": "[read/x:src/marshmallow/validate.py] || \u2192 [act/x:exec wc -l {path}\u2713] \u2192 [act/x:exec .venv/bin/python -m pytest {path} -q\u2713] \u2192 [act/x:exec .venv/bin/python -c {code}\u2713]",
+              "reason": "\"wc -l tests/test_validate.py\" is housekeeping, not a step to direct"
+            },
+            {
+              "pattern": "[act/x:exec wc -l {path}\u2713] \u2192 [read/x:tests/test_validate.py] || \u2192 [act/x:exec .venv/bin/python -c {code}\u2713]",
+              "reason": "\".venv/bin/python -c '<stdin>'\" is not a fixed, plain command"
+            },
+            {
+              "pattern": "[edit/x:src/marshmallow/validate.py] \u2192 [read/x:tests/test_validate.py] || \u2192 [act/x:exec .venv/bin/python -c {code}\u2713]",
+              "reason": "\".venv/bin/python -c '<stdin>'\" is not a fixed, plain command"
+            },
+            {
+              "pattern": "[prompt/k:prompt] \u2192 [edit/x:src/marshmallow/validate.py] \u2192 [read/x:tests/test_validate.py] || \u2192 [act/x:exec .venv/bin/python -c {code}\u2713]",
+              "reason": "\".venv/bin/python -c '<stdin>'\" is not a fixed, plain command"
+            },
+            {
+              "pattern": "[prompt/k:prompt] \u2192 [read/x:CHANGELOG.rst] \u2192 [read/x:tests/test_validate.py] || \u2192 [act/x:exec .venv/bin/python -c {code}\u2713]",
+              "reason": "\".venv/bin/python -c '<stdin>'\" is not a fixed, plain command"
+            },
+            {
+              "pattern": "[read/x:CHANGELOG.rst] \u2192 [edit/x:src/marshmallow/validate.py] \u2192 [read/x:tests/test_validate.py] || \u2192 [act/x:exec .venv/bin/python -c {code}\u2713]",
+              "reason": "\".venv/bin/python -c '<stdin>'\" is not a fixed, plain command"
+            },
+            {
+              "pattern": "[read/x:CHANGELOG.rst] \u2192 [read/x:tests/test_validate.py] || \u2192 [act/x:exec .venv/bin/python -c {code}\u2713]",
+              "reason": "\".venv/bin/python -c '<stdin>'\" is not a fixed, plain command"
+            },
+            {
+              "pattern": "[read/x:src/marshmallow/validate.py] \u2192 [act/x:exec wc -l {path}\u2713] \u2192 [read/x:tests/test_validate.py] || \u2192 [act/x:exec .venv/bin/python -c {code}\u2713]",
+              "reason": "\".venv/bin/python -c '<stdin>'\" is not a fixed, plain command"
+            },
+            {
+              "pattern": "[read/x:src/marshmallow/validate.py] \u2192 [edit/x:src/marshmallow/validate.py] \u2192 [read/x:tests/test_validate.py] || \u2192 [act/x:exec .venv/bin/python -c {code}\u2713]",
+              "reason": "\".venv/bin/python -c '<stdin>'\" is not a fixed, plain command"
+            },
+            {
+              "pattern": "[read/x:src/marshmallow/validate.py] \u2192 [read/x:CHANGELOG.rst] \u2192 [read/x:tests/test_validate.py] || \u2192 [act/x:exec .venv/bin/python -c {code}\u2713]",
+              "reason": "\".venv/bin/python -c '<stdin>'\" is not a fixed, plain command"
+            },
+            {
+              "pattern": "[read/x:tests/test_validate.py] \u2192 [act/x:exec wc -l {path}\u2713] \u2192 [read/x:tests/test_validate.py] || \u2192 [act/x:exec .venv/bin/python -c {code}\u2713]",
+              "reason": "\".venv/bin/python -c '<stdin>'\" is not a fixed, plain command"
+            },
+            {
+              "pattern": "[read/x:tests/test_validate.py] \u2192 [edit/x:src/marshmallow/validate.py] \u2192 [read/x:tests/test_validate.py] || \u2192 [act/x:exec .venv/bin/python -c {code}\u2713]",
+              "reason": "\".venv/bin/python -c '<stdin>'\" is not a fixed, plain command"
+            },
+            {
+              "pattern": "[read/x:tests/test_validate.py] \u2192 [read/x:CHANGELOG.rst] \u2192 [read/x:tests/test_validate.py] || \u2192 [act/x:exec .venv/bin/python -c {code}\u2713]",
+              "reason": "\".venv/bin/python -c '<stdin>'\" is not a fixed, plain command"
+            },
+            {
+              "pattern": "[act/x:exec wc -l {path}\u2713] \u2192 [act/x:exec .venv/bin/python -m pytest {path} -q\u2713] || \u2192 [act/x:exec .venv/bin/python -c {code}\u2713]",
+              "reason": "\".venv/bin/python -c '<stdin>'\" is not a fixed, plain command"
+            },
+            {
+              "pattern": "[read/x:src/marshmallow/validate.py] \u2192 [act/x:exec wc -l {path}\u2713] \u2192 [act/x:exec .venv/bin/python -m pytest {path} -q\u2713] || \u2192 [act/x:exec .venv/bin/python -c {code}\u2713]",
+              "reason": "\".venv/bin/python -c '<stdin>'\" is not a fixed, plain command"
+            },
+            {
+              "pattern": "[read/x:tests/test_validate.py] \u2192 [act/x:exec wc -l {path}\u2713] \u2192 [act/x:exec .venv/bin/python -m pytest {path} -q\u2713] || \u2192 [act/x:exec .venv/bin/python -c {code}\u2713]",
+              "reason": "\".venv/bin/python -c '<stdin>'\" is not a fixed, plain command"
+            }
+          ],
+          "intent_families": 0,
+          "reflexes": 1,
+          "routes": 1,
+          "sessions": 5,
+          "testmap": {
+            "advantage": {
+              "lower": -1.3744998925426994,
+              "mean": -0.5359074074074073,
+              "p_positive": 0.20639799399341716,
+              "q_null": 5.279259259259259,
+              "q_sat": 5.833333333333333,
+              "sd": 0.6543571754233636
+            },
+            "command": ".venv/bin/python -m pytest {tests}",
+            "glob": "src/marshmallow/*.py",
+            "map_files": 8,
+            "n_null": 5,
+            "n_sat": 5,
+            "runner": "pytest",
+            "strength": null,
+            "uplift": {
+              "kind": "run-after-edit",
+              "lower": -0.0361,
+              "mean": 0.1832,
+              "p_follow": 0.881,
+              "p_self": 0.6978,
+              "prior_self": 0.32,
+              "traces": 5,
+              "traces_took": 5
+            },
+            "verified": true
+          }
+        }
+      },
+      "execution_candidates": [],
+      "route_count": 26,
+      "routes_by_track": {
+        "github-com-marshmallow-code-marshmallow/instincts": 25,
+        "github-com-marshmallow-code-marshmallow/learned": 1
+      },
+      "sessions": 5,
+      "sessions_read": 5,
+      "sessions_steered": 0,
+      "status": "completed"
+    }
+  ],
+  "claims": {
+    "authored_tasks": true,
+    "autonomous_discovery_tested": false,
+    "coding_quality_established": false,
+    "cpu_action_elimination_established": false,
+    "gpu_utilization_measured": false,
+    "real_repository": true
+  },
+  "heldout": {
+    "assignment_denominator": 0,
+    "passed": false,
+    "rows": [],
+    "status": "not part of this development protocol"
+  },
+  "independent_training_quality": {
+    "kind": "post-training-diagnostic",
+    "limitation": "Training quality only; no treatment comparison. Grades never filter or modify frozen learning histories.",
+    "paid_calls": 0,
+    "passed": 4,
+    "rows": [
+      {
+        "final_generation": "ac3de59739baf7cf57bc5882ee733e47ee5678de1e10ed500b31b3e11d955d29",
+        "hidden_sha256": "5361c0d4cce2fe77ef4ecc6b8b11a2e3ee0b0063206800541ddf519f059bab58",
+        "native_sha256": "d5ef3ae0ea648619120d9e8635f453fa2af61976483abae87211096c4fa60428",
+        "paid_calls": 0,
+        "quality": {
+          "changed_files": [
+            "CHANGELOG.rst",
+            "src/marshmallow/validate.py",
+            "tests/test_validate.py"
+          ],
+          "checks": {
+            "tests": true
+          },
+          "ci_passed": true,
+          "dependency_mode": "frozen prepared environment; no rescue install",
+          "elapsed_s": 1.63,
+          "exit_code": 0,
+          "hidden_collection_integrity": {
+            "expected_count": 9,
+            "extra": [],
+            "missing": [],
+            "observed_count": 9,
+            "passed": true,
+            "unsuccessful": []
+          },
+          "hidden_failed": [],
+          "hidden_passed": true,
+          "n_tests": 1202,
+          "passed": true,
+          "rescue_error": null,
+          "suite_failed": [],
+          "tail": "........................................................................ [ 23%]\n........................................................................ [ 29%]\n........................................................................ [ 35%]\n........................................................................ [ 41%]\n........................................................................ [ 47%]\n........................................................................ [ 53%]\n........................................................................ [ 59%]\n........................................................................ [ 65%]\n........................................................................ [ 71%]\n........................................................................ [ 77%]\n........................................................................ [ 83%]\n........................................................................ [ 89%]\n........................................................................ [ 95%]\n..................................................                       [100%]\n1202 passed in 0.90s",
+          "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+        },
+        "status": "scored",
+        "task": "mm-curve--starts-with"
+      },
+      {
+        "final_generation": "617b754e218bf98984faf92b420447d4268c894a054709c41b190237b1f6238c",
+        "hidden_sha256": "f746867c1766fc3cadd24917625d623d95a380742017d94bb25d9ce8dedf33e5",
+        "native_sha256": "65f83160016745d5a9210d08b9b4bb1a0cd27bb64c413fc93aeed1370d2f6c16",
+        "paid_calls": 0,
+        "quality": {
+          "changed_files": [
+            "CHANGELOG.rst",
+            "src/marshmallow/validate.py",
+            "tests/test_validate.py"
+          ],
+          "checks": {
+            "tests": true
+          },
+          "ci_passed": true,
+          "dependency_mode": "frozen prepared environment; no rescue install",
+          "elapsed_s": 1.57,
+          "exit_code": 0,
+          "hidden_collection_integrity": {
+            "expected_count": 10,
+            "extra": [],
+            "missing": [],
+            "observed_count": 10,
+            "passed": true,
+            "unsuccessful": []
+          },
+          "hidden_failed": [],
+          "hidden_passed": true,
+          "n_tests": 1203,
+          "passed": true,
+          "rescue_error": null,
+          "suite_failed": [],
+          "tail": "........................................................................ [ 23%]\n........................................................................ [ 29%]\n........................................................................ [ 35%]\n........................................................................ [ 41%]\n........................................................................ [ 47%]\n........................................................................ [ 53%]\n........................................................................ [ 59%]\n........................................................................ [ 65%]\n........................................................................ [ 71%]\n........................................................................ [ 77%]\n........................................................................ [ 83%]\n........................................................................ [ 89%]\n........................................................................ [ 95%]\n...................................................                      [100%]\n1203 passed in 0.89s",
+          "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+        },
+        "status": "scored",
+        "task": "mm-curve--multiple-of"
+      },
+      {
+        "final_generation": "88d59865b2a702a217e08d3babce97b409958255cd4615eb0467c9e07038e2a4",
+        "hidden_sha256": "5e754a9db1b92f198bdde5488af78a30be1886bdc45c037b1b4201ee97ef7415",
+        "native_sha256": "e8040eeac21317f8264090fdd1c275a338da3ab04ac9fe499f74aa4d6675f40d",
+        "paid_calls": 0,
+        "quality": {
+          "changed_files": [
+            "CHANGELOG.rst",
+            "src/marshmallow/validate.py",
+            "tests/test_validate.py"
+          ],
+          "checks": {
+            "tests": false
+          },
+          "ci_passed": false,
+          "dependency_mode": "frozen prepared environment; no rescue install",
+          "elapsed_s": 1.57,
+          "exit_code": 1,
+          "hidden_collection_integrity": {
+            "expected_count": 10,
+            "extra": [],
+            "missing": [],
+            "observed_count": 10,
+            "passed": false,
+            "unsuccessful": [
+              [
+                "tests.test_rw_hidden",
+                "test_hidden_custom_error"
+              ]
+            ]
+          },
+          "hidden_failed": [
+            "test_hidden_custom_error"
+          ],
+          "hidden_passed": false,
+          "n_tests": 1205,
+          "passed": false,
+          "rescue_error": null,
+          "suite_failed": [],
+          "tail": "E           ]\n\ntests/test_rw_hidden.py:34: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_rw_hidden.py::test_hidden_custom_error - AssertionError: assert ['1, 2, 1 has duplicates'] == ['[1, 2, 1] has duplicates']\n  \n  At index 0 diff: '1, 2, 1 has duplicates' != '[1, 2, 1] has duplicates'\n  \n  Full diff:\n    [\n  -     '[1, 2, 1] has duplicates',\n  ?      -       -\n  +     '1, 2, 1 has duplicates',\n    ]\n1 failed, 1204 passed in 0.89s",
+          "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+        },
+        "status": "scored",
+        "task": "mm-curve--unique"
+      },
+      {
+        "final_generation": "a838f9187d6aa4e5e853fafe1fb3b7299946f6a9ca49a7e2e9a823c7dea84130",
+        "hidden_sha256": "04b85bf34041c00316266e4eb11f3d0336ebb745cb448ef1956d71225e81bcc9",
+        "native_sha256": "84aea1a1b870cfce8f3a8bf8bdec4cbf97fb063e16bc7b70c4ae87fbe0d1ce0e",
+        "paid_calls": 0,
+        "quality": {
+          "changed_files": [
+            "CHANGELOG.rst",
+            "src/marshmallow/validate.py",
+            "tests/test_validate.py"
+          ],
+          "checks": {
+            "tests": true
+          },
+          "ci_passed": true,
+          "dependency_mode": "frozen prepared environment; no rescue install",
+          "elapsed_s": 1.59,
+          "exit_code": 0,
+          "hidden_collection_integrity": {
+            "expected_count": 10,
+            "extra": [],
+            "missing": [],
+            "observed_count": 10,
+            "passed": true,
+            "unsuccessful": []
+          },
+          "hidden_failed": [],
+          "hidden_passed": true,
+          "n_tests": 1229,
+          "passed": true,
+          "rescue_error": null,
+          "suite_failed": [],
+          "tail": "........................................................................ [ 29%]\n........................................................................ [ 35%]\n........................................................................ [ 41%]\n........................................................................ [ 46%]\n........................................................................ [ 52%]\n........................................................................ [ 58%]\n........................................................................ [ 64%]\n........................................................................ [ 70%]\n........................................................................ [ 76%]\n........................................................................ [ 82%]\n........................................................................ [ 87%]\n........................................................................ [ 93%]\n........................................................................ [ 99%]\n.....                                                                    [100%]\n1229 passed in 0.89s",
+          "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+        },
+        "status": "scored",
+        "task": "mm-curve--hexadecimal"
+      },
+      {
+        "final_generation": "5549c0f378c21ef159b2333844eaa9d25f45c1d64cdd47e5ec5ddcd52e6422c7",
+        "hidden_sha256": "845955b6e099e6333f72c839808bb7248260b7d9b96330fccffeec5e8ecd019b",
+        "native_sha256": "f3dc82f115cadfb58a90adcf743d0b48567bd38e63dc353de01ef556282d18b4",
+        "paid_calls": 0,
+        "quality": {
+          "changed_files": [
+            "CHANGELOG.rst",
+            "src/marshmallow/validate.py",
+            "tests/test_validate.py"
+          ],
+          "checks": {
+            "tests": true
+          },
+          "ci_passed": true,
+          "dependency_mode": "frozen prepared environment; no rescue install",
+          "elapsed_s": 1.69,
+          "exit_code": 0,
+          "hidden_collection_integrity": {
+            "expected_count": 9,
+            "extra": [],
+            "missing": [],
+            "observed_count": 9,
+            "passed": true,
+            "unsuccessful": []
+          },
+          "hidden_failed": [],
+          "hidden_passed": true,
+          "n_tests": 1202,
+          "passed": true,
+          "rescue_error": null,
+          "suite_failed": [],
+          "tail": "........................................................................ [ 23%]\n........................................................................ [ 29%]\n........................................................................ [ 35%]\n........................................................................ [ 41%]\n........................................................................ [ 47%]\n........................................................................ [ 53%]\n........................................................................ [ 59%]\n........................................................................ [ 65%]\n........................................................................ [ 71%]\n........................................................................ [ 77%]\n........................................................................ [ 83%]\n........................................................................ [ 89%]\n........................................................................ [ 95%]\n..................................................                       [100%]\n1202 passed in 0.91s",
+          "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+        },
+        "status": "scored",
+        "task": "mm-curve--ends-with"
+      }
+    ],
+    "total": 5
+  },
+  "known_training_cost_usd": 0.7198791999999999,
+  "limitations": [
+    "Training CLI completion is not independent task correctness.",
+    "The pytest invocation audit is descriptive; tool success alone does not establish semantic equivalence or test coverage. Pipelines and arbitrary compounds are excluded.",
+    "All failed and unattempted assignments remain visible. Unknown costs are never zero.",
+    "No broad debug logs, credentials or local execution grants are exported.",
+    "These demonstrations prescribe the repository command. They test compilation, not autonomous discovery or efficacy."
+  ],
+  "protocol": "instruction-guided-development-1",
+  "recorded_at": "2026-09-30T18:16:22.784751+00:00",
+  "root_manifest_sha256": "81ccebbe574018e7c8a2dd20284e4de7ac1a3f76ef036be55b4f93422f403041",
+  "schema": 1,
+  "status": "training-complete-no-execution-candidate",
+  "training_assignments": [
+    {
+      "cost_usd": 0.17819000000000002,
+      "independent_quality": "not-scored",
+      "observed_model_requests": 23,
+      "pytest_calls": [
+        {
+          "command": ".venv/bin/python -m pytest tests/test_validate.py::test_startswith -xvs",
+          "result_present": true,
+          "tool_id": "toolu_01QAKm8xpCbS1NnNPSDALc9i",
+          "tool_reported_success": true
+        },
+        {
+          "command": ".venv/bin/python -m pytest tests/test_validate.py::test_startswith_custom_message tests/test_validate.py::test_startswith_repr -xvs",
+          "result_present": true,
+          "tool_id": "toolu_016YxDbR8XkxRxPpf7VBBGyD",
+          "tool_reported_success": true
+        },
+        {
+          "command": ".venv/bin/python -m pytest tests/test_validate.py -q",
+          "result_present": true,
+          "tool_id": "toolu_01BSsQZxK8Hk6HCzkWQQB9BK",
+          "tool_reported_success": true
+        }
+      ],
+      "request_diagnostics": [
+        {
+          "request_id": "09fecdfd-3382-4b85-bba1-d3d8e539a9e5",
+          "source": "sdk"
+        },
+        {
+          "request_id": "17848cf2-d1e9-432e-8840-62a9e9ffd139",
+          "source": "sdk"
+        },
+        {
+          "request_id": "5ed7d018-efc2-4370-879c-e6ac85236c4d",
+          "source": "sdk"
+        },
+        {
+          "request_id": "ba8bba3d-1b9d-49c0-970a-9ceae5bc8cf3",
+          "source": "sdk"
+        },
+        {
+          "request_id": "127b0e64-6097-42d6-97e2-459ea025276c",
+          "source": "sdk"
+        },
+        {
+          "request_id": "a1dbb0c4-072e-4184-83df-ea2129492fd2",
+          "source": "sdk"
+        },
+        {
+          "request_id": "1df15ee8-f93e-4ce1-bbc2-6f20688f5fa9",
+          "source": "sdk"
+        },
+        {
+          "request_id": "3541b520-69e2-4d80-86ff-df6ce97df06b",
+          "source": "sdk"
+        },
+        {
+          "request_id": "e220bb92-57d3-462f-81a5-341afd0c94b7",
+          "source": "sdk"
+        },
+        {
+          "request_id": "c4888c35-2416-485d-9bb8-fe7a461f7a71",
+          "source": "sdk"
+        },
+        {
+          "request_id": "4862dae9-4465-4565-ab46-ab33e9ae6c34",
+          "source": "sdk"
+        },
+        {
+          "request_id": "ff62f741-85ad-4b4f-b962-2cbae11d39cf",
+          "source": "sdk"
+        },
+        {
+          "request_id": "af4db54d-b65f-46dd-8b76-b1169f206a00",
+          "source": "sdk"
+        },
+        {
+          "request_id": "34122ed1-f467-44aa-88ec-92bda7a39751",
+          "source": "sdk"
+        },
+        {
+          "request_id": "3073c176-8579-407e-8855-cf96400a70b3",
+          "source": "sdk"
+        },
+        {
+          "request_id": "2ded386f-d42f-4019-b221-2a54c443875f",
+          "source": "sdk"
+        },
+        {
+          "request_id": "63e0435b-09f3-4cc2-9e76-27da12b023d7",
+          "source": "sdk"
+        },
+        {
+          "request_id": "f0717f04-5fd8-42c1-a738-0dc82ffa82df",
+          "source": "sdk"
+        },
+        {
+          "request_id": "6caee2eb-8e60-4821-9603-29106fe1c202",
+          "source": "sdk"
+        },
+        {
+          "request_id": "3c606f67-0849-4aae-984b-6d59b9d96ff5",
+          "source": "sdk"
+        },
+        {
+          "request_id": "df2fdd8c-bba1-4602-a9f1-541f670dd4b2",
+          "source": "sdk"
+        },
+        {
+          "request_id": "b5d8986d-713a-436d-8573-c4fad24169c7",
+          "source": "sdk"
+        },
+        {
+          "request_id": "022fe1ce-439f-41dc-8781-5fd86f43baac",
+          "source": "sdk"
+        }
+      ],
+      "source_sha256": {
+        "manifest.json": "5fa0446ae794614ff95a3afa08a4cbe3a7cc719acf2e01dbe93922fb778eeaf4",
+        "native-transcript.jsonl": "d5ef3ae0ea648619120d9e8635f453fa2af61976483abae87211096c4fa60428",
+        "run.json": "a2fe5e69c1e6253233b1c25ef89157b6f9c06e832d1d39a1e452cba0b9481a95",
+        "summary.json": "fb7f5393850c9c428c95565a651c10e9b012664b322b3494d9f02e24cbdee534",
+        "transcript-provenance.json": "20adf65e0c7f16a78714e4ffc4104d68cbd85e4b08788e26402b195473635d55"
+      },
+      "status": "completed",
+      "successful_pytest_calls": 3,
+      "task": "mm-curve--starts-with",
+      "terminal_error": false,
+      "tool_calls": 22,
+      "tools": {
+        "Bash": 11,
+        "Edit": 3,
+        "Read": 8
+      }
+    },
+    {
+      "cost_usd": 0.11998790000000001,
+      "independent_quality": "not-scored",
+      "observed_model_requests": 19,
+      "pytest_calls": [
+        {
+          "command": ".venv/bin/python -m pytest tests/test_validate.py -q",
+          "result_present": true,
+          "tool_id": "toolu_01Cc2wTmHazUmwTgwexa3Qf6",
+          "tool_reported_success": true
+        }
+      ],
+      "request_diagnostics": [
+        {
+          "request_id": "7a2d3b73-30c5-4e0c-8ecd-d89b5ee77846",
+          "source": "sdk"
+        },
+        {
+          "request_id": "18a497c4-d365-493d-b10e-a9cdebca2b15",
+          "source": "sdk"
+        },
+        {
+          "request_id": "74610169-e25e-4872-bca5-c86d9b5789df",
+          "source": "sdk"
+        },
+        {
+          "request_id": "1a0e2e36-5a91-4c56-89ba-8cd89356ddba",
+          "source": "sdk"
+        },
+        {
+          "request_id": "aa275166-7a68-46bd-95c7-c03cf0001e4a",
+          "source": "sdk"
+        },
+        {
+          "request_id": "58d80ebe-574b-4a6f-b2d2-65648412be2e",
+          "source": "sdk"
+        },
+        {
+          "request_id": "5aa99a01-8bdb-4581-8456-69e90ff178c0",
+          "source": "sdk"
+        },
+        {
+          "request_id": "0548590e-9223-4d07-89fb-3cecb81ef6f5",
+          "source": "sdk"
+        },
+        {
+          "request_id": "b57ef3a2-c94b-4beb-be21-7ff09b248ff1",
+          "source": "sdk"
+        },
+        {
+          "request_id": "bc93c617-0cba-4e21-bbac-cac2d2880cc4",
+          "source": "sdk"
+        },
+        {
+          "request_id": "6cda2548-8005-408a-aad4-b7ab9e833ccc",
+          "source": "sdk"
+        },
+        {
+          "request_id": "a04dab81-0a0d-4a76-9114-b0a8f5abd355",
+          "source": "sdk"
+        },
+        {
+          "request_id": "f7227ea1-a0e0-49c2-8000-ae7a2fde191c",
+          "source": "sdk"
+        },
+        {
+          "request_id": "18926f27-2e6f-4deb-9a6a-bb03eccb6a14",
+          "source": "sdk"
+        },
+        {
+          "request_id": "b8cf91ac-2660-40e8-ace7-d117bbe8c9c0",
+          "source": "sdk"
+        },
+        {
+          "request_id": "90ffab40-6d87-4e20-a2f4-451a0928332f",
+          "source": "sdk"
+        },
+        {
+          "request_id": "ce1df8e9-0797-4b43-8be1-ac2397a587ca",
+          "source": "sdk"
+        },
+        {
+          "request_id": "38837f9f-dfc9-4036-9368-3007f483dc2a",
+          "source": "sdk"
+        },
+        {
+          "request_id": "51861108-e856-431a-874c-70fe98f3fe2c",
+          "source": "sdk"
+        }
+      ],
+      "source_sha256": {
+        "manifest.json": "a81ef2d7de9f33cdd96deec02706c23952bf57002f369a9002f1b32ad2e876a0",
+        "native-transcript.jsonl": "65f83160016745d5a9210d08b9b4bb1a0cd27bb64c413fc93aeed1370d2f6c16",
+        "run.json": "ab64622c89abbe24769f4396fae947c389ef742c06f0b4acfafaa59626f48e2b",
+        "summary.json": "35c74aec8dee85bfec417e845465884da3cf6c6ab7dc9880026d91767bfc4228",
+        "transcript-provenance.json": "cd2832e7aa6c8d0b0961b95d5c0057fd93f1ede12ac81d11e45db1145a4ad504"
+      },
+      "status": "completed",
+      "successful_pytest_calls": 1,
+      "task": "mm-curve--multiple-of",
+      "terminal_error": false,
+      "tool_calls": 18,
+      "tools": {
+        "Bash": 9,
+        "Edit": 3,
+        "Read": 6
+      }
+    },
+    {
+      "cost_usd": 0.1439018,
+      "independent_quality": "not-scored",
+      "observed_model_requests": 19,
+      "pytest_calls": [
+        {
+          "command": ".venv/bin/python -m pytest tests/test_validate.py -q",
+          "result_present": true,
+          "tool_id": "toolu_01Rz5UcjzUNwussYStNcEgpz",
+          "tool_reported_success": false
+        },
+        {
+          "command": ".venv/bin/python -m pytest tests/test_validate.py -q",
+          "result_present": true,
+          "tool_id": "toolu_01XznXpw1hs9rKiycL7EgMYs",
+          "tool_reported_success": true
+        }
+      ],
+      "request_diagnostics": [
+        {
+          "request_id": "886eefaa-5474-4ce0-8b31-8ea0d5ed9298",
+          "source": "sdk"
+        },
+        {
+          "request_id": "e15c224f-017c-4a80-9402-7813d6efe09f",
+          "source": "sdk"
+        },
+        {
+          "request_id": "48215b7e-2b7c-49b1-a6e8-9da1b96a777d",
+          "source": "sdk"
+        },
+        {
+          "request_id": "138501c8-cb3e-41b1-9295-fbd5e6b88262",
+          "source": "sdk"
+        },
+        {
+          "request_id": "c1999c3c-dbc4-48c5-8783-4c1f3753d11d",
+          "source": "sdk"
+        },
+        {
+          "request_id": "0fab58c7-300b-4e61-aaf8-78e61c56511d",
+          "source": "sdk"
+        },
+        {
+          "request_id": "b95336b3-4f60-4495-b302-019a401851c4",
+          "source": "sdk"
+        },
+        {
+          "request_id": "c7718f67-e897-4071-987a-829fda208d6d",
+          "source": "sdk"
+        },
+        {
+          "request_id": "49974723-ec1e-4b36-8a0d-b61dc3fc4d5d",
+          "source": "sdk"
+        },
+        {
+          "request_id": "46be972b-4c59-4ca5-8572-37000ddcf22d",
+          "source": "sdk"
+        },
+        {
+          "request_id": "6ee80d86-8adc-4739-9084-66f833e7b88b",
+          "source": "sdk"
+        },
+        {
+          "request_id": "5c2c0fe4-f504-4da6-bd3b-1aa7dc752c83",
+          "source": "sdk"
+        },
+        {
+          "request_id": "a946392e-35ae-4c65-b32b-5f4148824048",
+          "source": "sdk"
+        },
+        {
+          "request_id": "b49d1300-a2ac-4061-90b6-291739b161ca",
+          "source": "sdk"
+        },
+        {
+          "request_id": "c95f5b64-7a02-409f-913d-f617352db33b",
+          "source": "sdk"
+        },
+        {
+          "request_id": "698c0932-d8d9-4c04-903a-3a747a41980a",
+          "source": "sdk"
+        },
+        {
+          "request_id": "4e7f7dcd-aac5-4c1d-b73a-ab8e62019af7",
+          "source": "sdk"
+        },
+        {
+          "request_id": "c5c8694c-cc8c-4f81-960e-61d9c8f40e07",
+          "source": "sdk"
+        },
+        {
+          "request_id": "af74d80f-8595-4ee4-9a77-0e907b529e17",
+          "source": "sdk"
+        }
+      ],
+      "source_sha256": {
+        "manifest.json": "a375bf1252d9b4b0401cc0a5430aea4c686f07fa167bf6031838b53059983247",
+        "native-transcript.jsonl": "e8040eeac21317f8264090fdd1c275a338da3ab04ac9fe499f74aa4d6675f40d",
+        "run.json": "9ec6c9fd581e9a06a7263e130fe23e4d3676c425cf698dd25d900acc5bc36dc4",
+        "summary.json": "d4f4762c4eccd011b25555d65e7fa3d715211b712db9433210611172b758ea4f",
+        "transcript-provenance.json": "caee11afe5f6c4ed46621593db4ecc1f60ef8e0c9ae75899c20fda67d95fb8b0"
+      },
+      "status": "completed",
+      "successful_pytest_calls": 1,
+      "task": "mm-curve--unique",
+      "terminal_error": false,
+      "tool_calls": 18,
+      "tools": {
+        "Bash": 9,
+        "Edit": 4,
+        "Read": 5
+      }
+    },
+    {
+      "cost_usd": 0.14425970000000005,
+      "independent_quality": "not-scored",
+      "observed_model_requests": 20,
+      "pytest_calls": [
+        {
+          "command": ".venv/bin/python -m pytest tests/test_validate.py -q",
+          "result_present": true,
+          "tool_id": "toolu_01DeS8eCak7pCYNRrRALmSjJ",
+          "tool_reported_success": true
+        },
+        {
+          "command": ".venv/bin/python -m pytest tests/test_validate.py::test_hexadecimal_valid -v",
+          "result_present": true,
+          "tool_id": "toolu_016wewAWfBDN2bWjsVrAFcBR",
+          "tool_reported_success": true
+        },
+        {
+          "command": ".venv/bin/python -m pytest tests/test_validate.py::test_hexadecimal_invalid -v",
+          "result_present": true,
+          "tool_id": "toolu_01WVZHMAQCzaJdavQse44vPA",
+          "tool_reported_success": true
+        },
+        {
+          "command": ".venv/bin/python -m pytest tests/test_validate.py -q",
+          "result_present": true,
+          "tool_id": "toolu_019NJFZ6iTxsKuv2Qo2CiYtd",
+          "tool_reported_success": true
+        }
+      ],
+      "request_diagnostics": [
+        {
+          "request_id": "4dbe9db3-6ff7-4b04-a2d2-91caaefd4a93",
+          "source": "sdk"
+        },
+        {
+          "request_id": "1ed10139-1f71-49e8-9a19-7429c2a2d9dc",
+          "source": "sdk"
+        },
+        {
+          "request_id": "40ac1bae-7a66-4df7-a6db-28664d83988f",
+          "source": "sdk"
+        },
+        {
+          "request_id": "b25ecd22-238d-426a-aa9a-37c7e3943d4c",
+          "source": "sdk"
+        },
+        {
+          "request_id": "af0bc601-59d1-4f4e-9e01-a75a705071ed",
+          "source": "sdk"
+        },
+        {
+          "request_id": "3dd50af7-0433-41af-a1cb-592f1eb9a9d8",
+          "source": "sdk"
+        },
+        {
+          "request_id": "f60379f4-5b8e-41ef-99ea-b86a8560ad71",
+          "source": "sdk"
+        },
+        {
+          "request_id": "b28aff56-002e-42cb-9aea-0e925adf15b1",
+          "source": "sdk"
+        },
+        {
+          "request_id": "898d71ad-3574-4f86-be29-f69df3ba2085",
+          "source": "sdk"
+        },
+        {
+          "request_id": "121d91fb-54a7-47ae-b51d-ecfa672fda4d",
+          "source": "sdk"
+        },
+        {
+          "request_id": "ad8faf63-45ae-43f5-b46a-2ef15b8e0439",
+          "source": "sdk"
+        },
+        {
+          "request_id": "5f99f9b4-a854-4cdb-9c5c-cf616d3cbe81",
+          "source": "sdk"
+        },
+        {
+          "request_id": "d5d6a074-c0e2-462d-971b-887d7d71d29e",
+          "source": "sdk"
+        },
+        {
+          "request_id": "c4a20c5c-d128-4db4-a2f1-99c4fecb78a7",
+          "source": "sdk"
+        },
+        {
+          "request_id": "a7575426-7c75-4a29-b2b2-25c096b48fa2",
+          "source": "sdk"
+        },
+        {
+          "request_id": "6f6c5909-b93a-459a-98df-31cb7995702d",
+          "source": "sdk"
+        },
+        {
+          "request_id": "fdb80924-0b93-4f7a-ba36-376dd905eb84",
+          "source": "sdk"
+        },
+        {
+          "request_id": "d334cc41-9216-4900-9692-071df4aa7cc0",
+          "source": "sdk"
+        },
+        {
+          "request_id": "994e5bf3-80f0-48ca-8b26-dbeb0ebee1b4",
+          "source": "sdk"
+        },
+        {
+          "request_id": "52cf5cac-402e-4c32-82ce-bbefa0a63f72",
+          "source": "sdk"
+        }
+      ],
+      "source_sha256": {
+        "manifest.json": "248985f4a3c29ebffa6aa6ef1ea26cf37ba5ece1e8510e935401ca38d87bf27a",
+        "native-transcript.jsonl": "84aea1a1b870cfce8f3a8bf8bdec4cbf97fb063e16bc7b70c4ae87fbe0d1ce0e",
+        "run.json": "d8652b87dae6b047010d7216d89a0b5a68244d9011b70986de47a706e7273ea3",
+        "summary.json": "fa1247cd0b3fc214e6e236cf5fbdeef9ca69a68ca0fb3dd86e080af8752e23b4",
+        "transcript-provenance.json": "4ad206f6449364b0a17b71aa1c528576543941bcd95c4099ca345aa32267c856"
+      },
+      "status": "completed",
+      "successful_pytest_calls": 4,
+      "task": "mm-curve--hexadecimal",
+      "terminal_error": false,
+      "tool_calls": 19,
+      "tools": {
+        "Bash": 10,
+        "Edit": 3,
+        "Read": 6
+      }
+    },
+    {
+      "cost_usd": 0.13353980000000001,
+      "independent_quality": "not-scored",
+      "observed_model_requests": 20,
+      "pytest_calls": [
+        {
+          "command": ".venv/bin/python -m pytest tests/test_validate.py -q",
+          "result_present": true,
+          "tool_id": "toolu_017y157gTLTFFfds7zD4Wbd9",
+          "tool_reported_success": true
+        }
+      ],
+      "request_diagnostics": [
+        {
+          "request_id": "2926cdc8-e8d4-45fc-a60f-b878130812b5",
+          "source": "sdk"
+        },
+        {
+          "request_id": "01f5dedd-02d4-4ea1-9613-66407508ff89",
+          "source": "sdk"
+        },
+        {
+          "request_id": "1ee66775-bd81-48f7-a92e-1b67c68da633",
+          "source": "sdk"
+        },
+        {
+          "request_id": "39afad58-9209-48f9-ba8a-cb9185f6b4e6",
+          "source": "sdk"
+        },
+        {
+          "request_id": "c37783c6-1123-40a1-a695-19566e0fda6e",
+          "source": "sdk"
+        },
+        {
+          "request_id": "8be13160-1d5f-426e-8869-9895ad6a4f44",
+          "source": "sdk"
+        },
+        {
+          "request_id": "fab2ab52-ad1c-464a-9078-225d93ae732b",
+          "source": "sdk"
+        },
+        {
+          "request_id": "a4e126ce-04bd-44a1-b2df-8639ee0f97dc",
+          "source": "sdk"
+        },
+        {
+          "request_id": "01dcf9fb-861f-4733-aabc-c085573376fc",
+          "source": "sdk"
+        },
+        {
+          "request_id": "023429cf-3f9b-495c-aaad-955b6fe2eb32",
+          "source": "sdk"
+        },
+        {
+          "request_id": "1c2f2b74-f67a-41e5-9c3b-4d6ca255b046",
+          "source": "sdk"
+        },
+        {
+          "request_id": "bf5ea8bf-99a4-4b45-b2c0-dc5baa968d65",
+          "source": "sdk"
+        },
+        {
+          "request_id": "5a8feb7e-e72f-42ff-826c-8edf918765c2",
+          "source": "sdk"
+        },
+        {
+          "request_id": "e8b386b1-2cc1-4cd6-91d4-e18c3c3b2583",
+          "source": "sdk"
+        },
+        {
+          "request_id": "1cc81ade-b55a-4ffb-a51e-46d55eda7136",
+          "source": "sdk"
+        },
+        {
+          "request_id": "0ae5e22c-5e87-4906-8a0f-a2269f2ca55b",
+          "source": "sdk"
+        },
+        {
+          "request_id": "093958e8-5f26-4e94-bab0-0d4c54702b36",
+          "source": "sdk"
+        },
+        {
+          "request_id": "150a20bb-35c8-4622-a595-c9b5c5d1ad45",
+          "source": "sdk"
+        },
+        {
+          "request_id": "73e8ac74-7458-4b1e-9ca8-ebe0d19de5ca",
+          "source": "sdk"
+        },
+        {
+          "request_id": "ee5fc384-1dda-48d4-afe0-b5595a2cf1c1",
+          "source": "sdk"
+        }
+      ],
+      "source_sha256": {
+        "manifest.json": "7453447558bc609b17941c776a191032cd93fc28e067b5e4268c488a119e6abe",
+        "native-transcript.jsonl": "f3dc82f115cadfb58a90adcf743d0b48567bd38e63dc353de01ef556282d18b4",
+        "run.json": "9157f50f9335dc374dffc37ff69c113a1d7760e4df8b3e12fd3556cc0809ab9e",
+        "summary.json": "6a62ef36a53db45434f572ac0df1ff0140928e7cbce30ee7d92ba534781b5357",
+        "transcript-provenance.json": "a36e3030fbf5b8cd3f2215605782ff111be008ebb32f120ce80a5075caea9d26"
+      },
+      "status": "completed",
+      "successful_pytest_calls": 1,
+      "task": "mm-curve--ends-with",
+      "terminal_error": false,
+      "tool_calls": 19,
+      "tools": {
+        "Bash": 7,
+        "Edit": 3,
+        "Grep": 1,
+        "Read": 8
+      }
+    }
+  ],
+  "training_kind": "instruction-guided-training",
+  "training_with_successful_pytest_observation": 5,
+  "workflow_guidance": "\n\nRepository workflow for this instruction-guided demonstration: after implementing the code, tests, and documentation, run `.venv/bin/python -m pytest tests/test_validate.py -q` from the repository root. Report its actual result; do not claim success if it fails.\n"
+}

@@ -58,6 +58,24 @@ actions and reduced observed model requests from six to three, with all answers 
 This is a small generated-repository mechanism proof, not a general coding speedup claim.
 The [launch evidence index](evals/reflex-proof/LAUNCH-STATUS.md) tracks real-repository validation,
 release gates, failed attempts and evaluation spending.
+Across [two runs of four cold-start tasks](evals/reflex-proof/harness/results/20260930-cold-start-replication/FINDINGS.md)
+on Marshmallow, shipped instincts passed **8/8 outputs versus 6/8** for the agent alone, with **8.8%
+lower reported API cost** and **10.5% fewer observed model requests**. Three of eight pairs cost more
+with instincts. The repeat alone saved only 0.6% and had equal request counts. This small,
+single-repository result measures advisory value, not automatic CPU execution.
+The latest [15-session real-repository learning pilot](evals/reflex-proof/harness/results/20260930-learning-curve-native/report.json)
+passed independent task grading on 12/15 outputs but learned zero automatically executable actions.
+Real-coding CPU savings remain unproven; the full result is retained alongside the mechanism proof.
+A separate [five-session guided routine check](evals/reflex-proof/harness/results/20260930-guided-demonstrations/FINDINGS.md)
+also produced zero executable candidates despite five eventual test-command successes. Its audit
+identified a mining/admission gap and insufficient trigger-specific evidence; the launch gate remains open.
+The [mining integration fix](evals/reflex-proof/harness/results/20260930-execution-prefix-integration/FINDINGS.md)
+now preserves executable prefixes: replaying those five histories compiles nine candidates instead
+of zero. Those five histories alone do not pass the unchanged execution evidence gate; compilation is not a savings result.
+A [separately registered five-session follow-up](evals/reflex-proof/harness/results/20260930-cumulative-guided/FINDINGS.md)
+then brings the retained history to ten sessions and certifies four triggers for one test routine,
+with **9/10 qualifying continuations**. This connects real traces to an executable learned artifact;
+live automatic action elimination remains a separate, human-approved evaluation.
 
 ```text
   agent traces ──► adage condition ──► reflexes ──► index ──► hooks
@@ -307,6 +325,11 @@ task interval above includes zero. Direct CPU action elimination has its own
 [launch gate](evals/reflex-proof/LAUNCH-STATUS.md), and real-repository coding results for that gate
 remain pending. The status card measures your own sessions, with a control, before showing a
 dollar figure.
+
+The next [cross-session evaluation](evals/reflex-proof/harness/LEARNING-CURVE.md) measures learning
+after 0, 3, 5, 10 and 15 related tasks, then compares four new tasks with no Adage, shipped instincts,
+learned guidance, and approved CPU execution. This is a prospective protocol, not a measured savings
+claim; correctness and duplicate agent work are part of its acceptance criteria.
 
 ## Results on generated sandboxes
 
