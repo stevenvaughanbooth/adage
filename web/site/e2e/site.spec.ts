@@ -222,11 +222,14 @@ test.describe("the film plays once, on a fresh visit", () => {
     await expect(page.locator("#film")).toBeHidden();
   });
 
-  test("the hero's See how it works and the section's Learn more open /how", async ({ page }) => {
+  test("the hero opens the concrete example and Learn more opens /how", async ({ page }) => {
     await films(page, "fail");
     await page.goto("/#how");
     await expect(page.getByRole("link", { name: /^Learn more/ })).toHaveAttribute("href", "/how");
-    await page.getByRole("link", { name: "See how it works" }).click();
+    await page.getByRole("link", { name: "See a reflex happen" }).click();
+    await expect(page).toHaveURL(/#shortcuts$/);
+    await expect(page.locator("#story-output")).toBeVisible();
+    await page.getByRole("link", { name: /^Learn more/ }).click();
     await expect(page).toHaveURL(/\/how$/);
   });
 });
@@ -276,4 +279,19 @@ test("the film's speaker mutes and unmutes; the skip icon skips", async ({ page 
   await page.locator("#film").screenshot({ path: "test-results/film-controls.png" });
   await page.getByRole("button", { name: "Skip intro" }).click();
   await expect(page.locator("#film")).toBeHidden();
+});
+
+
+test("the illustrative trace becomes a reflex, then a directive, by keyboard", async ({ page }) => {
+  await page.goto("/#shortcuts");
+  await expect(page.locator("#film")).toBeHidden();
+  await expect(page.locator("#story-code")).toContainText("generated files are out of date");
+  await page.getByRole("button", { name: /The pattern becomes a reflex/ }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#story-code")).toContainText("trigger   edit schema/*.json");
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#story-code")).toContainText("Adage: Changes to schema/*.json");
+  await expect(page.getByRole("button", { name: /The next session gets a shortcut/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".story-footnote")).toContainText("Illustrative sequence, not a benchmark");
 });

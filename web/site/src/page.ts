@@ -11,10 +11,13 @@ export function initPage() {
   document.querySelectorAll(".reveal").forEach((n) => io.observe(n));
 
   document.querySelectorAll<HTMLButtonElement>("button[data-copy]").forEach((b) => {
+    const label = b.textContent;
+    let reset = 0;
     b.addEventListener("click", async () => {
+      clearTimeout(reset);
       try { await navigator.clipboard.writeText(b.dataset.copy!); b.textContent = "Copied"; }
       catch { b.textContent = "Select and copy"; }
-      setTimeout(() => (b.textContent = "Copy"), 1800);
+      reset = window.setTimeout(() => (b.textContent = label), 1800);
     });
   });
 

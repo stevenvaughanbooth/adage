@@ -2167,3 +2167,24 @@ fn settings_show_rewrites_off_by_the_older_marker_and_notices() {
         Some(Cmd::Do(app::Action::SetConfig { key: "ui.notices", ref value })) if value == "off"
     ));
 }
+
+#[test]
+fn reflexes_escape_recovers_from_combined_filters() {
+    let mut s = app_state();
+    s.key(KeyCode::Char('2'), NONE);
+    for ch in ['F', 'P', 'I', 'S'] {
+        s.key(KeyCode::Char(ch), NONE);
+    }
+    assert!(tabs::reflexes::tree(&s).is_empty());
+    s.key(KeyCode::Esc, NONE);
+    assert_eq!(s.reflexes.hidden, [false; 3]);
+    assert_eq!(s.reflexes.states, 0);
+    assert!(!tabs::reflexes::tree(&s).is_empty());
+    s.key(KeyCode::Char('F'), NONE);
+    s.key(KeyCode::Char('/'), NONE);
+    s.key(KeyCode::Char('z'), NONE);
+    s.key(KeyCode::Esc, NONE);
+    assert!(!s.reflexes.filtering);
+    assert!(s.reflexes.filter.is_empty());
+    assert_eq!(s.reflexes.hidden, [false; 3]);
+}

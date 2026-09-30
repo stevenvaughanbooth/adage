@@ -276,6 +276,7 @@ export interface RewriteState {
 }
 
 export interface Graph {
+  demo?: boolean;
   generation: string;
   home: string;
   sessions: { total: number; treated: number; control: number };

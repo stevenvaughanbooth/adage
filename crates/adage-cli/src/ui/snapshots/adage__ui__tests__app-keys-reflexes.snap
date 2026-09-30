@@ -1,5 +1,6 @@
 ---
 source: crates/adage-cli/src/ui/tests.rs
+assertion_line: 229
 expression: text
 ---
  adage    1 Live   2 Reflexes (2)  3 Map   4 Health (2)  5 Settings                                                            harbor-dispatch · LIVE
@@ -32,10 +33,10 @@ expression: text
                                        │           o  the same reflex in the web map (adage map --focus)     │
                                        │       F P I  show or hide fire, prime, inhibit                      │e   n pin   m dismiss
                                        │           S  cycle the lifecycle filter                             │
-                                       │   PgUp PgDn  scroll the detail                                      │ents lookup-incident from any shell
+                                       │         esc  reset the search, strength and lifecycle filters       │ents lookup-incident from any shell
+                                       │   PgUp PgDn  scroll the detail                                      │
                                        │           R  reload the reflexes                                    │
                                        ╰─────────────────────────────────────────────────────────────────────╯
-                                                        │
                                                         │
                                                         │
                                                         │
