@@ -413,7 +413,9 @@ pub fn plan(
         };
         let (outputs, cache) = terms.map(|t| (t.outputs.clone(), t.cache.clone())).unwrap_or_default();
         let action = ActionSpec { kind, outputs, cache };
-        action.validate().map_err(|e| format!("{e} (declare them at approval: --outputs <glob>)"))?;
+        action.validate().map_err(|e| {
+            format!("{e} (declare source outputs with --outputs <glob>, or disposable caches with --cache <glob>; use explicit repository directories, not a root wildcard)")
+        })?;
         (effect, Some(action))
     } else {
         (Effect::Observe, None)

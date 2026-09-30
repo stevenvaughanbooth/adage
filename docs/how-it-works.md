@@ -21,6 +21,8 @@ no applicable history or declared conventions must receive an honest “nothing 
 
 See [zero-config behavior](zero-config.md), [live learning](live-learning.md) and
 [harness integration](harnesses.md) for exact commands, source locations and settings.
+The operational [first-reflex guide](first-reflex.md) walks through setup, empty-history states,
+the separate execution-policy and per-reflex decisions, and checking that an action replaced work.
 Noninteractive previews remain read-only; installing hooks is an explicit setup operation.
 
 ## Accumulated prediction and current execution limits

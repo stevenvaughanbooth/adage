@@ -85,6 +85,10 @@ live automatic action elimination remains a separate, human-approved evaluation.
 
 ## Install
 
+For a first session, expected results, and the separate approval path for CPU actions, follow
+[Your first useful reflex](docs/first-reflex.md). The current release is a developer preview;
+real-coding automatic action savings remain an open [launch gate](evals/reflex-proof/LAUNCH-STATUS.md).
+
 In Claude Code:
 
 ```text

@@ -124,7 +124,7 @@ pub fn action_glob_ok(g: &str) -> bool {
 /// Cache declarations additionally support pytest's conventional hidden cache directory.
 /// This exception never applies to outputs or to arbitrary hidden paths.
 pub fn cache_glob_ok(g: &str) -> bool {
-    action_glob_ok(g) || g == ".pytest_cache/**"
+    action_glob_ok(g) || matches!(g, ".pytest_cache/**" | ".pytest_cache/.gitignore")
 }
 
 #[cfg(test)]
@@ -134,7 +134,9 @@ mod cache_glob_tests {
     #[test]
     fn pytest_cache_exception_does_not_authorize_hidden_outputs_or_other_hidden_paths() {
         assert!(cache_glob_ok(".pytest_cache/**"));
+        assert!(cache_glob_ok(".pytest_cache/.gitignore"));
         assert!(!action_glob_ok(".pytest_cache/**"));
+        assert!(!action_glob_ok(".pytest_cache/.gitignore"));
         assert!(cache_glob_ok("tests/__pycache__/**"));
         for glob in
             [".env", ".codex/**", ".git/**", ".GIT/**", ".pytest_cache/../.git/**", ".*/**", "**/__pycache__/**"]

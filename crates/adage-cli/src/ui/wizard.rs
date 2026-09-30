@@ -589,7 +589,8 @@ pub fn finish_card(w: &Wizard, t: &Theme, completed: bool, cols: usize) -> Vec<L
             t.glyph(Glyph::Ok),
             t.green(),
             "Ready.",
-            " Your agents' next traces get Adage's instincts, and reflexes as they form.".to_string(),
+            " Start a normal agent session. Available instincts and learned guidance apply through the hooks."
+                .to_string(),
         )
     };
     out.push(Line::from(vec![
@@ -620,6 +621,8 @@ pub fn finish_card(w: &Wizard, t: &Theme, completed: bool, cols: usize) -> Vec<L
     if let Some(h) = unhooked.first() {
         next.push((format!("adage install {h} --write"), "registers the hooks (or run `adage init` again)"));
     }
+    next.push(("adage review".into(), "inspect learned candidates; approving evidence does not enable scripts"));
+    next.push(("adage delegate status".into(), "check execution connections and local grants"));
     next.push(("adage watch".into(), "live pane for a split terminal"));
     next.push(("adage map".into(), "explore reflexes in the browser"));
     next.push(("adage ui".into(), "review, health and settings in one place"));

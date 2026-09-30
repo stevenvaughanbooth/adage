@@ -18,6 +18,12 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### Launch clarity and local experience
 
+- First-run completion now points to learned-candidate review and execution status, distinguishing
+  evidence approval from permission to run scripts. The first-reflex guide explains empty-history
+  states, execution policy, scoped grants and how to verify an action actually replaced agent work.
+- Pytest's `.pytest_cache/**` is supported as an explicit cache declaration, while hidden output
+  paths and root wildcards remain restricted. Invalid action-glob errors distinguish outputs from caches.
+
 - The teaser opens with sound by default, with an explicit play button when the browser blocks
   audible autoplay. Reduced-motion and data-saving preferences still wait for a click.
 

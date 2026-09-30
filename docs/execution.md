@@ -494,6 +494,12 @@ forming; and policy `auto_approve = "inert-observe"`. It is **off by default** u
 
 ## Policy
 
+For the complete setup sequence and a scoped pytest example, see [Your first useful reflex](first-reflex.md).
+E2 needs both the policy opt-in below and a local per-reflex grant; enabling the companion alone
+does not supply either. For pytest, declare `.pytest_cache/**` and `.pytest_cache/.gitignore`
+as caches separately: wildcards do not implicitly cover hidden files. Neither declaration
+authorizes the repository's own `.gitignore` or other hidden source outputs.
+
 `$ADAGE_HOME/policy.toml` (personal) and a managed file (`/etc/adage/policy.toml`; macOS
 `/Library/Application Support/Adage/policy.toml`; or the path in `ADAGE_POLICY`):
 

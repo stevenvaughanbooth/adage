@@ -1246,6 +1246,21 @@ mod tests {
     }
 
     #[test]
+    fn pytest_hidden_cache_metadata_needs_its_explicit_contract() {
+        let broad = spec(ActionKind::Verify, &[], &[".pytest_cache/**"]);
+        broad.validate().unwrap();
+        let missing = judge(vec![file(".pytest_cache/.gitignore", ChangeKind::Created)], &broad, 1 << 20);
+        assert_eq!(missing.refused.len(), 1);
+        let exact = spec(ActionKind::Verify, &[], &[".pytest_cache/**", ".pytest_cache/.gitignore"]);
+        exact.validate().unwrap();
+        let covered = judge(vec![file(".pytest_cache/.gitignore", ChangeKind::Created)], &exact, 1 << 20);
+        assert!(covered.refused.is_empty());
+        assert_eq!(covered.apply.len(), 1);
+        let source = judge(vec![file(".gitignore", ChangeKind::Modified)], &exact, 1 << 20);
+        assert_eq!(source.refused.len(), 1);
+    }
+
+    #[test]
     fn apply_is_all_or_nothing_against_the_pre_state() {
         let d = tempfile::tempdir().unwrap();
         let repo = d.path();
