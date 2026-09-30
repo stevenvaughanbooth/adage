@@ -1,6 +1,8 @@
 """Transfer provenance and all-arm authorization preflight contracts; no paid calls."""
+import inspect
 import json
 from pathlib import Path
+import re
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -70,6 +72,22 @@ class TransferContracts(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "human grants"):
                     transfer.run(root)
                 live.assert_not_called()
+
+    def test_binary_allowlist_is_the_measured_cumulative_launch_10_replay(self):
+        # freeze() pins one replay per revision of curve_transfer.py: transfer-v1 (cumulative-10,
+        # ab909549/f2995504) froze 2b9594b, transfer-v2 (cumulative-cache-10, 64dee0b7/39acd547)
+        # fd469e3, transfer-v3 (cumulative-launch-10) the current file. Each manifest pins that
+        # file's hash, so a root verifies only with its own revision. This note is here because
+        # any edit there, even a comment, would make transfer-v3 fail verify().
+        expected = dict(re.findall(r'"(adage(?:-exec)?)": "([0-9a-f]{64})"', inspect.getsource(transfer.freeze)))
+        results = Path(transfer.__file__).parent / "results"
+        replay = transfer.pairs.read(results / "20260930-launch-experience/replay/attempt.json")
+        self.assertEqual(replay["binary_sha256"], expected["adage"])
+        for study in ("20260930-live-cpu-transfer", "20260930-launch-experience/transfer"):
+            m = transfer.pairs.read(results / study / "manifest.json")
+            self.assertTrue(m["root"].endswith("/transfer-v3") and m["cumulative_root"].endswith("/cumulative-launch-10"))
+            for name, digest in expected.items():
+                self.assertEqual(m["frozen_inputs"][m["cumulative_root"] + "/" + name], digest)
 
 
 if __name__ == "__main__":
