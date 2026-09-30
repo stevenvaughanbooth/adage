@@ -25,6 +25,7 @@ mod evidence;
 mod exec;
 use adage_hook::failopen;
 mod graph;
+mod history;
 use adage_hook::harness;
 mod hook;
 mod init;
@@ -277,6 +278,9 @@ pub(crate) fn check_dirs(dirs: &[(&str, Option<&std::path::Path>)]) -> Result<()
 
 fn condition(args: &[String], paths: &Paths) -> Result<()> {
     let started = std::time::Instant::now();
+    let settings = adage_store::config::load(paths).config;
+    let explicit =
+        args.iter().any(|a| matches!(a.as_str(), "--transcripts" | "--codex-sessions" | "--claude-projects"));
     let (cp, cs) =
         (flag(args, "--claude-projects").map(PathBuf::from), flag(args, "--codex-sessions").map(PathBuf::from));
     check_dirs(&[("--claude-projects", cp.as_deref()), ("--codex-sessions", cs.as_deref())])?;
@@ -299,59 +303,57 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
             "pass files that exist, or a directory with --claude-projects <dir> or --codex-sessions <dir>",
         ));
     }
-    // Codex rollouts: `--codex-sessions <dir>` (`$CODEX_HOME/sessions`), read only when asked.
-    if let Some(dir) = flag(args, "--codex-sessions") {
-        let (found, compressed) = adage_learn::codex::discover(std::path::Path::new(&dir));
+    // Explicit sources replace defaults, including when they contain no sessions.
+    if let Some(dir) = flag(args, "--codex-sessions")
+        .map(PathBuf::from)
+        .or_else(|| (!explicit).then(|| history::codex_sessions(&settings)).flatten())
+    {
+        let (found, compressed) = adage_learn::codex::discover(&dir);
         if compressed > 0 {
             let n = words::count(compressed, "compressed Codex rollout");
             let _ = adage_term::Out::stderr()
                 .warn(&format!("skipped {n} (.jsonl.zst); decompress them with `zstd -d` to include them"));
         }
-        let prefix = flag(args, "--cwd-prefix");
-        for p in found {
-            if let Some(pre) = &prefix {
-                // The first line (session metadata) records the cwd.
-                let mut head = String::new();
-                if let Ok(f) = std::fs::File::open(&p) {
-                    use std::io::{BufRead, Read};
-                    let _ = std::io::BufReader::new(f).take(1 << 20).read_line(&mut head);
-                }
-                if !head.contains(&format!("\"cwd\":\"{pre}")) {
-                    continue;
-                }
-            }
-            transcripts.push(p);
+        transcripts.extend(found);
+    }
+    // The same configured history sources as the read-only `sense` preview.
+    if let Some(dir) = flag(args, "--claude-projects")
+        .map(PathBuf::from)
+        .or_else(|| (!explicit).then(|| history::claude_projects(&settings)).flatten())
+    {
+        transcripts.extend(adage_learn::import::discover(&dir));
+    }
+    if !explicit {
+        if let Some(dir) = &settings.learn_opencode_exports {
+            transcripts.extend(history::opencode_exports(dir));
         }
     }
-    // Default to Claude Code history only when no source was named: an explicit source that finds
-    // nothing is an error, never a silent fallback to other history.
-    let explicit = args.iter().any(|a| a == "--transcripts" || a == "--codex-sessions");
-    if let Some(dir) = flag(args, "--claude-projects").or_else(|| {
-        (!explicit).then(|| {
-            adage_store::home_dir()
-                .map(|h| h.join(".claude").join("projects").to_string_lossy().into_owned())
-                .unwrap_or_default()
-        })
-    }) {
-        let prefix = flag(args, "--cwd-prefix");
-        for p in adage_learn::import::discover(std::path::Path::new(&dir)) {
-            if let Some(pre) = &prefix {
-                // Cheap pre-filter on the transcript's recorded cwd.
-                let head = std::fs::read_to_string(&p).unwrap_or_default();
-                if !head.contains(&format!("\"cwd\":\"{pre}")) {
-                    continue;
-                }
-            }
-            transcripts.push(p);
-        }
+    if let Some(prefix) = flag(args, "--cwd-prefix") {
+        transcripts = adage_learn::scope::recorded_inside(transcripts, &[PathBuf::from(prefix)]);
     }
     if transcripts.is_empty() {
+        // A fresh repository can already benefit from instincts bound to its real files. An
+        // explicit empty source still fails, so a typo never looks like successful learning.
+        if !explicit
+            && flag(args, "--cwd-prefix").is_none()
+            && settings.instincts_enabled
+            && !args.iter().any(|a| a == "--no-instincts")
+        {
+            if let Some(root) = std::env::current_dir().ok().and_then(|d| adage_core::repo::find_root(&d)) {
+                let own = adage_core::repo::repo_key_cached(&root, &paths.repo_keys());
+                if flag(args, "--repo").as_deref().is_none_or(|r| r.trim() == own) {
+                    adage_term::Out::stderr()
+                        .note("no past traces found; binding this repository's instincts from its files")?;
+                    return instincts_only(args, paths);
+                }
+            }
+        }
         let source = if let Some(p) = flag(args, "--cwd-prefix") {
             format!("none has a working directory under {p}")
         } else if explicit || args.iter().any(|a| a == "--claude-projects") {
             "the sources you named hold no traces".to_string()
         } else {
-            "no Claude Code history in ~/.claude/projects".to_string()
+            "no traces in the configured history sources".to_string()
         };
         return Err(hint(
             format!("no traces found: {source}"),
@@ -363,7 +365,6 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
         Some(p) => serde_json::from_str(&std::fs::read_to_string(p)?)?,
         None => BTreeMap::new(),
     };
-    let settings = adage_store::config::load(paths).config;
     let cfg = if args.iter().any(|a| a == "--demo") {
         LearnConfig::demo()
     } else {

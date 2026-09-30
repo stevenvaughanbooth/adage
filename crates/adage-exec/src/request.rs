@@ -352,10 +352,8 @@ impl OutputSpec {
                         bail!("field {name}: max must be 1 to {MAX_LIST}");
                     }
                 }
-                FieldType::Text => {
-                    if f.max.is_some_and(|m| m == 0 || m > MAX_TEXT) {
-                        bail!("field {name}: max must be 1 to {MAX_TEXT} characters");
-                    }
+                FieldType::Text if f.max.is_some_and(|m| m == 0 || m > MAX_TEXT) => {
+                    bail!("field {name}: max must be 1 to {MAX_TEXT} characters");
                 }
                 _ => {}
             }

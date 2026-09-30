@@ -5,29 +5,29 @@ expression: text
  adage    1 Live   2 Reflexes (3)  3 Map   4 Health (2)  5 Settings                                                            harbor-dispatch · LIVE
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
  / filter reflexes, commands, files                     │  ◠ read-before-edit-9a1c
- FIRE 3  PRIME 6  INHIBIT 1  ◌ quiet 1  all states ▾    │  PRIME · quiet · harbor-dispatch/learned@0.3.0
-                                                        │  ◌ quiet: uplift +0.04 < 0.10 · approve to deliver
- ▾ harbor-dispatch/incidents@0.3.0                      │
-   F ◠ lookup-incident         firm     24/25           │  WHAT THE AGENT SEES
-   F ◠ read-linked-files       firm     13/17           │    (no preview: the reflex has no directive text)
+ FIRE 3  PRIME 6  INHIBIT 1  ◌ quiet 1  all states ▾    │  mode     Suggest · No execution grant
+                                                        │  when     `bin/fetch-incident {item}` succeeds
+ ▾ harbor-dispatch/incidents@0.3.0                      │  do       read ≤5 listed files at once
+   F ◠ lookup-incident         firm     24/25           │  PRIME · quiet · harbor-dispatch/learned@0.3.0
+   F ◠ read-linked-files       firm     13/17           │  ◌ quiet: uplift +0.04 < 0.10 · approve to deliver
    I ◠ dead-end-npm-test       firm     11/43           │
+                                                        │  ADVISORY PREVIEW (EXAMPLE VALUES)
+ ▾ harbor-dispatch/intents@0.3.0                        │    (no preview: the reflex has no directive text)
+   P ◠ start-with-npm-check    forming  6/9             │
                                                         │  EVIDENCE
- ▾ harbor-dispatch/intents@0.3.0                        │    from conditioning: 21/23 traces took it · lower bound 0.53
-   P ◠ start-with-npm-check    forming  6/9             │    live since installed: fired 0 · followed 0 · ignored 0 · finish line met 0
-                                                        │    uplift: +0.04 (lower bound -0.02): followed 0.95 when told, 0.91 unaided; 20 of 22 traces
- ▾ harbor-dispatch/learned@0.3.0                        │    did it unaided. Quiet: agents already do this, so delivering it changes little
-   P ▤ card-carrier-rules      forming  4 traces        │
-   P ◠ tests-after-rules-edit  firm     value           │  LIFECYCLE
+ ▾ harbor-dispatch/learned@0.3.0                        │    from conditioning: 21/23 traces took it · lower bound 0.53
+   P ▤ card-carrier-rules      forming  4 traces        │    live since installed: fired 0 · followed 0 · ignored 0 · finish line met 0
+   P ◠ tests-after-rules-edit  firm     value           │    uplift: +0.04 (lower bound -0.02): followed 0.95 when told, 0.91 unaided; 20 of 22 traces
+                                                        │    did it unaided. Quiet: agents already do this, so delivering it changes little
+ ▾ @imported/@bound/harbor-skills@0.3.0 · pack          │
+   F ◈ release-notes-s2-chang… firm     –               │  LIFECYCLE
                                                         │    ○ nascent ──── ○ forming ──── ○ firm
- ▾ @imported/@bound/harbor-skills@0.3.0 · pack          │    ceiling fire · effect observe · not in the index
-   F ◈ release-notes-s2-chang… firm     –               │
+ ▾ nascent · waits for review                           │    ceiling fire · effect observe · not in the index
+   ○ ◠ regen-openapi-client    nascent  3/4             │
                                                         │  ACTIONS
- ▾ nascent · waits for review                           │    s strengthen   w weaken   x extinguish   a approve   n pin   m dismiss
-   ○ ◠ regen-openapi-client    nascent  3/4             │    d delegate   t traces (0)   o open in map
+ ▾ quiet · agents already do this; approve to deliver   │    s strengthen   w weaken   x extinguish   a approve   n pin   m dismiss
+▌  ◌ ◠ read-before-edit-9a1c   quiet    21/23           │    d delegate   t traces (0)   o open in map
                                                         │    same as adage review approve harbor-dispatch/learned read-before-edit-9a1c from any shell
- ▾ quiet · agents already do this; approve to deliver   │
-▌  ◌ ◠ read-before-edit-9a1c   quiet    21/23           │
-                                                        │
  ▾ instincts · adage/finish-line@0.1.0                  │
    P ◉ finish-line/regenerate  firm     –               │
                                                         │

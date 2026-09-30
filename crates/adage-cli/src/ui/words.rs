@@ -47,7 +47,7 @@ pub fn review_command(internal: &str, reference: &str, id: &str) -> String {
 pub fn verb_effect(internal: &str) -> &'static str {
     match verb(internal) {
         "approve" => {
-            "Approve: accept the reflex as it is (or apply its proposed change, or put a nascent reflex into service)."
+            "Approve: accept the reflex or proposed change, or put a nascent reflex into service. This does not grant script execution."
         }
         "extinguish" => {
             "Extinguish: take it out of service; conditioning keeps it extinguished unless it strengthens materially."

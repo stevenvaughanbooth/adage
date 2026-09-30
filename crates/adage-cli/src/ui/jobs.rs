@@ -68,13 +68,13 @@ impl Loader {
         let (health, health_asks) = mpsc::channel();
         let (routes, routes_asks) = mpsc::channel();
         {
-            let (out, paths) = (out.clone(), paths.clone());
+            let (out, paths, root) = (out.clone(), paths.clone(), root.clone());
             worker(health_asks, true, HEALTH_EVERY, move || {
                 out.send(Loaded::Health(Box::new(health::gather(&paths, root.as_deref())))).is_ok()
             });
         }
         worker(routes_asks, false, ROUTES_EVERY, move || {
-            out.send(Loaded::Routes(routes::load(&paths).map_err(|e| format!("{e:#}")))).is_ok()
+            out.send(Loaded::Routes(routes::load(&paths, root.as_deref()).map_err(|e| format!("{e:#}")))).is_ok()
         });
         Loader { rx, health, routes }
     }

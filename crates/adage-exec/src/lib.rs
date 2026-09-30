@@ -22,6 +22,7 @@ pub mod classify;
 pub mod env;
 pub mod git;
 pub mod hook;
+pub mod journal;
 pub mod limits;
 pub mod person;
 pub mod policy;
@@ -85,7 +86,7 @@ pub fn last_withheld(home: &std::path::Path) -> Option<LastWithheld> {
         .filter(|e| e.path().extension().is_some_and(|x| x == "spool"))
         .filter_map(|e| Some((e.metadata().ok()?.modified().ok()?, e.path())))
         .collect();
-    spools.sort_by(|a, b| b.0.cmp(&a.0));
+    spools.sort_by_key(|a| std::cmp::Reverse(a.0));
     let mut best: Option<LastWithheld> = None;
     for (_, p) in spools.into_iter().take(64) {
         let session = p.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();

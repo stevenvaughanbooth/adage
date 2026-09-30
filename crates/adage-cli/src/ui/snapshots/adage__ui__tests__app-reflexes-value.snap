@@ -5,32 +5,32 @@ expression: text
  adage    1 Live   2 Reflexes (3)  3 Map   4 Health (2)  5 Settings                                                            harbor-dispatch · LIVE
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
  / filter reflexes, commands, files                     │  ◠ tests-after-rules-edit
- FIRE 3  PRIME 6  INHIBIT 1  ◌ quiet 1  all states ▾    │  PRIME · firm · harbor-dispatch/learned@0.3.0
-                                                        │
- ▾ harbor-dispatch/incidents@0.3.0                      │  WHAT THE AGENT SEES
-   F ◠ lookup-incident         firm     24/25           │    (no preview: the reflex has no directive text)
+ FIRE 3  PRIME 6  INHIBIT 1  ◌ quiet 1  all states ▾    │  mode     Suggest · No execution grant
+                                                        │  when     an edit touches src/dispatch/rules_*.ts
+ ▾ harbor-dispatch/incidents@0.3.0                      │  do       npm run check -- {tests}
+   F ◠ lookup-incident         firm     24/25           │  PRIME · firm · harbor-dispatch/learned@0.3.0
    F ◠ read-linked-files       firm     13/17           │
-   I ◠ dead-end-npm-test       firm     11/43           │  EVIDENCE
+   I ◠ dead-end-npm-test       firm     11/43           │  ADVISORY PREVIEW (EXAMPLE VALUES)
+                                                        │    (no preview: the reflex has no directive text)
+ ▾ harbor-dispatch/intents@0.3.0                        │
+   P ◠ start-with-npm-check    forming  6/9             │  EVIDENCE
                                                         │    from conditioning: value: saves ~1.25 calls when followed (P(saves) 0.93, 90% lower bound
- ▾ harbor-dispatch/intents@0.3.0                        │    0.40); 7 triggers, 0 ran it — a desire path: no trace took the step yet, so its strength
-   P ◠ start-with-npm-check    forming  6/9             │    rests on the value estimate
-                                                        │    live since installed: fired 0 · followed 0 · ignored 0 · finish line met 0
- ▾ harbor-dispatch/learned@0.3.0                        │    enforced: after an edit to src/dispatch/rules_*.ts the agent is told to run `npm run
-   P ▤ card-carrier-rules      forming  4 traces        │    check -- {tests}`; if it then stops without running it, Adage asks it once to run it
-▌  P ◠ tests-after-rules-edit  firm     value           │    before finishing (at most 2 such requests a session)
+ ▾ harbor-dispatch/learned@0.3.0                        │    0.40); 7 triggers, 0 ran it — a desire path: no trace took the step yet, so its strength
+   P ▤ card-carrier-rules      forming  4 traces        │    rests on the value estimate
+▌  P ◠ tests-after-rules-edit  firm     value           │    live since installed: fired 0 · followed 0 · ignored 0 · finish line met 0
+                                                        │    enforced: after an edit to src/dispatch/rules_*.ts the agent is told to run `npm run
+ ▾ @imported/@bound/harbor-skills@0.3.0 · pack          │    check -- {tests}`; if it then stops without running it, Adage asks it once to run it
+   F ◈ release-notes-s2-chang… firm     –               │    before finishing (at most 2 such requests a session)
                                                         │
- ▾ @imported/@bound/harbor-skills@0.3.0 · pack          │  LIFECYCLE
-   F ◈ release-notes-s2-chang… firm     –               │    ○ nascent ──── ● forming ──── ● firm
+ ▾ nascent · waits for review                           │  LIFECYCLE
+   ○ ◠ regen-openapi-client    nascent  3/4             │    ○ nascent ──── ● forming ──── ● firm
                                                         │    ceiling fire · effect observe
- ▾ nascent · waits for review                           │
-   ○ ◠ regen-openapi-client    nascent  3/4             │  ACTIONS
+ ▾ quiet · agents already do this; approve to deliver   │
+   ◌ ◠ read-before-edit-9a1c   quiet    21/23           │  ACTIONS
                                                         │    s strengthen   w weaken   x extinguish   a approve   n pin   m dismiss
- ▾ quiet · agents already do this; approve to deliver   │    d delegate   t traces (0)   o open in map
-   ◌ ◠ read-before-edit-9a1c   quiet    21/23           │    same as adage review strengthen harbor-dispatch/learned tests-after-rules-edit from any
+ ▾ instincts · adage/finish-line@0.1.0                  │    d delegate   t traces (0)   o open in map
+   P ◉ finish-line/regenerate  firm     –               │    same as adage review strengthen harbor-dispatch/learned tests-after-rules-edit from any
                                                         │    shell
- ▾ instincts · adage/finish-line@0.1.0                  │
-   P ◉ finish-line/regenerate  firm     –               │
-                                                        │
  ▸ extinguished · 1                                     │
                                                         │
                                                         │

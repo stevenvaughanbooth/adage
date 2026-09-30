@@ -115,7 +115,7 @@ jobs:
           path: eval-reports/
 
       - name: live runner dry run (no agents)
-        run: python3 -m unittest evals/live/test_runner.py
+        run: python3 -m unittest evals/live/test_runner.py evals/live/test_budget.py
 
       # Generated sandboxes (evals/gen): determinism, schema, the self-check of the smoke suite, and
       # the scripted rehearsal's `adage condition` check (uses target/debug/adage, built above). The

@@ -185,6 +185,72 @@ fn add_row(csv: &Path, row: &str) {
 }
 
 #[test]
+fn native_event_redelivery_and_recovery_use_the_real_hook() {
+    if adage_exec().is_none() || !sandbox_live() {
+        eprintln!("skipped: built executor and live staging backend required");
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let base = dir.path().canonicalize().unwrap();
+    let home = base.join("adage");
+    let repo = base.join("repo");
+    for path in [home.join("exec"), repo.join("registry"), repo.join("gen")] {
+        std::fs::create_dir_all(path).unwrap();
+    }
+    std::fs::write(repo.join("registry/items.csv"), "one\n").unwrap();
+    std::fs::write(repo.join("gen/out"), "").unwrap();
+    std::fs::write(repo.join("Makefile"), "gen:\n\tprintf x >> gen/out\n.PHONY: gen\n").unwrap();
+    git(&repo, &["init", "-q"]);
+    git(&repo, &["add", "."]);
+    git(&repo, &["-c", "user.name=Fixture", "-c", "user.email=fixture@example.com", "commit", "-qm", "fixture"]);
+    open_up(&base);
+    let key = adage_core::repo::repo_key(&repo);
+    Index::compile(&[finish_line_track(&key)]).write_atomic(&home.join("index.json")).unwrap();
+    std::fs::write(home.join("policy.toml"), "[exec]\nmax_level = \"E2\"\n").unwrap();
+    ok(adage(&home, &repo, &["review", "delegate", TRACK, REGEN, "--level", "e2", "--outputs", "gen/**"]));
+    let mut payload = edited("native-identity", &repo, "registry/items.csv");
+    payload["tool_calls"][0]["tool_use_id"] = json!("toolu_first");
+    for _ in 0..2 {
+        let out = hook(&home, &repo, "PostToolBatch", payload.clone());
+        assert!(out.contains("Adage ran"), "{out}");
+        assert_eq!(std::fs::read_to_string(repo.join("gen/out")).unwrap(), "x");
+        assert_eq!(adage_exec::journal::list(&home).unwrap().len(), 1);
+    }
+    // Identical content with a new native ID is a new occurrence, not a duplicate.
+    payload["tool_calls"][0]["tool_use_id"] = json!("toolu_later");
+    let out = hook(&home, &repo, "PostToolBatch", payload.clone());
+    assert!(out.contains("Adage ran"), "{out}");
+    assert_eq!(std::fs::read_to_string(repo.join("gen/out")).unwrap(), "xx");
+    let mut receipts = adage_exec::journal::list(&home).unwrap();
+    assert_eq!(receipts.len(), 2);
+
+    // A durable reservation without completion blocks retry advice even after grant removal.
+    let mut pending = receipts.pop().unwrap();
+    pending.id = "interrupted-fixture".into();
+    pending.phase = adage_exec::journal::Phase::Prepared;
+    pending.outcome = adage_exec::stage::Outcome::Unknown { reason: "fixture interrupted".into() };
+    adage_store::spool::append_durable(&adage_exec::stage::spool_path(&home), &pending).unwrap();
+    std::fs::remove_file(home.join("approvals.json")).unwrap();
+    payload["tool_calls"][0]["tool_use_id"] = json!("toolu_recovery");
+    let out = hook(&home, &repo, "PostToolBatch", payload.clone());
+    assert!(out.contains("needs recovery") && out.contains("do not retry automatically"), "{out}");
+    assert!(!out.contains("must be followed by running"), "{out}");
+    assert_eq!(std::fs::read_to_string(repo.join("gen/out")).unwrap(), "xx");
+
+    // Corruption is also uncertainty, never an empty journal or plain retry instruction.
+    std::fs::OpenOptions::new()
+        .append(true)
+        .open(adage_exec::stage::spool_path(&home))
+        .unwrap()
+        .write_all(b"torn")
+        .unwrap();
+    let out = hook(&home, &repo, "PostToolBatch", payload);
+    assert!(out.contains("cannot verify") && out.contains("do not retry automatically"), "{out}");
+    assert!(!out.contains("must be followed by running"), "{out}");
+    assert_eq!(std::fs::read_to_string(repo.join("gen/out")).unwrap(), "xx");
+}
+
+#[test]
 fn finish_line_sandbox_make_gen_as_an_e2_action_from_the_hook() {
     if !(have("python3", "--version") && have("make", "--version") && have("git", "--version")) {
         eprintln!("skipped: python3, make and git are needed to generate the sandbox");

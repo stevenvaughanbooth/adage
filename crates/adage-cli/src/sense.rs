@@ -6,8 +6,8 @@
 //!              [--claude-projects <dir>] [--codex-sessions <dir>] [--transcripts <file>...]
 //! ```
 //!
-//! Sessions are found as `adage condition` finds them (Claude Code history under
-//! `~/.claude/projects`, or `--transcripts` files, including `opencode export` output). `--repo`
+//! Sessions are found as `adage condition` finds them (configured Claude Code, Codex and
+//! OpenCode history, or explicit sources including `--transcripts` files). `--repo`
 //! keeps one repository key; `--since` keeps sessions from the last N days. For each repository
 //! the report shows sessions and prompts, the most common command templates, turns before the
 //! first edit, repeated failing commands (dead-end candidates), edits followed by regeneration
@@ -51,9 +51,11 @@ pub struct Options {
     pub since_days: Option<u32>,
     pub demo: bool,
     pub claude_projects: Option<PathBuf>,
-    /// Codex rollouts (`$CODEX_HOME/sessions`), read only when asked.
+    /// Explicit Codex rollouts directory, replacing default source selection.
     pub codex_sessions: Option<PathBuf>,
     pub transcripts: Vec<PathBuf>,
+    /// Keep an explicitly empty `--transcripts` from silently selecting other history.
+    pub explicit_sources: bool,
 }
 
 impl Options {
@@ -61,6 +63,9 @@ impl Options {
         let mut o = Options {
             repo: crate::flag(args, "--repo"),
             demo: args.iter().any(|a| a == "--demo"),
+            explicit_sources: args
+                .iter()
+                .any(|a| matches!(a.as_str(), "--transcripts" | "--claude-projects" | "--codex-sessions")),
             ..Default::default()
         };
         if let Some(d) = crate::flag(args, "--since") {
@@ -385,16 +390,17 @@ fn percentile(sorted: &[u32], p: f64) -> Option<u32> {
 }
 
 /// Session files, as `adage condition` finds them, and a description of where they came from.
-fn discover(o: &Options) -> (Vec<PathBuf>, String) {
+fn discover(o: &Options, paths: &Paths) -> (Vec<PathBuf>, String) {
     let mut files = o.transcripts.clone();
-    // Default to Claude Code history only when no source was named, as `adage condition` does.
-    let explicit = !o.transcripts.is_empty() || o.codex_sessions.is_some();
-    let dir = o
-        .claude_projects
-        .clone()
-        .or_else(|| (!explicit).then(|| home().map(|h| PathBuf::from(h).join(".claude/projects"))).flatten());
+    let cfg = adage_store::config::load(paths).config;
+    let explicit =
+        o.explicit_sources || !o.transcripts.is_empty() || o.codex_sessions.is_some() || o.claude_projects.is_some();
+    let dir =
+        o.claude_projects.clone().or_else(|| (!explicit).then(|| crate::history::claude_projects(&cfg)).flatten());
+    let codex =
+        o.codex_sessions.clone().or_else(|| (!explicit).then(|| crate::history::codex_sessions(&cfg)).flatten());
     let mut source: Vec<String> = Vec::new();
-    if let Some(d) = &o.codex_sessions {
+    if let Some(d) = &codex {
         let (found, _) = adage_learn::codex::discover(d);
         source.push(format!("{} Codex rollout(s) in {}", found.len(), redacted(&d.display().to_string())));
         files.extend(found);
@@ -406,6 +412,14 @@ fn discover(o: &Options) -> (Vec<PathBuf>, String) {
         source.push(format!("Claude Code history in {}", redacted(&d.display().to_string())));
         files.extend(adage_learn::import::discover(&d));
     }
+    if !explicit {
+        if let Some(d) = &cfg.learn_opencode_exports {
+            source.push(format!("OpenCode exports in {}", redacted(&d.display().to_string())));
+            files.extend(crate::history::opencode_exports(d));
+        }
+    }
+    files.sort();
+    files.dedup();
     (files, source.join(" and "))
 }
 
@@ -424,7 +438,7 @@ fn modified_before(p: &Path, cutoff_days: i64) -> bool {
 
 /// Run `adage sense`. Reads history and installed tracks; writes nothing.
 pub fn run(o: &Options, paths: &Paths) -> Result<Sense> {
-    let (files, source) = discover(o);
+    let (files, source) = discover(o, paths);
     let table = CommandTable::load();
     let cutoff = o.since_days.map(|d| today_days() - i64::from(d));
     let since = cutoff.map(adage_tracks::review::civil_date);
@@ -455,8 +469,9 @@ pub fn run(o: &Options, paths: &Paths) -> Result<Sense> {
         a.keep_recent();
         mined.append(&mut a.mined);
     }
-    let mut cfg = if o.demo { LearnConfig::demo() } else { LearnConfig::default() };
-    cfg.cards = crate::autolearn::card_params(&adage_store::config::load(paths).config, paths);
+    let settings = adage_store::config::load(paths).config;
+    let mut cfg = if o.demo { LearnConfig::demo() } else { crate::autolearn::thresholds(settings.learn_thresholds) };
+    cfg.cards = crate::autolearn::card_params(&settings, paths);
     let (report, planned) = adage_learn::plan(mined, Some(&paths.models()), &paths.tracks(), &cfg)?;
     sense.thresholds = report.thresholds.clone();
     sense.intent_model = report.intent_model.clone();

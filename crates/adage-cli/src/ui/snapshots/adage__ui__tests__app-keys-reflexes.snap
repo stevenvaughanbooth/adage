@@ -1,42 +1,41 @@
 ---
 source: crates/adage-cli/src/ui/tests.rs
-assertion_line: 229
 expression: text
 ---
  adage    1 Live   2 Reflexes (2)  3 Map   4 Health (2)  5 Settings                                                            harbor-dispatch · LIVE
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
  / filter reflexes, commands, files                     │  ◠ lookup-incident
- FIRE 2  PRIME 3  INHIBIT 1  all states ▾               │  FIRE · firm · harbor-dispatch/incidents@0.3.0
-                                                        │  ○ waits for review: new · conditioned and never reviewed
- ▾ harbor-dispatch/incidents@0.3.0                      │
+ FIRE 2  PRIME 3  INHIBIT 1  all states ▾               │  mode     Suggest · No execution grant
+                                                        │  when     a prompt names a ticket
+ ▾ harbor-dispatch/incidents@0.3.0                      │  do       bin/fetch-incident {item}
 ▌  F ◠ lookup-incident         firm    ╭ keys ───────────────────────────────────────────────────────────────╮
-   F ◠ read-linked-files       firm    │ EVERYWHERE                                                          │0" reflex="lookup-incident"
+   F ◠ read-linked-files       firm    │ EVERYWHERE                                                          │iewed
    I ◠ dead-end-npm-test       firm    │           ?  this list                                              │
-                                       │           :  command palette (also ctrl-k): every action and reflex │ next step here is:
- ▾ harbor-dispatch/intents@0.3.0       │         tab  next tab (shift-tab: previous)                         │ser is asking for something else.
-   P ◠ start-with-npm-check    forming │         1-5  Live, Reflexes, Map, Health, Settings                  │nt sessions; not requested by the user.
-                                       │           q  quit                                                   │
- ▾ nascent · waits for review          │                                                                     │
-   ○ ◠ regen-openapi-client    nascent │ REFLEXES                                                            │
-                                       │           /  fuzzy filter reflexes by id, trigger, command or track │ound 0.80 · 8 turns saved per trace
- ▾ instincts · adage/finish-line@0.1.0 │         j/k  move through the tree                                  │red 1 · finish line met 0
+                                       │           :  command palette (also ctrl-k): every action and reflex │
+ ▾ harbor-dispatch/intents@0.3.0       │         tab  next tab (shift-tab: previous)                         │0" reflex="lookup-incident"
+   P ◠ start-with-npm-check    forming │         1-5  Live, Reflexes, Map, Health, Settings                  │
+                                       │           q  quit                                                   │ next step here is:
+ ▾ nascent · waits for review          │                                                                     │ser is asking for something else.
+   ○ ◠ regen-openapi-client    nascent │ REFLEXES                                                            │nt sessions; not requested by the user.
+                                       │           /  fuzzy filter reflexes by id, trigger, command or track │
+ ▾ instincts · adage/finish-line@0.1.0 │         j/k  move through the tree                                  │
    P ◉ finish-line/regenerate  firm    │       enter  open or close a group                                  │
-                                       │         tab  next tab                                               │
- ▸ extinguished · 1                    │           s  strengthen: prime → fire (adage review strengthen)     │ the step
+                                       │         tab  next tab                                               │ound 0.80 · 8 turns saved per trace
+ ▸ extinguished · 1                    │           s  strengthen: prime → fire (adage review strengthen)     │red 1 · finish line met 0
                                        │           w  weaken: fire → prime (adage review weaken)             │
                                        │           x  extinguish the reflex (adage review extinguish)        │
-                                       │           a  approve it as it is (adage review approve)             │
+                                       │           a  approve it as it is (adage review approve)             │ the step
                                        │           n  pin it: conditioning proposes instead of overwriting   │
                                        │           m  dismiss a pinned reflex's proposed change              │
                                        │           d  let the reflex act (shows adage review delegate)       │
                                        │           t  the traces it fired in                                 │
                                        │           o  the same reflex in the web map (adage map --focus)     │
-                                       │       F P I  show or hide fire, prime, inhibit                      │e   n pin   m dismiss
+                                       │       F P I  show or hide fire, prime, inhibit                      │
                                        │           S  cycle the lifecycle filter                             │
-                                       │         esc  reset the search, strength and lifecycle filters       │ents lookup-incident from any shell
-                                       │   PgUp PgDn  scroll the detail                                      │
+                                       │         esc  reset the search, strength and lifecycle filters       │
+                                       │   PgUp PgDn  scroll the detail                                      │e   n pin   m dismiss
                                        │           R  reload the reflexes                                    │
-                                       ╰─────────────────────────────────────────────────────────────────────╯
+                                       ╰─────────────────────────────────────────────────────────────────────╯ents lookup-incident from any shell
                                                         │
                                                         │
                                                         │

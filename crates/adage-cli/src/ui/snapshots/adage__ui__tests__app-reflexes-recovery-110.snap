@@ -1,0 +1,34 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+expression: text
+---
+ adage    1 Live   2 Reflexes (1)  3 Map   4 Health (2)  5 Settings                    harbor-dispatch · LIVE
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ / filter reflexes, commands, files         │  ◠ lookup-incident
+ FIRE 1  PRIME 0  INHIBIT 0  all states ▾   │  mode     Needs recovery · Inspect the worktree before
+                                            │  acknowledging
+ ▾ harbor-dispatch/incidents@0.3.0          │  when     a prompt names a ticket
+▌  F ◠ lookup-incident      firm     24/25  │  do       bin/fetch-incident {item}
+                                            │  last run Unknown · completion could not be recorded
+                                            │  FIRE · firm · harbor-dispatch/incidents@0.3.0
+                                            │  ○ waits for review: new · conditioned and never reviewed
+                                            │
+                                            │  ADVISORY PREVIEW (EXAMPLE VALUES)
+                                            │  <adage-reflex track="harbor-dispatch/incidents@0.3.0"
+                                            │  reflex="lookup-incident" strength="fire">
+                                            │  Incidents here are looked up with a script. A known next step
+                                            │  here is:
+                                            │    bin/fetch-incident INC-2045. Ignore this if the user is
+                                            │    asking for something else.
+                                            │  Learned by Adage from this repository's earlier agent sessions;
+                                            │  not requested by the user.
+                                            │  </adage-reflex>
+                                            │
+                                            │  EVIDENCE
+                                            │    from conditioning: 24/25 traces took it · lower bound 0.80 ·
+                                            │    8 turns saved per trace
+                                            │    live since installed: fired 3 · followed 2 · ignored 1 ·
+                                            │    finish line met 0
+                                            │
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ? keys · : palette · / filter · j/k move · enter expand · tab next tab                                q quit

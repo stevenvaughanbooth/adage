@@ -178,7 +178,7 @@ pub fn snapshot(ctx: &Ctx, size: Option<(u16, u16)>) -> String {
     let mut live = Live::default();
     let health = health::gather(&ctx.paths, ctx.root.as_deref());
     Sources::new(ctx).poll(&mut live, health.repo_key.as_deref());
-    if let Ok(r) = super::routes::load(&ctx.paths) {
+    if let Ok(r) = super::routes::load(&ctx.paths, ctx.root.as_deref()) {
         live.waiting = Some(r.waiting());
         live.quiet = r.quiet();
     }

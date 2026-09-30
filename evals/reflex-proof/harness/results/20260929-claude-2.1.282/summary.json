@@ -1,0 +1,106 @@
+{
+  "evidence": "live_attempt",
+  "hook_events": [
+    "SessionStart",
+    "UserPromptSubmit",
+    "PreToolUse",
+    "PostToolUse",
+    "PreToolUse",
+    "PostToolUse",
+    "PostToolBatch",
+    "Stop",
+    "SessionEnd"
+  ],
+  "receipts": [
+    {
+      "child_pid": 10786,
+      "event": "UserPromptSubmit",
+      "exit_code": 0,
+      "fixture": true,
+      "fixture_batch_key": null,
+      "kind": "receipt",
+      "monotonic_ns": 1692286560944000,
+      "pid": 10785,
+      "receipt_key": "c0d07d3491620cb5616efaa0d576020224439a7610edc94049c8eb4d214274ca",
+      "session_id": "8ad7637c-3b30-41af-a4a6-5cbb2308de1f",
+      "state": "succeeded",
+      "stderr": "",
+      "stdout": "REFLEX_FIXTURE_OK\n",
+      "tool_use_id": null,
+      "turn_id": null
+    },
+    {
+      "child_pid": 10829,
+      "event": "PostToolBatch",
+      "exit_code": 0,
+      "fixture": true,
+      "fixture_batch_key": "3211741c045b1ae28472bcef68af74bc37988f83418c9de7ac894aeca9962deb",
+      "kind": "receipt",
+      "monotonic_ns": 1692289801773000,
+      "pid": 10828,
+      "receipt_key": "3833c80fa9fc16ac4789e3fb8112b68d9bea394ad66ca06e36152b953fccacb2",
+      "session_id": "8ad7637c-3b30-41af-a4a6-5cbb2308de1f",
+      "state": "succeeded",
+      "stderr": "",
+      "stdout": "REFLEX_FIXTURE_OK\n",
+      "tool_use_id": null,
+      "turn_id": null
+    }
+  ],
+  "duplicate_suppressions": 0,
+  "explicit_stream_request_ids": [
+    "req_011CfYVyg92QTfbWKoNWbsdQ",
+    "req_011CfYVyum5ScdiScAUhssRu"
+  ],
+  "api_request_count": null,
+  "observed_stream_request_id_count": 2,
+  "assistant_message_ids": [
+    "msg_011CfYVygWM8qCHtMCNnKgyy",
+    "msg_011CfYVyv9PddyqY3F5MZ26X"
+  ],
+  "total_cost_usd": 0.015221599999999998,
+  "usage": {
+    "input_tokens": 18,
+    "cache_creation_input_tokens": 6044,
+    "cache_read_input_tokens": 5356,
+    "output_tokens": 516,
+    "output_tokens_details": {
+      "thinking_tokens": 235
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 6044,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 8,
+        "output_tokens": 200,
+        "cache_read_input_tokens": 5356,
+        "cache_creation_input_tokens": 688,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 688
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "num_turns": 3,
+  "result_status": "success",
+  "result_is_error": false,
+  "terminal_reason": "completed",
+  "result_text": "**File Contents:**\n\n- **a.txt**: `fixture alpha`\n- **b.txt**: `fixture beta`\n\n**REFLEX_FIXTURE_OK Receipts:**\n\nYes, I received 2 receipts:\n1. One from the UserPromptSubmit hook at the start\n2. One from the PostToolBatch hook after reading the files",
+  "duration_api_ms": 4972,
+  "accounting": "reported",
+  "limitation": "No API-request count inferred. Inspect version-specific debug logs and raw stream; arrival timestamps do not prove request dispatch timing. Fixture selftests are not live hook evidence.",
+  "fixture_script_sha256_at_export": "deaf771fafeb849b99f85c9d7d7f430fd28ee3c4bc063c4ec3192c698cd65bcb",
+  "observed_debug_dispatch_count": 2,
+  "export_note": "Request dispatches extracted from version-specific real diagnostics; no unsupported total billing/API-count claim."
+}

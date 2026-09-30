@@ -1065,6 +1065,8 @@ fn route_row(
         trigger: trigger.1.into(),
         step_kind: step.0.into(),
         step: step.1.into(),
+        executable: step.0 == "run",
+        execution: Default::default(),
         support,
         opportunities,
         rate: support as f64 / opportunities.max(1) as f64,
@@ -1189,6 +1191,29 @@ fn app_frame(s: &AppState, c: &Ctx, w: u16, h: u16) -> String {
 }
 
 #[test]
+fn reflex_detail_prioritizes_execution_and_unknown_outcome() {
+    let d = tempfile::tempdir().unwrap();
+    let c = ctx(Paths::at(d.path()), false);
+    let mut s = app_state();
+    s.tab = Tab::Reflexes;
+    // One relevant result remains readable when the tree stacks above the detail.
+    s.routes.as_mut().unwrap().as_mut().unwrap().rows.truncate(1);
+    let row = &mut s.routes.as_mut().unwrap().as_mut().unwrap().rows[0];
+    row.execution.mode = "Needs recovery".into();
+    row.execution.reason = "Inspect the worktree before acknowledging".into();
+    row.execution.last_result = Some("Unknown · completion could not be recorded".into());
+    for width in [70, 110] {
+        let text = app_frame(&s, &c, width, 30);
+        assert!(text.contains("Needs recovery") && text.contains("Unknown"), "{text}");
+        assert!(!text.contains("Completed"), "unknown must never render as success");
+        snap(&format!("app-reflexes-recovery-{width}"), &text);
+    }
+    s.key(KeyCode::Char('a'), NONE);
+    assert!(matches!(&s.modal, Some(Modal::Confirm { lines, .. })
+        if lines.iter().any(|l| l.to_string().contains("does not grant script execution"))));
+}
+
+#[test]
 fn app_frames_every_tab() {
     let d = tempfile::tempdir().unwrap();
     let paths = fixture(d.path());
@@ -1240,7 +1265,7 @@ fn reflexes_tab_tree_detail_and_empty_state() {
         "▾ nascent · waits for review",
         "▾ instincts · adage/finish-line@0.1.0",
         "▸ extinguished · 1",
-        "WHAT THE AGENT SEES",
+        "ADVISORY PREVIEW (EXAMPLE VALUES)",
         "  bin/fetch-incident INC-2045",
         "EVIDENCE",
         "from conditioning: 24/25 traces took it",
@@ -1253,11 +1278,15 @@ fn reflexes_tab_tree_detail_and_empty_state() {
         "LIFECYCLE",
         "nascent ──── ● forming ──── ● firm",
         "ACTIONS",
-        "same as adage review weaken harbor-dispatch/incidents lookup-incident from any shell",
     ] {
         assert!(text.contains(want), "the Reflexes tab lacks {want:?}:\n{text}");
     }
     assert!(!text.contains("grep-for-incident"), "the extinguished group starts closed");
+    // Execution status takes priority; the command remains reachable by detail scrolling.
+    s.key(KeyCode::PageDown, NONE);
+    assert!(app_frame(&s, &c, 150, 35)
+        .contains("same as adage review weaken harbor-dispatch/incidents lookup-incident from any shell"));
+    s.key(KeyCode::PageUp, NONE);
     // No control traces, no with-vs-control section.
     s.key(KeyCode::Down, NONE);
     let text = app_frame(&s, &c, 150, 35);

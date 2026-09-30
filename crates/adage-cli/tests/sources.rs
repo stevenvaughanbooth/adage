@@ -37,12 +37,28 @@ fn walk(d: &Path) -> Vec<PathBuf> {
 fn adage(home: &Path, args: &[&str]) -> (String, String, bool) {
     let o = Command::new(env!("CARGO_BIN_EXE_adage"))
         .args(args)
+        .current_dir(home)
         .env("HOME", home)
         .env("USERPROFILE", home)
         .env("ADAGE_HOME", home.join("adage"))
+        .env("CODEX_HOME", home.join(".codex"))
+        .env_remove("CLAUDE_CONFIG_DIR")
         .output()
         .unwrap();
     (String::from_utf8_lossy(&o.stdout).into(), String::from_utf8_lossy(&o.stderr).into(), o.status.success())
+}
+
+#[test]
+fn a_missing_explicit_directory_is_an_error_in_both_commands() {
+    let home = home_with_history();
+    let missing = home.path().join("missing-history");
+    for command in ["condition", "sense"] {
+        for flag in ["--claude-projects", "--codex-sessions"] {
+            let (_, err, ok) = adage(home.path(), &[command, flag, missing.to_str().unwrap()]);
+            assert!(!ok && err.contains("is not a directory"), "{command} {flag}: {err}");
+            assert!(!home.path().join("adage/tracks").exists(), "no default history is published");
+        }
+    }
 }
 
 #[test]
@@ -66,7 +82,15 @@ fn codex_history_is_learned_and_sensed_with_its_harness() {
     let s = sessions.to_str().unwrap();
     let (out, err, ok) = adage(home.path(), &["sense", "--demo", "--codex-sessions", s]);
     assert!(ok, "{err}");
-    assert!(out.contains("Codex rollout(s)") && out.contains("· codex"), "{out}");
+    assert!(out.contains("Codex rollout(s)"), "{out}");
+    let (out, err, ok) = adage(home.path(), &["sense", "--demo", "--codex-sessions", s, "--json"]);
+    assert!(ok, "{err}");
+    let report: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert!(report["repos"].as_array().unwrap().iter().any(|repo| repo["harnesses"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|h| h == "codex")));
 
     let (_, err, ok) = adage(home.path(), &["condition", "--demo", "--codex-sessions", s]);
     assert!(ok, "{err}");
@@ -74,4 +98,112 @@ fn codex_history_is_learned_and_sensed_with_its_harness() {
     let manifest = tracks.iter().find(|p| p.ends_with("track.toml")).expect("a track was learned");
     let text = std::fs::read_to_string(manifest).unwrap();
     assert!(text.contains("harness = [\"codex\"]"), "{text}");
+}
+
+fn copy_tree(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for e in std::fs::read_dir(from).unwrap().flatten() {
+        if e.path().is_dir() {
+            copy_tree(&e.path(), &to.join(e.file_name()));
+        } else {
+            std::fs::copy(e.path(), to.join(e.file_name())).unwrap();
+        }
+    }
+}
+
+#[test]
+fn default_discovery_includes_old_codex_history_and_respects_off() {
+    let home = tempfile::tempdir().unwrap();
+    copy_tree(&fixtures().join("codex/sessions"), &home.path().join(".codex/sessions"));
+    let (out, err, ok) = adage(home.path(), &["sense", "--json"]);
+    assert!(ok, "{err}");
+    let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert!(v["sessions"].as_u64().unwrap() > 0, "{out}");
+    assert!(v["source"].as_str().unwrap().contains("Codex rollout"));
+    let (out, err, ok) = adage(home.path(), &["condition", "--json"]);
+    assert!(ok, "{err}");
+    let learned: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(learned["sessions_read"], v["sessions"]);
+
+    std::fs::write(home.path().join("adage/config.toml"), "[learn]\ncodex_sessions = \"\"\n").unwrap();
+    let (out, err, ok) = adage(home.path(), &["sense", "--json"]);
+    assert!(ok, "{err}");
+    let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(v["sessions"], 0);
+    assert!(!v["source"].as_str().unwrap().contains("Codex"));
+}
+
+#[test]
+fn configured_sources_are_shared_by_preview_and_learning_and_explicit_sources_replace_them() {
+    let home = tempfile::tempdir().unwrap();
+    let source = home.path().join("old-codex/sessions");
+    copy_tree(&fixtures().join("codex/sessions"), &source);
+    std::fs::create_dir_all(home.path().join("adage")).unwrap();
+    std::fs::write(
+        home.path().join("adage/config.toml"),
+        format!("[learn]\nthresholds = \"demo\"\ncodex_sessions = {:?}\n", source.to_str().unwrap()),
+    )
+    .unwrap();
+    let (out, err, ok) = adage(home.path(), &["sense", "--json"]);
+    assert!(ok, "{err}");
+    let preview: serde_json::Value = serde_json::from_str(&out).unwrap();
+    let (out, err, ok) = adage(home.path(), &["condition", "--json"]);
+    assert!(ok, "{err}");
+    let learned: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert!(preview["sessions"].as_u64().unwrap() > 0);
+    assert_eq!(learned["sessions_read"], preview["sessions"]);
+    assert_eq!(learned["thresholds"], preview["thresholds"], "preview uses the configured evidence bars");
+    let empty = tempfile::tempdir().unwrap();
+    let (out, err, ok) = adage(home.path(), &["sense", "--json", "--claude-projects", empty.path().to_str().unwrap()]);
+    assert!(ok, "{err}");
+    let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(v["sessions"], 0);
+    let (_, err, ok) = adage(home.path(), &["condition", "--claude-projects", empty.path().to_str().unwrap()]);
+    assert!(!ok && err.contains("the sources you named hold no traces"), "{err}");
+    let (out, err, ok) = adage(home.path(), &["sense", "--transcripts", "--json"]);
+    assert!(!ok && err.contains("--transcripts"), "an empty explicit list is a usage error: {err}");
+    assert!(out.is_empty(), "an empty explicit list never falls back to a default source report");
+}
+
+#[test]
+fn no_default_history_binds_real_repository_instincts_but_explicit_empty_still_fails() {
+    // No origin: the scope retains a mixed-case, dot-prefixed local repository identity.
+    let home = tempfile::Builder::new().prefix(".MixedCase.repository-").tempdir().unwrap();
+    let sandbox = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../evals/sandboxes/acme-billing");
+    copy_tree(&sandbox, home.path());
+    std::fs::create_dir_all(home.path().join(".git")).unwrap();
+    let (out, err, ok) = adage(home.path(), &["condition", "--json"]);
+    assert!(ok, "{err}");
+    let report: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(report["sessions_read"], 0);
+    let index: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(home.path().join("adage/index.json")).unwrap()).unwrap();
+    assert!(!index["routes"].as_array().unwrap().is_empty(), "binds real Makefile instincts");
+    assert!(
+        report["repos"].as_object().unwrap().keys().any(|k| k.contains("MixedCase")),
+        "scope identity is unchanged"
+    );
+    assert!(err.contains("binding this repository's instincts"), "{err}");
+    let empty = tempfile::tempdir().unwrap();
+    let (_, err, ok) = adage(home.path(), &["condition", "--claude-projects", empty.path().to_str().unwrap()]);
+    assert!(!ok && err.contains("the sources you named hold no traces"), "{err}");
+    let (_, err, ok) = adage(home.path(), &["condition", "--no-instincts"]);
+    assert!(!ok && err.contains("no traces found"), "{err}");
+}
+
+#[test]
+fn cwd_prefix_uses_recorded_path_components_with_json_whitespace() {
+    let home = tempfile::tempdir().unwrap();
+    let source = home.path().join(".codex/sessions");
+    std::fs::create_dir_all(&source).unwrap();
+    let one = walk(&fixtures().join("codex/sessions")).remove(0);
+    let original = std::fs::read_to_string(one).unwrap();
+    for (name, cwd) in [("yes", "/work/app/src"), ("no", "/work/app-other")] {
+        let text = original.replace("/fixture/acme-billing", cwd).replace("\"cwd\":", "\"cwd\": ");
+        std::fs::write(source.join(format!("rollout-{name}.jsonl")), text).unwrap();
+    }
+    let (out, err, ok) = adage(home.path(), &["condition", "--cwd-prefix", "/work/app", "--json"]);
+    assert!(ok, "{err}");
+    let report: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(report["sessions_read"], 1, "{out}");
 }

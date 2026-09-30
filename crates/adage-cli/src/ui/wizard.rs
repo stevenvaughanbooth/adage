@@ -423,7 +423,7 @@ fn body(w: &Wizard, t: &Theme, width: usize) -> Vec<Line<'static>> {
             )),
         },
         Kind::Learn => out.extend(text(
-            "Read your agents' past traces (Claude Code history under ~/.claude/projects) and form reflexes from what they repeat. It only reads them; it never runs anything in them.",
+            "Condition this repository from existing Claude Code history, Codex history when registered, and configured OpenCode exports. Bind instincts from its files, learn reflexes, and compile the index hooks read. It only reads transcripts; it never runs anything they contain.",
             plain,
         )),
         Kind::AutoLearn => {
