@@ -117,6 +117,12 @@ $ make check
       </div>
     </div>
     <p class="story-footnote">Illustrative sequence, not a benchmark. Matching runs locally on the CPU; your agent still reasons and executes through its own tools and permissions. <a href="/how">Walk the full graph →</a></p>
+    <details class="source-install">
+      <summary>What actually moves off the model?</summary>
+      <p><b>By default:</b> local CPU matching delivers guidance; supported pre-call instincts can correct a command to the repository's verified environment without another model request. The agent still executes its tools.</p>
+      <p><b>With separate execution approval:</b> <code>adage-exec</code> can prefetch a read-only result or run a staged action in a sandbox and apply permitted outputs. Choosing and running that invocation needs no model request; the agent may still reason over its result.</p>
+      <p>A learned command is not automatically approved to run. A delivered directive is not proof of a saved model turn. Each behavior has its own evidence.</p>
+    </details>
     <div class="story-inputs">
       <p><span>Ready on day one</span><b>Instincts</b>Bind known moves to your repository's tools.</p>
       <p><span>Learned from work</span><b>Traces</b>Turn repeated paths and dead ends into reflexes.</p>
@@ -154,9 +160,9 @@ $ make check
         <li><b>reflexes</b><span>tracks and packs</span></li>
         <li><b>index</b><span>compiled</span></li>
         <li><b>hooks</b><span>Claude Code, Codex, OpenCode</span></li>
-        <li><b>directives</b><span>text, at the moment</span></li>
+        <li><b>response</b><span>guidance, rewrites, approved actions</span></li>
       </ol>
-      <figcaption id="pipe-cap">From transcript to directive. Everything left of the hooks runs on your machine; nothing reaches the context window until a reflex matches.</figcaption>
+      <figcaption id="pipe-cap">From transcript to directive. Learning and matching run on your machine. A match can deliver guidance, rewrite a supported command, or dispatch a separately approved CPU action.</figcaption>
     </figure>
 
     <p class="deeper reveal"><a class="btn" href="/how" aria-label="Learn more: every stage, step by step, with the math">Learn more</a></p>

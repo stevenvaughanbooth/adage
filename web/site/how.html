@@ -216,6 +216,7 @@
         <div><dt>Wrapper</dt><dd>each directive reaches the agent as <code>&lt;adage-reflex track="…" route="…" strength="…" kind="…"&gt;</code>, with a last line saying where it came from</dd></div>
         <div><dt>Fails open</dt><dd>if the hook errors or runs out of time, the agent carries on as if Adage were not installed</dd></div>
       </dl>
+      <p>Approved execution is a separate path. With <code>adage-exec</code> enabled and a local grant for the exact reflex, E1 prefetches a read-only result; E2 runs an action in a disposable stage and applies permitted outputs. The invocation is selected and run on the CPU without a model request. The next model request may still consume its result. Learning a command does not approve it, and a delivered procedure card does not demonstrate CPU execution or saved turns.</p>
       <p class="src">In the code: <code>crates/adage-runtime/src/{lib,pretool,render}.rs</code> (<code>assign_arm</code>) · <code>crates/adage-hook</code></p>
     </article>
     <article class="mblock reveal" id="m-measure" aria-labelledby="m-measure-h">
