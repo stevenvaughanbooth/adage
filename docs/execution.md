@@ -678,6 +678,19 @@ edited while the action runs is refused with the E0 fallback.
 
 ## Learned sequence predictions
 
+The learner scores independently executable single-action prefixes even when a longer routine
+contains the same action in every supporting session. A common action can be predictable enough
+to execute while offering little value as advice, so execution admission does not require advisory
+contrast or positive advisory value. Such candidates carry execution-only provenance: if their
+execution evidence fails, they cannot fall back to a directive.
+
+The existing support, day and consistency gates still apply. The learner recounts the compiled
+trigger against native history, requiring at least five supporting sessions and 90% qualifying
+continuations. Intervening edits and completed verification retain their boundaries; an eventual
+test success does not erase an earlier failed continuation. Local human permission is still needed
+before execution. Closed advisory patterns retain priority within the shared 20,000 scoring cap,
+so a crowded corpus can still prevent an execution prefix from reaching scoring.
+
 A runtime-selected learned `context` route can nominate its fixed, slot-free verification or
 regeneration command for E2 execution when it has execution evidence and an exact local grant.
 The command comes from the typed route, never from advisory prose. Matching may use related

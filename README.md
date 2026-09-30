@@ -68,6 +68,9 @@ Real-coding CPU savings remain unproven; the full result is retained alongside t
 A separate [five-session guided routine check](evals/reflex-proof/harness/results/20260930-guided-demonstrations/FINDINGS.md)
 also produced zero executable candidates despite five eventual test-command successes. Its audit
 identified a mining/admission gap and insufficient trigger-specific evidence; the launch gate remains open.
+The [mining integration fix](evals/reflex-proof/harness/results/20260930-execution-prefix-integration/FINDINGS.md)
+now preserves executable prefixes: replaying those five histories compiles nine candidates instead
+of zero. None yet passes the unchanged execution evidence gate; compilation is not a savings result.
 
 ```text
   agent traces ──► adage condition ──► reflexes ──► index ──► hooks

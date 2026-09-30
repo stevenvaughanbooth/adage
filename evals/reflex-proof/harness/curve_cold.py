@@ -40,9 +40,35 @@ def verify(root):
     return m, families
 
 
-def freeze(root, original):
+def replication_inputs(previous, original, tasks, ledger):
+    """A repeat must name a complete prior comparison, including every failed outcome."""
+    previous = previous.resolve(strict=True)
+    m = pairs.read(previous / "manifest.json")
+    if (m.get("protocol") != PROTOCOL or m.get("native_cohort_root") != str(original)
+            or m["families"][0]["heldout"] != tasks or m.get("replication_of")
+            or pairs.sha(previous / "manifest.json") != (previous / "manifest.sha256").read_text().strip()):
+        raise ValueError("replication requires the original frozen cold comparison")
+    expected = {(t, a) for t in tasks for a in ("agent", "instincts")}
+    if len(m["matrix"]) != len(expected) or {(e["task"], e["arm"]) for e in m["matrix"]} != expected:
+        raise ValueError("incomplete original comparison matrix")
+    inputs = [previous / "manifest.json"]
+    authority = Path(m["budget_authority"]).resolve(strict=True)
+    for e in m["matrix"]:
+        session = previous / "heldout" / e["task"] / e["arm"]
+        row = ledger["runs"].get(str(session.relative_to(authority)), {})
+        c = pairs.read(session / "collection.json")
+        if (row.get("status") != "complete" or c.get("collection_errors")
+                or pairs.known_cost(c.get("cost_usd")) is None
+                or type(c.get("quality", {}).get("passed")) is not bool):
+            raise ValueError("replication requires every original outcome and bill, not just successes")
+        inputs.append(session / "collection.json")
+    return inputs
+
+
+def freeze(root, original, replicate=None, native_cohort=None):
     original, root = original.resolve(strict=True), root.resolve()
-    if original not in root.parents:
+    native_cohort = native_cohort.resolve(strict=True) if native_cohort else original
+    if native_cohort not in root.parents:
         raise ValueError("cold study must be a new nested root within the reviewed native cohort")
     old = pairs.read(original / "manifest.json")
     authority = Path(old["budget_authority"])
@@ -65,10 +91,14 @@ def freeze(root, original):
         preserved.append(archived)
     tasks = old["families"][0]["heldout"]
     ledger = pairs.read(authority / "paid-state.json")
-    if any(row.get("task") in tasks for row in ledger["runs"].values()):
+    replication = replication_inputs(replicate, original, tasks, ledger) if replicate else []
+    if not replicate and any(row.get("task") in tasks for row in ledger["runs"].values()):
         raise ValueError("held-out tasks were already attempted")
-    review = original / "native-confinement-reviewed.json"
-    gate.require_native_review(dict(experiment_root=str(authority), cohort_root=str(original),
+    if (Path(pairs.read(native_cohort / "manifest.json")["budget_authority"]).resolve() != authority.resolve()
+            or (native_cohort / "runtime/python").resolve() != (original / "runtime/python").resolve()):
+        raise ValueError("native review must use the same budget authority and Python runtime")
+    review = native_cohort / "native-confinement-reviewed.json"
+    gate.require_native_review(dict(experiment_root=str(authority), cohort_root=str(native_cohort),
         native_review_path=str(review), native_review_sha256=pairs.sha(review)))
     archive = original / "production-original/manifest.json"
     binary_record = pairs.read(archive)
@@ -94,7 +124,7 @@ def freeze(root, original):
         shutil.copytree(original / "private/tasks" / task, root / "private/tasks" / task)
     matrix = []
     for index, task in enumerate(tasks):
-        for arm in (("agent", "instincts") if index % 2 == 0 else ("instincts", "agent")):
+        for arm in (("agent", "instincts") if (index + bool(replicate)) % 2 == 0 else ("instincts", "agent")):
             matrix.append(dict(task=task, arm=arm, order=len(matrix),
                 prompt=(root / "private/tasks" / task / "prompt.txt").read_text()))
     descriptor = dict(checkpoint=0, checkpoint0_home=str(home), checkpoint0_files=record["artifact_sha256"],
@@ -102,13 +132,13 @@ def freeze(root, original):
         condition_command=record["command"], condition_output=str(checkpoint / "condition.stdout.json"),
         source_sha256=sources())
     pairs.write(root / "checkpoint0-descriptor.json", descriptor)
-    native = original / "sessions/native-confinement"
+    native = native_cohort / "sessions/native-confinement"
     inputs = [original / "manifest.json", original / "validation.json", checkpoint / "attempt.json",
         checkpoint / "condition.stdout.json", original / "checkpoints/15/attempt.json", archive, review,
-        native / "manifest.json", native / "settings.json", root / "checkpoint0-descriptor.json",
+        native / "manifest.json", native / "settings.json", root / "checkpoint0-descriptor.json", *replication,
         root / "validation.json", *preserved, *map(Path, binaries.values()),
         *[home / name for name in record["artifact_sha256"]]]
-    m = dict(protocol=PROTOCOL, protocol_revision=5, root=str(root), native_cohort_root=str(original),
+    m = dict(protocol=PROTOCOL, protocol_revision=5, root=str(root), native_cohort_root=str(native_cohort),
         budget_authority=str(authority), budget_allocation_sha256=old["budget_allocation_sha256"],
         preparation_python=old["preparation_python"], python_requested=old["python_requested"], model=old["model"],
         families=copy.deepcopy(old["families"]), matrix=matrix, task_sha256={t: old["task_sha256"][t] for t in tasks},
@@ -117,6 +147,9 @@ def freeze(root, original):
         study_revision="Separate prospectively frozen cold-only comparison; original CPU protocol stopped with no executable checkpoint-15 candidate.",
         budget=dict(evaluation_sessions=8, per_session_usd=1.5, reservation_usd=12),
         cpu_savings_claim="not tested", learning_frozen=True, grants_written=False)
+    if replicate:
+        m.update(replication_of=str(replicate.resolve()), replication_registered_ns=time.time_ns(),
+            study_revision="Fixed second run of the same four tasks with reversed pair order. Combine all sixteen assignments; not eight distinct tasks, no outcome retries or CPU execution claim.")
     pairs.write(root / "manifest.json", m)
     (root / "manifest.sha256").write_text(pairs.sha(root / "manifest.json") + "\n")
     for source in m["source_sha256"]:
@@ -168,11 +201,13 @@ if __name__ == "__main__":
     parser.add_argument("command", choices=("freeze", "prepare", "run", "report"))
     parser.add_argument("root", type=Path)
     parser.add_argument("--original", type=Path)
+    parser.add_argument("--replicate", type=Path, help="complete original cold comparison to repeat with reversed arm order")
+    parser.add_argument("--native-cohort", type=Path, help="reviewed cohort for the current runner and identical runtime/policy")
     args = parser.parse_args()
     if args.command == "freeze":
         if args.original is None:
             parser.error("freeze needs --original")
-        result = freeze(args.root, args.original)
+        result = freeze(args.root, args.original, args.replicate, args.native_cohort)
     else:
         result = globals()[args.command](args.root.resolve(strict=True))
     print(json.dumps(result, indent=2))
