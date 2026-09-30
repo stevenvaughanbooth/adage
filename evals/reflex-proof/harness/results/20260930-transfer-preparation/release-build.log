@@ -1,0 +1,5 @@
+    Blocking waiting for file lock on build directory
+   Compiling adage-pack v0.1.0 (/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/crates/adage-pack)
+   Compiling adage-exec v0.1.0 (/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/crates/adage-exec)
+   Compiling adage-cli v0.1.0 (/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/crates/adage-cli)
+    Finished `release` profile [optimized] target(s) in 4m 13s

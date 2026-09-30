@@ -160,6 +160,14 @@ strict pytest-scope, unknown-shell and billing checks determine confirmed elimin
 three confirmed eliminations, complete accounting and all task-quality checks are required for
 this transfer gate. A failed result is retained without relaxing the protocol or retrying outcomes.
 
+The first transfer preparation stopped before dispatch: human approval rejected the conventional
+`.pytest_cache/**` cache declaration, and the proposed root wildcard for bytecode caches was also
+unsupported. Preserve that zero-spend attempt. The replacement uses a narrowly tested pytest-cache
+exception (cache declarations only), explicit `tests/` and `src/` bytecode cache roots, rebuilt
+executables with both hashes pinned, and a local replay of the identical ten histories. Freeze a
+new transfer root and obtain fresh human grants before any model call; task prompts, scoring and
+all eight assignments remain unchanged.
+
 ## Offline preparation
 
 ```sh

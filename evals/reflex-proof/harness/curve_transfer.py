@@ -108,9 +108,11 @@ def freeze(root, cumulative_root, controls):
             raise ValueError("checkpoint zero changed")
     if any(r["track"].endswith("/learned") for r in pairs.read(cold_home / "index.json")["routes"]):
         raise ValueError("checkpoint zero has learned knowledge")
-    binaries = {name: str((native / "bin" / name).resolve(strict=True)) for name in ("adage", "adage-exec")}
-    expected = {"adage": "ab909549c93758240df1b9087212ba958d47527067810e96e28706bdacfdbf17",
-                "adage-exec": "f2995504ce1255357d286e0228f8a8f319b7c5a6362384e038572ced093fda93"}
+    # The replacement replay preserves the original cohort's executables. Both rebuilt
+    # binaries remain explicitly pinned and enter the new study's frozen input hashes.
+    binaries = {name: str((cumulative / name).resolve(strict=True)) for name in ("adage", "adage-exec")}
+    expected = {"adage": "64dee0b72e8721df7c7ccb23777eeb816310f64139f6af4bd06bdb365b40d2a7",
+                "adage-exec": "39acd547b28a08d4daec615c83ddfd373acc970e7b30442f9e7213f58f7a898d"}
     if any(pairs.sha(Path(path)) != expected[name] for name, path in binaries.items()) or record["binary_sha256"] != expected["adage"]:
         raise ValueError("conditioned release binary mismatch")
     review = native / "native-confinement-reviewed.json"
