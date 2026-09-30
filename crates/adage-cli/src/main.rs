@@ -46,6 +46,7 @@ mod status_card;
 mod train;
 mod tty;
 mod ui;
+mod update;
 mod words;
 
 // Commands run on the hook's stack size (`adage_hook::STACK`).
@@ -245,6 +246,7 @@ fn run(args: &[String]) -> Result<()> {
             );
             Ok(())
         }
+        Some("update") => update::run(rest),
         Some("version") => {
             println!("adage {}", env!("CARGO_PKG_VERSION"));
             Ok(())

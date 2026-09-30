@@ -102,6 +102,11 @@ pub enum Command {
     HooksConfig(HooksConfigArgs),
     /// Print a shell completion script.
     Completions(CompletionsArgs),
+    /// Update Adage to the latest version, the same way it was installed.
+    #[command(
+        after_help = "Until the first release is published, this builds the main branch from source with cargo."
+    )]
+    Update(UpdateArgs),
 
     // ------------------------------------------------------------------ evaluation
     /// Offline replay evaluation of what Adage would have said.
@@ -554,6 +559,19 @@ pub struct HooksConfigArgs {
 }
 
 #[derive(Args, Debug)]
+pub struct UpdateArgs {
+    /// Where to update from (default: how this adage was installed).
+    #[arg(long, value_parser = ["source", "npm", "brew"])]
+    pub from: Option<String>,
+    /// The branch a source update builds.
+    #[arg(long, value_name = "NAME", default_value = "main")]
+    pub branch: String,
+    /// Print the command without running it.
+    #[arg(long)]
+    pub print: bool,
+}
+
+#[derive(Args, Debug)]
 pub struct CompletionsArgs {
     /// The shell to complete for.
     pub shell: clap_complete::Shell,
@@ -723,6 +741,7 @@ fn overview(t: &Theme) -> StyledStr {
                 ("models", "the optional embedding model"),
                 ("config", "settings"),
                 ("completions", "shell completions"),
+                ("update", "update Adage itself"),
             ],
         ),
         ("Evaluation", &[("eval", "offline replay evaluation")]),
@@ -824,10 +843,20 @@ mod tests {
     /// never refuses a flag the module understands.
     #[test]
     fn every_flag_a_module_reads_is_declared() {
-        // Flags a module reads that are not command-line flags (arguments it passes to curl, or
-        // the top-level --version it handles for scripts).
-        let not_flags: BTreeSet<&str> =
-            ["--max-filesize", "--proto", "--connect-timeout", "--version", "--help", "--serve"].into();
+        // Flags a module reads that are not command-line flags (arguments it passes to curl,
+        // cargo or npm, or the top-level --version it handles for scripts).
+        let not_flags: BTreeSet<&str> = [
+            "--max-filesize",
+            "--proto",
+            "--connect-timeout",
+            "--version",
+            "--help",
+            "--serve",
+            "--locked",
+            "--git",
+            "--global",
+        ]
+        .into();
         let table: &[(&str, &[&str])] = &[
             ("add.rs", &["add"]),
             ("autolearn.rs", &["condition"]),
@@ -843,6 +872,7 @@ mod tests {
             ("sense.rs", &["sense"]),
             ("savings.rs", &["savings"]),
             ("models.rs", &["models"]),
+            ("update.rs", &["update"]),
             ("main.rs", &["condition", "status", "report", "delegate"]),
             ("ui/mod.rs", &["watch", "ui"]),
         ];

@@ -113,7 +113,8 @@ the line names the plugin's own binary instead, so the command works as written)
 From a terminal, `brew install stevenvaughanbooth/tap/adage` or `npm install -g @adage-sh/cli`
 (**not published yet:** until the first release is out, the tap and the npm package do not exist;
 build from source with `cargo install --locked --git https://github.com/stevenvaughanbooth/adage
-adage-cli`), then run `adage init` inside your repository to connect a detected agent and learn
+adage-cli`; `adage update` later rebuilds from `main` the same way, or upgrades through npm or
+Homebrew when that is how it was installed), then run `adage init` inside your repository to connect a detected agent and learn
 from its previous sessions. For scripted setup, use `adage install claude-code --write --scope user`
 (or `codex`, `opencode`) and `adage condition --repo-root .`. Plain `adage`, anywhere (a terminal, a pipe, or
 `!adage` inside Claude Code), prints where things stand. An illustrative card (the numbers are made
