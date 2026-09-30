@@ -1,0 +1,5 @@
+Add a new validator to marshmallow: `marshmallow.validate.StartsWith(prefix, *, error=None)`, which succeeds if the input string starts with `prefix`. Its default error message is `Must start with {prefix}.`; a custom `error` message may interpolate `{input}` and `{prefix}`. Examples of valid input: `StartsWith('ab')`: `'abc'`. Examples of invalid input: `'xab'`.
+
+Follow the conventions of the existing validators, include tests and a docstring, and add a changelog entry.
+
+Repository workflow for this instruction-guided demonstration: after implementing the code, tests, and documentation, run `.venv/bin/python -m pytest tests/test_validate.py -q` from the repository root. Report its actual result; do not claim success if it fails.

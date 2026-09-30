@@ -31,7 +31,7 @@ def registry(root):
         os.environ.update(before)
 
 
-def prepare(root, authority, controls):
+def prepare(root, authority, controls, mode="organic-training"):
     root, authority, controls = root.resolve(), authority.resolve(strict=True), controls.resolve(strict=True)
     if authority not in root.parents:
         raise ValueError("live cohort must share its original ancestor ledger")
@@ -40,9 +40,13 @@ def prepare(root, authority, controls):
     if not validation["complete"] or not validation["valid"] or len(validation["rows"]) != 19:
         raise ValueError("all 19 trusted task controls must pass")
     with registry(authority):
-        m = curve.freeze(root, authority)
-    if m["task_sha256"] != old["task_sha256"]:
+        m = curve.freeze(root, authority, mode)
+    control_hashes = m.get("control_task_sha256", m["task_sha256"])
+    if any(old["task_sha256"].get(t) != files for t, files in control_hashes.items()):
         raise ValueError("new tasks differ from validated controls")
+    for task, files in control_hashes.items():
+        if any(gate.sha(controls / "private/tasks" / task / name) != digest for name, digest in files.items()):
+            raise ValueError("validated task control material changed")
     # Keep full old controls and provenance, rather than presenting them as new validation.
     shutil.copyfile(controls / "validation.json", root / "validation.json")
     (root / "private/validation").symlink_to(controls / "private/validation", target_is_directory=True)
@@ -52,6 +56,8 @@ def prepare(root, authority, controls):
              controls_reused=dict(root=str(controls), manifest_sha256=gate.sha(controls / "manifest.json"),
                                   validation_sha256=gate.sha(controls / "validation.json")),
              prospective_revision="15 new native sessions; all historical training excluded; user approved paid pilot.")
+    if mode == curve.GUIDED:
+        m["prospective_revision"] = "Five explicit instruction-guided development demonstrations; no autonomous-discovery or efficacy claim."
     m["budget"]["paid_scope_confirmed"] = True
     m["session_helper_sha256"] = gate.sha(Path(__file__))
     shutil.copyfile(Path(__file__), root / "source/evals/reflex-proof/harness/curve_sessions.py")
@@ -133,6 +139,8 @@ def checkpoint(root, count, binary):
     root, binary = root.resolve(strict=True), binary.resolve(strict=True)
     with registry(root):
         m, _ = curve.verify(root)
+    if m["session_helper_sha256"] != gate.sha(Path(__file__)):
+        raise ValueError("training helper changed after freeze")
     authority = Path(m["budget_authority"])
     state = pairs.read(authority / "paid-state.json")
     records = []
@@ -141,14 +149,19 @@ def checkpoint(root, count, binary):
         manifest, provenance = pairs.read(session / "manifest.json"), pairs.read(session / "transcript-provenance.json")
         key = str(session.relative_to(authority))
         terminal = state["runs"][key]
-        if (terminal["status"] != "completed" or manifest["kind"] != "organic-training"
+        if (terminal["status"] != "completed" or manifest["kind"] != m.get("training_kind", "organic-training")
+                or terminal.get("kind") != manifest["kind"]
+                or manifest["source_sha256"] != gate.sha(Path(gate.__file__))
+                or any(gate.sha(Path(p)) != digest for p, digest in manifest["shared_sources"].items())
                 or terminal["transcript"] != provenance
                 or provenance["sha256"] != gate.sha(session / "native-transcript.jsonl")
                 or manifest["settings_sha256"] != gate.sha(session / "settings.json")
                 or Path(provenance["cwd"]).resolve() != Path(manifest["execution_root"]).resolve()
                 or not pairs.read(session / "settings.json")["disableAllHooks"]):
             raise ValueError("native history provenance or ledger mismatch")
+        gate.validate_training_recipe(manifest)
         records.append(dict(task=task, session_id=provenance["session_id"], sha256=provenance["sha256"],
+            kind=manifest["kind"], workflow_guidance=manifest.get("workflow_guidance"),
             synthetic=provenance["synthetic"], hooks_enabled=manifest["training_hooks_enabled"],
             source=str(session / "native-transcript.jsonl"), outcome=terminal.get("result"),
             manifest_sha256=gate.sha(session / "manifest.json"), provenance_sha256=gate.sha(session / "transcript-provenance.json")))
@@ -172,6 +185,8 @@ def checkpoint(root, count, binary):
     env = {k: v for k, v in os.environ.items() if not k.startswith("ADAGE_")}
     env.update(ADAGE_HOME=str(home), ADAGE_AUTO_LEARN="0")
     record = dict(count=count, inputs=records, command=command, binary=str(binary), binary_sha256=gate.sha(binary),
+                  protocol=m["protocol"], training_kind=m.get("training_kind", "organic-training"),
+                  workflow_guidance=m.get("workflow_guidance"),
                   source_sha256=m["source_sha256"], status="started", started_ns=time.time_ns(), paid_calls=0)
     record["production_source_sha256"] = {str(p.relative_to(gate.REPO)): gate.sha(p)
         for p in [*sorted((gate.REPO / "crates").rglob("*")), gate.REPO / "Cargo.toml", gate.REPO / "Cargo.lock"] if p.is_file()}
@@ -199,12 +214,13 @@ def main():
     parser.add_argument("root", type=Path)
     parser.add_argument("--authority", type=Path)
     parser.add_argument("--controls", type=Path)
+    parser.add_argument("--mode", choices=("organic-training", curve.GUIDED), default="organic-training")
     parser.add_argument("--task", default="native-confinement")
     parser.add_argument("--count", type=int)
     parser.add_argument("--binary", type=Path)
     args = parser.parse_args()
     if args.command == "prepare":
-        result = prepare(args.root, args.authority, args.controls)
+        result = prepare(args.root, args.authority, args.controls, args.mode)
     elif args.command == "session":
         result = str(prepare_session(args.root, args.task))
     elif args.command == "run":

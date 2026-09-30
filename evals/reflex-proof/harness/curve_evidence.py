@@ -104,24 +104,29 @@ def report(root):
                 row["sessions_steered"] = learned.get("sessions_steered")
                 row["engine"] = {k: v.get("engine") for k, v in learned.get("repos", {}).items()}
         checkpoints.append(row)
-    heldout = curve_heldout.report(root)
-    final = next((r for r in checkpoints if r["sessions"] == 15), {})
-    status = ("training-complete-no-execution-candidate" if final.get("status") == "completed"
-              and not final.get("execution_candidates") else "live-pilot-in-progress")
+    guided = m["protocol"] == "instruction-guided-development-1"
+    heldout = (dict(passed=False, assignment_denominator=0, rows=[], status="not part of this development protocol")
+               if guided else curve_heldout.report(root))
+    final = next((r for r in checkpoints if r["sessions"] == (5 if guided else 15)), {})
+    status = ("training-complete-no-execution-candidate" if not final.get("execution_candidates")
+              else "training-complete-execution-candidate") if final.get("status") == "completed" else "live-pilot-in-progress"
     quality_path = root / "training-quality/report.json"
     quality = pairs.read(quality_path) if quality_path.exists() else None
     return dict(schema=1, recorded_at=datetime.now(timezone.utc).isoformat(), protocol=m["protocol"],
         root_manifest_sha256=pairs.sha(root / "manifest.json"), status=status,
+        training_kind=m.get("training_kind", "organic-training"), workflow_guidance=m.get("workflow_guidance"),
         independent_training_quality=quality,
         training_assignments=rows, checkpoints=checkpoints, heldout=heldout,
         known_training_cost_usd=sum(r["cost_usd"] for r in rows if pairs.known_cost(r["cost_usd"]) is not None),
         training_with_successful_pytest_observation=sum(bool(r["successful_pytest_calls"]) for r in rows),
-        claims=dict(real_repository=True, authored_tasks=True, coding_quality_established=False,
+        claims=dict(real_repository=True, authored_tasks=True, autonomous_discovery_tested=not guided,
+                    coding_quality_established=False,
                     cpu_action_elimination_established=heldout["passed"], gpu_utilization_measured=False),
         limitations=["Training CLI completion is not independent task correctness.",
             "The pytest invocation audit is descriptive; tool success alone does not establish semantic equivalence or test coverage. Pipelines and arbitrary compounds are excluded.",
             "All failed and unattempted assignments remain visible. Unknown costs are never zero.",
-            "No broad debug logs, credentials or local execution grants are exported."])
+            "No broad debug logs, credentials or local execution grants are exported."] +
+            (["These demonstrations prescribe the repository command. They test compilation, not autonomous discovery or efficacy."] if guided else []))
 
 
 def cold_report(root):

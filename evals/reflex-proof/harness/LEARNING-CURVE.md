@@ -126,6 +126,25 @@ reported cost and 20.5% fewer observed requests. Two tasks cost more with instin
 the four original unattempted CPU comparisons remain unattempted. These advisory results do not
 count as CPU action elimination and the small pilot does not establish general savings.
 
+## Separately registered guided development check
+
+`curve_sessions.py prepare --mode instruction-guided-training` freezes a distinct
+`instruction-guided-development-1` protocol: the first five validated training tasks, checkpoints
+0/5, and no held-out assignments. Each prompt explicitly supplies the repository workflow command
+`.venv/bin/python -m pytest tests/test_validate.py -q` after code, tests and documentation are edited.
+This tests compilation of a demonstrated routine, not autonomous discovery. Its native transcripts
+are labeled `instruction-guided-training` and cannot be mixed with or relabeled as organic history.
+It uses a fresh native confinement review, the same shared budget, and unchanged production learning
+thresholds. The maximum new reservation is $7.50 for training plus $0.50 for the native probe.
+No candidate at checkpoint five means stop; an execution grant still requires a person. All quality
+failures and bills remain visible, and any later execution comparison requires a separate protocol.
+
+This check has completed: five eventual prescribed-command successes, 4/5 independently correct
+outputs, and zero executable candidates. Training plus the fresh probe cost $0.7457761.
+The [complete findings](results/20260930-guided-demonstrations/FINDINGS.md) identify closure and
+advisory contrast as an upstream admission gap, and a separate insufficiency in trigger-specific
+success evidence. The original checkpoint remains unchanged; no automatic comparison ran.
+
 ## Offline preparation
 
 ```sh

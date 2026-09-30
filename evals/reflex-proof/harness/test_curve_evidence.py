@@ -1,4 +1,5 @@
 import unittest
+import json
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
@@ -7,6 +8,29 @@ from curve_evidence import pytest_invocation
 
 
 class InvocationAudit(unittest.TestCase):
+    def test_guided_report_never_claims_autonomous_discovery_or_heldout_efficacy(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'manifest.json').write_text(json.dumps(dict(
+                protocol='instruction-guided-development-1', budget_authority=str(root),
+                families=[dict(train=['demo'])], checkpoints=[5],
+                training_kind='instruction-guided-training', workflow_guidance='run the repo tests')))
+            (root / 'paid-state.json').write_text('{}')
+            checkpoint = root / 'checkpoints' / '5'
+            checkpoint.mkdir(parents=True)
+            (checkpoint / 'attempt.json').write_text(json.dumps(dict(
+                status='completed', binary_sha256='test-binary', execution_candidates=[])))
+            row = dict(cost_usd=0.25, successful_pytest_calls=1)
+            with patch.object(curve_evidence, 'training_row', return_value=row), \
+                    patch.object(curve_evidence.curve_heldout, 'report') as heldout:
+                result = curve_evidence.report(root)
+            heldout.assert_not_called()
+        self.assertEqual(result['status'], 'training-complete-no-execution-candidate')
+        self.assertEqual(result['heldout']['assignment_denominator'], 0)
+        self.assertFalse(result['claims']['autonomous_discovery_tested'])
+        self.assertFalse(result['claims']['cpu_action_elimination_established'])
+        self.assertEqual(result['known_training_cost_usd'], 0.25)
+
     def test_recognizes_invocation_without_claiming_coverage(self):
         for command in ('python3 -m pytest tests/test_validate.py', '.venv/bin/python -m pytest -q',
                         'source .venv/bin/activate && python -m pytest tests', '.venv/bin/pytest --co'):

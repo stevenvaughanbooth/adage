@@ -22,6 +22,15 @@ produced zero candidates. No held-out automatic arm ran, and there is no real-co
 percentage to publish. The updated harness passes 72 tests; the equivalence change passes 188 focused
 Rust tests. These test counts establish contracts, not product efficacy.
 
+The separate [guided development check](harness/results/20260930-guided-demonstrations/FINDINGS.md)
+then completed five explicitly instructed demonstrations: all eventually ran the prescribed test
+command successfully, 4/5 passed independent grading, and zero executable candidates compiled.
+Mining closure absorbs the test action into longer continuations; advisory contrast rejects many
+of those before execution eligibility. Even after fixing that admission gap, the common last-edit
+trigger has at most three qualifying sessions because intervening edits or verification stop the
+recount. This is a concrete integration blocker, not evidence that more paid runs alone will solve it.
+All 78 current harness tests pass. No grant or automatic held-out arm was created for this check.
+
 | Gate | Evidence | Current conclusion |
 | --- | --- | --- |
 | Learn without authored routes or outcome labels | [Default onboarding](traces/results/onboarding.json) | Nine archived generated-repository training sessions produce learned routes using normal thresholds |
@@ -126,8 +135,14 @@ The user authorized **$60 for this task**. Measured spend so far is **$4.3605710
 
 One startup-censored attempt has no reported terminal cost. The human explicitly approved charging
 its entire $0.50 reservation; its actual bill remains unknown. The ledger records this separately
-from measured provider costs. Admission charges total **$4.8605710**, leaving **$55.1394290** under
-the $60 task cap before further reservations. This approval does not cover future unknown bills.
+from measured provider costs. The earlier planning snapshot reported **$4.8605710**, leaving
+**$55.1394290** under the $60 task cap. The authoritative ledger's corresponding prior admission
+total is $4.8039968, a $0.0565742 reconciliation difference; retain the earlier snapshot as history.
+The [current accounting snapshot](harness/results/20260930-guided-demonstrations/budget-snapshot.json)
+includes all 48 attempts through the natural, cold-start, diagnostic and guided runs: **$10.7000678
+measured provider cost + $0.50 approved conservative charge = $11.2000678 admission spend**,
+leaving **$48.7999322**. All attempts are settled or explicitly cap-charged; none are outstanding.
+This approval does not cover future unknown bills.
 Historical experiments elsewhere in the repository are separate from this task's ledger. Each new
 experiment must reserve full session caps durably before dispatch; a new unknown cost blocks further
 paid work. Human approval of a reflex is separate from evaluation spending authorization and applies

@@ -363,7 +363,7 @@ def native_settings(root, checkout, allowed, protected=()):
 
 
 def prepare_session(root, task, model, native_probe=False, setup_checkout=None):
-    """Prepare one unique assignment, no paid dispatch; no training intervention."""
+    """Prepare one unique assignment; explicit guided cohorts use their frozen prompt."""
     import probe
     manifest = json.loads((root / "manifest.json").read_text())
     if not json.loads((root / "confinement.json").read_text()).get("passed"):
@@ -416,6 +416,11 @@ def prepare_session(root, task, model, native_probe=False, setup_checkout=None):
                   "Report the denied Read and the command's actual check results. Do not retry denied operations.")
     else:
         prompt = families.prompt(task)
+        if manifest.get("training_kind") == "instruction-guided-training":
+            frozen = root / "private/tasks" / task / "prompt.txt"
+            if sha(frozen) != manifest["task_sha256"][task]["prompt.txt"]:
+                raise ValueError("guided prompt changed after freeze")
+            prompt = frozen.read_text()
     settings = native_settings(root, checkout, allowed, protected)
     write(session / "settings.json", settings)
     (session / ".reflex-fixture").write_text("shared bounded runner marker; real repository session\n")
@@ -426,7 +431,7 @@ def prepare_session(root, task, model, native_probe=False, setup_checkout=None):
         "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}', "--tools", tools,
         "--permission-mode", "dontAsk", "--permission-prompts", "none", "--max-turns", "5" if native_probe else "60", prompt]
     value = dict(schema=1, root=str(session), experiment_root=str(root), execution_root=str(checkout),
-        task=task, kind="native-confinement" if native_probe else "organic-training", argv=argv,
+        task=task, kind="native-confinement" if native_probe else manifest.get("training_kind", "organic-training"), argv=argv,
         budget_usd=cap, model=model, expected_claude_version=probe.EXPECTED_VERSION,
         settings_sha256=sha(session / "settings.json"), source_sha256=sha(Path(__file__)),
         shared_sources={str(p):sha(p) for p in (HERE / "probe.py", REPO / "evals/live/budget.py")},
@@ -434,6 +439,8 @@ def prepare_session(root, task, model, native_probe=False, setup_checkout=None):
         training_hooks_enabled=False, outcome_retries=False)
     if native_probe:
         value["canary_sha256"] = sha(checkout / "native_canary.py")
+    elif value["kind"] == "instruction-guided-training":
+        value.update(workflow_guidance=manifest["workflow_guidance"], prompt_sha256=sha(frozen))
     write(session / "manifest.json", value)
     append(root / "attempts.jsonl", dict(status="session-prepared", task=task, kind=value["kind"],
             manifest=str(session / "manifest.json"), paid_calls=0, timestamp_ns=time.time_ns()))
@@ -526,6 +533,22 @@ def require_native_review(value):
                 raise ValueError("assignment permissions differ from reviewed cohort policy")
 
 
+def validate_training_recipe(value):
+    """Bind guided identity and actual runner prompt to its prospectively frozen cohort."""
+    cohort = Path(value.get("cohort_root", value["experiment_root"]))
+    m = json.loads((cohort / "manifest.json").read_text())
+    if value["kind"] != m.get("training_kind", "organic-training"):
+        raise ValueError("training kind differs from frozen cohort")
+    if value["kind"] == "instruction-guided-training":
+        from learning_curve import GUIDANCE
+        frozen = cohort / "private/tasks" / value["task"] / "prompt.txt"
+        if (m["protocol"] != "instruction-guided-development-1"
+                or value.get("workflow_guidance") != GUIDANCE or m.get("workflow_guidance") != GUIDANCE
+                or value.get("prompt_sha256") != m["task_sha256"][value["task"]]["prompt.txt"]
+                or sha(frozen) != value["prompt_sha256"] or value["argv"][-1] != frozen.read_text()):
+            raise ValueError("guided prompt or provenance differs from frozen cohort")
+
+
 def run_session(manifest_path, wall_seconds=300):
     """Explicit paid entry point; root reviewer dispatches after freezing preparations."""
     import probe
@@ -538,9 +561,10 @@ def run_session(manifest_path, wall_seconds=300):
         raise ValueError("prepared runner or settings changed; refreeze before paid dispatch")
     if any(sha(Path(p)) != digest for p, digest in value["shared_sources"].items()):
         raise ValueError("shared budget or executor changed; refreeze before paid dispatch")
-    if value["kind"] == "organic-training":
+    if value["kind"] in ("organic-training", "instruction-guided-training"):
+        validate_training_recipe(value)
         require_native_review(value)
-    elif sha(Path(value["execution_root"]) / "native_canary.py") != value["canary_sha256"]:
+    elif value["kind"] != "native-confinement" or sha(Path(value["execution_root"]) / "native_canary.py") != value["canary_sha256"]:
         raise ValueError("native canary changed")
     with execution_lock(root):
         path = root / "paid-state.json"

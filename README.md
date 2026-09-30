@@ -65,6 +65,9 @@ instincts. This small, single-repository result measures advisory value, not aut
 The latest [15-session real-repository learning pilot](evals/reflex-proof/harness/results/20260930-learning-curve-native/report.json)
 passed independent task grading on 12/15 outputs but learned zero automatically executable actions.
 Real-coding CPU savings remain unproven; the full result is retained alongside the mechanism proof.
+A separate [five-session guided routine check](evals/reflex-proof/harness/results/20260930-guided-demonstrations/FINDINGS.md)
+also produced zero executable candidates despite five eventual test-command successes. Its audit
+identified a mining/admission gap and insufficient trigger-specific evidence; the launch gate remains open.
 
 ```text
   agent traces ──► adage condition ──► reflexes ──► index ──► hooks
