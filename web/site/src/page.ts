@@ -1,3 +1,5 @@
+import { initSignup } from "./signup";
+
 // Everything below the hero: sections that rise into view, the copy button, the repository links
 // (shown only when the build names a public repository) and the early-access form.
 
@@ -27,30 +29,5 @@ export function initPage() {
     links.hidden = false;
   }
 
-  const form = document.getElementById("signup") as HTMLFormElement | null;
-  if (!form) return;
-  const status = document.getElementById("signup-status")!;
-  const email = form.elements.namedItem("email") as HTMLInputElement;
-  const say = (msg: string, kind: "" | "ok" | "err") => { status.textContent = msg; status.className = "status " + kind; };
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    if (!email.value.trim() || !email.validity.valid) { say("Enter an email address, like you@company.com.", "err"); email.focus(); return; }
-    const button = form.querySelector("button")!;
-    button.disabled = true; say("Adding you…", "");
-    try {
-      const r = await fetch(form.action, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email: email.value.trim(), hp_x7: (form.elements.namedItem("hp_x7") as HTMLInputElement).value }),
-      });
-      if (r.ok) { form.reset(); say("You're on the list. We'll email you once, when the first release is ready.", "ok"); }
-      else if (r.status === 400 || r.status === 413) say("That address doesn't look right. Check it and try again.", "err");
-      else if (r.status === 503) say("Sign-ups aren't open yet. Explore the interactive walkthrough below while you wait.", "err");
-      else say("Something went wrong on our side. Please try again in a minute.", "err");
-    } catch {
-      say("Couldn't reach the server. Check your connection and try again.", "err");
-    } finally {
-      button.disabled = false;
-    }
-  });
+  initSignup();
 }

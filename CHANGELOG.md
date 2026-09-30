@@ -18,6 +18,13 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### Launch clarity and local experience
 
+- The teaser opens with sound by default, with an explicit play button when the browser blocks
+  audible autoplay. Reduced-motion and data-saving preferences still wait for a click.
+
+- Early-access signup checks availability before asking for an email. Closed registration and
+  failed checks have clear states, retry controls, and a public walkthrough; requests time out
+  without discarding the entered address.
+
 - Plugin bootstrap prefers a native SHA-256 provider, reducing first-start checksum cost while
   retaining the same digest verification and portable fallback.
 

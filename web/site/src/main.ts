@@ -79,7 +79,7 @@ const film = createFilm({
   onOpen() { filmOn = true; clearTimeout(timer); scene?.hold(true); },
   onClose() { filmOn = false; scene?.hold(false); select(tab); },
 });
-$("teaser").addEventListener("click", (e) => { e.preventDefault(); select(0); film.show({ sound: true }); });
+$("teaser").addEventListener("click", (e) => { e.preventDefault(); select(0); film.show({ userInitiated: true }); });
 
 /* ------------------------------------------------------------ the scene, loaded after the words */
 function fallback() {

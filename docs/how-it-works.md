@@ -1,7 +1,7 @@
 # How Adage works
 
 This is the product behavior reference for the README, CLI, TUI and launch copy.
-Updated 2026-09-30 against the launch worktree, based on merged main `422ebdb`.
+Updated 2026-09-30 against the launch worktree, based on merged main `0c28814`.
 Implementation changes must update this page and the relevant operational guide in the same change.
 The older numbered [architecture document](Adage%20%E2%80%94%20Architecture.md) is a historical
 implementation snapshot, not the current feature checklist.

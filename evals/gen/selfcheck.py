@@ -110,7 +110,7 @@ class Checker:
 
     def status(self, cwd):
         return subprocess.run(["git", "status", "--porcelain", "--untracked-files=all"], cwd=cwd,
-                              capture_output=True, text=True).stdout
+                              capture_output=True, text=True, env=gen.git_env()).stdout
 
     def apply(self, d, tid, run=True):
         for e in self.sol[tid]["edits"]:

@@ -68,8 +68,11 @@ session with an intervening read. This proves the connection, not real-repositor
 
 The [first predictive development replay](harness/results/20260930-predictive-learning-v1/checkpoint.json)
 reuses the frozen ten-session training cohort and still produces zero executable certificates.
-The [final release replay](harness/results/20260930-predictive-learning-v2/checkpoint.json), after
-the integration and accounting fixes, confirms the same result with frozen source/binary hashes.
+The [release replay](harness/results/20260930-predictive-learning-v2/checkpoint.json), after
+the integration and accounting fixes at `45b13c4`, confirms the same result with frozen
+source/binary hashes. This snapshot precedes the subsequent merge of main `0c28814`.
+The [post-merge checks](harness/results/20260930-predictive-main-refresh/validation.json) cover
+the combined graph compiler, learner, native executor, review and harness adapters.
 Each repository has only four sessions containing successful pytest observations, below the
 five-session support requirement; activation compounds and command variation also limit the
 current executable evidence. No extra paid calls or held-out pairs were used for this replay.

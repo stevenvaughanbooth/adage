@@ -26,12 +26,12 @@
 <a class="skiplink" href="#main">Skip to content</a>
 
 <div class="film" id="film" tabindex="-1" role="dialog" aria-modal="true" aria-label="Adage teaser film" aria-describedby="film-desc">
-  <video id="film-video" playsinline muted preload="none" tabindex="-1"></video>
+  <video id="film-video" playsinline preload="none" tabindex="-1"></video>
   <p class="sr" id="film-desc">A 45-second film: an agent repeats work, Adage learns paths through its traces, and hooks deliver learned reflexes. The cinematic GPU-to-CPU sequence represents replacing repeated model deliberation with local matching. The film ends on Adage. Press Escape or the Skip intro button to go to the page.</p>
   <button class="film-close film-ui" id="film-close" type="button" aria-label="Close the teaser"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 2l10 10M12 2L2 12"/></svg></button>
-  <button class="film-play" id="film-play" type="button" hidden>&#9654;&#xFE0E; Play the teaser &middot; 0:45</button>
+  <button class="film-play" id="film-play" type="button" hidden>&#9654;&#xFE0E; Play the teaser with sound &middot; 0:45</button>
   <div class="film-bar film-ui">
-    <button class="iconbtn" id="film-sound" type="button" aria-label="Unmute" title="Unmute"><svg viewBox="0 0 20 20" aria-hidden="true"><path class="spk" d="M3 7.5h3l4-3.5v12l-4-3.5H3z"/><g class="on"><path d="M13 7.2a4 4 0 0 1 0 5.6"/><path d="M15.4 5a7 7 0 0 1 0 10"/></g><g class="off"><path d="M13.5 7.5l5 5M18.5 7.5l-5 5"/></g></svg></button>
+    <button class="iconbtn" id="film-sound" type="button" aria-label="Mute" title="Mute"><svg viewBox="0 0 20 20" aria-hidden="true"><path class="spk" d="M3 7.5h3l4-3.5v12l-4-3.5H3z"/><g class="on"><path d="M13 7.2a4 4 0 0 1 0 5.6"/><path d="M15.4 5a7 7 0 0 1 0 10"/></g><g class="off"><path d="M13.5 7.5l5 5M18.5 7.5l-5 5"/></g></svg></button>
     <div class="film-track" aria-hidden="true"><i id="film-prog"></i></div>
     <button class="iconbtn" id="film-skip" type="button" aria-label="Skip intro" title="Skip intro"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 4.5l6.5 5.5L6 15.5"/><path d="M15 4.5v11"/></svg></button>
   </div>
@@ -307,11 +307,15 @@ $ make check
     <h2 class="display reveal" id="access-h">Get early access</h2>
     <p class="lede reveal">We'll email you once, when the first release is ready. Nothing else.</p>
     <form class="signup reveal" id="signup" action="/api/waitlist" method="post" novalidate>
+      <fieldset class="signup-fields" id="signup-fields" hidden disabled>
+      <legend class="sr">Join early access</legend>
       <label class="sr" for="email">Email address</label>
       <input id="email" name="email" type="email" autocomplete="email" required placeholder="you@company.com" aria-describedby="signup-status">
       <input class="hp" name="hp_x7" tabindex="-1" autocomplete="off" aria-hidden="true">
       <button class="btn primary" type="submit">Join the list</button>
-      <p class="status" id="signup-status" role="status" aria-live="polite"></p>
+      </fieldset>
+      <p class="status" id="signup-status" role="status" aria-live="polite">Enable JavaScript to check early-access availability.</p>
+      <button class="btn" id="signup-retry" type="button" hidden>Check availability again</button>
     </form>
     <p class="reveal">Explore now: <a href="/how">Walk through how Adage works</a>, from traces to hooks and evidence.</p>
   </div>
