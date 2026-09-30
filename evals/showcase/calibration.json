@@ -1,0 +1,736 @@
+{
+ "_doc": "Calibration data for the showcase's power analysis and synthetic dry run: every complete held-out (variant, repeat) pair of the recurring-workflows research in which a procedure card was delivered (arm `card`: CLAUDE.md card in click-type and mm-validator, hook-delivered card in go-flag) against its control. Extracted from the research's runner roots (/tmp/adage-research/recurring-workflows/runs/{click-type,mm-validator}/state.json and .../confirm/runs/go-flag/state.json), fields as the runner recorded them: cost (billed total_cost_usd), calls (tool calls), elapsed (wall seconds), turns, passed (hidden check), censored (hit 60 turns). Claude Haiku 4.5, Claude Code 2.1.284.",
+ "source_runs": {
+  "click-type": "/tmp/adage-research/recurring-workflows/runs/click-type/state.json",
+  "mm-validator": "/tmp/adage-research/recurring-workflows/runs/mm-validator/state.json",
+  "go-flag": "/tmp/adage-research/recurring-workflows/confirm/runs/go-flag/state.json"
+ },
+ "pairs": {
+  "click-type": [
+   {
+    "task": "click-type--byte-size",
+    "rep": 1,
+    "card": {
+     "cost": 0.5288587000000001,
+     "calls": 49,
+     "elapsed": 204.57,
+     "passed": true,
+     "turns": 50,
+     "censored": false
+    },
+    "control": {
+     "cost": 0.4115813000000001,
+     "calls": 44,
+     "elapsed": 190.24,
+     "passed": false,
+     "turns": 45,
+     "censored": false
+    }
+   },
+   {
+    "task": "click-type--byte-size",
+    "rep": 2,
+    "control": {
+     "cost": 0.40384390000000003,
+     "calls": 53,
+     "elapsed": 186.67,
+     "passed": true,
+     "turns": 54,
+     "censored": false
+    },
+    "card": {
+     "cost": 0.3014817,
+     "calls": 29,
+     "elapsed": 137.66,
+     "passed": true,
+     "turns": 30,
+     "censored": false
+    }
+   },
+   {
+    "task": "click-type--date",
+    "rep": 1,
+    "card": {
+     "cost": 0.3135435,
+     "calls": 34,
+     "elapsed": 130.94,
+     "passed": false,
+     "turns": 35,
+     "censored": false
+    },
+    "control": {
+     "cost": 0.43736840000000005,
+     "calls": 52,
+     "elapsed": 180.23,
+     "passed": false,
+     "turns": 53,
+     "censored": false
+    }
+   },
+   {
+    "task": "click-type--date",
+    "rep": 2,
+    "card": {
+     "cost": 0.3121319000000001,
+     "calls": 34,
+     "elapsed": 135.06,
+     "passed": true,
+     "turns": 35,
+     "censored": false
+    },
+    "control": {
+     "cost": 0.5401922,
+     "calls": 60,
+     "elapsed": 189.43,
+     "passed": false,
+     "turns": 61,
+     "censored": true
+    }
+   },
+   {
+    "task": "click-type--host-port",
+    "rep": 1,
+    "card": {
+     "cost": 0.27173150000000007,
+     "calls": 38,
+     "elapsed": 148.53,
+     "passed": true,
+     "turns": 39,
+     "censored": false
+    },
+    "control": {
+     "cost": 0.32219609999999993,
+     "calls": 37,
+     "elapsed": 153.03,
+     "passed": true,
+     "turns": 38,
+     "censored": false
+    }
+   },
+   {
+    "task": "click-type--host-port",
+    "rep": 2,
+    "card": {
+     "cost": 0.32940640000000004,
+     "calls": 48,
+     "elapsed": 147.91,
+     "passed": false,
+     "turns": 49,
+     "censored": false
+    },
+    "control": {
+     "cost": 0.4847351000000001,
+     "calls": 56,
+     "elapsed": 180.94,
+     "passed": false,
+     "turns": 57,
+     "censored": false
+    }
+   },
+   {
+    "task": "click-type--percentage",
+    "rep": 1,
+    "card": {
+     "cost": 0.28824029999999995,
+     "calls": 31,
+     "elapsed": 129.39,
+     "passed": false,
+     "turns": 32,
+     "censored": false
+    },
+    "control": {
+     "cost": 0.33410490000000015,
+     "calls": 35,
+     "elapsed": 165.13,
+     "passed": true,
+     "turns": 36,
+     "censored": false
+    }
+   },
+   {
+    "task": "click-type--percentage",
+    "rep": 2,
+    "card": {
+     "cost": 0.27696489999999996,
+     "calls": 41,
+     "elapsed": 169.13,
+     "passed": true,
+     "turns": 42,
+     "censored": false
+    },
+    "control": {
+     "cost": 0.44724939999999996,
+     "calls": 51,
+     "elapsed": 186.37,
+     "passed": false,
+     "turns": 52,
+     "censored": false
+    }
+   },
+   {
+    "task": "click-type--semver",
+    "rep": 1,
+    "control": {
+     "cost": 0.3664725999999998,
+     "calls": 56,
+     "elapsed": 170.09,
+     "passed": true,
+     "turns": 57,
+     "censored": false
+    },
+    "card": {
+     "cost": 0.4404656,
+     "calls": 48,
+     "elapsed": 166.87,
+     "passed": true,
+     "turns": 49,
+     "censored": false
+    }
+   },
+   {
+    "task": "click-type--semver",
+    "rep": 2,
+    "card": {
+     "cost": 0.30830669999999993,
+     "calls": 34,
+     "elapsed": 129.81,
+     "passed": true,
+     "turns": 35,
+     "censored": false
+    },
+    "control": {
+     "cost": 0.4076185,
+     "calls": 53,
+     "elapsed": 198.82,
+     "passed": true,
+     "turns": 54,
+     "censored": false
+    }
+   },
+   {
+    "task": "click-type--slug",
+    "rep": 1,
+    "card": {
+     "cost": 0.27926889999999993,
+     "calls": 46,
+     "elapsed": 161.39,
+     "passed": true,
+     "turns": 47,
+     "censored": false
+    },
+    "control": {
+     "cost": 0.28107630000000006,
+     "calls": 33,
+     "elapsed": 144.94,
+     "passed": true,
+     "turns": 34,
+     "censored": false
+    }
+   },
+   {
+    "task": "click-type--slug",
+    "rep": 2,
+    "control": {
+     "cost": 0.3524011,
+     "calls": 42,
+     "elapsed": 151.1,
+     "passed": true,
+     "turns": 43,
+     "censored": false
+    },
+    "card": {
+     "cost": 0.3571801,
+     "calls": 47,
+     "elapsed": 151.37,
+     "passed": true,
+     "turns": 48,
+     "censored": false
+    }
+   }
+  ],
+  "mm-validator": [
+   {
+    "task": "mm-validator--ascii",
+    "rep": 1,
+    "control": {
+     "cost": 0.2721276000000001,
+     "calls": 39,
+     "elapsed": 126.02,
+     "passed": true,
+     "turns": 40,
+     "censored": false
+    },
+    "card": {
+     "cost": 0.13669730000000002,
+     "calls": 20,
+     "elapsed": 75.07,
+     "passed": true,
+     "turns": 21,
+     "censored": false
+    }
+   },
+   {
+    "task": "mm-validator--ascii",
+    "rep": 2,
+    "control": {
+     "cost": 0.2260754,
+     "calls": 37,
+     "elapsed": 124.31,
+     "passed": true,
+     "turns": 38,
+     "censored": false
+    },
+    "card": {
+     "cost": 0.27077509999999994,
+     "calls": 42,
+     "elapsed": 144.69,
+     "passed": true,
+     "turns": 43,
+     "censored": false
+    }
+   },
+   {
+    "task": "mm-validator--contains",
+    "rep": 1,
+    "card": {
+     "cost": 0.24171379999999998,
+     "calls": 37,
+     "elapsed": 137.86,
+     "passed": true,
+     "turns": 38,
+     "censored": false
+    },
+    "control": {
+     "cost": 0.23504470000000005,
+     "calls": 35,
+     "elapsed": 127.67,
+     "passed": true,
+     "turns": 36,
+     "censored": false
+    }
+   },
+   {
+    "task": "mm-validator--contains",
+    "rep": 2,
+    "card": {
+     "cost": 0.19273510000000005,
+     "calls": 36,
+     "elapsed": 118.61,
+     "passed": true,
+     "turns": 37,
+     "censored": false
+    },
+    "control": {
+     "cost": 0.1936329,
+     "calls": 29,
+     "elapsed": 110.35,
+     "passed": true,
+     "turns": 30,
+     "censored": false
+    }
+   },
+   {
+    "task": "mm-validator--ends-with",
+    "rep": 1,
+    "control": {
+     "cost": 0.23001660000000004,
+     "calls": 37,
+     "elapsed": 119.46,
+     "passed": true,
+     "turns": 38,
+     "censored": false
+    },
+    "card": {
+     "cost": 0.13204319999999997,
+     "calls": 25,
+     "elapsed": 95.59,
+     "passed": true,
+     "turns": 26,
+     "censored": false
+    }
+   },
+   {
+    "task": "mm-validator--ends-with",
+    "rep": 2,
+    "control": {
+     "cost": 0.18277499999999997,
+     "calls": 29,
+     "elapsed": 117.38,
+     "passed": true,
+     "turns": 30,
+     "censored": false
+    },
+    "card": {
+     "cost": 0.15460279999999998,
+     "calls": 24,
+     "elapsed": 79.96,
+     "passed": true,
+     "turns": 25,
+     "censored": false
+    }
+   },
+   {
+    "task": "mm-validator--ip-address",
+    "rep": 1,
+    "card": {
+     "cost": 0.2178015,
+     "calls": 36,
+     "elapsed": 125.48,
+     "passed": true,
+     "turns": 37,
+     "censored": false
+    },
+    "control": {
+     "cost": 0.2799918,
+     "calls": 38,
+     "elapsed": 141.93,
+     "passed": true,
+     "turns": 39,
+     "censored": false
+    }
+   },
+   {
+    "task": "mm-validator--ip-address",
+    "rep": 2,
+    "control": {
+     "cost": 0.2708364,
+     "calls": 38,
+     "elapsed": 140.79,
+     "passed": true,
+     "turns": 39,
+     "censored": false
+    },
+    "card": {
+     "cost": 0.1763352,
+     "calls": 24,
+     "elapsed": 110.31,
+     "passed": true,
+     "turns": 25,
+     "censored": false
+    }
+   },
+   {
+    "task": "mm-validator--lowercase",
+    "rep": 1,
+    "control": {
+     "cost": 0.204899,
+     "calls": 33,
+     "elapsed": 112.26,
+     "passed": true,
+     "turns": 34,
+     "censored": false
+    },
+    "card": {
+     "cost": 0.14942760000000005,
+     "calls": 31,
+     "elapsed": 92.76,
+     "passed": true,
+     "turns": 32,
+     "censored": false
+    }
+   },
+   {
+    "task": "mm-validator--lowercase",
+    "rep": 2,
+    "card": {
+     "cost": 0.15704390000000001,
+     "calls": 30,
+     "elapsed": 111.77,
+     "passed": true,
+     "turns": 31,
+     "censored": false
+    },
+    "control": {
+     "cost": 0.19508270000000003,
+     "calls": 32,
+     "elapsed": 100.99,
+     "passed": true,
+     "turns": 33,
+     "censored": false
+    }
+   },
+   {
+    "task": "mm-validator--not-blank",
+    "rep": 1,
+    "card": {
+     "cost": 0.1905418,
+     "calls": 28,
+     "elapsed": 108.48,
+     "passed": false,
+     "turns": 29,
+     "censored": false
+    },
+    "control": {
+     "cost": 0.23108300000000004,
+     "calls": 37,
+     "elapsed": 127.69,
+     "passed": true,
+     "turns": 38,
+     "censored": false
+    }
+   },
+   {
+    "task": "mm-validator--not-blank",
+    "rep": 2,
+    "card": {
+     "cost": 0.1574252,
+     "calls": 24,
+     "elapsed": 79.39,
+     "passed": true,
+     "turns": 25,
+     "censored": false
+    },
+    "control": {
+     "cost": 0.30184700000000003,
+     "calls": 39,
+     "elapsed": 135.86,
+     "passed": true,
+     "turns": 40,
+     "censored": false
+    }
+   }
+  ],
+  "go-flag": [
+   {
+    "task": "go-flag--bytesize",
+    "rep": 1,
+    "card": {
+     "cost": 0.28471640000000004,
+     "calls": 39,
+     "elapsed": 225.75,
+     "passed": false,
+     "turns": 40,
+     "censored": false
+    },
+    "control": {
+     "cost": 0.32386960000000004,
+     "calls": 46,
+     "elapsed": 220.77,
+     "passed": false,
+     "turns": 47,
+     "censored": false
+    }
+   },
+   {
+    "task": "go-flag--bytesize",
+    "rep": 2,
+    "card": {
+     "cost": 0.2608337,
+     "calls": 37,
+     "elapsed": 259.0,
+     "passed": false,
+     "turns": 38,
+     "censored": false
+    },
+    "control": {
+     "cost": 0.37976960000000004,
+     "calls": 60,
+     "elapsed": 294.75,
+     "passed": false,
+     "turns": 61,
+     "censored": true
+    }
+   },
+   {
+    "task": "go-flag--cidr",
+    "rep": 1,
+    "control": {
+     "cost": 0.36783239999999995,
+     "calls": 60,
+     "elapsed": 237.6,
+     "passed": false,
+     "turns": 61,
+     "censored": true
+    },
+    "card": {
+     "cost": 0.17289400000000005,
+     "calls": 30,
+     "elapsed": 171.06,
+     "passed": false,
+     "turns": 31,
+     "censored": false
+    }
+   },
+   {
+    "task": "go-flag--cidr",
+    "rep": 2,
+    "control": {
+     "cost": 0.30813599999999997,
+     "calls": 47,
+     "elapsed": 228.93,
+     "passed": false,
+     "turns": 48,
+     "censored": false
+    },
+    "card": {
+     "cost": 0.2668372,
+     "calls": 40,
+     "elapsed": 206.13,
+     "passed": false,
+     "turns": 41,
+     "censored": false
+    }
+   },
+   {
+    "task": "go-flag--date",
+    "rep": 1,
+    "control": {
+     "cost": 0.2508558,
+     "calls": 37,
+     "elapsed": 198.18,
+     "passed": false,
+     "turns": 38,
+     "censored": false
+    },
+    "card": {
+     "cost": 0.2227203,
+     "calls": 38,
+     "elapsed": 197.81,
+     "passed": false,
+     "turns": 39,
+     "censored": false
+    }
+   },
+   {
+    "task": "go-flag--date",
+    "rep": 2,
+    "card": {
+     "cost": 0.22042760000000008,
+     "calls": 37,
+     "elapsed": 207.63,
+     "passed": false,
+     "turns": 38,
+     "censored": false
+    },
+    "control": {
+     "cost": 0.24041049999999992,
+     "calls": 42,
+     "elapsed": 217.19,
+     "passed": false,
+     "turns": 43,
+     "censored": false
+    }
+   },
+   {
+    "task": "go-flag--hexcolor",
+    "rep": 1,
+    "card": {
+     "cost": 0.29154349999999996,
+     "calls": 44,
+     "elapsed": 221.62,
+     "passed": true,
+     "turns": 45,
+     "censored": false
+    },
+    "control": {
+     "cost": 0.38579389999999997,
+     "calls": 60,
+     "elapsed": 253.22,
+     "passed": true,
+     "turns": 61,
+     "censored": true
+    }
+   },
+   {
+    "task": "go-flag--hexcolor",
+    "rep": 2,
+    "control": {
+     "cost": 0.4233859999999998,
+     "calls": 60,
+     "elapsed": 288.43,
+     "passed": false,
+     "turns": 61,
+     "censored": true
+    },
+    "card": {
+     "cost": 0.32717370000000007,
+     "calls": 50,
+     "elapsed": 298.29,
+     "passed": true,
+     "turns": 51,
+     "censored": false
+    }
+   },
+   {
+    "task": "go-flag--percent",
+    "rep": 1,
+    "control": {
+     "cost": 0.3065331,
+     "calls": 46,
+     "elapsed": 228.01,
+     "passed": false,
+     "turns": 47,
+     "censored": false
+    },
+    "card": {
+     "cost": 0.2321369,
+     "calls": 39,
+     "elapsed": 213.75,
+     "passed": false,
+     "turns": 40,
+     "censored": false
+    }
+   },
+   {
+    "task": "go-flag--percent",
+    "rep": 2,
+    "control": {
+     "cost": 0.40126810000000007,
+     "calls": 60,
+     "elapsed": 324.37,
+     "passed": true,
+     "turns": 61,
+     "censored": true
+    },
+    "card": {
+     "cost": 0.12529389999999999,
+     "calls": 21,
+     "elapsed": 162.24,
+     "passed": false,
+     "turns": 22,
+     "censored": false
+    }
+   },
+   {
+    "task": "go-flag--semver",
+    "rep": 1,
+    "card": {
+     "cost": 0.1808605,
+     "calls": 28,
+     "elapsed": 193.29,
+     "passed": false,
+     "turns": 29,
+     "censored": false
+    },
+    "control": {
+     "cost": 0.36113969999999995,
+     "calls": 51,
+     "elapsed": 250.02,
+     "passed": false,
+     "turns": 52,
+     "censored": false
+    }
+   },
+   {
+    "task": "go-flag--semver",
+    "rep": 2,
+    "control": {
+     "cost": 0.4150052,
+     "calls": 60,
+     "elapsed": 304.65,
+     "passed": false,
+     "turns": 61,
+     "censored": true
+    },
+    "card": {
+     "cost": 0.17204739999999996,
+     "calls": 28,
+     "elapsed": 195.44,
+     "passed": false,
+     "turns": 29,
+     "censored": false
+    }
+   }
+  ]
+ }
+}

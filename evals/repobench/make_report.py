@@ -50,7 +50,7 @@ COMPARISONS = [("adage", "control"), ("agents-md", "control"), ("adage", "agents
 DEMO_PARAMS = {"learn": {"dead_end_consistency": [9, 10], "dead_end_signatures": 3, "dormant_exposure": 0.5,
                          "finish_line_contrast": 0.3, "fire_lower_bound": 0.5, "intent_contrast": 0.3,
                          "intent_ubiquitous": 0.8, "material_lower_bound": 0.1, "min_support": 3, "prime_rate": 0.5,
-                         "retain_rate": 0.3},
+                         "retain_rate": 0.3, "uplift_min": 0.0},
                "runtime": {"control_share": 0.1, "follow_window": 3, "history": 32, "max_directives_per_decision": 3,
                            "max_directives_per_session": 8, "max_stop_requests": 2}}
 

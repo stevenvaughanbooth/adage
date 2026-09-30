@@ -1259,7 +1259,7 @@ themed word is less clear than a plain one in a specific sentence, the plain one
 | Session command | `/adage off` |
 | Directive wrapper | `<adage-reflex track="…@…" route="…" strength="fire\|prime\|inhibit" kind="…">` … `</adage-reflex>` |
 | On-disk values | strength `fire` / `prime` / `inhibit`; state `nascent` / `forming` / `firm` / `dormant` / `extinguished`; judgements `followed` / `ignored` / `misfired` / `obligation_met`; arms `treated` / `control` |
-| Packages | `adage-ai` on npm and GitHub — both free as of 2026-09-22; the bare `adage` npm name is a small unrelated package |
+| Packages | `@adage-sh/cli` on npm (the `adage-sh` org, matching the adage.sh domain; decided 2026-09-30); the bare `adage` npm name is a small unrelated package |
 
 ### 17.5 Clearance and cautions
 

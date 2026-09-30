@@ -70,6 +70,15 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### Conditioning (learning from traces)
 
+- **Card families whose files are named per task.** When each task creates files named whole
+  after itself (chi's `middleware/no_sniff.go`, `middleware/hsts.go`), the files share no name
+  shape, and no card formed. Files a task created now also count by their role: directory, test
+  convention and extension. They group into `middleware/<x>.go` and `middleware/<x>_test.go`,
+  both for family overlap and on the card. A test sibling stays its own role, in the learner and
+  in the runtime's file match.
+- **The follow judge reads wrappers again.** A run behind a wrapper
+  (`xvfb-run -a .venv/bin/python -m pytest`) is a follow. `echo`/`cat`/`ls` naming the program is
+  not, as before.
 - **Linked worktrees share their repository's key.** A worktree made with `git worktree add`
   (one per task in tools that run agents in parallel, such as Conductor) has a `.git` file, and
   its `origin` lives in the common git directory; the key now reads it there (submodules read

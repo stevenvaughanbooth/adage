@@ -1,6 +1,6 @@
 # GO validation: the shipped product on a fresh recurring family
 
-Prepared 2026-09-29. **No paid session has run.** This is the end-to-end validation to run once the
+Prepared 2026-09-29. **Run on 2026-09-29: GO-WITH-CAVEATS, see [RESULTS.md](RESULTS.md).** This is the end-to-end validation to run once the
 product binary (procedure cards and uplift gating, merged) is ready. The pre-registration is
 `prereg.json`; `analyze.py` reads its thresholds from there.
 

@@ -1,0 +1,200 @@
+{
+ "family": "chi-middleware",
+ "home": "/tmp/sc-dry-chi-middleware-ikrts2u5/adage-home",
+ "adage": "/tmp/adage-showcase-target/release/adage",
+ "cards": [
+  {
+   "id": "card-11e594f481",
+   "bytes": 9503
+  }
+ ],
+ "held_out": [
+  {
+   "task": "chi-middleware--method-override",
+   "session": "cdfeb7f1-76a7-4c00-a561-c54a95c65950",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "chi-middleware--allow-hosts",
+   "session": "282e69c1-a524-4521-97b0-0974dc6fb70c",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "chi-middleware--lowercase-path",
+   "session": "6547b967-2911-4e71-a76d-66ad24ea66f1",
+   "at_prompt": false,
+   "at_edit": "middleware/lowercase_path.go",
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "chi-middleware--block-user-agents",
+   "session": "73870ad1-103a-4d09-a607-d51d275aaf57",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "chi-middleware--api-key",
+   "session": "9aa1c190-32a6-4364-8329-368e9befe44e",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "chi-middleware--vary",
+   "session": "9f416187-bfb9-44fe-afc1-128cb754d58f",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "chi-middleware--content-length-required",
+   "session": "aa265e65-5b42-469d-a98f-6ea181cb5988",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "chi-middleware--max-header-count",
+   "session": "e225ed6d-ac38-4aff-b751-0fb1bb762750",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  }
+ ],
+ "negatives": [
+  {
+   "id": "chi-1f927a8e",
+   "source": "repobench",
+   "session": "4645d5bb-0de1-42d3-afc8-e72f9d4feb30",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "chi-87c34a24",
+   "source": "repobench",
+   "session": "1872e57e-a416-40f7-a669-00a12db28ad2",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "chi-05f1ef7b",
+   "source": "repobench",
+   "session": "65dcbb41-44a8-4ecc-a588-a248e637367f",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "neg-chi-throttle-retry-after",
+   "source": "handwritten",
+   "session": "33cda0a8-509f-44ef-96bd-eea71b18ed5d",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "neg-chi-readme-clientip",
+   "source": "handwritten",
+   "session": "91b4088c-9c35-45e8-8410-3c1e0c011b58",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "neg-chi-nocache-bug",
+   "source": "handwritten",
+   "session": "39c3c25b-6951-4e57-a575-1d925aedb72f",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  }
+ ],
+ "hook_events": [
+  "PostToolBatch",
+  "PostToolUseFailure",
+  "PreToolUse",
+  "SessionEnd",
+  "SessionStart",
+  "Stop",
+  "UserPromptSubmit"
+ ],
+ "summary": {
+  "cards": 1,
+  "card_formed": true,
+  "held_out_delivered": [
+   8,
+   8
+  ],
+  "held_out_at_prompt": 7,
+  "held_out_at_edit": 1,
+  "delivered_tasks": [
+   "chi-middleware--method-override",
+   "chi-middleware--allow-hosts",
+   "chi-middleware--lowercase-path",
+   "chi-middleware--block-user-agents",
+   "chi-middleware--api-key",
+   "chi-middleware--vary",
+   "chi-middleware--content-length-required",
+   "chi-middleware--max-header-count"
+  ],
+  "false_fires": [
+   0,
+   6
+  ],
+  "false_fire_ids": [],
+  "false_fires_at_prompt": 0,
+  "false_fires_at_edit_only": 0,
+  "false_fire_rate_wilson90_upper": 0.3108
+ }
+}

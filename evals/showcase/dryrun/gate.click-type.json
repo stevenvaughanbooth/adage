@@ -1,0 +1,200 @@
+{
+ "family": "click-type",
+ "home": "/tmp/sc-dry-click-type-_ohplop9/adage-home",
+ "adage": "/tmp/adage-showcase-target/release/adage",
+ "cards": [
+  {
+   "id": "card-11e594f481",
+   "bytes": 9929
+  }
+ ],
+ "held_out": [
+  {
+   "task": "click-type--semver",
+   "session": "2f13204a-1fe8-4adb-9128-aa406e684d95",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "click-type--percentage",
+   "session": "e2ba41f1-723e-4651-a838-eac3e9df2969",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "click-type--byte-size",
+   "session": "c976d4eb-94b5-4e88-b667-3068683cf0e9",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "click-type--slug",
+   "session": "6a4b2af1-8781-4058-9178-2a38fef86792",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "click-type--date",
+   "session": "e45bd188-c533-4ec4-aefb-99a30b488402",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "click-type--host-port",
+   "session": "1baadf59-079c-41b9-88fd-caad8e2adc25",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "click-type--time",
+   "session": "c7c0b4e8-3733-46d7-ba54-6dd13e2e7d15",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "click-type--log-level",
+   "session": "f56d8bea-cb78-4025-8ecf-aba0ea4fea86",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  }
+ ],
+ "negatives": [
+  {
+   "id": "click-d251cb0a",
+   "source": "repobench",
+   "session": "ec068ff1-b078-433c-9df7-7c94ff688444",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "click-1a4d8c1b",
+   "source": "repobench",
+   "session": "2068a2f6-32e8-4ed3-a7a8-064078bc2d1f",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "click-eaf33a95",
+   "source": "repobench",
+   "session": "463ec88d-2c3f-4b01-ab69-a7b6c4ea1fc2",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "neg-click-choice-hidden",
+   "source": "handwritten",
+   "session": "a762bccd-9c1e-46bd-8f61-8bdb4d8e5237",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "neg-click-doc-custom-type",
+   "source": "handwritten",
+   "session": "5f75c080-0306-4d7b-ba54-4f7a8f6bfd2a",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "neg-click-path-resolve",
+   "source": "handwritten",
+   "session": "c7e475dc-767c-4473-aa16-d0249a9fad4a",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  }
+ ],
+ "hook_events": [
+  "PostToolBatch",
+  "PostToolUseFailure",
+  "PreToolUse",
+  "SessionEnd",
+  "SessionStart",
+  "Stop",
+  "UserPromptSubmit"
+ ],
+ "summary": {
+  "cards": 1,
+  "card_formed": true,
+  "held_out_delivered": [
+   8,
+   8
+  ],
+  "held_out_at_prompt": 8,
+  "held_out_at_edit": 0,
+  "delivered_tasks": [
+   "click-type--semver",
+   "click-type--percentage",
+   "click-type--byte-size",
+   "click-type--slug",
+   "click-type--date",
+   "click-type--host-port",
+   "click-type--time",
+   "click-type--log-level"
+  ],
+  "false_fires": [
+   0,
+   6
+  ],
+  "false_fire_ids": [],
+  "false_fires_at_prompt": 0,
+  "false_fires_at_edit_only": 0,
+  "false_fire_rate_wilson90_upper": 0.3108
+ }
+}

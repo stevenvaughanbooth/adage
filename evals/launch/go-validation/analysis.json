@@ -1,0 +1,329 @@
+{
+ "family": {
+  "arms": {
+   "adage": {
+    "sessions": 16,
+    "usd_per_task": 0.1816,
+    "calls": 24.31,
+    "turns": 25.31,
+    "passed": [
+     16,
+     16
+    ],
+    "pass_rate_wilson90": [
+     0.8554,
+     1.0
+    ],
+    "usd_per_resolved": 0.1816,
+    "censored": 0,
+    "card_delivered": 16,
+    "card_would_have": 16,
+    "dead_end_directives": 0
+   },
+   "control": {
+    "sessions": 16,
+    "usd_per_task": 0.2026,
+    "calls": 26.5,
+    "turns": 27.5,
+    "passed": [
+     15,
+     16
+    ],
+    "pass_rate_wilson90": [
+     0.7625,
+     0.9859
+    ],
+    "usd_per_resolved": 0.2161,
+    "censored": 0,
+    "card_delivered": 0,
+    "card_would_have": 15,
+    "dead_end_directives": 0
+   }
+  },
+  "usd": {
+   "ratio_minus_1": -0.1034,
+   "ci": [
+    -0.2013,
+    0.0203
+   ],
+   "pairs": 16,
+   "clusters": 8,
+   "adage_mean": 0.1816,
+   "control_mean": 0.2026
+  },
+  "calls": {
+   "ratio_minus_1": -0.0825,
+   "ci": [
+    -0.1916,
+    0.0527
+   ],
+   "pairs": 16,
+   "clusters": 8,
+   "adage_mean": 24.3125,
+   "control_mean": 26.5
+  },
+  "turns": {
+   "ratio_minus_1": -0.0795,
+   "ci": [
+    -0.1853,
+    0.0506
+   ],
+   "pairs": 16,
+   "clusters": 8,
+   "adage_mean": 25.3125,
+   "control_mean": 27.5
+  },
+  "pass_diff": {
+   "diff": 0.0625,
+   "ci": [
+    0.0,
+    0.1875
+   ],
+   "pairs": 16,
+   "clusters": 8
+  },
+  "pass_net": 1,
+  "sensitivity_uncensored_usd": {
+   "ratio_minus_1": -0.1034,
+   "ci": [
+    -0.2013,
+    0.0203
+   ],
+   "pairs": 16,
+   "clusters": 8,
+   "adage_mean": 0.1816,
+   "control_mean": 0.2026
+  },
+  "per_task_usd": {
+   "ufo-util--dot-segments": -0.3138,
+   "ufo-util--get-extension": -0.2502,
+   "ufo-util--is-http": -0.0236,
+   "ufo-util--lowercase-host": 0.0744,
+   "ufo-util--query-param": -0.0864,
+   "ufo-util--same-origin": 0.3572,
+   "ufo-util--sort-query": -0.0795,
+   "ufo-util--without-auth": -0.2673
+  },
+  "unpaired_sessions": 0
+ },
+ "family_delivered_subset_G2b": {
+  "arms": {
+   "adage": {
+    "sessions": 16,
+    "usd_per_task": 0.1816,
+    "calls": 24.31,
+    "turns": 25.31,
+    "passed": [
+     16,
+     16
+    ],
+    "pass_rate_wilson90": [
+     0.8554,
+     1.0
+    ],
+    "usd_per_resolved": 0.1816,
+    "censored": 0,
+    "card_delivered": 16,
+    "card_would_have": 16,
+    "dead_end_directives": 0
+   },
+   "control": {
+    "sessions": 16,
+    "usd_per_task": 0.2026,
+    "calls": 26.5,
+    "turns": 27.5,
+    "passed": [
+     15,
+     16
+    ],
+    "pass_rate_wilson90": [
+     0.7625,
+     0.9859
+    ],
+    "usd_per_resolved": 0.2161,
+    "censored": 0,
+    "card_delivered": 0,
+    "card_would_have": 15,
+    "dead_end_directives": 0
+   }
+  },
+  "usd": {
+   "ratio_minus_1": -0.1034,
+   "ci": [
+    -0.2013,
+    0.0203
+   ],
+   "pairs": 16,
+   "clusters": 8,
+   "adage_mean": 0.1816,
+   "control_mean": 0.2026
+  },
+  "calls": {
+   "ratio_minus_1": -0.0825,
+   "ci": [
+    -0.1916,
+    0.0527
+   ],
+   "pairs": 16,
+   "clusters": 8,
+   "adage_mean": 24.3125,
+   "control_mean": 26.5
+  },
+  "pass_net": 1
+ },
+ "regression": {
+  "arms": {
+   "adage": {
+    "sessions": 6,
+    "usd_per_task": 0.2965,
+    "calls": 35.17,
+    "turns": 36.17,
+    "passed": [
+     4,
+     6
+    ],
+    "pass_rate_wilson90": [
+     0.347,
+     0.8827
+    ],
+    "usd_per_resolved": 0.4448,
+    "censored": 3,
+    "card_delivered": 2,
+    "card_would_have": 2,
+    "dead_end_directives": 5
+   },
+   "control": {
+    "sessions": 6,
+    "usd_per_task": 0.282,
+    "calls": 33.5,
+    "turns": 34.5,
+    "passed": [
+     2,
+     6
+    ],
+    "pass_rate_wilson90": [
+     0.1173,
+     0.653
+    ],
+    "usd_per_resolved": 0.8459,
+    "censored": 2,
+    "card_delivered": 0,
+    "card_would_have": 2,
+    "dead_end_directives": 0
+   }
+  },
+  "usd": {
+   "ratio_minus_1": 0.0516,
+   "ci": [
+    -0.1005,
+    0.2157
+   ],
+   "pairs": 6,
+   "clusters": 6,
+   "adage_mean": 0.2965,
+   "control_mean": 0.282
+  },
+  "calls": {
+   "ratio_minus_1": 0.0498,
+   "ci": [
+    -0.1545,
+    0.2832
+   ],
+   "pairs": 6,
+   "clusters": 6,
+   "adage_mean": 35.1667,
+   "control_mean": 33.5
+  },
+  "turns": {
+   "ratio_minus_1": 0.0483,
+   "ci": [
+    -0.1506,
+    0.2737
+   ],
+   "pairs": 6,
+   "clusters": 6,
+   "adage_mean": 36.1667,
+   "control_mean": 34.5
+  },
+  "pass_diff": {
+   "diff": 0.3333,
+   "ci": [
+    0.0,
+    0.6667
+   ],
+   "pairs": 6,
+   "clusters": 6
+  },
+  "pass_net": 2,
+  "sensitivity_uncensored_usd": {
+   "ratio_minus_1": 0.0328,
+   "ci": [
+    0.0199,
+    0.0439
+   ],
+   "pairs": 2,
+   "clusters": 2,
+   "adage_mean": 0.2826,
+   "control_mean": 0.2736
+  },
+  "per_task_usd": {
+   "click-0cd28d65": 0.0199,
+   "click-19fd4d6e": 0.5291,
+   "click-2468b709": -0.303,
+   "click-3bb230dc": 0.0887,
+   "click-c3535905": 0.0439,
+   "click-c943271a": 0.1767
+  },
+  "unpaired_sessions": 0,
+  "card_deliveries": {
+   "in_area": [
+    "click-19fd4d6e/control",
+    "click-19fd4d6e/adage",
+    "click-c3535905/control",
+    "click-c3535905/adage"
+   ],
+   "false_fire": []
+  }
+ },
+ "gate": {
+  "cards": 1,
+  "held_out_delivered": [
+   8,
+   8
+  ],
+  "held_out_at_prompt": 5,
+  "held_out_at_edit": 3,
+  "delivered_tasks": [
+   "ufo-util--without-auth",
+   "ufo-util--same-origin",
+   "ufo-util--sort-query",
+   "ufo-util--lowercase-host",
+   "ufo-util--get-extension",
+   "ufo-util--dot-segments",
+   "ufo-util--query-param",
+   "ufo-util--is-http"
+  ],
+  "false_fires": [
+   0,
+   8
+  ],
+  "false_fire_rate_wilson90_upper": 0.2527,
+  "gate_R2_card_formed": true,
+  "gate_R3_detection": true,
+  "proceed_to_eval": true
+ },
+ "verdict": {
+  "criteria": {
+   "G1_card_formed": true,
+   "G2_primary_usd": false,
+   "G3_pass_noninferior": true,
+   "G4a_delivered_live": true,
+   "G4b_no_false_fire_probe": true,
+   "G4c_no_false_fire_on_regression": true,
+   "G5_regression_no_harm": true
+  },
+  "verdict": "GO-WITH-CAVEATS: G2's 90% CI includes 0 (underpowered)",
+  "calls_ci_upper_below_0": false,
+  "note": "criteria and thresholds: prereg.json"
+ }
+}

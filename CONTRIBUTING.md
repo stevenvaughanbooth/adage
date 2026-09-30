@@ -86,7 +86,7 @@ Releases are built by [dist](https://github.com/axodotdev/cargo-dist) from `dist
 
 Publishing needs, in the repository settings: the `HOMEBREW_TAP_TOKEN` secret (push access to
 `stevenvaughanbooth/homebrew-tap`), and for npm the `NPM_TOKEN` secret plus the variable
-`ADAGE_NPM_PUBLISH=true`. The npm package is `@adage/cli` (decision D3): claim the `@adage` scope
-first (`npm org create adage`); if it is taken, set `PACKAGE_NAME = "adage-cli"` in
-`npm/config.mjs`, the one place the name lives. macOS signing (decision D4) is off until the Apple
+`ADAGE_NPM_PUBLISH=true`. The npm package is `@adage-sh/cli` (decision D3), in the `adage-sh` npm org;
+`npm/config.mjs` is the one place the name lives. The `NPM_TOKEN` must be an automation token of
+an account that can publish to that org. macOS signing (decision D4) is off until the Apple
 Developer ID secrets exist; see the note in `dist-workspace.toml`.
