@@ -432,6 +432,6 @@ The binary stays `adage` whatever the package names are.
 | **O9** | Employer IP clearance | Get it in writing before M2 or any public release |
 | **D1** | License | ✅ **Apache-2.0** (decided 2026-09-23). Open core is still to decide before building depots |
 | **D2** | DCO or CLA | ✅ **DCO sign-off** (decided 2026-09-23) |
-| **D3** | npm name | ✅ **`@adage-ai/cli`**, in the `adage-ai` npm org (claimed 2026-09-29: `adage` and the `adage` org were taken; first decided as `@adage/cli` on 2026-09-23). The binary stays `adage` |
+| **D3** | npm name | ✅ **`@adage-sh/cli`**, in the `adage-sh` npm org (decided 2026-09-30, after `@adage-ai/cli` on 2026-09-29 and `@adage/cli` on 2026-09-23; `adage` and the `adage` org were taken). The binary stays `adage` |
 | **D4** | Apple Developer ID ($99/yr) | ✅ **Yes** (decided 2026-09-23). Enrol, add the signing secrets, set `macos-sign = true` in `dist-workspace.toml`; required before Homebrew and direct downloads |
 | **D5** | Private or public beta first | A private beta with a few teams after the pilot, then public |
