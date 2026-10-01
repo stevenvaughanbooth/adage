@@ -378,6 +378,9 @@ def native_canary_source(private, outside, port, inbox):
         + " try:urllib.request.urlopen('http://example.com/',timeout=5).close();return False\n except Exception:return True\n"
         + "checks['proxy_denies_external']=proxied()\n"
         + "checks['env_sentinel_denied']='ADAGE_CONFINEMENT_SENTINEL' not in os.environ\n"
+        # Revision 7: tools see the checkout's own environment first, as an activated developer would.
+        + "import shutil\nfound=shutil.which('python')\n"
+        + "checks['python_on_path']=bool(found) and os.path.abspath(found)==os.path.abspath('.venv/bin/python')\n"
         # Same rule as probe.visible_denied: only a named runtime-injected variable whose proof
         # passed above may remain visible.
         + f"exempt={dict(probe.RUNTIME_INJECTED)!r}\n"
@@ -458,6 +461,7 @@ def prepare_session(root, task, model, native_probe=False, setup_checkout=None):
         settings_sha256=sha(session / "settings.json"), source_sha256=sha(Path(__file__)),
         shared_sources={str(p):sha(p) for p in (HERE / "probe.py", REPO / "evals/live/budget.py")},
         native_listener_port=port, paid_calls=0, native_transcript_required=True, max_turns=5 if native_probe else 60,
+        project_environment=str(checkout / ".venv"),
         training_hooks_enabled=False, outcome_retries=False)
     if native_probe:
         value["canary_sha256"] = sha(checkout / "native_canary.py")

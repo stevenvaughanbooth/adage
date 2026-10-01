@@ -8,6 +8,13 @@ identical interpreter token and targets, differing only in OUTPUT_FLAGS. A narro
 the receipt's targets is `covered_subset`, reported separately and never counted as a repeat.
 Failed receipts, source changes (the digest excludes only declared caches and the environment),
 explicitly requested reruns and broader scopes keep verification necessary.
+
+Version 2 (launch-gate-1 revision 7, before any held-out dispatch): a request is a *repeat
+attempt* when a fresh successful receipt already selected every test it selects (same non-output
+options, targets equal or inside), whatever its interpreter and whether or not it launched. A
+bare `python` that fails with "command not found" is still a request the model made. Any repeat
+attempt blocks a confirmed elimination. Only requests that completed (a PostToolUse exists) can
+satisfy necessary verification; timelines without that field are treated as completed.
 """
 import argparse
 import json
@@ -15,7 +22,7 @@ from pathlib import Path
 import re
 import shlex
 
-VERSION = 1
+VERSION = 2
 OUTPUT_FLAGS = {"-q", "-qq", "-v", "-vv", "-rA", "-ra", "-s", "-x", "--no-header", "--disable-warnings",
                 "--quiet", "--verbose"}
 OUTPUT_PREFIXES = ("--tb=", "--color=")
@@ -84,6 +91,14 @@ def within(target, scope):
     return any(target == s or target.startswith(s + "::") or target.startswith(s + "/") for s in scope)
 
 
+def covered(request, receipt, rerun_requested=False):
+    """Whether a fresh successful receipt already ran every test this request selects."""
+    if receipt is None or not receipt["succeeded"] or request["digest"] != receipt["digest"] or rerun_requested:
+        return False
+    call, done = request["call"], receipt["call"]
+    return call[1] == done[1] and (call[2] == done[2] or bool(call[2]) and all(within(t, done[2]) for t in call[2]))
+
+
 def classify(request, receipt, rerun_requested=False):
     if receipt is None:
         return "before_receipt"
@@ -107,9 +122,12 @@ def classify(request, receipt, rerun_requested=False):
 
 def extract(hooks_path, arm=None):
     """Compact timeline from a `production-hooks.jsonl` capture (the collected hook wrapper log)."""
-    events, root, final = [], None, None
-    for line in Path(hooks_path).read_text().splitlines():
-        row = json.loads(line)
+    events, root, final, completed = [], None, None, set()
+    rows = [json.loads(line) for line in Path(hooks_path).read_text().splitlines()]
+    for row in rows:
+        if row.get("event") == "PostToolUse":
+            completed.add(row.get("payload", {}).get("tool_use_id"))
+    for row in rows:
         payload = row.get("payload", {})
         root = root or payload.get("cwd")
         if row.get("event") == "PreToolUse":
@@ -118,8 +136,9 @@ def extract(hooks_path, arm=None):
             events.append(dict(kind="tool", id=payload.get("tool_use_id"), name=tool,
                 command=data.get("command") if tool == "Bash" else None,
                 path=data.get("file_path") if tool in ("Edit", "Write", "MultiEdit") else None,
-                digest=row.get("before", {}).get("digest"),
-                adage_pre_context="additionalContext" in (row.get("output") or "")))
+                digest=row.get("before", {}).get("digest"), completed=payload.get("tool_use_id") in completed,
+                adage_pre_context="additionalContext" in (row.get("output") or ""),
+                receipt_note="<adage-receipt" in (row.get("output") or "")))
         for entry in row.get("journal_new") or []:
             text = json.loads(row["output"])["hookSpecificOutput"]["additionalContext"] if row.get("output") else ""
             match = RAN.search(text)
@@ -163,13 +182,17 @@ def replay(timeline, rerun_requested=False, broader_required=None):
             request = dict(call=call, digest=event["digest"], command_segment=shlex.join(argv))
             rows.append(dict(id=event["id"], command=event["command"], segment=request["command_segment"],
                 digest=event["digest"], adage_pre_context=event.get("adage_pre_context", False),
+                receipt_note=event.get("receipt_note", False), completed=event.get("completed", True),
+                covered=covered(request, receipt, rerun_requested),
                 classification=classify(request, receipt, rerun_requested)))
     final = timeline.get("final_digest")
     succeeded = [r for r in receipts if r["succeeded"]]
     redundant = [r for r in rows if r["classification"] in REDUNDANT]
     opaque = [r for r in rows if r["classification"] == "opaque_verification"]
     fresh_final = any(r["digest"] == final for r in succeeded)
-    at_final = [pytest_call(shlex.split(r["segment"]), root) for r in rows if "segment" in r and r["digest"] == final]
+    attempts = [r for r in rows if r.get("covered")]
+    at_final = [pytest_call(shlex.split(r["segment"]), root) for r in rows
+                if "segment" in r and r["digest"] == final and r.get("completed", True)]
     if broader_required is not None:
         satisfied = any(c[2] in {tuple(t) for t in broader_required} for c in at_final)
     elif rerun_requested:
@@ -178,9 +201,10 @@ def replay(timeline, rerun_requested=False, broader_required=None):
         satisfied = fresh_final or bool(at_final)
     necessary = bool(rerun_requested or broader_required is not None or (receipts and not fresh_final))
     return dict(version=VERSION, arm=timeline.get("arm"), requests=rows, receipts=len(receipts),
-        successful_receipts=len(succeeded), redundant_repeats=len(redundant),
+        successful_receipts=len(succeeded), redundant_repeats=len(redundant), repeat_attempts=len(attempts),
+        repeat_attempts_not_completed=sum(not r.get("completed", True) for r in attempts),
         covered_subsets=sum(r["classification"] == "covered_subset" for r in rows), opaque=len(opaque),
-        confirmed_elimination=bool(fresh_final and not redundant and not opaque and not necessary),
+        confirmed_elimination=bool(fresh_final and not attempts and not redundant and not opaque and not necessary),
         verification_necessary=necessary, necessary_work_skipped=necessary and not satisfied,
         final_source_verified=fresh_final or bool(at_final))
 

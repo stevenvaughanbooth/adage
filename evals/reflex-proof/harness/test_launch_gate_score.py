@@ -11,7 +11,7 @@ REFLEXES = {r: dict(certified=True, provenance="explicitly guided training", com
 
 
 def row(repo, arm, rep=1, task="t", **changes):
-    replay = dict(requests=[], successful_receipts=0, redundant_repeats=0, confirmed_elimination=False,
+    replay = dict(requests=[], successful_receipts=0, redundant_repeats=0, repeat_attempts=0, confirmed_elimination=False,
                   necessary_work_skipped=False)
     r = dict(repo=repo, task=task, arm=arm, repetition=rep, quality_passed=True, cost_usd=0.2, model_requests=30,
              executions=0, undeclared_writes=False, fresh_receipt=False, stale_receipts=0, replay=replay)
@@ -47,7 +47,7 @@ class Thresholds(unittest.TestCase):
         autos = lambda rows: [r for r in rows if r["arm"] == "automatic"]
         def repeats(rows):
             for r in autos(rows):
-                r["replay"].update(redundant_repeats=1, confirmed_elimination=False)
+                r["replay"].update(repeat_attempts=1, confirmed_elimination=False)
         no_go(repeats, "G3")
         no_go(repeats, "G4")
         no_go(lambda rows: autos(rows)[0].update(quality_passed=False), "G5")
@@ -65,7 +65,7 @@ class Thresholds(unittest.TestCase):
         def unseen_repeats(rows):
             for r in autos(rows):
                 if r["repo"] == "more-itertools":
-                    r["replay"].update(redundant_repeats=1, confirmed_elimination=False)
+                    r["replay"].update(repeat_attempts=1, confirmed_elimination=False)
         no_go(unseen_repeats, "G9")
         reflexes = copy.deepcopy(REFLEXES)
         reflexes["click"]["certified"] = reflexes["more-itertools"]["certified"] = False

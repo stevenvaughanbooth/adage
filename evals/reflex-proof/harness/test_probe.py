@@ -136,6 +136,30 @@ class LaunchEnvironment(unittest.TestCase):
             probe.check_launch(env, {})
 
 
+class ProjectEnvironment(unittest.TestCase):
+    def test_project_launch_activates_only_the_checkouts_own_environment(self):
+        with tempfile.TemporaryDirectory() as d:
+            checkout = Path(d) / "repo"
+            (checkout / ".venv/bin").mkdir(parents=True)
+            (checkout / ".venv/bin/python").write_text("")
+            shell = {"PATH": "/usr/bin:/bin", "VIRTUAL_ENV": "/elsewhere", "HOME": "/tmp"}
+            base = probe.launch_env(shell)
+            self.assertNotIn("VIRTUAL_ENV", base, "a shell's own activation never passes through")
+            env, plain = probe.project_launch(base, {"execution_root": str(checkout)})
+            self.assertEqual((env, plain), (base, probe.LAUNCH_PASS), "no project environment requested")
+            m = {"execution_root": str(checkout), "project_environment": str(checkout / ".venv")}
+            env, plain = probe.project_launch(base, m)
+            self.assertEqual(env["VIRTUAL_ENV"], str(checkout / ".venv"))
+            self.assertEqual(env["PATH"], str(checkout / ".venv/bin") + ":/usr/bin:/bin")
+            deny = {"sandbox": {"credentials": {"envVars": [{"name": n, "mode": "deny"} for n in probe.DENIED_ENV]}}}
+            self.assertIn("VIRTUAL_ENV", probe.check_launch(env, deny, plain))
+            with self.assertRaises(ValueError):
+                probe.check_launch(env, deny)  # VIRTUAL_ENV is plain only for a project launch
+            for other in ("/usr", str(checkout / "other")):
+                with self.assertRaises(ValueError):
+                    probe.project_launch(base, dict(m, project_environment=other))
+
+
 class RuntimeInjectedNames(unittest.TestCase):
     OBSERVED = ["CLAUDECODE", "CLAUDE_CODE_MESSAGING_SOCKET", "CLAUDE_CODE_MESSAGING_TOKEN", "CLOUDSDK_PROXY_PASSWORD",
                 "CLOUDSDK_PROXY_USERNAME", "HTTPS_PROXY", "PATH"]
@@ -179,7 +203,10 @@ class NativeCanaryOutput(unittest.TestCase):
                 probe.canary_output(bad)
 
     def test_dry_run_on_the_archived_shape_passes_only_with_the_proven_exemption(self):
-        content = self.fixture()["content"]
+        archived = self.fixture()["content"]
+        # The archived run predates revision 7, so it lacks the project-environment check.
+        self.assertEqual(probe.assess_canary(archived)["failed_checks"], ["python_on_path"])
+        content = archived.replace('"proxy_denies_external": true', '"proxy_denies_external": true, "python_on_path": true')
         verdict = probe.assess_canary(content)
         self.assertTrue(verdict["passed"], verdict)
         self.assertEqual(verdict["tolerated_runtime_names"], ["CLOUDSDK_PROXY_PASSWORD"])

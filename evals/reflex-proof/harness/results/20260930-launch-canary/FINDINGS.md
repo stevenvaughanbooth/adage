@@ -1,4 +1,10 @@
-# Launch canary: canary-v5 ran; canary-v7 frozen, not dispatched
+# Launch canary: canary-v5 and canary-v7 ran; canary-v8 designed, not frozen
+
+**Update (revision 7).** canary-v7 ran: 12 sessions, $1.3425845. Every positive had a fresh
+successful receipt, and every one still requested covered verification. The report's 4
+"eliminations" were bare `python` calls that failed to launch; the post hoc re-score finds 0
+(`canary-v7/FINDINGS.md`). canary-v8 (`launch-canary-8`) is designed in `launch_canary.py` but
+not frozen, pending the next design direction. The canary-v7 description below is kept as frozen.
 
 All of this is development-split work: no held-out tasks are involved, and none of it is evidence
 for the hypothesis.

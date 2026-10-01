@@ -81,6 +81,27 @@ class CanaryV5(unittest.TestCase):
         self.assertFalse(later["confirmed_elimination"] or broader["confirmed_elimination"])
 
 
+class CanaryV7(unittest.TestCase):
+    """Development canary-v7, re-scored post hoc: every positive requested covered verification."""
+    ROOT = Path(__file__).parent / "results/20260930-launch-canary/canary-v7/timelines"
+
+    def test_no_positive_is_an_elimination_once_failed_attempts_count(self):
+        positives = sorted(self.ROOT.glob("*-positive-*.json"))
+        self.assertEqual(len(positives), 6)
+        for path in positives:
+            r = rr.replay(json.loads(path.read_text()))
+            self.assertEqual(r["successful_receipts"], 1, path.stem)
+            self.assertFalse(r["confirmed_elimination"], path.stem)
+            first = next(q for q in r["requests"] if q.get("covered"))
+            # The first covered request was the bare interpreter: it never launched, yet it was made,
+            # and Adage's receipt note arrived with it rather than before it.
+            self.assertEqual((first["classification"], first["completed"], first["receipt_note"]),
+                             ("different_environment", False, True), path.stem)
+        attempts = [rr.replay(json.loads(p.read_text()))["repeat_attempts"] for p in positives]
+        self.assertEqual(sum(attempts), 10)
+        self.assertEqual(sum(a > 1 for a in attempts), 2, "two agents went on to run the .venv form")
+
+
 class Equivalence(unittest.TestCase):
     def kind(self, command, digest="a"):
         rows = rr.replay(timeline(receipt(), tool(command, digest)))["requests"]
@@ -105,6 +126,28 @@ class Equivalence(unittest.TestCase):
         hidden = rr.replay(timeline(receipt(), tool("bash -c \"$(echo pytest)\" > out")))
         self.assertEqual(hidden["opaque"], 1)
         self.assertFalse(hidden["confirmed_elimination"])
+
+
+class RepeatAttempts(unittest.TestCase):
+    """Scorer version 2: a covered request is a repeat attempt even if it never ran."""
+
+    def test_a_failed_bare_interpreter_request_is_a_repeat_attempt_not_an_elimination(self):
+        bare = dict(tool("python -m pytest tests/test_validate.py::test_finite_accepts_finite_numbers -v"), completed=False)
+        r = rr.replay(timeline(receipt(), bare))
+        self.assertEqual(r["requests"][0]["classification"], "different_environment")
+        self.assertEqual((r["repeat_attempts"], r["repeat_attempts_not_completed"]), (1, 1))
+        self.assertFalse(r["confirmed_elimination"])
+        for command in (".venv/bin/python -m pytest tests/test_validate.py::test_x", ".venv/bin/pytest tests/test_validate.py -q"):
+            self.assertEqual(rr.replay(timeline(receipt(), tool(command)))["repeat_attempts"], 1, command)
+        for command in (".venv/bin/python -m pytest tests/", ".venv/bin/python -m pytest tests/test_validate.py -k x",
+                        "git diff"):
+            self.assertEqual(rr.replay(timeline(receipt(), tool(command)))["repeat_attempts"], 0, command)
+        self.assertTrue(rr.replay(timeline(receipt(), tool("git diff")))["confirmed_elimination"])
+
+    def test_requests_that_never_completed_do_not_satisfy_necessary_verification(self):
+        failed = dict(tool(CMD, digest="b"), completed=False)
+        self.assertTrue(rr.replay(timeline(receipt("a"), failed, final="b"))["necessary_work_skipped"])
+        self.assertFalse(rr.replay(timeline(receipt("a"), tool(CMD, digest="b"), final="b"))["necessary_work_skipped"])
 
 
 class NegativeControls(unittest.TestCase):

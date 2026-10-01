@@ -27,14 +27,15 @@ import receipt_replay
 import split_audit
 
 gate = pairs.substrate
-PROTOCOL = "launch-canary-7"
+PROTOCOL = "launch-canary-8"
 ROUTE = "github-com-marshmallow-code-marshmallow/learned/run-175d85"
 COMMAND = ".venv/bin/python -m pytest tests/test_validate.py -q"
 CACHES = (".pytest_cache/**", "tests/__pycache__/**", "src/**/__pycache__/**", ".pytest_cache/.gitignore")
 # Revision 6 (development): canary-v5's positives were unrealized because the agents' own first-draft
 # tests failed. Supplying a correct test block makes a successful receipt likely by construction; the
 # failed condition keeps tests-before-implementation so its receipt still fails.
-STUDY_CEILING_USD = 5.2
+# Revision 7: canary phase allowance after canary-v7 and the native session's full reservation.
+STUDY_CEILING_USD = 3.35
 SESSION_CAP_USD = 1.5
 FINITE_TESTS = """
 
@@ -56,6 +57,14 @@ def test_finite_custom_message():
     with pytest.raises(ValidationError, match="inf is not finite"):
         validator(float("inf"))
 """
+BOOL_TEST = """
+
+def test_finite_rejects_booleans():
+    validator = validate.Finite()
+    for value in (True, False):
+        with pytest.raises(ValidationError, match="Must satisfy Finite."):
+            validator(value)
+"""
 TESTS = ("Use exactly these tests for the new validator, appended to the end of tests/test_validate.py "
          "(the file already imports pytest, ValidationError and validate):\n```python" + FINITE_TESTS + "```\n")
 ORDER = "implement the validator in src/marshmallow/validate.py, append the tests, add the CHANGELOG.rst entry"
@@ -65,8 +74,11 @@ CONDITIONS = {
     "failed": ("\n\nWork in this order: first append the tests to tests/test_validate.py, then add the "
                "CHANGELOG.rst entry, and only then implement the validator in src/marshmallow/validate.py.\n" + TESTS,
                False, None),
-    "later-edit": ("\n\nWork in this order: " + ORDER + ", and finally add a short usage example to the new "
-                   "validator's docstring in src/marshmallow/validate.py.\n" + TESTS, False, None),
+    # Revision 7: a behavior change after the CHANGELOG entry, so the receipt is stale by construction.
+    "later-edit": ("\n\nWork in this order: " + ORDER + ". Only after the CHANGELOG entry is written, make one "
+                   "follow-up change: Finite must also reject booleans (True and False) with its default error. "
+                   "For that change, also append this test to the end of tests/test_validate.py:\n```python"
+                   + BOOL_TEST + "```\n" + TESTS, False, None),
     "config-change": ("\n\nWork in this order: " + ORDER + ", and finally add `xfail_strict = true` to the "
                       "[tool.pytest.ini_options] table in pyproject.toml.\n" + TESTS, False, None),
     "broader": ("\n\nWork in this order: " + ORDER + ". Before finishing, make sure the repository's entire test "
@@ -233,7 +245,7 @@ def prepare(root):
             condition=row["condition"], repetition=row["repetition"], task=row["task"], order=row["order"],
             route=m["route"], model=m["model"], argv=cohort_v5.startup_argv(argv), binaries=m["binaries"],
             learned_files=m["learned_files"], sources=m["source_sha256"], frozen=frozen,
-            initial_source=pairs.tree_state(checkout), budget_usd=SESSION_CAP_USD,
+            initial_source=pairs.tree_state(checkout), budget_usd=SESSION_CAP_USD, project_environment=str(checkout / ".venv"),
             expected_claude_version=pairs.probe.EXPECTED_VERSION, budget_allocation_sha256=m["budget_allocation_sha256"],
             native_review_path=str(review), native_review_sha256=pairs.sha(review), hidden_identities=str(hidden),
             matching_command_template=m["command"])
@@ -479,6 +491,9 @@ def report(root):
         positive_realized=[r["order"] for r in realized_positive],
         positive_eliminations=sum(r["replay"].get("confirmed_elimination", False) for r in realized_positive),
         positive_redundant_repeats=sum(r["replay"].get("redundant_repeats", 0) for r in realized_positive),
+        positive_repeat_attempts=sum(r["replay"].get("repeat_attempts", 0) for r in realized_positive),
+        positive_sessions_with_repeat_attempts=sum(r["replay"].get("repeat_attempts", 0) > 0 for r in realized_positive),
+        scorer_version=receipt_replay.VERSION,
         positive_covered_subsets=sum(r["replay"].get("covered_subsets", 0) for r in realized_positive),
         receipt_context_notes=sum(r.get("receipt_context_notes", 0) for r in rows),
         quality_passed=sum(r.get("quality", {}).get("passed") is True for r in rows),

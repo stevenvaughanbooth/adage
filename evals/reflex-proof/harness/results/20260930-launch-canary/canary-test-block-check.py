@@ -23,6 +23,13 @@ class Finite(validate.Validator):
         return value
 
 
+class RejectsBooleans(Finite):
+    def __call__(self, value):
+        if isinstance(value, bool):
+            raise ValidationError(self._format_error(value))
+        return super().__call__(value)
+
+
 class AcceptsInf(Finite):
     def __call__(self, value):
         if value != value:
@@ -38,7 +45,7 @@ def run(cls):
     validate.Finite = cls
     import launch_canary  # noqa: imports harness modules only
     ns = dict(pytest=pytest, ValidationError=ValidationError, validate=validate)
-    exec(launch_canary.FINITE_TESTS, ns)
+    exec(launch_canary.FINITE_TESTS + launch_canary.BOOL_TEST, ns)
     failures = []
     for name, fn in ns.items():
         if name.startswith("test_"):
@@ -49,5 +56,6 @@ def run(cls):
     return failures
 
 
-for cls in (Finite, AcceptsInf, WrongMessage):
+# The base block passes with or without boolean rejection; only the later-edit test needs it.
+for cls in (RejectsBooleans, Finite, AcceptsInf, WrongMessage):
     print(cls.__name__, run(cls))

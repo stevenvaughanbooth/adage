@@ -42,6 +42,14 @@ positives got failing receipts from the agents' own first-draft tests, and agent
 after successful receipts. A receipt-aware note and a canary-v7 with a fixed test block are
 prepared. No launch statistic follows from this development work.
 
+The second development canary ([canary-v7](harness/results/20260930-launch-canary/canary-v7/FINDINGS.md),
+12 sessions, $1.3425845) realized every positive with a fresh successful receipt. **In all six,
+the model still requested covered verification of its new tests.** The original report's 4
+"eliminations" were bare `python` calls that failed to launch in the sandbox, and a post hoc
+re-score finds 0. The structured receipt and startup contract have not been shown to eliminate
+the model's action. Revision 7 makes the measurement honest: covered attempts count even when
+they fail to launch, sessions use the checkout's own environment, and receipts list tests.
+
 The subsequent [edit-receipt diagnostic](harness/results/20260930-edit-receipt-ablation/summary.json)
 is an authored fixture, not a launch benchmark. After fixing inherited-stdin contamination,
 two runs per arm observed verifier requests in baseline 2/2, generic receipt 2/2, structured

@@ -1,3 +1,4 @@
-Finite []
-AcceptsInf [('test_finite_rejects_nan_and_infinities', 'Failed'), ('test_finite_custom_message', 'Failed')]
-WrongMessage [('test_finite_rejects_nan_and_infinities', 'AssertionError')]
+RejectsBooleans []
+Finite [('test_finite_rejects_booleans', 'Failed')]
+AcceptsInf [('test_finite_rejects_nan_and_infinities', 'Failed'), ('test_finite_custom_message', 'Failed'), ('test_finite_rejects_booleans', 'Failed')]
+WrongMessage [('test_finite_rejects_nan_and_infinities', 'AssertionError'), ('test_finite_rejects_booleans', 'Failed')]

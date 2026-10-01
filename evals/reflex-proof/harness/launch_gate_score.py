@@ -39,7 +39,8 @@ def score(rows, reflexes, protocol=None):
     eliminated = [r for r in auto if r["replay"].get("confirmed_elimination")]
     per_repo = {repo: sum(r["repo"] == repo for r in eliminated) for repo in learned}
     noexec_equivalent = [r for r in noexec if ran_equivalent(r, reflexes[r["repo"]]["command"])]
-    repeating = [r for r in fresh if r["replay"].get("redundant_repeats")]
+    # Scorer version 2: any covered request (launched or not) is a repeat attempt.
+    repeating = [r for r in fresh if r["replay"].get("repeat_attempts")]
     failures = {name: sum(r.get("quality_passed") is not True for r in arm(name)) for name in ("agent", "noexec", "automatic")}
     executions = sum(r.get("executions") or 0 for r in auto)
     stale = sum(r.get("stale_receipts") or 0 for r in auto)

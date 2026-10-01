@@ -22,8 +22,9 @@ new dispatch; never reset it, double-dispatch, or treat an unknown bill as zero.
 
 ## Latest checkpoint: launch gate protocol (resume here)
 
-Branch `codex/launch-first-reflex`, PR #16 (draft). Ledger: 116 attempts, $18.9257862 admitted,
-$41.0742138 remaining. New charges in this checkpoint:
+Branch `codex/launch-first-reflex`, PR #16 (draft). Ledger: 128 attempts, $20.2683707 admitted,
+$39.7316293 remaining. New charges in this checkpoint:
+- the development canary-v7 ($1.3425845);
 - three excluded native-confinement sessions: `launch-gate-v1` ($0.0258378), `launch-gate-v2`
   ($0.0278896) and `launch-gate-v3` ($0.0140024);
 - the passing `launch-gate-v4` native session ($0.0143733);
@@ -32,7 +33,7 @@ canary manifests bind absolute harness paths in the agent worktree
 `/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d`; run the
 commands below from its `evals/reflex-proof/harness`, or refreeze new roots from another checkout.
 
-- [Launch gate protocol](launch-gate-protocol.md) (`launch-gate-1`, revision 6) and its governing
+- [Launch gate protocol](launch-gate-protocol.md) (`launch-gate-1`, revision 7) and its governing
   JSON (`evals/reflex-proof/harness/launch_gate_protocol.json`) were registered before any dispatch:
   task splits with near-duplicate groups, arms, paired blocks, budgets and the GO thresholds G1-G9.
   `launch_gate_score.py` applies those thresholds; its tests pin every failure mode.
@@ -91,6 +92,20 @@ commands below from its `evals/reflex-proof/harness`, or refreeze new roots from
   denied-name check contradicted the exemption. Both are fixed under a single rule,
   `probe.proven_harmless`. `launch-gate-v3` is excluded and never reviewed. An offline dry run of
   the fixed review on its archived output passes at the content level (a fixture, not evidence).
+
+- **canary-v7 ran (development). Elimination hypothesis: not supported.** All six positives had
+  a fresh successful receipt. In every one, the model then requested covered verification of its
+  new tests by name. The original report's 4 "eliminations" were bare `python` calls that failed
+  to launch in the sandbox; the post hoc scorer-v2 re-score finds 0
+  ([findings](../evals/reflex-proof/harness/results/20260930-launch-canary/canary-v7/FINDINGS.md)).
+  The PreToolUse receipt note arrives with the call, so it cannot save that turn. Both later-edit
+  controls were unrealized, and no necessary work was skipped.
+- **Revision 7**: scorer version 2, a realistic project environment, test node ids and counts in
+  pytest receipts (from the declared pytest cache record, bound to the journal), and the later-edit
+  control by construction. PreToolUse result substitution is out of scope: the user's goal is
+  skipping inference, not intercepting CPU. canary-v8 is designed in `launch_canary.py`
+  (`launch-canary-8`) but **not frozen**, awaiting the next design direction. Freezing it needs a
+  new native cohort, because the runner sources changed.
 
 Blocked on three things, none of which an agent may bypass:
 

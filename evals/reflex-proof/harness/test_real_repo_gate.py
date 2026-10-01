@@ -71,10 +71,27 @@ class PreparationTests(unittest.TestCase):
             names = json.loads(out.stdout.split("NATIVE_ENV_NAMES=", 1)[1].split("\n", 1)[0])
             self.assertEqual(out.returncode, 1)
             for name in ("read", "outside_write", "dependency_write", "git_write", "network", "inbox",
-                         "env_sentinel_denied", "env_denied_names_absent", "proxy_denies_external"):
+                         "env_sentinel_denied", "env_denied_names_absent", "proxy_denies_external", "python_on_path"):
                 self.assertIs(checks[name], False, name)
             self.assertIs(checks["inside_write"], True)
             self.assertEqual(gate_probe.unexplained_credentials(names, checks), ["GITHUB_TOKEN"])
+
+    def test_native_canary_requires_the_checkouts_python_first_on_path(self):
+        with tempfile.TemporaryDirectory() as d:
+            work = Path(d).resolve() / "repo"
+            (work / ".venv/bin").mkdir(parents=True)
+            python = work / ".venv/bin/python"
+            python.write_text("#!/bin/sh\n")
+            python.chmod(0o755)
+            (work / "native_canary.py").write_text(gate.native_canary_source(work / "p", work / "o", 9, work / "i.sock"))
+            def check(path):
+                out = subprocess.run([sys.executable, "native_canary.py"], cwd=work, capture_output=True, text=True,
+                                     env={"PATH": path})
+                return json.loads(out.stdout.split("NATIVE_SANDBOX_CHECKS=", 1)[1])["python_on_path"]
+            self.assertIs(check(str(work / ".venv/bin") + ":/usr/bin:/bin"), True)
+            self.assertIs(check("/usr/bin:/bin:" + str(work / ".venv/bin")), (not Path("/usr/bin/python").exists()
+                                                                              and not Path("/bin/python").exists()))
+            self.assertIs(check("/usr/bin:/bin"), False)
 
     def test_native_exact_protected_file_and_directory_are_denied(self):
         with tempfile.TemporaryDirectory() as d:

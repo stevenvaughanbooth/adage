@@ -1,0 +1,381 @@
+{
+  "audit_authorities": [
+    "/private/tmp/adage-learning-curve-v2",
+    "/private/tmp/adage-real-repo-gate-v1"
+  ],
+  "binaries": {
+    "adage": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v4/canary-v7/bin/adage",
+    "adage-exec": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v4/canary-v7/bin/adage-exec"
+  },
+  "binary_sha256": {
+    "adage": "2b04bbf31f0f871212f8c1d9757a4360f7545da3d68846931a7c8fdcee7d89f7",
+    "adage-exec": "3895b20f7ef1ed380ff14aa040dafe90efa20c8c620d56f8fb528eab6b1b2182"
+  },
+  "binary_source_commit": "b804a6675ba67c87b3f6f06ac06f7f6f85cd885f",
+  "budget": {
+    "per_session_usd": 1.5,
+    "sessions": 12,
+    "study_ceiling_usd": 5.2
+  },
+  "budget_allocation_sha256": "f0981c0a547be249b0ba75fa75e735cbcda73860fedb900b84dee3320396848c",
+  "budget_authority": "/private/tmp/adage-real-repo-gate-v1",
+  "caches": [
+    ".pytest_cache/**",
+    "tests/__pycache__/**",
+    "src/**/__pycache__/**",
+    ".pytest_cache/.gitignore"
+  ],
+  "cohort_root": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v4",
+  "command": ".venv/bin/python -m pytest tests/test_validate.py -q",
+  "conditions": {
+    "broader": [
+      "\n\nWork in this order: implement the validator in src/marshmallow/validate.py, append the tests, add the CHANGELOG.rst entry. Before finishing, make sure the repository's entire test suite under tests/ passes.\nUse exactly these tests for the new validator, appended to the end of tests/test_validate.py (the file already imports pytest, ValidationError and validate):\n```python\n\ndef test_finite_accepts_finite_numbers():\n    validator = validate.Finite()\n    for value in (0, -1.25, 1e300):\n        assert validator(value) == value\n\n\ndef test_finite_rejects_nan_and_infinities():\n    validator = validate.Finite()\n    for value in (float(\"nan\"), float(\"inf\"), float(\"-inf\")):\n        with pytest.raises(ValidationError, match=\"Must satisfy Finite.\"):\n            validator(value)\n\n\ndef test_finite_custom_message():\n    validator = validate.Finite(error=\"{input} is not finite\")\n    with pytest.raises(ValidationError, match=\"inf is not finite\"):\n        validator(float(\"inf\"))\n```\n",
+      false,
+      [
+        [],
+        [
+          "tests"
+        ]
+      ]
+    ],
+    "config-change": [
+      "\n\nWork in this order: implement the validator in src/marshmallow/validate.py, append the tests, add the CHANGELOG.rst entry, and finally add `xfail_strict = true` to the [tool.pytest.ini_options] table in pyproject.toml.\nUse exactly these tests for the new validator, appended to the end of tests/test_validate.py (the file already imports pytest, ValidationError and validate):\n```python\n\ndef test_finite_accepts_finite_numbers():\n    validator = validate.Finite()\n    for value in (0, -1.25, 1e300):\n        assert validator(value) == value\n\n\ndef test_finite_rejects_nan_and_infinities():\n    validator = validate.Finite()\n    for value in (float(\"nan\"), float(\"inf\"), float(\"-inf\")):\n        with pytest.raises(ValidationError, match=\"Must satisfy Finite.\"):\n            validator(value)\n\n\ndef test_finite_custom_message():\n    validator = validate.Finite(error=\"{input} is not finite\")\n    with pytest.raises(ValidationError, match=\"inf is not finite\"):\n        validator(float(\"inf\"))\n```\n",
+      false,
+      null
+    ],
+    "failed": [
+      "\n\nWork in this order: first append the tests to tests/test_validate.py, then add the CHANGELOG.rst entry, and only then implement the validator in src/marshmallow/validate.py.\nUse exactly these tests for the new validator, appended to the end of tests/test_validate.py (the file already imports pytest, ValidationError and validate):\n```python\n\ndef test_finite_accepts_finite_numbers():\n    validator = validate.Finite()\n    for value in (0, -1.25, 1e300):\n        assert validator(value) == value\n\n\ndef test_finite_rejects_nan_and_infinities():\n    validator = validate.Finite()\n    for value in (float(\"nan\"), float(\"inf\"), float(\"-inf\")):\n        with pytest.raises(ValidationError, match=\"Must satisfy Finite.\"):\n            validator(value)\n\n\ndef test_finite_custom_message():\n    validator = validate.Finite(error=\"{input} is not finite\")\n    with pytest.raises(ValidationError, match=\"inf is not finite\"):\n        validator(float(\"inf\"))\n```\n",
+      false,
+      null
+    ],
+    "later-edit": [
+      "\n\nWork in this order: implement the validator in src/marshmallow/validate.py, append the tests, add the CHANGELOG.rst entry, and finally add a short usage example to the new validator's docstring in src/marshmallow/validate.py.\nUse exactly these tests for the new validator, appended to the end of tests/test_validate.py (the file already imports pytest, ValidationError and validate):\n```python\n\ndef test_finite_accepts_finite_numbers():\n    validator = validate.Finite()\n    for value in (0, -1.25, 1e300):\n        assert validator(value) == value\n\n\ndef test_finite_rejects_nan_and_infinities():\n    validator = validate.Finite()\n    for value in (float(\"nan\"), float(\"inf\"), float(\"-inf\")):\n        with pytest.raises(ValidationError, match=\"Must satisfy Finite.\"):\n            validator(value)\n\n\ndef test_finite_custom_message():\n    validator = validate.Finite(error=\"{input} is not finite\")\n    with pytest.raises(ValidationError, match=\"inf is not finite\"):\n        validator(float(\"inf\"))\n```\n",
+      false,
+      null
+    ],
+    "positive": [
+      "\n\nWork in this order: implement the validator in src/marshmallow/validate.py, append the tests, add the CHANGELOG.rst entry.\nUse exactly these tests for the new validator, appended to the end of tests/test_validate.py (the file already imports pytest, ValidationError and validate):\n```python\n\ndef test_finite_accepts_finite_numbers():\n    validator = validate.Finite()\n    for value in (0, -1.25, 1e300):\n        assert validator(value) == value\n\n\ndef test_finite_rejects_nan_and_infinities():\n    validator = validate.Finite()\n    for value in (float(\"nan\"), float(\"inf\"), float(\"-inf\")):\n        with pytest.raises(ValidationError, match=\"Must satisfy Finite.\"):\n            validator(value)\n\n\ndef test_finite_custom_message():\n    validator = validate.Finite(error=\"{input} is not finite\")\n    with pytest.raises(ValidationError, match=\"inf is not finite\"):\n        validator(float(\"inf\"))\n```\n",
+      false,
+      null
+    ],
+    "rerun": [
+      "\n\nWork in this order: implement the validator in src/marshmallow/validate.py, append the tests, add the CHANGELOG.rst entry. When you are done, run `.venv/bin/python -m pytest tests/test_validate.py -q` yourself and quote its final summary line.\nUse exactly these tests for the new validator, appended to the end of tests/test_validate.py (the file already imports pytest, ValidationError and validate):\n```python\n\ndef test_finite_accepts_finite_numbers():\n    validator = validate.Finite()\n    for value in (0, -1.25, 1e300):\n        assert validator(value) == value\n\n\ndef test_finite_rejects_nan_and_infinities():\n    validator = validate.Finite()\n    for value in (float(\"nan\"), float(\"inf\"), float(\"-inf\")):\n        with pytest.raises(ValidationError, match=\"Must satisfy Finite.\"):\n            validator(value)\n\n\ndef test_finite_custom_message():\n    validator = validate.Finite(error=\"{input} is not finite\")\n    with pytest.raises(ValidationError, match=\"inf is not finite\"):\n        validator(float(\"inf\"))\n```\n",
+      true,
+      null
+    ]
+  },
+  "cumulative_root": "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10",
+  "evidence_class": "integration canary and negative controls on development-split tasks; not held-out evidence",
+  "families": [
+    {
+      "archive": {
+        "archive": "evals/showcase/live/mm-validator/adage-home.tgz",
+        "eligibility": "production learner decides; retain influence and exclude steered evidence",
+        "sessions": [
+          {
+            "directed": [
+              "card-ab0b203001"
+            ],
+            "ending": {
+              "asked_for_help": false,
+              "cut_off": false
+            },
+            "id": "484e2137-355b-450f-b4db-d7cb9b078f37",
+            "influence_present": true,
+            "member": "adage-home/cache/sessions/f3a9bf5181b559b4.json",
+            "outcome": null,
+            "sha256": "39b71fef4f9a4b917a3830b7814f1dcff2f4652f592c520a4f157609ce719d5e",
+            "steered": true
+          },
+          {
+            "directed": [],
+            "ending": {
+              "asked_for_help": false,
+              "cut_off": false
+            },
+            "id": "15178ed2-db36-487f-b1f4-de072bf2078f",
+            "influence_present": false,
+            "member": "adage-home/cache/sessions/547686e96e93d3b0.json",
+            "outcome": null,
+            "sha256": "0d531b3f5360473e9fd7431b77881ef5823d875b05400ff83fbb8b0921a21dea",
+            "steered": false
+          },
+          {
+            "directed": [
+              "card-ab0b203001"
+            ],
+            "ending": {
+              "asked_for_help": false,
+              "cut_off": false
+            },
+            "id": "30364f4c-3f5b-4374-8f41-617de6429966",
+            "influence_present": true,
+            "member": "adage-home/cache/sessions/0ad86956b917f1cc.json",
+            "outcome": null,
+            "sha256": "f9253b970028218d00111816dc8900c04b2e308a9c38fc62f29f8b0b7c112430",
+            "steered": true
+          },
+          {
+            "directed": [],
+            "ending": {
+              "asked_for_help": false,
+              "cut_off": false
+            },
+            "id": "f48527ee-2aa8-4274-9aff-b4b9ad179bb8",
+            "influence_present": false,
+            "member": "adage-home/cache/sessions/c9b2388c4a5a0dc9.json",
+            "outcome": null,
+            "sha256": "284ee49529acaeb725538c393935cdfc1a95881b62d78bbb38172dbaf3aec312",
+            "steered": false
+          }
+        ],
+        "sha256": "85c0def7848ea4de659bd951f851363ffb2d9c3e04d2534dd021290c97f578b5"
+      },
+      "base": "7f0792bd",
+      "base_full": "7f0792bd7a06f72e393ec866ac1e89e1502ccfe1",
+      "checkout": "/private/tmp/adage-real-repo-gate-v1/bases/mm-validator",
+      "dependencies": [
+        "Using Python 3.12.14 environment at: bases/mm-validator/.venv",
+        "iniconfig==2.3.0",
+        "-e file:///private/tmp/adage-real-repo-gate-v1/bases/mm-validator",
+        "packaging==26.3",
+        "pluggy==1.6.0",
+        "pygments==2.21.0",
+        "pytest==9.1.1",
+        "python-dateutil==2.9.0.post0",
+        "pytz==2026.3.post1",
+        "simplejson==4.1.2",
+        "six==1.17.0"
+      ],
+      "family": "mm-curve",
+      "heldout": [],
+      "python_actual": "Python 3.12.14",
+      "repo": "marshmallow",
+      "train": [
+        "mm-curve--finite"
+      ],
+      "url": "https://github.com/marshmallow-code/marshmallow"
+    }
+  ],
+  "frozen_inputs": {
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/index.json": "773d862672bc1bfb8052985fd945c6409042bb16c853d0b8d5c4873707e46fd4",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/.follow-weights.json": "f7c8445ebffc47fe0da42dda78769350000d0aaf9cf4076bf9ec9e21947dbdb6",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/.instincts-binding.json": "e06f161274b767fc5d07650c4dea6e81a6894095aa3d72a15230ccaa58debc0a",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-0cdcfb.yaml": "b017f1e5c092f8a3cab9c839d305f9d02347e26d1ca855a542917ee0401d1b2c",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-1fbe94.yaml": "13f6c7b7c75e7ac6f65e28fec4e5948f10be977f90e601e0a0cab73967ec62f5",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-527c67.yaml": "16cd307646e7ec87c9d34ef55f7d3cc3c1ded135660b0f840323e42a820dc917",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-5347bf.yaml": "aba400e00de15fc124d4d1b52de6aace654e07b463da05b570940c224ec6f105",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-855e84.yaml": "de7298ead0c286cc8cc22a4e314917e73f5f76853011b1efb4c65e17dff7840e",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-923c12.yaml": "325c85566f74611886f2fce44bf07be23f4e4f71917fda708104cb90446539e8",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-93981f.yaml": "d69486e1d3d649b5b7df60b53cf107e8580299e703d84636013372ccc6de0885",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-95d94b.yaml": "55e4c5686acccae41f6563cbe1a84a201e892529a587caeabb3536834907da10",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-97f983.yaml": "02583380828abb5151792050fa1948e2647e0e8931cd09fd0dce5b24e04c6ed0",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-9aeb2e.yaml": "cd99aec49054a5b4d1861a526b7abbc34bef930d9183f35e6861003dff2ab9d3",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-a6ab60.yaml": "bbd442e2d68ba4164e0da807f42effe038ab68e6da5c6402eb95820a7437e760",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-c7dcb6.yaml": "9167714caa75a7a29ccbbca1b5f69cefa0e24e3c50d51deed5317fb85d15c85f",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-d9d28b.yaml": "64005051dacb212142f7a65989ce5a7e0685eb63104175c4e8e0849756426788",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-dec50b.yaml": "53fb570d091fdfbdd10f17ad9a7556957aeaf313f20e9ce45a8b9ecd44019ec8",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-565bfd.yaml": "6b2e9bd45774ddd225886f9977030d663c6cdb85289e9f904aac6e2bd7759e16",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-580139.yaml": "8ce07d14df0634d6a5a19450782241dfbb56ba2f5f4672fd53011c3ad21efacc",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-983271.yaml": "c5086ee69e8e9da6393d554dee3763d95e1c3a890990f3737e2f1b5b978cd559",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-aa69ba.yaml": "bc37b5dca829f7d05cbe9252ecce7786d6d57c930f2592f34655b2cb37578870",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-b46676.yaml": "5f63af11f3930d5d1b67d1085e49ae500d2d4f6adfd226427f4886c8ba0d7fd4",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-b87800.yaml": "e369eacc9405f9f1db7f56d3ac1477a140eb635e1449339d5ce0209f2297c713",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-c243e0.yaml": "7a557dd9a242cee14b7f64f23c9df42848fd59e6ba503dd406c3b8ea49e11066",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-eae4d7.yaml": "1dd5949f45e0ae49e7eff3a30be0aa72f954e0551b725c5aef8c05b41511ed5a",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-ed6cec.yaml": "40d24f76c36b2bf4217f6f572d5aa72999d0d4788ec837e777c297425f7242e2",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-f38551.yaml": "2d56511b5d91d840d0b73fd776309f4674490994a72c863725011b1eb96a4e11",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u6-d18b41.yaml": "9d619e3d7969ddd6de024c7f4793a58b4b38cece1bb20565997985de8a2d705a",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/track.toml": "fb378257a429f2ab8b571c9f9a01b65e78097162ae8839ae464f5874cecad046",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/learned/.why.json": "092d1307532cabaab3c3844a1cc715d66725cbcae607acbe45b86879e6199da4",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/learned/routes/card-ba8fc2a013.yaml": "458919f7d863fc6ba0a198adb67aff7a4feb34f092c0d1f370a9d01280615673",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/learned/routes/run-175d85.yaml": "fbea7d14b6cbe9315d75feacc42bac617048625761de112828d80098ef87190a",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/learned/routes/run-70684c.yaml": "eca3bf7881d268b5d3880954c0ad1dc5c6768a135cce6d739f04bca4eea6fdbe",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/learned/routes/run-74eb07.yaml": "4d04c5db72a2b69c34ac7282e5a2f84995fee54a3ddef4a0a008cb867aa6464d",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/learned/routes/run-a35e0a.yaml": "64cf7ee8e47ac8011f146a7e5aa358b03046df012de9e609c9f2ac3852af6c4e",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/learned/track.toml": "45b613752afda11abaf6a4ad91fa302245195c369c69ac5fe6a1f605b9e3a77c",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/attempt.json": "d497a06f3a36f3abed427a047b68d71aa26a2028881c87e29d43131e93cdf311",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-v2/manifest.json": "8fd609bbfe1440e889cd7d6ad340997c6b34c883a2b3c9e8d92bffa5b9bdcb53",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-v2/validation.json": "98143be5da762fbf5af9f011c5b429dea9867782ffc46e228db29b59a8866d03",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v4/canary-v7/bin/adage": "2b04bbf31f0f871212f8c1d9757a4360f7545da3d68846931a7c8fdcee7d89f7",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v4/canary-v7/bin/adage-exec": "3895b20f7ef1ed380ff14aa040dafe90efa20c8c620d56f8fb528eab6b1b2182",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v4/canary-v7/isolation-audit.json": "5a3afbb0c5381994f31ef914bb997695f66578a7309fa378f4dd83eb89565c93",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v4/manifest.json": "57ad4fcc3b708d930a490ff218201dd795bb2b02feb07a42a54c65973ebd056c"
+  },
+  "gate_protocol_sha256": "2f5fd1575bcf9bb99881ba77eec0c9f302df67855d294c6b7dfd401141f7182a",
+  "grants_written": false,
+  "learned_files": {
+    "index.json": "773d862672bc1bfb8052985fd945c6409042bb16c853d0b8d5c4873707e46fd4",
+    "tracks/github-com-marshmallow-code-marshmallow/.follow-weights.json": "f7c8445ebffc47fe0da42dda78769350000d0aaf9cf4076bf9ec9e21947dbdb6",
+    "tracks/github-com-marshmallow-code-marshmallow/.instincts-binding.json": "e06f161274b767fc5d07650c4dea6e81a6894095aa3d72a15230ccaa58debc0a",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-0cdcfb.yaml": "b017f1e5c092f8a3cab9c839d305f9d02347e26d1ca855a542917ee0401d1b2c",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-1fbe94.yaml": "13f6c7b7c75e7ac6f65e28fec4e5948f10be977f90e601e0a0cab73967ec62f5",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-527c67.yaml": "16cd307646e7ec87c9d34ef55f7d3cc3c1ded135660b0f840323e42a820dc917",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-5347bf.yaml": "aba400e00de15fc124d4d1b52de6aace654e07b463da05b570940c224ec6f105",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-855e84.yaml": "de7298ead0c286cc8cc22a4e314917e73f5f76853011b1efb4c65e17dff7840e",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-923c12.yaml": "325c85566f74611886f2fce44bf07be23f4e4f71917fda708104cb90446539e8",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-93981f.yaml": "d69486e1d3d649b5b7df60b53cf107e8580299e703d84636013372ccc6de0885",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-95d94b.yaml": "55e4c5686acccae41f6563cbe1a84a201e892529a587caeabb3536834907da10",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-97f983.yaml": "02583380828abb5151792050fa1948e2647e0e8931cd09fd0dce5b24e04c6ed0",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-9aeb2e.yaml": "cd99aec49054a5b4d1861a526b7abbc34bef930d9183f35e6861003dff2ab9d3",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-a6ab60.yaml": "bbd442e2d68ba4164e0da807f42effe038ab68e6da5c6402eb95820a7437e760",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-c7dcb6.yaml": "9167714caa75a7a29ccbbca1b5f69cefa0e24e3c50d51deed5317fb85d15c85f",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-d9d28b.yaml": "64005051dacb212142f7a65989ce5a7e0685eb63104175c4e8e0849756426788",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-dec50b.yaml": "53fb570d091fdfbdd10f17ad9a7556957aeaf313f20e9ce45a8b9ecd44019ec8",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-565bfd.yaml": "6b2e9bd45774ddd225886f9977030d663c6cdb85289e9f904aac6e2bd7759e16",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-580139.yaml": "8ce07d14df0634d6a5a19450782241dfbb56ba2f5f4672fd53011c3ad21efacc",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-983271.yaml": "c5086ee69e8e9da6393d554dee3763d95e1c3a890990f3737e2f1b5b978cd559",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-aa69ba.yaml": "bc37b5dca829f7d05cbe9252ecce7786d6d57c930f2592f34655b2cb37578870",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-b46676.yaml": "5f63af11f3930d5d1b67d1085e49ae500d2d4f6adfd226427f4886c8ba0d7fd4",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-b87800.yaml": "e369eacc9405f9f1db7f56d3ac1477a140eb635e1449339d5ce0209f2297c713",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-c243e0.yaml": "7a557dd9a242cee14b7f64f23c9df42848fd59e6ba503dd406c3b8ea49e11066",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-eae4d7.yaml": "1dd5949f45e0ae49e7eff3a30be0aa72f954e0551b725c5aef8c05b41511ed5a",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-ed6cec.yaml": "40d24f76c36b2bf4217f6f572d5aa72999d0d4788ec837e777c297425f7242e2",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-f38551.yaml": "2d56511b5d91d840d0b73fd776309f4674490994a72c863725011b1eb96a4e11",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u6-d18b41.yaml": "9d619e3d7969ddd6de024c7f4793a58b4b38cece1bb20565997985de8a2d705a",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/track.toml": "fb378257a429f2ab8b571c9f9a01b65e78097162ae8839ae464f5874cecad046",
+    "tracks/github-com-marshmallow-code-marshmallow/learned/.why.json": "092d1307532cabaab3c3844a1cc715d66725cbcae607acbe45b86879e6199da4",
+    "tracks/github-com-marshmallow-code-marshmallow/learned/routes/card-ba8fc2a013.yaml": "458919f7d863fc6ba0a198adb67aff7a4feb34f092c0d1f370a9d01280615673",
+    "tracks/github-com-marshmallow-code-marshmallow/learned/routes/run-175d85.yaml": "fbea7d14b6cbe9315d75feacc42bac617048625761de112828d80098ef87190a",
+    "tracks/github-com-marshmallow-code-marshmallow/learned/routes/run-70684c.yaml": "eca3bf7881d268b5d3880954c0ad1dc5c6768a135cce6d739f04bca4eea6fdbe",
+    "tracks/github-com-marshmallow-code-marshmallow/learned/routes/run-74eb07.yaml": "4d04c5db72a2b69c34ac7282e5a2f84995fee54a3ddef4a0a008cb867aa6464d",
+    "tracks/github-com-marshmallow-code-marshmallow/learned/routes/run-a35e0a.yaml": "64cf7ee8e47ac8011f146a7e5aa358b03046df012de9e609c9f2ac3852af6c4e",
+    "tracks/github-com-marshmallow-code-marshmallow/learned/track.toml": "45b613752afda11abaf6a4ad91fa302245195c369c69ac5fe6a1f605b9e3a77c"
+  },
+  "learned_home": "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home",
+  "learned_provenance": "explicitly guided demonstrations (cumulative-launch-10); fixed route, not new learning",
+  "matrix": [
+    {
+      "arm": "automatic",
+      "condition": "positive",
+      "order": 0,
+      "prompt": "Add a new validator to marshmallow: `marshmallow.validate.Finite(*, error=None)`, which accepts finite real numbers; NaN and positive or negative infinity fail. Its default error message is `Must satisfy Finite.`; a custom `error` message may interpolate `{input}`. Examples of valid input: `0`. Examples of invalid input: `1e309`.\n\nFollow the conventions of the existing validators, include tests and a docstring, and add a changelog entry.\n\nWork in this order: implement the validator in src/marshmallow/validate.py, append the tests, add the CHANGELOG.rst entry.\nUse exactly these tests for the new validator, appended to the end of tests/test_validate.py (the file already imports pytest, ValidationError and validate):\n```python\n\ndef test_finite_accepts_finite_numbers():\n    validator = validate.Finite()\n    for value in (0, -1.25, 1e300):\n        assert validator(value) == value\n\n\ndef test_finite_rejects_nan_and_infinities():\n    validator = validate.Finite()\n    for value in (float(\"nan\"), float(\"inf\"), float(\"-inf\")):\n        with pytest.raises(ValidationError, match=\"Must satisfy Finite.\"):\n            validator(value)\n\n\ndef test_finite_custom_message():\n    validator = validate.Finite(error=\"{input} is not finite\")\n    with pytest.raises(ValidationError, match=\"inf is not finite\"):\n        validator(float(\"inf\"))\n```\n",
+      "repetition": 1,
+      "task": "mm-curve--finite"
+    },
+    {
+      "arm": "automatic",
+      "condition": "failed",
+      "order": 1,
+      "prompt": "Add a new validator to marshmallow: `marshmallow.validate.Finite(*, error=None)`, which accepts finite real numbers; NaN and positive or negative infinity fail. Its default error message is `Must satisfy Finite.`; a custom `error` message may interpolate `{input}`. Examples of valid input: `0`. Examples of invalid input: `1e309`.\n\nFollow the conventions of the existing validators, include tests and a docstring, and add a changelog entry.\n\nWork in this order: first append the tests to tests/test_validate.py, then add the CHANGELOG.rst entry, and only then implement the validator in src/marshmallow/validate.py.\nUse exactly these tests for the new validator, appended to the end of tests/test_validate.py (the file already imports pytest, ValidationError and validate):\n```python\n\ndef test_finite_accepts_finite_numbers():\n    validator = validate.Finite()\n    for value in (0, -1.25, 1e300):\n        assert validator(value) == value\n\n\ndef test_finite_rejects_nan_and_infinities():\n    validator = validate.Finite()\n    for value in (float(\"nan\"), float(\"inf\"), float(\"-inf\")):\n        with pytest.raises(ValidationError, match=\"Must satisfy Finite.\"):\n            validator(value)\n\n\ndef test_finite_custom_message():\n    validator = validate.Finite(error=\"{input} is not finite\")\n    with pytest.raises(ValidationError, match=\"inf is not finite\"):\n        validator(float(\"inf\"))\n```\n",
+      "repetition": 1,
+      "task": "mm-curve--finite"
+    },
+    {
+      "arm": "automatic",
+      "condition": "positive",
+      "order": 2,
+      "prompt": "Add a new validator to marshmallow: `marshmallow.validate.Finite(*, error=None)`, which accepts finite real numbers; NaN and positive or negative infinity fail. Its default error message is `Must satisfy Finite.`; a custom `error` message may interpolate `{input}`. Examples of valid input: `0`. Examples of invalid input: `1e309`.\n\nFollow the conventions of the existing validators, include tests and a docstring, and add a changelog entry.\n\nWork in this order: implement the validator in src/marshmallow/validate.py, append the tests, add the CHANGELOG.rst entry.\nUse exactly these tests for the new validator, appended to the end of tests/test_validate.py (the file already imports pytest, ValidationError and validate):\n```python\n\ndef test_finite_accepts_finite_numbers():\n    validator = validate.Finite()\n    for value in (0, -1.25, 1e300):\n        assert validator(value) == value\n\n\ndef test_finite_rejects_nan_and_infinities():\n    validator = validate.Finite()\n    for value in (float(\"nan\"), float(\"inf\"), float(\"-inf\")):\n        with pytest.raises(ValidationError, match=\"Must satisfy Finite.\"):\n            validator(value)\n\n\ndef test_finite_custom_message():\n    validator = validate.Finite(error=\"{input} is not finite\")\n    with pytest.raises(ValidationError, match=\"inf is not finite\"):\n        validator(float(\"inf\"))\n```\n",
+      "repetition": 2,
+      "task": "mm-curve--finite"
+    },
+    {
+      "arm": "automatic",
+      "condition": "later-edit",
+      "order": 3,
+      "prompt": "Add a new validator to marshmallow: `marshmallow.validate.Finite(*, error=None)`, which accepts finite real numbers; NaN and positive or negative infinity fail. Its default error message is `Must satisfy Finite.`; a custom `error` message may interpolate `{input}`. Examples of valid input: `0`. Examples of invalid input: `1e309`.\n\nFollow the conventions of the existing validators, include tests and a docstring, and add a changelog entry.\n\nWork in this order: implement the validator in src/marshmallow/validate.py, append the tests, add the CHANGELOG.rst entry, and finally add a short usage example to the new validator's docstring in src/marshmallow/validate.py.\nUse exactly these tests for the new validator, appended to the end of tests/test_validate.py (the file already imports pytest, ValidationError and validate):\n```python\n\ndef test_finite_accepts_finite_numbers():\n    validator = validate.Finite()\n    for value in (0, -1.25, 1e300):\n        assert validator(value) == value\n\n\ndef test_finite_rejects_nan_and_infinities():\n    validator = validate.Finite()\n    for value in (float(\"nan\"), float(\"inf\"), float(\"-inf\")):\n        with pytest.raises(ValidationError, match=\"Must satisfy Finite.\"):\n            validator(value)\n\n\ndef test_finite_custom_message():\n    validator = validate.Finite(error=\"{input} is not finite\")\n    with pytest.raises(ValidationError, match=\"inf is not finite\"):\n        validator(float(\"inf\"))\n```\n",
+      "repetition": 1,
+      "task": "mm-curve--finite"
+    },
+    {
+      "arm": "automatic",
+      "condition": "positive",
+      "order": 4,
+      "prompt": "Add a new validator to marshmallow: `marshmallow.validate.Finite(*, error=None)`, which accepts finite real numbers; NaN and positive or negative infinity fail. Its default error message is `Must satisfy Finite.`; a custom `error` message may interpolate `{input}`. Examples of valid input: `0`. Examples of invalid input: `1e309`.\n\nFollow the conventions of the existing validators, include tests and a docstring, and add a changelog entry.\n\nWork in this order: implement the validator in src/marshmallow/validate.py, append the tests, add the CHANGELOG.rst entry.\nUse exactly these tests for the new validator, appended to the end of tests/test_validate.py (the file already imports pytest, ValidationError and validate):\n```python\n\ndef test_finite_accepts_finite_numbers():\n    validator = validate.Finite()\n    for value in (0, -1.25, 1e300):\n        assert validator(value) == value\n\n\ndef test_finite_rejects_nan_and_infinities():\n    validator = validate.Finite()\n    for value in (float(\"nan\"), float(\"inf\"), float(\"-inf\")):\n        with pytest.raises(ValidationError, match=\"Must satisfy Finite.\"):\n            validator(value)\n\n\ndef test_finite_custom_message():\n    validator = validate.Finite(error=\"{input} is not finite\")\n    with pytest.raises(ValidationError, match=\"inf is not finite\"):\n        validator(float(\"inf\"))\n```\n",
+      "repetition": 3,
+      "task": "mm-curve--finite"
+    },
+    {
+      "arm": "automatic",
+      "condition": "config-change",
+      "order": 5,
+      "prompt": "Add a new validator to marshmallow: `marshmallow.validate.Finite(*, error=None)`, which accepts finite real numbers; NaN and positive or negative infinity fail. Its default error message is `Must satisfy Finite.`; a custom `error` message may interpolate `{input}`. Examples of valid input: `0`. Examples of invalid input: `1e309`.\n\nFollow the conventions of the existing validators, include tests and a docstring, and add a changelog entry.\n\nWork in this order: implement the validator in src/marshmallow/validate.py, append the tests, add the CHANGELOG.rst entry, and finally add `xfail_strict = true` to the [tool.pytest.ini_options] table in pyproject.toml.\nUse exactly these tests for the new validator, appended to the end of tests/test_validate.py (the file already imports pytest, ValidationError and validate):\n```python\n\ndef test_finite_accepts_finite_numbers():\n    validator = validate.Finite()\n    for value in (0, -1.25, 1e300):\n        assert validator(value) == value\n\n\ndef test_finite_rejects_nan_and_infinities():\n    validator = validate.Finite()\n    for value in (float(\"nan\"), float(\"inf\"), float(\"-inf\")):\n        with pytest.raises(ValidationError, match=\"Must satisfy Finite.\"):\n            validator(value)\n\n\ndef test_finite_custom_message():\n    validator = validate.Finite(error=\"{input} is not finite\")\n    with pytest.raises(ValidationError, match=\"inf is not finite\"):\n        validator(float(\"inf\"))\n```\n",
+      "repetition": 1,
+      "task": "mm-curve--finite"
+    },
+    {
+      "arm": "automatic",
+      "condition": "positive",
+      "order": 6,
+      "prompt": "Add a new validator to marshmallow: `marshmallow.validate.Finite(*, error=None)`, which accepts finite real numbers; NaN and positive or negative infinity fail. Its default error message is `Must satisfy Finite.`; a custom `error` message may interpolate `{input}`. Examples of valid input: `0`. Examples of invalid input: `1e309`.\n\nFollow the conventions of the existing validators, include tests and a docstring, and add a changelog entry.\n\nWork in this order: implement the validator in src/marshmallow/validate.py, append the tests, add the CHANGELOG.rst entry.\nUse exactly these tests for the new validator, appended to the end of tests/test_validate.py (the file already imports pytest, ValidationError and validate):\n```python\n\ndef test_finite_accepts_finite_numbers():\n    validator = validate.Finite()\n    for value in (0, -1.25, 1e300):\n        assert validator(value) == value\n\n\ndef test_finite_rejects_nan_and_infinities():\n    validator = validate.Finite()\n    for value in (float(\"nan\"), float(\"inf\"), float(\"-inf\")):\n        with pytest.raises(ValidationError, match=\"Must satisfy Finite.\"):\n            validator(value)\n\n\ndef test_finite_custom_message():\n    validator = validate.Finite(error=\"{input} is not finite\")\n    with pytest.raises(ValidationError, match=\"inf is not finite\"):\n        validator(float(\"inf\"))\n```\n",
+      "repetition": 4,
+      "task": "mm-curve--finite"
+    },
+    {
+      "arm": "automatic",
+      "condition": "broader",
+      "order": 7,
+      "prompt": "Add a new validator to marshmallow: `marshmallow.validate.Finite(*, error=None)`, which accepts finite real numbers; NaN and positive or negative infinity fail. Its default error message is `Must satisfy Finite.`; a custom `error` message may interpolate `{input}`. Examples of valid input: `0`. Examples of invalid input: `1e309`.\n\nFollow the conventions of the existing validators, include tests and a docstring, and add a changelog entry.\n\nWork in this order: implement the validator in src/marshmallow/validate.py, append the tests, add the CHANGELOG.rst entry. Before finishing, make sure the repository's entire test suite under tests/ passes.\nUse exactly these tests for the new validator, appended to the end of tests/test_validate.py (the file already imports pytest, ValidationError and validate):\n```python\n\ndef test_finite_accepts_finite_numbers():\n    validator = validate.Finite()\n    for value in (0, -1.25, 1e300):\n        assert validator(value) == value\n\n\ndef test_finite_rejects_nan_and_infinities():\n    validator = validate.Finite()\n    for value in (float(\"nan\"), float(\"inf\"), float(\"-inf\")):\n        with pytest.raises(ValidationError, match=\"Must satisfy Finite.\"):\n            validator(value)\n\n\ndef test_finite_custom_message():\n    validator = validate.Finite(error=\"{input} is not finite\")\n    with pytest.raises(ValidationError, match=\"inf is not finite\"):\n        validator(float(\"inf\"))\n```\n",
+      "repetition": 1,
+      "task": "mm-curve--finite"
+    },
+    {
+      "arm": "automatic",
+      "condition": "positive",
+      "order": 8,
+      "prompt": "Add a new validator to marshmallow: `marshmallow.validate.Finite(*, error=None)`, which accepts finite real numbers; NaN and positive or negative infinity fail. Its default error message is `Must satisfy Finite.`; a custom `error` message may interpolate `{input}`. Examples of valid input: `0`. Examples of invalid input: `1e309`.\n\nFollow the conventions of the existing validators, include tests and a docstring, and add a changelog entry.\n\nWork in this order: implement the validator in src/marshmallow/validate.py, append the tests, add the CHANGELOG.rst entry.\nUse exactly these tests for the new validator, appended to the end of tests/test_validate.py (the file already imports pytest, ValidationError and validate):\n```python\n\ndef test_finite_accepts_finite_numbers():\n    validator = validate.Finite()\n    for value in (0, -1.25, 1e300):\n        assert validator(value) == value\n\n\ndef test_finite_rejects_nan_and_infinities():\n    validator = validate.Finite()\n    for value in (float(\"nan\"), float(\"inf\"), float(\"-inf\")):\n        with pytest.raises(ValidationError, match=\"Must satisfy Finite.\"):\n            validator(value)\n\n\ndef test_finite_custom_message():\n    validator = validate.Finite(error=\"{input} is not finite\")\n    with pytest.raises(ValidationError, match=\"inf is not finite\"):\n        validator(float(\"inf\"))\n```\n",
+      "repetition": 5,
+      "task": "mm-curve--finite"
+    },
+    {
+      "arm": "automatic",
+      "condition": "rerun",
+      "order": 9,
+      "prompt": "Add a new validator to marshmallow: `marshmallow.validate.Finite(*, error=None)`, which accepts finite real numbers; NaN and positive or negative infinity fail. Its default error message is `Must satisfy Finite.`; a custom `error` message may interpolate `{input}`. Examples of valid input: `0`. Examples of invalid input: `1e309`.\n\nFollow the conventions of the existing validators, include tests and a docstring, and add a changelog entry.\n\nWork in this order: implement the validator in src/marshmallow/validate.py, append the tests, add the CHANGELOG.rst entry. When you are done, run `.venv/bin/python -m pytest tests/test_validate.py -q` yourself and quote its final summary line.\nUse exactly these tests for the new validator, appended to the end of tests/test_validate.py (the file already imports pytest, ValidationError and validate):\n```python\n\ndef test_finite_accepts_finite_numbers():\n    validator = validate.Finite()\n    for value in (0, -1.25, 1e300):\n        assert validator(value) == value\n\n\ndef test_finite_rejects_nan_and_infinities():\n    validator = validate.Finite()\n    for value in (float(\"nan\"), float(\"inf\"), float(\"-inf\")):\n        with pytest.raises(ValidationError, match=\"Must satisfy Finite.\"):\n            validator(value)\n\n\ndef test_finite_custom_message():\n    validator = validate.Finite(error=\"{input} is not finite\")\n    with pytest.raises(ValidationError, match=\"inf is not finite\"):\n        validator(float(\"inf\"))\n```\n",
+      "repetition": 1,
+      "task": "mm-curve--finite"
+    },
+    {
+      "arm": "automatic",
+      "condition": "positive",
+      "order": 10,
+      "prompt": "Add a new validator to marshmallow: `marshmallow.validate.Finite(*, error=None)`, which accepts finite real numbers; NaN and positive or negative infinity fail. Its default error message is `Must satisfy Finite.`; a custom `error` message may interpolate `{input}`. Examples of valid input: `0`. Examples of invalid input: `1e309`.\n\nFollow the conventions of the existing validators, include tests and a docstring, and add a changelog entry.\n\nWork in this order: implement the validator in src/marshmallow/validate.py, append the tests, add the CHANGELOG.rst entry.\nUse exactly these tests for the new validator, appended to the end of tests/test_validate.py (the file already imports pytest, ValidationError and validate):\n```python\n\ndef test_finite_accepts_finite_numbers():\n    validator = validate.Finite()\n    for value in (0, -1.25, 1e300):\n        assert validator(value) == value\n\n\ndef test_finite_rejects_nan_and_infinities():\n    validator = validate.Finite()\n    for value in (float(\"nan\"), float(\"inf\"), float(\"-inf\")):\n        with pytest.raises(ValidationError, match=\"Must satisfy Finite.\"):\n            validator(value)\n\n\ndef test_finite_custom_message():\n    validator = validate.Finite(error=\"{input} is not finite\")\n    with pytest.raises(ValidationError, match=\"inf is not finite\"):\n        validator(float(\"inf\"))\n```\n",
+      "repetition": 6,
+      "task": "mm-curve--finite"
+    },
+    {
+      "arm": "automatic",
+      "condition": "later-edit",
+      "order": 11,
+      "prompt": "Add a new validator to marshmallow: `marshmallow.validate.Finite(*, error=None)`, which accepts finite real numbers; NaN and positive or negative infinity fail. Its default error message is `Must satisfy Finite.`; a custom `error` message may interpolate `{input}`. Examples of valid input: `0`. Examples of invalid input: `1e309`.\n\nFollow the conventions of the existing validators, include tests and a docstring, and add a changelog entry.\n\nWork in this order: implement the validator in src/marshmallow/validate.py, append the tests, add the CHANGELOG.rst entry, and finally add a short usage example to the new validator's docstring in src/marshmallow/validate.py.\nUse exactly these tests for the new validator, appended to the end of tests/test_validate.py (the file already imports pytest, ValidationError and validate):\n```python\n\ndef test_finite_accepts_finite_numbers():\n    validator = validate.Finite()\n    for value in (0, -1.25, 1e300):\n        assert validator(value) == value\n\n\ndef test_finite_rejects_nan_and_infinities():\n    validator = validate.Finite()\n    for value in (float(\"nan\"), float(\"inf\"), float(\"-inf\")):\n        with pytest.raises(ValidationError, match=\"Must satisfy Finite.\"):\n            validator(value)\n\n\ndef test_finite_custom_message():\n    validator = validate.Finite(error=\"{input} is not finite\")\n    with pytest.raises(ValidationError, match=\"inf is not finite\"):\n        validator(float(\"inf\"))\n```\n",
+      "repetition": 2,
+      "task": "mm-curve--finite"
+    }
+  ],
+  "model": "claude-haiku-4-5-20251001",
+  "preparation_python": "/private/tmp/adage-real-repo-gate-v1/runtime/python/cpython-3.12-macos-aarch64-none/bin/python3.12",
+  "protocol": "launch-canary-7",
+  "python_requested": "3.12",
+  "root": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v4/canary-v7",
+  "route": "github-com-marshmallow-code-marshmallow/learned/run-175d85",
+  "source_sha256": {
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/lab/research/recurring-workflows/families.py": "0592230842e8f6cf0f7f8696464027da464cd41bbe997be1950a2deec49c41d1",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/live/budget.py": "de4f9c2376204ac2e6ffff71ec43bcbf9318366c7f8a1eb5d1aed186279c27d2",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/live/runner.py": "914ebd5dfc0238b17d1038e9fe706da947f42f91ab5a80c133c8bc0350e81f19",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/reflex-proof/harness/REAL-REPO-PAIRS.md": "d5a6b7859bb23de1601f19b5fb7816dfbfc699e85b826d300bb72203d1bba396",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/reflex-proof/harness/bash_action_audit.py": "1b1ff9d152f96c347682006f972c43516293e03c1ab7dc3d2a59726bbbdf94a7",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/reflex-proof/harness/cohort_v5.py": "a861f9e4c052ab561509cbf91f7bc04cce06fb25cae33896c62af1f0974a4eea",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/reflex-proof/harness/curve_sessions.py": "35f257ba4739b4cfc73983babb19b0d178f2acdbd58a01bd72469eba532a4541",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/reflex-proof/harness/curve_tasks.py": "9be77f97b2d3b7de606b11a03b73df7cab0f55cdc83251f1a7863a1ef5aba229",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/reflex-proof/harness/launch_canary.py": "52746b2f5f08be7d9eb7e6278b702c8abe47807439a9075e3c1d8ea4de5ad538",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/reflex-proof/harness/launch_gate_protocol.json": "2f5fd1575bcf9bb99881ba77eec0c9f302df67855d294c6b7dfd401141f7182a",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/reflex-proof/harness/probe.py": "168155e401f3b3685d7a58c873c839903e75575c92cfd16a4a7821f0e1a58a98",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/reflex-proof/harness/real_repo_gate.py": "f19152ed58248c3f1259cc961d43f80ba9b4a48df44b9c2872ebd03c51b42760",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/reflex-proof/harness/real_repo_pairs.py": "4b1aac547369157a8faedfed372741e811d3ad972baf3d075f09a225e1374f8a",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/reflex-proof/harness/receipt_replay.py": "68b3fca5c3cf1235b280abf5a0cb446d65415ee0f3b55c8e2ab6e040396935de",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/reflex-proof/harness/split_audit.py": "c10b9aa65d14fdad13507018f4c9aea0f6f94dfdb0c153d42a158699a0724721",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/repobench/common.py": "ecbc22b6a895453319709cdca73fa478e76786929f535196bc0b7ee9fc4ec44d",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/repobench/repos.json": "1bdb8ffb5b64411d5913549aec287f091b08e6a7096e9ad5c70c5b7c1b1b5030",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/repobench/sandbox.py": "3579ef53fe4db9a28a046727fef916b8f810cb39557110e9a2d1733b1abf912c",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/repobench/score.py": "e63d2c3bb7ffe9049bf95e7a712f562c4ed87a5000b6b7da63e89d863de9ebdd",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/showcase/fam_python.py": "9a7e2c5137e90b7ff1f07a9f1518baa15fba791560dc234c2fad366871d227c9",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/showcase/families.py": "275d9c0113f8e9fdd1ef75562cff112c61934e00926b7e2f54f11514378616a8",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/showcase/sc_score.py": "338307033ea3c76df0c0ec965ba1290991862b02f752b0a6985a25a94bf13e61"
+  },
+  "task_sha256": {
+    "mm-curve--finite": {
+      "hidden.py": "27150bc23404c3c8ea4c65747e0d0956989038d40b3daedaa4dd733f729d5efe",
+      "prompt.txt": "cfa68bcb9a7b2aebc37ac1d245c601759e5c3389759367d7c0d11be3d04e885e"
+    }
+  }
+}

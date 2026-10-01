@@ -23,7 +23,9 @@
     "admission_spend_at_r5_usd": 16.2151802,
     "attempts_at_r5": 103,
     "admission_spend_at_r6_usd": 18.9257862,
-    "attempts_at_r6": 116
+    "attempts_at_r6": 116,
+    "admission_spend_at_r7_usd": 20.2683707,
+    "attempts_at_r7": 128
   },
   "model": "claude-haiku-4-5-20251001",
   "claude_cli": "2.1.282",
@@ -90,7 +92,7 @@
     "explicitly guided training"
   ],
   "scoring": {
-    "classifier": "evals/reflex-proof/harness/receipt_replay.py (version 1)",
+    "classifier": "evals/reflex-proof/harness/receipt_replay.py (version 2)",
     "repeat": "same interpreter token and test targets as the receipt; output-only flags, redirections and pipes ignored",
     "output_only_flags": [
       "-q",
@@ -116,8 +118,10 @@
     ],
     "covered_subset": "narrower node ids inside the receipt targets; reported separately, never counted as repeats or eliminations",
     "cache_only_receipts": "a receipt whose only changes are the declared caches counts as source-unchanged",
-    "confirmed_elimination": "automatic session with a successful receipt whose digest equals the final source digest, no repeat or unparsed verification afterwards, and no condition requiring verification",
-    "necessary_work_skipped": "verification required (failed receipt, stale receipt, explicit rerun or wider scope) and no matching agent run on the final source"
+    "confirmed_elimination": "automatic session with a successful receipt whose digest equals the final source digest, no repeat attempt, no unparsed verification afterwards, and no condition requiring verification",
+    "necessary_work_skipped": "verification required (failed receipt, stale receipt, explicit rerun or wider scope) and no matching agent run on the final source",
+    "repeat_attempt": "any request after a fresh successful receipt whose selection the receipt covers (same non-output options; targets equal or inside), any interpreter, launched or not",
+    "necessary_satisfied_by": "completed requests only (a PostToolUse exists)"
   },
   "canary_pass": {
     "complete": "all 12 assignments collected with known cost",
@@ -164,7 +168,7 @@
     "copy grants",
     "change thresholds after the first held-out dispatch"
   ],
-  "revision": 6,
+  "revision": 7,
   "revisions": [
     "2026-09-30 r1: registered",
     "2026-09-30 r2, before any dispatch under this protocol: task splits with near-duplicate groups, training-isolation audit, evaluation read-only rule, paired blocks, same-repository strata and G9; canary moved to the development split",
@@ -172,7 +176,8 @@
     "2026-10-01 r4, before any canary or held-out agent session: runtime-injected tool names (sandbox proxy credential, session inbox token) are denied where possible and tolerated only by name when the same native canary proves them harmless (proxy refuses external requests; tool cannot connect to the inbox); launch-gate-v2 excluded after its review failed closed; canary moves to cohorts/launch-gate-v3/canary-v4",
     "2026-10-01 r5, before any canary or held-out agent session: the native review parses canary values where they start (Claude Code adds an exit-code line and appends <sandbox_violations>); one exemption rule (probe.proven_harmless) governs the canary program, the denied-name check and the credential-name check; launch-gate-v3 excluded unreviewed; canary moves to cohorts/launch-gate-v4/canary-v5",
     "2026-10-01 r6, development only (no held-out dispatch has occurred): canary-v5 results recorded (delivery and safety pass; positives unrealized; repeats after successful receipts); receipt note for covered test calls and plainer pytest receipt scope; canary-v7 supplies a fixed validated test block; canary phase ceiling 6 -> 8 and training 10 -> 8 (protocol total unchanged at 38)",
-    "2026-10-01 r6 note: canary-v6 (launch-canary-6) was frozen before this JSON's r6 edits, so its source hashes no longer verify; it was superseded before preparation with no spend and canary-v7 (launch-canary-7, same design) replaces it"
+    "2026-10-01 r6 note: canary-v6 (launch-canary-6) was frozen before this JSON's r6 edits, so its source hashes no longer verify; it was superseded before preparation with no spend and canary-v7 (launch-canary-7, same design) replaces it",
+    "2026-10-01 r7, before any held-out dispatch: scorer version 2 (covered requests are repeat attempts whether or not they launched; any blocks an elimination; only completed requests satisfy necessary verification); realistic project environment (checkout .venv first on PATH and as VIRTUAL_ENV, native canary requires python_on_path); pytest receipts list collected/new node ids from the declared pytest cache record bound to the journal; later-edit control realized by construction; PreToolUse result substitution out of scope (goal is skipping inference)"
   ],
   "splits": {
     "marshmallow": {
@@ -397,6 +402,17 @@
       "positives_realized": "0/2",
       "confirmed_eliminations": 0,
       "redundant_repeats_after_successful_receipts": 2
+    },
+    "canary-v7": {
+      "sessions": 12,
+      "known_cost_usd": 1.3425845,
+      "positives_with_fresh_receipt": "6/6",
+      "positives_with_covered_repeat_attempt_posthoc": "6/6",
+      "confirmed_eliminations_posthoc": 0,
+      "original_report_eliminations": "4 (scoring artifact: bare python failed to launch)",
+      "necessary_work_skipped": 0,
+      "later_edit_realized": "0/2"
     }
-  }
+  },
+  "environment": "every new session launches with the checkout's own .venv first on PATH and as VIRTUAL_ENV (probe.project_launch); the sandbox policy is unchanged"
 }

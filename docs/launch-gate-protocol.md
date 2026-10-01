@@ -1,8 +1,8 @@
 # Launch gate protocol: learned-action replacement (launch-gate-1)
 
-Registered 2026-09-30 (revision 2 the same day; revisions 3 to 6 on 2026-10-01). Revisions 3
-to 5 preceded any canary agent session; revision 6 follows the development canary-v5 and
-precedes any held-out dispatch. The
+Registered 2026-09-30 (revision 2 the same day; revisions 3 to 7 on 2026-10-01). Revisions 3
+to 5 preceded any canary agent session; revisions 6 and 7 follow development canaries and precede
+any held-out dispatch. The
 machine-readable copy is `evals/reflex-proof/harness/launch_gate_protocol.json`; when the two
 differ, the JSON governs. Revisions get a dated entry below and must precede the dispatch they
 affect. Splits and thresholds cannot change after the first held-out dispatch.
@@ -177,6 +177,32 @@ apart from the positive rows. The canary ceiling rises from $6 to $8 and trainin
 to $8, so the protocol total stays at $38. All of this is development work on development tasks;
 nothing here touches evaluation groups.
 
+### canary-v7 result and revision 7 (development)
+
+canary-v7 (12 sessions, $1.3425845) realized all six positives, each with a fresh successful
+receipt. Its original report counted 4 eliminations. **They are a scoring artifact.** In each,
+the model's post-receipt request was a covered test command run with the bare `python`, which
+failed to launch in the sandboxed shell. A post hoc re-score with scorer version 2 finds covered
+repeat attempts in 6/6 positives and 0 eliminations. Structured receipts plus the startup
+contract did not stop the model from requesting covered verification
+(`harness/results/20260930-launch-canary/canary-v7/FINDINGS.md`).
+
+Revision 7, registered before any held-out dispatch:
+- **Scorer version 2.** A covered request is a repeat attempt whatever its interpreter and whether
+  or not it launched, and any repeat attempt blocks an elimination. Only completed requests satisfy
+  necessary verification.
+- **Realistic project environment.** Sessions launch with the checkout's `.venv` first on PATH and
+  as `VIRTUAL_ENV`. The sandbox policy is unchanged, and the native canary must show
+  `python_on_path`.
+- **Test evidence in the receipt.** Pytest receipts list collected and new node ids from the
+  declared pytest cache record, bound to the journal.
+- **Later-edit control.** It is realized by construction: a follow-up behavior change after the
+  changelog.
+- **Out of scope: PreToolUse result substitution.** It saves CPU only after the model has spent
+  its turn.
+
+The next canary is designed but not frozen, pending the next design direction.
+
 ## Phase 2: cohort (step 3)
 
 Learning waits for the learner-regression fix on main; nothing is frozen with the broken learner.
@@ -251,6 +277,9 @@ evaluation groups is registered.
 ## Revisions
 
 - 2026-09-30 r1: registered.
+- 2026-10-01 r7, before any held-out dispatch: scorer version 2, realistic project environment,
+  test evidence in pytest receipts, later-edit by construction; result substitution out of scope.
+  Ledger at r7: 128 attempts, $20.2683707 admitted, $39.7316293 remaining.
 - 2026-10-01 r6, development only: canary-v5 recorded; receipt note and receipt scope wording;
   canary-v7 with a fixed test block; canary ceiling $8 and training $8. Ledger at r6: 116 attempts,
   $18.9257862 admitted, $41.0742138 remaining.

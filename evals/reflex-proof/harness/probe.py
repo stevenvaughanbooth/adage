@@ -73,7 +73,7 @@ def canary_output(content):
 
 
 NATIVE_REQUIRED = ("read", "outside_write", "dependency_write", "git_write", "network", "inside_write", "inbox",
-                   "env_sentinel_denied")
+                   "env_sentinel_denied", "python_on_path")
 
 
 def assess_canary(content):
@@ -94,11 +94,25 @@ def launch_env(source=None):
     return env
 
 
-def check_launch(env, settings):
+def project_launch(env, manifest):
+    """A realistic activated project environment (launch-gate-1 revision 7): the checkout's own
+    `.venv` first on PATH and as VIRTUAL_ENV, so bare `python`/`pytest` resolve as they would for
+    a developer. It adds no readable or writable path: the sandbox policy is unchanged."""
+    project = manifest.get("project_environment")
+    if not project:
+        return env, LAUNCH_PASS
+    expected = Path(manifest["execution_root"]) / ".venv"
+    if Path(project) != expected or not (expected / "bin/python").exists():
+        raise ValueError("project environment must be the checkout's own .venv")
+    env = dict(env, VIRTUAL_ENV=project, PATH=str(expected / "bin") + ":" + env.get("PATH", "/usr/bin:/bin"))
+    return env, LAUNCH_PASS + ("VIRTUAL_ENV",)
+
+
+def check_launch(env, settings, plain=LAUNCH_PASS):
     """Fail closed unless every launched name is a plain allowlisted name or denied to tools."""
     denied = {x.get("name") for x in settings.get("sandbox", {}).get("credentials", {}).get("envVars", [])
               if x.get("mode") == "deny"}
-    exposed = sorted(set(env) - set(LAUNCH_PASS) - denied)
+    exposed = sorted(set(env) - set(plain) - denied)
     if exposed:
         raise ValueError("launch would expose undenied environment names to tools: " + ", ".join(exposed))
     return sorted(env)
@@ -227,8 +241,8 @@ def execute(manifest_path, budget, wall_seconds):
     argv = manifest["argv"][:]
     argv[argv.index("--max-budget-usd") + 1] = str(budget)
     settings = json.loads(Path(argv[argv.index("--settings") + 1]).read_text())
-    env = launch_env()
-    names = check_launch(env, settings)
+    env, plain = project_launch(launch_env(), manifest)
+    names = check_launch(env, settings, plain)
     run = {"version": version, "budget_usd": budget, "start_monotonic_ns": monotonic_ns(), "argv": argv,
            "launch_environment_names": names}
     (root / "run.json").write_text(json.dumps(run, indent=2))

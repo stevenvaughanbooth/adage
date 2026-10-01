@@ -49,6 +49,10 @@ class Matrix(unittest.TestCase):
         self.assertLess(failed.index("append the tests"), failed.index("implement the validator"))
         self.assertNotIn("Adage", "".join(c[0] for c in canary.CONDITIONS.values()))
         self.assertNotIn("pytest tests", canary.CONDITIONS["positive"][0], "no verification instruction in a positive")
+        later = canary.CONDITIONS["later-edit"][0]
+        self.assertLess(later.index("CHANGELOG entry is written"), later.index("reject booleans"))
+        self.assertIn(canary.BOOL_TEST, later)
+        self.assertTrue(all(canary.BOOL_TEST not in c[0] for name, c in canary.CONDITIONS.items() if name != "later-edit"))
 
 
 class Approvals(unittest.TestCase):
