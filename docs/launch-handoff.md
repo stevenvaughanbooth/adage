@@ -186,6 +186,25 @@ After the canary: if it passes, prepare the cohort (author and validate the new 
 Click and more-itertools tasks, then learning once the fix lands). If it fails, diagnose on its
 records, fix the integration, and freeze a new canary root; never rerun an outcome.
 
+**Marshmallow held-out tasks are done** (branch `codex/heldout-tasks`, revision 9 draft). They were
+frozen at `260729a` before any v8 result was read:
+- tasks: has-keys, iso-date, json-object and lat-long, with max-sum withdrawn as a size-limit
+  near-duplicate;
+- validated offline; see `evals/reflex-proof/harness/results/20261001-heldout-tasks/README.md`.
+
+The r9 held-out analysis (`heldout_analysis.py`, A0/NOEXEC/BEST, 4 x 5 paired blocks) and the
+runner (`heldout_cohort.py`) are drafted with tests. Both are registered only when merged.
+
+`freeze` needs:
+- the dev-v8b report (BEST by rule);
+- a validated held-out controls root (`heldout_tasks.py validate`, under the authority);
+- the 19-task development controls;
+- the build commit and the two binary hashes.
+
+BEST is built after the dev result and after `codex/ship-fixes` and `codex/first-run-fixes` land.
+Then: `prepare`, review and run `approve-heldout.sh` (a person), `verify-grants`, `live`, `report`.
+The held-out budget is $26 at a $0.40 cap per session.
+
 ## What is established
 
 - Sixteen cold-start assignments on four Marshmallow tasks, two repetitions per arm: instincts
