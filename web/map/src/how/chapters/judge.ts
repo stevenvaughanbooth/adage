@@ -525,28 +525,40 @@ function build(stage: Stage, ctx: Context): Built {
   const gate = (ok: boolean, text: string) => ({ text, ok });
   const text: Omit<Step, "state">[] = [
     {
-      title: "Every reflex is judged again",
+      title: "Every reflex is checked again",
+      plain: "Before a reflex is kept, its evidence is recounted from scratch, exactly the way it will be used. Sessions where Adage already gave the advice do not count.",
+      math: "evidence",
       body: `Mining and compiling propose; before a reflex is written, its evidence is counted again on the traces, exactly as its own trigger and step read them: a lookup through the value type of the ticket it names, linked files over the traces that ran the lookup, a finish line over the traces that edited its files, a dead end over the traces that ran the failing runner. A trace a directive already steered toward the step is left out. ${tickets.length ? `Only ${tickets.length} sample prompt names a ticket-shaped token (${tickets.join(", ")}), and ${ticketUsed ? "a command uses it" : "no command uses it"}, so no lookup forms here.` : "No sample prompt names a ticket, so no lookup forms here."}`,
       chips: [{ text: "one learner: the graph engine" }, { text: "evidence in distinct traces" }, { text: `linked files: reads within ${LINKED_WINDOW} steps` }],
     },
     {
-      title: "Finish line: count the traces",
+      title: "Count the sessions",
+      plain: `Take the rule "after editing registry files, run ${CMD}". Of the ${fl.opp} sessions that edited those files, ${k} ran it.`,
+      math: "evidence",
+      key: true,
       body: `A reflex after an edit asks: after the last edit to registry/*.csv, did the trace run the same regenerate command, and succeed? ${k} of the ${fl.opp} traces that edited those files ran ${CMD}. A different command, even a variant, does not count, and the supporting traces must span at least ${MIN_TASKS} distinct tasks.`,
       chips: [{ text: `support ${k} ≥ ${BARS.default.min_support}`, ok: k >= BARS.default.min_support }, { text: `opportunities ${fl.opp}` }, { text: `rate ${f2(fl.rate)}` }, { text: `≥ ${MIN_TASKS} tasks` }],
     },
     {
       title: "Would it happen anyway?",
+      plain: `Is the edit really the trigger? In the ${fl.without} sessions without it, ${CMD} ran ${fl.ranWithout} times, so yes: the command belongs to the edit.`,
+      math: "evidence",
       body: `A finish line must belong to the edit. In the ${fl.without} traces without it, ${CMD} ran ${fl.ranWithout} times, so the rate rises by ${f2(fl.rate - fl.rateWithout)} with the edit. It must rise by at least ${f2(CONTRAST)}.`,
       chips: [gate(fl.rate - fl.rateWithout >= CONTRAST, `contrast ${f2(fl.rate - fl.rateWithout)} ≥ ${f2(CONTRAST)}`), { text: `${f2(fl.rate)} with · ${f2(fl.rateWithout)} without` }],
     },
     {
-      title: "The lower bound grows slowly",
+      title: "Small samples call for caution",
+      plain: `${k} out of ${fl.opp} sounds good, but it is a small sample, like a restaurant with only a few reviews. Adage asks how low the true rate could realistically be: ${f2(fl.lb)}, short of the ${f2(bar)} it needs to insist.`,
+      math: "evidence",
+      key: true,
       body: `A rate from few traces is uncertain, so strength is judged by the Wilson lower bound at 95%, not the rate. Each column adds one trace: the interval narrows, but after ${fl.opp} traces the lower bound is ${f2(fl.lb)}, well under the fire bar of ${f2(bar)}.`,
       chips: [{ text: "Wilson, z = 1.96" }, { text: `${k}/${fl.opp} → LB ${f2(fl.lb)}` }, { text: `fire bar ${f2(bar)}` }],
       figure: ivFigure,
     },
     {
-      title: verdict ? `It ${verdict}s` : "No reflex yet",
+      title: verdict === "fire" ? "Sure enough to tell" : verdict === "prime" ? "Suggest, but do not insist" : "Not enough evidence yet",
+      plain: (verdict === "fire" ? "Sure enough to tell the agent: the reflex fires." : verdict === "prime" ? "Not sure enough to insist, but sure enough to suggest: the reflex primes, and grows stronger as evidence comes in." : "Not enough evidence yet, so no reflex forms."),
+      math: "evidence",
       body: `A reflex fires when its lower bound reaches the fire bar and its effect allows it. Otherwise it primes if its rate reaches ${f2(PRIME_RATE)}, or ${f2(KEEP_RATE)} for a reflex that already exists, so reflexes do not flicker. A step too few traces took can still prime when the traces that took it succeeded more often than those that did not (the 95% lower bound on the difference at least ${f2(LIFT_LB)}). Here the lower bound is ${f2(fl.lb)} and the rate ${f2(fl.rate)}: ${verdict ?? "no reflex"}. With the demo thresholds (fire bar ${f2(BARS.demo.fire_lower_bound)}), it would ${verdictDemo ?? "not form"} too.`,
       chips: [
         gate(fl.lb >= bar, `LB ${f2(fl.lb)} ≥ ${f2(bar)}`),
@@ -557,6 +569,9 @@ function build(stage: Stage, ctx: Context): Built {
     },
     {
       title: "Does telling change anything?",
+      plain: `Saying what agents already do is just noise. Adage estimates how much more often they take the step when told: ${up.mean >= 0 ? "+" : ""}${f2(up.mean)} here, ${up.gated ? "too little, so it stays quiet" : "enough to be worth saying"}.`,
+      math: "uplift",
+      key: true,
       body: `Agents taking a step is not evidence that telling them helps. Uplift is how much more often agents take the step when told (p_follow) than unaided (p_self), each a Beta posterior that starts from its kind's prior and is updated by this repository's traces: unexposed traces and control-arm traces for p_self, treated judgements for p_follow. A finish line starts at p_self ${f2(PRIORS.obligation!.self)}; here ${k} of ${fl.opp} editing traces ran ${CMD} unaided, so p_self is ${f2(up.pSelf)} and uplift ${up.mean >= 0 ? "+" : ""}${f2(up.mean)}: ${up.gated ? "under the bar, so it stays quiet" : "above the bar, so it is delivered"}. A reflex under +${f2(UPLIFT_MIN)}, with at least ${UPLIFT_MIN_EVIDENCE} situations of the repository's own evidence, stays quiet: nascent, listed in adage review as quiet, until a person approves it.`,
       chips: [
         gate(!up.gated, `uplift ${up.mean >= 0 ? "+" : ""}${f2(up.mean)} ≥ +${f2(UPLIFT_MIN)}`),
@@ -567,12 +582,16 @@ function build(stage: Stage, ctx: Context): Built {
       figure: upFigure,
     },
     {
-      title: "The effect sets a ceiling",
+      title: "Riskier steps get a gentler voice",
+      plain: "What a step does limits how hard Adage may push it. Checks and lookups can be insisted on, installs only suggested, and edits and publishing are never directed.",
+      math: "read",
       body: "What a step does limits how strongly Adage may direct it. Reads and checks can fire. A regenerate step fires only after an edit. An install primes at most, and starts nascent until a person reviews it. Edits and publishing are never directed.",
       chips: [{ text: "observe, verify: fire" }, { text: "regenerate: fire after an edit" }, { text: "environment: prime" }, { text: "author, publish: none" }],
     },
     {
-      title: "Dead ends: fail, then recover",
+      title: "Spotting a dead end",
+      plain: `A command that keeps failing, followed by one that works, can become a warning. Here npm test failed every time, but only ${de.support} sessions show it, short of the ${BARS.default.min_support} needed, so no warning yet.`,
+      math: "evidence",
       body: `A failed check followed within ${DEAD_END_WINDOW} events by a different check that works is a dead-end pair. The runner must fail in at least ${DEAD_END[0]} of ${DEAD_END[1]} traces that ran it; npm test failed in ${de.failedIn} of ${de.ran}. But only ${de.support} traces show the pair, under the minimum of ${BARS.default.min_support}, so no reflex forms. A dead end inhibits: announced at session start when most traces run the failing runner, otherwise said right after the failure.`,
       chips: [
         gate(de.consistent, `failed ${de.failedIn}/${de.ran} ≥ ${DEAD_END[0]}/${DEAD_END[1]}`),
@@ -582,11 +601,15 @@ function build(stage: Stage, ctx: Context): Built {
     useRepo
       ? {
           title: "Your reflexes against the bar",
+          plain: "Each column is one of your reflexes. The lamp is how sure Adage can be at worst: above the line it may tell the agent, below it only suggests.",
+          math: "evidence",
           body: `Each column is one of this repository's reflexes: its lower bound (the lamp) below its rate. A lamp above the fire bar of ${f2(boardBar)} may fire; the ceiling or the rules explain the rest. Inhibit comes from the dead-end rule, not the bar.`,
           chips: [{ text: `${board.length} reflexes${repoRoutes.length > board.length ? ` of ${repoRoutes.length}` : ""}` }, { text: `min support ${boardMin}` }, { text: `fire bar ${f2(boardBar)}` }],
         }
       : {
-          title: "A recorded index",
+          title: "The demo's finished reflexes",
+          plain: "The demo's finished set of reflexes: the lookup is sure enough to tell, the list of files to read is only ever suggested, and the dead end warns.",
+          math: "evidence",
           body: `The demo dataset's recorded index, conditioned with the demo thresholds (fire bar ${f2(boardBar)}, min support ${boardMin}). The lookup fires at ${f2(board[0]!.lb)}. Linked files sit higher, at ${f2(board[1]!.lb)}, yet prime: a read is only ever suggested. The dead end inhibits whatever its bound.`,
           chips: board.map((b) => ({ text: `${b.lamp} ${b.support}/${b.opp}` })),
         },
@@ -609,11 +632,11 @@ function build(stage: Stage, ctx: Context): Built {
 
 export const judge: Chapter = {
   id: "judge",
-  title: "Judge the evidence",
+  title: "Check the evidence",
+  technical: "Judge the evidence",
   status: "Built · default",
   kind: "built",
-  summary:
-    "Every reflex the graph learner compiles is counted again on the traces, in distinct traces, with a Wilson lower bound against the fire bar and its effect as a ceiling. Reflexes that telling the agent would not change (uplift under +0.1) stay quiet until a person approves them.",
+  summary: "Every reflex is checked against the record again: how often it held, how sure Adage can be with this many examples, and whether saying it changes anything.",
   source: "crates/adage-learn/src/{engine,evidence,value}.rs · crates/adage-tracks/src/model.rs",
   usesRepo: true,
   build,

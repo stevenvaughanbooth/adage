@@ -3,9 +3,11 @@
 // sizes the track to the block in view, and opens the block a #m-… link names.
 // Without scripts the track still scrolls and snaps.
 
+import { scrollToScene } from "./scenes";
+
 export function initMath() {
   const found = document.getElementById("mtrack");
-  if (!found) return;
+  if (!found) return null;
   const track: HTMLElement = found;
   const section = document.getElementById("math")!;
   const cards = [...track.querySelectorAll<HTMLElement>(".mblock")];
@@ -92,7 +94,10 @@ export function initMath() {
   // The browser's own jump to a #m-… fragment lands on the math section's top, not the block's:
   // each block's scroll margin is the distance from the section's top to the track.
   const margin = () => track.style.setProperty("--mtop", `${track.getBoundingClientRect().top - section.getBoundingClientRect().top}px`);
-  new ResizeObserver(margin).observe(section);
+  const reflow = new ResizeObserver(margin);
+  reflow.observe(section);
+  for (const el of section.querySelectorAll(".wrap > :not(.mtrack)")) reflow.observe(el);
+  void document.fonts?.ready.then(margin);
   margin();
 
   /** A #m-… link opens its block and brings the math on screen. */
@@ -102,9 +107,26 @@ export function initMath() {
     track.scrollLeft = cards[n]!.offsetLeft;
     mark(n);
     centre(false);
-    section.scrollIntoView({ behavior: smooth && !reduced ? "smooth" : "instant" });
+    scrollToScene(section, smooth && !reduced);
     return true;
   }
   addEventListener("hashchange", () => fromHash(true));
-  if (!fromHash(false)) mark(nearest());
+  if (fromHash(false)) {
+    // Fonts arriving reflow the page above the math after the jump: once they and the page have
+    // loaded, a visitor still at the math's top is put exactly on it.
+    const align = () => requestAnimationFrame(() => {
+      if (Math.abs(section.getBoundingClientRect().top) < 80) scrollToScene(section, false);
+    });
+    void document.fonts?.ready.then(align);
+    addEventListener("load", align, { once: true });
+  } else mark(nearest());
+
+  return {
+    /** Opens a block by id ("evidence" for #m-evidence) and brings the math on screen. */
+    open(id: string) {
+      history.replaceState(null, "", `${location.pathname}${location.search}#m-${id}`);
+      fromHash(true);
+    },
+    label: (id: string) => pills[cards.findIndex((c) => c.id === `m-${id}`)]?.textContent ?? id,
+  };
 }

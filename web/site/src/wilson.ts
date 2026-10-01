@@ -33,11 +33,11 @@ export function initWilson() {
     const fires = b >= FIRE && kv >= MIN_SUPPORT;
     say.textContent =
       `Rate ${r.toFixed(2)}, lower bound ${b.toFixed(2)}. ` +
-      (fires ? "It clears the 0.80 fire bar with enough support, so it may fire."
-        : kv < MIN_SUPPORT ? `Under the minimum support of ${MIN_SUPPORT} traces, so no reflex forms yet.`
-        : r >= 0.5 ? "Under the fire bar: it primes, and firms up as traces arrive."
-        : "Too rare to prime.") +
-      ` Even a perfect record needs ${need} traces to fire.`;
+      (fires ? "It clears the 0.80 bar with enough sessions behind it, so it may fire: Adage tells the agent to take the step."
+        : kv < MIN_SUPPORT ? `Fewer than ${MIN_SUPPORT} sessions took the step, so no reflex forms yet.`
+        : r >= 0.5 ? "Under the 0.80 bar, so it primes: Adage suggests the step without insisting, and firms up as sessions arrive."
+        : "Too rare to suggest.") +
+      ` Even a perfect record needs ${need} sessions to fire.`;
   };
   k.addEventListener("input", () => update("k"));
   n.addEventListener("input", () => update("n"));

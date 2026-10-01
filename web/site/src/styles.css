@@ -366,6 +366,11 @@ code { font: 0.92em var(--mono); background: var(--raised); border: 1px solid va
 .chaps { grid-column: 2; font: 11px var(--mono); color: var(--ink-3); }
 .flagtxt { color: var(--prime); }
 .chapnote { margin: 16px 8px 0; font-size: 12.5px; color: var(--ink-3); max-width: 30ch; }
+/* Quick or full: the quick tour stops at each chapter's key steps. */
+.tourmode { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; margin: 0 0 12px; padding: 3px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--night); }
+.tourmode button { padding: 6px 8px; border: 0; border-radius: 7px; background: none; color: var(--ink-2); font-size: 13px; font-weight: 600; cursor: pointer; }
+.tourmode button:hover { color: var(--ink-1); }
+.tourmode button[aria-pressed="true"] { background: var(--raised); color: var(--ink-1); box-shadow: 0 0 0 1px var(--line-strong); }
 
 .stage { position: relative; display: flex; flex-direction: column; min-width: 0; }
 .stagebox { position: relative; flex: 1; overflow: hidden; background: radial-gradient(120% 90% at 70% 20%, color-mix(in srgb, var(--memory) 9%, transparent), transparent 60%); }
@@ -381,9 +386,19 @@ code { font: 0.92em var(--mono); background: var(--raised); border: 1px solid va
 .capbody { margin: 0; font-size: 14.5px; color: var(--ink-2); }
 .capfig { display: block; width: 100%; height: 104px; }
 .capfig[hidden] { display: none; }
+.capplain { margin: 0; font-size: 16px; line-height: 1.5; color: var(--ink-1); }
+.capmore { display: grid; gap: 9px; padding-top: 10px; border-top: 1px dashed var(--line-strong); }
+.capactions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.capbtn { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--raised); color: var(--ink-1); font-size: 13px; font-weight: 600; cursor: pointer; }
+.capbtn:hover { border-color: var(--memory); }
+.capbtn svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; transition: transform 200ms var(--ease); }
+.capbtn[aria-expanded="true"] svg { transform: rotate(180deg); }
+.capmath { font-size: 13px; font-weight: 600; color: var(--memory-soft); text-decoration: none; }
+.capmath:hover { text-decoration: underline; text-underline-offset: 3px; }
 .capchips { display: flex; flex-wrap: wrap; gap: 6px; }
 .capchips span { font: 11.5px var(--mono); border: 1px solid var(--line); background: var(--raised); border-radius: 6px; padding: 2px 7px; font-variant-numeric: tabular-nums; }
 .capchips b { color: var(--fire); font-weight: 600; }
+.capchips b.fail { color: var(--inhibit); }
 .transport { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-top: 1px solid var(--line); background: var(--raised); }
 .tbtn { flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 10px; border: 1px solid var(--line-strong); background: var(--night); cursor: pointer; }
 .tbtn:hover { border-color: var(--memory); }
@@ -423,11 +438,31 @@ code { font: 0.92em var(--mono); background: var(--raised); border: 1px solid va
 .mblock { flex: 0 0 100%; min-width: 0; scroll-margin-top: var(--mtop, 0px); scroll-snap-align: start; scroll-snap-stop: always; padding: clamp(20px, 3vw, 32px); border: 1px solid var(--line); border-radius: 18px; background: var(--raised); }
 .mblock .formula, .mblock .calc, .mblock .consts > div, .mblock .effects { break-inside: avoid; }
 .mblock .formula { background: var(--night); }
-/* Wide screens set a block in two columns, so most fit on one screen. */
+/* Each block leads with the plain words and its key formula; the rest waits under "More detail". */
+.mlead { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
+.mlead > *, .mplain > * { min-width: 0; }
+.mblock .mshort { margin: 0; font-size: 17px; line-height: 1.5; color: var(--ink-1); }
+.mblock .mexample { font-size: 15px; }
+.mblock .mshort b, .mblock .mexample b { color: var(--ink-1); font-weight: 700; }
+.mkey .formula { margin-top: 0; }
+.mkey .effects { margin-top: 0; grid-template-columns: repeat(3, 1fr); }
+.mblock .mlegend { margin-top: 10px; font-size: 13.5px; color: var(--ink-3); }
+.mmore { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--line); }
+.mmore summary { display: inline-flex; align-items: center; gap: 6px; padding: 4px 0; list-style: none; cursor: pointer; font-size: 13.5px; font-weight: 600; color: var(--ink-2); }
+.mmore summary::-webkit-details-marker { display: none; }
+.mmore summary::before { content: "+"; width: 14px; font: 600 15px var(--mono); color: var(--memory); }
+.mmore[open] summary::before { content: "−"; }
+.mmore summary:hover { color: var(--ink-1); }
+.mblock .mback { font-size: 13.5px; }
+.mback a { color: var(--memory-soft); font-weight: 600; text-decoration: none; }
+.mback a:hover { text-decoration: underline; text-underline-offset: 3px; }
+/* Wide screens set the lead and the detail in two columns, so most blocks fit on one screen. */
 @media (min-width: 1100px) {
-  .mblock { columns: 2; column-gap: 44px; }
-  .mblock header, .mblock .effects, .mblock .calc, .mblock .formula { column-span: all; }
-  .mblock > :first-child + p { margin-top: 0; }
+  .mplain { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 36px; align-items: start; }
+  .mblock .mplain .mexample { margin-top: 0; }
+  .mmore-body { columns: 2; column-gap: 44px; }
+  .mmore-body > :first-child { margin-top: 0; }
+  .mmore-body .formula, .mmore-body .consts { column-span: all; }
   /* The heading and the lede sit side by side, so the block gets the screen. */
   .math .wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 48px; }
   .math .wrap > * { grid-column: 1 / -1; }
@@ -547,18 +582,48 @@ math { color: inherit; font-family: "STIX Two Math", "Cambria Math", "Latin Mode
 
 .story-terminal code { background: transparent; border: 0; padding: 0; color: var(--ink-1); font: inherit; }
 
-/* ======================================================================= one section per screen */
-/* The page moves a section at a time. A section taller than the screen still scrolls through
-   freely, then settles on the next. The browser settles on a nearby section by itself; on wide
-   screens src/snap.ts takes over (html.snapjs) and finishes each move in its direction. */
-html { scroll-snap-type: y proximity; }
-html.snapjs { scroll-snap-type: none; }
-main > section, .top.static { scroll-snap-align: start; }
-.howintro { scroll-snap-align: none; }
-.foot { scroll-snap-align: end; }
+/* ======================================================================= scenes */
+/* The page as a stack of scenes, the way Apple's product pages move: the browser scrolls (always
+   smoothly), each section holds the screen while the next slides up over it, and the one
+   underneath recedes. src/scenes.ts sets where each section holds (--pin) and how far the next has
+   covered it (--cover), and puts .scenes on the root on wide screens. Phones scroll plainly. */
+@media (min-width: 861px) {
+  .scenes main > section { position: sticky; top: var(--pin, 0px); background-color: var(--night); }
+  .scenes main > section.alt { background-color: var(--raised); }
+  /* Each new scene arrives as a sheet over the last. */
+  .scenes main > section + section { border-top: 0; border-radius: 26px 26px 0 0; box-shadow: 0 -1px 0 var(--line-strong), 0 -20px 60px rgb(0 0 0 / 0.32); }
+  /* Nothing slides over the last scene but the footer, so it simply scrolls. */
+  .scenes main > section:last-child { position: relative; }
+  .scenes .foot { position: relative; background: var(--night); }
+  /* Two scenes under, it cannot show: it stops being drawn. */
+  .scenes main > section[data-gone] { opacity: 0; }
+  .scenes main > section::after { content: ""; position: absolute; inset: 0; z-index: 100; pointer-events: none; border-radius: inherit; background: #000; opacity: 0; }
+}
+/* The scene underneath recedes, a little smaller and darker, as the next one covers it. The
+   browser runs this from the page's scroll position, on the compositor, in step with the scroll:
+   src/scenes.ts measures where each covering starts and ends (--r0, --r1). */
+@supports (animation-timeline: scroll()) {
+  @media (min-width: 861px) and (prefers-reduced-motion: no-preference) {
+    .scenes main > section:not(:last-child) { animation: scene-recede linear both; animation-timeline: scroll(root block); animation-range: var(--r0, 0px) var(--r1, 1px); transform-origin: 50% 0; }
+    .scenes main > section:not(:last-child)::after { animation: scene-shade linear both; animation-timeline: scroll(root block); animation-range: var(--r0, 0px) var(--r1, 1px); }
+  }
+}
+/* Where the browser cannot, src/scenes.ts follows the scroll and sets --cover instead. */
+@supports not (animation-timeline: scroll()) {
+  @media (min-width: 861px) and (prefers-reduced-motion: no-preference) {
+    .scenes main > section[data-recede] { transform: scale(calc(1 - 0.05 * var(--cover, 0))); transform-origin: 50% 0; }
+    .scenes main > section[data-recede]::after { opacity: calc(var(--shade, 0.55) * var(--cover, 0)); }
+  }
+}
+@keyframes scene-recede { from { transform: scale(1); } to { transform: scale(0.95); } }
+@keyframes scene-shade { from { opacity: 0; } to { opacity: var(--shade, 0.55); } }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --shade: 0.2; } }
+:root[data-theme="light"] { --shade: 0.2; }
 @media (min-width: 861px) {
   .hero { min-height: 100svh; }
   main > section:not(.hero) { min-height: 100svh; display: flex; flex-direction: column; justify-content: center; }
+  /* The math keeps its heading still while blocks of different heights come and go. */
+  main > section.math { justify-content: flex-start; }
   .band { padding-block: clamp(56px, 9vh, 112px); }
   /* /how opens under its header: the intro fills the rest of the first screen. */
   .howpage .howintro { min-height: calc(100svh - 80px); }
@@ -572,3 +637,27 @@ main > section, .top.static { scroll-snap-align: start; }
   .mctl { justify-content: space-between; }
   .mtrack { gap: 12px; }
 }
+
+/* ======================================================================= words with a definition */
+/* A dotted word on /how: hover, focus or tap it for its definition (src/terms.ts). */
+.gloss { cursor: help; border-radius: 3px; text-decoration: underline dotted; text-decoration-thickness: 1.5px; text-decoration-color: color-mix(in srgb, var(--memory) 70%, transparent); text-underline-offset: 3px; }
+.gloss:hover { color: var(--ink-1); text-decoration-color: var(--memory); }
+.gloss:focus-visible { outline: 2px solid var(--memory); outline-offset: 1px; }
+.termtip { position: fixed; left: 0; top: 0; z-index: 70; max-width: min(320px, calc(100vw - 24px)); padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--raised); color: var(--ink-1); font: 13.5px/1.45 var(--body); box-shadow: 0 12px 32px rgb(0 0 0 / 0.28); pointer-events: none; }
+.howtips { margin: 14px 0 0; max-width: 64ch; font-size: 14.5px; color: var(--ink-3); }
+.termdemo { color: var(--ink-2); text-decoration: underline dotted; text-decoration-thickness: 1.5px; text-decoration-color: var(--memory); text-underline-offset: 3px; }
+
+/* The uplift calculator: on their own (grey), the gain from telling (green), or a loss (red). */
+.ubar { overflow: hidden; }
+.ubar .uself { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px 0 0 5px; background: color-mix(in srgb, var(--ink-3) 35%, transparent); transition: width 200ms var(--ease); }
+.ubar .ugain { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--fire) 60%, transparent); transition: left 200ms var(--ease), width 200ms var(--ease); }
+.ubar .ugain.neg { background: color-mix(in srgb, var(--inhibit) 60%, transparent); }
+
+@media (max-width: 960px) {
+  .chapters { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 10px; }
+  .tourmode { margin: 0; }
+}
+@media (max-width: 560px) {
+  .chapters { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) { .capbtn svg, .ubar i { transition: none; } }

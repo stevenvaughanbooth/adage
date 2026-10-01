@@ -70,7 +70,12 @@ document.querySelector(".copy")!.addEventListener("focusin", (e) => { const t = 
 $("panel").addEventListener("pointerenter", () => { hovering = true; schedule(); });
 $("panel").addEventListener("pointerleave", () => { hovering = false; if (auto) select(tab); });
 mqReduce.addEventListener("change", () => { reduced = mqReduce.matches; if (reduced) stopAuto(); scene?.motion(reduced); });
-new IntersectionObserver((es) => { heroOn = !!es[0]?.isIntersecting; schedule(); }).observe(document.querySelector(".hero")!);
+// The tour moves on only while the hero shows: on screen, and not covered by the scene above it.
+let heroSeen = true, heroCovered = false;
+const heroWatch = () => { heroOn = heroSeen && !heroCovered; schedule(); };
+const heroEl = document.querySelector<HTMLElement>(".hero")!;
+new IntersectionObserver((es) => { heroSeen = !!es[0]?.isIntersecting; heroWatch(); }).observe(heroEl);
+heroEl.addEventListener("scenecover", (e) => { heroCovered = (e as CustomEvent<boolean>).detail; heroWatch(); });
 
 /* ------------------------------------------------------------ the film: first, then the hero */
 const film = createFilm({

@@ -6,6 +6,17 @@ async function films(page: Page, mode: "hang" | "fail") {
   await page.route("**/*.mp4", (r) => (mode === "fail" ? r.abort() : undefined));
 }
 
+// /how's sections hold as scenes on wide screens (src/scenes.ts): a control scrolled into view by
+// its own position can sit under the next scene. Tests that work the walkthrough put it on screen
+// first, as a person scrolling to it would.
+async function toWalk(page: Page) {
+  await page.evaluate(() => {
+    let t = document.querySelector("main")!.getBoundingClientRect().top + scrollY;
+    for (const s of document.querySelectorAll<HTMLElement>("main > section")) { if (s.id === "walk") break; t += s.offsetHeight; }
+    scrollTo({ top: t, behavior: "instant" });
+  });
+}
+
 async function skipFilm(page: Page) {
   await page.locator("#film").hover();
   await page.getByRole("button", { name: "Skip intro" }).click();
@@ -207,8 +218,10 @@ test("Escape still closes the film after Play is pressed", async ({ page }) => {
 test.describe("/how", () => {
   test("steps through chapters with the buttons, the keys and the URL", async ({ page }) => {
     await page.goto("/how?ch=judge&step=2");
+    await toWalk(page);
     await expect(page.getByRole("heading", { level: 1 })).toContainText("From a transcript to a reflex");
-    await expect(page.locator("#capmeta")).toContainText("04 Judge the evidence");
+    await expect(page.locator("#capmeta")).toContainText("04 Check the evidence");
+    await page.getByRole("button", { name: "Full tour" }).click();
     await expect(page.locator("#count")).toHaveText(/^3 \/ \d+$/);
     await page.getByRole("button", { name: "Next step" }).click();
     await expect(page.locator("#count")).toHaveText(/^4 \//);
@@ -216,18 +229,20 @@ test.describe("/how", () => {
     await page.locator("#walk").click({ position: { x: 5, y: 5 } });
     await page.keyboard.press("ArrowLeft");
     await expect(page.locator("#count")).toHaveText(/^3 \//);
-    await page.getByRole("button", { name: /Measure against control/ }).click();
-    await expect(page.locator("#captitle")).toHaveText("Two arms, task by task");
+    await page.getByRole("button", { name: /Prove it helped/ }).click();
+    await expect(page.locator("#captitle")).toHaveText("With and without, task by task");
     await expect(page.locator("#howgl")).toBeVisible();
     // A link to the retired miners chapter lands on the chapter that replaced it.
     await page.goto("/how?ch=miners");
-    await expect(page.locator("#capmeta")).toContainText("04 Judge the evidence");
+    await expect(page.locator("#capmeta")).toContainText("04 Check the evidence");
   });
 
   test("every chapter builds and every step has words", async ({ page }) => {
     const errors: string[] = [];
     page.on("pageerror", (e) => errors.push(String(e)));
     await page.goto("/how");
+    await toWalk(page);
+    await page.getByRole("button", { name: "Full tour" }).click();
     const chapters = await page.locator("#chaplist .chap").count();
     expect(chapters).toBe(9);
     for (let c = 0; c < chapters; c++) {
@@ -237,6 +252,7 @@ test.describe("/how", () => {
       for (let s = 0; s < steps; s++) {
         await page.locator("#ticks button").nth(s).click();
         await expect(page.locator("#captitle")).not.toHaveText("");
+        await expect(page.locator("#capplain")).not.toHaveText("");
         await expect(page.locator("#capbody")).not.toHaveText("");
       }
     }
@@ -252,7 +268,7 @@ test.describe("/how", () => {
     await expect(count).toHaveText("02 / 10");
     await expect(page.locator(".mathtoc a[aria-current]")).toHaveText("Graph engine");
     await expect(page).toHaveURL(/#m-graph$/);
-    await page.locator(".mathtoc").getByRole("link", { name: "Skills" }).click();
+    await page.locator(".mathtoc").getByRole("link", { name: "Measurement" }).click();
     await expect(count).toHaveText("10 / 10");
     await expect(page.locator("#mnext")).toBeDisabled();
     await page.locator("#mtrack").focus();
@@ -265,32 +281,150 @@ test.describe("/how", () => {
     })).toBeLessThan(2);
 
     await page.goto("/how#m-hook");
-    await expect(count).toHaveText("08 / 10");
+    await expect(count).toHaveText("09 / 10");
     await expect(page.locator("#m-hook")).toBeInViewport();
     await expect.poll(() => page.evaluate(() => Math.abs(scrollY - document.getElementById("math")!.offsetTop))).toBeLessThan(2);
   });
 
-  test("the page moves a section at a time", async ({ page }) => {
+  test("sections hold as scenes: the next slides over, the one underneath recedes", async ({ page }) => {
     await page.goto("/how");
-    const top = (id: string) => page.evaluate((i) => document.getElementById(i)!.offsetTop, id);
-    const y = () => page.evaluate(() => Math.round(scrollY));
-    await page.evaluate(() => scrollTo({ top: document.getElementById("walk")!.offsetTop, behavior: "instant" }));
-    await page.mouse.move(720, 450);
-    // A short wheel turn finishes the move: down to the next section, and back up.
-    await page.mouse.wheel(0, 120);
-    await expect.poll(y, { timeout: 5000 }).toBe(await top("math"));
-    await page.mouse.move(720, 60);
-    await page.mouse.wheel(0, -120);
-    await expect.poll(y, { timeout: 5000 }).toBe(await top("walk"));
+    await expect(page.locator("html")).toHaveClass(/\bscenes\b/);
+    // Where each section sits in the page, counted from the stack (a held section's box moves).
+    const flow = (id: string) => page.evaluate((i) => {
+      const secs = [...document.querySelectorAll<HTMLElement>("main > section")];
+      let t = document.querySelector("main")!.getBoundingClientRect().top + scrollY;
+      for (const s of secs) { if (s.id === i) break; t += s.offsetHeight; }
+      return Math.round(t);
+    }, id);
+    const walkTop = await flow("walk");
+    // Halfway into the math sliding over: the walk holds at the top, and recedes halfway.
+    await page.evaluate((y) => scrollTo({ top: y, behavior: "instant" }), walkTop + 450);
+    await expect.poll(() => page.evaluate(() => Math.round(document.getElementById("walk")!.getBoundingClientRect().top))).toBe(0);
+    await expect.poll(() => page.evaluate(() => Math.round(document.getElementById("math")!.getBoundingClientRect().top))).toBe(450);
+    await expect.poll(() => page.evaluate(() => getComputedStyle(document.getElementById("walk")!).transform)).toMatch(/^matrix\(0\.97/);
+    await expect(page.getByRole("button", { name: "Pause" })).toBeVisible();
+    // Fully covered, the walk says so, and its tour rests.
+    await page.evaluate((y) => scrollTo({ top: y, behavior: "instant" }), walkTop + 900);
+    await expect(page.locator("#walk")).toHaveAttribute("data-covered", "");
+    await expect(page.getByRole("button", { name: "Play" })).toBeVisible();
+    // Back up, it is uncovered.
+    await page.evaluate((y) => scrollTo({ top: y, behavior: "instant" }), walkTop);
+    await expect(page.locator("#walk")).not.toHaveAttribute("data-covered", "");
+  });
 
-    // A section taller than the screen reads freely.
-    await page.goto("/#evidence");
-    const ev = await top("evidence");
+  test("links reach held sections, above and below", async ({ page }) => {
+    await films(page, "fail");
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/");
+    const y = () => page.evaluate(() => Math.round(scrollY));
+    await page.evaluate(() => scrollTo({ top: document.documentElement.scrollHeight, behavior: "instant" }));
+    // Every section above is held under the last one; a link still finds where each one starts.
+    await page.locator(".top").getByRole("link", { name: "Evidence" }).evaluate((a: HTMLAnchorElement) => a.click());
+    const ev = await page.evaluate(() => {
+      const secs = [...document.querySelectorAll<HTMLElement>("main > section")];
+      let t = document.querySelector("main")!.getBoundingClientRect().top + scrollY;
+      for (const s of secs) { if (s.id === "evidence") break; t += s.offsetHeight; }
+      return Math.round(t);
+    });
     await expect.poll(y).toBe(ev);
-    await page.mouse.move(720, 450);
-    await page.mouse.wheel(0, 300);
-    await page.waitForTimeout(800);
-    expect(await y()).toBe(ev + 300);
+    await expect(page).toHaveURL(/#evidence$/);
+    await page.getByRole("link", { name: "Adage, back to the top" }).evaluate((a: HTMLAnchorElement) => a.click());
+    await expect.poll(y).toBe(0);
+  });
+
+  test("phones scroll plainly: nothing holds", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/how");
+    await expect(page.locator("html")).not.toHaveClass(/\bscenes\b/);
+    expect(await page.evaluate(() => getComputedStyle(document.getElementById("walk")!).position)).toBe("static");
+  });
+
+  test("the quick tour stops at the key steps, and the choice is remembered", async ({ page }) => {
+    await page.goto("/how");
+    await toWalk(page);
+    await expect(page.getByRole("button", { name: "Quick tour" })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator("#capmeta")).toContainText("01 Read what the agent did");
+    await expect(page.locator("#count")).toHaveText("1 / 2");
+    await page.getByRole("button", { name: "Next step" }).click();
+    await expect(page.locator("#count")).toHaveText("2 / 2");
+    await page.getByRole("button", { name: "Next step" }).click();
+    await expect(page.locator("#capmeta")).toContainText("02 Spot the patterns");
+    await page.getByRole("button", { name: "Full tour" }).click();
+    await expect(page.locator("#count")).toHaveText(/^1 \/ 11$/);
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Full tour" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  test("each step reads plainly first, with the precise account under More detail", async ({ page }) => {
+    await page.goto("/how?ch=judge&step=3");
+    await toWalk(page);
+    await expect(page.locator("#capplain")).toContainText("like a restaurant with only a few reviews");
+    await expect(page.locator("#capbody")).toBeHidden();
+    await page.getByRole("button", { name: "More detail" }).click();
+    await expect(page.locator("#capbody")).toBeVisible();
+    await expect(page.locator("#capbody")).toContainText("Wilson lower bound");
+    await expect(page.locator("#capfig")).toBeVisible();
+    // A failed gate reads as failing.
+    await page.getByRole("button", { name: "Full tour" }).click();
+    await page.getByRole("button", { name: "Next step" }).click();
+    await expect(page.locator("#capchips")).toContainText("✗ LB 0.41 < 0.80");
+    // Detail stays open from step to step, and D closes it.
+    await expect(page.locator("#capbody")).toBeVisible();
+    await page.locator("#walk").click({ position: { x: 5, y: 5 } });
+    await page.keyboard.press("d");
+    await expect(page.locator("#capbody")).toBeHidden();
+    await expect(page.getByRole("button", { name: "More detail" })).toHaveAttribute("aria-expanded", "false");
+  });
+
+  test("a dotted word shows its definition on hover, focus or tap", async ({ page }) => {
+    await page.goto("/how?ch=subgraphs&step=10");
+    await toWalk(page);
+    const term = page.locator("#capplain .gloss", { hasText: "reflex" });
+    await term.hover();
+    await expect(page.getByRole("tooltip")).toBeVisible();
+    await expect(page.getByRole("tooltip")).toContainText("A small learned rule");
+    await page.mouse.move(5, 5);
+    await expect(page.getByRole("tooltip")).toBeHidden();
+    await term.focus();
+    await expect(page.getByRole("tooltip")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("tooltip")).toBeHidden();
+    // The math's words are marked too.
+    await expect(page.locator("#m-evidence .mshort .gloss").first()).toBeAttached();
+  });
+
+  test("a step links into its math, and the math links back to the walkthrough", async ({ page }) => {
+    // Where the links land, not how they glide there: jumps are instant with reduced motion.
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/how?ch=judge&step=3");
+    await toWalk(page);
+    const link = page.getByRole("link", { name: "The math: Evidence →" });
+    await link.click();
+    await expect(page.locator("#mcount")).toHaveText("03 / 10");
+    await expect(page.locator("#m-evidence")).toBeInViewport();
+    // Read down to the end of the block, where the math's end meets the bottom of the screen (once
+    // the track has grown to the block's height, and the math holds where its new end is).
+    await expect.poll(() => page.evaluate(() => {
+      const m = document.getElementById("math")!;
+      const grown = Math.abs(document.getElementById("mtrack")!.offsetHeight - document.getElementById("m-evidence")!.offsetHeight) < 2;
+      return grown && m.style.getPropertyValue("--pin") === `${Math.min(0, innerHeight - m.offsetHeight)}px`;
+    })).toBe(true);
+    await page.evaluate(() => {
+      const m = document.getElementById("math")!;
+      let t = document.querySelector("main")!.getBoundingClientRect().top + scrollY;
+      for (const s of document.querySelectorAll<HTMLElement>("main > section")) { if (s === m) break; t += s.offsetHeight; }
+      scrollTo({ top: t + Math.max(0, m.offsetHeight - innerHeight), behavior: "instant" });
+    });
+    await page.locator("#m-evidence").getByRole("link", { name: "← See it in the walkthrough: Check the evidence" }).click();
+    await expect(page.locator("#capmeta")).toContainText("04 Check the evidence");
+    await expect(page.locator("#walk")).toBeInViewport();
+  });
+
+  test("the uplift calculator says when telling is worth it", async ({ page }) => {
+    await page.goto("/how#m-uplift");
+    await expect(page.locator("#u-say")).toContainText("Telling adds 18 points. Worth saying");
+    await page.locator("#us").fill("95");
+    await expect(page.locator("#u-say")).toContainText("stays quiet");
   });
 
   test("the Wilson calculator agrees with the Rust bound", async ({ page }) => {
@@ -343,8 +477,14 @@ test.describe("the film plays once, on a fresh visit", () => {
 
   test("the hero opens the concrete example and Learn more opens /how", async ({ page }) => {
     await films(page, "fail");
+    // Where the links lead, not how the page glides there: jumps are instant with reduced motion.
+    await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/#how");
     await expect(page.getByRole("link", { name: /^Learn more/ })).toHaveAttribute("href", "/how");
+    // The hero is held under the scenes that slid over it: once the page has landed on #how, scroll
+    // back up to the hero, as a person would.
+    await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(0);
+    await page.evaluate(() => scrollTo({ top: 0, behavior: "instant" }));
     await page.getByRole("link", { name: "See a reflex happen" }).click();
     await expect(page).toHaveURL(/#shortcuts$/);
     await expect(page.locator("#story-output")).toBeVisible();

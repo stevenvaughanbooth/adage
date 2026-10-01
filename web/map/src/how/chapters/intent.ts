@@ -871,33 +871,43 @@ function build(stage: Stage): Built {
 
   const text: Omit<Step, "state">[] = [
     {
-      title: "Prompts are normalised",
+      title: "Requests are tidied up",
+      plain: "Requests are trimmed and their specifics (ticket numbers, file paths, links) swapped for placeholders, so they compare by what they ask, not what they name.",
       body: `Each of the ${n} sample prompts is cut to its first ${HEAD_TOKENS} words, and details become placeholders: tickets, paths, URLs, SHAs, versions, environment variables and PR numbers. Fenced code becomes [code]. Prompts then compare by what they ask, not by what they name.`,
       chips: [{ text: `≤ ${HEAD_TOKENS} tokens · ≤ 16 KiB read` }, { text: `${placeholders} placeholders in ${n} prompts` }, { text: `${fences} fenced block → [code]` }],
     },
     {
-      title: "Each prompt becomes a point",
+      title: "Requests on a map of meaning",
+      plain: "A small language model built into Adage places each request on a map of meaning. Requests that mean the same thing land close together, however they are worded.",
+      math: "intent",
+      key: true,
       body: "A static model embeds the normalised text: WordPiece tokens, the mean of their rows, scaled to unit length. Requests that mean the same thing land near each other. The model ships inside the adage binary, so nothing is downloaded; adage models fetch installs the full-precision table or a code model if you want one. Without a real model (the explicit hashed fallback) there are no intent reflexes, and nothing fails.",
       chips: [{ text: "potion-base-8M · int8 · bundled (7.7 MB)" }, { text: "SHA-256 pinned" }, { text: "≤ 512 WordPiece tokens" }, { text: "mean · L2 · 256-d" }],
     },
     {
-      title: "Near neighbours link",
+      title: "Similar requests link up",
+      plain: "Each request connects to the ones most like it, and weak links are cut.",
+      math: "intent",
       body: `Each prompt links to its ${K} most similar prompts, found exactly, with ties broken by index so every run builds the same graph. Links below cosine ${f2(EPS)} are cut: ${r.edgesEps.length} of the ${edgesTotal} remain.`,
       chips: [{ text: `exact kNN, k = ${K}` }, { text: `eps ${f2(EPS)}` }, { text: `${r.edgesEps.length} of ${edgesTotal} links kept` }],
       figure: simHist,
     },
     {
-      title: "Communities become families",
+      title: "Families form",
+      plain: "Tightly connected requests form families. The few that fit nowhere are left alone.",
+      math: "intent",
       body: `Louvain groups densely linked prompts. It visits them in a fixed order and moves one only on a strictly better gain, so the result never varies. Resolution ${RESOLUTION.toFixed(1)} keeps communities small and pure. ${commGroups.size} have at least ${MIN} prompts; the ${noise} prompts left in smaller ones are noise.`,
       chips: [{ text: `resolution ${RESOLUTION.toFixed(1)} · ≤ ${MAX_LEVELS} levels` }, { text: `min size max(min_support, 2) = ${MIN}` }, { text: `${commGroups.size} communities · ${noise} noise` }],
     },
     {
-      title: "Colour by what the trace ran first",
+      title: "Coloured by how each session began",
+      plain: "Each request is coloured by what its session did first, before editing anything. Something every session does, like git status, says nothing and is ignored.",
       body: `Each prompt is labelled with its trace's route: the first check or lookup it ran before editing. ${ubi.cmd} ran in ${ubi.traces} of ${n} traces, more than ${UBIQUITOUS} of them, so it says nothing about intent and is skipped. Now the families show what the text alone could not.`,
       chips: [{ text: "first observe or verify step before an edit" }, { text: `ubiquitous: > ${UBIQUITOUS} of traces (5 or more)` }],
     },
     {
-      title: "Behaviour splits and merges",
+      title: "Families split and merge",
+      plain: "When one family's sessions start in two different ways, it splits in two. When two families start the same way and mean nearly the same thing, they merge.",
       body: `One family mixes two routes: ${split.groups.map((x) => `${x.size} started with ${x.route}`).join(" and ")}. Each group is large enough and the text tells them apart, so the family splits. Two history families both start with ${merged.route}, and their centres are ${f2(merged.cos)} alike, so they merge.`,
       chips: [
         { text: `split: groups ≥ ${MIN} and ≥ ${MIN_SHARE * 100}%` },
@@ -906,7 +916,9 @@ function build(stage: Stage): Built {
       ],
     },
     {
-      title: "Keep pure families, calibrate each",
+      title: "Keep the consistent families",
+      plain: "A family is kept only when most of its sessions start the same way, and each kept family learns how close a new request must be to count as one of its own.",
+      math: "intent",
       body: `A family is kept when at least ${BAR} of its traces took its dominant route. The incident family is at ${f2(dropped.share)}, so ${kept.length} of ${r.families.length} are kept. Each kept centre is stored as integers, and its threshold is chosen on this repository's own prompts: the t whose prompts ran ${fam.route} with the best Wilson lower bound, ${fam.support} of ${fam.opp} here. Taking in the fixtures question too would give ${lower.sup} of ${lower.opp}, a lower bound of ${f2(lower.lb)}.`,
       chips: [
         { text: `bar ${BAR} · ${kept.length} kept` },
@@ -917,12 +929,18 @@ function build(stage: Stage): Built {
       figure: calFigure,
     },
     {
-      title: "A new prompt arrives",
+      title: "A new request arrives",
+      plain: "When a new request arrives, Adage finds the family it belongs to and suggests the usual first step. The match is close, but the evidence is not yet strong enough to insist.",
+      math: "intent",
+      key: true,
       body: `At the hook, a new prompt is normalised, embedded and compared with the centre of each of the ${reflexes.length} intent reflexes. The most similar one whose threshold it clears matches: cosine ${f2(probeSim)} against t ${f4(fam.t)}. Its lower bound, ${f2(fam.lb)}, is under the ${f2(FIRE_LB)} fire bar, so the reflex primes rather than fires.`,
       chips: [{ text: `cos ${f2(probeSim)} ≥ t ${f4(fam.t)}`, ok: probeSim >= fam.t }, { text: `${fam.lamp} · lower bound ${f2(fam.lb)}` }, { text: "p95 budget 25 ms with intent" }],
     },
     {
-      title: "Recurring tasks get a procedure card",
+      title: "Repeated tasks get a procedure card",
+      plain: "A task the repository keeps repeating gets a procedure card: which files to touch, what was added last time, the commands that worked and the check to finish with. It never quotes secrets.",
+      math: "cards",
+      key: true,
       body: `The same model groups whole tasks. Two traces are one family when their first prompts are at least ${f2(CARD.family)} alike and the files they edited have the same shapes (Jaccard ≥ ${f2(CARD.overlap)}). A family of at least ${CARD.minTraces} traces, one of them passing, gets a card: the files it touched in order, the lines the latest passing trace added, the commands that worked and those that failed, and the check it finished with, within ${CARD.tokens} tokens. A card never quotes .env files, files git ignores, or anything that looks like a secret. A new prompt at cosine ≥ ${CARD.threshold} to the family's prompts gets the card once, as prime; up to ${f2(CARD.grey)} below, it waits for the first edit of one of the card's files.`,
       chips: [
         { text: `family: cos ≥ ${f2(CARD.family)} · files Jaccard ≥ ${f2(CARD.overlap)}` },
@@ -944,11 +962,11 @@ function build(stage: Stage): Built {
 
 export const intent: Chapter = {
   id: "intent",
-  title: "Group prompts by intent",
+  title: "Recognise similar requests",
+  technical: "Group prompts by intent",
   status: "Built · model bundled",
   kind: "built",
-  summary:
-    "Prompts are normalised, embedded with the model bundled in the binary and clustered. Families split or merge by what their traces ran first, and each kept family gets a threshold calibrated on this repository's prompts.",
+  summary: "Requests that mean the same thing are grouped, however they are worded, so Adage can suggest how that kind of work usually starts. Tasks a repository keeps repeating get a procedure card.",
   source: "crates/adage-graph/src/compile/intent.rs · crates/adage-intent",
   usesRepo: false,
   build,
