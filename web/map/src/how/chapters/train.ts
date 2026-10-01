@@ -469,12 +469,16 @@ function build(stage: Stage): Built {
   const usd = (x: number) => `$${x.toFixed(2)}`;
   const text: Omit<Step, "state">[] = [
     {
-      title: "A skill is a set of claims",
+      title: "A guide is a set of claims",
+      plain: "A skill is a written guide to how work is done in a repository. Adage turns its instructions into reflexes for free, and treats each one as a claim to test, not a fact.",
+      math: "train",
+      key: true,
       body: `A skill file says what an agent should do here. adage train <SKILL.md> compiles its procedure into one pack of reflexes, for free: no model and no agent session. Every compiled command is replayed on a clean checkout of HEAD in adage-exec's sandbox (network off, your working tree untouched); one that fails there is dropped as stale, and nothing is installed until adage train accept. Sessions are optional evidence, and the rest of this chapter follows them: this sample SKILL.md for the registry service makes ${SKILL.length} instructions, and each one is a hypothesis to test, not a fact.`,
       chips: [{ text: "compile + sandbox replay: free" }, { text: "sessions: adage train plan, then --plan … --execute" }, { text: "SKILL.md · CONTRIBUTING.md · Makefile · package.json · CI · runbook" }, { text: "no model reads it: rules only" }],
     },
     {
-      title: "Each claim gets a type",
+      title: "Each instruction is sorted",
+      plain: "Each instruction is sorted by what it does. One that installs packages is too risky to run on its own, so it is marked unsafe.",
       body: `Commands come from code spans in imperative sentences, and each is classed by effect. ${SKILL.filter((c) => c.unsafe).length} claim installs packages, which is above regenerate, so it is marked unsafe and never run.`,
       chips: [
         { text: "verify · regenerate_after(glob) · lookup · avoid(x→y) · environment" },
@@ -482,7 +486,8 @@ function build(stage: Stage): Built {
       ],
     },
     {
-      title: "Tasks are generated to test them",
+      title: "Practice tasks test the claims",
+      plain: `To test the claims, Adage writes ${tasks.length} practice tasks, including control tasks that touch none of them. Most never mention the guide, so they test what an agent does unprompted.`,
       body: `The plan makes ${tasks.length} tasks for ${active.length} claims: ${triggers} give a claim its chance, and ${controls} are controls that touch nothing a claim covers. ${implicitN} of the ${triggers} never name the skill or the command. No file matches proto/*.proto, so that claim gets no tasks.`,
       chips: [
         { text: `${pct(implicitN / triggers)} implicit (about 70%)` },
@@ -514,7 +519,8 @@ function build(stage: Stage): Built {
       },
     },
     {
-      title: "Each task runs in a sealed clone",
+      title: "Practice runs in a sealed copy",
+      plain: "Your own agent works each task in a throwaway copy of the repository that cannot push anywhere. Your working files are never touched.",
       body: `With --execute, your own agent runs each task headlessly. Every session gets a fresh local clone with its origin removed, its own home and config directory, and a short tool list. Nothing can be pushed, and your working tree is never touched.`,
       chips: [
         { text: "tools: Bash Read Edit Write Glob Grep" },
@@ -524,12 +530,15 @@ function build(stage: Stage): Built {
       ],
     },
     {
-      title: "The traces go to the same learner",
+      title: "Same learning as real work",
+      plain: "The practice sessions then go through the same learning as your real ones.",
       body: `Exploration runs with the skill in the system prompt and Adage switched off, so no reflex steers it. The ${sessions.length} traces then go through the same learner as your own traces.`,
       chips: [{ text: "ADAGE_DISABLE=1" }, { text: "synthetic:skill:<sha256>@<run>" }, { text: `min support ${MIN_SUPPORT}` }],
     },
     {
-      title: "Reflexes are staged, never activated",
+      title: "Held for your review",
+      plain: "What it learns is set aside for review and kept at suggestion strength. Nothing reaches your agent until you accept it.",
+      math: "train",
       body: `The learner found ${[flLearned, deadLearned].filter(Boolean).length} reflexes. They are written to staged/tracks, capped at prime and forming, and never reach the index your hooks read. The finish line ${flFires ? "would fire, but is capped" : "primes"}: ${flSupport} of ${editors.length} sessions regenerated after the edit, a lower bound of ${f2(flLb)}.`,
       chips: [
         { text: "never fire · never firm" },
@@ -540,6 +549,9 @@ function build(stage: Stage): Built {
     },
     {
       title: "Each claim gets a verdict",
+      plain: "Each claim gets a verdict. The guide says to run npm test, but it failed every time and agents found make check instead, so the claim is marked out of date.",
+      math: "train",
+      key: true,
       body: `The skill says npm test. It failed in ${failedTest.length} of the ${ranTest.length} sessions that ran it, and the agents found make check instead, so a dead end was learned: the claim is contradicted. The regenerate claim compiled. The lookup was followed only ${lkFollowed} times, too few to learn.`,
       chips: [
         { text: `stale: failed ≥ ${CONSISTENT[0]}/${CONSISTENT[1]} + a dead end`, ok: consistent && deadLearned },
@@ -548,7 +560,9 @@ function build(stage: Stage): Built {
       ],
     },
     {
-      title: "Held-out tasks test the reflexes",
+      title: "A fair test on fresh tasks",
+      plain: "Fresh tasks compare three set-ups: no guide, the guide in the prompt, and the learned reflexes. A reflex is accepted when it works about as well as the guide, at no extra cost.",
+      math: "train",
       body: `${heldOut} new tasks run in three arms: no skill, the skill in the prompt, and the staged reflexes through Adage's hooks with no control arm. A reflex is accepted when its arm follows it in at least 70% of sessions, within 10 points of the skill arm, and costs no more than 10% extra in turns or dollars.`,
       chips: [
         ...acc.map((a) => ({ text: `${a.id} reflex ${pct(a.st.reflex.rate)} · skill ${pct(a.st.skill.rate)}`, ok: a.accepted })),
@@ -617,11 +631,11 @@ function build(stage: Stage): Built {
 
 export const train: Chapter = {
   id: "train",
-  title: "Train on a skill",
+  title: "Learn from a written guide",
+  technical: "Train on a skill",
   status: "Built · sessions optional",
   kind: "built",
-  summary:
-    "adage train compiles a skill into a pack of reflexes with no model and no session, and replays every command in a sandbox. Optionally, your agent runs headlessly on generated tasks in disposable clones, the same learner stages what it did, and each claim gets a verdict.",
+  summary: "A written guide to how work is done here can become reflexes too. Each of its instructions is tested, not trusted.",
   source: "crates/adage-train · docs/training.md",
   usesRepo: false,
   build,

@@ -532,7 +532,9 @@ function build(stage: Stage, ctx: { graph: Graph | null; repo: boolean }): Built
 
   const text: Omit<Step, "state">[] = [
     {
-      title: "Two arms, task by task",
+      title: "With and without, task by task",
+      plain: "The same tasks run both with Adage and without it. Each row is a task and each dot a run, placed by how many turns it took.",
+      key: true,
       body: `Each row is one of ${TASKS.length} sample tasks; each dot is a run, placed by its turns. Every task runs in both arms, treated and control, twice each. Runs of one task are not independent, so the task, not the run, is the unit.`,
       chips: [
         { text: `${TASKS.length} tasks × 2 arms × 2 runs` },
@@ -541,36 +543,50 @@ function build(stage: Stage, ctx: { graph: Graph | null; repo: boolean }): Built
       ],
     },
     {
-      title: "Measure the difference within each task",
+      title: "Compare within each task",
+      plain: `Within each task, the runs with Adage are compared with the runs without it. On average the difference is ${sd(obs)} turns.`,
+      math: "measure",
       body: `Within each task, the treated runs' mean is compared with the control runs' mean. The test statistic is the mean of those differences over the ${TASKS.length} tasks: ${sd(obs)} turns.`,
       chips: [{ text: `task mean diff ${sd(obs)}` }, { text: `${turns.g.filter(([a, b]) => mean(a) < mean(b)).length} of ${TASKS.length} tasks fewer turns` }],
     },
     {
-      title: "Shuffle the arms within each task",
+      title: "Could it be luck?",
+      plain: "If Adage made no difference, swapping which runs had it would change nothing. So the labels are shuffled within each task, and the difference is worked out again.",
+      math: "measure",
       body: `If the arm made no difference, the labels could be swapped within a task and nothing would change. One shuffle, seeded: runs trade arms inside their own row, never across rows, and the statistic becomes ${sd(permDiff)}.`,
       chips: [{ text: "labels shuffled within tasks" }, { text: `seed ${PERM_SEED}` }, { text: `shuffle 1: ${sd(permDiff)}` }],
     },
     {
       title: "Chance, ten thousand times",
+      plain: "Shuffled ten thousand times, chance alone almost never matches the real difference, so the result is very unlikely to be luck.",
+      math: "measure",
+      key: true,
       body: `Repeat the shuffle ${N_PERM.toLocaleString("en")} times and the statistics pile up around zero, with a spread of ±${f2(nullSd)}. ${extreme ? `Only ${extreme}` : "None"} land as far out as the observed ${sd(obs)}, so p = (${extreme} + 1) / (${N_PERM.toLocaleString("en")} + 1) = ${fp(turns.perm.p)}.`,
       chips: [{ text: `${N_PERM.toLocaleString("en")} permutations` }, { text: "two-sided" }, { text: `p ${fp(turns.perm.p)}`, ok: turns.perm.p < ALPHA }],
       figure: histFigure(nul, obs),
     },
     {
-      title: "Correct for looking at several metrics",
+      title: "Raise the bar for several tests",
+      plain: "Turns, cost and pass rate are all tested, and testing more things makes a lucky hit more likely, so the bar is raised to match.",
+      math: "measure",
       body: `Turns, cost and pass rate are tested together, so a chance hit somewhere is likelier. Holm's step-down multiplies the smallest p by ${tests.length}, the next by ${tests.length - 1}, and so on, never letting a later p fall below an earlier one. ${tests
         .map((t, i) => `${t.m.label} ${fp(adj[i]!)}`)
         .join(", ")}.`,
       chips: tests.map((t, i) => ({ text: `${t.m.label}: Holm ${fp(adj[i]!)}`, ok: adj[i]! < ALPHA })),
     },
     {
-      title: "Ask how far it generalises",
+      title: "Would it hold on new tasks?",
+      plain: "Resampling the tasks gives a likely range for the saving, and a second test asks whether it would carry over to tasks not seen here.",
+      math: "measure",
       body: `Resampling whole tasks ${N_BOOT.toLocaleString("en")} times gives a 95% interval for the median difference: [${sd(turns.boot.lo)}, ${sd(turns.boot.hi)}] turns${turns.boot.hi < 0 ? ", clear of zero" : ""}. A sign-flip test over the task differences asks whether it would hold for new tasks; it is exact, and with ${TASKS.length} tasks its smallest possible p is 2/2^${TASKS.length} = ${fp(minFlip)}.`,
       chips: [{ text: `bootstrap ${N_BOOT.toLocaleString("en")} · seed ${BOOT_SEED}` }, { text: `sign-flip p ${fp(turns.flip)}`, ok: turns.flip < ALPHA }, { text: `${TASKS.length} tasks` }],
       figure: ciFigure([{ label: "sample · turns", diff: turns.diff, lo: turns.boot.lo, hi: turns.boot.hi }], -16, 6),
     },
     {
-      title: "What 354 real traces showed",
+      title: "What 354 real sessions showed",
+      plain: "Across 354 real agent sessions: where Adage had learned a reflex, agents needed a median of 12.5 turns instead of 28, at about half the cost. The difference in pass rates was too small to call.",
+      math: "measure",
+      key: true,
       body: `The live corpus: ${total} headless Claude Code sessions over ${CORPUS.length} runs of ${haiku} sandboxes, confined with bubblewrap, arms control, adage and instincts. With Haiku 4.5, in the ${learnedHaiku} sandboxes where a reflex was learned: median turns 12.5 vs 28 (−15.5, CI [−18.5, −9], Holm p 0.001, sign-flip p 0.0002), cost $0.063 vs $0.120 (−48%). Across all ${haiku}: 18 vs 26 turns (Holm p 0.029); pass rate 0.62 vs 0.51, Holm p 0.76, not significant.${useRepo ? ` In ${haiku - learnedHaiku} of ${haiku} sandboxes nothing was learned, and instincts alone showed no measurable effect.` : ""}`,
       chips: [
         { text: "turns −15.5 · Holm 0.001", ok: true },
@@ -582,7 +598,9 @@ function build(stage: Stage, ctx: { graph: Graph | null; repo: boolean }): Built
     },
     useRepo
       ? {
-          title: "Your reflexes against control",
+          title: "Your reflexes, with and without",
+          plain: "Each row is one of your reflexes: with Adage above, without below, so you can see whether it changed what the agent did.",
+          math: "measure",
           body: `Each row is one of your reflexes: a dot per trace where it applied, lit where the agent took its path (or, for an inhibit, hit the dead end). Treated above, control below. A share is stated only with at least ${MIN_TREATED} treated and ${MIN_CONTROL} control traces; ${
             rows.filter((r) => r.enough).length ? `${rows.filter((r) => r.enough).length} of ${rows.length} have that many.` : `none of your ${rows.length} has that many yet, so these numbers are too small to conclude anything.`
           }${k0 ? ` In all: took the known path ${k0.treated.k}/${k0.treated.n} treated, ${k0.control.k}/${k0.control.n} control.` : ""} ${SAVINGS_NOTE}`,
@@ -590,6 +608,8 @@ function build(stage: Stage, ctx: { graph: Graph | null; repo: boolean }): Built
         }
       : {
           title: "Where nothing was learned, nothing changed",
+          plain: "Where nothing was learned, nothing changed, and no learned reflex gave wrong advice. Adage also reports its savings on your own work once enough sessions have finished.",
+          math: "measure",
           body: `In ${haiku - learnedHaiku} of ${haiku} Haiku sandboxes the agents found the lookup in too few training traces, so no reflex was learned; there, instincts alone showed no measurable effect (turns −1, CI [−4, 3]). No learned reflex was false. Offline, before any agent runs, the L0 bench scores a learner by J = turns saved − 2.0 × false directives + 1.0 × route F1, per session. ${SAVINGS_NOTE}`,
           chips: [
             { text: `nothing learned: ${haiku - learnedHaiku}/${haiku}` },
@@ -724,11 +744,11 @@ function ciFigure(rows: { label: string; diff: number; lo: number; hi: number; h
 
 export const measure: Chapter = {
   id: "measure",
-  title: "Measure against control",
+  title: "Prove it helped",
+  technical: "Measure against control",
   status: "Built",
   kind: "built",
-  summary:
-    "Effects are measured treated against control on the same tasks. The task is the unit, and the tests shuffle arms rather than assume a distribution. On your machine, adage savings compares your own treated and control sessions, and states dollars only once there are 10 control and 30 treated sessions.",
+  summary: "A small share of sessions get no help at all, so the two groups can be compared to show whether Adage really saves turns and money.",
   source: "crates/adage-eval · evals/live · evals/corpus",
   usesRepo: true,
   build,

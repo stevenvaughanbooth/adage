@@ -13,9 +13,19 @@ export interface Chip {
   ok?: boolean;
 }
 
+/** The blocks of "The math" on the site's /how page, in walkthrough order. */
+export type MathId = "read" | "graph" | "evidence" | "uplift" | "intent" | "cards" | "train" | "seal" | "hook" | "measure";
+
 export interface Step {
   title: string;
+  /** The step for someone new to it: one or two sentences in everyday words. */
+  plain: string;
+  /** The precise account, shown under "More detail". */
   body: string;
+  /** The block of "The math" this step relies on, if any. */
+  math?: MathId;
+  /** A stop on the quick tour. */
+  key?: boolean;
   chips: Chip[];
   state: SceneState;
   /** A figure under the caption (a chart or a table), drawn on a 2D canvas. */
@@ -43,11 +53,14 @@ export interface Context {
 
 export interface Chapter {
   id: string;
+  /** What the chapter does, in everyday words. */
   title: string;
+  /** The chapter's technical name. */
+  technical: string;
   /** One line for the chapter list. */
   status: string;
   kind: Status;
-  /** Two sentences: what this part of Adage does. */
+  /** Two sentences: what this part of Adage does, in everyday words. */
   summary: string;
   /** Where it lives in the code. */
   source: string;

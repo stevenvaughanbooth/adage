@@ -965,12 +965,16 @@ function build(stage: Stage): Built {
 
   const text: Omit<Step, "state">[] = [
     {
-      title: "Candidates arrive with their evidence",
+      title: "Candidate habits arrive",
+      plain: `The pattern finder hands over candidate habits, each with the sessions behind it: here ${S.length} of them, found across ${r.traces.length} sessions.`,
       body: `Mining hands over closed patterns, each read as a prediction: after this context, this follows. Here are ${S.length} sample candidates over ${r.traces.length} sample traces, among them the registry pattern from the previous chapter. Support counts distinct traces; opportunities are the traces where the context occurs.`,
       chips: [{ text: `${S.length} sample candidates` }, { text: `≤ ${MAX_CLOSED.toLocaleString("en")} closed patterns scored` }, { text: `${r.traces.length} traces over ${r.days} days` }],
     },
     {
-      title: "Frequent is not useful: the gates",
+      title: "Common is not the same as useful",
+      plain: `Common is not the same as useful. Each candidate must be seen in enough sessions, really be tied to its trigger, and be likely to hold. ${failing.length} of ${S.length} do not make it.`,
+      math: "graph",
+      key: true,
       body: `Confidence is a Beta posterior shrunk toward the parent context (κ ${KAPPA}), with evidence halved every ${HALF_LIFE} days, and judged by its 5% quantile. ${lead.cand.text.replace(/ → .*/, "")} predicts make gen then make check in ${lead.support} of ${lead.opp} traces, lower bound ${f2(lead.confLb)}. ${failing.map((s) => `${NAME[s.cand.key]} fails on ${s.gate.split(" ")[0]}`).join("; ")}.`,
       chips: [
         { text: `support ≥ ${MIN_SUPPORT} · days ≥ ${MIN_DAYS}` },
@@ -980,24 +984,33 @@ function build(stage: Stage): Built {
       ],
     },
     {
-      title: "Confidence is calibrated",
+      title: "Adage checks its own confidence",
+      plain: "Adage checks its own confidence: it predicts on some sessions, tests on others it did not see, and corrects itself, so 80% sure means right 80% of the time.",
+      math: "graph",
       body: `On ${CAL_FOLDS} task-grouped inner folds, every candidate's posterior mean is compared with what happened in the fold it did not see. Isotonic regression over ${CAL_BINS} bins bends the raw means onto the outcomes. Each candidate keeps both: the calibrated mean and lower bound are recorded beside the raw ones, which the compiler still reads.`,
       chips: [{ text: `${CAL_BINS} bins · pool adjacent violators` }, { text: `re-mined per fold below ${CAL_REMINE_MAX} traces` }, { text: "ECE 0.017 all pairs · 0.116 selected (demo-haiku45)" }],
       figure: reliability,
     },
     {
-      title: "One code table per delivery shape",
+      title: "Like competes with like",
+      plain: "To choose between overlapping habits, Adage asks which ones let it describe the sessions most briefly. Habits that would say different things never compete with each other.",
+      math: "graph",
       body: `Selection is by compression: a reflex earns its place by describing the traces in fewer bits. Candidates that would deliver different directives never compete, so each delivery shape gets its own table, and avoids get one per failing runner. A pattern costs its items' codes plus ${ITEM_BITS} bits per item and log2 6 for its length.`,
       chips: [{ text: `${r.tables.length} tables` }, { text: `${ITEM_BITS} bits per item + log2 6` }, { text: "SQS-style MDL" }],
     },
     {
-      title: "Compression chooses",
+      title: "Keep what says something new",
+      plain: `${kept.length} candidates make that description shorter, so they stay. One that only repeats what a shorter habit already says is dropped.`,
+      math: "graph",
+      key: true,
       body: `Each table fills best gain first, re-checking a candidate's gain before accepting it. ${kept.length} candidates save bits. ${fell.map((e) => NAME[e.sc.cand.key]).join(", ")} would code the same make gen and make check that the shorter sequence already coded, so it saves nothing and falls away.`,
       chips: [{ text: "lazy greedy, best gain first" }, { text: `${kept.length} kept · ${fell.length} saves 0 bits` }, { text: `≤ ${MAX_REFLEXES} reflexes · ≤ ${MAX_UNSELECTED.toLocaleString("en")} gated extras compile` }],
       figure: gains,
     },
     {
-      title: "Winners compile to shapes",
+      title: "Each winner gets a strength",
+      plain: "Each winner gets a strength. The best-supported one is sure enough to tell the agent; newer ones start as suggestions; and the test command that keeps failing becomes a warning at the start of each session.",
+      math: "evidence",
       body: `Each winner compiles to a delivery shape, and its strength is decided here. The context route's lower bound, ${f2(by.get("ctx")!.confLb)}, reaches the ${f2(GREEN_LB)} fire bar. The sequence and the finish line compile provisional: they prime until their evidence is counted again on their own trigger. The dead end is announced at session start, because ${Math.round((comp.get("avoid")!.share ?? 0) * r.traces.length)} of ${r.traces.length} traces run npm test.`,
       chips: [
         { text: `fire: LB ≥ ${f2(GREEN_LB)} and a fire ceiling` },
@@ -1007,12 +1020,14 @@ function build(stage: Stage): Built {
       ],
     },
     {
-      title: "Interlocks drop contradictions",
+      title: "Contradictions are dropped",
+      plain: "One candidate recommends npm test, but another reflex warns that npm test fails here. A contradiction like that is dropped before anything is saved.",
       body: `${interlocked.map((c) => NAME[c.sc.cand.key]).join(", ")} passed every gate and saved bits, but it directs npm test, the runner the avoid says fails here. A run or sequence that directs an avoided runner is dropped before anything is written.`,
       chips: [{ text: "interlock before emission" }, { text: `${delivered.length} reflexes delivered` }],
     },
     {
-      title: "One track, with its reasons",
+      title: "Saved, with the reasons why",
+      plain: `The ${delivered.length} survivors are saved together, each with a note explaining why it exists, for you to review. The agent never sees those notes.`,
       body: `The ${delivered.length} survivors are written to one track, <repo>/learned: the graph engine is the only learner, so there is no track per kind of reflex. Beside it, .why.json records why each exists: the mined pattern, how many context items it conditions on, the bits it saved, its lift and confidence, and example traces. adage review reads it; the agent never sees it, and it never travels in a shared pack. Each reflex is then judged again on the traces, next.`,
       chips: [{ text: "tracks/<repo>/learned" }, { text: ".why.json · never rendered to the agent" }, { text: "stable ids: review decisions survive re-learning" }],
     },
@@ -1034,11 +1049,11 @@ function build(stage: Stage): Built {
 
 export const choose: Chapter = {
   id: "choose",
-  title: "Choose and compile",
+  title: "Keep the useful ones",
+  technical: "Choose and compile",
   status: "Built · the learner",
   kind: "built",
-  summary:
-    "Candidates are scored as predictions, calibrated, then selected by compression: a reflex earns its place by describing traces in fewer bits. Winners compile to delivery shapes, and their strength is decided at compile time.",
+  summary: "Not every repeated pattern is worth saying. Adage keeps the reliable ones that add something new, and turns each into a reflex.",
   source: "crates/adage-graph/src/{score,select,compile} · crates/adage-tracks/src/why.rs",
   usesRepo: false,
   build,

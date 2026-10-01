@@ -364,26 +364,35 @@ function build(stage: Stage): Built {
   const text: Omit<Step, "state">[] = [
     {
       title: "Transcript lines stream in",
+      plain: "Every time a coding agent works, it keeps a diary: what you asked, which files it opened, which commands it ran and what came back. Adage reads that diary, on your machine.",
+      key: true,
       body: `This is a real Claude Code trace from the demo dataset: ${RECORDS.length} JSON lines. Adage reads it line by line and skips sub-agent (sidechain) records. Before that, it recognises the format by content: a Codex rollout, else an OpenCode export, else Claude Code JSONL.`,
       chips: [{ text: "Codex → OpenCode → Claude Code" }, { text: `OpenCode: "info" in the first ${OPENCODE_SNIFF} bytes` }, { text: "isSidechain skipped" }],
     },
     {
-      title: "The prompt, then the turns",
+      title: "Your request, then the agent's turns",
+      plain: `First comes your request, here about ticket ${PROMPT.match(/[A-Z][A-Z0-9]{0,9}-\d{1,7}/)?.[0] ?? "a ticket"}. Then the agent's actions, grouped into ${turns} turns. The agent's chatter in between is not an action, so it is set aside.`,
       body: `A user string that is not meta or synthetic is a prompt; this one names ${PROMPT.match(/[A-Z][A-Z0-9]{0,9}-\d{1,7}/)?.[0] ?? "a ticket"}. Tool calls that share one message.id form one turn: ${calls.length} calls make ${turns} turns here. The ${texts} assistant text blocks are not steps.`,
       chips: [{ text: `prompt ≤ ${MAX_PROMPT_KIB} KiB` }, { text: "anchored to the step it arrived at" }, { text: `${turns} turns` }],
     },
     {
-      title: "Results join their calls",
+      title: "Each action meets its result",
+      plain: `Each action is matched with its result, so Adage knows what worked: ${failedCalls.length} of the ${calls.length} actions in this session failed.`,
       body: `Each tool_result finds its call by tool_use_id, whatever line it sits on. is_error marks the call failed: ${failedCalls.length} of the ${calls.length} calls failed here, including a read of a directory and a missing tree command.`,
       chips: [{ text: "joined by tool_use_id" }, { text: `${failedCalls.length} failed` }],
     },
     {
-      title: "Compound commands split",
+      title: "Two-in-one commands are split",
+      plain: "A command that does two things at once, like build && test, is split into its parts, and a failure is pinned on the part that failed.",
+      math: "read",
       body: `A shell command is parsed, and a compound one becomes one step per sub-action: ${calls.length} calls become ${steps.length} steps. A failure is blamed on the last part only, unless the command used ||. Here the test command used ||, so both parts are marked failed.`,
       chips: [{ text: "failure → last part" }, { text: "|| → every part" }, { text: `${calls.length} calls → ${steps.length} steps` }],
     },
     {
-      title: "Every step gets a key and an effect",
+      title: "Each step gets a name and a risk level",
+      plain: "Specifics are swapped for placeholders, so looking up W-1041 and W-1042 count as the same step. Each step is also sorted by what it does, from just looking (safe to suggest) to publishing (never suggested).",
+      math: "read",
+      key: true,
       body: `Each step gets a template key, with the specifics replaced (the ticket becomes {id}), and an effect, ranked from observe to publish. The lookup is ${lookup.key}, an observe step. Keys are what the learner counts.`,
       chips: EFFECTS.map((e, i) => ({ text: `${e} ${byEffect[i]}` })),
       figure: (g, w, h, pal) => {
@@ -415,12 +424,15 @@ function build(stage: Stage): Built {
       },
     },
     {
-      title: "Steered traces are marked",
+      title: "Adage's own advice is set aside",
+      plain: "When Adage already gave advice in a session, the steps it advised are set aside, so a reflex never learns from its own advice.",
+      math: "read",
       body: "Where Adage already directed the agent, the trace carries an <adage-reflex> tag from the hook; only hook output counts, never text the agent wrote. What that directive named (here, make gen) is exposed from the point it arrived: it is not evidence for any reflex that directs it, so a reflex never learns from its own advice. The rest of the trace still counts.",
       chips: [{ text: "exposed from the directive on" }, { text: "only hook output steers" }, { text: "illustrative steered trace" }],
     },
     {
-      title: "Read once, then cached",
+      title: "Read once, kept on your machine",
+      plain: `Each session is read once and remembered, and nothing leaves your machine. These ${TRACES.length} sessions go on to the next chapter.`,
       body: `Parsed traces are cached by path, size and modification time, and the cache is stamped with the build, so a new build starts it empty. Nothing is redacted here; that happens only when something leaves the machine. These ${TRACES.length} traces are what the graph learner reads next.`,
       chips: [
         { text: `session format ${SESSION_FORMAT}` },
@@ -445,11 +457,11 @@ function build(stage: Stage): Built {
 
 export const readTraces: Chapter = {
   id: "read",
-  title: "Read traces",
+  title: "Read what the agent did",
+  technical: "Read traces",
   status: "Built",
   kind: "built",
-  summary:
-    "Claude Code, Codex and OpenCode transcripts become one shape: prompts, then a flat list of steps, one per action. Every shell command is parsed and classed by effect.",
+  summary: "Coding agents already keep a diary of every session. Adage reads those diaries on your machine and turns each into a simple list of actions.",
   source: "crates/adage-learn/src/{lib,import,codex,opencode,cache}.rs",
   usesRepo: false,
   build,
