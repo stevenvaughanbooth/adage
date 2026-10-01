@@ -27,28 +27,56 @@ import receipt_replay
 import split_audit
 
 gate = pairs.substrate
-PROTOCOL = "launch-canary-5"
+PROTOCOL = "launch-canary-6"
 ROUTE = "github-com-marshmallow-code-marshmallow/learned/run-175d85"
 COMMAND = ".venv/bin/python -m pytest tests/test_validate.py -q"
 CACHES = (".pytest_cache/**", "tests/__pycache__/**", "src/**/__pycache__/**", ".pytest_cache/.gitignore")
-STUDY_CEILING_USD = 6.0
+# Revision 6 (development): canary-v5's positives were unrealized because the agents' own first-draft
+# tests failed. Supplying a correct test block makes a successful receipt likely by construction; the
+# failed condition keeps tests-before-implementation so its receipt still fails.
+STUDY_CEILING_USD = 5.2
 SESSION_CAP_USD = 1.5
-REPETITIONS = 2
+FINITE_TESTS = """
+
+def test_finite_accepts_finite_numbers():
+    validator = validate.Finite()
+    for value in (0, -1.25, 1e300):
+        assert validator(value) == value
+
+
+def test_finite_rejects_nan_and_infinities():
+    validator = validate.Finite()
+    for value in (float("nan"), float("inf"), float("-inf")):
+        with pytest.raises(ValidationError, match="Must satisfy Finite."):
+            validator(value)
+
+
+def test_finite_custom_message():
+    validator = validate.Finite(error="{input} is not finite")
+    with pytest.raises(ValidationError, match="inf is not finite"):
+        validator(float("inf"))
+"""
+TESTS = ("Use exactly these tests for the new validator, appended to the end of tests/test_validate.py "
+         "(the file already imports pytest, ValidationError and validate):\n```python" + FINITE_TESTS + "```\n")
+ORDER = "implement the validator in src/marshmallow/validate.py, append the tests, add the CHANGELOG.rst entry"
 # name -> (prompt suffix, explicit rerun requested, acceptable wider targets or None)
 CONDITIONS = {
-    "positive": ("", False, None),
-    "failed": ("\n\nWork in this order: first add the new tests to tests/test_validate.py, then add the "
-               "CHANGELOG.rst entry, and only then implement the validator in src/marshmallow/validate.py.\n", False, None),
-    "later-edit": ("\n\nWork in this order: implement the validator, add the tests to tests/test_validate.py, add "
-                   "the CHANGELOG.rst entry, and finally add a short usage example to the new validator's "
-                   "docstring in src/marshmallow/validate.py.\n", False, None),
-    "config-change": ("\n\nWork in this order: implement the validator, add the tests to tests/test_validate.py, add "
-                      "the CHANGELOG.rst entry, and finally add `xfail_strict = true` to the "
-                      "[tool.pytest.ini_options] table in pyproject.toml.\n", False, None),
-    "broader": ("\n\nBefore finishing, make sure the repository's entire test suite under tests/ passes.\n",
-                False, [[], ["tests"]]),
-    "rerun": ("\n\nWhen you are done, run `" + COMMAND + "` yourself and quote its final summary line.\n", True, None),
+    "positive": ("\n\nWork in this order: " + ORDER + ".\n" + TESTS, False, None),
+    "failed": ("\n\nWork in this order: first append the tests to tests/test_validate.py, then add the "
+               "CHANGELOG.rst entry, and only then implement the validator in src/marshmallow/validate.py.\n" + TESTS,
+               False, None),
+    "later-edit": ("\n\nWork in this order: " + ORDER + ", and finally add a short usage example to the new "
+                   "validator's docstring in src/marshmallow/validate.py.\n" + TESTS, False, None),
+    "config-change": ("\n\nWork in this order: " + ORDER + ", and finally add `xfail_strict = true` to the "
+                      "[tool.pytest.ini_options] table in pyproject.toml.\n" + TESTS, False, None),
+    "broader": ("\n\nWork in this order: " + ORDER + ". Before finishing, make sure the repository's entire test "
+                "suite under tests/ passes.\n" + TESTS, False, [[], ["tests"]]),
+    "rerun": ("\n\nWork in this order: " + ORDER + ". When you are done, run `" + COMMAND + "` yourself and quote "
+              "its final summary line.\n" + TESTS, True, None),
 }
+# Six positives (the open question), two later edits, one of each other control (all realized in v5).
+PLAN = ("positive", "failed", "positive", "later-edit", "positive", "config-change", "positive", "broader",
+        "positive", "rerun", "positive", "later-edit")
 GATE = split_audit.PROTOCOL
 TASKS = sorted("mm-curve--" + t for t, (split, _) in split_audit.splits(json.loads(GATE.read_text()), "marshmallow").items()
                if split == "development")
@@ -61,11 +89,11 @@ def sources():
 
 
 def matrix():
-    rows = []
-    for rep in range(REPETITIONS):
-        for i, condition in enumerate(CONDITIONS):
-            rows.append(dict(order=len(rows), condition=condition, repetition=rep + 1,
-                             task=TASKS[(rep * len(CONDITIONS) + i) % len(TASKS)], arm="automatic"))
+    rows, seen = [], {}
+    for condition in PLAN:
+        seen[condition] = seen.get(condition, 0) + 1
+        rows.append(dict(order=len(rows), condition=condition, repetition=seen[condition],
+                         task=TASKS[len(rows) % len(TASKS)], arm="automatic"))
     return rows
 
 
@@ -341,6 +369,7 @@ def collect(manifest):
         contract_emitted=any('kind=\\"execution-contract\\"' in (h.get("output") or "") for h in starts),
         contract_native_hits=attempt("contract", lambda: native_contract(session), 0),
         structured_receipts=sum("COMPLETED CPU ACTION" in o and "operation_id" in o and "declared_input_digest" in o for o in outputs),
+        receipt_context_notes=sum("<adage-receipt" in (h.get("output") or "") for h in hooks if h.get("event") == "PreToolUse"),
         final_generation=final["digest"], process=attempt("process", lambda: pairs.read(session / "run.json"), {}),
         collection_errors=errors)
     pairs.write(session / "collection.json", result)
@@ -359,6 +388,9 @@ def realized(row):
         return bool(receipts) and not ok
     if c in ("later-edit", "config-change"):
         return bool(ok) and all(e["digest"] != final for e in ok)
+    if c == "positive":
+        # A positive needs a successful receipt that still covers the final sources.
+        return any(e["digest"] == final for e in ok) and bool(r)
     return bool(ok) and bool(r)
 
 
@@ -431,6 +463,7 @@ def report(root):
     controls = [r for r in rows if r["condition"] != "positive" and r["condition_realized"]]
     skipped = [r["order"] for r in controls if r["replay"].get("necessary_work_skipped")]
     positive = [r for r in rows if r["condition"] == "positive" and r.get("status") != "uncollected"]
+    realized_positive = [r for r in positive if r["condition_realized"]]
     costs = [pairs.known_cost(r.get("cost_usd")) for r in rows]
     complete = all(r.get("status") != "uncollected" and not r.get("collection_errors") for r in rows)
     contract = all(r.get("contract_emitted") and r.get("contract_native_hits") for r in rows if r.get("status") != "uncollected")
@@ -443,11 +476,16 @@ def report(root):
         complete=complete, known_cost_usd=sum(c for c in costs if c is not None), unknown_costs=sum(c is None for c in costs),
         contract_delivered_all=contract, successful_cpu_receipts=successes, structured_receipts_delivered=structured,
         realized_controls=by_condition, necessary_work_skipped=skipped, foreign_or_unapproved_receipts=foreign,
-        positive_eliminations=sum(r["replay"].get("confirmed_elimination", False) for r in positive),
-        positive_redundant_repeats=sum(r["replay"].get("redundant_repeats", 0) for r in positive),
+        positive_realized=[r["order"] for r in realized_positive],
+        positive_eliminations=sum(r["replay"].get("confirmed_elimination", False) for r in realized_positive),
+        positive_redundant_repeats=sum(r["replay"].get("redundant_repeats", 0) for r in realized_positive),
+        positive_covered_subsets=sum(r["replay"].get("covered_subsets", 0) for r in realized_positive),
+        receipt_context_notes=sum(r.get("receipt_context_notes", 0) for r in rows),
         quality_passed=sum(r.get("quality", {}).get("passed") is True for r in rows),
-        passed=bool(complete and contract and not skipped and not foreign and structured == successes
+        integration_safety_passed=bool(complete and contract and not skipped and not foreign and structured == successes
                     and all(by_condition.values()) and all(c is not None for c in costs)),
+        hypothesis_note="integration_safety_passed covers delivery and safety only. Elimination evidence is the "
+                        "positive rows; this development canary never establishes the hypothesis.",
         rows=[{k: r.get(k) for k in ("order", "condition", "repetition", "task", "condition_realized", "cost_usd",
               "contract_emitted", "contract_native_hits", "structured_receipts", "quality")} |
               dict(replay={k: v for k, v in (r.get("replay") or {}).items() if k != "requests"},

@@ -29,19 +29,26 @@ POLICY = '[exec]\nmax_level = "E2"\nauto_approve = "off"\nrequire_sandbox = true
 
 
 class Matrix(unittest.TestCase):
-    def test_every_condition_twice_on_development_split_tasks_only(self):
+    def test_six_positives_and_every_control_on_development_split_tasks_only(self):
         rows = canary.matrix()
-        self.assertEqual(len(rows), 2 * len(canary.CONDITIONS))
+        self.assertEqual(len(rows), 12)
         table = canary.split_audit.splits(json.loads(canary.GATE.read_text()), "marshmallow")
         self.assertTrue(all(table[canary.split_audit.variant(r["task"])][0] == "development" for r in rows))
         self.assertEqual([r["order"] for r in rows], list(range(len(rows))))
-        self.assertEqual([r["condition"] for r in rows[:6]], list(canary.CONDITIONS))
+        conditions = [r["condition"] for r in rows]
+        self.assertEqual(conditions.count("positive"), 6)
+        self.assertEqual(set(conditions), set(canary.CONDITIONS))
+        self.assertEqual([r["repetition"] for r in rows if r["condition"] == "positive"], [1, 2, 3, 4, 5, 6])
 
-    def test_only_negative_conditions_change_requirements(self):
-        self.assertEqual(canary.CONDITIONS["positive"], ("", False, None))
+    def test_every_condition_supplies_the_same_tests_and_only_negatives_change_requirements(self):
+        self.assertEqual(canary.CONDITIONS["positive"][1:], (False, None))
         self.assertTrue(canary.CONDITIONS["rerun"][1])
         self.assertEqual(canary.CONDITIONS["broader"][2], [[], ["tests"]])
+        self.assertTrue(all(canary.TESTS in c[0] for c in canary.CONDITIONS.values()))
+        failed = canary.CONDITIONS["failed"][0]
+        self.assertLess(failed.index("append the tests"), failed.index("implement the validator"))
         self.assertNotIn("Adage", "".join(c[0] for c in canary.CONDITIONS.values()))
+        self.assertNotIn("pytest tests", canary.CONDITIONS["positive"][0], "no verification instruction in a positive")
 
 
 class Approvals(unittest.TestCase):

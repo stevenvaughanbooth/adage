@@ -41,6 +41,46 @@ class ArchivedTransfer(unittest.TestCase):
             self.assertTrue(exact and all(r["segment"] == CMD for r in exact))
 
 
+class CanaryV5(unittest.TestCase):
+    """Development canary (launch-gate-v4/canary-v5): the two mechanisms behind zero eliminations."""
+    ROOT = Path(__file__).parent / "results/20260930-launch-canary/canary-v5/timelines"
+
+    def load(self, name):
+        return json.loads((self.ROOT / (name + ".json")).read_text())
+
+    def test_positive_sessions_got_failing_receipts_from_their_own_first_draft_tests(self):
+        for name in ("00-positive-1", "06-positive-2", "09-config-change-2"):
+            tl = self.load(name)
+            receipt = next(i for i, e in enumerate(tl["events"]) if e["kind"] == "receipt")
+            before = [e["path"] for e in tl["events"][:receipt] if e.get("name") == "Edit"]
+            # The context fired at the natural end of the work: source, tests, then the changelog.
+            self.assertEqual((before[0], before[-1]), ("src/marshmallow/validate.py", "CHANGELOG.rst"), name)
+            self.assertIn("tests/test_validate.py", before)
+            self.assertEqual(tl["events"][receipt]["outcome"], "failed")
+            # The agent then fixed its own tests: the failure was real, and the work necessary.
+            after = [e.get("path") for e in tl["events"][receipt:] if e.get("name") == "Edit"]
+            self.assertIn("tests/test_validate.py", after)
+            r = rr.replay(tl)
+            self.assertEqual((r["successful_receipts"], r["necessary_work_skipped"]), (0, False))
+
+    def test_interpreter_hint_turned_the_first_post_receipt_attempt_into_a_rerun(self):
+        hinted = 0
+        for path in sorted(self.ROOT.glob("*.json")):
+            tl = json.loads(path.read_text())
+            receipt = next(i for i, e in enumerate(tl["events"]) if e["kind"] == "receipt")
+            tests = [e for e in tl["events"][receipt + 1:] if e.get("name") == "Bash" and "pytest" in (e.get("command") or "")]
+            if tests[0]["command"].startswith("python -m pytest"):
+                hinted += 1
+                self.assertTrue(tests[0]["adage_pre_context"], path.stem)
+                self.assertTrue(tests[1]["command"].startswith(".venv/bin/python -m pytest"), path.stem)
+        self.assertEqual(hinted, 10)
+        later, broader = rr.replay(self.load("08-later-edit-2")), rr.replay(self.load("04-broader-1"))
+        self.assertEqual([r["classification"] for r in later["requests"] if "segment" in r][:2], ["different_environment", "covered_subset"])
+        self.assertEqual((later["successful_receipts"], later["redundant_repeats"], later["covered_subsets"]), (1, 1, 4))
+        self.assertEqual([r["classification"] for r in broader["requests"] if "segment" in r][:2], ["different_environment", "equivalent_repeat"])
+        self.assertFalse(later["confirmed_elimination"] or broader["confirmed_elimination"])
+
+
 class Equivalence(unittest.TestCase):
     def kind(self, command, digest="a"):
         rows = rr.replay(timeline(receipt(), tool(command, digest)))["requests"]
