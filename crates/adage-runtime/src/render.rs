@@ -248,12 +248,14 @@ pub fn action_predicted(
     wrap_result(&d.track, &d.version, &d.route, &d.kind, d.strength, &body, "e2")
 }
 
-/// The tests a passing run collected, from its declared pytest record: "Tests: 228 collected; new
-/// since the last recorded run: a, b."
+/// The tests a passing run collected, from its declared pytest record: "Tests: 228 collected;
+/// exit 0; new since the last recorded run: a, b." The record lists collected node ids, skipped
+/// and expected failures included, so it says what was collected and how the run exited, never
+/// that every test passed.
 fn tests_line(t: &TestEvidence) -> String {
     let mut line = String::from("Tests:");
     if let Some(n) = t.collected {
-        line.push_str(&format!(" {n} collected, all passing"));
+        line.push_str(&format!(" {n} collected; exit 0"));
     }
     if !t.new.is_empty() {
         let names: Vec<String> = t.new.iter().map(|n| sanitise(n)).collect();
@@ -300,25 +302,64 @@ mod result_text_tests {
             },
         );
         assert!(ok.contains("exec=\"e2\"") && ok.contains("passed (exit 0, 1.6 s; receipt 0123456789ab)"), "{ok}");
+        // F7: the record counts collected tests, skipped and expected failures included.
         assert!(
-            ok.contains("Tests: 228 collected, all passing; new since the last recorded run: tests/t.py::test_a."),
+            ok.contains("Tests: 228 collected; exit 0; new since the last recorded run: tests/t.py::test_a."),
             "{ok}"
         );
+        assert!(!ok.contains("all passing"), "{ok}");
         for banned in ["COMPLETED CPU ACTION", "not requested by the user", "dddddddd", "Do not", "Learned by Adage"] {
             assert!(!ok.contains(banned), "{banned}: {ok}");
         }
-        let failed = action_failed(&d(), "cmd", Some(1), &["tests/t.py::test_a".into()], 2, "0123456789abcdef");
+        let record = FailureRecord {
+            refreshed: true,
+            failing: Listed { names: vec!["tests/t.py::test_a".into()], more: 2 },
+            collection: Listed { names: vec!["tests/t_c.py".into()], more: 0 },
+            uncleared: Listed { names: vec!["tests/t.py::test_old".into()], more: 0 },
+        };
+        let failed = action_failed(&d(), "cmd", Some(1), Some(&record), "0123456789abcdef");
         assert!(
             failed.contains("it failed (exit 1; receipt 0123456789ab). Nothing was changed.")
-                && failed.contains("Failing tests: tests/t.py::test_a (+2 more)."),
+                && failed.contains("Failing tests: tests/t.py::test_a (+2 more).")
+                && failed.contains("Collection errors (the file could not be imported) in: tests/t_c.py.")
+                && failed.contains("Recorded as failing before this run and not cleared by it: tests/t.py::test_old."),
             "{failed}"
         );
-        let gate = stop_gate_failed("cmd", Some(1), &[], 0);
+        let stale = action_failed(&d(), "cmd", Some(1), Some(&FailureRecord::default()), "0123456789abcdef");
+        assert!(
+            stale.contains("not updated by this run, so no failing test names") && !stale.contains("Failing tests")
+        );
+        let gate = stop_gate_failed("cmd", Some(1), None);
         assert!(gate.contains("as you finished: it failed (exit 1)") && !gate.contains("Failing tests"));
         assert_eq!(card_checks_line(&[".venv/bin/python -m pytest tests/t.py -q"]).unwrap(),
                    "Tests in these sessions ran with: `.venv/bin/python -m pytest tests/t.py -q`. Python here is `.venv/bin/python`.");
         assert_eq!(card_checks_line(&["make test"]).unwrap(), "Tests in these sessions ran with: `make test`.");
         assert!(card_checks_line(&[]).is_none());
+    }
+
+    /// F3: every Stop continuation Adage writes is recognisable as its own text, with the same
+    /// first words and provenance sentence as a learned obligation's request.
+    #[test]
+    fn stop_gate_continuations_carry_adages_own_markers() {
+        let failed = stop_gate_failed(".venv/bin/python -m pytest tests -q", Some(1), None);
+        let unknown = stop_gate_unknown("make test", "the journal could not be written");
+        let obligation = stop_reason("registry/*.csv", "make gen");
+        for text in [&failed, &unknown, &obligation] {
+            assert!(text.starts_with(FINISH_LINE) && text.ends_with(NOT_FROM_USER), "{text}");
+            assert!(is_finish_line(text), "{text}");
+        }
+        assert!(unknown.contains("Do not retry it automatically"), "{unknown}");
+        // Joined (the gate's failure, then a learned obligation): one marker at each end, both bodies.
+        let both = join_finish_lines(&failed, &obligation);
+        assert!(both.starts_with(FINISH_LINE) && both.ends_with(NOT_FROM_USER), "{both}");
+        assert_eq!(both.matches(FINISH_LINE).count(), 1, "{both}");
+        assert_eq!(both.matches(NOT_FROM_USER).count(), 1, "{both}");
+        assert!(both.contains("it failed (exit 1)") && both.contains("`make gen`"), "{both}");
+        assert_eq!(named(&both).commands, [".venv/bin/python -m pytest tests -q", "make gen"]);
+        // Quoted inside a harness's own framing, both markers still identify it; a user's prompt does not.
+        assert!(is_finish_line(&format!("Stop hook feedback:\n{failed}")));
+        assert!(!is_finish_line("please add an Adage finish-line check: to the docs"));
+        assert_eq!(finish_line(&failed), failed, "idempotent");
     }
 }
 
@@ -327,24 +368,73 @@ fn short_id(id: &str) -> String {
     sanitise(id).chars().take(12).collect()
 }
 
+/// Names from a run's declared record, bounded: the first few, and how many more.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Listed {
+    pub names: Vec<String>,
+    pub more: usize,
+}
+
+impl Listed {
+    pub fn is_empty(&self) -> bool {
+        self.names.is_empty() && self.more == 0
+    }
+}
+
+/// What a failed pytest run's declared failure record (`.pytest_cache/v/cache/lastfailed`) shows
+/// about *this* run, never its output. pytest's record is cumulative: it keeps a failure until
+/// that test passes or is skipped, so only what this run changed can be attributed to it. A
+/// record this run did not rewrite says nothing about it (`refreshed` false), and no names are
+/// given then.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FailureRecord {
+    /// The run rewrote the record: the lists below are about this run.
+    pub refreshed: bool,
+    /// Tests this run added to the record: they failed in this run.
+    pub failing: Listed,
+    /// Test files this run recorded as failing to collect (an import or syntax error).
+    pub collection: Listed,
+    /// Failures recorded before this run that it did not clear: they failed again or did not run.
+    pub uncleared: Listed,
+}
+
 /// The failing tests a run's declared pytest record names, bounded: "a, b (+3 more)".
-fn failing_list(failing: &[String], more: usize) -> String {
-    let names: Vec<String> = failing.iter().map(|n| sanitise(n)).collect();
+fn failing_list(l: &Listed) -> String {
+    let names: Vec<String> = l.names.iter().map(|n| sanitise(n)).collect();
     let mut s = names.join(", ");
-    if more > 0 {
-        s.push_str(&format!(" (+{more} more)"));
+    if l.more > 0 {
+        s.push_str(&format!(" (+{} more)", l.more));
     }
     s
 }
 
+/// The sentences a failure record supports, each about this run only.
+fn failure_sentences(r: &FailureRecord) -> Vec<String> {
+    if !r.refreshed {
+        return vec![
+            "pytest's failure record was not updated by this run, so no failing test names are given here.".into()
+        ];
+    }
+    let mut out = Vec::new();
+    if !r.failing.is_empty() {
+        out.push(format!("Failing tests: {}.", failing_list(&r.failing)));
+    }
+    if !r.collection.is_empty() {
+        out.push(format!("Collection errors (the file could not be imported) in: {}.", failing_list(&r.collection)));
+    }
+    if !r.uncleared.is_empty() {
+        out.push(format!("Recorded as failing before this run and not cleared by it: {}.", failing_list(&r.uncleared)));
+    }
+    out
+}
+
 /// A learned verification Adage ran that failed: the exit status and, from the declared pytest
-/// record, the failing tests. Nothing was applied.
+/// record, what failed in this run ([`FailureRecord`]). Nothing was applied.
 pub fn action_failed(
     d: &crate::Directive,
     command: &str,
     exit: Option<i32>,
-    failing: &[String],
-    more: usize,
+    record: Option<&FailureRecord>,
     operation: &str,
 ) -> String {
     let mut body = format!(
@@ -353,24 +443,73 @@ pub fn action_failed(
         exit.map_or("unknown".into(), |e| e.to_string()),
         short_id(operation)
     );
-    if !failing.is_empty() {
-        body.push_str(&format!("\nFailing tests: {}.", failing_list(failing, more)));
+    for s in record.map(failure_sentences).unwrap_or_default() {
+        body.push('\n');
+        body.push_str(&s);
     }
     wrap_result(&d.track, &d.version, &d.route, &d.kind, d.strength, &body, "e2")
 }
 
+/// The first words of every Stop-hook continuation Adage writes. Where a continuation re-enters
+/// as a user message (Codex turns a Stop `block` reason into the next user prompt), these words
+/// are how the hook and the learners know it as Adage's own text, never the user's prompt.
+pub const FINISH_LINE: &str = "Adage finish-line check:";
+/// The provenance sentence that ends every Stop-hook continuation Adage writes.
+pub const NOT_FROM_USER: &str = "This reminder is from Adage, not from the user.";
+
+/// `body` as a Stop-hook continuation: [`FINISH_LINE`] first and [`NOT_FROM_USER`] last, each
+/// added only when missing (so joining two continuations keeps one of each at the ends).
+pub fn finish_line(body: &str) -> String {
+    let body = body.trim();
+    let mut s = if body.starts_with(FINISH_LINE) { body.to_string() } else { format!("{FINISH_LINE} {body}") };
+    if !s.ends_with(NOT_FROM_USER) {
+        s.push(' ');
+        s.push_str(NOT_FROM_USER);
+    }
+    s
+}
+
+/// Whether `text` is a Stop-hook continuation Adage wrote: it begins with [`FINISH_LINE`], or a
+/// harness quoted it inside framing of its own and both markers are there.
+pub fn is_finish_line(text: &str) -> bool {
+    let t = text.trim_start();
+    t.starts_with(FINISH_LINE) || (t.contains(FINISH_LINE) && t.contains(NOT_FROM_USER))
+}
+
+/// Two Stop-hook continuations due at the same Stop (the finish-line gate's, then a learned
+/// obligation's) as one: both bodies, one marker at each end.
+pub fn join_finish_lines(first: &str, second: &str) -> String {
+    let strip = |s: &str| {
+        let s = s.trim();
+        let s = s.strip_prefix(FINISH_LINE).unwrap_or(s).trim();
+        s.strip_suffix(NOT_FROM_USER).unwrap_or(s).trim().to_string()
+    };
+    finish_line(&format!("{} Also: {}", strip(first), strip(second)))
+}
+
 /// The Stop-gate continuation when the approved verification failed as the agent finished.
-pub fn stop_gate_failed(command: &str, exit: Option<i32>, failing: &[String], more: usize) -> String {
+pub fn stop_gate_failed(command: &str, exit: Option<i32>, record: Option<&FailureRecord>) -> String {
     let mut s = format!(
         "Adage ran `{}` (person-approved) as you finished: it failed (exit {}).",
         sanitise(command),
         exit.map_or("unknown".into(), |e| e.to_string())
     );
-    if !failing.is_empty() {
-        s.push_str(&format!(" Failing tests: {}.", failing_list(failing, more)));
+    for line in record.map(failure_sentences).unwrap_or_default() {
+        s.push(' ');
+        s.push_str(&line);
     }
     s.push_str(" The task is not finished until it passes; Adage runs it again when you finish.");
-    s
+    finish_line(&s)
+}
+
+/// The Stop-gate continuation when the run's completion could not be confirmed: like an action's
+/// (`adage-exec`'s `act`), the agent is told not to retry it and to have a person inspect it.
+pub fn stop_gate_unknown(command: &str, reason: &str) -> String {
+    finish_line(&format!(
+        "Adage cannot confirm that its run of `{}` as you finished completed: {}. Do not retry it automatically; inspect the worktree and ask the person to acknowledge recovery.",
+        sanitise(command),
+        sanitise(reason).trim_end_matches('.')
+    ))
 }
 
 /// The person's one line when the Stop gate ran (Claude Code shows it; the model never sees it).

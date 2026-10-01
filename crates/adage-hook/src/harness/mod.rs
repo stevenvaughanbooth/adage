@@ -108,12 +108,13 @@ pub fn adapter(harness: &str) -> Option<&'static dyn Adapter> {
     }
 }
 
-/// Text Adage itself wrote: a stop-hook reason (`render::stop_reason`) or a directive. On harnesses
+/// Text Adage itself wrote: a stop-hook continuation (a learned obligation's request, the
+/// finish-line gate's failure, a recovery warning: all begin `Adage finish-line check:` and end
+/// with the "not from the user" sentence, `render::finish_line`) or a directive. On harnesses
 /// where these re-enter as user messages (Codex Stop, OpenCode's context message), they must not
 /// be mistaken for the user's prompt.
 pub fn is_own_text(prompt: &str) -> bool {
-    let t = prompt.trim_start();
-    t.starts_with("Adage finish-line check:") || t.starts_with("<adage-reflex ")
+    adage_runtime::render::is_finish_line(prompt) || prompt.trim_start().starts_with("<adage-reflex ")
 }
 
 /// Calls for translated `(tool, input)` pairs, with relative file paths anchored at the session's
@@ -130,6 +131,43 @@ pub fn calls(pairs: Vec<(String, Value)>, cwd: &str, output: &str, failed: bool)
             Call { tool, input, output: output.to_string(), failed }
         })
         .collect()
+}
+
+#[cfg(test)]
+mod own_text_tests {
+    use super::*;
+    use adage_runtime::render;
+    use serde_json::json;
+
+    /// Review F3: on Codex a Stop `block` reason comes back as the next user prompt. Every Stop
+    /// continuation Adage writes (a learned obligation's request, the finish-line gate's failure
+    /// or unconfirmed run, both joined) is Adage's text there, never decided on as the person's
+    /// prompt; on Claude Code too, should it ever arrive as one. Before, the gate's failure began
+    /// "Adage ran …" and was taken for the user's prompt.
+    #[test]
+    fn stop_continuations_are_never_the_persons_prompt() {
+        let gate = render::stop_gate_failed(".venv/bin/python -m pytest tests -q", Some(1), None);
+        let unknown = render::stop_gate_unknown("make test", "the completion could not be recorded");
+        let obligation = render::stop_reason("schema/*.json", "make gen");
+        let joined = render::join_finish_lines(&gate, &obligation);
+        for text in [&gate, &unknown, &obligation, &joined] {
+            assert!(is_own_text(text), "{text}");
+            for harness in ["codex", "claude"] {
+                let a = adapter(harness).unwrap();
+                assert!(
+                    a.translate("UserPromptSubmit", &json!({ "prompt": text }), "/r").is_none(),
+                    "{harness}: {text}"
+                );
+            }
+        }
+        let typed = json!({ "prompt": "Fix the rounding bug in the finish-line check" });
+        for harness in ["codex", "claude"] {
+            assert!(matches!(
+                adapter(harness).unwrap().translate("UserPromptSubmit", &typed, "/r"),
+                Some(Event::Prompt { .. })
+            ));
+        }
+    }
 }
 
 #[cfg(test)]

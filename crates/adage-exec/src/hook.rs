@@ -142,6 +142,7 @@ impl Extension for Prefetch {
             d.met = a.met;
             d.stop = a.stop;
             d.recovery = a.recovery;
+            d.at_stop_action = a.at_stop_action;
         }
         if !records.is_empty() {
             d.spool = Some(Value::Array(records));
@@ -179,17 +180,111 @@ const PYTEST_NODEIDS: &str = ".pytest_cache/v/cache/nodeids";
 /// pytest's record of the node ids that failed in its last run (also a declared cache file).
 const PYTEST_LASTFAILED: &str = ".pytest_cache/v/cache/lastfailed";
 
-/// The failing node ids a staged run's declared pytest record names (sorted, at most
-/// [`MAX_LISTED_TESTS`], and how many more): read from the staged change set, never from output.
-fn pytest_failed(staged: &crate::stage::Staged) -> (Vec<String>, usize) {
-    let Some(change) = staged.plan.apply.iter().find(|c| c.path == PYTEST_LASTFAILED) else { return (vec![], 0) };
-    let crate::stage::After::File { bytes, .. } = &change.after else { return (vec![], 0) };
-    let Ok(map) = serde_json::from_slice::<serde_json::Map<String, Value>>(bytes) else { return (vec![], 0) };
-    let mut ids: Vec<String> = map.into_iter().map(|(k, _)| k).filter(|k| valid_nodeid(k)).collect();
-    ids.sort();
-    let more = ids.len().saturating_sub(MAX_LISTED_TESTS);
-    ids.truncate(MAX_LISTED_TESTS);
-    (ids, more)
+/// The largest pytest cache record read.
+const MAX_RECORD_BYTES: u64 = 4 << 20;
+
+/// A pytest cache record's keys (node ids, or file ids for collection errors), or `None` when it
+/// is not a JSON object within [`MAX_RECORD_BYTES`].
+fn record_keys(bytes: &[u8]) -> Option<std::collections::BTreeSet<String>> {
+    if bytes.len() as u64 > MAX_RECORD_BYTES {
+        return None;
+    }
+    let map: serde_json::Map<String, Value> = serde_json::from_slice(bytes).ok()?;
+    Some(map.into_iter().map(|(k, _)| k).collect())
+}
+
+/// What a failed staged run's declared pytest failure record says about *this* run
+/// ([`render::FailureRecord`]), read from the staged change set and the worktree, never from
+/// output; `None` when the command is not a pytest run whose approval declares the record.
+///
+/// pytest's `lastfailed` is cumulative: an entry stays until that test passes or is skipped, and
+/// pytest rewrites the file only when its content changes. So the run's record counts only when
+/// this run rewrote it (it is in the plan, or [`crate::stage::Staged::rewritten`]); then, within
+/// the command's targets, entries it added are this run's failures (file ids, without `::`, are
+/// collection errors), and entries it kept from before are failures it did not clear. Anything
+/// else gives no names: never a stale list.
+fn failure_record(staged: &crate::stage::Staged, command: &str) -> Option<render::FailureRecord> {
+    let call = pytest_call(&command.split_whitespace().collect::<Vec<_>>())?;
+    if !crate::stage::matches_any(&staged.action.cache, PYTEST_LASTFAILED) {
+        return None;
+    }
+    let unavailable = Some(render::FailureRecord::default());
+    // The worktree's record is the one the run started from: a failed run applies nothing.
+    let worktree = staged.repo.join(PYTEST_LASTFAILED);
+    let read_worktree = || -> Option<Vec<u8>> {
+        match std::fs::symlink_metadata(&worktree) {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Some(b"{}".to_vec()),
+            Ok(m) if m.is_file() && m.len() <= MAX_RECORD_BYTES => std::fs::read(&worktree).ok(),
+            _ => None,
+        }
+    };
+    let after = match staged.plan.apply.iter().find(|c| c.path == PYTEST_LASTFAILED) {
+        Some(crate::stage::Change { after: crate::stage::After::File { bytes, .. }, .. }) => bytes.clone(),
+        Some(_) => return unavailable,
+        // Rewritten with the same bytes: refreshed, and identical to the worktree's.
+        None if staged.rewritten.iter().any(|p| p == PYTEST_LASTFAILED) => match read_worktree() {
+            Some(b) => b,
+            None => return unavailable,
+        },
+        None => return unavailable,
+    };
+    let (Some(after), Some(before)) = (record_keys(&after), read_worktree().as_deref().and_then(record_keys)) else {
+        return unavailable;
+    };
+    let scoped = |ids: &std::collections::BTreeSet<String>| -> Vec<String> {
+        ids.iter()
+            .filter(|id| (valid_nodeid(id) || valid_file_id(id)) && in_targets(id, &call.targets))
+            .cloned()
+            .collect()
+    };
+    let (after, before): (Vec<String>, std::collections::BTreeSet<String>) =
+        (scoped(&after), scoped(&before).into_iter().collect());
+    // A file that failed to collect ran none of its tests: its node ids say nothing about this run.
+    let broken: Vec<&String> = after.iter().filter(|id| !id.contains("::")).collect();
+    let ran = |id: &&String| !broken.iter().any(|f| id.starts_with(&format!("{f}::")));
+    let mut failing = Vec::new();
+    let mut collection = Vec::new();
+    let mut uncleared = Vec::new();
+    for id in after.iter().filter(ran) {
+        match (before.contains(id), id.contains("::")) {
+            (false, true) => failing.push(id.clone()),
+            (false, false) => collection.push(id.clone()),
+            (true, _) => uncleared.push(id.clone()),
+        }
+    }
+    // One bound for all three lists, in the order they are read.
+    let mut left = MAX_LISTED_TESTS;
+    let mut listed = |mut ids: Vec<String>| {
+        let n = ids.len().min(left);
+        left -= n;
+        let more = ids.len() - n;
+        ids.truncate(n);
+        render::Listed { names: ids, more }
+    };
+    Some(render::FailureRecord {
+        refreshed: true,
+        failing: listed(failing),
+        collection: listed(collection),
+        uncleared: listed(uncleared),
+    })
+}
+
+/// A pytest file id as its failure record names a module that failed to collect.
+fn valid_file_id(id: &str) -> bool {
+    id.len() <= 200
+        && !id.contains("::")
+        && id.ends_with(".py")
+        && !id.starts_with('/')
+        && !id.split('/').any(|p| p == ".." || p.is_empty())
+        && id.chars().all(|c| c.is_ascii_alphanumeric() || "_./-".contains(c))
+}
+
+/// Whether a node or file id lies inside a pytest call's targets (every id, for a call that names
+/// none: it collects the whole configured suite).
+fn in_targets(id: &str, targets: &[String]) -> bool {
+    let file = id.split_once("::").map_or(id, |(f, _)| f);
+    targets.is_empty()
+        || targets.iter().any(|t| file == t || file.starts_with(&format!("{t}/")) || id.starts_with(&format!("{t}::")))
 }
 
 /// The edit globs of a context trigger, in order ("tests/*.py then CHANGELOG.rst").
@@ -241,6 +336,10 @@ fn verifications<'a>(
 /// At most this many Stop-gate runs per session; only the first may block.
 const MAX_STOP_GATES: u32 = 2;
 
+/// Time a gate run needs beyond its command's own wall limit: the worktree copy, the change set,
+/// the input snapshots and the apply (bounded in entries and bytes, not in time).
+const GATE_OVERHEAD_MS: u64 = 6_000;
+
 /// The finish-line gate. After a learned context verification ran in this treated session, a
 /// Stop whose current inputs have no successful run of it runs it (same grant, policy, sandbox,
 /// journal). Passed: the turn ends with a line for the person. Failed: the first time (and not
@@ -278,12 +377,20 @@ fn stop_gate(call: &StopCall<'_>) -> Option<StopGate> {
         route::plan(ir, call.index, call.root, &call.paths.tracks(), Level::E2, a.terms.as_ref(), &table).ok()?.request;
     req.inputs = route::bound_from_command(&req.argv, &command)?;
     let action = req.action.clone()?;
-    let now = crate::stage::input_snapshot(&req.repo_root.canonicalize().ok()?, &action).ok()?;
+    let now =
+        crate::stage::input_snapshot_until(&req.repo_root.canonicalize().ok()?, &action, Some(call.deadline)).ok()?;
     let digest = crate::sha256_hex(crate::canonical_json(&now).as_bytes());
     let fresh = mine.iter().any(|r| {
         r.route == label && r.input_digest == digest && matches!(r.outcome, crate::stage::Outcome::Applied { .. })
     });
     if fresh {
+        return None;
+    }
+    // Start only a run that, staged, checked and applied, ends before the hook's deadline: a hook
+    // killed between the journal's prepared and completed receipts leaves the worktree in
+    // recovery (review F4). Not started, it waits for the next Stop, uncounted.
+    let needed = std::time::Duration::from_millis(req.profile.limits.wall_ms.saturating_add(GATE_OVERHEAD_MS));
+    if call.deadline.saturating_duration_since(Instant::now()) < needed {
         return None;
     }
     let cap = sandbox::detect();
@@ -325,26 +432,42 @@ fn stop_gate(call: &StopCall<'_>) -> Option<StopGate> {
             request: &req,
         },
     );
-    Some(match completed.outcome {
+    Some(gate_answer(&completed.outcome, &command, &staged, may_block, call.stop_hook_active))
+}
+
+/// What a gate run's outcome tells the agent (a `Block`) or only the person (a `Notice`).
+fn gate_answer(
+    outcome: &crate::stage::Outcome,
+    command: &str,
+    staged: &crate::stage::Staged,
+    may_block: bool,
+    stop_hook_active: bool,
+) -> StopGate {
+    match outcome {
         crate::stage::Outcome::Applied { .. } => {
-            StopGate::Notice(render::stop_gate_notice(&command, true, staged.exit, staged.duration_ms))
+            StopGate::Notice(render::stop_gate_notice(command, true, staged.exit, staged.duration_ms))
         }
         crate::stage::Outcome::Failed { exit, .. } if may_block => {
-            let (failing, more) = pytest_failed(&staged);
-            StopGate::Block(render::stop_gate_failed(&command, exit, &failing, more))
+            StopGate::Block(render::stop_gate_failed(command, *exit, failure_record(staged, command).as_ref()))
         }
         crate::stage::Outcome::Failed { exit, .. } => {
-            StopGate::Notice(render::stop_gate_notice(&command, false, exit, staged.duration_ms))
+            StopGate::Notice(render::stop_gate_notice(command, false, *exit, staged.duration_ms))
+        }
+        // As for an action (`act`): completion unconfirmed, so the agent is told not to retry it
+        // and to have a person inspect it (the journal's recovery block pauses later runs).
+        crate::stage::Outcome::Unknown { reason } if !stop_hook_active => {
+            StopGate::Block(render::stop_gate_unknown(command, &crate::reason_text(reason)))
         }
         crate::stage::Outcome::Refused { reason, .. } | crate::stage::Outcome::Unknown { reason } => {
             StopGate::Notice(format!(
                 "adage: `{}` at finish did not complete: {}.",
-                render::sanitise(&command),
-                crate::reason_text(&reason)
+                render::sanitise(command),
+                crate::reason_text(reason)
             ))
         }
-    })
+    }
 }
+
 const MAX_LISTED_TESTS: usize = 12;
 
 /// The node ids in the worktree's pytest record, when this is a pytest verification whose approval
@@ -401,12 +524,7 @@ fn test_evidence(
         return None;
     }
     let after = pytest_nodeids(turn.root, req, command)?;
-    let inside = |id: &String| {
-        let file = id.split_once("::").map_or("", |(f, _)| f);
-        call.targets
-            .iter()
-            .any(|t| file == t || file.starts_with(&format!("{t}/")) || id.starts_with(&format!("{t}::")))
-    };
+    let inside = |id: &String| in_targets(id, &call.targets);
     let new: Vec<String> = after.difference(before).filter(|id| inside(id)).cloned().collect();
     let collected = before.is_empty().then(|| after.iter().filter(|id| inside(id)).count());
     if collected.is_none() && new.is_empty() {
@@ -429,9 +547,16 @@ struct PytestCall {
     targets: Vec<String>,
 }
 
+/// Commands a pytest call may share a command line with, because they only read or print (a
+/// pipe to `tail`, an `echo` after): none changes the directory, the environment or a file.
+const PASSIVE: &[&str] =
+    &["tail", "head", "grep", "egrep", "fgrep", "echo", "printf", "true", "wc", "sort", "uniq", "cut"];
+
 /// The pytest invocations in a plain command line (`&&`, `||`, `;` and `|` lists, with `2>&1`).
-/// `None` for anything a word split cannot read faithfully: quotes, expansions, redirections,
-/// globs, or no pytest at all.
+/// `None` for anything a word split cannot read faithfully (quotes, expansions, redirections,
+/// globs), for no pytest at all, and for a line whose other commands could change what pytest
+/// sees: `cd`, `pushd`, `popd`, `export`, a variable assignment, or any command not in
+/// [`PASSIVE`] (review F5).
 fn pytest_calls(command: &str, root: &std::path::Path) -> Option<Vec<PytestCall>> {
     if command.chars().any(|c| "'\"`$<(){}*?[]#\\\n".contains(c)) {
         return None;
@@ -446,7 +571,13 @@ fn pytest_calls(command: &str, root: &std::path::Path) -> Option<Vec<PytestCall>
         let argv: Vec<&str> = segment.iter().map(|w| w.strip_prefix(prefix.as_str()).unwrap_or(w)).collect();
         if let Some(call) = pytest_call(&argv) {
             calls.push(call);
-        } else if argv.iter().any(|w| w.contains("pytest") || w.ends_with(';') || w.contains('&')) {
+            continue;
+        }
+        let Some(first) = argv.first() else { continue };
+        if first.contains('=') || !PASSIVE.contains(first) {
+            return None;
+        }
+        if argv.iter().any(|w| w.contains("pytest") || w.ends_with(';') || w.contains('&')) {
             return None;
         }
     }
@@ -510,10 +641,21 @@ fn covers(done: &PytestCall, asked: &PytestCall) -> bool {
         && asked.targets.iter().all(|t| within(t))
 }
 
+/// The most a receipt check may take of a `PreToolUse` hook's 5 s: past it, no note (the
+/// interpreter rewrite beside it must still be delivered in time).
+const RECEIPT_CHECK_MS: u64 = 1_500;
+
 /// A completed, successful learned verification in this session whose inputs are byte-identical
 /// now (the executor's own snapshot, recomputed here) and which already ran every test `command`
-/// selects. A fact for the agent, never a refusal: the call still runs if it is made.
+/// selects. A fact for the agent, never a refusal: the call still runs if it is made. Only for a
+/// call made at the repository root (relative targets resolve as the receipt's did), and only
+/// when the check fits [`RECEIPT_CHECK_MS`] (review F5, F6).
 fn covering_receipt(call: &PreCall<'_>) -> Option<String> {
+    let deadline = Instant::now() + std::time::Duration::from_millis(RECEIPT_CHECK_MS);
+    let canon = |p: &std::path::Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    if canon(call.cwd) != canon(call.root) {
+        return None;
+    }
     let asked = pytest_calls(call.command, call.root)?;
     let rows = crate::journal::list(&call.paths.root).ok()?;
     let r = rows.iter().rev().find(|r| {
@@ -544,7 +686,7 @@ fn covering_receipt(call: &PreCall<'_>) -> Option<String> {
     .ok()?;
     let action = plan.request.action.as_ref()?;
     let repo = plan.request.repo_root.canonicalize().ok()?;
-    let now = crate::stage::input_snapshot(&repo, action).ok()?;
+    let now = crate::stage::input_snapshot_until(&repo, action, Some(deadline)).ok()?;
     if crate::sha256_hex(crate::canonical_json(&now).as_bytes()) != r.input_digest {
         return None;
     }
@@ -581,6 +723,8 @@ struct Acted {
     stop: Option<Option<String>>,
     records: Vec<Value>,
     recovery: Option<String>,
+    /// An approved action was selected for a Stop request at this event ([`adage_hook::Delivery::at_stop_action`]).
+    at_stop_action: bool,
 }
 
 /// The directive for a route: the one about to be delivered, else rebuilt from the index entry
@@ -787,6 +931,8 @@ fn act(turn: &Turn<'_>, directives: &[Directive], candidates: &[Candidate<'_>]) 
         None => format!("counter:{}:{}:{}:{}", turn.event, state.prompts, state.batches, s.route),
     };
     let nodeids_before = pytest_nodeids(turn.root, &req, s.command);
+    // From here this Stop's time belongs to this action, whatever its outcome: no Stop gate too.
+    out.at_stop_action = s.at_stop;
     let staged = match crate::stage::stage(&req, &ctx) {
         Ok(x) => x,
         Err(r) => {
@@ -888,8 +1034,9 @@ fn act(turn: &Turn<'_>, directives: &[Directive], candidates: &[Candidate<'_>]) 
         crate::stage::Outcome::Failed { exit, .. }
             if s.context.is_some() && ir.route.effect == adage_core::Effect::Verify =>
         {
-            // A failed run is a result the agent needs: what failed, from the declared record.
-            let (failing, more) = pytest_failed(&staged);
+            // A failed run is a result the agent needs: what failed in this run, from the declared
+            // record (never a stale list).
+            let record = failure_record(&staged, s.command);
             out.records.push(rec);
             out.replace.insert(
                 dir.route.clone(),
@@ -897,8 +1044,7 @@ fn act(turn: &Turn<'_>, directives: &[Directive], candidates: &[Candidate<'_>]) 
                     &dir,
                     s.command,
                     *exit,
-                    &failing,
-                    more,
+                    record.as_ref(),
                     completed.id.as_deref().unwrap_or_default(),
                 ),
             );
@@ -1074,7 +1220,8 @@ mod prediction_tests {
     impl Fixture {
         fn new() -> Self {
             let tmp = tempfile::tempdir().unwrap();
-            let root = tmp.path().canonicalize().unwrap().join("repo");
+            // Named for its repository key: a hook resolves a checkout without a remote by its name.
+            let root = tmp.path().canonicalize().unwrap().join("fixture");
             std::fs::create_dir_all(root.join("src")).unwrap();
             std::fs::create_dir_all(root.join(".git")).unwrap();
             std::fs::create_dir_all(root.join("tools")).unwrap();
@@ -1299,6 +1446,7 @@ mod prediction_tests {
             PREFETCH.pretool_context(&PreCall {
                 repo_key: "fixture",
                 root: &f.root,
+                cwd: &f.root,
                 session,
                 paths: &f.paths,
                 index: &f.index,
@@ -1415,6 +1563,10 @@ mod prediction_tests {
     }
 
     fn stop(f: &Fixture, active: bool) -> Option<StopGate> {
+        stop_by(f, active, Instant::now() + std::time::Duration::from_secs(28))
+    }
+
+    fn stop_by(f: &Fixture, active: bool, deadline: Instant) -> Option<StopGate> {
         PREFETCH.stop_gate(&StopCall {
             harness: "claude",
             repo_key: "fixture",
@@ -1423,6 +1575,7 @@ mod prediction_tests {
             paths: &f.paths,
             index: &f.index,
             stop_hook_active: active,
+            deadline,
         })
     }
 
@@ -1523,6 +1676,7 @@ mod prediction_tests {
             let covered = PREFETCH.pretool_context(&PreCall {
                 repo_key: "fixture",
                 root: &f.root,
+                cwd: &f.root,
                 session: "fixture-session",
                 paths: &f.paths,
                 index: &f.index,
@@ -1761,5 +1915,323 @@ mod prediction_tests {
         let repeat = PREFETCH.deliver(&turn, &dirs);
         assert_eq!(repeat.spool.unwrap()[0]["withheld"], "duplicate");
         assert_eq!(crate::journal::list(&f.paths.root).unwrap().len(), 1);
+    }
+
+    fn staging() -> bool {
+        crate::stage::backend(&sandbox::detect()).available()
+    }
+
+    /// The fixture as the hook pipeline serves it (`adage_hook::handle` with this extension): a
+    /// learned finish-line obligation beside the learned verification (after an edit to
+    /// `registry/*.csv`, run `make gen`; no grant for it), and no learner.
+    fn with_obligation(f: &mut Fixture) {
+        f.index.routes.push(IndexedRoute {
+            repo: "fixture".into(),
+            track: "fixture/finish".into(),
+            version: "0.1.0".into(),
+            exec: None,
+            route: Route {
+                id: "regenerate-registry".into(),
+                summary: String::new(),
+                trigger: Trigger::AfterEdit { paths: "registry/*.csv".into() },
+                step: Step::Run { command: "make gen".into() },
+                slots: vec![],
+                effect: Effect::Regenerate,
+                strength: Strength::Fire,
+                state: RouteState::Firm,
+                exit: vec![],
+                authored: false,
+                evidence: Evidence { support: 5, opportunities: 5, days: 3, ..Default::default() },
+            },
+        });
+        f.index.write_atomic(&f.paths.index()).unwrap();
+        std::fs::write(f.paths.root.join("config.toml"), "[learn]\nauto = false\n").unwrap();
+        std::fs::create_dir_all(f.root.join("registry")).unwrap();
+        std::fs::write(f.root.join("registry/currencies.csv"), "EUR\n").unwrap();
+    }
+
+    /// One hook event for the fixture's session, through the whole pipeline.
+    fn hook(f: &Fixture, event: &str, extra: Value) -> Option<Value> {
+        let mut p = json!({ "session_id": "fixture-session", "cwd": f.root });
+        for (k, v) in extra.as_object().unwrap() {
+            p[k] = v.clone();
+        }
+        let opts = adage_hook::Options { learner: None, extension: Some(&PREFETCH) };
+        let out = adage_hook::handle("claude", event, &p.to_string(), opts, &f.paths, Instant::now()).unwrap();
+        out.map(|o| serde_json::from_str(&o).unwrap())
+    }
+
+    /// Review F1, through the hook pipeline: the session armed `make gen` and its learned check
+    /// ran earlier. At the first Stop the check fails and the obligation is due: both reach the
+    /// agent in one continuation, recognisable as Adage's own text. The agent fixes the failure;
+    /// at the next Stop the check passes, and the obligation was requested (once).
+    #[test]
+    fn a_failing_finish_check_keeps_the_learned_obligation_request() {
+        if !staging() {
+            return;
+        }
+        let mut f = Fixture::new();
+        f.approve();
+        with_obligation(&mut f);
+        treated(&f, Arm::Treated);
+        record_receipt(&f, "fixture-session", "an-earlier-input-state");
+        std::fs::remove_file(f.root.join("src/feature.rs")).unwrap();
+        let edit = json!({ "tool_name": "Edit", "tool_use_id": "e1", "tool_response": "ok",
+                           "tool_input": { "file_path": f.root.join("registry/currencies.csv") } });
+        let armed = hook(&f, "PostToolBatch", json!({ "tool_calls": [edit] })).expect("the obligation's directive");
+        assert!(armed.to_string().contains("make gen"), "{armed}");
+        let first = hook(&f, "Stop", json!({ "stop_hook_active": false })).expect("a continuation");
+        assert_eq!(first["decision"], "block");
+        let reason = first["reason"].as_str().unwrap();
+        assert!(
+            reason.contains("Adage ran `sh tools/check.sh` (person-approved) as you finished: it failed (exit 1)"),
+            "{reason}"
+        );
+        assert!(reason.contains("requires running `make gen` after such changes"), "the obligation too: {reason}");
+        assert!(adage_hook::harness::is_own_text(reason), "{reason}");
+        std::fs::write(f.root.join("src/feature.rs"), "fixture\n").unwrap();
+        let second = hook(&f, "Stop", json!({ "stop_hook_active": true })).expect("the person's line");
+        let line = second["systemMessage"].as_str().unwrap();
+        assert!(line.contains("ran `sh tools/check.sh` at finish: passed (exit 0"), "{second}");
+        let st: SessionState = adage_store::state::try_read(&f.paths.state("fixture-session")).unwrap().unwrap();
+        let o = st.obligations.iter().find(|o| o.route == "regenerate-registry").unwrap();
+        assert!(o.stop_requested && st.stop_requests == 1, "{st:?}");
+        assert_eq!(st.stop_gates, 2);
+        assert_eq!(crate::journal::list(&f.paths.root).unwrap().len(), 3, "the context run and two gate runs");
+    }
+
+    /// Review F4: the gate starts a run only when, staged and applied, it ends before the hook's
+    /// deadline (the registered timeout less what the event already spent). Otherwise nothing is
+    /// staged, journaled or counted, and it waits for the next Stop.
+    #[test]
+    fn stop_gate_never_starts_a_run_it_cannot_finish_in_time() {
+        let f = Fixture::new();
+        f.approve();
+        treated(&f, Arm::Treated);
+        record_receipt(&f, "fixture-session", "an-earlier-input-state");
+        let soon = Instant::now() + std::time::Duration::from_millis(limits::E2_MAX_WALL_MS + GATE_OVERHEAD_MS - 1_000);
+        assert!(stop_by(&f, false, soon).is_none(), "20 s of wall time and the overhead do not fit");
+        assert!(stop_by(&f, false, Instant::now()).is_none(), "nothing left at all");
+        assert_eq!(crate::journal::list(&f.paths.root).unwrap().len(), 1, "nothing staged or journaled");
+        let st: SessionState = adage_store::state::try_read(&f.paths.state("fixture-session")).unwrap().unwrap();
+        assert_eq!(st.stop_gates, 0, "a run that never started is not counted");
+        // The whole budget of a hook that has just started: it runs.
+        if staging() {
+            assert!(matches!(stop(&f, false), Some(StopGate::Notice(_))));
+        }
+    }
+
+    /// Review F4: a hook killed between the journal's prepared and completed receipts (the only
+    /// window in which a kill matters) leaves its worktree in recovery. The next session runs
+    /// nothing there, gate included, and tells the agent not to retry; once a person has
+    /// inspected and acknowledged the operation, actions run again.
+    #[test]
+    fn an_interrupted_run_pauses_the_worktree_until_a_person_acknowledges_it() {
+        let f = Fixture::new();
+        f.approve();
+        let id = "0123456789abcdef".repeat(4);
+        let prepared = crate::journal::Receipt {
+            id: id.clone(),
+            ts: "fixture".into(),
+            session: "the-killed-session".into(),
+            repo: "fixture".into(),
+            worktree: f.root.canonicalize().unwrap().to_string_lossy().into_owned(),
+            route: "fixture/context/predict-check".into(),
+            approved_on: "fixture-only".into(),
+            level: "e2".into(),
+            phase: crate::journal::Phase::Prepared,
+            outcome: crate::stage::Outcome::Unknown { reason: "prepared without a durable completion".into() },
+            input_digest: "d".into(),
+            outputs: BTreeMap::new(),
+        };
+        std::fs::create_dir_all(f.paths.root.join("exec")).unwrap();
+        adage_store::spool::append(&crate::stage::spool_path(&f.paths.root), &prepared).unwrap();
+        // The next session: its learned context is selected, and its check ran earlier.
+        let (event, dirs) = f.selected("src/feature.rs");
+        record_receipt(&f, "fixture-session", "an-earlier-input-state");
+        let d = PREFETCH.deliver(&f.turn(&event), &dirs);
+        let warning = d.recovery.expect("recovery comes first");
+        assert!(warning.contains(&id) && warning.contains("do not retry automatically"), "{warning}");
+        assert!(stop(&f, false).is_none(), "no gate run while the worktree is in recovery");
+        assert_eq!(crate::journal::list(&f.paths.root).unwrap().len(), 2, "nothing ran");
+        // A person inspects the worktree and acknowledges it (`adage-exec recover --id <id> --acknowledge`).
+        crate::journal::acknowledge(&f.paths.root, &id).unwrap();
+        let d = PREFETCH.deliver(&f.turn(&event), &dirs);
+        assert!(d.recovery.is_none(), "recovered: no warning");
+        if staging() {
+            assert!(matches!(stop(&f, false), Some(StopGate::Notice(_))), "the finish-line check runs again");
+            assert_eq!(crate::journal::list(&f.paths.root).unwrap().len(), 3);
+        }
+    }
+
+    /// A failed staged pytest run whose record the plan carries (`after`), from the worktree's
+    /// record (`before`), for [`failure_record`].
+    fn failed_run(f: &Fixture, before: Option<&str>, after: Option<&str>, rewritten: bool) -> crate::stage::Staged {
+        let req = route::plan(
+            &f.index.routes[0],
+            &f.index,
+            &f.root,
+            &f.paths.tracks(),
+            Level::E2,
+            Store::load(&approvals::path(&f.paths.root)).unwrap().approvals[0].terms.as_ref(),
+            &CommandTable::load(),
+        )
+        .unwrap()
+        .request;
+        let record = f.root.join(PYTEST_LASTFAILED);
+        std::fs::create_dir_all(record.parent().unwrap()).unwrap();
+        match before {
+            Some(b) => std::fs::write(&record, b).unwrap(),
+            None => drop(std::fs::remove_file(&record)),
+        }
+        let apply: Vec<crate::stage::Change> = after
+            .map(|a| crate::stage::Change {
+                path: PYTEST_LASTFAILED.into(),
+                kind: crate::stage::ChangeKind::Modified,
+                after: crate::stage::After::File { bytes: a.as_bytes().to_vec(), exec: false },
+                before_file: before.is_some(),
+            })
+            .into_iter()
+            .collect();
+        crate::stage::Staged {
+            repo: f.root.clone(),
+            action: req.action.unwrap(),
+            exit: Some(1),
+            signal: None,
+            duration_ms: 5,
+            plan: crate::stage::Plan { apply, ..Default::default() },
+            pre: Default::default(),
+            inputs: BTreeMap::new(),
+            fields: None,
+            backend: crate::stage::StageBackend::Copy,
+            stderr: vec![],
+            rewritten: if rewritten { vec![PYTEST_LASTFAILED.into()] } else { vec![] },
+        }
+    }
+
+    /// Review F2: pytest's `lastfailed` is cumulative, so names come only from what this run
+    /// changed in it, within the command's targets: new entries failed now, file ids are
+    /// collection errors (their files' node ids say nothing), kept entries were not cleared, and
+    /// another file's earlier failure is not this run's. A record this run did not rewrite gives
+    /// no names at all.
+    #[test]
+    fn failing_tests_are_only_what_this_run_recorded_within_its_targets() {
+        let f = pytest_fixture();
+        let command = ".venv/bin/python -m pytest tests/test_b.py tests/test_c.py -q";
+        let before = r#"{"tests/test_a.py::test_other": true, "tests/test_b.py::test_old": true, "tests/test_c.py::test_stale": true}"#;
+        let after = r#"{"tests/test_a.py::test_other": true, "tests/test_b.py::test_old": true, "tests/test_b.py::test_new": true, "tests/test_c.py": true, "tests/test_c.py::test_stale": true, "/etc/x.py::t": true}"#;
+        let r = failure_record(&failed_run(&f, Some(before), Some(after), false), command).unwrap();
+        assert!(r.refreshed);
+        assert_eq!(r.failing.names, ["tests/test_b.py::test_new"]);
+        assert_eq!(r.collection.names, ["tests/test_c.py"]);
+        assert_eq!(r.uncleared.names, ["tests/test_b.py::test_old"]);
+        let text = render::stop_gate_failed(command, Some(1), Some(&r));
+        assert!(text.contains("Failing tests: tests/test_b.py::test_new."), "{text}");
+        assert!(text.contains("Collection errors (the file could not be imported) in: tests/test_c.py."), "{text}");
+        assert!(!text.contains("test_other") && !text.contains("test_stale"), "{text}");
+        // The agent already saw these failures: the run left the record byte-identical, so pytest
+        // did not rewrite it. Nothing can be attributed to this run.
+        let r = failure_record(&failed_run(&f, Some(before), None, false), command).unwrap();
+        assert!(!r.refreshed && r.failing.is_empty() && r.uncleared.is_empty());
+        let text = render::stop_gate_failed(command, Some(1), Some(&r));
+        assert!(
+            text.contains("not updated by this run, so no failing test names") && !text.contains("test_old"),
+            "{text}"
+        );
+        // Rewritten with the same bytes (refreshed by this run): what it kept, it did not clear.
+        let r = failure_record(&failed_run(&f, Some(before), None, true), command).unwrap();
+        assert!(r.refreshed && r.failing.is_empty());
+        assert_eq!(r.uncleared.names, ["tests/test_b.py::test_old", "tests/test_c.py::test_stale"]);
+        // No earlier record: everything in it is this run's.
+        let r = failure_record(&failed_run(&f, None, Some(r#"{"tests/test_b.py::test_new": true}"#), false), command)
+            .unwrap();
+        assert_eq!(r.failing.names, ["tests/test_b.py::test_new"]);
+        // Names are bounded across the lists.
+        let many: serde_json::Map<String, Value> =
+            (0..20).map(|i| (format!("tests/test_b.py::test_{i:02}"), json!(true))).collect();
+        let r = failure_record(&failed_run(&f, None, Some(&Value::Object(many).to_string()), false), command).unwrap();
+        assert_eq!((r.failing.names.len(), r.failing.more), (MAX_LISTED_TESTS, 20 - MAX_LISTED_TESTS));
+        // Not a pytest run: nothing is said about test names.
+        assert!(failure_record(&failed_run(&f, Some(before), Some(after), false), "sh tools/check.sh").is_none());
+    }
+
+    /// Review F8: a gate run whose completion cannot be confirmed tells the agent, like an action,
+    /// not to retry it (once, never while another Stop hook is continuing).
+    #[test]
+    fn an_unconfirmed_gate_run_tells_the_agent_not_to_retry() {
+        let f = pytest_fixture();
+        let staged = failed_run(&f, None, None, false);
+        let unknown = crate::stage::Outcome::Unknown { reason: "the completion could not be recorded".into() };
+        match gate_answer(&unknown, "make test", &staged, false, false) {
+            StopGate::Block(r) => {
+                assert!(r.contains("Do not retry it automatically") && r.contains("acknowledge recovery"), "{r}");
+                assert!(adage_hook::harness::is_own_text(&r), "{r}");
+            }
+            other => panic!("{other:?}"),
+        }
+        assert!(matches!(gate_answer(&unknown, "make test", &staged, false, true), StopGate::Notice(_)));
+    }
+
+    /// Review F5: a receipt never covers a call whose command line changes what pytest sees
+    /// (another directory, an exported or assigned variable, any command that is not passive), or
+    /// a call made from a subdirectory.
+    #[test]
+    fn a_receipt_never_covers_a_call_from_elsewhere() {
+        let root = std::path::Path::new("/repo");
+        let done = pytest_call(&[".venv/bin/python", "-m", "pytest", "tests/test_x.py", "-q"]).unwrap();
+        let covered = |c: &str| pytest_calls(c, root).is_some_and(|v| v.iter().all(|a| covers(&done, a)));
+        for no in [
+            "cd other && .venv/bin/python -m pytest tests/test_x.py -q",
+            "pushd other && .venv/bin/python -m pytest tests/test_x.py -q",
+            "popd && .venv/bin/python -m pytest tests/test_x.py -q",
+            "export PYTHONPATH=src && .venv/bin/python -m pytest tests/test_x.py -q",
+            "PYTHONPATH=src .venv/bin/python -m pytest tests/test_x.py -q",
+            "git stash && .venv/bin/python -m pytest tests/test_x.py -q",
+            "make gen && .venv/bin/python -m pytest tests/test_x.py -q",
+        ] {
+            assert!(!covered(no), "{no}");
+        }
+        assert!(covered(".venv/bin/python -m pytest tests/test_x.py -q 2>&1 | tail -20 && echo done"));
+        let f = pytest_fixture();
+        record_receipt(&f, "fixture-session", &current_digest(&f));
+        let call = |cwd: &std::path::Path| {
+            PREFETCH.pretool_context(&PreCall {
+                repo_key: "fixture",
+                root: &f.root,
+                cwd,
+                session: "fixture-session",
+                paths: &f.paths,
+                index: &f.index,
+                command: ".venv/bin/python -m pytest tests/test_x.py -q",
+            })
+        };
+        assert!(call(&f.root).is_some(), "at the root it is covered");
+        assert!(call(&f.root.join("tests")).is_none(), "from a subdirectory the same words name other files");
+    }
+
+    /// Review F6: the receipt check's repository hash stops at its deadline instead of holding up
+    /// the PreToolUse hook; the note is then skipped.
+    #[test]
+    fn the_input_snapshot_stops_at_its_deadline() {
+        let f = pytest_fixture();
+        let req = route::plan(
+            &f.index.routes[0],
+            &f.index,
+            &f.root,
+            &f.paths.tracks(),
+            Level::E2,
+            Store::load(&approvals::path(&f.paths.root)).unwrap().approvals[0].terms.as_ref(),
+            &CommandTable::load(),
+        )
+        .unwrap()
+        .request;
+        let action = req.action.as_ref().unwrap();
+        let late = crate::stage::input_snapshot_until(&f.root, action, Some(Instant::now())).unwrap_err();
+        assert_eq!(late.stage, "time");
+        let later = Instant::now() + std::time::Duration::from_secs(60);
+        assert_eq!(
+            crate::stage::input_snapshot_until(&f.root, action, Some(later)).unwrap(),
+            crate::stage::input_snapshot(&f.root, action).unwrap()
+        );
     }
 }

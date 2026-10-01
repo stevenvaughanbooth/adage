@@ -277,11 +277,26 @@ impl PreState {
 /// starts and checked immediately before applying. Bounded like the staged change set; an
 /// unreadable or oversized input set refuses rather than blessing a stale result.
 pub fn input_snapshot(repo: &Path, action: &ActionSpec) -> Result<BTreeMap<String, String>, Refusal> {
+    input_snapshot_until(repo, action, None)
+}
+
+/// [`input_snapshot`], abandoned (stage `time`) once `deadline` passes: for a hook that must
+/// answer within its timeout and can do without the snapshot (a receipt note, the Stop gate).
+pub fn input_snapshot_until(
+    repo: &Path,
+    action: &ActionSpec,
+    deadline: Option<std::time::Instant>,
+) -> Result<BTreeMap<String, String>, Refusal> {
+    let late = || deadline.is_some_and(|d| std::time::Instant::now() >= d);
+    let over = || Refusal { stage: "time", reason: "the input snapshot did not finish within the time left".into() };
     let mut files = Vec::new();
     walk(repo, "", true, &mut files, &mut MAX_ENTRIES.clone()).map_err(|e| Refusal { stage: "inputs", reason: e })?;
     let mut bytes = 0u64;
     let mut out = BTreeMap::new();
     for rel in files {
+        if late() {
+            return Err(over());
+        }
         if matches_any(&action.cache, &rel)
             || (action.kind == ActionKind::Regenerate && matches_any(&action.outputs, &rel))
         {
@@ -432,15 +447,28 @@ fn deleted_subtree(repo: &Path, rel: &str, out: &mut Vec<Change>, budget: &mut u
 /// layer). Whiteouts are deletions; an opaque directory deletes what the worktree held under it;
 /// redirects and metacopy (which this mount never enables) refuse the whole set.
 pub fn overlay_changes(upper: &Path, repo: &Path) -> Result<Vec<Change>, String> {
+    overlay_changes_with(upper, repo, &mut Vec::new())
+}
+
+/// [`overlay_changes`], also collecting the regular files the run wrote with the worktree's exact
+/// bytes (`rewritten`: in the upper layer, so written, yet no change).
+fn overlay_changes_with(upper: &Path, repo: &Path, rewritten: &mut Vec<String>) -> Result<Vec<Change>, String> {
     let mut out = Vec::new();
     let mut budget = MAX_ENTRIES;
-    upper_dir(upper, repo, "", &mut out, &mut budget)?;
+    upper_dir(upper, repo, "", &mut out, &mut budget, rewritten)?;
     out.sort_by(|a, b| a.path.cmp(&b.path));
     out.dedup_by(|a, b| a.path == b.path);
     Ok(out)
 }
 
-fn upper_dir(dir: &Path, repo: &Path, prefix: &str, out: &mut Vec<Change>, budget: &mut usize) -> Result<(), String> {
+fn upper_dir(
+    dir: &Path,
+    repo: &Path,
+    prefix: &str,
+    out: &mut Vec<Change>,
+    budget: &mut usize,
+    rewritten: &mut Vec<String>,
+) -> Result<(), String> {
     let mut entries: Vec<_> =
         std::fs::read_dir(dir).map_err(|e| format!("reading the stage: {e}"))?.flatten().collect();
     entries.sort_by_key(|e| e.file_name());
@@ -498,15 +526,16 @@ fn upper_dir(dir: &Path, repo: &Path, prefix: &str, out: &mut Vec<Change>, budge
                 }
                 _ => {}
             }
-            upper_dir(&p, repo, &rel, out, budget)?;
+            upper_dir(&p, repo, &rel, out, budget, rewritten)?;
             continue;
         }
         if lower.is_some_and(|lt| lt.is_dir()) {
             // A directory replaced by a file: everything under it is gone.
             deleted_subtree(repo, &rel, out, budget)?;
         }
-        if let Some(c) = compare(repo, &rel, read_after(&p, &m)?) {
-            out.push(c);
+        match compare(repo, &rel, read_after(&p, &m)?) {
+            Some(c) => out.push(c),
+            None => rewritten.push(rel),
         }
     }
     Ok(())
@@ -515,6 +544,12 @@ fn upper_dir(dir: &Path, repo: &Path, prefix: &str, out: &mut Vec<Change>, budge
 /// The change set of a copied tree (the macOS clone): every difference between `staged` and the
 /// worktree, `.git` included.
 pub fn tree_changes(staged: &Path, repo: &Path) -> Result<Vec<Change>, String> {
+    tree_changes_with(staged, repo, &mut Vec::new())
+}
+
+/// [`tree_changes`], also collecting the regular files the run rewrote with the worktree's exact
+/// bytes (`rewritten`: the copy's modification time moved, the content did not).
+fn tree_changes_with(staged: &Path, repo: &Path, rewritten: &mut Vec<String>) -> Result<Vec<Change>, String> {
     let (mut a, mut b) = (Vec::new(), Vec::new());
     let mut budget = MAX_ENTRIES * 4;
     walk(repo, "", false, &mut a, &mut budget)?;
@@ -552,7 +587,10 @@ pub fn tree_changes(staged: &Path, repo: &Path) -> Result<Vec<Change>, String> {
         }
         let lower = lower_kind(repo, rel);
         match (&after_state, lower) {
-            (After::File { .. }, _) => out.extend(compare(repo, rel, after_state)),
+            (After::File { .. }, _) => match compare(repo, rel, after_state) {
+                Some(c) => out.push(c),
+                None => rewritten.push(rel.clone()),
+            },
             (After::Symlink, Some(t)) if t.is_symlink() => {
                 let same = std::fs::read_link(repo.join(rel)).ok() == std::fs::read_link(staged.join(rel)).ok();
                 if !same {
@@ -886,6 +924,10 @@ pub struct Staged {
     pub backend: StageBackend,
     /// The first 8 KiB of stderr, for a person (approval previews); never returned to an agent.
     pub stderr: Vec<u8>,
+    /// Declared cache files the run wrote with the worktree's exact bytes: refreshed by this run,
+    /// yet not in the plan (there is nothing to apply). A cache file in neither the plan nor here
+    /// was not written by this run.
+    pub rewritten: Vec<String>,
 }
 
 /// Run an E2 request in a stage and judge its change set. Nothing touches the worktree. `Err`
@@ -986,9 +1028,14 @@ pub fn stage_with(req: &ExecRequest, ctx: &Context, backend: StageBackend) -> Re
     if o.timed_out {
         return refuse("limits", format!("timed out after {} ms", req.profile.limits.wall_ms));
     }
-    let changes =
-        if copied { tree_changes(&tree, &repo) } else { overlay_changes(&stage_dir.path.join("upper"), &repo) }
-            .map_err(|e| Refusal { stage: "verify", reason: e })?;
+    let mut rewritten = Vec::new();
+    let changes = if copied {
+        tree_changes_with(&tree, &repo, &mut rewritten)
+    } else {
+        overlay_changes_with(&stage_dir.path.join("upper"), &repo, &mut rewritten)
+    }
+    .map_err(|e| Refusal { stage: "verify", reason: e })?;
+    rewritten.retain(|p| matches_any(&action.cache, p));
     preparation_check()?;
     let plan = judge(changes, &action, req.profile.limits.file_size);
     let fields = (o.exit == Some(0) && !req.output.fields.is_empty())
@@ -1007,6 +1054,7 @@ pub fn stage_with(req: &ExecRequest, ctx: &Context, backend: StageBackend) -> Re
         fields,
         backend,
         stderr: o.stderr,
+        rewritten,
     })
 }
 
@@ -1345,5 +1393,34 @@ mod tests {
                 ("src/same.py", ChangeKind::Modified)
             ]
         );
+    }
+
+    /// A file the run wrote with the worktree's exact bytes is no change, but it was refreshed:
+    /// both staging diffs report it apart, so a cache record can be told fresh from untouched.
+    #[test]
+    fn rewritten_identical_files_are_reported_apart_from_changes() {
+        let repo = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(repo.path().join("cache")).unwrap();
+        std::fs::write(repo.path().join("cache/record"), "{}").unwrap();
+        std::fs::write(repo.path().join("cache/untouched"), "x").unwrap();
+        let copy = tempfile::tempdir().unwrap();
+        let tree = copy.path().join("tree");
+        copy_tree(repo.path(), &tree, &mut 100, &mut (1 << 20)).unwrap();
+        // The run rewrites the record with the same bytes, a moment later.
+        let later = std::time::SystemTime::now() + std::time::Duration::from_secs(5);
+        let f = std::fs::File::options().write(true).open(tree.join("cache/record")).unwrap();
+        f.set_modified(later).unwrap();
+        let mut rewritten = Vec::new();
+        assert!(tree_changes_with(&tree, repo.path(), &mut rewritten).unwrap().is_empty());
+        assert_eq!(rewritten, ["cache/record"], "the untouched file is not reported");
+        // An overlay's upper layer holds exactly what the run wrote.
+        let upper = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(upper.path().join("cache")).unwrap();
+        std::fs::write(upper.path().join("cache/record"), "{}").unwrap();
+        std::fs::write(upper.path().join("cache/new"), "n").unwrap();
+        let mut rewritten = Vec::new();
+        let changes = overlay_changes_with(upper.path(), repo.path(), &mut rewritten).unwrap();
+        assert_eq!(changes.iter().map(|c| c.path.as_str()).collect::<Vec<_>>(), ["cache/new"]);
+        assert_eq!(rewritten, ["cache/record"]);
     }
 }
