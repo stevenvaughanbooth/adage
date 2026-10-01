@@ -4,10 +4,9 @@
 # of `cargo test --workspace`.
 name: Evals
 
+# Weekly and on manual dispatch only (`gh workflow run Evals --ref <branch>`): the fast gates already
+# run on every push in ci.yml's `cargo test --workspace`.
 on:
-  push:
-    branches: [main]
-  pull_request:
   workflow_dispatch:
   schedule:
     - cron: "23 5 * * 1"
@@ -30,8 +29,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # macOS minutes bill at 10x: Linux on every push, macOS on the weekly run and manual dispatch.
-        include: ${{ fromJSON((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && '[{"name":"linux-x64","os":"ubuntu-24.04"},{"name":"macos-arm64","os":"macos-14"}]' || '[{"name":"linux-x64","os":"ubuntu-24.04"}]') }}
+        include:
+          - { name: linux-x64, os: ubuntu-24.04 }
+          - { name: macos-arm64, os: macos-14 }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
