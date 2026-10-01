@@ -33,8 +33,11 @@
 //! contrast or consistency alone). A single successful continuation after an edit or a bounded
 //! multi-event context at ≥90% anchor confidence is retained independently of advisory value
 //! for execution judgement, including frequent prefixes absorbed by closure. It still passes
-//! support/day/consistency gates; contrast and advisory value never grant execution. The learner
-//! recounts every matching compiled trigger before
+//! support/day/consistency gates; contrast and advisory value never grant execution. Admitted for
+//! execution only (absorbed by closure, or below the advisory contrast or value), its context
+//! must also be a change (no command, no file edited twice) with a positive contrast, and a
+//! prefix absorbed by closure still passes the advisory contrast bar. The learner recounts every
+//! matching compiled trigger before
 //! issuing an execution certificate and requires local human authorization to run. A guard's delivery is then decided on the traces, by the rate
 //! and Wilson rule of its judgement (`adage-learn`), as every reflex's is: a Beta lower bound here
 //! would demand five or six unanimous traces where three decide everything else (G5).
@@ -752,12 +755,48 @@ pub fn score(db: &Db, st: &Stats, mp: &MinedPattern, p: &ScoreParams, cache: &Ca
         String::new()
     };
     let execution_only = !mp.closed || !advisory_gate.is_empty();
+    // Execution-only admission skips closure, or the advisory contrast bar and value, on the
+    // premise that the context is a change the continuation checks or regenerates:
+    // - the context holds no command: after another command (a lookup, another target, a failed
+    //   run) the continuation is a step of a sequence or a recovery, advice judged as such;
+    // - no edit in it is edited again (the same or a covering label): a trigger holding the
+    //   earlier edit is an after-edit trigger crossing the later one, which the recount refuses;
+    // - the continuation follows the context more often than other anchors of its type (with no
+    //   contrast the context is the anchor type relabelled, such as any edit);
+    // - one bypass at a time: a prefix closure absorbed into a longer continuation still passes
+    //   the advisory contrast bar, so a closed pattern's evidence is not discounted twice.
+    let command = xs.iter().any(|x| db.ty(x.label) == NodeType::Act);
+    let superseded = xs.iter().enumerate().any(|(i, a)| {
+        db.ty(a.label) == NodeType::Edit
+            && xs[i + 1..].iter().any(|b| {
+                db.ty(b.label) == NodeType::Edit
+                    && (db.labels.is_ancestor_or_self(a.label, b.label)
+                        || db.labels.is_ancestor_or_self(b.label, a.label))
+            })
+    });
+    let execution_gate = if !execution_only {
+        String::new()
+    } else if command {
+        "execution-only context holds a command".into()
+    } else if superseded {
+        "execution-only context edits one file twice".into()
+    } else if contrast <= 0.0 {
+        format!("execution-only contrast {contrast:.2} <= 0")
+    } else if !mp.closed && contrast < p.contrast {
+        format!("execution-only prefix contrast {contrast:.2} < {}", p.contrast)
+    } else {
+        String::new()
+    };
     let gate = if !gate.is_empty() {
         gate
-    } else if execution_candidate {
+    } else if execution_candidate && execution_gate.is_empty() {
         String::new()
     } else if !mp.closed {
-        "non-closed pattern is not an execution candidate".into()
+        if execution_candidate {
+            execution_gate
+        } else {
+            "non-closed pattern is not an execution candidate".into()
+        }
     } else {
         advisory_gate
     };

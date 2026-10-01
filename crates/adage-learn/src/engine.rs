@@ -1228,9 +1228,19 @@ mod execution_equivalence_tests {
                 calls.push(("Bash", json!({"command":"cd sub"})));
             }
             calls.push(("Write", json!({"file_path":format!("{cwd}/tests/test_a.py"), "content":"pass"})));
+            if mode == "changelog" {
+                calls.push(("Write", json!({"file_path":format!("{cwd}/CHANGELOG.rst"), "content":"- Add a."})));
+            }
+            if mode == "rewrite" {
+                calls.push(("Write", json!({"file_path":format!("{cwd}/tests/test_a.py"), "content":"assert True"})));
+            }
             calls.push(("Bash", json!({"command":command})));
-            if mode.starts_with("trailing-action") {
+            if mode.starts_with("trailing-action") || mode == "changelog" || mode == "rewrite" {
                 calls.push(("Bash", json!({"command":".venv/bin/python -c \"print(1)\""})));
+            }
+            if mode == "changelog" || mode == "rewrite" {
+                // Not every edit is followed by the check: the context is what predicts it.
+                calls.push(("Write", json!({"file_path":format!("{cwd}/docs/notes.md"), "content":"done"})));
             }
             if mode == "same-turn-shell" {
                 calls.push(("Bash", json!({"command":"cd sub"})));
@@ -1287,6 +1297,39 @@ mod execution_equivalence_tests {
                 "prefix admission must preserve independent support and success recount: {mode}"
             );
         }
+    }
+
+    #[test]
+    fn a_check_after_tests_then_changelog_edits_certifies_as_a_context() {
+        // The guided Marshmallow routine (run-175d85): edit a test, then the changelog, then the
+        // test command, then a common later action that closure absorbs the check into.
+        let command = ".venv/bin/python -m pytest tests/test_a.py -q";
+        let index = routine_cwd(&[command; 5], "changelog");
+        let want = Trigger::Context {
+            items: vec![CtxItem::Edit { glob: "tests/*.py".into() }, CtxItem::Edit { glob: "CHANGELOG.rst".into() }],
+            within: 8,
+        };
+        let route = index
+            .routes
+            .iter()
+            .find(|r| r.route.trigger == want && r.route.evidence.execution.is_some())
+            .expect("the tests-then-changelog context is certified");
+        assert_eq!(route.route.step, Step::Run { command: command.into() });
+        let ev = route.route.evidence.execution.as_ref().unwrap();
+        assert_eq!((ev.sessions, ev.successful, ev.opportunities), (5, 5, 5));
+    }
+
+    #[test]
+    fn a_context_that_edits_one_file_twice_is_not_admitted_for_execution_alone() {
+        // The second write of the same test is a later mutation the first one's trigger would
+        // cross; as a context it is the same crossing, so nothing is certified.
+        let command = ".venv/bin/python -m pytest tests/test_a.py -q";
+        let index = routine_cwd(&[command; 5], "rewrite");
+        assert!(
+            !index.routes.iter().any(|r| r.route.evidence.execution.is_some()),
+            "{:?}",
+            index.routes.iter().map(|r| (&r.route.trigger, &r.route.evidence.execution)).collect::<Vec<_>>()
+        );
     }
 
     #[test]
