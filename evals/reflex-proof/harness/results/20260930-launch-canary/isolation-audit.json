@@ -14,7 +14,7 @@
     "cb9c9e3e-e0a8-476e-b83a-97b0a6380dab",
     "f67aaf62-ace7-4af8-b409-b1bc4be7a448"
   ],
-  "forbidden_sessions": 35,
+  "forbidden_sessions": 36,
   "learned_state_sha256": {
     "cache/sessions/251a65654c9f6369.json": "c2e4125640749dad976dbab718711651b15c21e472fa4b1416d5543907aad647",
     "cache/sessions/2ba2042049038bed.json": "d5fe059ea45ebd3e1e2198611e5a3cc1325db7668d5768685255a78677f314a5",
@@ -97,5 +97,5 @@
   "passed": true,
   "problems": [],
   "repo": "marshmallow",
-  "scanned_sessions": 69
+  "scanned_sessions": 70
 }

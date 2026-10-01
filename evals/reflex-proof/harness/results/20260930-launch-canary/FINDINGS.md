@@ -1,25 +1,32 @@
-# Launch canary (launch-canary-2): frozen, not dispatched
+# Launch canary (launch-canary-3): frozen, not dispatched
 
-Status at 2026-09-30: frozen offline under protocol `launch-gate-1` revision 2. No paid call, no
-preparation of assignment checkouts, no grant. Nothing here is evidence of an effect yet.
+Status at 2026-10-01: frozen offline under protocol `launch-gate-1` revision 3. No canary agent
+session, no grant. Nothing here is evidence of an effect yet.
 
-- Cohort `cohorts/launch-gate-v1` (new native-confinement cohort; the `curve-guided-v2` review no
-  longer matches the current runner source). Its native-confinement session is prepared and must
-  be run and reviewed before canary preparation (`native-confinement-manifest.json`).
-- Study `cohorts/launch-gate-v1/canary-v2`: 12 automatic sessions on the development task
+- Cohort `cohorts/launch-gate-v2`, with its native-confinement session prepared by the fixed runner
+  (`native-confinement-manifest.json`, `native-confinement-settings.json`). The policy is
+  independent of the shell: recomputing it in the agent environment (60 names) and in an `env -i`
+  shell (4 names) gives identical settings. The session must be run and reviewed from a terminal
+  before canary preparation. The review now also requires environment denial (sentinel absent,
+  no credential-like names visible to tools).
+- Study `cohorts/launch-gate-v2/canary-v3`: 12 automatic sessions on the development task
   `mm-curve--finite`, two per condition (positive, failed, later-edit, config-change, broader,
-  rerun). `manifest.json` / `manifest.sha256` freeze prompts, binaries, sources and inputs.
-- Binaries: release `adage` `41684cdb…`, `adage-exec` `2c511ee5…`, built at `b14ffd3`; production
-  crates are unchanged through the recorded `binary_source_commit` (the freeze refuses a dirty tree).
-- Learned route: `run-175d85` from `cumulative-launch-10` (explicitly guided provenance).
-  `isolation-audit.json` passed: all ten inputs are training-split sessions; 35 non-training
-  session ids across 69 scanned records and every development/evaluation marker are absent.
-- `approve-canary.sh` (sha256 `bfa2feb1…`): the person-run grant script. E2 opt-in only for the
+  rerun). `manifest.json` / `manifest.sha256` freeze prompts, binaries, sources and inputs at
+  commit `03de2b3`.
+- Binaries: release `adage` `41684cdb…`, `adage-exec` `2c511ee5…` (production crates unchanged
+  since `b14ffd3`). Learned route `run-175d85` from `cumulative-launch-10` (explicitly guided).
+  `isolation-audit.json` passed.
+- `approve-canary.sh` (sha256 `c288d6d1…`): the person-run grant script. E2 opt-in only for the
   twelve assignment homes, automatic approval off, sandbox required, the four declared caches,
   30 s timeout. Agents must not run it.
-- `canary-v1-superseded-manifest.json`: an earlier zero-spend freeze on training-pool tasks,
-  superseded by revision 2 before preparation.
 
-An offline dry run in a scratch cohort prepared assignments, rendered the script, ran the
-production hooks without a grant (silent, as designed) and scored fabricated collections built
-from the archived transfer-v3 timeline; none of that is in the ledger.
+Superseded or aborted, preserved:
+
+- `canary-v1-superseded-manifest.json`: zero-spend freeze on training-pool tasks (revision 2).
+- `canary-v2-aborted/`: frozen under revision 2 in `cohorts/launch-gate-v1`. That cohort's native
+  session was frozen in a Claude Code agent environment and run from the user's terminal
+  ($0.0258378). Its review passed on files and network, but environment denial was
+  shell-dependent and untested. It is **excluded as confinement evidence**
+  (`EXCLUDED.json`; the ledger entry is marked excluded and keeps its cost). Canary preparation
+  then failed the policy-equality check, so no assignment, grant or agent session was created
+  (`ABORTED.jsonl`). See `../20260930-environment-denial-audit/FINDINGS.md`.

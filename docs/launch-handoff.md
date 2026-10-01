@@ -22,13 +22,14 @@ new dispatch; never reset it, double-dispatch, or treat an unknown bill as zero.
 
 ## Latest checkpoint: launch gate protocol (resume here)
 
-Branch `codex/launch-first-reflex`, PR #16 (draft). This checkpoint spent nothing: the ledger is
-unchanged at 100 attempts, $16.1474504 admitted, $43.8525496 remaining. The frozen cohort and
+Branch `codex/launch-first-reflex`, PR #16 (draft). Ledger: 101 attempts, $16.1732882 admitted,
+$43.8267118 remaining. The only new charge is the excluded `launch-gate-v1` native session
+($0.0258378, below). The frozen cohort and
 canary manifests bind absolute harness paths in the agent worktree
 `/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d`; run the
 commands below from its `evals/reflex-proof/harness`, or refreeze new roots from another checkout.
 
-- [Launch gate protocol](launch-gate-protocol.md) (`launch-gate-1`, revision 2) and its governing
+- [Launch gate protocol](launch-gate-protocol.md) (`launch-gate-1`, revision 3) and its governing
   JSON (`evals/reflex-proof/harness/launch_gate_protocol.json`) were registered before any dispatch:
   task splits with near-duplicate groups, arms, paired blocks, budgets and the GO thresholds G1-G9.
   `launch_gate_score.py` applies those thresholds; its tests pin every failure mode.
@@ -43,14 +44,25 @@ commands below from its `evals/reflex-proof/harness`, or refreeze new roots from
   foreign state, forbidden session ids from every non-training record, development/evaluation
   markers). The protocol lists what the existing pipeline already enforced and what is new.
   `cumulative-launch-10` passes it.
-- `launch_canary.py` (`launch-canary-2`) is frozen at `cohorts/launch-gate-v1/canary-v2`: 12
+- `launch_canary.py` (`launch-canary-3`) is frozen at `cohorts/launch-gate-v2/canary-v3`: 12
   automatic sessions on the development task `finite`, covering the positive condition and five
   negative controls ([status](../evals/reflex-proof/harness/results/20260930-launch-canary/FINDINGS.md)).
+- **Confinement fix (revision 3).** The tool-environment denial list used to be computed from
+  the shell that prepared a session, while Claude inherited the shell that launched it. No canary
+  tested environment denial. The first canary attempt exposed this: `launch-gate-v1`'s native
+  session was frozen in an agent environment and run from the user's terminal. That session is
+  excluded as confinement evidence, and `canary-v2` aborted before preparing anything. Claude
+  now starts from an allowlisted environment plus a random sentinel. The denial list is fixed,
+  launch refuses any passed name that is neither plain nor denied, and the native canary checks
+  environment denial. A names-only [audit](../evals/reflex-proof/harness/results/20260930-environment-denial-audit/FINDINGS.md)
+  of the 101 launched archived sessions found no environment dump or Python environment access,
+  but it cannot verify launch-time denial. Earlier confinement claims cover the filesystem and
+  network only.
 
 Blocked on three things, none of which an agent may bypass:
 
 1. **Paid runs need a normal terminal.** `probe.execute` refuses nested Claude sessions.
-2. **Grants need the person.** `approve-canary.sh` (sha256 `bfa2feb1…`) is prepared; run it only
+2. **Grants need the person.** `approve-canary.sh` (sha256 `c288d6d1…`) is prepared; run it only
    after reading it.
 3. **Learning needs the learner fix.** About 22 learning-quality tests fail on main since PR #14.
    Cohort training replay, checkpoints and frozen learned homes wait for that fix and a rebuild.
@@ -58,9 +70,9 @@ Blocked on three things, none of which an agent may bypass:
 Canary commands, from `evals/reflex-proof/harness` in a normal terminal (one at a time; stop on error):
 
 ```sh
-A=/private/tmp/adage-real-repo-gate-v1; C=$A/cohorts/launch-gate-v1; R=$C/canary-v2
+A=/private/tmp/adage-real-repo-gate-v1; C=$A/cohorts/launch-gate-v2; R=$C/canary-v3
 python3 real_repo_gate.py run-session $C/sessions/native-confinement/manifest.json   # paid, <= $0.50 cap
-python3 curve_sessions.py review-native $C                                           # offline
+python3 curve_sessions.py review-native $C                                           # offline; must pass, incl. environment
 python3 launch_canary.py prepare $R                                                  # offline, several minutes
 less $R/approve-canary.sh && sh $R/approve-canary.sh                                 # the person issues 12 grants
 python3 launch_canary.py verify-grants $R                                            # read-only

@@ -1,0 +1,8 @@
+{
+  "canary_v2": "aborted at prepare (native review policy mismatch); no assignment prepared, no grant, no spend",
+  "native_review": "native-confinement-reviewed.json (passed, but invalid as confinement evidence)",
+  "reason": "Excluded confinement evidence: settings.json was frozen in a Claude Code agent environment and the session was launched from a different terminal shell; the environment-denial list was computed from the freezing shell, so names present only at launch were not denied to tools. The canary never tested environment denial. Cost is real and stays in the ledger.",
+  "recorded_ns": 1790814832304069000,
+  "status": "excluded",
+  "successor": "cohorts/launch-gate-v2"
+}

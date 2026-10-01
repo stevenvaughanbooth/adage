@@ -29,6 +29,10 @@ fixes task splits (near-duplicates grouped, held-out families never used), a pre
 training-isolation audit, three arms in paired blocks across three repositories, budgets, and
 numerical GO thresholds. Its production-contract canary is [frozen, not yet run](harness/results/20260930-launch-canary/FINDINGS.md).
 No statistic from it exists yet.
+An [environment-denial audit](harness/results/20260930-environment-denial-audit/FINDINGS.md) found that
+the tool-environment denial list depended on the preparing shell and was never canary-tested.
+Earlier native-confinement evidence covers the filesystem and network only. The runner now
+launches from an allowlisted environment and tests environment denial.
 
 The subsequent [edit-receipt diagnostic](harness/results/20260930-edit-receipt-ablation/summary.json)
 is an authored fixture, not a launch benchmark. After fixing inherited-stdin contamination,
