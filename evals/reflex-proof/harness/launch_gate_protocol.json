@@ -8,9 +8,9 @@
     "ceiling_usd": 60,
     "admission_spend_at_registration_usd": 16.1474504,
     "attempts_at_registration": 100,
-    "protocol_ceiling_usd": 38.0,
+    "protocol_ceiling_usd": 44.0,
     "phase_ceilings_usd": {
-      "canary": 12.0,
+      "canary": 18.0,
       "training": 0.0,
       "heldout": 26.0
     },
@@ -28,7 +28,10 @@
     "attempts_at_r7": 128,
     "admission_spend_at_r8_usd": 20.2683707,
     "attempts_at_r8": 128,
-    "r9_note": "r9 (draft): the $4 training allocation moves to held-out (held-out $26, training $0); Click and more-itertools training gets a new allocation later. The protocol total stays $38. The ledger had $39.7316293 remaining before development canary-v8."
+    "r9_note": "r9 (draft): the $4 training allocation moves to held-out (held-out $26, training $0); Click and more-itertools training gets a new allocation later. The protocol total stays $38. The ledger had $39.7316293 remaining before development canary-v8.",
+    "admission_spend_at_r10_usd": 24.6504369,
+    "attempts_at_r10": 163,
+    "r10_note": "r10 (development budget): the canary/development ceiling rises from $12 to $18 for development canary-v9 (study ceiling $8.50, $0.50 per session) and the protocol total from $38 to $44; held-out keeps $26 and training $0. Ledger at r10: $24.6504369 admitted (163 attempts), $35.3495631 remaining of $60. Worst case after dev-v9: $24.6504369 + $8.50 = $33.1504369 admitted, $26.8495631 remaining; held-out's $3 ledger floor then leaves $23.8495631 for its $26 worst case, so held-out would stop at the floor before its own ceiling if both studies hit their worst cases (expected spend is far below either: dev-v9 about $6.6, at v8's $0.125 per session). The ledger ceiling ($60) is unchanged."
   },
   "model": "claude-haiku-4-5-20251001",
   "claude_cli": "2.1.282",
@@ -174,7 +177,7 @@
     "copy grants",
     "change thresholds after the first held-out dispatch"
   ],
-  "revision": 9,
+  "revision": 10,
   "revisions": [
     "2026-09-30 r1: registered",
     "2026-09-30 r2, before any dispatch under this protocol: task splits with near-duplicate groups, training-isolation audit, evaluation read-only rule, paired blocks, same-repository strata and G9; canary moved to the development split",
@@ -185,7 +188,8 @@
     "2026-10-01 r6 note: canary-v6 (launch-canary-6) was frozen before this JSON's r6 edits, so its source hashes no longer verify; it was superseded before preparation with no spend and canary-v7 (launch-canary-7, same design) replaces it",
     "2026-10-01 r7, before any held-out dispatch: scorer version 2 (covered requests are repeat attempts whether or not they launched; any blocks an elimination; only completed requests satisfy necessary verification); realistic project environment (checkout .venv first on PATH and as VIRTUAL_ENV, native canary requires python_on_path); pytest receipts list collected/new node ids from the declared pytest cache record bound to the journal; later-edit control realized by construction; PreToolUse result substitution out of scope (goal is skipping inference)",
     "2026-10-01 r8, development only, before any held-out dispatch: target is fewer model requests per task against a no-Adage control in Claude Code hook mode; Lever 2 (factual contract, compact receipts, delivered failures, Stop gate) and Lever 1 (card names the certified test command); development canary-v8 (dev_arms.py) with arms A0 no hooks, A1 revision-7 integration, A2 Lever 2, A3 Levers 1+2 in six paired blocks plus A2/A3 safety controls, using the production hook registration; development thresholds D1-D4 registered here; canary/development ceiling 8 -> 12 and training 8 -> 4 (protocol total unchanged at 38; held-out keeps 22)",
-    "2026-10-01 r9 (draft on codex/heldout-tasks, registered only when merged, before any held-out dispatch): held-out Marshmallow tasks authored and frozen (heldout_tasks.py, results/20261001-heldout-tasks, commit 260729a); max-sum withdrawn as a near-duplicate of size-limit and replaced by lat-long (geo-coordinate); every held-out prompt carries the realism line 'Do not create git commits.', no work order and no test block; pre-registered held-out analysis (heldout_analysis.py) and runner (heldout_cohort.py): arms A0, NOEXEC and BEST (the dev arm passing D1-D4 with the lowest mean requests, built from the final pre-freeze commit; no held-out run if none passes), 4 tasks x 5 repetitions in randomized paired blocks; debug-log requests (retries count) with a per-session stream cross-check, unexplained mismatches excluding their block, more than 2 excluded blocks = unverified; headline test: one-sided 95% bootstrap upper bound of BEST/A0 requests <= 0.90 plus quality within one; censoring conservative against Adage (censored BEST at max(observed, 60), censored A0/NOEXEC at observed, all censored sessions quality failures) with a no-censored-blocks sensitivity; a no-has-keys sensitivity reported prominently if it disagrees; G1, G2, G5, G6, G7 and G8 apply, G3, G4 and G9 are not applicable with reasons; five realized controls first; $0.40 cap, 65 sessions, $26.00 worst case, held-out ceiling $26 after moving training's $4 (protocol total $38 unchanged); control prompts also carry the realism line (between the development prompt and the canary suffix), re-validated offline"
+    "2026-10-01 r9 (draft on codex/heldout-tasks, registered only when merged, before any held-out dispatch): held-out Marshmallow tasks authored and frozen (heldout_tasks.py, results/20261001-heldout-tasks, commit 260729a); max-sum withdrawn as a near-duplicate of size-limit and replaced by lat-long (geo-coordinate); every held-out prompt carries the realism line 'Do not create git commits.', no work order and no test block; pre-registered held-out analysis (heldout_analysis.py) and runner (heldout_cohort.py): arms A0, NOEXEC and BEST (the dev arm passing D1-D4 with the lowest mean requests, built from the final pre-freeze commit; no held-out run if none passes), 4 tasks x 5 repetitions in randomized paired blocks; debug-log requests (retries count) with a per-session stream cross-check, unexplained mismatches excluding their block, more than 2 excluded blocks = unverified; headline test: one-sided 95% bootstrap upper bound of BEST/A0 requests <= 0.90 plus quality within one; censoring conservative against Adage (censored BEST at max(observed, 60), censored A0/NOEXEC at observed, all censored sessions quality failures) with a no-censored-blocks sensitivity; a no-has-keys sensitivity reported prominently if it disagrees; G1, G2, G5, G6, G7 and G8 apply, G3, G4 and G9 are not applicable with reasons; five realized controls first; $0.40 cap, 65 sessions, $26.00 worst case, held-out ceiling $26 after moving training's $4 (protocol total $38 unchanged); control prompts also carry the realism line (between the development prompt and the canary suffix), re-validated offline",
+    "2026-10-01 r10, development only, before any held-out dispatch: dev-v8b archived as invalid for its execution arms from session 09 (its grants lapsed: an outside process wrote bytecode into the shared runtime); the harness fails loudly on lapsed grants, unverified or censored counts and unrealized controls, protects the shared runtime and re-checks every grant before each dispatch; production: the procedure card drops its exemplar for an orientation block (where its learned files stand in the checkout now, read-only, bounded) and receipts name the tests this session's edits added; development canary-v9 (dev_v9.py, dev-arms-2) with arms A0, A2f and A4 in 16 paired blocks plus five A4 controls, every prompt with the realism line; rule dev_thresholds_v9; canary/development ceiling 12 -> 18 and protocol total 38 -> 44 (held-out keeps 26)"
   ],
   "splits": {
     "marshmallow": {
@@ -476,7 +480,7 @@
   "harness_registration": "development and held-out sessions use the production hook registration (SessionStart, UserPromptSubmit, PostToolBatch, PostToolUseFailure, PreToolUse for Bash, Stop, SessionEnd); earlier canaries registered PostToolUse per tool instead",
   "heldout_analysis": {
     "revision": 9,
-    "status": "draft on codex/heldout-tasks; registered only when merged, before any held-out dispatch",
+    "status": "registered: drafted on codex/heldout-tasks and merged into codex/launch-first-reflex (57e79bf) on 2026-10-01, before any held-out dispatch",
     "script": "evals/reflex-proof/harness/heldout_analysis.py",
     "tests": "evals/reflex-proof/harness/test_heldout_analysis.py",
     "stratum": "same repository, same test file family, guided-learned route (run-175d85)",
@@ -626,5 +630,27 @@
       }
     },
     "go_rule": "GO for this stratum requires the primary test and quality, plus every G criterion marked applies; criteria marked not applicable carry their reason and are reported, never silently dropped"
+  },
+  "dev_thresholds_v9": {
+    "protocol": "dev-arms-2",
+    "arm": "A4",
+    "blocks": 16,
+    "D1_requests_max_ratio_to_A0": 0.8,
+    "D1_blocks_fewer_min": 10,
+    "D2": "hidden-test failures in A4's positives no more than in A0's",
+    "D3": "all five A4 controls (failed, later-edit, config-change, broader, rerun) realized, and none skipped necessary verification",
+    "D4_sessions_with_repeat_attempts_max": 5,
+    "D4_derivation": "v8's 2 of 6 positives, scaled to 16 blocks (5.3), rounded down",
+    "validity": "every hook-arm session (A2f, A4) has the execution contract, at least one receipt and no withheld approval; model requests equal the debug log's dispatches; no session censored; every control realized; each hook arm's card arrived in its form (A2f: exemplar, no orientation; A4: orientation, no exemplar). An invalid study passes no arm.",
+    "secondary": "A2f vs A0 is reported with the same D1, D2 and D4 computation; A2f has no controls, so it is never BEST",
+    "best_rule": "r9: the arm passing D1-D4 with the lowest mean requests (ties: lower mean cost, then name); in dev-arms-2 only A4 can be BEST",
+    "prompts": "every prompt (positives and controls) carries the held-out realism line 'Do not create git commits.' between the development prompt and the canary suffix",
+    "budget": {
+      "sessions": 53,
+      "per_session_usd": 0.5,
+      "study_ceiling_usd": 8.5,
+      "ledger_floor_usd": 3.0
+    },
+    "rule": "A4 passes development only if the study is valid and D1-D4 all hold; only then does the held-out comparison run, with BEST = A4 under r9"
   }
 }

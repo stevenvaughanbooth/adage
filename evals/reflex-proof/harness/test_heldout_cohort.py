@@ -175,6 +175,47 @@ class Freeze(unittest.TestCase):
             with self.assertRaises(ValueError):
                 runner.design(path)
 
+    def test_a_dev_v9_report_selects_its_arm_with_controls_and_carries_its_card_form(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "report.json"
+            report = dict(protocol=runner.dev_v9.PROTOCOL, valid=True,
+                          arms=dict(A2f=dict(requests=12.0), A4=dict(requests=13.0, cost_usd=0.1)),
+                          verdict=dict(A2f=dict(passed=True), A4=dict(passed=True)))
+            path.write_text(json.dumps(report))
+            d = runner.design(path)
+            self.assertEqual((d["arm"], d["card_orientation"], d["dev_protocol"]), ("A4", True, "dev-arms-2"),
+                             "A2f has no controls, so it is never BEST")
+            path.write_text(json.dumps(dict(report, valid=False)))
+            with self.assertRaisesRegex(ValueError, "invalid"):
+                runner.design(path)
+
+    def test_the_hook_gives_best_and_noexec_the_designs_card_form(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "manifest.json"
+            with patch.object(runner.pairs, "hook", return_value="out"), patch.dict(os.environ, {}, clear=False):
+                path.write_text(json.dumps(dict(arm="automatic", card_orientation=False)))
+                runner.hook(path, {})
+                self.assertEqual(os.environ.get("ADAGE_CARD_ORIENTATION"), "0")
+                path.write_text(json.dumps(dict(arm="noexec", card_orientation=True)))
+                runner.hook(path, {})
+                self.assertNotIn("ADAGE_CARD_ORIENTATION", os.environ)
+
+    def test_a_best_session_with_a_lapsed_grant_invalidates_the_report(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            m = frozen(root)
+            best = next(r for r in m["matrix"] if r["arm"] == "BEST" and r["condition"] == "positive")
+            noexec = next(r for r in m["matrix"] if r["arm"] == "NOEXEC")
+            for row, contract, decisions in ((best, False, [dict(withheld="approval", reason="exec-changed")]),
+                                             (noexec, False, [])):
+                runner.session_dir(root, row).mkdir(parents=True, exist_ok=True)
+                runner.pairs.write(runner.session_dir(root, row) / "collection.json",
+                                   dict(contract_emitted=contract, exec_decisions=decisions, all_journal_receipts=[]))
+            problems = runner.lapses(root, m)
+            self.assertEqual([p["order"] for p in problems], [best["order"]], "NOEXEC has no grant to lapse")
+            self.assertIn("withheld (approval: exec-changed)", problems[0]["problem"])
+            self.assertNotIn("no receipt", problems[0]["problem"], "a context that does not fire is measured, not a lapse")
+
     def test_binaries_are_bound_by_given_hashes_and_build_commit(self):
         with tempfile.TemporaryDirectory() as tmp:
             bins = Path(tmp)

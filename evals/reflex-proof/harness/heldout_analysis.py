@@ -90,11 +90,12 @@ GO_CRITERIA = {
 }
 
 
-def select_best(dev_report):
+def select_best(dev_report, candidates=CANDIDATES):
     """The development arm passing D1-D4 with the lowest mean requests (ties: lower mean cost, then
-    the name). None means the held-out comparison is not run."""
+    the name). None means the held-out comparison is not run. `candidates`: the design's arms that
+    can be BEST (dev-arms-1: A2, A3; dev-arms-2: A4, the arm with controls)."""
     verdict, arms = dev_report.get("verdict", {}), dev_report.get("arms", {})
-    passing = [a for a in CANDIDATES if verdict.get(a, {}).get("passed") is True
+    passing = [a for a in candidates if verdict.get(a, {}).get("passed") is True
                and isinstance(arms.get(a, {}).get("requests"), (int, float))]
     if not passing:
         return None

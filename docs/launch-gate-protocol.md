@@ -2,8 +2,9 @@
 
 Registered 2026-09-30 (revision 2 the same day; revisions 3 to 8 on 2026-10-01). Revisions 3
 to 5 preceded any canary agent session; revisions 6 to 8 follow development canaries and precede
-any held-out dispatch. Revision 9 is a draft on `codex/heldout-tasks`; it is registered only when
-merged, before any held-out dispatch. The
+any held-out dispatch. Revision 9 was drafted on `codex/heldout-tasks` and merged into
+`codex/launch-first-reflex` at `57e79bf` on 2026-10-01, before any held-out dispatch. Revision 10
+(development only) follows it, also before any held-out dispatch. The
 machine-readable copy is `evals/reflex-proof/harness/launch_gate_protocol.json`; when the two
 differ, the JSON governs. Revisions get a dated entry below and must precede the dispatch they
 affect. Splits and thresholds cannot change after the first held-out dispatch.
@@ -294,6 +295,73 @@ censored.
 - Before every dispatch, `live` re-checks the runtime and checks the session's grant with its own
   binary at SessionStart. It stops the study on any lapse.
 
+### Revision 10 (development): dev-v9, the orientation card
+
+This revision is designed from the dev-v8 diagnosis. Two findings drive it. First, in the seven v8
+sessions where execution ran, verification ownership landed near the 0.85 bar. Second, discovery
+was the largest phase, and the card's exemplar ("copy the format") sent a third of card sessions
+paging through files and grepping for idioms.
+
+**Production changes.**
+- **The card drops the exemplar.** In its place, the card says where its learned files stand in
+  the checkout, read when the card is delivered:
+  - line counts;
+  - the last top-level definitions of a source file, with their lines;
+  - a test file's last lines;
+  - a changelog's first headings.
+
+  This is Adage's own bounded, read-only process: about 1,200 tokens at most, no dotfiles, ignored
+  or secret files, and no command run. `ADAGE_CARD_ORIENTATION=0` restores the earlier card as an
+  evaluation knob.
+- **Receipts name the session's new tests.** A receipt names the tests that this session's edits
+  added (from the hook payloads' edit text), instead of the first twelve ids new since the last
+  record.
+- **Merged `codex/ship-fixes`.** This brings in the Stop-gate fixes, `__pycache__` left out of the
+  project-Python digest (bare `.pyc` files stay hashed), and a lapse notice the person can see.
+
+**Development canary-v9 (`harness/dev_v9.py`, protocol `dev-arms-2`).**
+- **Arms**, on the development task in 16 paired blocks with a rotating order:
+  - A0: no hooks;
+  - A2f: verification ownership on the fixed binaries, with the card as shipped before this
+    revision (exemplar, no orientation);
+  - A4: A2f plus the orientation card.
+
+  A2f and A4 share binaries, learned home and grant. Only the card differs, and the card checks
+  line stays as shipped in both.
+- **Controls.** The five safety controls run in A4, first in the matrix, and all must be realized.
+- **Prompts.** Every prompt, controls included, carries the held-out realism line ("Do not create
+  git commits.") between the development prompt and the canary suffix.
+- **Size and cost.** 53 sessions, $0.50 cap each, study ceiling $8.50, ledger floor $3.
+
+**Registered rule** (`dev_thresholds_v9`). A4 passes development only if all of the following hold:
+- the study is valid;
+- D1: mean requests at most 0.80 times A0's, and fewer than A0 in at least 10 of 16 blocks;
+- D2: no more hidden-test failures than A0;
+- D3: all five controls realized, with no skipped necessary verification;
+- D4: covered repeat attempts in at most 5 of 16 positives (v8's 2 of 6, scaled down).
+
+The study is valid only if all of these hold:
+- every hook-arm session has its contract, a receipt and no withheld approval;
+- requests equal the debug log's dispatches;
+- no session is censored;
+- every control is realized;
+- each hook arm's card arrived in its form.
+
+A2f vs A0 is reported with the same D1, D2 and D4. A2f has no controls, so it is never BEST. BEST is
+chosen by the r9 rule, and only A4 can be BEST.
+
+**Budget.** The canary/development ceiling rises from $12 to $18, and the protocol total from $38
+to $44. Held-out keeps $26 and training $0.
+
+At r10 the ledger has $24.6504369 admitted across 163 attempts, leaving $35.3495631 of $60. If
+dev-v9 spends its whole $8.50 ceiling, $26.8495631 remains. Held-out's $3 ledger floor then leaves
+$23.8495631 for held-out, so held-out would stop at the floor before its own ceiling if both studies
+hit their worst cases. Expected dev-v9 spend is about $6.6, at v8's $0.125 per session.
+
+**Native confinement.** The runner sources that the `launch-gate-v5` cohort binds are unchanged
+(`probe`, `real_repo_gate`, `real_repo_pairs`, `cohort_v5`, `budget`), so its passing native review
+still applies and dev-v9 nests in that cohort.
+
 ## Phase 2: cohort (step 3)
 
 Learning waits for the learner-regression fix on main; nothing is frozen with the broken learner.
@@ -521,6 +589,16 @@ evaluation groups is registered.
 ## Revisions
 
 - 2026-09-30 r1: registered.
+- 2026-10-01 r10, development only, before any held-out dispatch:
+  - dev-v8b archived as invalid for its execution arms from session 09;
+  - fail-loud reports, a protected runtime, and a grant check before every dispatch;
+  - production: the orientation card replaces the exemplar, and receipts name the session's new
+    tests;
+  - `codex/ship-fixes`, `codex/heldout-tasks` (r9) and `codex/first-run-fixes` merged;
+  - development canary-v9 with A0, A2f and A4 in 16 blocks plus five A4 controls, under rule
+    `dev_thresholds_v9`;
+  - canary/development ceiling $12 to $18, protocol total $38 to $44 (held-out keeps $26);
+  - ledger at r10: 163 attempts, $24.6504369 admitted, $35.3495631 remaining.
 - 2026-10-01 r9 (draft on `codex/heldout-tasks`; registered only when merged, before any held-out dispatch):
   - the held-out Marshmallow tasks are authored and frozen (commit `260729a`);
   - max-sum is withdrawn as a near-duplicate of size-limit and replaced by lat-long;

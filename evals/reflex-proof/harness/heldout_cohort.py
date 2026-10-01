@@ -31,6 +31,7 @@ import time
 
 import cohort_v5
 import dev_arms
+import dev_v9
 import heldout_analysis as analysis
 import heldout_tasks
 import launch_canary as canary
@@ -53,7 +54,7 @@ MAX_TURNS = analysis.MAX_TURNS
 
 
 def sources():
-    files = [Path(__file__), Path(analysis.__file__), Path(heldout_tasks.__file__)]
+    files = [Path(__file__), Path(analysis.__file__), Path(heldout_tasks.__file__), Path(dev_v9.__file__)]
     return {**dev_arms.sources(), **{str(p.resolve()): pairs.sha(p) for p in files}}
 
 
@@ -78,14 +79,24 @@ def session_dir(root, row):
 
 
 def design(dev_report_path):
-    """BEST from the development report by the registered rule; None stops the held-out study."""
+    """BEST from the development report by the registered rule; None stops the held-out study. A
+    dev-arms-2 (dev-v9) report must also be valid: its BEST is its arm with controls (A4)."""
     report = pairs.read(dev_report_path)
-    if report.get("protocol") != dev_arms.PROTOCOL:
-        raise ValueError("the selection input must be a dev-arms-1 report")
-    best = analysis.select_best(report)
+    if report.get("protocol") == dev_arms.PROTOCOL:
+        best = analysis.select_best(report)
+        arms, card_orientation = dev_arms.ARMS, None
+    elif report.get("protocol") == dev_v9.PROTOCOL:
+        if report.get("valid") is not True:
+            raise ValueError("the dev-v9 report is invalid; the held-out comparison is not run")
+        best = analysis.select_best(report, candidates=dev_v9.CONTROL_ARMS)
+        arms = dev_v9.ARMS
+        card_orientation = arms[best]["card_orientation"] if best else None
+    else:
+        raise ValueError("the selection input must be a dev-arms-1 or dev-arms-2 report")
     if best is None:
         raise ValueError("no development arm passed D1-D4; the held-out comparison is not run")
-    return dict(arm=best, card_checks=dev_arms.ARMS[best]["card_checks"], label=dev_arms.ARMS[best]["label"],
+    return dict(arm=best, card_checks=arms[best].get("card_checks"), card_orientation=card_orientation,
+                label=arms[best]["label"], dev_protocol=report["protocol"],
                 report=str(Path(dev_report_path).resolve()), report_sha256=pairs.sha(Path(dev_report_path)),
                 rule="the arm passing D1-D4 with the lowest mean requests (ties: lower mean cost, then name)")
 
@@ -256,6 +267,7 @@ def assignment(m, row, session, checkout, local, settings_base, hidden, review):
     value = dict(protocol=PROTOCOL, root=str(session), study_root=m["root"], cohort_root=m["cohort_root"],
                  experiment_root=m["budget_authority"], execution_root=str(checkout), home=str(local),
                  arm=RUNTIME_ARM[arm], heldout_arm=arm, card_checks=m["best"]["card_checks"] if HOOKS[arm] else None,
+                 card_orientation=m["best"].get("card_orientation") if HOOKS[arm] else None,
                  condition=row["condition"], block=row["block"], repetition=row["repetition"], task=row["task"],
                  order=row["order"], route=m["route"], model=m["model"], argv=argv, binaries=binaries,
                  learned_files=learned, sources=m["source_sha256"], budget_usd=SESSION_CAP_USD,
@@ -300,7 +312,8 @@ def prepare(root):
         pairs.write(session / "manifest.json", value)
         (session / "manifest.sha256").write_text(pairs.sha(session / "manifest.json") + "\n")
         out.append(str(session / "manifest.json"))
-    return dict(assignments=out, paid_calls=0, grants_written=False)
+    # Before any grant: the shared runtime every grant binds is made read-only (dev-v8b's lapse).
+    return dict(assignments=out, paid_calls=0, grants_written=False, runtime=canary.protect_runtime(root, m))
 
 
 def granted(m):
@@ -371,6 +384,10 @@ def hook(manifest, payload):
         os.environ["ADAGE_CARD_CHECKS"] = "0"
     else:
         os.environ.pop("ADAGE_CARD_CHECKS", None)
+    if m.get("card_orientation") is False:
+        os.environ["ADAGE_CARD_ORIENTATION"] = "0"
+    else:
+        os.environ.pop("ADAGE_CARD_ORIENTATION", None)
     return pairs.hook(manifest, payload)
 
 
@@ -423,8 +440,10 @@ def collect(manifest):
                   task=m["task"], order=m["order"], provenance=provenance, quality=quality,
                   cost_usd=summary.get("total_cost_usd"), timeline=timeline, replay=replay,
                   all_journal_receipts=attempt("journal", lambda: pairs.journal(m), []) if hooks else [],
-                  contract_emitted=any('kind=\\"execution-contract\\"' in (h.get("output") or "") for h in hooks
+                  contract_emitted=any(canary.contract_in(h.get("output")) for h in hooks
                                        if h.get("event") == "SessionStart"),
+                  exec_decisions=attempt("decisions", lambda: canary.exec_decisions(m["home"]), None)
+                  if m["arm"] == "automatic" else [],
                   final_generation=final["digest"], collection_errors=errors)
     pairs.write(session / "collection.json", result)
     return result
@@ -455,6 +474,7 @@ def live(root, wall_seconds=600):
     if not verify_grants(root)["passed"]:
         raise ValueError("person-issued grants are missing or differ from the reviewed script")
     canary.isolation(m)
+    canary.require_runtime(root, m)
     authority = Path(m["budget_authority"])
     for row in m["matrix"]:
         a = pairs.read(session_dir(root, row) / "manifest.json")
@@ -483,20 +503,26 @@ def live(root, wall_seconds=600):
             budget = pairs.Budget(state, gate.budget_limit(a), SESSION_CAP_USD, persist=lambda: pairs.write(state_path, state))
             if budget.total - (budget.spent + SESSION_CAP_USD) < LEDGER_FLOOR_USD:
                 raise ValueError("the ledger's remaining balance would fall below $3; stop and report")
+            # Every dispatch: the runtime every grant binds is unchanged, and a BEST session's grant
+            # still yields its contract at SessionStart (dev-v8b ran 20 sessions after its grants lapsed).
+            canary.require_runtime(root, m)
+            if a["arm"] == "automatic" and not canary.preflight_grant(a):
+                canary.stop(root, "order %d: the grant no longer binds at SessionStart (no execution contract)" % row["order"])
             attempt, reason = budget.reserve(key)
             if attempt is None:
                 raise ValueError(reason)
             state["runs"][key] = dict(status="reserved", task=a["task"], arm=a["heldout_arm"], condition=a["condition"],
                                       protocol=PROTOCOL)
             pairs.write(state_path, state)
-            result = None
+            result = collected = None
             try:
                 if not budget.dispatch(attempt):
                     raise ValueError("accounting blocked dispatch")
                 result = pairs.probe.execute(manifest, SESSION_CAP_USD, wall_seconds)
                 budget.settle(attempt, result)
                 state["runs"][key].update(status="complete", summary=result)
-                state["runs"][key]["quality"] = collect(manifest)["quality"]
+                collected = collect(manifest)
+                state["runs"][key]["quality"] = collected["quality"]
             except BaseException as error:
                 state["runs"][key].update(status="failed", error=str(error))
                 raise
@@ -506,16 +532,33 @@ def live(root, wall_seconds=600):
                 pairs.append(authority / "attempts.jsonl", dict(status="heldout-finished", run=key, accounting=attempt,
                                                                 evidence=state["runs"][key], timestamp_ns=time.time_ns()))
         results.append(dict(order=row["order"], status=state["runs"][key]["status"]))
+        if a["arm"] == "automatic" and canary.lapsed(collected):
+            canary.stop(root, "order %d: the grant lapsed during the session (%s)" % (
+                row["order"], "; ".join(canary.integrity(collected))))
     return results
+
+
+def lapses(root, m):
+    """BEST sessions whose grant did not bind (no contract, or a withheld approval): such a session
+    is card-only, whatever its label, and the study is invalid. A BEST session with no receipt is
+    not a lapse here: whether the learned context fires on a held-out task is measured (G2)."""
+    out = []
+    for row in m["matrix"]:
+        path = session_dir(root, row) / "collection.json"
+        if row["arm"] == "BEST" and path.exists() and canary.lapsed(pairs.read(path)):
+            out.append(dict(order=row["order"], arm=row["arm"], condition=row["condition"],
+                            problem="; ".join(p for p in canary.integrity(pairs.read(path)) if not p.startswith("no receipt"))))
+    return out
 
 
 def report(root):
     root = Path(root).resolve(strict=True)
     m = verify(root)
     rows = rows_of(root, m)
+    problems = lapses(root, m)
     result = dict(analysis.analyze(rows, m["best"]["arm"], route=m["route"]), best=m["best"], build_commit=m["build_commit"],
                   binary_sha256=m["binary_sha256"], assignments=len(rows),
-                  collected=sum(r.get("status") == "collected" for r in rows))
+                  collected=sum(r.get("status") == "collected" for r in rows), valid=not problems, problems=problems)
     pairs.write(root / "reports" / ("heldout-" + str(time.time_ns()) + ".json"), result)
     return result
 
@@ -554,6 +597,9 @@ def main():
         value = {"prepare": prepare, "approval-script": approval_script, "verify-grants": verify_grants,
                  "live": live, "report": report}[args.command](args.path.resolve(strict=True))
     print(json.dumps(value, indent=2, default=str))
+    if args.command == "report" and not value["valid"]:
+        sys.exit("INVALID: %d BEST session(s) ran with a lapsed grant; this report is not evidence (see `problems`)"
+                 % len(value["problems"]))
 
 
 if __name__ == "__main__":
