@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+import probe as gate_probe
 import real_repo_gate as gate
 
 
@@ -20,15 +21,22 @@ class PreparationTests(unittest.TestCase):
             self.assertNotIn('(subpath "/private/tmp")', p)
             self.assertNotIn('(subpath "/tmp")', p)
 
-    def test_native_credentials_scrub_keeps_product_agent_guards(self):
-        names = {name: "not-read" for name in ("CLAUDECODE", "OPENCODE", "CODEX_SANDBOX",
-                 "CODEX_SANDBOX_NETWORK_DISABLED", "ADAGE_ARM", "ADAGE_TRAIN_SESSION",
-                 "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_OAUTH_TOKEN", "GITHUB_TOKEN", "PYTHONPATH")}
-        with tempfile.TemporaryDirectory() as d, patch.dict("os.environ", names, clear=True):
+    def test_native_credentials_denial_is_fixed_and_independent_of_the_freezing_shell(self):
+        freeze = {name: "not-read" for name in ("CLAUDECODE", "CODEX_SANDBOX", "CLAUDE_CODE_MESSAGING_TOKEN", "GOCACHE")}
+        other = {"HOME": "/Users/person", "PATH": "/usr/bin", "GITHUB_TOKEN": "not-read", "ANTHROPIC_API_KEY": "not-read"}
+        with tempfile.TemporaryDirectory() as d:
             root = Path(d).resolve()
-            settings = gate.native_settings(root, root / "repo", ["Read"])
+            with patch.dict("os.environ", freeze, clear=True):
+                settings = gate.native_settings(root, root / "repo", ["Read"])
+            with patch.dict("os.environ", other, clear=True):
+                self.assertEqual(gate.native_settings(root, root / "repo", ["Read"]), settings)
+                # A different launching shell still confines: every passed credential name is denied.
+                names = gate_probe.check_launch(gate_probe.launch_env(), settings)
+            self.assertNotIn("GITHUB_TOKEN", names)
+            self.assertIn("ANTHROPIC_API_KEY", names)
             scrubbed = {x["name"] for x in settings["sandbox"]["credentials"]["envVars"]}
-            self.assertEqual(scrubbed, {"CLAUDE_CODE_OAUTH_TOKEN", "GITHUB_TOKEN", "PYTHONPATH"})
+            self.assertEqual(scrubbed, set(gate_probe.DENIED_ENV))
+            self.assertTrue({"ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", gate_probe.SENTINEL} <= scrubbed)
             self.assertNotIn("not-read", json.dumps(settings))
             self.assertTrue(settings["sandbox"]["failIfUnavailable"])
             self.assertFalse(settings["sandbox"]["allowUnsandboxedCommands"])

@@ -110,5 +110,27 @@ class FixtureTests(unittest.TestCase):
         self.assertEqual(probe.summary(self.root)["result_text"], "")
 
 
+class LaunchEnvironment(unittest.TestCase):
+    def test_extra_secret_in_the_launching_shell_never_reaches_claude(self):
+        shell = {"PATH": "/usr/bin:/bin", "HOME": "/tmp", "GITHUB_TOKEN": "x", "MY_SERVICE_PASSWORD": "y",
+                 "ANTHROPIC_API_KEY": "z", "PYTHONPATH": "/evil"}
+        env = probe.launch_env(shell)
+        self.assertEqual(set(env), {"PATH", "HOME", "ANTHROPIC_API_KEY", probe.SENTINEL})
+        # A real child process sees exactly the constructed names.
+        seen = subprocess.run(["/usr/bin/env"], env=env, capture_output=True, text=True, check=True).stdout
+        names = {line.split("=", 1)[0] for line in seen.splitlines()}
+        self.assertEqual(names, set(env))
+        self.assertNotEqual(probe.launch_env(shell)[probe.SENTINEL], env[probe.SENTINEL])
+
+    def test_launch_refuses_settings_that_do_not_deny_a_passed_credential(self):
+        env = probe.launch_env({"PATH": "/usr/bin", "CLAUDE_CODE_OAUTH_TOKEN": "x"})
+        deny = lambda names: {"sandbox": {"credentials": {"envVars": [{"name": n, "mode": "deny"} for n in names]}}}
+        self.assertIn("PATH", probe.check_launch(env, deny(probe.DENIED_ENV)))
+        with self.assertRaises(ValueError):
+            probe.check_launch(env, deny([probe.SENTINEL]))
+        with self.assertRaises(ValueError):
+            probe.check_launch(env, {})
+
+
 if __name__ == "__main__":
     unittest.main()

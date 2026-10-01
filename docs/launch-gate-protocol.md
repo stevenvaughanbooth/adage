@@ -1,6 +1,7 @@
 # Launch gate protocol: learned-action replacement (launch-gate-1)
 
-Registered 2026-09-30 (revision 2 the same day, before any dispatch under this protocol). The
+Registered 2026-09-30 (revision 2 the same day; revision 3 on 2026-10-01, before any canary or
+held-out agent session). The
 machine-readable copy is `evals/reflex-proof/harness/launch_gate_protocol.json`; when the two
 differ, the JSON governs. Revisions get a dated entry below and must precede the dispatch they
 affect. Splits and thresholds cannot change after the first held-out dispatch.
@@ -94,8 +95,8 @@ runner must do the same for each learned home before its first held-out dispatch
 
 ## Phase 1: canary and negative controls (steps 1 and 2)
 
-Study root `cohorts/launch-gate-v1/canary-v2` in the new native-confinement cohort
-`cohorts/launch-gate-v1`. Production binaries are built from the PR head and hash-pinned. One fixed
+Study root `cohorts/launch-gate-v2/canary-v3` in the native-confinement cohort
+`cohorts/launch-gate-v2`. Production binaries are built from the PR head and hash-pinned. One fixed
 learned route (`run-175d85`, guided provenance, from `cumulative-launch-10`, which passes the audit)
 runs `.venv/bin/python -m pytest tests/test_validate.py -q` after a test edit then a changelog edit.
 Twelve automatic sessions, all on the development task (finite), two per condition:
@@ -115,7 +116,25 @@ present in every native transcript, every successful receipt structured, each ne
 realized at least once, zero skipped necessary verification, zero foreign or unapproved receipts.
 A failure stops the protocol before held-out work; the mechanism is diagnosed and fixed, and a new
 canary root is frozen. Failed roots are preserved. `canary-v1` was frozen on training-pool tasks
-and superseded by revision 2 before preparation or spend.
+and superseded by revision 2 before preparation or spend. `canary-v2` aborted at preparation
+(revision 3, below); no assignment, grant or agent session was created.
+
+### Confinement (revision 3)
+
+The sandbox policy is independent of the shell that freezes or runs it. Claude is launched with
+an allowlisted environment: plain names, the Claude login names, and a fresh random sentinel.
+Everything else in the launching shell is dropped. Every passed credential name and the sentinel
+are on a fixed deny list for tool children. The launch refuses if a passed name is neither plain
+nor denied. The native canary must show that the sentinel and every credential-like name are
+absent in tool children. Its review must pass before any canary preparation.
+
+Audit of earlier cohorts (`harness/results/20260930-environment-denial-audit`): their denial lists
+were computed from the preparing environment, launch environments were not recorded, and no
+canary tested environment denial. In 101 launched sessions (1,389 Bash calls) no tool call dumped
+the environment or accessed it from Python. Only `$TMPDIR` and `$PYTHONPATH` were referenced, and
+the network was denied. Earlier native confinement claims cover the filesystem and network only.
+The `launch-gate-v1` native session (frozen in an agent environment, run from a terminal) is
+excluded as confinement evidence. Its $0.0258378 stays in the ledger.
 
 ## Phase 2: cohort (step 3)
 
@@ -191,6 +210,10 @@ evaluation groups is registered.
 ## Revisions
 
 - 2026-09-30 r1: registered.
+- 2026-10-01 r3, before any canary or held-out agent session: environment-independent policy and
+  allowlisted launch, environment checks in the native canary, the earlier-cohort audit, the
+  `launch-gate-v1` exclusion and `canary-v2` abort; the canary moves to `launch-gate-v2/canary-v3`.
+  Ledger at r3: 101 attempts, $16.1732882 admitted, $43.8267118 remaining.
 - 2026-09-30 r2, before any dispatch: task splits with near-duplicate groups, the training-isolation
   audit, evaluation read-only rule, paired blocks, strata and G9; the canary moved to the
   development split (`canary-v2`); Click held-out tasks replaced because all existing variants were

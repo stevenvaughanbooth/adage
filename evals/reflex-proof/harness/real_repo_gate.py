@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import json
 import os
+import pwd
 from pathlib import Path
 import random
 import re
@@ -337,15 +338,13 @@ def validate(root):
 
 
 def native_settings(root, checkout, allowed, protected=()):
-    """The Claude parent retains login; tool children get an offline restricted boundary."""
-    keep = {"PATH", "HOME", "TMPDIR", "USER", "LOGNAME", "SHELL", "LANG", "TERM", "PWD",
-            "SHLVL", "_", "CLAUDECODE", "OPENCODE", "CLAUDE_CODE_ENTRYPOINT", "ADAGE_AGENT", "CODEX_THREAD_ID",
-            "CODEX_SANDBOX", "CODEX_SANDBOX_NETWORK_DISABLED", "ADAGE_ARM", "ADAGE_TRAIN_SESSION",
-            "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_REMOTE_SESSION_ID"}
-    # Inspect names only. Never read, print, or serialize host credential values.
-    markers = {name for name in os.environ if name.startswith(("CODEX_", "ADAGE_AGENT"))
-               and not any(part in name for part in ("TOKEN", "KEY", "SECRET", "CREDENTIAL", "PASSWORD"))}
-    scrub = sorted(set(os.environ) - keep - markers)
+    """The Claude parent retains login; tool children get an offline restricted boundary.
+
+    Independent of the calling environment: probe.execute launches Claude with an allowlisted
+    environment and refuses unless every non-plain name it passes is in this fixed denial list.
+    """
+    import probe
+    scrub = list(probe.DENIED_ENV)
     blocked = [checkout / p for p in (".venv", ".git", ".claude", ".agents", ".codex")]
     blocked += list(protected)
     return {"autoMemoryEnabled": False, "disableAllHooks": True,
@@ -354,7 +353,7 @@ def native_settings(root, checkout, allowed, protected=()):
             "sandbox": {"enabled": True, "failIfUnavailable": True,
                 "autoAllowBashIfSandboxed": False, "allowUnsandboxedCommands": False,
                 "excludedCommands": [],
-                "filesystem": {"denyRead": [str(Path.home()), str(root)],
+                "filesystem": {"denyRead": [pwd.getpwuid(os.getuid()).pw_dir, str(root)],
                     "allowRead": [str(checkout), str(root / "runtime/python")],
                     "denyWrite": [str(p) for p in blocked]},
                 "network": {"allowedDomains": [], "deniedDomains": ["*"],
@@ -406,7 +405,11 @@ def prepare_session(root, task, model, native_probe=False, setup_checkout=None):
             + "denied('dependency_write',lambda:pathlib.Path('.venv/native-write-canary').write_text('bad'))\n"
             + "denied('git_write',lambda:pathlib.Path('.git/native-write-canary').write_text('bad'))\n"
             + f"denied('network',lambda:socket.create_connection(('127.0.0.1',{port}),timeout=2))\n"
+            + "import os\nchecks['env_sentinel_denied']='ADAGE_CONFINEMENT_SENTINEL' not in os.environ\n"
+            + "checks['env_secret_names_absent']=not [n for n in os.environ if any(p in n.upper() for p in "
+            + "('TOKEN','SECRET','PASSWORD','CREDENTIAL','API_KEY','AUTH'))]\n"
             + "pathlib.Path('inside-write-canary').write_text('allowed');checks['inside_write']=True\n"
+            + "print('NATIVE_ENV_NAMES='+json.dumps(sorted(os.environ)))\n"
             + "print('NATIVE_SANDBOX_CHECKS='+json.dumps(checks,sort_keys=True))\nraise SystemExit(0 if all(checks.values()) else 1)\n")
         exact = ".venv/bin/python native_canary.py"
         allowed += [f"Bash({exact})"]

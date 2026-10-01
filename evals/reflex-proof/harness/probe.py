@@ -21,6 +21,35 @@ from fixture_hook import monotonic_ns
 HERE = Path(__file__).resolve().parent
 EXPECTED_VERSION = "2.1.282"
 EVENTS = ("SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "PostToolBatch", "Stop", "SessionEnd")
+# The launch environment is an allowlist, so a frozen sandbox policy never depends on the shell
+# that freezes or runs it. Unlisted names are dropped before Claude starts. Credential names may
+# reach Claude for login but every one is denied to tool children (DENIED_ENV, a fixed list).
+# A random sentinel joins every launch and is denied too; the native canary proves it is absent.
+LAUNCH_PASS = ("PATH", "HOME", "USER", "LOGNAME", "SHELL", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "TMPDIR")
+LAUNCH_SECRETS = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "CLAUDE_CODE_OAUTH_TOKEN",
+                  "CLAUDE_CONFIG_DIR")
+SENTINEL = "ADAGE_CONFINEMENT_SENTINEL"
+DENIED_ENV = tuple(sorted({*LAUNCH_SECRETS, SENTINEL, "ANTHROPIC_CUSTOM_HEADERS", "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "GH_TOKEN", "GITHUB_TOKEN", "GOOGLE_APPLICATION_CREDENTIALS",
+    "NPM_TOKEN", "OPENAI_API_KEY", "PYTHONPATH", "PYTHONSTARTUP", "SSH_AUTH_SOCK"}))
+
+
+def launch_env(source=None):
+    """The exact Claude environment: allowlisted names from `source`, plus a fresh sentinel."""
+    source = os.environ if source is None else source
+    env = {k: source[k] for k in LAUNCH_PASS + LAUNCH_SECRETS if k in source}
+    env[SENTINEL] = os.urandom(16).hex()
+    return env
+
+
+def check_launch(env, settings):
+    """Fail closed unless every launched name is a plain allowlisted name or denied to tools."""
+    denied = {x.get("name") for x in settings.get("sandbox", {}).get("credentials", {}).get("envVars", [])
+              if x.get("mode") == "deny"}
+    exposed = sorted(set(env) - set(LAUNCH_PASS) - denied)
+    if exposed:
+        raise ValueError("launch would expose undenied environment names to tools: " + ", ".join(exposed))
+    return sorted(env)
 
 
 def prepare(model, budget, delay=0):
@@ -145,14 +174,18 @@ def execute(manifest_path, budget, wall_seconds):
         raise ValueError("Claude version changed; revalidate the recipe before changing the expected version")
     argv = manifest["argv"][:]
     argv[argv.index("--max-budget-usd") + 1] = str(budget)
-    run = {"version": version, "budget_usd": budget, "start_monotonic_ns": monotonic_ns(), "argv": argv}
+    settings = json.loads(Path(argv[argv.index("--settings") + 1]).read_text())
+    env = launch_env()
+    names = check_launch(env, settings)
+    run = {"version": version, "budget_usd": budget, "start_monotonic_ns": monotonic_ns(), "argv": argv,
+           "launch_environment_names": names}
     (root / "run.json").write_text(json.dumps(run, indent=2))
     lines = queue.Queue()
     with (root / "stderr.log").open("w") as err, (root / "stdout.jsonl").open("w") as raw, \
             (root / "stream-observations.jsonl").open("w") as observations:
         # The prompt is already an argv item. Inheriting a launcher's stdin (for example
         # a Python heredoc) can feed extra instructions to Claude's print-mode prompt.
-        child = subprocess.Popen(argv, cwd=manifest.get("execution_root", root), stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+        child = subprocess.Popen(argv, cwd=manifest.get("execution_root", root), env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                  stderr=err, text=True, start_new_session=True)
         def read_lines():
             for line in child.stdout:

@@ -113,7 +113,8 @@ def review_native(root):
         raise ValueError("native probe did not perform the two expected operations")
     result = results[commands[0]]
     checks = json.loads(result["content"].split("NATIVE_SANDBOX_CHECKS=", 1)[1])
-    expected = {k: True for k in ("read", "outside_write", "dependency_write", "git_write", "network", "inside_write")}
+    expected = {k: True for k in ("read", "outside_write", "dependency_write", "git_write", "network", "inside_write",
+                                  "env_sentinel_denied", "env_secret_names_absent")}
     checkout = Path(m["execution_root"])
     control = pairs.read(session / "outside-control.json")
     passed = (checks == expected and result.get("is_error") is False and results[reads[0]].get("is_error") is True
@@ -121,6 +122,7 @@ def review_native(root):
         and (checkout / "inside-write-canary").read_text() == "allowed"
         and not any(p.exists() for p in (root / "private/native-write-canary", checkout / ".venv/native-write-canary", checkout / ".git/native-write-canary"))
         and control == dict(network_connected=True, read_canary_exists=True)
+        and "ADAGE_CONFINEMENT_SENTINEL" in run.get("launch_environment_names", [])
         and run["exit_code"] == 0 and summary["result_is_error"] is False)
     record = dict(passed=passed, cohort_root=str(root), manifest_sha256=gate.sha(session / "manifest.json"),
         checks=checks, controls=control, cost_usd=summary["total_cost_usd"], model=m["model"],

@@ -15,7 +15,9 @@
       "heldout": 22.0
     },
     "per_session_cap_usd": 1.5,
-    "stop_if_ledger_remaining_below_usd": 3.0
+    "stop_if_ledger_remaining_below_usd": 3.0,
+    "admission_spend_at_r3_usd": 16.1732882,
+    "attempts_at_r3": 101
   },
   "model": "claude-haiku-4-5-20251001",
   "claude_cli": "2.1.282",
@@ -118,7 +120,8 @@
     "negative_controls": "each of failed, later-edit, config-change, broader and rerun realized at least once",
     "necessary_work_skipped": 0,
     "foreign_or_unapproved_receipts": 0,
-    "tasks": "development split only (marshmallow finite)"
+    "tasks": "development split only (marshmallow finite)",
+    "native_confinement": "fresh native-confinement review in launch-gate-v2 passes, including environment denial"
   },
   "go_thresholds": {
     "G1_learned_reflex_repositories_min": 2,
@@ -154,10 +157,11 @@
     "copy grants",
     "change thresholds after the first held-out dispatch"
   ],
-  "revision": 2,
+  "revision": 3,
   "revisions": [
     "2026-09-30 r1: registered",
-    "2026-09-30 r2, before any dispatch under this protocol: task splits with near-duplicate groups, training-isolation audit, evaluation read-only rule, paired blocks, same-repository strata and G9; canary moved to the development split"
+    "2026-09-30 r2, before any dispatch under this protocol: task splits with near-duplicate groups, training-isolation audit, evaluation read-only rule, paired blocks, same-repository strata and G9; canary moved to the development split",
+    "2026-10-01 r3, before any canary or held-out agent session: environment-independent sandbox policy and allowlisted launch environment; native canary tests environment denial; launch-gate-v1 native session excluded as confinement evidence, canary-v2 aborted; canary moves to cohorts/launch-gate-v2/canary-v3"
   ],
   "splits": {
     "marshmallow": {
@@ -359,5 +363,11 @@
   "unseen_repository_generalization": "not measured: learned tracks are repository-keyed, so this protocol never applies a reflex learned in one repository to another",
   "pairing": "a block is one held-out task and repetition; each block runs all three arms on identical prompts and checkouts; comparisons are within blocks; every attempt counts",
   "evaluation_read_only": "a result that informs a fix or tuning decision spends its set: it becomes development, and the next confirmatory run needs new evaluation groups",
-  "isolation_audit": "evals/reflex-proof/harness/split_audit.py must pass for every frozen learned home before any dispatch that uses it, and again after evaluation"
+  "isolation_audit": "evals/reflex-proof/harness/split_audit.py must pass for every frozen learned home before any dispatch that uses it, and again after evaluation",
+  "confinement": {
+    "launch_environment": "allowlist (probe.LAUNCH_PASS + probe.LAUNCH_SECRETS + random sentinel); all other names dropped",
+    "denied_to_tools": "fixed probe.DENIED_ENV, independent of the freezing shell",
+    "launch_check": "probe.check_launch refuses if a passed non-plain name is not denied",
+    "native_canary": "file, network and environment (sentinel absent; no credential-like names) checks"
+  }
 }
