@@ -31,7 +31,7 @@
     "r9_note": "r9 (draft): the $4 training allocation moves to held-out (held-out $26, training $0); Click and more-itertools training gets a new allocation later. The protocol total stays $38. The ledger had $39.7316293 remaining before development canary-v8.",
     "admission_spend_at_r10_usd": 24.6504369,
     "attempts_at_r10": 163,
-    "r10_note": "r10 (development budget): the canary/development ceiling rises from $12 to $18 for development canary-v9 (study ceiling $8.50, $0.50 per session) and the protocol total from $38 to $44; held-out keeps $26 and training $0. Ledger at r10: $24.6504369 admitted (163 attempts), $35.3495631 remaining of $60. Worst case after dev-v9: $24.6504369 + $8.50 = $33.1504369 admitted, $26.8495631 remaining; held-out's $3 ledger floor then leaves $23.8495631 for its $26 worst case, so held-out would stop at the floor before its own ceiling if both studies hit their worst cases (expected spend is far below either: dev-v9 about $6.6, at v8's $0.125 per session). The ledger ceiling ($60) is unchanged."
+    "r10_note": "r10 (development budget): the canary/development ceiling rises from $12 to $18 for development canary-v9 (study ceiling $8.50, $0.50 per session) and a new native-confinement session for cohort launch-gate-v6 ($0.50 cap); the protocol total rises from $38 to $44; held-out keeps $26 and training $0. Ledger at r10: $24.6504369 admitted (163 attempts), $35.3495631 remaining of $60. Worst case after both: $33.6504369 admitted, $26.3495631 remaining; held-out's $3 ledger floor then leaves $23.3495631 for its $26 worst case, so held-out would stop at the floor before its own ceiling if every study hit its worst case (expected spend is far below: dev-v9 about $6.6, a native session about $0.03). The ledger ceiling ($60) is unchanged."
   },
   "model": "claude-haiku-4-5-20251001",
   "claude_cli": "2.1.282",
@@ -651,6 +651,7 @@
       "study_ceiling_usd": 8.5,
       "ledger_floor_usd": 3.0
     },
-    "rule": "A4 passes development only if the study is valid and D1-D4 all hold; only then does the held-out comparison run, with BEST = A4 under r9"
+    "rule": "A4 passes development only if the study is valid and D1-D4 all hold; only then does the held-out comparison run, with BEST = A4 under r9",
+    "run_location": "frozen and run from a fresh clone outside iCloud (/private/tmp/adage-launch-src) at the frozen commit; the binaries are built there; freeze and dispatch refuse dataless (cloud-evicted) inputs; nested in cohort launch-gate-v6, whose native-confinement session (prepared from that clone) must pass review before prepare"
   }
 }

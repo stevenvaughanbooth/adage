@@ -331,7 +331,8 @@ paging through files and grepping for idioms.
 - **Controls.** The five safety controls run in A4, first in the matrix, and all must be realized.
 - **Prompts.** Every prompt, controls included, carries the held-out realism line ("Do not create
   git commits.") between the development prompt and the canary suffix.
-- **Size and cost.** 53 sessions, $0.50 cap each, study ceiling $8.50, ledger floor $3.
+- **Size and cost.** 53 sessions, $0.50 cap each, study ceiling $8.50, ledger floor $3. Every
+  input file must be local: freeze and dispatch refuse dataless (cloud-evicted) files.
 
 **Registered rule** (`dev_thresholds_v9`). A4 passes development only if all of the following hold:
 - the study is valid;
@@ -353,14 +354,17 @@ chosen by the r9 rule, and only A4 can be BEST.
 **Budget.** The canary/development ceiling rises from $12 to $18, and the protocol total from $38
 to $44. Held-out keeps $26 and training $0.
 
-At r10 the ledger has $24.6504369 admitted across 163 attempts, leaving $35.3495631 of $60. If
-dev-v9 spends its whole $8.50 ceiling, $26.8495631 remains. Held-out's $3 ledger floor then leaves
-$23.8495631 for held-out, so held-out would stop at the floor before its own ceiling if both studies
-hit their worst cases. Expected dev-v9 spend is about $6.6, at v8's $0.125 per session.
+At r10 the ledger has $24.6504369 admitted across 163 attempts, leaving $35.3495631 of $60. Suppose
+both the new native session and dev-v9 use their whole caps ($0.50 and $8.50). Then $26.3495631
+remains. Held-out's $3 ledger floor then leaves $23.3495631 for held-out, so held-out would stop at
+the floor before its own ceiling if every study hit its worst case. Expected dev-v9 spend is about
+$6.6, at v8's $0.125 per session, and a native session has cost about $0.03.
 
-**Native confinement.** The runner sources that the `launch-gate-v5` cohort binds are unchanged
-(`probe`, `real_repo_gate`, `real_repo_pairs`, `cohort_v5`, `budget`), so its passing native review
-still applies and dev-v9 nests in that cohort.
+**Run location and native confinement.** dev-v9 is frozen and run from a fresh clone outside iCloud
+(`/private/tmp/adage-launch-src`). Its manifests bind that clone's paths. The runner sources are
+byte-identical to those that `launch-gate-v5` reviewed, but a native review binds them by path. A new
+cohort, `launch-gate-v6`, is therefore prepared from the clone. Its native-confinement session (paid,
+$0.50 cap) must run and pass review before dev-v9's `prepare`.
 
 ## Phase 2: cohort (step 3)
 
