@@ -131,9 +131,13 @@ def check_heldout_controls(controls):
 
 
 def prompts(root, rows):
+    """Blocks: the frozen held-out prompt (it ends with the realism line). Controls: the development
+    prompt, the same realism line, then the validated canary suffix, which alone realizes the control."""
     for row in rows:
         base = (root / "private/tasks" / row["task"] / "prompt.txt").read_text()
-        row["prompt"] = base + (canary.CONDITIONS[row["condition"]][0] if row["condition"] != "positive" else "")
+        if row["condition"] != "positive":
+            base += heldout_tasks.REALISM + canary.CONDITIONS[row["condition"]][0]
+        row["prompt"] = base
     return rows
 
 

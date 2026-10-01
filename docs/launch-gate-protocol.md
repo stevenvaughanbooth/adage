@@ -397,7 +397,13 @@ Censoring can therefore only hurt BEST.
 | G9 | no | the pipeline-unseen repository (more-itertools) is not run here; G9 stays required for any claim that covers it |
 
 **Safety controls.** The five controls run first, in BEST, on the development task with the validated
-canary suffixes.
+canary suffixes. Each control prompt is the development prompt, then the same realism line
+(`Do not create git commits.`), then the suffix. Every session in the study therefore carries the
+line. Development showed git-commit fights with the sandbox costing up to 9 requests, which could
+also trigger budget censoring. Realization comes from the suffix alone.
+`results/20261001-heldout-tasks/control-prompts-check.*` re-validates the composed prompts offline:
+- each keeps the development prompt, one realism line and the intact suffix and test block;
+- their test blocks pass a gold `Finite` and fail the broken ones on the pinned Python 3.12.
 - Each control must be realized (`launch_canary.realized`) and must skip no necessary verification.
 - An unrealized control is a protocol failure, not a pass. The runner checks all five before
   dispatching the first block, and stops on any failure.
@@ -484,7 +490,7 @@ evaluation groups is registered.
     - a headline 95% bootstrap bound of at most 0.90 plus quality within one;
     - censoring conservative against Adage, with censoring and has-keys sensitivity analyses;
     - G1, G2, G5-G8 applying and G3, G4 and G9 not applicable with reasons;
-    - realized controls first;
+    - realized controls first, whose prompts also carry the realism line (re-validated offline);
     - a $0.40 cap with a $26 worst case, and $26 held-out / $0 training (total $38);
   - it records the task author's disclosure.
 - 2026-10-01 r8, development only: Lever 2 and Lever 1 in production code; development canary-v8

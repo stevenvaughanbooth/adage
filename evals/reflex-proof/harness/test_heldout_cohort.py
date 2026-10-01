@@ -63,7 +63,9 @@ class Prompts(unittest.TestCase):
                 self.assertNotIn("```", row["prompt"])
                 self.assertNotIn("Work in this order", row["prompt"])
             else:
-                self.assertEqual(row["prompt"], curve_tasks.prompt(FINITE) + runner.canary.CONDITIONS[row["condition"]][0])
+                self.assertEqual(row["prompt"], curve_tasks.prompt(FINITE) + "\n\nDo not create git commits."
+                                 + runner.canary.CONDITIONS[row["condition"]][0])
+            self.assertEqual(row["prompt"].count("Do not create git commits."), 1)
 
     def test_session_directories_are_unique_and_name_arm_and_block(self):
         with tempfile.TemporaryDirectory() as tmp:
