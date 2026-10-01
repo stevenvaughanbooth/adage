@@ -15,6 +15,7 @@
 //! | `history`, `first_edit_at_batch` | the observed call keys, in order |
 //! | `obligations` | each finish-line route emitted, from the index; met by `obligation_met` |
 //! | `stop_requests`, `stop_requested` | each recorded stop request, applied as the runtime does |
+//! | `stop_gates` | each `stop_gate` record (`adage-exec`'s finish-line gate ran), so the cap survives |
 //! | `intent` | the family of the last intent route emitted |
 //! | `ctx` | the last context state recorded (a decision records it when its event changed it), if it belongs to the index's alphabet for the repository |
 //!
@@ -77,6 +78,8 @@ pub fn rebuild(records: &[Value], index: &Index, repo: &str, table: &CommandTabl
         match kind {
             "prompt" => st.prompts += 1,
             "batch" => st.batches += 1,
+            // The finish-line gate's run (adage-exec): its per-session cap must survive a rebuild.
+            "stop_gate" => st.stop_gates = st.stop_gates.saturating_add(1),
             _ => {}
         }
         let Some(d) = r.get("decision").and_then(|d| serde_json::from_value::<Decision>(d.clone()).ok()) else {
@@ -188,5 +191,18 @@ mod tests {
     #[test]
     fn nothing_to_replay_is_no_state() {
         assert!(rebuild(&[], &Index::default(), "r", &CommandTable::load()).is_none());
+    }
+
+    /// F8: the finish-line gate's per-session cap is restored from its spool records.
+    #[test]
+    fn stop_gate_runs_are_restored() {
+        let records = [
+            json!({ "event": "SessionStart", "kind": "session_start", "arm": "treated", "repo": "r" }),
+            json!({ "event": "Stop", "kind": "stop_gate", "blocked": true }),
+            json!({ "event": "Stop", "kind": "stop", "arm": "treated", "repo": "r" }),
+            json!({ "event": "Stop", "kind": "stop_gate", "blocked": false }),
+        ];
+        let st = rebuild(&records, &Index::default(), "r", &CommandTable::load()).unwrap();
+        assert_eq!(st.stop_gates, 2);
     }
 }

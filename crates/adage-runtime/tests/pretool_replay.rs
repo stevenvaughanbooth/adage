@@ -13,6 +13,7 @@ fn a_real_control_trace_is_rewritten_only_at_its_dead_end() {
     let env = Env {
         interpreter: "/w/click/.venv/bin/python".into(),
         shown: ".venv/bin/python".into(),
+        relative: None,
         pytest: true,
         modules: vec!["click".into(), "pytest".into()],
         root: "/w/click".into(),

@@ -155,9 +155,14 @@ has what it needs.
 
 ```text
 python -m pytest tests/test_formatting.py -xvs 2>&1 | head -50
-→ /work/click/.venv/bin/python -m pytest tests/test_formatting.py -xvs 2>&1 | head -50
+→ .venv/bin/python -m pytest tests/test_formatting.py -xvs 2>&1 | head -50
 ```
 
+- **Which interpreter word**: at the repository root the command names the environment's
+  interpreter as a person does, `.venv/bin/python` (so a permission rule written for it matches);
+  when the call runs from a subdirectory, or a rewritten part follows a `cd` inside the checkout,
+  the absolute path instead (`/work/click/.venv/bin/python`). Both notes name the word that was
+  substituted.
 - **What is rewritten**: `pytest …`, `python -m pytest …`, and a `python`/`python3` run whose code
   imports the project's own package or a declared test dependency (`-c`, a heredoc, `-m <pkg>`, or a
   `.py` script it reads). Every argument, pipe and redirection is kept; only the interpreter word
@@ -314,8 +319,8 @@ hook-latency claim has been established by the small regression fixtures.
 events a 30 s hook timeout; every other event keeps 5 s. OpenCode's plugin bridge waits one second
 for a hook, so actions never run under OpenCode: it gets the E0 directive and the reason.
 
-**Approving an action** (a person, at a terminal; E2 is a beta behind gate G4, so policy must opt
-in with `max_level = "E2"`):
+**Approving an action** (a person, at a terminal; E2 actions are an opt-in beta, so policy must
+allow them first: `adage delegate policy --max-level e2` sets `max_level = "E2"`):
 
 ```sh
 adage review delegate tallyhouse/finish-lines regenerate-registry --level e2 \
@@ -496,7 +501,10 @@ forming; and policy `auto_approve = "inert-observe"`. It is **off by default** u
 
 For the complete setup sequence and a scoped pytest example, see [Your first useful reflex](first-reflex.md).
 E2 needs both the policy opt-in below and a local per-reflex grant; enabling the companion alone
-does not supply either. For pytest, declare `.pytest_cache/**` and `.pytest_cache/.gitignore`
+does not supply either. `adage delegate policy` shows the effective policy and the personal file's
+path; `adage delegate policy --max-level e2` (a person, at a terminal) writes the opt-in with
+`auto_approve = "off"` and `require_sandbox = true`, keeping the file's other settings, and
+`--max-level e1` turns actions off again. For pytest, declare `.pytest_cache/**` and `.pytest_cache/.gitignore`
 as caches separately: wildcards do not implicitly cover hidden files. Neither declaration
 authorizes the repository's own `.gitignore` or other hidden source outputs.
 
@@ -711,3 +719,58 @@ Evidence and permission remain distinct. Context predictions with no grant remai
 control sessions never execute. Multi-command sequences and context input slots are not yet
 supported. See the [behavior reference](how-it-works.md#accumulated-prediction-and-current-execution-limits)
 for the accumulation model and current evidence limits.
+
+### Receipts before a repeated test run
+
+When a pytest verification Adage ran in this session passed on inputs byte-identical to the
+current ones, a `PreToolUse` Bash call that would run tests inside its targets (same options;
+the project's or a bare `python`) gets an `<adage-receipt>` note saying so. It is a fact, never a
+refusal: the call runs if it is made. No note is given for a call made outside the repository
+root, for a command line that also changes directory, exports or assigns a variable, or runs
+anything but passive output commands (`tail`, `grep`, `echo`, …) beside pytest, or when the
+freshness check cannot finish within 1.5 s of the hook's 5 s. A note delivered alone is recorded
+in the session spool (`kind: "pretool"`, `receipt: true`), and learning reads it as Adage's own
+text.
+
+## The finish-line check (Stop gate)
+
+In a treated session whose policy allows E2, a learned `context` verification with a current E2
+grant that already ran in this session is run again when the agent finishes (Claude Code and
+Codex `Stop`; never OpenCode), if the repository's inputs changed since its last successful run.
+The run goes through the same request, policy, sandbox, staging and journal gates as any action.
+
+- **Passed:** the turn ends; the person sees one line (`adage: ran … at finish: passed …`).
+- **Failed, first time:** the agent continues with a continuation that begins
+  `Adage finish-line check:` and ends `This reminder is from Adage, not from the user.`, like
+  every Stop continuation Adage writes. On Codex it re-enters as the next user prompt, and the
+  hook and the learners recognise it as Adage's text, never the person's.
+- **Failed again,** or while another Stop hook is already continuing the agent: one line for the
+  person. At most two gate runs per session; the count survives a rebuilt session state.
+- **Unconfirmed** (`unknown`): the agent is told not to retry and to have a person inspect the
+  worktree, as for an action; the journal's recovery block pauses later runs.
+
+A learned finish-line obligation due at the same Stop is not lost: its request is decided first
+and, when the gate also fails, both reach the agent in one continuation.
+
+Failing test names come from the action's declared pytest record
+(`.pytest_cache/v/cache/lastfailed`), never from output. pytest keeps that record across runs and
+rewrites it only when it changes, so only what this run changed is attributed to it, within the
+command's targets: entries it added are this run's failures, file entries (no `::`) are
+collection errors, and entries it kept are reported as earlier failures it did not clear. A record
+this run did not rewrite gives no names at all.
+
+**Time.** The Stop hook's registered timeout is 30 s and an action may run 20 s, so one Stop never
+stages two runs: when an approved action already ran for an obligation's Stop request in the same
+event, the gate waits for the next Stop. Otherwise the gate's deadline is the timeout, counted
+from the hook's start, less a 2 s reserve; it starts a run only if the run's wall limit plus 6 s
+for staging, checks and applying fits before then, and its input snapshot stops at the deadline.
+A run that does not start is not counted.
+
+**A killed hook.** Only a kill between the journal's `prepared` and `completed` receipts matters:
+that window is the apply, after the sandboxed run has finished, so the budget above keeps it well
+inside the timeout. A kill there (an overloaded machine, a harness that shortens timeouts) leaves
+the worktree in recovery, by design: the next session runs nothing in that worktree, gate
+included, and the agent is told not to retry. A person inspects the worktree with
+`adage-exec journal --repo <dir>` and acknowledges with `adage-exec recover --id <id> --acknowledge`;
+actions and the gate then resume. A kill before `prepared` (during the sandboxed run) leaves no
+receipt and needs nothing.

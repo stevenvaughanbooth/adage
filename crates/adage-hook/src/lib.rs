@@ -35,7 +35,7 @@ use harness::Output;
 use serde_json::{json, Value};
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const MAX_STDIN: u64 = 8 << 20;
 
@@ -117,6 +117,18 @@ pub struct Delivery {
     /// Execution may have effects that require inspection. This warning takes precedence over
     /// ordinary directives and must survive context overflow; it never implies a safe retry.
     pub recovery: Option<String>,
+    /// An approved action was selected for this Stop's obligation request (whatever its outcome):
+    /// the Stop gate does not also run at this event, so one hook never stages two actions within
+    /// its timeout.
+    pub at_stop_action: bool,
+}
+
+/// What [`respond`] decided for one event, before rendering.
+#[derive(Debug, Default)]
+struct Responded {
+    out: Option<Output>,
+    /// [`Delivery::at_stop_action`].
+    at_stop_action: bool,
 }
 
 const RECOVERY_NOTICE: &str = "Adage cannot confirm an execution outcome. Do not retry the action automatically. Inspect the worktree and execution journal, then ask the person to resolve recovery.";
@@ -180,10 +192,16 @@ pub struct StopCall<'a> {
     pub paths: &'a Paths,
     pub index: &'a Index,
     pub stop_hook_active: bool,
+    /// When the gate must be finished, applying included: the Stop hook's registered timeout,
+    /// less what this event already spent and a reserve for what follows. A gate that cannot
+    /// finish by then does not start.
+    pub deadline: Instant,
 }
 
 /// What a Stop gate decided: continue the agent with this reason (a failure it must see), or let
-/// the turn end with a line for the person.
+/// the turn end with a line for the person. A `Block` reason is a Stop continuation like any
+/// other Adage writes ([`render::finish_line`]): the hook and the learners recognise it as
+/// Adage's own text.
 #[derive(Debug, Clone, PartialEq)]
 pub enum StopGate {
     Block(String),
@@ -194,6 +212,9 @@ pub enum StopGate {
 pub struct PreCall<'a> {
     pub repo_key: &'a str,
     pub root: &'a Path,
+    /// The session's working directory at this call (the payload's `cwd`): a relative command
+    /// runs from here, which need not be the repository root.
+    pub cwd: &'a Path,
     pub session: &'a str,
     pub paths: &'a Paths,
     pub index: &'a Index,
@@ -262,9 +283,13 @@ pub fn main(harness: String, event: String, opts: Options) -> ! {
 }
 
 pub fn run(harness: &str, event: &str, opts: Options) -> Result<Option<String>, Failure> {
+    // The harness's timeout for this hook counts from about now.
+    let started = Instant::now();
     // Read (or drain) stdin first, whatever happens next.
     let payload = read_payload(&mut std::io::stdin().lock());
-    let Some(adapter) = harness::adapter(harness) else { return Err(Failure::new("config", "unknown harness")) };
+    if harness::adapter(harness).is_none() {
+        return Err(Failure::new("config", "unknown harness"));
+    }
     if std::env::var("ADAGE_DISABLE").is_ok_and(|v| v == "1") {
         return Ok(None);
     }
@@ -275,7 +300,23 @@ pub fn run(harness: &str, event: &str, opts: Options) -> Result<Option<String>, 
         // panic message can: it must never reach the log.
         panic!("injected fault while handling {buf}");
     }
-    let p: Value = serde_json::from_str(&buf)
+    handle(harness, event, &buf, opts, &Paths::from_env(), started)
+}
+
+/// One hook event, once its payload is read: everything [`run`] does after stdin and the kill
+/// switches, with Adage's data directory given (`paths`). `started` is when the hook process
+/// began: the harness's registered timeout counts from then, and the Stop gate's budget is what
+/// is left of it.
+pub fn handle(
+    harness: &str,
+    event: &str,
+    buf: &str,
+    opts: Options,
+    paths: &Paths,
+    started: Instant,
+) -> Result<Option<String>, Failure> {
+    let Some(adapter) = harness::adapter(harness) else { return Err(Failure::new("config", "unknown harness")) };
+    let p: Value = serde_json::from_str(buf)
         .map_err(|e| Failure::new("payload", format!("stdin is not a JSON payload ({:?})", e.classify())))?;
     let Some(harness::Envelope { session, cwd }) = adapter.envelope(&p) else {
         return Err(Failure::new("payload", "no session id or working directory"));
@@ -289,9 +330,8 @@ pub fn run(harness: &str, event: &str, opts: Options) -> Result<Option<String>, 
     if root.join(".adage/disabled").exists() {
         return Ok(None);
     }
-    let paths = Paths::from_env();
     if event == "PreToolUse" {
-        return pretool(adapter, &p, &session, &cwd, &root, &paths, opts.extension);
+        return pretool(adapter, &p, &session, &cwd, &root, paths, opts.extension);
     }
     // A damaged index (a truncated write, a disk error) is served as empty and rebuilt: the
     // session start asks the learner to recompile it (docs/zero-config.md §5).
@@ -302,56 +342,101 @@ pub fn run(harness: &str, event: &str, opts: Options) -> Result<Option<String>, 
         Some(find) => find().ok_or_else(|| Failure::new("condition", "finding the adage binary: not found")),
         None => std::env::current_exe().map_err(|e| Failure::io("condition", "finding the adage binary", &e)),
     };
-    if matches!(adapter.translate(event, &p, &cwd.to_string_lossy()), Some(Event::SessionStart)) {
-        let start =
-            Start { adapter, harness, event, session: &session, root: &root, in_repo, paths: &paths, index: &index };
+    let translated = adapter.translate(event, &p, &cwd.to_string_lossy());
+    if matches!(translated, Some(Event::SessionStart)) {
+        let start = Start { adapter, harness, event, session: &session, root: &root, in_repo, paths, index: &index };
         return session_start(&start, damaged, &learner, opts.extension);
     }
-    // The finish-line gate runs first: a failing check keeps the agent going whatever else is due.
-    let gate = match (adapter.translate(event, &p, &cwd.to_string_lossy()), opts.extension) {
+    // Decide first, always: the session's bookkeeping (a learned obligation's Stop request, an
+    // at-Stop action) must not depend on what the finish-line gate finds (review F1).
+    let responded = respond(adapter, harness, event, &p, &session, &cwd, &root, paths, opts, &index);
+    let out = match (translated, opts.extension) {
         (Some(Event::Stop { stop_hook_active }), Some(x)) if in_repo => {
-            let keys: std::collections::BTreeSet<&str> = index.routes.iter().map(|r| r.repo.as_str()).collect();
-            repo::lookup_key(&root, Some(&paths.repo_keys()), &keys).and_then(|repo_key| {
-                let call = StopCall {
-                    harness,
-                    repo_key: &repo_key,
-                    root: &root,
-                    session: &session,
-                    paths: &paths,
-                    index: &index,
-                    stop_hook_active,
-                };
-                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| x.stop_gate(&call))).ok().flatten()
-            })
+            // One hook never stages two actions: when an approved action already ran for this
+            // Stop's obligation, the gate waits for the next Stop (review F4).
+            let acted = responded.as_ref().is_ok_and(|r| r.at_stop_action);
+            let gate = if acted {
+                None
+            } else {
+                let keys: std::collections::BTreeSet<&str> = index.routes.iter().map(|r| r.repo.as_str()).collect();
+                repo::lookup_key(&root, Some(&paths.repo_keys()), &keys).and_then(|repo_key| {
+                    let call = StopCall {
+                        harness,
+                        repo_key: &repo_key,
+                        root: &root,
+                        session: &session,
+                        paths,
+                        index: &index,
+                        stop_hook_active,
+                        deadline: stop_deadline(started),
+                    };
+                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| x.stop_gate(&call))).ok().flatten()
+                })
+            };
+            if let Some(g) = &gate {
+                let ts = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+                let rec = json!({ "ts": ts, "event": event, "kind": "stop_gate", "blocked": matches!(g, StopGate::Block(_)) });
+                if let Err(e) = spool::append(&paths.spool(&session), &rec) {
+                    let f = Failure::io("spool", "appending to the session spool", &e);
+                    failopen::record(&paths.root, harness, event, &f);
+                }
+            }
+            match (gate, responded) {
+                (None, r) => r.map(|r| r.out),
+                (Some(g), Err(f)) => {
+                    // The decision failed (and ran nothing); the gate's result still stands.
+                    failopen::record(&paths.root, harness, event, &f);
+                    Ok(Some(gate_output(g)))
+                }
+                (Some(g), Ok(r)) => Ok(Some(with_gate(g, r.out))),
+            }
+            .map(|o| o.and_then(|o| adapter.render(event, o)))
         }
-        _ => None,
-    };
-    if let Some(g) = &gate {
-        let ts = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
-        let rec = json!({ "ts": ts, "event": event, "kind": "stop_gate", "blocked": matches!(g, StopGate::Block(_)) });
-        if let Err(e) = spool::append(&paths.spool(&session), &rec) {
-            failopen::record(&paths.root, harness, event, &Failure::io("spool", "appending to the session spool", &e));
-        }
-    }
-    let out = match &gate {
-        Some(StopGate::Block(reason)) => Ok(adapter.render(event, Output::Continue(reason.clone()))),
-        _ => match respond(adapter, harness, event, &p, &session, &cwd, &root, &paths, opts, &index) {
-            Ok(None) => Ok(match gate {
-                Some(StopGate::Notice(n)) => adapter.render(event, Output::Notice(n)),
-                _ => None,
-            }),
-            other => other,
-        },
+        _ => responded.map(|r| r.out.and_then(|o| adapter.render(event, o))),
     };
     if in_repo && adapter.is_learn_point(event) {
         let transcript = p.get("transcript_path").and_then(|v| v.as_str());
         let learned = learner()
-            .and_then(|l| autolearn::on_turn_end(&paths, &root, adapter.name(), transcript, &l, false).map(drop));
+            .and_then(|l| autolearn::on_turn_end(paths, &root, adapter.name(), transcript, &l, false).map(drop));
         if let Err(f) = learned {
             failopen::record(&paths.root, harness, event, &f);
         }
     }
     out
+}
+
+/// Kept back from the Stop hook's registered timeout for what follows the gate (the spool
+/// record, the learner request, the output).
+const STOP_RESERVE: Duration = Duration::from_secs(2);
+
+/// When the Stop gate must be done, applying included: the registered timeout of a Stop hook
+/// that runs actions ([`harness::ACTION_HOOK_TIMEOUT_S`]) from the hook's start, less
+/// [`STOP_RESERVE`]. Whatever the event already spent is deducted.
+fn stop_deadline(started: Instant) -> Instant {
+    started + Duration::from_secs(u64::from(harness::ACTION_HOOK_TIMEOUT_S)) - STOP_RESERVE
+}
+
+/// A gate result alone.
+fn gate_output(g: StopGate) -> Output {
+    match g {
+        StopGate::Block(reason) => Output::Continue(reason),
+        StopGate::Notice(n) => Output::Notice(n),
+    }
+}
+
+/// The gate's result with the decision's output for the same Stop. A failing gate's
+/// continuation and a learned obligation's request (or an action's) both reach the agent, in one
+/// continuation; a passing gate's line for the person yields to anything for the agent.
+fn with_gate(g: StopGate, decided: Option<Output>) -> Output {
+    match (g, decided) {
+        (StopGate::Block(reason), Some(Output::Continue(other))) => {
+            Output::Continue(render::join_finish_lines(&reason, &other))
+        }
+        // A Stop carries no context: anything else decided here has no channel at a Stop.
+        (StopGate::Block(reason), _) => Output::Continue(reason),
+        (StopGate::Notice(_), Some(o)) => o,
+        (StopGate::Notice(n), None) => Output::Notice(n),
+    }
 }
 
 /// The marker `adage delegate rewrites off` (and `delegate off`) writes: no `PreToolUse` rewrite on
@@ -466,11 +551,31 @@ fn pretool(
             .flatten()
             .is_some_and(|s| s.arm == Some(Arm::Control))
     };
+    // Like every other extension call: a panic loses only this note, never the call's rewrite.
     let receipt = extension.filter(|_| !control()).and_then(|x| {
         let index = Index::try_load(&paths.index()).unwrap_or_default();
-        x.pretool_context(&PreCall { repo_key: &key, root, session, paths, index: &index, command })
+        let call = PreCall { repo_key: &key, root, cwd, session, paths, index: &index, command };
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| x.pretool_context(&call))).ok().flatten()
     });
-    let only_receipt = || receipt.clone().and_then(|t| adapter.render("PreToolUse", Output::Context(t)));
+    // A receipt delivered with no rewrite or advice beside it is recorded too (with no `pretool`
+    // action), so evaluation sees every delivery.
+    let only_receipt = || {
+        let text = receipt.clone()?;
+        let st = state::try_read::<SessionState>(&paths.state(session)).ok().flatten();
+        let ts = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+        let rec = json!({ "ts": ts, "event": "PreToolUse", "kind": "pretool", "arm": st.as_ref().and_then(|s| s.arm),
+                          "propensity": st.as_ref().and_then(|s| s.propensity), "repo": key, "receipt": true });
+        if let Err(e) = spool::append(&paths.spool(session), &rec) {
+            // Measurement is lost, but the note stands.
+            failopen::record(
+                &paths.root,
+                adapter.name(),
+                "PreToolUse",
+                &Failure::io("spool", "appending to the session spool", &e),
+            );
+        }
+        adapter.render("PreToolUse", Output::Context(text))
+    };
     // The person started the session in an environment of their choosing (a virtualenv, a conda
     // environment): `python` and `pip` are that environment's, and Adage leaves them alone.
     if ["VIRTUAL_ENV", "CONDA_PREFIX"].iter().any(|v| std::env::var_os(v).is_some_and(|x| !x.is_empty())) {
@@ -514,6 +619,9 @@ fn pretool(
     let e = pretool::Env {
         interpreter: pretool::shell_word(&abs.to_string_lossy()),
         shown: env.interpreter.clone(),
+        // At the root, the command names the interpreter as the person (and their permission
+        // rules) do: `.venv/bin/python` (first-run QA item 7).
+        relative: Path::new(&env.interpreter).is_relative().then(|| pretool::shell_word(&env.interpreter)),
         pytest: env.pytest,
         modules: env.modules.clone(),
         root: root.to_path_buf(),
@@ -529,7 +637,7 @@ fn pretool(
     let Some(mut pre) = pretool::plan(command, &e, read) else { return Ok(only_receipt()) };
     // A rewrite the person's permission rules would treat differently from the command as written
     // is advice instead (review S4).
-    if let Pre::Rewrite { command: new, kind, segments } = &pre {
+    if let Pre::Rewrite { command: new, kind, segments, .. } = &pre {
         let mode = p.get("permission_mode").and_then(Value::as_str);
         if !pretool::keeps_permissions(segments, &claude_allow_rules(root), mode) {
             pre = Pre::Advise { reason: pretool::permission_advice(&e, kind, new), kind: "permissions" };
@@ -555,17 +663,18 @@ fn pretool(
         None => text,
     };
     let (what, out) = match &pre {
-        Pre::Rewrite { command: new, kind, .. } => {
+        Pre::Rewrite { command: new, kind, interpreter, .. } => {
             let mut updated = input.clone();
             updated["command"] = Value::String(new.clone());
+            // Both notes name the interpreter word that was substituted, as it now reads in the command.
             let notice = format!(
                 "adage: pointed this {} at {} (the project's environment).",
                 if *kind == "test" { "test run" } else { "Python run" },
-                env.interpreter
+                interpreter
             );
             (
                 json!({ "rewrite": kind, "interpreter": env.interpreter }),
-                Output::Rewrite { input: updated, context: lead(pretool::rewrite_note(&e, kind)), notice },
+                Output::Rewrite { input: updated, context: lead(pretool::rewrite_note(interpreter, kind)), notice },
             )
         }
         // Advice, never a refusal: the command runs as written, and the person's own permission
@@ -767,7 +876,7 @@ fn record_start(s: &Start<'_>, repo_key: &str) -> Result<(), Failure> {
         .map_err(|e| Failure::io("spool", "appending to the session spool", &e))
 }
 
-/// Decide and render: everything after the kill switches.
+/// Decide: everything after the kill switches, up to rendering.
 #[allow(clippy::too_many_arguments)]
 fn respond(
     adapter: &dyn harness::Adapter,
@@ -780,19 +889,19 @@ fn respond(
     paths: &Paths,
     opts: Options,
     index: &Index,
-) -> Result<Option<String>, Failure> {
+) -> Result<Responded, Failure> {
     let keys: std::collections::BTreeSet<&str> = index.routes.iter().map(|r| r.repo.as_str()).collect();
     let Some(repo_key) = repo::lookup_key(root, Some(&paths.repo_keys()), &keys) else {
-        return Ok(None); // nothing installed for this repository: the common, cheapest path
+        return Ok(Responded::default()); // nothing installed for this repository: the common, cheapest path
     };
     // An event this adapter does not act on.
-    let Some(ev) = adapter.translate(event, p, &cwd.to_string_lossy()) else { return Ok(None) };
+    let Some(ev) = adapter.translate(event, p, &cwd.to_string_lossy()) else { return Ok(Responded::default()) };
     // An event that cannot change any decision stops here, before the command table, the state
     // lock and the spool (Design §13.2; `adage_runtime::fast`).
     let state_path = paths.state(session);
     let read_state = || state::try_read::<SessionState>(&state_path).ok().flatten();
     if fast::skip(&index.triggers(&repo_key), &ev, &cwd.to_string_lossy(), read_state) {
-        return Ok(None);
+        return Ok(Responded::default());
     }
     let table = CommandTable::load();
     // The embedding model is opened only if the runtime asks, which it does only at a prompt in a
@@ -924,19 +1033,23 @@ fn respond(
         failopen::record(&paths.root, harness, event, &Failure::io("spool", "appending to the session spool", &e));
     }
 
+    let at_stop_action = delivery.at_stop_action;
+    let done = |out: Option<Output>| Ok(Responded { out, at_stop_action });
     if let Some(warning) = delivery.recovery.take() {
-        return Ok(bounded_notice(warning, RECOVERY_NOTICE, adapter.max_context()).and_then(|text| {
-            adapter.render(
-                event,
-                if matches!(ev, Event::Stop { .. }) { Output::Continue(text) } else { Output::Context(text) },
-            )
+        return done(bounded_notice(warning, RECOVERY_NOTICE, adapter.max_context()).map(|text| {
+            // At a Stop the warning is a continuation, marked as Adage's own text like every other.
+            if matches!(ev, Event::Stop { .. }) {
+                Output::Continue(render::finish_line(&text))
+            } else {
+                Output::Context(text)
+            }
         }));
     }
     if let Some(reason) = decision.continue_reason {
-        return Ok(adapter.render(event, Output::Continue(reason)));
+        return done(Some(Output::Continue(reason)));
     }
     if decision.directives.is_empty() && delivery.extra.is_empty() {
-        return Ok(None);
+        return done(None);
     }
     let max = adapter.max_context();
     let e0 = || decision.directives.iter().map(render::wrap_directive).collect::<Vec<_>>().join("\n\n");
@@ -949,14 +1062,14 @@ fn respond(
     // An applied action cannot fall back to its original "run this" directive on overflow.
     let mut text = fitted_context(all.join("\n\n"), e0, !delivery.met.is_empty(), max);
     if text.is_empty() {
-        return Ok(None);
+        return done(None);
     }
     // Design W8 (spill overflow to a file) cannot arise: the longest decision validation allows
     // fits every harness's cap (`the_largest_decision_fits_every_harness_cap`). This is a backstop.
     if text.len() > max {
         text.truncate(text.char_indices().take_while(|(i, _)| *i < max).last().map(|(i, _)| i).unwrap_or(0));
     }
-    Ok(adapter.render(event, Output::Context(text)))
+    done(Some(Output::Context(text)))
 }
 
 #[cfg(test)]
@@ -1004,10 +1117,38 @@ mod tests {
         assert!(out["hookSpecificOutput"].get("permissionDecision").is_none());
         assert!(call(".venv/bin/python -c 'print(1)'").is_none());
         assert!(call("git status").is_none());
+        // F8: a receipt delivered alone is recorded, with no rewrite or advice in the record.
+        let recs: Vec<Value> = spool::read_all(&paths.spool("s-1")).unwrap();
+        assert_eq!(recs.len(), 1, "{recs:?}");
+        assert_eq!((recs[0]["kind"].as_str(), recs[0]["receipt"].as_bool()), (Some("pretool"), Some(true)));
+        assert!(recs[0].get("pretool").is_none(), "{recs:?}");
         state::update::<SessionState, _>(&paths.state("s-1"), |st| st.arm = Some(Arm::Control)).unwrap();
         assert!(call(".venv/bin/python -m pytest tests/test_x.py -q").is_none(), "never in the control arm");
         let p = json!({ "tool_name": "Bash", "tool_input": { "command": "python -m pytest" } });
         assert!(pretool(&harness::claude::Claude, &p, "s-1", &root, &root, &paths, None).unwrap().is_none());
+    }
+
+    /// F8: `pretool_context` is wrapped like every other extension call: a panic there loses only
+    /// the note, and the hook still answers.
+    #[test]
+    fn a_panicking_receipt_check_loses_only_the_note() {
+        struct Panics;
+        impl Extension for Panics {
+            fn deliver(&self, _: &Turn<'_>, _: &[Directive]) -> Delivery {
+                Delivery::default()
+            }
+            fn pretool_context(&self, _: &PreCall<'_>) -> Option<String> {
+                panic!("a receipt check that panics")
+            }
+        }
+        static PANICS: Panics = Panics;
+        let temp = tempfile::tempdir().unwrap();
+        let paths = Paths::at(temp.path().join("home"));
+        let root = temp.path().join("repo");
+        std::fs::create_dir_all(&root).unwrap();
+        let p = json!({ "tool_name": "Bash", "tool_input": { "command": ".venv/bin/python -m pytest tests -q" } });
+        let out = pretool(&harness::claude::Claude, &p, "s-1", &root, &root, &paths, Some(&PANICS));
+        assert!(matches!(out, Ok(None)), "{out:?}");
     }
 
     #[test]
@@ -1113,6 +1254,176 @@ mod tests {
             fresh,
             ..Default::default()
         }
+    }
+
+    /// A stand-in for adage-exec: its finish-line gate answers from a script (one answer per Stop,
+    /// in order), and it counts how often it was asked.
+    struct Scripted {
+        answers: std::sync::Mutex<Vec<StopGate>>,
+        asked: std::sync::atomic::AtomicUsize,
+    }
+
+    impl Extension for Scripted {
+        fn deliver(&self, _: &Turn<'_>, _: &[Directive]) -> Delivery {
+            Delivery::default()
+        }
+        fn stop_gate(&self, _: &StopCall<'_>) -> Option<StopGate> {
+            self.asked.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            let mut a = self.answers.lock().unwrap();
+            (!a.is_empty()).then(|| a.remove(0))
+        }
+    }
+
+    fn scripted(answers: Vec<StopGate>) -> &'static Scripted {
+        Box::leak(Box::new(Scripted { answers: std::sync::Mutex::new(answers), asked: Default::default() }))
+    }
+
+    /// A treated session in a repository whose one learned reflex is a finish-line obligation:
+    /// after an edit to `registry/*.csv`, run `make gen`.
+    struct ObligationWorld {
+        _temp: tempfile::TempDir,
+        root: PathBuf,
+        paths: Paths,
+    }
+
+    impl ObligationWorld {
+        fn new() -> Self {
+            use adage_tracks::{index::IndexedRoute, Evidence, Route, RouteState, Step, Strength, Trigger};
+            let temp = tempfile::tempdir().unwrap();
+            let root = temp.path().canonicalize().unwrap().join("acme");
+            std::fs::create_dir_all(root.join(".git")).unwrap();
+            std::fs::create_dir_all(root.join("registry")).unwrap();
+            let paths = Paths::at(temp.path().join("home"));
+            std::fs::create_dir_all(&paths.root).unwrap();
+            std::fs::write(paths.root.join("config.toml"), "[learn]\nauto = false\n").unwrap();
+            let route = Route {
+                id: "regenerate-registry".into(),
+                summary: String::new(),
+                trigger: Trigger::AfterEdit { paths: "registry/*.csv".into() },
+                step: Step::Run { command: "make gen".into() },
+                slots: vec![],
+                effect: adage_core::Effect::Regenerate,
+                strength: Strength::Fire,
+                state: RouteState::Firm,
+                exit: vec![],
+                evidence: Evidence { support: 5, opportunities: 5, days: 3, ..Default::default() },
+                authored: false,
+            };
+            let index = Index {
+                generation: "obligation-world".into(),
+                routes: vec![IndexedRoute {
+                    repo: "acme".into(),
+                    track: "acme/finish-lines".into(),
+                    version: "0.1.0".into(),
+                    exec: None,
+                    route,
+                }],
+                ..Default::default()
+            };
+            index.write_atomic(&paths.index()).unwrap();
+            state::update::<SessionState, _>(&paths.state("s"), |st| st.arm = Some(Arm::Treated)).unwrap();
+            ObligationWorld { _temp: temp, root, paths }
+        }
+
+        fn event(&self, ext: &'static dyn Extension, event: &str, extra: Value) -> Option<Value> {
+            let mut p = json!({ "session_id": "s", "cwd": self.root });
+            for (k, v) in extra.as_object().unwrap() {
+                p[k] = v.clone();
+            }
+            let opts = Options { learner: None, extension: Some(ext) };
+            let out = handle("claude", event, &p.to_string(), opts, &self.paths, Instant::now()).unwrap();
+            out.map(|o| serde_json::from_str(&o).unwrap())
+        }
+
+        fn edit(&self, ext: &'static dyn Extension) -> Option<Value> {
+            let call = json!({ "tool_name": "Edit", "tool_use_id": "t1", "tool_response": "ok",
+                               "tool_input": { "file_path": self.root.join("registry/currencies.csv") } });
+            self.event(ext, "PostToolBatch", json!({ "tool_calls": [call] }))
+        }
+
+        fn stop(&self, ext: &'static dyn Extension, active: bool) -> Option<Value> {
+            self.event(ext, "Stop", json!({ "stop_hook_active": active }))
+        }
+
+        fn state(&self) -> SessionState {
+            state::try_read::<SessionState>(&self.paths.state("s")).unwrap().unwrap()
+        }
+    }
+
+    /// F1: a Stop-gate block no longer hides a learned finish-line obligation. The gate fails at
+    /// the first Stop and the obligation is due there too: the agent gets both in one
+    /// continuation. At the next Stop the gate passes, and the obligation has been requested.
+    #[test]
+    fn a_failing_stop_gate_keeps_the_learned_obligation_request() {
+        let w = ObligationWorld::new();
+        let failed = render::stop_gate_failed(".venv/bin/python -m pytest tests -q", Some(1), None);
+        let ext = scripted(vec![
+            StopGate::Block(failed.clone()),
+            StopGate::Notice(
+                "adage: ran `.venv/bin/python -m pytest tests -q` at finish: passed (exit 0, 1.0 s).".into(),
+            ),
+        ]);
+        let directive = w.edit(ext).expect("the edit arms the obligation");
+        assert!(directive["hookSpecificOutput"]["additionalContext"].as_str().unwrap().contains("make gen"));
+        let first = w.stop(ext, false).expect("the gate failed: the agent continues");
+        assert_eq!(first["decision"], "block");
+        let reason = first["reason"].as_str().unwrap();
+        assert!(reason.contains("it failed (exit 1)"), "the gate's failure: {reason}");
+        assert!(reason.contains("running `make gen`"), "the obligation's request is not lost: {reason}");
+        assert!(harness::is_own_text(reason), "{reason}");
+        let st = w.state();
+        assert!(st.obligations[0].stop_requested && st.stop_requests == 1, "{:?}", st.obligations);
+        // The agent fixes the failure and finishes again: the gate passes; nothing is lost.
+        let second = w.stop(ext, true).expect("the person's line");
+        assert!(second["systemMessage"].as_str().unwrap().contains("passed"), "{second}");
+        assert_eq!(ext.asked.load(std::sync::atomic::Ordering::SeqCst), 2);
+        assert_eq!(w.state().stop_requests, 1, "requested once");
+    }
+
+    /// F4: when an approved action already ran for this Stop's obligation request, the gate does
+    /// not also run in the same hook (two staged runs could outlast the Stop hook's timeout); it
+    /// runs at the next Stop. The gate's deadline is the registered timeout from the hook's start,
+    /// less a reserve, so what the event already spent is deducted.
+    #[test]
+    fn an_action_at_stop_leaves_the_gate_for_the_next_stop() {
+        struct ActsAtStop {
+            asked: std::sync::atomic::AtomicUsize,
+            deadlines: std::sync::Mutex<Vec<Instant>>,
+        }
+        impl Extension for ActsAtStop {
+            fn deliver(&self, turn: &Turn<'_>, _: &[Directive]) -> Delivery {
+                let at_stop: Vec<String> = turn.stimuli.iter().filter(|s| s.at_stop).map(|s| s.route.clone()).collect();
+                // As adage-exec does for an applied at-Stop action: met, and the request withdrawn.
+                Delivery {
+                    at_stop_action: !at_stop.is_empty(),
+                    stop: (!at_stop.is_empty()).then_some(None),
+                    met: at_stop,
+                    ..Delivery::default()
+                }
+            }
+            fn stop_gate(&self, call: &StopCall<'_>) -> Option<StopGate> {
+                self.asked.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                self.deadlines.lock().unwrap().push(call.deadline);
+                Some(StopGate::Notice("adage: ran `make test` at finish: passed (exit 0, 0.1 s).".into()))
+            }
+        }
+        let ext: &'static ActsAtStop =
+            Box::leak(Box::new(ActsAtStop { asked: Default::default(), deadlines: Default::default() }));
+        let w = ObligationWorld::new();
+        w.edit(ext).expect("the obligation is announced");
+        assert!(w.stop(ext, false).is_none(), "the action met the obligation: the turn ends");
+        assert_eq!(ext.asked.load(std::sync::atomic::Ordering::SeqCst), 0, "no gate beside an action");
+        assert!(w.state().obligations[0].met);
+        let before = Instant::now();
+        let next = w.stop(ext, false).expect("the gate runs at the next Stop");
+        assert!(next["systemMessage"].as_str().unwrap().contains("passed"), "{next}");
+        assert_eq!(ext.asked.load(std::sync::atomic::Ordering::SeqCst), 1);
+        let deadline = ext.deadlines.lock().unwrap()[0];
+        let timeout = Duration::from_secs(u64::from(harness::ACTION_HOOK_TIMEOUT_S));
+        assert!(deadline <= before + timeout - STOP_RESERVE + Duration::from_secs(1), "within the timeout");
+        // Time the event already spent is deducted.
+        let started = Instant::now() - Duration::from_secs(10);
+        assert_eq!(stop_deadline(started), started + timeout - STOP_RESERVE);
     }
 
     #[test]

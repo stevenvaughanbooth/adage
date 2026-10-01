@@ -74,7 +74,15 @@ impl Adapter for Claude {
     fn translate(&self, event: &str, p: &Value, _cwd: &str) -> Option<Event> {
         Some(match event {
             "SessionStart" => Event::SessionStart,
-            "UserPromptSubmit" => Event::Prompt { text: p.get("prompt")?.as_str()?.to_string() },
+            "UserPromptSubmit" => {
+                // How Claude Code carries a Stop `block` reason onward is not documented: should
+                // Adage's own continuation ever come back as a prompt, it is not the person's.
+                let text = p.get("prompt")?.as_str()?;
+                if super::is_own_text(text) {
+                    return None;
+                }
+                Event::Prompt { text: text.to_string() }
+            }
             "PostToolBatch" => {
                 Event::Batch { calls: p.get("tool_calls")?.as_array()?.iter().map(|c| call_from(c, false)).collect() }
             }

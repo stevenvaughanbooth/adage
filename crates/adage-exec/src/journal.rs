@@ -357,6 +357,7 @@ mod tests {
                 fields: None,
                 backend: StageBackend::Copy,
                 stderr: vec![],
+                rewritten: vec![],
             }
         }
 

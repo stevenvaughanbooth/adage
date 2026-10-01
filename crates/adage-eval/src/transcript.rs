@@ -163,6 +163,10 @@ pub fn parse(text: &str) -> Option<Transcript> {
                 steered = true;
                 directed.insert("finish-line-stop".into());
             }
+            // A receipt for work Adage already ran (PreToolUse): Adage's text too.
+            if line.contains("<adage-receipt") {
+                steered = true;
+            }
             continue;
         }
         match typ {

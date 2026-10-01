@@ -25,9 +25,10 @@ adage condition --repo-root .
 adage review
 ```
 
-`doctor` identifies connection or model problems and gives their fixes. `condition` imports
-supported existing history and binds applicable instincts. `review` explains candidates and their
-evidence. It is fine to have no candidates: a fresh repository can have instincts without learned
+`doctor` identifies connection or model problems and gives their fixes. `condition --repo-root .`
+imports the supported existing history recorded in this repository (any of its checkouts) and
+binds applicable instincts; without `--repo-root` it conditions every repository your history
+holds. `review` explains candidates and their evidence. It is fine to have no candidates: a fresh repository can have instincts without learned
 behavior, and inconsistent or insufficient history should not produce an automatic action.
 
 Start a normal coding session. `adage watch` shows activity alongside it; `adage ui` brings review,
@@ -57,8 +58,15 @@ cargo install --locked --path crates/adage-exec
 ```
 
 Use your own terminal for the following decisions. Review the candidate in its target repository.
-Verification actions require an explicit E2 opt-in under `[exec]` in your personal
-`$ADAGE_HOME/policy.toml` (or the default Adage data directory if no override is set):
+Verification actions require an explicit E2 opt-in on this machine:
+
+```sh
+adage delegate policy --max-level e2
+```
+
+It writes these settings under `[exec]` in your personal policy file and prints its path
+(`$ADAGE_HOME/policy.toml`, or the default Adage data directory if no override is set), keeping
+any other policy in it:
 
 ```toml
 [exec]
@@ -67,9 +75,10 @@ auto_approve = "off"
 require_sandbox = true
 ```
 
-Merge these settings into an existing file; do not overwrite other policy. A managed policy can
-still prohibit E2. This opt-in enables review of actions; each reflex still needs its own grant.
-See [execution policy](execution.md#policy) for precedence and default locations.
+It refuses to run inside an agent session. `adage delegate policy` shows the current policy;
+`--max-level e1` turns actions back off. A managed policy can still prohibit E2. This opt-in
+enables review of actions; each reflex still needs its own grant. See
+[execution policy](execution.md#policy) for precedence and default locations.
 
 For a learned pytest verification candidate, substitute the actual track and reflex shown by
 `adage review` into this example. Declare only caches that command needs:
@@ -78,12 +87,14 @@ For a learned pytest verification candidate, substitute the actual track and ref
 adage review delegate TRACK REFLEX --level e2 --effect verify \
   --cache '.pytest_cache/**' --cache '.pytest_cache/.gitignore' \
   --cache 'tests/__pycache__/**' \
-  --cache 'src/**/__pycache__/**' --timeout-ms 30000 --repo .
+  --cache 'src/**/__pycache__/**' --timeout-ms 20000 --repo .
 adage delegate on --repo .
 adage delegate status --repo .
 ```
 
-The approval command stages the action and validates its behavior before saving a grant. A failed
+20 seconds is the most an E2 action may run (it runs inside a hook); a larger `--timeout-ms` is
+lowered to it, and the approval says so. The approval command stages the action and validates
+its behavior before saving a grant. A failed
 stage or policy check saves no approval. Verify actions cannot apply source changes. Use explicit
 repository directories for cache globs; `**/__pycache__/**` at the root is intentionally rejected.
 Pytest's named cache is a narrow exception for caches, not permission for arbitrary hidden outputs.

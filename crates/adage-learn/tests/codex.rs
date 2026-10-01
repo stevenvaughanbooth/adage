@@ -183,6 +183,28 @@ fn out(call: &str, code: i32, body: &str) -> Value {
     )
 }
 
+/// F3: Codex turns a Stop `block` reason into the next user prompt. The finish-line gate's
+/// failure is Adage's direction there, never the person's prompt, and the session is steered.
+#[test]
+fn a_stop_gate_failure_continuation_is_adages_text_not_a_prompt() {
+    let t = CommandTable::load();
+    let cmd = ".venv/bin/python -m pytest tests -q";
+    let gate = adage_runtime::render::stop_gate_failed(cmd, Some(1), None);
+    let lines = vec![
+        meta(json!({})),
+        user("Fix W-2042"),
+        exec("c1", "ls"),
+        out("c1", 0, "Makefile"),
+        user(&gate),
+        exec("c2", cmd),
+        out("c2", 1, "1 failed"),
+    ];
+    let s = parse_rollout(&lines, &t, None).expect("parses");
+    assert_eq!((s.prompt.as_str(), s.prompt_count()), ("Fix W-2042", 1));
+    assert!(s.steered && s.directed.contains("finish-line-stop"), "{:?}", s.directed);
+    assert!(s.exposed_to(&[cmd], false), "the rerun after the continuation is not the agent's own");
+}
+
 #[test]
 fn every_prompt_is_kept_and_anchored() {
     let t = CommandTable::load();
