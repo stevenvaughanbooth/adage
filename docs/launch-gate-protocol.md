@@ -1,7 +1,8 @@
 # Launch gate protocol: learned-action replacement (launch-gate-1)
 
-Registered 2026-09-30 (revision 2 the same day; revisions 3 to 5 on 2026-10-01, before any
-canary or held-out agent session). The
+Registered 2026-09-30 (revision 2 the same day; revisions 3 to 6 on 2026-10-01). Revisions 3
+to 5 preceded any canary agent session; revision 6 follows the development canary-v5 and
+precedes any held-out dispatch. The
 machine-readable copy is `evals/reflex-proof/harness/launch_gate_protocol.json`; when the two
 differ, the JSON governs. Revisions get a dated entry below and must precede the dispatch they
 affect. Splits and thresholds cannot change after the first held-out dispatch.
@@ -95,8 +96,8 @@ runner must do the same for each learned home before its first held-out dispatch
 
 ## Phase 1: canary and negative controls (steps 1 and 2)
 
-Study root `cohorts/launch-gate-v4/canary-v5` in the native-confinement cohort
-`cohorts/launch-gate-v4`. Production binaries are built from the PR head and hash-pinned. One fixed
+Study root `cohorts/launch-gate-v4/canary-v7` (development) in the native-confinement cohort
+`cohorts/launch-gate-v4`. Its native review passed. `canary-v5` ran and is reported below. Production binaries are built from the PR head and hash-pinned. One fixed
 learned route (`run-175d85`, guided provenance, from `cumulative-launch-10`, which passes the audit)
 runs `.venv/bin/python -m pytest tests/test_validate.py -q` after a test edit then a changelog edit.
 Twelve automatic sessions, all on the development task (finite), two per condition:
@@ -157,6 +158,24 @@ Code adds an exit-code line and appends a `<sandbox_violations>` block. The `lau
 native session ($0.0140024) exposed both problems. It is excluded and never reviewed: the review
 semantics changed after seeing its output, and the review refuses excluded cohorts. A
 content-level dry run on its archived tool result is a test fixture, not evidence.
+
+### canary-v5 result and revision 6 (development)
+
+canary-v5 (12 sessions, $2.6962327) passed the integration and safety criterion. The contract
+reached all 12 native transcripts and all 7 successful receipts were structured. Every realized
+control kept necessary work, and quality was 12/12. **It gives no support for elimination.** Both
+positives got failing receipts, because the agents' own first-draft tests were wrong (the context
+fired at the natural end of the work). Where a successful receipt was current, agents repeated: a
+bare `python` attempt drew Adage's interpreter advice, and the agents then ran its runnable form.
+Findings: `harness/results/20260930-launch-canary/canary-v5/FINDINGS.md`.
+
+Revision 6 adds a receipt note to covered test calls. The receipt must be fresh: byte-identical
+inputs recomputed by the executor's snapshot, the same session, applied and successful. The note
+is context only. Pytest receipts now state their scope plainly. canary-v7 supplies one fixed,
+validated test block, runs six positives plus controls, and reports `integration_safety_passed`
+apart from the positive rows. The canary ceiling rises from $6 to $8 and training falls from $10
+to $8, so the protocol total stays at $38. All of this is development work on development tasks;
+nothing here touches evaluation groups.
 
 ## Phase 2: cohort (step 3)
 
@@ -232,6 +251,9 @@ evaluation groups is registered.
 ## Revisions
 
 - 2026-09-30 r1: registered.
+- 2026-10-01 r6, development only: canary-v5 recorded; receipt note and receipt scope wording;
+  canary-v7 with a fixed test block; canary ceiling $8 and training $8. Ledger at r6: 116 attempts,
+  $18.9257862 admitted, $41.0742138 remaining.
 - 2026-10-01 r5, before any canary or held-out agent session: tolerant canary-output parsing,
   a single exemption rule, review refuses excluded cohorts; `launch-gate-v3` excluded unreviewed;
   the canary moves to `launch-gate-v4/canary-v5`. Ledger at r5: 103 attempts, $16.2151802

@@ -34,6 +34,14 @@ the tool-environment denial list depended on the preparing shell and was never c
 Earlier native-confinement evidence covers the filesystem and network only. The runner now
 launches from an allowlisted environment and tests environment denial.
 
+The first development canary ([canary-v5](harness/results/20260930-launch-canary/canary-v5/FINDINGS.md),
+12 sessions, $2.6962327) showed native delivery of the contract and structured receipts, and that
+failed, stale, broader and explicit-rerun controls kept necessary work. Its report's `passed`
+flag is that integration and safety criterion only. **It produced no elimination evidence:** both
+positives got failing receipts from the agents' own first-draft tests, and agents still repeated
+after successful receipts. A receipt-aware note and a canary-v7 with a fixed test block are
+prepared. No launch statistic follows from this development work.
+
 The subsequent [edit-receipt diagnostic](harness/results/20260930-edit-receipt-ablation/summary.json)
 is an authored fixture, not a launch benchmark. After fixing inherited-stdin contamination,
 two runs per arm observed verifier requests in baseline 2/2, generic receipt 2/2, structured

@@ -10,8 +10,8 @@
     "attempts_at_registration": 100,
     "protocol_ceiling_usd": 38.0,
     "phase_ceilings_usd": {
-      "canary": 6.0,
-      "training": 10.0,
+      "canary": 8.0,
+      "training": 8.0,
       "heldout": 22.0
     },
     "per_session_cap_usd": 1.5,
@@ -21,7 +21,9 @@
     "admission_spend_at_r4_usd": 16.2011778,
     "attempts_at_r4": 102,
     "admission_spend_at_r5_usd": 16.2151802,
-    "attempts_at_r5": 103
+    "attempts_at_r5": 103,
+    "admission_spend_at_r6_usd": 18.9257862,
+    "attempts_at_r6": 116
   },
   "model": "claude-haiku-4-5-20251001",
   "claude_cli": "2.1.282",
@@ -125,7 +127,8 @@
     "necessary_work_skipped": 0,
     "foreign_or_unapproved_receipts": 0,
     "tasks": "development split only (marshmallow finite)",
-    "native_confinement": "fresh native-confinement review in launch-gate-v2 passes, including environment denial"
+    "native_confinement": "fresh native-confinement review in launch-gate-v2 passes, including environment denial",
+    "reporting": "integration_safety_passed is delivery and safety only; elimination evidence is reported from realized positive rows and is never a hypothesis pass"
   },
   "go_thresholds": {
     "G1_learned_reflex_repositories_min": 2,
@@ -161,13 +164,15 @@
     "copy grants",
     "change thresholds after the first held-out dispatch"
   ],
-  "revision": 5,
+  "revision": 6,
   "revisions": [
     "2026-09-30 r1: registered",
     "2026-09-30 r2, before any dispatch under this protocol: task splits with near-duplicate groups, training-isolation audit, evaluation read-only rule, paired blocks, same-repository strata and G9; canary moved to the development split",
     "2026-10-01 r3, before any canary or held-out agent session: environment-independent sandbox policy and allowlisted launch environment; native canary tests environment denial; launch-gate-v1 native session excluded as confinement evidence, canary-v2 aborted; canary moves to cohorts/launch-gate-v2/canary-v3",
     "2026-10-01 r4, before any canary or held-out agent session: runtime-injected tool names (sandbox proxy credential, session inbox token) are denied where possible and tolerated only by name when the same native canary proves them harmless (proxy refuses external requests; tool cannot connect to the inbox); launch-gate-v2 excluded after its review failed closed; canary moves to cohorts/launch-gate-v3/canary-v4",
-    "2026-10-01 r5, before any canary or held-out agent session: the native review parses canary values where they start (Claude Code adds an exit-code line and appends <sandbox_violations>); one exemption rule (probe.proven_harmless) governs the canary program, the denied-name check and the credential-name check; launch-gate-v3 excluded unreviewed; canary moves to cohorts/launch-gate-v4/canary-v5"
+    "2026-10-01 r5, before any canary or held-out agent session: the native review parses canary values where they start (Claude Code adds an exit-code line and appends <sandbox_violations>); one exemption rule (probe.proven_harmless) governs the canary program, the denied-name check and the credential-name check; launch-gate-v3 excluded unreviewed; canary moves to cohorts/launch-gate-v4/canary-v5",
+    "2026-10-01 r6, development only (no held-out dispatch has occurred): canary-v5 results recorded (delivery and safety pass; positives unrealized; repeats after successful receipts); receipt note for covered test calls and plainer pytest receipt scope; canary-v7 supplies a fixed validated test block; canary phase ceiling 6 -> 8 and training 10 -> 8 (protocol total unchanged at 38)",
+    "2026-10-01 r6 note: canary-v6 (launch-canary-6) was frozen before this JSON's r6 edits, so its source hashes no longer verify; it was superseded before preparation with no spend and canary-v7 (launch-canary-7, same design) replaces it"
   ],
   "splits": {
     "marshmallow": {
@@ -380,5 +385,18 @@
       "CLAUDE_CODE_MESSAGING_TOKEN": "inbox"
     },
     "exemption_rule": "a name in RUNTIME_INJECTED is exempt from the denied-name and credential-name checks only when its named proof passed in the same run; nothing else is exempt"
+  },
+  "development_results": {
+    "canary-v5": {
+      "sessions": 12,
+      "known_cost_usd": 2.6962327,
+      "contract_delivered": "12/12",
+      "structured_receipts": "7/7",
+      "necessary_work_skipped": 0,
+      "quality": "12/12",
+      "positives_realized": "0/2",
+      "confirmed_eliminations": 0,
+      "redundant_repeats_after_successful_receipts": 2
+    }
   }
 }

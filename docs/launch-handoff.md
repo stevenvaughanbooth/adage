@@ -22,15 +22,17 @@ new dispatch; never reset it, double-dispatch, or treat an unknown bill as zero.
 
 ## Latest checkpoint: launch gate protocol (resume here)
 
-Branch `codex/launch-first-reflex`, PR #16 (draft). Ledger: 103 attempts, $16.2151802 admitted,
-$43.7848198 remaining. The only new charges are three excluded native-confinement sessions:
-`launch-gate-v1` ($0.0258378), `launch-gate-v2` ($0.0278896) and `launch-gate-v3` ($0.0140024),
-all described below. The frozen cohort and
+Branch `codex/launch-first-reflex`, PR #16 (draft). Ledger: 116 attempts, $18.9257862 admitted,
+$41.0742138 remaining. New charges in this checkpoint:
+- three excluded native-confinement sessions: `launch-gate-v1` ($0.0258378), `launch-gate-v2`
+  ($0.0278896) and `launch-gate-v3` ($0.0140024);
+- the passing `launch-gate-v4` native session ($0.0143733);
+- the development canary-v5 ($2.6962327). The frozen cohort and
 canary manifests bind absolute harness paths in the agent worktree
 `/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d`; run the
 commands below from its `evals/reflex-proof/harness`, or refreeze new roots from another checkout.
 
-- [Launch gate protocol](launch-gate-protocol.md) (`launch-gate-1`, revision 5) and its governing
+- [Launch gate protocol](launch-gate-protocol.md) (`launch-gate-1`, revision 6) and its governing
   JSON (`evals/reflex-proof/harness/launch_gate_protocol.json`) were registered before any dispatch:
   task splits with near-duplicate groups, arms, paired blocks, budgets and the GO thresholds G1-G9.
   `launch_gate_score.py` applies those thresholds; its tests pin every failure mode.
@@ -45,9 +47,26 @@ commands below from its `evals/reflex-proof/harness`, or refreeze new roots from
   foreign state, forbidden session ids from every non-training record, development/evaluation
   markers). The protocol lists what the existing pipeline already enforced and what is new.
   `cumulative-launch-10` passes it.
-- `launch_canary.py` (`launch-canary-5`) is frozen at `cohorts/launch-gate-v4/canary-v5`: 12
-  automatic sessions on the development task `finite`, covering the positive condition and five
-  negative controls ([status](../evals/reflex-proof/harness/results/20260930-launch-canary/FINDINGS.md)).
+- **canary-v5 ran (development).** It passed integration and safety: the contract reached all
+  12 native transcripts, all 7 successful receipts were structured, every realized failed, edit,
+  config, broader and rerun control kept necessary work, and quality was 12/12. **It gives no
+  elimination evidence.**
+  - Both positives got failing receipts. The context fired at the natural end of the work, but
+    the agents' own first-draft tests were wrong, so the follow-up work was necessary.
+  - After successful receipts, agents still repeated. A bare `python` attempt drew Adage's
+    interpreter advice, and the agents ran its runnable form: a node run, then an exact repeat
+    (`later-edit-2`), or an equivalent repeat (`broader-1`).
+  - The report's `passed` is the integration and safety flag, not a hypothesis result
+    ([findings](../evals/reflex-proof/harness/results/20260930-launch-canary/canary-v5/FINDINGS.md)).
+- **Revision 6 (development).**
+  - Test calls covered by a fresh, successful receipt from the same session now get a receipt
+    note ahead of any interpreter advice. Freshness means inputs byte-identical by the executor's
+    recomputed snapshot. The note is context only and never a refusal.
+  - Pytest receipts state their scope plainly.
+  - `launch_canary.py` (`launch-canary-7`) is frozen at `cohorts/launch-gate-v4/canary-v7`: six
+    positives plus controls, with a fixed, validated test block in every prompt, so a successful
+    receipt is likely by construction. Its report separates `integration_safety_passed` from the
+    positive rows ([status](../evals/reflex-proof/harness/results/20260930-launch-canary/FINDINGS.md)).
 - **Confinement fix (revision 3).** The tool-environment denial list used to be computed from
   the shell that prepared a session, while Claude inherited the shell that launched it. No canary
   tested environment denial. The first canary attempt exposed this: `launch-gate-v1`'s native
@@ -76,7 +95,7 @@ commands below from its `evals/reflex-proof/harness`, or refreeze new roots from
 Blocked on three things, none of which an agent may bypass:
 
 1. **Paid runs need a normal terminal.** `probe.execute` refuses nested Claude sessions.
-2. **Grants need the person.** `approve-canary.sh` (sha256 `2a6269a7…`) is prepared; run it only
+2. **Grants need the person.** `approve-canary.sh` (sha256 `SHA_V7`) is prepared; run it only
    after reading it.
 3. **Learning needs the learner fix.** About 22 learning-quality tests fail on main since PR #14.
    Cohort training replay, checkpoints and frozen learned homes wait for that fix and a rebuild.
@@ -84,13 +103,12 @@ Blocked on three things, none of which an agent may bypass:
 Canary commands, from `evals/reflex-proof/harness` in a normal terminal (one at a time; stop on error):
 
 ```sh
-A=/private/tmp/adage-real-repo-gate-v1; C=$A/cohorts/launch-gate-v4; R=$C/canary-v5
-python3 real_repo_gate.py run-session $C/sessions/native-confinement/manifest.json   # paid, <= $0.50 cap
-python3 curve_sessions.py review-native $C                                           # offline; must pass, incl. environment
+A=/private/tmp/adage-real-repo-gate-v1; C=$A/cohorts/launch-gate-v4; R=$C/canary-v7
+# The launch-gate-v4 native session already ran and its review passed; do not rerun them.
 python3 launch_canary.py prepare $R                                                  # offline, several minutes
 less $R/approve-canary.sh && sh $R/approve-canary.sh                                 # the person issues 12 grants
 python3 launch_canary.py verify-grants $R                                            # read-only
-python3 launch_canary.py live $R                                                     # paid, 12 sessions, $6 study ceiling
+python3 launch_canary.py live $R                                                     # paid, 12 sessions, $5.20 study ceiling
 python3 launch_canary.py report $R
 ```
 

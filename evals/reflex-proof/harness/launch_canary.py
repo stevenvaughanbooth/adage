@@ -27,7 +27,7 @@ import receipt_replay
 import split_audit
 
 gate = pairs.substrate
-PROTOCOL = "launch-canary-6"
+PROTOCOL = "launch-canary-7"
 ROUTE = "github-com-marshmallow-code-marshmallow/learned/run-175d85"
 COMMAND = ".venv/bin/python -m pytest tests/test_validate.py -q"
 CACHES = (".pytest_cache/**", "tests/__pycache__/**", "src/**/__pycache__/**", ".pytest_cache/.gitignore")

@@ -1,23 +1,22 @@
-# Launch canary (launch-canary-5): frozen, not dispatched
+# Launch canary: canary-v5 ran; canary-v6 frozen, not dispatched
 
-Status at 2026-10-01: frozen offline under protocol `launch-gate-1` revision 5. No canary agent
-session and no grant exist. Nothing here is evidence of an effect yet.
+All of this is development-split work: no held-out tasks are involved, and none of it is evidence
+for the hypothesis.
 
-- Cohort `cohorts/launch-gate-v4`. Its native-confinement session is prepared by the fixed runner:
-  `native-confinement-manifest.json`, `native-confinement-settings.json`, and the canary program
-  `native_canary.py`. The program checks files, the network, the session inbox socket (fixed at
-  preparation) and the tool environment, and probes the sandbox proxy. The policy does not depend
-  on the shell: the agent environment (60 names) and an `env -i` shell (3 names) give identical
-  settings. The session must be run and reviewed from a terminal before canary preparation.
-- Study `cohorts/launch-gate-v4/canary-v5`: 12 automatic sessions on the development task
-  `mm-curve--finite`, two per condition (positive, failed, later-edit, config-change, broader,
-  rerun), frozen at commit `be53c9d`.
-- Binaries: release `adage` `41684cdb…`, `adage-exec` `2c511ee5…`; the production crates are
-  unchanged since `b14ffd3`. Learned route: `run-175d85` from `cumulative-launch-10` (explicitly
-  guided). `isolation-audit.json` passed.
-- `approve-canary.sh` (sha256 `2a6269a7…`) is the person-run grant script. It enables E2 only for
-  the twelve assignment homes, keeps automatic approval off, requires the sandbox, declares the
-  four caches and sets a 30 s timeout. Agents must not run it.
+- **canary-v5** (`cohorts/launch-gate-v4/canary-v5`, protocol `launch-canary-5`) ran all 12
+  sessions for $2.6962327. Delivery and safety passed; both positives were unrealized; there were
+  0 eliminations. See `canary-v5/FINDINGS.md`.
+- **canary-v6** (`cohorts/launch-gate-v4/canary-v6`, protocol `launch-canary-6`) is frozen at
+  commit `11eb615`:
+  - binaries: `adage` `2b04bbf3…`, `adage-exec` `3895b20f…`, which include the receipt note;
+  - 12 sessions on `mm-curve--finite`: six positives, two later-edits, and one each of failed,
+    config-change, broader and rerun;
+  - every prompt supplies the same validated test block (`canary-v6-test-block-check.*`);
+  - `isolation-audit.json` passed;
+  - `approve-canary.sh` sha256 `8878e159…` is person-run only.
+- The cohort `cohorts/launch-gate-v4` native review passed. It remains valid for canary-v6: the
+  runner, probe and helper sources are unchanged. Native files: `native-confinement-*.json`,
+  `native_canary.py`.
 
 Superseded or aborted attempts, preserved:
 
