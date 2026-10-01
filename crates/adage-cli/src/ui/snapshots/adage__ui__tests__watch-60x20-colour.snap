@@ -8,7 +8,7 @@ expression: text
                             [green]✓ [/]bin/fetch-incident INC-2045
  [darkgray]12:04:03[/] [d]0b0b[/] [d]cc [/] tools    [darkgray]· 1 call, nothing to say[/]
  [darkgray]12:04:04[/] [d]0b0b[/] [d]cc [/] failure  [magenta]→ ◠ [/][red]● inhibit [/][d]npm run check[/]
- [darkgray]12:04:05[/] [d]0b0b[/] [d]cc [/] tools    [red]✗ [/]bin/fetch-incident INC-2045
+ [darkgray]12:04:05[/] [d]0b0b[/] [d]cc [/] tools    [red]✗ [/]lookup-incident
  [darkgray]12:04:06[/] [darkgray i]c4a1[/] [darkgray i]cc [/] [darkgray i]tools   [/] [darkgray i]○ found bin/fetch-incident INC-…[/]
  [darkgray]12:04:07[/] [d]0b0b[/] [d]cc [/] stop     [yellow b]■ [/]finish line: asked the agent …
  [darkgray]12:04:08[/] [d]a11c[/] [d]cc [/] tools    [green]✓ [/][d]finish line met: [/]codegen-afte…

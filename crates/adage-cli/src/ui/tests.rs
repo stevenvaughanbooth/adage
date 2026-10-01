@@ -483,7 +483,7 @@ fn pretool_records_and_cards_are_shown() {
     );
     m.session = "s-misfire".into();
     let items = [&i, &w, &c, &m];
-    let lines: Vec<String> = view::feed_lines(&items, &cx, 110, &Default::default())
+    let lines: Vec<String> = view::feed_lines(&items, &cx, 110, &Default::default(), &Default::default())
         .into_iter()
         .map(|(_, l)| l.spans.iter().map(|s| s.content.to_string()).collect::<String>().trim_end().to_string())
         .collect();
@@ -493,6 +493,44 @@ fn pretool_records_and_cards_are_shown() {
     assert!(text.contains("would have pointed the test run at x (withheld)"), "{text}");
     assert!(text.contains("card · 2 files · 3 traces"), "{text}");
     assert!(text.contains("misfired run-tests"), "{text}");
+}
+
+/// A line about a reflex names it by what it told that session; never by what it told another
+/// session (another ticket); else by its gist once the reflexes are loaded; else by its id.
+#[test]
+fn a_reflex_is_named_by_what_it_told_this_session() {
+    let cx = ctx(Paths::at(Path::new("/nonexistent")), false);
+    let delivered = |sid: &str, ticket: &str| {
+        let text = format!("A known next step here is:\n  bin/fetch-incident {ticket}");
+        feed::from_record(
+            sid,
+            &json!({ "ts": T0, "event": "UserPromptSubmit", "kind": "prompt", "arm": "treated",
+            "decision": { "directives": [{ "route": "lookup-incident", "strength": "fire", "text": text }] } }),
+        )
+    };
+    let ignored = |sid: &str| {
+        feed::from_record(
+            sid,
+            &json!({ "ts": T0, "event": "PostToolBatch", "kind": "batch", "arm": "treated",
+            "decision": { "judgements": [{ "kind": "ignored", "route": "lookup-incident" }] } }),
+        )
+    };
+    let (a, b, a2, b2, c2) =
+        (delivered("s-a", "INC-24"), delivered("s-b", "INC-17"), ignored("s-a"), ignored("s-b"), ignored("s-c"));
+    let lines = |gists: &std::collections::BTreeMap<String, String>| -> Vec<String> {
+        view::feed_lines(&[&a, &b, &a2, &b2, &c2], &cx, 110, &Default::default(), gists)
+            .into_iter()
+            .map(|(_, l)| l.spans.iter().map(|s| s.content.to_string()).collect::<String>().trim_end().to_string())
+            .collect()
+    };
+    let none = lines(&Default::default());
+    assert!(none[2].ends_with("ignored bin/fetch-incident INC-24"), "{none:?}");
+    assert!(none[3].ends_with("ignored bin/fetch-incident INC-17"), "{none:?}");
+    assert!(none[4].ends_with("ignored lookup-incident"), "never told s-c: {none:?}");
+    let gists =
+        [("lookup-incident".to_string(), "on a prompt that names a ticket, run bin/fetch-incident {item}".to_string())]
+            .into();
+    assert!(lines(&gists)[4].ends_with("ignored on a prompt that names a ticket, run bin/fetch-incident {item}"));
 }
 
 /// A session in a repository with no reflexes yet is shown as watched, with its calls counted
@@ -509,7 +547,7 @@ fn a_session_with_no_reflexes_here_is_shown_as_watched() {
     };
     let (start, batch) = (seen("session_start", "SessionStart", None), seen("batch", "PostToolBatch", Some(23)));
     assert!(batch.unrouted && batch.quiet() && batch.observed == 23);
-    let text: Vec<String> = view::feed_lines(&[&start, &batch], &cx, 110, &Default::default())
+    let text: Vec<String> = view::feed_lines(&[&start, &batch], &cx, 110, &Default::default(), &Default::default())
         .into_iter()
         .map(|(_, l)| l.spans.iter().map(|s| s.content.to_string()).collect::<String>().trim_end().to_string())
         .collect();
@@ -520,7 +558,7 @@ fn a_session_with_no_reflexes_here_is_shown_as_watched() {
         "s",
         &json!({ "ts": T0, "event": "PostToolBatch", "kind": "batch", "decision": { "observed": ["ls"] } }),
     );
-    let line: String = view::feed_lines(&[&routed], &cx, 110, &Default::default())[0]
+    let line: String = view::feed_lines(&[&routed], &cx, 110, &Default::default(), &Default::default())[0]
         .1
         .spans
         .iter()
@@ -808,7 +846,9 @@ fn watch_frames_at_split_pane_and_wide_sizes_in_colour_and_no_color() {
         "→ ◠ ● fire     bin/fetch-incident INC-2045",
         "○ would fire bin/fetch-incident INC-2045 (withheld)",
         "✓ followed bin/fetch-incident INC-2045",
-        "✗ ignored bin/fetch-incident INC-2045",
+        // Never delivered to this session in the feed, and no reflexes loaded: its id, not
+        // what another session was told.
+        "✗ ignored lookup-incident",
         "→ ◠ ● inhibit  npm run check",
         "─ conditioning ─",
         "lookup-incident                             prime → fire       24/25 · lb 0.80",
@@ -1108,6 +1148,7 @@ fn route_row(
         in_index: state != "nascent" && state != "extinguished",
         instinct: false,
         id: id.into(),
+        gist: format!("the gist of {id}"),
         strength,
         ceiling: "fire".into(),
         effect: "observe".into(),

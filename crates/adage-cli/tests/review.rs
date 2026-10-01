@@ -288,7 +288,7 @@ fn queue_lists_each_reason_with_evidence_and_directive() {
 
     let t = w.ok(&["review"]);
     for s in [
-        "5 reflexes wait for a decision",
+        "5 to look over",
         "why         new:",
         "seen in 20 of 20 traces",
         "example values: item = W-1234",

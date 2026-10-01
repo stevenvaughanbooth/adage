@@ -16,7 +16,7 @@ expression: text
                                        [green]✓ [/][d]followed [/]bin/fetch-incident INC-2045
  [darkgray]12:04:03[/]  [d]000b0b[/]  [d]claude   [/]  tools    [darkgray]· 1 call, nothing to say[/]
  [darkgray]12:04:04[/]  [d]000b0b[/]  [d]claude   [/]  failure  [magenta]→ ◠ [/][red]● inhibit  [/][d]npm run check[/]
- [darkgray]12:04:05[/]  [d]000b0b[/]  [d]claude   [/]  tools    [red]✗ [/][d]ignored [/]bin/fetch-incident INC-2045
+ [darkgray]12:04:05[/]  [d]000b0b[/]  [d]claude   [/]  tools    [red]✗ [/][d]ignored [/]lookup-incident
  [darkgray]12:04:06[/]  [darkgray i]00c4a1[/]  [darkgray i]claude   [/]  [darkgray i]tools   [/] [darkgray i]○ found bin/fetch-incident INC-2045 unaided[/]
  [darkgray]12:04:07[/]  [d]000b0b[/]  [d]claude   [/]  stop     [yellow b]■ [/]finish line: asked the agent to continue
  [darkgray]12:04:08[/]  [d]00a11c[/]  [d]claude   [/]  tools    [green]✓ [/][d]finish line met: [/]codegen-after-registry

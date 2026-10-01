@@ -996,6 +996,7 @@ pub fn run(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>) -> Result<()> {
                         s.live.waiting = Some(rs.waiting());
                         s.live.quiet = rs.quiet();
                         s.live.needs = rs.needs();
+                        s.live.gists = rs.gists();
                     }
                     s.routes = Some(r);
                 }

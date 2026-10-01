@@ -139,6 +139,7 @@ pub fn run(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>) -> Result<()> {
                     live.waiting = Some(r.waiting());
                     live.quiet = r.quiet();
                     live.needs = r.needs();
+                    live.gists = r.gists();
                 }
                 Loaded::Routes(Err(_)) => {}
             }
@@ -183,6 +184,7 @@ pub fn snapshot(ctx: &Ctx, size: Option<(u16, u16)>) -> String {
         live.waiting = Some(r.waiting());
         live.quiet = r.quiet();
         live.needs = r.needs();
+        live.gists = r.gists();
     }
     let mut term = match Terminal::new(TestBackend::new(w, h)) {
         Ok(t) => t,

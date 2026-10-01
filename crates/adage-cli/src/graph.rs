@@ -654,6 +654,8 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
                 "authored": r.authored,
                 "shape": adage_tracks::shape(r),
                 "quiet": quiet,
+                // What it tells the agent, in one sentence (`Route::gist`): how people name it.
+                "gist": r.gist(),
                 "trigger": trigger(&r.trigger),
                 "step": step_json,
                 "execution_only": e.execution.is_some(),

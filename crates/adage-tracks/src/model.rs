@@ -449,8 +449,11 @@ impl Route {
         }
         let when = match &self.trigger {
             Trigger::Prompt { span } => format!("on a prompt that names a {}", span.as_str()),
-            Trigger::AfterCommand { command } => format!("after {command}"),
-            Trigger::AfterFailure { command, .. } => format!("when {command} fails"),
+            // Command keys spell a script run as `exec <script>`; people read the script.
+            Trigger::AfterCommand { command } => format!("after {}", command.strip_prefix("exec ").unwrap_or(command)),
+            Trigger::AfterFailure { command, .. } => {
+                format!("when {} fails", command.strip_prefix("exec ").unwrap_or(command))
+            }
             Trigger::AfterEdit { paths } => format!("after editing {paths}"),
             Trigger::SessionStart => "at the start of a session".into(),
             Trigger::Intent { .. } => "on requests like these".into(),

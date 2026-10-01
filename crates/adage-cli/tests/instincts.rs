@@ -418,7 +418,7 @@ fn rebinding_with_nothing_new_changes_nothing() {
 fn doctor_review_and_pack_approval() {
     let w = World::new().with_pnpm();
     let out = w.bind();
-    assert!(out.contains("wait for review"), "{out}");
+    assert!(out.contains("need you"), "the environment steps need a person: {out}");
     // doctor counts what is bound per repository.
     let (d, _, _) = w.run(&["doctor", "--json"], b"");
     let v: Value = serde_json::from_str(&d).unwrap();
@@ -449,7 +449,7 @@ fn doctor_review_and_pack_approval() {
     assert!(inst.iter().all(|r| r["trigger"].as_str().is_some_and(|t| !t.is_empty())), "{q:#}");
     let text = w.ok(&["review"]);
     assert!(text.contains("instinct U1 (from Makefile)"), "{text}");
-    assert!(text.contains("4 reflexes wait for a decision") && text.contains("Instincts in effect"), "{text}");
+    assert!(text.contains("4 need you") && text.contains("Instincts in effect"), "{text}");
     // Approving one environment step approves its pack's (the one N1's routes came from) for this
     // repository.
     let out = w.ok(&["review", "approve", TRACK, nascent[0]]);

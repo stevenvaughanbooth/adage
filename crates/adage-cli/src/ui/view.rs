@@ -171,6 +171,8 @@ pub struct Live {
     pub quiet: usize,
     /// Of those: the ones that need a person (the rest are in use, worth a look).
     pub needs: usize,
+    /// Each reflex's gist by id, once the reflexes are loaded: the ticker names reflexes by it.
+    pub gists: std::collections::BTreeMap<String, String>,
     pub pulse: Pulse,
     next_seq: u64,
     primed: bool,
@@ -300,7 +302,7 @@ impl Live {
     /// The item the inspector opens: the newest shown (under the scroll) that did something.
     pub fn current<'a>(&'a self, repo_key: Option<&'a str>, ctx: &Ctx, width: u16) -> Option<&'a FeedItem> {
         let items = self.visible(repo_key);
-        let lines = feed_lines(&items, ctx, width, &self.pulse);
+        let lines = feed_lines(&items, ctx, width, &self.pulse, &self.gists);
         let end = lines.len().saturating_sub(self.scroll.min(lines.len()));
         let last_seq = lines.get(end.checked_sub(1)?).map(|(s, _)| *s)?;
         let upto: Vec<&FeedItem> = items.into_iter().filter(|i| i.seq <= last_seq).collect();
@@ -362,20 +364,10 @@ fn fit_for(width: u16) -> Fit {
 }
 
 /// One act, as spans, within `room` columns.
-fn act_spans(
-    a: &Act,
-    t: &Theme,
-    fit_: Fit,
-    room: usize,
-    hot: u8,
-    said: &std::collections::BTreeMap<&str, &str>,
-) -> Vec<Span<'static>> {
+fn act_spans(a: &Act, t: &Theme, fit_: Fit, room: usize, hot: u8, name: &dyn Fn(&str) -> String) -> Vec<Span<'static>> {
     let narrow = fit_ == Fit::Narrow;
     let verb = |v: &str| if narrow { String::new() } else { format!("{v} ") };
     let off = t.glyph(Glyph::Off);
-    // A reflex by what it said when it was delivered in this feed (its command, or its first
-    // sentence), else its id (docs/design/everyday-ux.md, rule 4; `enter` shows the id).
-    let name = |r: &str| said.get(r).filter(|d| !d.is_empty()).map_or_else(|| r.to_string(), |d| d.to_string());
     let mut spans = match a {
         Act::Directed { route, strength, detail, instinct } => {
             let glyph = if detail == "card" || detail.starts_with("card · ") {
@@ -496,17 +488,28 @@ fn pretool_words(rewrite: bool, kind: &str, interpreter: &str) -> String {
 }
 
 /// Each item as lines (one per act), tagged with the item's `seq`.
-pub fn feed_lines(items: &[&FeedItem], ctx: &Ctx, width: u16, pulse: &Pulse) -> Vec<(u64, Line<'static>)> {
+pub fn feed_lines(
+    items: &[&FeedItem],
+    ctx: &Ctx,
+    width: u16,
+    pulse: &Pulse,
+    gists: &std::collections::BTreeMap<String, String>,
+) -> Vec<(u64, Line<'static>)> {
     let t = &ctx.theme;
     let f = fit_for(width);
-    // What each reflex said when it was delivered in this feed, so a later line about it (followed,
-    // finish line met) names it the same way.
-    let mut said: std::collections::BTreeMap<&str, &str> = std::collections::BTreeMap::new();
+    // What each reflex said when it was delivered to each session in this feed, so a later line
+    // about it in that session (followed, finish line met) names it the same way: the same reflex
+    // says different things to different sessions (`bin/fetch-incident INC-24`, `… INC-17`).
+    // A withheld one (the control arm) is named by the text it would have said.
+    let mut said: std::collections::BTreeMap<(&str, &str), String> = std::collections::BTreeMap::new();
     for i in items {
         for a in &i.acts {
             if let Act::Directed { route, detail, .. } = a {
-                said.insert(route.as_str(), detail.as_str());
+                said.insert((i.session.as_str(), route.as_str()), detail.clone());
             }
+        }
+        for (route, text) in &i.texts {
+            said.entry((i.session.as_str(), route.as_str())).or_insert_with(|| feed::detail_of(text));
         }
     }
     let mut out = Vec::new();
@@ -550,7 +553,16 @@ pub fn feed_lines(items: &[&FeedItem], ctx: &Ctx, width: u16, pulse: &Pulse) -> 
         for (k, a) in i.acts.iter().enumerate() {
             let mut spans = if k == 0 { prefix.clone() } else { vec![Span::raw(" ".repeat(indent))] };
             let act_hot = if matches!(a, Act::Directed { .. }) { hot } else { 0 };
-            spans.extend(act_spans(a, t, f, room, act_hot, &said));
+            // A reflex by what it said when it was delivered to this session (its command, or its
+            // first sentence), else by what it tells any agent (its gist, once the reflexes are
+            // loaded), else by its id (docs/design/everyday-ux.md, rule 4; `enter` shows the id).
+            let name = |r: &str| {
+                said.get(&(i.session.as_str(), r))
+                    .filter(|d| !d.is_empty())
+                    .or_else(|| gists.get(r))
+                    .map_or_else(|| r.to_string(), |d| d.to_string())
+            };
+            spans.extend(act_spans(a, t, f, room, act_hot, &name));
             out.push((i.seq, Line::from(spans)));
         }
     }
@@ -558,7 +570,7 @@ pub fn feed_lines(items: &[&FeedItem], ctx: &Ctx, width: u16, pulse: &Pulse) -> 
 }
 
 /// One conditioning line.
-pub fn tick_line(k: &Tick, ctx: &Ctx, width: u16) -> Line<'static> {
+pub fn tick_line(k: &Tick, ctx: &Ctx, width: u16, gists: &std::collections::BTreeMap<String, String>) -> Line<'static> {
     let t = &ctx.theme;
     let wide = width >= 90;
     match (k.tone, &k.change, &k.run) {
@@ -577,7 +589,10 @@ pub fn tick_line(k: &Tick, ctx: &Ctx, width: u16) -> Line<'static> {
             let mut spans = vec![
                 Span::raw("   "),
                 Span::styled(format!("{glyph} "), t.accent()),
-                Span::styled(t.pad(&t.fit(c.name(), id_w - 1), id_w), t.bold()),
+                Span::styled(
+                    t.pad(&t.fit(gists.get(&c.route).map_or(c.name(), String::as_str), id_w - 1), id_w),
+                    t.bold(),
+                ),
             ];
             let word_style = |w: &str| match w {
                 "fire" | "firm" => t.green().patch(t.bold()),
@@ -894,10 +909,9 @@ pub fn inspect_lines(i: &FeedItem, ctx: &Ctx, width: u16) -> Vec<Line<'static>> 
     }
     v.push(Line::raw(""));
     // The inspector names reflexes by id: it is where the id is for (`adage review <track> <id>`).
-    let by_id = std::collections::BTreeMap::new();
     for a in &i.acts {
         let mut spans = vec![Span::raw("  ")];
-        spans.extend(act_spans(a, t, Fit::Wide, width as usize, 0, &by_id));
+        spans.extend(act_spans(a, t, Fit::Wide, width as usize, 0, &|r: &str| r.to_string()));
         v.push(Line::from(spans));
         if let Act::Directed { route, .. } = a {
             v.push(Line::from(Span::styled(format!("      reflex {route}"), t.dim())));
@@ -1078,7 +1092,7 @@ fn draw_feed(f: &mut Frame, area: Rect, live: &Live, key: Option<&str>, ctx: &Ct
         f.render_widget(Paragraph::new(wrap_lines(lines, area.width)), area);
         return;
     }
-    let lines = feed_lines(&items, ctx, area.width, &live.pulse);
+    let lines = feed_lines(&items, ctx, area.width, &live.pulse, &live.gists);
     let h = area.height as usize;
     let scroll = live.scroll.min(lines.len().saturating_sub(h));
     let end = lines.len() - scroll;
@@ -1136,7 +1150,7 @@ fn draw_ticker(f: &mut Frame, area: Rect, live: &Live, key: Option<&str>, ctx: &
     }
     let h = (area.height as usize).saturating_sub(tail.len());
     let mut lines: Vec<Line> =
-        ticks[ticks.len().saturating_sub(h)..].iter().map(|k| tick_line(k, ctx, area.width)).collect();
+        ticks[ticks.len().saturating_sub(h)..].iter().map(|k| tick_line(k, ctx, area.width, &live.gists)).collect();
     lines.extend(tail);
     f.render_widget(Paragraph::new(lines), area);
 }

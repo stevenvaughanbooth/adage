@@ -43,8 +43,9 @@ pub struct Change {
     pub to: Option<Strength>,
     pub summary: String,
     /// What the reflex tells the agent (`Route::gist`), so a change reads as what it is about,
-    /// not only its id (docs/design/everyday-ux.md, rule 4). Empty in lines written before it.
-    #[serde(default, skip_serializing_if = "String::is_empty")]
+    /// not only its id (docs/design/everyday-ux.md, rule 4). For display only: never written to
+    /// learn.log, which holds no command, path or prompt.
+    #[serde(skip)]
     pub gist: String,
 }
 

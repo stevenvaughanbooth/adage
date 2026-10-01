@@ -21,7 +21,7 @@ expression: text
                                        ✓ followed bin/fetch-incident INC-2045
  12:04:03  000b0b  claude     tools    · 1 call, nothing to say
  12:04:04  000b0b  claude     failure  → ◠ INHIBIT    npm run check
- 12:04:05  000b0b  claude     tools    ✗ ignored bin/fetch-incident INC-2045
+ 12:04:05  000b0b  claude     tools    ✗ ignored lookup-incident
  12:04:06  00c4a1  claude     tools    ○ found bin/fetch-incident INC-2045 unaided
  12:04:07  000b0b  claude     stop     ■ finish line: asked the agent to continue
  12:04:08  00a11c  claude     tools    ✓ finish line met: codegen-after-registry

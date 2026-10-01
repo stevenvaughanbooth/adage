@@ -457,6 +457,11 @@ pub fn plan(
         }
     }
     let family = families.iter().max_by(|a, b| a.1.cmp(b.1).then_with(|| b.0.cmp(a.0))).map(|(f, _)| f.clone())?;
+    // The reflex binds the edited file's tests as file paths: only for runners that take them
+    // (`cargo test crate tests/x.rs` is not a command that can run).
+    if !outcome::takes_test_files(&family) {
+        return None;
+    }
     let mut spellings: BTreeMap<String, (u32, action::Env)> = BTreeMap::new();
     let mut ran_tests = 0u32;
     for s in ss {

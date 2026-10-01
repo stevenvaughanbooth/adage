@@ -58,6 +58,8 @@ pub struct RouteRow {
     /// Ships with Adage (an instinct), rather than conditioned from traces.
     pub instinct: bool,
     pub id: String,
+    /// What it tells the agent, in one sentence (`Route::gist`): how people name it.
+    pub gist: String,
     pub strength: Strength,
     pub ceiling: String,
     pub effect: String,
@@ -184,6 +186,12 @@ impl Routes {
         self.rows.iter().filter(|r| r.quiet()).count()
     }
 
+    /// Each reflex's gist by id, for lines that name a reflex only by its id (the conditioning
+    /// ticker reads learn.log, which holds no command).
+    pub fn gists(&self) -> std::collections::BTreeMap<String, String> {
+        self.rows.iter().filter(|r| !r.gist.is_empty()).map(|r| (r.id.clone(), r.gist.clone())).collect()
+    }
+
     /// Of those waiting: the ones held back until a person decides (`review::needs_person`);
     /// the rest are in use and only worth a look.
     pub fn needs(&self) -> usize {
@@ -229,6 +237,7 @@ pub fn from_graph(
                 imported: r["imported"].as_bool().unwrap_or(false),
                 in_index: r["in_index"].as_bool().unwrap_or(false),
                 instinct: instincts.contains(&(reference.clone(), id.clone())),
+                gist: r["gist"].as_str().unwrap_or("").to_string(),
                 strength: either(r, ["strength", "aspect"])
                     .as_str()
                     .and_then(parse_strength)
