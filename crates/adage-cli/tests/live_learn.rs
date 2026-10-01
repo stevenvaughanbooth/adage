@@ -464,6 +464,54 @@ fn a_real_stop_hook_learns_in_the_background() {
 
 /// Doctor's live-learning checks flag a failed learn, a stuck learner and a request left waiting.
 #[test]
+fn a_learner_is_stuck_relative_to_how_long_it_usually_takes() {
+    let w = World::new();
+    w.config("[learn]\nmin_interval_secs = 0\n");
+    w.claude_stop("u1");
+    let req = w.requests().remove(0);
+    let repo = req["repo"].as_str().unwrap().to_string();
+    let slug = repo.replace(|c: char| !c.is_ascii_alphanumeric() && c != '-' && c != '_', "-");
+    let file = |s: &str| w.q().join(format!("{slug}{s}"));
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
+    // Automatic runs take about 8 s here (a manual run's 0.3 s is not the learner's).
+    let run = |ts: u64, ms: u64, trigger: &str| json!({ "ts": ts, "kind": "condition", "trigger": trigger, "repo": repo, "duration_ms": ms, "changes": [] });
+    let log: Vec<String> =
+        [run(now - 900_000, 7_500, "auto"), run(now - 800_000, 300, "manual"), run(now - 700_000, 8_000, "auto")]
+            .iter()
+            .map(Value::to_string)
+            .collect();
+    std::fs::write(w.home().join("learn.log"), log.join("\n") + "\n").unwrap();
+    let _lock = adage_store::lock::try_exclusive(&file(".lock")).unwrap().unwrap();
+    let running_since = |ms_ago: u64| {
+        let s = json!({ "pid": 4343, "started_at": now - ms_ago, "outcome": "running", "processed": 0 });
+        std::fs::write(file(".state.json"), s.to_string()).unwrap();
+    };
+    let lock_check = || -> Value {
+        let o = w.cmd(&["doctor", "--json"]).output().unwrap();
+        let d: Value = serde_json::from_slice(&o.stdout).unwrap();
+        d["checks"].as_array().unwrap().iter().find(|c| c["check"] == "auto-learn lock").cloned().unwrap()
+    };
+    let card = || {
+        let o = w.cmd(&[]).current_dir(w.repo()).env("ADAGE_COLOR", "never").output().unwrap();
+        String::from_utf8_lossy(&o.stdout).to_string()
+    };
+    // Thirty seconds into a run that usually takes 8 s: running, not stuck.
+    running_since(30_000);
+    assert_eq!(lock_check()["status"], "pass");
+    let c = card();
+    assert!(c.contains("learning    running for 3") && c.contains(" s (usually 8 s)"), "{c}");
+    assert!(!c.contains("longer than it should"), "{c}");
+    // Five minutes in: stuck (the old fixed rule waited fifteen), and both surfaces say so.
+    running_since(300_000);
+    let stuck = lock_check();
+    assert_eq!(stuck["status"], "warn", "{stuck}");
+    let detail = stuck["detail"].as_str().unwrap();
+    assert!(detail.contains("running for 5 min (usually 8 s)") && detail.contains("4343"), "{detail}");
+    let c = card();
+    assert!(c.contains("running for 5 min (usually 8 s) longer than it should"), "{c}");
+}
+
+#[test]
 fn doctor_reports_failed_stuck_and_waiting_learners() {
     let w = World::new();
     w.config("[learn]\nmin_interval_secs = 0\n");

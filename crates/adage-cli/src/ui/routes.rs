@@ -183,6 +183,15 @@ impl Routes {
     pub fn quiet(&self) -> usize {
         self.rows.iter().filter(|r| r.quiet()).count()
     }
+
+    /// Of those waiting: the ones held back until a person decides (`review::needs_person`);
+    /// the rest are in use and only worth a look.
+    pub fn needs(&self) -> usize {
+        self.rows
+            .iter()
+            .filter(|r| r.nascent() || r.reasons.iter().any(|(k, _)| crate::review::needs_person(k)))
+            .count()
+    }
 }
 
 fn step_label(s: &Value) -> String {

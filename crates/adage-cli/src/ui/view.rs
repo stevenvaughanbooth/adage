@@ -63,7 +63,12 @@ impl Ctx {
     }
 
     pub fn at(paths: Paths, root: Option<PathBuf>) -> Ctx {
-        let label = root.as_deref().map(repo::dir_name).unwrap_or_else(|| "(no repository)".into());
+        // The repository as the card names it (its `origin`, else its main checkout's name), not
+        // the directory: a worktree is the same repository.
+        let label = root
+            .as_deref()
+            .map(|r| repo::origin_key(r).unwrap_or_else(|| repo::checkout_name(r)))
+            .unwrap_or_else(|| "(no repository)".into());
         Ctx { paths, root, label, theme: Theme::from_env(), tz: local_offset(), demo: false }
     }
 }
@@ -164,6 +169,8 @@ pub struct Live {
     pub waiting: Option<usize>,
     /// Of those: quiet ones (uplift below the bar), which are not install steps.
     pub quiet: usize,
+    /// Of those: the ones that need a person (the rest are in use, worth a look).
+    pub needs: usize,
     pub pulse: Pulse,
     next_seq: u64,
     primed: bool,
@@ -355,10 +362,20 @@ fn fit_for(width: u16) -> Fit {
 }
 
 /// One act, as spans, within `room` columns.
-fn act_spans(a: &Act, t: &Theme, fit_: Fit, room: usize, hot: u8) -> Vec<Span<'static>> {
+fn act_spans(
+    a: &Act,
+    t: &Theme,
+    fit_: Fit,
+    room: usize,
+    hot: u8,
+    said: &std::collections::BTreeMap<&str, &str>,
+) -> Vec<Span<'static>> {
     let narrow = fit_ == Fit::Narrow;
     let verb = |v: &str| if narrow { String::new() } else { format!("{v} ") };
     let off = t.glyph(Glyph::Off);
+    // A reflex by what it said when it was delivered in this feed (its command, or its first
+    // sentence), else its id (docs/design/everyday-ux.md, rule 4; `enter` shows the id).
+    let name = |r: &str| said.get(r).filter(|d| !d.is_empty()).map_or_else(|| r.to_string(), |d| d.to_string());
     let mut spans = match a {
         Act::Directed { route, strength, detail, instinct } => {
             let glyph = if detail == "card" || detail.starts_with("card · ") {
@@ -368,20 +385,9 @@ fn act_spans(a: &Act, t: &Theme, fit_: Fit, room: usize, hot: u8) -> Vec<Span<'s
             } else {
                 Glyph::Reflex
             };
-            let id_w = match fit_ {
-                Fit::Wide => 25,
-                Fit::Mid => 22,
-                Fit::Narrow => route.chars().count() + 1,
-            };
-            let id_style = match hot {
-                0 => Style::default(),
-                1 => t.bold(),
-                _ => t.accent().patch(t.bold()),
-            };
             let mut v = vec![
                 Span::styled(format!("{} ", t.glyph(Glyph::Arrow)), t.accent()),
                 Span::styled(format!("{} ", t.glyph(glyph)), t.accent()),
-                Span::styled(t.pad(route, id_w), id_style),
             ];
             let cell_w = if narrow { Theme::strength_word(*strength).len() + 3 } else { 11 };
             let mut cell = strength_cell(*strength, t, cell_w, hot > 0);
@@ -391,40 +397,46 @@ fn act_spans(a: &Act, t: &Theme, fit_: Fit, room: usize, hot: u8) -> Vec<Span<'s
                 }
             }
             v.extend(cell);
-            if !narrow && !detail.is_empty() {
-                let used: usize = v.iter().map(|s| s.width()).sum();
-                v.push(Span::styled(t.fit(&t.text(detail), room.saturating_sub(used)), t.ink2()));
-            }
+            // What it said, in the pulse's emphasis while it is new; the id only when it said
+            // nothing that can be shown.
+            let what = if detail.is_empty() { route.as_str() } else { detail.as_str() };
+            let style = match hot {
+                0 => t.ink2(),
+                1 => t.bold(),
+                _ => t.accent().patch(t.bold()),
+            };
+            let used: usize = v.iter().map(|s| s.width()).sum();
+            v.push(Span::styled(t.fit(&t.text(what), room.saturating_sub(used)), style));
             v
         }
         Act::Withheld { route, strength } => {
             vec![Span::styled(
-                format!("{off} would {} {route} (withheld)", Theme::strength_word(*strength)),
+                format!("{off} would {} {} (withheld)", Theme::strength_word(*strength), name(route)),
                 t.control(),
             )]
         }
         Act::Followed(r) => vec![
             Span::styled(format!("{} ", t.glyph(Glyph::Ok)), t.green()),
             Span::styled(verb("followed"), t.ink2()),
-            Span::raw(r.clone()),
+            Span::raw(name(r)),
         ],
         Act::Ignored(r) => vec![
             Span::styled(format!("{} ", t.glyph(Glyph::Fail)), t.red()),
             Span::styled(verb("ignored"), t.ink2()),
-            Span::raw(r.clone()),
+            Span::raw(name(r)),
         ],
         Act::Misfired(r) => vec![
             Span::styled(format!("{} ", t.glyph(Glyph::Fail)), t.red()),
             Span::styled(verb("misfired"), t.ink2()),
-            Span::raw(r.clone()),
+            Span::raw(name(r)),
         ],
         Act::Met(r) => vec![
             Span::styled(format!("{} ", t.glyph(Glyph::Ok)), t.green()),
-            Span::styled("finish line met ".to_string(), t.ink2()),
-            Span::raw(r.clone()),
+            Span::styled("finish line met: ".to_string(), t.ink2()),
+            Span::raw(name(r)),
         ],
-        Act::Unaided(r) => vec![Span::styled(format!("{off} found {r} unaided"), t.control())],
-        Act::NotReached(r) => vec![Span::styled(format!("{off} missed {r}"), t.control())],
+        Act::Unaided(r) => vec![Span::styled(format!("{off} found {} unaided", name(r)), t.control())],
+        Act::NotReached(r) => vec![Span::styled(format!("{off} missed {}", name(r)), t.control())],
         Act::StopRequest => vec![
             Span::styled(format!("{} ", t.ch("■", "#")), t.yellow().patch(t.bold())),
             Span::raw("finish line: asked the agent to continue".to_string()),
@@ -448,7 +460,7 @@ fn act_spans(a: &Act, t: &Theme, fit_: Fit, room: usize, hot: u8) -> Vec<Span<'s
         Act::Other(kind, r) => vec![
             Span::styled(format!("{} ", t.glyph(Glyph::Sep)), t.dim()),
             Span::styled(format!("{kind} "), t.ink2()),
-            Span::raw(r.clone()),
+            Span::raw(name(r)),
         ],
     };
     // Whatever is left over is cut to the room there is (padding goes first, without an
@@ -487,6 +499,16 @@ fn pretool_words(rewrite: bool, kind: &str, interpreter: &str) -> String {
 pub fn feed_lines(items: &[&FeedItem], ctx: &Ctx, width: u16, pulse: &Pulse) -> Vec<(u64, Line<'static>)> {
     let t = &ctx.theme;
     let f = fit_for(width);
+    // What each reflex said when it was delivered in this feed, so a later line about it (followed,
+    // finish line met) names it the same way.
+    let mut said: std::collections::BTreeMap<&str, &str> = std::collections::BTreeMap::new();
+    for i in items {
+        for a in &i.acts {
+            if let Act::Directed { route, detail, .. } = a {
+                said.insert(route.as_str(), detail.as_str());
+            }
+        }
+    }
     let mut out = Vec::new();
     for i in items {
         let dimmed = i.control;
@@ -513,10 +535,12 @@ pub fn feed_lines(items: &[&FeedItem], ctx: &Ctx, width: u16, pulse: &Pulse) -> 
         let indent: usize = prefix.iter().map(|s| s.width()).sum();
         let room = (width as usize).saturating_sub(indent);
         if i.acts.is_empty() {
+            // Seen in a repository with no reflexes yet: watching, learning after the session.
+            let quiet = if i.unrouted { "watching, no reflexes here yet" } else { "nothing to say" };
             let what = match i.observed {
-                0 => format!("{} nothing to say", t.glyph(Glyph::Sep)),
-                1 => format!("{} 1 call, nothing to say", t.glyph(Glyph::Sep)),
-                n => format!("{} {n} calls, nothing to say", t.glyph(Glyph::Sep)),
+                0 => format!("{} {quiet}", t.glyph(Glyph::Sep)),
+                1 => format!("{} 1 call, {quiet}", t.glyph(Glyph::Sep)),
+                n => format!("{} {n} calls, {quiet}", t.glyph(Glyph::Sep)),
             };
             let mut spans = prefix;
             spans.push(Span::styled(t.fit(&what, room), t.dim()));
@@ -526,7 +550,7 @@ pub fn feed_lines(items: &[&FeedItem], ctx: &Ctx, width: u16, pulse: &Pulse) -> 
         for (k, a) in i.acts.iter().enumerate() {
             let mut spans = if k == 0 { prefix.clone() } else { vec![Span::raw(" ".repeat(indent))] };
             let act_hot = if matches!(a, Act::Directed { .. }) { hot } else { 0 };
-            spans.extend(act_spans(a, t, f, room, act_hot));
+            spans.extend(act_spans(a, t, f, room, act_hot, &said));
             out.push((i.seq, Line::from(spans)));
         }
     }
@@ -547,12 +571,13 @@ pub fn tick_line(k: &Tick, ctx: &Ctx, width: u16) -> Line<'static> {
             ),
         ]),
         (Tone::Change, Some(c), _) => {
-            let id_w = if wide { 26 } else { 20 };
+            // The reflex by what it tells the agent (its id in lines written before gists).
+            let id_w = if wide { 44 } else { 26 };
             let glyph = if c.what == "written" { t.glyph(Glyph::Done) } else { t.glyph(Glyph::Reflex) };
             let mut spans = vec![
                 Span::raw("   "),
                 Span::styled(format!("{glyph} "), t.accent()),
-                Span::styled(t.pad(&c.route, id_w), t.bold()),
+                Span::styled(t.pad(&t.fit(c.name(), id_w - 1), id_w), t.bold()),
             ];
             let word_style = |w: &str| match w {
                 "fire" | "firm" => t.green().patch(t.bold()),
@@ -868,10 +893,15 @@ pub fn inspect_lines(i: &FeedItem, ctx: &Ctx, width: u16) -> Vec<Line<'static>> 
         v.push(Line::from(Span::styled("control arm: nothing was delivered to the agent in this trace", t.dim())));
     }
     v.push(Line::raw(""));
+    // The inspector names reflexes by id: it is where the id is for (`adage review <track> <id>`).
+    let by_id = std::collections::BTreeMap::new();
     for a in &i.acts {
         let mut spans = vec![Span::raw("  ")];
-        spans.extend(act_spans(a, t, Fit::Wide, width as usize, 0));
+        spans.extend(act_spans(a, t, Fit::Wide, width as usize, 0, &by_id));
         v.push(Line::from(spans));
+        if let Act::Directed { route, .. } = a {
+            v.push(Line::from(Span::styled(format!("      reflex {route}"), t.dim())));
+        }
     }
     if i.acts.is_empty() {
         v.push(Line::from(Span::styled("  nothing to say here", t.dim())));
@@ -1075,15 +1105,9 @@ fn draw_ticker(f: &mut Frame, area: Rect, live: &Live, key: Option<&str>, ctx: &
                 Span::styled("adage review", t.command()),
             ])
         };
-        let quiet = if live.quiet > 0 { format!(" ({} quiet)", live.quiet) } else { String::new() };
-        let full = line(
-            format!(
-                "{n} reflex{} wait{} for review{quiet}",
-                if n == 1 { "" } else { "es" },
-                if n == 1 { "s" } else { "" }
-            ),
-            "   ",
-        );
+        let needs = live.needs.min(n);
+        let words = crate::review::waiting_words(needs, n - needs).unwrap_or_default();
+        let full = line(words, "   ");
         // Narrow panes keep the command whole.
         tail.push(if full.width() <= area.width as usize { full } else { line(format!("{n} to review"), " ") });
     }

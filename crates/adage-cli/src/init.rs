@@ -284,13 +284,8 @@ pub fn init(args: &[String], paths: &Paths) -> Result<()> {
         out.next("adage doctor", "checks the whole setup at any time")?;
         out.also("adage watch", "live pane for a split terminal")?;
     }
-    let waiting = if yes { crate::waiting(paths) } else { 0 };
-    if waiting > 0 {
-        let why = if waiting == 1 {
-            "1 reflex waits for a decision".to_string()
-        } else {
-            format!("{waiting} reflexes wait for a decision")
-        };
+    let (needs, look) = if yes { crate::waiting(paths) } else { (0, 0) };
+    if let Some(why) = crate::review::waiting_words(needs, look) {
         out.also("adage review", &why)?;
     }
     out.flush()?;

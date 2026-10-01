@@ -138,6 +138,7 @@ pub fn run(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>) -> Result<()> {
                 Loaded::Routes(Ok(r)) => {
                     live.waiting = Some(r.waiting());
                     live.quiet = r.quiet();
+                    live.needs = r.needs();
                 }
                 Loaded::Routes(Err(_)) => {}
             }
@@ -181,6 +182,7 @@ pub fn snapshot(ctx: &Ctx, size: Option<(u16, u16)>) -> String {
     if let Ok(r) = super::routes::load(&ctx.paths, ctx.root.as_deref()) {
         live.waiting = Some(r.waiting());
         live.quiet = r.quiet();
+        live.needs = r.needs();
     }
     let mut term = match Terminal::new(TestBackend::new(w, h)) {
         Ok(t) => t,

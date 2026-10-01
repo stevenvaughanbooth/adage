@@ -419,6 +419,54 @@ pub struct Route {
 }
 
 impl Route {
+    /// What this reflex tells the agent, in one sentence a person reads at a glance: when it
+    /// applies and what it says (`after editing crates/**/*.rs, run cargo fmt --all`). People see
+    /// this wherever a reflex is listed; the id is for commands and `--json`
+    /// (docs/design/everyday-ux.md, rule 4). Advice is the advisory template's own sentence.
+    pub fn gist(&self) -> String {
+        if let Step::Advise { template, slots } = &self.step {
+            // The instruction first, so a clipped line still says it; else the agent's sentence.
+            let slot = |k: &str| slots.get(k).map(String::as_str).unwrap_or("?");
+            let short = match template.as_str() {
+                "generated-file" => Some(match slots.get("command") {
+                    Some(c) => format!("{}: generated; run {c}, don't edit it by hand", slot("path")),
+                    None => format!("{}: generated; regenerate it, don't edit it by hand", slot("path")),
+                }),
+                "lockfile" => {
+                    Some(format!("{}: let {} update it; don't edit it by hand", slot("path"), slot("manager")))
+                }
+                "package-manager" => Some(format!("use {} here, not npm", slot("manager"))),
+                "project-python" => Some(format!("run Python as {}", slot("interpreter"))),
+                "test-command" => Some(format!("run the tests with {}", slot("command"))),
+                _ => None,
+            };
+            if let Some(s) = short {
+                return s;
+            }
+            if let Some(t) = crate::advice::text(template, slots) {
+                return t.strip_prefix("In this repository, ").unwrap_or(&t).trim_end_matches('.').to_string();
+            }
+        }
+        let when = match &self.trigger {
+            Trigger::Prompt { span } => format!("on a prompt that names a {}", span.as_str()),
+            Trigger::AfterCommand { command } => format!("after {command}"),
+            Trigger::AfterFailure { command, .. } => format!("when {command} fails"),
+            Trigger::AfterEdit { paths } => format!("after editing {paths}"),
+            Trigger::SessionStart => "at the start of a session".into(),
+            Trigger::Intent { .. } => "on requests like these".into(),
+            Trigger::Context { .. } => "after a sequence of steps seen before".into(),
+        };
+        let what = match &self.step {
+            Step::Run { command } => format!("run {command}"),
+            Step::ReadBatch { .. } => "read the files it names".into(),
+            Step::Avoid { avoid, instead, .. } => format!("run {instead}, not {avoid}"),
+            Step::Advise { template, .. } => format!("advise ({template})"),
+            Step::Sequence { commands } => format!("run {}", commands.join(", then ")),
+            Step::Card { .. } => "show the checklist these tasks needed before".into(),
+        };
+        format!("{when}, {what}")
+    }
+
     /// Where this route came from: the recorded origin, else what its provenance says
     /// (`instinct:<pack>@<version>`, `authored`, `imported…`), else learned.
     pub fn origin(&self) -> Origin {
@@ -570,6 +618,69 @@ pub fn wilson_lower(successes: u32, n: u32) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A reflex as people read it: when it applies and what it says, instruction first for advice.
+    #[test]
+    fn a_reflex_reads_as_what_it_tells_the_agent() {
+        let r = |trigger: Trigger, step: Step| Route {
+            id: "x".into(),
+            summary: String::new(),
+            trigger,
+            step,
+            slots: vec![],
+            effect: Effect::Verify,
+            strength: Strength::Prime,
+            state: RouteState::Firm,
+            exit: vec![],
+            evidence: Evidence::default(),
+            authored: false,
+        };
+        let edit = |p: &str| Trigger::AfterEdit { paths: p.into() };
+        let run = |c: &str| Step::Run { command: c.into() };
+        let advise = |t: &str, kv: &[(&str, &str)]| Step::Advise {
+            template: t.into(),
+            slots: kv.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect(),
+        };
+        let cases = [
+            (r(edit("crates/**/*.rs"), run("cargo fmt --all")), "after editing crates/**/*.rs, run cargo fmt --all"),
+            (
+                r(
+                    Trigger::AfterFailure { command: "python3 -m pytest".into(), signature: "x".into() },
+                    Step::Avoid {
+                        avoid: "python3 -m pytest".into(),
+                        instead: "make test".into(),
+                        signature: "x".into(),
+                    },
+                ),
+                "when python3 -m pytest fails, run make test, not python3 -m pytest",
+            ),
+            (
+                r(
+                    Trigger::Intent { family: "f".into(), model: "m".into(), centroid: vec![], threshold: 0.8 },
+                    run("git status"),
+                ),
+                "on requests like these, run git status",
+            ),
+            (
+                r(edit("x"), Step::Sequence { commands: vec!["make gen".into(), "make check".into()] }),
+                "after editing x, run make gen, then make check",
+            ),
+            (
+                r(edit("Cargo.lock"), advise("lockfile", &[("path", "Cargo.lock"), ("manager", "cargo")])),
+                "Cargo.lock: let cargo update it; don't edit it by hand",
+            ),
+            (
+                r(
+                    edit("src/tokens.rs"),
+                    advise("generated-file", &[("path", "src/tokens.rs"), ("command", "cargo xtask tokens")]),
+                ),
+                "src/tokens.rs: generated; run cargo xtask tokens, don't edit it by hand",
+            ),
+        ];
+        for (route, want) in cases {
+            assert_eq!(route.gist(), want);
+        }
+    }
 
     #[test]
     fn wilson_matches_known_values() {

@@ -80,6 +80,10 @@ pub struct Counts {
     /// rewrites), and `pip install`s into the system Python refused.
     #[serde(default)]
     pub rewritten: usize,
+    /// When the earliest session counted was first recorded (ms since the epoch; 0 for none). A
+    /// count that began inside the window says so (docs/design/everyday-ux.md, rule 3).
+    #[serde(default)]
+    pub since: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -307,6 +311,7 @@ struct SpoolSession {
     arm_control: Option<bool>,
     propensity: Option<f64>,
     ended: bool,
+    first_ts: u64,
     last_ts: u64,
     directives: usize,
     followed: usize,
@@ -326,7 +331,11 @@ fn read_spool(path: &Path, repo: &str) -> Option<SpoolSession> {
             continue;
         }
         mine = true;
-        s.last_ts = s.last_ts.max(r["ts"].as_u64().unwrap_or(0));
+        let ts = r["ts"].as_u64().unwrap_or(0);
+        s.last_ts = s.last_ts.max(ts);
+        if ts > 0 && (s.first_ts == 0 || ts < s.first_ts) {
+            s.first_ts = ts;
+        }
         if s.arm_control.is_none() {
             s.arm_control = r["arm"].as_str().map(|a| a == "control");
         }
@@ -385,6 +394,9 @@ pub fn gather(paths: &Paths, repo: &str, ledger: &BTreeMap<String, SessionSummar
         let Some(s) = read_spool(&p, repo) else { continue };
         if s.last_ts >= since {
             counts.sessions += 1;
+            if s.first_ts > 0 && (counts.since == 0 || s.first_ts < counts.since) {
+                counts.since = s.first_ts;
+            }
             counts.directives += s.directives;
             counts.followed += s.followed;
             counts.dead_ends_headed_off += s.headed_off;
@@ -781,6 +793,7 @@ mod tests {
             dead_ends_headed_off: 7,
             finish_lines_met: 3,
             rewritten: 2,
+            since: 0,
         }
     }
 

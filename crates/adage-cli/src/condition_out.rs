@@ -9,13 +9,13 @@
 //!
 //! acme-billing · 54 traces · 1 intent family
 //!   work-items@0.3.0 · updated
-//!     ● fire     ◠ lookup-work-item        23/33  lb 0.53
-//!   changed     read-linked-files  prime → fire
-//!   instincts   2 bound · 1 advice
+//!     ● fire     ◠ on a prompt that names a ticket, run bin/wi-lookup {item}   23/33  lb 0.53
+//!   changed     on a prompt that names a ticket, read the files it names      prime → fire
+//!   instincts   3 in use (2 steps to run, 1 advice)
 //!
 //! index       gen 8dd5ec01
 //!
-//! next  adage review · 1 reflex waits for a decision
+//! next  adage review · 1 needs you · 2 to look over
 //! ```
 
 use crate::words;
@@ -34,8 +34,8 @@ pub struct Run<'a> {
     pub after: &'a BTreeMap<String, Snapshot>,
     pub changes: &'a BTreeMap<&'a String, Vec<Change>>,
     pub elapsed_ms: u64,
-    /// Reflexes that wait for a decision in `adage review` after this run.
-    pub waiting: usize,
+    /// What `adage review` has after this run: `(needs you, to look over)`.
+    pub waiting: (usize, usize),
     /// End with what to run next (`adage init`, which runs it as a step, prints its own).
     pub next: bool,
 }
@@ -77,13 +77,6 @@ pub fn render<W: Write>(o: &mut Out<W>, run: &Run) -> io::Result<()> {
         }
         o.line(&head)?;
         let snap = run.after.get(repo);
-        let id_w = snap
-            .into_iter()
-            .flat_map(|s| s.values())
-            .flat_map(|(t, _)| t.routes.iter().map(|r| r.id.chars().count()))
-            .max()
-            .unwrap_or(16)
-            .clamp(16, 34);
         for t in &rr.tracks {
             let track = snap.and_then(|s| s.get(&t.name)).map(|(track, _)| track);
             let mut head = Line::new()
@@ -111,8 +104,8 @@ pub fn render<W: Write>(o: &mut Out<W>, run: &Run) -> io::Result<()> {
                     .pad_to(15)
                     .glyph(Role::Accent, glyph)
                     .text(" ")
-                    .text(r.id.clone())
-                    .pad_to(18 + id_w)
+                    .text(clip(&r.gist(), GIST))
+                    .pad_to(18 + GIST)
                     .extend(words::evidence(&r.evidence));
                 if r.state != RouteState::Firm {
                     l = l.sep().quiet(words::lifecycle(r.state));
@@ -126,7 +119,9 @@ pub fn render<W: Write>(o: &mut Out<W>, run: &Run) -> io::Result<()> {
             if c.change == ChangeKind::New && created.contains(&c.track.as_str()) {
                 continue;
             }
-            o.line(&Line::new().text("  ").extend(change_line(c, id_w)))?;
+            // Each reflex by what it tells the agent (`Route::gist`), its id only if unknown.
+            let name = if c.gist.is_empty() { &c.route } else { &c.gist };
+            o.line(&Line::new().text("  ").extend(change_line(c, name)))?;
         }
         if let Some(ir) = &rr.instincts {
             o.line(&Line::new().text("  ").extend(instincts_line(ir)))?;
@@ -204,12 +199,7 @@ pub fn render<W: Write>(o: &mut Out<W>, run: &Run) -> io::Result<()> {
         o.note("No reflexes formed: none of these traces could be used.")?;
         nexts.push(("adage sense".into(), "with the same sources: what those traces hold".into()));
     }
-    if run.waiting > 0 {
-        let why = if run.waiting == 1 {
-            "1 reflex waits for a decision".to_string()
-        } else {
-            format!("{} reflexes wait for a decision", run.waiting)
-        };
+    if let Some(why) = crate::review::waiting_words(run.waiting.0, run.waiting.1) {
         nexts.push(("adage review".into(), why));
     }
     if run.command == "condition" && rep.intent_model.is_none() {
@@ -297,8 +287,22 @@ fn short_name(name: &str, repo: &str) -> String {
     name.strip_prefix(&format!("{tail}/")).unwrap_or(name).to_string()
 }
 
-fn change_line(c: &Change, id_w: usize) -> Line {
-    let l = Line::new().faint("changed").pad_to(14).text(c.route.clone()).pad_to(16 + id_w);
+/// How wide a reflex's gist may be on a line before it is clipped.
+const GIST: usize = 58;
+
+/// `s` in at most `n` characters, ending in `…` when cut.
+fn clip(s: &str, n: usize) -> String {
+    if s.chars().count() <= n {
+        return s.to_string();
+    }
+    let mut out: String = s.chars().take(n.saturating_sub(1)).collect();
+    out.truncate(out.trim_end().len());
+    out.push('…');
+    out
+}
+
+fn change_line(c: &Change, gist: &str) -> Line {
+    let l = Line::new().faint("changed").pad_to(14).text(clip(gist, GIST)).pad_to(16 + GIST);
     match (c.change, c.from, c.to) {
         (ChangeKind::Strength, Some(a), Some(b)) => l
             .push(words::strength(a).role(), words::strength(a).word())
@@ -317,9 +321,16 @@ fn instincts_line(ir: &InstinctReport) -> Line {
     if let Some(why) = &ir.not_bound {
         return l.quiet("none bound").sep().quiet(words::prose(why));
     }
-    let mut l = l.text(format!("{} bound", ir.bound)).sep().text(format!("{} advice", ir.advice));
+    // In use, and of what kind: a run step the agent is told to take, or advice.
+    let kinds = match (ir.bound, ir.advice) {
+        (0, 0) => String::new(),
+        (0, _) => " (advice)".into(),
+        (_, 0) => " (steps to run)".into(),
+        (b, a) => format!(" ({b} steps to run, {a} advice)"),
+    };
+    let mut l = l.text(format!("{} in use{kinds}", ir.bound + ir.advice));
     if ir.nascent > 0 {
-        l = l.sep().push(Role::Prime, format!("{} wait for review", ir.nascent));
+        l = l.sep().push(Role::Prime, format!("{} need{} you", ir.nascent, if ir.nascent == 1 { "s" } else { "" }));
     }
     if !ir.extinguished.is_empty() {
         l = l.sep().quiet(format!("{} extinguished after failing", ir.extinguished.len()));

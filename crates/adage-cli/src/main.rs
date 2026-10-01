@@ -31,6 +31,7 @@ mod hook;
 mod init;
 mod install;
 mod jsonedit;
+mod learning;
 mod learnlog;
 mod map;
 mod marketplace_cmd;
@@ -564,9 +565,10 @@ pub(crate) fn instincts_only_then(args: &[String], paths: &Paths, next: bool) ->
     Ok(())
 }
 
-/// Reflexes that wait for a decision in `adage review` (an instinct in effect waits for none).
-pub(crate) fn waiting(paths: &Paths) -> usize {
-    review::standings(paths).map(|s| s.values().filter(|s| review::waits(&s.reasons)).count()).unwrap_or(0)
+/// What `adage review` has: `(needs you, to look over)`; an instinct in effect waits for none
+/// (`review::waiting_counts`).
+pub(crate) fn waiting(paths: &Paths) -> (usize, usize) {
+    review::standings(paths).map(|s| review::waiting_counts(s.values().map(|s| s.reasons.as_slice()))).unwrap_or((0, 0))
 }
 
 /// Append one `learn.log` line per repository this `adage condition` learned (`crate::learnlog`), or
@@ -758,14 +760,9 @@ fn status(paths: &Paths, json: bool) -> Result<()> {
         }
     }
     // Nascent reflexes, and new or changed ones nobody has decided on yet.
-    let waiting = waiting(paths);
+    let (needs, look) = waiting(paths);
     o.blank()?;
-    if waiting > 0 {
-        let why = if waiting == 1 {
-            "1 reflex waits for a decision".to_string()
-        } else {
-            format!("{waiting} reflexes wait for a decision")
-        };
+    if let Some(why) = review::waiting_words(needs, look) {
         o.next("adage review", &why)?;
     } else {
         o.next("adage report", "what Adage told agents, and what they did")?;

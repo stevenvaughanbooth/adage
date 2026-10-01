@@ -995,6 +995,7 @@ pub fn run(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>) -> Result<()> {
                     if let Ok(rs) = &r {
                         s.live.waiting = Some(rs.waiting());
                         s.live.quiet = rs.quiet();
+                        s.live.needs = rs.needs();
                     }
                     s.routes = Some(r);
                 }

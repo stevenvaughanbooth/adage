@@ -507,6 +507,22 @@ fn hooks_checks(repo_root: Option<&Path>, exe: Option<&Path>) -> Vec<Check> {
             let fix = if dup.plugin { format!("{}; or uninstall the plugin", dup.fix) } else { dup.fix };
             out.push(warn(&format!("{name} (twice)"), detail, fix));
         }
+        // Out of date: an event this version uses that no registration has. Registrations add up
+        // (the harness runs every settings file's hooks), so only what all of them lack is missing.
+        let have: std::collections::BTreeSet<&str> =
+            mine.iter().filter(|r| r.kind == "settings").flat_map(|r| r.events.iter().map(String::as_str)).collect();
+        let missing: Vec<String> =
+            detect::wanted_events(d.harness).into_iter().filter(|e| !have.contains(e.as_str())).collect();
+        if !have.is_empty() && !missing.is_empty() {
+            let user =
+                mine.iter().any(|r| r.kind == "settings" && repo_root.is_none_or(|root| !r.location.starts_with(root)));
+            let them = if missing.len() == 1 { "it" } else { "them" };
+            out.push(warn(
+                &format!("{name} (out of date)"),
+                format!("the registered hooks lack {}, which this version of Adage uses", missing.join(", ")),
+                format!("`adage install {}{} --write` adds {them}", d.harness, if user { " --scope user" } else { "" }),
+            ));
+        }
         for r in mine {
             let at = detect::tilde(&r.location);
             match &r.binary {
@@ -671,15 +687,23 @@ fn kill_switches(repo_root: Option<&Path>) -> Check {
 }
 
 fn spools(paths: &Paths) -> Check {
-    let (mut bytes, mut sessions) = (0u64, 0usize);
+    let (mut bytes, mut sessions, mut newest) = (0u64, 0usize, None);
     for e in std::fs::read_dir(paths.sessions()).into_iter().flatten().flatten() {
-        if let Ok(m) = e.metadata() {
-            bytes += m.len();
+        let Ok(m) = e.metadata() else { continue };
+        bytes += m.len();
+        if e.path().extension().is_some_and(|x| x == "spool") {
+            sessions += 1;
+            newest = newest.max(m.modified().ok());
         }
-        sessions += usize::from(e.path().extension().is_some_and(|x| x == "spool"));
     }
     let mb = bytes as f64 / (1 << 20) as f64;
-    let detail = format!("{sessions} trace spool(s), {mb:.1} MB in {}", detect::tilde(&paths.sessions()));
+    // Evidence that hooks fire (docs/design/everyday-ux.md, rule 1): a session last reached Adage
+    // then, in any repository.
+    let heard = match newest.and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()) {
+        Some(t) => format!("; the newest {}", ago(crate::learnlog::now_ms(), t.as_millis() as u64)),
+        None => "; no session has reached Adage yet".into(),
+    };
+    let detail = format!("{sessions} trace spool(s), {mb:.1} MB in {}{heard}", detect::tilde(&paths.sessions()));
     if bytes > SPOOL_WARN_BYTES {
         warn(
             "session spools",
@@ -714,8 +738,6 @@ fn fail_open(paths: &Paths) -> Check {
     }
 }
 
-/// A learner holding its repository's lock for longer than this is reported as stuck.
-const STUCK_MS: u64 = 15 * 60_000;
 /// A request still waiting this long after it could have been learned is backlog.
 const BACKLOG_SLACK_MS: u64 = 5 * 60_000;
 
@@ -775,11 +797,12 @@ fn live_learning(paths: &Paths) -> Vec<Check> {
         return out;
     }
     // The last automatic learn per repository, from learn.log.
+    let log = crate::learnlog::read(paths);
     let mut last: std::collections::BTreeMap<String, serde_json::Value> = Default::default();
-    for l in crate::learnlog::read(paths) {
+    for l in &log {
         if l["trigger"] == "auto" {
             if let Some(r) = l["repo"].as_str() {
-                last.insert(r.to_string(), l);
+                last.insert(r.to_string(), l.clone());
             }
         }
     }
@@ -817,16 +840,23 @@ fn live_learning(paths: &Paths) -> Vec<Check> {
                 _ => runs.push(format!("{repo} (not conditioned automatically yet)")),
             },
         }
-        let started = state.as_ref().map(|s| s.started_at).unwrap_or(0);
-        let waiting = spawned.after > now;
-        if held
-            && !waiting
-            && state.as_ref().is_some_and(|s| s.outcome == "running")
-            && now.saturating_sub(started) > STUCK_MS
-        {
-            let pid = state.as_ref().map(|s| s.pid).unwrap_or(0);
-            stuck.push(format!("{repo} (learner pid {pid}, started {})", ago(now, started)));
+        // Stuck relative to how long a run usually takes (`crate::learning`); a learner waiting for
+        // its interval to end has not started.
+        let learning = crate::learning::of(paths, repo, &log);
+        let is_stuck = spawned.after <= now && learning.stuck(now);
+        if is_stuck {
+            let since = learning.running_since.unwrap_or(now);
+            let usual = learning
+                .usual_ms
+                .map_or("no run has finished yet".to_string(), |u| format!("usually {}", crate::learning::duration(u)));
+            stuck.push(format!(
+                "{repo}: running for {} ({usual}), learner pid {}",
+                crate::learning::duration(now.saturating_sub(since)),
+                learning.pid.unwrap_or(0)
+            ));
         }
+        // A request behind a learner that holds the lock is that learner's: if it is stuck, the
+        // lock check says so (one problem, one line), not the queue.
         let processed = state.as_ref().map(|s| s.processed).unwrap_or(0);
         let due =
             req.requested_at.max(spawned.after).saturating_add(cfg.learn_min_interval_secs * 1000 + BACKLOG_SLACK_MS);
@@ -853,8 +883,8 @@ fn live_learning(paths: &Paths) -> Vec<Check> {
     if !stuck.is_empty() {
         out.push(warn(
             "auto-learn lock",
-            format!("a learner has held its lock for over {} minutes: {}", STUCK_MS / 60_000, shown(&stuck)),
-            "stop that process; the lock is released when it exits and the next session stop starts a new learner",
+            format!("learning is taking far longer than it usually does: {}", shown(&stuck)),
+            "stop that learner (kill <pid>); the next session that ends starts a new one. A learner usually stalls reading files only in the cloud (see cloud files)",
         ));
     } else {
         out.push(pass("auto-learn lock", "no learner stuck"));

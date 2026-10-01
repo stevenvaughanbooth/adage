@@ -489,10 +489,44 @@ fn pretool_records_and_cards_are_shown() {
         .collect();
     let text = lines.join("\n");
     assert!(text.contains("↪ pointed the test run at .venv/bin/python"), "a rewrite has its own mark: {text}");
-    assert!(text.contains("→ ▤ card-1"), "a card delivery has the card's mark: {text}");
+    assert!(text.contains("→ ▤ "), "a card delivery has the card's mark: {text}");
     assert!(text.contains("would have pointed the test run at x (withheld)"), "{text}");
     assert!(text.contains("card · 2 files · 3 traces"), "{text}");
     assert!(text.contains("misfired run-tests"), "{text}");
+}
+
+/// A session in a repository with no reflexes yet is shown as watched, with its calls counted
+/// (docs/design/everyday-ux.md, state S1), not as "nothing to say".
+#[test]
+fn a_session_with_no_reflexes_here_is_shown_as_watched() {
+    let cx = ctx(Paths::at(Path::new("/nonexistent")), false);
+    let seen = |kind: &str, event: &str, calls: Option<u64>| {
+        let mut r = json!({ "ts": T0, "event": event, "kind": kind, "repo": "fresh@path-1", "unrouted": true });
+        if let Some(n) = calls {
+            r["calls"] = json!(n);
+        }
+        feed::from_record("s-fresh", &r)
+    };
+    let (start, batch) = (seen("session_start", "SessionStart", None), seen("batch", "PostToolBatch", Some(23)));
+    assert!(batch.unrouted && batch.quiet() && batch.observed == 23);
+    let text: Vec<String> = view::feed_lines(&[&start, &batch], &cx, 110, &Default::default())
+        .into_iter()
+        .map(|(_, l)| l.spans.iter().map(|s| s.content.to_string()).collect::<String>().trim_end().to_string())
+        .collect();
+    assert!(text[0].contains("start") && text[0].ends_with("watching, no reflexes here yet"), "{text:?}");
+    assert!(text[1].ends_with("23 calls, watching, no reflexes here yet"), "{text:?}");
+    // A repository with reflexes keeps its words.
+    let routed = feed::from_record(
+        "s",
+        &json!({ "ts": T0, "event": "PostToolBatch", "kind": "batch", "decision": { "observed": ["ls"] } }),
+    );
+    let line: String = view::feed_lines(&[&routed], &cx, 110, &Default::default())[0]
+        .1
+        .spans
+        .iter()
+        .map(|s| s.content.to_string())
+        .collect();
+    assert!(line.trim_end().ends_with("1 call, nothing to say"), "{line}");
 }
 
 #[test]
@@ -554,6 +588,23 @@ fn learn_log_reads_both_shapes_and_skips_the_rest() {
     assert_eq!(t[3].text, "r/finish-line: old firm → dormant");
     assert_eq!(t[4].text, "r/finish-line: nascent-one → nascent (3/4)");
     assert_eq!(t[5].text, "r/finish-line: gone → extinguished");
+    // A change recorded with what its reflex tells the agent reads as that, not its id.
+    let t = learnlog::parse(
+        &json!({ "ts": T0, "kind": "condition", "trigger": "auto", "repo": "r", "changes": [
+            { "route": "run-7c62ab", "track": "r/learned", "change": "new", "to": "prime", "summary": "new prime reflex (26 of 36 traces)",
+              "gist": "after editing crates/**/*.rs, run cargo clippy --workspace --all-targets" },
+          ] })
+        .to_string(),
+    );
+    let c = t[1].change.as_ref().unwrap();
+    assert_eq!(
+        (c.route.as_str(), c.name()),
+        ("run-7c62ab", "after editing crates/**/*.rs, run cargo clippy --workspace --all-targets")
+    );
+    assert_eq!(
+        t[1].short,
+        "learned: after editing crates/**/*.rs, run cargo clippy --workspace --all-targets new · prime (26/36)"
+    );
     // The older change words.
     let t = learnlog::parse(
         &json!({ "kind": "learn", "repo": "r", "changes": [
@@ -748,21 +799,21 @@ fn watch_frames_at_split_pane_and_wide_sizes_in_colour_and_no_color() {
     let c = ctx(paths.clone(), true);
     let (wide, buf) = render(110, 30, |f| view::draw_live(f, f.area(), &live, Some(&h), &c, true));
     // Colour carries the strength: the fire lamp of the directive is green.
-    let (x, y) = find(&buf, "lookup-incident          ● fire").expect("a firing is shown");
-    assert_eq!(buf[(x + 25, y)].fg, Color::Green);
+    let (x, y) = find(&buf, "◠ ● fire").expect("a firing is shown");
+    assert_eq!(buf[(x + 2, y)].fg, Color::Green);
     for s in [
         "adage watch  harbor-dispatch · gen 8216e29f · claude",
         "● live   ● fire 1   ● prime 1   ● inhibit 1",
         "─ now ─",
-        "→ ◠ lookup-incident          ● fire     bin/fetch-incident INC-2045",
-        "○ would fire lookup-incident (withheld)",
-        "✓ followed lookup-incident",
-        "✗ ignored lookup-incident",
-        "→ ◠ dead-end-npm-test        ● inhibit  npm run check",
+        "→ ◠ ● fire     bin/fetch-incident INC-2045",
+        "○ would fire bin/fetch-incident INC-2045 (withheld)",
+        "✓ followed bin/fetch-incident INC-2045",
+        "✗ ignored bin/fetch-incident INC-2045",
+        "→ ◠ ● inhibit  npm run check",
         "─ conditioning ─",
-        "lookup-incident           prime → fire       24/25 · lb 0.80",
+        "lookup-incident                             prime → fire       24/25 · lb 0.80",
         "conditioning failed for harbor-dispatch (io)",
-        "1 reflex waits for review · adage review",
+        "1 to look over · adage review",
         "─ health ─",
         "! no model · adage models fetch",
         "p pause · f scope · / filter · enter inspect · m open map · ? keys",
@@ -770,7 +821,7 @@ fn watch_frames_at_split_pane_and_wide_sizes_in_colour_and_no_color() {
         assert!(wide.contains(s), "the wide frame lacks {s:?}:\n{wide}");
     }
     // The control arm is dimmed, whole rows of it.
-    let (x, y) = find(&buf, "would fire lookup-incident").unwrap();
+    let (x, y) = find(&buf, "would fire bin/fetch-incident").unwrap();
     assert_eq!(buf[(x, y)].fg, Color::DarkGray);
     assert_eq!(buf[(x - 20, y)].fg, Color::DarkGray, "the trace id of a control row is dim too");
 
@@ -794,7 +845,7 @@ fn ascii_glyphs_when_the_terminal_cannot_draw_them() {
     let c = Ctx { theme: Theme::with_color(false).ascii(), ..ctx(paths, false) };
     let (text, _) = render(110, 30, |f| view::draw_live(f, f.area(), &live, Some(&h), &c, true));
     snap("watch-110x30-ascii", &text);
-    assert!(text.contains("-> ~ lookup-incident") && text.contains("- now -"), "{text}");
+    assert!(text.contains("-> ~ FIRE       bin/fetch-incident INC-2045") && text.contains("- now -"), "{text}");
     assert!(!text.chars().any(|ch| matches!(ch, '●' | '◠' | '─' | '→' | '✓')), "{text}");
 }
 
@@ -941,8 +992,9 @@ fn the_newest_firing_pulses_once() {
     let (_, y) = find(&buf, "12:04:30").expect("the new row");
     assert_eq!(buf[(0, y)].symbol(), "▌", "the pulsing row is marked");
     let row: String = (0..buf.area.width).map(|x| buf[(x, y)].symbol().to_string()).collect();
-    let rx = row[..row.find("lookup-incident").expect("the reflex id on the new row")].chars().count() as u16;
-    assert!(buf[(rx, y)].modifier.contains(Modifier::BOLD), "and its reflex is bright");
+    let rx =
+        row[..row.find("bin/fetch-incident").expect("what the reflex said, on the new row")].chars().count() as u16;
+    assert!(buf[(rx, y)].modifier.contains(Modifier::BOLD), "and what it said is bright");
     // It dims, then stops, within 900 ms.
     let at = live.pulse.at.unwrap();
     live.tick_pulse(at + std::time::Duration::from_millis(450), true);
@@ -1030,7 +1082,7 @@ fn empty_home_says_what_to_do() {
     let mut busy = live_from(&paths);
     busy.waiting = Some(4);
     let (text, _) = render(40, 12, |f| view::draw_live(f, f.area(), &busy, Some(&h), &c, true));
-    assert!(text.contains("4 to review · adage review") && text.contains("adage watch"), "{text}");
+    assert!(text.contains("4 to look over · adage review") && text.contains("adage watch"), "{text}");
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1772,6 +1824,7 @@ fn wizard_keeps_an_existing_registration_and_never_adds_a_second() {
         location: "/nowhere/a/.claude/settings.json".into(),
         binary: Some("/opt/adage".into()),
         kind: "settings",
+        events: Vec::new(),
     }];
     let mut w = Wizard::new(detected, regs, true);
     assert!(matches!(w.key(KeyCode::Enter, NONE), Some(wizard::Cmd::Replan)));
@@ -2052,9 +2105,9 @@ fn reflexes_tab_tells_quiet_from_install_steps() {
     assert!(text.contains("They are not install steps"), "{text}");
     // The watch pane's review line counts them apart.
     let mut live = Live::default();
-    (live.waiting, live.quiet, live.all_repos) = (Some(3), 1, true);
+    (live.waiting, live.quiet, live.needs, live.all_repos) = (Some(3), 1, 1, true);
     let (text, _) = render(100, 30, |f| view::draw_live(f, f.area(), &live, Some(&health()), &c, true));
-    assert!(text.contains("3 reflexes wait for review (1 quiet)"), "{text}");
+    assert!(text.contains("1 needs you · 2 to look over · adage review"), "{text}");
 }
 
 #[test]

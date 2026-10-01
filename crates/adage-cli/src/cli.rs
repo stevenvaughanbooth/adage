@@ -784,55 +784,60 @@ pub fn styles(t: &Theme) -> Styles {
         .error(t.style(Role::Inhibit).bold())
 }
 
-/// The commands, grouped, for the top-level help.
+/// The commands, grouped by the question a person has (docs/design/everyday-ux.md §5.6): the
+/// everyday three first, then what to run when something is off, then setting up; everything else
+/// after. Every command stays.
 fn overview(t: &Theme) -> StyledStr {
     const GROUPS: &[(&str, &[(&str, &str)])] = &[
         (
-            "Start",
-            &[("init", "set Adage up: harnesses, hooks, past traces"), ("doctor", "check that everything is healthy")],
-        ),
-        (
             "Every day",
             &[
-                ("status", "reflexes and instincts in effect, with evidence"),
-                ("watch", "live pane for a split terminal"),
-                ("ui", "the full-screen app"),
-                ("map", "open the map in your browser"),
-                ("review", "reflexes waiting for you"),
-                ("savings", "what Adage saves here"),
+                ("watch", "what Adage sees and says, live (a pane for a split terminal)"),
+                ("review", "the reflexes Adage formed: look them over, approve, extinguish"),
+                ("map", "explore reflexes and their evidence in your browser"),
+            ],
+        ),
+        ("When something is off", &[("doctor", "what is wrong, and the fix for each problem")]),
+        (
+            "Set up",
+            &[
+                ("init", "set Adage up: harnesses, hooks, past traces"),
+                ("install", "register Adage's hooks with one agent"),
+                ("packs", "base instincts and added packs: list, turn on, turn off"),
+                ("config", "settings"),
+                ("update", "update Adage itself"),
             ],
         ),
         (
             "Conditioning",
             &[
                 ("sense", "what your agents actually do (read-only)"),
-                ("condition", "condition reflexes from traces"),
+                ("condition", "condition reflexes from traces now"),
                 ("report", "what Adage said, and what agents did"),
                 ("graph", "Adage's state as a graph"),
                 ("train", "compile a skill into reflexes"),
             ],
         ),
         (
-            "Packs",
+            "Sharing",
             &[
-                ("packs", "base instincts and added packs"),
                 ("marketplace", "where packs come from"),
                 ("share", "build and sign a pack"),
                 ("add", "verify and install a pack"),
             ],
         ),
-        ("Execution", &[("delegate", "let hooks run delegated reflexes, and rewrites")]),
         (
-            "Setup",
+            "More",
             &[
-                ("install", "one harness's hook registration"),
+                ("ui", "the full-screen app: live, reflexes, map, health, settings"),
+                ("status", "reflexes and instincts in effect, with evidence"),
+                ("savings", "what Adage saves here"),
+                ("delegate", "let hooks run delegated reflexes, and rewrites"),
                 ("models", "the optional embedding model"),
-                ("config", "settings"),
                 ("completions", "shell completions"),
-                ("update", "update Adage itself"),
+                ("eval", "offline replay evaluation"),
             ],
         ),
-        ("Evaluation", &[("eval", "offline replay evaluation")]),
     ];
     let head = t.style(Role::Accent).bold();
     let cmd = t.style(Role::Command);
@@ -862,8 +867,8 @@ pub fn command(t: &Theme) -> clap::Command {
         ))
         .before_help(overview(t))
         .after_help(StyledStr::from(format!(
-            "{tip}Start with{tip:#} adage init{tip}. `adage <command> --help` explains each command.{tip:#}\n\
-             {tip}Bare `adage` prints the status card; `adage ui` opens the app.{tip:#}\n\
+            "{tip}Bare{tip:#} adage {tip}answers \"is it working here?\": the status card.{tip:#}\n\
+             {tip}New here? Start with{tip:#} adage init{tip}. `adage <command> --help` explains each command.{tip:#}\n\
              {tip}Environment: ADAGE_HOME (data directory), ADAGE_DISABLE=1 (kill switch),\n\
              ADAGE_ARM=treated|control, ADAGE_CONTROL (control share), ADAGE_AUTO_LEARN=0|1,\n\
              ADAGE_ALLOW_NONINTERACTIVE=1 (share and add in CI).{tip:#}"
