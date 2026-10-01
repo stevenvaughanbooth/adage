@@ -16,7 +16,9 @@
 //! ```
 //!
 //! Steps: harnesses (read-only); hooks, per harness found (the exact file and diff first; this
-//! repository or every repository); the embedding model (bundled in adage, so usually nothing
+//! repository or every repository; a harness already registered for this repository, in either
+//! scope or by the Claude Code plugin, defaults to keeping that registration, and is never
+//! registered a second time); the embedding model (bundled in adage, so usually nothing
 //! to do; offered for download only when none is usable); a first `adage condition`;
 //! auto-condition; then the doctor's summary and what to run next. `y` takes the first choice,
 //! `n` skips, `q` (or esc) stops: nothing already done is undone, and nothing else is written.
@@ -106,6 +108,8 @@ pub struct Wizard {
     /// How far the body can scroll, as last drawn (the body's length is known only then).
     pub max_scroll: std::cell::Cell<u16>,
     pub has_repo: bool,
+    /// The repository being set up, if any: which of its files a registration is.
+    pub root: Option<std::path::PathBuf>,
     /// The highlighted choice of the current step.
     pub choice: usize,
 }
@@ -135,12 +139,50 @@ impl Wizard {
             scroll: 0,
             max_scroll: Default::default(),
             has_repo,
+            root: None,
             choice: 0,
         }
     }
 
     pub fn current(&self) -> &Kind {
         &self.steps[self.cur].kind
+    }
+
+    /// For a hooks step: where its harness's hooks are registered already (one entry per place),
+    /// counting the Claude Code plugin. A harness registered anywhere that applies here is not
+    /// registered again: a second registration runs every hook twice.
+    pub fn existing(&self) -> Vec<&Registration> {
+        let Kind::Hooks(h) = self.current() else { return vec![] };
+        let mut out: Vec<&Registration> = Vec::new();
+        for r in self.registrations.iter().filter(|r| r.harness == *h) {
+            if !out.iter().any(|o| o.location == r.location) {
+                out.push(r);
+            }
+        }
+        out
+    }
+
+    /// For a hooks step whose harness is registered already: the scope of the registration
+    /// `adage install` can rewrite in place (to point it at this adage), if it is one.
+    fn update_scope(&self) -> Option<&'static str> {
+        let Kind::Hooks(h) = self.current() else { return None };
+        self.existing().iter().find_map(|r| crate::install::scope_of(h, &r.location, self.root.as_deref()))
+    }
+
+    /// "already registered in ~/.claude/settings.json" (or "by the Adage plugin").
+    fn registered_note(&self) -> String {
+        let places: Vec<String> = self
+            .existing()
+            .iter()
+            .map(|r| {
+                if r.kind == "plugin-data" {
+                    "by the Adage plugin".into()
+                } else {
+                    format!("in {}", detect::tilde(&r.location))
+                }
+            })
+            .collect();
+        format!("already registered {} · nothing written", places.join(" and "))
     }
 
     /// The current step's choices; the last one of a step that can be skipped is the skip.
@@ -150,6 +192,14 @@ impl Wizard {
         }
         match self.current() {
             Kind::Harnesses => vec!["Continue".into()],
+            Kind::Hooks(h) if !self.existing().is_empty() => {
+                let mut v = vec!["Keep it · already registered, nothing to do".to_string()];
+                if self.update_scope().is_some() {
+                    v.push("Rewrite that registration · point it at this adage".to_string());
+                }
+                v.push(format!("Skip {h}"));
+                v
+            }
             Kind::Hooks(h) => {
                 let mut v = Vec::new();
                 if self.has_repo {
@@ -180,7 +230,8 @@ impl Wizard {
         }
         match self.current() {
             Kind::Hooks(_) => {
-                self.scope = if self.has_repo { "project" } else { "user" };
+                // Registered already: the only write offered is rewriting that registration.
+                self.scope = self.update_scope().unwrap_or(if self.has_repo { "project" } else { "user" });
                 Some(Cmd::Replan)
             }
             Kind::Finish => Some(Cmd::Finish),
@@ -207,7 +258,9 @@ impl Wizard {
             return None; // a job is running
         }
         let n = self.choices().len();
-        let hooks = matches!(self.current(), Kind::Hooks(_)) && self.output.is_empty();
+        let registered =
+            matches!(self.current(), Kind::Hooks(_)) && self.output.is_empty() && !self.existing().is_empty();
+        let hooks = matches!(self.current(), Kind::Hooks(_)) && self.output.is_empty() && !registered;
         match code {
             KeyCode::Up | KeyCode::Char('k') if self.choice > 0 => {
                 self.choice -= 1;
@@ -248,6 +301,22 @@ impl Wizard {
         }
         match self.current().clone() {
             Kind::Harnesses if yes => self.advance(StepStatus::Done(self.found_names())),
+            // Registered already: keep it (the default), rewrite that same registration, or skip.
+            // Never a second registration elsewhere.
+            Kind::Hooks(_) if registered && skip => self.advance(StepStatus::Skipped),
+            Kind::Hooks(_) if registered && yes && self.choice == 0 => {
+                let note = self.registered_note();
+                self.advance(StepStatus::Done(note))
+            }
+            Kind::Hooks(_) if registered && yes => match &self.plan {
+                Some(Ok(p)) if p.before.as_deref() != Some(p.after.as_str()) => Some(Cmd::Install(Box::new(p.clone()))),
+                Some(Ok(_)) => {
+                    let note = self.registered_note();
+                    self.advance(StepStatus::Done(note))
+                }
+                _ => None,
+            },
+            Kind::Hooks(_) if registered => None,
             Kind::Hooks(_) if code == KeyCode::Tab && self.has_repo => {
                 self.scope = if self.scope == "project" { "user" } else { "project" };
                 self.choice = if self.scope == "project" { 0 } else { 1 };
@@ -398,10 +467,36 @@ fn body(w: &Wizard, t: &Theme, width: usize) -> Vec<Line<'static>> {
                 out.extend(text("No harness found, so there are no hooks to install. Install Claude Code, Codex or OpenCode, then run `adage init` again; the other steps still help.", t.dim()));
             }
         }
-        Kind::Hooks(h) => {
-            for r in w.registrations.iter().filter(|r| r.harness == *h) {
-                out.extend(text(&format!("Already registered in {}.", detect::tilde(&r.location)), t.green()));
+        Kind::Hooks(h) if !w.existing().is_empty() => {
+            for r in w.existing() {
+                let at = if r.kind == "plugin-data" {
+                    "by the Adage plugin".to_string()
+                } else {
+                    format!("in {}", detect::tilde(&r.location))
+                };
+                out.extend(text(&format!("Already registered {at}."), t.green()));
             }
+            let rewrite = w.update_scope().is_some() && w.choice == 1;
+            match &w.plan {
+                Some(Ok(p)) if rewrite => out.extend(
+                    install_confirm(p, t)
+                        .into_iter()
+                        .filter(|l| !l.spans.iter().any(|s| s.content.starts_with("y write"))),
+                ),
+                Some(Err(e)) if rewrite => out.extend(text(e, t.red())),
+                _ => {
+                    out.extend(text(
+                        "Nothing to write: a second registration would run every hook twice, so each directive and notice would arrive twice.",
+                        plain,
+                    ));
+                    out.extend(text(
+                        &format!("`adage install {h} --remove` takes a registration out; `adage doctor` checks them."),
+                        t.dim(),
+                    ));
+                }
+            }
+        }
+        Kind::Hooks(_) => {
             match &w.plan {
                 None => out.push(Line::from(Span::styled("planning…", t.dim()))),
                 Some(Err(e)) => out.extend(text(e, t.red())),
@@ -732,6 +827,7 @@ fn usable_model(ctx: &Ctx) -> Option<String> {
 
 pub fn run(ctx: Ctx) -> Result<()> {
     let mut w = Wizard::new(detect::harnesses(), detect::registrations(ctx.root.as_deref()), ctx.root.is_some());
+    w.root = ctx.root.clone();
     w.model = usable_model(&ctx);
     let loaded = config::load(&ctx.paths);
     w.auto_learn = loaded.get("learn.auto").map(|(_, src)| (loaded.config.learn_auto, src.to_string()));

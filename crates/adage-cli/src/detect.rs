@@ -135,7 +135,10 @@ pub fn harnesses() -> Vec<Detected> {
             if let Some(p) = on_path(bin) {
                 evidence.push(format!("`{bin}` on PATH ({})", tilde(&p)));
             }
-            if let Some(d) = dir.filter(|d| d.is_dir()) {
+            // An empty Codex home is not Codex: `CODEX_HOME` pointed at a directory Codex never used
+            // (Codex writes its config, auth and sessions there at its first run).
+            let used = |d: &Path| h != "codex" || std::fs::read_dir(d).is_ok_and(|mut rd| rd.next().is_some());
+            if let Some(d) = dir.filter(|d| d.is_dir() && used(d)) {
                 evidence.push(format!("{} exists", tilde(&d)));
             }
             Detected { harness: h, evidence }

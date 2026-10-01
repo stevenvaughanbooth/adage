@@ -7,6 +7,25 @@ pub fn main(harness: String, event: String) -> ! {
     adage_hook::main(harness, event, adage_hook::Options::default())
 }
 
+/// `adage hook` without a harness Adage knows, or without an event: a person typing it (no
+/// registration runs it so). Prints the usage on stderr and records nothing in `fail-open.log`.
+/// At a terminal that is a usage error (exit 2); from anything else it still fails open (exit 0),
+/// since a harness treats some exit codes as a reason to stop the agent.
+pub fn usage(harness: &str, event: &str) -> ! {
+    use std::io::IsTerminal;
+    let what = match (harness.is_empty(), crate::harness::adapter(harness).is_some(), event.is_empty()) {
+        (true, _, _) => "`adage hook` needs a harness and an event".to_string(),
+        (false, false, _) => format!("unknown harness `{harness}` (claude, opencode or codex)"),
+        _ => format!("`adage hook {harness}` needs an event (SessionStart, UserPromptSubmit, Stop, …)"),
+    };
+    let help = "usage: adage hook <claude|opencode|codex> <event>, with the event's JSON on stdin. Harnesses run it; \
+                `adage install <harness>` registers it, and `adage doctor` checks the registration";
+    if adage_term::Out::stderr().error(&what, &[], Some(help)).is_err() {
+        eprintln!("adage: {what}\n{help}");
+    }
+    std::process::exit(if std::io::stdin().is_terminal() { 2 } else { 0 })
+}
+
 #[cfg(test)]
 mod tests {
     use crate::harness;

@@ -50,7 +50,12 @@ Persona (a) cannot approve nascent reflexes, because decisions require a person 
 - **The wizard's first question**, answered with one keypress, is **user scope** ("every repo") rather than project scope. Per-repo `.claude/settings.json` edits are dirty-worktree friction.
 - **Condition step**: the wizard runs bootstrap for the current repo only. It does not run a global `adage condition` over every repo.
 - **Model download**: the wizard offers it, and it runs only on `y`.
-- **Next agent session**: from here the flow is the same as persona (a).
+- **Next agent session**: from here the flow is the same as persona (a), except that the repository
+  already has its reflexes, so there is no bootstrap to announce. The first `SessionStart` says
+  what is in effect instead, once: `adage: 2 reflexes and 14 instincts active in this repo; it keeps
+  learning as you work. Nothing runs without you.` (with `learn.auto` on). A later notice counts as
+  new only what the background learner added since; instincts are counted apart from learned
+  reflexes (`adage: 1 new reflex and 2 instincts active.`).
 
 ### (c) Team lead sharing reflexes
 

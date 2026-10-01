@@ -2,7 +2,8 @@
 //! person, and the decisions a person makes about them.
 //!
 //! ```text
-//! adage review [--json]                                     list the queue (agents may read it)
+//! adage review [--json] [--verbose]                         list the queue (agents may read it);
+//!                                                           --verbose adds the statistics
 //! adage review approve    <track> <route> [--by <name>]     accept as is (restores an extinguished route at
 //!                                                           forming; puts a nascent environment step into service)
 //! adage review extinguish <track> <route> [--by <name>]     take it out of service, and keep it out
@@ -18,8 +19,13 @@
 //! diff (see [`crate::proposal`]); `approve` applies the proposed version, which stays pinned.
 //!
 //! Instinct routes (Adage's built-in defaults, bound from a repository's files; track
-//! `<repo>/instincts`) are listed with their origin until a person decides. They stay prime at
-//! most and can never be strengthened. Approving an environment-effect instinct (an install step,
+//! `<repo>/instincts`) are listed with their origin until a person decides, once per instinct
+//! and step with what triggers each; one in effect waits for no decision (it is not counted as
+//! waiting). They stay prime at most and can never be strengthened.
+//!
+//! A learned routine with execution evidence (execution only: never said to the agent) waits
+//! for a decision on its evidence once; after `approve` it is listed as ready to delegate, and
+//! no longer waits. `adage review delegate` grants it, separately. Approving an environment-effect instinct (an install step,
 //! nascent until then) approves every environment step of its pack for that repository, recorded
 //! in the track's `review.yaml` (`packs`); extinguishing one keeps it out of later binds.
 //!
@@ -52,7 +58,7 @@ const MIN_JUDGED: u32 = 5;
 /// A route is flagged when the Wilson lower bound of its ignore share reaches this.
 const IGNORE_BAR: f64 = 0.5;
 
-const USAGE: &str = "usage: adage review [--json]\n       adage review <approve|extinguish|weaken|strengthen|pin|dismiss> <track> <reflex> [--by <name>]\n       adage review delegate <track> <reflex> --level e1|e2 [...]\n       adage review revoke <track> <reflex>";
+const USAGE: &str = "usage: adage review [--json] [--verbose]\n       adage review <approve|extinguish|weaken|strengthen|pin|dismiss> <track> <reflex> [--by <name>]\n       adage review delegate <track> <reflex> --level e1|e2 [...]\n       adage review revoke <track> <reflex>";
 
 pub(crate) struct Installed {
     pub(crate) dir: PathBuf,
@@ -67,7 +73,9 @@ pub(crate) struct Installed {
 
 pub fn review(args: &[String], paths: &Paths) -> Result<()> {
     match args.first().map(String::as_str) {
-        None | Some("list") | Some("--json") => list(paths, args.iter().any(|a| a == "--json")),
+        None | Some("list" | "--json" | "--verbose" | "-v") => {
+            list(paths, args.iter().any(|a| a == "--json"), args.iter().any(|a| a == "--verbose" || a == "-v"))
+        }
         Some(verb @ ("approve" | "extinguish" | "weaken" | "strengthen" | "pin" | "dismiss")) => {
             decide(verb, &args[1..], paths)
         }
@@ -155,6 +163,17 @@ fn judgements(paths: &Paths) -> BTreeMap<(String, String), (u32, u32)> {
 
 fn live(s: RouteState) -> bool {
     matches!(s, RouteState::Firm | RouteState::Forming | RouteState::Dormant)
+}
+
+/// Reasons that list a reflex in `adage review` without making it wait for a decision: an
+/// instinct in effect (Adage's built-in default; extinguish it to turn it off), and a routine
+/// whose evidence was approved and which runs once delegated.
+pub(crate) const LISTED_ONLY: [&str; 2] = ["instinct", "delegable"];
+
+/// Does a reflex with these reasons wait for a decision (what `adage review`, `adage status`, the
+/// card and `condition`'s `next` count)?
+pub(crate) fn waits(reasons: &[(&'static str, String)]) -> bool {
+    reasons.iter().any(|(k, _)| !LISTED_ONLY.contains(k))
 }
 
 /// Kept quiet by its uplift: agents already take its step unaided (`adage_learn::value::assess`).
@@ -404,8 +423,17 @@ fn queue<'a>(
                     format!("agents ignored this reflex in {ignored} of {n} treated traces{since}; {advice}"),
                 ));
             }
+            // A routine with execution evidence waits for a decision on its evidence once; after
+            // `approve` it no longer waits, and is listed as ready to delegate until it is.
             if r.evidence.execution.is_some() && live(r.state) && !granted(inst, r) {
-                reasons.push(("execution", "Routine CPU candidate; silent without a valid local E2 grant. Ordinary approve accepts the evidence only. Review execution from this repository with `adage review delegate <track> <reflex> --level e2`.".into()));
+                match rv {
+                    // Decided, and nothing new since: it waits for nothing.
+                    Some(v) if reasons.is_empty() => reasons.push((
+                        "delegable",
+                        format!("{} on {}; it runs only once delegated (an E2 grant)", v.decision.as_str(), v.on),
+                    )),
+                    _ => reasons.push(("execution", "a routine Adage could run itself (execution only): without a local E2 grant it stays silent. `approve` accepts the evidence only; `adage review delegate <track> <reflex> --level e2`, from this repository, reviews running it.".into())),
+                }
             }
             if !reasons.is_empty() {
                 items.push(Item { inst, route: r, reasons, followed, ignored, proposal });
@@ -415,7 +443,7 @@ fn queue<'a>(
     items
 }
 
-fn list(paths: &Paths, as_json: bool) -> Result<()> {
+fn list(paths: &Paths, as_json: bool, verbose: bool) -> Result<()> {
     let all = discover(&paths.tracks())?;
     let judged = judgements(paths);
     let index = Index::compile_root(&paths.tracks(), &all.iter().map(|i| i.track.clone()).collect::<Vec<_>>()).0;
@@ -442,6 +470,8 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
                     "origin": r.evidence.origin.clone().map(|o| serde_json::to_value(o).unwrap_or_default()).unwrap_or_else(|| json!({ "kind": if it.inst.imported { "imported" } else { "learned" } })),
                     "route": r.id,
                     "reasons": it.reasons.iter().map(|(k, d)| json!({ "kind": k, "detail": d })).collect::<Vec<_>>(),
+                    "waits": waits(&it.reasons),
+                    "trigger": words::trigger(&r.trigger),
                     "strength": strength_str(r.strength),
                     "execution_only": e.execution.is_some(),
                     "next": if e.execution.is_some() { Some(format!("adage review delegate {} {} --level e2", it.inst.reference, r.id)) } else { None },
@@ -478,24 +508,34 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
         println!(
             "{}",
             serde_json::to_string_pretty(
-                &json!({ "count": rows.len(), "queue": rows, "inert": inert, "attestations": attestations, "exec_revoked": revoked, "exec_lapsed": lapsed,
+                &json!({ "count": rows.len(), "waiting": items.iter().filter(|it| waits(&it.reasons)).count(),
+                         "queue": rows, "inert": inert, "attestations": attestations, "exec_revoked": revoked, "exec_lapsed": lapsed,
                          "exec_last_withheld": adage_exec::last_withheld(&paths.root) })
             )?
         );
         return Ok(());
     }
     let mut o = Out::stdout();
-    let waiting = if items.is_empty() {
-        "nothing waits for a decision".to_string()
-    } else if items.len() == 1 {
-        "1 reflex waits for a decision".to_string()
-    } else {
-        format!("{} reflexes wait for a decision", items.len())
+    // What waits for a decision, and what is only listed: instincts in effect, and approved
+    // routines that run once delegated.
+    let (deciding, listed): (Vec<&Item>, Vec<&Item>) = items.iter().partition(|it| waits(&it.reasons));
+    let waiting = match deciding.len() {
+        0 => "nothing waits for a decision".to_string(),
+        1 => "1 reflex waits for a decision".to_string(),
+        n => format!("{n} reflexes wait for a decision"),
     };
     // Quiet reflexes wait too, but they are not install steps: agents already take their step.
-    let quiet_n = items.iter().filter(|it| it.reasons.iter().any(|(k, _)| *k == "quiet")).count();
+    let quiet_n = deciding.iter().filter(|it| it.reasons.iter().any(|(k, _)| *k == "quiet")).count();
     let quiet_fact = if quiet_n > 0 { format!("{quiet_n} quiet") } else { String::new() };
-    o.header("review", &[&waiting, &quiet_fact])?;
+    let is = |it: &&Item, kind: &str| it.reasons.iter().any(|(k, _)| *k == kind);
+    let instincts: Vec<&Item> = listed.iter().copied().filter(|it| is(it, "instinct")).collect();
+    let delegable: Vec<&Item> = listed.iter().copied().filter(|it| is(it, "delegable")).collect();
+    let instinct_fact = if instincts.is_empty() {
+        String::new()
+    } else {
+        format!("{} in effect", words::count(instincts.len(), "instinct"))
+    };
+    o.header("review", &[&waiting, &quiet_fact, &instinct_fact])?;
     print_inert(&mut o, &inert)?;
     print_revoked(&mut o, &revoked)?;
     crate::exec::print_lapsed(&mut o, &lapsed)?;
@@ -509,55 +549,137 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
         o.blank()?;
         return Ok(o.next("adage status", "the reflexes in effect")?);
     }
-    for it in &items {
-        let (t, r) = (&it.inst.track, it.route);
+    // What Adage learned here first: a person's decision matters most there.
+    let mut ordered = deciding.clone();
+    ordered.sort_by_key(|it| it.route.is_instinct());
+    for it in &ordered {
+        print_item(&mut o, it, verbose)?;
+    }
+    if !delegable.is_empty() {
         o.blank()?;
-        let quiet = it.reasons.iter().any(|(k, _)| *k == "quiet");
-        let mut head = Line::new();
-        if quiet {
-            head = head.glyph(Role::Ink3, Glyph::Quiet).text(" ");
-        } else if matches!(r.step, Step::Card { .. }) {
-            head = head.glyph(Role::Accent, Glyph::Card).text(" ");
+        o.line(
+            &Line::new()
+                .bold(Role::Ink, "Approved, and run only once delegated")
+                .sep()
+                .quiet("nothing waits: delegate one to let Adage run it on this machine"),
+        )?;
+        for it in &delegable {
+            print_item(&mut o, it, verbose)?;
         }
-        head = head
-            .bold(Role::Ink, it.inst.reference.clone())
-            .faint(format!("@{}", t.manifest.track.version))
-            .sep()
-            .text(r.id.clone())
-            .sep()
-            .quiet(t.manifest.scope.repo.clone());
-        match origin_label(r) {
-            Some(l) => head = head.sep().quiet(l),
-            None if it.inst.imported => head = head.sep().quiet("imported"),
-            None => {}
+    }
+    if !instincts.is_empty() {
+        o.blank()?;
+        o.line(&Line::new().bold(Role::Ink, "Instincts in effect").sep().quiet(
+            "Adage's built-in defaults, bound from this repository's files: prime at most, and any conditioned reflex overrides them. Nothing waits: extinguish one to turn it off.",
+        ))?;
+        // One block per instinct and step; its reflexes differ only in what triggers each.
+        let groups = words::group(instincts.iter().copied(), |it| {
+            format!(
+                "{}\n{}\n{}\n{:?}",
+                it.inst.reference,
+                origin_label(it.route).unwrap_or_default(),
+                describe_step(&it.route.step),
+                it.route.state
+            )
+        });
+        for g in &groups {
+            print_instinct_group(&mut o, g, verbose)?;
         }
-        o.line(&head)?;
-        for (kind, detail) in &it.reasons {
-            // Quiet: the one-line reason; the uplift row below says the rest.
-            let line = match crate::evidence::quiet_line(r).filter(|_| *kind == "quiet") {
-                Some(q) => q,
-                None => format!("{kind}: {}", words::prose(detail)),
+    }
+    o.blank()?;
+    // Next: the first decision, a learned reflex before an instinct; else the first routine to
+    // delegate; else what is in effect.
+    match ordered.first() {
+        Some(first) if first.reasons.iter().any(|(k, _)| *k == "execution") => o.next(
+            &format!("adage review approve {} {}", first.inst.reference, first.route.id),
+            "accepts its evidence (it still runs nothing); or another decision listed above",
+        )?,
+        Some(first) => {
+            let why = if first.reasons.iter().any(|(k, _)| *k == "quiet") {
+                "delivers this quiet reflex anyway; or another decision listed above"
+            } else {
+                "or another decision listed above"
             };
-            o.line(&row("why", Line::new().text(line)))?;
+            o.next(&format!("adage review approve {} {}", first.inst.reference, first.route.id), why)?
         }
-        let mut strength = if r.evidence.execution.is_some() {
-            Line::new().text("Execution only")
-        } else {
-            Line::new().strength(words::strength(r.strength))
+        None => match delegable.first() {
+            Some(d) => o.next(
+                &format!("adage review delegate {} {} --level e2", d.inst.reference, d.route.id),
+                "review the exact command and its limits, from its repository, to let Adage run it",
+            )?,
+            None => o.next("adage status", "the reflexes in effect")?,
+        },
+    }
+    if verbose {
+        return Ok(());
+    }
+    o.also("adage review --verbose", "the statistics behind each reflex")?;
+    Ok(())
+}
+
+/// One reflex in the review listing: why it is listed, what it does, its evidence (in plain words;
+/// `--verbose` adds the statistics and the graph engine's reasons), and the decisions it takes.
+fn print_item<W: std::io::Write>(o: &mut Out<W>, it: &Item, verbose: bool) -> Result<()> {
+    let (t, r) = (&it.inst.track, it.route);
+    o.blank()?;
+    let quiet = it.reasons.iter().any(|(k, _)| *k == "quiet");
+    let mut head = Line::new();
+    if quiet {
+        head = head.glyph(Role::Ink3, Glyph::Quiet).text(" ");
+    } else if matches!(r.step, Step::Card { .. }) {
+        head = head.glyph(Role::Accent, Glyph::Card).text(" ");
+    }
+    head = head
+        .bold(Role::Ink, it.inst.reference.clone())
+        .faint(format!("@{}", t.manifest.track.version))
+        .sep()
+        .text(r.id.clone())
+        .sep()
+        .quiet(t.manifest.scope.repo.clone());
+    match origin_label(r) {
+        Some(l) => head = head.sep().quiet(l),
+        None if it.inst.imported => head = head.sep().quiet("imported"),
+        None => {}
+    }
+    o.line(&head)?;
+    for (kind, detail) in &it.reasons {
+        // Quiet: the one-line reason; the uplift row below says the rest.
+        let q = if verbose { crate::evidence::quiet_line(r) } else { crate::evidence::quiet_plain(r) };
+        let line = match q.filter(|_| *kind == "quiet") {
+            Some(q) => q,
+            None => format!("{kind}: {}", words::prose(detail)),
         };
-        if r.strength != Strength::Inhibit {
-            strength = strength.quiet(format!(" (ceiling {})", ceiling_str(r)));
-        }
-        strength = strength.sep().quiet(format!("effect {}", r.effect.as_str())).sep().quiet(words::lifecycle(r.state));
-        if r.authored {
-            strength = strength.sep().quiet("pinned");
-        }
-        o.line(&row("strength", strength))?;
-        let whys = adage_tracks::why::load(&it.inst.dir);
-        o.line(&row("evidence", Line::new().text(crate::evidence::describe(r, whys.get(&r.id)))))?;
-        if let Some(ob) = crate::evidence::obligation(r) {
-            o.line(&row("enforced", Line::new().quiet(ob)))?;
-        }
+        o.line(&row("why", Line::new().text(line)))?;
+    }
+    if !matches!(r.trigger, Trigger::Intent { .. }) {
+        o.line(&row("when", Line::new().text(words::trigger(&r.trigger))))?;
+    }
+    let execution = r.evidence.execution.is_some();
+    let mut strength =
+        if execution { Line::new().text("Execution only") } else { Line::new().strength(words::strength(r.strength)) };
+    if r.strength != Strength::Inhibit && !execution {
+        strength = strength.quiet(format!(" (ceiling {})", ceiling_str(r)));
+    }
+    strength = strength.sep().quiet(format!("effect {}", r.effect.as_str())).sep().quiet(words::lifecycle(r.state));
+    if r.authored {
+        strength = strength.sep().quiet("pinned");
+    }
+    o.line(&row("strength", strength))?;
+    let whys = adage_tracks::why::load(&it.inst.dir);
+    let evidence = if verbose {
+        crate::evidence::describe(r, whys.get(&r.id))
+    } else {
+        crate::evidence::plain(r, whys.get(&r.id))
+    };
+    o.line(&row("evidence", Line::new().text(evidence)))?;
+    if let Some(ob) = crate::evidence::obligation(r) {
+        o.line(&row("enforced", Line::new().quiet(ob)))?;
+    }
+    // An execution-only routine is never said to the agent: what it does with and without a grant.
+    if let Some((without, with)) = crate::evidence::execution(r) {
+        o.line(&row("no grant", Line::new().text(without)))?;
+        o.line(&row("with grant", Line::new().quiet(with)))?;
+    } else {
         o.line(&row(
             "in use",
             Line::new()
@@ -566,70 +688,124 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
                 .text(format!("ignored {}", it.ignored))
                 .faint(" (treated traces)"),
         ))?;
-        if let Some(u) = &r.evidence.uplift {
-            o.line(&row("uplift", Line::new().quiet(u.line())))?;
+    }
+    let uplift = if verbose { r.evidence.uplift.as_ref().map(|u| u.line()) } else { crate::evidence::uplift_plain(r) };
+    if let Some(u) = uplift {
+        o.line(&row(if verbose { "uplift" } else { "unaided" }, Line::new().quiet(u)))?;
+    }
+    // The graph engine's reasons for a reflex (Track G §6.3): for people, never the agent.
+    if let Some(w) = whys.get(&r.id).filter(|_| verbose) {
+        for (i, line) in w.lines().iter().enumerate() {
+            o.line(&row(if i == 0 { "reflex" } else { "" }, Line::new().quiet(line.to_string())))?;
         }
-        // The graph engine's reasons for a reflex (Track G §6.3): for people, never the agent.
-        if let Some(w) = whys.get(&r.id) {
-            for (i, line) in w.lines().iter().enumerate() {
-                o.line(&row(if i == 0 { "reflex" } else { "" }, Line::new().quiet(line.to_string())))?;
-            }
-        }
-        o.line(&row("step", Line::new().text(describe_step(&r.step))))?;
-        if let Some(e) = &r.evidence.execution {
-            o.line(&row("CPU evidence", Line::new().text(format!("{} / {} matching situations supported by a compatible successful continuation before further mutation; {} sessions", e.successful, e.opportunities, e.sessions))))?;
-            o.line(&row(
-                "execution",
-                Line::new().text("Silent without a valid local E2 grant; ordinary approve accepts evidence only"),
-            ))?;
-            o.line(&row(
-                "delegate",
-                Line::new().cmd(format!("adage review delegate {} {} --level e2", it.inst.reference, r.id)),
-            ))?;
-        }
-        let (directive, examples) = preview(t, r);
-        let ex = if examples.is_empty() {
-            String::new()
+    }
+    o.line(&row("step", Line::new().text(describe_step(&r.step))))?;
+    if let Some(e) = &r.evidence.execution {
+        let text = if verbose {
+            format!(
+                "{} / {} matching situations supported by a compatible successful continuation before further mutation; {} sessions",
+                e.successful, e.opportunities, e.sessions
+            )
         } else {
             format!(
-                "example values: {}",
-                examples.iter().map(|(k, v)| format!("{k} = {v}")).collect::<Vec<_>>().join(", ")
+                "{} / {} times it came up, the agent then ran it successfully before changing anything else ({})",
+                e.successful,
+                e.opportunities,
+                words::count(e.sessions as usize, "trace")
             )
         };
-        if r.evidence.execution.is_none() {
-            o.line(&row("directive", Line::new().faint(ex)))?;
-            for line in directive.lines() {
-                o.line(&Line::new().text("    ").quiet(line))?;
-            }
-        }
-        if let Some(p) = it.proposal {
-            o.line(&row(
-                "proposed",
-                Line::new().text("`adage review approve` applies these changes (the reflex stays pinned):"),
-            ))?;
-            for (field, pinned, proposed) in crate::proposal::diff(r, &p.route) {
-                o.line(&Line::new().text("    ").push(Role::Inhibit, format!("- {field:<9} {pinned}")))?;
-                o.line(&Line::new().text("    ").push(Role::Fire, format!("+ {field:<9} {proposed}")))?;
-            }
-        }
-        let decide = verbs(r, it.proposal.is_some()).join("|");
-        o.line(&row("decide", Line::new().cmd(format!("adage review <{decide}> {} {}", it.inst.reference, r.id))))?;
+        o.line(&row("CPU evidence", Line::new().text(text)))?;
+        o.line(&row(
+            "delegate",
+            Line::new().cmd(format!("adage review delegate {} {} --level e2", it.inst.reference, r.id)),
+        ))?;
     }
-    let first = &items[0];
-    o.blank()?;
-    let why = if first.reasons.iter().any(|(k, _)| *k == "quiet") {
-        "delivers this quiet reflex anyway; or another decision listed above"
+    let (directive, examples) = preview(t, r);
+    let ex = if examples.is_empty() {
+        String::new()
     } else {
-        "or another decision listed above"
+        format!("example values: {}", examples.iter().map(|(k, v)| format!("{k} = {v}")).collect::<Vec<_>>().join(", "))
     };
-    if first.route.evidence.execution.is_some() {
-        o.next(
-            &format!("adage review delegate {} {} --level e2", first.inst.reference, first.route.id),
-            "review the exact command and execution limits from its repository",
-        )?;
-    } else {
-        o.next(&format!("adage review approve {} {}", first.inst.reference, first.route.id), why)?;
+    if r.evidence.execution.is_none() {
+        o.line(&row("directive", Line::new().faint(ex)))?;
+        for line in directive.lines() {
+            o.line(&Line::new().text("    ").quiet(line))?;
+        }
     }
+    if let Some(p) = it.proposal {
+        o.line(&row(
+            "proposed",
+            Line::new().text("`adage review approve` applies these changes (the reflex stays pinned):"),
+        ))?;
+        for (field, pinned, proposed) in crate::proposal::diff(r, &p.route) {
+            o.line(&Line::new().text("    ").push(Role::Inhibit, format!("- {field:<9} {pinned}")))?;
+            o.line(&Line::new().text("    ").push(Role::Fire, format!("+ {field:<9} {proposed}")))?;
+        }
+    }
+    let decide = verbs(r, it.proposal.is_some()).join("|");
+    o.line(&row("decide", Line::new().cmd(format!("adage review <{decide}> {} {}", it.inst.reference, r.id))))?;
+    Ok(())
+}
+
+/// Instinct reflexes that do the same thing (one instinct, one step), once: what each answers
+/// (its trigger) with its id, one directive as an example, and the decisions they take.
+fn print_instinct_group<W: std::io::Write>(o: &mut Out<W>, g: &[&Item], verbose: bool) -> Result<()> {
+    let (first, r) = (g[0], g[0].route);
+    let t = &first.inst.track;
+    o.blank()?;
+    let mut head = Line::new()
+        .bold(Role::Ink, first.inst.reference.clone())
+        .faint(format!("@{}", t.manifest.track.version))
+        .sep()
+        .text(origin_label(r).unwrap_or_else(|| "instinct".into()))
+        .sep()
+        .text(describe_step(&r.step));
+    if g.len() > 1 {
+        head = head.sep().quiet(words::count(g.len(), "reflex"));
+    }
+    o.line(&head)?;
+    let id_w = g.iter().map(|it| it.route.id.chars().count()).max().unwrap_or(0) + 2;
+    for (i, it) in g.iter().enumerate() {
+        let when = Line::new().text(format!("{:<id_w$}", it.route.id)).quiet(words::trigger(&it.route.trigger));
+        o.line(&row(if i == 0 { "when" } else { "" }, when))?;
+    }
+    let judged: (u32, u32) = g.iter().fold((0, 0), |(f, i), it| (f + it.followed, i + it.ignored));
+    o.line(&row(
+        "strength",
+        Line::new()
+            .strength(words::strength(r.strength))
+            .sep()
+            .quiet(format!("effect {}", r.effect.as_str()))
+            .sep()
+            .quiet(words::lifecycle(r.state)),
+    ))?;
+    o.line(&row(
+        "in use",
+        Line::new()
+            .text(format!("followed {}", judged.0))
+            .sep()
+            .text(format!("ignored {}", judged.1))
+            .faint(" (treated traces)"),
+    ))?;
+    for it in g {
+        let u = if verbose {
+            it.route.evidence.uplift.as_ref().map(|u| u.line())
+        } else {
+            crate::evidence::uplift_plain(it.route)
+        };
+        if let Some(u) = u {
+            let key = if verbose { "uplift" } else { "unaided" };
+            o.line(&row(key, Line::new().quiet(format!("{}: {u}", it.route.id))))?;
+        }
+    }
+    let (directive, _) = preview(t, r);
+    o.line(&row("directive", Line::new().faint(if g.len() > 1 { "each says, for example:" } else { "" })))?;
+    for line in directive.lines() {
+        o.line(&Line::new().text("    ").quiet(line))?;
+    }
+    let decide = verbs(r, false).join("|");
+    let reflex = if g.len() > 1 { "<reflex>" } else { r.id.as_str() };
+    o.line(&row("decide", Line::new().cmd(format!("adage review <{decide}> {} {reflex}", first.inst.reference))))?;
     Ok(())
 }
 
@@ -849,7 +1025,7 @@ fn decide(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
     // What waits now, after this decision.
     let all = discover(&paths.tracks())?;
     let index = Index::load(&paths.index());
-    let left = queue(&all, &judgements(paths), &index, paths).len();
+    let left = queue(&all, &judgements(paths), &index, paths).iter().filter(|it| waits(&it.reasons)).count();
     if left > 0 {
         let why = if left == 1 { "1 reflex still waits".to_string() } else { format!("{left} reflexes still wait") };
         o.next("adage review", &why)?;
@@ -1043,10 +1219,13 @@ fn apply(verb: &str, spec: &str, route_id: &str, by: Option<String>, paths: &Pat
     index.write_atomic(&paths.index())?;
 
     let mut facts = vec![inst.reference.clone(), route_id.to_string()];
+    let was = inst.reviews.routes.get(route_id.as_str()).map(|v| v.decision);
     if proposal.is_some() && verb == "approve" {
         facts.push("proposed change applied; it stays pinned".into());
     } else if verb == "extinguish" && before.state == RouteState::Extinguished {
         facts.push("already extinguished".into());
+    } else if verb == "approve" && was == Some(Decision::Approved) && after == before {
+        facts.push("already approved; nothing changed".into());
     }
     let mut rows: Vec<(&'static str, Line)> = Vec::new();
     if verb == "approve" && proposal.is_some() {

@@ -114,7 +114,8 @@ adage condition --transcripts exports/*.json
 
 **Install** — `adage install opencode [--write] [--scope project|user]` prints (default) or writes
 the plugin with the binary's absolute path embedded, to `.opencode/plugins/adage.js` or
-`$XDG_CONFIG_HOME/opencode/plugins/adage.js`. It replaces that file only if it is Adage's.
+`$XDG_CONFIG_HOME/opencode/plugins/adage.js`. It replaces that file only if it is Adage's, and
+`--remove` removes it (keeping `adage.js.adage-bak`).
 
 ### Not possible, or not done
 
@@ -197,8 +198,10 @@ Sub-agent threads are skipped; compressed `.jsonl.zst` rollouts are counted and 
 
 `adage install codex [--write] [--scope project|user]` prints or merges a `hooks.json`
 registering `SessionStart`, `UserPromptSubmit`, `PostToolUse`, `Stop`, and `SessionEnd`, with the
-binary path shell-quoted. Existing hooks are kept; Adage's own entries are replaced, so reinstalling
-is idempotent. Codex then asks you to review the hooks in `/hooks`.
+binary path shell-quoted. Existing hooks are kept as written; Adage's own entries are replaced, so
+reinstalling is idempotent, and `--remove` takes them out again. Codex runs both a user-scope and a
+repository `hooks.json`, so Adage registers in one of them only. Codex then asks you to review the
+hooks in `/hooks`.
 
 ### Not possible, or not done
 

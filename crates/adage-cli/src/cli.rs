@@ -200,6 +200,9 @@ pub struct ReviewArgs {
     /// Machine-readable queue (agents may read it).
     #[arg(long)]
     pub json: bool,
+    /// The statistics behind each reflex too (bounds, uplift, the graph engine's reasons).
+    #[arg(long, short = 'v')]
+    pub verbose: bool,
     #[command(subcommand)]
     pub decision: Option<ReviewDecision>,
 }
@@ -478,17 +481,24 @@ pub enum Harness {
 }
 
 #[derive(Args, Debug)]
+#[command(
+    group(clap::ArgGroup::new("change").args(["write", "remove"])),
+    after_help = "Writing skips a harness already registered elsewhere for this repository (the other scope, or the Claude Code plugin): a second registration runs every hook twice. `--remove` takes Adage's hooks out again; your own hooks and settings stay as they are."
+)]
 pub struct InstallArgs {
     /// The agent harness to register Adage's hooks with.
     pub harness: Harness,
     /// Print the registration (the default).
-    #[arg(long, conflicts_with = "write")]
+    #[arg(long, conflicts_with_all = ["write", "remove"])]
     pub print: bool,
     /// Write it (a diff is shown first, and a terminal asks before writing).
     #[arg(long)]
     pub write: bool,
-    /// With --write: write without asking.
-    #[arg(long, short = 'y', requires = "write")]
+    /// Remove Adage's hooks from the scope's file (a diff is shown first; a backup is kept).
+    #[arg(long)]
+    pub remove: bool,
+    /// With --write or --remove: do it without asking.
+    #[arg(long, short = 'y', requires = "change")]
     pub yes: bool,
     /// This repository only (project, the default) or every repository (user).
     #[arg(long, value_parser = ["project", "user"])]

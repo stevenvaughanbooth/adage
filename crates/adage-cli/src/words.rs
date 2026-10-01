@@ -36,6 +36,39 @@ pub fn evidence(e: &adage_tracks::Evidence) -> adage_term::Line {
     }
 }
 
+/// When a reflex fires, in a few words: `` `python3 -m pytest` fails with "No module named pytest" ``.
+pub fn trigger(t: &adage_tracks::Trigger) -> String {
+    use adage_tracks::Trigger;
+    let cmd = |c: &str| c.strip_prefix("exec ").unwrap_or(c).to_string();
+    match t {
+        Trigger::AfterFailure { command, signature } => {
+            format!("`{}` fails with \"{signature}\"", cmd(command))
+        }
+        Trigger::AfterCommand { command } => format!("`{}` succeeds", cmd(command)),
+        Trigger::AfterEdit { paths } => format!("an edit touches {paths}"),
+        Trigger::SessionStart => "a session starts".into(),
+        other => crate::graph::trigger(other)["label"].as_str().unwrap_or_default().to_string(),
+    }
+}
+
+/// Items with the same `key` together, groups in the order first seen: reflexes that do the same
+/// thing (one instinct, one step), listed once with what sets each apart.
+pub fn group<T>(items: impl IntoIterator<Item = T>, key: impl Fn(&T) -> String) -> Vec<Vec<T>> {
+    let mut keys: Vec<String> = Vec::new();
+    let mut out: Vec<Vec<T>> = Vec::new();
+    for it in items {
+        let k = key(&it);
+        match keys.iter().position(|x| *x == k) {
+            Some(i) => out[i].push(it),
+            None => {
+                keys.push(k);
+                out.push(vec![it]);
+            }
+        }
+    }
+    out
+}
+
 /// `n` and a noun, pluralised (`1 trace`, `3 reflexes`).
 pub fn count(n: usize, noun: &str) -> String {
     if n == 1 {

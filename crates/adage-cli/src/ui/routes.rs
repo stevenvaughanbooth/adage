@@ -171,8 +171,11 @@ pub struct Routes {
 }
 
 impl Routes {
+    /// Reflexes that wait for a decision. An instinct in effect, or an approved routine not yet
+    /// delegated, is listed for review but waits for nothing (`crate::review::waits`).
     pub fn waiting(&self) -> usize {
-        self.rows.iter().filter(|r| r.nascent() || !r.reasons.is_empty()).count()
+        let waits = |k: &String| !crate::review::LISTED_ONLY.contains(&k.as_str());
+        self.rows.iter().filter(|r| r.nascent() || r.reasons.iter().any(|(k, _)| waits(k))).count()
     }
 
     /// Of those waiting: quiet ones (uplift below the bar), and install steps (every other

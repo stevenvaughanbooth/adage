@@ -461,21 +461,21 @@ fn hooks_checks(repo_root: Option<&Path>, exe: Option<&Path>) -> Vec<Check> {
             });
             continue;
         }
-        // The Claude Code plugin registers its own hooks: settings entries as well run every hook
-        // twice, so each notice the person sees appears twice.
-        if plugin {
-            let at: Vec<String> = mine.iter().map(|r| detect::tilde(&r.location)).collect();
-            out.push(warn(
-                &format!("{name} (twice)"),
+        // Registered in more than one place that applies here (the Claude Code plugin and a
+        // settings file, or a user-scope and a project-scope file): every registration runs, so
+        // every hook runs twice and each notice the person sees appears twice.
+        if let Some(dup) = crate::install::duplicates(&regs, repo_root).into_iter().find(|x| x.harness == d.harness) {
+            let files: Vec<&String> = dup.places.iter().filter(|p| *p != "the Adage plugin").collect();
+            let at = files.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(" and in ");
+            let detail = if dup.plugin {
                 format!(
-                    "registered by the Adage plugin and in {}: every hook runs twice, and each notice appears twice",
-                    at.join(" and ")
-                ),
-                format!(
-                    "keep one: remove Adage's hook entries from {} (the plugin keeps working), or uninstall the plugin",
-                    at.join(" and ")
-                ),
-            ));
+                    "registered by the Adage plugin and in {at}: every hook runs twice, and each notice appears twice"
+                )
+            } else {
+                format!("registered in {at}: every hook runs twice, and each notice appears twice")
+            };
+            let fix = if dup.plugin { format!("{}; or uninstall the plugin", dup.fix) } else { dup.fix };
+            out.push(warn(&format!("{name} (twice)"), detail, fix));
         }
         for r in mine {
             let at = detect::tilde(&r.location);
@@ -833,8 +833,10 @@ pub fn render<W: std::io::Write>(o: &mut adage_term::Out<W>, checks: &[Check]) -
                 .pad_to(10 + name_w)
                 .quiet(c.detail.clone()),
         )?;
+        // A passing check has nothing to fix; one with a switch (rewrites) says how to flip it.
         if let Some(fix) = &c.fix {
-            o.line(&Line::new().pad_to(10 + name_w).faint("fix ").push(Role::Command, fix.clone()))?;
+            let lead = if c.status == Status::Pass { "switch " } else { "fix " };
+            o.line(&Line::new().pad_to(10 + name_w).faint(lead).push(Role::Command, fix.clone()))?;
         }
     }
     o.blank()?;
