@@ -1,0 +1,159 @@
+{
+  "registered_near_duplicate_pairs": {
+    "host-port/ip-address": {
+      "group": "network-address",
+      "body": 0.32,
+      "description": 0.38
+    },
+    "percentage/port": {
+      "group": "numeric-range",
+      "body": 0.68,
+      "description": 0.49
+    },
+    "hex-color/semver": {
+      "group": "pattern-string",
+      "body": 0.5,
+      "description": 0.41
+    },
+    "hex-color/slug": {
+      "group": "pattern-string",
+      "body": 0.46,
+      "description": 0.32
+    },
+    "semver/slug": {
+      "group": "pattern-string",
+      "body": 0.54,
+      "description": 0.35
+    },
+    "date/time": {
+      "group": "temporal",
+      "body": 0.7,
+      "description": 0.55
+    },
+    "byte-size/duration": {
+      "group": "unit-quantity",
+      "body": 0.02,
+      "description": 0.19
+    }
+  },
+  "registered_body_similarity": {
+    "min": 0.02,
+    "median": 0.5,
+    "max": 0.7
+  },
+  "nearest_earlier_tasks": {
+    "json-object": [
+      {
+        "task": "port",
+        "split": "training",
+        "group": "numeric-range",
+        "body_similarity": 0.74,
+        "description_similarity": 0.41,
+        "same_return_kind": false
+      },
+      {
+        "task": "percentage",
+        "split": "training",
+        "group": "numeric-range",
+        "body_similarity": 0.62,
+        "description_similarity": 0.38,
+        "same_return_kind": false
+      },
+      {
+        "task": "ip-address",
+        "split": "training",
+        "group": "network-address",
+        "body_similarity": 0.54,
+        "description_similarity": 0.37,
+        "same_return_kind": false
+      }
+    ],
+    "key-value": [
+      {
+        "task": "slug",
+        "split": "training",
+        "group": "pattern-string",
+        "body_similarity": 0.58,
+        "description_similarity": 0.33,
+        "same_return_kind": false
+      },
+      {
+        "task": "host-port",
+        "split": "training",
+        "group": "network-address",
+        "body_similarity": 0.56,
+        "description_similarity": 0.36,
+        "same_return_kind": false
+      },
+      {
+        "task": "port",
+        "split": "training",
+        "group": "numeric-range",
+        "body_similarity": 0.46,
+        "description_similarity": 0.24,
+        "same_return_kind": false
+      }
+    ],
+    "int-list": [
+      {
+        "task": "ip-address",
+        "split": "training",
+        "group": "network-address",
+        "body_similarity": 0.65,
+        "description_similarity": 0.39,
+        "same_return_kind": false
+      },
+      {
+        "task": "port",
+        "split": "training",
+        "group": "numeric-range",
+        "body_similarity": 0.57,
+        "description_similarity": 0.37,
+        "same_return_kind": false
+      },
+      {
+        "task": "date",
+        "split": "development",
+        "group": "temporal",
+        "body_similarity": 0.5,
+        "description_similarity": 0.39,
+        "same_return_kind": false
+      }
+    ],
+    "regex": [
+      {
+        "task": "ip-address",
+        "split": "training",
+        "group": "network-address",
+        "body_similarity": 0.69,
+        "description_similarity": 0.36,
+        "same_return_kind": false
+      },
+      {
+        "task": "port",
+        "split": "training",
+        "group": "numeric-range",
+        "body_similarity": 0.57,
+        "description_similarity": 0.31,
+        "same_return_kind": false
+      },
+      {
+        "task": "date",
+        "split": "development",
+        "group": "temporal",
+        "body_similarity": 0.46,
+        "description_similarity": 0.34,
+        "same_return_kind": false
+      }
+    ]
+  },
+  "flagged_at_or_above_registered_max": {
+    "json-object": [
+      "port"
+    ],
+    "key-value": [],
+    "int-list": [],
+    "regex": []
+  },
+  "rule": "a screen only: the registered Click pairs span the whole similarity range (the generated bodies share try/except/fail idioms), so concept, return kind and parse shape decide"
+}

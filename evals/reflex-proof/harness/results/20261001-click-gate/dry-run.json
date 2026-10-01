@@ -1,0 +1,229 @@
+{
+  "advisory": {
+    "budget": {
+      "per_session_usd": 0.6,
+      "sessions": 40,
+      "worst_case_usd": 24.0
+    },
+    "command": null,
+    "control_prompt_checks": [],
+    "live_refused": "a dry-run root is never dispatched",
+    "mode": "advisory",
+    "prepare": {
+      "assignments": 40,
+      "runtime_protected": true
+    },
+    "report": {
+      "assignments": 40,
+      "collected": 0,
+      "outcomes": {
+        "advisory": "incomplete",
+        "execution": "not-run"
+      }
+    },
+    "root": "/private/tmp/claude-501/-Users-stevenbooth-Documents-skill-compile--claude-worktrees-pr-review-handoff-6eeea9/5765f504-183e-43c1-aa0d-48a0dd1731b8/scratchpad/click-dryrun-2/authority/cohorts/click-dry/heldout-dry-advisory",
+    "route": null,
+    "sessions": 40,
+    "verify_grants": {
+      "best_homes": 0,
+      "only_missing_best_grants": true,
+      "passed": true,
+      "problems": 0
+    }
+  },
+  "analysis": "click-heldout-analysis-1",
+  "authority": "/private/tmp/claude-501/-Users-stevenbooth-Documents-skill-compile--claude-worktrees-pr-review-handoff-6eeea9/5765f504-183e-43c1-aa0d-48a0dd1731b8/scratchpad/click-dryrun-2/authority",
+  "budget_check_start": {
+    "available_usd": 57.0,
+    "fits": true,
+    "ledger": {
+      "attempts": 0,
+      "blocked": null,
+      "limit_usd": 60,
+      "remaining_usd": 60,
+      "spent_usd": 0
+    },
+    "mode": null,
+    "needed_usd": 30.5,
+    "note": "raising the allocation is the person's decision: evaluation-allocation.json's ledger_ceiling_usd and real_repo_gate.budget_limit's $60 limit; no agent changes either",
+    "phase": "start",
+    "shortfall_usd": 0.0
+  },
+  "claude_sessions": 0,
+  "cohort": {
+    "allocation_bound": true,
+    "budget": {
+      "ledger_floor_usd": 3.0,
+      "native_usd": 0.5,
+      "per_session_usd": 0.6,
+      "reservation_usd": 6.0,
+      "training_sessions": 10
+    },
+    "protocol": "click-guided-training-1",
+    "sessions": [
+      "guided-1-hex-color",
+      "guided-1-port",
+      "guided-1-duration",
+      "guided-1-ip-address",
+      "guided-1-semver",
+      "guided-2-hex-color",
+      "guided-2-port",
+      "guided-2-duration",
+      "guided-2-ip-address",
+      "guided-2-semver"
+    ]
+  },
+  "execution": {
+    "approval_script": {
+      "homes": 25,
+      "path": "/private/tmp/claude-501/-Users-stevenbooth-Documents-skill-compile--claude-worktrees-pr-review-handoff-6eeea9/5765f504-183e-43c1-aa0d-48a0dd1731b8/scratchpad/click-dryrun-2/authority/cohorts/click-dry/heldout-dry-execution/approve-click.sh",
+      "sha256": "3dd601c27769325f6a74dc6a823beb4502902d6e52ae8882b7dbb58f942fbccb"
+    },
+    "budget": {
+      "per_session_usd": 0.6,
+      "sessions": 65,
+      "worst_case_usd": 39.0
+    },
+    "command": ".venv/bin/python -m pytest tests/test_types -q",
+    "control_prompt_checks": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "live_refused": "a dry-run root is never dispatched",
+    "mode": "execution",
+    "prepare": {
+      "assignments": 65,
+      "runtime_protected": true
+    },
+    "report": {
+      "assignments": 65,
+      "collected": 0,
+      "outcomes": {
+        "advisory": "incomplete",
+        "execution": "incomplete"
+      }
+    },
+    "root": "/private/tmp/claude-501/-Users-stevenbooth-Documents-skill-compile--claude-worktrees-pr-review-handoff-6eeea9/5765f504-183e-43c1-aa0d-48a0dd1731b8/scratchpad/click-dryrun-2/authority/cohorts/click-dry/heldout-dry-execution",
+    "route": "github-com-pallets-click/learned/run-0dryrun",
+    "sessions": 65,
+    "verify_grants": {
+      "best_homes": 25,
+      "only_missing_best_grants": true,
+      "passed": false,
+      "problems": 25
+    }
+  },
+  "expected": {
+    "advisory_grants": true,
+    "advisory_sessions": true,
+    "control_prompts": true,
+    "execution_best_homes": true,
+    "execution_only_missing_grants": true,
+    "execution_sessions": true,
+    "learning_audit": true,
+    "live_refused": true,
+    "reports_incomplete": true
+  },
+  "grants_written": false,
+  "learning": {
+    "audit_passed": true,
+    "guided": {
+      "certified": 0,
+      "sessions": 10,
+      "status": "completed"
+    },
+    "mode": "advisory",
+    "organic": {
+      "audit": true,
+      "certified": 0,
+      "sessions": 5,
+      "status": "completed"
+    }
+  },
+  "native": {
+    "already": false,
+    "native": "/private/tmp/claude-501/-Users-stevenbooth-Documents-skill-compile--claude-worktrees-pr-review-handoff-6eeea9/5765f504-183e-43c1-aa0d-48a0dd1731b8/scratchpad/click-dryrun-2/authority/cohorts/click-dry/sessions/native-confinement/manifest.json"
+  },
+  "paid_calls": 0,
+  "passed": true,
+  "status_before": {
+    "cohort": "/private/tmp/claude-501/-Users-stevenbooth-Documents-skill-compile--claude-worktrees-pr-review-handoff-6eeea9/5765f504-183e-43c1-aa0d-48a0dd1731b8/scratchpad/click-dryrun-2/authority/cohorts/click-dry",
+    "learned": false,
+    "native": null,
+    "reviewed": true,
+    "training": [
+      {
+        "cost_usd": null,
+        "key": "guided-1-hex-color",
+        "prepared": true,
+        "status": null
+      },
+      {
+        "cost_usd": null,
+        "key": "guided-1-port",
+        "prepared": true,
+        "status": null
+      },
+      {
+        "cost_usd": null,
+        "key": "guided-1-duration",
+        "prepared": true,
+        "status": null
+      },
+      {
+        "cost_usd": null,
+        "key": "guided-1-ip-address",
+        "prepared": true,
+        "status": null
+      },
+      {
+        "cost_usd": null,
+        "key": "guided-1-semver",
+        "prepared": true,
+        "status": null
+      },
+      {
+        "cost_usd": null,
+        "key": "guided-2-hex-color",
+        "prepared": true,
+        "status": null
+      },
+      {
+        "cost_usd": null,
+        "key": "guided-2-port",
+        "prepared": true,
+        "status": null
+      },
+      {
+        "cost_usd": null,
+        "key": "guided-2-duration",
+        "prepared": true,
+        "status": null
+      },
+      {
+        "cost_usd": null,
+        "key": "guided-2-ip-address",
+        "prepared": true,
+        "status": null
+      },
+      {
+        "cost_usd": null,
+        "key": "guided-2-semver",
+        "prepared": true,
+        "status": null
+      }
+    ]
+  },
+  "training_recipe": {
+    "budget_usd": 0.6,
+    "guided": true,
+    "kind": "instruction-guided-training",
+    "max_turns": 60,
+    "prompt_ends_with_guidance": true,
+    "realism_line": true
+  },
+  "training_recipes": 10
+}

@@ -393,8 +393,9 @@ def native_canary_source(private, outside, port, inbox):
         + "raise SystemExit(0 if all(v for k,v in checks.items() if k!='proxy_denies_external') else 1)\n")
 
 
-def prepare_session(root, task, model, native_probe=False, setup_checkout=None):
-    """Prepare one unique assignment; explicit guided cohorts use their frozen prompt."""
+def prepare_session(root, task, model, native_probe=False, setup_checkout=None, key=None):
+    """Prepare one unique assignment; explicit guided cohorts use their frozen prompt. `key` names the
+    session directory when a cohort repeats a task (default: the task)."""
     import probe
     manifest = json.loads((root / "manifest.json").read_text())
     if not json.loads((root / "confinement.json").read_text()).get("passed"):
@@ -403,7 +404,9 @@ def prepare_session(root, task, model, native_probe=False, setup_checkout=None):
     all_train = [t for p in manifest["families"] for t in p["train"]]
     if not native_probe and task not in all_train:
         raise ValueError("only prospectively assigned training tasks may be prepared here")
-    key = "native-confinement" if native_probe else task
+    if key is not None and (native_probe or not re.fullmatch(r"[a-z0-9][a-z0-9.-]*", key)):
+        raise ValueError("a session key is a plain name, and the native session has its own")
+    key = "native-confinement" if native_probe else (key or task)
     session = root / "sessions" / key
     session.mkdir(parents=True, exist_ok=False)
     checkout = session / "repo"
@@ -559,6 +562,17 @@ def require_native_review(value):
                 raise ValueError("assignment permissions differ from reviewed cohort policy")
 
 
+# Registered guided-training protocols and the module holding each one's exact workflow guidance.
+GUIDED_PROTOCOLS = {"instruction-guided-development-1": "learning_curve", "click-guided-training-1": "click_training"}
+
+
+def guided_guidance(protocol):
+    """The registered workflow guidance of a guided-training protocol (None when unregistered)."""
+    import importlib
+    module = GUIDED_PROTOCOLS.get(protocol)
+    return importlib.import_module(module).GUIDANCE if module else None
+
+
 def validate_training_recipe(value):
     """Bind guided identity and actual runner prompt to its prospectively frozen cohort."""
     cohort = Path(value.get("cohort_root", value["experiment_root"]))
@@ -566,9 +580,9 @@ def validate_training_recipe(value):
     if value["kind"] != m.get("training_kind", "organic-training"):
         raise ValueError("training kind differs from frozen cohort")
     if value["kind"] == "instruction-guided-training":
-        from learning_curve import GUIDANCE
+        GUIDANCE = guided_guidance(m.get("protocol"))
         frozen = cohort / "private/tasks" / value["task"] / "prompt.txt"
-        if (m["protocol"] != "instruction-guided-development-1"
+        if (GUIDANCE is None
                 or value.get("workflow_guidance") != GUIDANCE or m.get("workflow_guidance") != GUIDANCE
                 or value.get("prompt_sha256") != m["task_sha256"][value["task"]]["prompt.txt"]
                 or sha(frozen) != value["prompt_sha256"] or value["argv"][-1] != frozen.read_text()):

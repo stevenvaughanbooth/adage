@@ -1,0 +1,101 @@
+diff --git a/CHANGES.md b/CHANGES.md
+index 8853860..875066a 100644
+--- a/CHANGES.md
++++ b/CHANGES.md
+@@ -2,6 +2,7 @@
+ 
+ Unreleased
+ 
++- Add the {data}`KEY_VALUE` parameter type.
+ - A parameter name that is not a valid Python identifier, or that is a Python
+   keyword, is deprecated and raises `TypeError` in Click 9.0. {pr}`3866`
+ - An {class}`Option` name written as a Python identifier is deprecated when it
+diff --git a/docs/api.md b/docs/api.md
+index df62cf5..035ed56 100644
+--- a/docs/api.md
++++ b/docs/api.md
+@@ -227,6 +227,10 @@ classes and functions.
+ .. autodata:: UUID
+ ```
+ 
++```{eval-rst}
++.. autodata:: KEY_VALUE
++```
++
+ ```{eval-rst}
+ .. autodata:: UNPROCESSED
+ ```
+diff --git a/docs/parameter-types.md b/docs/parameter-types.md
+index 470eb07..e20d8f7 100644
+--- a/docs/parameter-types.md
++++ b/docs/parameter-types.md
+@@ -123,6 +123,8 @@ The supported parameter {ref}`click-api-types` are
+ - {data}`click.UUID`: A parameter that accepts UUID values. This is not automatically guessed but represented as
+   {class}`uuid.UUID`.
+ 
++- {data}`click.KEY_VALUE`: which accepts an assignment written as `KEY=VALUE` and converts it to a tuple `(key, value)` of two `str`s. The key is a name of ASCII letters, digits and underscores that does not start with a digit; the value is everything after the first `=` and may be empty or contain further `=` signs.
++
+ ```{eval-rst}
+ *   .. autoclass:: Choice
+        :noindex:
+diff --git a/src/click/__init__.py b/src/click/__init__.py
+index a34ab02..00a7d84 100644
+--- a/src/click/__init__.py
++++ b/src/click/__init__.py
+@@ -67,6 +67,7 @@ from .types import STRING as STRING
+ from .types import Tuple as Tuple
+ from .types import UNPROCESSED as UNPROCESSED
+ from .types import UUID as UUID
++from .types import KEY_VALUE as KEY_VALUE
+ from .utils import echo as echo
+ from .utils import format_filename as format_filename
+ from .utils import get_app_dir as get_app_dir
+diff --git a/src/click/types.py b/src/click/types.py
+index b6e98a9..df2e7d6 100644
+--- a/src/click/types.py
++++ b/src/click/types.py
+@@ -4,6 +4,7 @@ import abc
+ import collections.abc as cabc
+ import enum
+ import os
++import re
+ import stat
+ import sys
+ import typing as t
+@@ -1435,3 +1436,25 @@ class OptionHelpExtra(t.TypedDict, total=False):
+     default: str
+     range: str
+     required: str
++
++
++class KeyValueParamType(ParamType[t.Any]):
++    name = 'key value'
++
++    def convert(self, value: t.Any, param: Parameter | None, ctx: Context | None) -> t.Any:
++        def fail(v: t.Any) -> t.NoReturn:
++            self.fail(_("{value!r} is not a valid key value.").format(value=v), param, ctx)
++
++        if not isinstance(value, str):
++            return value
++        key, sep, val = value.rpartition("=")
++        if not sep or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key):
++            fail(value)
++        return (key, val)
++
++    def __repr__(self) -> str:
++        return 'KEY_VALUE'
++
++
++#: A key value parameter.
++KEY_VALUE: t.Final[KeyValueParamType] = KeyValueParamType()
+diff --git a/tests/test_types/test_key_value.py b/tests/test_types/test_key_value.py
+new file mode 100644
+index 0000000..7e4cd35
+--- /dev/null
++++ b/tests/test_types/test_key_value.py
+@@ -0,0 +1,5 @@
++import click
++
++
++def test_key_value():
++    assert click.KEY_VALUE.convert('mode=fast', None, None) is not None

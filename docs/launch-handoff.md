@@ -20,7 +20,130 @@ its $60 ceiling: **$15.6474504 measured + $0.50 conservative charge = $16.147450
 accounting is unblocked and no paid process remains active. Read the live ledger before any
 new dispatch; never reset it, double-dispatch, or treat an unknown bill as zero.
 
-## Current decision, 2026-10-01 (resume here)
+## Click study: ready to run (2026-10-01, resume here)
+
+**The second-repository launch-gate study (Click) is prepared offline and registered as protocol
+revision 13. Nothing in it has run, and nothing was spent.** It is blocked only on allocation: at the
+current $60 ledger ceiling its worst case does not fit, so the script refuses to start (see Budget).
+
+- **Branch.** `codex/click-gate` (from PR #16's head `cfafd5e`), pushed. Work and run from the clean
+  clone **`/private/tmp/adage-click-src`** (outside iCloud). Never edit, pull or rebuild in it before
+  the study finishes: the cohort and the freeze bind its sources by path and hash.
+- **Protocol.** "Revision 13: the Click stratum" in [the protocol](launch-gate-protocol.md), and
+  `click_heldout_analysis` in the protocol JSON (sha256 `00ba79cc…`, checked by the script).
+- **Records.** [`results/20261001-click-gate`](../evals/reflex-proof/harness/results/20261001-click-gate/README.md)
+  (the person's script, inputs, organic replay, dry run) and
+  [`results/20261001-click-tasks`](../evals/reflex-proof/harness/results/20261001-click-tasks/README.md)
+  (the frozen tasks).
+
+**What is ready.**
+1. **Held-out tasks.** json-object, key-value, int-list and regex fill the registered Click evaluation
+   groups. Each has a neutral prompt plus `Do not create git commits.`, hidden behaviour tests, a gold
+   and three registered broken implementations.
+   - Validated offline on copies of the pinned substrate: every base fails only hidden tests, every
+     gold passes everything, and all 12 broken implementations fail hidden behaviour tests only.
+   - The control task's test blocks are validated too.
+   - A name scan of 876 earlier session files is clean, and the near-duplicate screen is recorded.
+   - Frozen in `results/20261001-click-tasks/manifest.json`, sha256 `5c0cc301…`.
+2. **Training plan.** The `cumulative-launch-10` recipe: 10 guided sessions (the five training tasks
+   twice) with one instruction to run `.venv/bin/python -m pytest tests/test_types -q`, in cohort
+   `click-gate-v1`.
+   - **Organic arm (natural learning, report-only):** a free replay of the five organic v5 Click
+     histories. It ran once offline, after its expectation was written: 25 routes, **0 certified**, as
+     expected.
+3. **Learning step** (`click_training.py learn`, offline). It conditions the fixed learner (PR #16
+   head, which contains PR #21's fix), runs the isolation audit, and selects the route by the
+   registered rule.
+   - The rule: the lexicographically first certified verify-effect context route with a project
+     pytest command, whose trigger fits the control work orders.
+   - Expectation, recorded beforehand: about even odds that a guided route certifies.
+   - **No route means advisory only.** The study then runs NOEXEC against A0 (40 sessions), BEST is
+     skipped, and the script pauses for your explicit `advisory` before any held-out session.
+4. **r13 analysis.** The r9 rules (upper bound at most 0.90, quality within one, applicable G
+   criteria, sensitivity analyses) plus per-task tables.
+   - **Advisory mode is now a GATED co-primary**, with its own bound and quality non-inferiority.
+   - A failed control or lapsed grant drops BEST, and the advisory study continues.
+   - BEST is A4 on the PR #16 head binaries:
+     - `adage` `101a1ecc669f3830e1611456cabc8f871fd0d7aa4922ccd00e3092d76bf92a45`;
+     - `adage-exec` `286455d71f01de57788c87d5bf1e1bad3fb3065bb65ae177f27c7d87e8bfea8c`;
+     - built at `cfafd5e` in the clone's `target/release`.
+5. **The person's script** `run-click-gate.sh` chains every step and stops on any error:
+   - the native session and its review;
+   - training, learning and the audit;
+   - the mode decision, freeze and prepare;
+   - your grants (the approve script's sha256 is printed and checked, and you type its first 12
+     characters);
+   - verify-grants, live and report.
+
+   Rerunning it resumes, and nothing already attempted is dispatched again.
+6. **Checks.**
+   - The offline dry run passes on a scratch authority: advisory mode end to end (40 assignments) and
+     execution mode on a simulated route (65 assignments; only the 25 BEST grants missing).
+   - The harness suite passes: 268 tests, including 50 new.
+
+**Budget (live ledger, read-only).**
+- **Ledger.** 284 attempts, $39.8915551 admitted, **$20.1084449 remaining** of $60. Less the $3
+  floor, **$17.1084449** is available.
+- **Caps.** Native $0.50; training and held-out $0.60 per session (a 60-turn Click session costs
+  about $0.50).
+- **Worst case:**
+  - execution chain: **$45.50** (native $0.50, training $6.00, held-out $39.00);
+  - advisory chain: **$30.50** (held-out $24.00).
+- **Expected:**
+  - execution chain: about $18.6 (planning basis: v5 Click costs scaled by Marshmallow's v5-to-held-out
+    drop), up to $33.9 at v5's mean cost;
+  - advisory chain: about $13.5.
+- **Shortfall:**
+  - execution: **$28.39** (a ledger ceiling of at least **$88.40**);
+  - advisory only: **$13.39** (at least **$73.40**).
+- **No sane cap fits $17.11.** The caps that would fit are $0.16 and $0.27 per session, below a Click
+  session's expected cost.
+
+**Decision needed from the person: the allocation.**
+- **(a)** Raise the ceiling to at least **$88.40**. Execution mode then fits whatever learning
+  selects. About $86 would suffice if training costs what is expected, because freeze checks the live
+  ledger.
+- **(b)** Raise it to at least $73.40. The study starts; if learning selects a route, the script
+  offers `advisory-only` at freeze, or stops so you can raise more.
+- **(c)** Keep $60. The study cannot run as registered.
+
+**How to raise it.** These are spending guards, so only the person decides; no agent changes them.
+1. Edit `/private/tmp/adage-real-repo-gate-v1/evaluation-allocation.json`: `ledger_ceiling_usd`, with
+   a new `statement` and `recorded_at`.
+2. Approve the one-line change to `real_repo_gate.budget_limit` (`0 < cap <= 60` becomes the new
+   ceiling) and its test in `test_click_gate.py`.
+3. Have the raise recorded as a budget-only r13 amendment in the protocol JSON and the script's
+   `PROTOCOL_SHA`.
+4. Commit and push to `codex/click-gate` in the clone before running.
+
+**The command** (a normal terminal, not an agent session; about 3 to 4 hours with unattended paid
+stretches; needs about 3 GB of free disk):
+
+```sh
+bash /private/tmp/adage-click-src/evals/reflex-proof/harness/results/20261001-click-gate/run-click-gate.sh
+```
+
+**What it asks you:**
+- `run`, to start;
+- `advisory`, only if learning selected no route;
+- `advisory-only`, only if execution mode does not fit at freeze;
+- the approve script's first 12 sha256 characters, in execution mode, after you read it.
+
+**Where things land:**
+- the cohort `$A/cohorts/click-gate-v1`;
+- the study `$A/cohorts/click-gate-v1/heldout-1`, with its decision record in `reports/click-heldout-<time>.md`;
+- the log `/private/tmp/adage-click-gate-<time>.log`.
+
+Afterwards an agent archives the record (as for Marshmallow) and updates the evidence pages.
+
+**If something stops it:** read the log line.
+- **A failed native review** means a new cohort (native confinement is never re-reviewed).
+- **A failed isolation audit** stops the study before freeze.
+- **Partly issued grants:** the approve script refuses to overwrite, so review them by hand.
+
+Never rerun an outcome, never reset the ledger, and never edit the clone mid-study.
+
+## Current decision, 2026-10-01 (Marshmallow held-out result)
 
 **The held-out Marshmallow study ran, and its outcome is FAIL on quality. The execution-mode
 launch gate is NOT met.**

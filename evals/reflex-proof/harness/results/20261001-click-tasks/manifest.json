@@ -1,0 +1,388 @@
+{
+  "base_commit": "06b2a678741131fd577ce170e23e5ca0aeba0309",
+  "control_task": "click-type--log-level",
+  "controls": {
+    "blocks_valid": true,
+    "command_slot": "{command}",
+    "conditions": {
+      "broader": {
+        "rerun": false,
+        "suffix_sha256": "036f267c7377027d88deaf819683f25352579a231ef01f0423668ebc862e7050",
+        "wider": [
+          [],
+          [
+            "tests"
+          ]
+        ]
+      },
+      "config-change": {
+        "rerun": false,
+        "suffix_sha256": "b53d348ae91211dbe4827617c7cdc8d13b6a345d4b4694de7073612d3c164f25",
+        "wider": null
+      },
+      "failed": {
+        "rerun": false,
+        "suffix_sha256": "a1d35eb615b25b78f06a39f0d8faf83c5e7d342d08bbde93e1fd83d446e92047",
+        "wider": null
+      },
+      "later-edit": {
+        "rerun": false,
+        "suffix_sha256": "941f8e74520897b1396592058e4875a83a4d5b21ba23b6503cf5b56b53368c36",
+        "wider": null
+      },
+      "rerun": {
+        "rerun": true,
+        "suffix_sha256": "06b6877dcf194ec64b153b87be4a7adb08f2ddaca885222182cefae78b39040e",
+        "wider": null
+      }
+    },
+    "failed_order": [
+      "tests/test_types/test_log_level.py",
+      "docs/api.md",
+      "docs/parameter-types.md",
+      "CHANGES.md",
+      "src/click/types.py",
+      "src/click/__init__.py"
+    ],
+    "natural_order": [
+      "src/click/types.py",
+      "src/click/__init__.py",
+      "tests/test_types/test_log_level.py",
+      "docs/api.md",
+      "docs/parameter-types.md",
+      "CHANGES.md"
+    ],
+    "number_test_sha256": "85369a2ca7d7ae21f4fae10bb8ff40275ae4cab1be45bc63172bb0bb5f535c9a",
+    "test_path": "tests/test_types/test_log_level.py",
+    "tests_sha256": "17a668c290956ee846c78f626362fa96233ae2e577ddd08e7c53a01375fb69a7"
+  },
+  "evaluation": [
+    "click-type--json-object",
+    "click-type--key-value",
+    "click-type--int-list",
+    "click-type--regex"
+  ],
+  "expectation": {
+    "basis": "the held-out prompts share the training template and deliverables; the training sessions name the same files",
+    "expected": {
+      "int-list": "a learned context over the tests and changelog edits, if one certifies, fires in most sessions",
+      "json-object": "a learned context over the tests and changelog edits, if one certifies, fires in most sessions",
+      "key-value": "a learned context over the tests and changelog edits, if one certifies, fires in most sessions",
+      "regex": "a learned context over the tests and changelog edits, if one certifies, fires in most sessions"
+    },
+    "family_specific_risk": {
+      "int-list": "none known",
+      "json-object": "Click's light-imports test forbids a top-level `import json`; a session that adds one fails the suite and may iterate on it",
+      "key-value": "nearest training neighbour (host-port shares a split-on-a-delimiter parse shape); a sensitivity analysis without its blocks is registered",
+      "regex": "none known"
+    },
+    "workflow": "in all five earlier unguided Click sessions (v5 organic training) the agent edited src/click/types.py and src/click/__init__.py, wrote a new tests/test_types/test_<Name>.py, then edited the docs and CHANGES.md, and ran pytest on tests/test_types or its own test file"
+  },
+  "family": "click-type",
+  "frozen_at_utc": "2026-10-01T23:04:19Z",
+  "near_duplicates": {
+    "flagged_at_or_above_registered_max": {
+      "int-list": [],
+      "json-object": [
+        "port"
+      ],
+      "key-value": [],
+      "regex": []
+    },
+    "nearest_earlier_tasks": {
+      "int-list": [
+        {
+          "body_similarity": 0.65,
+          "description_similarity": 0.39,
+          "group": "network-address",
+          "same_return_kind": false,
+          "split": "training",
+          "task": "ip-address"
+        },
+        {
+          "body_similarity": 0.57,
+          "description_similarity": 0.37,
+          "group": "numeric-range",
+          "same_return_kind": false,
+          "split": "training",
+          "task": "port"
+        },
+        {
+          "body_similarity": 0.5,
+          "description_similarity": 0.39,
+          "group": "temporal",
+          "same_return_kind": false,
+          "split": "development",
+          "task": "date"
+        }
+      ],
+      "json-object": [
+        {
+          "body_similarity": 0.74,
+          "description_similarity": 0.41,
+          "group": "numeric-range",
+          "same_return_kind": false,
+          "split": "training",
+          "task": "port"
+        },
+        {
+          "body_similarity": 0.62,
+          "description_similarity": 0.38,
+          "group": "numeric-range",
+          "same_return_kind": false,
+          "split": "training",
+          "task": "percentage"
+        },
+        {
+          "body_similarity": 0.54,
+          "description_similarity": 0.37,
+          "group": "network-address",
+          "same_return_kind": false,
+          "split": "training",
+          "task": "ip-address"
+        }
+      ],
+      "key-value": [
+        {
+          "body_similarity": 0.58,
+          "description_similarity": 0.33,
+          "group": "pattern-string",
+          "same_return_kind": false,
+          "split": "training",
+          "task": "slug"
+        },
+        {
+          "body_similarity": 0.56,
+          "description_similarity": 0.36,
+          "group": "network-address",
+          "same_return_kind": false,
+          "split": "training",
+          "task": "host-port"
+        },
+        {
+          "body_similarity": 0.46,
+          "description_similarity": 0.24,
+          "group": "numeric-range",
+          "same_return_kind": false,
+          "split": "training",
+          "task": "port"
+        }
+      ],
+      "regex": [
+        {
+          "body_similarity": 0.69,
+          "description_similarity": 0.36,
+          "group": "network-address",
+          "same_return_kind": false,
+          "split": "training",
+          "task": "ip-address"
+        },
+        {
+          "body_similarity": 0.57,
+          "description_similarity": 0.31,
+          "group": "numeric-range",
+          "same_return_kind": false,
+          "split": "training",
+          "task": "port"
+        },
+        {
+          "body_similarity": 0.46,
+          "description_similarity": 0.34,
+          "group": "temporal",
+          "same_return_kind": false,
+          "split": "development",
+          "task": "date"
+        }
+      ]
+    },
+    "registered_body_similarity": {
+      "max": 0.7,
+      "median": 0.5,
+      "min": 0.02
+    },
+    "registered_near_duplicate_pairs": {
+      "byte-size/duration": {
+        "body": 0.02,
+        "description": 0.19,
+        "group": "unit-quantity"
+      },
+      "date/time": {
+        "body": 0.7,
+        "description": 0.55,
+        "group": "temporal"
+      },
+      "hex-color/semver": {
+        "body": 0.5,
+        "description": 0.41,
+        "group": "pattern-string"
+      },
+      "hex-color/slug": {
+        "body": 0.46,
+        "description": 0.32,
+        "group": "pattern-string"
+      },
+      "host-port/ip-address": {
+        "body": 0.32,
+        "description": 0.38,
+        "group": "network-address"
+      },
+      "percentage/port": {
+        "body": 0.68,
+        "description": 0.49,
+        "group": "numeric-range"
+      },
+      "semver/slug": {
+        "body": 0.54,
+        "description": 0.35,
+        "group": "pattern-string"
+      }
+    },
+    "rule": "a screen only: the registered Click pairs span the whole similarity range (the generated bodies share try/except/fail idioms), so concept, return kind and parse shape decide"
+  },
+  "paid_calls": 0,
+  "protocol": "click-heldout-tasks-1",
+  "python": "Python 3.12.14",
+  "realism_line": "Do not create git commits.",
+  "source_sha256": {
+    "evals/lab/research/recurring-workflows/families.py": "0592230842e8f6cf0f7f8696464027da464cd41bbe997be1950a2deec49c41d1",
+    "evals/reflex-proof/harness/click_tasks.py": "34e21676dd4460394aeef08755af61b3e123739a60df5b336352a8aa01ba7c7b",
+    "evals/reflex-proof/harness/heldout_tasks.py": "76e807771256f04ee91aef2cc7bcc80783b59db785a8db47fc7f218fa64ddc0a",
+    "evals/reflex-proof/harness/real_repo_gate.py": "f6ea190c5649dc8eb7c961519b15c417ce85dd59297d53bb46413a4c2bb71c41",
+    "evals/reflex-proof/harness/real_repo_pairs.py": "352d375d6ee5d5a38ce2cf47e1532186500393ef3ded0a61e615c96345eee3a0",
+    "evals/showcase/fam_python.py": "9a7e2c5137e90b7ff1f07a9f1518baa15fba791560dc234c2fad366871d227c9",
+    "evals/showcase/sc_score.py": "338307033ea3c76df0c0ec965ba1290991862b02f752b0a6985a25a94bf13e61"
+  },
+  "tasks": {
+    "click-type--int-list": {
+      "broken": [
+        "digits-only",
+        "float-items",
+        "skip-empty"
+      ],
+      "files": {
+        "broken-digits-only.patch": "230bd09b89f8642b62c41dae2bbf32e0507a0cf5ef5d093ff36a9916ee2510e1",
+        "broken-float-items.patch": "35e09dee581a2394300eaf200310400a32e1e91f111820ac5d7d8c3dca768f73",
+        "broken-skip-empty.patch": "b53f9f897eb31ebfb23d43836d0c41892c408303fec2d2b77e921387e2b07108",
+        "gold.patch": "39dbec871e27d290681dce033ace0c1332168078822e01e7af206c0dd5d5b21a",
+        "hidden.py": "979eb7a58ff2c7bb5a7680feed0a0f44acc561b9ad191c55af16e4fb844b8ff7",
+        "prompt.txt": "8fc38d8ce4248afd3fab815c980c08af717b89e797187f9c6d72b96ebaf09e13"
+      },
+      "gold_files_sha256": {
+        "CHANGES.md": "d96a800a4fbdaff93b92f0e52a89a9931cee36c9630e0dbadfca3668ea9388b8",
+        "docs/api.md": "43de33d79d14e0836a12a95e8cc62fb4b949f1b80e073c63976ceaba27d12b91",
+        "docs/parameter-types.md": "defae22d63b6bfde5b62fdd9d203ba5f3a99fdd6bad40d9ac1292f4113627c24",
+        "src/click/__init__.py": "1ae1c603d4600635c04b8c6b64aa96bb8dc3ff7a0ba718209db13e60cea04d51",
+        "src/click/types.py": "861c4511b555e49a61b6ff635fbf8da05e78a323565a5a21ba1a1fc262fa12ac",
+        "tests/test_types/test_int_list.py": "9d180efabddc0ed31c7096b0e5b181f12d9feb0de7bd5e81293568d8b6042879"
+      },
+      "group": "list-parsing",
+      "hidden_identities": 13,
+      "split": "evaluation",
+      "valid": true
+    },
+    "click-type--json-object": {
+      "broken": [
+        "any-json",
+        "no-surrounding-whitespace",
+        "python-literal"
+      ],
+      "files": {
+        "broken-any-json.patch": "0a0fa086f077bacefcf89cd933b529c428920600587f6dfee0c1956e3e5e508e",
+        "broken-no-surrounding-whitespace.patch": "4a9c934c0cc41170f466a69b3b0c62b4056013f54b7d3d5943d99c4e60ad77e7",
+        "broken-python-literal.patch": "8e86a41b40eaacadcb7427fc3f23757e0da45ca6a175b3aaf9c2bef8c5a86477",
+        "gold.patch": "7e38c4cb1fffdd086ce4121aac88acc9198ffe24a5b03907220402b4d8194c46",
+        "hidden.py": "912520e92577f8bb5214ac798e4199faf9080cae6f3ad8d16060ed0a9d1b39b2",
+        "prompt.txt": "55b92ccdc772fa9e4021d313182bbe0692780e1216980b0ad14d432d56e43595"
+      },
+      "gold_files_sha256": {
+        "CHANGES.md": "686330e75ba389b803a4aa8a961a084d5424ed9b777a7f8befb7cdfa82fe5a55",
+        "docs/api.md": "5cf97cd911633014019ddcb0011e09eb7af74a209132febe05033b04d67b8a0e",
+        "docs/parameter-types.md": "d4ce7da542247cf3a364e91dbd331177789d492ed5119fe3cba917236061640e",
+        "src/click/__init__.py": "600ffe4b263024e97ea4664dd751e415465dd4b40dcf8c98ec6407bc8c687bff",
+        "src/click/types.py": "6cdba74a0357650f83926aeeee82231cb7327510d7f74e48509559dbfff12d08",
+        "tests/test_types/test_json_object.py": "cecfcef787452f7929c34b9d2e70d6459f9c2023dbd9f44f7f83360751e3335b"
+      },
+      "group": "structured-text",
+      "hidden_identities": 14,
+      "split": "evaluation",
+      "valid": true
+    },
+    "click-type--key-value": {
+      "broken": [
+        "last-equals",
+        "nonempty-value",
+        "unicode-identifier"
+      ],
+      "files": {
+        "broken-last-equals.patch": "c345882ad41cd3b0ed134558017e527705cf1fc61f1e5726c8302becd84a9b6f",
+        "broken-nonempty-value.patch": "8c1b03802ae35e72f86a9e4dc885288119278f44b5c22b9af522f272b857b9a5",
+        "broken-unicode-identifier.patch": "c2ab66bc753a78f30544fe7e34f72ccd70e62d4ceb2b9757e4a27ffecbe0eb0d",
+        "gold.patch": "3ffd23717261b9ec86f1e78a02f1cb2a97ffe5786d1f3bd758155e6fe3b6d376",
+        "hidden.py": "89050a893db67bf9da8f09e5b8b012122de1434778a855bf24fefd95392bd95d",
+        "prompt.txt": "4bfc16e7861eeef364f9bd936b80804b5a231c217f4dda75955c46dc6ae95410"
+      },
+      "gold_files_sha256": {
+        "CHANGES.md": "8c59b9bd01152e4663a6949c86a30b45a8e3b0aa87f4ad0489dbc344f1c83e75",
+        "docs/api.md": "537271ad43a967181e2268b43dbabc37b9f93e4aefa76ee772b855e91fc9a61d",
+        "docs/parameter-types.md": "9e2bb9f4f3bcfb93cd998d20cf7d610f98c2bcffc04e6f908304e3381051efd5",
+        "src/click/__init__.py": "c9e30840fdacbc0d093ecc25628e6e05ed1005caa72c9d83666f6eb7261c9560",
+        "src/click/types.py": "599a0bb973b95f4c93085bb0398b802eea0180ad6f383f5a506122944af83754",
+        "tests/test_types/test_key_value.py": "73e3facaa19a9a7d8f978556543cb055b3b1ea9f442b70b4294044a598f1fd58"
+      },
+      "group": "key-value",
+      "hidden_identities": 13,
+      "split": "evaluation",
+      "valid": true
+    },
+    "click-type--log-level": {
+      "broken": [],
+      "files": {
+        "gold.patch": "f90a2dfa785d11187626d2ea609f430909dc8e81c7d0d9a5076db909d391c345",
+        "hidden.py": "1c81a9e88cc9d3079ad240bdb73c7aec112e9400e4a176533f101494d34b3650",
+        "prompt.txt": "4df7bfa6ad4e5bad32ac0b440a25dfe11f7b9d2ef26c91b9a2fa296c31c9750d"
+      },
+      "gold_files_sha256": {
+        "CHANGES.md": "6ea69503f74bf81e70498c3b7fd0807010e2396b555a954ac8694048c44b25d0",
+        "docs/api.md": "407d4148fcedbf358bc3fc86296f252345bbea896b9354c1d515008ea8be84b3",
+        "docs/parameter-types.md": "ba30e22617c14769e27ef877ce6daeecdfb916ea2276b8c73f325590c5356fa1",
+        "src/click/__init__.py": "54e9cf2703c1c727641723ca7468bde67094fe5f04831e043f107a5385e6655c",
+        "src/click/types.py": "8ba8183ac8ca0c1be0a763fd73f8c9c074e96948a0c83dcf64a05ce46c168a4f",
+        "tests/test_types/test_log_level.py": "68df3d699b14cce7dc3019b523c2407d2d9dd2c1d002969533c7143705b369ec"
+      },
+      "group": "enumeration",
+      "hidden_identities": 10,
+      "split": "development (safety controls)",
+      "valid": true
+    },
+    "click-type--regex": {
+      "broken": [
+        "returns-text",
+        "strips-whitespace",
+        "uncaught-error"
+      ],
+      "files": {
+        "broken-returns-text.patch": "104c1cd58e6164b880300a6524e829724634a852c475674db041340b848daf32",
+        "broken-strips-whitespace.patch": "741bb9893647133785c71fe3a3eed240e4d764b4219f6febf124228f2851a9be",
+        "broken-uncaught-error.patch": "0156db800d53c320e5a67471bc3eee17df751d341bfedca83d3668a9f89bb646",
+        "gold.patch": "c9e309ba0f3b1d2e84419527e7e4ccda6c24e85c733bcfd49d61c9380b39e20e",
+        "hidden.py": "57030c729328c1a59c7c7bff50e1c51eff0fa35adee11362f9c069e914eeb8b0",
+        "prompt.txt": "b51bcd90ec498519fd4c9c0d7039ba957ee2639bed19f7df7799ff9394d54ddc"
+      },
+      "gold_files_sha256": {
+        "CHANGES.md": "1b8b73f4e24d951b2fe49544bf31f28141cd891ab0a46241ffdff496e951cd05",
+        "docs/api.md": "9dbdb9dba01a7ed9f3d47a1e848658f69a6c66f98aa1af0503aea7c064690a6d",
+        "docs/parameter-types.md": "98e04d2c2a057a64393c86109cc4e6c69d71dc470254c786123ff1db98d42f23",
+        "src/click/__init__.py": "6a329d25991e6d1663d3a533582750643d95c878c287d4279c3d8a407902af32",
+        "src/click/types.py": "85c46d333e4fefe69f2223185ee2ed7355e172785ff8d2882685b93dbacbf568",
+        "tests/test_types/test_regex.py": "2e6a1006cf89acf54aa4911e920375bfcbe1408a595fcb9be14da990c0451367"
+      },
+      "group": "compiled-pattern",
+      "hidden_identities": 12,
+      "split": "evaluation",
+      "valid": true
+    }
+  },
+  "validation_root": "/private/tmp/adage-click-controls-2",
+  "validation_sha256": "0670e344b0fa72b0f81aa71f17a0196236868423eceeb7d535d7abb4cb64b0af",
+  "withdrawn": {}
+}

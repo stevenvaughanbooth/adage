@@ -1,0 +1,92 @@
+{
+  "protocol": "launch-gate-1 revision 13 (click_heldout_analysis)",
+  "recorded_at_utc": "2026-10-01",
+  "branch": "codex/click-gate",
+  "clone": "/private/tmp/adage-click-src",
+  "base_commit": "cfafd5e0c14cebcbfda0932e73f09122516c8034",
+  "protocol_json_sha256": "00ba79cc17932afbb22feddbb9c21889595f50b547e15acf560bb6a39a705d5c",
+  "binaries": {
+    "build_commit": "cfafd5e0c14cebcbfda0932e73f09122516c8034",
+    "command": "cargo build --release --locked -p adage-cli -p adage-exec (in the clone)",
+    "path": "/private/tmp/adage-click-src/target/release",
+    "sha256": {
+      "adage": "101a1ecc669f3830e1611456cabc8f871fd0d7aa4922ccd00e3092d76bf92a45",
+      "adage-exec": "286455d71f01de57788c87d5bf1e1bad3fb3065bb65ae177f27c7d87e8bfea8c"
+    },
+    "contains": "PR #16 head: PR #21's learner fix, the failure-detail and own-test fixes"
+  },
+  "task_controls": {
+    "root": "/private/tmp/adage-click-controls-2",
+    "validation_sha256": "0670e344b0fa72b0f81aa71f17a0196236868423eceeb7d535d7abb4cb64b0af",
+    "manifest": "results/20261001-click-tasks/manifest.json",
+    "manifest_sha256": "5c0cc30131abd6410adb65e6fbba251d90b498992f66fa7e5fe6fba6d9704934",
+    "superseded": "/private/tmp/adage-click-controls-1 (key-value's shown example named the product; never used)"
+  },
+  "best_selection": {
+    "report": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v6/dev-v9b/reports/dev-v9-1790870521952346000.json",
+    "sha256": "48cba77667eb59eb849be5be94d20f155408d4ef421a7661cbf94f4ea61b7cf0",
+    "rule": "r9: the dev-arms-2 arm passing D1-D4 with the lowest mean requests",
+    "best": "A4 (orientation card on)"
+  },
+  "authority": {
+    "path": "/private/tmp/adage-real-repo-gate-v1",
+    "allocation_sha256": "f0981c0a547be249b0ba75fa75e735cbcda73860fedb900b84dee3320396848c",
+    "ledger_ceiling_usd": 60,
+    "ledger_at_registration": {
+      "attempts": 284,
+      "settled": 283,
+      "cap_charged": 1,
+      "admitted_usd": 39.8915551,
+      "remaining_usd": 20.1084449,
+      "open": []
+    },
+    "paid_state_sha256_when_read": "4081ab2376f82e86dcf0b36d25612986d7c9926ae18c01dc45ec256145e79e3c",
+    "written": false
+  },
+  "extra_audit_authority": "/private/tmp/adage-learning-curve-v2",
+  "cohort": "cohorts/click-gate-v1 (created by the person's script)",
+  "study": "cohorts/click-gate-v1/heldout-1",
+  "budget": {
+    "remaining_usd": 20.1084449,
+    "floor_usd": 3.0,
+    "available_usd": 17.1084449,
+    "caps": {
+      "native": 0.5,
+      "training": 0.6,
+      "heldout": 0.6
+    },
+    "modes": {
+      "execution": {
+        "heldout_sessions": 65,
+        "heldout_worst_usd": 39.0,
+        "chain_worst_usd": 45.5,
+        "fits": false,
+        "shortfall_usd": 28.3915551,
+        "ceiling_needed_usd": 88.3915551,
+        "heldout_expected_usd": 15.1,
+        "chain_expected_usd": 18.63,
+        "chain_expected_at_v5_mean_usd": 33.93,
+        "max_cap_that_fits_usd": 0.1632
+      },
+      "advisory": {
+        "heldout_sessions": 40,
+        "heldout_worst_usd": 24.0,
+        "chain_worst_usd": 30.5,
+        "fits": false,
+        "shortfall_usd": 13.3915551,
+        "ceiling_needed_usd": 73.3915551,
+        "heldout_expected_usd": 10.0,
+        "chain_expected_usd": 13.53,
+        "chain_expected_at_v5_mean_usd": 22.63,
+        "max_cap_that_fits_usd": 0.2652
+      }
+    },
+    "training_and_native_worst_usd": 6.5
+  },
+  "person_script": {
+    "path": "results/20261001-click-gate/run-click-gate.sh"
+  },
+  "paid_calls": 0,
+  "claude_sessions": 0,
+  "grants_written": false
+}

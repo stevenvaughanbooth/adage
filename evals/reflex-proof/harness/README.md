@@ -109,3 +109,18 @@ The registered protocol is `docs/launch-gate-protocol.md`; `launch_gate_protocol
 - `heldout_cohort.py`: the revision 9 held-out runner (A0, NOEXEC and BEST). Its subcommands are
   `freeze` (the dev report, build commit and binary hashes are inputs), `prepare`, `approval-script`
   (BEST homes only), `verify-grants`, `live` (paid; controls first) and `report`.
+- Revision 13, the Click stratum (`results/20261001-click-gate`; the person runs its
+  `run-click-gate.sh`):
+  - `click_tasks.py`: the held-out Click tasks (json-object, key-value, int-list, regex) and the
+    log-level control task. `validate` scores base, gold and broken implementations and the control
+    test blocks offline on a copied substrate; `archive` freezes them
+    (`results/20261001-click-tasks`); `near-duplicates` and `name-scan` are the screens.
+  - `click_training.py`: the Click cohort and the guided training recipe (`prepare-cohort`,
+    `prepare-native`, `prepare-training`, `train` (paid, resumable)). `learn` conditions the fixed
+    learner, replays the organic arm, runs the isolation audit and selects the route.
+  - `click_analysis.py`: the r13 analysis. Both co-primaries are gated: advisory (NOEXEC/A0) and
+    execution (BEST/A0, r9 rules). It also covers per-task tables and the budget. Pure and offline.
+  - `click_gate.py`: the Click held-out runner. It covers the execution or advisory-only mode,
+    dropping BEST on a failed control or lapse, `budget-check` and `attempted`.
+  - `click_writeup.py`: the decision record.
+  - `click_dryrun.py`: the offline dry run of the whole chain on a scratch authority.

@@ -1,0 +1,5 @@
+Add a new built-in parameter type to Click: `click.REGEX`, which accepts a regular expression in Python's `re` syntax and converts it to a compiled pattern (`re.compile`); the expression is used exactly as written, so spaces around it are part of the pattern, and an expression that does not compile fails. Values it cannot convert must fail with Click's usual "Invalid value" usage error. Examples of valid input: `^[a-z]+$`. Examples of invalid input: `[a-z`.
+
+Include tests, document the new type in the API reference and in the parameter types guide, and add a changelog entry.
+
+Do not create git commits.

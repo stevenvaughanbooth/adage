@@ -1,0 +1,619 @@
+{
+  "complete": true,
+  "control_blocks": {
+    "rows": [
+      {
+        "blocks": "base",
+        "counts": {
+          "passed": 6
+        },
+        "exit_code": 0,
+        "expected_pass": true,
+        "implementation": "gold",
+        "ok": true,
+        "passed": true,
+        "tail": "......                                                                   [100%]\n6 passed in 0.01s"
+      },
+      {
+        "blocks": "base",
+        "counts": {
+          "passed": 6
+        },
+        "exit_code": 0,
+        "expected_pass": true,
+        "implementation": "numeric-gold",
+        "ok": true,
+        "passed": true,
+        "tail": "......                                                                   [100%]\n6 passed in 0.01s"
+      },
+      {
+        "blocks": "number",
+        "counts": {
+          "passed": 8
+        },
+        "exit_code": 0,
+        "expected_pass": true,
+        "implementation": "numeric-gold",
+        "ok": true,
+        "passed": true,
+        "tail": "........                                                                 [100%]\n8 passed in 0.01s"
+      },
+      {
+        "blocks": "number",
+        "counts": {
+          "failed": 2,
+          "passed": 6
+        },
+        "exit_code": 1,
+        "expected_pass": false,
+        "implementation": "gold",
+        "ok": true,
+        "passed": false,
+        "tail": "=========================== short test summary info ============================\nFAILED tests/test_types/test_log_level.py::test_log_level_accepts_level_numbers[10-10] - click.exceptions.BadParameter: '10' is not a valid log level.\nFAILED tests/test_types/test_log_level.py::test_log_level_accepts_level_numbers[50-50] - click.exceptions.BadParameter: '50' is not a valid log level.\n2 failed, 6 passed in 0.05s"
+      },
+      {
+        "blocks": "base",
+        "counts": {
+          "failed": 2,
+          "passed": 4
+        },
+        "exit_code": 1,
+        "expected_pass": false,
+        "implementation": "broken-case-sensitive",
+        "ok": true,
+        "passed": false,
+        "tail": "=========================== short test summary info ============================\nFAILED tests/test_types/test_log_level.py::test_log_level_converts_level_names[debug-10] - click.exceptions.BadParameter: 'debug' is not a valid log level.\nFAILED tests/test_types/test_log_level.py::test_log_level_converts_level_names[Critical-50] - click.exceptions.BadParameter: 'Critical' is not a valid log level.\n2 failed, 4 passed in 0.05s"
+      },
+      {
+        "blocks": "base",
+        "counts": {
+          "failed": 1,
+          "passed": 5
+        },
+        "exit_code": 1,
+        "expected_pass": false,
+        "implementation": "broken-any-integer",
+        "ok": true,
+        "passed": false,
+        "tail": "=========================== short test summary info ============================\nFAILED tests/test_types/test_log_level.py::test_log_level_rejects_other_values[5] - assert 0 == 2\n +  where 0 = <Result okay>.exit_code\n1 failed, 5 passed in 0.02s"
+      },
+      {
+        "blocks": "base",
+        "counts": {
+          "failed": 3,
+          "passed": 3
+        },
+        "exit_code": 1,
+        "expected_pass": false,
+        "implementation": "broken-name-string",
+        "ok": true,
+        "passed": false,
+        "tail": " +  where 'CRITICAL' = convert('Critical', None, None)\n +    where convert = LOG_LEVEL.convert\n +      where LOG_LEVEL = click.LOG_LEVEL\n3 failed, 3 passed in 0.02s"
+      }
+    ],
+    "valid": true
+  },
+  "evaluation_valid": true,
+  "manifest_sha256": "3f057510c0d56c1e463ecb37ffac7a1b110a14147d0fb907400ce66a7e604d3b",
+  "paid_calls": 0,
+  "patch_sha256": {
+    "click-type--int-list": {
+      "broken-digits-only.patch": "230bd09b89f8642b62c41dae2bbf32e0507a0cf5ef5d093ff36a9916ee2510e1",
+      "broken-float-items.patch": "35e09dee581a2394300eaf200310400a32e1e91f111820ac5d7d8c3dca768f73",
+      "broken-skip-empty.patch": "b53f9f897eb31ebfb23d43836d0c41892c408303fec2d2b77e921387e2b07108",
+      "gold.patch": "39dbec871e27d290681dce033ace0c1332168078822e01e7af206c0dd5d5b21a"
+    },
+    "click-type--json-object": {
+      "broken-any-json.patch": "0a0fa086f077bacefcf89cd933b529c428920600587f6dfee0c1956e3e5e508e",
+      "broken-no-surrounding-whitespace.patch": "4a9c934c0cc41170f466a69b3b0c62b4056013f54b7d3d5943d99c4e60ad77e7",
+      "broken-python-literal.patch": "8e86a41b40eaacadcb7427fc3f23757e0da45ca6a175b3aaf9c2bef8c5a86477",
+      "gold.patch": "7e38c4cb1fffdd086ce4121aac88acc9198ffe24a5b03907220402b4d8194c46"
+    },
+    "click-type--key-value": {
+      "broken-last-equals.patch": "c345882ad41cd3b0ed134558017e527705cf1fc61f1e5726c8302becd84a9b6f",
+      "broken-nonempty-value.patch": "8c1b03802ae35e72f86a9e4dc885288119278f44b5c22b9af522f272b857b9a5",
+      "broken-unicode-identifier.patch": "c2ab66bc753a78f30544fe7e34f72ccd70e62d4ceb2b9757e4a27ffecbe0eb0d",
+      "gold.patch": "3ffd23717261b9ec86f1e78a02f1cb2a97ffe5786d1f3bd758155e6fe3b6d376"
+    },
+    "click-type--log-level": {
+      "gold.patch": "f90a2dfa785d11187626d2ea609f430909dc8e81c7d0d9a5076db909d391c345"
+    },
+    "click-type--regex": {
+      "broken-returns-text.patch": "104c1cd58e6164b880300a6524e829724634a852c475674db041340b848daf32",
+      "broken-strips-whitespace.patch": "741bb9893647133785c71fe3a3eed240e4d764b4219f6febf124228f2851a9be",
+      "broken-uncaught-error.patch": "0156db800d53c320e5a67471bc3eee17df751d341bfedca83d3668a9f89bb646",
+      "gold.patch": "c9e309ba0f3b1d2e84419527e7e4ccda6c24e85c733bcfd49d61c9380b39e20e"
+    }
+  },
+  "protocol": "click-heldout-tasks-1",
+  "python": "Python 3.12.14",
+  "rows": [
+    {
+      "base": {
+        "changed_files": [],
+        "exit_code": 1,
+        "hidden_failed": [
+          "test_changelog",
+          "test_documented",
+          "test_has_tests",
+          "test_invalid[\"{}\"]",
+          "test_invalid[[1,",
+          "test_invalid[]",
+          "test_invalid[null]",
+          "test_invalid[{\"a\":",
+          "test_invalid[{'a':",
+          "test_is_param_type",
+          "test_valid[",
+          "test_valid[{\"a\":",
+          "test_valid[{\"items\":",
+          "test_valid[{}-expected1]"
+        ],
+        "n_tests": 2254,
+        "passed": false,
+        "suite_failed": [],
+        "tail": "FAILED tests/test_rw_hidden.py::test_invalid[] - AssertionError: click.JSON_OBJECT is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_documented - AssertionError: not in the API reference\nassert None\n +  where None = <built-in method search of re.Pattern object at 0x10cab6200>('# API\\n\\n```{currentmodule} click\\n```\\n\\nThis part of the documentation lists the full API reference of all public\\n...``{eval-rst}\\n.. autoclass:: CliRunner\\n   :members:\\n```\\n\\n```{eval-rst}\\n.. autoclass:: Result\\n   :members:\\n```\\n')\n +    where <built-in method search of re.Pattern object at 0x10cab6200> = re.compile('\\\\bJSON_OBJECT\\\\b').search\n +    and   '# API\\n\\n```{currentmodule} click\\n```\\n\\nThis part of the documentation lists the full API reference of all public\\n...``{eval-rst}\\n.. autoclass:: CliRunner\\n   :members:\\n```\\n\\n```{eval-rst}\\n.. autoclass:: Result\\n   :members:\\n```\\n' = read_text()\n +      where read_text = ((PosixPath('/private/tmp/adage-click-controls-2/private/validation/1790895474964119000/click-type--json-object/base') / 'docs') / 'api.md').read_text\nFAILED tests/test_rw_hidden.py::test_changelog - AssertionError: no entry in the unreleased version's changes\nassert None\n +  where None = <function search at 0x106c585e0>((('\\\\b' + 'JSON_OBJECT') + '\\\\b'), '8.6.0\\n\\nUnreleased\\n\\n- A parameter name that is not a valid Python identifier, or that is a Python\\n  keyword, is d...class}`Option` name written as a Python identifier is deprecated when it\\n  is not already lower-cased. {pr}`3866`\\n\\n')\n +    where <function search at 0x106c585e0> = re.search\nFAILED tests/test_rw_hidden.py::test_has_tests - assert False\n +  where False = any(<generator object test_has_tests.<locals>.<genexpr> at 0x10cab6890>)\n14 failed, 2240 passed, 25 skipped, 31000 deselected, 1 xfailed in 37.01s"
+      },
+      "broken-any-json": {
+        "changed_files": [
+          "CHANGES.md",
+          "docs/api.md",
+          "docs/parameter-types.md",
+          "src/click/__init__.py",
+          "src/click/types.py",
+          "tests/test_types/test_json_object.py"
+        ],
+        "exit_code": 1,
+        "hidden_failed": [
+          "test_invalid[\"{}\"]",
+          "test_invalid[[1,",
+          "test_invalid[null]"
+        ],
+        "n_tests": 2255,
+        "passed": false,
+        "suite_failed": [],
+        "tail": "tests/test_rw_hidden.py:47: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_rw_hidden.py::test_invalid[[1, 2]] - AssertionError: [1, 2]\n  \nassert 0 == 2\n +  where 0 = <Result okay>.exit_code\nFAILED tests/test_rw_hidden.py::test_invalid[null] - AssertionError: None\n  \nassert 0 == 2\n +  where 0 = <Result okay>.exit_code\nFAILED tests/test_rw_hidden.py::test_invalid[\"{}\"] - AssertionError: '{}'\n  \nassert 0 == 2\n +  where 0 = <Result okay>.exit_code\n3 failed, 2252 passed, 25 skipped, 31000 deselected, 1 xfailed in 25.25s"
+      },
+      "broken-no-surrounding-whitespace": {
+        "changed_files": [
+          "CHANGES.md",
+          "docs/api.md",
+          "docs/parameter-types.md",
+          "src/click/__init__.py",
+          "src/click/types.py",
+          "tests/test_types/test_json_object.py"
+        ],
+        "exit_code": 1,
+        "hidden_failed": [
+          "test_valid["
+        ],
+        "n_tests": 2255,
+        "passed": false,
+        "suite_failed": [],
+        "tail": "\n    def fail(\n        self,\n        message: str,\n        param: Parameter | None = None,\n        ctx: Context | None = None,\n    ) -> t.NoReturn:\n        \"\"\"Helper method to fail with an invalid value message.\"\"\"\n>       raise BadParameter(message, ctx=ctx, param=param)\nE       click.exceptions.BadParameter: '  {\"a\": 1}  ' is not a valid json object.\n\nsrc/click/types.py:223: BadParameter\n=========================== short test summary info ============================\nFAILED tests/test_rw_hidden.py::test_valid[  {\"a\": 1}  -expected3] - click.exceptions.BadParameter: '  {\"a\": 1}  ' is not a valid json object.\n1 failed, 2254 passed, 25 skipped, 31000 deselected, 1 xfailed in 11.57s"
+      },
+      "broken-python-literal": {
+        "changed_files": [
+          "CHANGES.md",
+          "docs/api.md",
+          "docs/parameter-types.md",
+          "src/click/__init__.py",
+          "src/click/types.py",
+          "tests/test_types/test_json_object.py"
+        ],
+        "exit_code": 1,
+        "hidden_failed": [
+          "test_invalid[{'a':",
+          "test_valid[{\"items\":"
+        ],
+        "n_tests": 2255,
+        "passed": false,
+        "suite_failed": [],
+        "tail": "        r = _run([\"--v\", raw])\n>       assert r.exit_code == 2, r.output\nE       AssertionError: {'a': 1}\nE         \nE       assert 0 == 2\nE        +  where 0 = <Result okay>.exit_code\n\ntests/test_rw_hidden.py:47: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_rw_hidden.py::test_valid[{\"items\": [1, 2], \"meta\": {\"ok\": true, \"next\": null}}-expected2] - click.exceptions.BadParameter: '{\"items\": [1, 2], \"meta\": {\"ok\": true, \"next\": null}}' is not a valid json object.\nFAILED tests/test_rw_hidden.py::test_invalid[{'a': 1}] - AssertionError: {'a': 1}\n  \nassert 0 == 2\n +  where 0 = <Result okay>.exit_code\n2 failed, 2253 passed, 25 skipped, 31000 deselected, 1 xfailed in 13.28s"
+      },
+      "checks": {
+        "base_fails_hidden": true,
+        "broken_broken-any-json_fails_behaviour_only": true,
+        "broken_broken-no-surrounding-whitespace_fails_behaviour_only": true,
+        "broken_broken-python-literal_fails_behaviour_only": true,
+        "gold_adds_own_test": true,
+        "gold_passes_all": true,
+        "hidden_identities_unique_and_pass": true
+      },
+      "gold": {
+        "changed_files": [
+          "CHANGES.md",
+          "docs/api.md",
+          "docs/parameter-types.md",
+          "src/click/__init__.py",
+          "src/click/types.py",
+          "tests/test_types/test_json_object.py"
+        ],
+        "exit_code": 0,
+        "hidden_failed": [],
+        "n_tests": 2255,
+        "passed": true,
+        "suite_failed": [],
+        "tail": "........................................................................ [ 59%]\n........................................................................ [ 63%]\n........................................................................ [ 66%]\n........................................................................ [ 69%]\n........................................................................ [ 72%]\n...................................sssssssssssssssssssss................ [ 75%]\n..ss.................................................................... [ 78%]\n........................................................................ [ 82%]\n........................................................................ [ 85%]\n......s..........................................s...................... [ 88%]\n........................................................................ [ 91%]\n........................................................................ [ 94%]\n........................................................................ [ 97%]\n.................................................                        [100%]\n2255 passed, 25 skipped, 31000 deselected, 1 xfailed in 29.80s"
+      },
+      "hidden_identities": 14,
+      "task": "click-type--json-object",
+      "valid": true
+    },
+    {
+      "base": {
+        "changed_files": [],
+        "exit_code": 1,
+        "hidden_failed": [
+          "test_changelog",
+          "test_documented",
+          "test_has_tests",
+          "test_invalid[1st=x]",
+          "test_invalid[=value]",
+          "test_invalid[na\\xefve=1]",
+          "test_invalid[noequals]",
+          "test_invalid[two",
+          "test_is_param_type",
+          "test_valid[EMPTY=-expected1]",
+          "test_valid[_max_2=10",
+          "test_valid[mode=fast-expected0]",
+          "test_valid[url=a=b-expected2]"
+        ],
+        "n_tests": 2253,
+        "passed": false,
+        "suite_failed": [],
+        "tail": "FAILED tests/test_rw_hidden.py::test_invalid[na\\xefve=1] - AssertionError: click.KEY_VALUE is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_documented - AssertionError: not in the API reference\nassert None\n +  where None = <built-in method search of re.Pattern object at 0x110d9ba00>('# API\\n\\n```{currentmodule} click\\n```\\n\\nThis part of the documentation lists the full API reference of all public\\n...``{eval-rst}\\n.. autoclass:: CliRunner\\n   :members:\\n```\\n\\n```{eval-rst}\\n.. autoclass:: Result\\n   :members:\\n```\\n')\n +    where <built-in method search of re.Pattern object at 0x110d9ba00> = re.compile('\\\\bKEY_VALUE\\\\b').search\n +    and   '# API\\n\\n```{currentmodule} click\\n```\\n\\nThis part of the documentation lists the full API reference of all public\\n...``{eval-rst}\\n.. autoclass:: CliRunner\\n   :members:\\n```\\n\\n```{eval-rst}\\n.. autoclass:: Result\\n   :members:\\n```\\n' = read_text()\n +      where read_text = ((PosixPath('/private/tmp/adage-click-controls-2/private/validation/1790895474964119000/click-type--key-value/base') / 'docs') / 'api.md').read_text\nFAILED tests/test_rw_hidden.py::test_changelog - AssertionError: no entry in the unreleased version's changes\nassert None\n +  where None = <function search at 0x10ab60680>((('\\\\b' + 'KEY_VALUE') + '\\\\b'), '8.6.0\\n\\nUnreleased\\n\\n- A parameter name that is not a valid Python identifier, or that is a Python\\n  keyword, is d...class}`Option` name written as a Python identifier is deprecated when it\\n  is not already lower-cased. {pr}`3866`\\n\\n')\n +    where <function search at 0x10ab60680> = re.search\nFAILED tests/test_rw_hidden.py::test_has_tests - assert False\n +  where False = any(<generator object test_has_tests.<locals>.<genexpr> at 0x110b354e0>)\n13 failed, 2240 passed, 25 skipped, 31000 deselected, 1 xfailed in 12.09s"
+      },
+      "broken-last-equals": {
+        "changed_files": [
+          "CHANGES.md",
+          "docs/api.md",
+          "docs/parameter-types.md",
+          "src/click/__init__.py",
+          "src/click/types.py",
+          "tests/test_types/test_key_value.py"
+        ],
+        "exit_code": 1,
+        "hidden_failed": [
+          "test_valid[url=a=b-expected2]"
+        ],
+        "n_tests": 2254,
+        "passed": false,
+        "suite_failed": [],
+        "tail": "\n    def fail(\n        self,\n        message: str,\n        param: Parameter | None = None,\n        ctx: Context | None = None,\n    ) -> t.NoReturn:\n        \"\"\"Helper method to fail with an invalid value message.\"\"\"\n>       raise BadParameter(message, ctx=ctx, param=param)\nE       click.exceptions.BadParameter: 'url=a=b' is not a valid key value.\n\nsrc/click/types.py:223: BadParameter\n=========================== short test summary info ============================\nFAILED tests/test_rw_hidden.py::test_valid[url=a=b-expected2] - click.exceptions.BadParameter: 'url=a=b' is not a valid key value.\n1 failed, 2253 passed, 25 skipped, 31000 deselected, 1 xfailed in 11.48s"
+      },
+      "broken-nonempty-value": {
+        "changed_files": [
+          "CHANGES.md",
+          "docs/api.md",
+          "docs/parameter-types.md",
+          "src/click/__init__.py",
+          "src/click/types.py",
+          "tests/test_types/test_key_value.py"
+        ],
+        "exit_code": 1,
+        "hidden_failed": [
+          "test_valid[EMPTY=-expected1]"
+        ],
+        "n_tests": 2254,
+        "passed": false,
+        "suite_failed": [],
+        "tail": "\n    def fail(\n        self,\n        message: str,\n        param: Parameter | None = None,\n        ctx: Context | None = None,\n    ) -> t.NoReturn:\n        \"\"\"Helper method to fail with an invalid value message.\"\"\"\n>       raise BadParameter(message, ctx=ctx, param=param)\nE       click.exceptions.BadParameter: 'EMPTY=' is not a valid key value.\n\nsrc/click/types.py:223: BadParameter\n=========================== short test summary info ============================\nFAILED tests/test_rw_hidden.py::test_valid[EMPTY=-expected1] - click.exceptions.BadParameter: 'EMPTY=' is not a valid key value.\n1 failed, 2253 passed, 25 skipped, 31000 deselected, 1 xfailed in 11.01s"
+      },
+      "broken-unicode-identifier": {
+        "changed_files": [
+          "CHANGES.md",
+          "docs/api.md",
+          "docs/parameter-types.md",
+          "src/click/__init__.py",
+          "src/click/types.py",
+          "tests/test_types/test_key_value.py"
+        ],
+        "exit_code": 1,
+        "hidden_failed": [
+          "test_invalid[na\\xefve=1]"
+        ],
+        "n_tests": 2254,
+        "passed": false,
+        "suite_failed": [],
+        "tail": "    def test_invalid(raw):\n        r = _run([\"--v\", raw])\n>       assert r.exit_code == 2, r.output\nE       AssertionError: ('na\u00efve', '1')\nE         \nE       assert 0 == 2\nE        +  where 0 = <Result okay>.exit_code\n\ntests/test_rw_hidden.py:47: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_rw_hidden.py::test_invalid[na\\xefve=1] - AssertionError: ('na\u00efve', '1')\n  \nassert 0 == 2\n +  where 0 = <Result okay>.exit_code\n1 failed, 2253 passed, 25 skipped, 31000 deselected, 1 xfailed in 11.02s"
+      },
+      "checks": {
+        "base_fails_hidden": true,
+        "broken_broken-last-equals_fails_behaviour_only": true,
+        "broken_broken-nonempty-value_fails_behaviour_only": true,
+        "broken_broken-unicode-identifier_fails_behaviour_only": true,
+        "gold_adds_own_test": true,
+        "gold_passes_all": true,
+        "hidden_identities_unique_and_pass": true
+      },
+      "gold": {
+        "changed_files": [
+          "CHANGES.md",
+          "docs/api.md",
+          "docs/parameter-types.md",
+          "src/click/__init__.py",
+          "src/click/types.py",
+          "tests/test_types/test_key_value.py"
+        ],
+        "exit_code": 0,
+        "hidden_failed": [],
+        "n_tests": 2254,
+        "passed": true,
+        "suite_failed": [],
+        "tail": "........................................................................ [ 60%]\n........................................................................ [ 63%]\n........................................................................ [ 66%]\n........................................................................ [ 69%]\n........................................................................ [ 72%]\n..................................sssssssssssssssssssss................. [ 75%]\n.ss..................................................................... [ 78%]\n........................................................................ [ 82%]\n........................................................................ [ 85%]\n.....s..........................................s....................... [ 88%]\n........................................................................ [ 91%]\n........................................................................ [ 94%]\n........................................................................ [ 97%]\n................................................                         [100%]\n2254 passed, 25 skipped, 31000 deselected, 1 xfailed in 12.62s"
+      },
+      "hidden_identities": 13,
+      "task": "click-type--key-value",
+      "valid": true
+    },
+    {
+      "base": {
+        "changed_files": [],
+        "exit_code": 1,
+        "hidden_failed": [
+          "test_changelog",
+          "test_documented",
+          "test_has_tests",
+          "test_invalid[1,,2]",
+          "test_invalid[1,2,]",
+          "test_invalid[1.5,2]",
+          "test_invalid[]",
+          "test_invalid[a,b]",
+          "test_is_param_type",
+          "test_valid[",
+          "test_valid[0,10,0-expected3]",
+          "test_valid[1,2,3-expected0]",
+          "test_valid[42-expected1]"
+        ],
+        "n_tests": 2253,
+        "passed": false,
+        "suite_failed": [],
+        "tail": "FAILED tests/test_rw_hidden.py::test_invalid[1,2,] - AssertionError: click.INT_LIST is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_documented - AssertionError: not in the API reference\nassert None\n +  where None = <built-in method search of re.Pattern object at 0x10bdd3760>('# API\\n\\n```{currentmodule} click\\n```\\n\\nThis part of the documentation lists the full API reference of all public\\n...``{eval-rst}\\n.. autoclass:: CliRunner\\n   :members:\\n```\\n\\n```{eval-rst}\\n.. autoclass:: Result\\n   :members:\\n```\\n')\n +    where <built-in method search of re.Pattern object at 0x10bdd3760> = re.compile('\\\\bINT_LIST\\\\b').search\n +    and   '# API\\n\\n```{currentmodule} click\\n```\\n\\nThis part of the documentation lists the full API reference of all public\\n...``{eval-rst}\\n.. autoclass:: CliRunner\\n   :members:\\n```\\n\\n```{eval-rst}\\n.. autoclass:: Result\\n   :members:\\n```\\n' = read_text()\n +      where read_text = ((PosixPath('/private/tmp/adage-click-controls-2/private/validation/1790895474964119000/click-type--int-list/base') / 'docs') / 'api.md').read_text\nFAILED tests/test_rw_hidden.py::test_changelog - AssertionError: no entry in the unreleased version's changes\nassert None\n +  where None = <function search at 0x105d98680>((('\\\\b' + 'INT_LIST') + '\\\\b'), '8.6.0\\n\\nUnreleased\\n\\n- A parameter name that is not a valid Python identifier, or that is a Python\\n  keyword, is d...class}`Option` name written as a Python identifier is deprecated when it\\n  is not already lower-cased. {pr}`3866`\\n\\n')\n +    where <function search at 0x105d98680> = re.search\nFAILED tests/test_rw_hidden.py::test_has_tests - assert False\n +  where False = any(<generator object test_has_tests.<locals>.<genexpr> at 0x10bf25300>)\n13 failed, 2240 passed, 25 skipped, 31000 deselected, 1 xfailed in 11.00s"
+      },
+      "broken-digits-only": {
+        "changed_files": [
+          "CHANGES.md",
+          "docs/api.md",
+          "docs/parameter-types.md",
+          "src/click/__init__.py",
+          "src/click/types.py",
+          "tests/test_types/test_int_list.py"
+        ],
+        "exit_code": 1,
+        "hidden_failed": [
+          "test_valid["
+        ],
+        "n_tests": 2254,
+        "passed": false,
+        "suite_failed": [],
+        "tail": "\n    def fail(\n        self,\n        message: str,\n        param: Parameter | None = None,\n        ctx: Context | None = None,\n    ) -> t.NoReturn:\n        \"\"\"Helper method to fail with an invalid value message.\"\"\"\n>       raise BadParameter(message, ctx=ctx, param=param)\nE       click.exceptions.BadParameter: ' 7 , -8 ' is not a valid int list.\n\nsrc/click/types.py:223: BadParameter\n=========================== short test summary info ============================\nFAILED tests/test_rw_hidden.py::test_valid[ 7 , -8 -expected2] - click.exceptions.BadParameter: ' 7 , -8 ' is not a valid int list.\n1 failed, 2253 passed, 25 skipped, 31000 deselected, 1 xfailed in 14.07s"
+      },
+      "broken-float-items": {
+        "changed_files": [
+          "CHANGES.md",
+          "docs/api.md",
+          "docs/parameter-types.md",
+          "src/click/__init__.py",
+          "src/click/types.py",
+          "tests/test_types/test_int_list.py"
+        ],
+        "exit_code": 1,
+        "hidden_failed": [
+          "test_invalid[1.5,2]"
+        ],
+        "n_tests": 2254,
+        "passed": false,
+        "suite_failed": [],
+        "tail": "    def test_invalid(raw):\n        r = _run([\"--v\", raw])\n>       assert r.exit_code == 2, r.output\nE       AssertionError: [1, 2]\nE         \nE       assert 0 == 2\nE        +  where 0 = <Result okay>.exit_code\n\ntests/test_rw_hidden.py:47: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_rw_hidden.py::test_invalid[1.5,2] - AssertionError: [1, 2]\n  \nassert 0 == 2\n +  where 0 = <Result okay>.exit_code\n1 failed, 2253 passed, 25 skipped, 31000 deselected, 1 xfailed in 16.95s"
+      },
+      "broken-skip-empty": {
+        "changed_files": [
+          "CHANGES.md",
+          "docs/api.md",
+          "docs/parameter-types.md",
+          "src/click/__init__.py",
+          "src/click/types.py",
+          "tests/test_types/test_int_list.py"
+        ],
+        "exit_code": 1,
+        "hidden_failed": [
+          "test_invalid[1,,2]",
+          "test_invalid[1,2,]",
+          "test_invalid[]"
+        ],
+        "n_tests": 2254,
+        "passed": false,
+        "suite_failed": [],
+        "tail": "tests/test_rw_hidden.py:47: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_rw_hidden.py::test_invalid[1,,2] - AssertionError: [1, 2]\n  \nassert 0 == 2\n +  where 0 = <Result okay>.exit_code\nFAILED tests/test_rw_hidden.py::test_invalid[] - AssertionError: []\n  \nassert 0 == 2\n +  where 0 = <Result okay>.exit_code\nFAILED tests/test_rw_hidden.py::test_invalid[1,2,] - AssertionError: [1, 2]\n  \nassert 0 == 2\n +  where 0 = <Result okay>.exit_code\n3 failed, 2251 passed, 25 skipped, 31000 deselected, 1 xfailed in 11.29s"
+      },
+      "checks": {
+        "base_fails_hidden": true,
+        "broken_broken-digits-only_fails_behaviour_only": true,
+        "broken_broken-float-items_fails_behaviour_only": true,
+        "broken_broken-skip-empty_fails_behaviour_only": true,
+        "gold_adds_own_test": true,
+        "gold_passes_all": true,
+        "hidden_identities_unique_and_pass": true
+      },
+      "gold": {
+        "changed_files": [
+          "CHANGES.md",
+          "docs/api.md",
+          "docs/parameter-types.md",
+          "src/click/__init__.py",
+          "src/click/types.py",
+          "tests/test_types/test_int_list.py"
+        ],
+        "exit_code": 0,
+        "hidden_failed": [],
+        "n_tests": 2254,
+        "passed": true,
+        "suite_failed": [],
+        "tail": "........................................................................ [ 60%]\n........................................................................ [ 63%]\n........................................................................ [ 66%]\n........................................................................ [ 69%]\n........................................................................ [ 72%]\n..................................sssssssssssssssssssss................. [ 75%]\n.ss..................................................................... [ 78%]\n........................................................................ [ 82%]\n........................................................................ [ 85%]\n.....s..........................................s....................... [ 88%]\n........................................................................ [ 91%]\n........................................................................ [ 94%]\n........................................................................ [ 97%]\n................................................                         [100%]\n2254 passed, 25 skipped, 31000 deselected, 1 xfailed in 11.14s"
+      },
+      "hidden_identities": 13,
+      "task": "click-type--int-list",
+      "valid": true
+    },
+    {
+      "base": {
+        "changed_files": [],
+        "exit_code": 1,
+        "hidden_failed": [
+          "test_changelog",
+          "test_documented",
+          "test_has_tests",
+          "test_invalid[(unclosed]",
+          "test_invalid[*abc]",
+          "test_invalid[[a-z]",
+          "test_invalid[a{2,1}]",
+          "test_is_param_type",
+          "test_valid[",
+          "test_valid[(?i)abc-(?i)abc]",
+          "test_valid[^[a-z]+$-^[a-z]+$]",
+          "test_valid[a|b-a|b]"
+        ],
+        "n_tests": 2252,
+        "passed": false,
+        "suite_failed": [],
+        "tail": "FAILED tests/test_rw_hidden.py::test_invalid[a{2,1}] - AssertionError: click.REGEX is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_documented - AssertionError: not in the API reference\nassert None\n +  where None = <built-in method search of re.Pattern object at 0x10ed78580>('# API\\n\\n```{currentmodule} click\\n```\\n\\nThis part of the documentation lists the full API reference of all public\\n...``{eval-rst}\\n.. autoclass:: CliRunner\\n   :members:\\n```\\n\\n```{eval-rst}\\n.. autoclass:: Result\\n   :members:\\n```\\n')\n +    where <built-in method search of re.Pattern object at 0x10ed78580> = re.compile('\\\\bREGEX\\\\b').search\n +    and   '# API\\n\\n```{currentmodule} click\\n```\\n\\nThis part of the documentation lists the full API reference of all public\\n...``{eval-rst}\\n.. autoclass:: CliRunner\\n   :members:\\n```\\n\\n```{eval-rst}\\n.. autoclass:: Result\\n   :members:\\n```\\n' = read_text()\n +      where read_text = ((PosixPath('/private/tmp/adage-click-controls-2/private/validation/1790895474964119000/click-type--regex/base') / 'docs') / 'api.md').read_text\nFAILED tests/test_rw_hidden.py::test_changelog - AssertionError: no entry in the unreleased version's changes\nassert None\n +  where None = <function search at 0x1043b84a0>((('\\\\b' + 'REGEX') + '\\\\b'), '8.6.0\\n\\nUnreleased\\n\\n- A parameter name that is not a valid Python identifier, or that is a Python\\n  keyword, is d...class}`Option` name written as a Python identifier is deprecated when it\\n  is not already lower-cased. {pr}`3866`\\n\\n')\n +    where <function search at 0x1043b84a0> = re.search\nFAILED tests/test_rw_hidden.py::test_has_tests - assert False\n +  where False = any(<generator object test_has_tests.<locals>.<genexpr> at 0x10ed9c220>)\n12 failed, 2240 passed, 25 skipped, 31000 deselected, 1 xfailed in 11.38s"
+      },
+      "broken-returns-text": {
+        "changed_files": [
+          "CHANGES.md",
+          "docs/api.md",
+          "docs/parameter-types.md",
+          "src/click/__init__.py",
+          "src/click/types.py",
+          "tests/test_types/test_regex.py"
+        ],
+        "exit_code": 1,
+        "hidden_failed": [
+          "test_valid[",
+          "test_valid[(?i)abc-(?i)abc]",
+          "test_valid[^[a-z]+$-^[a-z]+$]",
+          "test_valid[a|b-a|b]"
+        ],
+        "n_tests": 2253,
+        "passed": false,
+        "suite_failed": [],
+        "tail": " +    where convert = REGEX.convert\n +      where REGEX = _type()\nFAILED tests/test_rw_hidden.py::test_valid[a|b-a|b] - AssertionError: assert 'a|b' == re.compile('a|b')\n +  where 'a|b' = convert('a|b', None, None)\n +    where convert = REGEX.convert\n +      where REGEX = _type()\nFAILED tests/test_rw_hidden.py::test_valid[ x - x ] - AssertionError: assert ' x ' == re.compile(' x ')\n +  where ' x ' = convert(' x ', None, None)\n +    where convert = REGEX.convert\n +      where REGEX = _type()\nFAILED tests/test_rw_hidden.py::test_valid[(?i)abc-(?i)abc] - AssertionError: assert '(?i)abc' == re.compile('(?i)abc', re.IGNORECASE)\n +  where '(?i)abc' = convert('(?i)abc', None, None)\n +    where convert = REGEX.convert\n +      where REGEX = _type()\n4 failed, 2249 passed, 25 skipped, 31000 deselected, 1 xfailed in 11.72s"
+      },
+      "broken-strips-whitespace": {
+        "changed_files": [
+          "CHANGES.md",
+          "docs/api.md",
+          "docs/parameter-types.md",
+          "src/click/__init__.py",
+          "src/click/types.py",
+          "tests/test_types/test_regex.py"
+        ],
+        "exit_code": 1,
+        "hidden_failed": [
+          "test_valid["
+        ],
+        "n_tests": 2253,
+        "passed": false,
+        "suite_failed": [],
+        "tail": "    @pytest.mark.parametrize((\"raw\", \"expected\"), VALID)\n    def test_valid(raw, expected):\n>       assert _type().convert(raw, None, None) == expected\nE       AssertionError: assert re.compile('x') == re.compile(' x ')\nE        +  where re.compile('x') = convert(' x ', None, None)\nE        +    where convert = REGEX.convert\nE        +      where REGEX = _type()\n\ntests/test_rw_hidden.py:38: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_rw_hidden.py::test_valid[ x - x ] - AssertionError: assert re.compile('x') == re.compile(' x ')\n +  where re.compile('x') = convert(' x ', None, None)\n +    where convert = REGEX.convert\n +      where REGEX = _type()\n1 failed, 2252 passed, 25 skipped, 31000 deselected, 1 xfailed in 12.64s"
+      },
+      "broken-uncaught-error": {
+        "changed_files": [
+          "CHANGES.md",
+          "docs/api.md",
+          "docs/parameter-types.md",
+          "src/click/__init__.py",
+          "src/click/types.py",
+          "tests/test_types/test_regex.py"
+        ],
+        "exit_code": 1,
+        "hidden_failed": [
+          "test_invalid[(unclosed]",
+          "test_invalid[*abc]",
+          "test_invalid[[a-z]",
+          "test_invalid[a{2,1}]"
+        ],
+        "n_tests": 2253,
+        "passed": false,
+        "suite_failed": [],
+        "tail": "tests/test_rw_hidden.py:47: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_rw_hidden.py::test_invalid[[a-z] - AssertionError: \nassert 1 == 2\n +  where 1 = <Result error('unterminated character set at position 0')>.exit_code\nFAILED tests/test_rw_hidden.py::test_invalid[(unclosed] - AssertionError: \nassert 1 == 2\n +  where 1 = <Result error('missing ), unterminated subpattern at position 0')>.exit_code\nFAILED tests/test_rw_hidden.py::test_invalid[*abc] - AssertionError: \nassert 1 == 2\n +  where 1 = <Result error('nothing to repeat at position 0')>.exit_code\nFAILED tests/test_rw_hidden.py::test_invalid[a{2,1}] - AssertionError: \nassert 1 == 2\n +  where 1 = <Result error('min repeat greater than max repeat at position 2')>.exit_code\n4 failed, 2249 passed, 25 skipped, 31000 deselected, 1 xfailed in 11.78s"
+      },
+      "checks": {
+        "base_fails_hidden": true,
+        "broken_broken-returns-text_fails_behaviour_only": true,
+        "broken_broken-strips-whitespace_fails_behaviour_only": true,
+        "broken_broken-uncaught-error_fails_behaviour_only": true,
+        "gold_adds_own_test": true,
+        "gold_passes_all": true,
+        "hidden_identities_unique_and_pass": true
+      },
+      "gold": {
+        "changed_files": [
+          "CHANGES.md",
+          "docs/api.md",
+          "docs/parameter-types.md",
+          "src/click/__init__.py",
+          "src/click/types.py",
+          "tests/test_types/test_regex.py"
+        ],
+        "exit_code": 0,
+        "hidden_failed": [],
+        "n_tests": 2253,
+        "passed": true,
+        "suite_failed": [],
+        "tail": "........................................................................ [ 60%]\n........................................................................ [ 63%]\n........................................................................ [ 66%]\n........................................................................ [ 69%]\n........................................................................ [ 72%]\n.................................sssssssssssssssssssss.................. [ 75%]\nss...................................................................... [ 78%]\n........................................................................ [ 82%]\n........................................................................ [ 85%]\n....s..........................................s........................ [ 88%]\n........................................................................ [ 91%]\n........................................................................ [ 94%]\n........................................................................ [ 97%]\n...............................................                          [100%]\n2253 passed, 25 skipped, 31000 deselected, 1 xfailed in 11.38s"
+      },
+      "hidden_identities": 12,
+      "task": "click-type--regex",
+      "valid": true
+    },
+    {
+      "base": {
+        "changed_files": [],
+        "exit_code": 1,
+        "hidden_failed": [
+          "test_changelog",
+          "test_documented",
+          "test_has_tests",
+          "test_invalid[5]",
+          "test_invalid[verbose]",
+          "test_invalid[warn]",
+          "test_is_param_type",
+          "test_valid[Critical-50]",
+          "test_valid[INFO-20]",
+          "test_valid[debug-10]"
+        ],
+        "n_tests": 2250,
+        "passed": false,
+        "suite_failed": [],
+        "tail": "FAILED tests/test_rw_hidden.py::test_invalid[warn] - AssertionError: click.LOG_LEVEL is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_documented - AssertionError: not in the API reference\nassert None\n +  where None = <built-in method search of re.Pattern object at 0x10e47c3c0>('# API\\n\\n```{currentmodule} click\\n```\\n\\nThis part of the documentation lists the full API reference of all public\\n...``{eval-rst}\\n.. autoclass:: CliRunner\\n   :members:\\n```\\n\\n```{eval-rst}\\n.. autoclass:: Result\\n   :members:\\n```\\n')\n +    where <built-in method search of re.Pattern object at 0x10e47c3c0> = re.compile('\\\\bLOG_LEVEL\\\\b').search\n +    and   '# API\\n\\n```{currentmodule} click\\n```\\n\\nThis part of the documentation lists the full API reference of all public\\n...``{eval-rst}\\n.. autoclass:: CliRunner\\n   :members:\\n```\\n\\n```{eval-rst}\\n.. autoclass:: Result\\n   :members:\\n```\\n' = read_text()\n +      where read_text = ((PosixPath('/private/tmp/adage-click-controls-2/private/validation/1790895474964119000/click-type--log-level/base') / 'docs') / 'api.md').read_text\nFAILED tests/test_rw_hidden.py::test_changelog - AssertionError: no entry in the unreleased version's changes\nassert None\n +  where None = <function search at 0x108448680>((('\\\\b' + 'LOG_LEVEL') + '\\\\b'), '8.6.0\\n\\nUnreleased\\n\\n- A parameter name that is not a valid Python identifier, or that is a Python\\n  keyword, is d...class}`Option` name written as a Python identifier is deprecated when it\\n  is not already lower-cased. {pr}`3866`\\n\\n')\n +    where <function search at 0x108448680> = re.search\nFAILED tests/test_rw_hidden.py::test_has_tests - assert False\n +  where False = any(<generator object test_has_tests.<locals>.<genexpr> at 0x10e5d86d0>)\n10 failed, 2240 passed, 25 skipped, 31000 deselected, 1 xfailed in 11.85s"
+      },
+      "checks": {
+        "base_fails_hidden": true,
+        "gold_adds_own_test": true,
+        "gold_passes_all": true,
+        "hidden_identities_unique_and_pass": true
+      },
+      "gold": {
+        "changed_files": [
+          "CHANGES.md",
+          "docs/api.md",
+          "docs/parameter-types.md",
+          "src/click/__init__.py",
+          "src/click/types.py",
+          "tests/test_types/test_log_level.py"
+        ],
+        "exit_code": 0,
+        "hidden_failed": [],
+        "n_tests": 2251,
+        "passed": true,
+        "suite_failed": [],
+        "tail": "........................................................................ [ 60%]\n........................................................................ [ 63%]\n........................................................................ [ 66%]\n........................................................................ [ 69%]\n........................................................................ [ 72%]\n...............................sssssssssssssssssssss..................ss [ 75%]\n........................................................................ [ 79%]\n........................................................................ [ 82%]\n........................................................................ [ 85%]\n..s..........................................s.......................... [ 88%]\n........................................................................ [ 91%]\n........................................................................ [ 94%]\n........................................................................ [ 98%]\n.............................................                            [100%]\n2251 passed, 25 skipped, 31000 deselected, 1 xfailed in 14.63s"
+      },
+      "hidden_identities": 10,
+      "task": "click-type--log-level",
+      "valid": true
+    }
+  ],
+  "valid": true
+}

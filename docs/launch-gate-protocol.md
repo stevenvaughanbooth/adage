@@ -8,7 +8,9 @@ any held-out dispatch. Revision 9 was drafted on `codex/heldout-tasks` and merge
 fix) was registered after dev-v9's first control and before any of its positive blocks.
 Revision 12 (native admission under the person's allocation) preceded the held-out dispatch. The
 held-out Marshmallow stratum ran on 2026-10-01 and **failed on quality**; see "Held-out result:
-Marshmallow stratum" below. The machine-readable copy is `evals/reflex-proof/harness/launch_gate_protocol.json`; when the two
+Marshmallow stratum" below. Revision 13 (the Click stratum, with advisory mode as a gated
+co-primary) was registered on `codex/click-gate` before any Click session of that study; see
+"Revision 13: the Click stratum" below. The machine-readable copy is `evals/reflex-proof/harness/launch_gate_protocol.json`; when the two
 differ, the JSON governs. Revisions get a dated entry below and must precede the dispatch they
 affect. Splits and thresholds cannot change after the first held-out dispatch.
 
@@ -695,6 +697,164 @@ BEST was A4 (verification ownership plus the orientation card), selected by r9 f
 
 Model requests are not GPU measurements, and CPU work is never counted as inference saved.
 
+### Revision 13: the Click stratum (registered before any Click session)
+
+**What this is.** The second repository's held-out study, prepared entirely offline. Nothing in it
+has run: no Click session of this study (native, training or held-out) has been dispatched. The
+person runs one script, `harness/results/20261001-click-gate/run-click-gate.sh`, which chains every
+step and stops on any error. The governing values are in the JSON's `click_heldout_analysis`.
+
+**The tasks** (`harness/click_tasks.py`; frozen manifest `harness/results/20261001-click-tasks/manifest.json`).
+They fill the four registered Click evaluation groups, unchanged since r2:
+
+| Task | Group | Type | Converts to |
+| --- | --- | --- | --- |
+| `click-type--json-object` | structured-text | `JsonObjectParamType` | the parsed `dict` of a JSON object |
+| `click-type--key-value` | key-value | `KeyValueParamType` | `(key, value)` from `KEY=VALUE` (split at the first `=`) |
+| `click-type--int-list` | list-parsing | `IntListParamType` | a `list` of `int` from comma-separated items |
+| `click-type--regex` | compiled-pattern | `RegexParamType` | a compiled `re.Pattern`, taken exactly as written |
+
+- **Pattern** (as the Marshmallow held-out tasks): the lab's click-type schema, hidden test and
+  generated gold. The prompt is the lab Click template showing only the first valid and the first
+  invalid example (the rest are private boundary cases), plus `Do not create git commits.`. There is
+  no work order, no test block and no verification instruction.
+- **Validation** (offline, copies of the pinned substrate, Python 3.12.14, pytest 9.1.1, base
+  `06b2a678`): each base fails only hidden tests; each gold passes the hidden tests and Click's whole
+  suite (light-imports test restored); each task's three registered broken implementations fail
+  hidden behaviour tests only; the hidden-test identities are unique. The control task's test blocks
+  pass gold, fail the broken implementations, and the later-edit test needs the follow-up change.
+- **Screens.** A name scan of 876 earlier session files finds none of the authored names. The
+  near-duplicate screen is text only (the registered Click pairs span 0.02 to 0.70), so concept,
+  return kind and parse shape decide. key-value shares a split-on-a-delimiter shape with training
+  host-port, but neither its domain nor its validation. It keeps its registered group and gets the
+  sensitivity analysis.
+- **Superseded before freezing.** A first validation used `name=adage` as key-value's shown example,
+  which names the product in a prompt. It was replaced by `mode=fast` and the tasks were validated
+  again before the freeze; the first validation root was never used.
+
+**Training** (`harness/click_training.py`), Phase 2's registered Click path:
+1. **The organic arm is a free replay.** The five organic v5 Click histories, conditioned by the
+   fixed learner, are report-only natural-learning evidence. Its expectation was written before it
+   ran: no certified route. Observed before registration (development, not evaluation): 25 routes, 0
+   certified, isolation audit passed. The script's learning step repeats it.
+2. **Then 10 guided sessions, the `cumulative-launch-10` recipe.** The five registered training
+   tasks (hex-color, port, duration, ip-address, semver) run twice, repetition-major, hooks off.
+   - Each prompt is the held-out template, the realism line, then one instruction: run
+     `.venv/bin/python -m pytest tests/test_types -q` after implementing the code, tests and docs, and
+     report its result.
+   - $0.60 cap and 60 turns per session; Haiku 4.5.
+   - They run in the study's own cohort, `cohorts/click-gate-v1`, after its native-confinement session
+     passes review.
+   - The realism line is a deliberate difference from Marshmallow's recipe: v5's Click sessions spent
+     many turns fighting the sandbox's `.git` denial.
+3. **Learning.** One conditioning pass over every completed guided history, with the PR #16 head
+   learner (`adage` `101a1ecc…`, built at `cfafd5e`, which contains PR #21's fix). Then the isolation
+   audit of both learning runs.
+4. **Selection.** The lexicographically first certified verify-effect context route in a learned
+   track whose step runs a project pytest command, and whose trigger fits the control work orders.
+   - The fit is a static check over the edit orders: in the natural order the trigger fires at or
+     after the new test file; in the failed order, before the implementation edit.
+   - **Expectation, recorded before learning:** about even odds that a guided route certifies, from
+     the Marshmallow analog; Click sessions interleave two docs edits and the agent's own test runs.
+   - **No selected route means advisory only.** The script then stops and asks the person to confirm
+     before any held-out session.
+
+**Arms and modes.**
+- **A0:** no Adage hooks.
+- **NOEXEC (advisory mode):** the production hooks, BEST's binaries, the guided learned home and the
+  orientation card; no grant, no policy, no contract, no execution.
+- **BEST:** A4 by r9's rule on dev-v9b, now on the PR #16 head binaries (with the failure-detail and
+  own-test fixes): `adage` `101a1ecc…`, `adage-exec` `286455d7…`. One person-issued E2 grant for the
+  selected route, timeout 20 s (the E2 maximum).
+- **Execution mode** (a route was selected): five BEST controls on the development task
+  `click-type--log-level`, then 20 paired blocks of A0, NOEXEC and BEST, 65 sessions.
+- **Advisory mode** (no route; or the person froze advisory only because execution mode's worst case
+  did not fit, recorded before any held-out dispatch): 20 paired blocks of A0 and NOEXEC, 40
+  sessions, no grants and no controls.
+- The matrix and arm orders come from `random.Random(20261001)`, as r9. Dispatch is
+  repetition-major, one session at a time.
+
+**Two gated co-primaries, each its own claim** (`harness/click_analysis.py`):
+
+| | Advisory mode (new: gated) | Execution mode (r9 rules unchanged) |
+| --- | --- | --- |
+| Statistic | sum(NOEXEC)/sum(A0) model requests, included blocks | sum(BEST)/sum(A0) |
+| Bound | one-sided 95% upper bound at most 0.90 | the same |
+| Quality | NOEXEC passes at least A0's minus one | BEST at least A0's minus one |
+| Also | no receipts, executions or contracts in A0 or NOEXEC; no unknown cost | G1, G2, G5, G6, G7, G8; all five controls realized and safe |
+| Excluded block | its A0 or NOEXEC count is unverified | any of its three counts is unverified |
+| Evaluated | in both modes | in execution mode only |
+
+- **Shared rules, as r9:**
+  - the metric is debug-log dispatches, cross-checked against the stream;
+  - more than 2 excluded blocks make a contrast `unverified`;
+  - the percentile bootstrap over blocks is stratified by task, with 20,000 draws and seed 20261001;
+  - a censored session is a quality failure in every arm.
+- **Censoring names the arm under test.** For requests, the Adage arm under test is imputed to
+  max(observed, 60): BEST in the execution contrast and in G8, NOEXEC in the advisory contrast. A0
+  counts its observed requests.
+- **No combined claim.** The advisory claim rests only on the advisory outcome, and the execution
+  claim only on the execution outcome. Nothing is claimed from "either passed".
+- **Sensitivity, reported and never gating.** Each co-primary is also computed without blocks that
+  contain a censored session, and without the key-value blocks. If a co-primary passes and a
+  sensitivity analysis fails, the write-up says so prominently.
+- **Per-task tables** cover every arm. Report only: BEST/NOEXEC, sign-flip p-values, tokens, cost,
+  wall time and CPU work.
+
+**Controls and BEST's integrity (changed from r9).**
+- **The controls.** The five run first, in BEST, on log-level. Each suffix carries a fixed test block
+  for `tests/test_types/test_log_level.py`; the rerun suffix names the selected command, and freeze
+  re-checks every composed prompt.
+- **A failure drops BEST.** That covers an unrealized or unsafe control, a grant that fails its
+  preflight, a changed or writable shared runtime, and a lapse during a BEST session.
+  - No further BEST session is dispatched, and the execution outcome is `protocol-failure`.
+  - A0 and NOEXEC continue, so the advisory co-primary is still evaluated.
+  - r9 stopped the whole study instead.
+- **Declared caches:** `.pytest_cache/**`, `tests/__pycache__/**`, `tests/**/__pycache__/**`,
+  `src/**/__pycache__/**`, `.pytest_cache/.gitignore`.
+
+**Budget (the chain does not fit the current allocation).**
+
+| | Worst case | Expected | Expected at v5's mean cost |
+| --- | ---: | ---: | ---: |
+| Native session ($0.50 cap) | $0.50 | $0.03 | |
+| Training (10 at $0.60) | $6.00 | $3.50 | |
+| Held-out, execution (65 at $0.60) | $39.00 | $15.10 | |
+| Held-out, advisory (40 at $0.60) | $24.00 | $10.00 | |
+| **Chain, execution** | **$45.50** | **$18.63** | $33.93 |
+| **Chain, advisory** | **$30.50** | **$13.53** | $22.63 |
+
+- **Basis of the expectation:**
+  - Click's five v5 sessions averaged $0.452 (max $0.528) before the realism line and the project
+    environment.
+  - Marshmallow's no-Adage arm fell from $0.304 (v5) to $0.201 at held-out, and NOEXEC and BEST cost
+    0.67 times A0's there.
+- **The ledger at registration.** $39.8915551 admitted over 284 attempts, so $20.1084449 remains;
+  less the $3 floor, $17.1084449 is available.
+- **The shortfall:**
+  - execution chain: $28.3915551 short, which needs a ledger ceiling of at least $88.3915551;
+  - advisory chain: $13.3915551 short, which needs at least $73.3915551.
+- **No sane cap fits.** The caps that would fit are $0.163 and $0.265 per session, below a Click
+  session's expected cost.
+- **The $60 ceiling stays** unless the person raises it. A raise means editing
+  `evaluation-allocation.json` and approving a change to `real_repo_gate.budget_limit`'s $60 limit.
+  No agent changes either.
+- **Guards:**
+  - the script starts only if the advisory chain fits;
+  - freeze refuses a mode whose held-out worst case does not fit;
+  - training and held-out dispatch stop before the $3 floor;
+  - the held-out study stops at sessions × $0.60.
+
+**Disclosure.** Before registration, the author:
+- read the five organic v5 Click transcripts' tool actions (Bash commands and edit paths; training
+  sessions) to choose the guided command and the control work orders;
+- read the public Marshmallow held-out record;
+- ran the organic replay once, after writing its expectation.
+
+No Click evaluation-group task has run in any session. Marshmallow's json-object validator is
+another repository's task: learned tracks are repository-keyed, and its sessions never feed Click
+learning.
+
 ## Measures (step 4)
 
 Per session: successful CPU executions; receipts and digests; agent pytest requests classified by
@@ -744,6 +904,23 @@ evaluation groups is registered.
 ## Revisions
 
 - 2026-09-30 r1: registered.
+- 2026-10-01 r13, before any Click session of this study: the Click stratum.
+  - Four held-out Click tasks authored, validated offline and frozen (json-object, key-value, int-list
+    and regex, in the registered evaluation groups); log-level is the control task.
+  - Guided training by the `cumulative-launch-10` recipe in cohort `click-gate-v1` (10 sessions at a
+    $0.60 cap), with a free organic replay arm (report-only).
+  - The learning step with the fixed learner (`cfafd5e`), the isolation audit, and a selection rule
+    with a static control-fit check.
+  - Advisory mode (NOEXEC vs A0) becomes a gated co-primary, with its own bound of at most 0.90,
+    quality within one and no-execution conditions. It sits beside execution mode (BEST vs A0), whose
+    r9 rules are unchanged.
+  - The censoring imputation names the Adage arm under test.
+  - A failed control or a lapsed grant drops BEST, and the advisory study continues.
+  - No selected route means advisory only (40 sessions), with the person's confirmation.
+  - A $0.60 held-out cap, the key-value sensitivity analysis and per-task tables.
+  - Budget at registration: the chain does not fit the $60 ledger (short $28.39 for execution,
+    $13.39 for advisory). The person decides any raise.
+  - Splits, groups and the r9 thresholds are unchanged.
 - 2026-10-01 r12, before any held-out dispatch: cohort native recipes bind the person's
   evaluation allocation (`evaluation-allocation.json`, listed in `shared_sources`) instead of the
   legacy $27.50 admission ceiling. The user approved it in chat and applied the `cohort_v5.py`

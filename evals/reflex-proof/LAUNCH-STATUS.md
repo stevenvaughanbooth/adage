@@ -30,6 +30,36 @@ and its report is valid. Its outcome is **FAIL**.
 - **Not GPU.** Model requests are not GPU measurements, and no GPU or general savings claim
   follows.
 
+## Click study: ready to run (registered as revision 13; nothing run, nothing spent)
+
+The second-repository confirmation is prepared offline on `codex/click-gate`. The
+[protocol](../../docs/launch-gate-protocol.md) has it in "Revision 13: the Click stratum", and the
+records are [the plan](harness/results/20261001-click-gate/README.md) and
+[the frozen tasks](harness/results/20261001-click-tasks/README.md).
+- **Tasks.** Four new held-out Click tasks (json-object, key-value, int-list, regex) are validated
+  offline and frozen: every base fails only hidden tests, every gold passes, and 12 broken
+  implementations fail hidden behaviour tests only.
+- **Training.** 10 guided sessions (the recipe that taught Marshmallow its route), then one learning
+  pass with the fixed learner. A free organic replay of the five earlier Click sessions certified
+  nothing, as expected.
+- **Advisory mode is gated this time.** NOEXEC against A0 is a co-primary with its own upper bound of
+  at most 0.90 and quality within one. Execution mode (BEST against A0) keeps the r9 rules and runs
+  only if learning certifies a route that fits the controls.
+- **No route means advisory only.** BEST is then skipped, after the person confirms.
+- **One person-run script:** [`run-click-gate.sh`](harness/results/20261001-click-gate/run-click-gate.sh).
+- **Blocked on allocation.** At the $60 ceiling, with $20.11 remaining, the chain's worst case does
+  not fit:
+  - execution: $45.50, short $28.39;
+  - advisory: $30.50, short $13.39.
+
+  Expected spend is about $19 (execution) or $14 (advisory). Raising the ceiling is the person's
+  decision.
+
+```sh
+# after the person has raised the allocation (see docs/launch-handoff.md), from a normal terminal:
+bash /private/tmp/adage-click-src/evals/reflex-proof/harness/results/20261001-click-gate/run-click-gate.sh
+```
+
 Earlier status: **real-repository CPU action-elimination gate failed in the completed pilot**. The
 [eight-session result](harness/results/20260930-live-cpu-transfer/FINDINGS.md) establishes 4/4
 successful learned CPU executions and 4/4 correct automatic outputs versus 3/4 baseline outputs,

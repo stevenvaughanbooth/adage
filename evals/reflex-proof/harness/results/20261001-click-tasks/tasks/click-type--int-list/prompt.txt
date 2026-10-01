@@ -1,0 +1,5 @@
+Add a new built-in parameter type to Click: `click.INT_LIST`, which accepts a comma-separated list of integers and converts it to a `list` of `int`s; spaces around an item are allowed, but an empty item (such as a trailing comma) or an item that is not an integer fails. Values it cannot convert must fail with Click's usual "Invalid value" usage error. Examples of valid input: `1,2,3`. Examples of invalid input: `1,,2`.
+
+Include tests, document the new type in the API reference and in the parameter types guide, and add a changelog entry.
+
+Do not create git commits.

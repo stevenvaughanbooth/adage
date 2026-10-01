@@ -1,0 +1,3 @@
+Add a new built-in parameter type to Click: `click.LOG_LEVEL`, which accepts a logging level name, one of `DEBUG`, `INFO`, `WARNING`, `ERROR` and `CRITICAL` (case-insensitive), and converts it to the level's `int` value in the `logging` module (`INFO` becomes `20`). Values it cannot convert must fail with Click's usual "Invalid value" usage error. Examples of valid input: `INFO`. Examples of invalid input: `verbose`.
+
+Include tests, document the new type in the API reference and in the parameter types guide, and add a changelog entry.

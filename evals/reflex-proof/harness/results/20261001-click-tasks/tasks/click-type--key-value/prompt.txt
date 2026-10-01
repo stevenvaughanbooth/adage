@@ -1,0 +1,5 @@
+Add a new built-in parameter type to Click: `click.KEY_VALUE`, which accepts an assignment written as `KEY=VALUE` and converts it to a tuple `(key, value)` of two `str`s. The key is a name of ASCII letters, digits and underscores that does not start with a digit; the value is everything after the first `=` and may be empty or contain further `=` signs. Values it cannot convert must fail with Click's usual "Invalid value" usage error. Examples of valid input: `mode=fast`. Examples of invalid input: `noequals`.
+
+Include tests, document the new type in the API reference and in the parameter types guide, and add a changelog entry.
+
+Do not create git commits.

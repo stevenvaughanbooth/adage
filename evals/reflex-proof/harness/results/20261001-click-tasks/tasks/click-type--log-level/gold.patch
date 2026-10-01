@@ -1,0 +1,102 @@
+diff --git a/CHANGES.md b/CHANGES.md
+index 8853860..94cc868 100644
+--- a/CHANGES.md
++++ b/CHANGES.md
+@@ -2,6 +2,7 @@
+ 
+ Unreleased
+ 
++- Add the {data}`LOG_LEVEL` parameter type.
+ - A parameter name that is not a valid Python identifier, or that is a Python
+   keyword, is deprecated and raises `TypeError` in Click 9.0. {pr}`3866`
+ - An {class}`Option` name written as a Python identifier is deprecated when it
+diff --git a/docs/api.md b/docs/api.md
+index df62cf5..863b2a4 100644
+--- a/docs/api.md
++++ b/docs/api.md
+@@ -227,6 +227,10 @@ classes and functions.
+ .. autodata:: UUID
+ ```
+ 
++```{eval-rst}
++.. autodata:: LOG_LEVEL
++```
++
+ ```{eval-rst}
+ .. autodata:: UNPROCESSED
+ ```
+diff --git a/docs/parameter-types.md b/docs/parameter-types.md
+index 470eb07..c0f7c94 100644
+--- a/docs/parameter-types.md
++++ b/docs/parameter-types.md
+@@ -123,6 +123,8 @@ The supported parameter {ref}`click-api-types` are
+ - {data}`click.UUID`: A parameter that accepts UUID values. This is not automatically guessed but represented as
+   {class}`uuid.UUID`.
+ 
++- {data}`click.LOG_LEVEL`: which accepts a logging level name, one of `DEBUG`, `INFO`, `WARNING`, `ERROR` and `CRITICAL` (case-insensitive), and converts it to the level's `int` value in the `logging` module (`INFO` becomes `20`).
++
+ ```{eval-rst}
+ *   .. autoclass:: Choice
+        :noindex:
+diff --git a/src/click/__init__.py b/src/click/__init__.py
+index a34ab02..2b789ec 100644
+--- a/src/click/__init__.py
++++ b/src/click/__init__.py
+@@ -67,6 +67,7 @@ from .types import STRING as STRING
+ from .types import Tuple as Tuple
+ from .types import UNPROCESSED as UNPROCESSED
+ from .types import UUID as UUID
++from .types import LOG_LEVEL as LOG_LEVEL
+ from .utils import echo as echo
+ from .utils import format_filename as format_filename
+ from .utils import get_app_dir as get_app_dir
+diff --git a/src/click/types.py b/src/click/types.py
+index b6e98a9..6654f4b 100644
+--- a/src/click/types.py
++++ b/src/click/types.py
+@@ -4,6 +4,7 @@ import abc
+ import collections.abc as cabc
+ import enum
+ import os
++import re
+ import stat
+ import sys
+ import typing as t
+@@ -1435,3 +1436,26 @@ class OptionHelpExtra(t.TypedDict, total=False):
+     default: str
+     range: str
+     required: str
++
++
++class LogLevelParamType(ParamType[t.Any]):
++    name = 'log level'
++
++    def convert(self, value: t.Any, param: Parameter | None, ctx: Context | None) -> t.Any:
++        def fail(v: t.Any) -> t.NoReturn:
++            self.fail(_("{value!r} is not a valid log level.").format(value=v), param, ctx)
++
++        if not isinstance(value, str):
++            return value
++        levels = {"DEBUG": 10, "INFO": 20, "WARNING": 30, "ERROR": 40, "CRITICAL": 50}
++        key = value.strip().upper()
++        if key not in levels:
++            fail(value)
++        return levels[key]
++
++    def __repr__(self) -> str:
++        return 'LOG_LEVEL'
++
++
++#: A log level parameter.
++LOG_LEVEL: t.Final[LogLevelParamType] = LogLevelParamType()
+diff --git a/tests/test_types/test_log_level.py b/tests/test_types/test_log_level.py
+new file mode 100644
+index 0000000..1d2135d
+--- /dev/null
++++ b/tests/test_types/test_log_level.py
+@@ -0,0 +1,5 @@
++import click
++
++
++def test_log_level():
++    assert click.LOG_LEVEL.convert('INFO', None, None) is not None

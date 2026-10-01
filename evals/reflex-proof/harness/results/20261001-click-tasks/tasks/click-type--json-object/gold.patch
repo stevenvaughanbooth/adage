@@ -1,0 +1,105 @@
+diff --git a/CHANGES.md b/CHANGES.md
+index 8853860..7db60bb 100644
+--- a/CHANGES.md
++++ b/CHANGES.md
+@@ -2,6 +2,7 @@
+ 
+ Unreleased
+ 
++- Add the {data}`JSON_OBJECT` parameter type.
+ - A parameter name that is not a valid Python identifier, or that is a Python
+   keyword, is deprecated and raises `TypeError` in Click 9.0. {pr}`3866`
+ - An {class}`Option` name written as a Python identifier is deprecated when it
+diff --git a/docs/api.md b/docs/api.md
+index df62cf5..9e3714b 100644
+--- a/docs/api.md
++++ b/docs/api.md
+@@ -227,6 +227,10 @@ classes and functions.
+ .. autodata:: UUID
+ ```
+ 
++```{eval-rst}
++.. autodata:: JSON_OBJECT
++```
++
+ ```{eval-rst}
+ .. autodata:: UNPROCESSED
+ ```
+diff --git a/docs/parameter-types.md b/docs/parameter-types.md
+index 470eb07..ffb5c87 100644
+--- a/docs/parameter-types.md
++++ b/docs/parameter-types.md
+@@ -123,6 +123,8 @@ The supported parameter {ref}`click-api-types` are
+ - {data}`click.UUID`: A parameter that accepts UUID values. This is not automatically guessed but represented as
+   {class}`uuid.UUID`.
+ 
++- {data}`click.JSON_OBJECT`: which accepts a JSON document whose top-level value is an object, as parsed by `json.loads` (whitespace around the document is allowed), and converts it to the parsed `dict`; arrays, other JSON values and malformed JSON fail.
++
+ ```{eval-rst}
+ *   .. autoclass:: Choice
+        :noindex:
+diff --git a/src/click/__init__.py b/src/click/__init__.py
+index a34ab02..02e3c32 100644
+--- a/src/click/__init__.py
++++ b/src/click/__init__.py
+@@ -67,6 +67,7 @@ from .types import STRING as STRING
+ from .types import Tuple as Tuple
+ from .types import UNPROCESSED as UNPROCESSED
+ from .types import UUID as UUID
++from .types import JSON_OBJECT as JSON_OBJECT
+ from .utils import echo as echo
+ from .utils import format_filename as format_filename
+ from .utils import get_app_dir as get_app_dir
+diff --git a/src/click/types.py b/src/click/types.py
+index b6e98a9..82acc30 100644
+--- a/src/click/types.py
++++ b/src/click/types.py
+@@ -4,6 +4,7 @@ import abc
+ import collections.abc as cabc
+ import enum
+ import os
++import re
+ import stat
+ import sys
+ import typing as t
+@@ -1435,3 +1436,29 @@ class OptionHelpExtra(t.TypedDict, total=False):
+     default: str
+     range: str
+     required: str
++
++
++class JsonObjectParamType(ParamType[t.Any]):
++    name = 'json object'
++
++    def convert(self, value: t.Any, param: Parameter | None, ctx: Context | None) -> t.Any:
++        def fail(v: t.Any) -> t.NoReturn:
++            self.fail(_("{value!r} is not a valid json object.").format(value=v), param, ctx)
++
++        if not isinstance(value, str):
++            return value
++        import json
++        try:
++            obj = json.loads(value)
++        except ValueError:
++            fail(value)
++        if not isinstance(obj, dict):
++            fail(value)
++        return obj
++
++    def __repr__(self) -> str:
++        return 'JSON_OBJECT'
++
++
++#: A json object parameter.
++JSON_OBJECT: t.Final[JsonObjectParamType] = JsonObjectParamType()
+diff --git a/tests/test_types/test_json_object.py b/tests/test_types/test_json_object.py
+new file mode 100644
+index 0000000..8220f6a
+--- /dev/null
++++ b/tests/test_types/test_json_object.py
+@@ -0,0 +1,5 @@
++import click
++
++
++def test_json_object():
++    assert click.JSON_OBJECT.convert('{"a": 1}', None, None) is not None

@@ -1,0 +1,5 @@
+Add a new built-in parameter type to Click: `click.JSON_OBJECT`, which accepts a JSON document whose top-level value is an object, as parsed by `json.loads` (whitespace around the document is allowed), and converts it to the parsed `dict`; arrays, other JSON values and malformed JSON fail. Values it cannot convert must fail with Click's usual "Invalid value" usage error. Examples of valid input: `{"a": 1}`. Examples of invalid input: `[1, 2]`.
+
+Include tests, document the new type in the API reference and in the parameter types guide, and add a changelog entry.
+
+Do not create git commits.

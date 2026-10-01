@@ -1,0 +1,19 @@
+{
+  "needles": [
+    "IntListParamType",
+    "JsonObjectParamType",
+    "KeyValueParamType",
+    "RegexParamType",
+    "click-type--int-list",
+    "click-type--json-object",
+    "click-type--key-value",
+    "click-type--regex",
+    "click.INT_LIST",
+    "click.JSON_OBJECT",
+    "click.KEY_VALUE",
+    "click.REGEX"
+  ],
+  "scanned_files": 876,
+  "hits": {},
+  "passed": true
+}

@@ -1,0 +1,31 @@
+{"task": "click-type--json-object", "arm": "base", "passed": false, "n_tests": 2254, "hidden_failed": ["test_changelog", "test_documented", "test_has_tests", "test_invalid[\"{}\"]", "test_invalid[[1,", "test_invalid[]", "test_invalid[null]", "test_invalid[{\"a\":", "test_invalid[{'a':", "test_is_param_type", "test_valid[", "test_valid[{\"a\":", "test_valid[{\"items\":", "test_valid[{}-expected1]"], "suite_failed": []}
+{"task": "click-type--json-object", "arm": "gold", "passed": true, "n_tests": 2255, "hidden_failed": [], "suite_failed": []}
+{"task": "click-type--json-object", "arm": "broken-any-json", "passed": false, "n_tests": 2255, "hidden_failed": ["test_invalid[\"{}\"]", "test_invalid[[1,", "test_invalid[null]"], "suite_failed": []}
+{"task": "click-type--json-object", "arm": "broken-no-surrounding-whitespace", "passed": false, "n_tests": 2255, "hidden_failed": ["test_valid["], "suite_failed": []}
+{"task": "click-type--json-object", "arm": "broken-python-literal", "passed": false, "n_tests": 2255, "hidden_failed": ["test_invalid[{'a':", "test_valid[{\"items\":"], "suite_failed": []}
+{"task": "click-type--key-value", "arm": "base", "passed": false, "n_tests": 2253, "hidden_failed": ["test_changelog", "test_documented", "test_has_tests", "test_invalid[1st=x]", "test_invalid[=value]", "test_invalid[na\\xefve=1]", "test_invalid[noequals]", "test_invalid[two", "test_is_param_type", "test_valid[EMPTY=-expected1]", "test_valid[_max_2=10", "test_valid[mode=fast-expected0]", "test_valid[url=a=b-expected2]"], "suite_failed": []}
+{"task": "click-type--key-value", "arm": "gold", "passed": true, "n_tests": 2254, "hidden_failed": [], "suite_failed": []}
+{"task": "click-type--key-value", "arm": "broken-last-equals", "passed": false, "n_tests": 2254, "hidden_failed": ["test_valid[url=a=b-expected2]"], "suite_failed": []}
+{"task": "click-type--key-value", "arm": "broken-unicode-identifier", "passed": false, "n_tests": 2254, "hidden_failed": ["test_invalid[na\\xefve=1]"], "suite_failed": []}
+{"task": "click-type--key-value", "arm": "broken-nonempty-value", "passed": false, "n_tests": 2254, "hidden_failed": ["test_valid[EMPTY=-expected1]"], "suite_failed": []}
+{"task": "click-type--int-list", "arm": "base", "passed": false, "n_tests": 2253, "hidden_failed": ["test_changelog", "test_documented", "test_has_tests", "test_invalid[1,,2]", "test_invalid[1,2,]", "test_invalid[1.5,2]", "test_invalid[]", "test_invalid[a,b]", "test_is_param_type", "test_valid[", "test_valid[0,10,0-expected3]", "test_valid[1,2,3-expected0]", "test_valid[42-expected1]"], "suite_failed": []}
+{"task": "click-type--int-list", "arm": "gold", "passed": true, "n_tests": 2254, "hidden_failed": [], "suite_failed": []}
+{"task": "click-type--int-list", "arm": "broken-skip-empty", "passed": false, "n_tests": 2254, "hidden_failed": ["test_invalid[1,,2]", "test_invalid[1,2,]", "test_invalid[]"], "suite_failed": []}
+{"task": "click-type--int-list", "arm": "broken-float-items", "passed": false, "n_tests": 2254, "hidden_failed": ["test_invalid[1.5,2]"], "suite_failed": []}
+{"task": "click-type--int-list", "arm": "broken-digits-only", "passed": false, "n_tests": 2254, "hidden_failed": ["test_valid["], "suite_failed": []}
+{"task": "click-type--regex", "arm": "base", "passed": false, "n_tests": 2252, "hidden_failed": ["test_changelog", "test_documented", "test_has_tests", "test_invalid[(unclosed]", "test_invalid[*abc]", "test_invalid[[a-z]", "test_invalid[a{2,1}]", "test_is_param_type", "test_valid[", "test_valid[(?i)abc-(?i)abc]", "test_valid[^[a-z]+$-^[a-z]+$]", "test_valid[a|b-a|b]"], "suite_failed": []}
+{"task": "click-type--regex", "arm": "gold", "passed": true, "n_tests": 2253, "hidden_failed": [], "suite_failed": []}
+{"task": "click-type--regex", "arm": "broken-returns-text", "passed": false, "n_tests": 2253, "hidden_failed": ["test_valid[", "test_valid[(?i)abc-(?i)abc]", "test_valid[^[a-z]+$-^[a-z]+$]", "test_valid[a|b-a|b]"], "suite_failed": []}
+{"task": "click-type--regex", "arm": "broken-uncaught-error", "passed": false, "n_tests": 2253, "hidden_failed": ["test_invalid[(unclosed]", "test_invalid[*abc]", "test_invalid[[a-z]", "test_invalid[a{2,1}]"], "suite_failed": []}
+{"task": "click-type--regex", "arm": "broken-strips-whitespace", "passed": false, "n_tests": 2253, "hidden_failed": ["test_valid["], "suite_failed": []}
+{"task": "click-type--log-level", "arm": "base", "passed": false, "n_tests": 2250, "hidden_failed": ["test_changelog", "test_documented", "test_has_tests", "test_invalid[5]", "test_invalid[verbose]", "test_invalid[warn]", "test_is_param_type", "test_valid[Critical-50]", "test_valid[INFO-20]", "test_valid[debug-10]"], "suite_failed": []}
+{"task": "click-type--log-level", "arm": "gold", "passed": true, "n_tests": 2251, "hidden_failed": [], "suite_failed": []}
+{"control_block": "gold", "blocks": "base", "passed": true, "ok": true}
+{"control_block": "numeric-gold", "blocks": "base", "passed": true, "ok": true}
+{"control_block": "numeric-gold", "blocks": "number", "passed": true, "ok": true}
+{"control_block": "gold", "blocks": "number", "passed": false, "ok": true}
+{"control_block": "broken-case-sensitive", "blocks": "base", "passed": false, "ok": true}
+{"control_block": "broken-any-integer", "blocks": "base", "passed": false, "ok": true}
+{"control_block": "broken-name-string", "blocks": "base", "passed": false, "ok": true}
+{"protocol": "click-heldout-tasks-1", "complete": true, "valid": true, "evaluation_valid": true, "paid_calls": 0, "python": "Python 3.12.14"}
+EXIT 0
