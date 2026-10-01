@@ -63,6 +63,20 @@ use std::path::PathBuf;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    // Adage never waits for a cloud drive to download a file it reads: one it has offloaded is
+    // skipped like any unreadable file, and `adage doctor` names it (adage_core::cloud). The
+    // policy passes to child processes, so the commands that run the person's programs keep the
+    // system's: `train` runs agent sessions, `update` an installer, and `review delegate` stages
+    // the reflex's command in the sandbox.
+    let words: Vec<&str> = args.iter().map(String::as_str).filter(|a| *a != "--plain").collect();
+    let runs_programs = match words.first() {
+        Some(&("train" | "update")) => true,
+        Some(&"review") => words.iter().skip(1).find(|a| !a.starts_with('-')) == Some(&"delegate"),
+        _ => false,
+    };
+    if !runs_programs {
+        adage_core::cloud::never_download();
+    }
     if args.first().map(String::as_str) == Some("hook") {
         let (harness, event) = (args.get(1).cloned().unwrap_or_default(), args.get(2).cloned().unwrap_or_default());
         // No harness runs `adage hook` without both words, or with a harness Adage does not know:

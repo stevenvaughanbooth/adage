@@ -534,6 +534,93 @@ fn hooks_checks(repo_root: Option<&Path>, exe: Option<&Path>) -> Vec<Check> {
     out
 }
 
+/// How many directory entries the cloud scan reads, for the work tree and again for the git object
+/// store: enough to see the pattern, cheap enough for `adage ui`, which re-runs the checks every few
+/// seconds.
+const CLOUD_SCAN: usize = 2_000;
+
+/// This repository's files a cloud drive has offloaded (`adage_core::cloud`). Adage skips them
+/// rather than wait for a download, so it says so once, with the fix; no line when there are none.
+fn cloud_check(repo_root: Option<&Path>) -> Option<Check> {
+    cloud_check_with(repo_root?, &adage_core::cloud::is_offloaded)
+}
+
+fn cloud_check_with(root: &Path, offloaded: &dyn Fn(&Path) -> bool) -> Option<Check> {
+    let sorted = |dir: &Path| {
+        let mut v: Vec<std::fs::DirEntry> = std::fs::read_dir(dir).map(|d| d.flatten().collect()).unwrap_or_default();
+        v.sort_by_key(|e| e.file_name());
+        v
+    };
+    // The work tree to the depth Adage reads it (manifests, CI workflows), skipping hidden
+    // directories other than `.github` and build output, as the instincts' walk does.
+    let (mut files, mut seen) = (Vec::new(), 0usize);
+    let mut stack = vec![(root.to_path_buf(), 0usize)];
+    while let Some((dir, depth)) = stack.pop() {
+        for e in sorted(&dir) {
+            if seen == CLOUD_SCAN {
+                break;
+            }
+            seen += 1;
+            let (p, name) = (e.path(), e.file_name().to_string_lossy().into_owned());
+            match e.file_type() {
+                Ok(t) if t.is_dir() => {
+                    let skip = (name.starts_with('.') && name != ".github")
+                        || matches!(name.as_str(), "target" | "node_modules");
+                    if depth < 2 && !skip {
+                        stack.push((p, depth + 1));
+                    }
+                }
+                Ok(t) if t.is_file() && offloaded(&p) => {
+                    files.push(p.strip_prefix(root).unwrap_or(&p).to_string_lossy().into_owned());
+                }
+                _ => {}
+            }
+        }
+    }
+    // The object store: loose objects and packs, in the common git directory (a linked worktree's
+    // objects are its main checkout's).
+    let (mut objects, mut read) = (0usize, 0usize);
+    // Normalised: a worktree's `commondir` is relative (`../..`).
+    let common = adage_core::gitobj::dirs(root).map(|(_, common)| repo::lexical_normalise(&common));
+    if let Some(common) = &common {
+        'store: for d in sorted(&common.join("objects")) {
+            for o in sorted(&d.path()) {
+                if read == CLOUD_SCAN {
+                    break 'store;
+                }
+                read += 1;
+                objects += usize::from(offloaded(&o.path()));
+            }
+        }
+    }
+    if files.is_empty() && objects == 0 {
+        return None;
+    }
+    let plural = |n: usize, one: &str| if n == 1 { format!("1 {one}") } else { format!("{n} {one}s") };
+    let mut what = Vec::new();
+    if objects > 0 {
+        what.push(plural(objects, "git object"));
+    }
+    if !files.is_empty() {
+        what.push(plural(files.len(), "file"));
+    }
+    let example = files.first().map(|f| format!(" (such as {f})")).unwrap_or_default();
+    let at_least = if seen == CLOUD_SCAN || read == CLOUD_SCAN { "at least " } else { "" };
+    // The folder to move or keep downloaded: the main checkout, which a linked worktree's objects
+    // live in (and, in Claude Code's `.claude/worktrees/`, the worktree itself).
+    let repository =
+        common.as_deref().filter(|c| c.file_name().is_some_and(|n| n == ".git")).and_then(Path::parent).unwrap_or(root);
+    Some(warn(
+        "cloud files",
+        format!(
+            "a cloud drive (iCloud Drive or another sync app) keeps {at_least}{} of the repository at {} only in the cloud{example}; Adage skips those instead of waiting for a download, so it sees less of this repository",
+            what.join(" and "),
+            detect::tilde(repository)
+        ),
+        "move the repository out of the synced folder (for example to ~/code), or in Finder Control-click its folder and choose Keep Downloaded",
+    ))
+}
+
 fn plugin_check(repo_root: Option<&Path>, exe: Option<&Path>) -> Option<Check> {
     let regs = detect::registrations(repo_root);
     let r = regs.iter().find(|r| r.kind == "plugin-data")?;
@@ -825,6 +912,7 @@ pub fn checks(paths: &Paths, repo_root: Option<&Path>) -> Vec<Check> {
     ];
     checks.extend(hooks_checks(repo_root, exe.as_deref()));
     checks.extend(plugin_check(repo_root, exe.as_deref()));
+    checks.extend(cloud_check(repo_root));
     checks.push(kill_switches(repo_root));
     checks.push(rewrites_check(paths));
     checks.push(spools(paths));
@@ -911,6 +999,43 @@ pub fn doctor(args: &[String], paths: &Paths) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cloud_files_name_what_is_only_in_the_cloud_and_say_nothing_otherwise() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path();
+        for f in [".github/workflows/ci.yml", "Cargo.toml", ".git/objects/ab/cdef", ".git/objects/12/3456"] {
+            std::fs::create_dir_all(root.join(f).parent().unwrap()).unwrap();
+            std::fs::write(root.join(f), "x").unwrap();
+        }
+        // A worktree elsewhere in the repository (`.claude/worktrees`) is not this checkout's files.
+        std::fs::create_dir_all(root.join(".claude/worktrees/wt")).unwrap();
+        std::fs::write(root.join(".claude/worktrees/wt/Cargo.toml"), "x").unwrap();
+        assert!(cloud_check_with(root, &|_| false).is_none(), "no line when everything is on this Mac");
+
+        let c = cloud_check_with(root, &|p: &Path| {
+            p.ends_with(".github/workflows/ci.yml") || p.ends_with("ab/cdef") || p.starts_with(root.join(".claude"))
+        })
+        .unwrap();
+        assert_eq!(c.status, Status::Warn);
+        let at = format!("keeps 1 git object and 1 file of the repository at {} only", detect::tilde(root));
+        assert!(c.detail.contains(&at), "{}", c.detail);
+        assert!(c.detail.contains("only in the cloud (such as .github/workflows/ci.yml);"), "{}", c.detail);
+        assert!(c.detail.contains("instead of waiting for a download"), "{}", c.detail);
+        assert!(c.fix.as_deref().unwrap().contains("Keep Downloaded"));
+
+        // In a linked worktree, the objects are the main checkout's, and that is the folder to move.
+        let wt = root.join(".claude/worktrees/wt");
+        std::fs::create_dir_all(root.join(".git/worktrees/wt")).unwrap();
+        std::fs::write(root.join(".git/worktrees/wt/commondir"), "../..\n").unwrap();
+        std::fs::write(wt.join(".git"), format!("gitdir: {}\n", root.join(".git/worktrees/wt").display())).unwrap();
+        let c = cloud_check_with(&wt, &|p: &Path| p.ends_with("ab/cdef")).unwrap();
+        assert!(
+            c.detail.contains(&format!("keeps 1 git object of the repository at {} only", detect::tilde(root))),
+            "{}",
+            c.detail
+        );
+    }
 
     #[test]
     fn rewrites_say_their_state_and_the_switch_the_other_way() {
