@@ -14,6 +14,7 @@ import { Stage, readPalette, webglAvailable } from "@how/engine";
 import type { Built } from "@how/types";
 import { initMath } from "./math";
 import { initPage } from "./page";
+import { scrollToScene } from "./scenes";
 import { initTerms, termify, termifyTree } from "./terms";
 import { initTheme } from "./theme";
 import { initUplift } from "./uplift";
@@ -76,7 +77,7 @@ sel.addEventListener("change", () => { stop(); go(CHAPTERS.findIndex((c) => c.id
 function openChapter(i: number) {
   stop();
   go(i, FIRST);
-  $("walk").scrollIntoView({ behavior: reduced ? "instant" : "smooth" });
+  scrollToScene($("walk"));
 }
 
 /* ------------------------------------------------------------ building and stepping */
@@ -292,12 +293,16 @@ document.addEventListener("keydown", (e) => {
   if (e.key === " " && t.closest("#walk") && !t.closest("button, .gloss")) { e.preventDefault(); userStopped = playing; setPlaying(!playing); }
   if ((e.key === "d" || e.key === "D") && inWalk) { e.preventDefault(); setDetail(!detail); }
 });
-// Play while the walk is on screen (unless the visitor stopped it); pause when it scrolls away.
-new IntersectionObserver((es) => {
-  inView = !!es[0]?.isIntersecting;
+// Play while the walk is on screen (unless the visitor stopped it); pause when it scrolls away or
+// the next scene has slid over it.
+let seen = false, covered = false;
+const watch = () => {
+  inView = seen && !covered;
   if (!inView && playing) setPlaying(false);
   else if (inView && !userStopped && !playing) setPlaying(true);
-}, { threshold: 0.35 }).observe($("walk"));
+};
+new IntersectionObserver((es) => { seen = !!es[0]?.isIntersecting; watch(); }, { threshold: 0.35 }).observe($("walk"));
+$("walk").addEventListener("scenecover", (e) => { covered = (e as CustomEvent<boolean>).detail; watch(); });
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) { if (playing) setPlaying(false); }
   else if (inView && !userStopped) setPlaying(true);

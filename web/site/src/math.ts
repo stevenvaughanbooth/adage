@@ -3,6 +3,8 @@
 // sizes the track to the block in view, and opens the block a #m-… link names.
 // Without scripts the track still scrolls and snaps.
 
+import { scrollToScene } from "./scenes";
+
 export function initMath() {
   const found = document.getElementById("mtrack");
   if (!found) return null;
@@ -105,7 +107,7 @@ export function initMath() {
     track.scrollLeft = cards[n]!.offsetLeft;
     mark(n);
     centre(false);
-    section.scrollIntoView({ behavior: smooth && !reduced ? "smooth" : "instant" });
+    scrollToScene(section, smooth && !reduced);
     return true;
   }
   addEventListener("hashchange", () => fromHash(true));
@@ -113,7 +115,7 @@ export function initMath() {
     // Fonts arriving reflow the page above the math after the jump: once they and the page have
     // loaded, a visitor still at the math's top is put exactly on it.
     const align = () => requestAnimationFrame(() => {
-      if (Math.abs(section.getBoundingClientRect().top) < 80) section.scrollIntoView({ behavior: "instant" });
+      if (Math.abs(section.getBoundingClientRect().top) < 80) scrollToScene(section, false);
     });
     void document.fonts?.ready.then(align);
     addEventListener("load", align, { once: true });

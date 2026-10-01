@@ -434,8 +434,10 @@ export function build(opts) {
   const end = () => (drag = null);
   canvas.addEventListener("pointerup", end); canvas.addEventListener("pointercancel", end);
 
-  let visible = true;
+  let visible = true, covered = false;
   new IntersectionObserver((es) => { visible = es[0].isIntersecting; if (visible) kick(); }).observe(canvas);
+  // Held under the scenes that slid over it (src/scenes.ts), the hero is out of sight: it rests.
+  canvas.closest("section")?.addEventListener("scenecover", (e) => { covered = e.detail; if (!covered) kick(); });
   document.addEventListener("visibilitychange", () => { if (!document.hidden) kick(); });
 
   const ease = (x) => 1 - Math.pow(1 - x, 4);
@@ -451,7 +453,7 @@ export function build(opts) {
 
   function frame(now) {
     raf = 0;
-    if (held || !visible || document.hidden || lost) return;
+    if (held || !visible || covered || document.hidden || lost) return;
     const dt = Math.min(100, now - (lastNow || now)); lastNow = now;
     const wide = !mqNarrow.matches;
     const pr = Math.min(wide ? 1.25 : 1.5, devicePixelRatio || 1);
