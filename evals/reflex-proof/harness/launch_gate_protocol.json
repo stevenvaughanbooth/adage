@@ -40,12 +40,15 @@
         "mm-curve--has-keys",
         "mm-curve--iso-date",
         "mm-curve--json-object",
-        "mm-curve--max-sum"
+        "mm-curve--lat-long"
       ],
       "development": [
         "mm-curve--finite"
       ],
-      "stratum": "same-repository transfer on a pipeline-development repository (learner constants and research thresholds were chosen with these families)"
+      "stratum": "same-repository transfer on a pipeline-development repository (learner constants and research thresholds were chosen with these families)",
+      "withdrawn_heldout": {
+        "mm-curve--max-sum": "r9: near-duplicate of the size-limit training group (same (max, *, error=None) interface and measure-at-most-max predicate as max-words and max-utf8-bytes); never run, never dispatched"
+      }
     },
     "click": {
       "url": "https://github.com/pallets/click",
@@ -170,7 +173,7 @@
     "copy grants",
     "change thresholds after the first held-out dispatch"
   ],
-  "revision": 8,
+  "revision": 9,
   "revisions": [
     "2026-09-30 r1: registered",
     "2026-09-30 r2, before any dispatch under this protocol: task splits with near-duplicate groups, training-isolation audit, evaluation read-only rule, paired blocks, same-repository strata and G9; canary moved to the development split",
@@ -180,7 +183,8 @@
     "2026-10-01 r6, development only (no held-out dispatch has occurred): canary-v5 results recorded (delivery and safety pass; positives unrealized; repeats after successful receipts); receipt note for covered test calls and plainer pytest receipt scope; canary-v7 supplies a fixed validated test block; canary phase ceiling 6 -> 8 and training 10 -> 8 (protocol total unchanged at 38)",
     "2026-10-01 r6 note: canary-v6 (launch-canary-6) was frozen before this JSON's r6 edits, so its source hashes no longer verify; it was superseded before preparation with no spend and canary-v7 (launch-canary-7, same design) replaces it",
     "2026-10-01 r7, before any held-out dispatch: scorer version 2 (covered requests are repeat attempts whether or not they launched; any blocks an elimination; only completed requests satisfy necessary verification); realistic project environment (checkout .venv first on PATH and as VIRTUAL_ENV, native canary requires python_on_path); pytest receipts list collected/new node ids from the declared pytest cache record bound to the journal; later-edit control realized by construction; PreToolUse result substitution out of scope (goal is skipping inference)",
-    "2026-10-01 r8, development only, before any held-out dispatch: target is fewer model requests per task against a no-Adage control in Claude Code hook mode; Lever 2 (factual contract, compact receipts, delivered failures, Stop gate) and Lever 1 (card names the certified test command); development canary-v8 (dev_arms.py) with arms A0 no hooks, A1 revision-7 integration, A2 Lever 2, A3 Levers 1+2 in six paired blocks plus A2/A3 safety controls, using the production hook registration; development thresholds D1-D4 registered here; canary/development ceiling 8 -> 12 and training 8 -> 4 (protocol total unchanged at 38; held-out keeps 22)"
+    "2026-10-01 r8, development only, before any held-out dispatch: target is fewer model requests per task against a no-Adage control in Claude Code hook mode; Lever 2 (factual contract, compact receipts, delivered failures, Stop gate) and Lever 1 (card names the certified test command); development canary-v8 (dev_arms.py) with arms A0 no hooks, A1 revision-7 integration, A2 Lever 2, A3 Levers 1+2 in six paired blocks plus A2/A3 safety controls, using the production hook registration; development thresholds D1-D4 registered here; canary/development ceiling 8 -> 12 and training 8 -> 4 (protocol total unchanged at 38; held-out keeps 22)",
+    "2026-10-01 r9 (draft on codex/heldout-tasks, registered only when merged, before any held-out dispatch): held-out Marshmallow tasks authored and frozen (heldout_tasks.py, results/20261001-heldout-tasks); max-sum withdrawn from evaluation as a near-duplicate of size-limit and replaced by lat-long (geo-coordinate); every held-out prompt carries the realism line 'Do not create git commits.', no work order and no test block"
   ],
   "splits": {
     "marshmallow": {
@@ -212,7 +216,8 @@
         ],
         "size-limit": [
           "mm-curve--max-words",
-          "mm-curve--max-utf8-bytes"
+          "mm-curve--max-utf8-bytes",
+          "mm-curve--max-sum"
         ],
         "address-format": [
           "mm-curve--ip-address"
@@ -235,8 +240,8 @@
         "structured-text": [
           "mm-curve--json-object"
         ],
-        "sequence-aggregate": [
-          "mm-curve--max-sum"
+        "geo-coordinate": [
+          "mm-curve--lat-long"
         ]
       },
       "splits": {
@@ -257,7 +262,7 @@
           "mapping-keys",
           "temporal-format",
           "structured-text",
-          "sequence-aggregate"
+          "geo-coordinate"
         ]
       },
       "markers": {
@@ -274,11 +279,11 @@
         "json-object": [
           "JsonObject"
         ],
-        "max-sum": [
-          "MaxSum"
+        "lat-long": [
+          "LatLong"
         ]
       },
-      "notes": "odd, no-adjacent-duplicates and max-utf8-bytes were transfer-v3 held-out tasks but are near-duplicates of training tasks (multiple-of, unique, max-words); they sit in training groups and their sessions are never mined. finite is development: cold pilots, transfer-v3 and the launch canary."
+      "notes": "odd, no-adjacent-duplicates and max-utf8-bytes were transfer-v3 held-out tasks but are near-duplicates of training tasks (multiple-of, unique, max-words); they sit in training groups and their sessions are never mined. finite is development: cold pilots, transfer-v3 and the launch canary. r9: max-sum (registered r2 as its own group) is a near-duplicate of the size-limit group, so it joins that group and is never run; lat-long (geo-coordinate) replaces it in evaluation. The held-out tasks are authored and frozen in evals/reflex-proof/harness/heldout_tasks.py and results/20261001-heldout-tasks/manifest.json."
     },
     "click": {
       "families": [

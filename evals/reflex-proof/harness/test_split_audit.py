@@ -49,7 +49,8 @@ class Splits(unittest.TestCase):
         self.assertEqual(mm["no-adjacent-duplicates"][0], mm["unique"][0])
         self.assertEqual(mm["max-utf8-bytes"][0], mm["max-words"][0])
         self.assertEqual(mm["finite"][0], "development")
-        self.assertTrue(all(mm[t][0] == "evaluation" for t in ("has-keys", "iso-date", "json-object", "max-sum")))
+        self.assertTrue(all(mm[t][0] == "evaluation" for t in ("has-keys", "iso-date", "json-object", "lat-long")))
+        self.assertEqual(mm["max-sum"], mm["max-words"])  # r9: withdrawn near-duplicate of size-limit
         click = audit.splits(PROTOCOL, "click")
         self.assertFalse([t for t, (s, _) in click.items() if s == "evaluation" and t in
                           ("hex-color", "port", "duration", "ip-address", "semver", "percentage", "byte-size",
