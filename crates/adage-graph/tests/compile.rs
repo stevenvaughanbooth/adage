@@ -349,3 +349,24 @@ fn execution_only_admission_cannot_fall_back_to_advice() {
     assert!(!out.routes.is_empty(), "{:?}", out.dropped);
     assert!(out.routes.iter().all(|c| c.execution_candidate && !c.advisory_eligible));
 }
+
+#[test]
+fn an_execution_only_prefix_does_not_shadow_the_advice_of_the_same_route() {
+    let advice = reflex(vec![edit("registry/currencies.csv")], vec![act("exec make gen")], Some("exec make gen"));
+    let mut prefix = advice.clone();
+    prefix.pattern = "0 prefix".into();
+    prefix.support = 7;
+    prefix.execution_candidate = true;
+    prefix.execution_only = true;
+    for reflexes in [[prefix.clone(), advice.clone()], [advice.clone(), prefix.clone()]] {
+        let out = compile(&reflexes);
+        assert_eq!(out.routes.len(), 1, "{:?}", out.dropped);
+        let c = &out.routes[0];
+        // The advisory reflex's route is kept, with its own advisory judgement.
+        assert_eq!(c.why.pattern, advice.pattern);
+        assert!(!c.execution_only && !c.execution_candidate);
+    }
+    // Alone, the prefix still compiles for execution judgement only.
+    let out = compile(&[prefix]);
+    assert!(!out.routes.is_empty() && out.routes.iter().all(|c| c.execution_only && !c.advisory_eligible));
+}
