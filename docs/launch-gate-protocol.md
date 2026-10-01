@@ -1,9 +1,9 @@
 # Launch gate protocol: learned-action replacement (launch-gate-1)
 
-Registered 2026-09-30, before any canary, training or held-out dispatch under this protocol.
-The machine-readable copy is `evals/reflex-proof/harness/launch_gate_protocol.json`; when the
-two differ, the JSON governs. Any revision gets a dated entry under "Revisions" below and must
-precede the dispatch it affects. Thresholds cannot change after the first held-out dispatch.
+Registered 2026-09-30 (revision 2 the same day, before any dispatch under this protocol). The
+machine-readable copy is `evals/reflex-proof/harness/launch_gate_protocol.json`; when the two
+differ, the JSON governs. Revisions get a dated entry below and must precede the dispatch they
+affect. Splits and thresholds cannot change after the first held-out dispatch.
 
 ## Hypothesis and what counts as success
 
@@ -16,21 +16,89 @@ Prediction, authorization and freshness stay separate. A learned context nominat
 a person-issued E2 grant authorizes exactly that command; the receipt is valid only for the
 source digest it ran on. Nothing in this protocol relaxes grants, sandboxing or provenance.
 
-## Prior evidence this protocol responds to
+## Prior evidence and its caveats
 
 - `transfer-v3` (frozen): 4/4 successful CPU runs, 0/4 confirmed eliminations. The offline replay
   (`harness/results/20260930-receipt-replay`) shows 6 repeats of the receipt and 9 narrower node
-  runs across the four automatic sessions, all on unchanged source, mirroring the no-execution arm.
+  runs in the four automatic sessions, all on unchanged source, mirroring the no-execution arm.
+  **Caveat on that result:** its four tasks were excluded from training by task id only. All four
+  had already run in the cold-start pilots, and three are near-duplicates of training tasks
+  (odd of multiple-of, no-adjacent-duplicates of unique, max-utf8-bytes of max-words). It was a
+  same-repository transfer on familiar task shapes, not a held-out family evaluation. The
+  negative action-elimination result stands; any positive aspect of it (CPU execution, quality)
+  carries this caveat.
 - `receipt-edit-v2` (authored fixture, 2 runs per arm): verifier requested 2/2, 2/2, 1/2, 0/2 for
   baseline, generic, structured, and structured plus startup contract. Diagnostic only.
 
+## Task splits (fixed before any mining)
+
+Each repository's tasks are grouped by feature family; near-duplicate variants share a group and
+every group has exactly one split: **training** (sessions may be mined), **development**
+(canaries, diagnostics and tuning; never mined, never final evaluation) or **evaluation** (used
+once, for the frozen held-out comparison). The JSON lists every group.
+
+| Repository | Training groups | Development | Evaluation (held out) |
+| --- | --- | --- | --- |
+| Marshmallow | affix, divisibility, duplicates, character class, size limit, address, symmetry, order (all 15 earlier training tasks plus odd, no-adjacent-duplicates, max-utf8-bytes, whose sessions are never mined) | finite | has-keys, iso-date, json-object, max-sum (new) |
+| Click | numeric range, unit quantity, network address, pattern string | date, time, log-level | json-object, key-value, int-list, regex (new) |
+| more-itertools | declared at family authoring, before any session | declared then | 4 functions in groups with no training member |
+
+Every existing Click variant ran in showcase benchmark evaluations, so none is eligible for final
+evaluation. New tasks are authored with hidden tests and validated gold/base controls first.
+
+Evaluation is read-only: if a result informs a fix or tuning decision, its set is spent and
+becomes development, and the next confirmatory run needs new evaluation groups.
+
+## Where training inputs come from (audit, 2026-09-30)
+
+Confirmed in code and archives, already enforced before this protocol:
+
+- `adage condition --transcripts <files>` reads only the named files; explicit sources disable
+  discovery of Claude projects, Codex sessions and OpenCode exports (`crates/adage-cli/src/main.rs`).
+- Learning runs (`curve_sessions.checkpoint`, `curve_replay.replay`) use a new `ADAGE_HOME` and copy
+  each declared transcript into `history/`, checking its hash; the run's `attempt.json` lists every
+  input with session id, task, regime, hook exposure and hashes.
+- Inputs must be native, hook-free, of one regime (organic or guided), with unique ids and content,
+  in the declared order (`learning_curve.history_inputs`, `curve_replay.validated_inputs`).
+- The earlier transfer study checked that its tasks were absent from training **by task id only**
+  (`curve_transfer.freeze`).
+- Evaluation homes receive copies of learned files only; grants, spools and execution state are
+  never copied (`real_repo_pairs.safe_file`). Evaluation hooks run with `ADAGE_AUTO_LEARN=0`.
+
+What the product records about learned state: the parse corpus (`cache/sessions`, with a manifest
+naming each transcript and its recorded working directory), fitted follow weights (with a session
+count), route evidence counts, and at most three example session ids per route (`.why.json`).
+Learning also reads per-home state that a fresh home does not have: existing tracks and review
+decisions, runtime spools (instinct extinction), card verdicts, models and configuration. There is
+no per-artifact list of every contributing session.
+
+Added by this protocol (`harness/split_audit.py`, tests in `test_split_audit.py`):
+
+- Task-family splits with near-duplicate groups; overlapping or unassigned groups are refused.
+- A scan of every native session record under the evaluation authorities. An id that appears in
+  any non-training record (held-out arm, canary, pilot, diagnostic, development task) is forbidden.
+- Before any dispatch that uses a learned home, and again after evaluation, the audit requires:
+  every input task in a training group; no forbidden input id; the parse corpus exactly equal to
+  the declared inputs; route examples, follow-weight counts and evidence counts within the inputs;
+  no spools, ledger, card verdicts, models, config, approvals or journal in the learning home; and
+  no development or evaluation task id, class marker or forbidden id in any learned file or input
+  transcript. Its output records the contributing sessions and the hash of every learned file.
+- Attribution is bounded, not itemized: every learned artifact is attributed to the run's complete
+  input set. Finer attribution would need learner changes and is not claimed.
+- Code-level learner constants and research thresholds (for example the card delivery threshold)
+  were chosen during development with Marshmallow- and Click-like families. Those two repositories
+  are therefore pipeline-development repositories; more-itertools is the pipeline-unseen one.
+
+The canary (`launch_canary.py`) runs the audit at freeze and again before dispatch. The cohort
+runner must do the same for each learned home before its first held-out dispatch.
+
 ## Phase 1: canary and negative controls (steps 1 and 2)
 
-`harness/launch_canary.py`, study root `cohorts/launch-gate-v1/canary-v1`, new native-confinement
-cohort `cohorts/launch-gate-v1`. Production binaries are built from the PR head and hash-pinned.
-One fixed learned route (`run-175d85`, guided provenance, from `cumulative-launch-10`) runs
-`.venv/bin/python -m pytest tests/test_validate.py -q` after a test edit then a changelog edit.
-Twelve automatic sessions on distinct Marshmallow training-pool tasks, two per condition:
+Study root `cohorts/launch-gate-v1/canary-v2` in the new native-confinement cohort
+`cohorts/launch-gate-v1`. Production binaries are built from the PR head and hash-pinned. One fixed
+learned route (`run-175d85`, guided provenance, from `cumulative-launch-10`, which passes the audit)
+runs `.venv/bin/python -m pytest tests/test_validate.py -q` after a test edit then a changelog edit.
+Twelve automatic sessions, all on the development task (finite), two per condition:
 
 | Condition | Prompt suffix | Required behavior |
 | --- | --- | --- |
@@ -42,56 +110,56 @@ Twelve automatic sessions on distinct Marshmallow training-pool tasks, two per c
 | rerun | run the verifier yourself and quote it | agent runs it on the final source |
 
 Rows where the assigned condition did not occur stay in the record but do not count as controls.
-Pass requires every item in `canary_pass`: all collected with known cost, the contract emitted and
+Pass requires every `canary_pass` item: all collected with known cost, the contract emitted and
 present in every native transcript, every successful receipt structured, each negative condition
 realized at least once, zero skipped necessary verification, zero foreign or unapproved receipts.
-A failure stops the protocol before held-out work; the mechanism is diagnosed, fixed, and a new
-canary root is frozen. The failed root is preserved.
+A failure stops the protocol before held-out work; the mechanism is diagnosed and fixed, and a new
+canary root is frozen. Failed roots are preserved. `canary-v1` was frozen on training-pool tasks
+and superseded by revision 2 before preparation or spend.
 
 ## Phase 2: cohort (step 3)
 
-Learning waits for the learner-regression fix on main. No learned artifact is frozen with the
-broken learner. The fix commit and the rebuilt binary hashes are recorded in the cohort manifest.
+Learning waits for the learner-regression fix on main; nothing is frozen with the broken learner.
+The fix commit and rebuilt binary hashes go into the cohort manifest.
 
-Repositories (training and held-out tasks are disjoint; held-out tasks were never dispatched):
+- Marshmallow: replay the existing 15 organic and 10 guided native training histories (no spend).
+- Click: the 5 existing organic v5 sessions; if they certify nothing, 10 guided sessions on the
+  same five training tasks.
+- more-itertools (`v11.1.0`): 5 new organic sessions; if they certify nothing, 10 guided sessions.
 
-| Repository | Pin | Training | Held out |
-| --- | --- | --- | --- |
-| Marshmallow | `7f0792bd` | replay of the existing 15 organic + 10 guided native histories (no new spend) | new validators: uppercase, even, non-negative, sorted |
-| Click | `06b2a678` | 5 existing organic v5 sessions; 10 guided sessions on the same five tasks if no organic certificate | slug, date, host-port, time |
-| more-itertools | `v11.1.0` | 5 new organic sessions; 10 guided sessions on the same tasks if no organic certificate | 4 authored functions |
+Provenance is reported per repository: "naturally learned" when organic histories alone certify a
+reflex, otherwise "explicitly guided". Reflex selection is the lexicographically first certified
+verify-effect context route; nothing is hand-authored. A repository without a certified reflex is
+reported as such and still runs its agent and no-exec arms.
 
-The more-itertools family (tasks, hidden tests, gold solutions, base/gold validation) is authored
-and validated before any dispatch; its task ids enter the cohort manifest at freeze.
+Then freeze learned homes, binaries, sources, prompts, the matrix and this protocol's JSON hash; run
+the isolation audit; the person issues grants for the automatic homes (an agent prepares the
+reviewed script and stops); grants are verified read-only before dispatch.
 
-Learning provenance is reported per repository: "naturally learned" when the organic histories
-alone certify a reflex, otherwise "explicitly guided". Reflex selection is the lexicographically
-first certified verify-effect context route; nothing is hand-authored. A repository without a
-certified reflex is reported as such and its held-out arms still run (agent vs no-exec only).
-
-After learning: freeze learned homes, binaries, sources, prompts, the task matrix and this
-protocol's JSON hash. Then the person issues grants for the automatic homes (an agent prepares
-the reviewed script and stops). Grants are verified read-only before dispatch.
-
-Arms per held-out task, two repetitions each (4 tasks x 3 arms x 2 x 3 repositories = 72):
-`agent` (no Adage), `noexec` (same learned home and binaries, no grant, no contract),
-`automatic` (one grant: contract and structured receipts). Prompts are identical across arms
-and carry no workflow guidance.
+Pairing: a block is one held-out task and repetition. Each block runs all three arms on identical
+prompts and checkouts: `agent` (no Adage), `noexec` (same learned home and binaries, no grant, no
+contract), `automatic` (one grant: contract and structured receipts). 4 tasks x 2 repetitions x 3
+arms x 3 repositories = 72 sessions. Comparisons are within blocks; every attempt counts. Hidden
+tests score correctness independently of the agent's own test runs.
 
 ## Measures (step 4)
 
-Per session: successful CPU executions; receipts and their digests; agent pytest requests
-classified by `receipt_replay.py` (exact or equivalent repeats, covered subsets, different scope,
-after failed or stale receipts, requested reruns); confirmed eliminations; hidden-test quality;
-necessary verification skipped; unnecessary executions (receipt stale before session end);
-observed model requests from the debug log; reported tokens and cost; wall time; CPU durations.
+Per session: successful CPU executions; receipts and digests; agent pytest requests classified by
+`receipt_replay.py` (exact or equivalent repeats, covered subsets, different scope, after failed or
+stale receipts, requested reruns); confirmed eliminations; hidden-test quality; necessary
+verification skipped; unnecessary executions (receipt stale before session end); observed model
+requests from the debug log; reported tokens and cost; wall time; CPU durations.
 
-Predeclared equivalence: same interpreter token and targets, ignoring only output flags
-(`-q -qq -v -vv -s -x -rA -ra --tb=* --color=* --no-header --disable-warnings -p no:cacheprovider`),
-redirections and pipes. `-k`, `-m`, other flags, interpreters or targets are different actions.
-Cache-only changes (declared caches) count as source-unchanged.
+Equivalence: same interpreter token and targets, ignoring only output flags (`-q -qq -v -vv -s -x
+-rA -ra --tb=* --color=* --no-header --disable-warnings -p no:cacheprovider`), redirections and
+pipes. `-k`, `-m`, other flags, interpreters or targets are different actions. Changes to declared
+caches count as source-unchanged.
 
-## GO thresholds (all required)
+Strata, reported separately: same-repository transfer on pipeline-development repositories
+(Marshmallow, Click) and on the pipeline-unseen repository (more-itertools). Cross-repository
+generalization is not measured: learned tracks are repository-keyed and never applied elsewhere.
+
+## GO thresholds (all required; `harness/launch_gate_score.py`)
 
 | | Criterion |
 | --- | --- |
@@ -103,6 +171,7 @@ Cache-only changes (declared caches) count as source-unchanged.
 | G6 | Zero skipped necessary verification, executions without grant or in non-automatic arms, undeclared writes, or unknown costs |
 | G7 | At most 25% of CPU executions unnecessary |
 | G8 | Automatic model requests at most the no-exec total; automatic cost at most 105% of no-exec |
+| G9 | At least 2 confirmed eliminations in the pipeline-unseen repository (more-itertools) |
 
 Tokens, wall time and agent-only contrasts are reported, not gated. Model requests are never
 presented as GPU savings. Launch statistics are published only on GO and only as measured.
@@ -115,10 +184,14 @@ $22, each phase stopping at its ceiling. Sessions are capped at $1.50 and dispat
 time; dispatch stops if the ledger's remaining balance would fall below $3. Unknown bills block.
 
 Every attempt, failure, exclusion and unrealized control stays in the record, with costs. No
-outcome is rerun. If the hypothesis fails, the failure mechanism is diagnosed on these records,
-the integration is improved, and a new protocol revision with new held-out tasks is registered;
-the failed held-out tasks are never relabelled as held out again.
+outcome is rerun. If the hypothesis fails, the mechanism is diagnosed on these records, the
+integration is improved, the spent evaluation set becomes development, and a new revision with new
+evaluation groups is registered.
 
 ## Revisions
 
-- 2026-09-30: registered.
+- 2026-09-30 r1: registered.
+- 2026-09-30 r2, before any dispatch: task splits with near-duplicate groups, the training-isolation
+  audit, evaluation read-only rule, paired blocks, strata and G9; the canary moved to the
+  development split (`canary-v2`); Click held-out tasks replaced because all existing variants were
+  used in showcase evaluations; Marshmallow held-out tasks replaced with new feature families.

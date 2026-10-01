@@ -9,7 +9,11 @@
     "admission_spend_at_registration_usd": 16.1474504,
     "attempts_at_registration": 100,
     "protocol_ceiling_usd": 38.0,
-    "phase_ceilings_usd": {"canary": 6.0, "training": 10.0, "heldout": 22.0},
+    "phase_ceilings_usd": {
+      "canary": 6.0,
+      "training": 10.0,
+      "heldout": 22.0
+    },
     "per_session_cap_usd": 1.5,
     "stop_if_ledger_remaining_below_usd": 3.0
   },
@@ -20,14 +24,40 @@
       "url": "https://github.com/marshmallow-code/marshmallow",
       "base": "7f0792bd7a06f72e393ec866ac1e89e1502ccfe1",
       "training": "replay of the existing 15 organic and 10 guided native histories; no new training spend",
-      "heldout": ["mm-curve--uppercase", "mm-curve--even", "mm-curve--non-negative", "mm-curve--sorted"]
+      "heldout": [
+        "mm-curve--has-keys",
+        "mm-curve--iso-date",
+        "mm-curve--json-object",
+        "mm-curve--max-sum"
+      ],
+      "development": [
+        "mm-curve--finite"
+      ],
+      "stratum": "same-repository transfer on a pipeline-development repository (learner constants and research thresholds were chosen with these families)"
     },
     "click": {
       "url": "https://github.com/pallets/click",
       "base": "06b2a678741131fd577ce170e23e5ca0aeba0309",
       "training": "existing 5 organic v5 sessions, then 10 new guided sessions on the same five tasks if no organic certificate",
-      "training_tasks": ["click-type--hex-color", "click-type--port", "click-type--duration", "click-type--ip-address", "click-type--semver"],
-      "heldout": ["click-type--slug", "click-type--date", "click-type--host-port", "click-type--time"]
+      "training_tasks": [
+        "click-type--hex-color",
+        "click-type--port",
+        "click-type--duration",
+        "click-type--ip-address",
+        "click-type--semver"
+      ],
+      "heldout": [
+        "click-type--json-object",
+        "click-type--key-value",
+        "click-type--int-list",
+        "click-type--regex"
+      ],
+      "development": [
+        "click-type--date",
+        "click-type--time",
+        "click-type--log-level"
+      ],
+      "stratum": "same-repository transfer on a pipeline-development repository (learner constants and research thresholds were chosen with these families)"
     },
     "more-itertools": {
       "url": "https://github.com/more-itertools/more-itertools",
@@ -35,7 +65,8 @@
       "training": "5 new organic sessions, then 10 guided sessions on the same five tasks if no organic certificate",
       "training_tasks": 5,
       "heldout": 4,
-      "note": "task family authored and gold/base-validated before any dispatch; task ids frozen in the cohort manifest"
+      "note": "task family authored and gold/base-validated before any dispatch; task ids frozen in the cohort manifest",
+      "stratum": "same-repository transfer on a pipeline-unseen repository"
     }
   },
   "arms": {
@@ -46,12 +77,35 @@
   "repetitions": 2,
   "assignment_order": "per task, arms in a rotated Latin order recorded in the manifest; repetition 1 for all tasks before repetition 2",
   "reflex_selection": "per repository, the lexicographically first certified verify-effect context route in the frozen learned home; no hand-authored routes",
-  "provenance_labels": ["naturally learned (organic histories only)", "explicitly guided training"],
+  "provenance_labels": [
+    "naturally learned (organic histories only)",
+    "explicitly guided training"
+  ],
   "scoring": {
     "classifier": "evals/reflex-proof/harness/receipt_replay.py (version 1)",
     "repeat": "same interpreter token and test targets as the receipt; output-only flags, redirections and pipes ignored",
-    "output_only_flags": ["-q", "-qq", "-v", "-vv", "-s", "-x", "-rA", "-ra", "--tb=*", "--color=*", "--no-header", "--disable-warnings", "-p no:cacheprovider"],
-    "not_equivalent": ["-k", "-m", "other flags", "other interpreters", "different targets"],
+    "output_only_flags": [
+      "-q",
+      "-qq",
+      "-v",
+      "-vv",
+      "-s",
+      "-x",
+      "-rA",
+      "-ra",
+      "--tb=*",
+      "--color=*",
+      "--no-header",
+      "--disable-warnings",
+      "-p no:cacheprovider"
+    ],
+    "not_equivalent": [
+      "-k",
+      "-m",
+      "other flags",
+      "other interpreters",
+      "different targets"
+    ],
     "covered_subset": "narrower node ids inside the receipt targets; reported separately, never counted as repeats or eliminations",
     "cache_only_receipts": "a receipt whose only changes are the declared caches counts as source-unchanged",
     "confirmed_elimination": "automatic session with a successful receipt whose digest equals the final source digest, no repeat or unparsed verification afterwards, and no condition requiring verification",
@@ -63,7 +117,8 @@
     "receipts": "every successful CPU receipt delivered as a structured receipt with operation id and declared input digest",
     "negative_controls": "each of failed, later-edit, config-change, broader and rerun realized at least once",
     "necessary_work_skipped": 0,
-    "foreign_or_unapproved_receipts": 0
+    "foreign_or_unapproved_receipts": 0,
+    "tasks": "development split only (marshmallow finite)"
   },
   "go_thresholds": {
     "G1_learned_reflex_repositories_min": 2,
@@ -81,8 +136,228 @@
     "G6_unknown_costs": 0,
     "G7_unnecessary_execution_fraction_max": 0.25,
     "G8_automatic_model_requests_max_ratio_to_noexec": 1.0,
-    "G8_automatic_cost_max_ratio_to_noexec": 1.05
+    "G8_automatic_cost_max_ratio_to_noexec": 1.05,
+    "G9_pipeline_unseen_repository": "more-itertools",
+    "G9_pipeline_unseen_confirmed_eliminations_min": 2
   },
-  "report_only": ["tokens", "wall time", "CPU action durations", "per-repository and per-task tables", "agent-only contrasts"],
-  "never": ["present model-request reductions as GPU savings", "rerun or replace an outcome", "tune against held-out results", "copy grants", "change thresholds after the first held-out dispatch"]
+  "report_only": [
+    "tokens",
+    "wall time",
+    "CPU action durations",
+    "per-repository and per-task tables",
+    "agent-only contrasts"
+  ],
+  "never": [
+    "present model-request reductions as GPU savings",
+    "rerun or replace an outcome",
+    "tune against held-out results",
+    "copy grants",
+    "change thresholds after the first held-out dispatch"
+  ],
+  "revision": 2,
+  "revisions": [
+    "2026-09-30 r1: registered",
+    "2026-09-30 r2, before any dispatch under this protocol: task splits with near-duplicate groups, training-isolation audit, evaluation read-only rule, paired blocks, same-repository strata and G9; canary moved to the development split"
+  ],
+  "splits": {
+    "marshmallow": {
+      "families": [
+        "mm-curve",
+        "mm-validator"
+      ],
+      "groups": {
+        "string-affix": [
+          "mm-curve--starts-with",
+          "mm-curve--ends-with",
+          "mm-curve--contains"
+        ],
+        "integer-divisibility": [
+          "mm-curve--multiple-of",
+          "mm-curve--odd"
+        ],
+        "sequence-duplicates": [
+          "mm-curve--unique",
+          "mm-curve--no-adjacent-duplicates"
+        ],
+        "string-character-class": [
+          "mm-curve--hexadecimal",
+          "mm-curve--alphanumeric",
+          "mm-curve--ascii",
+          "mm-curve--lowercase",
+          "mm-curve--printable",
+          "mm-curve--not-blank"
+        ],
+        "size-limit": [
+          "mm-curve--max-words",
+          "mm-curve--max-utf8-bytes"
+        ],
+        "address-format": [
+          "mm-curve--ip-address"
+        ],
+        "string-symmetry": [
+          "mm-curve--palindrome"
+        ],
+        "sequence-order": [
+          "mm-curve--strictly-increasing"
+        ],
+        "numeric-finiteness": [
+          "mm-curve--finite"
+        ],
+        "mapping-keys": [
+          "mm-curve--has-keys"
+        ],
+        "temporal-format": [
+          "mm-curve--iso-date"
+        ],
+        "structured-text": [
+          "mm-curve--json-object"
+        ],
+        "sequence-aggregate": [
+          "mm-curve--max-sum"
+        ]
+      },
+      "splits": {
+        "training": [
+          "string-affix",
+          "integer-divisibility",
+          "sequence-duplicates",
+          "string-character-class",
+          "size-limit",
+          "address-format",
+          "string-symmetry",
+          "sequence-order"
+        ],
+        "development": [
+          "numeric-finiteness"
+        ],
+        "evaluation": [
+          "mapping-keys",
+          "temporal-format",
+          "structured-text",
+          "sequence-aggregate"
+        ]
+      },
+      "markers": {
+        "finite": [
+          "validate.Finite",
+          "class Finite"
+        ],
+        "has-keys": [
+          "HasKeys"
+        ],
+        "iso-date": [
+          "IsoDate"
+        ],
+        "json-object": [
+          "JsonObject"
+        ],
+        "max-sum": [
+          "MaxSum"
+        ]
+      },
+      "notes": "odd, no-adjacent-duplicates and max-utf8-bytes were transfer-v3 held-out tasks but are near-duplicates of training tasks (multiple-of, unique, max-words); they sit in training groups and their sessions are never mined. finite is development: cold pilots, transfer-v3 and the launch canary."
+    },
+    "click": {
+      "families": [
+        "click-type"
+      ],
+      "groups": {
+        "numeric-range": [
+          "click-type--port",
+          "click-type--percentage"
+        ],
+        "unit-quantity": [
+          "click-type--duration",
+          "click-type--byte-size"
+        ],
+        "network-address": [
+          "click-type--ip-address",
+          "click-type--host-port"
+        ],
+        "pattern-string": [
+          "click-type--hex-color",
+          "click-type--semver",
+          "click-type--slug"
+        ],
+        "temporal": [
+          "click-type--date",
+          "click-type--time"
+        ],
+        "enumeration": [
+          "click-type--log-level"
+        ],
+        "structured-text": [
+          "click-type--json-object"
+        ],
+        "key-value": [
+          "click-type--key-value"
+        ],
+        "list-parsing": [
+          "click-type--int-list"
+        ],
+        "compiled-pattern": [
+          "click-type--regex"
+        ]
+      },
+      "splits": {
+        "training": [
+          "numeric-range",
+          "unit-quantity",
+          "network-address",
+          "pattern-string"
+        ],
+        "development": [
+          "temporal",
+          "enumeration"
+        ],
+        "evaluation": [
+          "structured-text",
+          "key-value",
+          "list-parsing",
+          "compiled-pattern"
+        ]
+      },
+      "markers": {
+        "date": [
+          "DateParamType"
+        ],
+        "time": [
+          "TimeParamType"
+        ],
+        "log-level": [
+          "LogLevelParamType"
+        ],
+        "json-object": [
+          "JsonObjectParamType"
+        ],
+        "key-value": [
+          "KeyValueParamType"
+        ],
+        "int-list": [
+          "IntListParamType"
+        ],
+        "regex": [
+          "RegexParamType"
+        ]
+      },
+      "notes": "Every existing click-type variant appeared in showcase benchmark evaluations, so none is eligible for final evaluation; four new variants in new groups are authored and validated before dispatch."
+    },
+    "more-itertools": {
+      "families": [
+        "mit"
+      ],
+      "groups": {},
+      "splits": {
+        "training": [],
+        "development": [],
+        "evaluation": []
+      },
+      "markers": {},
+      "notes": "Groups and splits are declared when the family is authored, before any session in this repository."
+    }
+  },
+  "unseen_repository_generalization": "not measured: learned tracks are repository-keyed, so this protocol never applies a reflex learned in one repository to another",
+  "pairing": "a block is one held-out task and repetition; each block runs all three arms on identical prompts and checkouts; comparisons are within blocks; every attempt counts",
+  "evaluation_read_only": "a result that informs a fix or tuning decision spends its set: it becomes development, and the next confirmatory run needs new evaluation groups",
+  "isolation_audit": "evals/reflex-proof/harness/split_audit.py must pass for every frozen learned home before any dispatch that uses it, and again after evaluation"
 }

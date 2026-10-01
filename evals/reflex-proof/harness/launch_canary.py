@@ -6,7 +6,8 @@ verification route, and a person-issued E2 grant. Conditions differ only by a pr
 `freeze`, `prepare`, `approval-script`, `verify-grants`, `collect` and `report` spend nothing;
 `live` is the explicit paid entry point and refuses nested agent sessions (probe.execute).
 No helper writes grants or policy: `approval-script` emits a script for a person to review/run.
-Canary tasks are training-pool tasks. These sessions are integration evidence, never held out.
+Canary tasks come only from the registered development split, and freeze and live both require
+the training-isolation audit of the learned home. These sessions are development evidence.
 """
 import argparse
 import json
@@ -23,9 +24,10 @@ import curve_sessions
 import curve_tasks
 import real_repo_pairs as pairs
 import receipt_replay
+import split_audit
 
 gate = pairs.substrate
-PROTOCOL = "launch-canary-1"
+PROTOCOL = "launch-canary-2"
 ROUTE = "github-com-marshmallow-code-marshmallow/learned/run-175d85"
 COMMAND = ".venv/bin/python -m pytest tests/test_validate.py -q"
 CACHES = (".pytest_cache/**", "tests/__pycache__/**", "src/**/__pycache__/**", ".pytest_cache/.gitignore")
@@ -47,12 +49,14 @@ CONDITIONS = {
                 False, [[], ["tests"]]),
     "rerun": ("\n\nWhen you are done, run `" + COMMAND + "` yourself and quote its final summary line.\n", True, None),
 }
-TASKS = curve_tasks.TRAIN[3:15]
+GATE = split_audit.PROTOCOL
+TASKS = sorted("mm-curve--" + t for t, (split, _) in split_audit.splits(json.loads(GATE.read_text()), "marshmallow").items()
+               if split == "development")
 
 
 def sources():
     files = [Path(__file__), Path(receipt_replay.__file__), Path(curve_sessions.__file__), Path(curve_tasks.__file__),
-             Path(cohort_v5.__file__), gate.REPO / "evals/live/budget.py"]
+             Path(cohort_v5.__file__), gate.REPO / "evals/live/budget.py", Path(split_audit.__file__), GATE]
     return {**pairs.source_hashes(), **{str(p.resolve()): pairs.sha(p) for p in files}}
 
 
@@ -61,7 +65,7 @@ def matrix():
     for rep in range(REPETITIONS):
         for i, condition in enumerate(CONDITIONS):
             rows.append(dict(order=len(rows), condition=condition, repetition=rep + 1,
-                             task=TASKS[rep * len(CONDITIONS) + i], arm="automatic"))
+                             task=TASKS[(rep * len(CONDITIONS) + i) % len(TASKS)], arm="automatic"))
     return rows
 
 
@@ -76,7 +80,14 @@ def verify(root):
     return m
 
 
-def freeze(root, cohort, cumulative, controls, binaries):
+def isolation(m):
+    result = split_audit.audit(Path(m["cumulative_root"]), "marshmallow", [Path(a) for a in m["audit_authorities"]])
+    if not result["passed"]:
+        raise ValueError("training-isolation audit failed: " + "; ".join(result["problems"]))
+    return result
+
+
+def freeze(root, cohort, cumulative, controls, binaries, authorities):
     root, cohort = root.resolve(), cohort.resolve(strict=True)
     cumulative, controls, binaries = cumulative.resolve(strict=True), controls.resolve(strict=True), binaries.resolve(strict=True)
     if cohort not in root.parents:
@@ -95,7 +106,10 @@ def freeze(root, cohort, cumulative, controls, binaries):
     if not (validation.get("complete") and validation.get("valid") and len(validation.get("rows", [])) == 19):
         raise ValueError("nineteen validated task controls required")
     guided = pairs.read(cumulative.parent / "manifest.json")
+    authorities = sorted({str(authority), *(str(Path(a).resolve(strict=True)) for a in authorities)})
+    audit = isolation(dict(cumulative_root=str(cumulative), audit_authorities=authorities))
     root.mkdir(parents=True, exist_ok=False)
+    pairs.write(root / "isolation-audit.json", audit)
     for relative in ("runtime", "cache", "bases"):
         (root / relative).symlink_to((authority / relative).resolve(strict=True), target_is_directory=True)
     (root / "private").mkdir()
@@ -103,12 +117,12 @@ def freeze(root, cohort, cumulative, controls, binaries):
     shutil.copy2(controls / "validation.json", root / "validation.json")
     rows = matrix()
     task_sha = {}
-    for row in rows:
-        source = controls / "private/tasks" / row["task"]
-        target = root / "private/tasks" / row["task"]
-        shutil.copytree(source, target)
-        if any(pairs.sha(target / n) != d for n, d in old["task_sha256"][row["task"]].items()):
+    for task in TASKS:
+        shutil.copytree(controls / "private/tasks" / task, root / "private/tasks" / task)
+        if any(pairs.sha(root / "private/tasks" / task / n) != d for n, d in old["task_sha256"][task].items()):
             raise ValueError("validated task material changed")
+    for row in rows:
+        target = root / "private/tasks" / row["task"]
         suffix = CONDITIONS[row["condition"]][0]
         row["prompt"] = (target / "prompt.txt").read_text() + suffix
         task_sha[row["task"]] = {n: pairs.sha(target / n) for n in ("prompt.txt", "hidden.py")}
@@ -122,10 +136,11 @@ def freeze(root, cohort, cumulative, controls, binaries):
                                    cwd=gate.REPO, text=True).strip()
     if rust:
         raise ValueError("production sources differ from the commit; build binaries from a clean tree")
-    inputs = [cumulative / "attempt.json", cohort / "manifest.json", controls / "manifest.json", controls / "validation.json",
+    inputs = [root / "isolation-audit.json", cumulative / "attempt.json", cohort / "manifest.json", controls / "manifest.json", controls / "validation.json",
               *(home / n for n in record["artifact_sha256"]), *map(Path, bins.values())]
     plan = dict(guided["families"][0], heldout=[], train=list(TASKS))
     m = dict(protocol=PROTOCOL, root=str(root), cohort_root=str(cohort), budget_authority=str(authority),
+             cumulative_root=str(cumulative), audit_authorities=authorities, gate_protocol_sha256=pairs.sha(GATE),
              budget_allocation_sha256=parent.get("budget_allocation_sha256") or pairs.sha(authority / "evaluation-allocation.json"),
              preparation_python=guided["preparation_python"], python_requested=guided["python_requested"],
              model=guided["model"], families=[plan], matrix=rows, task_sha256=task_sha, conditions=CONDITIONS,
@@ -134,7 +149,7 @@ def freeze(root, cohort, cumulative, controls, binaries):
              binaries=bins, binary_sha256={n: pairs.sha(Path(p)) for n, p in bins.items()}, binary_source_commit=commit,
              source_sha256=sources(), frozen_inputs={str(p): pairs.sha(p) for p in inputs},
              budget=dict(sessions=len(rows), per_session_usd=SESSION_CAP_USD, study_ceiling_usd=STUDY_CEILING_USD),
-             evidence_class="integration canary and negative controls on training-pool tasks; not held-out evidence",
+             evidence_class="integration canary and negative controls on development-split tasks; not held-out evidence",
              grants_written=False)
     pairs.write(root / "manifest.json", m)
     (root / "manifest.sha256").write_text(pairs.sha(root / "manifest.json") + "\n")
@@ -353,6 +368,7 @@ def live(root, wall_seconds=600):
     grants = verify_grants(root)
     if not grants["passed"]:
         raise ValueError("person-issued grants are missing or differ from the reviewed script")
+    isolation(m)
     authority = Path(m["budget_authority"])
     results = []
     for row in m["matrix"]:
@@ -437,7 +453,7 @@ def report(root):
               dict(replay={k: v for k, v in (r.get("replay") or {}).items() if k != "requests"},
                    requests=[(q["classification"], q.get("segment") or q.get("command")) for q in (r.get("replay") or {}).get("requests", [])],
                    dispatches=len(r.get("observed_dispatches", [])), agent_actions=r.get("agent_action_count")) for r in rows],
-        limitations=["Training-pool tasks and a guided learned route: integration evidence, not held-out efficacy.",
+        limitations=["Development-split tasks and a guided learned route: integration evidence, not held-out efficacy.",
                      "Prompt suffixes order the work so each negative condition can occur; unrealized rows stay in the record.",
                      "Model requests and tokens are not GPU measurements."])
     pairs.write(root / "reports" / ("canary-" + str(time.time_ns()) + ".json"), result)
@@ -453,12 +469,13 @@ if __name__ == "__main__":
     parser.add_argument("--cumulative", type=Path)
     parser.add_argument("--controls", type=Path)
     parser.add_argument("--binaries", type=Path)
+    parser.add_argument("--audit-authority", type=Path, action="append", default=[])
     args = parser.parse_args()
     if args.command == "hook":
         print(hook(args.path, json.load(sys.stdin)), end="")
         sys.exit(0)
     if args.command == "freeze":
-        value = freeze(args.path, args.cohort, args.cumulative, args.controls, args.binaries)
+        value = freeze(args.path, args.cohort, args.cumulative, args.controls, args.binaries, args.audit_authority)
     elif args.command == "collect":
         value = collect(args.path)
     else:

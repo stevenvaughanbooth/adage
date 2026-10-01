@@ -29,12 +29,11 @@ POLICY = '[exec]\nmax_level = "E2"\nauto_approve = "off"\nrequire_sandbox = true
 
 
 class Matrix(unittest.TestCase):
-    def test_every_condition_twice_on_distinct_training_pool_tasks(self):
+    def test_every_condition_twice_on_development_split_tasks_only(self):
         rows = canary.matrix()
         self.assertEqual(len(rows), 2 * len(canary.CONDITIONS))
-        self.assertEqual(len({r["task"] for r in rows}), len(rows))
-        self.assertTrue({r["task"] for r in rows} <= set(canary.curve_tasks.TRAIN))
-        self.assertFalse({r["task"] for r in rows} & set(canary.curve_tasks.HELDOUT))
+        table = canary.split_audit.splits(json.loads(canary.GATE.read_text()), "marshmallow")
+        self.assertTrue(all(table[canary.split_audit.variant(r["task"])][0] == "development" for r in rows))
         self.assertEqual([r["order"] for r in rows], list(range(len(rows))))
         self.assertEqual([r["condition"] for r in rows[:6]], list(canary.CONDITIONS))
 
