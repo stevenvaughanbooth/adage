@@ -346,7 +346,9 @@ pub struct ConditionArgs {
     /// Condition one repository quietly, as hooks do after a session.
     #[arg(long, hide = true)]
     pub auto: bool,
-    #[arg(long, value_name = "DIR", hide = true)]
+    /// Condition only this repository: traces recorded in its checkouts, and its instincts
+    /// (default: every repository in the history sources).
+    #[arg(long, value_name = "DIR")]
     pub repo_root: Option<PathBuf>,
     #[arg(long, value_name = "MS", hide = true)]
     pub after: Option<u64>,
@@ -457,6 +459,13 @@ pub enum DelegateAction {
         /// `on` or `off`.
         #[arg(value_parser = ["on", "off"])]
         state: String,
+    },
+    /// This machine's execution policy, and where it is kept; --max-level e2 opts in to actions.
+    Policy {
+        /// The highest level reflexes may run at: e1 (read-only lookups) or e2 (approved actions
+        /// from hooks; a person's decision).
+        #[arg(long, value_name = "LEVEL", value_parser = ["e1", "e2", "E1", "E2"])]
+        max_level: Option<String>,
     },
 }
 
@@ -958,11 +967,16 @@ mod tests {
             &["delegate", "status", "--json"],
             &["delegate", "--json"],
             &["delegate", "rewrites", "off"],
+            &["delegate", "policy"],
+            &["delegate", "policy", "--max-level", "e2"],
         ] {
             let m = command(&Theme::plain()).try_get_matches_from(std::iter::once(&"adage").chain(args));
             assert!(m.is_ok(), "{args:?}: {m:?}");
         }
         assert!(command(&Theme::plain()).try_get_matches_from(["adage", "delegate", "rewrites", "maybe"]).is_err());
+        assert!(command(&Theme::plain())
+            .try_get_matches_from(["adage", "delegate", "policy", "--max-level", "e3"])
+            .is_err());
     }
 
     #[test]

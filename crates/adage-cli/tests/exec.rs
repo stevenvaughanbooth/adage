@@ -257,6 +257,66 @@ fn allow_exec_at_e2_is_for_actions_only() {
     assert!(err.contains("--level e1 or e2 is required"), "{err}");
 }
 
+/// Launch review: opting in to E2 is a person's command, not a hand-edited file. It names the
+/// file it writes, keeps automatic approval off and the sandbox required, and is refused inside
+/// an agent session; turning it back down needs no terminal. Hints say how, in plain words.
+#[test]
+fn delegate_policy_opts_in_to_e2_with_a_command() {
+    let w = World::with(|r| {
+        r.trigger = Trigger::AfterEdit { paths: "src/*.py".into() };
+        r.step = Step::Run { command: "make test".into() };
+        r.slots = vec![];
+        r.effect = Effect::Verify;
+    });
+    std::fs::write(w.p("acme-billing/Makefile"), "test:\n\ttrue\n").unwrap();
+    let file = w.p("adage/policy.toml");
+    let e2 =
+        ["review", "delegate", "acme-billing/work-items", "lookup-work-item", "--level", "e2", "--effect", "verify"];
+    let (_, err, code) = w.run(&e2, &[]);
+    assert_eq!(code, 1, "{err}");
+    assert!(err.contains("run `adage delegate policy --max-level e2` yourself"), "{err}");
+    assert!(err.contains(file.to_str().unwrap()) && !err.contains("G4"), "the file, in plain words: {err}");
+
+    let (out, err, code) = w.run(&["delegate", "policy"], &[]);
+    assert_eq!(code, 0, "{err}");
+    assert!(out.contains("E1") && out.contains(file.to_str().unwrap()), "{out}");
+    assert!(out.contains("adage delegate policy --max-level e2"), "{out}");
+    assert!(!file.exists(), "showing it changes nothing");
+    let (_, err, code) = w.run(&["delegate", "policy", "--max-level", "e2"], &[("CLAUDECODE", "1")]);
+    assert_eq!(code, 1);
+    assert!(err.contains("will not run inside an agent session"), "{err}");
+    assert!(!file.exists());
+    let (out, err, code) = w.run(&["delegate", "policy", "--max-level", "e2"], &[]);
+    assert_eq!(code, 0, "{err}");
+    assert!(out.contains(file.to_str().unwrap()) && out.contains("adage review delegate"), "{out}");
+    let text = std::fs::read_to_string(&file).unwrap();
+    for want in ["max_level = \"E2\"", "auto_approve = \"off\"", "require_sandbox = true"] {
+        assert!(text.contains(want), "{want}: {text}");
+    }
+    let (_, err, code) = w.run(&["delegate", "policy", "--max-level", "e1"], &[("ADAGE_ALLOW_NONINTERACTIVE", "0")]);
+    assert_eq!(code, 0, "turning it down needs no terminal: {err}");
+    assert!(std::fs::read_to_string(&file).unwrap().contains("max_level = \"E1\""));
+}
+
+/// Launch review: a `--timeout-ms` above the level's limit is clamped, and the approval says so.
+#[test]
+fn a_timeout_above_the_levels_limit_is_clamped_and_said() {
+    let w = World::new();
+    let mut args = allow();
+    args.extend(["--timeout-ms", "9000"]);
+    let (out, err, code) = w.run(&args, &[]);
+    assert_eq!(code, 0, "{err}");
+    assert!(
+        out.contains("3000 ms") && out.contains("--timeout-ms 9000 was clamped: E1 allows at most 3000 ms"),
+        "{out}"
+    );
+    let mut within = allow();
+    within.extend(["--timeout-ms", "2000"]);
+    let (out, err, code) = w.run(&within, &[]);
+    assert_eq!(code, 0, "{err}");
+    assert!(!out.contains("clamped"), "{out}");
+}
+
 /// A repository script the traces showed only reading (`tools/case`, whose name says nothing) is
 /// learned observe with its effect evidence. It can be delegated at E1 like a script named for
 /// reading, the evidence is shown at approval, and it is never approved automatically.

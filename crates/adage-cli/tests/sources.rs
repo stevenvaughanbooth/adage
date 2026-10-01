@@ -191,6 +191,58 @@ fn no_default_history_binds_real_repository_instincts_but_explicit_empty_still_f
     assert!(!ok && err.contains("no traces found"), "{err}");
 }
 
+/// Launch review: `adage condition --repo-root <dir>` (README, docs/first-reflex.md) conditions
+/// that repository alone: only traces recorded in it are read, its instincts bind from it, and a
+/// repository with no traces gets its instincts. Before, the flag was silently ignored without
+/// `--auto`, and every repository in the history was conditioned.
+#[test]
+fn repo_root_conditions_only_that_repository() {
+    let home = tempfile::tempdir().unwrap();
+    let source = home.path().join(".codex/sessions");
+    std::fs::create_dir_all(&source).unwrap();
+    let one = walk(&fixtures().join("codex/sessions")).remove(0);
+    let original = std::fs::read_to_string(one).unwrap();
+    let work = home.path().canonicalize().unwrap().join("work");
+    for name in ["app", "other"] {
+        let repo = work.join(name);
+        std::fs::create_dir_all(repo.join(".git")).unwrap();
+        let text = original.replace("/fixture/acme-billing", repo.to_str().unwrap());
+        std::fs::write(source.join(format!("rollout-{name}.jsonl")), text).unwrap();
+    }
+    let app = work.join("app");
+    let (out, err, ok) = adage(home.path(), &["condition", "--repo-root", app.to_str().unwrap(), "--json"]);
+    assert!(ok, "{err}");
+    let report: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(report["sessions_read"], 1, "only the trace recorded in this repository: {out}");
+    let repos: Vec<&String> = report["repos"].as_object().unwrap().keys().collect();
+    assert!(repos.iter().all(|k| !k.contains("other")), "{repos:?}");
+    // From inside the repository, as the docs write it.
+    let o = Command::new(env!("CARGO_BIN_EXE_adage"))
+        .args(["condition", "--repo-root", ".", "--json"])
+        .current_dir(&app)
+        .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("ADAGE_HOME", home.path().join("adage"))
+        .env("CODEX_HOME", home.path().join(".codex"))
+        .env_remove("CLAUDE_CONFIG_DIR")
+        .output()
+        .unwrap();
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    let report: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
+    assert_eq!(report["sessions_read"], 1);
+    // A repository with no traces: its own instincts, not every other repository's traces.
+    let fresh = home.path().join("fresh");
+    copy_tree(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../evals/sandboxes/acme-billing"), &fresh);
+    std::fs::create_dir_all(fresh.join(".git")).unwrap();
+    let (out, err, ok) = adage(home.path(), &["condition", "--repo-root", fresh.to_str().unwrap(), "--json"]);
+    assert!(ok, "{err}");
+    assert!(err.contains("binding this repository's instincts"), "{err}");
+    let report: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert!(report.to_string().contains("fresh") && !report.to_string().contains("other"), "{out}");
+    let (_, err, ok) = adage(home.path(), &["condition", "--repo-root", home.path().to_str().unwrap()]);
+    assert!(!ok && err.contains("is not inside a git repository"), "{err}");
+}
+
 #[test]
 fn cwd_prefix_uses_recorded_path_components_with_json_whitespace() {
     let home = tempfile::tempdir().unwrap();

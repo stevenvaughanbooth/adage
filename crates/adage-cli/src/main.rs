@@ -257,7 +257,11 @@ fn run(args: &[String]) -> Result<()> {
 }
 
 /// `adage condition [--transcripts <file>...] [--claude-projects <dir>] [--codex-sessions <dir>] [--cwd-prefix <path>]
-///               [--outcomes <json>] [--repo <key>] [--demo] [--no-cache] [--no-instincts] [--json]`
+///               [--repo-root <dir>] [--outcomes <json>] [--repo <key>] [--demo] [--no-cache] [--no-instincts] [--json]`
+///
+/// `--repo-root <dir>` conditions one repository: only traces recorded in one of its checkouts
+/// are read, its instincts bind from that root, and with no such trace its instincts alone are
+/// bound (as `--instincts-only`). Without it, every repository the sources hold is conditioned.
 ///
 /// Thresholds: `--demo`, else `learn.thresholds` (`adage config`). Parses are cached under
 /// `$ADAGE_HOME/cache/sessions` unless `--no-cache` or `learn.parse_cache = false` (the result is
@@ -276,9 +280,30 @@ pub(crate) fn check_dirs(dirs: &[(&str, Option<&std::path::Path>)]) -> Result<()
     Ok(())
 }
 
+/// `--repo-root <dir>`: the repository it names (its root, found from `dir`) and the key its
+/// reflexes are stored under (`--repo <key>` when given, as `--instincts-only` derives it).
+fn repo_scope(args: &[String], paths: &Paths) -> Result<Option<(PathBuf, String)>> {
+    let Some(dir) = flag(args, "--repo-root").map(PathBuf::from) else { return Ok(None) };
+    let canon = dir
+        .canonicalize()
+        .map_err(|e| hint(format!("{}: {e}", dir.display()), "pass the repository's directory: --repo-root <dir>"))?;
+    let Some(root) = adage_core::repo::find_root(&canon) else {
+        return Err(hint(
+            format!("{} is not inside a git repository", dir.display()),
+            "pass a repository's directory: --repo-root <dir>",
+        ));
+    };
+    let key = adage_core::repo::key_with(flag(args, "--repo").as_deref(), || {
+        adage_core::repo::repo_key_cached(&root, &paths.repo_keys())
+    });
+    Ok(Some((root, key)))
+}
+
 fn condition(args: &[String], paths: &Paths) -> Result<()> {
     let started = std::time::Instant::now();
     let settings = adage_store::config::load(paths).config;
+    // One repository (`--repo-root`): only traces recorded in one of its checkouts are read.
+    let scope = repo_scope(args, paths)?;
     let explicit =
         args.iter().any(|a| matches!(a.as_str(), "--transcripts" | "--codex-sessions" | "--claude-projects"));
     let (cp, cs) =
@@ -331,14 +356,23 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
     if let Some(prefix) = flag(args, "--cwd-prefix") {
         transcripts = adage_learn::scope::recorded_inside(transcripts, &[PathBuf::from(prefix)]);
     }
+    if let Some((root, _)) = &scope {
+        transcripts = adage_learn::scope::recorded_inside(transcripts, &adage_learn::scope::checkouts(root));
+    }
     if transcripts.is_empty() {
         // A fresh repository can already benefit from instincts bound to its real files. An
         // explicit empty source still fails, so a typo never looks like successful learning.
-        if !explicit
+        let instincts = !explicit
             && flag(args, "--cwd-prefix").is_none()
             && settings.instincts_enabled
-            && !args.iter().any(|a| a == "--no-instincts")
-        {
+            && !args.iter().any(|a| a == "--no-instincts");
+        if instincts && scope.is_some() {
+            // `instincts_only` binds the `--repo-root` repository, under the same key.
+            adage_term::Out::stderr()
+                .note("no past traces found; binding this repository's instincts from its files")?;
+            return instincts_only(args, paths);
+        }
+        if instincts {
             if let Some(root) = std::env::current_dir().ok().and_then(|d| adage_core::repo::find_root(&d)) {
                 let own = adage_core::repo::repo_key_cached(&root, &paths.repo_keys());
                 if flag(args, "--repo").as_deref().is_none_or(|r| r.trim() == own) {
@@ -350,6 +384,8 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
         }
         let source = if let Some(p) = flag(args, "--cwd-prefix") {
             format!("none has a working directory under {p}")
+        } else if let Some((root, _)) = &scope {
+            format!("none was recorded in {}", root.display())
         } else if explicit || args.iter().any(|a| a == "--claude-projects") {
             "the sources you named hold no traces".to_string()
         } else {
@@ -379,7 +415,9 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
         // the one the next session works in.
         // Only when the checkout is the repository being learned: `--repo <key>` names another
         // repository's traces from anywhere (an eval harness's working directory).
-        if let Some(root) = std::env::current_dir().ok().and_then(|d| adage_core::repo::find_root(&d)) {
+        if let Some((root, key)) = &scope {
+            ic.roots.insert(key.clone(), root.clone());
+        } else if let Some(root) = std::env::current_dir().ok().and_then(|d| adage_core::repo::find_root(&d)) {
             let own = adage_core::repo::repo_key_cached(&root, &paths.repo_keys());
             if flag(args, "--repo").as_deref().is_none_or(|k| k.trim() == own) {
                 ic.roots.insert(own, root);
@@ -398,7 +436,7 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
         repo_override: flag(args, "--repo"),
         models: Some(paths.models()),
         cache,
-        only_repo: None,
+        only_repo: scope.as_ref().map(|(_, key)| key.clone()),
     };
     // One writer of the tracks and index at a time (automatic learners, review decisions).
     writable_data_dir(paths)?;
