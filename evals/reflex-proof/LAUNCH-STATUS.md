@@ -17,6 +17,19 @@ first-reflex guide and TUI next steps, covers pytest's hidden cache metadata exp
 This page is the launch evidence index. Preserve earlier reports, failed attempts and protocols
 when a later experiment supersedes them.
 
+Caveat on that pilot: its four tasks were excluded from training by task id only. They had run
+in the cold-start pilots, and three are near-duplicates of training tasks (odd of multiple-of,
+no-adjacent-duplicates of unique, max-utf8-bytes of max-words). It measured same-repository
+transfer on familiar task shapes. An [offline replay](harness/results/20260930-receipt-replay/FINDINGS.md)
+of its native hook records reproduces the failure: 6 repeats and 9 narrower node runs after the
+receipt, all on unchanged source, the same routine as the no-execution arm.
+
+The next gate is registered before any dispatch: the [launch gate protocol](../../docs/launch-gate-protocol.md)
+fixes task splits (near-duplicates grouped, held-out families never used), a pre-dispatch
+training-isolation audit, three arms in paired blocks across three repositories, budgets, and
+numerical GO thresholds. Its production-contract canary is [frozen, not yet run](harness/results/20260930-launch-canary/FINDINGS.md).
+No statistic from it exists yet.
+
 The subsequent [edit-receipt diagnostic](harness/results/20260930-edit-receipt-ablation/summary.json)
 is an authored fixture, not a launch benchmark. After fixing inherited-stdin contamination,
 two runs per arm observed verifier requests in baseline 2/2, generic receipt 2/2, structured

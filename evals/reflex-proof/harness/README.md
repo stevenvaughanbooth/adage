@@ -83,3 +83,15 @@ Completed real-run evidence: [2026-09-29 findings](results/20260929-claude-2.1.2
 Use `probe.py export ROOT DESTINATION` to preserve fixture logs and a narrow diagnostic
 milestone extraction. It excludes the broad debug log; the source remains in the private
 temporary run directory. Capture copies before temporary-directory cleanup.
+
+## Launch gate tools
+
+The registered protocol is `docs/launch-gate-protocol.md`; `launch_gate_protocol.json` governs.
+
+- `receipt_replay.py`: classifies agent pytest requests against CPU receipts from native hook
+  records (repeats, covered subsets, failed or stale receipts, reruns, wider scope).
+- `split_audit.py`: pre-dispatch training-isolation audit of a learning run against the splits.
+- `launch_canary.py`: production contract and receipt canary with negative controls. `freeze`,
+  `prepare`, `approval-script`, `verify-grants`, `collect` and `report` spend nothing; `live` is
+  paid and refuses nested agent sessions. It never writes grants.
+- `launch_gate_score.py`: the registered GO thresholds applied to collected held-out rows.

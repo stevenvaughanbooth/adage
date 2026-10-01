@@ -20,6 +20,56 @@ its $60 ceiling: **$15.6474504 measured + $0.50 conservative charge = $16.147450
 accounting is unblocked and no paid process remains active. Read the live ledger before any
 new dispatch; never reset it, double-dispatch, or treat an unknown bill as zero.
 
+## Latest checkpoint: launch gate protocol (resume here)
+
+Branch `codex/launch-first-reflex`, PR #16 (draft). This checkpoint spent nothing: the ledger is
+unchanged at 100 attempts, $16.1474504 admitted, $43.8525496 remaining. The work so far was done
+in an agent worktree; any checkout of this branch has the same harness files.
+
+- [Launch gate protocol](launch-gate-protocol.md) (`launch-gate-1`, revision 2) and its governing
+  JSON (`evals/reflex-proof/harness/launch_gate_protocol.json`) were registered before any dispatch:
+  task splits with near-duplicate groups, arms, paired blocks, budgets and the GO thresholds G1-G9.
+  `launch_gate_score.py` applies those thresholds; its tests pin every failure mode.
+- `receipt_replay.py` rebuilds receipt consumption from native hook records. On the frozen
+  transfer-v3 sessions it reproduces 0/4 eliminations: 6 repeats and 9 narrower node runs on
+  unchanged source, the same routine as the no-execution arm
+  ([findings](../evals/reflex-proof/harness/results/20260930-receipt-replay/FINDINGS.md)).
+- transfer-v3's tasks were excluded from training by task id only. They had run in the cold
+  pilots, and three are near-duplicates of training tasks. Its result is same-repository transfer
+  on familiar task shapes; the protocol states that caveat.
+- `split_audit.py` checks training isolation before dispatch (corpus, fitted state, examples,
+  foreign state, forbidden session ids from every non-training record, development/evaluation
+  markers). The protocol lists what the existing pipeline already enforced and what is new.
+  `cumulative-launch-10` passes it.
+- `launch_canary.py` (`launch-canary-2`) is frozen at `cohorts/launch-gate-v1/canary-v2`: 12
+  automatic sessions on the development task `finite`, covering the positive condition and five
+  negative controls ([status](../evals/reflex-proof/harness/results/20260930-launch-canary/FINDINGS.md)).
+
+Blocked on three things, none of which an agent may bypass:
+
+1. **Paid runs need a normal terminal.** `probe.execute` refuses nested Claude sessions.
+2. **Grants need the person.** `approve-canary.sh` (sha256 `bfa2feb1…`) is prepared; run it only
+   after reading it.
+3. **Learning needs the learner fix.** About 22 learning-quality tests fail on main since PR #14.
+   Cohort training replay, checkpoints and frozen learned homes wait for that fix and a rebuild.
+
+Canary commands, from `evals/reflex-proof/harness` in a normal terminal (one at a time; stop on error):
+
+```sh
+A=/private/tmp/adage-real-repo-gate-v1; C=$A/cohorts/launch-gate-v1; R=$C/canary-v2
+python3 real_repo_gate.py run-session $C/sessions/native-confinement/manifest.json   # paid, <= $0.50 cap
+python3 curve_sessions.py review-native $C                                           # offline
+python3 launch_canary.py prepare $R                                                  # offline, several minutes
+less $R/approve-canary.sh && sh $R/approve-canary.sh                                 # the person issues 12 grants
+python3 launch_canary.py verify-grants $R                                            # read-only
+python3 launch_canary.py live $R                                                     # paid, 12 sessions, $6 study ceiling
+python3 launch_canary.py report $R
+```
+
+After the canary: if it passes, prepare the cohort (author and validate the new Marshmallow,
+Click and more-itertools tasks, then learning once the fix lands). If it fails, diagnose on its
+records, fix the integration, and freeze a new canary root; never rerun an outcome.
+
 ## What is established
 
 - Sixteen cold-start assignments on four Marshmallow tasks, two repetitions per arm: instincts
