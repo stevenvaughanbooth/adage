@@ -22,14 +22,14 @@ new dispatch; never reset it, double-dispatch, or treat an unknown bill as zero.
 
 ## Latest checkpoint: launch gate protocol (resume here)
 
-Branch `codex/launch-first-reflex`, PR #16 (draft). Ledger: 101 attempts, $16.1732882 admitted,
-$43.8267118 remaining. The only new charge is the excluded `launch-gate-v1` native session
-($0.0258378, below). The frozen cohort and
+Branch `codex/launch-first-reflex`, PR #16 (draft). Ledger: 102 attempts, $16.2011778 admitted,
+$43.7988222 remaining. The only new charges are two excluded native-confinement sessions:
+`launch-gate-v1` ($0.0258378) and `launch-gate-v2` ($0.0278896), both described below. The frozen cohort and
 canary manifests bind absolute harness paths in the agent worktree
 `/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d`; run the
 commands below from its `evals/reflex-proof/harness`, or refreeze new roots from another checkout.
 
-- [Launch gate protocol](launch-gate-protocol.md) (`launch-gate-1`, revision 3) and its governing
+- [Launch gate protocol](launch-gate-protocol.md) (`launch-gate-1`, revision 4) and its governing
   JSON (`evals/reflex-proof/harness/launch_gate_protocol.json`) were registered before any dispatch:
   task splits with near-duplicate groups, arms, paired blocks, budgets and the GO thresholds G1-G9.
   `launch_gate_score.py` applies those thresholds; its tests pin every failure mode.
@@ -44,7 +44,7 @@ commands below from its `evals/reflex-proof/harness`, or refreeze new roots from
   foreign state, forbidden session ids from every non-training record, development/evaluation
   markers). The protocol lists what the existing pipeline already enforced and what is new.
   `cumulative-launch-10` passes it.
-- `launch_canary.py` (`launch-canary-3`) is frozen at `cohorts/launch-gate-v2/canary-v3`: 12
+- `launch_canary.py` (`launch-canary-4`) is frozen at `cohorts/launch-gate-v3/canary-v4`: 12
   automatic sessions on the development task `finite`, covering the positive condition and five
   negative controls ([status](../evals/reflex-proof/harness/results/20260930-launch-canary/FINDINGS.md)).
 - **Confinement fix (revision 3).** The tool-environment denial list used to be computed from
@@ -58,11 +58,18 @@ commands below from its `evals/reflex-proof/harness`, or refreeze new roots from
   of the 101 launched archived sessions found no environment dump or Python environment access,
   but it cannot verify launch-time denial. Earlier confinement claims cover the filesystem and
   network only.
+- **Runtime-injected names (revision 4).** The fixed runner's `launch-gate-v2` native review
+  failed closed. Claude Code itself gives tool children the sandbox proxy credential
+  (`CLOUDSDK_PROXY_PASSWORD`) and the session inbox child token (`CLAUDE_CODE_MESSAGING_TOKEN`).
+  A tool able to reach the inbox could inject messages into the agent's session. Both names are
+  now on the denial list. The canary requires that a tool cannot connect to the inbox socket, and
+  it probes whether the proxy refuses external requests. A surviving name is tolerated only by
+  exact name and only with its proof passing in the same run. `launch-gate-v2` is excluded.
 
 Blocked on three things, none of which an agent may bypass:
 
 1. **Paid runs need a normal terminal.** `probe.execute` refuses nested Claude sessions.
-2. **Grants need the person.** `approve-canary.sh` (sha256 `c288d6d1…`) is prepared; run it only
+2. **Grants need the person.** `approve-canary.sh` (sha256 `9b35534a…`) is prepared; run it only
    after reading it.
 3. **Learning needs the learner fix.** About 22 learning-quality tests fail on main since PR #14.
    Cohort training replay, checkpoints and frozen learned homes wait for that fix and a rebuild.
@@ -70,7 +77,7 @@ Blocked on three things, none of which an agent may bypass:
 Canary commands, from `evals/reflex-proof/harness` in a normal terminal (one at a time; stop on error):
 
 ```sh
-A=/private/tmp/adage-real-repo-gate-v1; C=$A/cohorts/launch-gate-v2; R=$C/canary-v3
+A=/private/tmp/adage-real-repo-gate-v1; C=$A/cohorts/launch-gate-v3; R=$C/canary-v4
 python3 real_repo_gate.py run-session $C/sessions/native-confinement/manifest.json   # paid, <= $0.50 cap
 python3 curve_sessions.py review-native $C                                           # offline; must pass, incl. environment
 python3 launch_canary.py prepare $R                                                  # offline, several minutes
