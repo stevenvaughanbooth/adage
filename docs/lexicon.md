@@ -19,6 +19,9 @@ from them. Instincts are innate responses that ship with Adage.
 | What a reflex does when it matches | **response**; **directive** for advice, **action** for execution | directive used for every behavior |
 | Files on disk | **tracks** | (unchanged) |
 | Signed, shareable artefact | **pack** | shared track |
+| An instinct's route, with blanks its detector fills from a repository's files | **template** | |
+| The instinct packs Adage ships (`adage/python-env`, …) | **base instincts**, **base packs** | core instincts, built-in routes |
+| A repository's list of the packs it offers, pinned by digest | **marketplace** (`.adage/marketplace.toml`) | |
 | Holdout arm | **control** | holdout |
 | Traces of similar tasks | **family** (of similar tasks) | cluster |
 | What a family's traces had in common, said at the next such task | **procedure card**: a reflex, whose response is the card | recipe, playbook |
@@ -74,6 +77,8 @@ automatically. [How Adage works](how-it-works.md) defines the product contract b
 | `adage-train run` | `adage train` | Compile a skill into reflexes (`adage train <SKILL.md>`); skill-steered sessions are `plan`, `--plan`, `report` |
 | | `adage train accept` | Install a compiled skill's pack, as reviewed (the person accepts the review) |
 | | `adage train cards` | Replay the commands of a repository's procedure cards on a clean checkout |
+| | `adage packs` | The packs Adage binds: base instincts and added packs; `on`, `off`, `show` |
+| | `adage marketplace` | Where packs come from: the adage marketplace, built in; `show`, `update` |
 | `adage review promote` / `demote` / `reject` | `adage review strengthen` / `weaken` / `extinguish` | |
 | `adage graph --serve` | `adage map` | |
 | `adage exec enable` / `review allow-exec` | `adage delegate` / `adage review delegate` | Reflexes that act |

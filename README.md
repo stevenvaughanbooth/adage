@@ -35,7 +35,8 @@ agent; the repeated part gets cheaper.
 - **Learns from history you already have.** Claude Code, Codex and OpenCode transcripts, read
   locally, one repository at a time.
 - **Works on day one.** Built-in *instincts* read your Makefile, `package.json`, CI and lockfiles
-  before there is any history.
+  before there is any history. They ship as packs from the marketplace in this repository;
+  `adage packs` shows which apply and turns any off.
 - **Keeps learning.** After each session ends, a background learner updates the reflexes. No
   re-runs needed.
 - **Compiles skills.** `adage train SKILL.md` turns a skill's steps into verified reflexes, replayed
@@ -44,7 +45,8 @@ agent; the repeated part gets cheaper.
   baseline, never assumed.
 - **Nothing runs without you.** By default Adage only advises. Running commands is a separate,
   opt-in, sandboxed binary.
-- **Shareable.** Reflexes travel as signed, reviewable packs you can commit or hand to a teammate.
+- **Shareable.** Reflexes travel as signed, reviewable packs you can commit or hand to a teammate:
+  the same format the built-in instincts ship in.
 - **Small and fast.** One ~10 MB Rust binary with a bundled embedding model, deterministic and
   fail-open.
 
@@ -145,6 +147,7 @@ approval, and what the evidence does and doesn't show.
 | --- | --- |
 | [How Adage works](docs/how-it-works.md) | The behavior reference and current limits |
 | [Usage](docs/usage.md) | Every command, the live views (`adage watch`, `adage ui`), settings, sharing and review |
+| [Packs and the marketplace](docs/marketplace.md) | What a packaged reflex looks like, the base instincts, sharing and hosting |
 | [Benchmarks and evidence](docs/benchmarks.md) | Every published number, with data, code and caveats |
 | [Harnesses](docs/harnesses.md) | What Claude Code, Codex and OpenCode each support |
 | [Execution](docs/execution.md) | Opt-in, sandboxed `adage-exec` |

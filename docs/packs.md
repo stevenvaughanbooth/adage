@@ -2,8 +2,9 @@
 
 > Status: format reference for Track C milestones C0 and C1 ([design](tracks/track-c-compiled-skills.md)).
 > The crate `adage-pack` reads, validates, writes, digests, converts and binds packs. `adage share`
-> emits packs and `adage add` installs them ([Using packs](#using-packs)). Nothing here executes
-> anything.
+> emits packs and `adage add` installs them ([Using packs](#using-packs)). Instincts ship as packs
+> too ([Instinct packs](#instinct-packs)), from the marketplace built into Adage
+> ([marketplace.md](marketplace.md)). Nothing here executes anything.
 
 A **pack** is the unit of distribution and approval for compiled skills: one track namespace
 (`owner/name`) in route format v2, closed over everything it references, content-addressed and
@@ -68,8 +69,8 @@ repo_keys = ["github.com/acme/payments", "payments@1a2b3c4d5e6f"]
 #   [[applicability.fingerprint]] package_script  = "codegen"
 #   [[applicability.fingerprint]] path_exists     = "proto/**/*.proto"   # repository-relative glob
 #   [[applicability.fingerprint]] lockfile        = "pnpm-lock.yaml"     # a known root lockfile
-# kind = "detector"   detector = "U5", catalogue = "core@0.2.0"   (instinct packs only;
-#                     detector = "*": any enabled detector of the catalogue)
+# kind = "detector"   detector = "U5", catalogue = "core@0.2.0"   (instinct packs only: every
+#                     route is a template; detector = "*": the detectors its templates name)
 
 [requires]
 os        = ["linux", "macos"]        # "windows" only when [exec] requested = "E0"
@@ -227,6 +228,46 @@ Each route renders with the template `<shape>@1` (and an advise step with
 - `exit` predicates: `intent_changes`, `exploratory_change`, and
   `result_equals { step, field, value }`, whose value must pass the type of that output.
 
+### Templates
+
+An instinct pack's routes are **templates** (`detector: <id>`, in a pack whose applicability is
+`detector`; every route of such a pack is one, and no other pack's route is). A template says what
+an instinct may bind, with blanks where a learned route holds values, and names the detector,
+compiled into Adage, that fills them in from each repository's declared files:
+
+```yaml
+id: run-tests-in-project-env
+summary: After pytest fails outside the project's environment, run it inside the environment
+shape: after
+detector: U11
+trigger: { on: after_failure, command: "{runner}", signature: "{signature}" }
+steps: [{ id: run, run: { argv: ["{command}"] }, effect: verify }]
+strength: prime
+exit: [{ when: intent_changes }]
+```
+
+- **Blanks stand where the detector fills them.** An `after_failure` trigger is `{runner}` failing
+  with `{signature}`, an `after_command` trigger is `{runner}`, an `after_edit` trigger is
+  `{paths}` (instincts are reactive: no prompt, intent or session-start template). A run step's
+  argv is exactly `["{command}"]`; an advise step's slots are its template's, each the blank of its
+  own name (`interpreter: "{interpreter}"`), its required slots present.
+- **The template is the ceiling.** One step, with no script or outputs; a run step's effect is at
+  most `environment` (an install, which still waits for review), an advise step's `observe`;
+  strength `prime`; exits `intent_changes` or `exploratory_change` only; no inputs, links,
+  execution request or evidence (a repository's evidence is its own).
+- **Its digest and signature cover it** like any route's: the route exec digest includes
+  `detector`, and the closure lists the detector it names.
+
+Binding (`adage_pack::instincts::bind`) runs the detectors the templates name, once and together in
+the catalogue's order, so one directive per trigger holds across packs and a learned route still
+wins. A route a detector binds is kept only if a template of its pack **admits** it: the same
+trigger kind, the same step kind (and advice template, with slots the template has), an effect no
+stronger than the template's, the template's strength and exits. A kept route names its pack in its
+origin (`instinct:<pack>@<version>`). So a detector that no template names stays off, and a route
+of a shape no template admits is not bound (`no template of its pack admits …`). Where two packs'
+templates admit a route, the one with the lower effect ceiling takes it, then the pack that sorts
+first.
+
 ### Evidence
 
 `evidence` (per route) mirrors `adage_tracks::Evidence` without per-machine fields: `opportunities`,
@@ -319,7 +360,9 @@ routes, types, scripts, repository files, tools, environment programs, templates
    gives A → B (the lookup → read-linked pair);
 6. an avoid step whose `instead` is another route's run command → that route;
 7. a route → its shape template, an advise step → its advise template, an intent trigger → its
-   model.
+   model;
+8. a template → `detector:<id>`, built in like a template (its command is a blank, so it has no
+   tool edge and joins no implicit edge).
 
 Checks, after a breadth-first search from every entry route:
 
@@ -450,7 +493,12 @@ recipients need, with `namespaces="adage-pack"`.
 adage add <pack-dir> [--trust]
 ```
 
-Run it inside the repository the pack is for. It refuses to run inside an agent session.
+Run it inside the repository the pack is for, or name it with `--repo-path <dir>`. It refuses to run
+inside an agent session.
+
+A pack the marketplace built into Adage pins (a base instinct pack) is trusted by that pin instead
+of a signature: an unsigned copy whose digest is the pin installs, and any other bytes under one of
+its names are refused (`is a pack of the adage marketplace built into Adage`), signed or not.
 
 `add`:
 
@@ -469,9 +517,13 @@ Run it inside the repository the pack is for. It refuses to run inside an agent 
 6. **Applies policy.** It reads `$ADAGE_HOME/policy.toml`, then the managed file (`ADAGE_POLICY`,
    else `/etc/adage/policy.toml`). `[publishers] deny = ["SHA256:…"]` refuses a signer, and
    `[exec] allow_vendor_scripts = false` refuses packs with vendored scripts.
-7. **Installs the pack.** It goes under `tracks/@imported/<owner>/<name>/` exactly as verified,
-   and vendored scripts are copied read-only to `$ADAGE_HOME/cas/<sha256>`.
-8. **Binds the pack** to repositories (below) and recompiles the index.
+7. **Installs the pack.** It goes under `tracks/@imported/<owner>/<name>/` exactly as verified
+   (`adage_pack::install::write_verified`), it is recorded in `tracks/@imported/installed.json` with
+   how it was trusted (the signer's key, or the marketplace that pins it), and vendored scripts are
+   copied read-only to `$ADAGE_HOME/cas/<sha256>`.
+8. **Binds the pack** to repositories (below) and recompiles the index. An instinct pack instead binds
+   with the other instinct packs, through learning: `add` runs `adage condition --instincts-only`
+   for the repository.
 
 It creates no execution approvals.
 
@@ -534,16 +586,23 @@ routes with the pack, its version and digest, the repository and the reason. To 
 route back, restore what it needs (the script, the tool) and run `adage add` again. It can be run
 on the installed pack's directory.
 
-### The core instincts pack
+### Instinct packs
 
-The instinct catalogue ships as the pack `adage/core-instincts`
-(`adage_pack::instincts::core_instincts(root, existing, rejections)`). Its applicability is
-`kind = "detector"`, `detector = "*"`, with `catalogue` set to this build's.
+Adage's instincts ship as packs: one per instinct, listed in the Adage repository's
+`.adage/marketplace.toml` and kept in `packs/` ([marketplace.md](marketplace.md)). The binary embeds
+that marketplace (`adage_pack::builtin`) and verifies each pack against the digest it pins; the
+learner syncs it before binding (`adage_pack::marketplace::Loaded::sync`: each pack installed under
+`tracks/@imported/adage/<name>/` with the install `adage add` uses, recorded as from the marketplace,
+and packs it no longer lists removed; `adage marketplace update` does it on demand), and binds every
+instinct pack turned on (`instincts.packs`, `instincts.disabled`; `adage packs`) per repository,
+into the track `<repo>/instincts`, where learned routes take over and failing instincts extinguish
+([instincts.md](instincts.md)).
 
-The detectors are compiled Rust, so the pack names them and cannot supply them. For each
-repository, the compiled detectors propose the pack's routes, which are converted, validated and
-closed like any pack's. Binding that pack gives exactly the routes the instinct binder gives; a
-test pins this.
+Each base pack applies by its detector (`kind = "detector"`, `detector = "U11"`, `catalogue =
+"core@0.1.0"`). A pack written for a catalogue binds with a build whose catalogue has the same name
+and a compatible version by semver's caret rule (`^0.1.0` is `>=0.1.0, <0.2.0`); otherwise every
+template is inert, with the reason. Binding the base packs together gives exactly the routes the
+instinct binder gives on every fixture; a test pins this.
 
 ## Library
 
@@ -561,4 +620,14 @@ let binding = adage_pack::bind(&pack, &adage_pack::Target::checkout(root), &env)
 for r in binding.inert() { println!("{}: {}", r.id, r.status.reason().unwrap()); }
 ```
 
-`adage-pack inspect|verify|digest` is a small debugging binary over the same API.
+`adage-pack inspect|verify|digest` is a small debugging binary over the same API. For packs written
+by hand, `adage-pack seal <dir>` writes the canonical form with its derived `CLOSURE`, and
+`adage-pack marketplace <repo> [--pin]` checks (or rewrites) a marketplace's pins.
+
+```rust
+let b = adage_pack::builtin::marketplace()?;                     // the marketplace in this binary, verified
+adage_pack::builtin::install(&tracks_root)?;                     // pre-install its packs, as adage add installs
+let (packs, _) = adage_pack::instincts::available(&tracks_root); // built-in and added instinct packs
+let refs: Vec<&adage_pack::Pack> = packs.iter().map(|(p, _)| p).collect();
+let bound = adage_pack::instincts::bind(&refs, root, &existing, &rejections, &disabled_ids);
+```
