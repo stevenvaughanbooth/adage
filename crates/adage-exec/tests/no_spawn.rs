@@ -33,6 +33,11 @@ const ALLOWED: &[(&str, usize, &str)] = &[
     // `xdg-open`, one per platform), at their request; `--no-open` skips it. A URL, never a
     // repository or agent command.
     ("adage-cli/src/map/mod.rs", 3, "the platform's URL opener for `adage map`"),
+    // `adage update`: replaces Adage's own binaries the way they were installed (`cargo install`,
+    // `git pull --ff-only` then `cargo build` in a checkout, `npm` or `brew`), each command
+    // printed first, only when a person runs it; no hook or learner calls it. A package manager
+    // on Adage itself, never a repository or agent command.
+    ("adage-cli/src/update.rs", 1, "the install's package manager for `adage update`"),
 ];
 
 fn rs_files(dir: &Path, out: &mut Vec<PathBuf>) {
