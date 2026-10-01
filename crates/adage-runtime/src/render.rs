@@ -116,6 +116,25 @@ pub fn wrap_origin(
     wrap_exec(track, version, route, kind, strength, body, origin, "")
 }
 
+/// A result block: the wrapper's attributes carry provenance (`exec="e2"`, which learning reads), and
+/// the body is the fact alone, with no origin footer.
+fn wrap_result(
+    track: &str,
+    version: &str,
+    route: &str,
+    kind: &str,
+    strength: Strength,
+    body: &str,
+    exec: &str,
+) -> String {
+    let wrapped = wrap_exec(track, version, route, kind, strength, body, None, exec);
+    let footer = format!("\n{}\n</adage-reflex>", footer(None));
+    match wrapped.strip_suffix(&footer) {
+        Some(head) => format!("{head}\n</adage-reflex>"),
+        None => wrapped,
+    }
+}
+
 /// [`wrap_origin`], with `exec="<level>"` after the other attributes when `exec` is not empty: a
 /// directive whose route Adage ran (Track C §3.4). Learning reads the attribute: after it, the
 /// agent's actions are not its own (`adage_learn::import::Signals`).
@@ -211,43 +230,176 @@ pub fn action_predicted(
     verify: bool,
     receipt: &CpuReceipt<'_>,
 ) -> String {
-    let outcome = if verify {
-        "verification succeeded; no source files changed (declared caches may have changed)".to_string()
-    } else {
-        format!("updated {} declared output files", changed.len())
-    };
-    let data = serde_json::json!({
-        "status": "completed", "command": sanitise(command),
-        "operation_id": sanitise(receipt.operation),
-        "declared_input_digest": sanitise(receipt.input_digest),
-        "exit_code": receipt.exit, "duration_ms": receipt.duration_ms,
-    });
-    // Agents verify their new tests by node id; say plainly that the run included them.
-    let scope = if verify && command.contains(" -m pytest ") {
-        "It ran every test the command selects, on the repository files as they were at this point, your edits so far included. Single tests inside its targets are covered by it; other targets, other pytest options, another interpreter and later edits are not."
-    } else {
-        "This is completed work for the stated command and staged inputs. Use it as evidence within that scope. It does not verify later edits, a changed environment, or additional test scopes."
-    };
-    let tests = receipt.tests.map(|t| {
-        let mut line = String::from("Tests it ran with no failure or error (exit 0):");
-        if let Some(n) = t.collected {
-            line.push_str(&format!(" {n} collected"));
+    // Factual, short, fact first: what ran, the result, which tests, and how long it stays current.
+    let seconds = receipt.duration_ms as f64 / 1000.0;
+    let result = if verify { "passed".to_string() } else { format!("updated {} declared output files", changed.len()) };
+    let mut body = format!(
+        "Adage ran `{}` after your edits: {result} (exit {}, {seconds:.1} s; receipt {}).",
+        sanitise(command),
+        receipt.exit.map_or("unknown".into(), |e| e.to_string()),
+        short_id(receipt.operation),
+    );
+    if let Some(t) = receipt.tests {
+        body.push_str(&format!("\n{}", tests_line(t)));
+    }
+    if verify {
+        body.push_str("\nNo files have changed since it ran. The result covers single tests inside its targets and stays current until a file changes; Adage runs it again when you finish if one does.");
+    }
+    wrap_result(&d.track, &d.version, &d.route, &d.kind, d.strength, &body, "e2")
+}
+
+/// The tests a passing run collected, from its declared pytest record: "Tests: 228 collected; new
+/// since the last recorded run: a, b."
+fn tests_line(t: &TestEvidence) -> String {
+    let mut line = String::from("Tests:");
+    if let Some(n) = t.collected {
+        line.push_str(&format!(" {n} collected, all passing"));
+    }
+    if !t.new.is_empty() {
+        let names: Vec<String> = t.new.iter().map(|n| sanitise(n)).collect();
+        let sep = if t.collected.is_some() { ";" } else { "" };
+        line.push_str(&format!("{sep} new since the last recorded run: {}", names.join(", ")));
+        if t.more_new > 0 {
+            line.push_str(&format!(" (+{} more)", t.more_new));
         }
-        if !t.new.is_empty() {
-            let names: Vec<String> = t.new.iter().map(|n| sanitise(n)).collect();
-            line.push_str(&format!(
-                "{} new since the last recorded run here: {}",
-                if t.collected.is_some() { ";" } else { "" },
-                names.join(", ")
-            ));
-            if t.more_new > 0 {
-                line.push_str(&format!(" (+{} more)", t.more_new));
-            }
+    }
+    line.push('.');
+    line
+}
+
+#[cfg(test)]
+mod result_text_tests {
+    use super::*;
+
+    fn d() -> crate::Directive {
+        crate::Directive {
+            route: "run-1".into(),
+            track: "repo/learned".into(),
+            version: "0.1.0".into(),
+            strength: Strength::Prime,
+            text: "x".into(),
+            kind: "run".into(),
+            origin: None,
         }
-        format!("{line}.\nDo not rerun these tests unless you change code or configuration again; run them only if you need their detailed output.\n")
-    });
-    let body = format!("COMPLETED CPU ACTION\nAdage ran `{}` automatically after a learned context matched: {outcome}.\nReceipt: {data}\n{}{scope} No raw command output is included.", sanitise(command), tests.unwrap_or_default());
-    wrap_exec(&d.track, &d.version, &d.route, &d.kind, d.strength, &body, d.origin.as_ref(), "e2")
+    }
+
+    #[test]
+    fn results_are_short_factual_and_carry_provenance_in_attributes_only() {
+        let t = TestEvidence { collected: Some(228), new: vec!["tests/t.py::test_a".into()], more_new: 0 };
+        let ok = action_predicted(
+            &d(),
+            ".venv/bin/python -m pytest tests/t.py -q",
+            &[],
+            true,
+            &CpuReceipt {
+                tests: Some(&t),
+                operation: "0123456789abcdef0123",
+                input_digest: "d".repeat(64).leak(),
+                exit: Some(0),
+                duration_ms: 1620,
+            },
+        );
+        assert!(ok.contains("exec=\"e2\"") && ok.contains("passed (exit 0, 1.6 s; receipt 0123456789ab)"), "{ok}");
+        assert!(
+            ok.contains("Tests: 228 collected, all passing; new since the last recorded run: tests/t.py::test_a."),
+            "{ok}"
+        );
+        for banned in ["COMPLETED CPU ACTION", "not requested by the user", "dddddddd", "Do not", "Learned by Adage"] {
+            assert!(!ok.contains(banned), "{banned}: {ok}");
+        }
+        let failed = action_failed(&d(), "cmd", Some(1), &["tests/t.py::test_a".into()], 2, "0123456789abcdef");
+        assert!(
+            failed.contains("it failed (exit 1; receipt 0123456789ab). Nothing was changed.")
+                && failed.contains("Failing tests: tests/t.py::test_a (+2 more)."),
+            "{failed}"
+        );
+        let gate = stop_gate_failed("cmd", Some(1), &[], 0);
+        assert!(gate.contains("as you finished: it failed (exit 1)") && !gate.contains("Failing tests"));
+        assert_eq!(card_checks_line(&[".venv/bin/python -m pytest tests/t.py -q"]).unwrap(),
+                   "Tests in these sessions ran with: `.venv/bin/python -m pytest tests/t.py -q`. Python here is `.venv/bin/python`.");
+        assert_eq!(card_checks_line(&["make test"]).unwrap(), "Tests in these sessions ran with: `make test`.");
+        assert!(card_checks_line(&[]).is_none());
+    }
+}
+
+/// The first 12 characters of an operation id: enough to find it in the journal.
+fn short_id(id: &str) -> String {
+    sanitise(id).chars().take(12).collect()
+}
+
+/// The failing tests a run's declared pytest record names, bounded: "a, b (+3 more)".
+fn failing_list(failing: &[String], more: usize) -> String {
+    let names: Vec<String> = failing.iter().map(|n| sanitise(n)).collect();
+    let mut s = names.join(", ");
+    if more > 0 {
+        s.push_str(&format!(" (+{more} more)"));
+    }
+    s
+}
+
+/// A learned verification Adage ran that failed: the exit status and, from the declared pytest
+/// record, the failing tests. Nothing was applied.
+pub fn action_failed(
+    d: &crate::Directive,
+    command: &str,
+    exit: Option<i32>,
+    failing: &[String],
+    more: usize,
+    operation: &str,
+) -> String {
+    let mut body = format!(
+        "Adage ran `{}` after your edits: it failed (exit {}; receipt {}). Nothing was changed.",
+        sanitise(command),
+        exit.map_or("unknown".into(), |e| e.to_string()),
+        short_id(operation)
+    );
+    if !failing.is_empty() {
+        body.push_str(&format!("\nFailing tests: {}.", failing_list(failing, more)));
+    }
+    wrap_result(&d.track, &d.version, &d.route, &d.kind, d.strength, &body, "e2")
+}
+
+/// The Stop-gate continuation when the approved verification failed as the agent finished.
+pub fn stop_gate_failed(command: &str, exit: Option<i32>, failing: &[String], more: usize) -> String {
+    let mut s = format!(
+        "Adage ran `{}` (person-approved) as you finished: it failed (exit {}).",
+        sanitise(command),
+        exit.map_or("unknown".into(), |e| e.to_string())
+    );
+    if !failing.is_empty() {
+        s.push_str(&format!(" Failing tests: {}.", failing_list(failing, more)));
+    }
+    s.push_str(" The task is not finished until it passes; Adage runs it again when you finish.");
+    s
+}
+
+/// The person's one line when the Stop gate ran (Claude Code shows it; the model never sees it).
+pub fn stop_gate_notice(command: &str, passed: bool, exit: Option<i32>, duration_ms: u64) -> String {
+    format!(
+        "adage: ran `{}` at finish: {} (exit {}, {:.1} s).",
+        sanitise(command),
+        if passed { "passed" } else { "failed" },
+        exit.map_or("unknown".into(), |e| e.to_string()),
+        duration_ms as f64 / 1000.0
+    )
+}
+
+/// The card's line naming the test command an execution-certified learned verification uses
+/// (`cmd`), with its interpreter when it is the project's own environment. A fact about the
+/// repository, not a directive: execution-only routes still never become advice.
+pub fn card_checks_line(commands: &[&str]) -> Option<String> {
+    let cmds: Vec<String> = commands.iter().map(|c| sanitise(c)).filter(|c| !c.is_empty()).take(2).collect();
+    let first = cmds.first()?;
+    let interpreter = first
+        .split_whitespace()
+        .next()
+        .filter(|w| w.ends_with("/bin/python") && !w.starts_with('/'))
+        .map(|w| format!(" Python here is `{w}`."))
+        .unwrap_or_default();
+    Some(format!(
+        "Tests in these sessions ran with: {}.{interpreter}",
+        cmds.iter().map(|c| format!("`{c}`")).collect::<Vec<_>>().join(", ")
+    ))
 }
 
 /// A directive whose approved action Adage could not complete: the plain E0 directive, and why

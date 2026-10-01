@@ -164,6 +164,30 @@ pub trait Extension: Sync {
     fn pretool_context(&self, _call: &PreCall<'_>) -> Option<String> {
         None
     }
+    /// The finish-line verification (Claude Code `Stop`): run an approved learned check whose
+    /// result on the current inputs is not yet known, and say what happened.
+    fn stop_gate(&self, _call: &StopCall<'_>) -> Option<StopGate> {
+        None
+    }
+}
+
+/// A `Stop` event, as [`Extension::stop_gate`] sees it.
+pub struct StopCall<'a> {
+    pub harness: &'a str,
+    pub repo_key: &'a str,
+    pub root: &'a Path,
+    pub session: &'a str,
+    pub paths: &'a Paths,
+    pub index: &'a Index,
+    pub stop_hook_active: bool,
+}
+
+/// What a Stop gate decided: continue the agent with this reason (a failure it must see), or let
+/// the turn end with a line for the person.
+#[derive(Debug, Clone, PartialEq)]
+pub enum StopGate {
+    Block(String),
+    Notice(String),
 }
 
 /// A Bash call about to run, as [`Extension::pretool_context`] sees it.
@@ -283,7 +307,42 @@ pub fn run(harness: &str, event: &str, opts: Options) -> Result<Option<String>, 
             Start { adapter, harness, event, session: &session, root: &root, in_repo, paths: &paths, index: &index };
         return session_start(&start, damaged, &learner, opts.extension);
     }
-    let out = respond(adapter, harness, event, &p, &session, &cwd, &root, &paths, opts, &index);
+    // The finish-line gate runs first: a failing check keeps the agent going whatever else is due.
+    let gate = match (adapter.translate(event, &p, &cwd.to_string_lossy()), opts.extension) {
+        (Some(Event::Stop { stop_hook_active }), Some(x)) if in_repo => {
+            let keys: std::collections::BTreeSet<&str> = index.routes.iter().map(|r| r.repo.as_str()).collect();
+            repo::lookup_key(&root, Some(&paths.repo_keys()), &keys).and_then(|repo_key| {
+                let call = StopCall {
+                    harness,
+                    repo_key: &repo_key,
+                    root: &root,
+                    session: &session,
+                    paths: &paths,
+                    index: &index,
+                    stop_hook_active,
+                };
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| x.stop_gate(&call))).ok().flatten()
+            })
+        }
+        _ => None,
+    };
+    if let Some(g) = &gate {
+        let ts = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+        let rec = json!({ "ts": ts, "event": event, "kind": "stop_gate", "blocked": matches!(g, StopGate::Block(_)) });
+        if let Err(e) = spool::append(&paths.spool(&session), &rec) {
+            failopen::record(&paths.root, harness, event, &Failure::io("spool", "appending to the session spool", &e));
+        }
+    }
+    let out = match &gate {
+        Some(StopGate::Block(reason)) => Ok(adapter.render(event, Output::Continue(reason.clone()))),
+        _ => match respond(adapter, harness, event, &p, &session, &cwd, &root, &paths, opts, &index) {
+            Ok(None) => Ok(match gate {
+                Some(StopGate::Notice(n)) => adapter.render(event, Output::Notice(n)),
+                _ => None,
+            }),
+            other => other,
+        },
+    };
     if in_repo && adapter.is_learn_point(event) {
         let transcript = p.get("transcript_path").and_then(|v| v.as_str());
         let learned = learner()
@@ -785,8 +844,13 @@ fn respond(
             });
             let before: Vec<(String, bool)> =
                 st.obligations.iter().map(|o| (o.route.clone(), o.stop_requested)).collect();
+            // ADAGE_CARD_CHECKS=0 (an evaluation knob, like ADAGE_ARM) leaves the card's test-command
+            // line out.
+            let card_checks = std::env::var("ADAGE_CARD_CHECKS").map_or(true, |v| v != "0");
             let d = adage_runtime::with_follow_weights(weights.clone(), || {
-                adage_runtime::with_exec_only(exec_only.clone(), || decide(&ctx, st, &ev))
+                adage_runtime::with_card_checks(card_checks, || {
+                    adage_runtime::with_exec_only(exec_only.clone(), || decide(&ctx, st, &ev))
+                })
             });
             let stims = stimuli(&before, &st.obligations, matches!(ev, Event::Batch { .. }));
             (d, st.arm, propensity, stims)

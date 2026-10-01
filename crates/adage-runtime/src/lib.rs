@@ -159,6 +159,13 @@ pub struct SessionState {
     /// threshold): said at the session's first edit of one of the card's files.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub card_waiting: Option<String>,
+    /// Stop-gate runs this session (adage-exec): at most two, and only the first may block.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub stop_gates: u32,
+}
+
+fn is_zero(n: &u32) -> bool {
+    *n == 0
 }
 
 /// At most this many stop-hook requests per session, across all obligations (the default of
@@ -253,6 +260,36 @@ thread_local! {
     static EXACT_KEYS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     static EXEC_ONLY: std::cell::RefCell<Vec<(String, String)>> = const { std::cell::RefCell::new(Vec::new()) };
     static FOLLOW_WEIGHTS: std::cell::RefCell<Option<adage_core::judge::Weights>> = const { std::cell::RefCell::new(None) };
+    static CARD_CHECKS: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+}
+
+/// Run `f` with procedure cards naming (`true`, the default) or leaving out the test command of the
+/// repository's execution-certified learned verification ([`render::card_checks_line`]).
+pub fn with_card_checks<R>(on: bool, f: impl FnOnce() -> R) -> R {
+    struct Reset(bool);
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            CARD_CHECKS.with(|c| c.set(self.0));
+        }
+    }
+    let _reset = Reset(CARD_CHECKS.with(|c| c.replace(on)));
+    f()
+}
+
+/// The commands of this repository's learned verifications with execution evidence, most
+/// supported first: what a card may name as the repository's test command.
+fn certified_checks<'a>(routes: &[&'a IndexedRoute]) -> Vec<&'a str> {
+    let mut v: Vec<(&'a str, u32)> = routes
+        .iter()
+        .filter(|r| r.route.effect == adage_core::Effect::Verify && r.route.evidence.execution.is_some())
+        .filter_map(|r| match &r.route.step {
+            Step::Run { command } if !command.contains('{') => Some((command.as_str(), r.route.evidence.support)),
+            _ => None,
+        })
+        .collect();
+    v.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
+    v.dedup_by(|a, b| a.0 == b.0);
+    v.into_iter().map(|(c, _)| c).collect()
 }
 
 /// Run `f` with the repository's learned follow-judge weights (`adage_core::judge`, fitted at
@@ -513,7 +550,17 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
             match match_card(ctx, &cards, text, &mut emb) {
                 Some((ir, true)) => {
                     if ok(st, &out, ir, inhibits_left) {
-                        if let Some(t) = render::route_text(&ir.route, &[]) {
+                        if let Some(mut t) = render::route_text(&ir.route, &[]) {
+                            // Execution-only verifications are out of play as advice; the card may still
+                            // name their command as a fact about the repository.
+                            let all: Vec<&IndexedRoute> = ctx.index.for_repo(&ctx.repo).collect();
+                            let checks = certified_checks(&all);
+                            if let Some(line) =
+                                CARD_CHECKS.with(|c| c.get()).then(|| render::card_checks_line(&checks)).flatten()
+                            {
+                                t.push('\n');
+                                t.push_str(&line);
+                            }
                             out.push(directive(ir, t));
                         }
                     }

@@ -34,7 +34,7 @@
 
 use adage_core::CommandTable;
 use adage_eval::safety::{check_data_block, DataType};
-use adage_hook::{Delivery, Extension, PreCall, Turn};
+use adage_hook::{Delivery, Extension, PreCall, StopCall, StopGate, Turn};
 use adage_runtime::{render, Directive};
 use adage_tracks::{Origin, Step, Trigger};
 use serde_json::{json, Value};
@@ -77,21 +77,23 @@ impl Extension for Prefetch {
             return None;
         }
         let store = Store::load(&approvals::path(&paths.root)).ok()?;
-        let table = CommandTable::load();
         // Only a grant whose key still equals the route's current one, derived as act() derives
-        // it: a lapsed grant would be refused, so it promises no receipt.
-        let has_verifier = index.for_repo(repo_key).any(|r| {
-            let label = format!("{}/{}", r.track, r.route.id);
-            store.approvals.iter().any(|a| {
-                a.key.repo == repo_key
-                    && a.route == label
-                    && a.key.level == Level::E2
-                    && a.key.effect == adage_core::Effect::Verify
-                    && route::plan(r, index, root, &paths.tracks(), Level::E2, a.terms.as_ref(), &table)
-                        .is_ok_and(|p| store.find(&approvals::ApprovalKey::for_request(&p.request, repo_key)).is_some())
+        // it: a lapsed grant would be refused, so it promises no receipt. A short factual
+        // description of what Adage runs, when, and where results appear (not instructions).
+        let lines: Vec<String> = verifications(repo_key, root, index, paths, &store)
+            .into_iter()
+            .take(2)
+            .map(|(ir, command, _)| {
+                let pattern = edit_pattern(ir);
+                let when = if pattern.is_empty() { "when your edits match its learned pattern".to_string() } else { format!("after edits to {pattern}") };
+                format!("In this repository Adage runs `{}` (approved by a person, sandboxed) {when}, and again when you finish if files changed since.", render::sanitise(&command))
             })
-        });
-        has_verifier.then(|| "<adage-reflex track=\"adage/execution@1\" route=\"session-contract\" strength=\"prime\" kind=\"execution-contract\">\nAdage can run person-approved verification actions from hooks. A successful completion receipt records work already executed for the stated command and inputs. Use a current receipt as verification evidence instead of running the same verification solely to repeat it. A receipt covers only that command's scope, not all correctness. If a receipt is missing, failed, uncertain, or stale after source/configuration/runtime changes, perform the necessary verification. Run additional diagnostics for a different scope or an explicit rerun request. An approval alone is not a successful result; execution still checks its policy and grant at each action.\n</adage-reflex>".into())
+            .collect();
+        (!lines.is_empty()).then(|| format!("<adage-reflex track=\"adage/execution@1\" route=\"session-contract\" strength=\"prime\" kind=\"execution-contract\">\n{}\nIts results appear with your tool results, with the tests it ran; a failure comes back to you with the failing tests.\n</adage-reflex>", lines.join("\n")))
+    }
+
+    fn stop_gate(&self, call: &StopCall<'_>) -> Option<StopGate> {
+        stop_gate(call)
     }
 
     fn deliver(&self, turn: &Turn<'_>, directives: &[Directive]) -> Delivery {
@@ -174,6 +176,175 @@ impl Extension for Prefetch {
 
 /// pytest's own record of collected node ids, a cache file the approval declares.
 const PYTEST_NODEIDS: &str = ".pytest_cache/v/cache/nodeids";
+/// pytest's record of the node ids that failed in its last run (also a declared cache file).
+const PYTEST_LASTFAILED: &str = ".pytest_cache/v/cache/lastfailed";
+
+/// The failing node ids a staged run's declared pytest record names (sorted, at most
+/// [`MAX_LISTED_TESTS`], and how many more): read from the staged change set, never from output.
+fn pytest_failed(staged: &crate::stage::Staged) -> (Vec<String>, usize) {
+    let Some(change) = staged.plan.apply.iter().find(|c| c.path == PYTEST_LASTFAILED) else { return (vec![], 0) };
+    let crate::stage::After::File { bytes, .. } = &change.after else { return (vec![], 0) };
+    let Ok(map) = serde_json::from_slice::<serde_json::Map<String, Value>>(bytes) else { return (vec![], 0) };
+    let mut ids: Vec<String> = map.into_iter().map(|(k, _)| k).filter(|k| valid_nodeid(k)).collect();
+    ids.sort();
+    let more = ids.len().saturating_sub(MAX_LISTED_TESTS);
+    ids.truncate(MAX_LISTED_TESTS);
+    (ids, more)
+}
+
+/// The edit globs of a context trigger, in order ("tests/*.py then CHANGELOG.rst").
+fn edit_pattern(ir: &adage_tracks::index::IndexedRoute) -> String {
+    let Trigger::Context { items, .. } = &ir.route.trigger else { return String::new() };
+    let globs: Vec<String> = items
+        .iter()
+        .filter_map(|i| match i {
+            adage_tracks::CtxItem::Edit { glob } => Some(render::sanitise(glob)),
+            _ => None,
+        })
+        .collect();
+    globs.join(" then ")
+}
+
+/// This repository's learned context verifications with a current E2 grant: the route, its fixed
+/// command, and the grant (most supported first).
+fn verifications<'a>(
+    repo_key: &'a str,
+    root: &std::path::Path,
+    index: &'a adage_tracks::Index,
+    paths: &adage_store::Paths,
+    store: &'a Store,
+) -> Vec<(&'a adage_tracks::index::IndexedRoute, String, &'a Approval)> {
+    let table = CommandTable::load();
+    let mut out: Vec<(&adage_tracks::index::IndexedRoute, String, &Approval)> = Vec::new();
+    for r in index.for_repo(repo_key) {
+        let label = format!("{}/{}", r.track, r.route.id);
+        let Step::Run { command } = &r.route.step else { continue };
+        if r.route.effect != adage_core::Effect::Verify || command.contains('{') {
+            continue;
+        }
+        let grant = store.approvals.iter().find(|a| {
+            a.key.repo == repo_key
+                && a.route == label
+                && a.key.level == Level::E2
+                && a.key.effect == adage_core::Effect::Verify
+                && route::plan(r, index, root, &paths.tracks(), Level::E2, a.terms.as_ref(), &table)
+                    .is_ok_and(|p| store.find(&approvals::ApprovalKey::for_request(&p.request, repo_key)).is_some())
+        });
+        if let Some(a) = grant {
+            out.push((r, command.clone(), a));
+        }
+    }
+    out.sort_by_key(|(r, _, _)| std::cmp::Reverse(r.route.evidence.support));
+    out
+}
+
+/// At most this many Stop-gate runs per session; only the first may block.
+const MAX_STOP_GATES: u32 = 2;
+
+/// The finish-line gate. After a learned context verification ran in this treated session, a
+/// Stop whose current inputs have no successful run of it runs it (same grant, policy, sandbox,
+/// journal). Passed: the turn ends with a line for the person. Failed: the first time (and not
+/// while another stop hook is already continuing), the agent continues with the failing tests;
+/// otherwise the turn ends with a line for the person. Never more than [`MAX_STOP_GATES`] runs.
+fn stop_gate(call: &StopCall<'_>) -> Option<StopGate> {
+    if call.harness == "opencode" {
+        return None;
+    }
+    let state = adage_store::state::try_read::<adage_runtime::SessionState>(&call.paths.state(call.session)).ok()??;
+    if state.arm != Some(adage_runtime::Arm::Treated) || state.stop_gates >= MAX_STOP_GATES {
+        return None;
+    }
+    let home = &call.paths.root;
+    let pol = policy::load(home).ok()?;
+    if pol.max_level < Level::E2 {
+        return None;
+    }
+    let store = Store::load(&approvals::path(home)).ok()?;
+    let rows = crate::journal::list(home).ok()?;
+    if crate::journal::pending(home, call.root).ok()?.is_some() {
+        return None; // recovery comes first and is reported by the ordinary pipeline
+    }
+    let mine: Vec<&crate::journal::Receipt> =
+        rows.iter().filter(|r| r.repo == call.repo_key && r.session == call.session).collect();
+    // Only a verification this session's learned context already ran: the gate follows prediction.
+    let (ir, command, a) =
+        verifications(call.repo_key, call.root, call.index, call.paths, &store).into_iter().find(|(ir, _, _)| {
+            matches!(ir.route.trigger, Trigger::Context { .. })
+                && mine.iter().any(|r| r.route == format!("{}/{}", ir.track, ir.route.id))
+        })?;
+    let label = format!("{}/{}", ir.track, ir.route.id);
+    let table = CommandTable::load();
+    let mut req =
+        route::plan(ir, call.index, call.root, &call.paths.tracks(), Level::E2, a.terms.as_ref(), &table).ok()?.request;
+    req.inputs = route::bound_from_command(&req.argv, &command)?;
+    let action = req.action.clone()?;
+    let now = crate::stage::input_snapshot(&req.repo_root.canonicalize().ok()?, &action).ok()?;
+    let digest = crate::sha256_hex(crate::canonical_json(&now).as_bytes());
+    let fresh = mine.iter().any(|r| {
+        r.route == label && r.input_digest == digest && matches!(r.outcome, crate::stage::Outcome::Applied { .. })
+    });
+    if fresh {
+        return None;
+    }
+    let cap = sandbox::detect();
+    let ctx = Context {
+        inherited_env: std::env::vars().collect(),
+        policy: &pol,
+        store: &store,
+        capability: &cap,
+        table: &table,
+        repo_key: call.repo_key.to_string(),
+        cas: Some(home.join("cas")).filter(|p| p.is_dir()),
+        home: adage_store::home_dir(),
+        canaries: Vec::new(),
+    };
+    let gates = adage_store::state::update::<adage_runtime::SessionState, _>(&call.paths.state(call.session), |st| {
+        st.stop_gates += 1;
+        st.stop_gates
+    })
+    .ok()?;
+    let may_block = gates == 1 && !call.stop_hook_active;
+    let staged = match crate::stage::stage(&req, &ctx) {
+        Ok(s) => s,
+        Err(r) => {
+            return Some(StopGate::Notice(format!(
+                "adage: could not run `{}` at finish: {}.",
+                render::sanitise(&command),
+                crate::reason_text(&r.reason)
+            )))
+        }
+    };
+    let completed = crate::journal::finish(
+        &staged,
+        &crate::journal::Commit {
+            home,
+            repo: call.repo_key,
+            session: call.session,
+            occurrence: &format!("stop-gate:{gates}:{digest}"),
+            approved_on: &a.approved_on,
+            request: &req,
+        },
+    );
+    Some(match completed.outcome {
+        crate::stage::Outcome::Applied { .. } => {
+            StopGate::Notice(render::stop_gate_notice(&command, true, staged.exit, staged.duration_ms))
+        }
+        crate::stage::Outcome::Failed { exit, .. } if may_block => {
+            let (failing, more) = pytest_failed(&staged);
+            StopGate::Block(render::stop_gate_failed(&command, exit, &failing, more))
+        }
+        crate::stage::Outcome::Failed { exit, .. } => {
+            StopGate::Notice(render::stop_gate_notice(&command, false, exit, staged.duration_ms))
+        }
+        crate::stage::Outcome::Refused { reason, .. } | crate::stage::Outcome::Unknown { reason } => {
+            StopGate::Notice(format!(
+                "adage: `{}` at finish did not complete: {}.",
+                render::sanitise(&command),
+                crate::reason_text(&reason)
+            ))
+        }
+    })
+}
 const MAX_LISTED_TESTS: usize = 12;
 
 /// The node ids in the worktree's pytest record, when this is a pytest verification whose approval
@@ -393,8 +564,8 @@ fn covering_receipt(call: &PreCall<'_>) -> Option<String> {
         return None;
     }
     Some(format!(
-        "<adage-receipt operation=\"{}\">\nAdage already ran `{}` in this session (exit 0) on repository files (its environment included, declared caches aside) that are byte-identical now; it ran every test this command selects{}. Use that receipt as verification evidence instead of rerunning those tests solely to repeat the check; run them if you need their detailed output.\n</adage-receipt>",
-        render::sanitise(&r.id),
+        "<adage-receipt operation=\"{}\">\nAdage's run of `{}` in this session passed on files identical to the current ones, and it included every test this command selects{}.\n</adage-receipt>",
+        render::sanitise(&r.id).chars().take(12).collect::<String>(),
         render::sanitise(template),
         if elsewhere { " (in the project's environment)" } else { "" }
     ))
@@ -713,6 +884,24 @@ fn act(turn: &Turn<'_>, directives: &[Directive], candidates: &[Candidate<'_>]) 
             not_run(&mut out, "refused", &reason);
             out.records = records;
             out.records.push(rec);
+        }
+        crate::stage::Outcome::Failed { exit, .. }
+            if s.context.is_some() && ir.route.effect == adage_core::Effect::Verify =>
+        {
+            // A failed run is a result the agent needs: what failed, from the declared record.
+            let (failing, more) = pytest_failed(&staged);
+            out.records.push(rec);
+            out.replace.insert(
+                dir.route.clone(),
+                render::action_failed(
+                    &dir,
+                    s.command,
+                    *exit,
+                    &failing,
+                    more,
+                    completed.id.as_deref().unwrap_or_default(),
+                ),
+            );
         }
         crate::stage::Outcome::Failed { exit, .. } => {
             let reason = match exit {
@@ -1121,11 +1310,7 @@ mod prediction_tests {
         let digest = current_digest(&f);
         record_receipt(&f, "fixture-session", &digest);
         let text = call(node, "fixture-session").unwrap();
-        assert!(
-            text.contains("already ran `.venv/bin/python -m pytest tests/test_x.py -q`")
-                && text.contains("byte-identical now"),
-            "{text}"
-        );
+        assert!(text.contains("run of `.venv/bin/python -m pytest tests/test_x.py -q` in this session passed on files identical to the current ones"), "{text}");
         assert!(!text.contains("project's environment"));
         assert!(call("python -m pytest tests/test_x.py -v", "fixture-session")
             .unwrap()
@@ -1224,9 +1409,91 @@ mod prediction_tests {
             true,
             &render::CpuReceipt { tests: Some(&t), operation: "op", input_digest: "d", exit: Some(0), duration_ms: 5 },
         );
-        assert!(text.contains("new since the last recorded run here: tests/test_x.py::test_new[a-b]"), "{text}");
-        assert!(text.contains("Do not rerun these tests unless you change code or configuration again"), "{text}");
+        assert!(text.contains("new since the last recorded run: tests/test_x.py::test_new[a-b]"), "{text}");
+        assert!(text.contains("stays current until a file changes"), "{text}");
         assert!(!pytest_nodeids(&f.root, &req, "sh tools/check.sh").is_some(), "only pytest commands");
+    }
+
+    fn stop(f: &Fixture, active: bool) -> Option<StopGate> {
+        PREFETCH.stop_gate(&StopCall {
+            harness: "claude",
+            repo_key: "fixture",
+            root: &f.root,
+            session: "fixture-session",
+            paths: &f.paths,
+            index: &f.index,
+            stop_hook_active: active,
+        })
+    }
+
+    fn treated(f: &Fixture, arm: Arm) {
+        adage_store::state::update::<SessionState, _>(&f.paths.state("fixture-session"), |s| s.arm = Some(arm))
+            .unwrap();
+    }
+
+    #[test]
+    fn stop_gate_needs_a_grant_a_treated_session_and_this_sessions_context_run() {
+        let f = Fixture::new();
+        treated(&f, Arm::Treated);
+        record_receipt(&f, "fixture-session", "stale");
+        assert!(stop(&f, false).is_none(), "no grant: nothing runs");
+        f.approve();
+        treated(&f, Arm::Control);
+        assert!(stop(&f, false).is_none(), "control arm: nothing runs");
+        let g = Fixture::new();
+        g.approve();
+        treated(&g, Arm::Treated);
+        assert!(stop(&g, false).is_none(), "the learned context never ran this session");
+        record_receipt(&g, "another-session", "stale");
+        assert!(stop(&g, false).is_none(), "another session's run does not arm this one");
+        let digest = current_digest(&g);
+        record_receipt(&g, "fixture-session", &digest);
+        assert!(stop(&g, false).is_none(), "a passing run on the current inputs needs no rerun");
+        assert_eq!(crate::journal::list(&g.paths.root).unwrap().len(), 2, "nothing ran");
+    }
+
+    #[test]
+    fn stop_gate_runs_a_stale_check_and_blocks_once_on_failure() {
+        if !crate::stage::backend(&sandbox::detect()).available() {
+            return;
+        }
+        let f = Fixture::new();
+        f.approve();
+        treated(&f, Arm::Treated);
+        record_receipt(&f, "fixture-session", "an-earlier-input-state");
+        match stop(&f, false) {
+            Some(StopGate::Notice(n)) => {
+                assert!(n.contains("ran `sh tools/check.sh` at finish: passed (exit 0"), "{n}")
+            }
+            other => panic!("stale passing check: {other:?}"),
+        }
+        assert!(stop(&f, false).is_none(), "now current: no second run");
+        // A later edit breaks the check: the first gate continues the agent, the next only reports.
+        let f = Fixture::new();
+        f.approve();
+        treated(&f, Arm::Treated);
+        record_receipt(&f, "fixture-session", "an-earlier-input-state");
+        std::fs::remove_file(f.root.join("src/feature.rs")).unwrap();
+        match stop(&f, false) {
+            Some(StopGate::Block(r)) => {
+                assert!(r.contains("as you finished: it failed (exit 1)") && r.contains("runs it again"), "{r}")
+            }
+            other => panic!("failing check: {other:?}"),
+        }
+        match stop(&f, true) {
+            Some(StopGate::Notice(n)) => assert!(n.contains("failed"), "{n}"),
+            other => panic!("second gate never blocks: {other:?}"),
+        }
+        assert!(stop(&f, true).is_none(), "at most two gate runs per session");
+        let runs = crate::journal::list(&f.paths.root).unwrap().len();
+        assert_eq!(runs, 3, "the context run plus two gate runs, all journaled");
+        // A first gate while another stop hook is already continuing reports instead of blocking.
+        let g = Fixture::new();
+        g.approve();
+        treated(&g, Arm::Treated);
+        record_receipt(&g, "fixture-session", "an-earlier-input-state");
+        std::fs::remove_file(g.root.join("src/feature.rs")).unwrap();
+        assert!(matches!(stop(&g, true), Some(StopGate::Notice(_))));
     }
 
     #[test]
@@ -1272,8 +1539,12 @@ mod prediction_tests {
         f.approve();
         let text = PREFETCH.session_context("fixture", &f.root, &f.index, &f.paths).unwrap();
         assert!(text.contains("<adage-reflex") && text.contains("session-contract"));
-        assert!(text.contains("missing, failed, uncertain, or stale"));
-        assert!(text.contains("explicit rerun request"));
+        assert!(
+            text.contains("Adage runs `sh tools/check.sh` (approved by a person, sandboxed) after edits to src/*.rs"),
+            "{text}"
+        );
+        assert!(text.contains("again when you finish") && text.contains("a failure comes back to you"), "{text}");
+        assert!(!text.contains("Use a current receipt") && text.len() < 500, "factual and short: {text}");
         assert!(PREFETCH.session_context("other-repository", &f.root, &f.index, &f.paths).is_none());
         std::fs::write(f.paths.root.join("policy.toml"), "[exec]\nmax_level = \"E1\"\n").unwrap();
         assert!(PREFETCH.session_context("fixture", &f.root, &f.index, &f.paths).is_none());
@@ -1458,7 +1729,7 @@ mod prediction_tests {
         let records = delivery.spool.unwrap();
         assert_eq!(records[0]["outcome"], "applied", "{records}");
         assert_eq!(delivery.cpu_predictions, vec![ir.route.id]);
-        assert!(delivery.texts.unwrap().join("\n").contains("verification succeeded"));
+        assert!(delivery.texts.unwrap().join("\n").contains("after your edits: passed (exit 0"));
         assert_eq!(std::fs::read_to_string(f.root.join("src/feature.rs")).unwrap(), "fixture\n");
     }
 
@@ -1481,11 +1752,12 @@ mod prediction_tests {
         assert_eq!(records[0]["context"]["on"], "context");
         assert!(d.met.is_empty(), "no invented obligation completion");
         let text = d.texts.unwrap().join("\n");
-        assert!(text.contains("verification succeeded") && text.contains("exec=\"e2\""), "{text}");
+        assert!(text.contains("after your edits: passed (exit 0") && text.contains("exec=\"e2\""), "{text}");
         let receipt = crate::journal::list(&f.paths.root).unwrap().pop().unwrap();
-        assert!(text.contains(&receipt.id) && text.contains(&receipt.input_digest), "{text}");
-        assert!(text.contains("\"exit_code\":0") && text.contains("does not verify later edits"));
-        assert!(!text.contains("after your edit"));
+        assert!(text.contains(&receipt.id[..12]) && !text.contains(&receipt.input_digest), "{text}");
+        assert!(text.contains("stays current until a file changes"), "{text}");
+        assert!(!text.contains("COMPLETED CPU ACTION") && !text.contains("not requested by the user"), "{text}");
+        assert!(!text.contains("after your edit to"));
         let repeat = PREFETCH.deliver(&turn, &dirs);
         assert_eq!(repeat.spool.unwrap()[0]["withheld"], "duplicate");
         assert_eq!(crate::journal::list(&f.paths.root).unwrap().len(), 1);

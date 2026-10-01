@@ -518,6 +518,53 @@ fn a_card_is_said_once_at_a_close_prompt_or_at_the_first_edit_of_its_files_when_
     }
 }
 
+#[test]
+fn a_card_names_the_test_command_of_an_execution_certified_verification_unless_turned_off() {
+    let (dir, index, table) = card_fixture(0.9);
+    let mut index = index;
+    let mut check = index.routes[0].clone();
+    check.route = route(
+        "check-1",
+        Trigger::Context { items: vec![adage_tracks::CtxItem::Edit { glob: "flag_*.go".into() }], within: 3 },
+        Step::Run { command: "go test ./...".into() },
+        vec![],
+        Effect::Verify,
+        Strength::Prime,
+    );
+    check.route.evidence.execution =
+        Some(adage_tracks::ExecutionEvidence { opportunities: 5, successful: 5, sessions: 5 });
+    index.routes.push(check);
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: Some(&fake_embed),
+        params: Default::default(),
+    };
+    let card = |on: bool| {
+        let mut st = SessionState::default();
+        let d = with_card_checks(on, || decide(&ctx, &mut st, &Event::Prompt { text: "add a test flag".into() }));
+        d.directives.into_iter().find(|x| x.route == "card-1").unwrap().text
+    };
+    assert!(card(true).contains("\nTests in these sessions ran with: `go test ./...`."), "{}", card(true));
+    assert!(!card(false).contains("Tests in these sessions"));
+    // Without execution evidence the command is not named: only certified verifications are.
+    let mut index2 = index.clone();
+    index2.routes.last_mut().unwrap().route.evidence.execution = None;
+    let ctx2 = Ctx {
+        index: &index2,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: Some(&fake_embed),
+        params: Default::default(),
+    };
+    let mut st = SessionState::default();
+    let d = decide(&ctx2, &mut st, &Event::Prompt { text: "add a test flag".into() });
+    assert!(!d.directives.iter().any(|x| x.text.contains("Tests in these sessions")));
+}
+
 /// Review S7: a grey-zone card waits only for the prompt that came close to it. Prompt 1 is close
 /// and edits nothing of the card; prompt 2 is an unrelated task that edits a card file: no card.
 #[test]
