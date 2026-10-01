@@ -34,7 +34,7 @@
 
 use adage_core::CommandTable;
 use adage_eval::safety::{check_data_block, DataType};
-use adage_hook::{Delivery, Extension, Turn};
+use adage_hook::{Delivery, Extension, PreCall, Turn};
 use adage_runtime::{render, Directive};
 use adage_tracks::{Origin, Step, Trigger};
 use serde_json::{json, Value};
@@ -147,6 +147,10 @@ impl Extension for Prefetch {
         d
     }
 
+    fn pretool_context(&self, call: &PreCall<'_>) -> Option<String> {
+        covering_receipt(call)
+    }
+
     /// Exec-only reflexes (vendored scripts) approved here at E1 or E2: only then are they
     /// directed, and only because this binary carries them out.
     fn exec_only(
@@ -166,6 +170,151 @@ impl Extension for Prefetch {
             .map(|r| (r.track.clone(), r.route.id.clone()))
             .collect()
     }
+}
+
+/// pytest options that change only what is printed or when a passing run stops, never which
+/// tests run (registered with the launch-gate scorer).
+const OUTPUT_FLAGS: &[&str] =
+    &["-q", "-qq", "-v", "-vv", "-s", "-x", "-rA", "-ra", "--no-header", "--disable-warnings", "--quiet", "--verbose"];
+
+/// A pytest invocation: interpreter word, non-output options, sorted targets.
+#[derive(Debug, PartialEq)]
+struct PytestCall {
+    interpreter: String,
+    options: Vec<String>,
+    targets: Vec<String>,
+}
+
+/// The pytest invocations in a plain command line (`&&`, `||`, `;` and `|` lists, with `2>&1`).
+/// `None` for anything a word split cannot read faithfully: quotes, expansions, redirections,
+/// globs, or no pytest at all.
+fn pytest_calls(command: &str, root: &std::path::Path) -> Option<Vec<PytestCall>> {
+    if command.chars().any(|c| "'\"`$<(){}*?[]#\\\n".contains(c)) {
+        return None;
+    }
+    let words: Vec<&str> = command.split_whitespace().filter(|w| *w != "2>&1").collect();
+    if words.iter().any(|w| w.contains('>')) {
+        return None;
+    }
+    let prefix = format!("{}/", root.to_string_lossy());
+    let mut calls = Vec::new();
+    for segment in words.split(|w| matches!(*w, "&&" | "||" | ";" | "|")) {
+        let argv: Vec<&str> = segment.iter().map(|w| w.strip_prefix(prefix.as_str()).unwrap_or(w)).collect();
+        if let Some(call) = pytest_call(&argv) {
+            calls.push(call);
+        } else if argv.iter().any(|w| w.contains("pytest") || w.ends_with(';') || w.contains('&')) {
+            return None;
+        }
+    }
+    (!calls.is_empty()).then_some(calls)
+}
+
+fn pytest_call(argv: &[&str]) -> Option<PytestCall> {
+    let python = |w: &str| {
+        let name = w.rsplit('/').next().unwrap_or(w);
+        name == "python"
+            || name
+                .strip_prefix("python")
+                .is_some_and(|v| !v.is_empty() && v.chars().all(|c| c.is_ascii_digit() || c == '.'))
+    };
+    let (interpreter, rest) = match argv {
+        [i, "-m", "pytest", rest @ ..] if python(i) => (i.to_string(), rest),
+        _ => return None,
+    };
+    let (mut options, mut targets) = (Vec::new(), Vec::new());
+    let mut i = 0;
+    while i < rest.len() {
+        let a = rest[i];
+        if a == "-p" && rest.get(i + 1) == Some(&"no:cacheprovider") {
+            i += 2;
+            continue;
+        }
+        let output = OUTPUT_FLAGS.contains(&a)
+            || a.starts_with("--tb=")
+            || a.starts_with("--color=")
+            || (a.len() > 1
+                && a.starts_with('-')
+                && !a.starts_with("--")
+                && a[1..].chars().all(|c| "qvsx".contains(c)));
+        if !output {
+            if a.starts_with('-') {
+                options.push(a.to_string());
+            } else {
+                targets.push(a.trim_end_matches('/').to_string());
+            }
+        }
+        i += 1;
+    }
+    targets.sort();
+    targets.dedup();
+    Some(PytestCall { interpreter, options, targets })
+}
+
+/// Whether `done` already ran every test `asked` selects: same options, and each requested
+/// target is one of its targets or a node or path inside one. A different interpreter word
+/// is accepted only for a bare system `python`, which the advice beside this points at the
+/// project's environment; the note says so.
+fn covers(done: &PytestCall, asked: &PytestCall) -> bool {
+    let within = |t: &str| {
+        done.targets.iter().any(|s| t == s || t.starts_with(&format!("{s}::")) || t.starts_with(&format!("{s}/")))
+    };
+    let interpreter = asked.interpreter == done.interpreter || !asked.interpreter.contains('/');
+    interpreter
+        && asked.options == done.options
+        && !done.targets.is_empty()
+        && !asked.targets.is_empty()
+        && asked.targets.iter().all(|t| within(t))
+}
+
+/// A completed, successful learned verification in this session whose inputs are byte-identical
+/// now (the executor's own snapshot, recomputed here) and which already ran every test `command`
+/// selects. A fact for the agent, never a refusal: the call still runs if it is made.
+fn covering_receipt(call: &PreCall<'_>) -> Option<String> {
+    let asked = pytest_calls(call.command, call.root)?;
+    let rows = crate::journal::list(&call.paths.root).ok()?;
+    let r = rows.iter().rev().find(|r| {
+        r.repo == call.repo_key
+            && r.session == call.session
+            && r.phase == crate::journal::Phase::Completed
+            && matches!(r.outcome, crate::stage::Outcome::Applied { .. })
+    })?;
+    let ir = call.index.for_repo(call.repo_key).find(|x| format!("{}/{}", x.track, x.route.id) == r.route)?;
+    let Step::Run { command: template } = &ir.route.step else { return None };
+    if ir.route.effect != adage_core::Effect::Verify || template.contains('{') {
+        return None;
+    }
+    let store = Store::load(&approvals::path(&call.paths.root)).ok()?;
+    let a = store
+        .approvals
+        .iter()
+        .find(|a| a.key.repo == call.repo_key && a.route == r.route && a.key.level == Level::E2)?;
+    let plan = route::plan(
+        ir,
+        call.index,
+        call.root,
+        &call.paths.tracks(),
+        Level::E2,
+        a.terms.as_ref(),
+        &CommandTable::load(),
+    )
+    .ok()?;
+    let action = plan.request.action.as_ref()?;
+    let repo = plan.request.repo_root.canonicalize().ok()?;
+    let now = crate::stage::input_snapshot(&repo, action).ok()?;
+    if crate::sha256_hex(crate::canonical_json(&now).as_bytes()) != r.input_digest {
+        return None;
+    }
+    let done = pytest_call(&template.split_whitespace().collect::<Vec<_>>())?;
+    if !asked.iter().all(|c| covers(&done, c)) {
+        return None;
+    }
+    let elsewhere = asked.iter().any(|c| c.interpreter != done.interpreter);
+    Some(format!(
+        "<adage-receipt operation=\"{}\">\nAdage already ran `{}` in this session (exit 0) on repository files (its environment included, declared caches aside) that are byte-identical now; it ran every test this command selects{}. Use that receipt as verification evidence instead of rerunning those tests solely to repeat the check; run them if you need their detailed output.\n</adage-receipt>",
+        render::sanitise(&r.id),
+        render::sanitise(template),
+        if elsewhere { " (in the project's environment)" } else { "" }
+    ))
 }
 
 /// What the E2 step decided for one event.
@@ -741,7 +890,10 @@ mod prediction_tests {
             (events[2].clone(), dirs)
         }
         fn approve(&self) {
-            let terms = route::Terms { effect: Some(Effect::Verify), ..Default::default() };
+            self.approve_with(vec![]);
+        }
+        fn approve_with(&self, cache: Vec<String>) {
+            let terms = route::Terms { effect: Some(Effect::Verify), cache, ..Default::default() };
             let req = route::plan(
                 &self.index.routes[0],
                 &self.index,
@@ -765,6 +917,179 @@ mod prediction_tests {
             });
             store.save(&approvals::path(&self.paths.root)).unwrap();
             std::fs::write(self.paths.root.join("policy.toml"), "[exec]\nmax_level = \"E2\"\n").unwrap();
+        }
+    }
+
+    /// A completed, applied receipt for the fixture's route in `session`, on `digest`.
+    fn record_receipt(f: &Fixture, session: &str, digest: &str) {
+        let r = crate::journal::Receipt {
+            id: String::new(),
+            ts: "fixture".into(),
+            session: session.into(),
+            repo: "fixture".into(),
+            worktree: String::new(),
+            route: "fixture/context/predict-check".into(),
+            approved_on: "fixture-only".into(),
+            level: "e2".into(),
+            phase: crate::journal::Phase::Completed,
+            outcome: crate::stage::Outcome::Applied { changed: vec![], discarded: 0 },
+            input_digest: digest.into(),
+            outputs: BTreeMap::new(),
+        };
+        std::fs::create_dir_all(f.paths.root.join("exec")).unwrap();
+        adage_store::spool::append(&crate::stage::spool_path(&f.paths.root), &r).unwrap();
+    }
+
+    /// The fixture as a project-Python repository with one pytest verification route (the layout
+    /// `project_python` accepts: a venv whose runtime lives outside the repository).
+    fn pytest_fixture() -> Fixture {
+        let mut f = Fixture::new();
+        let top = f.root.parent().unwrap().to_path_buf();
+        for d in [".venv/bin", ".venv/lib/python3.12/site-packages", "tests"] {
+            std::fs::create_dir_all(f.root.join(d)).unwrap();
+        }
+        for d in ["runtime/bin", "runtime/lib/python3.12/encodings"] {
+            std::fs::create_dir_all(top.join(d)).unwrap();
+        }
+        std::fs::write(top.join("runtime/bin/python3.12"), b"\x7fELFfixture-only").unwrap();
+        std::fs::write(top.join("runtime/lib/python3.12/os.py"), "# fixture\n").unwrap();
+        std::fs::write(top.join("runtime/lib/python3.12/encodings/__init__.py"), "# fixture\n").unwrap();
+        std::fs::write(
+            f.root.join(".venv/pyvenv.cfg"),
+            format!(
+                "home = {}/runtime/bin\nversion_info = 3.12\ninclude-system-site-packages = false\n",
+                top.display()
+            ),
+        )
+        .unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(top.join("runtime/bin/python3.12"), f.root.join(".venv/bin/python")).unwrap();
+        std::fs::write(f.root.join("tests/test_x.py"), "def test_one():\n    pass\n").unwrap();
+        f.index.routes[0].route.step = Step::Run { command: ".venv/bin/python -m pytest tests/test_x.py -q".into() };
+        f.approve_with(vec![".pytest_cache/**".into()]);
+        f
+    }
+
+    fn current_digest(f: &Fixture) -> String {
+        let store = Store::load(&approvals::path(&f.paths.root)).unwrap();
+        let plan = route::plan(
+            &f.index.routes[0],
+            &f.index,
+            &f.root,
+            &f.paths.tracks(),
+            Level::E2,
+            store.approvals[0].terms.as_ref(),
+            &CommandTable::load(),
+        )
+        .unwrap();
+        let now = crate::stage::input_snapshot(&f.root.canonicalize().unwrap(), plan.request.action.as_ref().unwrap())
+            .unwrap();
+        crate::sha256_hex(crate::canonical_json(&now).as_bytes())
+    }
+
+    #[test]
+    fn pytest_scope_equivalence_is_narrow() {
+        let root = std::path::Path::new("/repo");
+        let done = pytest_call(&[".venv/bin/python", "-m", "pytest", "tests/test_x.py", "-q"]).unwrap();
+        let covered = |c: &str| pytest_calls(c, root).is_some_and(|v| v.iter().all(|a| covers(&done, a)));
+        for yes in [
+            ".venv/bin/python -m pytest tests/test_x.py -q",
+            ".venv/bin/python -m pytest tests/test_x.py::test_one -xvs",
+            "/repo/.venv/bin/python -m pytest /repo/tests/test_x.py --tb=short -p no:cacheprovider 2>&1 | tail -20",
+            "python -m pytest tests/test_x.py::test_one -v && .venv/bin/python -m pytest tests/test_x.py -q",
+        ] {
+            assert!(covered(yes), "{yes}");
+        }
+        for no in [
+            ".venv/bin/python -m pytest tests/test_x.py -k one",
+            ".venv/bin/python -m pytest tests/",
+            ".venv/bin/python -m pytest",
+            ".venv/bin/python -m pytest tests/test_y.py",
+            "other/bin/python -m pytest tests/test_x.py",
+            ".venv/bin/pytest tests/test_x.py",
+            ".venv/bin/python -m pytest \"$T\"",
+            ".venv/bin/python -m pytest tests/test_x.py > out.txt",
+            "git status",
+        ] {
+            assert!(!covered(no), "{no}");
+        }
+    }
+
+    #[test]
+    fn pretool_context_needs_a_fresh_successful_receipt_in_this_session_covering_the_call() {
+        let f = pytest_fixture();
+        let call = |command: &'static str, session: &'static str| {
+            PREFETCH.pretool_context(&PreCall {
+                repo_key: "fixture",
+                root: &f.root,
+                session,
+                paths: &f.paths,
+                index: &f.index,
+                command,
+            })
+        };
+        let node = ".venv/bin/python -m pytest tests/test_x.py::test_one -xvs";
+        assert!(call(node, "fixture-session").is_none(), "no receipt yet");
+        let digest = current_digest(&f);
+        record_receipt(&f, "fixture-session", &digest);
+        let text = call(node, "fixture-session").unwrap();
+        assert!(
+            text.contains("already ran `.venv/bin/python -m pytest tests/test_x.py -q`")
+                && text.contains("byte-identical now"),
+            "{text}"
+        );
+        assert!(!text.contains("project's environment"));
+        assert!(call("python -m pytest tests/test_x.py -v", "fixture-session")
+            .unwrap()
+            .contains("(in the project's environment)"));
+        assert!(call(node, "another-session").is_none(), "another session's receipt is not this session's evidence");
+        assert!(call(".venv/bin/python -m pytest tests/", "fixture-session").is_none(), "wider scope");
+        assert!(
+            call(".venv/bin/python -m pytest tests/test_x.py -k one", "fixture-session").is_none(),
+            "selection option"
+        );
+        // Declared caches do not make a receipt stale; any other repository file does.
+        std::fs::create_dir_all(f.root.join(".pytest_cache")).unwrap();
+        std::fs::write(f.root.join(".pytest_cache/nodeids"), "[]").unwrap();
+        assert!(call(node, "fixture-session").is_some(), "a declared cache does not make it stale");
+        std::fs::remove_dir_all(f.root.join(".pytest_cache")).unwrap();
+        std::fs::write(f.root.join("tests/test_x.py"), "def test_one():\n    assert False\n").unwrap();
+        assert!(call(node, "fixture-session").is_none(), "a later edit makes the receipt stale");
+    }
+
+    #[test]
+    fn failed_or_refused_receipts_never_cover_a_call() {
+        let f = pytest_fixture();
+        let digest = current_digest(&f);
+        for outcome in [
+            crate::stage::Outcome::Failed { exit: Some(1), signal: None },
+            crate::stage::Outcome::Refused { stage: "verify".into(), reason: "x".into(), counts: true },
+        ] {
+            let r = crate::journal::Receipt {
+                id: String::new(),
+                ts: "fixture".into(),
+                session: "fixture-session".into(),
+                repo: "fixture".into(),
+                worktree: String::new(),
+                route: "fixture/context/predict-check".into(),
+                approved_on: "fixture-only".into(),
+                level: "e2".into(),
+                phase: crate::journal::Phase::Completed,
+                outcome,
+                input_digest: digest.clone(),
+                outputs: BTreeMap::new(),
+            };
+            std::fs::create_dir_all(f.paths.root.join("exec")).unwrap();
+            adage_store::spool::append(&crate::stage::spool_path(&f.paths.root), &r).unwrap();
+            let covered = PREFETCH.pretool_context(&PreCall {
+                repo_key: "fixture",
+                root: &f.root,
+                session: "fixture-session",
+                paths: &f.paths,
+                index: &f.index,
+                command: ".venv/bin/python -m pytest tests/test_x.py -q",
+            });
+            assert!(covered.is_none());
         }
     }
 

@@ -159,6 +159,21 @@ pub trait Extension: Sync {
     fn exec_only(&self, _repo_key: &str, _index: &Index, _paths: &Paths) -> Vec<(String, String)> {
         Vec::new()
     }
+    /// A fact for a tool call about to run (`PreToolUse`): completed work it would repeat, checked
+    /// now. Context only, never a refusal; it goes beside any interpreter advice.
+    fn pretool_context(&self, _call: &PreCall<'_>) -> Option<String> {
+        None
+    }
+}
+
+/// A Bash call about to run, as [`Extension::pretool_context`] sees it.
+pub struct PreCall<'a> {
+    pub repo_key: &'a str,
+    pub root: &'a Path,
+    pub session: &'a str,
+    pub paths: &'a Paths,
+    pub index: &'a Index,
+    pub command: &'a str,
 }
 
 /// How a binary runs the pipeline.
@@ -252,7 +267,7 @@ pub fn run(harness: &str, event: &str, opts: Options) -> Result<Option<String>, 
     }
     let paths = Paths::from_env();
     if event == "PreToolUse" {
-        return pretool(adapter, &p, &session, &cwd, &root, &paths);
+        return pretool(adapter, &p, &session, &cwd, &root, &paths, opts.extension);
     }
     // A damaged index (a truncated write, a disk error) is served as empty and rebuilt: the
     // session start asks the learner to recompile it (docs/zero-config.md §5).
@@ -369,6 +384,7 @@ fn pretool(
     cwd: &Path,
     root: &Path,
     paths: &Paths,
+    extension: Option<&'static dyn Extension>,
 ) -> Result<Option<String>, Failure> {
     use adage_runtime::pretool::{self, Pre};
     if adapter.name() != "claude" || p.get("tool_name").and_then(Value::as_str) != Some("Bash") {
@@ -387,14 +403,27 @@ fn pretool(
     if ["VIRTUAL_ENV", "CONDA_PREFIX"].iter().any(|v| std::env::var_os(v).is_some_and(|x| !x.is_empty())) {
         return Ok(None);
     }
+    let key = repo::repo_key_cached(root, &paths.repo_keys());
+    // A current receipt covering this call, whatever the interpreter advice below decides. Only
+    // treated sessions hold receipts; the extension rechecks freshness now.
+    let control = || {
+        state::try_read::<SessionState>(&paths.state(session))
+            .ok()
+            .flatten()
+            .is_some_and(|s| s.arm == Some(Arm::Control))
+    };
+    let receipt = extension.filter(|_| !control()).and_then(|x| {
+        let index = Index::try_load(&paths.index()).unwrap_or_default();
+        x.pretool_context(&PreCall { repo_key: &key, root, session, paths, index: &index, command })
+    });
+    let only_receipt = || receipt.clone().and_then(|t| adapter.render("PreToolUse", Output::Context(t)));
     // Off with `runtime.rewrite = false` (`adage delegate rewrites off`), or the older marker.
     let cfg = adage_store::config::load(paths).config;
     if !cfg.runtime_rewrite || rewrite_off(paths).exists() {
-        return Ok(None);
+        return Ok(only_receipt());
     }
-    let key = repo::repo_key_cached(root, &paths.repo_keys());
-    let Some(binding) = adage_learn::instincts::binding(&paths.tracks(), &key) else { return Ok(None) };
-    let Some(mut env) = binding.env else { return Ok(None) };
+    let Some(binding) = adage_learn::instincts::binding(&paths.tracks(), &key) else { return Ok(only_receipt()) };
+    let Some(mut env) = binding.env else { return Ok(only_receipt()) };
     let venv = root.join(env.interpreter.strip_suffix("/bin/python").unwrap_or(".venv"));
     if Path::new(&binding.root) != root {
         // Another checkout of the repository (a per-task worktree, a fresh clone) until the
@@ -409,7 +438,7 @@ fn pretool(
             .any(|e| e.path().join("site-packages/pytest/__init__.py").is_file());
         let usable = root.join(&env.interpreter).is_file() && venv.join("pyvenv.cfg").is_file() && pytest;
         if !(usable && env_of_checkout(&venv, root, Path::new(&binding.root))) {
-            return Ok(None);
+            return Ok(only_receipt());
         }
         env.pytest = true;
         env.modules.clear();
@@ -420,7 +449,7 @@ fn pretool(
         matches!(&r.route.evidence.origin, Some(adage_tracks::Origin::Instinct { instinct, .. }) if instinct == "U11")
     });
     if !u11 {
-        return Ok(None);
+        return Ok(only_receipt());
     }
     let abs = root.join(&env.interpreter);
     let e = pretool::Env {
@@ -438,7 +467,7 @@ fn pretool(
         let small = std::fs::metadata(&p).is_ok_and(|m| m.is_file() && m.len() <= 256 << 10);
         small.then(|| std::fs::read_to_string(&p).ok()).flatten()
     };
-    let Some(mut pre) = pretool::plan(command, &e, read) else { return Ok(None) };
+    let Some(mut pre) = pretool::plan(command, &e, read) else { return Ok(only_receipt()) };
     // A rewrite the person's permission rules would treat differently from the command as written
     // is advice instead (review S4).
     if let Pre::Rewrite { command: new, kind, segments } = &pre {
@@ -461,6 +490,11 @@ fn pretool(
     })
     .map_err(|e| Failure::io("state", "assigning the session's arm", &e))?;
     let control = arm == Some(Arm::Control);
+    // The receipt leads: a covered run is evidence already in hand, the interpreter is secondary.
+    let lead = |text: String| match &receipt {
+        Some(r) => format!("{r}\n{text}"),
+        None => text,
+    };
     let (what, out) = match &pre {
         Pre::Rewrite { command: new, kind, .. } => {
             let mut updated = input.clone();
@@ -472,17 +506,17 @@ fn pretool(
             );
             (
                 json!({ "rewrite": kind, "interpreter": env.interpreter }),
-                Output::Rewrite { input: updated, context: pretool::rewrite_note(&e, kind), notice },
+                Output::Rewrite { input: updated, context: lead(pretool::rewrite_note(&e, kind)), notice },
             )
         }
         // Advice, never a refusal: the command runs as written, and the person's own permission
         // rules decide it (review B2).
         Pre::Advise { reason, kind } => {
-            (json!({ "advise": kind, "interpreter": env.interpreter }), Output::Context(reason.clone()))
+            (json!({ "advise": kind, "interpreter": env.interpreter }), Output::Context(lead(reason.clone())))
         }
     };
     let ts = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
-    let mut rec = json!({ "ts": ts, "event": "PreToolUse", "kind": "pretool", "arm": arm, "propensity": propensity, "repo": key, "pretool": what });
+    let mut rec = json!({ "ts": ts, "event": "PreToolUse", "kind": "pretool", "arm": arm, "propensity": propensity, "repo": key, "pretool": what, "receipt": receipt.is_some() });
     if control {
         rec["withheld"] = json!(true);
     }
@@ -877,6 +911,39 @@ mod tests {
         let value: Value = serde_json::from_str(&value).unwrap();
         assert_eq!(value["hookSpecificOutput"]["additionalContext"], "model contract");
         assert_eq!(value["systemMessage"], "person notice");
+    }
+
+    #[test]
+    fn pretool_receipt_context_reaches_a_python_test_call_without_any_rewrite() {
+        struct Receipts;
+        impl Extension for Receipts {
+            fn deliver(&self, _: &Turn<'_>, _: &[Directive]) -> Delivery {
+                Delivery::default()
+            }
+            fn pretool_context(&self, call: &PreCall<'_>) -> Option<String> {
+                call.command.contains("pytest").then(|| format!("receipt for {}", call.session))
+            }
+        }
+        static RECEIPTS: Receipts = Receipts;
+        let temp = tempfile::tempdir().unwrap();
+        let paths = Paths::at(temp.path().join("home"));
+        let root = temp.path().join("repo");
+        std::fs::create_dir_all(&root).unwrap();
+        let call = |command: &str| {
+            let p = json!({ "tool_name": "Bash", "tool_input": { "command": command } });
+            pretool(&harness::claude::Claude, &p, "s-1", &root, &root, &paths, Some(&RECEIPTS)).unwrap()
+        };
+        let out: Value =
+            serde_json::from_str(&call(".venv/bin/python -m pytest tests/test_x.py::t -q").unwrap()).unwrap();
+        assert_eq!(out["hookSpecificOutput"]["additionalContext"], "receipt for s-1");
+        assert!(out["hookSpecificOutput"].get("updatedInput").is_none(), "context only, never a rewrite or refusal");
+        assert!(out["hookSpecificOutput"].get("permissionDecision").is_none());
+        assert!(call(".venv/bin/python -c 'print(1)'").is_none());
+        assert!(call("git status").is_none());
+        state::update::<SessionState, _>(&paths.state("s-1"), |st| st.arm = Some(Arm::Control)).unwrap();
+        assert!(call(".venv/bin/python -m pytest tests/test_x.py -q").is_none(), "never in the control arm");
+        let p = json!({ "tool_name": "Bash", "tool_input": { "command": "python -m pytest" } });
+        assert!(pretool(&harness::claude::Claude, &p, "s-1", &root, &root, &paths, None).unwrap().is_none());
     }
 
     #[test]

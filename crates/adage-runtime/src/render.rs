@@ -211,7 +211,13 @@ pub fn action_predicted(
         "declared_input_digest": sanitise(receipt.input_digest),
         "exit_code": receipt.exit, "duration_ms": receipt.duration_ms,
     });
-    let body = format!("COMPLETED CPU ACTION\nAdage ran `{}` automatically after a learned context matched: {outcome}.\nReceipt: {data}\nThis is completed work for the stated command and staged inputs. Use it as evidence within that scope. It does not verify later edits, a changed environment, or additional test scopes. No raw command output is included.", sanitise(command));
+    // Agents verify their new tests by node id; say plainly that the run included them.
+    let scope = if verify && command.contains(" -m pytest ") {
+        "It ran every test the command selects, on the repository files as they were at this point, your edits so far included. Single tests inside its targets are covered by it; other targets, other pytest options, another interpreter and later edits are not."
+    } else {
+        "This is completed work for the stated command and staged inputs. Use it as evidence within that scope. It does not verify later edits, a changed environment, or additional test scopes."
+    };
+    let body = format!("COMPLETED CPU ACTION\nAdage ran `{}` automatically after a learned context matched: {outcome}.\nReceipt: {data}\n{scope} No raw command output is included.", sanitise(command));
     wrap_exec(&d.track, &d.version, &d.route, &d.kind, d.strength, &body, d.origin.as_ref(), "e2")
 }
 
