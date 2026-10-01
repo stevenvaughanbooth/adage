@@ -375,10 +375,9 @@ def collect(manifest):
         timeline=timeline, replay=replay, all_journal_receipts=attempt("journal", lambda: pairs.journal(m), []) if hooks else [],
         stop_gate_outputs=[receipt_replay.hook_text(h.get("output")) for h in hooks if h.get("event") == "Stop" and h.get("output")],
         contract_emitted=any(canary.contract_in(h.get("output")) for h in hooks if h.get("event") == "SessionStart"),
-        card_oriented=any("Where those files stand in this checkout now" in (h.get("output") or "")
-                          for h in hooks if h.get("event") == "UserPromptSubmit"),
-        card_exemplar=any("What the edit looked like last time" in (h.get("output") or "")
-                          for h in hooks if h.get("event") == "UserPromptSubmit"),
+        # The card's form, wherever it arrived (at the prompt, or at the first edit of a card file).
+        card_oriented=any("Where those files stand in this checkout now" in (h.get("output") or "") for h in hooks),
+        card_exemplar=any("What the edit looked like last time" in (h.get("output") or "") for h in hooks),
         final_generation=final["digest"], collection_errors=errors)
     pairs.write(session / "collection.json", result)
     return result
