@@ -193,19 +193,9 @@ $ make check
   <div class="wrap">
     <p class="kicker reveal">Evidence</p>
     <h2 class="display reveal" id="ev-h">Measured against a control, <span class="soft">not a vibe.</span></h2>
-    <p class="lede reveal">Your agent stops re-exploring and re-checking the same things. Adage saves model calls by handling learned reflexes and instincts on your CPU; we count that in model requests, tokens and API cost, against the same task without Adage, scored by hidden tests. GPU use and energy are not measured. It is strongest on the work a repository repeats; a novel task still needs the model.</p>
+    <p class="lede reveal">Adage learns your repository's recurring work and gives your agent what it would otherwise go looking for, so it stops re-exploring and re-checking the same things. Adage saves model calls by handling learned reflexes and instincts on your CPU; we count that in model requests, tokens and API cost, against the same task without Adage, scored by hidden tests. GPU use and energy are not measured. It is strongest on the work a repository repeats; a novel task still needs the model.</p>
 
-    <article class="trial current-proof launch-proof reveal" aria-labelledby="launch-proof-h">
-      <header><p class="kicker">Launch study · development result · October 1, 2026</p><h3 id="launch-proof-h">The agent stops re-checking what Adage already checked.</h3><p>Adage runs the person-approved tests on your CPU and hands back a receipt; a card says where the files stand · Claude Haiku 4.5 · Marshmallow · {{ev:dev-v9b:blocks}} paired blocks</p></header>
-      <dl class="stats">
-        <div><dt>Model requests per session</dt><dd><span class="sr">without Adage </span><span class="was">{{ev:dev-v9b:arms.A0.mean_requests|fixed1}}</span><span class="arrow" aria-hidden="true">→</span><span class="sr">, with Adage </span><span class="now">{{ev:dev-v9b:arms.A4.mean_requests|fixed1}}</span><small>{{ev:dev-v9b:comparison.A4.ratio|x2}} · fewer in {{ev:dev-v9b:comparison.A4.blocks_fewer}} of {{ev:dev-v9b:blocks}} paired blocks</small></dd></div>
-        <div><dt>Hidden tests passed</dt><dd><span class="now">{{ev:dev-v9b:arms.A4.hidden_test_passes}}/{{ev:dev-v9b:arms.A4.sessions}}</span><small>with Adage · {{ev:dev-v9b:arms.A0.hidden_test_passes}}/{{ev:dev-v9b:arms.A0.sessions}} without</small></dd></div>
-        <div><dt>Cost per session (API list price)</dt><dd><span class="sr">without Adage </span><span class="was">{{ev:dev-v9b:arms.A0.cost_usd_mean|usd3}}</span><span class="arrow" aria-hidden="true">→</span><span class="sr">, with Adage </span><span class="now">{{ev:dev-v9b:arms.A4.cost_usd_mean|usd3}}</span><small>cache-read tokens {{ev:dev-v9b:arms.A0.tokens_mean.cache_read|kilo}} → {{ev:dev-v9b:arms.A4.tokens_mean.cache_read|kilo}}</small></dd></div>
-      </dl>
-      <p class="note">Development evidence, not the launch number: one task, the one the design was tuned on, with a supplied test block and a work order in every prompt. All five safety controls kept their necessary checks. The held-out comparison on new tasks is the one that counts:</p>
-      <div class="launch-heldout" data-heldout="brief">{{heldout:brief}}</div>
-      <p class="launch-cta"><a class="btn primary" href="/how-we-tested">How we tested, misses included</a><a class="textlink" href="/evidence/dev-v9b.json">The numbers behind this card</a></p>
-    </article>
+    <article class="trial current-proof launch-proof reveal" aria-labelledby="launch-proof-h" data-heldout="card">{{heldout:card}}</article>
 
     <article class="trial current-proof reveal" aria-labelledby="cold-proof-h">
       <header><p class="kicker">Cold-start pilot + replication · September 30, 2026</p><h3 id="cold-proof-h">Cold-start value, measured twice.</h3><p>Shipped instincts · Claude Haiku 4.5 · Marshmallow · {{ev:cold-start:unique_tasks}} coding tasks, {{ev:cold-start:repetitions_per_arm_per_task}} runs per arm</p></header>

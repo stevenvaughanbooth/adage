@@ -12,9 +12,10 @@ task. Automatic argument binding also abstains when a prompt contains multiple d
 values. See [complete lookup results](execution.md#e1-prefetch-adage-exec-hook)
 and the [action-elimination gate](../evals/reflex-proof/harness/ACTION-GATE.md).
 
-**What we measure, and what we don't.** Adage saves model calls by handling learned reflexes and
-instincts on your CPU; we measure that in model requests, tokens and API cost. GPU use and energy
-are not measured. The launch studies used Claude Haiku 4.5 on one repository,
+This is the full launch history, in order, misses included; the [README](../README.md#evidence-so-far)
+has the result. **What we measure, and what we don't.** Adage saves model calls by handling learned
+reflexes and instincts on your CPU; we measure that in model requests, tokens and API cost. GPU use
+and energy are not measured. The launch studies used Claude Haiku 4.5 on one repository,
 [Marshmallow](https://github.com/marshmallow-code/marshmallow); the
 [launch evidence index](../evals/reflex-proof/LAUNCH-STATUS.md) keeps every record, failures included,
 and the [launch gate protocol](launch-gate-protocol.md) has every pass rule as it was written
@@ -51,11 +52,28 @@ before dispatch.
   ([RESULT.json](../evals/reflex-proof/harness/results/20261001-dev-v9b/RESULT.json)). Every prompt
   carried development scaffolding, and the design was iterated on this task. It is not a launch
   statistic.
-- **Held-out comparison.** Four new tasks, frozen before any result was read
-  ([tasks](../evals/reflex-proof/harness/results/20261001-heldout-tasks/README.md)), 20 paired blocks,
-  no scaffolding in the prompts. Pass rule: the one-sided 95% upper bound of the request ratio is at
-  most 0.90, with no loss of quality. Its decision record is linked from the launch evidence index
-  as written.
+- **Held-out comparison (2026-10-01).** Four new tasks, frozen before any result was read
+  ([tasks](../evals/reflex-proof/harness/results/20261001-heldout-tasks/README.md)), five
+  repetitions in 20 paired blocks, prompts without scaffolding, three arms: the agent alone (A0),
+  advisory mode (NOEXEC: hooks, instincts and the orientation card, no execution) and execution mode
+  (BEST = A4: advisory plus person-approved CPU test runs and the Stop gate). 65 sessions, all
+  collected; no block excluded; no session censored.
+  - **Advisory mode** (the registered report-only contrast NOEXEC/A0): **0.7845×** model requests
+    (95% interval 0.7374 to 0.8330; fewer in 18/20 blocks; sign-flip p 0.0023), 455 against 580
+    requests (22.75 against 29.0 per session), cost $2.6998 against $4.0192 (32.8% lower), hidden
+    tests 19/20 in both arms.
+  - **Execution mode** (the gated primary BEST/A0): **0.6741×** (0.6258 to 0.7265; 18/20 blocks;
+    p 0.0001), 391 requests (19.55 per session), cost $2.7014, hidden tests **17/20** against 19/20.
+    The quality rule (BEST passes at least A0's minus one) and G5 did not hold, so **the registered
+    outcome is FAIL** for this stratum. One of the three BEST failures was a block (has-keys,
+    block 5) where all three arms failed. Every other applicable criterion (G1, G2, G6, G7, G8)
+    held; both sensitivity analyses clear the bound (0.7265 without censored blocks, 0.6987 without
+    has-keys); execution against advisory is 0.8593× (upper 0.9197, not under the bound).
+  - **Safety controls:** all five realized; no necessary work skipped.
+  - The report and its decision record are published unchanged with the site
+    ([report](../web/site/public/evidence/heldout-report.json), [record](../web/site/public/evidence/heldout-record.md)).
+    Advisory mode leads the product story; execution mode stays opt-in and experimental until a new
+    registered test shows it keeps quality.
 
 ## Real-repository benchmarks
 

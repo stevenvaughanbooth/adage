@@ -7,7 +7,8 @@ lookup mechanism now passes; broad coding-task value remains the question.
 > learned CPU transfer study found 0/4 action eliminations; development canaries v5 and v7 found 0
 > genuine eliminations; dev-v8 is invalid; dev-v9b is a valid development result on one task with
 > development scaffolding (0.62× the requests of no Adage), not a launch statistic; the held-out
-> comparison has not run. All used Claude Haiku 4.5 on Marshmallow, and no GPU or energy
+> comparison found advisory mode at 0.78× with the same hidden-test passes (19/20) and execution
+> mode at 0.67× but 17/20, below its registered quality rule. All used Claude Haiku 4.5 on Marshmallow, and no GPU or energy
 > measurements were made. See the [launch evidence index](../evals/reflex-proof/LAUNCH-STATUS.md).
 
 ## Objective

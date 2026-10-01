@@ -9,17 +9,27 @@
 //        [--link <repository path of the archived report>] [--out <file>]
 //   node scripts/heldout-evidence.mjs --pending          # the state before the result exists
 //
-// Tokens: the report has cost but no tokens, so the positive sessions' own usage is summed from
-// <$H>/sessions/*/summary.json. $H is found from the report's path (<$H>/reports/…) unless
-// --sessions names it; --no-sessions skips it, and the page then says tokens were not converted.
-// The decision record (the .md the report command writes beside the .json) is linked when present.
+// The sessions: the report has cost but no tokens, and hidden-test results per arm but not per
+// block, so the positive sessions' own records are read too (read-only): tokens from
+// <$H>/sessions/*/summary.json, and which blocks failed in which arm from collection.json (the same
+// `quality.passed` the analysis reads). $H is found from the report's path (<$H>/reports/…) unless
+// --sessions names it; --no-sessions skips it, and the page then says what was not converted.
+//
+// Two modes are read out of the one report, as the product ships them:
+//   advisory  = NOEXEC, the default (hooks, instincts and the card; nothing executed, no approvals),
+//               against the agent alone: the analysis's pre-registered report-only contrast;
+//   execution = BEST, opt-in (person-approved CPU test runs and the Stop gate), against the agent
+//               alone: the study's gated test, whose registered outcome is the report's `outcome`.
+//
+// The report and its decision record are copied beside the output (heldout-report.json,
+// heldout-record.md) unchanged, so the page links the exact files its numbers came from.
 
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const SCHEMA = "adage-heldout-evidence-1";
+export const SCHEMA = "adage-heldout-evidence-2";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "../../..");
 const OUT = join(HERE, "../public/evidence/heldout.json");
@@ -37,8 +47,8 @@ export const STUDY = {
   controls: ["failed", "later-edit", "config-change", "broader", "rerun"],
   arms: {
     A0: "The agent alone (no Adage)",
-    NOEXEC: "Adage's hooks and card, no approved check",
-    BEST: "Adage with the person-approved check (A4: verification ownership plus the orientation card)",
+    NOEXEC: "Advisory mode (the default): instincts, the orientation card and learned advice; nothing executed",
+    BEST: "Execution mode (opt-in): advisory plus person-approved CPU test runs and the finish-line check",
   },
   pass_rule: {
     threshold: 0.9,
@@ -99,6 +109,61 @@ export function sessionTokens(root) {
   }));
 }
 
+/** Per arm, the positive blocks whose hidden tests failed, from the sessions' collection records. */
+export function sessionFailures(root) {
+  const dir = join(root, "sessions");
+  const out = Object.fromEntries(ARMS.map((a) => [a, []]));
+  for (const name of readdirSync(dir)) {
+    const m = /^\d+-(A0|NOEXEC|BEST)-b(\d+)-(.+)$/.exec(name);
+    const file = join(dir, name, "collection.json");
+    if (!m || !existsSync(file)) continue;
+    const c = JSON.parse(readFileSync(file, "utf8"));
+    if (c.quality?.passed !== true) out[m[1]].push({ block: Number(m[2]), task: c.task ?? m[3] });
+  }
+  for (const a of ARMS) out[a].sort((x, y) => x.block - y.block);
+  return out;
+}
+
+const pct = (v) => (num(v) === null ? null : Math.round(v * 1000) / 10);
+
+/** One mode against the agent alone, as the pages show it. */
+function mode(kind, report, c, arms, failures) {
+  const arm = kind === "advisory" ? "NOEXEC" : "BEST";
+  const x = arms[arm], a0 = arms.A0;
+  if (!c || !x || !a0) return null;
+  const per = (y) => (num(y?.cost_usd) !== null && num(y?.sessions) ? y.cost_usd / y.sessions : null);
+  const cost = per(x), cost0 = per(a0);
+  const threshold = num(report.primary?.threshold) ?? STUDY.pass_rule.threshold;
+  const clears = num(c.upper) !== null && c.upper <= threshold;
+  const passes = num(x.hidden_test_passes), passes0 = num(a0.hidden_test_passes);
+  const failedHere = failures?.[arm] ?? null;
+  const sharedAll = failures ? failedHere.filter((f) => ARMS.every((b) => failures[b].some((g) => g.block === f.block))) : null;
+  const out = {
+    arm,
+    role: kind === "advisory" ? "the default" : "opt-in",
+    registered: kind === "advisory" ? "report-only comparison, registered before the study" : "the study's gated test",
+    ratio: num(c.ratio), lower: num(c.lower), upper: num(c.upper), threshold,
+    clears_line: clears,
+    fewer_requests_percent: num(c.ratio) === null ? null : Math.round((1 - c.ratio) * 100),
+    blocks: num(c.blocks), blocks_fewer: num(c.blocks_fewer), sign_flip_p: num(c.sign_flip_p),
+    mean_requests: num(x.mean_requests_included), mean_requests_alone: num(a0.mean_requests_included),
+    cost_per_session_usd: cost === null ? null : round(cost, 6), cost_per_session_alone_usd: cost0 === null ? null : round(cost0, 6),
+    cost_change_percent: cost === null || !cost0 ? null : pct(cost / cost0 - 1),
+    hidden_test_passes: passes, hidden_test_passes_alone: passes0, of: num(x.sessions),
+    failed_blocks: failedHere, failed_blocks_alone: failures?.A0 ?? null, failures_shared_by_all_arms: sharedAll,
+  };
+  if (kind === "advisory") {
+    out.status = clears && passes !== null && passes0 !== null && passes >= passes0 ? "clear" : clears ? "fewer-calls-lower-quality" : "no-clear-saving";
+  } else {
+    const failedCriteria = (report.go_criteria ? Object.entries(report.go_criteria) : []).filter(([, g]) => g.applies && g.passed === false).map(([id]) => id);
+    out.outcome = report.outcome;
+    out.quality_rule_passed = report.quality?.passed === true && !failedCriteria.includes("G5");
+    out.failed_criteria = failedCriteria;
+    out.status = report.outcome === "pass" ? "passed" : !out.quality_rule_passed ? "experimental-quality" : report.primary?.passed === false ? "experimental-savings" : "experimental";
+  }
+  return out;
+}
+
 /** heldout.json before the result exists. */
 export function pending() {
   return { schema: SCHEMA, status: "pending", study: STUDY, result: null, source: null };
@@ -107,9 +172,9 @@ export function pending() {
 /**
  * heldout.json from a held-out report (the object `heldout_cohort.py report` writes).
  * @param {any} report
- * @param {{ tokens?: Record<string, any> | null, source?: { report: string, report_sha256: string, decision_record: string | null, converted_at: string, converter: string } | null }} [options]
+ * @param {{ tokens?: Record<string, any> | null, failures?: Record<string, { block: number, task: string }[]> | null, source?: { report: string, report_sha256: string, decision_record: string | null, converted_at: string, converter: string } | null }} [options]
  */
-export function convert(report, { tokens = null, source = null } = {}) {
+export function convert(report, { tokens = null, failures = null, source = null } = {}) {
   if (!report || typeof report !== "object" || typeof report.outcome !== "string") throw new Error("not a held-out report: no outcome");
   if (!(report.outcome in VERDICTS)) throw new Error(`unknown outcome ${JSON.stringify(report.outcome)}`);
   if (report.protocol && report.protocol !== STUDY.protocol.analysis) throw new Error(`unexpected analysis protocol ${report.protocol}`);
@@ -152,6 +217,10 @@ export function convert(report, { tokens = null, source = null } = {}) {
       } : null,
       arms: Object.fromEntries(ARMS.map((a) => [a, armRow(a)]).filter(([, r]) => r)),
       tokens_converted: tokens !== null,
+      modes: valid && (report.outcome === "pass" || report.outcome === "fail") ? {
+        advisory: mode("advisory", report, report.report_only?.noexec_vs_a0, arms, failures),
+        execution: mode("execution", report, report.primary, arms, failures),
+      } : null,
       criteria,
       controls,
       controls_passed: controls.length === STUDY.controls.length && controls.every((c) => c.realized && !c.necessary_work_skipped),
@@ -198,16 +267,21 @@ function main(argv) {
     const report = JSON.parse(text);
     const record = path.replace(/\.json$/, ".md");
     const inRepo = (p) => (p.startsWith(REPO + "/") ? relative(REPO, p) : null);
-    const link = args.link ?? inRepo(path);
     const guess = dirname(dirname(path));
     const sessions = args.noSessions ? null : args.sessions ? resolve(args.sessions) : existsSync(join(guess, "sessions")) ? guess : null;
-    if (sessions) console.log(`tokens from ${join(sessions, "sessions")}`);
+    if (sessions) console.log(`tokens and per-block hidden-test results from ${join(sessions, "sessions")} (read only)`);
+    // The exact report and decision record, published beside the page's file.
+    copyFileSync(path, join(dirname(out), "heldout-report.json"));
+    const hasRecord = existsSync(record);
+    if (hasRecord) copyFileSync(record, join(dirname(out), "heldout-record.md"));
     value = convert(report, {
       tokens: sessions ? sessionTokens(sessions) : null,
+      failures: sessions ? sessionFailures(sessions) : null,
       source: {
-        report: link ?? basename(path),
+        report: "/evidence/heldout-report.json",
         report_sha256: createHash("sha256").update(text).digest("hex"),
-        decision_record: existsSync(record) ? (args.link ? args.link.replace(/\.json$/, ".md") : inRepo(record) ?? basename(record)) : null,
+        decision_record: hasRecord ? "/evidence/heldout-record.md" : null,
+        archived: args.link ?? inRepo(path),
         converted_at: new Date().toISOString(),
         converter: "web/site/scripts/heldout-evidence.mjs",
       },
@@ -215,7 +289,8 @@ function main(argv) {
   }
   writeFileSync(out, JSON.stringify(value, null, 2) + "\n");
   const r = value.result;
-  console.log(r ? `${out}: ${r.verdict} (${r.outcome}); ratio ${r.primary?.ratio ?? "n/a"}, upper ${r.primary?.upper ?? "n/a"}` : `${out}: pending`);
+  const m = r?.modes;
+  console.log(r ? `${out}: ${r.verdict} (${r.outcome})${m ? `; advisory ${m.advisory?.ratio}× (upper ${m.advisory?.upper}), execution ${m.execution?.ratio}× (upper ${m.execution?.upper}, ${m.execution?.status})` : ""}` : `${out}: pending`);
   if (r && !r.valid) console.error("The report is INVALID (a lapsed approval): the page says so and shows no verdict.");
   return 0;
 }

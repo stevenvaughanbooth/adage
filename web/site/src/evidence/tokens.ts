@@ -1,9 +1,10 @@
 // Numbers in the pages come from the data files in public/evidence, never from the HTML. At build
 // time (vite.config.ts) every `{{ev:<file>:<path>|<format>}}` in a page becomes the value at <path>
-// in public/evidence/<file>.json, and `{{heldout:full}}` / `{{heldout:brief}}` become the held-out
-// component (src/evidence/heldout.ts). A missing file, path or format fails the build.
+// in public/evidence/<file>.json, and `{{heldout:<kind>}}` becomes a held-out component
+// (src/evidence/heldout.ts: full, brief, card, headline, example). A missing file, path, format or
+// kind fails the build.
 
-import { renderHeldout, renderHeldoutBrief, type Heldout } from "./heldout";
+import { HELDOUT_KINDS, type Heldout } from "./heldout";
 
 const FORMATS: Record<string, (v: number) => string> = {
   int: (v) => Math.round(v).toLocaleString("en-US"),
@@ -44,8 +45,9 @@ export function fillTokens(html: string, load: (name: string) => unknown, page =
       if (typeof v !== "number") throw new Error(`${page}: ${file}.json ${path} is not a number`);
       return f(v);
     })
-    .replace(/\{\{heldout:(full|brief)\}\}/g, (_, kind: string) => {
-      const h = load("heldout") as Heldout;
-      return kind === "full" ? renderHeldout(h) : renderHeldoutBrief(h);
+    .replace(/\{\{heldout:(\w+)\}\}/g, (_, kind: string) => {
+      const draw = HELDOUT_KINDS[kind];
+      if (!draw) throw new Error(`${page}: unknown held-out component ${kind}`);
+      return draw(load("heldout") as Heldout);
     });
 }

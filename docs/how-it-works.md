@@ -88,7 +88,9 @@ verification in treated sessions on Claude Code and Codex:
 The contract marks the session as guided for learning, conservatively excluding its continuation
 from organic demonstrations. This integration has local regression coverage. On real tasks it
 has one development result (dev-v9b: one task, with development scaffolding, iterated on that
-task), not held-out evidence; the held-out comparison has not run. See the
+task), and the held-out comparison (four new tasks, 2026-10-01) found execution mode at 0.67× the
+agent alone's model requests but with hidden tests 17/20 against 19/20, so it did not pass the
+registered quality rule and stays experimental. See the
 [launch evidence index](../evals/reflex-proof/LAUNCH-STATUS.md) and the exact mechanics in
 [execution](execution.md#the-finish-line-check-stop-gate).
 

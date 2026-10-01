@@ -5,8 +5,10 @@ Each fixture is the registered analysis (`heldout_analysis.analyze`, the code `h
 report` runs) applied to made-up session rows, wrapped the way `heldout_cohort.report` wraps it, so
 the site's converter and page are tested against the report's real shape:
 
-- pass.json: Adage needs far fewer requests and loses no quality (outcome "pass", GO);
-- fail.json: a small, uncertain difference and one more hidden-test failure (outcome "fail");
+- pass.json: both modes need far fewer requests with no quality loss (outcome "pass");
+- fail.json: shaped like a real mixed result: advisory mode clearly fewer requests with the same
+  quality; execution mode fewer still but two more hidden-test failures (outcome "fail", quality);
+- fail-savings.json: neither mode clears the 0.90 line (outcome "fail", savings);
 - unverified.json: three blocks with unexplained request counts (outcome "unverified", no verdict).
 
 Usage, from the repository root: python3 web/site/e2e/fixtures/heldout/make.py
@@ -64,9 +66,10 @@ def report(rs):
 
 
 CASES = {
-    "pass": dict(means={"A0": (18, 3, 0.115), "NOEXEC": (16.5, 3, 0.105), "BEST": (11.5, 2.5, 0.083)}),
-    "fail": dict(means={"A0": (17, 3, 0.112), "NOEXEC": (16.5, 3, 0.108), "BEST": (16, 3, 0.106)},
-                 failures={(3, "BEST"), (11, "BEST")}),
+    "pass": dict(means={"A0": (18, 3, 0.115), "NOEXEC": (14, 2.5, 0.09), "BEST": (11.5, 2.5, 0.083)}),
+    "fail": dict(means={"A0": (29, 4, 0.2), "NOEXEC": (23, 3, 0.135), "BEST": (19.5, 3, 0.125)},
+                 failures={(5, "A0"), (5, "NOEXEC"), (5, "BEST"), (8, "BEST"), (9, "BEST")}),
+    "fail-savings": dict(means={"A0": (17, 3, 0.112), "NOEXEC": (16.5, 3, 0.108), "BEST": (16, 3, 0.106)}),
     "unverified": dict(means={"A0": (18, 3, 0.115), "NOEXEC": (16.5, 3, 0.105), "BEST": (11.5, 2.5, 0.083)},
                        unverified={(2, "A0"), (9, "BEST"), (14, "NOEXEC")}),
 }

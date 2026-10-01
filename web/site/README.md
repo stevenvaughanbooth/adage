@@ -3,8 +3,8 @@
 The landing page (the teaser film, the 3D hero, how it works, the evidence, getting started and the
 early-access list); `/how`, which opens on how Adage plugs into Claude Code (a diagram that follows
 the hooks as the page scrolls) and then walks the nine chapters in 3D, with the math behind every
-threshold; and `/how-we-tested`, the evidence page: how the studies are run, every study in order,
-misses included, and the held-out result. The chapters and their 3D stage are shared with `adage map`
+threshold; and `/how-we-tested`, the evidence page: what we tested and how, the held-out result in
+advisory and execution mode, and the limits. The chapters and their 3D stage are shared with `adage map`
 (`web/map/src/how`, imported through the `@how` alias), so the two never tell different stories.
 A static Vite build with one
 Vercel Function (`api/waitlist.ts`). It is separate from `web/map`, which the `adage` binary embeds.
@@ -32,23 +32,27 @@ pnpm test:e2e     # builds, serves with `vite preview`, runs Playwright and axe 
 ## Evidence numbers come from data
 
 Every result number on the pages is read from `public/evidence/*.json` at build time: a token such as
-`{{ev:dev-v9b:arms.A4.mean_requests|fixed1}}` becomes that value (`src/evidence/tokens.ts`; a missing
-value fails the build). Each file names the archived record and sha256 it came from.
+`{{ev:cold-start:cost_reduction_percent|fixed1}}` becomes that value, and `{{heldout:<kind>}}` becomes
+a held-out component (`src/evidence/tokens.ts`, `src/evidence/heldout.ts`; a missing value fails the
+build). Each file names the archived record and sha256 it came from.
 
-The held-out result drops in from `public/evidence/heldout.json`, which ships as "running". When the
-report lands, one command converts it, then rebuild and deploy:
+The held-out result lives in `public/evidence/heldout.json`, converted from the report
+`heldout_cohort.py report` writes. To convert a new one, then rebuild and deploy:
 
 ```bash
 node scripts/heldout-evidence.mjs $H/reports/heldout-<time>.json     # $H: the held-out root
 ```
 
-It reads the report `heldout_cohort.py report` writes (the registered analysis), takes the outcome
-as the report states it (pass is GO, fail is NO-GO; unverified, a protocol failure, an incomplete
-study or an invalid report show no verdict), links the decision record written beside it, and sums
-each arm's tokens from the sessions' own summaries in `$H/sessions` (found from the report's path;
-`--sessions <dir>` names it, `--no-sessions` skips it). `--link <path>` names the
-report's archived path in this repository. The pages also re-read the file when they open, so a
-cached page shows the new result. `--pending` writes the running state again.
+It reads the report two ways, as Adage ships: **advisory mode** (NOEXEC, the default) against the
+agent alone, the analysis's registered report-only comparison, which leads the pages; and
+**execution mode** (BEST, opt-in) against the agent alone, the study's gated test, shown as passed or
+as experimental, with the report's own outcome in the detail. Unverified, protocol-failure,
+incomplete or invalid reports show no verdict and no headline number. It also reads the sessions in
+`$H/sessions` (read-only) for tokens and which blocks failed (`--sessions <dir>` names them,
+`--no-sessions` skips them), and copies the report and its decision record beside the output
+(`heldout-report.json`, `heldout-record.md`), unchanged, so the pages link the exact files. The pages
+re-read `heldout.json` when they open, so a cached page shows a new result. `--pending` writes the
+"running" state.
 
 ## Deploying on Vercel
 
@@ -98,9 +102,9 @@ on preview deployments; turn it off in Settings → General → Vercel Toolbar t
 | `src/plug.ts` | `/how`'s opening scene: the diagram lights the hook of the step in the middle of the screen. |
 | `how-we-tested.html`, `src/evidence-page.ts` | `/how-we-tested`: the evidence page. |
 | `src/evidence/` | The held-out component (`heldout.ts`), the build-time number tokens (`tokens.ts`) and the loader that redraws the held-out result from its file (`load.ts`). |
-| `public/evidence/` | The data every number comes from: `dev-v9b.json`, `cold-start.json`, `benchmarks.json`, `heldout.json`. |
+| `public/evidence/` | The data every number comes from: `heldout.json` (with the report and decision record it came from), `cold-start.json`, `benchmarks.json`. |
 | `scripts/heldout-evidence.mjs` | Converts a held-out report into `public/evidence/heldout.json`. |
-| `e2e/fixtures/heldout/` | Synthetic held-out reports (pass, fail, unverified) made with the registered analysis, for the tests; not study results. |
+| `e2e/fixtures/heldout/` | Synthetic held-out reports (pass, a mixed fail, a fail on savings, unverified) made with the registered analysis, for the tests; not study results. |
 | `src/theme.ts` | The Day/Night choice, shared by every page. |
 | `src/page.ts`, `src/signup.ts` | Section reveals, copy button, repository links, and recoverable early-access registration. |
 | `api/waitlist.ts` | `GET` returns only registration availability; `POST` validates and forwards to `WAITLIST_WEBHOOK_URL`. |

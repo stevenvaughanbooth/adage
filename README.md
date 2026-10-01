@@ -110,46 +110,30 @@ shows counts, not dollars.</sub>
 
 ## Evidence so far
 
-**Adage saves model calls by handling learned reflexes and instincts on your CPU.** We count that in
-model requests, tokens and API cost; GPU use and energy are not measured. It is strongest on the
-work a repository repeats; novel tasks still need the model. The launch studies below all used
-Claude Haiku 4.5 on one repository, [Marshmallow](https://github.com/marshmallow-code/marshmallow),
-paired against the agent alone on the same task and scored by hidden tests. Every record,
-failures included, is in the [launch evidence index](evals/reflex-proof/LAUNCH-STATUS.md).
+**Adage learns your repository's recurring work and gives your agent what it would otherwise go
+looking for.** Adage saves model calls by handling learned reflexes and instincts on your CPU; we
+count that in model requests, tokens and API cost. GPU use and energy are not measured.
 
-- **Advisory instincts, cold start.** Over [16 assignments](evals/reflex-proof/harness/results/20260930-cold-start-replication/FINDINGS.md)
-  (four tasks, two runs per arm), shipped instincts cost **8.8% less** and used **10.5% fewer model
-  requests** than the agent alone, and 8/8 outputs passed independent checks against 6/8. Three of
-  the eight pairs cost more with instincts, and the reversed-order repeat alone saved only 0.6%.
-  This is advice, not automatic execution.
-- **Learning an executable routine.** Fifteen organic (unguided) sessions produced
-  [zero executable candidates](evals/reflex-proof/harness/results/20260930-learning-curve-native/report.json).
-  The only executable routine learned on a real repository so far, one pytest command, came from
-  [ten explicitly guided sessions](evals/reflex-proof/harness/results/20260930-cumulative-guided/FINDINGS.md)
-  (9/10 qualifying continuations).
-- **Running it on new tasks.** In the [real-repository transfer study](evals/reflex-proof/harness/results/20260930-live-cpu-transfer/FINDINGS.md),
-  Adage ran that routine successfully in 4/4 automatic sessions, but every agent then ran the
-  same tests again: **0/4 action eliminations**.
-- **Development canaries.** canary-v5 and canary-v7 produced 0 genuine eliminations. dev-v8 is
-  invalid for its execution arms (an approval lapsed mid-study), so it counts neither way.
-- **dev-v9b, a development result on one task.** With verification ownership and the orientation
-  card, the Adage arm used **0.62× the model requests** of no Adage (11.2 against 18.0 per
-  session), fewer in 15 of 16 paired blocks, with no hidden-test failures (16/16 in each arm).
-  It passed its pre-registered development rule
-  ([RESULT.json](evals/reflex-proof/harness/results/20261001-dev-v9b/RESULT.json)). Every prompt
-  carried development scaffolding (a supplied test block and a work order), and the design was
-  iterated on this same task. **It is not a launch statistic.**
-- **Held-out comparison: running.** Four new tasks frozen before any result was read, 20 paired
-  blocks, prompts without that scaffolding. Pass rule, written down before dispatch: the one-sided
-  95% upper bound of the request ratio is at most 0.90, with no loss of quality. Its decision
-  record will be linked here as written, pass or fail.
-- **Generated-repository mechanism proof.** On three held-out triage tasks in a generated
-  sandbox, an approved learned lookup [removed all three agent lookups](evals/reflex-proof/harness/results/20260929-learned-action-gate/FINDINGS.md)
-  (observed model requests 6 → 3), with every answer correct.
+On four held-out tasks in a real repository ([Marshmallow](https://github.com/marshmallow-code/marshmallow)),
+frozen before any result was read and never used for tuning, each run five times with and without
+Adage (Claude Haiku 4.5, scored by hidden tests the agent never sees):
 
-Nothing here shows that these effects carry over to other repositories or other models; transfer
-to cheaper models is the next study. The advisory results below are separate studies with their
-own caveats.
+- **Advisory mode, the default** (instincts, the orientation card and learned advice; nothing runs
+  on the agent's behalf): **about 22% fewer model calls** (29.0 → 22.8 per session, 0.78×; one-sided
+  95% upper bound 0.83; fewer in 18 of 20 paired blocks) and **a third lower cost** ($0.201 →
+  $0.135 per session), **with the same correctness** (hidden tests 19/20 in both). This comparison
+  was registered before the study, to be reported beside its gated test.
+- **Execution mode, opt-in and experimental** (Adage also runs the person-approved tests on your
+  CPU and checks the finish line): more savings in testing (0.67×, upper bound 0.73), but hidden
+  tests passed 17/20 against 19/20, which misses the registered quality rule, so the study's verdict
+  for execution mode is that it did not pass. It is not yet proven to keep quality and stays opt-in.
+- **Safety controls:** all five (a failing test, a later edit, a config change, a broader change, an
+  explicit rerun request) ran as designed, and none skipped necessary work.
+
+One repository and one model so far; transfer to cheaper models and more repositories are next.
+The launch site's "How we tested" page explains the method in plain words. The full study
+history, misses included, is in [docs/benchmarks.md](docs/benchmarks.md#launch-evidence-cpu-execution-and-cross-session-learning),
+with every record in the [launch evidence index](evals/reflex-proof/LAUNCH-STATUS.md).
 
 ## What it learns
 

@@ -43,12 +43,13 @@
     <h1 class="display" id="plug-h">How Adage plugs into <span class="soft">Claude Code.</span></h1>
     </div>
     <div>
-    <p class="lede">Claude Code lets outside tools speak at fixed moments in every session. Adage listens at those moments, answers on your CPU in milliseconds, and hands the agent what it needs right then: where things stand, and checks already done. The model still does the thinking. It just needs fewer calls to get there.</p>
+    <p class="lede">Claude Code lets outside tools speak at fixed moments in every session. Adage listens at those moments, answers on your CPU in milliseconds, and hands the agent what it would otherwise go looking for: where things stand, what works here, what is still owed. The model still does the thinking. It just needs fewer calls to get there.</p>
     <ul class="plug-legend" aria-label="What runs where">
       <li><i class="remote" aria-hidden="true"></i>The model: remote, on GPUs, one call per turn</li>
       <li><i class="local" aria-hidden="true"></i>Adage: your CPU, local, sandboxed, no network</li>
       <li><i class="approve" aria-hidden="true"></i>Runs a command only with a person's approval</li>
     </ul>
+    <p class="plug-modes"><span class="plug-mode">Advisory mode</span> is the default: Adage informs, and nothing runs on the agent's behalf. <span class="plug-mode exec">Execution mode</span> is opt-in and experimental: Adage also runs checks a person approved.</p>
     <p class="howtips">Scroll through one session, start to finish. Hover, tap or tab to a <span class="termdemo">dotted word</span> to see what it means; “Technical detail” opens the precise account.</p>
     </div>
   </div>
@@ -67,7 +68,7 @@
           <rect x="16" y="150" width="528" height="434" rx="18"/>
           <text class="zl" x="34" y="174">YOUR MACHINE · CPU</text>
         </g>
-        <text class="hk plug-count" data-hook="loop sum" x="526" y="40" text-anchor="end">development study: {{ev:dev-v9b:arms.A0.mean_requests|fixed1}} → {{ev:dev-v9b:arms.A4.mean_requests|fixed1}} calls per session</text>
+        <text class="hk plug-count" data-hook="loop sum" x="526" y="40" text-anchor="end">each turn of the loop: one model call</text>
 
         <g class="node model hk" data-hook="loop sum">
           <rect x="200" y="56" width="160" height="56" rx="12"/>
@@ -125,15 +126,15 @@
           <text x="56" y="448" class="nt">Adage</text>
           <text x="114" y="448" class="ns">your CPU · local · no network · fails open</text>
           <text class="cap" data-cap="loop" x="56" y="480">listens at the hooks; one session in ten it stays silent, as a control</text>
-          <text class="cap" data-cap="start" x="56" y="480">names the approved check it will run, and when</text>
+          <text class="cap" data-cap="start" x="56" y="480">opt-in: names the approved check it will run, and when</text>
           <text class="cap" data-cap="prompt" x="56" y="480">matches the task · procedure card · where the files stand now</text>
           <text class="cap" data-cap="pre" x="56" y="480">points the command at the project's own environment</text>
-          <text class="cap" data-cap="post" x="56" y="480">runs the approved tests in a sandbox · hands back a receipt</text>
-          <text class="cap" data-cap="stop" x="56" y="480">finish-line check: a pass ends the turn, a failure goes back</text>
+          <text class="cap" data-cap="post" x="56" y="480">advice for the next step · opt-in: runs the approved tests</text>
+          <text class="cap" data-cap="stop" x="56" y="480">anything still owed goes back once · opt-in: reruns the check</text>
           <text class="cap" data-cap="learn" x="56" y="480">starts the learner for this repository, in the background</text>
-          <text class="cap" data-cap="sum" x="56" y="480">fewer model calls, the same hidden tests passing</text>
+          <text class="cap" data-cap="sum" x="56" y="480">advisory mode: fewer model calls, the same hidden tests passing</text>
         </g>
-        <g class="hk approve" data-hook="start post stop learn">
+        <g class="hk approve" data-hook="start learn">
           <rect x="384" y="430" width="128" height="26" rx="13"/>
           <text x="448" y="447" text-anchor="middle">person-approved</text>
         </g>
@@ -155,16 +156,16 @@
         </div></details>
       </li>
       <li class="plug-step" id="plug-start" data-step="start">
-        <p class="plug-when"><code>SessionStart</code> · before the first word</p>
+        <p class="plug-when"><code>SessionStart</code> · before the first word <span class="plug-mode exec">Execution mode</span></p>
         <h2>It says which check it will run for you.</h2>
-        <p>If a person has approved one of this repository's checks, the agent hears it up front, in one plain sentence: which tests Adage runs, after which edits, and that it runs them again at the end. No approval, no sentence.</p>
+        <p>In execution mode, if a person has approved one of this repository's checks, the agent hears it up front, in one plain sentence: which tests Adage runs, after which edits, and that it runs them again at the end. No approval, no sentence. In advisory mode the agent hears nothing here.</p>
         <blockquote class="plug-quote">In this repository Adage runs <code>.venv/bin/python -m pytest tests/test_validate.py -q</code> (approved by a person, sandboxed) after edits to tests/*.py then CHANGELOG.rst, and again when you finish if files changed since.</blockquote>
         <details class="plug-more"><summary>Technical detail</summary><div>
           <p><code>adage-exec</code>'s SessionStart adds an <code>&lt;adage-reflex … kind="execution-contract"&gt;</code> block naming at most two current verification grants. Only a grant whose approval key still matches is named: a lapsed one promises nothing, and the person is told instead, in a line the agent never sees. Control sessions get no note. Source: <code>crates/adage-exec/src/hook.rs</code>.</p>
         </div></details>
       </li>
       <li class="plug-step" id="plug-prompt" data-step="prompt">
-        <p class="plug-when"><code>UserPromptSubmit</code> · your request arrives</p>
+        <p class="plug-when"><code>UserPromptSubmit</code> · your request arrives <span class="plug-mode">Advisory</span></p>
         <h2>It recognises the task, and says where things stand.</h2>
         <p>Adage compares your request with the tasks this repository keeps repeating, using a small model built into the binary. On a match it hands over a procedure card, once: the files to touch, the commands that worked and the ones that failed. Then it reads those files itself, read-only, and adds where they stand right now: line counts, the last definitions, the end of the test file, the changelog's head. The agent goes straight to the right line instead of paging through files.</p>
         <details class="plug-more"><summary>Technical detail</summary><div>
@@ -172,26 +173,27 @@
         </div></details>
       </li>
       <li class="plug-step" id="plug-pre" data-step="pre">
-        <p class="plug-when"><code>PreToolUse</code> · before a command runs</p>
+        <p class="plug-when"><code>PreToolUse</code> · before a command runs <span class="plug-mode">Advisory</span></p>
         <h2>It fixes the command before it can fail.</h2>
-        <p>Instincts know how your repository is set up. If the agent starts the tests with the system Python, Adage points the command at the project's own verified environment before it runs, so it does not fail and cost another call. If Adage's passing check already covers the test run the agent is about to start, the agent gets a note saying so. A note, never a refusal: the command still runs.</p>
+        <p>Instincts know how your repository is set up. If the agent starts the tests with the system Python, Adage points the command at the project's own verified environment before it runs, so it does not fail and cost another call. In execution mode, if Adage's passing check already covers the test run the agent is about to start, the agent gets a note saying so. A note, never a refusal: the command still runs.</p>
         <details class="plug-more"><summary>Technical detail</summary><div>
           <p>The rewrite uses Claude Code's <code>updatedInput</code> and changes only the interpreter word of a top-level command (<code>python3 -m pytest</code> becomes <code>.venv/bin/python -m pytest</code>), never text in a heredoc, a quoted string or a <code>-c</code> payload. It is on by default in Claude Code, shown to you each time, and <code>adage delegate rewrites off</code> turns it off. The receipt note needs a passing run in this session on byte-identical inputs.</p>
         </div></details>
       </li>
       <li class="plug-step" id="plug-post" data-step="post">
-        <p class="plug-when"><code>PostToolBatch</code> · after the edits, before the next model call</p>
-        <h2>It runs the approved check itself, on your CPU.</h2>
-        <p>When the agent's edits match the learned pattern (here: the tests, then the changelog), Adage runs the person-approved test command in a sandbox, right there on your CPU, and hands back a short receipt: whether it passed, how long it took, and the agent's own new tests by name. It arrives with the tool results, before the model decides what to do next, so the agent has no reason to spend calls running the tests and reading their output.</p>
+        <p class="plug-when"><code>PostToolBatch</code> · after the edits, before the next model call <span class="plug-mode">Advisory</span><span class="plug-mode exec">Execution mode</span></p>
+        <h2>The next step arrives before the model asks.</h2>
+        <p>In advisory mode, this is where learned advice lands: after editing the schema, regenerate; after these edits, these checks, in this order. It arrives with the tool results, before the model decides what to do next.</p>
+        <p>In execution mode, when the agent's edits match the learned pattern (here: the tests, then the changelog), Adage also runs the person-approved test command in a sandbox, right there on your CPU, and hands back a short receipt: whether it passed, how long it took, and the agent's own new tests by name.</p>
         <blockquote class="plug-quote"><span class="plug-q-label">A receipt, as Adage writes it (example values)</span>Adage ran <code>.venv/bin/python -m pytest tests/test_validate.py -q</code> after your edits: passed (exit 0, 1.2 s; receipt 3f9c2a7e01b4). Tests: 1202 collected; exit 0; the tests added in this session: test_finite.</blockquote>
         <details class="plug-more"><summary>Technical detail</summary><div>
           <p><code>PostToolBatch</code> fires once the agent's batch of tool calls has resolved and before the next model request. A learned context (an edit to <code>tests/*.py</code>, then <code>CHANGELOG.rst</code>, within eight events) nominates the command; the person's E2 grant authorises exactly that command; <code>adage-exec</code> stages the inputs, runs it in an OS sandbox with no network, journals it and applies only declared outputs (pytest's cache). Test names come from pytest's own cache record, never from its output. Learned directives (for example "after editing <code>schema/*.json</code>, run <code>make gen</code>") arrive here too, and a failing command gets dead-end advice at <code>PostToolUseFailure</code>.</p>
         </div></details>
       </li>
       <li class="plug-step" id="plug-stop" data-step="stop">
-        <p class="plug-when"><code>Stop</code> · the agent says it is done</p>
+        <p class="plug-when"><code>Stop</code> · the agent says it is done <span class="plug-mode">Advisory</span><span class="plug-mode exec">Execution mode</span></p>
         <h2>It checks the finish line.</h2>
-        <p>If the code changed since the last passing run, Adage runs the approved check once more. A pass lets the agent stop, and you see one line. A failure goes back to the agent with the failing tests named, marked as coming from Adage, not from you. It runs at most twice a session, so it can never loop.</p>
+        <p>If a step this repository always needs is still owed (say, regenerating code after a schema edit), the agent is asked once to finish it, in a message marked as coming from Adage, not from you. In execution mode, if the code changed since the last passing run, Adage also runs the approved check once more: a pass lets the agent stop, a failure goes back with the failing tests named. It asks at most twice a session, so it can never loop.</p>
         <details class="plug-more"><summary>Technical detail</summary><div>
           <p>The finish-line check (the Stop gate) goes through the same request, policy, sandbox, staging and journal as any action; a failure continues the agent once with a message that begins <code>Adage finish-line check:</code>. A learned finish-line step due at the same moment (such as <code>make gen</code> after a schema edit) is asked in the same continuation. If Adage cannot confirm a run completed, it tells the agent not to retry and pauses actions in that worktree until a person looks.</p>
         </div></details>
@@ -207,9 +209,8 @@
       <li class="plug-step" id="plug-sum" data-step="sum">
         <p class="plug-when">What it adds up to</p>
         <h2>No hook skips a model call. The agent just needs fewer of them.</h2>
-        <p>The model still does the thinking. Adage takes the predictable parts off its plate (finding where things are, running and reading the checks), so each call goes further.</p>
-        <p class="plug-result"><b>{{ev:dev-v9b:arms.A0.mean_requests|fixed1}} → {{ev:dev-v9b:arms.A4.mean_requests|fixed1}}</b><span>model calls per session in the development study, with hidden tests {{ev:dev-v9b:arms.A4.hidden_test_passes}}/{{ev:dev-v9b:arms.A4.sessions}} in both arms. Development evidence: one task, with extra help in every prompt.</span></p>
-        <div data-heldout="brief">{{heldout:brief}}</div>
+        <p>The model still does the thinking. Adage takes the predictable parts off its plate (finding where things are, what works here, what is still owed), so each call goes further.</p>
+        <div data-heldout="plug">{{heldout:plug}}</div>
         <p class="plug-links"><a class="btn" href="/how-we-tested">How we tested it</a><a class="textlink" href="#walk">How it learns, stage by stage ↓</a></p>
       </li>
     </ol>

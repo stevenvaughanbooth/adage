@@ -140,7 +140,9 @@ runs the same check again, do not count that as saved work. Model-request counts
 also do not measure physical GPU utilization or energy. So far, agents in the
 [real-repository studies](../evals/reflex-proof/LAUNCH-STATUS.md) repeated the check in every
 transfer session (0/4 eliminations); one development study on a single task used fewer model
-requests with this design, and the held-out comparison has not run.
+requests with this design; on four held-out tasks it used 0.67× the agent alone's requests but
+passed hidden tests 17/20 against 19/20, so execution mode is not yet proven to keep quality.
+Advisory mode alone used 0.78× with the same 19/20 ([README](../README.md#evidence-so-far)).
 
 If nothing executes, check `adage delegate status`, `adage review`, and `adage doctor`: a missing
 grant, policy ceiling, unmatched context, changed command or dependency, stale grant, sandbox

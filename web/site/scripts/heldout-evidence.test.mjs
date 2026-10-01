@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { SCHEMA, STUDY, convert, pending, sessionTokens } from "./heldout-evidence.mjs";
+import { SCHEMA, STUDY, convert, pending, sessionFailures, sessionTokens } from "./heldout-evidence.mjs";
 
 const here = (p) => fileURLToPath(new URL(p, import.meta.url));
 const report = (name) => JSON.parse(readFileSync(here(`../e2e/fixtures/heldout/${name}.json`), "utf8"));
@@ -20,7 +20,24 @@ test("pending: the registered design and no result", () => {
   assert.equal(p.study.tasks.length, 4);
   assert.equal(p.study.blocks, 20);
   assert.equal(p.study.pass_rule.threshold, 0.9);
-  assert.deepEqual(JSON.parse(readFileSync(here("../public/evidence/heldout.json"), "utf8")), p);
+});
+
+test("the shipped file is a converted held-out report, and its numbers are the report's", () => {
+  const h = JSON.parse(readFileSync(here("../public/evidence/heldout.json"), "utf8"));
+  const r = JSON.parse(readFileSync(here("../public/evidence/heldout-report.json"), "utf8"));
+  assert.equal(h.schema, SCHEMA);
+  assert.equal(h.status, "result");
+  assert.equal(h.result.outcome, r.outcome);
+  const a = h.result.modes.advisory, e = h.result.modes.execution;
+  assert.equal(a.ratio, r.report_only.noexec_vs_a0.ratio);
+  assert.equal(a.upper, r.report_only.noexec_vs_a0.upper);
+  assert.equal(a.blocks_fewer, r.report_only.noexec_vs_a0.blocks_fewer);
+  assert.equal(a.hidden_test_passes, r.arms.NOEXEC.hidden_test_passes);
+  assert.equal(a.mean_requests, r.arms.NOEXEC.mean_requests_included);
+  assert.equal(e.ratio, r.primary.ratio);
+  assert.equal(e.hidden_test_passes, r.quality.best);
+  assert.equal(a.cost_change_percent, Math.round((r.arms.NOEXEC.cost_usd / r.arms.A0.cost_usd - 1) * 1000) / 10);
+  assert.equal(a.fewer_requests_percent, Math.round((1 - r.report_only.noexec_vs_a0.ratio) * 100));
 });
 
 test("pass: GO, with the report's own ratio, bound, quality and controls", () => {
@@ -41,19 +58,38 @@ test("pass: GO, with the report's own ratio, bound, quality and controls", () =>
   assert.equal(h.tokens_converted, false);
 });
 
-test("fail: NO-GO, never softened", () => {
-  const h = convert(report("fail")).result;
-  assert.equal(h.verdict, "NO-GO");
-  assert.equal(h.label, "Did not pass");
-  assert.equal(h.quality.passed, false);
-  assert.ok(h.criteria.some((c) => c.id === "G5" && c.passed === false));
+test("pass: both modes clear, execution mode passed", () => {
+  const m = convert(report("pass")).result.modes;
+  assert.equal(m.advisory.status, "clear");
+  assert.equal(m.advisory.arm, "NOEXEC");
+  assert.equal(m.execution.status, "passed");
 });
 
-test("unverified and invalid: no verdict", () => {
+test("a mixed fail: advisory clears; execution is experimental on quality, and the outcome is kept", () => {
+  const h = convert(report("fail")).result;
+  assert.equal(h.verdict, "NO-GO");
+  assert.equal(h.outcome, "fail");
+  assert.equal(h.quality.passed, false);
+  assert.equal(h.modes.advisory.status, "clear");
+  assert.equal(h.modes.advisory.hidden_test_passes, h.modes.advisory.hidden_test_passes_alone);
+  assert.equal(h.modes.execution.status, "experimental-quality");
+  assert.deepEqual(h.modes.execution.failed_criteria, ["G5"]);
+  assert.equal(h.modes.execution.failed_blocks, null);
+});
+
+test("a fail on savings: no clear advisory saving either", () => {
+  const m = convert(report("fail-savings")).result.modes;
+  assert.equal(m.advisory.status, "no-clear-saving");
+  assert.equal(m.execution.status, "experimental-savings");
+});
+
+test("unverified and invalid: no verdict, and no modes to headline", () => {
   assert.equal(convert(report("unverified")).result.verdict, "NO VERDICT");
+  assert.equal(convert(report("unverified")).result.modes, null);
   const invalid = convert({ ...report("pass"), valid: false, lapses: [{ order: 9, problem: "withheld: approval" }] }).result;
   assert.equal(invalid.verdict, "NO VERDICT");
   assert.equal(invalid.valid, false);
+  assert.equal(invalid.modes, null);
   assert.deepEqual(invalid.lapses, [{ order: 9, problem: "withheld: approval" }]);
 });
 
@@ -94,9 +130,26 @@ test("the command writes the page's file and names its source", () => {
   execFileSync(process.execPath, [here("./heldout-evidence.mjs"), src, "--out", out]);
   const h = JSON.parse(readFileSync(out, "utf8"));
   assert.equal(h.result.verdict, "NO-GO");
-  assert.equal(h.source.report, "heldout-1.json");
-  assert.equal(h.source.decision_record, "heldout-1.md");
+  assert.equal(h.source.report, "/evidence/heldout-report.json");
+  assert.equal(h.source.decision_record, "/evidence/heldout-record.md");
+  // The exact files are published beside it.
+  assert.equal(readFileSync(join(dir, "heldout-report.json"), "utf8"), readFileSync(src, "utf8"));
+  assert.equal(readFileSync(join(dir, "heldout-record.md"), "utf8"), "# record\n");
   assert.match(h.source.report_sha256, /^[0-9a-f]{64}$/);
+});
+
+test("failures by block: which arms failed where, and the blocks every arm failed", () => {
+  const root = mkdtempSync(join(tmpdir(), "heldout-fail-"));
+  const write = (name, passed) => { mkdirSync(join(root, "sessions", name), { recursive: true }); writeFileSync(join(root, "sessions", name, "collection.json"), JSON.stringify({ task: "mm-curve--has-keys", quality: { passed } })); };
+  write("05-BEST-b01-has-keys", false); write("06-NOEXEC-b01-has-keys", false); write("07-A0-b01-has-keys", false);
+  write("08-A0-b02-has-keys", true); write("09-BEST-b02-has-keys", false); write("10-NOEXEC-b02-has-keys", true);
+  write("00-BEST-failed", false);
+  const f = sessionFailures(root);
+  assert.deepEqual(f.BEST.map((b) => b.block), [1, 2]);
+  assert.deepEqual(f.A0.map((b) => b.block), [1]);
+  const m = convert(report("fail"), { failures: f }).result.modes;
+  assert.deepEqual(m.execution.failures_shared_by_all_arms, [{ block: 1, task: "mm-curve--has-keys" }]);
+  assert.deepEqual(m.execution.failed_blocks_alone, [{ block: 1, task: "mm-curve--has-keys" }]);
 });
 
 test("the command finds the sessions beside the report, as heldout_cohort.py lays them out", () => {

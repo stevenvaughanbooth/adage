@@ -1,4 +1,4 @@
-// /how-we-tested: how the studies were run, every study in order, and the held-out result. The
+// /how-we-tested: what we tested and how, the held-out result in both modes, the limits. The
 // numbers are in the page from the build (public/evidence/*.json, src/evidence/tokens.ts); this file
 // adds the dots of the running example, the dotted words with their definitions (the shared
 // glossary), and redraws the held-out result from its data file.
@@ -26,7 +26,7 @@ export function drawDots(root: ParentNode = document) {
 }
 
 // Words a newcomer may not know, marked once per section; the held-out block is marked as it draws.
-const TERMED = "main > section .lede, .ev-question, .ev-ex-lead, .ev-ex-foot, .ev-rules p, .ev-callout p, .ev-more-body > p, .ev-t > p:not(.ev-t-src):not(.ev-t-when), .ev-changed-grid p:not(.ev-changed-k), .ev-list li, .ev-repro-grid p";
+const TERMED = "main > section .lede, .ev-question, .ev-ex-lead, .ev-rules p, .ev-callout p, #tested .ev-more-body > p, .ev-list li, .ev-repro-grid p";
 function terms(root: ParentNode = document) {
   const seen = new Map<Element, Set<string>>();
   root.querySelectorAll(TERMED).forEach((el) => {
@@ -41,4 +41,13 @@ initTerms();
 drawDots();
 terms();
 initPage();
-void loadHeldout((el) => termifyTree(el.querySelector(".ev-ho-plain") ?? el, new Set(), allTerms));
+// The held-out result's own words get their definitions, in the built copy and when it redraws.
+const markResult = (el: ParentNode) => {
+  const seen = new Set<string>();
+  el.querySelectorAll(".ev-ho-plain, .ev-exec-what, .ev-exec-line").forEach((p) => termifyTree(p, seen, allTerms));
+};
+document.querySelectorAll("[data-heldout='full']").forEach(markResult);
+void loadHeldout((el) => {
+  drawDots(el);
+  markResult(el);
+});
