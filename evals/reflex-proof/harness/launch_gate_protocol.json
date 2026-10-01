@@ -729,5 +729,78 @@
     },
     "rule": "A4 passes development only if the study is valid and D1-D4 all hold; only then does the held-out comparison run, with BEST = A4 under r9",
     "run_location": "frozen and run from a fresh clone outside iCloud (/private/tmp/adage-launch-src) at the frozen commit; the binaries are built there; freeze and dispatch refuse dataless (cloud-evicted) inputs; nested in cohort launch-gate-v6, whose native-confinement session (prepared from that clone) must pass review before prepare"
+  },
+  "heldout_results": {
+    "marshmallow-heldout-1": {
+      "recorded": "2026-10-01, after the run; no threshold, split or rule changed",
+      "root": "cohorts/launch-gate-v8/heldout-1",
+      "stratum": "same repository, same test file family, guided-learned route (run-175d85)",
+      "best": "A4 (verification ownership plus the orientation card), selected by r9 from dev-v9b",
+      "valid": true,
+      "collected": "65/65",
+      "outcome": "FAIL: the registered quality criterion and G5 do not hold",
+      "primary": {
+        "ratio": 0.6741,
+        "lower": 0.6258,
+        "upper": 0.7265,
+        "blocks": 20,
+        "blocks_fewer": 18,
+        "sign_flip_p": 0.0001,
+        "passed": true
+      },
+      "quality": {
+        "BEST_passes": 17,
+        "A0_passes": 19,
+        "NOEXEC_passes": 19,
+        "margin": 1,
+        "passed": false,
+        "G5_failures": {
+          "A0": 1,
+          "BEST": 3,
+          "NOEXEC": 1
+        },
+        "note": "b05 has-keys failed in all three arms; BEST alone failed b08 lat-long and b09 has-keys"
+      },
+      "go_criteria": {
+        "G1": true,
+        "G2": true,
+        "G3": null,
+        "G4": null,
+        "G5": false,
+        "G6": true,
+        "G7": true,
+        "G8": true,
+        "G9": null
+      },
+      "controls": "all five realized; none skipped necessary verification",
+      "report_only": {
+        "NOEXEC/A0": {
+          "ratio": 0.7845,
+          "upper": 0.833,
+          "blocks_fewer": 18
+        },
+        "BEST/NOEXEC": {
+          "ratio": 0.8593,
+          "upper": 0.9197,
+          "blocks_fewer": 14
+        },
+        "note": "pre-registered report-only contrasts; not gated and not a pass for any arm"
+      },
+      "cost_usd": 9.884438,
+      "native_v8_cost_usd": 0.0276484,
+      "tasks_spent": "the evaluation groups mapping-keys, temporal-format, structured-text and geo-coordinate are spent; under this protocol's failure rule they become development, and any confirmation registers new evaluation groups in a new revision",
+      "decision": {
+        "execution_mode_launch_gate": "NOT met (quality)",
+        "recommendation": "launch the developer preview leading with advisory mode (the learned card and instincts, no execution); execution mode opt-in and labelled experimental and unproven",
+        "basis_for_advisory": "the user's messaging decision; NOEXEC/A0 was a report-only contrast here, so advisory mode has no registered pass either and its numbers are not a launch statistic",
+        "next": [
+          "diagnose the BEST quality misses on these records",
+          "fix and validate in development (the spent tasks are development now)",
+          "a fresh, quality-powered confirmation on new evaluation groups, registered before dispatch",
+          "then the expensive-to-cheap transfer study"
+        ]
+      },
+      "archive": "results/20261001-heldout-marshmallow"
+    }
   }
 }

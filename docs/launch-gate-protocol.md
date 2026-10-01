@@ -5,8 +5,10 @@ to 5 preceded any canary agent session; revisions 6 to 8 follow development cana
 any held-out dispatch. Revision 9 was drafted on `codex/heldout-tasks` and merged into
 `codex/launch-first-reflex` at `57e79bf` on 2026-10-01, before any held-out dispatch. Revision 10
 (development only) follows it, also before any held-out dispatch. Revision 11 (a scoring-definition
-fix) was registered after dev-v9's first control and before any of its positive blocks. The
-machine-readable copy is `evals/reflex-proof/harness/launch_gate_protocol.json`; when the two
+fix) was registered after dev-v9's first control and before any of its positive blocks.
+Revision 12 (native admission under the person's allocation) preceded the held-out dispatch. The
+held-out Marshmallow stratum ran on 2026-10-01 and **failed on quality**; see "Held-out result:
+Marshmallow stratum" below. The machine-readable copy is `evals/reflex-proof/harness/launch_gate_protocol.json`; when the two
 differ, the JSON governs. Revisions get a dated entry below and must precede the dispatch they
 affect. Splits and thresholds cannot change after the first held-out dispatch.
 
@@ -640,6 +642,58 @@ any form (`pytest`, `py.test`, `python -m pytest`, `uv run pytest`), `tox`/`nox`
 
 Report only: NOEXEC/A0 and BEST/NOEXEC ratios, a sign-flip permutation p-value, tokens, cost, wall
 time, verification requests and CPU work. Model requests are never presented as GPU savings.
+
+### Held-out result: Marshmallow stratum (recorded 2026-10-01; no threshold, split or rule changed)
+
+**Outcome: FAIL. The execution-mode launch gate is not met, on quality.** The record is in
+`evals/reflex-proof/harness/results/20261001-heldout-marshmallow`: `RESULT.json`, the decision
+record `report.md`, `report.json`, all 65 collections, the run log and the freeze records.
+
+`cohorts/launch-gate-v8/heldout-1` ran 65 of 65 sessions, and the report is valid:
+- no lapses or problems;
+- no censored session;
+- no excluded block.
+
+The frozen sources match the runner commit `f2a2a09` byte for byte, and so does the protocol copy.
+BEST was A4 (verification ownership plus the orientation card), selected by r9 from dev-v9b.
+
+| Measure | Result | Registered rule | Holds |
+| --- | --- | --- | --- |
+| Primary: BEST/A0 total model requests | 0.6741 (95% one-sided upper bound 0.7265); 18 of 20 blocks fewer; sign-flip p = 0.0001 | upper bound ≤ 0.90 | yes |
+| Quality: hidden-test passes | BEST 17/20, A0 19/20 | BEST ≥ A0 − 1 | **no** |
+| G5: hidden-test failures | BEST 3, A0 1, NOEXEC 1 | BEST ≤ min(A0, NOEXEC) | **no** |
+| G1, G2, G6, G7, G8 | G2: 20/20 fired, 15 successful; G6: no skipped work, unapproved execution, undeclared writes or unknown costs; G7: 0/15 unnecessary; G8: BEST 391 requests vs NOEXEC 455, cost $2.7014 vs $2.6998 | as registered | yes |
+| Controls | all five realized, none skipped necessary verification | all must hold | yes |
+
+- **Where quality failed.** b05 has-keys failed the same hidden tests in all three arms. BEST alone
+  also failed b08 lat-long and b09 has-keys. A diagnosis of these misses is separate work and is
+  not part of this record.
+- **Report-only contrasts** (pre-registered, not gated, and not a pass for any arm):
+  - NOEXEC/A0: 0.7845 (upper bound 0.833), 18 of 20 blocks fewer, quality 19/20;
+  - BEST/NOEXEC: 0.8593 (upper bound 0.9197), 14 of 20 blocks fewer.
+- **Spent tasks.** has-keys, iso-date, json-object and lat-long (the groups mapping-keys,
+  temporal-format, structured-text and geo-coordinate) are now spent. Under this protocol's failure
+  rule they become development. Any confirmation registers new evaluation groups in a new revision
+  before its dispatch.
+- **Cost.** Held-out cost $9.884438 for 65 sessions, and the `launch-gate-v8` native session cost
+  $0.0276484.
+
+**Go/no-go.**
+- The execution-mode launch gate is **not met**.
+- **Recommendation (the user's messaging decision).** Launch the developer preview leading with
+  advisory mode (the learned card and instincts, no execution). Execution mode is opt-in and
+  labelled experimental and unproven.
+- **Advisory mode has no registered pass either.** NOEXEC/A0 was a report-only contrast here, so
+  advisory mode's numbers are not a launch statistic.
+
+**Next steps:**
+1. Diagnose the quality misses on these records.
+2. Fix and validate the fix in development.
+3. Run a fresh confirmation powered for quality, registered before dispatch on new evaluation
+   groups.
+4. Then run the expensive-to-cheap transfer study.
+
+Model requests are not GPU measurements, and CPU work is never counted as inference saved.
 
 ## Measures (step 4)
 

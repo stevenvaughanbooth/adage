@@ -1,0 +1,337 @@
+{
+  "all_journal_receipts": [
+    {
+      "approved_on": "2026-10-01T16:49:29Z",
+      "id": "d957a1332bf4c7e276ec4fa408c0f8964d8e081c2d860d6638f7828b58e73815",
+      "input_digest": "4ce7e963e149af5375f1c719a2c4ec5f42b0da281faceb545cc651995eb5ec2b",
+      "level": "e2",
+      "origin": "context",
+      "outcome": {
+        "changed": [
+          {
+            "change": "created",
+            "path": ".pytest_cache/.gitignore"
+          },
+          {
+            "change": "created",
+            "path": ".pytest_cache/CACHEDIR.TAG"
+          },
+          {
+            "change": "created",
+            "path": ".pytest_cache/README.md"
+          },
+          {
+            "change": "created",
+            "path": ".pytest_cache/v/cache/nodeids"
+          }
+        ],
+        "discarded": 0,
+        "outcome": "applied"
+      },
+      "outputs": {
+        ".pytest_cache/.gitignore": {
+          "exec": false,
+          "kind": "file",
+          "sha256": "3ed731b65d06150c138e2dadb0be0697550888a6b47eb8c45ecc9adba8b8e9bd"
+        },
+        ".pytest_cache/CACHEDIR.TAG": {
+          "exec": false,
+          "kind": "file",
+          "sha256": "37dc88ef9a0abeddbe81053a6dd8fdfb13afb613045ea1eb4a5c815a74a3bde4"
+        },
+        ".pytest_cache/README.md": {
+          "exec": false,
+          "kind": "file",
+          "sha256": "73fd6fccdd802c419a6b2d983d6c3173b7da97558ac4b589edec2dfe443db9ad"
+        },
+        ".pytest_cache/v/cache/nodeids": {
+          "exec": false,
+          "kind": "file",
+          "sha256": "b37ed48a1e07f482277e15cdca5f9aa5c9041bb0ef45d92292355afa70bd080b"
+        }
+      },
+      "phase": "completed",
+      "repo": "github.com/marshmallow-code/marshmallow",
+      "route": "github-com-marshmallow-code-marshmallow/learned/run-175d85",
+      "session": "f972b932-ee27-4def-8888-de2d1759487f",
+      "ts": "2026-10-01T16:53:48Z",
+      "worktree": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/02-BEST-config-change/repo"
+    },
+    {
+      "approved_on": "2026-10-01T16:49:29Z",
+      "id": "a54757258c98854bc5d4d55c36d4777a79b947fca9f9750d752550a488609284",
+      "input_digest": "fcade4fcecae2d947544b81726a433ceb2176c37382b196fb2dd9f6b2abd58dd",
+      "level": "e2",
+      "origin": "stop-gate",
+      "outcome": {
+        "changed": [],
+        "discarded": 0,
+        "outcome": "applied"
+      },
+      "outputs": {},
+      "phase": "completed",
+      "repo": "github.com/marshmallow-code/marshmallow",
+      "route": "github-com-marshmallow-code-marshmallow/learned/run-175d85",
+      "session": "f972b932-ee27-4def-8888-de2d1759487f",
+      "ts": "2026-10-01T16:54:09Z",
+      "worktree": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/02-BEST-config-change/repo"
+    }
+  ],
+  "block": null,
+  "collection_errors": [],
+  "condition": "config-change",
+  "contract_emitted": true,
+  "cost_usd": 0.09808909999999998,
+  "exec_decisions": [
+    {
+      "event": "PostToolBatch",
+      "outcome": "applied",
+      "reason": null,
+      "route": "github-com-marshmallow-code-marshmallow/learned/run-175d85",
+      "ts": 1790873628764,
+      "withheld": null
+    }
+  ],
+  "final_generation": "e72dd234ff43bf07eabf958bf0bd79cd2752e5baea99ac54dc6a0092aa2edd44",
+  "heldout_arm": "BEST",
+  "order": 2,
+  "protocol": "heldout-cohort-1",
+  "provenance": {
+    "cwd": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/02-BEST-config-change/repo",
+    "destination": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/02-BEST-config-change/native-transcript.jsonl",
+    "session_id": "f972b932-ee27-4def-8888-de2d1759487f",
+    "sha256": "30578fadc486e902156a2f8e23b169c1ded0f4f55a068080a0af9e9ee7bfe833",
+    "source": "/Users/stevenbooth/.claude/projects/-private-tmp-adage-real-repo-gate-v1-cohorts-launch-gate-v8-heldout-1-sessions-02-BEST-config-change-repo/f972b932-ee27-4def-8888-de2d1759487f.jsonl",
+    "synthetic": false
+  },
+  "quality": {
+    "changed_files": [
+      "CHANGELOG.rst",
+      "pyproject.toml",
+      "src/marshmallow/validate.py",
+      "tests/test_validate.py"
+    ],
+    "checks": {
+      "tests": true
+    },
+    "ci_passed": true,
+    "dependency_mode": "frozen prepared environment; no rescue install",
+    "elapsed_s": 1.54,
+    "exit_code": 0,
+    "hidden_collection_integrity": {
+      "expected_count": 11,
+      "extra": [],
+      "missing": [],
+      "observed_count": 11,
+      "passed": true,
+      "unsuccessful": []
+    },
+    "hidden_failed": [],
+    "hidden_passed": true,
+    "n_tests": 1204,
+    "passed": true,
+    "rescue_error": null,
+    "suite_failed": [],
+    "tail": "........................................................................ [ 23%]\n........................................................................ [ 29%]\n........................................................................ [ 35%]\n........................................................................ [ 41%]\n........................................................................ [ 47%]\n........................................................................ [ 53%]\n........................................................................ [ 59%]\n........................................................................ [ 65%]\n........................................................................ [ 71%]\n........................................................................ [ 77%]\n........................................................................ [ 83%]\n........................................................................ [ 89%]\n........................................................................ [ 95%]\n....................................................                     [100%]\n1204 passed in 0.96s",
+    "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+  },
+  "replay": {
+    "arm": "BEST",
+    "confirmed_elimination": false,
+    "context_receipts": 1,
+    "covered_subsets": 0,
+    "final_source_verified": true,
+    "gate_runs": [
+      {
+        "covers_final": true,
+        "digest": "e72dd234ff43bf07eabf958bf0bd79cd2752e5baea99ac54dc6a0092aa2edd44",
+        "operation": "a54757258c98854bc5d4d55c36d4777a79b947fca9f9750d752550a488609284",
+        "outcome": "applied"
+      }
+    ],
+    "necessary_work_skipped": false,
+    "opaque": 0,
+    "receipts": 2,
+    "redundant_repeats": 0,
+    "repeat_attempts": 0,
+    "repeat_attempts_not_completed": 0,
+    "requests": [
+      {
+        "adage_pre_context": false,
+        "classification": "after_relevant_change",
+        "command": ".venv/bin/python -m pytest tests/test_validate.py -q",
+        "completed": true,
+        "covered": false,
+        "digest": "e72dd234ff43bf07eabf958bf0bd79cd2752e5baea99ac54dc6a0092aa2edd44",
+        "id": "toolu_01AJM5taaz6J5XgzbVr5NmoR",
+        "receipt_note": false,
+        "segment": ".venv/bin/python -m pytest tests/test_validate.py -q"
+      }
+    ],
+    "successful_receipts": 2,
+    "verification_necessary": true,
+    "version": 3
+  },
+  "task": "mm-curve--finite",
+  "timeline": {
+    "arm": "BEST",
+    "events": [
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+        "id": "toolu_01PwgtcxkWqJ8BQG3ApF7d3F",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+        "id": "toolu_01AjboWviuPmWn7cjx91FEbP",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+        "id": "toolu_01RP6f6b6X5QqaWNABgJir86",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "31eb5bf7f494e4a4b93d5e00bcb8f72c22053fd4e7ab67c6599124d7ae16657a",
+        "id": "toolu_01A5uVHrYJwJjXLjeXu6N56r",
+        "kind": "tool",
+        "name": "Edit",
+        "path": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/02-BEST-config-change/repo/src/marshmallow/validate.py",
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "9345cc9284077aa3ffb959b9c91b3cd46d68f08d539a5abeb1fd13a7fa4d6258",
+        "id": "toolu_01SEwyyH2sUsHdWRDFtjcjPo",
+        "kind": "tool",
+        "name": "Edit",
+        "path": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/02-BEST-config-change/repo/src/marshmallow/validate.py",
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "9a6a5a263e5725533b2d4a65827e7eb7f77c8a0e79925368a38e893ab8350e79",
+        "id": "toolu_01NfboFLjUHwi4uwX6oikEiJ",
+        "kind": "tool",
+        "name": "Edit",
+        "path": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/02-BEST-config-change/repo/tests/test_validate.py",
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "9a6a5a263e5725533b2d4a65827e7eb7f77c8a0e79925368a38e893ab8350e79",
+        "id": "toolu_01RWEUYTjtVfoHvBXJ1YfviC",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "aec9c82534660d3c864f3921ff5cf64fc8e6994845de83812c9306884efd4914",
+        "id": "toolu_01BMMj6FAQY2V7NYH3DyyzC5",
+        "kind": "tool",
+        "name": "Edit",
+        "path": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/02-BEST-config-change/repo/CHANGELOG.rst",
+        "receipt_note": false
+      },
+      {
+        "at": "PostToolBatch",
+        "changed": [
+          ".pytest_cache/.gitignore",
+          ".pytest_cache/CACHEDIR.TAG",
+          ".pytest_cache/README.md",
+          ".pytest_cache/v/cache/nodeids"
+        ],
+        "command": ".venv/bin/python -m pytest tests/test_validate.py -q",
+        "completion_delivered": true,
+        "digest": "aec9c82534660d3c864f3921ff5cf64fc8e6994845de83812c9306884efd4914",
+        "kind": "receipt",
+        "operation": "d957a1332bf4c7e276ec4fa408c0f8964d8e081c2d860d6638f7828b58e73815",
+        "origin": "context",
+        "origin_recorded": true,
+        "outcome": "applied",
+        "phase": "completed",
+        "route": "github-com-marshmallow-code-marshmallow/learned/run-175d85"
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "aec9c82534660d3c864f3921ff5cf64fc8e6994845de83812c9306884efd4914",
+        "id": "toolu_01KxnXsEx2fFBBBgToihrmFS",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "e72dd234ff43bf07eabf958bf0bd79cd2752e5baea99ac54dc6a0092aa2edd44",
+        "id": "toolu_01BahZ78m4aEFzBWedrSmeia",
+        "kind": "tool",
+        "name": "Edit",
+        "path": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/02-BEST-config-change/repo/pyproject.toml",
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": ".venv/bin/python -m pytest tests/test_validate.py -q",
+        "completed": true,
+        "digest": "e72dd234ff43bf07eabf958bf0bd79cd2752e5baea99ac54dc6a0092aa2edd44",
+        "id": "toolu_01AJM5taaz6J5XgzbVr5NmoR",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "at": "Stop",
+        "changed": [],
+        "command": ".venv/bin/python -m pytest tests/test_validate.py -q",
+        "completion_delivered": false,
+        "digest": "e72dd234ff43bf07eabf958bf0bd79cd2752e5baea99ac54dc6a0092aa2edd44",
+        "kind": "receipt",
+        "operation": "a54757258c98854bc5d4d55c36d4777a79b947fca9f9750d752550a488609284",
+        "origin": "stop-gate",
+        "origin_recorded": true,
+        "outcome": "applied",
+        "phase": "completed",
+        "route": "github-com-marshmallow-code-marshmallow/learned/run-175d85"
+      }
+    ],
+    "final_digest": "e72dd234ff43bf07eabf958bf0bd79cd2752e5baea99ac54dc6a0092aa2edd44",
+    "root": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/02-BEST-config-change/repo"
+  }
+}

@@ -1,0 +1,409 @@
+{
+  "all_journal_receipts": [
+    {
+      "approved_on": "2026-10-01T16:49:50Z",
+      "id": "d9fd49f7f395b882ccc32026e35807a6660340297c0c2304eaf74a9bb74a3d36",
+      "input_digest": "a3330e7ba7d835ced66d78b64461a597f0ba5507d0d4d2667699c3ce6d8e0d7a",
+      "level": "e2",
+      "origin": "context",
+      "outcome": {
+        "exit": 1,
+        "outcome": "failed",
+        "signal": null
+      },
+      "outputs": {},
+      "phase": "completed",
+      "repo": "github.com/marshmallow-code/marshmallow",
+      "route": "github-com-marshmallow-code-marshmallow/learned/run-175d85",
+      "session": "aab7086b-19d8-45fb-8ed6-a52ade28ddf2",
+      "ts": "2026-10-01T17:12:09Z",
+      "worktree": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/15-BEST-b04-lat-long/repo"
+    },
+    {
+      "approved_on": "2026-10-01T16:49:50Z",
+      "id": "4b41dc852a2617cb850b445dece35aa5639da41c5d04b08d8c360ce391b90457",
+      "input_digest": "08f8895670d67576ae168befa9a2df593e1ad980dca0d02fb730bb0bb472bcfe",
+      "level": "e2",
+      "origin": "stop-gate",
+      "outcome": {
+        "changed": [],
+        "discarded": 0,
+        "outcome": "applied"
+      },
+      "outputs": {},
+      "phase": "completed",
+      "repo": "github.com/marshmallow-code/marshmallow",
+      "route": "github-com-marshmallow-code-marshmallow/learned/run-175d85",
+      "session": "aab7086b-19d8-45fb-8ed6-a52ade28ddf2",
+      "ts": "2026-10-01T17:12:58Z",
+      "worktree": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/15-BEST-b04-lat-long/repo"
+    }
+  ],
+  "block": 4,
+  "collection_errors": [],
+  "condition": "positive",
+  "contract_emitted": true,
+  "cost_usd": 0.14232440000000002,
+  "exec_decisions": [
+    {
+      "event": "PostToolBatch",
+      "outcome": "failed",
+      "reason": null,
+      "route": "github-com-marshmallow-code-marshmallow/learned/run-175d85",
+      "ts": 1790874729380,
+      "withheld": null
+    }
+  ],
+  "final_generation": "0b681b797a9a47ff6215f2790c2473240d272261c360f9f1844cfb3d086fac74",
+  "heldout_arm": "BEST",
+  "order": 15,
+  "protocol": "heldout-cohort-1",
+  "provenance": {
+    "cwd": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/15-BEST-b04-lat-long/repo",
+    "destination": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/15-BEST-b04-lat-long/native-transcript.jsonl",
+    "session_id": "aab7086b-19d8-45fb-8ed6-a52ade28ddf2",
+    "sha256": "b0d559a8b7e4980988d18df7c67f61db37bde4d690d3d1b1d3aabc81a0b680b6",
+    "source": "/Users/stevenbooth/.claude/projects/-private-tmp-adage-real-repo-gate-v1-cohorts-launch-gate-v8-heldout-1-sessions-15-BEST-b04-lat-long-repo/aab7086b-19d8-45fb-8ed6-a52ade28ddf2.jsonl",
+    "synthetic": false
+  },
+  "quality": {
+    "changed_files": [
+      "CHANGELOG.rst",
+      "src/marshmallow/validate.py",
+      "tests/test_validate.py"
+    ],
+    "checks": {
+      "tests": true
+    },
+    "ci_passed": true,
+    "dependency_mode": "frozen prepared environment; no rescue install",
+    "elapsed_s": 2.2,
+    "exit_code": 0,
+    "hidden_collection_integrity": {
+      "expected_count": 13,
+      "extra": [],
+      "missing": [],
+      "observed_count": 13,
+      "passed": true,
+      "unsuccessful": []
+    },
+    "hidden_failed": [],
+    "hidden_passed": true,
+    "n_tests": 1229,
+    "passed": true,
+    "rescue_error": null,
+    "suite_failed": [],
+    "tail": "........................................................................ [ 29%]\n........................................................................ [ 35%]\n........................................................................ [ 41%]\n........................................................................ [ 46%]\n........................................................................ [ 52%]\n........................................................................ [ 58%]\n........................................................................ [ 64%]\n........................................................................ [ 70%]\n........................................................................ [ 76%]\n........................................................................ [ 82%]\n........................................................................ [ 87%]\n........................................................................ [ 93%]\n........................................................................ [ 99%]\n.....                                                                    [100%]\n1229 passed in 0.99s",
+    "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+  },
+  "replay": {
+    "arm": "BEST",
+    "confirmed_elimination": false,
+    "context_receipts": 1,
+    "covered_subsets": 0,
+    "final_source_verified": true,
+    "gate_runs": [
+      {
+        "covers_final": true,
+        "digest": "0b681b797a9a47ff6215f2790c2473240d272261c360f9f1844cfb3d086fac74",
+        "operation": "4b41dc852a2617cb850b445dece35aa5639da41c5d04b08d8c360ce391b90457",
+        "outcome": "applied"
+      }
+    ],
+    "necessary_work_skipped": false,
+    "opaque": 0,
+    "receipts": 2,
+    "redundant_repeats": 0,
+    "repeat_attempts": 0,
+    "repeat_attempts_not_completed": 0,
+    "requests": [
+      {
+        "adage_pre_context": false,
+        "classification": "after_failed_receipt",
+        "command": ".venv/bin/python -m pytest tests/test_validate.py::test_latlong_invalid -v",
+        "completed": false,
+        "covered": false,
+        "digest": "26395e35df4b9803668998f537f325bf1a09b55ed6803642c62ea071978977e3",
+        "id": "toolu_019v3Fv5Lj4LDhcjbd39Kwji",
+        "receipt_note": false,
+        "segment": ".venv/bin/python -m pytest tests/test_validate.py::test_latlong_invalid -v"
+      },
+      {
+        "adage_pre_context": false,
+        "classification": "after_failed_receipt",
+        "command": ".venv/bin/python -m pytest tests/test_validate.py::test_latlong_invalid -v",
+        "completed": true,
+        "covered": false,
+        "digest": "0b681b797a9a47ff6215f2790c2473240d272261c360f9f1844cfb3d086fac74",
+        "id": "toolu_011R3yiEfau8r37PDZvZpzXt",
+        "receipt_note": false,
+        "segment": ".venv/bin/python -m pytest tests/test_validate.py::test_latlong_invalid -v"
+      },
+      {
+        "adage_pre_context": false,
+        "classification": "after_failed_receipt",
+        "command": ".venv/bin/python -m pytest tests/test_validate.py::test_latlong_valid tests/test_validate.py::test_latlong_invalid tests/test_validate.py::test_latlong_custom_message -v",
+        "completed": true,
+        "covered": false,
+        "digest": "0b681b797a9a47ff6215f2790c2473240d272261c360f9f1844cfb3d086fac74",
+        "id": "toolu_01V5h7muA2bVpddmnV7oY86i",
+        "receipt_note": false,
+        "segment": ".venv/bin/python -m pytest tests/test_validate.py::test_latlong_valid tests/test_validate.py::test_latlong_invalid tests/test_validate.py::test_latlong_custom_message -v"
+      },
+      {
+        "adage_pre_context": false,
+        "classification": "after_failed_receipt",
+        "command": ".venv/bin/python -m pytest tests/test_validate.py -q",
+        "completed": true,
+        "covered": false,
+        "digest": "0b681b797a9a47ff6215f2790c2473240d272261c360f9f1844cfb3d086fac74",
+        "id": "toolu_01Sgi61GfQuti6SmpGrQC4cm",
+        "receipt_note": false,
+        "segment": ".venv/bin/python -m pytest tests/test_validate.py -q"
+      },
+      {
+        "classification": "opaque_shell",
+        "command": ".venv/bin/python << 'EOF'\nfrom marshmallow.validate import LatLong\nfrom marshmallow.exceptions import ValidationError\n\nvalidator = LatLong()\n\n# Test valid example\ntry:\n    result = validator((0, 0))\n    print(f\"\u2713 Valid input (0, 0): {result}\")\nexcept ValidationError as e:\n    print(f\"\u2717 Valid input (0, 0) failed: {e}\")\n\n# Test invalid example\ntry:\n    result = validator((91, 0))\n    print(f\"\u2717 Invalid input (91, 0) should have failed but got: {result}\")\nexcept ValidationError as e:\n    print(f\"\u2713 Invalid input (91, 0) correctly raised error: {e}\")\n\n# Test custom error message\nvalidator_custom = LatLong(error=\"Location {input} is out of bounds\")\ntry:\n    result = validator_custom((91, 0))\n    print(f\"\u2717 Custom error test failed\")\nexcept ValidationError as e:\n    print(f\"\u2713 Custom error message: {e}\")\n\n# Test boundary values\nprint(\"\\nBoundary tests:\")\nfor test_case in [(90, 180), (-90, -180), (90, -180), (-90, 180)]:\n    try:\n        result = validator(test_case)\n        print(f\"\u2713 Valid boundary {test_case}: {result}\")\n    except ValidationError:\n        print(f\"\u2717 Boundary {test_case} incorrectly rejected\")\nEOF\n",
+        "digest": "0b681b797a9a47ff6215f2790c2473240d272261c360f9f1844cfb3d086fac74",
+        "id": "toolu_01AZ4qNy1sYdqsDtwz2q3AoY"
+      },
+      {
+        "adage_pre_context": false,
+        "classification": "after_failed_receipt",
+        "command": ".venv/bin/python -m pytest tests/test_validate.py -q",
+        "completed": true,
+        "covered": false,
+        "digest": "0b681b797a9a47ff6215f2790c2473240d272261c360f9f1844cfb3d086fac74",
+        "id": "toolu_01KryC96DHZRZMujhqUGbfjk",
+        "receipt_note": false,
+        "segment": ".venv/bin/python -m pytest tests/test_validate.py -q"
+      }
+    ],
+    "successful_receipts": 1,
+    "verification_necessary": true,
+    "version": 3
+  },
+  "task": "mm-curve--lat-long",
+  "timeline": {
+    "arm": "BEST",
+    "events": [
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+        "id": "toolu_01WAvsCwU48LTfjKU3J9JfNu",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+        "id": "toolu_01JXauQqK9ZHddrzhev3b3Zt",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+        "id": "toolu_01MTAbevLv8Tf1m39L58XGBB",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "75b3f0034fe1bd2d83c079d257854fb0de48bfa641e76ad7d79c29b68d077a07",
+        "id": "toolu_017QbxmEaMan4cAKiSMc7b11",
+        "kind": "tool",
+        "name": "Edit",
+        "path": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/15-BEST-b04-lat-long/repo/src/marshmallow/validate.py",
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "56b379b0dfe6ba31171dc967cedc4eef0c61e4726d9aafc6837246bc74402049",
+        "id": "toolu_01XQyPPqF9cdUYyU5Sy74mTf",
+        "kind": "tool",
+        "name": "Edit",
+        "path": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/15-BEST-b04-lat-long/repo/tests/test_validate.py",
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "56b379b0dfe6ba31171dc967cedc4eef0c61e4726d9aafc6837246bc74402049",
+        "id": "toolu_01JCknrz3viz8QNEFYNg8dmS",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "26395e35df4b9803668998f537f325bf1a09b55ed6803642c62ea071978977e3",
+        "id": "toolu_016GHgHVoqiCcPxKK36W8uj1",
+        "kind": "tool",
+        "name": "Edit",
+        "path": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/15-BEST-b04-lat-long/repo/CHANGELOG.rst",
+        "receipt_note": false
+      },
+      {
+        "at": "PostToolBatch",
+        "changed": [],
+        "command": ".venv/bin/python -m pytest tests/test_validate.py -q",
+        "completion_delivered": true,
+        "digest": "26395e35df4b9803668998f537f325bf1a09b55ed6803642c62ea071978977e3",
+        "kind": "receipt",
+        "operation": "d9fd49f7f395b882ccc32026e35807a6660340297c0c2304eaf74a9bb74a3d36",
+        "origin": "context",
+        "origin_recorded": true,
+        "outcome": "failed",
+        "phase": "completed",
+        "route": "github-com-marshmallow-code-marshmallow/learned/run-175d85"
+      },
+      {
+        "adage_pre_context": false,
+        "command": ".venv/bin/python -m pytest tests/test_validate.py::test_latlong_invalid -v",
+        "completed": false,
+        "digest": "26395e35df4b9803668998f537f325bf1a09b55ed6803642c62ea071978977e3",
+        "id": "toolu_019v3Fv5Lj4LDhcjbd39Kwji",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "0b681b797a9a47ff6215f2790c2473240d272261c360f9f1844cfb3d086fac74",
+        "id": "toolu_01MeJL4zKJ9NfyVh5GkiLin1",
+        "kind": "tool",
+        "name": "Edit",
+        "path": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/15-BEST-b04-lat-long/repo/src/marshmallow/validate.py",
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": ".venv/bin/python -m pytest tests/test_validate.py::test_latlong_invalid -v",
+        "completed": true,
+        "digest": "0b681b797a9a47ff6215f2790c2473240d272261c360f9f1844cfb3d086fac74",
+        "id": "toolu_011R3yiEfau8r37PDZvZpzXt",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": ".venv/bin/python -m pytest tests/test_validate.py::test_latlong_valid tests/test_validate.py::test_latlong_invalid tests/test_validate.py::test_latlong_custom_message -v",
+        "completed": true,
+        "digest": "0b681b797a9a47ff6215f2790c2473240d272261c360f9f1844cfb3d086fac74",
+        "id": "toolu_01V5h7muA2bVpddmnV7oY86i",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": ".venv/bin/python -m pytest tests/test_validate.py -q",
+        "completed": true,
+        "digest": "0b681b797a9a47ff6215f2790c2473240d272261c360f9f1844cfb3d086fac74",
+        "id": "toolu_01Sgi61GfQuti6SmpGrQC4cm",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": ".venv/bin/python -c \"from marshmallow.validate import LatLong; validator = LatLong(); print('LatLong validator created:', validator); print('Valid test:', validator((0, 0)))\"",
+        "completed": true,
+        "digest": "0b681b797a9a47ff6215f2790c2473240d272261c360f9f1844cfb3d086fac74",
+        "id": "toolu_01JwPDwm9imPyudNpa4rKDpK",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": ".venv/bin/python << 'EOF'\nfrom marshmallow.validate import LatLong\nfrom marshmallow.exceptions import ValidationError\n\nvalidator = LatLong()\n\n# Test valid example\ntry:\n    result = validator((0, 0))\n    print(f\"\u2713 Valid input (0, 0): {result}\")\nexcept ValidationError as e:\n    print(f\"\u2717 Valid input (0, 0) failed: {e}\")\n\n# Test invalid example\ntry:\n    result = validator((91, 0))\n    print(f\"\u2717 Invalid input (91, 0) should have failed but got: {result}\")\nexcept ValidationError as e:\n    print(f\"\u2713 Invalid input (91, 0) correctly raised error: {e}\")\n\n# Test custom error message\nvalidator_custom = LatLong(error=\"Location {input} is out of bounds\")\ntry:\n    result = validator_custom((91, 0))\n    print(f\"\u2717 Custom error test failed\")\nexcept ValidationError as e:\n    print(f\"\u2713 Custom error message: {e}\")\n\n# Test boundary values\nprint(\"\\nBoundary tests:\")\nfor test_case in [(90, 180), (-90, -180), (90, -180), (-90, 180)]:\n    try:\n        result = validator(test_case)\n        print(f\"\u2713 Valid boundary {test_case}: {result}\")\n    except ValidationError:\n        print(f\"\u2717 Boundary {test_case} incorrectly rejected\")\nEOF\n",
+        "completed": true,
+        "digest": "0b681b797a9a47ff6215f2790c2473240d272261c360f9f1844cfb3d086fac74",
+        "id": "toolu_01AZ4qNy1sYdqsDtwz2q3AoY",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "0b681b797a9a47ff6215f2790c2473240d272261c360f9f1844cfb3d086fac74",
+        "id": "toolu_01RHeZZvZpGWRutEabSaPDAR",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "0b681b797a9a47ff6215f2790c2473240d272261c360f9f1844cfb3d086fac74",
+        "id": "toolu_017baWr8n2XvBdxrvDoLznpV",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": ".venv/bin/python -m pytest tests/test_validate.py -q",
+        "completed": true,
+        "digest": "0b681b797a9a47ff6215f2790c2473240d272261c360f9f1844cfb3d086fac74",
+        "id": "toolu_01KryC96DHZRZMujhqUGbfjk",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "at": "Stop",
+        "changed": [],
+        "command": ".venv/bin/python -m pytest tests/test_validate.py -q",
+        "completion_delivered": false,
+        "digest": "0b681b797a9a47ff6215f2790c2473240d272261c360f9f1844cfb3d086fac74",
+        "kind": "receipt",
+        "operation": "4b41dc852a2617cb850b445dece35aa5639da41c5d04b08d8c360ce391b90457",
+        "origin": "stop-gate",
+        "origin_recorded": true,
+        "outcome": "applied",
+        "phase": "completed",
+        "route": "github-com-marshmallow-code-marshmallow/learned/run-175d85"
+      }
+    ],
+    "final_digest": "0b681b797a9a47ff6215f2790c2473240d272261c360f9f1844cfb3d086fac74",
+    "root": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/15-BEST-b04-lat-long/repo"
+  }
+}

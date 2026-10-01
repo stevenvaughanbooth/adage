@@ -1,6 +1,36 @@
 # Open-source launch evidence
 
-Status: **real-repository CPU action-elimination gate failed in the completed pilot**. The
+**Current status (2026-10-01): the execution-mode launch gate is NOT met, on quality.** The
+pre-registered held-out Marshmallow study ([record](harness/results/20261001-heldout-marshmallow/RESULT.json),
+[decision record](harness/results/20261001-heldout-marshmallow/report.md)) ran 65 of 65 sessions,
+and its report is valid. Its outcome is **FAIL**.
+- **Primary: passed.** Execution mode (BEST: A4, verification ownership, the orientation card and
+  learned CPU execution) used 0.6741 times the no-Adage arm's model requests. The one-sided 95% upper
+  bound was 0.7265 against a registered limit of 0.90, with fewer requests in 18 of 20 blocks.
+- **Quality: failed.** BEST passed 17 of 20 hidden-test blocks, against 19 of 20 for no Adage. The
+  stricter G5 also fails: 3 failures for BEST, 1 for no Adage, 1 for NOEXEC. One failing block
+  (b05 has-keys) failed in all three arms.
+- **What held.** G1, G2, G6, G7 and G8 passed, and all five safety controls were realized with no
+  necessary verification skipped.
+- **Report only.** NOEXEC (advisory mode: the card and instincts, no execution) against no Adage
+  was 0.7845, with an upper bound of 0.833 and quality 19/20. This was a pre-registered report-only
+  contrast. It is not a registered pass and not a launch statistic.
+- **The four held-out tasks are now spent.** They count as development for any future
+  confirmation.
+
+**Decision.**
+- The developer preview launches leading with advisory mode. Execution mode is opt-in and labelled
+  experimental and unproven.
+- **Next steps:**
+  1. diagnose the quality misses;
+  2. fix and validate in development;
+  3. run a fresh confirmation powered for quality, on new evaluation groups registered before
+     dispatch;
+  4. then the expensive-to-cheap transfer study.
+- **Not GPU.** Model requests are not GPU measurements, and no GPU or general savings claim
+  follows.
+
+Earlier status: **real-repository CPU action-elimination gate failed in the completed pilot**. The
 [eight-session result](harness/results/20260930-live-cpu-transfer/FINDINGS.md) establishes 4/4
 successful learned CPU executions and 4/4 correct automatic outputs versus 3/4 baseline outputs,
 but 0/4 confirmed action eliminations. Every automatic session repeated the test command after
@@ -119,14 +149,12 @@ dispatch. Mean model requests per positive:
 - **Not GPU.** Model requests are not GPU measurements, and CPU runs are never counted as inference
   saved.
 
-The held-out comparison (Marshmallow, revisions 9 to 11) is the evidence that counts. It runs from
-its own clone (`/private/tmp/adage-heldout-src`, with main merged) under a new native cohort, with
-BEST = A4. Its inputs are ready, and a read-only freeze preflight passed on them
-([inputs](harness/results/20261001-heldout-inputs/INPUTS.json)). It is not frozen yet: the new
-cohort's native session cannot be admitted under the legacy ledger ceiling, and the remedy needs the
-user's decision. **Held-out result: not run, and no numbers exist.** Once it runs,
-its decision record will be linked here as written. The record covers the primary bound, quality,
-the G criteria, the sensitivity analyses and censoring.
+The held-out comparison (Marshmallow, revisions 9 to 12) is the evidence that counts. It ran from its
+own clone (`/private/tmp/adage-heldout-src`, with main merged) under native cohort `launch-gate-v8`,
+with BEST = A4 ([inputs](harness/results/20261001-heldout-inputs/INPUTS.json)). Revision 12 let the
+new cohort's native session be admitted under the person's allocation; the user approved it.
+**Held-out result: FAIL on quality.** The primary request test passed, and the full numbers are at
+the top of this page and in the [decision record](harness/results/20261001-heldout-marshmallow/report.md).
 
 **Ledger.**
 - After dev-v8b: 163 attempts, $24.6504369 admitted ($24.1504369 measured plus $0.50
@@ -135,6 +163,9 @@ the G criteria, the sensitivity analyses and censoring.
   attempts, $24.7344477 admitted, $35.2655523 remaining.
 - After dev-v9b: 218 attempts, all settled, $29.9794687 admitted ($29.4794687 measured plus $0.50),
   $30.0205313 remaining.
+- After held-out: the `launch-gate-v8` native session ($0.0276484) and 65 held-out sessions
+  ($9.884438) bring it to 284 attempts (283 settled, 1 cap-charged), $39.8915551 admitted
+  ($39.3915551 measured plus $0.50), and $20.1084449 remaining of $60.
 
 The subsequent [edit-receipt diagnostic](harness/results/20260930-edit-receipt-ablation/summary.json)
 is an authored fixture, not a launch benchmark. After fixing inherited-stdin contamination,

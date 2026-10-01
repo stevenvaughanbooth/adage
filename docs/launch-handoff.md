@@ -20,15 +20,99 @@ its $60 ceiling: **$15.6474504 measured + $0.50 conservative charge = $16.147450
 accounting is unblocked and no paid process remains active. Read the live ledger before any
 new dispatch; never reset it, double-dispatch, or treat an unknown bill as zero.
 
-## Latest checkpoint: launch gate protocol (resume here)
+## Current decision, 2026-10-01 (resume here)
+
+**The held-out Marshmallow study ran, and its outcome is FAIL on quality. The execution-mode
+launch gate is NOT met.**
+- **Record:** [`results/20261001-heldout-marshmallow`](../evals/reflex-proof/harness/results/20261001-heldout-marshmallow/RESULT.json).
+  It holds the decision record `report.md`, `report.json`, all 65 collections, the run log, and the
+  freeze records with frozen-source verification.
+- **Protocol:** `heldout_results` in the protocol JSON, and "Held-out result: Marshmallow stratum" in
+  [the protocol](launch-gate-protocol.md).
+
+| Registered measure | Result | Holds |
+| --- | --- | --- |
+| Primary: BEST/A0 model requests (upper bound must be ≤ 0.90) | 0.6741, upper bound 0.7265; 18 of 20 blocks fewer; p = 0.0001 | yes |
+| Quality: BEST ≥ A0 − 1 hidden-test passes | BEST 17/20, A0 19/20 | **no** |
+| G5: BEST failures ≤ min(A0, NOEXEC) | BEST 3, A0 1, NOEXEC 1 | **no** |
+| G1, G2, G6, G7, G8 | as registered | yes |
+| Five safety controls | all realized; none skipped necessary verification | yes |
+
+- **The study.** `cohorts/launch-gate-v8/heldout-1` ran 65 of 65 sessions, and the report is valid:
+  - no lapses, censoring or excluded blocks;
+  - the frozen sources equal the runner commit `f2a2a09`.
+
+  BEST was A4: verification ownership, the orientation card and learned CPU execution.
+- **Where quality failed.** b05 has-keys failed in all three arms. BEST alone also failed b08
+  lat-long and b09 has-keys. A separate diagnosis is running.
+- **Report only** (pre-registered, not gated, and not a pass for any arm):
+  - NOEXEC/A0: 0.7845, upper bound 0.833, quality 19/20. NOEXEC is the learned card and instincts,
+    with no execution.
+  - BEST/NOEXEC: 0.8593, upper bound 0.9197.
+- **Spent tasks.** has-keys, iso-date, json-object and lat-long are now development tasks. A
+  confirmation needs new evaluation groups, registered before dispatch.
+
+**Decision (the user's messaging decision):**
+- Launch the developer preview leading with **advisory mode**: the card and instincts, no
+  execution.
+- **Execution mode is opt-in and labelled experimental and unproven.**
+- **What advisory mode does not have.** Its contrast was report-only here, so it has no registered
+  pass and no launch statistic.
+- **Never present model requests as GPU savings.**
+
+**Next, in order:**
+1. **Diagnose the quality misses** on the archived records. Start with BEST's b08 lat-long and b09
+   has-keys, against the same blocks in A0 and NOEXEC.
+2. **Fix, and validate the fix in development** on development tasks only. The four spent tasks
+   are development now.
+3. **Run a fresh confirmation powered for quality.** It needs new evaluation groups and must be
+   registered as a new protocol revision before any dispatch. Use a new native cohort from a
+   fresh clone outside iCloud, and person-issued grants.
+4. **Then the expensive-to-cheap transfer study.**
+
+**Ledger after the held-out study:** 284 attempts (283 settled, 1 cap-charged), nothing open,
+nothing blocked.
+- Admitted: $39.8915551 ($39.3915551 measured plus the $0.50 conservative charge).
+- Remaining of $60: $20.1084449.
+- Held-out: $9.884438 for 65 sessions. The `launch-gate-v8` native session: $0.0276484.
+- The ceiling stays $60, and the $3 floor applies. Any further allocation is set separately by
+  the user.
+
+**Where things are:**
+- **Branch.** `codex/launch-first-reflex`, PR #16 (draft). Work and commit in the clean clone
+  `/private/tmp/adage-heldout-src`, which is outside iCloud, then push.
+- **The agent worktree** under `~/Documents` is iCloud-synced. Fast-forward it only.
+- **Ledger and authority.** `/private/tmp/adage-real-repo-gate-v1`: `paid-state.json` and
+  `evaluation-allocation.json`.
+- **Study roots.** Never modify or rerun them:
+  - `cohorts/launch-gate-v6/dev-v9b`, bound to `/private/tmp/adage-launch-src`, which must not be
+    edited;
+  - `cohorts/launch-gate-v8/heldout-1`, bound to `/private/tmp/adage-heldout-src` at `f2a2a09`;
+  - `launch-gate-v7`: excluded, never dispatched.
+- **Held-out freeze records:**
+  - manifest `a508a425…`;
+  - `approve-heldout.sh` `3213ff49…`;
+  - `run-heldout.sh` `ff092c8f…`;
+  - binaries `adage` `63475c2e…` and `adage-exec` `c77b9859…`, built at `8770f8c`.
+- **Rules:**
+  - agents never issue grants;
+  - paid runs go from a normal terminal (the CLAUDECODE guard);
+  - no Python from the shared runtime or bases outside the study runner;
+  - kill only your own PIDs;
+  - refuse dataless inputs;
+  - never change thresholds, splits or reports after dispatch.
+
+## Launch gate protocol checkpoints (history)
 
 Branch `codex/launch-first-reflex`, PR #16 (draft).
 
-Ledger: 218 attempts, all settled or cap-charged.
+Ledger before the held-out study: 218 attempts, all settled or cap-charged.
 - Admitted: $29.9794687 ($29.4794687 measured plus the $0.50 conservative charge).
 - Remaining: $30.0205313.
 
-New charges in this checkpoint:
+Charges, newest first:
+- the held-out study `launch-gate-v8/heldout-1` (65 sessions, $9.884438) and the `launch-gate-v8`
+  native session ($0.0276484);
 - the development canary-v9b `dev-v9b` (53 sessions, $5.245021);
 - the aborted development canary `dev-v9` (1 session, $0.0675211);
 - the passing `launch-gate-v6` native session ($0.0164897);
@@ -140,10 +224,22 @@ to dataless placeholders. A sandboxed tool reads such a file as empty: a test fi
 runs 0 tests, and an `include_str!` asset (the intent vocabulary) builds empty. Studies therefore
 freeze and run from the clone in `/private/tmp`, and freeze and dispatch refuse dataless inputs.
 
-### Held-out phase: inputs ready, not frozen; blocked on native admission (resume here)
+### Held-out phase: frozen, run and reported (history; the result is at the top)
 
-Nothing here is a result. dev-v9b's report is valid and A4 passed `dev_thresholds_v9`, so BEST is
-A4 with the orientation card, by r9's rule.
+**This section records preparation only.** The outcome (FAIL on quality) is under "Current
+decision" above.
+- **The native-admission blocker was resolved by r12.** The user approved the change and applied
+  it in `cohort_v5.py` (`f2a2a09`).
+- `launch-gate-v7` is excluded and was never dispatched. `launch-gate-v8`'s native session passed
+  review.
+- `heldout-1` was frozen in v8 at `f2a2a09` with the binaries below.
+- The person ran `run-heldout.sh` from their own terminal. It ran the native session, the review,
+  prepare, the 25 grants, verify-grants, live and report. Its log is archived.
+
+The text below is kept as it was written before the run.
+
+dev-v9b's report is valid and A4 passed `dev_thresholds_v9`, so BEST is A4 with the orientation
+card, by r9's rule.
 
 **Done offline on 2026-10-01** (record: [`results/20261001-heldout-inputs/INPUTS.json`](../evals/reflex-proof/harness/results/20261001-heldout-inputs/INPUTS.json)):
 - **Binaries** were built in `/private/tmp/adage-heldout-src` at `8770f8c` with
@@ -264,8 +360,8 @@ python3 heldout_cohort.py report $H                    # writes reports/heldout-
 
 `heldout_tasks.py validate` is done (`$A/heldout-controls-1`); do not run it again.
 
-**Held-out result:** not run. There are no numbers. The decision record (`reports/heldout-<time>.md`)
-is the result.
+**Held-out result:** FAIL on quality (see "Current decision" at the top). The decision record is
+`results/20261001-heldout-marshmallow/report.md`.
 
 dev-v9b commands. Run them in a normal terminal, one at a time, and stop on any error. `prepare`
 runs again for the new root (53 fresh checkouts). The grants must be issued again: the new root's
@@ -407,8 +503,8 @@ Blocked on three things, none of which an agent may bypass:
 1. **Paid runs need a normal terminal.** `probe.execute` refuses nested Claude sessions.
 2. **Grants need the person.** The person issued the dev-v8b grants (`approve-dev-arms.sh`,
    sha256 `2290b18c…`) and dev-v9b's (`approve-dev-v9.sh`, sha256 `ec674a11…`, 37 homes).
-   Held-out's `approve-heldout.sh` (25 BEST homes) is written at freeze, which waits for the
-   native-admission decision. Run it only after `prepare`, and after reading it.
+   They also issued held-out's grants (`approve-heldout.sh`, sha256 `3213ff49…`, 25 BEST homes),
+   from their own terminal via `run-heldout.sh`.
 3. **Learning needs the learner fix.** About 22 learning-quality tests fail on main since PR #14.
    Cohort training replay, checkpoints and frozen learned homes wait for that fix and a rebuild.
 
