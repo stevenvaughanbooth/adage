@@ -77,6 +77,16 @@ These means mix working sessions with card-only ones, so they test neither lever
 The harness now fails loudly on any of these. It also protects the shared runtime and checks
 every grant before each dispatch.
 
+The fourth development canary, [dev-v9](harness/results/20261001-dev-v9/), is frozen and not run.
+It compares A0 (no hooks) with two arms that share binaries and grants:
+- A2f: verification ownership, with the earlier card;
+- A4: A2f plus an orientation card. A4's card replaces the exemplar with where the card's files
+  stand in the checkout now.
+
+The arms run in 16 paired blocks, with five A4 controls. The rule was registered before dispatch: A4
+needs at most 0.80 times A0's requests, fewer requests in at least 10 of 16 blocks, and a valid
+study. No statistic exists yet.
+
 The ledger after this run: 163 attempts, $24.6504369 admitted ($24.1504369 measured plus $0.50
 conservative), $35.3495631 remaining of $60.
 

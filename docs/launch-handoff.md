@@ -40,6 +40,80 @@ canary manifests bind absolute harness paths in the agent worktree
 `/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d`; run the
 commands below from its `evals/reflex-proof/harness`, or refreeze new roots from another checkout.
 
+### dev-v9: frozen, not run (resume here)
+
+Development canary-v9 (`harness/dev_v9.py`, protocol `dev-arms-2`, revision 10) is frozen at
+`cohorts/launch-gate-v6/dev-v9`. Records are in
+[`results/20261001-dev-v9`](../evals/reflex-proof/harness/results/20261001-dev-v9/).
+
+It was frozen from a fresh clone outside iCloud, **`/private/tmp/adage-launch-src`**, at `3e21e6e`,
+and its binaries were built there. The manifest binds that clone's paths, so run every dev-v9
+command from `/private/tmp/adage-launch-src/evals/reflex-proof/harness`, and never edit, pull or
+rebuild in that clone. The freeze refused any dataless (cloud-evicted) input, and `live` checks the
+sources and binaries again.
+- **Commits and binaries.** Binaries come from `3e21e6e`: `adage` `e22a1754…`, `adage-exec` `f5d0dd35…`. That
+  build includes `codex/ship-fixes`, `codex/first-run-fixes`, `codex/heldout-tasks` (r9), the
+  orientation card and the receipts that name the session's new tests.
+- **Arms.**
+  - A0: no hooks.
+  - A2f: verification ownership, with the card as shipped before r10 (exemplar).
+  - A4: A2f plus the orientation card.
+
+  The matrix runs the five A4 controls first, then 16 paired blocks: 53 sessions in all. The cap is
+  $0.50 per session, the study ceiling $8.50 and the ledger floor $3. Every prompt carries "Do not
+  create git commits."
+- **Rule** (`dev_thresholds_v9`, registered before dispatch). A4 needs all of the following:
+  - a valid study;
+  - mean requests at most 0.80 times A0's;
+  - fewer requests than A0 in at least 10 of 16 blocks;
+  - D2, D3 (all five controls realized) and D4 (at most 5 of 16).
+
+  A2f is reported only. BEST follows the r9 rule. If A4 does not pass, held-out does not run.
+- **Native confinement.** The runner sources are byte-identical to those that `launch-gate-v5`
+  reviewed. However, a native review binds them by path, so the clone needs its own cohort,
+  `launch-gate-v6`. I prepared that cohort without running any Python. Its native-confinement session
+  (paid, $0.50 cap) is the first user step, and it must pass review before `prepare`.
+- **Offline card dry run.** This used scratch copies, no grants, and no Python from the shared
+  runtime. A2f's card quoted the exemplar. A4's said `validate.py: 708 lines` with its last eight
+  classes and their lines, the test file's last 12 lines (1090-1101), and the changelog's first
+  headings.
+- **Guards.**
+  - `prepare` makes the shared runtime library read-only.
+  - Before every dispatch, `live` re-checks it and runs each hook-arm session's binary at
+    SessionStart on a throwaway home copy.
+  - `live` stops on any lapse or unrealized control.
+  - `report` exits non-zero if the study is invalid.
+
+**Rule for every agent and every review:** nobody runs Python from the study's shared runtime
+(`/private/tmp/adage-real-repo-gate-v1/runtime`) or its base environments (`bases/*/.venv`), except
+the study runner itself (`prepare`, `live`, `collect`, `report`). Reviews and diagnoses read files.
+They never run those interpreters, not even `-m pytest` on a scratch directory. dev-v8b lost 20
+sessions this way.
+
+**iCloud warning.** This repository lives in an iCloud-synced Documents folder with Optimize Storage
+on. On 2026-10-01, 1,009 files in this worktree and one git pack (`pack-0eaf922f…`) had been evicted
+to dataless placeholders. A sandboxed tool reads such a file as empty: a test file read that way
+runs 0 tests, and an `include_str!` asset (the intent vocabulary) builds empty. I restored this
+worktree's tracked files from the git index before testing. The coordinator freed space (75 GB
+free afterwards), but the risk remains: about 120 GB of agent build targets sit under
+`.claude/worktrees`. dev-v9 therefore runs from the clone in `/private/tmp`, which iCloud does not
+manage.
+
+dev-v9 commands. Run them in a normal terminal, one at a time, and stop on any error:
+
+```sh
+cd /private/tmp/adage-launch-src/evals/reflex-proof/harness
+A=/private/tmp/adage-real-repo-gate-v1; C=$A/cohorts/launch-gate-v6; R=$C/dev-v9
+python3 cohort_v5.py prepare-session $C                # offline: the native-confinement checkout and recipe
+python3 real_repo_gate.py run-session $C/sessions/native-confinement/manifest.json   # paid, <= $0.50 cap
+python3 curve_sessions.py review-native $C             # offline; must pass
+python3 dev_v9.py prepare $R                           # offline, ~25 min (53 checkouts); then makes the shared runtime read-only
+less $R/approve-dev-v9.sh && sh $R/approve-dev-v9.sh   # the person issues 37 grants (sha256 aab7f7f2…)
+python3 dev_v9.py verify-grants $R                     # read-only
+python3 dev_v9.py live $R                              # paid: 53 sessions, $0.50 cap, $8.50 ceiling; stops on any lapse
+python3 dev_v9.py report $R                            # exits non-zero if the study is invalid
+```
+
 - [Launch gate protocol](launch-gate-protocol.md) (`launch-gate-1`, revision 8) and its governing
   JSON (`evals/reflex-proof/harness/launch_gate_protocol.json`) were registered before any dispatch:
   task splits with near-duplicate groups, arms, paired blocks, budgets and the GO thresholds G1-G9.
@@ -165,7 +239,8 @@ Blocked on three things, none of which an agent may bypass:
 
 1. **Paid runs need a normal terminal.** `probe.execute` refuses nested Claude sessions.
 2. **Grants need the person.** The person issued the dev-v8b grants (`approve-dev-arms.sh`,
-   sha256 `2290b18c…`); no grant is pending.
+   sha256 `2290b18c…`). dev-v9's `approve-dev-v9.sh` (sha256 `aab7f7f2…`, 37 homes) is prepared
+   and pending: run it only after `prepare`, and after reading it.
 3. **Learning needs the learner fix.** About 22 learning-quality tests fail on main since PR #14.
    Cohort training replay, checkpoints and frozen learned homes wait for that fix and a rebuild.
 
