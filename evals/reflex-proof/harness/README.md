@@ -95,3 +95,10 @@ The registered protocol is `docs/launch-gate-protocol.md`; `launch_gate_protocol
   `prepare`, `approval-script`, `verify-grants`, `collect` and `report` spend nothing; `live` is
   paid and refuses nested agent sessions. It never writes grants.
 - `launch_gate_score.py`: the registered GO thresholds applied to collected held-out rows.
+- `heldout_tasks.py`: the held-out Marshmallow tasks (has-keys, iso-date, json-object,
+  lat-long; max-sum withdrawn). `validate` scores base, gold and broken implementations offline,
+  on a copied pinned substrate; `archive` freezes the prompts, hidden tests and patches with their
+  hashes (`results/20261001-heldout-tasks`).
+- `heldout_analysis.py`: the revision 9 draft held-out analysis. It covers BEST selection, the
+  paired matrix, budget, verification classifier, request cross-check, censoring, controls and the
+  bootstrap verdict. It is pure and offline.

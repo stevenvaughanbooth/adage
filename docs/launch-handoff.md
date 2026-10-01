@@ -151,6 +151,15 @@ After the canary: if it passes, prepare the cohort (author and validate the new 
 Click and more-itertools tasks, then learning once the fix lands). If it fails, diagnose on its
 records, fix the integration, and freeze a new canary root; never rerun an outcome.
 
+**Marshmallow held-out tasks are done** (branch `codex/heldout-tasks`, revision 9 draft). They were
+frozen at `260729a` before any v8 result was read:
+- tasks: has-keys, iso-date, json-object and lat-long, with max-sum withdrawn as a size-limit
+  near-duplicate;
+- validated offline; see `evals/reflex-proof/harness/results/20261001-heldout-tasks/README.md`.
+
+The r9 held-out analysis (`heldout_analysis.py`, A0/NOEXEC/BEST, 4 x 5 paired blocks) is drafted
+with tests. It is registered only when merged. The cohort runner that dispatches it is not written.
+
 ## What is established
 
 - Sixteen cold-start assignments on four Marshmallow tasks, two repetitions per arm: instincts

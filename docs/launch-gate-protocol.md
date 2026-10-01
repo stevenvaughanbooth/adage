@@ -2,7 +2,8 @@
 
 Registered 2026-09-30 (revision 2 the same day; revisions 3 to 8 on 2026-10-01). Revisions 3
 to 5 preceded any canary agent session; revisions 6 to 8 follow development canaries and precede
-any held-out dispatch. The
+any held-out dispatch. Revision 9 is a draft on `codex/heldout-tasks`; it is registered only when
+merged, before any held-out dispatch. The
 machine-readable copy is `evals/reflex-proof/harness/launch_gate_protocol.json`; when the two
 differ, the JSON governs. Revisions get a dated entry below and must precede the dispatch they
 affect. Splits and thresholds cannot change after the first held-out dispatch.
@@ -41,7 +42,7 @@ once, for the frozen held-out comparison). The JSON lists every group.
 
 | Repository | Training groups | Development | Evaluation (held out) |
 | --- | --- | --- | --- |
-| Marshmallow | affix, divisibility, duplicates, character class, size limit, address, symmetry, order (all 15 earlier training tasks plus odd, no-adjacent-duplicates, max-utf8-bytes, whose sessions are never mined) | finite | has-keys, iso-date, json-object, max-sum (new) |
+| Marshmallow | affix, divisibility, duplicates, character class, size limit, address, symmetry, order (all 15 earlier training tasks plus odd, no-adjacent-duplicates, max-utf8-bytes, whose sessions are never mined; r9 adds the withdrawn, never-run max-sum to size limit) | finite | has-keys, iso-date, json-object, lat-long (new; lat-long replaced max-sum in r9) |
 | Click | numeric range, unit quantity, network address, pattern string | date, time, log-level | json-object, key-value, int-list, regex (new) |
 | more-itertools | declared at family authoring, before any session | declared then | 4 functions in groups with no training member |
 
@@ -275,6 +276,105 @@ contract), `automatic` (one grant: contract and structured receipts). 4 tasks x 
 arms x 3 repositories = 72 sessions. Comparisons are within blocks; every attempt counts. Hidden
 tests score correctness independently of the agent's own test runs.
 
+### Held-out Marshmallow tasks (revision 9 draft)
+
+The four evaluation tasks were authored, validated and frozen before any development canary-v8
+result was read. They were frozen at commit `260729ae0723531fd2c40308a98cdad71257f9ae`
+(2026-10-01T06:09:53Z). The manifest is `harness/results/20261001-heldout-tasks/manifest.json`, sha256
+`02341cc07e54627f60767c39ef22747250e52d388873c715d6242b156646f556`. Definitions are in
+`harness/heldout_tasks.py`, and the archived command outputs are in that results directory's
+`README.md`.
+
+| Task | Group | Validator | Prompt sha256 | Hidden test sha256 | Gold patch sha256 |
+| --- | --- | --- | --- | --- | --- |
+| `mm-curve--has-keys` | mapping-keys | `HasKeys(keys)`: a mapping containing every key | `5daff605…` | `4d11270b…` | `0499b1e9…` |
+| `mm-curve--iso-date` | temporal-format | `IsoDate()`: exactly `YYYY-MM-DD`, a real date | `5f29842f…` | `13ab2ae5…` | `4e2b1de6…` |
+| `mm-curve--json-object` | structured-text | `JsonObject()`: `json.loads` gives an object | `423da26b…` | `1f812a5c…` | `9a19e415…` |
+| `mm-curve--lat-long` | geo-coordinate | `LatLong()`: a `(latitude, longitude)` pair in range | `346a2951…` | `d28a3dbc…` | `3a046e61…` |
+
+- **Prompts.** The earlier neutral mm-curve template asks for the validator, tests, a docstring and
+  a changelog entry, and shows only the first valid and first invalid example. Every held-out prompt
+  adds one realism line, identical in every arm: `Do not create git commits.`. There is no work
+  order, no test block and no verification instruction; agents write their own tests.
+- **Validation** (offline, a copy of the pinned substrate, Python 3.12.14, pytest 9.1.1, base
+  `7f0792bd`):
+  - each base fails only the hidden tests;
+  - each gold passes the hidden tests and the full suite;
+  - each task's three broken implementations fail hidden behaviour tests only;
+  - the gold hidden-test identities are unique.
+- **max-sum withdrawn.** Its `(max, *, error=None)` interface and measure-at-most-`max` predicate
+  match the size-limit group. Its check similarity to max-words is 0.73; the registered pair
+  max-utf8-bytes/max-words scores 0.74. It joins size-limit, is never run, and stays recorded with
+  its validation. lat-long (geo-coordinate) replaces it.
+- **Isolation.** `split_audit.py` on `cumulative-launch-10` passes with the new markers. A scan of
+  671 earlier session files finds no authored family name. Unlike the transfer-v3 tasks, none of
+  these families ran in any cold pilot or earlier session.
+- **Natural workflow, recorded before any run.** Of 31 earlier unguided sessions on this template,
+  31 edited `validate.py`, then tests, then `CHANGELOG.rst`. 27 produced run-175d85's context
+  (tests then changelog within eight events). The context is expected to fire in most held-out
+  sessions; the tasks were not tuned for it.
+- **Disclosure.** Before the coordinator's lock (2026-10-01), the task author's read-only scan for
+  the natural tests-then-CHANGELOG base rate read the edit order (only) in 3 dev-v8b A0 transcripts
+  (`00-A0-positive-b1`, `07-A0-positive-b2`, `10-A0-positive-b3`): the file paths of their
+  Edit/Write calls. For `07-A0-positive-b2` it also confirmed that one Edit to a nonexistent path had
+  failed with a tool error. It computed no outcome metrics (no request counts, costs, quality or arm
+  comparisons), and those sessions are excluded from the base-rate scan.
+
+### Revision 9 (draft): pre-registered Marshmallow held-out analysis
+
+`harness/heldout_analysis.py` implements this analysis and its tests are committed before any
+dispatch. The governing values are in the JSON's `heldout_analysis`. The stratum is labelled
+**same repository, same test file family, guided-learned route (run-175d85)**.
+
+- **Arms.**
+  - A0: no Adage hooks.
+  - NOEXEC: Adage hooks with BEST's binaries, learned home and card setting, but no execution grant
+    (so no contract and no execution).
+  - BEST: the development canary-v8 arm (A2 or A3) that passes D1-D4 with the lowest mean requests
+    per positive session. Ties go to the lower mean cost, then the name. If no arm passes, the
+    held-out comparison is not run.
+- **Design.**
+  - 4 tasks x 5 repetitions give 20 paired blocks.
+  - Each block runs all three arms on the same task, repetition, frozen prompt and fresh checkout.
+  - The arm order within each block is drawn from `random.Random(20261001)` and recorded in the
+    frozen matrix.
+  - Dispatch is repetition-major, one session at a time.
+- **Primary metric.** Model requests per session: the count of `[API REQUEST] /v1/messages` lines in
+  the debug log. It must equal the stream's distinct request ids one to one. A positive session that
+  fails the cross-check makes the result unverified, which is not a pass.
+- **Primary test.**
+  - Statistic: sum(BEST)/sum(A0) requests over the 20 blocks.
+  - Its one-sided 95% upper bound (a percentile bootstrap over blocks, stratified by task, 20,000
+    draws, seed 20261001) must be at most 0.90.
+  - Quality must be non-inferior: BEST's hidden-test passes are at least A0's minus one.
+- **Censoring.** A session without a successful result is a quality failure and counts as
+  max(observed, 60) requests (60 is the max-turns cap). This covers max turns, the budget cap, the
+  wall clock or any other stop. Such sessions are never dropped or rerun. The rule penalizes the
+  censored arm, and uncensored blocks are reported.
+- **Safety controls.** The five controls (failed, later-edit, config-change, broader, rerun) run
+  first, in BEST, on the development task with the validated canary suffixes.
+  - Every control must be realized (`launch_canary.realized`) and must skip no necessary
+    verification.
+  - An unrealized control is a protocol failure, not a pass. On any control failure no held-out
+    block is dispatched.
+- **Verification classifier (reported, not gated).** It counts Bash requests running any of: pytest
+  in any form (`pytest`, `py.test`, `python -m pytest`, `uv run pytest`), `tox`/`nox`,
+  `python -m unittest`, `python -c`, Python reading stdin or a heredoc, or a test script.
+- **Budget.** 65 sessions (60 held-out plus 5 controls), each capped at $0.33 and reserved at the cap.
+  - Worst case: $21.45, within the $22 held-out reserve.
+  - Expected: $7.15-$9.75 at $0.11-$0.15 per session, or $12.38 at the $0.1905 mean of 78 earlier
+    sessions.
+  - Those 78 sessions had a $0.336 maximum; 2 of 78 exceeded $0.33.
+  - The r8 $1.50 cap would give a $97.50 worst case.
+  - An incomplete matrix is not a pass.
+- **Pass.** A complete matrix, the request cross-check, realized and safe controls, known costs, the
+  primary bound and quality non-inferiority.
+  - Report only: NOEXEC/A0 and BEST/NOEXEC ratios, a sign-flip permutation p-value, tokens, cost, wall
+    time, verification requests and CPU work.
+  - Model requests are never presented as GPU savings.
+- **Relation to G1-G9.** Not modified. Whether they also apply to this stratum is decided before
+  registration.
+
 ## Measures (step 4)
 
 Per session: successful CPU executions; receipts and digests; agent pytest requests classified by
@@ -324,6 +424,14 @@ evaluation groups is registered.
 ## Revisions
 
 - 2026-09-30 r1: registered.
+- 2026-10-01 r9 (draft on `codex/heldout-tasks`; registered only when merged, before any held-out dispatch):
+  - the held-out Marshmallow tasks are authored and frozen (commit `260729a`);
+  - max-sum is withdrawn as a near-duplicate of size-limit and replaced by lat-long;
+  - every held-out prompt carries the realism line, with no work order or test block;
+  - the pre-registered held-out analysis covers arms A0/NOEXEC/BEST, 4 x 5 paired blocks, debug-log
+    requests with a stream cross-check, a 95% bootstrap upper bound of at most 0.90, quality within one,
+    censoring at 60 requests, realized controls first, and a $0.33 cap with a $21.45 worst case;
+  - it records the task author's disclosure.
 - 2026-10-01 r8, development only: Lever 2 and Lever 1 in production code; development canary-v8
   with arms A0-A3, the production hook registration, and thresholds D1-D4; ceilings $12
   canary/development, $4 training and $22 held-out. Ledger at r8: 128 attempts, $20.2683707

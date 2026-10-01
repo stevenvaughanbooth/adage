@@ -184,7 +184,7 @@
     "2026-10-01 r6 note: canary-v6 (launch-canary-6) was frozen before this JSON's r6 edits, so its source hashes no longer verify; it was superseded before preparation with no spend and canary-v7 (launch-canary-7, same design) replaces it",
     "2026-10-01 r7, before any held-out dispatch: scorer version 2 (covered requests are repeat attempts whether or not they launched; any blocks an elimination; only completed requests satisfy necessary verification); realistic project environment (checkout .venv first on PATH and as VIRTUAL_ENV, native canary requires python_on_path); pytest receipts list collected/new node ids from the declared pytest cache record bound to the journal; later-edit control realized by construction; PreToolUse result substitution out of scope (goal is skipping inference)",
     "2026-10-01 r8, development only, before any held-out dispatch: target is fewer model requests per task against a no-Adage control in Claude Code hook mode; Lever 2 (factual contract, compact receipts, delivered failures, Stop gate) and Lever 1 (card names the certified test command); development canary-v8 (dev_arms.py) with arms A0 no hooks, A1 revision-7 integration, A2 Lever 2, A3 Levers 1+2 in six paired blocks plus A2/A3 safety controls, using the production hook registration; development thresholds D1-D4 registered here; canary/development ceiling 8 -> 12 and training 8 -> 4 (protocol total unchanged at 38; held-out keeps 22)",
-    "2026-10-01 r9 (draft on codex/heldout-tasks, registered only when merged, before any held-out dispatch): held-out Marshmallow tasks authored and frozen (heldout_tasks.py, results/20261001-heldout-tasks); max-sum withdrawn from evaluation as a near-duplicate of size-limit and replaced by lat-long (geo-coordinate); every held-out prompt carries the realism line 'Do not create git commits.', no work order and no test block"
+    "2026-10-01 r9 (draft on codex/heldout-tasks, registered only when merged, before any held-out dispatch): held-out Marshmallow tasks authored and frozen (heldout_tasks.py, results/20261001-heldout-tasks, commit 260729a); max-sum withdrawn from evaluation as a near-duplicate of size-limit and replaced by lat-long (geo-coordinate); every held-out prompt carries the realism line 'Do not create git commits.', no work order and no test block; pre-registered held-out analysis (heldout_analysis): arms A0, NOEXEC and BEST (the dev arm passing D1-D4 with the lowest mean requests, else no held-out run), 4 tasks x 5 repetitions in randomized paired blocks, debug-log request counts cross-checked against stream request ids, one-sided 95% bootstrap upper bound of BEST/A0 requests <= 0.90 plus quality non-inferiority (A0 - 1), censored sessions as failures at 60 requests, five realized safety controls first, a verification classifier, and a $0.33 per-session cap (65 sessions, $21.45 worst case within the $22 reserve)"
   ],
   "splits": {
     "marshmallow": {
@@ -440,5 +440,97 @@
       "A1 for context"
     ]
   },
-  "harness_registration": "development and held-out sessions use the production hook registration (SessionStart, UserPromptSubmit, PostToolBatch, PostToolUseFailure, PreToolUse for Bash, Stop, SessionEnd); earlier canaries registered PostToolUse per tool instead"
+  "harness_registration": "development and held-out sessions use the production hook registration (SessionStart, UserPromptSubmit, PostToolBatch, PostToolUseFailure, PreToolUse for Bash, Stop, SessionEnd); earlier canaries registered PostToolUse per tool instead",
+  "heldout_analysis": {
+    "revision": 9,
+    "status": "draft on codex/heldout-tasks; registered only when merged, before any held-out dispatch",
+    "script": "evals/reflex-proof/harness/heldout_analysis.py",
+    "tests": "evals/reflex-proof/harness/test_heldout_analysis.py",
+    "stratum": "same repository, same test file family, guided-learned route (run-175d85)",
+    "repository": "marshmallow",
+    "tasks": [
+      "mm-curve--has-keys",
+      "mm-curve--iso-date",
+      "mm-curve--json-object",
+      "mm-curve--lat-long"
+    ],
+    "task_manifest": "evals/reflex-proof/harness/results/20261001-heldout-tasks/manifest.json",
+    "task_manifest_sha256": "02341cc07e54627f60767c39ef22747250e52d388873c715d6242b156646f556",
+    "task_freeze_commit": "260729ae0723531fd2c40308a98cdad71257f9ae",
+    "arms": [
+      "A0",
+      "NOEXEC",
+      "BEST"
+    ],
+    "arm_definitions": {
+      "A0": "no Adage hooks (hooks disabled), same checkout, prompt and settings otherwise",
+      "NOEXEC": "Adage hooks with the production registration, BEST's frozen binaries, learned home and card setting; no execution grant (no contract, no CPU execution)",
+      "BEST": "the development arm selected below, with its binaries, card setting and one person-issued E2 grant for run-175d85"
+    },
+    "best_selection": "the development canary-v8 arm (A2 or A3) that passes D1-D4 with the lowest mean requests per positive session; ties go to the lower mean cost, then the name; if no arm passes, the held-out comparison is not run (heldout_analysis.select_best)",
+    "repetitions": 5,
+    "blocks": "20 paired blocks (4 tasks x 5 repetitions); each block runs all three arms on the identical frozen prompt and a fresh checkout of the pinned base; the arm order within each block comes from random.Random(seed) and is recorded in the frozen matrix; repetition-major dispatch, one session at a time",
+    "prompts": "the frozen prompt.txt of each task (the earlier neutral mm-curve template plus 'Do not create git commits.'), identical in every arm; no work order, no test block, no verification instruction",
+    "primary_metric": "model requests per session: the count of '[API REQUEST] /v1/messages' dispatch lines in the session debug log, which must equal the number of distinct stream request ids (one-to-one cross-check); any positive session that fails the cross-check makes the result unverified, which is not a pass",
+    "primary_test": {
+      "statistic": "sum(BEST requests) / sum(A0 requests) over the 20 blocks, after censoring imputation",
+      "method": "percentile bootstrap over blocks, resampling blocks with replacement within each task",
+      "bootstrap_draws": 20000,
+      "seed": 20261001,
+      "confidence": 0.95,
+      "sided": "one-sided upper bound",
+      "ratio_upper_bound_max": 0.9
+    },
+    "quality_margin": 1,
+    "quality_rule": "BEST's hidden-test passes >= A0's hidden-test passes - 1, scored by the independent hidden tests; censored sessions are failures",
+    "censoring": {
+      "rule": "a session without a successful result (max turns, budget cap, wall-clock limit or any other stop) counts as a quality failure and as max(observed requests, 60); it is never dropped or rerun",
+      "max_turns": 60,
+      "imputed_requests": 60,
+      "note": "imputation penalizes the censored arm: a censored A0 session favors BEST; uncensored blocks are reported"
+    },
+    "controls": {
+      "conditions": [
+        "failed",
+        "later-edit",
+        "config-change",
+        "broader",
+        "rerun"
+      ],
+      "arm": "BEST",
+      "task": "mm-curve--finite",
+      "suffixes": "launch_canary.CONDITIONS, unchanged (validated by canary-test-block-check)",
+      "order": "first, before any held-out block",
+      "rule": "every control session must be realized (launch_canary.realized) and skip no necessary verification; an unrealized control is a protocol failure, not a pass; on any control failure no held-out block is dispatched"
+    },
+    "verification_classifier": "heldout_analysis.verification_kinds: pytest, py.test, python -m pytest and uv/poetry run pytest; tox and nox; python -m unittest; python -c; python reading stdin or a heredoc; test scripts. Counted per Bash request, reported per arm, never gated",
+    "budget": {
+      "sessions": 65,
+      "per_session_cap_usd": 0.33,
+      "ceiling_usd": 22.0,
+      "worst_case_usd": 21.45,
+      "expected_usd": {
+        "at_0.11_to_0.15_per_session": [
+          7.15,
+          9.75
+        ],
+        "at_historical_mean_0.1905": 12.38
+      },
+      "basis": "78 earlier reported Haiku 4.5 Marshmallow sessions (excluding dev-v8b): mean $0.1905, p90 $0.2904, max $0.3365; 2 of 78 above $0.33",
+      "rule": "each session is reserved at its cap before dispatch; the phase stops when spend plus one cap would exceed the ceiling, and an incomplete matrix is not a pass",
+      "r8_cap_note": "the r8 $1.50 cap gives a $97.50 worst case for 65 sessions, above the $22 reserve; r9 lowers the per-session cap to $0.33 for this study only"
+    },
+    "pass": "all of: complete matrix, request cross-check, controls realized and safe, known costs, primary upper bound <= 0.90, quality non-inferiority",
+    "report_only": [
+      "NOEXEC/A0 and BEST/NOEXEC ratios with bounds",
+      "sign-flip permutation p-value for mean(BEST - 0.9*A0) < 0",
+      "verification requests per arm",
+      "tokens, cost and wall time",
+      "uncensored blocks",
+      "CPU executions and receipts"
+    ],
+    "relation_to_go_thresholds": "this is the pre-registered analysis for the Marshmallow held-out stratum; G1-G9 are not modified, and whether they also apply to this stratum is a coordinator decision before registration",
+    "natural_workflow_expectation": "recorded in heldout_tasks.EXPECTATION and the task manifest before any run",
+    "disclosure": "Before the coordinator's lock (2026-10-01), the task author's read-only scan for the natural tests-then-CHANGELOG base rate read the edit order (only) in 3 dev-v8b A0 transcripts (sessions 00-A0-positive-b1, 07-A0-positive-b2, 10-A0-positive-b3): the file paths of their Edit/Write calls. For 07-A0-positive-b2 it also confirmed that one Edit to a nonexistent path had failed with a tool error. It computed no outcome metrics (no request counts, costs, quality or arm comparisons), and those sessions are excluded from the base-rate scan."
+  }
 }
