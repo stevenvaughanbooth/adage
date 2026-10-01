@@ -844,7 +844,7 @@ mod tests {
     #[test]
     fn every_flag_a_module_reads_is_declared() {
         // Flags a module reads that are not command-line flags (arguments it passes to curl,
-        // cargo or npm, or the top-level --version it handles for scripts).
+        // cargo, git or npm, or the top-level --version it handles for scripts).
         let not_flags: BTreeSet<&str> = [
             "--max-filesize",
             "--proto",
@@ -855,6 +855,11 @@ mod tests {
             "--locked",
             "--git",
             "--global",
+            "--config",
+            "--ff-only",
+            "--manifest-path",
+            "--profile",
+            "--release",
         ]
         .into();
         let table: &[(&str, &[&str])] = &[
