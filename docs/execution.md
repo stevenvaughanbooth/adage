@@ -775,6 +775,13 @@ command's targets: entries it added are this run's failures, file entries (no `:
 collection errors, and entries it kept are reported as earlier failures it did not clear. A record
 this run did not rewrite gives no names at all.
 
+A passing verification's receipt names the tests from the declared node-id record
+(`.pytest_cache/v/cache/nodeids`, bound to the journal), within the command's targets. It prefers
+the tests that this session's edits added. The runtime keeps their function names (`new_tests` in
+the session state), taken from the `def test…` lines that an Edit or MultiEdit wrote and did not
+replace, or from a Write to a test file. The receipt says "the tests added in this session: …".
+When the record has none of them, it falls back to the ids new since the last recorded run.
+
 **Time.** The Stop hook's registered timeout is 30 s and an action may run 20 s, so one Stop never
 stages two runs: when an approved action already ran for an obligation's Stop request in the same
 event, the gate waits for the next Stop. Otherwise the gate's deadline is the timeout, counted

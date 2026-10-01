@@ -323,6 +323,20 @@ works with no user action.
    prompt within 0.10 below the threshold gets the card at the first edit of one of its files
    (PostToolUse) before the next prompt: a new prompt is a new task, and ends the wait. It is
    prime and observe: it directs no command, and `adage review strengthen` refuses it.
+   **What is delivered.** The learned card keeps its exemplars, but the delivered card leaves
+   them out. In dev-v8, a third of card sessions paged and grepped for the exemplar's idioms. In
+   the exemplars' place, the delivered card says where the card's files stand in the checkout
+   when it is said (`crates/adage-runtime/src/orient.rs`):
+   - each file's line count;
+   - a Python source's last eight top-level definitions, with their lines;
+   - a test file's last twelve lines, numbered;
+   - a changelog's first headings, numbered.
+
+   This is Adage's own read-only process. It runs no command, and is bounded at about 1,200
+   tokens. It skips patterns, dotfiles, ignored and secret-holding files, symlinks, files outside
+   the checkout and files over 1 MiB. Quoted lines are data, checked like exemplar lines, and a
+   line that looks like a secret is withheld. `ADAGE_CARD_ORIENTATION=0` (an evaluation knob)
+   delivers the earlier form: the exemplars and no orientation.
 5. **Verification.** `adage train cards` replays each card's commands on a clean checkout in
    adage-exec's sandbox (as `adage train` does for a skill; `adage` itself runs nothing). Installs
    are not replayed, since the sandbox has no network. The next learn marks the commands that
