@@ -10,8 +10,8 @@
     "attempts_at_registration": 100,
     "protocol_ceiling_usd": 38.0,
     "phase_ceilings_usd": {
-      "canary": 8.0,
-      "training": 8.0,
+      "canary": 12.0,
+      "training": 4.0,
       "heldout": 22.0
     },
     "per_session_cap_usd": 1.5,
@@ -25,7 +25,9 @@
     "admission_spend_at_r6_usd": 18.9257862,
     "attempts_at_r6": 116,
     "admission_spend_at_r7_usd": 20.2683707,
-    "attempts_at_r7": 128
+    "attempts_at_r7": 128,
+    "admission_spend_at_r8_usd": 20.2683707,
+    "attempts_at_r8": 128
   },
   "model": "claude-haiku-4-5-20251001",
   "claude_cli": "2.1.282",
@@ -168,7 +170,7 @@
     "copy grants",
     "change thresholds after the first held-out dispatch"
   ],
-  "revision": 7,
+  "revision": 8,
   "revisions": [
     "2026-09-30 r1: registered",
     "2026-09-30 r2, before any dispatch under this protocol: task splits with near-duplicate groups, training-isolation audit, evaluation read-only rule, paired blocks, same-repository strata and G9; canary moved to the development split",
@@ -177,7 +179,8 @@
     "2026-10-01 r5, before any canary or held-out agent session: the native review parses canary values where they start (Claude Code adds an exit-code line and appends <sandbox_violations>); one exemption rule (probe.proven_harmless) governs the canary program, the denied-name check and the credential-name check; launch-gate-v3 excluded unreviewed; canary moves to cohorts/launch-gate-v4/canary-v5",
     "2026-10-01 r6, development only (no held-out dispatch has occurred): canary-v5 results recorded (delivery and safety pass; positives unrealized; repeats after successful receipts); receipt note for covered test calls and plainer pytest receipt scope; canary-v7 supplies a fixed validated test block; canary phase ceiling 6 -> 8 and training 10 -> 8 (protocol total unchanged at 38)",
     "2026-10-01 r6 note: canary-v6 (launch-canary-6) was frozen before this JSON's r6 edits, so its source hashes no longer verify; it was superseded before preparation with no spend and canary-v7 (launch-canary-7, same design) replaces it",
-    "2026-10-01 r7, before any held-out dispatch: scorer version 2 (covered requests are repeat attempts whether or not they launched; any blocks an elimination; only completed requests satisfy necessary verification); realistic project environment (checkout .venv first on PATH and as VIRTUAL_ENV, native canary requires python_on_path); pytest receipts list collected/new node ids from the declared pytest cache record bound to the journal; later-edit control realized by construction; PreToolUse result substitution out of scope (goal is skipping inference)"
+    "2026-10-01 r7, before any held-out dispatch: scorer version 2 (covered requests are repeat attempts whether or not they launched; any blocks an elimination; only completed requests satisfy necessary verification); realistic project environment (checkout .venv first on PATH and as VIRTUAL_ENV, native canary requires python_on_path); pytest receipts list collected/new node ids from the declared pytest cache record bound to the journal; later-edit control realized by construction; PreToolUse result substitution out of scope (goal is skipping inference)",
+    "2026-10-01 r8, development only, before any held-out dispatch: target is fewer model requests per task against a no-Adage control in Claude Code hook mode; Lever 2 (factual contract, compact receipts, delivered failures, Stop gate) and Lever 1 (card names the certified test command); development canary-v8 (dev_arms.py) with arms A0 no hooks, A1 revision-7 integration, A2 Lever 2, A3 Levers 1+2 in six paired blocks plus A2/A3 safety controls, using the production hook registration; development thresholds D1-D4 registered here; canary/development ceiling 8 -> 12 and training 8 -> 4 (protocol total unchanged at 38; held-out keeps 22)"
   ],
   "splits": {
     "marshmallow": {
@@ -414,5 +417,23 @@
       "later_edit_realized": "0/2"
     }
   },
-  "environment": "every new session launches with the checkout's own .venv first on PATH and as VIRTUAL_ENV (probe.project_launch); the sandbox policy is unchanged"
+  "environment": "every new session launches with the checkout's own .venv first on PATH and as VIRTUAL_ENV (probe.project_launch); the sandbox policy is unchanged",
+  "primary_metric": "model requests per session (distinct assistant message ids), paired against A0 (no Adage hooks); CPU work is reported separately and never counted as inference saved",
+  "dev_thresholds": {
+    "D1_requests_max_ratio_to_A0": 0.85,
+    "D1_blocks_fewer_min": 4,
+    "D2": "hidden-test failures in the arm's positives no more than in A0's",
+    "D3": "necessary_work_skipped = 0 in the arm's controls",
+    "D4_sessions_with_repeat_attempts_max": 2,
+    "rule": "an arm passes development only if D1-D4 all hold; only a passing arm goes to the held-out comparison against A0, and the held-out comparison is scored by G1-G9 with model requests as the primary measure",
+    "reported_not_gated": [
+      "tokens by class (input, cache write, cache read, output)",
+      "cost",
+      "wall time",
+      "pytest requests",
+      "Stop gate runs",
+      "A1 for context"
+    ]
+  },
+  "harness_registration": "development and held-out sessions use the production hook registration (SessionStart, UserPromptSubmit, PostToolBatch, PostToolUseFailure, PreToolUse for Bash, Stop, SessionEnd); earlier canaries registered PostToolUse per tool instead"
 }

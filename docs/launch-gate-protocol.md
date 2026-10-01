@@ -1,7 +1,7 @@
 # Launch gate protocol: learned-action replacement (launch-gate-1)
 
-Registered 2026-09-30 (revision 2 the same day; revisions 3 to 7 on 2026-10-01). Revisions 3
-to 5 preceded any canary agent session; revisions 6 and 7 follow development canaries and precede
+Registered 2026-09-30 (revision 2 the same day; revisions 3 to 8 on 2026-10-01). Revisions 3
+to 5 preceded any canary agent session; revisions 6 to 8 follow development canaries and precede
 any held-out dispatch. The
 machine-readable copy is `evals/reflex-proof/harness/launch_gate_protocol.json`; when the two
 differ, the JSON governs. Revisions get a dated entry below and must precede the dispatch they
@@ -203,6 +203,53 @@ Revision 7, registered before any held-out dispatch:
 
 The next canary is designed but not frozen, pending the next design direction.
 
+### Revision 8 (development): fewer model requests, measured against no Adage
+
+**Target.** Fewer model requests per task, measured against a no-Adage control in Claude Code
+hook mode. CPU reuse is reported separately and never counted as inference saved. No hook can skip
+a mid-turn model request (see the inference-skip research summarized in the handoff), so savings
+can only come from the agent needing fewer requests.
+
+**Lever 2: verification ownership.**
+- **Contract.** A short factual SessionStart contract names the person-approved command, when Adage
+  runs it, and that it runs again when the agent finishes.
+- **Receipts.** Compact factual receipts give the command, pass or fail, the exit code and time, a
+  short receipt id, the tests from the declared pytest record, and how long the result stays
+  current.
+- **Failures.** A failed learned verification is delivered with its failing tests.
+- **Stop gate.** After a learned context verification ran in a treated session, a Stop with no
+  passing run on the current inputs runs it under the same grant, sandbox and journal. A pass ends
+  the turn with a person notice. The first failure continues the agent with the failing tests,
+  unless another stop hook is already continuing. At most two gate runs per session.
+
+**Lever 1.** The procedure card names the test command of an execution-certified verification as a
+fact. No learned lookup or linked-file routes exist for this family (the learned home holds a card,
+dead-end instincts and pytest runs), so discovery prefetch is skipped.
+
+**Firing at the tests edit (1c) is not implemented.** It would change the approval key's input
+scope, and the trigger stays as learned.
+
+**Development canary-v8 (`harness/dev_arms.py`, protocol `dev-arms-1`).**
+- **Arms**, run on the development task in six paired blocks with a rotating arm order:
+  - A0: no Adage hooks;
+  - A1: the revision-7 binaries;
+  - A2: Lever 2;
+  - A3: Levers 1+2.
+- **Controls.** Five safety controls each in A2 and A3: failed, later-edit, config-change, broader
+  and rerun. That makes 34 sessions, Haiku 4.5, with a study ceiling of $6.50.
+- **Registration.** Every hook arm uses Claude Code's production registration: PostToolBatch rather
+  than per-tool PostToolUse, and PreToolUse for Bash only.
+- **Primary metric.** Model requests per session (distinct assistant message ids). Tokens by class,
+  cost, wall time, quality, pytest requests and Stop-gate runs are reported.
+- **Development thresholds**, all required for an arm to proceed to held-out:
+  - D1: mean requests at most 0.85 times A0's, with fewer requests in at least 4 of 6 blocks;
+  - D2: no more hidden-test failures than A0;
+  - D3: zero skipped necessary verification in its controls;
+  - D4: covered repeat attempts in at most 2 of 6 positives.
+
+**Budget.** The canary/development ceiling rises from $8 to $12 and training falls from $8 to $4.
+The protocol total ($38) and the held-out reserve ($22) are unchanged.
+
 ## Phase 2: cohort (step 3)
 
 Learning waits for the learner-regression fix on main; nothing is frozen with the broken learner.
@@ -277,6 +324,10 @@ evaluation groups is registered.
 ## Revisions
 
 - 2026-09-30 r1: registered.
+- 2026-10-01 r8, development only: Lever 2 and Lever 1 in production code; development canary-v8
+  with arms A0-A3, the production hook registration, and thresholds D1-D4; ceilings $12
+  canary/development, $4 training and $22 held-out. Ledger at r8: 128 attempts, $20.2683707
+  admitted, $39.7316293 remaining.
 - 2026-10-01 r7, before any held-out dispatch: scorer version 2, realistic project environment,
   test evidence in pytest receipts, later-edit by construction; result substitution out of scope.
   Ledger at r7: 128 attempts, $20.2683707 admitted, $39.7316293 remaining.

@@ -120,36 +120,85 @@ def classify(request, receipt, rerun_requested=False):
     return "different_scope"
 
 
+def hook_text(output):
+    """The model- or person-facing text of a hook's output: additionalContext, a Stop reason, or a
+    person notice."""
+    if not output:
+        return ""
+    try:
+        value = json.loads(output)
+    except json.JSONDecodeError:
+        return ""
+    return ((value.get("hookSpecificOutput") or {}).get("additionalContext") or value.get("reason")
+            or value.get("systemMessage") or "")
+
+
 def extract(hooks_path, arm=None):
-    """Compact timeline from a `production-hooks.jsonl` capture (the collected hook wrapper log)."""
-    events, root, final, completed = [], None, None, set()
+    """Compact timeline from a `production-hooks.jsonl` capture (the collected hook wrapper log).
+
+    Works with both registrations: the older per-tool one (PreToolUse/PostToolUse for every tool)
+    and the production one (PreToolUse for Bash only, PostToolBatch, PostToolUseFailure). A tool seen
+    only in a batch is placed at that batch with the digest observed then. A call is completed when
+    a PostToolUse or a PostToolBatch reports it and no PostToolUseFailure does.
+    """
+    events, root, final = [], None, None
     rows = [json.loads(line) for line in Path(hooks_path).read_text().splitlines()]
+    reported, failed, seen = set(), set(), set()
     for row in rows:
+        payload = row.get("payload", {})
         if row.get("event") == "PostToolUse":
-            completed.add(row.get("payload", {}).get("tool_use_id"))
+            reported.add(payload.get("tool_use_id"))
+        elif row.get("event") == "PostToolBatch":
+            reported.update(c.get("tool_use_id") for c in payload.get("tool_calls", []))
+        elif row.get("event") == "PostToolUseFailure":
+            failed.add(payload.get("tool_use_id"))
+    completed = reported - failed
+
+    def tool(call, digest, pre_output=""):
+        name, data = call.get("tool_name"), call.get("tool_input", {}) or {}
+        return dict(kind="tool", id=call.get("tool_use_id"), name=name,
+            command=data.get("command") if name == "Bash" else None,
+            path=data.get("file_path") if name in ("Edit", "Write", "MultiEdit") else None,
+            digest=digest, completed=call.get("tool_use_id") in completed,
+            adage_pre_context="additionalContext" in (pre_output or ""),
+            receipt_note="<adage-receipt" in (pre_output or ""))
+
     for row in rows:
         payload = row.get("payload", {})
         root = root or payload.get("cwd")
-        if row.get("event") == "PreToolUse":
-            tool = payload.get("tool_name")
-            data = payload.get("tool_input", {})
-            events.append(dict(kind="tool", id=payload.get("tool_use_id"), name=tool,
-                command=data.get("command") if tool == "Bash" else None,
-                path=data.get("file_path") if tool in ("Edit", "Write", "MultiEdit") else None,
-                digest=row.get("before", {}).get("digest"), completed=payload.get("tool_use_id") in completed,
-                adage_pre_context="additionalContext" in (row.get("output") or ""),
-                receipt_note="<adage-receipt" in (row.get("output") or "")))
+        event = row.get("event")
+        if event == "PreToolUse":
+            seen.add(payload.get("tool_use_id"))
+            events.append(tool(payload, row.get("before", {}).get("digest"), row.get("output")))
+        elif event == "PostToolBatch":
+            for call in payload.get("tool_calls", []):
+                if call.get("tool_use_id") not in seen:
+                    seen.add(call.get("tool_use_id"))
+                    events.append(tool(call, row.get("before", {}).get("digest")))
         for entry in row.get("journal_new") or []:
-            text = json.loads(row["output"])["hookSpecificOutput"]["additionalContext"] if row.get("output") else ""
+            text = hook_text(row.get("output"))
             match = RAN.search(text)
             outcome = entry.get("outcome", {})
             events.append(dict(kind="receipt", operation=entry.get("id"), route=entry.get("route"),
                 command=match.group(1) if match else None, phase=entry.get("phase"),
                 outcome=outcome.get("outcome"), changed=[c.get("path") for c in outcome.get("changed", [])],
-                digest=row.get("after", {}).get("digest"), completion_delivered=bool(match)))
-        if row.get("event") in ("Stop", "SessionEnd"):
+                digest=row.get("after", {}).get("digest"), completion_delivered=bool(match), at=event))
+        if event in ("Stop", "SessionEnd"):
             final = row.get("after", {}).get("digest")
     return dict(arm=arm, root=root, events=events, final_digest=final)
+
+
+def stop_gate_replay(timeline):
+    """Offline prediction of the revision-8 Stop gate on a recorded session: it runs when a learned
+    context run happened and no successful run covers the final sources (a later edit, or only a
+    failed run). Whether it would pass is unknowable offline."""
+    receipts = [e for e in timeline["events"] if e["kind"] == "receipt" and e.get("at") != "Stop"]
+    ok = [e for e in receipts if e.get("phase") == "completed" and e.get("outcome") == "applied"]
+    final = timeline.get("final_digest")
+    runs = bool(receipts) and not any(e["digest"] == final for e in ok)
+    return dict(context_ran=bool(receipts), gate_runs=runs,
+                reason=("no context run" if not receipts else "a passing run covers the final sources" if not runs
+                        else "only failed runs" if not ok else "files changed after the last passing run"))
 
 
 def replay(timeline, rerun_requested=False, broader_required=None):

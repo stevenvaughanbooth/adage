@@ -32,6 +32,8 @@ from runner import spool_records
 
 PROTOCOL = 2
 EVENTS = ("SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop", "SessionEnd")
+# Events the recorder accepts: the registration above, plus the production one (claude.rs).
+RECORDED_EVENTS = EVENTS + ("PostToolBatch", "PostToolUseFailure")
 IGNORED = {".git", ".venv", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"}
 write, sha, append = substrate.write, substrate.sha, substrate.append
 
@@ -297,7 +299,7 @@ def hook(manifest_path, payload):
     if Path(payload.get("cwd", "")).resolve() != Path(m["execution_root"]).resolve():
         raise ValueError("hook cwd does not match its assignment")
     event = payload.get("hook_event_name")
-    if event not in EVENTS:
+    if event not in RECORDED_EVENTS:
         raise ValueError("unregistered hook event")
     session = Path(m["root"])
     before = tree_state(Path(m["execution_root"]))
