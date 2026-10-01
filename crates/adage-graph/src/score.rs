@@ -31,8 +31,9 @@
 //! otherwise, and V > 0 for a directive (not for a guard: an obligation after `last(edit)` or an
 //! avoid after a failure, whose worth is in the sessions that would miss them: its gate is
 //! contrast or consistency alone). A single successful continuation after an edit or a bounded
-//! multi-event context at ≥90% anchor confidence is retained independently of advisory value
-//! for execution judgement, including frequent prefixes absorbed by closure. It still passes
+//! multi-event context at ≥90% anchor confidence, with no check passed after the context's last
+//! edit (after one, the continuation is the next step of a sequence), is retained independently
+//! of advisory value for execution judgement, including frequent prefixes absorbed by closure. It still passes
 //! support/day/consistency gates; contrast and advisory value never grant execution. Admitted for
 //! execution only (absorbed by closure, or below the advisory contrast or value), its context
 //! must also be a change (no command, no file edited twice) with a positive contrast, and a
@@ -601,13 +602,25 @@ impl Stats {
 }
 
 /// Structural admission only. The score and independent execution recount still judge evidence.
+///
+/// The context is a change awaiting its check: no check passed after its last edit. Once one has,
+/// the change is checked and what follows is the next step of a sequence (`make test` then
+/// `make ci`), which advice learns as a sequence; the recount's own window after an edit closes at
+/// a passed check for the same reason.
 pub(crate) fn execution_shape(db: &Db, pat: &Pattern) -> bool {
     if pat.cut == 0 || pat.cut >= pat.items.len() {
         return false;
     }
     let xs = pat.context();
     let ys = &pat.items[pat.cut..];
+    let since_edit = xs.iter().rposition(|x| db.ty(x.label) == NodeType::Edit).map_or(0, |i| i + 1);
+    let checked = xs[since_edit..].iter().any(|x| {
+        db.ty(x.label) == NodeType::Act
+            && x.pol != Pol::Fail
+            && db.labels.effect[x.label as usize] == Some(adage_core::types::Effect::Verify)
+    });
     (db.ty(xs[xs.len() - 1].label) == NodeType::Edit || (2..=3).contains(&xs.len()))
+        && !checked
         && ys.len() == 1
         && db.ty(ys[0].label) == NodeType::Act
         && ys[0].pol != Pol::Fail

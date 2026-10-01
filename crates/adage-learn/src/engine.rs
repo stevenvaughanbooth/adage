@@ -1250,6 +1250,10 @@ mod execution_equivalence_tests {
                 // Unless every edit, or nearly every one, is.
                 calls.push(("Bash", json!({"command":command})));
             }
+            if mode == "then-ci" {
+                calls.push(("Read", json!({"file_path":format!("{cwd}/README.md")})));
+                calls.push(("Bash", json!({"command":"make ci"})));
+            }
             if mode == "same-turn-shell" {
                 calls.push(("Bash", json!({"command":"cd sub"})));
             }
@@ -1378,6 +1382,21 @@ mod execution_equivalence_tests {
             !index.routes.iter().any(|r| r.route.evidence.execution.is_some()),
             "{:?}",
             index.routes.iter().map(|r| (&r.route.trigger, &r.route.evidence.execution)).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn a_step_after_a_passed_check_is_not_an_execution_candidate() {
+        // Edit, the check passes, then `make ci`: the check is certified after the edit, but once
+        // it has passed the change is checked, and `make ci` is the next step of a sequence.
+        let command = ".venv/bin/python -m pytest tests/test_a.py -q";
+        let index = routine_cwd(&[command; 5], "then-ci");
+        let certified: Vec<_> = index.routes.iter().filter(|r| r.route.evidence.execution.is_some()).collect();
+        assert!(certified.iter().any(|r| r.route.step == Step::Run { command: command.into() }), "{certified:?}");
+        assert!(
+            certified.iter().all(|r| r.route.step != Step::Run { command: "make ci".into() }),
+            "{:?}",
+            certified.iter().map(|r| (&r.route.trigger, &r.route.step)).collect::<Vec<_>>()
         );
     }
 
