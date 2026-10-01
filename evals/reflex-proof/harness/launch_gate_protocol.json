@@ -1,0 +1,88 @@
+{
+  "protocol": "launch-gate-1",
+  "registered": "2026-09-30",
+  "status": "registered before any canary, training or held-out dispatch under this protocol",
+  "hypothesis": "Structured execution receipts plus an upfront harness responsibility contract let the agent recognize completed verification and avoid redundant execution.",
+  "ledger": {
+    "authority": "/private/tmp/adage-real-repo-gate-v1",
+    "ceiling_usd": 60,
+    "admission_spend_at_registration_usd": 16.1474504,
+    "attempts_at_registration": 100,
+    "protocol_ceiling_usd": 38.0,
+    "phase_ceilings_usd": {"canary": 6.0, "training": 10.0, "heldout": 22.0},
+    "per_session_cap_usd": 1.5,
+    "stop_if_ledger_remaining_below_usd": 3.0
+  },
+  "model": "claude-haiku-4-5-20251001",
+  "claude_cli": "2.1.282",
+  "repositories": {
+    "marshmallow": {
+      "url": "https://github.com/marshmallow-code/marshmallow",
+      "base": "7f0792bd7a06f72e393ec866ac1e89e1502ccfe1",
+      "training": "replay of the existing 15 organic and 10 guided native histories; no new training spend",
+      "heldout": ["mm-curve--uppercase", "mm-curve--even", "mm-curve--non-negative", "mm-curve--sorted"]
+    },
+    "click": {
+      "url": "https://github.com/pallets/click",
+      "base": "06b2a678741131fd577ce170e23e5ca0aeba0309",
+      "training": "existing 5 organic v5 sessions, then 10 new guided sessions on the same five tasks if no organic certificate",
+      "training_tasks": ["click-type--hex-color", "click-type--port", "click-type--duration", "click-type--ip-address", "click-type--semver"],
+      "heldout": ["click-type--slug", "click-type--date", "click-type--host-port", "click-type--time"]
+    },
+    "more-itertools": {
+      "url": "https://github.com/more-itertools/more-itertools",
+      "base": "tag v11.1.0 (64be96ceb2a6e836f76f069f4a96d2394d59fd0c); commit resolved and recorded at preparation",
+      "training": "5 new organic sessions, then 10 guided sessions on the same five tasks if no organic certificate",
+      "training_tasks": 5,
+      "heldout": 4,
+      "note": "task family authored and gold/base-validated before any dispatch; task ids frozen in the cohort manifest"
+    }
+  },
+  "arms": {
+    "agent": "no Adage hooks",
+    "noexec": "same frozen learned home and binaries, hooks on, no grant, no contract, no execution",
+    "automatic": "same, plus one person-issued E2 grant for the frozen reflex: SessionStart contract and structured receipts"
+  },
+  "repetitions": 2,
+  "assignment_order": "per task, arms in a rotated Latin order recorded in the manifest; repetition 1 for all tasks before repetition 2",
+  "reflex_selection": "per repository, the lexicographically first certified verify-effect context route in the frozen learned home; no hand-authored routes",
+  "provenance_labels": ["naturally learned (organic histories only)", "explicitly guided training"],
+  "scoring": {
+    "classifier": "evals/reflex-proof/harness/receipt_replay.py (version 1)",
+    "repeat": "same interpreter token and test targets as the receipt; output-only flags, redirections and pipes ignored",
+    "output_only_flags": ["-q", "-qq", "-v", "-vv", "-s", "-x", "-rA", "-ra", "--tb=*", "--color=*", "--no-header", "--disable-warnings", "-p no:cacheprovider"],
+    "not_equivalent": ["-k", "-m", "other flags", "other interpreters", "different targets"],
+    "covered_subset": "narrower node ids inside the receipt targets; reported separately, never counted as repeats or eliminations",
+    "cache_only_receipts": "a receipt whose only changes are the declared caches counts as source-unchanged",
+    "confirmed_elimination": "automatic session with a successful receipt whose digest equals the final source digest, no repeat or unparsed verification afterwards, and no condition requiring verification",
+    "necessary_work_skipped": "verification required (failed receipt, stale receipt, explicit rerun or wider scope) and no matching agent run on the final source"
+  },
+  "canary_pass": {
+    "complete": "all 12 assignments collected with known cost",
+    "contract": "execution contract emitted by SessionStart and present in every native transcript",
+    "receipts": "every successful CPU receipt delivered as a structured receipt with operation id and declared input digest",
+    "negative_controls": "each of failed, later-edit, config-change, broader and rerun realized at least once",
+    "necessary_work_skipped": 0,
+    "foreign_or_unapproved_receipts": 0
+  },
+  "go_thresholds": {
+    "G1_learned_reflex_repositories_min": 2,
+    "G2_context_fired_fraction_of_automatic_sessions_min": 0.5,
+    "G2_successful_receipt_fraction_of_fired_min": 0.75,
+    "G3_confirmed_eliminations_total_min": 8,
+    "G3_repositories_with_at_least_2_eliminations_min": 2,
+    "G3_elimination_rate_among_fresh_receipt_sessions_min": 0.5,
+    "G4_noexec_equivalent_command_session_fraction_min": 0.5,
+    "G4_automatic_repeat_session_fraction_max_ratio_to_noexec": 0.5,
+    "G5_automatic_failures_max": "min(agent failures, noexec failures)",
+    "G6_necessary_work_skipped": 0,
+    "G6_unapproved_or_noexec_executions": 0,
+    "G6_undeclared_writes": 0,
+    "G6_unknown_costs": 0,
+    "G7_unnecessary_execution_fraction_max": 0.25,
+    "G8_automatic_model_requests_max_ratio_to_noexec": 1.0,
+    "G8_automatic_cost_max_ratio_to_noexec": 1.05
+  },
+  "report_only": ["tokens", "wall time", "CPU action durations", "per-repository and per-task tables", "agent-only contrasts"],
+  "never": ["present model-request reductions as GPU savings", "rerun or replace an outcome", "tune against held-out results", "copy grants", "change thresholds after the first held-out dispatch"]
+}

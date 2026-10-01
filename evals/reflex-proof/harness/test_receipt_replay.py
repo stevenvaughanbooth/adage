@@ -1,0 +1,113 @@
+"""Receipt-consumption replay: archived transfer-v3 duplicates and negative controls; offline."""
+import json
+from pathlib import Path
+import unittest
+
+import receipt_replay as rr
+
+ARCHIVE = Path(__file__).parent / "results/20260930-receipt-replay/timelines"
+CMD = ".venv/bin/python -m pytest tests/test_validate.py -q"
+
+
+def tool(command=None, digest="a", name="Bash", path=None):
+    return dict(kind="tool", id="t", name=name, command=command, path=path, digest=digest)
+
+
+def receipt(digest="a", phase="completed", outcome="applied", command=CMD):
+    return dict(kind="receipt", command=command, phase=phase, outcome=outcome, digest=digest)
+
+
+def timeline(*events, final="a"):
+    return dict(root="/repo", events=list(events), final_digest=final)
+
+
+class ArchivedTransfer(unittest.TestCase):
+    """The frozen study's 0/4 result is reproduced from native hook records, not reinterpreted."""
+
+    def test_every_automatic_session_repeated_the_completed_verification(self):
+        expected = {"odd": (2, 4), "finite": (1, 2), "no-adjacent-duplicates": (2, 1), "max-utf8-bytes": (1, 2)}
+        for task, (redundant, subsets) in expected.items():
+            auto = rr.replay(json.loads((ARCHIVE / f"mm-curve--{task}--automatic.json").read_text()))
+            learned = rr.replay(json.loads((ARCHIVE / f"mm-curve--{task}--learned.json").read_text()))
+            self.assertEqual((auto["successful_receipts"], auto["redundant_repeats"], auto["covered_subsets"]),
+                             (1, redundant, subsets), task)
+            self.assertFalse(auto["confirmed_elimination"])
+            self.assertFalse(auto["verification_necessary"])  # Source never changed after the receipt.
+            # The first post-receipt test request used the bare interpreter in every session.
+            self.assertEqual([r["classification"] for r in auto["requests"] if "segment" in r][0], "different_environment")
+            self.assertEqual(learned["receipts"], 0)
+            self.assertTrue(learned["final_source_verified"])
+            exact = [r for r in auto["requests"] if r["classification"] == "exact_repeat"]
+            self.assertTrue(exact and all(r["segment"] == CMD for r in exact))
+
+
+class Equivalence(unittest.TestCase):
+    def kind(self, command, digest="a"):
+        rows = rr.replay(timeline(receipt(), tool(command, digest)))["requests"]
+        return rows[0]["classification"] if rows else None
+
+    def test_predeclared_equivalence_is_narrow(self):
+        self.assertEqual(self.kind(CMD), "exact_repeat")
+        self.assertEqual(self.kind(".venv/bin/python -m pytest tests/test_validate.py --tb=short -p no:cacheprovider"),
+                         "equivalent_repeat")
+        self.assertEqual(self.kind("/repo/.venv/bin/python -m pytest /repo/tests/test_validate.py -xvs 2>&1 | tail -20"),
+                         "equivalent_repeat")
+        self.assertEqual(self.kind("python -m pytest tests/test_validate.py -q"), "different_environment")
+        self.assertEqual(self.kind(".venv/bin/python -m pytest tests/test_validate.py::test_odd -v"), "covered_subset")
+        self.assertEqual(self.kind(".venv/bin/python -m pytest tests/test_validate.py -k odd"), "different_scope")
+        self.assertEqual(self.kind(".venv/bin/python -m pytest tests/"), "different_scope")
+        self.assertEqual(self.kind(".venv/bin/python -m pytest"), "different_scope")
+        self.assertIsNone(self.kind("git status"))
+
+    def test_unparsed_verification_blocks_elimination_but_other_shell_does_not(self):
+        heredoc = rr.replay(timeline(receipt(), tool(".venv/bin/python << 'EOF'\nprint(1)\nEOF")))
+        self.assertTrue(heredoc["confirmed_elimination"])
+        hidden = rr.replay(timeline(receipt(), tool("bash -c \"$(echo pytest)\" > out")))
+        self.assertEqual(hidden["opaque"], 1)
+        self.assertFalse(hidden["confirmed_elimination"])
+
+
+class NegativeControls(unittest.TestCase):
+    """Failed, stale, broader and explicitly requested verification must remain necessary."""
+
+    def test_fresh_receipt_without_repeat_is_an_elimination(self):
+        r = rr.replay(timeline(tool(name="Edit", path="CHANGELOG.rst"), receipt(), tool("git diff")))
+        self.assertTrue(r["confirmed_elimination"])
+        self.assertFalse(r["necessary_work_skipped"])
+
+    def test_failed_receipt_requires_agent_verification(self):
+        skipped = rr.replay(timeline(receipt(phase="completed", outcome="refused")))
+        self.assertTrue(skipped["verification_necessary"] and skipped["necessary_work_skipped"])
+        self.assertFalse(skipped["confirmed_elimination"])
+        ran = rr.replay(timeline(receipt(outcome="refused"), tool(CMD)))
+        self.assertEqual(ran["requests"][0]["classification"], "after_failed_receipt")
+        self.assertFalse(ran["necessary_work_skipped"])
+        self.assertEqual(ran["redundant_repeats"], 0)
+
+    def test_later_relevant_edit_makes_the_receipt_stale(self):
+        skipped = rr.replay(timeline(receipt("a"), tool(name="Edit", path="src/x.py", digest="a"), final="b"))
+        self.assertTrue(skipped["necessary_work_skipped"])
+        ran = rr.replay(timeline(receipt("a"), tool(CMD, digest="b"), final="b"))
+        self.assertEqual(ran["requests"][0]["classification"], "after_relevant_change")
+        self.assertFalse(ran["necessary_work_skipped"] or ran["confirmed_elimination"])
+        # A verification run before the final edit does not cover the final source.
+        early = rr.replay(timeline(receipt("a"), tool(CMD, digest="b"), final="c"))
+        self.assertTrue(early["necessary_work_skipped"])
+
+    def test_broader_scope_request_needs_the_broader_run(self):
+        narrow = rr.replay(timeline(receipt(), tool(CMD)), broader_required=[(), ("tests",)])
+        self.assertTrue(narrow["necessary_work_skipped"])
+        broad = rr.replay(timeline(receipt(), tool(".venv/bin/python -m pytest tests -q")), broader_required=[(), ("tests",)])
+        self.assertEqual(broad["requests"][0]["classification"], "different_scope")
+        self.assertFalse(broad["necessary_work_skipped"] or broad["confirmed_elimination"])
+
+    def test_explicit_rerun_is_necessary_not_redundant(self):
+        skipped = rr.replay(timeline(receipt()), rerun_requested=True)
+        self.assertTrue(skipped["necessary_work_skipped"])
+        ran = rr.replay(timeline(receipt(), tool(CMD)), rerun_requested=True)
+        self.assertEqual((ran["requests"][0]["classification"], ran["redundant_repeats"]), ("requested_rerun", 0))
+        self.assertFalse(ran["necessary_work_skipped"] or ran["confirmed_elimination"])
+
+
+if __name__ == "__main__":
+    unittest.main()
