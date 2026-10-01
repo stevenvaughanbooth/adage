@@ -27,7 +27,7 @@
 
 <div class="film" id="film" tabindex="-1" role="dialog" aria-modal="true" aria-label="Adage teaser film" aria-describedby="film-desc">
   <video id="film-video" playsinline preload="none" tabindex="-1"></video>
-  <p class="sr" id="film-desc">A 45-second film: an agent repeats work, Adage learns paths through its traces, and hooks deliver learned reflexes. The cinematic GPU-to-CPU sequence represents replacing repeated model deliberation with local matching. The film ends on Adage. Press Escape or the Skip intro button to go to the page.</p>
+  <p class="sr" id="film-desc">A 45-second film: an agent repeats work, Adage learns paths through its traces, and hooks deliver learned reflexes. The cinematic GPU-to-CPU sequence represents replacing repeated model deliberation with local matching. It is a visual metaphor: Adage has not measured any GPU, energy or inference savings. The film ends on Adage. Press Escape or the Skip intro button to go to the page.</p>
   <button class="film-close film-ui" id="film-close" type="button" aria-label="Close the teaser"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 2l10 10M12 2L2 12"/></svg></button>
   <button class="film-play" id="film-play" type="button" hidden>&#9654;&#xFE0E; Play the teaser with sound &middot; 0:45</button>
   <div class="film-bar film-ui">
@@ -121,7 +121,7 @@ $ make check
       <summary>What actually moves off the model?</summary>
       <p><b>By default:</b> local CPU matching delivers guidance; supported pre-call instincts can correct a command to the repository's verified environment without another model request. The agent still executes its tools.</p>
       <p><b>With separate execution approval:</b> <code>adage-exec</code> can prefetch a read-only result or run a staged action in a sandbox and apply permitted outputs. Choosing and running that invocation needs no model request; the agent may still reason over its result.</p>
-      <p>A learned command is not automatically approved to run. A delivered directive is not proof of a saved model turn. Each behavior has its own evidence.</p>
+      <p>A learned command is not automatically approved to run. A delivered directive is not proof of a saved model turn. Each behavior has its own evidence. Model requests and API cost are not GPU measurements: no GPU, energy or inference savings have been measured.</p>
     </details>
     <div class="story-inputs">
       <p><span>Ready on day one</span><b>Instincts</b>Bind known moves to your repository's tools.</p>
@@ -180,7 +180,7 @@ $ make check
           <tr><th scope="row">Check the part you edited</th><td>A command naming the directory an edit touched, or the tests of the edited file</td><td><span class="lamp prime">prime</span><q>After an edit under <code>packages/ledger/</code>: <code>make -C packages/ledger check</code></q></td></tr>
           <tr><th scope="row">Sync the environment</th><td>A dependency step after a dependency file changes; waits for your approval</td><td><span class="lamp prime">prime</span><q>Once <code>requirements.txt</code> changes: <code>make deps</code></q></td></tr>
           <tr><th scope="row">Start like others did</th><td>Prompts that mean the same thing, whose sessions ran the same command first</td><td><span class="lamp prime">prime</span><q>Requests like this one usually start by running: <code>make test</code></q></td></tr>
-          <tr><th scope="row">Procedure card</th><td>Two or more earlier sessions of a task the repository repeats, one of them passing</td><td><span class="lamp prime">prime</span><q>Once, at the prompt: the files to edit in order, the lines added last time, the commands that worked and those that failed, the finishing check</q></td></tr>
+          <tr><th scope="row">Procedure card</th><td>Two or more earlier sessions of a task the repository repeats, one of them passing</td><td><span class="lamp prime">prime</span><q>Once, at the prompt: the files to edit in order and where each stands in your checkout now, the commands that worked and those that failed, the finishing check</q></td></tr>
         </tbody>
       </table>
     </div>
@@ -283,14 +283,14 @@ $ make check
   <div class="wrap split">
     <div>
       <p class="kicker reveal">Get started</p>
-      <h2 class="display reveal" id="start-h">Install the plugin. <span class="soft">Start a session.</span></h2>
-      <p class="lede reveal">When the first release ships, install the Claude Code plugin and start a session in a repository. Adage binds instincts and learns from earlier traces in the background. The plugin bundles its binaries; it does not put <code>adage</code> on your terminal's PATH.</p>
-      <p class="reveal">Have repository access? Build the CLI from source, then try the isolated demos below. The source preview currently requires access to the private repository. Homebrew and <code>@adage-sh/cli</code> distribution are planned for the release. Codex and OpenCode adapters are in preview.</p>
+      <h2 class="display reveal" id="start-h">Not released yet. <span class="soft">The plugin comes first.</span></h2>
+      <p class="lede reveal">Adage is an unreleased developer preview. Nothing is published yet: no plugin marketplace, release binaries, Homebrew tap or npm package. When the first release ships, install the Claude Code plugin and start a session in a repository. Adage binds instincts and learns from earlier traces in the background. The plugin bundles its binaries; it does not put <code>adage</code> on your terminal's PATH.</p>
+      <p class="reveal">Have repository access? Build the CLI from source, then try the isolated demos below. The source preview currently requires access to the private repository. Homebrew and <code>@adage-sh/cli</code> distribution are planned for the release. Codex and OpenCode adapters are in preview. Opt-in execution runs on macOS and Linux; Windows execution is unsupported.</p>
       <p class="links reveal" id="repo-links" hidden><a href="#" data-repo="">Read the README</a><a href="#" data-repo="/blob/main/docs/lexicon.md">The lexicon</a></p>
     </div>
     <div class="term reveal" role="region" aria-label="Install and set up">
       <div class="term-top" aria-hidden="true"><i></i><i></i><i></i></div>
-      <pre><code><span class="c"># in Claude Code, once the first release ships</span>
+      <pre><code><span class="c"># not published yet: in Claude Code, once the first release ships</span>
 /plugin marketplace add stevenvaughanbooth/adage
 /plugin install adage@adage
 <span class="c"># then start a coding session in your repo</span></code></pre>

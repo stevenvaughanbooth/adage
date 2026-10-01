@@ -19,6 +19,10 @@ for source overrides and the distinction between manual and automatic Codex disc
 > re-bound at every automatic learn, not only at bootstrap. `systemMessage` on `SessionStart` was
 > verified against Claude Code 2.1.283: it is recorded as a `hook_system_message` attachment,
 > shown to the person, and not sent to the model.
+>
+> **Distribution (2026-10-01):** nothing is published yet. There is no release, plugin
+> marketplace, Homebrew tap or npm package; Adage is built from source. The plugin, brew, npm and
+> curl paths below describe the design for the first release.
 
 ## 0. Principles
 
@@ -35,7 +39,7 @@ for source overrides and the distinction between manual and automatic Codex disc
 
 | t | What happens (automatic) |
 |---|---|
-| `/plugin install adage@adage` | The plugin ships **verified binaries for all 5 targets** (see P0-1). No network is used. |
+| `/plugin install adage@adage` | The plugin ships **checksummed binaries for all 5 targets** (see P0-1). No network is used. (The marketplace is not published yet: no release has been built, so this row describes the design.) |
 | First `SessionStart` | The shim stages the binary. The hook sees the repo has no index entry and no learn-queue state, so it runs the **bootstrap**: it spawns a detached `adage condition --auto --repo-root <root> --bootstrap`. Phase 1 binds instincts from the repo files and compiles the index (tens of ms). Phase 2 conditions from this repo's existing `~/.claude/projects` traces. The hook itself returns in under 50 ms. It also writes a `session_start` spool record (arm, propensity) and emits one `systemMessage` line that the user sees but the model does not: `adage: learning from 23 past sessions in this repo; 4 instincts active now. Nothing runs without you.` |
 | First prompt (seconds later) | The index now has instincts, and after phase 2, learned reflexes. The first directive is delivered. |
 | Each `Stop` | Auto-learn runs as it does today. |

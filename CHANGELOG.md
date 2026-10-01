@@ -18,9 +18,40 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### Launch clarity and local experience
 
-- Approved E2 verification sessions receive a model-facing responsibility contract, separate
-  from UI notices. Learned CPU completions carry journal-backed metadata and scope caveats;
-  guided sessions stay excluded from organic learning. Live real-repository savings remain unproven.
+- **Adage owns an approved verification.** With E2 allowed and one learned verification approved,
+  a treated Claude Code or Codex session starts with a short, factual contract naming the command
+  Adage runs (at most two), when, and that it runs again at finish; only grants that still match
+  are named, and control sessions get none. The receipt after a run is short: result, exit, time,
+  a receipt id, the number of tests pytest collected and the tests this session's edits added, by
+  name, from pytest's declared cache record (never from output). A test call that a fresh passing
+  receipt covers gets a note, never a refusal. Guided sessions stay excluded from organic learning.
+- **The finish-line check (Stop gate).** When the agent finishes, a verification that ran this
+  session and has not passed on the current inputs runs again through the same gates. Passed: the
+  turn ends with one line for the person. Failed: the agent continues once, with the failing tests,
+  in a continuation marked as Adage's; a second failure ends the turn with a line for the person.
+  At most two gate runs per session; never on OpenCode. An unconfirmed run pauses actions until a
+  person acknowledges recovery.
+- **The orientation card.** A delivered procedure card no longer quotes the exemplar lines; it says
+  where its files stand in the checkout instead (line counts, a Python source's last definitions,
+  a test file's last lines, a changelog's first headings), read locally with no command run and
+  bounded at about 1,200 tokens. `ADAGE_CARD_ORIENTATION=0` delivers the earlier form.
+- **Lapsed approvals are told, not silent.** When a grant stops matching, the person sees one line
+  at most once per session naming the grant, what changed and the `adage review delegate …`
+  command that approves it again; `adage delegate status` and `adage review` list lapsed grants.
+  Bytecode in `__pycache__` no longer lapses a project-Python grant (adapter version 2).
+- **`adage delegate policy [--max-level e1|e2]`** shows this machine's execution policy and its
+  file; `--max-level e2` (a person, never in an agent session) writes the opt-in with automatic
+  approval off and the sandbox required, keeping other settings. Refusal hints name it instead of
+  an internal gate. `review delegate --timeout-ms` above the level's limit says it was clamped.
+- **`adage install <harness> --remove`** takes Adage's hooks out of the scope's file with a diff, a
+  confirmation and a `.adage-bak`, leaving the person's own hooks and settings as they were
+  (install then remove restores the file byte for byte).
+  `install --write` and the init wizard no longer add a second registration where one exists.
+- **`adage condition --repo-root <dir>`** conditions that repository alone; it was a hidden flag
+  that plain `condition` ignored.
+- Evidence for this work is development-stage only: one valid development study on one task with
+  development scaffolding (dev-v9b), not a launch statistic. The held-out comparison has not run.
+  Live real-repository savings remain unproven.
 - Live evaluation subprocesses no longer inherit launcher stdin as unintended model input.
   The regression reproduces the prior leak; contaminated diagnostic cohorts remain archived.
 
@@ -98,8 +129,9 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 - Paid evaluation dispatch reserves per-session budgets durably and stops on unknown accounting.
   The current behavior reference and reproducible proof ledger distinguish execution from savings.
 
-- **The marketplace plugin carries its binaries.** The release workflow stages both Claude Code
-  plugins with verified binaries for all five targets (`scripts/stage-plugin.mjs`, archives
+- **The marketplace plugin carries its binaries** (not published yet: the workflow has not run on
+  a tag, and the `marketplace` branch does not exist). The release workflow stages both Claude Code
+  plugins with checksummed binaries for all five targets (`scripts/stage-plugin.mjs`, archives
   checked against dist's `.sha256`, binaries against `dist/SHA256SUMS`) and publishes them to the
   `marketplace` branch (`.github/workflows/publish-marketplace.yml`); `marketplace.json` installs
   from it (`git-subdir`, `ref: marketplace`). No `adage` on `PATH` is needed and nothing is
@@ -381,14 +413,18 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### Platforms and distribution
 
-- macOS (arm64, x64), Linux (x64, arm64; static musl) and Windows (x64; execution is unavailable
-  there). CI runs rustfmt, clippy, the whole test suite, cargo-deny, a NOTICE check and plugin
-  validation on every platform, and the slow eval gates weekly.
-- Releases built by dist for every target: `adage`, `adage-exec` and `adage-train`, each with
-  shell, PowerShell and Homebrew installers, Sigstore build-provenance attestations and a
+- Build targets: macOS (arm64, x64), Linux (x64, arm64; static musl) and Windows (x64; execution
+  is unavailable there). Pushes and pull requests run rustfmt, clippy, the Linux x64 tests and the
+  DCO, cargo-deny and plugin checks; the full matrix (macOS, Windows, Linux arm64, the musl builds,
+  NOTICE, the design and site suites) and the slow eval gates run weekly and on dispatch. Native
+  Linux and Windows runs remain unverified for this preview.
+- A release workflow (dist) set up for every target: `adage`, `adage-exec` and `adage-train`, each
+  with shell, PowerShell and Homebrew installers, Sigstore build-provenance attestations and a
   CycloneDX SBOM. The npm package's launcher runs the binaries from a per-platform package chosen
-  by `os`/`cpu` (all three binaries in it); nothing is downloaded at install time.
+  by `os`/`cpu` (all three binaries in it); nothing is downloaded at install time. None of this
+  is published yet: the workflow has not run on a tag, and the tap and npm package do not exist.
 - A Claude Code plugin marketplace with two plugins (`adage`, and `adage-exec` for execution);
-  each uses a bundled, checksum-verified binary, else the one on `PATH`, and never downloads.
-- A public website (`web/site`).
+  each uses a bundled, checksummed binary, else the one on `PATH`, and never downloads. Not
+  published yet.
+- The website (`web/site`).
 - Apache-2.0, with a generated NOTICE of third-party licenses; `SECURITY.md`, `CONTRIBUTING.md`.

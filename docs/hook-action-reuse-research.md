@@ -4,7 +4,7 @@ Research checkpoint: 2026-09-30. This is a diagnosis and prospective experiment 
 not evidence that duplicate work has been fixed.
 
 Subsequent live diagnostics, evaluator stdin isolation, candidate production integration, and
-current validation are recorded in the [launch handoff](launch-handoff.md). The experiment plan
+current validation are recorded in the [launch evidence index](../evals/reflex-proof/LAUNCH-STATUS.md). The experiment plan
 below is the original research checkpoint, not the latest execution status.
 
 ## The observed problem
