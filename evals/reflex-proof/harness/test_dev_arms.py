@@ -93,6 +93,10 @@ class Hook(unittest.TestCase):
                 self.assertEqual(dev.hook(path, {}), "out")
                 self.assertEqual(os.environ.get("ADAGE_CARD_CHECKS"), "0")
                 h.assert_called_once()
+                # A recorder process never carries one arm's knob into another's hook.
+                path.write_text(json.dumps(dict(arm="automatic", card_checks=True)))
+                dev.hook(path, {})
+                self.assertNotIn("ADAGE_CARD_CHECKS", os.environ)
 
 
 def row(arm, block, requests, condition="positive", **extra):

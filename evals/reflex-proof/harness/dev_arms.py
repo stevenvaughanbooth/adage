@@ -277,9 +277,11 @@ def hook(manifest, payload):
     m = pairs.read(manifest)
     if m["arm"] != "automatic":
         raise ValueError("the no-hook arm never runs Adage")
+    import os
     if m.get("card_checks") is False:
-        import os
         os.environ["ADAGE_CARD_CHECKS"] = "0"
+    else:
+        os.environ.pop("ADAGE_CARD_CHECKS", None)
     return pairs.hook(manifest, payload)
 
 
