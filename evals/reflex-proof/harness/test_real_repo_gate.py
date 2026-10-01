@@ -1,4 +1,6 @@
 import json
+import subprocess
+import sys
 from pathlib import Path
 import tempfile
 import unittest
@@ -41,6 +43,38 @@ class PreparationTests(unittest.TestCase):
             self.assertTrue(settings["sandbox"]["failIfUnavailable"])
             self.assertFalse(settings["sandbox"]["allowUnsandboxedCommands"])
             self.assertFalse(settings["sandbox"]["autoAllowBashIfSandboxed"])
+
+    def test_native_canary_program_fails_every_check_outside_a_sandbox(self):
+        import socket as sk
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d).resolve()
+            work = root / "repo"
+            for sub in (".venv", ".git"):
+                (work / sub).mkdir(parents=True)
+            private = root / "private.txt"
+            private.write_text("x")
+            inbox = root / "i.sock"
+            listener = sk.socket(sk.AF_UNIX)
+            listener.bind(str(inbox))
+            listener.listen()
+            tcp = sk.socket()
+            tcp.bind(("127.0.0.1", 0))
+            tcp.listen()
+            try:
+                (work / "native_canary.py").write_text(gate.native_canary_source(private, root / "outside", tcp.getsockname()[1], inbox))
+                env = {"PATH": "/usr/bin:/bin", gate_probe.SENTINEL: "s", "GITHUB_TOKEN": "t"}
+                out = subprocess.run([sys.executable, "native_canary.py"], cwd=work, env=env, capture_output=True, text=True)
+            finally:
+                listener.close()
+                tcp.close()
+            checks = json.loads(out.stdout.split("NATIVE_SANDBOX_CHECKS=", 1)[1])
+            names = json.loads(out.stdout.split("NATIVE_ENV_NAMES=", 1)[1].split("\n", 1)[0])
+            self.assertEqual(out.returncode, 1)
+            for name in ("read", "outside_write", "dependency_write", "git_write", "network", "inbox",
+                         "env_sentinel_denied", "env_denied_names_absent", "proxy_denies_external"):
+                self.assertIs(checks[name], False, name)
+            self.assertIs(checks["inside_write"], True)
+            self.assertEqual(gate_probe.unexplained_credentials(names, checks), ["GITHUB_TOKEN"])
 
     def test_native_exact_protected_file_and_directory_are_denied(self):
         with tempfile.TemporaryDirectory() as d:

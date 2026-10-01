@@ -21,15 +21,21 @@ def policy(authority, checkout, runtime, protected=()):
     return settings
 
 
-def startup_argv(argv):
-    """Identical startup isolation for native, training and paired assignments."""
+def inbox_socket():
+    """A fresh private inbox path; Claude starts an inbox regardless, this only fixes its path."""
     inbox = Path(tempfile.mkdtemp(prefix="adage-np5-", dir="/tmp")).resolve()
     inbox.chmod(0o700)
     socket = inbox / "inbox.sock"
     if len(os.fsencode(socket)) >= 100:
         raise ValueError("messaging socket exceeds portable native limit")
+    return socket
+
+
+def startup_argv(argv):
+    """Identical startup isolation for native, training and paired assignments."""
     argv = list(argv)
-    argv[-1:-1] = ["--messaging-socket-path", str(socket)]
+    if "--messaging-socket-path" not in argv:
+        argv[-1:-1] = ["--messaging-socket-path", str(inbox_socket())]
     return ["/usr/bin/env", "CLAUDE_CODE_PROFILE_STARTUP=1", *argv]
 
 

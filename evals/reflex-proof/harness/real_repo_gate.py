@@ -361,6 +361,30 @@ def native_settings(root, checkout, allowed, protected=()):
                 "credentials": {"envVars": [{"name": name, "mode": "deny"} for name in scrub]}}}
 
 
+def native_canary_source(private, outside, port, inbox):
+    """The native canary program: file, network, inbox and tool-environment checks, names only."""
+    import probe
+    return ("import errno,json,pathlib,socket\nchecks={}\n"
+        "def denied(name, fn):\n try:\n  result=fn()\n  if hasattr(result,'close'):result.close()\n  checks[name]=False\n"
+        " except OSError as e:checks[name]=e.errno in (errno.EPERM,errno.EACCES)\n"
+        + f"denied('read',lambda:pathlib.Path({str(private)!r}).read_text())\n"
+        + f"denied('outside_write',lambda:pathlib.Path({str(outside)!r}).write_text('bad'))\n"
+        + "denied('dependency_write',lambda:pathlib.Path('.venv/native-write-canary').write_text('bad'))\n"
+        + "denied('git_write',lambda:pathlib.Path('.git/native-write-canary').write_text('bad'))\n"
+        + f"denied('network',lambda:socket.create_connection(('127.0.0.1',{port}),timeout=2))\n"
+        + f"denied('inbox',lambda:socket.socket(socket.AF_UNIX).connect({str(inbox)!r}))\n"
+        + "import os,urllib.request\nchecks['env_sentinel_denied']='ADAGE_CONFINEMENT_SENTINEL' not in os.environ\n"
+        + f"checks['env_denied_names_absent']=not [n for n in {sorted(probe.DENIED_ENV)!r} if n in os.environ]\n"
+        + "def proxied():\n if not (os.environ.get('HTTP_PROXY') or os.environ.get('http_proxy')):return False\n"
+        + " try:urllib.request.urlopen('http://example.com/',timeout=5).close();return False\n except Exception:return True\n"
+        + "checks['proxy_denies_external']=proxied()\n"
+        + "pathlib.Path('inside-write-canary').write_text('allowed');checks['inside_write']=True\n"
+        + "print('NATIVE_ENV_NAMES='+json.dumps(sorted(os.environ)))\n"
+        + "print('NATIVE_SANDBOX_CHECKS='+json.dumps(checks,sort_keys=True))\n"
+        # The proxy check only conditions an exemption; it never decides the exit status.
+        + "raise SystemExit(0 if all(v for k,v in checks.items() if k!='proxy_denies_external') else 1)\n")
+
+
 def prepare_session(root, task, model, native_probe=False, setup_checkout=None):
     """Prepare one unique assignment; explicit guided cohorts use their frozen prompt."""
     import probe
@@ -396,21 +420,10 @@ def prepare_session(root, task, model, native_probe=False, setup_checkout=None):
         with socket.socket() as listener:
             listener.bind(("127.0.0.1", 0))
             port = listener.getsockname()[1]
+        from cohort_v5 import inbox_socket
+        inbox = inbox_socket()
         script = checkout / "native_canary.py"
-        script.write_text("import errno,json,pathlib,socket\nchecks={}\n"
-            "def denied(name, fn):\n try:\n  result=fn()\n  if hasattr(result,'close'):result.close()\n  checks[name]=False\n"
-            " except OSError as e:checks[name]=e.errno in (errno.EPERM,errno.EACCES)\n"
-            + f"denied('read',lambda:pathlib.Path({str(private)!r}).read_text())\n"
-            + f"denied('outside_write',lambda:pathlib.Path({str(root / 'private/native-write-canary')!r}).write_text('bad'))\n"
-            + "denied('dependency_write',lambda:pathlib.Path('.venv/native-write-canary').write_text('bad'))\n"
-            + "denied('git_write',lambda:pathlib.Path('.git/native-write-canary').write_text('bad'))\n"
-            + f"denied('network',lambda:socket.create_connection(('127.0.0.1',{port}),timeout=2))\n"
-            + "import os\nchecks['env_sentinel_denied']='ADAGE_CONFINEMENT_SENTINEL' not in os.environ\n"
-            + "checks['env_secret_names_absent']=not [n for n in os.environ if any(p in n.upper() for p in "
-            + "('TOKEN','SECRET','PASSWORD','CREDENTIAL','API_KEY','AUTH'))]\n"
-            + "pathlib.Path('inside-write-canary').write_text('allowed');checks['inside_write']=True\n"
-            + "print('NATIVE_ENV_NAMES='+json.dumps(sorted(os.environ)))\n"
-            + "print('NATIVE_SANDBOX_CHECKS='+json.dumps(checks,sort_keys=True))\nraise SystemExit(0 if all(checks.values()) else 1)\n")
+        script.write_text(native_canary_source(private, root / "private/native-write-canary", port, inbox))
         exact = ".venv/bin/python native_canary.py"
         allowed += [f"Bash({exact})"]
         protected.append(script)
@@ -428,6 +441,7 @@ def prepare_session(root, task, model, native_probe=False, setup_checkout=None):
     write(session / "settings.json", settings)
     (session / ".reflex-fixture").write_text("shared bounded runner marker; real repository session\n")
     argv = ["claude", "--print", "--restricted", "--model", model, "--max-budget-usd", str(cap),
+        *(["--messaging-socket-path", str(inbox)] if native_probe else []),
         "--output-format", "stream-json", "--verbose", "--include-partial-messages",
         "--debug-file", str(session / "claude-debug.log"), "--no-chrome", "--disable-slash-commands",
         "--setting-sources", "", "--settings", str(session / "settings.json"),

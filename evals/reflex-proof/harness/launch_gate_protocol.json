@@ -17,7 +17,9 @@
     "per_session_cap_usd": 1.5,
     "stop_if_ledger_remaining_below_usd": 3.0,
     "admission_spend_at_r3_usd": 16.1732882,
-    "attempts_at_r3": 101
+    "attempts_at_r3": 101,
+    "admission_spend_at_r4_usd": 16.2011778,
+    "attempts_at_r4": 102
   },
   "model": "claude-haiku-4-5-20251001",
   "claude_cli": "2.1.282",
@@ -157,11 +159,12 @@
     "copy grants",
     "change thresholds after the first held-out dispatch"
   ],
-  "revision": 3,
+  "revision": 4,
   "revisions": [
     "2026-09-30 r1: registered",
     "2026-09-30 r2, before any dispatch under this protocol: task splits with near-duplicate groups, training-isolation audit, evaluation read-only rule, paired blocks, same-repository strata and G9; canary moved to the development split",
-    "2026-10-01 r3, before any canary or held-out agent session: environment-independent sandbox policy and allowlisted launch environment; native canary tests environment denial; launch-gate-v1 native session excluded as confinement evidence, canary-v2 aborted; canary moves to cohorts/launch-gate-v2/canary-v3"
+    "2026-10-01 r3, before any canary or held-out agent session: environment-independent sandbox policy and allowlisted launch environment; native canary tests environment denial; launch-gate-v1 native session excluded as confinement evidence, canary-v2 aborted; canary moves to cohorts/launch-gate-v2/canary-v3",
+    "2026-10-01 r4, before any canary or held-out agent session: runtime-injected tool names (sandbox proxy credential, session inbox token) are denied where possible and tolerated only by name when the same native canary proves them harmless (proxy refuses external requests; tool cannot connect to the inbox); launch-gate-v2 excluded after its review failed closed; canary moves to cohorts/launch-gate-v3/canary-v4"
   ],
   "splits": {
     "marshmallow": {
@@ -368,6 +371,10 @@
     "launch_environment": "allowlist (probe.LAUNCH_PASS + probe.LAUNCH_SECRETS + random sentinel); all other names dropped",
     "denied_to_tools": "fixed probe.DENIED_ENV, independent of the freezing shell",
     "launch_check": "probe.check_launch refuses if a passed non-plain name is not denied",
-    "native_canary": "file, network and environment (sentinel absent; no credential-like names) checks"
+    "native_canary": "file, network, inbox-socket and environment checks; sentinel absent; every denied name invisible; credential-like names only the two named runtime names, each with a passing proof in the same run",
+    "runtime_injected_exemptions": {
+      "CLOUDSDK_PROXY_PASSWORD": "proxy_denies_external",
+      "CLAUDE_CODE_MESSAGING_TOKEN": "inbox"
+    }
   }
 }

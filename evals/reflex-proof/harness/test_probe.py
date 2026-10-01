@@ -132,5 +132,24 @@ class LaunchEnvironment(unittest.TestCase):
             probe.check_launch(env, {})
 
 
+class RuntimeInjectedNames(unittest.TestCase):
+    OBSERVED = ["CLAUDECODE", "CLAUDE_CODE_MESSAGING_SOCKET", "CLAUDE_CODE_MESSAGING_TOKEN", "CLOUDSDK_PROXY_PASSWORD",
+                "CLOUDSDK_PROXY_USERNAME", "HTTPS_PROXY", "PATH"]
+
+    def test_exemptions_are_named_and_conditional_on_a_passing_proof(self):
+        proven = {"inbox": True, "proxy_denies_external": True}
+        self.assertEqual(probe.unexplained_credentials(self.OBSERVED, proven), [])
+        self.assertEqual(probe.unexplained_credentials(self.OBSERVED, {"inbox": True}), ["CLOUDSDK_PROXY_PASSWORD"])
+        self.assertEqual(probe.unexplained_credentials(self.OBSERVED, {"proxy_denies_external": True}),
+                         ["CLAUDE_CODE_MESSAGING_TOKEN"])
+        # Host secrets, the sentinel and look-alike names are never exempt.
+        for name in ("ANTHROPIC_API_KEY", "GITHUB_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN", "CLOUDSDK_PROXY_PASSWORD_2",
+                     "MY_MESSAGING_TOKEN", "SSH_AUTH_SOCK"):
+            self.assertEqual(probe.unexplained_credentials([name], proven), [name])
+        self.assertTrue(set(probe.RUNTIME_INJECTED) <= set(probe.DENIED_ENV))
+        self.assertIn("CLAUDE_CODE_MESSAGING_SOCKET", probe.DENIED_ENV)
+        self.assertNotIn(probe.SENTINEL, probe.RUNTIME_INJECTED)
+
+
 if __name__ == "__main__":
     unittest.main()

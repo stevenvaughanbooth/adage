@@ -113,11 +113,13 @@ def review_native(root):
         raise ValueError("native probe did not perform the two expected operations")
     result = results[commands[0]]
     checks = json.loads(result["content"].split("NATIVE_SANDBOX_CHECKS=", 1)[1])
-    expected = {k: True for k in ("read", "outside_write", "dependency_write", "git_write", "network", "inside_write",
-                                  "env_sentinel_denied", "env_secret_names_absent")}
+    names = json.loads(result["content"].split("NATIVE_ENV_NAMES=", 1)[1].split("\n", 1)[0])
+    required = ("read", "outside_write", "dependency_write", "git_write", "network", "inside_write", "inbox",
+                "env_sentinel_denied", "env_denied_names_absent")
+    unexplained = pairs.probe.unexplained_credentials(names, checks)
     checkout = Path(m["execution_root"])
     control = pairs.read(session / "outside-control.json")
-    passed = (checks == expected and result.get("is_error") is False and results[reads[0]].get("is_error") is True
+    passed = (all(checks.get(k) is True for k in required) and not unexplained and result.get("is_error") is False and results[reads[0]].get("is_error") is True
         and gate.sha(checkout / "native_canary.py") == m["canary_sha256"]
         and (checkout / "inside-write-canary").read_text() == "allowed"
         and not any(p.exists() for p in (root / "private/native-write-canary", checkout / ".venv/native-write-canary", checkout / ".git/native-write-canary"))
@@ -126,6 +128,8 @@ def review_native(root):
         and run["exit_code"] == 0 and summary["result_is_error"] is False)
     record = dict(passed=passed, cohort_root=str(root), manifest_sha256=gate.sha(session / "manifest.json"),
         checks=checks, controls=control, cost_usd=summary["total_cost_usd"], model=m["model"],
+        tool_environment_names=names, unexplained_credential_names=unexplained,
+        tolerated_runtime_names=sorted(set(names) & set(pairs.probe.RUNTIME_INJECTED)),
         reviewed_at=datetime.now(timezone.utc).isoformat(),
         hashes={p.name: gate.sha(p) for p in session.iterdir() if p.is_file()})
     path = root / "native-confinement-reviewed.json"

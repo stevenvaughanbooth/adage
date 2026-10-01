@@ -55,3 +55,53 @@ Of 140 native settings files, 101 sessions were launched:
 - Tests: identical settings from two different shells, still confining under a third launching
   shell; an extra secret in the launching shell never reaches a real child process; settings that
   fail to deny a passed credential make the launch refuse.
+
+## Names that Claude Code itself gives tool children (revision 4)
+
+The fixed runner's first native session (`launch-gate-v2`, $0.0278896, exit 0) passed every file,
+network and sentinel check. Its review failed closed on credential-like names. The user's shell
+was excluded as designed: the sentinel was absent and no launched credential name was visible.
+The tool child saw 59 names. The two flagged names come from Claude Code 2.1.282 itself. This was
+established by read-only inspection of the installed binary's bundled code; no Claude process was
+launched to test it.
+
+- **`CLOUDSDK_PROXY_PASSWORD`.** For network-restricted commands the sandbox runtime starts a
+  localhost filtering proxy. It exports `HTTP(S)_PROXY`/`ALL_PROXY` as
+  `http://<user>:<proxyAuthToken>@localhost:<port>`. A helper then copies the URL's user and
+  password into `CLOUDSDK_PROXY_USERNAME`/`PASSWORD`, plus Docker, gRPC, Java and git proxy
+  settings. The token authenticates a tool only to the session's own enforcing proxy, which
+  applies the session's network policy (here deny all). It is not a host or user secret, and the
+  same value is also inside the proxy URLs, whose names are not credential-like. Expected grant:
+  nothing beyond the denied policy. Not yet demonstrated live; the next canary tests it.
+- **`CLAUDE_CODE_MESSAGING_TOKEN`** (with `CLAUDE_CODE_MESSAGING_SOCKET`). Claude Code starts a
+  local cross-session inbox (`uds-messaging`) in every session, at a default path or at
+  `--messaging-socket-path`. It exports the socket and a `childToken` so its children can send
+  messages into the session. A tool child that could connect would be able to inject messages into
+  the agent's own session and contaminate the evaluation. The flag does not create the inbox; it
+  only fixes its path. It was added after a startup stall that a default-inbox conflict plausibly
+  caused (`NATIVE-PROBE-REVISION-3.md`). Dropping it would not remove the exposure, so it stays.
+- The other visible runtime names (`CLAUDECODE`, `CLAUDE_CODE_SESSION_ID`, `CLAUDE_PID`, `AI_AGENT`,
+  `SANDBOX_RUNTIME`, `GIT_CONFIG_*`, `GIT_SSH_COMMAND`, `JAVA_TOOL_OPTIONS`, the `*_PROXY` family,
+  temporary directories) are markers, the proxy plumbing above, or git/ssh settings that route
+  through the proxy. None is credential-like.
+
+Changes:
+
+1. Both names, and `CLAUDE_CODE_MESSAGING_SOCKET`, are added to the fixed denial list. Whether
+   `deny` removes names the runtime injects (rather than inherits) is unknown. The canary now
+   reports exactly which names survive.
+2. New live proofs in the same canary. `inbox`: a tool's `AF_UNIX` connect to the session's inbox
+   socket path (fixed at preparation, embedded in the canary) must be denied with EPERM/EACCES.
+   This check is required, whatever the environment shows. `proxy_denies_external`: with the
+   proxy variables present, an HTTP request to `example.com` through them must fail.
+3. A survivor is tolerated only by name, and only when its proof passed in the same run:
+   `CLOUDSDK_PROXY_PASSWORD` if `proxy_denies_external`, `CLAUDE_CODE_MESSAGING_TOKEN` if `inbox`
+   (`probe.RUNTIME_INJECTED`, `probe.unexplained_credentials`). Every other credential-like name
+   still fails the review. The sentinel must be absent and every name on the denial list must be
+   invisible (`env_denied_names_absent`). Neither check has any exemption.
+4. Tests: exemptions require the matching proof and never cover host credentials, the sentinel or
+   look-alike names. The canary program, run outside a sandbox, fails every confinement check
+   (including a reachable inbox socket and a visible sentinel) and reports the unexplained name.
+
+`launch-gate-v2` is preserved and excluded (its failed review is immutable); `canary-v3` was never
+prepared. The successor is `launch-gate-v3/canary-v4`.

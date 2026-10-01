@@ -29,9 +29,22 @@ LAUNCH_PASS = ("PATH", "HOME", "USER", "LOGNAME", "SHELL", "LANG", "LC_ALL", "LC
 LAUNCH_SECRETS = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "CLAUDE_CODE_OAUTH_TOKEN",
                   "CLAUDE_CONFIG_DIR")
 SENTINEL = "ADAGE_CONFINEMENT_SENTINEL"
-DENIED_ENV = tuple(sorted({*LAUNCH_SECRETS, SENTINEL, "ANTHROPIC_CUSTOM_HEADERS", "AWS_ACCESS_KEY_ID",
-    "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "GH_TOKEN", "GITHUB_TOKEN", "GOOGLE_APPLICATION_CREDENTIALS",
-    "NPM_TOKEN", "OPENAI_API_KEY", "PYTHONPATH", "PYTHONSTARTUP", "SSH_AUTH_SOCK"}))
+# Names Claude Code itself gives tool children. Denial is attempted for each; the native canary
+# reports which survive. A survivor is tolerated only when the same canary proves it grants nothing:
+# the sandbox proxy credential only if the proxy refuses an external request, the inbox token only if
+# a tool cannot connect to the session's inbox socket. Never a pattern; never a host credential.
+RUNTIME_INJECTED = {"CLOUDSDK_PROXY_PASSWORD": "proxy_denies_external", "CLAUDE_CODE_MESSAGING_TOKEN": "inbox"}
+CREDENTIAL_LIKE = re.compile(r"TOKEN|SECRET|PASSWORD|CREDENTIAL|API_KEY|AUTH", re.I)
+DENIED_ENV = tuple(sorted({*LAUNCH_SECRETS, SENTINEL, *RUNTIME_INJECTED, "CLAUDE_CODE_MESSAGING_SOCKET",
+    "ANTHROPIC_CUSTOM_HEADERS", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "GH_TOKEN",
+    "GITHUB_TOKEN", "GOOGLE_APPLICATION_CREDENTIALS", "NPM_TOKEN", "OPENAI_API_KEY", "PYTHONPATH", "PYTHONSTARTUP",
+    "SSH_AUTH_SOCK"}))
+
+
+def unexplained_credentials(names, checks):
+    """Credential-like names visible to tools that no passing canary check accounts for."""
+    return sorted(n for n in names if CREDENTIAL_LIKE.search(n)
+                  and not (n in RUNTIME_INJECTED and checks.get(RUNTIME_INJECTED[n]) is True))
 
 
 def launch_env(source=None):
