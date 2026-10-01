@@ -1,21 +1,21 @@
-# Launch canary (launch-canary-4): frozen, not dispatched
+# Launch canary (launch-canary-5): frozen, not dispatched
 
-Status at 2026-10-01: frozen offline under protocol `launch-gate-1` revision 4. No canary agent
+Status at 2026-10-01: frozen offline under protocol `launch-gate-1` revision 5. No canary agent
 session and no grant exist. Nothing here is evidence of an effect yet.
 
-- Cohort `cohorts/launch-gate-v3`. Its native-confinement session is prepared by the fixed runner:
+- Cohort `cohorts/launch-gate-v4`. Its native-confinement session is prepared by the fixed runner:
   `native-confinement-manifest.json`, `native-confinement-settings.json`, and the canary program
   `native_canary.py`. The program checks files, the network, the session inbox socket (fixed at
   preparation) and the tool environment, and probes the sandbox proxy. The policy does not depend
   on the shell: the agent environment (60 names) and an `env -i` shell (3 names) give identical
   settings. The session must be run and reviewed from a terminal before canary preparation.
-- Study `cohorts/launch-gate-v3/canary-v4`: 12 automatic sessions on the development task
+- Study `cohorts/launch-gate-v4/canary-v5`: 12 automatic sessions on the development task
   `mm-curve--finite`, two per condition (positive, failed, later-edit, config-change, broader,
-  rerun), frozen at commit `a5a769a`.
+  rerun), frozen at commit `be53c9d`.
 - Binaries: release `adage` `41684cdb…`, `adage-exec` `2c511ee5…`; the production crates are
   unchanged since `b14ffd3`. Learned route: `run-175d85` from `cumulative-launch-10` (explicitly
   guided). `isolation-audit.json` passed.
-- `approve-canary.sh` (sha256 `9b35534a…`) is the person-run grant script. It enables E2 only for
+- `approve-canary.sh` (sha256 `2a6269a7…`) is the person-run grant script. It enables E2 only for
   the twelve assignment homes, keeps automatic approval off, requires the sandbox, declares the
   four caches and sets a 30 s timeout. Agents must not run it.
 
@@ -28,3 +28,10 @@ Superseded or aborted attempts, preserved:
   and sentinel checks. Its review failed closed on two names that Claude Code itself gives tool
   children (`CLOUDSDK_PROXY_PASSWORD`, `CLAUDE_CODE_MESSAGING_TOKEN`). That review is immutable and
   excluded, and the canary was never prepared. See `../20260930-environment-denial-audit/FINDINGS.md`.
+- `canary-v4-aborted/`: the `launch-gate-v3` native session ($0.0140024) never got a review. The
+  review parser crashed on the appended `<sandbox_violations>` block, and the canary program
+  exited 1 because its own denied-name check contradicted the proven exemption for the sandbox
+  proxy credential. The session is excluded and the review now refuses that cohort. The archived
+  tool result (`native-canary-tool-result.json`) is a test fixture. `dry-run-review.txt` shows the
+  full review run offline under the fixed code, without writing: the content verdict passes, and
+  only the old program's own flag and exit status fail.
