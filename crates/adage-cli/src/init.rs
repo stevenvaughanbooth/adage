@@ -70,11 +70,11 @@ pub fn init(args: &[String], paths: &Paths) -> Result<()> {
     out.blank()?;
     out.line(&Line::new().faint("It will:"))?;
     out.line(&Line::new().faint("  1. detect the agent harnesses installed here (read-only);"))?;
-    out.line(
-        &Line::new().faint(
-            "  2. show how to register Adage's hooks with each (`adage install <harness>`; nothing is written);",
-        ),
-    )?;
+    out.line(&Line::new().faint(if yes {
+        "  2. show how to register Adage's hooks with each (--yes does not register them: `adage install <harness> --write` does);"
+    } else {
+        "  2. show how to register Adage's hooks with each (`adage install <harness>`; nothing is written);"
+    }))?;
     out.line(&Line::new().faint(format!(
         "  3. {} the optional embedding model for intent families (`adage models fetch`);",
         if yes { "download" } else { "offer" }
@@ -243,15 +243,63 @@ pub fn init(args: &[String], paths: &Paths) -> Result<()> {
     instincts(root.as_deref(), yes, paths)?;
     let mut out = Out::stdout();
     out.blank()?;
+    // Where hooks stand: `init` never registers them, so a scripted `--yes` must not read as
+    // finished setup when agents will not hear from Adage.
+    let regs = detect::registrations(root.as_deref());
+    let unhooked = installed_without_hooks(&found, &regs);
+    match regs.first() {
+        Some(_) => {
+            let mut at: Vec<String> = Vec::new();
+            for r in &regs {
+                let place = if r.kind == "plugin-data" {
+                    format!("{} (the Adage plugin)", r.harness)
+                } else {
+                    format!("{} ({})", r.harness, detect::tilde(&r.location))
+                };
+                if !at.contains(&place) {
+                    at.push(place);
+                }
+            }
+            out.kv("hooks", Line::new().push(Role::Fire, "registered").quiet(format!(": {}", at.join(", "))))?;
+        }
+        None => match unhooked.first() {
+            Some(h) => out.kv(
+                "hooks",
+                Line::new()
+                    .push(Role::Prime, "not registered")
+                    .quiet(format!(": {h} sessions will not hear from Adage until they are")),
+            )?,
+            None => out.kv("hooks", Line::new().quiet("no harness found to register them with"))?,
+        },
+    }
+    out.blank()?;
+    let register = unhooked.first().filter(|_| regs.is_empty()).map(|h| format!("adage install {h} --write{repo_opt}"));
     if agent.is_none() && !yes {
         out.next("adage init", "in your own terminal, to set this up step by step")?;
+        out.also("adage doctor", "checks the whole setup at any time")?;
+    } else if let Some(cmd) = register.filter(|_| agent.is_none()) {
+        out.next(&cmd, "registers the hooks for this repository (add --scope user for every repository)")?;
         out.also("adage doctor", "checks the whole setup at any time")?;
     } else {
         out.next("adage doctor", "checks the whole setup at any time")?;
         out.also("adage watch", "live pane for a split terminal")?;
     }
+    let waiting = if yes { crate::waiting(paths) } else { 0 };
+    if waiting > 0 {
+        let why = if waiting == 1 {
+            "1 reflex waits for a decision".to_string()
+        } else {
+            format!("{waiting} reflexes wait for a decision")
+        };
+        out.also("adage review", &why)?;
+    }
     out.flush()?;
     Ok(())
+}
+
+/// Harnesses found on this machine with no registration of Adage's hooks.
+fn installed_without_hooks(found: &[detect::Detected], regs: &[detect::Registration]) -> Vec<&'static str> {
+    found.iter().filter(|d| d.found() && !regs.iter().any(|r| r.harness == d.harness)).map(|d| d.harness).collect()
 }
 
 /// Show what would bind for the repository (a dry bind, nothing written), and offer
@@ -283,17 +331,31 @@ fn instincts(root: Option<&std::path::Path>, yes: bool, paths: &Paths) -> Result
         say(&mut o, Line::new().quiet("Nothing in this repository's files matches an instinct."))?;
         return Ok(());
     }
-    say(&mut o, Line::new().quiet("From this repository's files alone, with no traces, Adage would bind:"))?;
+    say(
+        &mut o,
+        Line::new().quiet(format!(
+            "From this repository's files alone, with no traces, Adage would bind {}:",
+            crate::words::count(dry.routes.len(), "reflex")
+        )),
+    )?;
     let w = dry.origins.values().map(|s| s.chars().count()).max().unwrap_or(1);
-    for r in &dry.routes {
-        let instinct = dry.origins.get(&r.id).map(String::as_str).unwrap_or("?");
+    let origin = |r: &adage_tracks::Route| dry.origins.get(&r.id).cloned().unwrap_or_else(|| "?".into());
+    // One line per instinct and step; what sets the reflexes of a line apart is their trigger.
+    let groups = crate::words::group(dry.routes.iter(), |r| {
+        format!("{}\n{}\n{:?}", origin(r), crate::share::describe_step(&r.step), r.state)
+    });
+    for g in &groups {
+        let r = g[0];
+        let when = crate::words::trigger(&r.trigger);
         let mut l = Line::new()
             .text("  ")
             .glyph(Role::Accent, adage_term::Glyph::Instinct)
             .text(" ")
-            .text(instinct)
+            .text(origin(r))
             .pad_to(8 + w)
-            .text(crate::share::describe_step(&r.step));
+            .text(crate::share::describe_step(&r.step))
+            .sep()
+            .quiet(if g.len() == 1 { format!("when {when}") } else { format!("{} triggers, e.g. {when}", g.len()) });
         if r.state == adage_tracks::RouteState::Nascent {
             l = l.sep().faint("nascent").quiet(": needs your approval in ").cmd("adage review");
         }
@@ -319,7 +381,8 @@ fn instincts(root: Option<&std::path::Path>, yes: bool, paths: &Paths) -> Result
     if yes {
         say(&mut o, Line::new().quiet("binding").sep().cmd(cmd))?;
         o.flush()?;
-        crate::instincts_only(&["--repo-path".to_string(), root.to_string_lossy().into_owned()], paths)?;
+        // Its own `next` would come before init's: init ends with the one that applies.
+        crate::instincts_only_then(&["--repo-path".to_string(), root.to_string_lossy().into_owned()], paths, false)?;
     } else {
         say(
             &mut o,

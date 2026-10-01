@@ -290,13 +290,18 @@ fn queue_lists_each_reason_with_evidence_and_directive() {
     for s in [
         "5 reflexes wait for a decision",
         "why         new:",
-        "Wilson lower bound",
+        "seen in 20 of 20 traces",
         "example values: item = W-1234",
         "adage review <approve|extinguish|weaken|pin> acme/work-items lookup",
         " · imported",
+        "adage review --verbose",
     ] {
         assert!(t.contains(s), "listing lacks {s:?}:\n{t}");
     }
+    // The statistics are for `--verbose` (QA first-run #13): plain words by default.
+    assert!(!t.contains("Wilson lower bound") && !t.contains("backoff depth"), "{t}");
+    let v = w.ok(&["review", "--verbose"]);
+    assert!(v.contains("Wilson lower bound"), "{v}");
     // Deterministic: the same inputs give the same bytes.
     assert_eq!(w.ok(&["review", "--json"]), w.ok(&["review", "--json"]));
     assert_eq!(t, w.ok(&["review"]));
@@ -706,11 +711,32 @@ fn routine_candidate_stays_in_execution_review_after_evidence_approval() {
     assert_eq!(row["evidence"]["execution"]["successful"], 5);
     assert!(row["directive"].is_null());
     assert!(row["next"].as_str().unwrap().ends_with("routine --level e2"));
+    // What it does, truthfully (QA first-run #6): silent without a grant, nothing at Stop; no
+    // finish line is promised for a reflex never said to the agent.
+    let shown = w.ok(&["review"]);
+    assert!(
+        shown.contains("no grant    silent: the agent is told nothing, nothing runs, and nothing happens at Stop"),
+        "{shown}"
+    );
+    assert!(shown.contains("with grant  after an edit to src/*.rs, Adage runs `cargo test` itself"), "{shown}");
+    assert!(!shown.contains("enforced") && !shown.contains("asks it once"), "{shown}");
+    assert!(shown.contains("next  adage review approve"), "{shown}");
     let approved = w.ok(&["review", "approve", NAME, "routine"]);
     assert!(approved.contains("execution still requires a valid local E2 grant"), "{approved}");
-    assert_eq!(reasons(&w.queue())[&key(NAME, "routine")], vec!["execution"]);
+    assert!(approved.contains("next  adage status"), "approving dequeues it (QA first-run #3): {approved}");
+    let again = w.ok(&["review", "approve", NAME, "routine"]);
+    assert!(again.contains("already approved; nothing changed"), "{again}");
+    // Approved, it no longer waits; it is listed as ready to delegate until it is.
+    let q = w.queue();
+    assert_eq!(reasons(&q)[&key(NAME, "routine")], vec!["delegable"]);
+    assert_eq!((q["waiting"].as_u64(), q["queue"][0]["waits"].as_bool()), (Some(0), Some(false)), "{q:#}");
     let shown = w.ok(&["review"]);
+    assert!(
+        shown.contains("nothing waits for a decision") && shown.contains("Approved, and run only once delegated"),
+        "{shown}"
+    );
     assert!(shown.contains("Execution only") && shown.contains("5 / 5"), "{shown}");
+    assert!(shown.contains("next  adage review delegate"), "{shown}");
     assert!(!shown.contains("\n  directive"), "{shown}");
 
     // A fixture grant is valid only for this exact derived request; no command is executed.

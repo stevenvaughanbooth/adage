@@ -88,9 +88,77 @@ pub fn describe(r: &Route, why: Option<&Why>) -> String {
     )
 }
 
-/// What a reflex does beyond advising, when it does: a learned finish line is enforced at Stop.
-pub fn obligation(r: &Route) -> Option<String> {
+/// [`describe`] in plain words, for the default `adage review`: counts a person reads at a glance
+/// (`10 of 10 traces over 10 days`), without the statistics behind the strength (`--verbose`).
+pub fn plain(r: &Route, why: Option<&Why>) -> String {
+    let e = &r.evidence;
     if r.is_instinct() {
+        return describe(r, why);
+    }
+    if let Some((w, did)) = valued(why) {
+        return format!(
+            "saves about {} agent calls when followed; {} of {} triggers {did}",
+            num(w.gain),
+            e.support,
+            e.opportunities
+        );
+    }
+    format!("seen in {} of {} traces over {}", e.support, e.opportunities, crate::words::count(e.days as usize, "day"))
+}
+
+/// What is known of how agents take the step unaided, in plain words, when anything is: `agents
+/// took it unaided in 12 of 12 traces`. `None` when the estimate rests on a prior alone (no
+/// evidence to show), or when the reflex is never said to an agent (execution only).
+pub fn uplift_plain(r: &Route) -> Option<String> {
+    let u = r.evidence.uplift.as_ref().filter(|_| r.evidence.execution.is_none())?;
+    let mut from = Vec::new();
+    if u.traces > 0 {
+        from.push(format!("agents took this step unaided in {} of {} traces", u.traces_took, u.traces));
+    }
+    if u.control > 0 {
+        from.push(format!("{} of {} sessions without Adage did it unaided", u.control_took, u.control));
+    }
+    if u.delivered > 0 {
+        from.push(format!("followed {} of {} times it was said", u.followed, u.delivered));
+    }
+    (!from.is_empty()).then(|| from.join("; "))
+}
+
+/// Why a quiet reflex is quiet, in plain words: `quiet: agents already do this unaided, so Adage
+/// does not say it · approve to deliver it anyway` ([`quiet_line`] has the numbers).
+pub fn quiet_plain(r: &Route) -> Option<String> {
+    // Quiet is a reflex held back (nascent) on its uplift; an execution-only one is never said.
+    if r.state != adage_tracks::RouteState::Nascent || r.evidence.execution.is_some() {
+        return None;
+    }
+    quiet_line(r)?;
+    Some("quiet: agents already do this unaided, so Adage does not say it · approve to deliver it anyway".into())
+}
+
+/// What an execution-only reflex (a routine with execution evidence) does in a session, without a
+/// grant and with one. Such a reflex is never said to the agent: without a valid local E2 grant
+/// it is silent, at every event, Stop included.
+pub fn execution(r: &Route) -> Option<(String, String)> {
+    r.evidence.execution.as_ref()?;
+    let without = "silent: the agent is told nothing, nothing runs, and nothing happens at Stop".to_string();
+    let with = match (&r.trigger, &r.step) {
+        (Trigger::AfterEdit { paths }, Step::Run { command }) => format!(
+            "after an edit to {paths}, Adage runs `{command}` itself, sandboxed, and gives the agent the result; at Stop, if no check ran after the last edit, it runs it then"
+        ),
+        (t, Step::Run { command }) => format!(
+            "when {}, Adage runs `{command}` itself, sandboxed, and gives the agent the result",
+            crate::words::trigger(t)
+        ),
+        (t, _) => format!("when {}, Adage carries it out itself and gives the agent the result", crate::words::trigger(t)),
+    };
+    Some((without, format!("{with} (an E2 grant for this repository, and `adage delegate on`)")))
+}
+
+/// What a reflex does beyond advising, when it does: a learned finish line is enforced at Stop.
+/// Not for an execution-only reflex: it is never said to the agent, so it owes no finish line
+/// ([`execution`] says what it does instead).
+pub fn obligation(r: &Route) -> Option<String> {
+    if r.is_instinct() || r.evidence.execution.is_some() {
         return None; // an instinct's finish line is advice only
     }
     match (&r.trigger, &r.step) {

@@ -1761,6 +1761,38 @@ fn wizard_choices_follow_the_arrows() {
     assert!(text.contains("└  ↑↓ choose"), "{text}");
 }
 
+/// QA first-run #2: hooks registered at user scope already; the hooks step defaults to keeping
+/// them and offers no second registration (which would run every hook twice).
+#[test]
+fn wizard_keeps_an_existing_registration_and_never_adds_a_second() {
+    use crate::detect::{Detected, Registration};
+    let detected = vec![Detected { harness: "claude-code", evidence: vec!["~/.claude exists".into()] }];
+    let regs = vec![Registration {
+        harness: "claude-code",
+        location: "/nowhere/a/.claude/settings.json".into(),
+        binary: Some("/opt/adage".into()),
+        kind: "settings",
+    }];
+    let mut w = Wizard::new(detected, regs, true);
+    assert!(matches!(w.key(KeyCode::Enter, NONE), Some(wizard::Cmd::Replan)));
+    let choices = w.choices();
+    assert!(choices[0].starts_with("Keep it · already registered"), "{choices:?}");
+    assert!(!choices.iter().any(|c| c.starts_with("For this")), "no second registration offered: {choices:?}");
+    assert!(w.key(KeyCode::Tab, NONE).is_none(), "no switching to another scope");
+    let d = tempfile::tempdir().unwrap();
+    let c = ctx(Paths::at(d.path()), true);
+    let (text, _) = render(100, 18, |f| wizard::draw(f, &w, &c));
+    assert!(text.contains("Already registered in /nowhere/a/.claude/settings.json."), "{text}");
+    assert!(text.contains("Nothing to write: a second registration would run every hook twice"), "{text}");
+    // Enter keeps it: nothing is installed, and the step says so.
+    assert!(!matches!(w.key(KeyCode::Enter, NONE), Some(wizard::Cmd::Install(_))));
+    assert_eq!(
+        w.steps[1].status,
+        wizard::StepStatus::Done("already registered in /nowhere/a/.claude/settings.json · nothing written".into())
+    );
+    assert_eq!(*w.current(), wizard::Kind::Model);
+}
+
 #[test]
 fn clock_times_use_the_offset() {
     assert_eq!(view::clock(T0, 0, true), "12:04:00");

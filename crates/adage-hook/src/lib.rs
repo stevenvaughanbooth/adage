@@ -832,9 +832,14 @@ fn session_start(
             context.and_then(|context| s.adapter.render(s.event, Output::SessionContext { context, notice: None }))
         );
     }
-    let text = if bootstrap && first {
+    // Set up from a terminal (`adage init --yes`, `adage condition`): reflexes are in place before
+    // the first session here, so there is no bootstrap to announce. Say what is in effect, once.
+    let ready = first && !bootstrap && cfg.learn_auto && routed.is_some();
+    let text = if (bootstrap || ready) && first {
         let now = autolearn::now_ms();
-        match autolearn::write_json(&q.shown(), &autolearn::Shown { id: "bootstrap".into(), at: now }) {
+        let id = if ready { "ready" } else { "bootstrap" };
+        match autolearn::write_json(&q.shown(), &autolearn::Shown { id: id.into(), at: now }) {
+            Ok(()) if ready => Some(ready_notice(s.index, &key)),
             Ok(()) => Some(first_notice(s.root, &cfg)),
             // The data directory cannot be written: nothing can be learned, and a notice shown now
             // could not be remembered, so it would repeat at every session start. Say what is
@@ -869,6 +874,28 @@ fn first_notice(root: &Path, cfg: &adage_store::config::Config) -> String {
         1 => "adage: learning from 1 past session in this repo; reflexes arrive within a minute. Nothing runs without you.".into(),
         n => format!("adage: learning from {n} past sessions in this repo; reflexes arrive within a minute. Nothing runs without you."),
     }
+}
+
+/// What the first session says in a repository set up from a terminal: what is in effect (as the
+/// status card counts it: reflexes said to the agent, learned and instincts) and that Adage keeps
+/// learning.
+fn ready_notice(index: &Index, repo: &str) -> String {
+    let (mut learned, mut instincts) = (0usize, 0usize);
+    for r in index.for_repo(repo).filter(|r| !r.exec_only()) {
+        if r.route.is_instinct() {
+            instincts += 1;
+        } else {
+            learned += 1;
+        }
+    }
+    let n = |k: usize, one: &str, many: &str| if k == 1 { format!("1 {one}") } else { format!("{k} {many}") };
+    let what = match (learned, instincts) {
+        (0, 0) => return "adage: set up in this repo; it keeps learning as you work. Nothing runs without you.".into(),
+        (0, i) => n(i, "instinct", "instincts"),
+        (l, 0) => n(l, "reflex", "reflexes"),
+        (l, i) => format!("{} and {}", n(l, "reflex", "reflexes"), n(i, "instinct", "instincts")),
+    };
+    format!("adage: {what} active in this repo; it keeps learning as you work. Nothing runs without you.")
 }
 
 /// The one line said when the data directory cannot be written (at most once per data

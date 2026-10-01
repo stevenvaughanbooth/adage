@@ -16,8 +16,10 @@ adage init
 
 Run `init` in your own terminal. Its interactive wizard shows the hook configuration before
 installing it and offers to learn this repository's existing sessions. A run inside an agent or
-with `--print` is a preview, not completed setup. If you already installed the Claude Code plugin,
-its session-start hook bootstraps the repository; avoid installing a second copy of the same hooks.
+with `--print` is a preview, not completed setup, and `init --yes` registers no hooks (it ends by
+saying so, with the `adage install <harness> --write` that does). If you already installed the
+Claude Code plugin, or registered the hooks for every repository (`--scope user`), Adage keeps that
+registration and does not add a second copy of the same hooks; `adage doctor` flags one made by hand.
 
 ```sh
 adage doctor
@@ -119,5 +121,11 @@ before changing thresholds. Continue ordinary work while evidence accumulates.
 To stop automatic actions, run `adage delegate off --repo .`. To withdraw one permission, run
 `adage review revoke TRACK REFLEX --repo .`. Importing or sharing a reflex never transfers your
 machine's execution grants.
+
+To remove Adage's hooks, run `adage install claude-code --remove` (add `--scope user` for the
+registration in `~/.claude/settings.json`; `codex` and `opencode` work the same way). It shows the
+diff, keeps the previous file as `<file>.adage-bak`, and leaves your own hooks and settings as they
+were. Adage's data stays in its data directory until you delete it. For the Claude Code plugin, use
+`/plugin uninstall adage@adage`.
 
 For measured results and remaining release gates, see [launch status](../evals/reflex-proof/LAUNCH-STATUS.md).

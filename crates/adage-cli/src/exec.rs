@@ -347,8 +347,12 @@ fn status(args: &[String], paths: &Paths) -> Result<()> {
     }
     let enabled = marker(paths).is_file();
     let lapsed = lapsed_here(paths, root.as_deref(), &store);
+    // A harness registered twice runs every hook twice (`adage doctor` says the same).
+    let dups = install::duplicates(&crate::detect::registrations(root.as_deref()), root.as_deref());
     if args.iter().any(|a| a == "--json") {
-        let v = json!({ "enabled": enabled, "registrations": regs, "grants": grants, "lapsed": lapsed });
+        let duplicates: Vec<Value> =
+            dups.iter().map(|d| json!({ "harness": d.harness, "places": d.places, "fix": d.fix })).collect();
+        let v = json!({ "enabled": enabled, "registrations": regs, "grants": grants, "lapsed": lapsed, "duplicates": duplicates });
         println!("{}", serde_json::to_string_pretty(&v)?);
         return Ok(());
     }
@@ -374,6 +378,11 @@ fn status(args: &[String], paths: &Paths) -> Result<()> {
     if enabled {
         kv(&mut o, "plugin", Line::new().quiet("Claude Code: the adage-exec plugin serves"))?;
     }
+    for d in &dups {
+        o.blank()?;
+        o.warn(&format!("{} is registered twice ({}): every hook runs twice", d.harness, d.places.join(" and ")))?;
+        o.line(&Line::new().text("  ").faint("fix ").text(d.fix.replace('`', "")))?;
+    }
     for (repo, gs) in &grants {
         o.blank()?;
         o.line(&Line::new().bold(Role::Ink, repo.clone()))?;
@@ -395,7 +404,9 @@ fn status(args: &[String], paths: &Paths) -> Result<()> {
     }
     print_lapsed(&mut o, &lapsed)?;
     o.blank()?;
-    if grants.is_empty() {
+    if let Some(cmd) = dups.first().and_then(|d| d.fix.split('`').nth(1)) {
+        o.next(cmd, "leaves one registration")?;
+    } else if grants.is_empty() {
         o.next("adage review delegate <track> <reflex> --level e1|e2", "no reflex is delegated on this machine")?;
     } else if !enabled {
         o.next("adage delegate on", "hooks run nothing delegated until it is on")?;

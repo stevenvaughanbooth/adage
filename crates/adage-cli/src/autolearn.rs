@@ -214,6 +214,9 @@ pub fn run_auto(args: &[String], paths: &Paths) -> Result<()> {
     let Some(_lock) = lock::exclusive_within(&q.lock(), LOCK_PATIENCE)? else {
         return Ok(()); // another learner has this repository; it re-checks the queue
     };
+    // What was in effect before this learner ran: a first notice says only what it adds (a
+    // repository set up from a terminal already has its reflexes and instincts).
+    let had = notice::basis(paths, &repo, None, 0).active;
     if let Some(at) = after {
         let wait = at.saturating_sub(learnlog::now_ms()).min(MAX_WAIT_MS);
         std::thread::sleep(Duration::from_millis(wait));
@@ -282,7 +285,7 @@ pub fn run_auto(args: &[String], paths: &Paths) -> Result<()> {
         let _ = write_json(&q.state(), &state);
         let failed = result.as_ref().err().map(|Failed(class, _)| *class);
         let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            notice::update(paths, &repo, &q, summary.as_ref(), state.errors, failed)
+            notice::update(paths, &repo, &q, summary.as_ref(), state.errors, failed, &had)
         }));
         let newer = read_json::<Request>(&q.request()).is_some_and(|r| r.requested_at > seen);
         if round == 1 || !newer || result.is_err() {
@@ -304,8 +307,13 @@ pub mod notice {
     /// What a notice is composed from.
     #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
     pub struct Basis {
-        /// Reflexes delivered for the repository (the index).
+        /// Reflexes delivered for the repository (the index; not those only `adage-exec` runs,
+        /// which are never said to an agent).
         pub active: BTreeSet<String>,
+        /// Of `active`, the instincts (Adage's built-in defaults): counted apart from learned
+        /// reflexes.
+        #[serde(default)]
+        pub instincts: BTreeSet<String>,
         /// Install steps that wait for a person (`adage review`): nascent, and not merely quiet.
         pub nascent: BTreeSet<String>,
         /// Quiet reflexes: formed, but their uplift is under the bar, so they wait for approval.
@@ -320,7 +328,9 @@ pub mod notice {
     /// The repository's reflexes now: delivered (the index) and waiting (nascent in its tracks).
     pub fn basis(paths: &Paths, repo: &str, summary: Option<&Summary>, errors: u32) -> Basis {
         let index = adage_tracks::Index::load(&paths.index());
-        let active = index.for_repo(repo).map(|r| r.route.id.clone()).collect();
+        let said: Vec<_> = index.for_repo(repo).filter(|r| !r.exec_only()).collect();
+        let active = said.iter().map(|r| r.route.id.clone()).collect();
+        let instincts = said.iter().filter(|r| r.route.is_instinct()).map(|r| r.route.id.clone()).collect();
         let dir = paths.tracks().join(adage_learn::slug(repo));
         let (mut nascent, mut quiet) = (BTreeSet::new(), BTreeSet::new());
         for t in adage_tracks::io::read_all(&dir).unwrap_or_default() {
@@ -332,7 +342,7 @@ pub mod notice {
         let verdict = summary
             .and_then(|s| serde_json::to_value(s.verdict).ok().and_then(|v| v.as_str().map(str::to_string)))
             .unwrap_or_else(|| "measuring".into());
-        Basis { active, nascent, quiet, verdict, errors }
+        Basis { active, instincts, nascent, quiet, verdict, errors }
     }
 
     fn plural(n: usize, one: &str, many: &str) -> String {
@@ -400,9 +410,21 @@ pub mod notice {
                 }
             }
         }
-        let new = now.active.difference(&was.active).count();
-        if new > 0 {
-            parts.push(format!("{} active", plural(new, "new reflex", "new reflexes")));
+        // New learned reflexes and new instincts, counted apart: an instinct is a built-in default
+        // bound from the repository's files, not something learned from its traces.
+        let new: Vec<&String> = now.active.difference(&was.active).collect();
+        let instincts = new.iter().filter(|id| now.instincts.contains(**id)).count();
+        let learned = new.len() - instincts;
+        let said = match (learned, instincts) {
+            (0, 0) => None,
+            (l, 0) => Some(plural(l, "new reflex", "new reflexes")),
+            (0, i) => Some(plural(i, "instinct", "instincts")),
+            (l, i) => {
+                Some(format!("{} and {}", plural(l, "new reflex", "new reflexes"), plural(i, "instinct", "instincts")))
+            }
+        };
+        if let Some(s) = said {
+            parts.push(format!("{s} active"));
             if kind.is_empty() {
                 kind = "reflexes";
             }
@@ -415,17 +437,27 @@ pub mod notice {
         Some((format!("adage: {}.", parts.join("; ")), kind.to_string()))
     }
 
-    /// Recompose `<slug>.notice.json` after a learn.
-    pub fn update(paths: &Paths, repo: &str, q: &Queue, summary: Option<&Summary>, errors: u32, failed: Option<&str>) {
+    /// Recompose `<slug>.notice.json` after a learn. `had`: the reflexes in effect before this
+    /// learner ran, the baseline of a first notice.
+    pub fn update(
+        paths: &Paths,
+        repo: &str,
+        q: &Queue,
+        summary: Option<&Summary>,
+        errors: u32,
+        failed: Option<&str>,
+        had: &BTreeSet<String>,
+    ) {
         let prev: Option<Notice> = read_json(&q.notice());
         let shown: Shown = read_json(&q.shown()).unwrap_or_default();
         let parse = |v: &serde_json::Value| serde_json::from_value::<Basis>(v.clone()).unwrap_or_default();
         // "New" is measured from what the person last saw: the previous notice's basis if it was
-        // shown, else the baseline it was itself measured from.
+        // shown, else the baseline it was itself measured from; with no notice yet, what was in
+        // effect before this learner ran (a repository set up from a terminal is not new).
         let baseline = match &prev {
             Some(p) if p.id == shown.id => parse(&p.basis),
             Some(p) => parse(&p.baseline),
-            None => Basis::default(),
+            None => Basis { active: had.clone(), ..Basis::default() },
         };
         let now = basis(paths, repo, summary, errors);
         let adage = crate::detect::adage_command();
@@ -452,6 +484,7 @@ pub mod notice {
         fn b(active: &[&str], nascent: &[&str]) -> Basis {
             Basis {
                 active: active.iter().map(|s| s.to_string()).collect(),
+                instincts: BTreeSet::new(),
                 nascent: nascent.iter().map(|s| s.to_string()).collect(),
                 quiet: BTreeSet::new(),
                 verdict: "measuring".into(),
@@ -471,6 +504,19 @@ pub mod notice {
             );
             assert_eq!(kind, "waiting");
             assert!(!t.contains("install step"));
+        }
+
+        /// QA first-run #8: instincts are not counted as new learned reflexes, and what was in
+        /// effect before (set up from a terminal) is not new.
+        #[test]
+        fn instincts_are_counted_apart_and_what_was_there_is_not_new() {
+            let mut now = b(&["i1", "i2", "r1"], &[]);
+            now.instincts = ["i1", "i2"].iter().map(|s| s.to_string()).collect();
+            let (t, _) = compose(&b(&[], &[]), &now, None, None, "adage").unwrap();
+            assert_eq!(t, "adage: 1 new reflex and 2 instincts active.");
+            assert_eq!(compose(&b(&["i1", "i2", "r1"], &[]), &now, None, None, "adage"), None);
+            let (t, _) = compose(&b(&["r1"], &[]), &now, None, None, "adage").unwrap();
+            assert_eq!(t, "adage: 2 instincts active.");
         }
 
         #[test]

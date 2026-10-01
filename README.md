@@ -155,8 +155,8 @@ the table is shown as tokens and turns only. `adage savings --json` has the whol
 **What never happens without you:** nothing is ever run on the agent's behalf unless you turn on
 delegation at a terminal; install steps (environment changes) wait for `adage review`; no hook or
 learner touches the network; settings files change only when you install the plugin or run
-`adage install … --write` (which shows the diff, asks before writing and keeps the previous file
-as `<file>.adage-bak`).
+`adage install … --write` or `--remove` (which show the diff, ask before writing, keep the previous
+file as `<file>.adage-bak`, and leave the rest of your settings as you wrote them).
 
 **The one change Adage makes by default** (Claude Code): when a Python repository's own `.venv` was
 verified to have pytest and the project, a test run or scratch repro the agent starts under the
@@ -462,7 +462,9 @@ At a terminal, `init` is a wizard: it detects your harnesses and, one step at a 
 it registers hooks (showing the exact file and diff), fetches the embedding model, conditions
 the repository for the first time, and turns automatic conditioning on if it is off; it ends with the doctor's
 summary. Piped, inside an agent session, or with `--print`, it prints the same report and writes
-nothing; `--yes` downloads the embedding model and binds this repository's instincts. `sense` reads
+nothing; `--yes` downloads the embedding model and binds this repository's instincts, but registers
+no hooks (it ends by saying whether they are registered; `adage install <harness> --write` registers
+them). `sense` reads
 the same traces `condition` does and lists the reflexes `condition` would form as candidates, with
 prompts shown only as short redacted snippets. With no history yet, plain `adage condition`
 inside a repository binds available instincts from its files; `--instincts-only` requests that
@@ -574,7 +576,11 @@ adage condition --codex-sessions ~/.codex/sessions   # Codex rollouts
 
 `--write` installs into the repository (`.opencode/plugins/adage.js`, `.codex/hooks.json`) or, with
 `--scope user`, the harness's documented user location; it never runs inside an agent session.
-`adage install claude-code` does the same for Claude Code settings. What each harness supports, and
+`adage install claude-code` does the same for Claude Code settings. A harness already registered for
+the repository (in the other scope, or by the Claude Code plugin) is not registered again, since a
+second registration runs every hook twice; `adage doctor` flags one made by hand. To remove Adage's
+hooks, `adage install <harness> --remove [--scope user]` shows the diff, keeps `<file>.adage-bak`, and
+leaves your own hooks and settings as they were. What each harness supports, and
 what it cannot do yet (Codex reports no tool failures to hooks, so only reflexes that react to a
 failed command stay silent there; learned dead ends are announced at the first prompt), is in
 [docs/harnesses.md](docs/harnesses.md).
@@ -645,11 +651,15 @@ the same reflex yourself, your first-hand reflex wins. Adding a newer version ke
 decisions for every reflex that survives. An unknown signer needs `--trust`. Both commands refuse to run inside an agent
 session (`CLAUDECODE`) or without a terminal; `ADAGE_ALLOW_NONINTERACTIVE=1` lifts only the terminal check.
 
-**Review:** `adage review [--json]` lists the reflexes that need a person's decision: new reflexes from
+**Review:** `adage review [--json] [--verbose]` lists the reflexes that need a person's decision: new reflexes from
 `adage condition`, reflexes whose strength or evidence changed materially since the last decision (shape,
 strength, a Wilson lower bound moving by 0.10, or support doubling or halving), imports forming,
 extinguished reflexes that came back stronger, and reflexes agents keep ignoring in treated traces. Each
-entry shows its evidence, effect and ceiling, and the exact directive text with example slot values.
+entry shows its trigger, evidence (in plain counts; `--verbose` adds the bounds, uplift and the graph
+engine's reasons), effect and ceiling, and the exact directive text with example slot values.
+Instincts in effect are listed once per instinct and step, with what triggers each, and wait for no
+decision; an execution-only routine waits once, for its evidence, and is then listed as ready to
+delegate.
 A pinned reflex is never overwritten: when learning (or a re-import) finds a materially different
 version, it waits as *proposed*, with a diff; `approve` applies it (still pinned) and `dismiss` keeps
 yours. `adage review <approve|extinguish|weaken|strengthen|pin|dismiss> <track> <reflex> [--by <name>]` records the decision

@@ -147,7 +147,7 @@ fn repo_lines(paths: &Paths, repo: &str, root: &Path, index: &Index, now: u64) -
         format!("{} {label}: {}", plural(r.total(), "reflex", "reflexes"), parts.join(", "))
     });
     if r.execution_only > 0 {
-        out.push(format!("{} execution-only; authority: adage delegate status", r.execution_only));
+        out.push(format!("{} execution-only: silent until delegated → adage delegate status", r.execution_only));
     }
 
     // Learning.
@@ -203,9 +203,12 @@ fn repo_lines(paths: &Paths, repo: &str, root: &Path, index: &Index, now: u64) -
         }
         // Adage acting, not advising: always visible (docs/execution.md, rewrites).
         if c.rewritten > 0 {
+            // Said as it stands now: the switch that turns rewrites off, or that they are off.
+            let now_on = cfg.config.runtime_rewrite && !adage_hook::rewrite_off(paths).exists();
             out.push(format!(
-                "rewrote {} to use the project's environment (off: adage delegate rewrites off)",
-                plural(c.rewritten, "command", "commands")
+                "rewrote {} to use the project's environment ({})",
+                plural(c.rewritten, "command", "commands"),
+                if now_on { "turn off: adage delegate rewrites off" } else { "now off: adage delegate rewrites on" }
             ));
         }
         out.extend(savings::lines(s));
