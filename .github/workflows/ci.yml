@@ -65,6 +65,8 @@ jobs:
 
   test:
     name: test (${{ matrix.name }})
+    # A hung test fails the job instead of billing hours of runner time.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -94,7 +96,9 @@ jobs:
       - name: test
         env:
           ADAGE_PROP_TRACE: ${{ runner.temp }}/prop_shell_last.json
-        run: cargo test --workspace --locked --no-fail-fast
+        # adage-eval's gates, bench and parity suites take hours in a debug build; they run in
+        # evals.yml (weekly and on dispatch).
+        run: cargo test --workspace --exclude adage-eval --locked --no-fail-fast
       - name: last property-test input (if the process crashed)
         if: failure()
         shell: bash
@@ -264,6 +268,9 @@ jobs:
         working-directory: web/site
       - name: registration API contract
         run: pnpm test:api
+        working-directory: web/site
+      - name: held-out evidence converter
+        run: pnpm test:evidence
         working-directory: web/site
       - name: browser for the e2e suite
         run: pnpm exec playwright install --with-deps chromium

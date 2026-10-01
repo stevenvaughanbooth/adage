@@ -38,6 +38,26 @@
     "file": "evals/reflex-proof/harness/results/20260930-cold-start-replication/report.json",
     "sha256": "4744cace0ac4f31424bb500940bbeb272a9c19a224cac72a227e8dcb3e59ab47"
   },
+  "rounds": [
+    {
+      "round": 1,
+      "derived_from": "outcomes",
+      "agent_cost_usd": 1.0104017,
+      "instincts_cost_usd": 0.8452748,
+      "cost_reduction_percent": 16.34269815658465,
+      "agent_requests": 156,
+      "instincts_requests": 124
+    },
+    {
+      "round": 2,
+      "derived_from": "outcomes",
+      "agent_cost_usd": 0.9325707,
+      "instincts_cost_usd": 0.926771,
+      "cost_reduction_percent": 0.6219045912551385,
+      "agent_requests": 148,
+      "instincts_requests": 148
+    }
+  ],
   "outcomes": [
     {
       "round": 1,

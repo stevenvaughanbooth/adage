@@ -13,9 +13,11 @@ import { chipMark, chipText } from "@how/chip";
 import { Stage, readPalette, webglAvailable } from "@how/engine";
 import type { Built } from "@how/types";
 import { initMath } from "./math";
+import { loadHeldout } from "./evidence/load";
 import { initPage } from "./page";
+import { initPlug } from "./plug";
 import { scrollToScene } from "./scenes";
-import { initTerms, termify, termifyTree } from "./terms";
+import { allTerms, initTerms, termify, termifyTree } from "./terms";
 import { initTheme } from "./theme";
 import { initUplift } from "./uplift";
 import { initWilson } from "./wilson";
@@ -320,7 +322,14 @@ built = null;
 go(start, params.has("step") ? Number(params.get("step")) || 0 : FIRST, true);
 initWilson();
 initUplift();
-// Hard words in the intro and the math get their definitions too.
+// Hard words in the intro and the math get their definitions too, and in the opening scene's steps.
+termifyTree(document.querySelector(".plug-head .lede")!, new Set(), allTerms);
+document.querySelectorAll(".plug-step").forEach((s) => {
+  const seen = new Set<string>();
+  s.querySelectorAll(":scope > p:not(.plug-when), .plug-more p").forEach((p) => termifyTree(p, seen, allTerms));
+});
 termifyTree(document.querySelector(".howintro .lede")!);
 document.querySelectorAll(".mblock").forEach((b) => termifyTree(b));
+initPlug();
 initPage();
+void loadHeldout();

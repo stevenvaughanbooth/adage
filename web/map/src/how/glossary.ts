@@ -84,3 +84,54 @@ export function segments(text: string, seen: Set<string> = new Set()): Segment[]
   if (at < text.length) out.push(text.slice(at));
   return out;
 }
+
+/**
+ * The words the site's evidence page and its "How Adage plugs into Claude Code" walkthrough add:
+ * how a study is run and read, and what Adage hands the agent. Defined here, beside the rest, so
+ * one file holds every definition; the map does not use them (an unused export leaves its bundle
+ * as it was), and the site marks them with `segmenter([...TERMS, ...MORE_TERMS])`.
+ */
+export const MORE_TERMS: Term[] = [
+  { id: "held-out", forms: ["held-out", "held out"], def: "Tasks set aside and frozen before any result was seen, and never used to tune Adage, so a result on them is a fair test of tasks it has not met." },
+  { id: "paired", forms: ["paired comparison", "paired comparisons", "paired block", "paired blocks"], def: "The same task run with Adage and without it, side by side, so the only difference between the two runs is Adage." },
+  { id: "hidden-test", forms: ["hidden test", "hidden tests", "hidden-test"], def: "Tests the agent never sees. They check its work afterwards, so it cannot pass by writing to the test." },
+  { id: "pass-rule", forms: ["pass rule", "pass rules", "pre-registered", "registered rule"], def: "The line a result must clear, written down and committed before the study runs, so it cannot be moved after the numbers come in." },
+  { id: "upper-bound", forms: ["upper bound", "95% upper bound"], def: "The highest the true value is likely to be, given the spread in the data. Requiring the upper bound to clear the line asks for a result that holds even in the unlucky case." },
+  { id: "request-ratio", forms: ["request ratio"], def: "Model requests with Adage divided by model requests without it, over the same tasks. 0.62 means 62 requests for every 100." },
+  { id: "model-request", forms: ["model request", "model requests", "model call", "model calls"], def: "One round trip to the AI model: the agent sends what it has so far and gets back its next step. Each one costs time and money." },
+  { id: "token", forms: ["token", "tokens"], def: "The small pieces of text a model reads and writes, roughly three quarters of a word each. Model use is billed by them." },
+  { id: "cpu", forms: ["cpu"], def: "Your computer's own processor. Work Adage does here is local and needs no model request." },
+  { id: "gpu", forms: ["gpu", "gpus"], def: "The chips in a data centre that run the AI model. Adage does not measure their use or energy." },
+  { id: "receipt", forms: ["receipt", "receipts"], def: "Adage's short report after it runs an approved check: the command, whether it passed, how long it took and which of the agent's new tests ran." },
+  { id: "orientation", forms: ["orientation"], def: "Where a procedure card's files stand in your checkout right now: line counts, the last definitions, the end of the test file, the changelog's head. Adage reads them itself, read-only." },
+  { id: "grant", forms: ["grant", "grants", "execution approval"], def: "A person's approval for Adage to run one exact command in a sandbox. Change the command, its scripts or its environment, and the approval stops matching: nothing runs." },
+  { id: "scaffolding", forms: ["scaffolding"], def: "Extra help in a development study's prompts, such as supplied tests and a work order. Real prompts do not carry it." },
+  { id: "safety-control", forms: ["safety control", "safety controls"], def: "A run set up so the right move is to check again (a failing test, a later edit, a changed config, a broader change, or a request to rerun). Adage passes only if the work still gets done." },
+  { id: "arm", forms: ["arm", "arms"], def: "One of the groups a study compares, such as the agent alone or the agent with Adage." },
+  { id: "censored", forms: ["censored", "censoring"], def: "A session that stopped before it finished, for example at its turn limit. Here it always counts as a failure, and against Adage." },
+  { id: "sensitivity", forms: ["sensitivity analysis", "sensitivity analyses"], def: "The same test rerun with some data left out, to see whether the answer depends on it." },
+];
+
+/** `segments` over another list of terms (for example `[...TERMS, ...MORE_TERMS]`). */
+export function segmenter(terms: Term[]): (text: string, seen?: Set<string>) => Segment[] {
+  const forms = new Map<string, Term>();
+  for (const t of terms) for (const f of t.forms) forms.set(f.toLowerCase(), t);
+  const pattern = new RegExp(
+    `(?<![\\w-])(${[...forms.keys()].sort((a, b) => b.length - a.length).map(escape).join("|")})(?![\\w-])`,
+    "gi",
+  );
+  return (text, seen = new Set()) => {
+    const out: Segment[] = [];
+    let at = 0;
+    for (const m of text.matchAll(pattern)) {
+      const term = forms.get(m[0].toLowerCase())!;
+      if (seen.has(term.id)) continue;
+      seen.add(term.id);
+      if (m.index > at) out.push(text.slice(at, m.index));
+      out.push({ text: m[0], term });
+      at = m.index + m[0].length;
+    }
+    if (at < text.length) out.push(text.slice(at));
+    return out;
+  };
+}

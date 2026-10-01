@@ -7,6 +7,7 @@ import { createFilm } from "./film";
 import { initStory } from "./story";
 import { initPage } from "./page";
 import { initTheme, isLight } from "./theme";
+import { loadHeldout } from "./evidence/load";
 
 type Scene = {
   go(id: string): void;
@@ -110,6 +111,8 @@ select(0);
 film.start();
 initPage();
 initStory();
+// The held-out status beside the claim, from its data file.
+void loadHeldout();
 
 if (webgl()) {
   import("./hero/scene.js")

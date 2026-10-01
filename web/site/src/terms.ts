@@ -2,7 +2,12 @@
 // words and definitions are the shared glossary (web/map/src/how/glossary.ts); this file marks
 // them in the page and shows one tooltip for whichever is active.
 
-import { segments, type Segment } from "@how/glossary";
+import { MORE_TERMS, TERMS, segmenter, segments, type Segment } from "@how/glossary";
+
+/** Splits text into words and term mentions (`segments`, or one over more terms). */
+export type Split = (text: string, seen?: Set<string>) => Segment[];
+/** The shared glossary plus the terms the evidence page and the hook walkthrough add. */
+export const allTerms: Split = segmenter([...TERMS, ...MORE_TERMS]);
 
 let tip: HTMLElement | null = null;
 let current: HTMLElement | null = null;
@@ -21,13 +26,13 @@ function node(s: Segment): Node {
 }
 
 /** Sets `el` to `text`, marking the first mention of each term not already in `seen`. */
-export function termify(el: HTMLElement, text: string, seen: Set<string>) {
-  el.replaceChildren(...segments(text, seen).map(node));
+export function termify(el: HTMLElement, text: string, seen: Set<string>, split: Split = segments) {
+  el.replaceChildren(...split(text, seen).map(node));
 }
 
 /** Marks terms in text already on the page under `root`, leaving code, math, links, headings,
  *  decorations and live readouts (which their scripts rewrite) alone. */
-export function termifyTree(root: Element, seen = new Set<string>()) {
+export function termifyTree(root: Element, seen = new Set<string>(), split: Split = segments) {
   const skip = "code, math, a, button, h1, h2, h3, summary, label, output, .mnum, .gloss, [aria-hidden='true'], [aria-live]";
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode: (n) => (n.parentElement?.closest(skip) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
@@ -35,7 +40,7 @@ export function termifyTree(root: Element, seen = new Set<string>()) {
   const texts: Text[] = [];
   while (walker.nextNode()) texts.push(walker.currentNode as Text);
   for (const t of texts) {
-    const parts = segments(t.data, seen);
+    const parts = split(t.data, seen);
     if (parts.length > 1 || typeof parts[0] !== "string") t.replaceWith(...parts.map(node));
   }
 }

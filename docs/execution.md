@@ -105,7 +105,8 @@ automatically (it runs a script).
 `adage-exec hook <harness> <event>` takes `adage hook`'s arguments. For the Claude Code plugin it
 writes `$ADAGE_HOME/exec/enabled`: with it, the Adage plugin's session-start shim points its hooks
 at a no-op and the `adage-exec` plugin (`plugin/claude-code-exec`, the second plugin in the
-marketplace: `/plugin install adage-exec@adage`) serves; without it, the reverse. Exactly one
+marketplace: `/plugin install adage-exec@adage`, once the marketplace is published; it is not yet)
+serves; without it, the reverse. Exactly one
 plugin answers, so hooks never fire twice. Changes take effect in new sessions.
 
 **What `adage-exec hook` does.** The pipeline is `adage hook`'s, shared as the `adage-hook` library
@@ -735,6 +736,24 @@ Evidence and permission remain distinct. Context predictions with no grant remai
 control sessions never execute. Multi-command sequences and context input slots are not yet
 supported. See the [behavior reference](how-it-works.md#accumulated-prediction-and-current-execution-limits)
 for the accumulation model and current evidence limits.
+
+### The session contract (SessionStart)
+
+In a treated session on Claude Code or Codex whose policy allows E2, `adage-exec`'s SessionStart
+adds a short model-facing note for each current E2 verification grant in the repository (at most
+two), in an `<adage-reflex … route="session-contract" kind="execution-contract">` block:
+
+```text
+In this repository Adage runs `.venv/bin/python -m pytest tests/test_validate.py -q` (approved by a person, sandboxed) after edits to tests/*.py then CHANGELOG.rst, and again when you finish if files changed since.
+Its results appear with your tool results, with the tests it ran; a failure comes back to you with the failing tests.
+```
+
+It names only a grant whose approval key still equals the route's current one, derived as an
+action derives it: a lapsed or revoked grant would be refused, so it promises nothing. Control
+sessions, a damaged index, a missing extension and a missing grant stay silent. The note is
+separate from the person's notices (muting notices does not mute it), and learning treats the
+session as guided from its start, so the contract's own effect is never relearned as organic
+evidence. A lapsed grant is told to the person instead (above).
 
 ### Receipts before a repeated test run
 

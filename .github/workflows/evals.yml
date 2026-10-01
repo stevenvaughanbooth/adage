@@ -1,11 +1,10 @@
 # Offline evals (docs/evals.md): regression gates on the committed datasets, property tests at the
 # slow case counts, replay fidelity, per-dataset reports, and the live runner's dry-run smoke
-# test. Nothing here runs an agent or spends tokens. The fast gates also run in ci.yml, as part
-# of `cargo test --workspace`.
+# test. Nothing here runs an agent or spends tokens. ci.yml excludes adage-eval, so this workflow
+# is the only place its suites run.
 name: Evals
 
-# Weekly and on manual dispatch only (`gh workflow run Evals --ref <branch>`): the fast gates already
-# run on every push in ci.yml's `cargo test --workspace`.
+# Weekly and on manual dispatch only: `gh workflow run Evals --ref <branch>`.
 on:
   workflow_dispatch:
   schedule:
