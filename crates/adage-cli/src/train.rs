@@ -154,6 +154,9 @@ fn accept(args: &[String], paths: &Paths) -> Result<()> {
     }
     std::fs::create_dir_all(dest.parent().context("an install directory has a parent")?)?;
     std::fs::rename(&stage, &dest)?;
+    let (version, via) = (pack.manifest.pack.version.clone(), adage_pack::install::Via::Review);
+    let record = adage_pack::install::Record { version, digest: digest.clone(), via };
+    adage_pack::install::record(&paths.tracks(), &pack.manifest.pack.name, record)?;
     packs::record_accepted(paths, &pack.manifest.pack.name, &digest)?;
     let root = PathBuf::from(&review.root);
     let cwd_root = std::env::current_dir().ok().and_then(|d| adage_core::repo::find_root(&d));

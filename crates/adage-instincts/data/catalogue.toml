@@ -1,15 +1,19 @@
-# The instinct catalogue: prebuilt routes that ship with Adage (docs/instincts.md).
+# The detector catalogue (docs/instincts.md): every instinct detector this build has, by id, with
+# what it detects and how strongly it may direct.
 #
-# An instinct is this data (what it directs, when, how strongly) plus a detector in Rust
-# (src/detect.rs) that reads the repository's *declared* facts (src/declared.rs). At learn time
-# the binder turns each enabled instinct into concrete routes for one repository. Nothing here
-# reaches an agent as text: directives are rendered by Adage from fixed templates, and every bound
-# route is validated like any untrusted track (adage_tracks::io::validate).
+# An instinct ships as a pack (packs/<name>/ in the Adage repository, listed by its marketplace,
+# .adage/marketplace.toml; docs/marketplace.md) whose routes are templates naming a detector here.
+# The detector, in Rust (src/detect.rs), reads the repository's *declared* facts (src/declared.rs)
+# and fills the templates in. So this file says what a build can detect; the marketplace decides
+# what ships. [pack] is the catalogue's own name and version (core@0.1.0), which instinct packs name
+# as their catalogue. Nothing here reaches an agent as text: directives are rendered by Adage from
+# fixed templates, and every bound route is validated like any untrusted track
+# (adage_tracks::io::validate).
 #
 # Fields per instinct:
 #   id          stable catalogue id (U = universal, N = node, P = python, R = rust, G = go, X = cross)
 #   priority    P0 (bound now) or P1 (catalogued; detector is a stub until the model can express it)
-#   enabled     whether the binder runs its detector; a disabled instinct never binds
+#   enabled     whether its detector is built; a disabled instinct never binds, in any pack
 #   title       for people (docs, `adage doctor`), never for the agent
 #   trigger     the trigger it binds to (a Trigger variant, or one the model still lacks)
 #   directive   a sketch of what the fixed template says

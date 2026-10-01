@@ -25,7 +25,9 @@ Conditioning:
   graph        Adage's state as a graph
   train        compile a skill into reflexes
 
-Sharing:
+Packs:
+  packs        base instincts and added packs
+  marketplace  where packs come from
   share        build and sign a pack
   add          verify and install a pack
 

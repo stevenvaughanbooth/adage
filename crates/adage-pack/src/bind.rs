@@ -181,10 +181,32 @@ pub fn local_keys(root: &Path) -> BTreeSet<String> {
     keys
 }
 
-/// The catalogue this build compiles in (`core@0.1.0`).
+/// The detector catalogue this build compiles in (`core@0.1.0`).
 pub fn catalogue_id() -> String {
     let c = adage_instincts::catalogue();
     format!("{}@{}", c.pack.name, c.pack.version)
+}
+
+/// Whether a pack written for detector catalogue `wanted` (`core@0.1.0`) binds with this build's
+/// `ours`: the same catalogue, at the same or a later version that is compatible by semver's caret
+/// rule (`^0.1.0` is `>=0.1.0, <0.2.0`; `^1.2.0` is `>=1.2.0, <2.0.0`). A newer build keeps
+/// binding the packs written for it; a pack written for a newer catalogue waits for a newer build.
+pub fn catalogue_compatible(wanted: &str, ours: &str) -> bool {
+    let parse = |s: &str| -> Option<(String, [u64; 3])> {
+        let (name, v) = s.split_once('@')?;
+        let mut it = v.split('.').map(|x| x.parse::<u64>().ok());
+        let v = [it.next()??, it.next()??, it.next()??];
+        it.next().is_none().then(|| (name.to_string(), v))
+    };
+    let (Some((wn, w)), Some((on, o))) = (parse(wanted), parse(ours)) else { return false };
+    let same_line = if w[0] > 0 {
+        o[0] == w[0]
+    } else if w[1] > 0 {
+        o[0] == 0 && o[1] == w[1]
+    } else {
+        o == w
+    };
+    wn == on && same_line && o >= w
 }
 
 /// Does `pack` apply to `target`?
@@ -232,17 +254,21 @@ pub fn applies(pack: &Pack, target: &Target) -> Applies {
         }
         Applicability::Detector { detector, catalogue } => {
             let ours = catalogue_id();
-            if *catalogue != ours {
+            if !catalogue_compatible(catalogue, &ours) {
                 return Applies::Unknown(format!("catalogue {catalogue} is not this build's ({ours})"));
             }
             let cat = adage_instincts::catalogue();
-            let ids: Vec<&str> = if detector == "*" {
-                cat.instincts.iter().filter(|i| i.enabled).map(|i| i.id.as_str()).collect()
-            } else if cat.get(detector).is_some() {
-                vec![detector.as_str()]
+            // `*`: the detectors the pack's templates name.
+            let mut ids: Vec<&str> = if detector == "*" {
+                pack.routes.iter().filter_map(|r| r.detector.as_deref()).collect()
             } else {
-                return Applies::Unknown(format!("detector {detector} is not compiled into this build"));
+                vec![detector.as_str()]
             };
+            ids.sort_unstable();
+            ids.dedup();
+            if let Some(d) = ids.iter().find(|d| cat.get(d).is_none()) {
+                return Applies::Unknown(format!("detector {d} is not compiled into this build"));
+            }
             let Some(root) = &target.root else {
                 return Applies::No(format!("no checkout of {} on this machine to run detectors over", target.repo));
             };
@@ -354,6 +380,19 @@ pub fn bind(pack: &Pack, target: &Target, env: &BindEnv) -> Binding {
             os_name(env.os)
         )
     });
+    // An instinct pack's routes are templates: what binds is what their detectors fill in here.
+    if matches!(m.applicability, Applicability::Detector { .. }) {
+        let inert = everything_inert.or(os_problem);
+        b.routes = match (&target.root, inert) {
+            (Some(root), inert) => crate::instincts::bound_routes(pack, root, inert),
+            (None, inert) => crate::instincts::bound_routes(
+                pack,
+                Path::new("."),
+                Some(inert.unwrap_or_else(|| format!("no checkout of {} on this machine", target.repo))),
+            ),
+        };
+        return b;
+    }
     let table = CommandTable::load();
     for r in &pack.routes {
         let digest = crate::digest::route_exec_digest(r, &pack.types);

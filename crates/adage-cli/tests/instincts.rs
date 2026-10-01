@@ -450,11 +450,12 @@ fn doctor_review_and_pack_approval() {
     let text = w.ok(&["review"]);
     assert!(text.contains("instinct U1 (from Makefile)"), "{text}");
     assert!(text.contains("4 reflexes wait for a decision") && text.contains("Instincts in effect"), "{text}");
-    // Approving one environment step approves the pack's for this repository.
+    // Approving one environment step approves its pack's (the one N1's routes came from) for this
+    // repository.
     let out = w.ok(&["review", "approve", TRACK, nascent[0]]);
-    assert!(out.contains(&format!("approved    pack core's environment steps for {KEY}")), "{out}");
+    assert!(out.contains(&format!("approved    pack adage/package-manager's environment steps for {KEY}")), "{out}");
     let yaml = std::fs::read_to_string(w.p(&format!("adage/tracks/{TRACK}/review.yaml"))).unwrap();
-    assert!(yaml.contains("packs:") && yaml.contains("core:"), "{yaml}");
+    assert!(yaml.contains("packs:") && yaml.contains("adage/package-manager:"), "{yaml}");
     // Re-binding keeps both in service.
     w.bind();
     let idx: Value = serde_json::from_str(&std::fs::read_to_string(w.p("adage/index.json")).unwrap()).unwrap();
@@ -522,4 +523,139 @@ fn followed_and_failed_instincts_extinguish_at_the_next_learn() {
     let idx: Value = serde_json::from_str(&std::fs::read_to_string(w.p("adage/index.json")).unwrap()).unwrap();
     let extinguished = idx["routes"].as_array().unwrap().iter().any(|r| r["route"]["id"] == "dead-end-d41b1e");
     assert!(!extinguished, "the extinguished route is not delivered");
+}
+
+/// Routes in service whose advice uses `template`.
+fn advised(w: &World, template: &str) -> usize {
+    let idx: Value = serde_json::from_str(&std::fs::read_to_string(w.p("adage/index.json")).unwrap()).unwrap();
+    let needle = format!("\"template\":\"{template}\"");
+    idx["routes"].as_array().unwrap().iter().filter(|r| r["route"].to_string().contains(&needle)).count()
+}
+
+#[test]
+fn packs_lists_the_base_instincts_and_turns_one_off_and_on() {
+    let w = World::new().with_pnpm();
+    w.bind();
+    let packs = |w: &World| -> Value {
+        let v: Value = serde_json::from_str(&w.ok(&["packs", "--json", "--repo-path", &w.repo()])).unwrap();
+        v["instincts"].clone()
+    };
+    let lockfiles = |v: &Value| v.as_array().unwrap().iter().find(|p| p["name"] == "adage/lockfiles").unwrap().clone();
+    // Every base pack is listed: built in, pre-installed as pinned, on; this repository's lockfile
+    // is what adage/lockfiles needs, so it bound its advice.
+    let v = packs(&w);
+    let names: Vec<&str> = v.as_array().unwrap().iter().map(|p| p["name"].as_str().unwrap()).collect();
+    assert_eq!(names.len(), 8, "{names:?}");
+    assert!(v
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|p| p["source"] == "builtin" && p["on"] == true && p["installed"] == true));
+    let l = lockfiles(&v);
+    assert_eq!((l["applies"].as_bool(), l["bound"].as_u64()), (Some(true), Some(1)), "{l:#}");
+    assert_eq!(advised(&w, "lockfile"), 1);
+    // Off: nothing of it binds here (and every other repository rebinds at its next session).
+    let out = w.ok(&["packs", "off", "adage/lockfiles", "--repo-path", &w.repo()]);
+    assert!(out.contains("adage/lockfiles binds nowhere until `adage packs on adage/lockfiles`"), "{out}");
+    assert_eq!(advised(&w, "lockfile"), 0);
+    let l = lockfiles(&packs(&w));
+    assert_eq!((l["on"].as_bool(), l["applies"].as_bool(), l["bound"].as_u64()), (Some(false), Some(true), Some(0)));
+    assert!(advised(&w, "package-manager") > 0, "the other packs are untouched");
+    // On again.
+    w.ok(&["packs", "on", "adage/lockfiles", "--repo-path", &w.repo()]);
+    assert_eq!(advised(&w, "lockfile"), 1);
+    // What a packaged instinct is: its files, as installed.
+    let show = w.ok(&["packs", "show", "adage/lockfiles"]);
+    for want in ["── pack.toml", "name = \"adage/lockfiles\"", "── routes/lockfile.yaml", "detector: U6", "── CLOSURE"]
+    {
+        assert!(show.contains(want), "{want}: {show}");
+    }
+    let (_, err, code) = w.run(&["packs", "off", "adage/nope"], b"");
+    assert!(code != 0 && err.contains("is not an instinct pack Adage has"), "{err}");
+}
+
+/// The adage marketplace end to end, through the binary and its real hooks: listed before anything
+/// runs; synced by the first run (every base pack installed where `adage add` installs a pack, at
+/// its pin, and recorded as from the marketplace); what its packs bind reaches the agent with the
+/// pack named in the route; a pack turned off is silent from the next session and back when turned
+/// on; a damaged installed copy shows, and `adage marketplace update` repairs it.
+#[test]
+fn the_adage_marketplace_end_to_end() {
+    let w = World::new().with_pnpm();
+    let adage = |w: &World| -> Value {
+        let v: Value = serde_json::from_str(&w.ok(&["marketplace", "--json"])).unwrap();
+        v["marketplaces"].as_array().unwrap().iter().find(|m| m["name"] == "adage").unwrap().clone()
+    };
+    let installed = |m: &Value, state: &str| m["packs"].as_array().unwrap().iter().all(|p| p["installed"] == state);
+    // Before anything runs: this repository's marketplace, built in, none of its packs installed.
+    let m = adage(&w);
+    assert_eq!(m["repository"], "github.com/stevenvaughanbooth/adage");
+    assert_eq!(m["source"], "builtin");
+    assert_eq!(m["packs"].as_array().unwrap().len(), 8);
+    assert!(installed(&m, "no"), "{m:#}");
+    let doctor = |w: &World| -> String {
+        let (d, _, _) = w.run(&["doctor", "--json"], b"");
+        let v: Value = serde_json::from_str(&d).unwrap();
+        let c = v["checks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|c| c["check"] == "marketplace")
+            .expect("a marketplace check")
+            .clone();
+        assert_eq!(c["status"], "pass", "{c:#}");
+        c["detail"].as_str().unwrap().to_string()
+    };
+    assert!(doctor(&w).contains("0 installed as pinned; the next condition"), "{}", doctor(&w));
+    // The first run syncs it: every pack installed as pinned, and recorded as from it.
+    w.ok(&["init", "--yes", "--repo", &w.repo()]);
+    let m = adage(&w);
+    assert!(installed(&m, "current"), "{m:#}");
+    assert!(doctor(&w).contains("adage (built into Adage"), "{}", doctor(&w));
+    assert!(doctor(&w).contains("every one installed as pinned"), "{}", doctor(&w));
+    let records: Value =
+        serde_json::from_str(&std::fs::read_to_string(w.p("adage/tracks/@imported/installed.json")).unwrap()).unwrap();
+    for p in m["packs"].as_array().unwrap() {
+        let name = p["name"].as_str().unwrap();
+        assert_eq!(records[name]["via"], json!({ "kind": "marketplace", "name": "adage" }), "{name}");
+        assert_eq!(records[name]["digest"], p["digest"], "{name}");
+        assert!(w.p(&format!("adage/tracks/@imported/{name}/pack.toml")).is_file(), "{name}");
+    }
+    // A real hook delivers what the packs bound: the agent edits the lockfile.
+    let edit = |session: &str| {
+        let cwd = w.repo();
+        let p = json!({
+            "session_id": session, "cwd": cwd, "transcript_path": "/dev/null", "hook_event_name": "PostToolBatch",
+            "tool_calls": [{ "tool_name": "Edit", "tool_input": {
+                "file_path": format!("{cwd}/pnpm-lock.yaml"), "old_string": "a", "new_string": "b"
+            }, "tool_response": "ok" }],
+        });
+        w.hook("claude", "PostToolBatch", &p)
+    };
+    let delivered = edit("market-1");
+    assert_instinct_text(&delivered);
+    assert!(delivered.contains("maintained by pnpm"), "{delivered}");
+    let idx = std::fs::read_to_string(w.p("adage/index.json")).unwrap();
+    assert!(idx.contains("instinct:adage/lockfiles@0.1.0"), "the route names its pack");
+    // Turned off, the next session hears nothing of it; turned on, it is back.
+    w.ok(&["packs", "off", "adage/lockfiles", "--repo-path", &w.repo()]);
+    assert!(!edit("market-2").contains("maintained by pnpm"));
+    w.ok(&["packs", "on", "adage/lockfiles", "--repo-path", &w.repo()]);
+    assert!(edit("market-3").contains("maintained by pnpm"));
+    // A damaged installed copy shows, and an update repairs it; a second update has nothing to do.
+    std::fs::write(w.p("adage/tracks/@imported/adage/lockfiles/routes/lockfile.yaml"), "id: lockfile\n").unwrap();
+    let m = adage(&w);
+    assert!(m["packs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|p| p["name"] == "adage/lockfiles" && p["installed"] == "differs"));
+    let out = w.ok(&["marketplace", "update"]);
+    assert!(out.contains("updated adage/lockfiles"), "{out}");
+    assert!(installed(&adage(&w), "current"));
+    assert!(w.ok(&["marketplace", "update"]).contains("in sync"));
+    // Its manifest, as published.
+    let show = w.ok(&["marketplace", "show", "adage"]);
+    assert!(show.contains("format = \"adage-marketplace/1\""), "{show}");
+    assert!(show.contains("repository = \"github.com/stevenvaughanbooth/adage\""), "{show}");
 }

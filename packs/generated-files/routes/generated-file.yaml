@@ -1,0 +1,16 @@
+id: generated-file
+summary: After an edit to a generated file, say to change its inputs and regenerate it
+shape: advise
+detector: U4
+trigger:
+  on: after_edit
+  paths: '{paths}'
+steps:
+- id: advise
+  advise:
+    template: generated-file
+    slots:
+      command: '{command}'
+      path: '{path}'
+  effect: observe
+strength: prime

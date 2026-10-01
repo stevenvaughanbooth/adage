@@ -24,10 +24,14 @@ const html = (): Plugin => ({
 // The How it works chapters are shared with the map (web/map/src/how): one source for both. They
 // import three, which resolves from this package (the map's node_modules are not installed here).
 const how = fileURLToPath(new URL("../map/src/how", import.meta.url));
+// The Packs section shows real packs, read from the repository as they are: Adage's base instincts
+// (packs/) and a reflex pack shared from a study (src/packs.ts).
+const repo = fileURLToPath(new URL("../..", import.meta.url));
+const REFLEX_PACK = "evals/datasets/live-20260928-acme-billing-sonnet5/packs/work-items";
 
 export default defineConfig({
   plugins: [html()],
-  resolve: { alias: { "@how": how }, dedupe: ["three"] },
+  resolve: { alias: { "@how": how, "@repo": repo }, dedupe: ["three"] },
   build: {
     outDir: "dist",
     emptyOutDir: true,
@@ -52,5 +56,5 @@ export default defineConfig({
       },
     },
   },
-  server: { port: 5174, fs: { allow: [".", "../map/src"] } },
+  server: { port: 5174, fs: { allow: [".", "../map/src", "../../packs", `../../${REFLEX_PACK}`] } },
 });

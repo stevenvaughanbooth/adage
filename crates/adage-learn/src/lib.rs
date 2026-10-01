@@ -246,7 +246,7 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
         // No session to learn from yet: bind the repository's instincts from its files (day 0),
         // when its root is known and they are not bound against it as its files are now.
         let bound = io::read(&tracks_root.join(slug(repo)).join(instincts::TRACK)).is_ok();
-        let fresh = |root: &Path| bound && !instincts::stale_binding(tracks_root, repo, root);
+        let fresh = |root: &Path| bound && !instincts::stale_binding(tracks_root, repo, root, &ic.selection());
         if let Some(root) = ic.roots.get(repo).filter(|r| !fresh(r)) {
             let mut report = instincts::learn_only(repo, root, tracks_root, index_path, ic)?;
             report.sessions_read = read;
@@ -269,6 +269,9 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
         };
         return Ok(report);
     }
+    if cfg.instincts.as_ref().is_some_and(instincts::Config::binds) {
+        instincts::preinstall(tracks_root);
+    }
     let weights = follow_weights(&sessions);
     let (mut report, planned) = plan(sessions, inputs.models.as_deref(), tracks_root, cfg)?;
     report.sessions_read = read;
@@ -278,8 +281,9 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
         p.write()?;
     }
     for (repo, rr) in &report.repos {
-        if let Some(root) = rr.instincts.as_ref().and_then(|i| i.root.as_deref()) {
-            instincts::record_binding(tracks_root, repo, root);
+        if let (Some(root), Some(ic)) = (rr.instincts.as_ref().and_then(|i| i.root.as_deref()), cfg.instincts.as_ref())
+        {
+            instincts::record_binding(tracks_root, repo, root, ic);
         }
     }
     for (repo, w) in &weights {

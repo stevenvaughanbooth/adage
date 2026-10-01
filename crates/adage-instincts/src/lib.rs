@@ -1,11 +1,13 @@
 //! Instincts: prebuilt routes that ship with Adage and work on day 0, with no session history.
 //!
-//! *Reflexes* are routes learned from sessions (every route the graph engine learns). An *instinct* is
-//! a route template shipped as data (`data/catalogue.toml`) plus a detector. At learn time the
-//! binder reads a repository's declared facts — Makefile rules, package.json scripts, lockfiles,
-//! pyproject, Cargo and Go metadata, CI `run:` steps, generated-file markers — from bounded reads
-//! of its files, never executing anything, and binds each enabled instinct into concrete
-//! [`adage_tracks::Route`] values:
+//! *Reflexes* are routes learned from sessions (every route the graph engine learns). An *instinct*
+//! ships as a pack of templates (`packs/<name>/` in the Adage repository, `adage_pack::builtin`;
+//! `docs/marketplace.md`), each naming a detector of this crate's catalogue (`data/catalogue.toml`):
+//! this crate is the detectors. At learn time the binder reads a repository's declared facts —
+//! Makefile rules, package.json scripts, lockfiles, pyproject, Cargo and Go metadata, CI `run:`
+//! steps, generated-file markers — from bounded reads of its files, never executing anything, and
+//! binds each enabled detector into concrete [`adage_tracks::Route`] values, which
+//! `adage_pack::instincts::bind` keeps where a template of a pack turned on admits them:
 //!
 //! - provenance `instinct:<pack>@<version>`, no evidence of its own;
 //! - prime, in forming (an environment step in nascent, waiting for review);

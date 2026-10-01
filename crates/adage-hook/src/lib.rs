@@ -794,12 +794,18 @@ fn session_start(
     // Instincts bind against the live checkout, this session's (docs/instincts.md): bound against
     // another one (a per-task worktree, a clone the traces name), or before its declared files
     // changed (a `.venv` made since), they are bound again, by the same fast first phase as a
-    // bootstrap. A few dozen `stat`s decide it (`adage_instincts::fingerprint`).
+    // bootstrap; so are they when other instinct packs are selected (`adage packs off`) or this build
+    // ships other base packs. A few dozen `stat`s decide it (`adage_instincts::fingerprint`).
     let rebind = !bootstrap
         && !damaged
         && cfg.learn_auto
         && cfg.instincts_enabled
-        && adage_learn::instincts::stale_binding(&s.paths.tracks(), &key, s.root);
+        && adage_learn::instincts::stale_binding(
+            &s.paths.tracks(),
+            &key,
+            s.root,
+            &adage_learn::instincts::selection(&cfg.instincts_packs, &cfg.instincts_disabled),
+        );
     if bootstrap || rebind {
         let asked = learner().and_then(|l| autolearn::on_turn_end(s.paths, s.root, s.adapter.name(), None, &l, true));
         if let Err(f) = asked {

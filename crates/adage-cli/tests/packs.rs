@@ -528,11 +528,8 @@ fn fingerprint_packs_bind_where_the_repository_matches() {
     assert_eq!(index.for_repo(REPO).count(), 2);
 }
 
-#[test]
-fn the_core_instincts_detector_pack_travels_and_binds() {
-    let w = World::new();
-    let pk = keygen(&w);
-    w.trust(&pk, "adage-pack");
+/// A checkout U1 binds in: a Makefile test target that runs pytest with what it needs.
+fn wrapped_checkout(w: &World) -> PathBuf {
     let root = w.p("checkout");
     std::fs::write(root.join("Makefile"), "test:\n\tACME_ENV=test python3 -m pytest\n").unwrap();
     std::fs::write(
@@ -540,26 +537,74 @@ fn the_core_instincts_detector_pack_travels_and_binds() {
         "[project]\nname = \"x\"\n\n[tool.pytest.ini_options]\naddopts = \"-q\"\n",
     )
     .unwrap();
-    let direct = adage_instincts::bind(&root, &[], &Default::default());
-    let pack = adage_pack::instincts::core_instincts(&root, &[], &Default::default()).unwrap().unwrap().pack;
-    pack.write(&w.p("core")).unwrap();
-    ok(w.share(&w.p("core"), "out", &[]));
+    root
+}
+
+fn builtin_pack(name: &str) -> adage_pack::Pack {
+    adage_pack::builtin::marketplace().unwrap().get(name).unwrap().1.clone()
+}
+
+#[test]
+fn an_instinct_pack_travels_and_binds_with_the_other_instincts() {
+    let w = World::new();
+    let pk = keygen(&w);
+    w.trust(&pk, "adage-pack");
+    let root = wrapped_checkout(&w);
+    // A team's instinct pack: the base test-wrapper pack, published under the team's name.
+    let mut pack = builtin_pack("adage/test-wrapper");
+    pack.manifest.pack.name = "acme/test-wrapper".into();
+    pack.write(&w.p("team")).unwrap();
+    ok(w.share(&w.p("team"), "out", &[]));
     let t = ok(w.add("out", &root));
-    assert!(t.contains("pack adage/core-instincts"), "{t}");
+    assert!(t.contains("pack acme/test-wrapper"), "{t}");
+    assert!(t.contains("binds in each repository from its files"), "{t}");
+    // Installed where any pack is; no bound track of its own: learning bound it with the base packs.
+    assert!(w.p("recipient/tracks/@imported/acme/test-wrapper/pack.toml").is_file());
+    assert!(!w.p("recipient/tracks/@imported/@bound/acme/test-wrapper").exists());
     let index = Index::load(&w.p("recipient/index.json"));
     let mut got: Vec<adage_tracks::Route> = index.for_repo(REPO).map(|r| r.route.clone()).collect();
     got.sort_by(|a, b| a.id.cmp(&b.id));
-    assert!(!got.is_empty());
+    let direct = adage_instincts::bind(&root, &[], &Default::default());
     assert_eq!(got.iter().map(|r| &r.id).collect::<Vec<_>>(), direct.routes.iter().map(|r| &r.id).collect::<Vec<_>>());
     for (a, b) in got.iter().zip(&direct.routes) {
         assert_eq!((&a.trigger, &a.step, a.effect, a.strength), (&b.trigger, &b.step, b.effect, b.strength));
         assert!(a.is_instinct());
     }
+    // U1's routes came from the team's pack (it sorts first among the packs that name U1).
+    assert!(got.iter().any(|r| r.evidence.provenance == "instinct:acme/test-wrapper@0.1.0"), "{got:?}");
+    // The base packs were pre-installed beside it, exactly as pinned.
+    for (e, _) in &adage_pack::builtin::marketplace().unwrap().packs {
+        let dir = w.p("recipient/tracks/@imported").join(&e.name);
+        assert_eq!(adage_pack::digest_dir(&dir).unwrap(), e.digest, "{}", e.name);
+    }
     // Elsewhere, the detectors find nothing to bind to.
     let empty = w.p("empty");
     std::fs::create_dir_all(empty.join(".git")).unwrap();
-    let t = ok(w.add("out", &empty));
-    assert!(t.contains("not applicable"), "{t}");
+    ok(w.add("out", &empty));
+    assert_eq!(Index::load(&w.p("recipient/index.json")).for_repo(REPO).count(), got.len());
+}
+
+#[test]
+fn a_base_pack_is_trusted_by_its_pin_and_its_name_is_reserved() {
+    let w = World::new();
+    let root = wrapped_checkout(&w);
+    // An unsigned copy of a base pack: the marketplace built into Adage pins it.
+    for (rel, b) in adage_pack::builtin::marketplace().unwrap().files("adage/test-wrapper").unwrap() {
+        let p = w.p("base").join(rel);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(p, b).unwrap();
+    }
+    let t = ok(w.add("base", &root));
+    assert!(t.contains("pinned by the adage marketplace built into Adage"), "{t}");
+    assert!(Index::load(&w.p("recipient/index.json")).for_repo(REPO).any(|r| r.route.is_instinct()));
+    // Other bytes under its name are refused, signed by a trusted signer or not.
+    let pk = keygen(&w);
+    w.trust(&pk, "adage-pack");
+    let mut forged = builtin_pack("adage/test-wrapper");
+    forged.manifest.pack.description = "Ours now".into();
+    forged.write(&w.p("forged")).unwrap();
+    ok(w.share(&w.p("forged"), "forged-out", &[]));
+    refused(w.add("forged-out", &root), "is a pack of the adage marketplace built into Adage");
 }
 
 /// A Claude Code transcript: the prompt names `ticket`, the agent looks it up, then edits.

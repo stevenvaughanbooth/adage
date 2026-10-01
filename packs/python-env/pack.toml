@@ -1,0 +1,32 @@
+format = "adage-pack/1"
+
+[pack]
+name = "adage/python-env"
+version = "0.1.0"
+origin = "instinct"
+description = "Use the project's own Python environment. When pytest, tox or python fail outside the repository's virtual environment (or uv project), Adage names the command that runs inside it, or the interpreter to use. On Claude Code it can also point a pending test run at that environment; adage delegate rewrites off turns that off."
+
+[applicability]
+kind = "detector"
+detector = "U11"
+catalogue = "core@0.1.0"
+
+[requires]
+templates = [
+    "advise:project-python@1",
+    "advise@1",
+    "after@1",
+]
+
+[exec]
+requested = "E0"
+
+[provenance]
+tool = "adage 0.1.0"
+
+[provenance.origins]
+organic = 0
+synthetic = 0
+declared = 0
+instinct = 0
+imported = 0

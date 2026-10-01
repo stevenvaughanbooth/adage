@@ -80,6 +80,10 @@ pub enum Command {
     Train(TrainArgs),
 
     // ------------------------------------------------------------------ sharing
+    /// The packs Adage binds: its base instincts and the packs you added.
+    Packs(PacksArgs),
+    /// Where packs come from: the adage marketplace, built in.
+    Marketplace(MarketplaceArgs),
     /// Build and sign a pack from a track, to share it.
     Share(ShareArgs),
     /// Verify, install and bind a shared pack.
@@ -421,6 +425,63 @@ pub struct AddArgs {
     /// Trust the pack's signer.
     #[arg(long)]
     pub trust: bool,
+    /// The repository to bind the pack in (default: the one `add` runs in).
+    #[arg(long, value_name = "DIR")]
+    pub repo_path: Option<PathBuf>,
+}
+
+#[derive(Args, Debug)]
+pub struct PacksArgs {
+    #[command(subcommand)]
+    pub action: Option<PacksAction>,
+    /// The repository to report on, or to bind again (default: the current one).
+    #[arg(long, value_name = "DIR", global = true)]
+    pub repo_path: Option<PathBuf>,
+    /// Machine-readable output.
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum PacksAction {
+    /// Bind an instinct pack wherever its detectors find what it needs.
+    On {
+        /// The pack (`adage packs` lists them).
+        name: String,
+    },
+    /// Stop binding an instinct pack, here and everywhere.
+    Off {
+        /// The pack (`adage packs` lists them).
+        name: String,
+    },
+    /// A pack's files, as installed: what a packaged reflex is.
+    Show {
+        /// The pack (`adage packs` lists them).
+        name: String,
+    },
+}
+
+#[derive(Args, Debug)]
+pub struct MarketplaceArgs {
+    #[command(subcommand)]
+    pub action: Option<MarketplaceAction>,
+    /// Machine-readable output.
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum MarketplaceAction {
+    /// A marketplace's manifest, as published: every pack it offers, pinned by digest.
+    Show {
+        /// The marketplace (`adage marketplace` lists them).
+        name: String,
+    },
+    /// Install a marketplace's packs now, as learning does: each at its pin; ones it no longer lists removed.
+    Update {
+        /// The marketplace (default: every one).
+        name: Option<String>,
+    },
 }
 
 #[derive(Args, Debug)]
@@ -751,7 +812,15 @@ fn overview(t: &Theme) -> StyledStr {
                 ("train", "compile a skill into reflexes"),
             ],
         ),
-        ("Sharing", &[("share", "build and sign a pack"), ("add", "verify and install a pack")]),
+        (
+            "Packs",
+            &[
+                ("packs", "base instincts and added packs"),
+                ("marketplace", "where packs come from"),
+                ("share", "build and sign a pack"),
+                ("add", "verify and install a pack"),
+            ],
+        ),
         ("Execution", &[("delegate", "let hooks run delegated reflexes, and rewrites")]),
         (
             "Setup",
@@ -883,6 +952,8 @@ mod tests {
         .into();
         let table: &[(&str, &[&str])] = &[
             ("add.rs", &["add"]),
+            ("packs_cmd.rs", &["packs"]),
+            ("marketplace_cmd.rs", &["marketplace"]),
             ("autolearn.rs", &["condition"]),
             ("config.rs", &["config"]),
             ("doctor.rs", &["doctor"]),

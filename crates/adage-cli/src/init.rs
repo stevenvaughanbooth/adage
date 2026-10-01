@@ -325,8 +325,31 @@ fn instincts(root: Option<&std::path::Path>, yes: bool, paths: &Paths) -> Result
         )?;
         return Ok(());
     }
-    let opts = adage_instincts::BindOptions { disabled: settings.instincts_disabled.iter().cloned().collect() };
-    let dry = adage_instincts::bind_with(root, &[], &Default::default(), &opts);
+    // A dry bind through the instinct packs turned on: the base packs of the marketplace built into
+    // Adage (installed by the bind itself) and any added with `adage add`.
+    let ic = crate::autolearn::instinct_config(&settings, paths);
+    let (packs, _) = adage_learn::instincts::packs(&ic, &paths.tracks());
+    let refs: Vec<&adage_pack::Pack> = packs.iter().collect();
+    let bound = adage_pack::instincts::bind(&refs, root, &[], &Default::default(), &ic.disabled_ids());
+    let here: Vec<&str> =
+        packs.iter().map(|p| p.manifest.pack.name.as_str()).filter(|n| bound.of_pack(n).next().is_some()).collect();
+    say(
+        &mut o,
+        Line::new()
+            .quiet(format!(
+                "{} on, from the adage marketplace built into Adage; ",
+                crate::words::count(packs.len(), "instinct pack")
+            ))
+            .text(if here.is_empty() {
+                "none applies here".to_string()
+            } else {
+                format!("{} here: {}", here.len(), here.join(", "))
+            })
+            .quiet(" (")
+            .cmd("adage packs")
+            .quiet(" to see or turn them off)"),
+    )?;
+    let dry = bound.into_result();
     if dry.routes.is_empty() {
         say(&mut o, Line::new().quiet("Nothing in this repository's files matches an instinct."))?;
         return Ok(());

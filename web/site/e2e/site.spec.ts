@@ -556,6 +556,35 @@ test("the illustrative trace becomes a reflex, then a directive, by keyboard", a
 });
 
 
+test("a pack, file by file: a shared reflex, and an instinct whose blanks a repository fills", async ({ page }) => {
+  await page.goto("/#packs");
+  await expect(page.locator("#film")).toBeHidden();
+  const files = page.locator("#pack-files");
+  const code = page.locator("#pack-code");
+  // A reflex pack, read from the repository as shared: its manifest first, then any file by keyboard.
+  await expect(files.getByRole("button", { name: "pack.toml" })).toHaveAttribute("aria-pressed", "true");
+  await expect(code).toContainText('origin = "reflex"');
+  await files.getByRole("button", { name: "routes/read-linked-files.yaml" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(code).toContainText("summary: Read the files the work item links, together");
+  await files.getByRole("button", { name: "pack.sig" }).click();
+  await expect(code).toContainText("BEGIN SSH SIGNATURE");
+  await expect(page.locator("#pack-fill-row")).toBeHidden();
+  // The instinct: the same format; its template's blanks, then what a repository's files put there.
+  await page.getByRole("button", { name: /An instinct Adage ships/ }).click();
+  await expect(page.getByRole("button", { name: /An instinct Adage ships/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(code).toContainText('origin = "instinct"');
+  await files.getByRole("button", { name: "routes/run-tests-in-project-env.yaml" }).click();
+  await expect(code.locator("mark.blank")).toHaveText(["{runner}", "{signature}", "{command}"]);
+  const fill = page.getByRole("button", { name: "Fill in the blanks" });
+  await fill.click();
+  await expect(code.locator("mark.filled")).toHaveText(["exec python3 -m pytest", "No module named pytest", ".venv/bin/python -m pytest"]);
+  await expect(page.getByRole("button", { name: "Show the blanks" })).toHaveAttribute("aria-pressed", "true");
+  await files.getByRole("button", { name: "CLOSURE" }).click();
+  await expect(code).toContainText("detector U11 -");
+  await expect(page.locator("#packs .base-packs li")).toHaveCount(8);
+});
+
 test("blocked audible autoplay offers a click to play with sound", async ({ page }) => {
   await films(page, "hang");
   await page.addInitScript(() => {
