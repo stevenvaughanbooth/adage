@@ -6,7 +6,7 @@
 use super::health::{self, Health};
 use super::routes::{self, Routes};
 use adage_store::Paths;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::time::{Duration, Instant};
 
@@ -149,60 +149,93 @@ pub fn fetch_model(paths: Paths) -> Job {
     })
 }
 
-/// Condition now, as a child process (its output is captured, never written to the screen). In a
-/// repository this is exactly what a hook's background conditioner runs, `adage condition --auto
-/// --repo-root <root>`, so it takes the same per-repository lock and logs to `learn.log` the same
-/// way; the result is read back from there. Outside one it is `adage condition` (every
-/// repository).
-pub fn learn_now(paths: Paths, root: Option<PathBuf>) -> Job {
+/// Condition each repository chosen (`(label, checkout)`), as child processes (their output is
+/// captured, never written to the screen): exactly what a hook's background conditioner runs,
+/// `adage condition --auto --repo-root <root>`, so each takes the same per-repository lock and
+/// logs to `learn.log` the same way; the result is read back from there.
+pub fn learn_now(paths: Paths, roots: Vec<(String, PathBuf)>) -> Job {
     Job::spawn("Conditioning on your agents' traces", move |tx| {
-        let exe = std::env::current_exe()?;
-        let _ = tx.send(JobMsg::Progress(0.1, "reading traces…".into()));
-        let mut cmd = std::process::Command::new(exe);
-        cmd.arg("condition").env("ADAGE_HOME", &paths.root).stdin(std::process::Stdio::null());
-        if let Some(r) = &root {
-            cmd.args(["--auto", "--repo-root"]).arg(r);
+        let n = roots.len();
+        if n == 1 {
+            let _ = tx.send(JobMsg::Progress(0.1, "reading traces…".into()));
+            return learn_one(&paths, &roots[0].1);
         }
-        let started = crate::learnlog::now_ms();
-        let out = cmd.output()?;
-        let err: Vec<String> = String::from_utf8_lossy(&out.stderr).lines().map(String::from).collect();
-        if !out.status.success() {
-            let msg = err.last().cloned().unwrap_or_else(|| format!("adage condition exited with {}", out.status));
-            anyhow::bail!("{}", msg.trim_start_matches("adage: "));
-        }
-        let Some(root) = root else {
-            let mut lines: Vec<String> = String::from_utf8_lossy(&out.stdout).lines().map(String::from).collect();
-            lines.extend(err);
-            return Ok(lines);
-        };
-        // What this run appended for the repository.
-        let repo = adage_core::repo::repo_key_cached(&root, &paths.repo_keys());
-        let mine: Vec<serde_json::Value> = crate::learnlog::read(&paths)
-            .into_iter()
-            .filter(|l| l["ts"].as_u64().is_some_and(|t| t >= started) && l["repo"] == repo.as_str())
-            .collect();
-        if mine.is_empty() {
-            return Ok(vec![format!(
-                "A conditioner is already working on {repo}; what it changes appears under conditioning."
-            )]);
-        }
-        let mut lines = Vec::new();
-        let mut none_read = false;
-        for l in &mine {
-            let ticks = super::learnlog::parse(&l.to_string());
-            if let Some(e) = ticks.iter().find(|t| t.tone == super::learnlog::Tone::Error) {
-                anyhow::bail!("{}", e.text);
+        // One repository after another; one that fails is said, and the rest still run.
+        let (mut lines, mut failed) = (Vec::new(), 0);
+        for (i, (label, root)) in roots.iter().enumerate() {
+            let _ = tx.send(JobMsg::Progress((i as f64 + 0.1) / n as f64, format!("{} of {n} · {label}", i + 1)));
+            match learn_one(&paths, root) {
+                Ok(got) => {
+                    lines.push(format!("{label}: {}", got.first().cloned().unwrap_or_default()));
+                    lines.extend(got.into_iter().skip(1).map(|l| format!("  {l}")));
+                }
+                Err(e) => {
+                    failed += 1;
+                    lines.push(format!("{label}: failed: {e:#}"));
+                }
             }
-            none_read |= ticks.iter().any(|t| t.run.as_ref().is_some_and(|r| r.read == Some(0)));
-            lines.extend(ticks.into_iter().map(|t| t.text));
         }
-        if none_read {
-            // An empty run names what fills it, instead of a bare 0/0.
-            lines.push(
-                "No traces for this repository yet: reflexes form as your agents work here (adage watch shows them)."
-                    .into(),
-            );
+        if failed == n {
+            anyhow::bail!("{}", lines.join("; "));
         }
+        let head = match failed {
+            0 => format!("{n} repositories conditioned"),
+            f => format!("{} of {n} repositories conditioned · {f} failed", n - f),
+        };
+        lines.insert(0, head);
         Ok(lines)
     })
+}
+
+/// `adage condition --auto --repo-root <root>`, and what it appended to learn.log for the
+/// repository, as lines.
+fn learn_one(paths: &Paths, root: &Path) -> anyhow::Result<Vec<String>> {
+    let repo = adage_core::repo::repo_key_cached(root, &paths.repo_keys());
+    // The background conditioner reads only what `learn.repos` names, and so does this.
+    if !adage_store::config::load(paths).config.learns(&repo) {
+        return Ok(vec![format!(
+            "{repo} is not one of the repositories you chose (learn.repos); `adage init` adds it."
+        )]);
+    }
+    let exe = std::env::current_exe()?;
+    let started = crate::learnlog::now_ms();
+    let out = std::process::Command::new(exe)
+        .args(["condition", "--auto", "--repo-root"])
+        .arg(root)
+        .env("ADAGE_HOME", &paths.root)
+        .stdin(std::process::Stdio::null())
+        .output()?;
+    let err: Vec<String> = String::from_utf8_lossy(&out.stderr).lines().map(String::from).collect();
+    if !out.status.success() {
+        let msg = err.last().cloned().unwrap_or_else(|| format!("adage condition exited with {}", out.status));
+        anyhow::bail!("{}", msg.trim_start_matches("adage: "));
+    }
+    // What this run appended for the repository.
+    let mine: Vec<serde_json::Value> = crate::learnlog::read(paths)
+        .into_iter()
+        .filter(|l| l["ts"].as_u64().is_some_and(|t| t >= started) && l["repo"] == repo.as_str())
+        .collect();
+    if mine.is_empty() {
+        return Ok(vec![format!(
+            "A conditioner is already working on {repo}; what it changes appears under conditioning."
+        )]);
+    }
+    let mut lines = Vec::new();
+    let mut none_read = false;
+    for l in &mine {
+        let ticks = super::learnlog::parse(&l.to_string());
+        if let Some(e) = ticks.iter().find(|t| t.tone == super::learnlog::Tone::Error) {
+            anyhow::bail!("{}", e.text);
+        }
+        none_read |= ticks.iter().any(|t| t.run.as_ref().is_some_and(|r| r.read == Some(0)));
+        lines.extend(ticks.into_iter().map(|t| t.text));
+    }
+    if none_read {
+        // An empty run names what fills it, instead of a bare 0/0.
+        lines.push(
+            "No traces for this repository yet: reflexes form as your agents work here (adage watch shows them)."
+                .into(),
+        );
+    }
+    Ok(lines)
 }

@@ -304,7 +304,7 @@ pub struct Sources {
     /// Claude Code history (otherwise uses configured history when no source is named).
     #[arg(long, value_name = "DIR")]
     pub claude_projects: Option<PathBuf>,
-    /// Codex rollouts ($CODEX_HOME/sessions).
+    /// Codex rollouts (otherwise $CODEX_HOME/sessions once Codex hooks are registered).
     #[arg(long, value_name = "DIR")]
     pub codex_sessions: Option<PathBuf>,
 }
@@ -313,6 +313,9 @@ pub struct Sources {
 pub struct SenseArgs {
     #[command(flatten)]
     pub sources: Sources,
+    /// Read every repository's traces (default: those recorded in this repository).
+    #[arg(long, conflicts_with = "repo")]
+    pub all: bool,
     /// Keep one repository key.
     #[arg(long, value_name = "KEY")]
     pub repo: Option<String>,
@@ -359,9 +362,12 @@ pub struct ConditionArgs {
     #[arg(long, hide = true)]
     pub auto: bool,
     /// Condition only this repository: traces recorded in its checkouts, and its instincts
-    /// (default: every repository in the history sources).
+    /// (default: the repository this runs in).
     #[arg(long, value_name = "DIR")]
     pub repo_root: Option<PathBuf>,
+    /// Condition every repository in the history sources (default: the one this runs in).
+    #[arg(long, conflicts_with_all = ["repo_root", "auto"])]
+    pub all: bool,
     #[arg(long, value_name = "MS", hide = true)]
     pub after: Option<u64>,
     /// With --auto: the first run in a repository (hooks pass it).

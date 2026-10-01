@@ -245,11 +245,11 @@ makes it cheap.
 | Slice | Covers | Size | State |
 | --- | --- | --- | --- |
 | 1. Never wait on the cloud; unread is unknown; walk only tracked output | F1, F2 | Small | Implemented, with tests; verified on the author's machine |
-| 2. Learning you can see | F3, F4, F6 | Medium | Proposal |
-| 3. `init` scoped to what you choose | F9, F8 (history) | Medium | Proposal: design below |
-| 4. Say what things do | F7, F10, F5 (message) | Medium | Proposal, after the words decision (§6, question 3) |
-| 5. Work in proportion | F8 (watch, identities, `local_keys`, pack order, learner passes) | Small to medium | Proposal |
-| 6. Learned commands that can run | F13 | Small | Proposal |
+| 2. Learning you can see | F3, F4, F6 | Medium | Implemented, with tests |
+| 3. `init` scoped to what you choose | F9, F8 (history) | Medium | Implemented, with tests: `learn.repos`, the repository step, manual commands scoped (`--all`) |
+| 4. Say what things do | F7, F10, F5 (message) | Medium | Implemented, with tests (lexicon words kept; every surface says what a reflex does) |
+| 5. Work in proportion | F8 (watch, identities, `local_keys`, pack order, learner passes) | Small to medium | Proposal (the manual-history part landed with slice 3) |
+| 6. Learned commands that can run | F13 | Small | Implemented, with tests |
 
 ### Slice 3 design sketch: `init` scoped to what you choose
 
@@ -285,7 +285,9 @@ makes it cheap.
 1. Slice 2: should session start and end be recorded for repositories with no reflexes (one
    append each), or should `watch` derive "session running" from the learner's queue alone?
 2. Slice 3: does the repository choice apply to hooks too (user-scope hooks that stay silent in
-   unchosen repositories), or only to which history is read?
+   unchosen repositories), or only to which history is read? *Decided: history only. Hooks record
+   sessions in every repository they are registered for; `learn.repos` decides which repositories'
+   history is read, and reflexes already learned keep firing.*
 3. Slice 4: where do the lexicon's words appear? The lexicon (approved 2026-09-28) says on every
    user-facing surface; zero-config §0 rule 3 says only where a decision needs them. One of the
    two should be amended so the code has one rule.

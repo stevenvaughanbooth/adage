@@ -41,6 +41,7 @@ mod packs_cmd;
 mod proposal;
 mod redact;
 mod reimport;
+mod repos;
 mod review;
 mod savings;
 mod sense;
@@ -286,11 +287,12 @@ fn run(args: &[String]) -> Result<()> {
 }
 
 /// `adage condition [--transcripts <file>...] [--claude-projects <dir>] [--codex-sessions <dir>] [--cwd-prefix <path>]
-///               [--repo-root <dir>] [--outcomes <json>] [--repo <key>] [--demo] [--no-cache] [--no-instincts] [--json]`
+///               [--repo-root <dir> | --all] [--outcomes <json>] [--repo <key>] [--demo] [--no-cache] [--no-instincts] [--json]`
 ///
-/// `--repo-root <dir>` conditions one repository: only traces recorded in one of its checkouts
-/// are read, its instincts bind from that root, and with no such trace its instincts alone are
-/// bound (as `--instincts-only`). Without it, every repository the sources hold is conditioned.
+/// One repository is conditioned: `--repo-root <dir>`'s, else the one this runs in. Only traces
+/// recorded in one of its checkouts are read, its instincts bind from that root, and with no such
+/// trace its instincts alone are bound (as `--instincts-only`). `--all`, a named source, a key or
+/// a working-directory prefix conditions every repository the sources hold.
 ///
 /// Thresholds: `--demo`, else `learn.thresholds` (`adage config`). Parses are cached under
 /// `$ADAGE_HOME/cache/sessions` unless `--no-cache` or `learn.parse_cache = false` (the result is
@@ -328,13 +330,42 @@ fn repo_scope(args: &[String], paths: &Paths) -> Result<Option<(PathBuf, String)
     Ok(Some((root, key)))
 }
 
+/// The repository a manual `condition` or `sense` reads by default: the one it runs in, as the
+/// learner reads one (docs/first-principles-audit.md F9). Outside one, every repository's history
+/// is read only when asked for (`--all`).
+pub(crate) fn here_or_all(command: &str) -> Result<PathBuf> {
+    let cwd = std::env::current_dir()?;
+    adage_core::repo::find_root(&cwd).ok_or_else(|| {
+        hint(
+            format!(
+                "not inside a repository: `adage {command}` reads the traces recorded in the repository it runs in"
+            ),
+            format!("run it inside one, or `adage {command} --all` for every repository's"),
+        )
+    })
+}
+
 fn condition(args: &[String], paths: &Paths) -> Result<()> {
     let started = std::time::Instant::now();
     let settings = adage_store::config::load(paths).config;
-    // One repository (`--repo-root`): only traces recorded in one of its checkouts are read.
-    let scope = repo_scope(args, paths)?;
     let explicit =
         args.iter().any(|a| matches!(a.as_str(), "--transcripts" | "--codex-sessions" | "--claude-projects"));
+    // One repository: only traces recorded in one of its checkouts are read. `--repo-root` names
+    // it; else it is the one this runs in, unless a source, a key, a working-directory prefix or
+    // every repository (`--all`) is named.
+    let scope = match repo_scope(args, paths)? {
+        Some(s) => Some(s),
+        None if !explicit
+            && !args.iter().any(|a| a == "--all")
+            && flag(args, "--cwd-prefix").is_none()
+            && flag(args, "--repo").is_none() =>
+        {
+            let root = here_or_all("condition")?;
+            let key = adage_core::repo::repo_key_cached(&root, &paths.repo_keys());
+            Some((root, key))
+        }
+        None => None,
+    };
     let (cp, cs) =
         (flag(args, "--claude-projects").map(PathBuf::from), flag(args, "--codex-sessions").map(PathBuf::from));
     check_dirs(&[("--claude-projects", cp.as_deref()), ("--codex-sessions", cs.as_deref())])?;
@@ -358,10 +389,9 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
         ));
     }
     // Explicit sources replace defaults, including when they contain no sessions.
-    if let Some(dir) = flag(args, "--codex-sessions")
-        .map(PathBuf::from)
-        .or_else(|| (!explicit).then(|| history::codex_sessions(&settings)).flatten())
-    {
+    if let Some(dir) = flag(args, "--codex-sessions").map(PathBuf::from).or_else(|| {
+        (!explicit).then(|| history::codex_sessions(&settings, scope.as_ref().map(|(r, _)| r.as_path()))).flatten()
+    }) {
         let (found, compressed) = adage_learn::codex::discover(&dir);
         if compressed > 0 {
             let n = words::count(compressed, "compressed Codex rollout");
@@ -375,7 +405,12 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
         .map(PathBuf::from)
         .or_else(|| (!explicit).then(|| history::claude_projects(&settings)).flatten())
     {
-        transcripts.extend(adage_learn::import::discover(&dir));
+        // One repository's project directories only, as the learner picks them: the others are
+        // never listed.
+        transcripts.extend(match &scope {
+            Some((root, _)) => adage_learn::scope::claude_transcripts(&dir, &adage_learn::scope::checkouts(root)),
+            None => adage_learn::import::discover(&dir),
+        });
     }
     if !explicit {
         if let Some(dir) = &settings.learn_opencode_exports {
@@ -414,7 +449,7 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
         let source = if let Some(p) = flag(args, "--cwd-prefix") {
             format!("none has a working directory under {p}")
         } else if let Some((root, _)) = &scope {
-            format!("none was recorded in {}", root.display())
+            format!("none was recorded in {} (`--all` reads every repository's)", root.display())
         } else if explicit || args.iter().any(|a| a == "--claude-projects") {
             "the sources you named hold no traces".to_string()
         } else {

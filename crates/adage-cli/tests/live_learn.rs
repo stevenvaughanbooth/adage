@@ -318,7 +318,7 @@ fn learn_auto_logs_what_changed() {
     assert_eq!(log[1]["index_generation"], log[0]["index_generation"]);
 
     // A manual learn writes the same kind of line, with trigger manual, one per repository.
-    let o = w.cmd(&["condition", "--demo"]).output().unwrap();
+    let o = w.cmd(&["condition", "--all", "--demo"]).output().unwrap();
     assert!(o.status.success(), "{}", World::text(&o));
     let all = w.log();
     let manual: Vec<&Value> = all.iter().skip(2).collect();
@@ -559,4 +559,48 @@ fn doctor_reports_failed_stuck_and_waiting_learners() {
     // Config problems are reported too.
     w.config("[learn]\nauto = \"sometimes\"\n");
     assert_eq!(check(&doctor(), "config")["status"], "warn");
+}
+
+/// `learn.repos` names the repositories whose history is read (docs/design/everyday-ux.md §5.5):
+/// a session ending in one it leaves out is recorded, starts no learner, and a learner asked for
+/// before the choice reads nothing; doctor and the card say so.
+#[test]
+#[cfg_attr(not(debug_assertions), ignore = "requires debug-only ADAGE_TEST_NO_SPAWN instrumentation")]
+fn a_repository_left_out_of_learn_repos_is_recorded_never_conditioned() {
+    let w = World::new();
+    w.history();
+    let other = "[learn]\nmin_interval_secs = 0\nrepos = [\"github.com/acme/other\"]\n";
+    w.config(other);
+    w.claude_stop("r1");
+    assert!(w.spawns().is_empty() && w.requests().is_empty(), "left out: no learner, no request");
+    // Every repository (the default): it is learned.
+    w.config("[learn]\nmin_interval_secs = 0\n");
+    w.claude_stop("r2");
+    assert_eq!(w.spawns().len(), 1);
+    let key = w.requests()[0]["repo"].as_str().unwrap().to_string();
+    // Left out again before its learner ran: the learner reads nothing and drops the request.
+    w.config(other);
+    let o = w.cmd(&["condition", "--auto", "--repo-root", &w.repo()]).output().unwrap();
+    assert!(o.status.success(), "{}", World::text(&o));
+    assert!(w.log().is_empty(), "nothing read, nothing logged");
+    assert!(w.requests().is_empty(), "nothing left waiting");
+    let o = w.cmd(&["doctor", "--json"]).output().unwrap();
+    let d: Value = serde_json::from_slice(&o.stdout).unwrap();
+    let auto = d["checks"].as_array().unwrap().iter().find(|c| c["check"] == "auto-learn").unwrap();
+    assert!(
+        auto["detail"].as_str().unwrap().contains("the repository you chose (github.com/acme/other; learn.repos)"),
+        "{auto}"
+    );
+    let mut card = w.cmd(&[]);
+    card.current_dir(w.repo());
+    let text = World::text(&card.output().unwrap());
+    assert!(text.contains("not here") && text.contains("adage init"), "{text}");
+    let mut watch = w.cmd(&["watch", "--once", "--size", "118x30"]);
+    watch.current_dir(w.repo());
+    let text = World::text(&watch.output().unwrap());
+    assert!(text.contains("not conditioned here"), "the live pane's health row says so: {text}");
+    // Chosen: learned again.
+    w.config(&format!("[learn]\nmin_interval_secs = 0\nrepos = [\"github.com/acme/other\", \"{key}\"]\n"));
+    w.claude_stop("r3");
+    assert_eq!(w.spawns().len(), 2, "chosen: a learner starts");
 }

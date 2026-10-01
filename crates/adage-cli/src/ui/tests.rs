@@ -1768,7 +1768,11 @@ fn wizard_walks_every_step() {
     ];
     let mut w = Wizard::new(detected, vec![], true);
     let titles: Vec<String> = w.steps.iter().map(|s| format!("{:?}", s.kind)).collect();
-    assert_eq!(titles, ["Harnesses", "Hooks(\"claude-code\")", "Model", "Learn", "AutoLearn", "Finish"]);
+    assert_eq!(titles, ["Harnesses", "Hooks(\"claude-code\")", "Model", "Repos", "Learn", "AutoLearn", "Finish"]);
+    let app =
+        crate::repos::Found { key: "github.com/acme/app".into(), root: std::env::temp_dir(), sessions: 12, last_ms: 0 };
+    w.here = Some(app.key.clone());
+    w.set_repos(vec![app], &["github.com/acme/app".into()]);
     assert!(matches!(w.key(KeyCode::Enter, NONE), Some(wizard::Cmd::Replan)));
     assert!(matches!(w.key(KeyCode::Tab, NONE), Some(wizard::Cmd::Replan)));
     assert_eq!(w.scope, "user");
@@ -1777,6 +1781,15 @@ fn wizard_walks_every_step() {
     assert_eq!(*w.current(), wizard::Kind::Model);
     assert!(matches!(w.key(KeyCode::Char('y'), NONE), Some(wizard::Cmd::FetchModel)));
     w.key(KeyCode::Char('n'), NONE);
+    // Which repositories: the current one is ticked; space unticks it, `a` ticks every one.
+    assert_eq!(*w.current(), wizard::Kind::Repos);
+    w.key(KeyCode::Char(' '), NONE);
+    assert!(w.chosen().is_empty());
+    w.key(KeyCode::Char('a'), NONE);
+    assert!(matches!(w.key(KeyCode::Enter, NONE), Some(wizard::Cmd::ChooseRepos)));
+    let note = w.chosen_note();
+    assert_eq!(note, "conditions on github.com/acme/app");
+    w.advance(wizard::StepStatus::Done(note));
     assert!(matches!(w.key(KeyCode::Char('y'), NONE), Some(wizard::Cmd::Learn)));
     // The learn ran and showed its output; any answer moves on.
     w.steps[w.cur].status = wizard::StepStatus::Done("12 sessions read".into());
@@ -1792,11 +1805,56 @@ fn wizard_walks_every_step() {
     let report = w.report().join("\n");
     assert!(
         report.contains("◇  Hooks · claude-code · skipped")
+            && report.contains("◇  Repositories to condition on · conditions on github.com/acme/app")
             && report.contains("◇  Condition from past traces · 12 sessions read"),
         "{report}"
     );
     assert!(report.contains("adage watch"));
     assert!(matches!(w.key(KeyCode::Enter, NONE), Some(wizard::Cmd::Quit)));
+}
+
+/// docs/design/everyday-ux.md §5.5: the repositories Claude Code worked in, the current one first
+/// and ticked; a long list shows a window that follows the highlight.
+#[test]
+fn wizard_asks_which_repositories_and_a_long_list_scrolls() {
+    let day = 86_400_000;
+    let now = 400 * day;
+    let rows: Vec<crate::repos::Found> = (0..12)
+        .map(|i| crate::repos::Found {
+            key: format!("github.com/acme/repo{i:02}"),
+            root: std::path::PathBuf::from(format!("/r/repo{i:02}")),
+            sessions: 12 - i,
+            last_ms: now - i as u64 * day,
+        })
+        .collect();
+    let mut w = Wizard::new(vec![], vec![], true);
+    w.now_ms = now;
+    w.here = Some("github.com/acme/repo00".into());
+    w.set_repos(rows, &["github.com/acme/repo00".into()]);
+    while *w.current() != wizard::Kind::Repos {
+        w.advance(wizard::StepStatus::Skipped);
+    }
+    let d = tempfile::tempdir().unwrap();
+    let c = ctx(Paths::at(d.path()), true);
+    let (text, _) = render(100, 18, |f| wizard::draw(f, &w, &c));
+    assert!(text.contains("◆  Repositories to condition on"), "{text}");
+    assert!(text.contains("› [x] github.com/acme/repo00  12 sessions · last today · this repository"), "{text}");
+    assert!(text.contains("  [ ] github.com/acme/repo01  11 sessions · last yesterday"), "{text}");
+    assert!(text.contains("0 above · 4 below") && !text.contains("repo08"), "a window of eight: {text}");
+    assert!(text.contains("space tick · a all · n none"), "{text}");
+    for _ in 0..9 {
+        w.key(KeyCode::Down, NONE);
+    }
+    w.key(KeyCode::Char(' '), NONE);
+    let (text, _) = render(100, 18, |f| wizard::draw(f, &w, &c));
+    assert!(text.contains("› [x] github.com/acme/repo09  3 sessions · last 9 days ago"), "{text}");
+    assert!(!text.contains("repo00") && text.contains("below"), "the window follows: {text}");
+    assert_eq!(w.chosen_note(), "conditions on 2: github.com/acme/repo00, github.com/acme/repo09");
+    w.key(KeyCode::Char('n'), NONE);
+    assert_eq!(w.chosen_note(), "conditions on none · sessions are recorded, not read");
+    w.key(KeyCode::Char('a'), NONE);
+    assert!(w.chosen_note().starts_with("conditions on 12: github.com/acme/repo00, "), "{}", w.chosen_note());
+    assert!(matches!(w.key(KeyCode::Enter, NONE), Some(wizard::Cmd::ChooseRepos)));
 }
 
 #[test]

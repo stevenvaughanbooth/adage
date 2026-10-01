@@ -741,6 +741,18 @@ fn fail_open(paths: &Paths) -> Check {
 /// A request still waiting this long after it could have been learned is backlog.
 const BACKLOG_SLACK_MS: u64 = 5 * 60_000;
 
+/// The subject for the repositories `learn.repos` names: `the repository you chose (a; learn.repos)
+/// is`, `the 3 repositories you chose (a, b, c; learn.repos) are`.
+fn chosen(keys: &[String]) -> String {
+    match keys {
+        [one] => format!("the repository you chose ({one}; learn.repos) is"),
+        _ if keys.len() <= 3 => {
+            format!("the {} repositories you chose ({}; learn.repos) are", keys.len(), keys.join(", "))
+        }
+        _ => format!("the {} repositories you chose ({}, …; learn.repos) are", keys.len(), keys[..2].join(", ")),
+    }
+}
+
 fn ago(now: u64, ts: u64) -> String {
     let s = now.saturating_sub(ts) / 1000;
     match s {
@@ -770,10 +782,15 @@ fn live_learning(paths: &Paths) -> Vec<Check> {
     });
     let source = &loaded.values["learn.auto"].1;
     out.push(if cfg.learn_auto {
+        let which = match &cfg.learn_repos {
+            None => "each repository is".to_string(),
+            Some(keys) if keys.is_empty() => "no repository is (learn.repos is empty; `adage init` picks some), so none is".to_string(),
+            Some(keys) => chosen(keys),
+        };
         pass(
             "auto-learn",
             format!(
-                "on ({source}): each repository is conditioned in the background when a session stops, at most every {}s, {} thresholds",
+                "on ({source}): {which} conditioned in the background when a session stops, at most every {}s, {} thresholds",
                 cfg.learn_min_interval_secs,
                 cfg.learn_thresholds.as_str()
             ),
@@ -810,6 +827,10 @@ fn live_learning(paths: &Paths) -> Vec<Check> {
     for slug in &slugs {
         let file = |suffix: &str| dir.join(format!("{slug}{suffix}"));
         let Some(req) = read_json::<Request>(&file(".json")) else { continue };
+        // A repository taken out of `learn.repos`: its requests are never served, by choice.
+        if !cfg.learns(&req.repo) {
+            continue;
+        }
         // A request for a directory that is not (or no longer) a repository — a session opened in
         // `~` or `/` by an older Adage, a checkout since deleted — can never be conditioned: it is
         // not a problem to fix.

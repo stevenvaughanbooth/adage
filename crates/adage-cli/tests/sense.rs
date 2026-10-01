@@ -131,7 +131,8 @@ fn history(w: &World) {
 fn senses_history_per_repository_and_writes_nothing() {
     let w = World::new();
     history(&w);
-    let out = w.ok(&["sense", "--demo"]);
+    // Run outside any repository: every repository's history is read when asked for.
+    let out = w.ok(&["sense", "--all", "--demo"]);
     for s in [
         "read-only",
         "7 traces · 2 repositories",
@@ -157,7 +158,7 @@ fn senses_history_per_repository_and_writes_nothing() {
     assert!(!w.root.join("data").exists(), "`adage sense` writes nothing");
 
     // JSON for tools, with the same content.
-    let v: Value = serde_json::from_str(&w.ok(&["sense", "--json", "--demo"])).unwrap();
+    let v: Value = serde_json::from_str(&w.ok(&["sense", "--all", "--json", "--demo"])).unwrap();
     let repos = v["repos"].as_array().unwrap();
     assert_eq!(repos.len(), 2);
     let acme = repos.iter().find(|r| r["repo"] == "acme-billing").unwrap();
@@ -179,7 +180,7 @@ fn senses_history_per_repository_and_writes_nothing() {
     let v: Value = serde_json::from_str(&w.ok(&["sense", "--json", "--repo", "other"])).unwrap();
     assert_eq!(v["repos"].as_array().unwrap().len(), 1);
     assert_eq!(v["repos"][0]["repo"], "other");
-    let v: Value = serde_json::from_str(&w.ok(&["sense", "--json", "--since", "30"])).unwrap();
+    let v: Value = serde_json::from_str(&w.ok(&["sense", "--all", "--json", "--since", "30"])).unwrap();
     assert_eq!(v["sessions"], 6);
     assert!(w.run(&["sense", "--since", "soon"]).status.code() == Some(2), "a usage error");
 }
@@ -207,6 +208,6 @@ fn candidates_are_compared_with_installed_tracks() {
 #[test]
 fn an_empty_history_says_how_to_point_it_elsewhere() {
     let w = World::new();
-    let out = w.ok(&["sense"]);
+    let out = w.ok(&["sense", "--all"]);
     assert!(out.contains("No traces to sense in that source"), "{out}");
 }

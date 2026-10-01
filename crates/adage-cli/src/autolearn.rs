@@ -91,15 +91,11 @@ pub fn thresholds(t: Thresholds) -> LearnConfig {
 /// `$CODEX_HOME/sessions` (else `~/.codex/sessions`) once Codex hooks are registered (in user
 /// scope or this repository), or a Codex hook asked for this learn.
 fn codex_sessions(cfg: &Config, req: Option<&Request>, root: &Path) -> Option<PathBuf> {
-    if let Some(d) = &cfg.learn_codex_sessions {
-        return Some(d.clone());
+    let asked = cfg.learn_codex_auto && cfg.learn_codex_sessions.is_none() && req.is_some_and(|r| r.harness == "codex");
+    if asked {
+        return crate::detect::codex_dir().map(|d| d.join("sessions"));
     }
-    if !cfg.learn_codex_auto {
-        return None;
-    }
-    let registered = req.is_some_and(|r| r.harness == "codex")
-        || crate::detect::registrations(Some(root)).iter().any(|r| r.harness == "codex");
-    registered.then(|| crate::detect::codex_dir().map(|d| d.join("sessions"))).flatten()
+    crate::history::codex_sessions(cfg, Some(root))
 }
 
 /// The transcripts automatic learning reads for a repository: the configured sources, only those
@@ -225,6 +221,12 @@ pub fn run_auto(args: &[String], paths: &Paths) -> Result<()> {
         }
     }
     let cfg = config::load(paths).config;
+    // Taken out of `learn.repos` since this learner was asked for: nothing is read, and the
+    // request is dropped rather than left waiting.
+    if !cfg.learns(&repo) {
+        let _ = std::fs::remove_file(q.request());
+        return Ok(());
+    }
     let mut state: RunState = read_json(&q.state()).unwrap_or_default();
     // At a bootstrap, instincts are bound and the index compiled before any trace is read (tens of
     // milliseconds). A bootstrap asked while this learner waited counts too (it held the lock).

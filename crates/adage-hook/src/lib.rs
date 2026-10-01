@@ -782,7 +782,9 @@ fn session_start(
             (Some(_), None) => true,
         }
     };
-    let bootstrap = cfg.learn_auto && (damaged || (routed.is_none() && stale()));
+    // A repository `learn.repos` leaves out is recorded, never learned (`autolearn::on_turn_end`).
+    let learns = cfg.learn_auto && cfg.learns(&key);
+    let bootstrap = learns && (damaged || (routed.is_none() && stale()));
     // The bootstrap session is a session in this repository too: its reflexes arrive while it
     // runs, so it is assigned its arm now and counted by the savings estimate like any other
     // (without this record it never was, and the card's session count lagged one behind).
@@ -801,7 +803,7 @@ fn session_start(
     // ships other base packs. A few dozen `stat`s decide it (`adage_instincts::fingerprint`).
     let rebind = !bootstrap
         && !damaged
-        && cfg.learn_auto
+        && learns
         && cfg.instincts_enabled
         && adage_learn::instincts::stale_binding(
             &s.paths.tracks(),

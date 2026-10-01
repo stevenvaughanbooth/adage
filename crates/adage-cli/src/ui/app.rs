@@ -901,11 +901,19 @@ fn execute(cmd: Cmd, s: &mut AppState, ctx: &Ctx, loader: &Loader, job: &mut Opt
                 s.modal = Some(Modal::Progress { title: j.title.clone(), status: j.status.clone(), ratio: 0.0 });
                 *job = Some(j);
             }
-            Action::LearnNow => {
-                let j = jobs::learn_now(ctx.paths.clone(), ctx.root.clone());
-                s.modal = Some(Modal::Progress { title: j.title.clone(), status: j.status.clone(), ratio: 0.0 });
-                *job = Some(j);
-            }
+            Action::LearnNow => match ctx.root.clone() {
+                Some(root) => {
+                    let key = adage_core::repo::repo_key_cached(&root, &ctx.paths.repo_keys());
+                    let j = jobs::learn_now(ctx.paths.clone(), vec![(key, root)]);
+                    s.modal = Some(Modal::Progress { title: j.title.clone(), status: j.status.clone(), ratio: 0.0 });
+                    *job = Some(j);
+                }
+                None => s.message(
+                    "Not inside a repository",
+                    vec!["Conditioning reads one repository's traces: open adage inside one, or run `adage condition --all` for every repository's.".into()],
+                    true,
+                ),
+            },
             Action::SetConfig { key, value } => {
                 // `adage config set`'s own guard and validation.
                 let set = crate::share::require_person("config set")

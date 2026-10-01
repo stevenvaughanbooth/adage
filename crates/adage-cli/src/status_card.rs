@@ -294,6 +294,15 @@ fn repo_rows(paths: &Paths, repo: &str, root: &Path, index: &Index, now: u64) ->
                 "adage config set learn.auto true",
             ),
         ));
+    } else if !cfg.config.learns(repo) {
+        // Recorded, never read: the person chose other repositories (`learn.repos`).
+        out.push((
+            "learning",
+            arrow(
+                Line::new().push(Role::Prime, "not here").quiet(" (learn.repos leaves this repository out)"),
+                "adage init",
+            ),
+        ));
     } else if let Some((l, stuck)) = running(paths, repo, now) {
         // A learner is running: for how long, against how long it usually takes.
         out.push(("learning", if stuck { arrow(l, "adage doctor") } else { l }));
