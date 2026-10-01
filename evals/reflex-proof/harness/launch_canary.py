@@ -10,13 +10,16 @@ Canary tasks come only from the registered development split, and freeze and liv
 the training-isolation audit of the learned home. These sessions are development evidence.
 """
 import argparse
+import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 
 import cohort_v5
@@ -254,7 +257,7 @@ def prepare(root):
         pairs.write(session / "manifest.json", value)
         (session / "manifest.sha256").write_text(pairs.sha(session / "manifest.json") + "\n")
         out.append(str(session / "manifest.json"))
-    return dict(assignments=out, paid_calls=0, grants_written=False)
+    return dict(assignments=out, paid_calls=0, grants_written=False, runtime=protect_runtime(root, m))
 
 
 def approval_script(root):
@@ -365,9 +368,7 @@ def collect(manifest):
             return pairs.score_with_integrity(root, m["task"], scoring, pairs.read(m["hidden_identities"]))
     quality = attempt("independent-quality", score, dict(passed=False, status="unknown"))
     summary = attempt("summary", lambda: pairs.probe.summary(session), {})
-    pattern = re.compile(r"^\S+ \[DEBUG\] \[API REQUEST\] /v1/messages x-client-request-id=([\w-]+) source=(\w+)$")
-    dispatches = attempt("dispatches", lambda: [dict(request_id=v[1], source=v[2]) for line in
-        (session / "claude-debug.log").read_text().splitlines() if (v := pattern.fullmatch(line))], [])
+    observed = attempt("dispatches", lambda: dispatches(session), [])
     receipts = attempt("journal", lambda: pairs.journal(m), [])
     rerun, wider = CONDITIONS[m["condition"]][1:]
     timeline = attempt("timeline", lambda: receipt_replay.extract(session / "production-hooks.jsonl", "automatic"), {})
@@ -376,8 +377,10 @@ def collect(manifest):
     outputs = [h.get("output") or "" for h in hooks if h.get("journal_new")]
     result = dict(protocol=PROTOCOL, condition=m["condition"], repetition=m["repetition"], task=m["task"],
         order=m["order"], provenance=provenance, quality=quality, summary=summary, cost_usd=summary.get("total_cost_usd"),
-        usage=summary.get("usage"), observed_dispatches=dispatches, agent_action_count=metrics["agent_action_count"],
+        usage=summary.get("usage"), observed_dispatches=observed, agent_action_count=metrics["agent_action_count"],
         agent_actions=metrics["agent_actions"], all_journal_receipts=receipts, timeline=timeline, replay=replay,
+        exec_decisions=attempt("decisions", lambda: exec_decisions(m["home"]), None),
+        censored=attempt("censored", lambda: censored(summary, m["argv"]), None),
         contract_emitted=any('kind=\\"execution-contract\\"' in (h.get("output") or "") for h in starts),
         contract_native_hits=attempt("contract", lambda: native_contract(session), 0),
         structured_receipts=sum("COMPLETED CPU ACTION" in o and "operation_id" in o and "declared_input_digest" in o for o in outputs),
@@ -406,6 +409,166 @@ def realized(row):
     return bool(ok) and bool(r)
 
 
+# Spool stages at which the grant, policy or sandbox stopped the learned verification. The session
+# then ran card-only, whatever its arm says. Other stages (a duplicate, say) are ordinary.
+LAPSE_STAGES = ("approval", "approvals", "policy", "sandbox")
+DISPATCH = re.compile(r"^\S+ \[DEBUG\] \[API REQUEST\] /v1/messages x-client-request-id=([\w-]+) source=(\w+)$")
+
+
+def dispatches(session):
+    """Model requests Claude Code dispatched, from its debug log (retries count)."""
+    return [dict(request_id=v[1], source=v[2]) for line in (session / "claude-debug.log").read_text().splitlines()
+            if (v := DISPATCH.fullmatch(line))]
+
+
+def exec_decisions(home):
+    """Every learned-verification decision in a session's Adage spool: ran (its outcome) or withheld (why)."""
+    out = []
+    for spool in sorted((Path(home) / "sessions").glob("*.spool")):
+        for record in pairs.spool_records(spool):
+            for e in record.get("exec") or []:
+                out.append(dict(ts=record.get("ts"), event=record.get("event"), route=e.get("route"),
+                                outcome=e.get("outcome"), withheld=e.get("withheld"), reason=e.get("reason")))
+    return out
+
+
+def censored(summary, argv):
+    """Why a session's request count is truncated; empty when it ran to completion."""
+    argv = list(argv)
+    turns, budget = int(argv[argv.index("--max-turns") + 1]), float(argv[argv.index("--max-budget-usd") + 1])
+    return [why for why, hit in (
+        ("not success", summary.get("result_status") != "success" or bool(summary.get("result_is_error"))),
+        ("not completed", summary.get("terminal_reason") != "completed"),
+        ("turn cap", (summary.get("num_turns") or 0) >= turns),
+        ("budget cap", (summary.get("total_cost_usd") or 0) >= budget)) if hit]
+
+
+def contract_in(output):
+    return 'kind=\\"execution-contract\\"' in (output or "") or 'kind="execution-contract"' in (output or "")
+
+
+def lapsed(row):
+    """The session's grant did not bind: no contract at SessionStart, or a lapse-stage withholding."""
+    return not row.get("contract_emitted") or any(d.get("withheld") in LAPSE_STAGES for d in row.get("exec_decisions") or [])
+
+
+def integrity(row):
+    """Why an execution-arm session is not evidence for its arm (empty when it is). dev-v8b averaged
+    20 sessions whose grants had lapsed into its arms, because nothing checked this."""
+    problems = []
+    if not row.get("contract_emitted"):
+        problems.append("no execution contract at SessionStart: the grant did not bind")
+    decisions = row.get("exec_decisions")
+    if decisions is None:
+        problems.append("learned-verification decisions were not recorded")
+    else:
+        stopped = sorted({"%s: %s" % (d["withheld"], d.get("reason")) for d in decisions if d.get("withheld") in LAPSE_STAGES})
+        if stopped:
+            problems.append("learned verification withheld (" + "; ".join(stopped) + ")")
+    if not row.get("all_journal_receipts"):
+        problems.append("no receipt: the learned verification never ran")
+    return problems
+
+
+def session_problems(rows, executes=lambda row: True):
+    """Every reason a study's sessions are not the evidence their labels claim. A report with any is
+    invalid: it is still written for the record, and the command exits non-zero."""
+    out = []
+    for r in rows:
+        where = dict(order=r.get("order"), arm=r.get("dev_arm") or r.get("arm"), condition=r.get("condition"))
+        if r.get("status") == "uncollected":
+            out.append(dict(where, problem="uncollected"))
+            continue
+        found = integrity(r) if executes(r) else []
+        if r.get("collection_errors"):
+            found.append("collection errors at " + ", ".join(e.get("stage", "?") for e in r["collection_errors"]))
+        if "requests" in r and (r.get("observed_dispatches") is None or len(r["observed_dispatches"]) != r["requests"]):
+            found.append("model requests differ from the debug log's dispatches")
+        if r.get("censored") is None:
+            found.append("censoring was not recorded")
+        elif r["censored"]:
+            found.append("censored (" + ", ".join(r["censored"]) + "): its request count is truncated")
+        out += [dict(where, problem=p) for p in found]
+    return out
+
+
+def runtime_lib(m):
+    """The shared interpreter's library. Every grant binds it (project Python's `runtime_sha256`)."""
+    return Path(m["preparation_python"]).resolve(strict=True).parents[1] / "lib"
+
+
+def tree_digest(root):
+    """A tree's contents, bytecode included, as the approval's interpreter identity hashes them."""
+    h, root = hashlib.sha256(), Path(root)
+    for directory, dirs, files in os.walk(root, followlinks=False):
+        dirs.sort()
+        for name in sorted(files + [d for d in dirs if (Path(directory) / d).is_symlink()]):
+            p = Path(directory) / name
+            rel = p.relative_to(root).as_posix().encode()
+            if p.is_symlink():
+                h.update(b"link\0" + rel + b"\0" + os.readlink(p).encode() + b"\0")
+            else:
+                h.update(b"file\0" + rel + b"\0" + hashlib.sha256(p.read_bytes()).digest())
+        h.update(b"dir\0" + Path(directory).relative_to(root).as_posix().encode() + b"\0")
+    return h.hexdigest()
+
+
+def writable(root):
+    return [str(Path(d)) for d, _, _ in os.walk(root, followlinks=False) if os.access(d, os.W_OK)]
+
+
+def protect_runtime(root, m):
+    """At preparation, before any grant: make the shared runtime library read-only, so no process
+    outside a session sandbox can add bytecode to it during the study. In dev-v8b an unsandboxed
+    pytest elsewhere on the machine did, and every grant lapsed. Records the protected digest."""
+    lib = runtime_lib(m)
+    for directory, dirs, files in os.walk(lib, followlinks=False):
+        for name in files + dirs:
+            p = Path(directory) / name
+            if not p.is_symlink():
+                p.chmod(p.stat().st_mode & ~0o222)
+    lib.chmod(lib.stat().st_mode & ~0o222)
+    state = dict(lib=str(lib), sha256=tree_digest(lib), protected_ns=time.time_ns())
+    pairs.write(root / "runtime-state.json", state)
+    return state
+
+
+def stop(root, reason):
+    """Stop the study: record why, then refuse to dispatch anything further."""
+    pairs.append(root / "ABORTED.jsonl", dict(status="stopped", reason=reason, timestamp_ns=time.time_ns()))
+    raise ValueError("study stopped: " + reason)
+
+
+def require_runtime(root, m):
+    """Before every dispatch: the shared runtime is byte-identical to, and as read-only as, at preparation."""
+    path = root / "runtime-state.json"
+    if not path.exists():
+        stop(root, "the shared runtime was never protected; prepare protects it before the grants")
+    state, lib = pairs.read(path), runtime_lib(m)
+    if str(lib) != state["lib"] or tree_digest(lib) != state["sha256"]:
+        stop(root, "the shared Python runtime changed after preparation; every grant that binds it has lapsed")
+    if writable(lib):
+        stop(root, "the shared Python runtime is writable again; protect it before dispatching")
+
+
+def preflight_grant(a):
+    """Just before a hook-arm session: its own binary at SessionStart, on a throwaway copy of its
+    home. A grant that still binds yields the execution contract; anything else means it lapsed."""
+    checkout = Path(a["execution_root"])
+    before = pairs.tree_state(checkout)
+    with tempfile.TemporaryDirectory() as tmp:
+        home = Path(tmp) / "adage-home"
+        shutil.copytree(a["home"], home, symlinks=True)
+        payload = dict(session_id="grant-preflight", transcript_path=str(Path(tmp) / "transcript.jsonl"),
+                       cwd=str(checkout), hook_event_name="SessionStart", source="startup")
+        p = subprocess.run([a["binaries"]["adage-exec"], "hook", "claude", "SessionStart"], input=json.dumps(payload),
+                           cwd=checkout, env=pairs.production_env(dict(a, home=str(home))), capture_output=True,
+                           text=True, timeout=80)
+    if pairs.tree_state(checkout) != before:
+        raise ValueError("the grant preflight changed the prepared checkout")
+    return p.returncode == 0 and contract_in(p.stdout)
+
+
 def live(root, wall_seconds=600):
     root = root.resolve(strict=True)
     m = verify(root)
@@ -413,6 +576,7 @@ def live(root, wall_seconds=600):
     if not grants["passed"]:
         raise ValueError("person-issued grants are missing or differ from the reviewed script")
     isolation(m)
+    require_runtime(root, m)
     authority = Path(m["budget_authority"])
     results = []
     for row in m["matrix"]:
@@ -437,20 +601,24 @@ def live(root, wall_seconds=600):
                         if k.startswith(str(root.relative_to(authority)) + "/"))
             if spent + SESSION_CAP_USD > m["budget"]["study_ceiling_usd"]:
                 raise ValueError("canary study ceiling reached; stop and report")
+            require_runtime(root, m)
+            if not preflight_grant(a):
+                stop(root, "order %d: the grant no longer binds at SessionStart (no execution contract)" % row["order"])
             budget = pairs.Budget(state, gate.budget_limit(a), SESSION_CAP_USD, persist=lambda: pairs.write(state_path, state))
             attempt, reason = budget.reserve(key)
             if attempt is None:
                 raise ValueError(reason)
             state["runs"][key] = dict(status="reserved", task=a["task"], arm="automatic", condition=a["condition"], protocol=PROTOCOL)
             pairs.write(state_path, state)
-            result = None
+            result = collected = None
             try:
                 if not budget.dispatch(attempt):
                     raise ValueError("accounting blocked dispatch")
                 result = pairs.probe.execute(manifest, SESSION_CAP_USD, wall_seconds)
                 budget.settle(attempt, result)
                 state["runs"][key].update(status="complete", summary=result)
-                state["runs"][key]["quality"] = collect(manifest)["quality"]
+                collected = collect(manifest)
+                state["runs"][key]["quality"] = collected["quality"]
             except BaseException as error:
                 state["runs"][key].update(status="failed", error=str(error))
                 raise
@@ -460,6 +628,8 @@ def live(root, wall_seconds=600):
                 pairs.append(authority / "attempts.jsonl", dict(status="launch-canary-finished", run=key,
                     accounting=attempt, evidence=state["runs"][key], timestamp_ns=time.time_ns()))
         results.append(dict(order=row["order"], status=state["runs"][key]["status"]))
+        if lapsed(collected):
+            stop(root, "order %d: the grant lapsed during the session (%s)" % (row["order"], "; ".join(integrity(collected))))
     return results
 
 
@@ -484,7 +654,9 @@ def report(root):
     foreign = [r["order"] for r in rows if any(x.get("route") != m["route"] or not x.get("approved_on")
                                                  for x in r.get("all_journal_receipts", []))]
     by_condition = {c: sorted(r["order"] for r in controls if r["condition"] == c) for c in CONDITIONS if c != "positive"}
-    result = dict(protocol=PROTOCOL, assignments=len(rows), collected=sum(r.get("status") != "uncollected" for r in rows),
+    problems = session_problems(rows)
+    result = dict(protocol=PROTOCOL, valid=not problems, problems=problems,
+        assignments=len(rows), collected=sum(r.get("status") != "uncollected" for r in rows),
         complete=complete, known_cost_usd=sum(c for c in costs if c is not None), unknown_costs=sum(c is None for c in costs),
         contract_delivered_all=contract, successful_cpu_receipts=successes, structured_receipts_delivered=structured,
         realized_controls=by_condition, necessary_work_skipped=skipped, foreign_or_unapproved_receipts=foreign,
@@ -497,8 +669,8 @@ def report(root):
         positive_covered_subsets=sum(r["replay"].get("covered_subsets", 0) for r in realized_positive),
         receipt_context_notes=sum(r.get("receipt_context_notes", 0) for r in rows),
         quality_passed=sum(r.get("quality", {}).get("passed") is True for r in rows),
-        integration_safety_passed=bool(complete and contract and not skipped and not foreign and structured == successes
-                    and all(by_condition.values()) and all(c is not None for c in costs)),
+        integration_safety_passed=bool(not problems and complete and contract and not skipped and not foreign
+                    and structured == successes and all(by_condition.values()) and all(c is not None for c in costs)),
         hypothesis_note="integration_safety_passed covers delivery and safety only. Elimination evidence is the "
                         "positive rows; this development canary never establishes the hypothesis.",
         rows=[{k: r.get(k) for k in ("order", "condition", "repetition", "task", "condition_realized", "cost_usd",
@@ -535,3 +707,6 @@ if __name__ == "__main__":
         value = {"prepare": prepare, "approval-script": approval_script, "verify-grants": verify_grants,
                  "live": live, "report": report}[args.command](args.path.resolve(strict=True))
     print(json.dumps(value, indent=2, default=str))
+    if args.command == "report" and not value["valid"]:
+        sys.exit("INVALID: %d session problem(s); this report is not evidence for any arm (see `problems`)"
+                 % len(value["problems"]))

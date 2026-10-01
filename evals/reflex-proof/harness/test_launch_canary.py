@@ -120,5 +120,106 @@ class Realized(unittest.TestCase):
         self.assertFalse(canary.realized(self.row("broader", [])))
 
 
+def spool(path, *records):
+    """Adage's spool framing: magic, little-endian length, four reserved bytes, then the JSON record."""
+    data = b""
+    for r in records:
+        body = json.dumps(r).encode()
+        data += bytes([0xAD, 0xA6, 0xE5, 0x01]) + len(body).to_bytes(4, "little") + b"\0\0\0\0" + body
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+
+
+class SessionIntegrity(unittest.TestCase):
+    """dev-v8b: an outside pytest wrote bytecode into the shared runtime, every grant lapsed, and the
+    harness kept dispatching card-only sessions under execution-arm labels."""
+
+    def test_spool_decisions_and_lapse(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            reason = "exec-changed: the approval for this route no longer matches (route_exec_digest)"
+            spool(home / "sessions/s.spool",
+                  dict(ts=1, event="PostToolBatch", exec=[dict(route=canary.ROUTE, outcome="applied")]),
+                  dict(ts=2, event="UserPromptSubmit", decision={}),
+                  dict(ts=3, event="PostToolBatch", exec=[dict(route=canary.ROUTE, withheld="approval", reason=reason)]))
+            decisions = canary.exec_decisions(home)
+        self.assertEqual([(d["outcome"], d["withheld"]) for d in decisions], [("applied", None), (None, "approval")])
+        row = dict(contract_emitted=True, exec_decisions=decisions, all_journal_receipts=[dict(id="op")])
+        self.assertTrue(canary.lapsed(row))
+        self.assertEqual(canary.integrity(row), ["learned verification withheld (approval: %s)" % reason])
+        clean = dict(row, exec_decisions=decisions[:1])
+        self.assertFalse(canary.lapsed(clean))
+        self.assertEqual(canary.integrity(clean), [])
+        self.assertTrue(canary.lapsed(dict(clean, contract_emitted=False)))
+
+    def test_censoring_reads_the_session_caps(self):
+        argv = ["claude", "--max-budget-usd", "1.5", "--max-turns", "60"]
+        done = dict(result_status="success", terminal_reason="completed", num_turns=20, total_cost_usd=0.1)
+        self.assertEqual(canary.censored(done, argv), [])
+        self.assertEqual(canary.censored(dict(done, num_turns=60, terminal_reason="max_turns"), argv),
+                         ["not completed", "turn cap"])
+        self.assertEqual(canary.censored(dict(done, total_cost_usd=1.5), argv), ["budget cap"])
+
+    def runtime(self, tmp):
+        python = Path(tmp) / "rt/bin/python3.12"
+        python.parent.mkdir(parents=True)
+        python.write_text("")
+        (Path(tmp) / "rt/lib/python3.12/encodings").mkdir(parents=True)
+        (Path(tmp) / "rt/lib/python3.12/os.py").write_text("x = 1\n")
+        study = Path(tmp) / "study"
+        study.mkdir()
+        return study, dict(preparation_python=str(python))
+
+    def unprotect(self, tmp):
+        for p in sorted(Path(tmp).rglob("*")):
+            p.chmod(p.stat().st_mode | 0o200)
+
+    def test_preparation_protects_the_runtime_and_dispatch_stops_when_it_changes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            study, m = self.runtime(tmp)
+            lib = canary.runtime_lib(m)
+            try:
+                with self.assertRaises(ValueError):
+                    canary.require_runtime(study, m)  # never protected
+                state = canary.protect_runtime(study, m)
+                self.assertEqual(canary.writable(lib), [])
+                canary.require_runtime(study, m)
+                with self.assertRaises(OSError, msg="nothing outside a sandbox can add bytecode now"):
+                    (lib / "python3.12/__pycache__").mkdir()
+                # Someone restores write access and an unsandboxed run writes bytecode, as in dev-v8b.
+                self.unprotect(tmp)
+                (lib / "python3.12/__pycache__").mkdir()
+                (lib / "python3.12/__pycache__/os.cpython-312.pyc").write_bytes(b"\0")
+                self.assertNotEqual(canary.tree_digest(lib), state["sha256"])
+                with self.assertRaisesRegex(ValueError, "changed after preparation"):
+                    canary.require_runtime(study, m)
+                stopped = [json.loads(line) for line in (study / "ABORTED.jsonl").read_text().splitlines()]
+                self.assertEqual([s["status"] for s in stopped], ["stopped", "stopped"])
+            finally:
+                self.unprotect(tmp)
+
+    def test_grant_preflight_runs_the_session_start_hook_on_a_throwaway_home(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            checkout, home = tmp / "repo", tmp / "adage-home"
+            checkout.mkdir()
+            (checkout / "a.py").write_text("x = 1\n")
+            home.mkdir()
+            binary = tmp / "adage-exec"
+            # The contract appears only while the grant binds; the hook also writes spool state.
+            binary.write_text("#!/bin/sh\ncat > /dev/null\nmkdir -p \"$ADAGE_HOME/sessions\"\n"
+                              "touch \"$ADAGE_HOME/sessions/grant-preflight.spool\"\n"
+                              "if [ -f \"$ADAGE_HOME/approvals.json\" ]; then\n"
+                              "  printf '%s' '{\"hookSpecificOutput\":{\"additionalContext\":"
+                              "\"<adage-reflex kind=\\\"execution-contract\\\">x</adage-reflex>\"}}'\n"
+                              "else printf '{}'; fi\n")
+            binary.chmod(0o755)
+            a = dict(execution_root=str(checkout), home=str(home), binaries={"adage-exec": str(binary)})
+            self.assertFalse(canary.preflight_grant(a))
+            (home / "approvals.json").write_text("{}")
+            self.assertTrue(canary.preflight_grant(a))
+            self.assertEqual(sorted(p.name for p in home.iterdir()), ["approvals.json"], "the real home is untouched")
+
+
 if __name__ == "__main__":
     unittest.main()

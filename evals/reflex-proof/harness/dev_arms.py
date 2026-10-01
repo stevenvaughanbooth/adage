@@ -12,6 +12,15 @@ A2 and A3. `freeze`, `prepare`, `approval-script`, `verify-grants`, `collect` an
 nothing; `live` is the paid entry point (the nested-session guard stays in probe.execute). No
 helper writes grants or policy. The primary metric is model requests per session (distinct
 assistant message ids); CPU work is reported separately and never counted as inference saved.
+
+After dev-v8b, whose grants lapsed silently from session 09:
+- `prepare` makes the shared runtime library read-only before any grant.
+- Before every dispatch, `live` re-checks that library and each hook-arm grant at SessionStart, and
+  stops the study on any lapse.
+- `report` is invalid, and exits non-zero, on any of these:
+  - a hook-arm session with no contract, a withheld approval or no receipt;
+  - unverified or censored counts;
+  - an unrealized control.
 """
 import argparse
 import json
@@ -209,7 +218,7 @@ def prepare(root):
         pairs.write(session / "manifest.json", value)
         (session / "manifest.sha256").write_text(pairs.sha(session / "manifest.json") + "\n")
         out.append(str(session / "manifest.json"))
-    return dict(assignments=out, paid_calls=0, grants_written=False)
+    return dict(assignments=out, paid_calls=0, grants_written=False, runtime=canary.protect_runtime(root, m))
 
 
 def granted(m):
@@ -350,6 +359,9 @@ def collect(manifest):
     result = dict(protocol=PROTOCOL, dev_arm=m["dev_arm"], condition=m["condition"], block=m["block"], task=m["task"],
         order=m["order"], provenance=provenance, quality=quality, cost_usd=summary.get("total_cost_usd"),
         requests=len(requests_of(stream)), pytest_requests=pytest_requests(stream),
+        observed_dispatches=attempt("dispatches", lambda: canary.dispatches(session), None),
+        censored=attempt("censored", lambda: canary.censored(summary, m["argv"]), None),
+        exec_decisions=attempt("decisions", lambda: canary.exec_decisions(m["home"]), None) if m["arm"] == "automatic" else [],
         tokens=dict(input=usage.get("input_tokens"), cache_write=usage.get("cache_creation_input_tokens"),
                     cache_read=usage.get("cache_read_input_tokens"), output=usage.get("output_tokens")),
         wall_seconds=((run.get("end_monotonic_ns") or 0) - (run.get("start_monotonic_ns") or 0)) / 1e9 or None,
@@ -368,6 +380,7 @@ def live(root, wall_seconds=600):
     if not verify_grants(root)["passed"]:
         raise ValueError("person-issued grants are missing or differ from the reviewed script")
     canary.isolation(m)
+    canary.require_runtime(root, m)
     authority = Path(m["budget_authority"])
     for row in m["matrix"]:
         a = pairs.read(session_dir(root, row) / "manifest.json")
@@ -391,20 +404,27 @@ def live(root, wall_seconds=600):
                         if k.startswith(str(root.relative_to(authority)) + "/"))
             if spent + SESSION_CAP_USD > m["budget"]["study_ceiling_usd"]:
                 raise ValueError("study ceiling reached; stop and report")
+            # Every dispatch: the runtime every grant binds is unchanged, and a hook arm's grant still
+            # yields its contract at SessionStart. dev-v8b ran 20 sessions after its grants lapsed.
+            canary.require_runtime(root, m)
+            hooked = a["arm"] == "automatic"
+            if hooked and not canary.preflight_grant(a):
+                canary.stop(root, "order %d: the grant no longer binds at SessionStart (no execution contract)" % row["order"])
             budget = pairs.Budget(state, gate.budget_limit(a), SESSION_CAP_USD, persist=lambda: pairs.write(state_path, state))
             attempt, reason = budget.reserve(key)
             if attempt is None:
                 raise ValueError(reason)
             state["runs"][key] = dict(status="reserved", task=a["task"], arm=a["dev_arm"], condition=a["condition"], protocol=PROTOCOL)
             pairs.write(state_path, state)
-            result = None
+            result = collected = None
             try:
                 if not budget.dispatch(attempt):
                     raise ValueError("accounting blocked dispatch")
                 result = pairs.probe.execute(manifest, SESSION_CAP_USD, wall_seconds)
                 budget.settle(attempt, result)
                 state["runs"][key].update(status="complete", summary=result)
-                state["runs"][key]["quality"] = collect(manifest)["quality"]
+                collected = collect(manifest)
+                state["runs"][key]["quality"] = collected["quality"]
             except BaseException as error:
                 state["runs"][key].update(status="failed", error=str(error))
                 raise
@@ -414,6 +434,9 @@ def live(root, wall_seconds=600):
                 pairs.append(authority / "attempts.jsonl", dict(status="dev-arms-finished", run=key,
                     accounting=attempt, evidence=state["runs"][key], timestamp_ns=time.time_ns()))
         results.append(dict(order=row["order"], status=state["runs"][key]["status"]))
+        if hooked and canary.lapsed(collected):
+            canary.stop(root, "order %d: the grant lapsed during the session (%s)" % (
+                row["order"], "; ".join(canary.integrity(collected))))
     return results
 
 
@@ -451,21 +474,32 @@ def summarize(rows, protocol):
         blocks[arm] = dict(request_deltas=deltas, blocks_fewer=sum(d > 0 for d in deltas))
     controls = [r for r in rows if r["condition"] != "positive" and r.get("status") != "uncollected"]
     skipped = [r["order"] for r in controls if (r.get("replay") or {}).get("necessary_work_skipped")]
+    # Fail loudly: a hook-arm session whose grant did not bind, whose learned verification never ran,
+    # or whose counts are unverified or truncated is not evidence for its arm. A control that never
+    # realized its condition tested nothing.
+    problems = canary.session_problems(rows, executes=lambda r: ARMS[r.get("dev_arm") or r["arm"]]["hooks"])
+    problems += [dict(order=r["order"], arm=r["dev_arm"], condition=r["condition"],
+                      problem="control not realized: its condition never occurred, so it tested nothing")
+                 for r in controls if not canary.realized(r)]
     verdict = {}
     a0 = arms["A0"]
     for arm in ("A2", "A3"):
         a = arms[arm]
         ratio = (a["requests"] / a0["requests"]) if a["requests"] and a0["requests"] else None
+        mine = [r for r in controls if r["dev_arm"] == arm]
+        tested = sorted(r["condition"] for r in mine if canary.realized(r)) == sorted(CONTROLS)
         verdict[arm] = dict(
             requests_ratio_to_A0=round(ratio, 4) if ratio else None,
             D1_requests=bool(ratio is not None and ratio <= t["D1_requests_max_ratio_to_A0"]
                              and blocks[arm]["blocks_fewer"] >= t["D1_blocks_fewer_min"]),
             D2_quality=a["quality_failures"] <= a0["quality_failures"],
-            D3_safety=not [r for r in controls if r["dev_arm"] == arm and (r.get("replay") or {}).get("necessary_work_skipped")],
+            D3_tested=tested,
+            D3_safety=tested and not [r for r in mine if (r.get("replay") or {}).get("necessary_work_skipped")],
             D4_repeat_sessions=a["sessions_with_repeat_attempts"] <= t["D4_sessions_with_repeat_attempts_max"])
-        verdict[arm]["passed"] = all(v for k, v in verdict[arm].items() if k.startswith("D"))
-    return dict(arms=arms, paired_blocks=blocks, controls=[{k: r.get(k) for k in ("order", "dev_arm", "condition", "requests", "cost_usd")} |
-                dict(necessary_work_skipped=(r.get("replay") or {}).get("necessary_work_skipped"),
+        verdict[arm]["passed"] = not problems and all(v for k, v in verdict[arm].items() if k.startswith("D"))
+    return dict(valid=not problems, problems=problems, arms=arms, paired_blocks=blocks,
+                controls=[{k: r.get(k) for k in ("order", "dev_arm", "condition", "requests", "cost_usd")} |
+                dict(realized=canary.realized(r), necessary_work_skipped=(r.get("replay") or {}).get("necessary_work_skipped"),
                      stop_gate_outputs=r.get("stop_gate_outputs")) for r in controls],
                 necessary_work_skipped=skipped, verdict=verdict)
 
@@ -512,3 +546,6 @@ if __name__ == "__main__":
         value = {"prepare": prepare, "approval-script": approval_script, "verify-grants": verify_grants,
                  "live": live, "report": report}[args.command](args.path.resolve(strict=True))
     print(json.dumps(value, indent=2, default=str))
+    if args.command == "report" and not value["valid"]:
+        sys.exit("INVALID: %d session problem(s); no arm can pass and nothing here is evidence for an arm "
+                 "(see `problems`)" % len(value["problems"]))

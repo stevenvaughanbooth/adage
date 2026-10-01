@@ -100,9 +100,20 @@ class Hook(unittest.TestCase):
 
 
 def row(arm, block, requests, condition="positive", **extra):
-    return dict(dev_arm=arm, block=block, condition=condition, requests=requests, cost_usd=0.1, wall_seconds=60,
+    """A collected row whose integrity facts hold: in a hook arm the grant bound (contract), the learned
+    verification ran (journal receipt, spool outcome) and its condition occurred; counts are verified."""
+    hooked = dev.ARMS[arm]["hooks"]
+    receipt = dict(kind="receipt", phase="completed", outcome="failed" if condition == "failed" else "applied", digest="a")
+    base = dict(dev_arm=arm, block=block, condition=condition, requests=requests, cost_usd=0.1, wall_seconds=60,
                 tokens=dict(input=1, cache_write=1, cache_read=1, output=1), pytest_requests=1,
-                quality=dict(passed=True), replay=extra.pop("replay", {}), stop_gate_outputs=[], order=0, **extra)
+                quality=dict(passed=True), replay={"receipts": 1}, stop_gate_outputs=[], order=0,
+                observed_dispatches=[dict(source="sdk")] * requests, censored=[], contract_emitted=hooked,
+                exec_decisions=[dict(outcome="applied", withheld=None)] if hooked else [],
+                all_journal_receipts=[dict(id="op")] if hooked else [],
+                timeline=dict(events=[receipt] if hooked else [],
+                              final_digest="b" if condition in ("later-edit", "config-change") else "a"))
+    base.update(extra)
+    return base
 
 
 class Thresholds(unittest.TestCase):
@@ -110,6 +121,9 @@ class Thresholds(unittest.TestCase):
         out = []
         for b in range(1, 7):
             out += [row("A0", b, 18), row("A1", b, 18), row("A2", b, a2[b - 1]), row("A3", b, (a3 or a2)[b - 1])]
+        out += [row(arm, None, 15, condition=c) for arm in dev.CONTROL_ARMS for c in dev.CONTROLS]
+        for order, r in enumerate(out):
+            r["order"] = order
         return out
 
     def test_a_real_paired_reduction_passes_and_a_mean_driven_by_one_block_does_not(self):
@@ -121,7 +135,8 @@ class Thresholds(unittest.TestCase):
         self.assertFalse(lumpy["A2"]["D1_requests"], "one block cannot carry the result")
 
     def test_safety_quality_and_repeats_each_fail_an_arm(self):
-        rows = self.rows([14] * 6) + [row("A2", None, 20, condition="later-edit", replay=dict(necessary_work_skipped=True))]
+        rows = self.rows([14] * 6)
+        next(r for r in rows if r["dev_arm"] == "A2" and r["condition"] == "later-edit")["replay"] = dict(necessary_work_skipped=True)
         self.assertFalse(dev.summarize(rows, PROTOCOL)["verdict"]["A2"]["D3_safety"])
         rows = self.rows([14] * 6)
         for r in rows[:12]:
@@ -133,6 +148,82 @@ class Thresholds(unittest.TestCase):
             if r["dev_arm"] == "A2":
                 r["replay"] = dict(repeat_attempts=1)
         self.assertFalse(dev.summarize(rows, PROTOCOL)["verdict"]["A2"]["D4_repeat_sessions"])
+
+
+class Integrity(unittest.TestCase):
+    """dev-v8b averaged 20 lapsed-grant sessions into its arms; a report must now refuse that loudly."""
+
+    def rows(self):
+        return Thresholds().rows([14] * 6)
+
+    def problems_after(self, change):
+        rows = self.rows()
+        target = next(r for r in rows if r["dev_arm"] == "A3" and r["condition"] == "positive")
+        change(target)
+        out = dev.summarize(rows, PROTOCOL)
+        self.assertFalse(out["valid"])
+        self.assertFalse(out["verdict"]["A2"]["passed"], "an invalid study passes no arm, not just the affected one")
+        return [p["problem"] for p in out["problems"] if p["order"] == target["order"]]
+
+    def test_a_clean_study_is_valid(self):
+        out = dev.summarize(self.rows(), PROTOCOL)
+        self.assertEqual(out["problems"], [])
+        self.assertTrue(out["valid"] and out["verdict"]["A2"]["passed"] and out["verdict"]["A2"]["D3_tested"])
+
+    def test_no_contract_a_withheld_approval_or_no_receipt_each_invalidate_the_study(self):
+        self.assertIn("no execution contract at SessionStart: the grant did not bind",
+                      self.problems_after(lambda r: r.update(contract_emitted=False)))
+        withheld = self.problems_after(lambda r: r.update(exec_decisions=[dict(
+            withheld="approval", reason="exec-changed: the approval for this route no longer matches (route_exec_digest)")]))
+        self.assertTrue(any("withheld (approval: exec-changed" in p for p in withheld), withheld)
+        self.assertIn("no receipt: the learned verification never ran",
+                      self.problems_after(lambda r: r.update(all_journal_receipts=[])))
+        self.assertIn("learned-verification decisions were not recorded",
+                      self.problems_after(lambda r: r.update(exec_decisions=None)))
+
+    def test_a_duplicate_suppression_is_not_a_lapse(self):
+        rows = self.rows()
+        rows[3]["exec_decisions"].append(dict(withheld="duplicate", reason="already ran on these inputs"))
+        self.assertTrue(dev.summarize(rows, PROTOCOL)["valid"])
+
+    def test_unverified_or_truncated_counts_invalidate_the_study(self):
+        self.assertIn("model requests differ from the debug log's dispatches",
+                      self.problems_after(lambda r: r.update(observed_dispatches=[{}])))
+        self.assertTrue(any(p.startswith("censored (turn cap)") for p in
+                            self.problems_after(lambda r: r.update(censored=["turn cap"]))))
+
+    def test_the_no_hook_arm_needs_no_contract(self):
+        rows = self.rows()
+        self.assertFalse(rows[0]["contract_emitted"])
+        self.assertTrue(dev.summarize(rows, PROTOCOL)["valid"])
+
+    def test_an_unrealized_control_leaves_d3_untested(self):
+        rows = self.rows()
+        later = next(r for r in rows if r["dev_arm"] == "A2" and r["condition"] == "later-edit")
+        later["timeline"]["final_digest"] = "a"  # the receipt still covers the final sources: nothing was stale
+        out = dev.summarize(rows, PROTOCOL)
+        self.assertFalse(out["verdict"]["A2"]["D3_tested"])
+        self.assertFalse(out["verdict"]["A2"]["D3_safety"], "no skipped work in an untested control is not safety")
+        self.assertIn("control not realized: its condition never occurred, so it tested nothing",
+                      [p["problem"] for p in out["problems"] if p["order"] == later["order"]])
+
+    def test_dev_v8b_would_have_failed_loudly_at_exactly_the_lapsed_sessions(self):
+        base = Path(__file__).parent / "results/20261001-dev-arms/dev-v8b"
+        facts = {s["order"]: s for s in json.loads((base / "posthoc-audit.json").read_text())["sessions"]}
+        rows = []
+        for p in sorted((base / "collections").glob("*.json")):
+            r = json.loads(p.read_text())
+            s = facts[r["order"]]  # the facts dev-arms-1 never recorded, from the post hoc audit
+            r.update(exec_decisions=s["learned_verification"], censored=s["censored"],
+                     observed_dispatches=[{}] * sum(s["debug_dispatches"].values()))
+            rows.append(r)
+        out = dev.summarize(rows, PROTOCOL)
+        self.assertFalse(out["valid"])
+        self.assertFalse(any(v["passed"] for v in out["verdict"].values()))
+        self.assertFalse(out["verdict"]["A2"]["D3_tested"] or out["verdict"]["A3"]["D3_tested"])
+        hooked = {r["order"] for r in rows if dev.ARMS[r["dev_arm"]]["hooks"]}
+        self.assertEqual({p["order"] for p in out["problems"]}, {o for o in hooked if o >= 9},
+                         "sessions 01-06 and 08 ran as designed; every hook-arm session from 09 did not")
 
 
 class ProductionShapedReplay(unittest.TestCase):
