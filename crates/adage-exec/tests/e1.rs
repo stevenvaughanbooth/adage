@@ -5,7 +5,8 @@
 //!
 //! - approved, with a live sandbox: the directive says the lookup ran, and the typed data block
 //!   (the linked files, the state) is beside it, re-checked by the safety oracle;
-//! - the script changes after approval: the approval lapses, and the output is exactly E0;
+//! - the script changes after approval: the approval lapses; the model gets exactly E0, and the
+//!   person one line saying so (once per session);
 //! - hostile lookup output (injection text in a field that fails its type, a fake closer, output
 //!   past the capture cap): the block is withheld, exactly E0;
 //! - no sandbox: exactly E0.
@@ -212,6 +213,16 @@ fn context(out: &str) -> String {
     v["hookSpecificOutput"]["additionalContext"].as_str().unwrap().to_string()
 }
 
+/// A lapsed grant: the model receives exactly E0, and the person (only) a line saying the grant
+/// no longer matches and how to approve it again.
+fn assert_lapsed_e0(out: &str, e0: &str) {
+    let (got, want): (Value, Value) =
+        (serde_json::from_str(out.trim()).unwrap(), serde_json::from_str(e0.trim()).unwrap());
+    assert_eq!(got["hookSpecificOutput"], want["hookSpecificOutput"], "exactly E0 for the model");
+    let line = got["systemMessage"].as_str().unwrap_or_default();
+    assert!(line.contains("no longer matches") && line.contains("adage review delegate"), "{out}");
+}
+
 fn have_python() -> bool {
     Command::new("python3").arg("-c").arg("pass").status().is_ok_and(|s| s.success())
 }
@@ -257,9 +268,9 @@ fn complete_lookup_contract_delivers_all_text_and_abstains_on_ambiguity_or_overf
     });
     assert_eq!(w.hook("complete-overflow", &[]), e0);
     assert_eq!(w.exec_records("complete-overflow")[0][0]["withheld"], "output");
-    // A new contract cannot authorize changed script bytes.
+    // A new contract cannot authorize changed script bytes (the person is told).
     std::fs::write(&script, "print('changed')\n").unwrap();
-    assert_eq!(w.hook("complete-script-change", &[]), e0);
+    assert_lapsed_e0(&w.hook("complete-script-change", &[]), &e0);
     assert_eq!(w.exec_records("complete-script-change")[0][0]["withheld"], "approval");
     // Successful projection cannot turn a failed command into a completed lookup.
     std::fs::write(&script, "import sys\nprint('A plausible but incomplete task')\nsys.exit(1)\n").unwrap();
@@ -335,13 +346,15 @@ fn e1_prefetch_delivers_typed_data_and_every_failure_is_exactly_e0() {
         assert!(w.exec_records(&s)[0][0]["withheld"].is_string());
     }
 
-    // The script changes after approval: the approval lapses (hash re-read now), exactly E0.
+    // The script changes after approval: the approval lapses (hash re-read now). The model gets
+    // exactly E0; the person is told, once per session, that the grant no longer matches.
     w.tracker(json!({ "id": "W-2042", "linked_files": ["acme/customers.py"], "state": "Active" }));
     assert!(context(&w.hook("s-again", &[])).contains("<adage-data"));
     let script = w.repo().join("scripts/wi-lookup");
     let mut text = std::fs::read_to_string(&script).unwrap();
     text.push_str("# changed after approval\n");
     std::fs::write(&script, text).unwrap();
-    assert_eq!(w.hook("s-changed", &[]), e0);
+    assert_lapsed_e0(&w.hook("s-changed", &[]), &e0);
     assert_eq!(w.exec_records("s-changed")[0][0]["withheld"], "approval");
+    assert!(!w.hook("s-changed", &[]).contains("systemMessage"), "said once per session");
 }

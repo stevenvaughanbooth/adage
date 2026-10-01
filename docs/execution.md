@@ -416,10 +416,26 @@ and automatic substitution of a different interpreter are outside this adapter.
 
 Review shows the environment, runtime location, and dependency hashes. The local approval binds
 the adapter version, `pyvenv.cfg`, native interpreter bytes, environment tree, and runtime `lib`
-tree, including bytecode and symlink targets. Changing any of these requires a fresh approval.
-This includes ordinary cache churn: an agent running Python directly may create a new dependency
-or runtime `.pyc` file and lapse this strict grant even without a package upgrade. Adage's private
-execution avoids writing those caches back; cache-normalized grants are future work.
+tree, including symlink targets and any bytecode outside `__pycache__`. Changing any of these
+requires a fresh approval. A bare `.pyc` or `.pyo` outside `__pycache__` can be imported with no
+source beside it, so it is code: adding or changing one lapses the grant.
+
+`__pycache__` directories are left out of both digests (adapter version 2). Python writes them
+as it runs, so before version 2 any ordinary `python` or `pytest` run (an agent's, the person's)
+could lapse the grant without a package upgrade; in one study 126 stdlib `.pyc` files written into
+a shared runtime silently withheld every later action and session contract. Leaving them out is
+safe only because an approved run never reads them: every staged project-Python run starts with
+`-B -X pycache_prefix=<fresh scratch directory>`, child interpreters inherit
+`PYTHONPYCACHEPREFIX` (the same directory) and `PYTHONDONTWRITEBYTECODE`, and the private copies
+of the environment and runtime have every `__pycache__` removed before anything runs. Project
+Python is only valid for an E2 verify action, and E2 runs only staged.
+
+A grant that stops matching is not withheld silently. The person sees one line (Claude Code's
+`systemMessage`; the agent never sees it) at most once per session, at the session start or beside
+the first event whose action it withheld: which grant, which approval-key field changed, and the
+`adage review delegate …` command, with the grant's own terms, that approves it again after
+checking the change. `adage delegate status` and `adage review` list every lapsed grant for the
+current repository the same way (`lapsed` and `exec_lapsed` in their JSON).
 The configured runtime must be a separate installation matching the environment's declared
 Python 3.8+ version; system site packages and dependency symlinks escaping the approved trees
 are refused. The runtime `lib` tree and exact interpreter are copied into private scratch, checked against
@@ -436,7 +452,7 @@ layouts that cannot work without reading the original checkout remain unsupporte
 original environment files are not rewritten. The extra environment copy keeps this runtime
 preparation separate from the staged source change set.
 
-Adapter version 1 forces `-B` and a fresh `-X pycache_prefix`, disables user site packages, removes
+Adapter version 2 forces `-B` and a fresh `-X pycache_prefix` (also `PYTHONPYCACHEPREFIX` for child interpreters), disables user site packages, removes
 private environment bytecode, and adds its private `bin` directory to the sanitized PATH. It
 still runs on the CPU with no model call. Dependency hashing and copying add measurable setup
 cost; they are included in the launch evaluation rather than counted as zero-cost work. Python

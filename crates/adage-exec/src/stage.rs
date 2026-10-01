@@ -1009,10 +1009,13 @@ pub fn stage_with(req: &ExecRequest, ctx: &Context, backend: StageBackend) -> Re
             })?;
         }
         bound[0] = python.to_string_lossy().into_owned();
-        bound.splice(
-            1..1,
-            ["-B".into(), "-X".into(), format!("pycache_prefix={}", scratch.path.join("python-bytecode").display())],
-        );
+        // Bytecode caches are read and written only under a fresh private prefix, never from a
+        // `__pycache__` in the environment or runtime: that is what lets their digests leave
+        // `__pycache__` out (`project_python::bytecode_cache`). Child interpreters (a test that
+        // starts `sys.executable`) get the same prefix from the environment.
+        let prefix = scratch.path.join("python-bytecode");
+        bound.splice(1..1, ["-B".into(), "-X".into(), format!("pycache_prefix={}", prefix.display())]);
+        environment.insert("PYTHONPYCACHEPREFIX".into(), prefix.to_string_lossy().into_owned());
         environment.insert("PYTHONDONTWRITEBYTECODE".into(), "1".into());
         environment.insert("PYTHONNOUSERSITE".into(), "1".into());
         environment.remove("PYTHONHOME");

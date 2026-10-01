@@ -298,6 +298,39 @@ fn delegate_policy_opts_in_to_e2_with_a_command() {
     assert!(std::fs::read_to_string(&file).unwrap().contains("max_level = \"E1\""));
 }
 
+/// A grant whose route no longer matches what would run (here its script changed) is listed by
+/// `adage delegate status` and `adage review`, with what changed and the command that approves
+/// it again, instead of being withheld silently.
+#[test]
+fn lapsed_grants_are_listed_with_what_changed_and_how_to_approve_again() {
+    let w = World::new();
+    let (_, err, code) = w.run(&allow(), &[]);
+    assert_eq!(code, 0, "{err}");
+    let (out, _, _) = w.run(&["delegate", "status", "--json"], &[]);
+    let v: Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(v["lapsed"], serde_json::json!([]), "current: nothing lapsed");
+    std::fs::write(w.p("acme-billing/scripts/wi-lookup"), "#!/usr/bin/env python3\nprint('{\"x\": 1}')\n").unwrap();
+    let (out, _, _) = w.run(&["delegate", "status", "--json"], &[]);
+    let v: Value = serde_json::from_str(&out).unwrap();
+    let l = &v["lapsed"][0];
+    assert_eq!(l["route"], "acme-billing/work-items/lookup-work-item", "{v}");
+    assert!(l["changed"].as_array().unwrap().iter().any(|c| c == "scripts"), "{l}");
+    assert!(
+        l["reapprove"]
+            .as_str()
+            .unwrap()
+            .starts_with("adage review delegate acme-billing/work-items lookup-work-item --level e1"),
+        "{l}"
+    );
+    let (out, _, code) = w.run(&["delegate", "status"], &[]);
+    assert_eq!(code, 0);
+    assert!(out.contains("1 delegation no longer matches") && out.contains("a script it runs"), "{out}");
+    let (out, _, code) = w.run(&["review", "--json"], &[]);
+    assert_eq!(code, 0, "{out}");
+    let v: Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(v["exec_lapsed"][0]["route"], "acme-billing/work-items/lookup-work-item", "{v}");
+}
+
 /// Launch review: a `--timeout-ms` above the level's limit is clamped, and the approval says so.
 #[test]
 fn a_timeout_above_the_levels_limit_is_clamped_and_said() {

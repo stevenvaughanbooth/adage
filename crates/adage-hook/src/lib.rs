@@ -121,6 +121,16 @@ pub struct Delivery {
     /// the Stop gate does not also run at this event, so one hook never stages two actions within
     /// its timeout.
     pub at_stop_action: bool,
+    /// One line for the person: a grant no longer matches what would run, so its action was
+    /// withheld (which field changed, and how to approve it again). Shown at most once per
+    /// session; the agent never sees it.
+    pub notice: Option<String>,
+}
+
+/// Whether this session has not yet had a lapsed-grant notice; marks it as having had one.
+fn first_lapse_notice(paths: &Paths, session: &str) -> bool {
+    state::update::<SessionState, _>(&paths.state(session), |st| !std::mem::replace(&mut st.lapse_noticed, true))
+        .unwrap_or(false)
 }
 
 /// What [`respond`] decided for one event, before rendering.
@@ -166,6 +176,12 @@ pub trait Extension: Sync {
     fn session_context(&self, _repo_key: &str, _root: &Path, _index: &Index, _paths: &Paths) -> Option<String> {
         None
     }
+    /// The session start's texts: the contract ([`Extension::session_context`]) and one line for
+    /// the person (a grant that no longer matches what would run). An extension that can find
+    /// both in one pass overrides this.
+    fn session_texts(&self, repo_key: &str, root: &Path, index: &Index, paths: &Paths) -> SessionTexts {
+        SessionTexts { context: self.session_context(repo_key, root, index, paths), notice: None }
+    }
     /// The exec-only reflexes (`(track, route id)`, vendored scripts) this extension would carry
     /// out in this repository, so `decide()` may direct them. Asked only when the index holds one.
     fn exec_only(&self, _repo_key: &str, _index: &Index, _paths: &Paths) -> Vec<(String, String)> {
@@ -181,6 +197,15 @@ pub trait Extension: Sync {
     fn stop_gate(&self, _call: &StopCall<'_>) -> Option<StopGate> {
         None
     }
+}
+
+/// What [`Extension::session_texts`] says at a session start.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SessionTexts {
+    /// For the model.
+    pub context: Option<String>,
+    /// For the person only (Claude Code's `systemMessage`), at most once per session.
+    pub notice: Option<String>,
 }
 
 /// A `Stop` event, as [`Extension::stop_gate`] sees it.
@@ -788,17 +813,20 @@ fn session_start(
             .flatten()
             .is_some_and(|st| st.arm == Some(Arm::Treated))
     {
-        extension.and_then(|ext| {
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                ext.session_context(&key, s.root, s.index, s.paths)
-            }))
-            .ok()
-            .flatten()
-            .filter(|text| text.len() <= s.adapter.max_context())
-        })
+        extension
+            .and_then(|ext| {
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    ext.session_texts(&key, s.root, s.index, s.paths)
+                }))
+                .ok()
+            })
+            .unwrap_or_default()
     } else {
-        None
+        SessionTexts::default()
     };
+    // A grant that stopped matching is said once per session, beside any other notice.
+    let lapse = context.notice.filter(|_| cfg.ui_notices && first_lapse_notice(s.paths, s.session));
+    let context = context.context.filter(|text| text.len() <= s.adapter.max_context());
     if damaged || !cfg.ui_notices {
         return Ok(
             context.and_then(|context| s.adapter.render(s.event, Output::SessionContext { context, notice: None }))
@@ -815,6 +843,10 @@ fn session_start(
         }
     } else {
         autolearn::take_notice(s.paths, &key)
+    };
+    let text = match (text, lapse) {
+        (Some(t), Some(l)) => Some(format!("{t}\n{l}")),
+        (t, l) => t.or(l),
     };
     Ok(match context {
         Some(context) => s.adapter.render(s.event, Output::SessionContext { context, notice: text }),
@@ -1048,8 +1080,20 @@ fn respond(
     if let Some(reason) = decision.continue_reason {
         return done(Some(Output::Continue(reason)));
     }
+    // A grant that stopped matching: one line for the person, once per session, beside whatever
+    // the agent receives (never at a Stop, which has no such channel).
+    let lapse = delivery.notice.take().filter(|_| {
+        !matches!(ev, Event::Stop { .. })
+            && adage_store::config::load(paths).config.ui_notices
+            && first_lapse_notice(paths, session)
+    });
+    let with_lapse = |text: String| match &lapse {
+        Some(n) if !text.is_empty() => Output::SessionContext { context: text, notice: Some(n.clone()) },
+        Some(n) => Output::Notice(n.clone()),
+        None => Output::Context(text),
+    };
     if decision.directives.is_empty() && delivery.extra.is_empty() {
-        return done(None);
+        return done(lapse.map(Output::Notice));
     }
     let max = adapter.max_context();
     let e0 = || decision.directives.iter().map(render::wrap_directive).collect::<Vec<_>>().join("\n\n");
@@ -1062,14 +1106,14 @@ fn respond(
     // An applied action cannot fall back to its original "run this" directive on overflow.
     let mut text = fitted_context(all.join("\n\n"), e0, !delivery.met.is_empty(), max);
     if text.is_empty() {
-        return done(None);
+        return done(lapse.map(Output::Notice));
     }
     // Design W8 (spill overflow to a file) cannot arise: the longest decision validation allows
     // fits every harness's cap (`the_largest_decision_fits_every_harness_cap`). This is a backstop.
     if text.len() > max {
         text.truncate(text.char_indices().take_while(|(i, _)| *i < max).last().map(|(i, _)| i).unwrap_or(0));
     }
-    done(Some(Output::Context(text)))
+    done(Some(with_lapse(text)))
 }
 
 #[cfg(test)]
@@ -1424,6 +1468,56 @@ mod tests {
         // Time the event already spent is deducted.
         let started = Instant::now() - Duration::from_secs(10);
         assert_eq!(stop_deadline(started), started + timeout - STOP_RESERVE);
+    }
+
+    /// A grant that stopped matching is told to the person (Claude Code's `systemMessage`, never
+    /// the model), at most once per session: at the session start, or beside the first event
+    /// whose action it withheld.
+    #[test]
+    fn a_lapsed_grant_notice_is_shown_once_per_session() {
+        const LINE: &str = "adage: the E2 approval for acme/finish-lines/x no longer matches (…), so it does not run.";
+        struct Lapsed;
+        impl Extension for Lapsed {
+            fn deliver(&self, _: &Turn<'_>, _: &[Directive]) -> Delivery {
+                Delivery { notice: Some(LINE.into()), ..Delivery::default() }
+            }
+            fn session_texts(&self, _: &str, _: &Path, _: &Index, _: &Paths) -> SessionTexts {
+                SessionTexts { context: Some("contract".into()), notice: Some(LINE.into()) }
+            }
+        }
+        static LAPSED: Lapsed = Lapsed;
+        let w = ObligationWorld::new();
+        let start = |session: &str| {
+            let p = json!({ "session_id": session, "cwd": w.root, "source": "startup" });
+            let opts = Options { learner: None, extension: Some(&LAPSED) };
+            handle("claude", "SessionStart", &p.to_string(), opts, &w.paths, Instant::now())
+                .unwrap()
+                .map(|o| serde_json::from_str::<Value>(&o).unwrap())
+        };
+        let first = start("s").expect("contract and notice");
+        assert_eq!(first["systemMessage"], LINE, "{first}");
+        assert_eq!(first["hookSpecificOutput"]["additionalContext"], "contract");
+        let again = start("s").expect("the contract again");
+        assert!(again.get("systemMessage").is_none(), "once per session: {again}");
+        let edit = w.edit(&LAPSED).expect("the obligation's directive");
+        assert!(edit.get("systemMessage").is_none(), "already told this session: {edit}");
+        // Another session: told once, beside the directive the event delivers.
+        state::update::<SessionState, _>(&w.paths.state("s2"), |st| st.arm = Some(Arm::Treated)).unwrap();
+        let event = |session: &str| {
+            let call = json!({ "tool_name": "Edit", "tool_use_id": "t2", "tool_response": "ok",
+                               "tool_input": { "file_path": w.root.join("registry/currencies.csv") } });
+            let p = json!({ "session_id": session, "cwd": w.root, "tool_calls": [call] });
+            let opts = Options { learner: None, extension: Some(&LAPSED) };
+            handle("claude", "PostToolBatch", &p.to_string(), opts, &w.paths, Instant::now())
+                .unwrap()
+                .map(|o| serde_json::from_str::<Value>(&o).unwrap())
+        };
+        let told = event("s2").expect("directive and notice");
+        assert_eq!(told["systemMessage"], LINE, "{told}");
+        assert!(told["hookSpecificOutput"]["additionalContext"].as_str().unwrap().contains("make gen"), "{told}");
+        assert!(!told["hookSpecificOutput"]["additionalContext"].as_str().unwrap().contains("no longer matches"));
+        let quiet = event("s2");
+        assert!(quiet.as_ref().is_none_or(|q| q.get("systemMessage").is_none()), "{quiet:?}");
     }
 
     #[test]

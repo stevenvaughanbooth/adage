@@ -162,6 +162,10 @@ pub struct SessionState {
     /// Stop-gate runs this session (adage-exec): at most two, and only the first may block.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub stop_gates: u32,
+    /// The person was told this session that a grant no longer matches (adage-exec): at most
+    /// once per session.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub lapse_noticed: bool,
 }
 
 fn is_zero(n: &u32) -> bool {

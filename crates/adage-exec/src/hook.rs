@@ -34,7 +34,7 @@
 
 use adage_core::CommandTable;
 use adage_eval::safety::{check_data_block, DataType};
-use adage_hook::{Delivery, Extension, PreCall, StopCall, StopGate, Turn};
+use adage_hook::{Delivery, Extension, PreCall, SessionTexts, StopCall, StopGate, Turn};
 use adage_runtime::{render, Directive};
 use adage_tracks::{Origin, Step, Trigger};
 use serde_json::{json, Value};
@@ -73,14 +73,36 @@ impl Extension for Prefetch {
         index: &adage_tracks::Index,
         paths: &adage_store::Paths,
     ) -> Option<String> {
-        if policy::load(&paths.root).ok()?.max_level < Level::E2 {
-            return None;
+        self.session_texts(repo_key, root, index, paths).context
+    }
+
+    /// The contract and, for the person, a grant that stopped matching: one planning pass over
+    /// this repository's grants serves both.
+    fn session_texts(
+        &self,
+        repo_key: &str,
+        root: &std::path::Path,
+        index: &adage_tracks::Index,
+        paths: &adage_store::Paths,
+    ) -> SessionTexts {
+        let (Ok(pol), Ok(store)) = (policy::load(&paths.root), Store::load(&approvals::path(&paths.root))) else {
+            return SessionTexts::default();
+        };
+        let planned = route::plan_grants(repo_key, root, index, &paths.tracks(), &store, &CommandTable::load());
+        // A grant that could run under this policy but no longer matches: said, never silent.
+        let lapsed: Vec<route::Lapse> =
+            route::lapses(&planned, &store).into_iter().filter(|l| l.level <= pol.max_level).collect();
+        let notice = lapsed.first().map(|l| match lapsed.len() {
+            1 => l.notice(),
+            n => format!("{} ({} more no longer match.)", l.notice(), n - 1),
+        });
+        if pol.max_level < Level::E2 {
+            return SessionTexts { context: None, notice };
         }
-        let store = Store::load(&approvals::path(&paths.root)).ok()?;
         // Only a grant whose key still equals the route's current one, derived as act() derives
         // it: a lapsed grant would be refused, so it promises no receipt. A short factual
         // description of what Adage runs, when, and where results appear (not instructions).
-        let lines: Vec<String> = verifications(repo_key, root, index, paths, &store)
+        let lines: Vec<String> = current_verifications(&planned, &store)
             .into_iter()
             .take(2)
             .map(|(ir, command, _)| {
@@ -89,7 +111,8 @@ impl Extension for Prefetch {
                 format!("In this repository Adage runs `{}` (approved by a person, sandboxed) {when}, and again when you finish if files changed since.", render::sanitise(&command))
             })
             .collect();
-        (!lines.is_empty()).then(|| format!("<adage-reflex track=\"adage/execution@1\" route=\"session-contract\" strength=\"prime\" kind=\"execution-contract\">\n{}\nIts results appear with your tool results, with the tests it ran; a failure comes back to you with the failing tests.\n</adage-reflex>", lines.join("\n")))
+        let context = (!lines.is_empty()).then(|| format!("<adage-reflex track=\"adage/execution@1\" route=\"session-contract\" strength=\"prime\" kind=\"execution-contract\">\n{}\nIts results appear with your tool results, with the tests it ran; a failure comes back to you with the failing tests.\n</adage-reflex>", lines.join("\n")));
+        SessionTexts { context, notice }
     }
 
     fn stop_gate(&self, call: &StopCall<'_>) -> Option<StopGate> {
@@ -100,7 +123,7 @@ impl Extension for Prefetch {
         let mut d = Delivery::default();
         let mut records: Vec<Value> = Vec::new();
         if !directives.is_empty() {
-            match prefetch(turn, directives) {
+            match prefetch(turn, directives, &mut d.notice) {
                 Ok(None) => {}
                 Ok(Some((texts, r))) => {
                     d.texts = Some(texts);
@@ -143,6 +166,7 @@ impl Extension for Prefetch {
             d.stop = a.stop;
             d.recovery = a.recovery;
             d.at_stop_action = a.at_stop_action;
+            d.notice = d.notice.take().or(a.notice);
         }
         if !records.is_empty() {
             d.spool = Some(Value::Array(records));
@@ -309,25 +333,31 @@ fn verifications<'a>(
     paths: &adage_store::Paths,
     store: &'a Store,
 ) -> Vec<(&'a adage_tracks::index::IndexedRoute, String, &'a Approval)> {
-    let table = CommandTable::load();
+    current_verifications(
+        &route::plan_grants(repo_key, root, index, &paths.tracks(), store, &CommandTable::load()),
+        store,
+    )
+}
+
+/// [`verifications`], from grants already planned.
+fn current_verifications<'a>(
+    planned: &[route::Planned<'a>],
+    store: &Store,
+) -> Vec<(&'a adage_tracks::index::IndexedRoute, String, &'a Approval)> {
     let mut out: Vec<(&adage_tracks::index::IndexedRoute, String, &Approval)> = Vec::new();
-    for r in index.for_repo(repo_key) {
-        let label = format!("{}/{}", r.track, r.route.id);
+    for p in planned {
+        let (r, a) = (p.route, p.approval);
         let Step::Run { command } = &r.route.step else { continue };
-        if r.route.effect != adage_core::Effect::Verify || command.contains('{') {
+        if r.route.effect != adage_core::Effect::Verify
+            || command.contains('{')
+            || a.key.level != Level::E2
+            || a.key.effect != adage_core::Effect::Verify
+            || !p.current(store)
+            || out.iter().any(|(x, _, _)| std::ptr::eq(*x, r))
+        {
             continue;
         }
-        let grant = store.approvals.iter().find(|a| {
-            a.key.repo == repo_key
-                && a.route == label
-                && a.key.level == Level::E2
-                && a.key.effect == adage_core::Effect::Verify
-                && route::plan(r, index, root, &paths.tracks(), Level::E2, a.terms.as_ref(), &table)
-                    .is_ok_and(|p| store.find(&approvals::ApprovalKey::for_request(&p.request, repo_key)).is_some())
-        });
-        if let Some(a) = grant {
-            out.push((r, command.clone(), a));
-        }
+        out.push((r, command.clone(), a));
     }
     out.sort_by_key(|(r, _, _)| std::cmp::Reverse(r.route.evidence.support));
     out
@@ -725,6 +755,8 @@ struct Acted {
     recovery: Option<String>,
     /// An approved action was selected for a Stop request at this event ([`adage_hook::Delivery::at_stop_action`]).
     at_stop_action: bool,
+    /// For the person: the selected grant no longer matches ([`adage_hook::Delivery::notice`]).
+    notice: Option<String>,
 }
 
 /// The directive for a route: the one about to be delivered, else rebuilt from the index entry
@@ -871,6 +903,7 @@ fn act(turn: &Turn<'_>, directives: &[Directive], candidates: &[Candidate<'_>]) 
     let plan = match route::plan(ir, turn.index, turn.root, &turn.paths.tracks(), Level::E2, a.terms.as_ref(), &table) {
         Ok(p) => p,
         Err(e) => {
+            out.notice = Some(lapse_notice(a, vec![format!("it cannot be planned now: {}", crate::reason_text(&e))]));
             not_run(&mut out, "route", &e);
             return out;
         }
@@ -882,6 +915,12 @@ fn act(turn: &Turn<'_>, directives: &[Directive], candidates: &[Candidate<'_>]) 
             not_run(&mut out, "bind", "its command could not be bound from the selected action");
             return out;
         }
+    }
+    // A grant that no longer matches what would run is refused below (`run::check`); the person
+    // is told which field changed and how to approve it again, not only the spool.
+    let key = approvals::ApprovalKey::for_request(&req, turn.repo_key);
+    if store.find(&key).is_none() {
+        out.notice = Some(lapse_notice(a, a.key.diff(&key).into_iter().map(|c| c.field.to_string()).collect()));
     }
     let Ok(pol) = policy::load(home) else {
         not_run(&mut out, "policy", "the policy file is unreadable");
@@ -1063,6 +1102,12 @@ fn act(turn: &Turn<'_>, directives: &[Directive], candidates: &[Candidate<'_>]) 
     out
 }
 
+/// The person's line for a grant `a` whose key no longer matches (`changed`: its fields, or why).
+fn lapse_notice(a: &Approval, changed: Vec<String>) -> String {
+    route::Lapse { route: a.route.clone(), level: a.key.level, changed, reapprove: route::reapprove_command(a) }
+        .notice()
+}
+
 /// A withheld attempt's spool record: the stage that refused it and why (never output text), so
 /// `adage-exec doctor` and `adage review` can say what went wrong ([`crate::last_withheld`]).
 fn withheld(route: &str, stage: &str, reason: &str) -> Value {
@@ -1092,7 +1137,11 @@ fn payload(block: &str) -> Option<&str> {
 /// `Ok(None)`: nothing approved here (E0, nothing recorded). `Ok(Some)`: every approved directive
 /// delivered with its block. `Err`: something failed; E0 is delivered and the records say why.
 #[allow(clippy::type_complexity)]
-fn prefetch(turn: &Turn<'_>, directives: &[Directive]) -> Result<Option<(Vec<String>, Vec<Value>)>, Vec<Value>> {
+fn prefetch(
+    turn: &Turn<'_>,
+    directives: &[Directive],
+    notice: &mut Option<String>,
+) -> Result<Option<(Vec<String>, Vec<Value>)>, Vec<Value>> {
     let home = &turn.paths.root;
     let store = match Store::load(&approvals::path(home)) {
         Ok(s) => s,
@@ -1140,7 +1189,10 @@ fn prefetch(turn: &Turn<'_>, directives: &[Directive]) -> Result<Option<(Vec<Str
         };
         let plan = match route::plan(ir, turn.index, turn.root, &tracks, Level::E1, a.terms.as_ref(), &table) {
             Ok(p) => p,
-            Err(e) => return Err(fail(records, "route", &e)),
+            Err(e) => {
+                *notice = Some(lapse_notice(a, vec![format!("it cannot be planned now: {}", crate::reason_text(&e))]));
+                return Err(fail(records, "route", &e));
+            }
         };
         let mut req = plan.request;
         match route::bound_inputs(&req.argv, &d.text) {
@@ -1151,6 +1203,12 @@ fn prefetch(turn: &Turn<'_>, directives: &[Directive]) -> Result<Option<(Vec<Str
         }
         if let Err(reason) = route::unique_prompt_inputs(&ir.route, turn.ev, &req.inputs) {
             return Err(fail(records, "bind", &reason));
+        }
+        // As for an action: a grant that no longer matches is refused below, and said.
+        // (An automatic approval is granted again while the route stays in its class.)
+        let key = approvals::ApprovalKey::for_request(&req, turn.repo_key);
+        if !a.auto && store.find(&key).is_none() {
+            *notice = Some(lapse_notice(a, a.key.diff(&key).into_iter().map(|c| c.field.to_string()).collect()));
         }
         // All E1 runs of one event together stay within E1's longest wall timeout.
         let left = limits::E1_MAX_WALL_MS.saturating_sub(started.elapsed().as_millis() as u64);
@@ -2207,6 +2265,64 @@ mod prediction_tests {
         };
         assert!(call(&f.root).is_some(), "at the root it is covered");
         assert!(call(&f.root.join("tests")).is_none(), "from a subdirectory the same words name other files");
+    }
+
+    /// dev-v8b, end to end: bytecode an ordinary Python run writes into the runtime's
+    /// `__pycache__` (or the environment's) leaves the grant, the session contract and the receipt
+    /// promise in force; a bare injected `.pyc` is code, and lapses the grant, which the person is
+    /// told about: which field changed and the command that approves it again.
+    #[cfg(unix)]
+    #[test]
+    fn pycache_writes_keep_the_grant_and_a_real_change_is_told_to_the_person() {
+        let f = pytest_fixture();
+        let top = f.root.parent().unwrap().to_path_buf();
+        assert!(
+            Store::load(&approvals::path(&f.paths.root)).unwrap().approvals[0].terms.is_some(),
+            "approved with its terms"
+        );
+        let texts = || PREFETCH.session_texts("fixture", &f.root, &f.index, &f.paths);
+        let before = texts();
+        assert!(before.context.is_some() && before.notice.is_none(), "{before:?}");
+        for cache in [
+            "runtime/lib/python3.12/__pycache__/os.cpython-312.pyc",
+            "runtime/lib/python3.12/encodings/__pycache__/__init__.cpython-312.pyc",
+            "fixture/.venv/lib/python3.12/site-packages/__pycache__/x.cpython-312.pyc",
+        ] {
+            let file = top.join(cache);
+            std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+            std::fs::write(file, b"bytecode from an ordinary run").unwrap();
+        }
+        assert_eq!(texts(), before, "bytecode caches change nothing");
+        std::fs::write(top.join("runtime/lib/python3.12/injected.pyc"), b"unapproved bytecode").unwrap();
+        let after = texts();
+        assert!(after.context.is_none(), "a lapsed grant promises nothing to the agent");
+        let notice = after.notice.expect("the person is told");
+        assert!(notice.contains("E2 approval for fixture/context/predict-check no longer matches"), "{notice}");
+        assert!(notice.contains("(route_exec_digest)"), "{notice}");
+        assert!(
+            notice.contains("adage review delegate fixture/context predict-check --level e2 --effect verify --cache '.pytest_cache/**'"),
+            "{notice}"
+        );
+    }
+
+    /// A lapsed grant at the moment its action would run: withheld as before (no agent advice),
+    /// and now one line for the person with the field that changed and how to approve it again.
+    #[test]
+    fn a_lapsed_grant_is_told_to_the_person_when_its_action_is_withheld() {
+        let f = Fixture::new();
+        f.approve();
+        let (event, dirs) = f.selected("src/feature.rs");
+        std::fs::write(f.root.join("tools/check.sh"), "#!/bin/sh\ntest -f src/other.rs\n").unwrap();
+        let d = PREFETCH.deliver(&f.turn(&event), &dirs);
+        assert!(d.texts.unwrap().iter().all(String::is_empty), "no fallback advice");
+        assert_eq!(d.spool.unwrap()[0]["withheld"], "approval");
+        let notice = d.notice.expect("the person is told");
+        assert!(notice.contains("fixture/context/predict-check") && notice.contains("route_exec_digest"), "{notice}");
+        assert!(
+            notice.contains("`adage review delegate fixture/context predict-check --level e2 --effect verify`"),
+            "{notice}"
+        );
+        assert!(crate::journal::list(&f.paths.root).unwrap().is_empty(), "nothing ran");
     }
 
     /// Review F6: the receipt check's repository hash stops at its deadline instead of holding up
