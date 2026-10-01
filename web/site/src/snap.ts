@@ -2,10 +2,15 @@
 // scripts), but on a desktop Chrome treats a short wheel turn as "not far enough" and pulls the
 // page back to the section it left. So on wide screens the snapping is directional instead: when
 // scrolling stops between two sections, the page finishes the move in the direction it was going.
-// A section taller than the screen scrolls freely until its end, like any page.
+// A section taller than the screen scrolls freely until its end, like any page. Only a scroll
+// the visitor makes by hand (wheel, touch, keys, the scrollbar) snaps; a scroll a link, a script
+// or the browser's find-in-page makes lands where it was sent.
 
 const wide = matchMedia("(min-width: 861px)");
 const reduced = matchMedia("(prefers-reduced-motion: reduce)");
+const SCROLL_KEYS = new Set(["PageDown", "PageUp", " ", "ArrowDown", "ArrowUp", "Home", "End"]);
+// How long after the visitor's last scrolling input a scroll still counts as theirs.
+const BY_HAND_MS = 1200;
 
 export function initSnap() {
   const parts = [...document.querySelectorAll<HTMLElement>("main > section, body > .foot")];
@@ -15,7 +20,7 @@ export function initSnap() {
   wide.addEventListener("change", sync);
   sync();
 
-  let rest = scrollY, timer = 0, gliding = false;
+  let rest = scrollY, timer = 0, gliding = false, byHand = -Infinity;
 
   /** Section tops on the page; the first is the page's own top, above any header. */
   const tops = () => parts.map((p, i) => (i === 0 ? 0 : Math.round(p.getBoundingClientRect().top + scrollY)));
@@ -25,7 +30,7 @@ export function initSnap() {
     const y = scrollY, vh = innerHeight, dir = Math.sign(y - rest);
     const max = root.scrollHeight - vh;
     rest = y;
-    if (!wide.matches || gliding || !dir) { gliding = false; return; }
+    if (!wide.matches || gliding || !dir || performance.now() - byHand > BY_HAND_MS) { gliding = false; return; }
     const t = tops();
     // The section the top of the screen is in, and where the next one starts.
     let i = t.length - 1;
@@ -54,9 +59,12 @@ export function initSnap() {
     clearTimeout(timer);
     timer = window.setTimeout(settle, 250);
   }, { passive: true });
-  // A wheel or key while the page glides takes the page back from it.
-  const take = () => { gliding = false; };
-  addEventListener("wheel", take, { passive: true });
-  addEventListener("keydown", take);
-  addEventListener("touchstart", take, { passive: true });
+  // The visitor's own scrolling: it is what snaps, and it takes the page back from a glide. Heard
+  // while capturing, because the 3D stage keeps a plain wheel from bubbling (it scrolls the page).
+  const hand = () => { byHand = performance.now(); gliding = false; };
+  addEventListener("wheel", hand, { passive: true, capture: true });
+  addEventListener("touchmove", hand, { passive: true, capture: true });
+  addEventListener("keydown", (e) => { if (SCROLL_KEYS.has(e.key)) hand(); }, { capture: true });
+  // A press on the page's own scrollbar lands on the root element.
+  addEventListener("pointerdown", (e) => { if (e.target === root) hand(); }, { capture: true });
 }

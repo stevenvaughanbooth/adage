@@ -4,13 +4,17 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Graph } from "../api/types";
+import { TermText, useTermTip } from "../components/Terms";
 import { Segmented, cx } from "../components/ui";
 import { CHAPTERS, chapterIndex } from "../how/chapters";
+import { chipMark, chipText } from "../how/chip";
+import { segments } from "../how/glossary";
 import { Stage, readPalette, webglAvailable } from "../how/engine";
 import type { Built } from "../how/types";
 import { useUrl } from "../state/url";
 
 const STEP_MS = 5200;
+const MORE_KEY = "adage.how.detail";
 
 export default function HowItWorks({ graph }: { graph: Graph | null }) {
   const [url, setUrl] = useUrl();
@@ -28,6 +32,22 @@ export default function HowItWorks({ graph }: { graph: Graph | null }) {
   const repoAvailable = chapter.usesRepo && Boolean(graph?.routes.length);
   const [useRepo, setUseRepo] = useState(true);
   const repo = repoAvailable && useRepo;
+  // "More detail" stays open from step to step once it is opened.
+  const [more, setMoreState] = useState(() => {
+    try {
+      return localStorage.getItem(MORE_KEY) === "open";
+    } catch {
+      return false;
+    }
+  });
+  const setMore = useCallback((m: boolean) => {
+    setMoreState(m);
+    try {
+      localStorage.setItem(MORE_KEY, m ? "open" : "closed");
+    } catch {
+      /* not remembered */
+    }
+  }, []);
 
   // The stage lives as long as the view.
   useEffect(() => {
@@ -86,7 +106,7 @@ export default function HowItWorks({ graph }: { graph: Graph | null }) {
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.clearRect(0, 0, w, h);
     cur.figure(g, w, h, stage?.palette() ?? readPalette());
-  }, [cur, stage, themeTick]);
+  }, [cur, stage, themeTick, more]);
 
   const go = useCallback(
     (ch: number, s: number, push = false) => {
@@ -159,7 +179,7 @@ export default function HowItWorks({ graph }: { graph: Graph | null }) {
           >
             {CHAPTERS.map((c, i) => (
               <option key={c.id} value={c.id}>
-                {String(i + 1).padStart(2, "0")} {c.title} · {c.status}
+                {String(i + 1).padStart(2, "0")} {c.title}
               </option>
             ))}
           </select>
@@ -178,7 +198,7 @@ export default function HowItWorks({ graph }: { graph: Graph | null }) {
               >
                 <span className="pt-0.5 font-mono text-xs text-ink-3 tabular-nums">{String(i + 1).padStart(2, "0")}</span>
                 <span className="text-sm font-semibold">{c.title}</span>
-                <span className={cx("col-start-2 font-mono text-[11px]", c.kind === "flag" ? "text-prime" : "text-ink-3")}>{c.status}</span>
+                <span className={cx("col-start-2 font-mono text-[11px]", c.kind === "flag" ? "text-prime" : "text-ink-3")}>{c.kind === "flag" ? c.status : c.technical}</span>
               </button>
             </li>
           ))}
@@ -239,7 +259,7 @@ export default function HowItWorks({ graph }: { graph: Graph | null }) {
           </div>
 
           <div ref={captionBox} className="sm:absolute sm:top-4 sm:left-4 sm:w-[min(420px,calc(100%-32px))]">
-            <Caption chapter={chIndex} step={step} total={steps.length} built={built} figRef={fig} />
+            <Caption chapter={chIndex} step={step} total={steps.length} built={built} figRef={fig} more={more} setMore={setMore} />
           </div>
         </div>
 
@@ -275,15 +295,25 @@ function Caption({
   total,
   built,
   figRef,
+  more,
+  setMore,
 }: {
   chapter: number;
   step: number;
   total: number;
   built: Built | null;
   figRef: React.RefObject<HTMLCanvasElement | null>;
+  more: boolean;
+  setMore: (m: boolean) => void;
 }) {
   const c = CHAPTERS[chapter]!;
   const s = built?.steps[step];
+  const { setTip, node } = useTermTip();
+  // The first mention of each hard word gets its definition, in the plain words or the detail.
+  const [plain, body] = useMemo(() => {
+    const seen = new Set<string>();
+    return [segments(s?.plain ?? "", seen), segments(s?.body ?? "", seen)];
+  }, [s]);
   return (
     <div
       aria-live="polite"
@@ -299,16 +329,40 @@ function Caption({
         <span className={c.kind === "flag" ? "text-prime" : undefined}>· {built?.source ?? ""}</span>
       </div>
       <h2 className="display m-0 text-[22px] leading-[1.15] font-semibold text-balance">{s?.title}</h2>
-      <p className="m-0 text-sm text-ink-2">{s?.body}</p>
-      {s?.figure && <canvas ref={figRef} className="block h-24 w-full" role="img" aria-label={`Figure: ${s.title}`} />}
-      <div className="flex flex-wrap gap-1.5">
-        {s?.chips.map((chip) => (
-          <span key={chip.text} className="rounded-md border border-line bg-raised px-1.5 py-0.5 font-mono text-[11.5px] text-ink-1 tabular-nums">
-            {chip.ok && <span className="text-fire">✓ </span>}
-            {chip.text}
-          </span>
-        ))}
+      <p className="m-0 text-[15px] leading-normal text-ink-1">
+        <TermText parts={plain} onTip={setTip} />
+      </p>
+      {more && (
+        <div id="how-more" className="grid gap-2 border-t border-dashed border-line-strong pt-2">
+          <p className="m-0 text-sm text-ink-2">
+            <TermText parts={body} onTip={setTip} />
+          </p>
+          {s?.figure && <canvas ref={figRef} className="block h-24 w-full" role="img" aria-label={`Figure: ${s.title}`} />}
+          <div className="flex flex-wrap gap-1.5">
+            {s?.chips.map((chip) => (
+              <span key={chip.text} className="rounded-md border border-line bg-raised px-1.5 py-0.5 font-mono text-[11.5px] text-ink-1 tabular-nums">
+                {chipMark(chip) && <span className={chip.ok ? "text-fire" : "text-inhibit"}>{chipMark(chip)} </span>}
+                {chipText(chip)}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+      <div>
+        <button
+          type="button"
+          aria-expanded={more}
+          aria-controls="how-more"
+          onClick={() => setMore(!more)}
+          className="inline-flex items-center gap-1.5 rounded-full border border-line-strong bg-raised px-3 py-1 text-[13px] font-semibold text-ink-1 hover:border-accent"
+        >
+          {more ? "Less detail" : "More detail"}
+          <svg viewBox="0 0 12 12" aria-hidden="true" className={cx("size-3 fill-none stroke-current stroke-[1.6]", more && "rotate-180")}>
+            <path d="M2.5 4.5 6 8l3.5-3.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
       </div>
+      {node}
     </div>
   );
 }

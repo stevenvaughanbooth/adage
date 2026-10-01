@@ -367,22 +367,31 @@ function buildSample(stage: Stage): Built {
   const ins = SAMPLE.filter((r) => r.source === "instinct").length;
   const text: Omit<Step, "state">[] = [
     {
-      title: "Reflexes live in tracks",
+      title: "One folder per repository",
+      plain: "Everything Adage learns in a repository is kept in one folder, with a note on why each reflex exists. Only you can read it.",
+      math: "seal",
       body: `Everything Adage conditions in a repository goes into one track directory, <repo>/learned: a track.toml, one routes/<id>.yaml per reflex, and a .why.json beside them that says why each exists (read by people, never sent to the agent). Instincts get their own track. Tracks and the index are readable by their owner only. This sample repository has ${fh} reflexes learned here, ${im} from an imported pack, and ${ins} instincts.`,
       chips: [{ text: "tracks/<repo>/learned/track.toml" }, { text: "routes/<id>.yaml · .why.json" }, { text: "mode 0600" }, { text: `${SAMPLE.length} sample reflexes` }],
     },
     {
       title: "Versions say what changed",
+      plain: "Each folder has a version number that shows whether only the evidence moved, a reflex was added, or one was changed or removed.",
+      math: "seal",
       body: "A new track starts at 0.1.0. When only the evidence moves, the patch number goes up. An added reflex bumps the minor number; a changed or removed reflex bumps the major number, so anything that reads the track can tell.",
       chips: [{ text: "new: 0.1.0" }, { text: "evidence only: patch" }, { text: "added: minor" }, { text: "changed or removed: major" }],
     },
     {
-      title: "Imported packs arrive forming",
+      title: "Teammates' reflexes start humble",
+      plain: "Teammates can share what they learned as a signed pack. Their reflexes only suggest until your own sessions confirm them.",
+      math: "seal",
       body: `A pack is a signed, self-contained track from a teammate: its reflexes, any scripts named by their own hash, its evidence and a closure listing. Imported reflexes start forming and never fire until your own traces confirm them.`,
       chips: [{ text: "adage-pack/1" }, { text: "sshsig · namespace adage-pack" }, { text: "imports never fire" }, { text: `material change: lower bound moves ≥ ${f2(MATERIAL)}` }],
     },
     {
       title: "Instincts ship with Adage",
+      plain: "Instincts work from day one, set up from files your repository already has, like a Makefile. They only ever suggest, and one that keeps being wrong switches itself off.",
+      math: "seal",
+      key: true,
       body: `Instincts are bound on day one from files the repository declares, like its Makefile, package.json, CI and lockfiles. They are delivered as prime at most, only react to events, and never block the agent from stopping. One, U11, points a Python test run at the project's verified .venv before it runs. An instinct that keeps misfiring extinguishes itself.`,
       chips: [
         { text: `${ENABLED} of ${CATALOGUE} enabled` },
@@ -392,19 +401,25 @@ function buildSample(stage: Stage): Built {
       ],
     },
     {
-      title: "Duplicates collide",
+      title: "Duplicates are merged",
+      plain: "Everything is merged into one list. When two sources learned the same thing, your own evidence wins over a teammate's, and both win over an instinct.",
+      math: "seal",
       body: `All installed tracks compile into one list. The same behaviour gets the same id wherever it was found, so ids collide: ${c.dropped.length} copies are dropped. Your own evidence beats a teammate's pack, and both beat an instinct. ${c.out.length} reflexes remain.`,
       chips: [{ text: "key: (repo, id)" }, { text: "first-hand > imported > instinct" }, ...c.dropped.map((d) => ({ text: `${d.lost.key} → ${d.to.key}` }))],
     },
     {
-      title: "Inhibit beats fire",
+      title: "Warnings beat recommendations",
+      plain: "When a warning and a recommendation disagree, the warning wins: if npm test fails here, nothing will recommend it.",
+      math: "seal",
       body: lockedR
         ? `The dead end says npm test fails here; the imported reflex says to run it. Inhibit wins, whatever the source. Because the dead end speaks after a failure, not at the first prompt, the other reflex stays in the index but is locked: it is never delivered beside or after the warning.`
         : "No reflex here runs a command a dead end avoids.",
       chips: [{ text: "suppressed if the inhibit speaks at session start" }, { text: "otherwise locked at runtime" }],
     },
     {
-      title: "One fire per decision point",
+      title: "One strong voice at a time",
+      plain: "Only one reflex may insist at any moment. When two would, the one learned here with more sessions behind it keeps the strong voice, and the other becomes a suggestion.",
+      math: "seal",
       body: demotedR
         ? `Two first-hand reflexes fire after an edit to overlapping paths, with different commands. One keeps fire: learned beats imported, then the one with more supporting traces (${demotedR.winner.support} against ${demotedR.loser.support}). The other is compiled as prime.`
         : "No two fires share a decision point here.",
@@ -417,7 +432,10 @@ function buildSample(stage: Stage): Built {
         : [{ text: "instincts last" }],
     },
     {
-      title: "The index seals",
+      title: "Sealed into one file",
+      plain: "The final list is sealed into one file with a fingerprint. Any change gives a new fingerprint, and this file is all Adage reads while the agent works.",
+      math: "seal",
+      key: true,
       body: `The ${c.out.length} survivors are serialised in order and hashed. The first ${GEN_HEX} hex digits of the SHA-256 are the generation, ${c.generation}. Any change to any reflex gives a new generation, and the hook reads only this one file.`,
       chips: [{ text: `generation = sha256[..${GEN_HEX}]` }, { text: "trigger words derived, not hashed" }, { text: "written atomically" }],
     },
@@ -512,22 +530,32 @@ function buildRepo(stage: Stage, routes: ApiRoute[], generation: string): Built 
 
   const text: Omit<Step, "state">[] = [
     {
-      title: "Your reflexes, in their tracks",
+      title: "Your reflexes, by source",
+      plain: "Your repository's reflexes, grouped by where they came from.",
+      math: "seal",
+      key: true,
       body: `This repository's map has ${routes.length} reflexes in ${order.length} track${order.length === 1 ? "" : "s"}${hidden ? `; the ${shown.length} largest sources are shown` : ""}. Each track is a directory with a track.toml and one file per reflex.`,
       chips: [{ text: `${count("first-hand")} first-hand` }, { text: `${count("imported")} imported` }, { text: `${count("instinct")} instinct` }],
     },
     {
       title: "Each has a strength",
+      plain: "Colour shows each reflex's strength: tell, suggest or warn.",
+      math: "seal",
       body: `Colour is strength as compiled: fire, prime or inhibit. Of the reflexes in your index, ${strengths.fire} fire, ${strengths.prime} prime and ${strengths.inhibit} inhibit.`,
       chips: [{ text: `${strengths.fire} fire` }, { text: `${strengths.prime} prime` }, { text: `${strengths.inhibit} inhibit` }],
     },
     {
-      title: "What the index serves",
+      title: "What is active",
+      plain: "Not every reflex is active: some wait for your approval, some were switched off, and some lost to a better copy or a warning.",
+      math: "seal",
       body: `${nIn} of ${routes.length} are in the index. A reflex is left out when it is nascent or extinguished, when a first-hand copy of it exists, or when the interlock suppressed it.`,
       chips: [{ text: `${nIn} in the index` }, { text: `${routes.length - nIn} left out` }, { text: "first-hand > imported > instinct" }],
     },
     {
-      title: "Your index is sealed",
+      title: "Your sealed file",
+      plain: "Your active reflexes, sealed into the one file Adage reads while your agent works.",
+      math: "seal",
+      key: true,
       body: `adage compiled these ${nIn} reflexes into index.json. Its generation, ${generation || "not yet written"}, is your real one, read from the map: the page does not recompute it, because adage serialises the full routes, which the map does not carry.`,
       chips: [{ text: `generation = sha256[..${GEN_HEX}]` }, { text: "trigger words not hashed" }],
     },
@@ -545,10 +573,11 @@ function buildRepo(stage: Stage, routes: ApiRoute[], generation: string): Built 
 
 export const seal: Chapter = {
   id: "index",
-  title: "Seal the index",
+  title: "Package what was learned",
+  technical: "Seal the index",
   status: "Built",
   kind: "built",
-  summary: "Every installed track compiles into one index. Duplicates and conflicts resolve by rule, and the result is identified by a hash of its contents.",
+  summary: "Reflexes from your work, your teammates and Adage's built-in instincts are merged, conflicts are settled, and the result is sealed into one file.",
   source: "crates/adage-tracks/src/{index,interlock}.rs · adage-instincts · adage-pack",
   usesRepo: true,
   build(stage: Stage, ctx: Context): Built {
