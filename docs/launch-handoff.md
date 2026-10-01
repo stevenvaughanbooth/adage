@@ -95,7 +95,7 @@ commands below from its `evals/reflex-proof/harness`, or refreeze new roots from
 Blocked on three things, none of which an agent may bypass:
 
 1. **Paid runs need a normal terminal.** `probe.execute` refuses nested Claude sessions.
-2. **Grants need the person.** `approve-canary.sh` (sha256 `SHA_V7`) is prepared; run it only
+2. **Grants need the person.** `approve-canary.sh` (sha256 `24fc4857…`) is prepared; run it only
    after reading it.
 3. **Learning needs the learner fix.** About 22 learning-quality tests fail on main since PR #14.
    Cohort training replay, checkpoints and frozen learned homes wait for that fix and a rebuild.

@@ -1,4 +1,4 @@
-# Launch canary: canary-v5 ran; canary-v6 frozen, not dispatched
+# Launch canary: canary-v5 ran; canary-v7 frozen, not dispatched
 
 All of this is development-split work: no held-out tasks are involved, and none of it is evidence
 for the hypothesis.
@@ -6,15 +6,15 @@ for the hypothesis.
 - **canary-v5** (`cohorts/launch-gate-v4/canary-v5`, protocol `launch-canary-5`) ran all 12
   sessions for $2.6962327. Delivery and safety passed; both positives were unrealized; there were
   0 eliminations. See `canary-v5/FINDINGS.md`.
-- **canary-v6** (`cohorts/launch-gate-v4/canary-v6`, protocol `launch-canary-6`) is frozen at
-  commit `11eb615`:
+- **canary-v7** (`cohorts/launch-gate-v4/canary-v7`, protocol `launch-canary-7`) is frozen at
+  commit `b804a66`:
   - binaries: `adage` `2b04bbf3…`, `adage-exec` `3895b20f…`, which include the receipt note;
   - 12 sessions on `mm-curve--finite`: six positives, two later-edits, and one each of failed,
     config-change, broader and rerun;
-  - every prompt supplies the same validated test block (`canary-v6-test-block-check.*`);
+  - every prompt supplies the same validated test block (`canary-test-block-check.*`);
   - `isolation-audit.json` passed;
-  - `approve-canary.sh` sha256 `8878e159…` is person-run only.
-- The cohort `cohorts/launch-gate-v4` native review passed. It remains valid for canary-v6: the
+  - `approve-canary.sh` sha256 `24fc4857…` is person-run only.
+- The cohort `cohorts/launch-gate-v4` native review passed. It remains valid for canary-v7: the
   runner, probe and helper sources are unchanged. Native files: `native-confinement-*.json`,
   `native_canary.py`.
 
@@ -34,3 +34,5 @@ Superseded or aborted attempts, preserved:
   tool result (`native-canary-tool-result.json`) is a test fixture. `dry-run-review.txt` shows the
   full review run offline under the fixed code, without writing: the content verdict passes, and
   only the old program's own flag and exit status fail.
+- `canary-v6-superseded/`: the same design, frozen before the protocol JSON's revision-6 edits, so
+  its source hashes no longer verify. It was never prepared and nothing was spent (`ABORTED.jsonl`).
