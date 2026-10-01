@@ -1227,20 +1227,28 @@ mod execution_equivalence_tests {
             if mode == "prior-shell" {
                 calls.push(("Bash", json!({"command":"cd sub"})));
             }
+            if mode == "lookup" {
+                calls.push(("Bash", json!({"command":"git log --oneline -3"})));
+            }
             calls.push(("Write", json!({"file_path":format!("{cwd}/tests/test_a.py"), "content":"pass"})));
-            if mode == "changelog" {
+            if mode == "changelog" || mode == "most-edits" {
                 calls.push(("Write", json!({"file_path":format!("{cwd}/CHANGELOG.rst"), "content":"- Add a."})));
             }
             if mode == "rewrite" {
                 calls.push(("Write", json!({"file_path":format!("{cwd}/tests/test_a.py"), "content":"assert True"})));
             }
             calls.push(("Bash", json!({"command":command})));
-            if mode.starts_with("trailing-action") || mode == "changelog" || mode == "rewrite" {
+            let closing = ["changelog", "rewrite", "lookup", "every-edit", "most-edits"].contains(&mode);
+            if mode.starts_with("trailing-action") || closing {
                 calls.push(("Bash", json!({"command":".venv/bin/python -c \"print(1)\""})));
             }
-            if mode == "changelog" || mode == "rewrite" {
+            if closing {
                 // Not every edit is followed by the check: the context is what predicts it.
                 calls.push(("Write", json!({"file_path":format!("{cwd}/docs/notes.md"), "content":"done"})));
+            }
+            if mode == "every-edit" || (mode == "most-edits" && i > 0) {
+                // Unless every edit, or nearly every one, is.
+                calls.push(("Bash", json!({"command":command})));
             }
             if mode == "same-turn-shell" {
                 calls.push(("Bash", json!({"command":"cd sub"})));
@@ -1325,6 +1333,47 @@ mod execution_equivalence_tests {
         // cross; as a context it is the same crossing, so nothing is certified.
         let command = ".venv/bin/python -m pytest tests/test_a.py -q";
         let index = routine_cwd(&[command; 5], "rewrite");
+        assert!(
+            !index.routes.iter().any(|r| r.route.evidence.execution.is_some()),
+            "{:?}",
+            index.routes.iter().map(|r| (&r.route.trigger, &r.route.evidence.execution)).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn a_context_holding_a_command_is_not_admitted_for_execution_alone() {
+        // A lookup before the edit: the check is certified after the edit, never after the lookup
+        // and the edit (after another command, the check is a step of a sequence).
+        let command = ".venv/bin/python -m pytest tests/test_a.py -q";
+        let index = routine_cwd(&[command; 5], "lookup");
+        let certified: Vec<_> = index.routes.iter().filter(|r| r.route.evidence.execution.is_some()).collect();
+        assert!(!certified.is_empty(), "the check after the edit is still certified");
+        for r in certified {
+            let command = |i: &CtxItem| matches!(i, CtxItem::Act { .. });
+            let holds = matches!(&r.route.trigger, Trigger::Context { items, .. } if items.iter().any(command));
+            assert!(!holds, "{:?}", r.route.trigger);
+        }
+    }
+
+    #[test]
+    fn a_check_after_every_edit_is_not_admitted_for_execution_alone() {
+        // With every edit followed by the check (one that names no file), no edit predicts it
+        // better than another: the trigger would be the anchor type relabelled, which advisory
+        // contrast refuses too.
+        let index = routine_cwd(&["make test"; 5], "every-edit");
+        assert!(
+            !index.routes.iter().any(|r| r.route.evidence.execution.is_some()),
+            "{:?}",
+            index.routes.iter().map(|r| (&r.route.trigger, &r.route.evidence.execution)).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn a_prefix_closure_absorbed_still_needs_the_advisory_contrast() {
+        // The tests-then-changelog routine, but four of five later edits are followed by the
+        // check too (contrast 0.1), and closure absorbs the check into the later action: one
+        // bypass at a time, so nothing is certified.
+        let index = routine_cwd(&[".venv/bin/python -m pytest tests/test_a.py -q"; 5], "most-edits");
         assert!(
             !index.routes.iter().any(|r| r.route.evidence.execution.is_some()),
             "{:?}",
