@@ -30,7 +30,8 @@ are safe, repository-relative, and exist.
 ## Tracks, packs and execution
 
 Reflexes live in **tracks** on disk, and travel as signed, closed **packs** you can review, commit
-and share. By default, reflexes advise the agent and supported pre-call instincts can rewrite its
+and share. Instincts ship in the same format: Adage's base instincts are packs of the marketplace in
+its own repository, built into the binary ([marketplace.md](marketplace.md)). By default, reflexes advise the agent and supported pre-call instincts can rewrite its
 tool arguments; the harness executes those calls under its own permissions. The `adage` binary starts no process on the
 agent's behalf (it starts only itself, to condition in the background, and `adage-train` when you
 ask it to train; a test pins this). Execution is a separate, opt-in binary (`adage-exec`, turned
@@ -117,6 +118,9 @@ adage review           # evidence, advice previews, and routine candidates await
 Then, when you want to:
 
 ```bash
+adage marketplace                                          # where packs come from: the adage marketplace, built in
+adage packs                                                # base instincts and added packs: which apply here
+adage packs off adage/lockfiles                            # stop an instinct pack, here and everywhere
 adage share <track> --out <dir> --key ~/.ssh/id_ed25519   # a signed pack for your team
 adage add <dir> --trust                                    # a teammate's pack, bound here at forming
 adage delegate on                                          # let reflexes you approve act (adage-exec)
@@ -280,6 +284,8 @@ adage config set learn.min_interval_secs 300  # condition each repository at mos
 | `learn.cards` | `true` | Procedure cards for recurring tasks (embedded with the installed or bundled model) ([docs/training.md](training.md#recurring-tasks-procedure-cards)) |
 | `learn.card_threshold` | `0.811` | A prompt's best similarity to a family's prompts that delivers its card (strict: it recognises phrasing close to earlier prompts, not paraphrases) |
 | `instincts.enabled` | `true` | Bind Adage's instincts from each repository's files |
+| `instincts.packs` | `auto` | The instinct packs to bind: `auto` (every installed one) or pack names |
+| `instincts.disabled` | `""` | Packs (`adage/lockfiles`) or instinct ids (`U3`) never to bind; `adage packs off` writes it |
 | `ui.notices` | `daily` | One-line notices at session start (Claude Code), at most daily and only when new; `off` silences them |
 | `runtime.control` | `0.1` | Control share (`ADAGE_CONTROL` wins) |
 
@@ -306,7 +312,8 @@ digest (`sshsig`, namespace `adage-pack`; ssh-agent first, else the key file, wh
 for at the terminal). `adage add <dir>` verifies the
 signature against `$ADAGE_HOME/trusted-signers` or the repository's `.adage/trusted-signers` (approved
 once with `--trust` and pinned by hash in `$ADAGE_HOME/trust.json`) and installs the reflexes
-forming, never fire, under `tracks/@imported/` where `adage condition` never writes; if you later condition
+forming, never fire, under `tracks/@imported/` where `adage condition` never writes (beside the base
+instinct packs, which the marketplace built into Adage pins, so they need no signature); if you later condition
 the same reflex yourself, your first-hand reflex wins. Adding a newer version keeps your own review
 decisions for every reflex that survives. An unknown signer needs `--trust`. Both commands refuse to run inside an agent
 session (`CLAUDECODE`) or without a terminal; `ADAGE_ALLOW_NONINTERACTIVE=1` lifts only the terminal check.

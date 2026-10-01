@@ -170,6 +170,7 @@ dependencies = [
  "adage-graph",
  "adage-instincts",
  "adage-intent",
+ "adage-pack",
  "adage-runtime",
  "adage-sim",
  "adage-store",

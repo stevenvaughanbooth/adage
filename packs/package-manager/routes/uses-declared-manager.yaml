@@ -1,0 +1,16 @@
+id: uses-declared-manager
+summary: After npm installs in a repository that declares another package manager, say which one
+shape: advise
+detector: N1
+trigger:
+  on: after_command
+  command: '{runner}'
+steps:
+- id: advise
+  advise:
+    template: package-manager
+    slots:
+      lockfile: '{lockfile}'
+      manager: '{manager}'
+  effect: observe
+strength: prime

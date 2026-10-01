@@ -1,0 +1,16 @@
+id: name-project-interpreter
+summary: After a Python run fails to import the project, name the project's interpreter
+shape: advise
+detector: U11
+trigger:
+  on: after_failure
+  command: '{runner}'
+  signature: '{signature}'
+steps:
+- id: advise
+  advise:
+    template: project-python
+    slots:
+      interpreter: '{interpreter}'
+  effect: observe
+strength: prime

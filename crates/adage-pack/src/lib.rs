@@ -22,10 +22,13 @@
 
 pub mod attest;
 pub mod bind;
+pub mod builtin;
 pub mod closure;
 pub mod convert;
 pub mod digest;
+pub mod install;
 pub mod instincts;
+pub mod marketplace;
 pub mod model;
 pub mod procedure;
 pub mod types;
@@ -77,6 +80,20 @@ impl Pack {
         if found != derived {
             bail!("{CLOSURE} does not match the closure re-derived from the pack:\n{}", diff(&found, &derived));
         }
+        Ok(pack)
+    }
+
+    /// Seal a pack directory as its author wrote it: read it without its `CLOSURE` (absent or
+    /// stale), validate it, and write it back in canonical form with the closure derived from it.
+    /// A `pack.sig` is removed: it no longer matches. For packs written by hand (`adage-pack
+    /// seal`), such as the marketplace's in `packs/`.
+    pub fn seal(dir: &Path) -> Result<Pack> {
+        let mut files = validate::read_dir_files(dir)?;
+        files.remove(CLOSURE);
+        files.remove(SIG);
+        let pack = Pack::from_parsed(validate::parse(&files)?)
+            .with_context(|| format!("{} is not a valid pack", dir.display()))?;
+        pack.write(dir)?;
         Ok(pack)
     }
 

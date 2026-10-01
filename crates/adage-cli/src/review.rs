@@ -1012,8 +1012,11 @@ fn apply(verb: &str, spec: &str, route_id: &str, by: Option<String>, paths: &Pat
         if let adage_tracks::Origin::Instinct { pack, .. } = after.origin() {
             if !pack.is_empty() {
                 reviews.packs.insert(pack.clone(), review::PackApproval { on: review::today(), by: by.clone() });
-                for other in
-                    track.routes.iter_mut().filter(|x| x.state == RouteState::Nascent && x.is_instinct() && !quiet(x))
+                let same_pack = |x: &adage_tracks::Route| matches!(x.origin(), adage_tracks::Origin::Instinct { pack: p, .. } if p == pack);
+                for other in track
+                    .routes
+                    .iter_mut()
+                    .filter(|x| x.state == RouteState::Nascent && x.is_instinct() && !quiet(x) && same_pack(x))
                 {
                     other.state = RouteState::Forming;
                     pack_approved.push(other.id.clone());

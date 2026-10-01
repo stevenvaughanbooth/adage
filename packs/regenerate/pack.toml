@@ -1,0 +1,28 @@
+format = "adage-pack/1"
+
+[pack]
+name = "adage/regenerate"
+version = "0.1.0"
+origin = "instinct"
+description = "Regenerate after editing a generator's inputs. When an edit touches files a declared generator reads (a Makefile rule's prerequisites, the paths a generator script names), Adage names the regenerate step to run before finishing."
+
+[applicability]
+kind = "detector"
+detector = "U5"
+catalogue = "core@0.1.0"
+
+[requires]
+templates = ["obligation@1"]
+
+[exec]
+requested = "E0"
+
+[provenance]
+tool = "adage 0.1.0"
+
+[provenance.origins]
+organic = 0
+synthetic = 0
+declared = 0
+instinct = 0
+imported = 0

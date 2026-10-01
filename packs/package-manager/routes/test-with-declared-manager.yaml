@@ -1,0 +1,17 @@
+id: test-with-declared-manager
+summary: After the wrong package manager refuses to run the tests, run them with the declared one
+shape: after
+detector: N1
+trigger:
+  on: after_failure
+  command: '{runner}'
+  signature: '{signature}'
+steps:
+- id: run
+  run:
+    argv:
+    - '{command}'
+  effect: verify
+strength: prime
+exit:
+- when: intent_changes

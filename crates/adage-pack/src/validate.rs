@@ -76,6 +76,11 @@ pub fn safe_pack_name(n: &str) -> bool {
         })
 }
 
+/// A detector's catalogue id: an uppercase letter and one to three digits (`U5`, `N1`, `U11`).
+pub fn detector_id_ok(d: &str) -> bool {
+    (2..=4).contains(&d.len()) && d.as_bytes()[0].is_ascii_uppercase() && d.bytes().skip(1).all(|c| c.is_ascii_digit())
+}
+
 /// A short token: ASCII alphanumeric first, then `[A-Za-z0-9._-]`.
 pub fn safe_token(s: &str, max: usize) -> bool {
     !s.is_empty()
@@ -539,6 +544,32 @@ pub fn validate(p: &Parsed) -> Result<Checked> {
             }
         }
     }
+    // A detector pack is made of templates, each filled by a detector compiled into Adage; every
+    // other pack holds routes with their values.
+    match &p.manifest.applicability {
+        Applicability::Detector { detector, .. } => {
+            for r in &p.routes {
+                match r.detector.as_deref() {
+                    None => bail!("route {}: a detector pack holds templates, and this route names no detector", r.id),
+                    Some(d) if detector != "*" && d != detector => {
+                        bail!("route {}: detector {d} is not the pack's ({detector}, its applicability)", r.id)
+                    }
+                    Some(_) => {}
+                }
+            }
+            if p.evidence.is_some() {
+                bail!("a detector pack has no {EVIDENCE}: a template's evidence is each repository's own");
+            }
+        }
+        _ => {
+            if let Some(r) = p.routes.iter().find(|r| r.is_template()) {
+                bail!(
+                    "route {}: only a detector pack's routes are templates (applicability kind = \"detector\")",
+                    r.id
+                );
+            }
+        }
+    }
     let ids: BTreeSet<&str> = p.routes.iter().map(|r| r.id.as_str()).collect();
     let mut checked = Checked::default();
     for r in &p.routes {
@@ -634,12 +665,8 @@ fn validate_manifest(m: &PackManifest, table: &CommandTable) -> Result<()> {
             if i.origin != PackOrigin::Instinct {
                 bail!("applicability: a detector applies only to an instinct pack");
             }
-            // `*`: every enabled detector of the catalogue (the core instincts pack).
-            let det = detector == "*"
-                || (detector.len() <= 4
-                    && detector.as_bytes().first().is_some_and(|c| c.is_ascii_uppercase())
-                    && detector.bytes().skip(1).all(|c| c.is_ascii_digit())
-                    && detector.len() >= 2);
+            // `*`: any detector the pack's templates name.
+            let det = detector == "*" || detector_id_ok(detector);
             let cat = catalogue.split_once('@').is_some_and(|(n, v)| safe_token(n, 32) && semver_ok(v));
             if !det || !cat {
                 bail!("applicability: detector {detector:?} in catalogue {catalogue:?} is not allowed");
@@ -739,6 +766,10 @@ fn validate_route(
     }
     if !r.summary.is_empty() && !safe_text(&r.summary) {
         bail!("summary contains characters that may not be shown");
+    }
+    if r.is_template() {
+        validate_template(r)?;
+        return Ok(BTreeMap::new());
     }
     validate_trigger(&r.trigger)?;
 
@@ -977,6 +1008,98 @@ fn validate_route(
         validate_evidence(ev)?;
     }
     Ok(resolved)
+}
+
+/// A template ([`RouteV2::detector`]): what an instinct may bind, with blanks where its values
+/// go. Its detector supplies the values per repository, and each route it binds is checked
+/// against this template and validated in full ([`crate::instincts`]), so here the template's
+/// fixed parts are checked, and its blanks must stand exactly where a detector fills them.
+fn validate_template(r: &RouteV2) -> Result<()> {
+    let d = r.detector.as_deref().unwrap_or_default();
+    if !detector_id_ok(d) {
+        bail!("detector {d:?} is not a catalogue id (U5, N1, U11, …)");
+    }
+    if !r.inputs.is_empty() {
+        bail!("a template has no inputs: its detector fills its blanks");
+    }
+    let blanks_ok = match &r.trigger {
+        TriggerV2::AfterFailure { command, signature } => command == BLANK_RUNNER && signature == BLANK_SIGNATURE,
+        TriggerV2::AfterCommand { command } => command == BLANK_RUNNER,
+        TriggerV2::AfterEdit { paths } => paths == BLANK_PATHS,
+        _ => bail!("an instinct is reactive: a template's trigger is after_failure, after_command or after_edit"),
+    };
+    if !blanks_ok {
+        bail!(
+            "a template's trigger holds blanks, not values: `{BLANK_RUNNER}` (and `{BLANK_SIGNATURE}` after a failure), or `{BLANK_PATHS}` after an edit"
+        );
+    }
+    let [s] = r.steps.as_slice() else { bail!("a template has exactly one step") };
+    if !safe_id(&s.id) {
+        bail!("step id {:?} is not allowed", s.id);
+    }
+    if s.script.is_some() || !s.outputs.is_empty() {
+        bail!("step {}: a template's step has no script or outputs", s.id);
+    }
+    let Some(kind) = s.kind() else { bail!("step {}: exactly one of run, read, avoid, advise", s.id) };
+    match kind {
+        StepKind::Run(run) => {
+            if run.argv != [BLANK_COMMAND] {
+                bail!(
+                    "step {}: a template's run step is argv [\"{BLANK_COMMAND}\"]: its detector names the command",
+                    s.id
+                );
+            }
+            if rank(s.effect) > rank(Effect::Environment) {
+                bail!("step {}: an instinct directs at most an environment step", s.id);
+            }
+        }
+        StepKind::Advise(a) => {
+            let Some((_, required, optional)) =
+                adage_tracks::advice::TEMPLATES.iter().find(|(id, ..)| *id == a.template)
+            else {
+                bail!("step {}: advice template {:?} is not known", s.id, a.template);
+            };
+            if let Some(missing) = required.iter().find(|k| !a.slots.contains_key(**k)) {
+                bail!("step {}: advice template {} needs the slot {missing}", s.id, a.template);
+            }
+            for (k, v) in &a.slots {
+                if !required.contains(&k.as_str()) && !optional.contains(&k.as_str()) {
+                    bail!("step {}: advice template {} has no slot {k}", s.id, a.template);
+                }
+                if v != &format!("{{{k}}}") {
+                    bail!("step {}: slot {k} of a template is the blank {{{k}}}: its detector fills it", s.id);
+                }
+            }
+        }
+        StepKind::Read(_) | StepKind::Avoid(_) => {
+            bail!("step {}: a template's step runs a command or gives advice", s.id)
+        }
+    }
+    validate_shape(r, &[kind])?;
+    if r.strength != Strength::Prime {
+        bail!("an instinct route is prime");
+    }
+    let by_edit = matches!(r.trigger, TriggerV2::AfterEdit { .. });
+    if adage_tracks::ceiling(s.effect, by_edit).is_none() {
+        bail!("effect {:?} may never be directed", s.effect);
+    }
+    if r.exit.len() > 8 {
+        bail!("at most 8 exit predicates");
+    }
+    unique(&r.exit.iter().map(|e| format!("{e:?}")).collect::<Vec<_>>(), "exit")?;
+    if r.exit.iter().any(|e| matches!(e, ExitV2::ResultEquals { .. })) {
+        bail!("exit: a template has no outputs for result_equals to read");
+    }
+    if !r.entry || !r.links.is_empty() {
+        bail!("a template is an entry route with no links");
+    }
+    if r.exec.as_ref().is_some_and(|x| x.level != Level::E0 || !x.outputs.is_empty() || !x.cache.is_empty()) {
+        bail!("an instinct is delivered at E0: a template requests no execution");
+    }
+    if r.evidence.is_some() {
+        bail!("a template has no evidence: each repository's is its own");
+    }
+    Ok(())
 }
 
 fn validate_run(

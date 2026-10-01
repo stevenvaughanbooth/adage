@@ -1,0 +1,31 @@
+format = "adage-pack/1"
+
+[pack]
+name = "adage/lockfiles"
+version = "0.1.0"
+origin = "instinct"
+description = "Do not hand-edit lockfiles. When an edit touches the lockfile at the repository's root, Adage names the package manager that maintains it, so the manifest changes instead."
+
+[applicability]
+kind = "detector"
+detector = "U6"
+catalogue = "core@0.1.0"
+
+[requires]
+templates = [
+    "advise:lockfile@1",
+    "advise@1",
+]
+
+[exec]
+requested = "E0"
+
+[provenance]
+tool = "adage 0.1.0"
+
+[provenance.origins]
+organic = 0
+synthetic = 0
+declared = 0
+instinct = 0
+imported = 0

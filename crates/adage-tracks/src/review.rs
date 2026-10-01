@@ -200,7 +200,7 @@ pub fn validate(r: &Reviews) -> Result<()> {
         }
     }
     for (pack, a) in &r.packs {
-        if pack.is_empty() || pack.len() > 32 || !pack.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'-') {
+        if !crate::io::safe_instinct_pack(pack) {
             bail!("{FILE}: pack {pack:?} is not allowed");
         }
         if !safe_date(&a.on) || a.by.as_deref().is_some_and(|b| !safe_by(b)) {

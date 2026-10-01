@@ -32,8 +32,10 @@ mod init;
 mod install;
 mod learnlog;
 mod map;
+mod marketplace_cmd;
 mod models;
 mod packs;
+mod packs_cmd;
 mod proposal;
 mod redact;
 mod reimport;
@@ -210,6 +212,8 @@ fn run(args: &[String]) -> Result<()> {
         Some("report") => report(&paths, has("--json")),
         Some("share") => share::share(rest, &paths),
         Some("add") => add::add(rest, &paths),
+        Some("packs") => packs_cmd::run(rest, &paths),
+        Some("marketplace") => marketplace_cmd::run(rest, &paths),
         Some("review") => {
             // `review.rs` takes the lexicon's verbs as they are; execution grants are `exec.rs`'s.
             match sub.and_then(|(_, m)| m.subcommand_name()) {

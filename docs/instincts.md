@@ -3,25 +3,46 @@
 A **reflex** is learned from a repository's own agent sessions. An **instinct** ships with Adage
 and binds from declared repository files, so a new repository can benefit before it has history.
 
-An **instinct** is a prebuilt route that ships with Adage. It is a template (data, in
-[`crates/adage-instincts/data/catalogue.toml`](../crates/adage-instincts/data/catalogue.toml)) plus a
-detector (Rust, in [`src/detect.rs`](../crates/adage-instincts/src/detect.rs)). At learn time a
-**binder** reads the repository's *declared facts* from its files and binds each enabled instinct
-into concrete routes for that repository. Nothing comes from session history, so instincts work the
-first time Adage sees a repository. They are weaker than reflexes by design: prime at most, never a
-Stop block, and a reflex that says otherwise always wins.
+An **instinct** ships with Adage as a **pack**, in the same format reflexes travel in
+([packs.md](packs.md)): one pack per instinct, whose routes are **templates** with blanks where a
+learned reflex holds values, plus a **detector** (Rust, in
+[`src/detect.rs`](../crates/adage-instincts/src/detect.rs)) that fills the blanks in. The packs live
+in [`packs/`](../packs) and are listed by the Adage repository's marketplace,
+[`.adage/marketplace.toml`](../.adage/marketplace.toml), which every binary embeds and verifies
+([marketplace.md](marketplace.md)). The detector catalogue,
+[`crates/adage-instincts/data/catalogue.toml`](../crates/adage-instincts/data/catalogue.toml), lists
+the detectors a build has; the marketplace decides what ships. At learn time the detectors read the
+repository's *declared facts* from its files and bind each instinct pack turned on into concrete
+routes for that repository. Nothing comes from session history, so instincts work the first time
+Adage sees a repository. They are weaker than reflexes by design: prime at most, never a Stop block,
+and a reflex that says otherwise always wins.
 
 **Status: integrated.** `adage condition` binds instincts per repository after mining (and
-`adage condition --instincts-only` binds them with no sessions at all); the index, the runtime, the CLI
-and the offline eval know them by their provenance. This document is the catalogue, the binding
-and override model, the safety rules, and how the crate is wired in ([Integration](#integration)).
+`adage condition --instincts-only` binds them with no sessions at all), through the instinct packs
+turned on; the index, the runtime, the CLI and the offline eval know them by their provenance. This
+document is the catalogue, the binding and override model, the safety rules, and how the crate is
+wired in ([Integration](#integration)).
 
 ## What ships at launch
 
-The core pack contains **eight enabled instinct detectors**: U1, U3, U4, U5, U6, N1, P1 and U11.
-They may bind multiple routes, one route, or none in a repository. A route is installed only when
-its declared facts support it; competing test entry points, unsafe command bodies, or an absent
-environment can correctly leave an instinct unbound. The remaining catalogue entries are disabled.
+Adage ships **eight base packs**, one per built instinct, all on by default:
+
+| Pack | Instinct | Templates |
+| --- | --- | --- |
+| `adage/python-env` | U11 | a run after a failure (verify); `project-python` advice after a failure |
+| `adage/test-wrapper` | U1 | a run after a failure (verify) |
+| `adage/test-command` | U3 | a run after a failure (verify) |
+| `adage/pytest-wrapper` | P1 | a run after a failure (verify) |
+| `adage/package-manager` | N1 | a run after a failure (environment: an install, nascent until approved); a run after a failure (verify); `package-manager` advice after a command |
+| `adage/regenerate` | U5 | a run after an edit (regenerate), the finish line |
+| `adage/generated-files` | U4 | `generated-file` advice after an edit |
+| `adage/lockfiles` | U6 | `lockfile` advice after an edit |
+
+Each may bind multiple routes, one route, or none in a repository. A route is installed only when
+its declared facts support it and a template of its pack admits it; competing test entry points,
+unsafe command bodies, or an absent environment can correctly leave an instinct unbound. The
+remaining catalogue entries are detectors still to build, and ship in no pack. `adage packs` lists
+the packs, which apply to the repository, and turns any off (`instincts.disabled`).
 
 Run `adage init --yes --repo /path/to/repo` to install available harness integration and bind
 these defaults without transcripts. Noninteractive `adage init` previews setup without writing.
@@ -288,10 +309,13 @@ impl BindResult {
 pub struct BindOptions { pub disabled: BTreeSet<String> }
 ```
 
-Every bound route carries `evidence.provenance = "instinct:<pack>@<version>"`, `evidence.origin =
-Origin::Instinct { pack, version, instinct, ecosystem, declared }` (the catalogue id, the ecosystem
-the wrapper names, and the file that declares what it directs) and `evidence.by_origin =
-{declared: 1}`; `support` and `opportunities` stay 0.
+Every bound route carries `evidence.provenance = "instinct:<pack>@<version>"` (the pack that admitted
+it: `instinct:adage/python-env@0.1.0`), `evidence.origin = Origin::Instinct { pack, version,
+instinct, ecosystem, declared }` (that pack, the catalogue id, the ecosystem the wrapper names, and
+the file that declares what it directs) and `evidence.by_origin = {declared: 1}`; `support` and
+`opportunities` stay 0. The binder alone (`adage_instincts::bind`, as `dry_run` uses it) stamps the
+detector catalogue instead (`instinct:core@0.1.0`); binding through packs
+(`adage_pack::instincts::bind`) names the pack.
 
 **Determinism.** The same repository files produce byte-identical `BindResult`s, wherever the
 repository lives: every collection is a sorted `Vec` or a `BTreeMap`, walks are sorted, and no
@@ -381,13 +405,19 @@ each part does, and where:
 
 ### adage-learn
 
+- **Pre-install.** A learn that binds instincts first installs the built-in marketplace's packs
+  under `tracks/@imported/adage/<name>/` (`adage_pack::builtin::install`: staged, re-checked against
+  each pin, as `adage add` installs a pack). A failure is reported and never stops learning: binding
+  reads the verified copy in the binary.
 - **Bind in the plan, per repository** (`adage_learn::instincts`). After mining and review
-  reconciliation, `plan()` calls `adage_instincts::bind_with(root, others, rejections, opts)` when
-  `LearnConfig::instincts` is set: `others` are the repository's routes just planned plus its other
-  installed tracks and imports; `rejections` are the ids rejected in any of the repository's
-  `review.yaml` files. The routes go to the track `<repo>/instincts`, provenance
-  `instinct:<pack>@<version>`, versioned by the usual semver rules, and appear in the report (`bound`,
-  `advice`, `nascent reflexes`, `skipped`, `extinguished`, `confirmed`) and, as counts, in `learn.log`.
+  reconciliation, `plan()` calls `adage_pack::instincts::bind(packs, root, others, rejections,
+  disabled)` when `LearnConfig::instincts` is set: `packs` are the instinct packs turned on (the
+  built-in ones and any added with `adage add`, by `instincts.packs` and `instincts.disabled`);
+  `others` are the repository's routes just planned plus its other installed tracks and imports;
+  `rejections` are the ids rejected in any of the repository's `review.yaml` files. The routes go to
+  the track `<repo>/instincts`, each with its pack's provenance, versioned by the usual semver rules,
+  and appear in the report (`bound`, `advice`, `nascent reflexes`, `skipped`, `extinguished`,
+  `confirmed`, and the `packs` that bound something) and, as counts, in `learn.log`.
 - **The repository's root** is the live checkout: the root the caller names (`Config::roots`:
   automatic learning names the hook's root, the session's own checkout; `adage condition` names the
   checkout it runs in), else the working directory most of its sessions recorded that still exists
@@ -396,9 +426,11 @@ each part does, and where:
   bug 7). Unknown: nothing is bound, with the reason in the report.
 - **Rebinding.** Each binding is recorded beside the repository's tracks
   (`.instincts-binding.json`: the checkout and a fingerprint of its declared files,
-  `adage_instincts::fingerprint`, a few dozen `stat`s). A session start whose checkout differs, or
-  whose declared files changed since (a `.venv` made, a Makefile edited), asks the learner to bind
-  again, by the bootstrap's fast first phase.
+  `adage_instincts::fingerprint`, a few dozen `stat`s, and the packs it was bound with,
+  `adage_learn::instincts::selection`). A session start whose checkout differs, whose declared files
+  changed since (a `.venv` made, a Makefile edited), or whose choice of packs changed (`adage packs
+  off`, or a build that ships other base packs), asks the learner to bind again, by the bootstrap's
+  fast first phase.
 - **Day 0.** `adage condition --instincts-only [--repo-path <dir>]` binds a repository with no sessions
   (`instincts::learn_only`), and an automatic learn for a repository with no usable session yet
   binds its instincts once from the root the hook named.
@@ -409,7 +441,7 @@ each part does, and where:
   `learn.log` says "instinct route confirmed by sessions: the learned route takes over".
 - **Review.** Extinguished ids are never bound again, and an extinguished instinct stays in the
   track. Environment steps stay nascent reflexes until approved; approving one approves every environment
-  step of its pack for the repository (`review.yaml`, `packs:`). Decisions never raise an instinct
+  step of its pack (`adage/package-manager`) for the repository (`review.yaml`, `packs:`). Decisions never raise an instinct
   above prime or past forming.
 - **Auto-extinguish, conservatively.** The spools' judgements are read at learn, by arm. An instinct
   route with at least 3 `misfired` (followed, and the directed command failed for want of its
@@ -441,11 +473,16 @@ each part does, and where:
 
 ### adage-cli
 
-- **Config**: `instincts.enabled` (default `true`), `instincts.packs` (default `core`),
-  `instincts.disabled` (ids, comma-separated); in `adage config` and the settings tab of `adage ui`.
-  `adage condition --no-instincts` skips them for one run.
-- **`adage init`** shows what would bind for the current repository (a dry bind), explains pack
-  approval, and prints `adage condition --instincts-only`; `adage init --yes` runs it.
+- **Config**: `instincts.enabled` (default `true`), `instincts.packs` (default `auto`: every installed
+  instinct pack; or pack names), `instincts.disabled` (pack names or instinct ids, comma-separated);
+  in `adage config` and the settings tab of `adage ui`. `adage condition --no-instincts` skips them
+  for one run.
+- **`adage packs`** lists the instinct packs (built in, and added), which apply to the repository and
+  how many reflexes each bound; `adage packs off|on <name>` turns one off or on and binds the
+  repository again; `adage packs show <name>` prints a pack's files.
+- **`adage init`** names the instinct packs that apply to the current repository and shows what would
+  bind (a dry bind through the packs turned on), explains pack approval, and prints `adage condition
+  --instincts-only`; `adage init --yes` runs it, which pre-installs the base packs.
 - **`adage doctor`**: an `instincts` check with, per repository, the routes bound and delivered,
   advice, nascent reflexes awaiting approval, and those overridden.
 - **`adage review`** lists instinct routes with their origin (`instinct U1 (from Makefile)`) until a

@@ -122,6 +122,12 @@ pub fn safe_name(n: &str) -> bool {
         })
 }
 
+/// The pack an instinct came from: a pack name (`adage/python-env`, as [`safe_name`] with both
+/// parts) or a bare catalogue name (`core`), at most 64 bytes. Never rendered to an agent.
+pub fn safe_instinct_pack(p: &str) -> bool {
+    p.len() <= 64 && safe_name(p)
+}
+
 /// Directed commands are plain argv: no shell operators, substitutions, redirections, or quoting,
 /// and no path outside the repository (absolute, or with a `..` segment), in an argument or in a
 /// flag's value.
@@ -609,12 +615,12 @@ fn validate_context(items: &[CtxItem], within: u8) -> Result<()> {
     Ok(())
 }
 
-/// Where a route came from: every field is rendered into the directive's wrapper, so each is a
-/// short safe token from a closed set or a repository-relative path.
+/// Where a route came from: each field is a short safe token from a closed set, a pack name or a
+/// repository-relative path (the wrapper renders the ecosystem and the declared file).
 fn validate_origin(o: &Origin) -> Result<()> {
     if let Origin::Instinct { pack, version, instinct, ecosystem, declared } = o {
         let token = |s: &str| s.len() <= 32 && s.bytes().all(|c| c.is_ascii_alphanumeric() || b"._-".contains(&c));
-        if !token(pack) || !token(version) || !token(instinct) {
+        if !safe_instinct_pack(pack) || !token(version) || !token(instinct) {
             bail!("instinct origin {pack:?}@{version:?} ({instinct:?}) is not allowed");
         }
         if let Some(e) = ecosystem {

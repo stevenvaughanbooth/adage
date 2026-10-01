@@ -18,6 +18,9 @@
 //! 7. A route → the template of its shape (`run@1`), an advise step → `advise:<template>@1`
 //!    (`requires.templates`); an intent trigger → its model (`requires.models`).
 //! 8. `read.from` names an earlier step's list-of-`repo-path` output (checked in validation).
+//! 9. A template (an instinct pack's route, [`RouteV2::detector`]) → `detector:<id>`, compiled into
+//!    Adage like the templates and types that are built in. Its command is a blank until the
+//!    detector fills it, so it has no program edge (3) and takes part in no implicit edge (5, 6).
 //!
 //! Then: breadth-first search from every entry route; no dangling references; no unreferenced
 //! bytes or requirements; no cycle through `after` edges and no `after` chain longer than
@@ -37,8 +40,8 @@ pub const MAX_AFTER_CHAIN: usize = 4;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Edge {
-    /// `type`, `item`, `script`, `repo-file`, `tool`, `link`, `after`, `instead`, `template`,
-    /// `model`.
+    /// `type`, `item`, `script`, `repo-file`, `tool`, `env`, `link`, `after`, `instead`,
+    /// `template`, `model`, `detector`.
     pub kind: &'static str,
     pub from: String,
     pub to: String,
@@ -112,11 +115,17 @@ pub fn compute(p: &Parsed) -> Result<Closure> {
         if let TriggerV2::Intent { model, .. } = &r.trigger {
             edge(&mut c, "model", &me, format!("model:{model}"));
         }
+        if let Some(d) = &r.detector {
+            edge(&mut c, "detector", &me, format!("detector:{d}"));
+        }
         for s in &r.steps {
             if let Some(a) = &s.advise {
                 edge(&mut c, "template", &me, format!("template:advise:{}@1", a.template));
             }
             let Some(run) = &s.run else { continue };
+            if r.is_template() {
+                continue;
+            }
             match program(&run.argv, &table)? {
                 Program::Tool(t) => edge(&mut c, "tool", &me, format!("tool:{t}")),
                 // The project's environment: found in the checkout at bind, never in `requires`.
@@ -177,10 +186,12 @@ pub fn compute(p: &Parsed) -> Result<Closure> {
         }
     }
 
-    // Implicit edges: A's first run step meets B's after_command trigger.
-    for b in &p.routes {
+    // Implicit edges: A's first run step meets B's after_command trigger. A template's command is
+    // a blank, so it meets nothing.
+    let fixed: Vec<&RouteV2> = p.routes.iter().filter(|r| !r.is_template()).collect();
+    for b in &fixed {
         let TriggerV2::AfterCommand { command } = &b.trigger else { continue };
-        for a in &p.routes {
+        for a in &fixed {
             if let Some(run) = a.steps.first().and_then(|s| s.run.as_ref()) {
                 if pattern::meets(command, &argv_key(&run.argv)) {
                     edge(&mut c, "after", &format!("route:{}", a.id), format!("route:{}", b.id));
@@ -189,10 +200,10 @@ pub fn compute(p: &Parsed) -> Result<Closure> {
         }
     }
     // An avoid step's `instead` that another route runs.
-    for r in &p.routes {
+    for r in &fixed {
         let Some(av) = r.steps.first().and_then(|s| s.avoid.as_ref()) else { continue };
         let instead = av.instead.join(" ");
-        for a in p.routes.iter().filter(|a| a.id != r.id) {
+        for a in fixed.iter().filter(|a| a.id != r.id) {
             if let Some(run) = a.steps.first().and_then(|s| s.run.as_ref()) {
                 if pattern::same_command(&instead, &run.argv.join(" ")) {
                     edge(&mut c, "instead", &format!("route:{}", r.id), format!("route:{}", a.id));
@@ -278,7 +289,7 @@ pub fn compute(p: &Parsed) -> Result<Closure> {
             Some(("repo-file", path)) => {
                 q.repo_files.iter().find(|f| f.path == path).map(|f| f.sha256.clone()).unwrap_or_default()
             }
-            Some(("builtin" | "tool" | "template" | "model" | "env", _)) => "-".to_string(),
+            Some(("builtin" | "tool" | "template" | "model" | "env" | "detector", _)) => "-".to_string(),
             _ => continue,
         };
         c.nodes.insert(e.to.clone(), digest);

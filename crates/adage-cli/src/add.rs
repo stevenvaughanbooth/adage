@@ -8,9 +8,15 @@
 //! runs; the pack is installed under `tracks/@imported/<owner>/<name>/` exactly as verified, its
 //! vendored scripts are copied read-only into `$ADAGE_HOME/cas/`, and it is bound to repositories
 //! ([`crate::packs`]): routes whose closure is unsatisfied here become inert, with a reason. No
-//! execution approval is created.
+//! execution approval is created. An instinct pack (its routes are templates a detector fills) is
+//! bound per repository by learning, with the other instinct packs (`adage condition
+//! --instincts-only` runs for the repository `add` runs in).
 //!
-//! Trust anchors, in order:
+//! A pack of the marketplace built into Adage (its base instincts, `adage_pack::builtin`) is
+//! trusted by the marketplace's pin, signed or not, exactly as the base instincts are pre-installed;
+//! other bytes under one of its names are refused. Every other pack is trusted by its signature.
+//!
+//! Trust anchors for a signature, in order:
 //! 1. `$ADAGE_HOME/trusted-signers` — the person's own `allowed_signers` file.
 //! 2. `<repo>/.adage/trusted-signers` of the repository the track is scoped to (when run inside
 //!    it). A hostile repository could plant this file, so it counts only once approved on this
@@ -209,10 +215,15 @@ fn decide(
 
 pub fn add(args: &[String], paths: &Paths) -> Result<()> {
     require_person("add")?;
-    let usage = "usage: adage add <pack-dir> [--trust]";
+    let usage = "usage: adage add <pack-dir> [--trust] [--repo-path <dir>]";
     let src = PathBuf::from(args.first().filter(|a| !a.starts_with("--")).context(usage)?);
     let trust = args.iter().any(|a| a == "--trust");
-    let cwd_root = std::env::current_dir().ok().and_then(|d| find_root(&d));
+    // The repository to bind in: `--repo-path <dir>`, else the one `add` runs in.
+    let at = match args.iter().position(|a| a == "--repo-path") {
+        Some(i) => Some(PathBuf::from(args.get(i + 1).context(usage)?)),
+        None => std::env::current_dir().ok(),
+    };
+    let cwd_root = at.and_then(|d| d.canonicalize().ok()).and_then(|d| find_root(&d));
     if src.join(adage_pack::validate::MANIFEST).is_file() {
         return add_pack(&src, paths, trust, cwd_root.as_deref());
     }
@@ -281,61 +292,95 @@ fn local_effects(pack: &Pack) -> BTreeMap<String, adage_core::Effect> {
         .collect()
 }
 
+/// The entry of the marketplace built into Adage for the pack these files name, if they name one
+/// of its packs (whose names are reserved: no other bytes are installed under them).
+fn builtin_entry(files: &BTreeMap<String, Vec<u8>>) -> Option<adage_pack::marketplace::Entry> {
+    let text = std::str::from_utf8(files.get(adage_pack::validate::MANIFEST)?).ok()?;
+    let name = toml::from_str::<adage_pack::PackManifest>(text).ok()?.pack.name;
+    let b = adage_pack::builtin::marketplace().ok()?;
+    b.get(&name).map(|(e, _)| e.clone())
+}
+
 fn add_pack(src: &Path, paths: &Paths, trust: bool, cwd_root: Option<&Path>) -> Result<()> {
     // Exactly the listed files, read once: what is checked is what is installed.
     let files = adage_pack::validate::read_dir_files(src).map_err(|e| anyhow!("refusing: {e:#}"))?;
-    let Some(sig) = files.get(adage_pack::validate::SIG) else {
-        bail!("refusing an unsigned pack: {} has no {}", src.display(), adage_pack::validate::SIG)
-    };
     let digest = adage_pack::pack_digest(&files);
-    let msg = adage_sign::message(&digest)?;
-    let pem = std::str::from_utf8(sig).context("refusing: pack.sig is not text")?.to_string();
-    let signer = adage_sign::verify_embedded(&msg, PACK_NAMESPACE, &pem).map_err(|e| {
-        anyhow!(
-            "refusing: the signature does not match this pack — it changed after signing, or was not signed as a pack (namespace {PACK_NAMESPACE}) ({e:#})"
-        )
-    })?;
+    // A pack of the marketplace built into Adage is trusted by its pin, as the base instincts are
+    // pre-installed; any other bytes under its name are not that pack.
+    let pinned = builtin_entry(&files);
+    if let Some(e) = &pinned {
+        if e.digest != digest {
+            bail!(
+                "refusing: {} is a pack of the adage marketplace built into Adage, and this is not it (digest {digest}; the marketplace pins {})",
+                e.name,
+                e.digest
+            );
+        }
+    }
+    let signed = match (&pinned, files.get(adage_pack::validate::SIG)) {
+        (Some(_), _) => None,
+        (None, None) => {
+            bail!("refusing an unsigned pack: {} has no {}", src.display(), adage_pack::validate::SIG)
+        }
+        (None, Some(sig)) => {
+            let msg = adage_sign::message(&digest)?;
+            let pem = std::str::from_utf8(sig).context("refusing: pack.sig is not text")?.to_string();
+            let signer = adage_sign::verify_embedded(&msg, PACK_NAMESPACE, &pem).map_err(|e| {
+                anyhow!(
+                    "refusing: the signature does not match this pack — it changed after signing, or was not signed as a pack (namespace {PACK_NAMESPACE}) ({e:#})"
+                )
+            })?;
+            Some((msg, pem, signer))
+        }
+    };
     let pack = Pack::from_files(&files).map_err(|e| anyhow!("refusing: the pack fails validation: {e:#}"))?;
-    packs::policy_check(paths, &pack, Some(&fingerprint(&signer)))?;
+    let signer_fp = signed.as_ref().map(|(_, _, k)| fingerprint(k));
+    packs::policy_check(paths, &pack, signer_fp.as_deref())?;
     let scope = trust_scope(&pack, cwd_root);
     // One writer of the tracks and index at a time (`adage condition`, automatic learners).
-    let _tracks = adage_store::lock::exclusive(&paths.tracks_lock())?;
-    let decision = decide(paths, &scope, &msg, &pem, &signer, trust, PACK_NAMESPACE)?;
+    let tracks_lock = adage_store::lock::exclusive(&paths.tracks_lock())?;
+    let (decision, verified) = match &signed {
+        Some((msg, pem, signer)) => (
+            decide(paths, &scope, msg, pem, signer, trust, PACK_NAMESPACE)?,
+            format!("signature by {}, namespace {PACK_NAMESPACE}", fingerprint(signer)),
+        ),
+        None => {
+            let how = format!("pinned by the adage marketplace built into Adage {}", env!("CARGO_PKG_VERSION"));
+            (Decision { how: how.clone(), record: None }, how)
+        }
+    };
 
     let name = pack.manifest.pack.name.clone();
     let dest = packs::pack_dir(paths, &name);
-    let stage = paths.root.join("staging").join(format!("add-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&stage);
-    let staged = (|| -> Result<()> {
-        for (rel, bytes) in &files {
-            let p = stage.join(rel);
-            std::fs::create_dir_all(p.parent().context("a pack file has a parent directory")?)?;
-            std::fs::write(p, bytes)?;
-        }
-        // Re-read what was written: it must be the pack that was verified.
-        if adage_pack::digest_dir(&stage)? != digest {
-            bail!("the staged copy of the pack differs from what was verified");
-        }
-        Ok(())
-    })();
-    if let Err(e) = staged {
-        let _ = std::fs::remove_dir_all(&stage);
-        return Err(e);
-    }
+    adage_pack::install::write_verified(&files, &digest, &dest)?;
+    // Where it came from: a signer's key, or the marketplace built into Adage.
+    let via = match &signer_fp {
+        Some(fp) => adage_pack::install::Via::Signature { signer: fp.clone() },
+        None => adage_pack::install::Via::Marketplace { name: adage_pack::builtin::NAME.into() },
+    };
+    let version = pack.manifest.pack.version.clone();
+    let record = adage_pack::install::Record { version, digest: digest.clone(), via };
+    adage_pack::install::record(&paths.tracks(), &name, record)?;
     if let Some(store) = &decision.record {
         save_store(paths, store)?;
     }
-    replace_dir(&stage, &dest)?;
     let cas = packs::install_cas(paths, &pack)?;
-    let verified = format!("signature by {}, namespace {PACK_NAMESPACE}", fingerprint(&signer));
-    let bound = packs::bind_installed(paths, &pack, &digest, &verified, &[], cwd_root)?;
+    // An instinct pack binds with the other instinct packs, per repository, through learning (as
+    // the base packs do); any other pack binds here.
+    let instinct = matches!(pack.manifest.applicability, adage_pack::Applicability::Detector { .. });
+    let bound =
+        if instinct { Vec::new() } else { packs::bind_installed(paths, &pack, &digest, &verified, &[], cwd_root)? };
     let index = recompile(paths)?;
+    drop(tracks_lock);
 
     let m = &pack.manifest;
     let mut o = Out::stdout();
     o.header("add", &[&format!("pack {}@{}", m.pack.name, m.pack.version), &format!("from {}", src.display())])?;
     o.blank()?;
-    o.kv("signature", Line::new().text(format!("good, namespace {PACK_NAMESPACE}, key {}", fingerprint(&signer))))?;
+    match &signer_fp {
+        Some(fp) => o.kv("signature", Line::new().text(format!("good, namespace {PACK_NAMESPACE}, key {fp}")))?,
+        None => o.kv("pinned", Line::new().text(format!("sha256 {digest} is the marketplace's pin")))?,
+    }
     o.kv("trusted", Line::new().text(decision.how.clone()))?;
     o.kv("digest", Line::new().quiet(format!("sha256 {digest}")))?;
     o.kv("installed", Line::new().text(dest.display().to_string()))?;
@@ -349,6 +394,26 @@ fn add_pack(src: &Path, paths: &Paths, trust: bool, cwd_root: Option<&Path>) -> 
                 cas.len()
             )),
         )?;
+    }
+    if instinct {
+        o.kv(
+            "instincts",
+            Line::new().text(
+                "binds in each repository from its files, with your other instinct packs (instincts.packs; adage packs)",
+            ),
+        )?;
+        o.flush()?;
+        match cwd_root {
+            Some(root) => {
+                let root = root.to_string_lossy().into_owned();
+                return crate::instincts_only(&["--repo-path".to_string(), root], paths);
+            }
+            None => {
+                o.blank()?;
+                o.next("adage condition --instincts-only", "inside a repository, binds it there now")?;
+                return Ok(());
+            }
+        }
     }
     print_bound(&mut o, &pack, &bound, &local_effects(&pack))?;
     finish(&mut o, &index)
@@ -366,16 +431,6 @@ fn finish<W: std::io::Write>(o: &mut Out<W>, index: &Index) -> Result<()> {
     o.blank()?;
     o.next("adage review", "imported reflexes wait for your decision")?;
     o.also("adage status", "every reflex in effect")?;
-    Ok(())
-}
-
-/// Replace `dest` with the directory `from` (on the same filesystem).
-fn replace_dir(from: &Path, dest: &Path) -> Result<()> {
-    if dest.exists() {
-        std::fs::remove_dir_all(dest)?;
-    }
-    std::fs::create_dir_all(dest.parent().context("an install directory has a parent")?)?;
-    std::fs::rename(from, dest)?;
     Ok(())
 }
 
