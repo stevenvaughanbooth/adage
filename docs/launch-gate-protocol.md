@@ -690,6 +690,12 @@ evaluation groups is registered.
 ## Revisions
 
 - 2026-09-30 r1: registered.
+- 2026-10-01 r12, before any held-out dispatch: cohort native recipes bind the person's
+  evaluation allocation (`evaluation-allocation.json`, listed in `shared_sources`) instead of the
+  legacy $27.50 admission ceiling. The user approved it in chat and applied the `cohort_v5.py`
+  edit themselves. The $0.50 native cap, the $3 floor, the $60 ledger ceiling (not raised) and old
+  cohorts' $27.50 fallback are unchanged. `launch-gate-v7` is superseded before any dispatch;
+  `launch-gate-v8` replaces it.
 - 2026-10-01 r11, development only, a scoring-definition fix registered after dev-v9's first control
   (order 0) and before any of its positive blocks, and before any held-out dispatch:
   - journal receipts record their origin;
