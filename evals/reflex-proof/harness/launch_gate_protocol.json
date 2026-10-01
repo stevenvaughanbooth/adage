@@ -473,6 +473,65 @@
       "native_session_usd": 0.0164897,
       "successor": "dev-v9b: the same arms, matrix, prompts and dev_thresholds_v9, scored with receipt_replay version 3",
       "archive": "results/20261001-dev-v9"
+    },
+    "dev-v9b": {
+      "protocol": "dev-arms-2",
+      "recorded": "2026-10-01, after the run; no threshold or rule changed",
+      "what_it_is": "a development result on one task (mm-curve--finite) with development scaffolding: every prompt carries a supplied test block and a work order, and the design was iterated on this same task (canary-v5, canary-v7, dev-v8b, dev-v9); it qualifies A4 as BEST for the held-out comparison under r9 and is not a launch statistic, held-out evidence or a savings estimate",
+      "status": "complete and valid: 53/53 sessions collected, no problems, no unknown cost, no necessary work skipped",
+      "frozen": {
+        "commit": "91a97141fc8f12770bb05a0833578cd99c9e963d",
+        "clone": "/private/tmp/adage-launch-src",
+        "sources_matching_commit": "26/26"
+      },
+      "sessions": 53,
+      "known_cost_usd": 5.245021,
+      "unknown_costs": 0,
+      "mean_requests_per_positive": {
+        "A0": 18,
+        "A2f": 15.0625,
+        "A4": 11.1875
+      },
+      "blocks_fewer_than_A0": {
+        "A2f": "13/16",
+        "A4": "15/16"
+      },
+      "requests_ratio_to_A0": {
+        "A2f": 0.8368,
+        "A4": 0.6215
+      },
+      "verdict": "A4 passed D1-D4 (D3 tested: all five controls realized, none skipped necessary verification); A2f met D1's ratio and block count but is not eligible (no controls); BEST = A4 with the orientation card",
+      "D2_quality": "hidden-test failures 0 in every arm (16/16 each)",
+      "D4_sessions_with_repeat_attempts": {
+        "A0": 0,
+        "A2f": 2,
+        "A4": 1
+      },
+      "controls": "failed, later-edit and config-change met their necessary verification through a passing Stop-gate run on the final sources (receipt_replay version 3); broader and rerun through the agent's own runs",
+      "report_only": {
+        "cost_usd_mean": {
+          "A0": 0.1169,
+          "A2f": 0.1011,
+          "A4": 0.0825
+        },
+        "pytest_requests_mean": {
+          "A0": 2.8125,
+          "A2f": 0.375,
+          "A4": 0.1875
+        },
+        "cache_read_tokens_mean": {
+          "A0": 445386,
+          "A2f": 344669,
+          "A4": 244540
+        },
+        "wall_seconds_mean": {
+          "A0": 57.71,
+          "A2f": 58.42,
+          "A4": 50.47
+        }
+      },
+      "not_established": "held-out benefit, other tasks or repositories, prompts without the test block and work order, and any GPU effect",
+      "archive": "results/20261001-dev-v9b"
     }
   },
   "environment": "every new session launches with the checkout's own .venv first on PATH and as VIRTUAL_ENV (probe.project_launch); the sandbox policy is unchanged",

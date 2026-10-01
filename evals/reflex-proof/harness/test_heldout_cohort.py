@@ -189,6 +189,16 @@ class Freeze(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "invalid"):
                 runner.design(path)
 
+    def test_the_archived_dev_v9b_report_selects_a4_with_the_orientation_card(self):
+        """The selection input held-out freezes (a development result on one task, not evidence)."""
+        path = Path(__file__).parent / "results/20261001-dev-v9b/report.json"
+        d = runner.design(path)
+        self.assertEqual((d["arm"], d["card_orientation"], d["dev_protocol"]), ("A4", True, "dev-arms-2"))
+        self.assertIsNone(d["card_checks"], "the shipped default; the hook sets no ADAGE_CARD_CHECKS")
+        result = json.loads(path.with_name("RESULT.json").read_text())
+        self.assertEqual(d["report_sha256"], result["report"]["sha256"])
+        self.assertEqual(result["frozen"]["mismatches"], [])
+
     def test_the_hook_gives_best_and_noexec_the_designs_card_form(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "manifest.json"

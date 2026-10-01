@@ -24,11 +24,12 @@ new dispatch; never reset it, double-dispatch, or treat an unknown bill as zero.
 
 Branch `codex/launch-first-reflex`, PR #16 (draft).
 
-Ledger: 165 attempts, all settled or cap-charged.
-- Admitted: $24.7344477 ($24.2344477 measured plus the $0.50 conservative charge).
-- Remaining: $35.2655523.
+Ledger: 218 attempts, all settled or cap-charged.
+- Admitted: $29.9794687 ($29.4794687 measured plus the $0.50 conservative charge).
+- Remaining: $30.0205313.
 
 New charges in this checkpoint:
+- the development canary-v9b `dev-v9b` (53 sessions, $5.245021);
 - the aborted development canary `dev-v9` (1 session, $0.0675211);
 - the passing `launch-gate-v6` native session ($0.0164897);
 - the development canary-v8 `dev-v8b` (34 sessions, $4.3539376);
@@ -42,7 +43,38 @@ canary manifests bind absolute harness paths in the agent worktree
 `/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d`; run the
 commands below from its `evals/reflex-proof/harness`, or refreeze new roots from another checkout.
 
-### dev-v9b: frozen, not run (resume here)
+### dev-v9b: ran, valid; A4 passed the development rule
+
+**dev-v9b ran to completion and is valid** ([`RESULT.json`](../evals/reflex-proof/harness/results/20261001-dev-v9b/RESULT.json),
+with the report and all 53 collected rows beside it). It collected 53 of 53 sessions at a known cost
+of $5.245021, with no unknown cost. The report has no problems and skipped no necessary work. Its
+26 frozen sources and its copy of the protocol JSON match `91a9714` byte for byte.
+
+**What it is.** A development result on one task (`mm-curve--finite`), with development
+scaffolding: every prompt carries a supplied test block and a work order. The design was iterated
+on this same task (canary-v5, canary-v7, dev-v8b, dev-v9). It selects BEST for held-out under r9.
+**It is not a launch statistic, held-out evidence or a savings estimate.**
+
+| Arm | Mean requests per positive | Ratio to A0 | Blocks fewer than A0 | Verdict |
+| --- | --- | --- | --- | --- |
+| A0 | 18.0 | | | |
+| A2f | 15.06 | 0.837 | 13/16 | not eligible (no controls) |
+| A4 | 11.19 | 0.6215 | 15/16 | passed D1-D4 |
+
+- **D2 to D4.**
+  - D2: there were no hidden-test failures in any arm (16/16 each).
+  - D3 was tested. All five A4 controls were realized, and none skipped necessary verification.
+    The failed, later-edit and config-change controls were met by a passing Stop-gate run on the
+    final sources; the broader and rerun controls by the agent's own runs.
+  - D4: sessions with repeat attempts were A0 0, A2f 2, A4 1.
+- **BEST = A4, with the orientation card on.**
+- **Reported, not gated** (A0 against A4, per positive):
+  - cost: $0.117 against $0.0825;
+  - pytest requests: 2.81 against 0.19;
+  - cache-read tokens: 445k against 245k;
+  - wall time: 57.7 s against 50.5 s.
+
+Model requests are not GPU measurements, and CPU runs are never counted as inference saved.
 
 **dev-v9 was aborted after its first session.** The stop rule ended the study at order 0, the
 failed control, which it reported as "not realized". That was a scoring bug, not a product

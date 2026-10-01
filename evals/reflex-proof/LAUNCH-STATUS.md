@@ -77,28 +77,61 @@ These means mix working sessions with card-only ones, so they test neither lever
 The harness now fails loudly on any of these. It also protects the shared runtime and checks
 every grant before each dispatch.
 
-The fourth development canary was refrozen as [dev-v9b](harness/results/20261001-dev-v9b/), and it
-has not run. Its first attempt, [dev-v9](harness/results/20261001-dev-v9/ABORTED.json), stopped
-after one control: the scoring read the finish-line gate's passing run as the context's. Revision
-11 fixed this before any positive block ran, and the thresholds are unchanged.
-It compares A0 (no hooks) with two arms that share binaries and grants:
+The fourth development canary, [dev-v9b](harness/results/20261001-dev-v9b/RESULT.json) (53
+sessions, $5.245021), **ran and is valid, and A4 passed its registered development rule.** Its
+first attempt, [dev-v9](harness/results/20261001-dev-v9/ABORTED.json), stopped after one control:
+the scoring read the finish-line gate's passing run as the context's. Revision 11 fixed this before
+any positive block ran, and the thresholds were not changed.
+
+**This is a development result, not a launch statistic.**
+- It covers one task (`mm-curve--finite`).
+- It used development scaffolding: every prompt carried a supplied test block and a work order.
+- The design was iterated on this same task over four earlier canaries.
+
+It qualifies A4 for the held-out comparison and says nothing about held-out tasks, other
+repositories or prompts without that scaffolding.
+
+dev-v9b compared A0 (no hooks) with two arms that share binaries and grants:
 - A2f: verification ownership, with the earlier card;
 - A4: A2f plus an orientation card. A4's card replaces the exemplar with where the card's files
   stand in the checkout now.
 
-The arms run in 16 paired blocks, with five A4 controls. The rule was registered before dispatch: A4
-needs at most 0.80 times A0's requests, fewer requests in at least 10 of 16 blocks, and a valid
-study. No statistic exists yet.
+The arms ran in 16 paired blocks, with five A4 controls first. The rule was registered before
+dispatch. Mean model requests per positive:
 
-The held-out comparison (Marshmallow, revisions 9 to 11) is prepared but not frozen. Its freeze
-pipeline passed an offline dry run with a simulated development report. It runs only if dev-v9b's A4
-passes. **Held-out result: not run, and no numbers exist.** Once it runs, its decision record (the
-primary bound, quality, the G criteria, the sensitivity analyses and censoring) will be linked here
-as written.
+| Arm | Mean requests | Ratio to A0 | Blocks with fewer requests than A0 |
+| --- | --- | --- | --- |
+| No Adage (A0) | 18.0 | | |
+| Earlier card (A2f) | 15.06 | 0.837 | 13/16 (reported only: no controls) |
+| Orientation card (A4) | 11.19 | 0.6215 | 15/16 |
 
-The ledger after dev-v8b: 163 attempts, $24.6504369 admitted ($24.1504369 measured plus $0.50
-conservative), $35.3495631 remaining of $60. After the `launch-gate-v6` native session ($0.0164897)
-and dev-v9's one session ($0.0675211): 165 attempts, $24.7344477 admitted, $35.2655523 remaining.
+- **The rule held for A4.** A4 needed at most 0.80 times A0's requests and fewer requests in at
+  least 10 of 16 blocks. It met both, and D2 to D4.
+- **Quality.** There were no hidden-test failures in any arm.
+- **Controls.** All five A4 controls realized their conditions, and none skipped necessary
+  verification. Three were met by the finish-line gate's passing run on the final sources, two by
+  the agent's own runs.
+- **Reported only** (A0 against A4, per positive):
+  - cost: $0.117 against $0.0825;
+  - pytest requests: 2.8 against 0.19;
+  - cache-read tokens: 445k against 245k;
+  - wall time: 57.7 s against 50.5 s.
+- **Not GPU.** Model requests are not GPU measurements, and CPU runs are never counted as inference
+  saved.
+
+The held-out comparison (Marshmallow, revisions 9 to 11) is the evidence that counts. It runs from
+its own clone (`/private/tmp/adage-heldout-src`, with main merged) under a new native cohort,
+`launch-gate-v7`, with BEST = A4. **Held-out result: not run, and no numbers exist.** Once it runs,
+its decision record will be linked here as written. The record covers the primary bound, quality,
+the G criteria, the sensitivity analyses and censoring.
+
+**Ledger.**
+- After dev-v8b: 163 attempts, $24.6504369 admitted ($24.1504369 measured plus $0.50
+  conservative), $35.3495631 remaining of $60.
+- After the `launch-gate-v6` native session ($0.0164897) and dev-v9's one session ($0.0675211): 165
+  attempts, $24.7344477 admitted, $35.2655523 remaining.
+- After dev-v9b: 218 attempts, all settled, $29.9794687 admitted ($29.4794687 measured plus $0.50),
+  $30.0205313 remaining.
 
 The subsequent [edit-receipt diagnostic](harness/results/20260930-edit-receipt-ablation/summary.json)
 is an authored fixture, not a launch benchmark. After fixing inherited-stdin contamination,

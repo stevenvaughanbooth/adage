@@ -1,0 +1,138 @@
+{
+  "all_journal_receipts": [],
+  "block": 7,
+  "card_exemplar": false,
+  "card_oriented": false,
+  "censored": [],
+  "collection_errors": [],
+  "condition": "positive",
+  "contract_emitted": false,
+  "cost_usd": 0.10886569999999998,
+  "dev_arm": "A0",
+  "exec_decisions": [],
+  "final_generation": "976ed87ddffc042a1934628bccccc9960f5c97b57bac57be5d358e45197782e1",
+  "gate_runs": [],
+  "observed_dispatches": [
+    {
+      "request_id": "429afa86-a00b-4339-83b4-703274b1ac32",
+      "source": "sdk"
+    },
+    {
+      "request_id": "10fbd52f-2793-4a1e-9f69-ce65d5a9341e",
+      "source": "sdk"
+    },
+    {
+      "request_id": "ce342eb8-0727-4c51-a585-51cd3df1bb26",
+      "source": "sdk"
+    },
+    {
+      "request_id": "0c216a6c-6fd1-4866-b6c2-3b683f434909",
+      "source": "sdk"
+    },
+    {
+      "request_id": "71d95e4d-f613-4fad-ab1e-65d776c3af76",
+      "source": "sdk"
+    },
+    {
+      "request_id": "29733612-4a03-434a-bafd-36cacf17ba01",
+      "source": "sdk"
+    },
+    {
+      "request_id": "01a42254-7158-4e2f-827d-808eda08fe1c",
+      "source": "sdk"
+    },
+    {
+      "request_id": "e1848377-01d3-46ef-af88-fbe568cf53b4",
+      "source": "sdk"
+    },
+    {
+      "request_id": "bb419971-e28c-48ed-bec6-8f1452de31f8",
+      "source": "sdk"
+    },
+    {
+      "request_id": "86635cdc-6714-4f93-b968-7e6539b6bc6a",
+      "source": "sdk"
+    },
+    {
+      "request_id": "ecb4cfaa-f536-498d-8e36-56dfa4faf847",
+      "source": "sdk"
+    },
+    {
+      "request_id": "607b00d8-fd7e-4f0d-94cd-c7188246f49d",
+      "source": "sdk"
+    },
+    {
+      "request_id": "30a83adf-36ba-46c1-8d2f-bf454c84ba96",
+      "source": "sdk"
+    },
+    {
+      "request_id": "8aedb39d-37ec-45ec-90d1-352dd0734421",
+      "source": "sdk"
+    },
+    {
+      "request_id": "88af5cd8-b376-4641-b111-9ea4e8b0c492",
+      "source": "sdk"
+    },
+    {
+      "request_id": "fbf2fb3b-0fd4-4edb-9d0c-29dc94f5ddd9",
+      "source": "sdk"
+    },
+    {
+      "request_id": "c0889b1a-d9f8-4bbf-957c-6ab0ef9a055f",
+      "source": "sdk"
+    }
+  ],
+  "order": 23,
+  "protocol": "dev-arms-2",
+  "provenance": {
+    "cwd": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v6/dev-v9b/sessions/23-A0-positive-b07/repo",
+    "destination": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v6/dev-v9b/sessions/23-A0-positive-b07/native-transcript.jsonl",
+    "session_id": "285df462-4955-4895-bc65-5de5578a35c6",
+    "sha256": "1163748129661afd09ceba153afbcdeb1923b9dde85ac1dd882dfb3e6f82d654",
+    "source": "/Users/stevenbooth/.claude/projects/-private-tmp-adage-real-repo-gate-v1-cohorts-launch-gate-v6-dev-v9b-sessions-23-A0-positive-b07-repo/285df462-4955-4895-bc65-5de5578a35c6.jsonl",
+    "synthetic": false
+  },
+  "pytest_requests": 3,
+  "quality": {
+    "changed_files": [
+      "CHANGELOG.rst",
+      "src/marshmallow/validate.py",
+      "tests/test_validate.py"
+    ],
+    "checks": {
+      "tests": true
+    },
+    "ci_passed": true,
+    "dependency_mode": "frozen prepared environment; no rescue install",
+    "elapsed_s": 1.51,
+    "exit_code": 0,
+    "hidden_collection_integrity": {
+      "expected_count": 11,
+      "extra": [],
+      "missing": [],
+      "observed_count": 11,
+      "passed": true,
+      "unsuccessful": []
+    },
+    "hidden_failed": [],
+    "hidden_passed": true,
+    "n_tests": 1204,
+    "passed": true,
+    "rescue_error": null,
+    "suite_failed": [],
+    "tail": "........................................................................ [ 23%]\n........................................................................ [ 29%]\n........................................................................ [ 35%]\n........................................................................ [ 41%]\n........................................................................ [ 47%]\n........................................................................ [ 53%]\n........................................................................ [ 59%]\n........................................................................ [ 65%]\n........................................................................ [ 71%]\n........................................................................ [ 77%]\n........................................................................ [ 83%]\n........................................................................ [ 89%]\n........................................................................ [ 95%]\n....................................................                     [100%]\n1204 passed in 0.99s",
+    "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+  },
+  "replay": {},
+  "requests": 17,
+  "stop_gate_outputs": [],
+  "task": "mm-curve--finite",
+  "timeline": {},
+  "tokens": {
+    "cache_read": 424957,
+    "cache_write": 21309,
+    "input": 137,
+    "output": 4723
+  },
+  "wall_seconds": 51.348818
+}

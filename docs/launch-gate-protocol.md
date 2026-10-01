@@ -407,6 +407,57 @@ design with these scoring sources, from a fresh clone at the same path outside i
 `real_repo_gate`, `real_repo_pairs`, `cohort_v5`, `budget`) are unchanged, byte for byte, at the
 same paths.
 
+### Development canary-v9 result (dev-v9b, recorded 2026-10-01 under r11)
+
+**What this is.** dev-v9b is a development result on one task (`mm-curve--finite`), run with
+development scaffolding: every prompt carries a supplied test block and a work order. The design
+was iterated on this same task (canary-v5, canary-v7, dev-v8b, dev-v9). It qualifies A4 as BEST for
+the held-out comparison under r9. **It is not a launch statistic, not held-out evidence and not a
+savings estimate.** No threshold or rule changed. The record is in
+`evals/reflex-proof/harness/results/20261001-dev-v9b` (`RESULT.json`, `report.json` and the 53
+collected rows).
+
+**Validity.** All 53 sessions were collected, at a known cost of $5.245021 with no unknown cost.
+The report is valid with no problems. Its 26 frozen sources match commit `91a9714` byte for byte,
+and so does its copy of this protocol's JSON.
+
+**Mean model requests per positive** (16 paired blocks):
+
+| Arm | Requests | Ratio to A0 | Blocks fewer than A0 | Status |
+| --- | --- | --- | --- | --- |
+| A0 | 18.0 | | | |
+| A2f | 15.06 | 0.837 | 13/16 | not eligible (no controls) |
+| A4 | 11.19 | 0.6215 | 15/16 | passed D1-D4 |
+
+- D2: there were no hidden-test failures in any arm (16/16 in each).
+- D3 was tested: all five A4 controls were realized, and none skipped necessary verification.
+  - failed, later-edit and config-change were each met by a passing Stop-gate run on the final
+    sources (`receipt_replay` version 3);
+  - broader and rerun were met by the agent's own runs.
+- D4: sessions with repeat attempts were A0 0, A2f 2 and A4 1 (the maximum allowed is 5).
+- **BEST = A4**, with the orientation card on.
+
+**Reported, not gated** (means per positive, A0 against A4):
+- cost: $0.117 against $0.0825;
+- pytest requests: 2.81 against 0.19;
+- cache-read tokens: 445k against 245k;
+- wall time: 57.7 s against 50.5 s.
+
+**What it does not establish:**
+- benefit on held-out tasks;
+- benefit on other repositories;
+- benefit on prompts without the test block and work order;
+- any GPU effect.
+
+Model requests are counted against the debug log's dispatches. CPU runs (receipts and the Stop
+gate) are reported apart and are never counted as inference saved.
+
+**Held-out run location.** The held-out phase runs from a separate fresh clone,
+`/private/tmp/adage-heldout-src`, which contains the main merge (`32e1cfa`). The confinement review
+binds runner sources by path, so this clone gets its own native-confinement cohort,
+`launch-gate-v7`. Its native session ($0.50 cap) must pass review before held-out `prepare`. This
+follows the existing confinement rule and changes no rule.
+
 ## Phase 2: cohort (step 3)
 
 Learning waits for the learner-regression fix on main; nothing is frozen with the broken learner.
