@@ -775,6 +775,30 @@ command's targets: entries it added are this run's failures, file entries (no `:
 collection errors, and entries it kept are reported as earlier failures it did not clear. A record
 this run did not rewrite gives no names at all.
 
+pytest's failure messages are output, so they are never passed on, and pytest's cache keeps no
+failure reasons. Each listed failing test (within the same bound of 12) is instead described from
+its own source: the test file is read through the orientation card's gate (no dotfile, ignored,
+secret-holding, linked or oversized file) and only when its bytes equal the run's input snapshot.
+Adage reads Python's lexical structure without running anything: the test's `def`, its one
+`@pytest.mark.parametrize` and its body. The node id is matched to its parametrized case by pytest's
+own id rule, only where the rule is certain (strings, numbers, booleans and `None` by value,
+containers by `argname<index>`, explicit ids, and either form of pytest's duplicate suffixes);
+otherwise the receipt gives the line where the cases are listed. When the body has exactly one
+check (`assert`, `pytest.raises`, …) that line is quoted. The receipt says that the detail comes from
+the source, not from pytest's messages. A failing test whose function this session added
+(`new_tests`) also gets one sentence:
+
+```text
+From the test source the run used (pytest's own failure messages are not passed on):
+test_latlong_invalid[invalid_latlong12] is the case invalid_latlong = [45, 90] (tests/test_validate.py line 1137); the test's only check is line 1149: with pytest.raises(ValidationError):
+test_latlong_invalid[invalid_latlong12] was added in this session; check it against the request before changing the implementation.
+```
+
+Values are cut to 100 characters and sentences to 320, with 2,400 bytes for all of them. Quoted
+text passes the card's line checks and the secret scan, never carries Adage's own markers, and is
+dropped when it would read as a named command. The finish-line continuation carries the same
+sentences in one paragraph.
+
 A passing verification's receipt names the tests from the declared node-id record
 (`.pytest_cache/v/cache/nodeids`, bound to the journal), within the command's targets. It prefers
 the tests that this session's edits added. The runtime keeps their function names (`new_tests` in

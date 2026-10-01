@@ -57,7 +57,11 @@ pub fn is_test_file(rel: &str) -> bool {
         || rel.split('/').rev().skip(1).any(|d| d == "tests" || d == "test")
 }
 
-fn readable(base: &Path, rel: &str, ignore: &Ignore) -> Option<String> {
+/// A checkout file's text, if Adage may read it: a plain repository-relative path (no dotfile, no
+/// varying part, no secret-holding or ignored file), a regular file inside `base` (canonical) of
+/// at most [`MAX_FILE`] bytes, in UTF-8. Also the gate for a failing test's source
+/// (`adage-exec`'s failure detail).
+pub fn readable(base: &Path, rel: &str, ignore: &Ignore) -> Option<String> {
     let ok_path = !rel.is_empty()
         && !rel.contains(VARYING)
         && !rel.starts_with('/')
@@ -78,19 +82,20 @@ fn readable(base: &Path, rel: &str, ignore: &Ignore) -> Option<String> {
     String::from_utf8(std::fs::read(&path).ok()?).ok()
 }
 
-/// A line as data: tabs as spaces, cut to [`LINE`] characters, withheld if it is not printable
-/// card text or looks like a secret.
-fn quote(n: usize, l: &str) -> String {
+/// A source line as data: tabs as spaces, cut to [`LINE`] characters; `None` (withheld) if it is
+/// not printable card text or looks like a secret.
+pub fn shown(l: &str) -> Option<String> {
     let l = l.trim_end_matches('\r').replace('\t', "    ");
     let mut cut: String = l.chars().take(LINE).collect();
     if l.chars().count() > LINE {
         cut.push('…');
     }
-    let shown = if adage_tracks::card::line_ok(&cut) && !adage_core::secrets::has_secret(&l) {
-        cut
-    } else {
-        "(line withheld)".to_string()
-    };
+    (adage_tracks::card::line_ok(&cut) && !adage_core::secrets::has_secret(&l)).then_some(cut)
+}
+
+/// A numbered line as data ([`shown`]), or `(line withheld)`.
+fn quote(n: usize, l: &str) -> String {
+    let shown = shown(l).unwrap_or_else(|| "(line withheld)".to_string());
     if shown.is_empty() {
         format!("    {n}|\n")
     } else {
@@ -102,10 +107,8 @@ fn quote(n: usize, l: &str) -> String {
 fn definition(l: &str) -> Option<(&'static str, &str)> {
     let (kind, rest) = if let Some(r) = l.strip_prefix("class ") {
         ("class", r)
-    } else if let Some(r) = l.strip_prefix("def ").or_else(|| l.strip_prefix("async def ")) {
-        ("def", r)
     } else {
-        return None;
+        ("def", l.strip_prefix("def ").or_else(|| l.strip_prefix("async def "))?)
     };
     let end = rest.find(|c: char| !(c.is_ascii_alphanumeric() || c == '_')).unwrap_or(rest.len());
     let name = &rest[..end];

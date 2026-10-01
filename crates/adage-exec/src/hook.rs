@@ -227,7 +227,10 @@ fn record_keys(bytes: &[u8]) -> Option<std::collections::BTreeSet<String>> {
 /// the command's targets, entries it added are this run's failures (file ids, without `::`, are
 /// collection errors), and entries it kept from before are failures it did not clear. Anything
 /// else gives no names: never a stale list.
-fn failure_record(staged: &crate::stage::Staged, command: &str) -> Option<render::FailureRecord> {
+///
+/// The listed failing tests are also described beyond their names ([`failing_cases`]): from their
+/// own source and from `new_tests` (the runtime's names of test functions this session added).
+fn failure_record(staged: &crate::stage::Staged, command: &str, new_tests: &[String]) -> Option<render::FailureRecord> {
     let call = pytest_call(&command.split_whitespace().collect::<Vec<_>>())?;
     if !crate::stage::matches_any(&staged.action.cache, PYTEST_LASTFAILED) {
         return None;
@@ -285,12 +288,58 @@ fn failure_record(staged: &crate::stage::Staged, command: &str) -> Option<render
         ids.truncate(n);
         render::Listed { names: ids, more }
     };
-    Some(render::FailureRecord {
-        refreshed: true,
-        failing: listed(failing),
-        collection: listed(collection),
-        uncleared: listed(uncleared),
-    })
+    let (failing, collection, uncleared) = (listed(failing), listed(collection), listed(uncleared));
+    let cases = failing_cases(staged, failing.names.iter().chain(&uncleared.names), new_tests);
+    Some(render::FailureRecord { refreshed: true, failing, collection, uncleared, cases })
+}
+
+/// The listed failing tests as a failed run's receipt describes them beyond their names
+/// ([`render::FailingCase`]), never from the run's output: what each test's own source says
+/// ([`adage_runtime::pytest_case::facts`]), read from the file the run used ([`run_source`]), and
+/// whether this session's edits added its function (`new_tests`, by name, as a passing receipt
+/// names them).
+fn failing_cases<'a>(
+    staged: &crate::stage::Staged,
+    ids: impl Iterator<Item = &'a String>,
+    new_tests: &[String],
+) -> Vec<render::FailingCase> {
+    let ids: Vec<&String> = ids.collect();
+    if ids.is_empty() {
+        return Vec::new();
+    }
+    let ignore = adage_core::gitignore::Ignore::new(&staged.repo);
+    let base = staged.repo.canonicalize().ok();
+    // Each test file is read and parsed once.
+    let mut texts: BTreeMap<&str, Option<String>> = BTreeMap::new();
+    for file in ids.iter().filter_map(|id| id.split_once("::").map(|(f, _)| f)) {
+        texts.entry(file).or_insert_with(|| base.as_deref().and_then(|b| run_source(staged, b, file, &ignore)));
+    }
+    let sources: BTreeMap<&str, adage_runtime::pytest_case::TestSource> = texts
+        .iter()
+        .filter_map(|(f, t)| Some((*f, adage_runtime::pytest_case::TestSource::new(t.as_deref()?)?)))
+        .collect();
+    ids.into_iter()
+        .filter(|id| id.contains("::"))
+        .map(|id| render::FailingCase {
+            id: id.clone(),
+            facts: id.split_once("::").and_then(|(f, _)| sources.get(f)).and_then(|s| s.facts(id)),
+            added: new_tests.iter().any(|n| n == test_function(id)),
+        })
+        .collect()
+}
+
+/// A test file's text as the run read it: through the orientation card's read gate
+/// ([`adage_runtime::orient::readable`]: no dotfile, ignored, secret-holding, oversized or linked
+/// file), and only when its bytes are the ones in the run's input snapshot.
+fn run_source(
+    staged: &crate::stage::Staged,
+    base: &std::path::Path,
+    rel: &str,
+    ignore: &adage_core::gitignore::Ignore,
+) -> Option<String> {
+    let text = adage_runtime::orient::readable(base, rel, ignore)?;
+    let (sha, _) = staged.inputs.get(rel)?.split_once(':')?;
+    (crate::sha256_hex(text.as_bytes()) == sha).then_some(text)
 }
 
 /// A pytest file id as its failure record names a module that failed to collect.
@@ -463,7 +512,7 @@ fn stop_gate(call: &StopCall<'_>) -> Option<StopGate> {
             origin: crate::journal::RunOrigin::StopGate,
         },
     );
-    Some(gate_answer(&completed.outcome, &command, &staged, may_block, call.stop_hook_active))
+    Some(gate_answer(&completed.outcome, &command, &staged, &state.new_tests, may_block, call.stop_hook_active))
 }
 
 /// What a gate run's outcome tells the agent (a `Block`) or only the person (a `Notice`).
@@ -471,6 +520,7 @@ fn gate_answer(
     outcome: &crate::stage::Outcome,
     command: &str,
     staged: &crate::stage::Staged,
+    new_tests: &[String],
     may_block: bool,
     stop_hook_active: bool,
 ) -> StopGate {
@@ -478,9 +528,11 @@ fn gate_answer(
         crate::stage::Outcome::Applied { .. } => {
             StopGate::Notice(render::stop_gate_notice(command, true, staged.exit, staged.duration_ms))
         }
-        crate::stage::Outcome::Failed { exit, .. } if may_block => {
-            StopGate::Block(render::stop_gate_failed(command, *exit, failure_record(staged, command).as_ref()))
-        }
+        crate::stage::Outcome::Failed { exit, .. } if may_block => StopGate::Block(render::stop_gate_failed(
+            command,
+            *exit,
+            failure_record(staged, command, new_tests).as_ref(),
+        )),
         crate::stage::Outcome::Failed { exit, .. } => {
             StopGate::Notice(render::stop_gate_notice(command, false, *exit, staged.duration_ms))
         }
@@ -1099,7 +1151,7 @@ fn act(turn: &Turn<'_>, directives: &[Directive], candidates: &[Candidate<'_>]) 
         {
             // A failed run is a result the agent needs: what failed in this run, from the declared
             // record (never a stale list).
-            let record = failure_record(&staged, s.command);
+            let record = failure_record(&staged, s.command, &state.new_tests);
             out.records.push(rec);
             out.replace.insert(
                 dir.route.clone(),
@@ -2226,7 +2278,7 @@ mod prediction_tests {
         let command = ".venv/bin/python -m pytest tests/test_b.py tests/test_c.py -q";
         let before = r#"{"tests/test_a.py::test_other": true, "tests/test_b.py::test_old": true, "tests/test_c.py::test_stale": true}"#;
         let after = r#"{"tests/test_a.py::test_other": true, "tests/test_b.py::test_old": true, "tests/test_b.py::test_new": true, "tests/test_c.py": true, "tests/test_c.py::test_stale": true, "/etc/x.py::t": true}"#;
-        let r = failure_record(&failed_run(&f, Some(before), Some(after), false), command).unwrap();
+        let r = failure_record(&failed_run(&f, Some(before), Some(after), false), command, &[]).unwrap();
         assert!(r.refreshed);
         assert_eq!(r.failing.names, ["tests/test_b.py::test_new"]);
         assert_eq!(r.collection.names, ["tests/test_c.py"]);
@@ -2237,7 +2289,7 @@ mod prediction_tests {
         assert!(!text.contains("test_other") && !text.contains("test_stale"), "{text}");
         // The agent already saw these failures: the run left the record byte-identical, so pytest
         // did not rewrite it. Nothing can be attributed to this run.
-        let r = failure_record(&failed_run(&f, Some(before), None, false), command).unwrap();
+        let r = failure_record(&failed_run(&f, Some(before), None, false), command, &[]).unwrap();
         assert!(!r.refreshed && r.failing.is_empty() && r.uncleared.is_empty());
         let text = render::stop_gate_failed(command, Some(1), Some(&r));
         assert!(
@@ -2245,20 +2297,159 @@ mod prediction_tests {
             "{text}"
         );
         // Rewritten with the same bytes (refreshed by this run): what it kept, it did not clear.
-        let r = failure_record(&failed_run(&f, Some(before), None, true), command).unwrap();
+        let r = failure_record(&failed_run(&f, Some(before), None, true), command, &[]).unwrap();
         assert!(r.refreshed && r.failing.is_empty());
         assert_eq!(r.uncleared.names, ["tests/test_b.py::test_old", "tests/test_c.py::test_stale"]);
         // No earlier record: everything in it is this run's.
-        let r = failure_record(&failed_run(&f, None, Some(r#"{"tests/test_b.py::test_new": true}"#), false), command)
-            .unwrap();
+        let r =
+            failure_record(&failed_run(&f, None, Some(r#"{"tests/test_b.py::test_new": true}"#), false), command, &[])
+                .unwrap();
         assert_eq!(r.failing.names, ["tests/test_b.py::test_new"]);
         // Names are bounded across the lists.
         let many: serde_json::Map<String, Value> =
             (0..20).map(|i| (format!("tests/test_b.py::test_{i:02}"), json!(true))).collect();
-        let r = failure_record(&failed_run(&f, None, Some(&Value::Object(many).to_string()), false), command).unwrap();
+        let r =
+            failure_record(&failed_run(&f, None, Some(&Value::Object(many).to_string()), false), command, &[]).unwrap();
         assert_eq!((r.failing.names.len(), r.failing.more), (MAX_LISTED_TESTS, 20 - MAX_LISTED_TESTS));
         // Not a pytest run: nothing is said about test names.
-        assert!(failure_record(&failed_run(&f, Some(before), Some(after), false), "sh tools/check.sh").is_none());
+        assert!(failure_record(&failed_run(&f, Some(before), Some(after), false), "sh tools/check.sh", &[]).is_none());
+    }
+
+    /// The held-out b08 shape (launch-gate-v8): a session's own parametrized test that declares a
+    /// valid (latitude, longitude) pair invalid. The run's record names only the case's id.
+    const B08_TESTS: &str = r#"import pytest
+
+from marshmallow import validate
+from marshmallow.exceptions import ValidationError
+
+
+def test_and():
+    validator = validate.And(validate.Range(min=0))
+    assert validator(2)
+
+
+@pytest.mark.parametrize(
+    "valid_latlong",
+    [
+        (0, 0),
+        (45, 90),
+        (-45, -90),
+        (90, 180),
+        (-90, -180),
+        (0.5, 0.5),
+        (-45.5, 135.5),
+        (45.0, -135.0),
+    ],
+)
+def test_latlong_valid(valid_latlong):
+    validator = validate.LatLong()
+    assert validator(valid_latlong) == valid_latlong
+
+
+@pytest.mark.parametrize(
+    "invalid_latlong",
+    [
+        (91, 0),
+        (-91, 0),
+        (0, 181),
+        (0, -181),
+        (90.1, 0),
+        (-90.1, 0),
+        (0, 180.1),
+        (0, -180.1),
+        (100, 200),
+        (45,),
+        (45, 90, 45),
+        [],
+        [45, 90],
+        "45, 90",
+        45,
+        None,
+        (None, 0),
+        (0, None),
+        ("invalid", 0),
+        (0, "invalid"),
+    ],
+)
+def test_latlong_invalid(invalid_latlong):
+    validator = validate.LatLong()
+    with pytest.raises(ValidationError):
+        validator(invalid_latlong)
+"#;
+
+    fn b08_directive() -> Directive {
+        Directive {
+            route: "predict-check".into(),
+            track: "fixture/context".into(),
+            version: "0.1.0".into(),
+            strength: Strength::Fire,
+            text: "x".into(),
+            kind: "run".into(),
+            origin: None,
+        }
+    }
+
+    /// A failed run's receipt and the finish-line continuation describe a failing test beyond its
+    /// id, from the test source the run used (never the run's output): the parametrized case with
+    /// its value, and the test's one check. A test this session added is said to be the agent's
+    /// own; one it did not add is not. A source that changed since the run is not described.
+    #[test]
+    fn a_failing_case_is_described_from_the_source_the_run_used() {
+        let f = pytest_fixture();
+        std::fs::write(f.root.join("tests/test_validate.py"), B08_TESTS).unwrap();
+        let command = ".venv/bin/python -m pytest tests/test_validate.py -q";
+        let id = "tests/test_validate.py::test_latlong_invalid[invalid_latlong12]";
+        let mut staged = failed_run(&f, None, Some(&json!({ id: true }).to_string()), false);
+        staged.inputs = crate::stage::input_snapshot(&f.root.canonicalize().unwrap(), &staged.action).unwrap();
+        let added = ["test_latlong_valid".to_string(), "test_latlong_invalid".to_string()];
+        let r = failure_record(&staged, command, &added).unwrap();
+        assert_eq!(r.failing.names, [id]);
+        let case = &r.cases[0];
+        assert!(case.added, "{case:?}");
+        let facts = case.facts.as_ref().expect("the source the run used is read");
+        let line = |needle: &str| B08_TESTS.lines().position(|l| l.contains(needle)).unwrap() + 1;
+        assert_eq!(facts.case, Some((line("        [45, 90],"), Some("invalid_latlong = [45, 90]".into()))));
+        assert_eq!(facts.check, Some((line("pytest.raises"), "with pytest.raises(ValidationError):".into())));
+
+        let detail = format!(
+            "From the test source the run used (pytest's own failure messages are not passed on):\n\
+             test_latlong_invalid[invalid_latlong12] is the case invalid_latlong = [45, 90] (tests/test_validate.py line {}); \
+             the test's only check is line {}: with pytest.raises(ValidationError):\n\
+             test_latlong_invalid[invalid_latlong12] was added in this session; check it against the request before changing the implementation.",
+            line("        [45, 90],"),
+            line("pytest.raises")
+        );
+        let receipt = render::action_failed(&b08_directive(), command, Some(1), Some(&r), "959cb36ea93c0123");
+        let expected = format!(
+            "Adage ran `{command}` after your edits: it failed (exit 1; receipt 959cb36ea93c). Nothing was changed.\n\
+             Failing tests: {id}.\n{detail}\n</adage-reflex>"
+        );
+        assert!(receipt.ends_with(&expected), "{receipt}");
+        assert!(receipt.len() < 1200, "{}", receipt.len());
+        assert!(render::named(&receipt).commands == [command], "only the command reads as named: {receipt}");
+        // The finish-line continuation says the same, in one paragraph.
+        let failed = crate::stage::Outcome::Failed { exit: Some(1), signal: None };
+        let StopGate::Block(gate) = gate_answer(&failed, command, &staged, &added, true, false) else { panic!() };
+        assert!(gate.starts_with(render::FINISH_LINE) && gate.ends_with(render::NOT_FROM_USER), "{gate}");
+        assert!(gate.contains(&format!("Failing tests: {id}. {}", detail.replace('\n', " "))), "{gate}");
+        assert!(adage_hook::harness::is_own_text(&gate), "{gate}");
+        assert_eq!(render::named(&gate).commands, [command], "{gate}");
+
+        // A failing test this session did not add: described, not flagged.
+        let r = failure_record(&staged, command, &["test_other".to_string()]).unwrap();
+        assert!(!r.cases[0].added && r.cases[0].facts.is_some());
+        let text = render::action_failed(&b08_directive(), command, Some(1), Some(&r), "959cb36ea93c0123");
+        assert!(
+            text.contains("is the case invalid_latlong = [45, 90]") && !text.contains("added in this session"),
+            "{text}"
+        );
+
+        // The file changed after the run: its text is not the one that ran, so nothing is read.
+        std::fs::write(f.root.join("tests/test_validate.py"), format!("{B08_TESTS}\n# edited\n")).unwrap();
+        let r = failure_record(&staged, command, &added).unwrap();
+        assert!(r.cases[0].facts.is_none() && r.cases[0].added, "{:?}", r.cases);
+        let text = render::stop_gate_failed(command, Some(1), Some(&r));
+        assert!(!text.contains("From the test source") && text.contains("was added in this session"), "{text}");
     }
 
     /// Review F8: a gate run whose completion cannot be confirmed tells the agent, like an action,
@@ -2268,14 +2459,14 @@ mod prediction_tests {
         let f = pytest_fixture();
         let staged = failed_run(&f, None, None, false);
         let unknown = crate::stage::Outcome::Unknown { reason: "the completion could not be recorded".into() };
-        match gate_answer(&unknown, "make test", &staged, false, false) {
+        match gate_answer(&unknown, "make test", &staged, &[], false, false) {
             StopGate::Block(r) => {
                 assert!(r.contains("Do not retry it automatically") && r.contains("acknowledge recovery"), "{r}");
                 assert!(adage_hook::harness::is_own_text(&r), "{r}");
             }
             other => panic!("{other:?}"),
         }
-        assert!(matches!(gate_answer(&unknown, "make test", &staged, false, true), StopGate::Notice(_)));
+        assert!(matches!(gate_answer(&unknown, "make test", &staged, &[], false, true), StopGate::Notice(_)));
     }
 
     /// Review F5: a receipt never covers a call whose command line changes what pytest sees
