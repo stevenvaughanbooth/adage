@@ -729,8 +729,11 @@ fn status(paths: &Paths, json: bool) -> Result<()> {
             if let Some(ob) = evidence::obligation(r) {
                 o.line(&detail(ob))?;
             }
-            if let Some((without, _)) = evidence::execution(r) {
-                o.line(&detail(format!("execution only: {without} until delegated (adage review)")))?;
+            if evidence::execution(r).is_some() {
+                o.line(&detail(
+                    "execution only: never said to the agent, and silent (Stop included) until delegated with an E2 grant · adage review"
+                        .to_string(),
+                ))?;
             }
         }
     }
