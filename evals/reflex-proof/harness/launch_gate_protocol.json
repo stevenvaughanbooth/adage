@@ -1,0 +1,806 @@
+{
+  "protocol": "launch-gate-1",
+  "registered": "2026-09-30",
+  "status": "registered before any canary, training or held-out dispatch under this protocol",
+  "hypothesis": "Structured execution receipts plus an upfront harness responsibility contract let the agent recognize completed verification and avoid redundant execution.",
+  "ledger": {
+    "authority": "/private/tmp/adage-real-repo-gate-v1",
+    "ceiling_usd": 60,
+    "admission_spend_at_registration_usd": 16.1474504,
+    "attempts_at_registration": 100,
+    "protocol_ceiling_usd": 44.0,
+    "phase_ceilings_usd": {
+      "canary": 18.0,
+      "training": 0.0,
+      "heldout": 26.0
+    },
+    "per_session_cap_usd": 1.5,
+    "stop_if_ledger_remaining_below_usd": 3.0,
+    "admission_spend_at_r3_usd": 16.1732882,
+    "attempts_at_r3": 101,
+    "admission_spend_at_r4_usd": 16.2011778,
+    "attempts_at_r4": 102,
+    "admission_spend_at_r5_usd": 16.2151802,
+    "attempts_at_r5": 103,
+    "admission_spend_at_r6_usd": 18.9257862,
+    "attempts_at_r6": 116,
+    "admission_spend_at_r7_usd": 20.2683707,
+    "attempts_at_r7": 128,
+    "admission_spend_at_r8_usd": 20.2683707,
+    "attempts_at_r8": 128,
+    "r9_note": "r9 (draft): the $4 training allocation moves to held-out (held-out $26, training $0); Click and more-itertools training gets a new allocation later. The protocol total stays $38. The ledger had $39.7316293 remaining before development canary-v8.",
+    "admission_spend_at_r10_usd": 24.6504369,
+    "attempts_at_r10": 163,
+    "r10_note": "r10 (development budget): the canary/development ceiling rises from $12 to $18 for development canary-v9 (study ceiling $8.50, $0.50 per session) and a new native-confinement session for cohort launch-gate-v6 ($0.50 cap); the protocol total rises from $38 to $44; held-out keeps $26 and training $0. Ledger at r10: $24.6504369 admitted (163 attempts), $35.3495631 remaining of $60. Worst case after both: $33.6504369 admitted, $26.3495631 remaining; held-out's $3 ledger floor then leaves $23.3495631 for its $26 worst case, so held-out would stop at the floor before its own ceiling if every study hit its worst case (expected spend is far below: dev-v9 about $6.6, a native session about $0.03). The ledger ceiling ($60) is unchanged.",
+    "admission_spend_at_r11_usd": 24.7344477,
+    "attempts_at_r11": 165
+  },
+  "model": "claude-haiku-4-5-20251001",
+  "claude_cli": "2.1.282",
+  "repositories": {
+    "marshmallow": {
+      "url": "https://github.com/marshmallow-code/marshmallow",
+      "base": "7f0792bd7a06f72e393ec866ac1e89e1502ccfe1",
+      "training": "replay of the existing 15 organic and 10 guided native histories; no new training spend",
+      "heldout": [
+        "mm-curve--has-keys",
+        "mm-curve--iso-date",
+        "mm-curve--json-object",
+        "mm-curve--lat-long"
+      ],
+      "development": [
+        "mm-curve--finite"
+      ],
+      "stratum": "same-repository transfer on a pipeline-development repository (learner constants and research thresholds were chosen with these families)",
+      "withdrawn_heldout": {
+        "mm-curve--max-sum": "r9: near-duplicate of the size-limit training group (same (max, *, error=None) interface and measure-at-most-max predicate as max-words and max-utf8-bytes); never run, never dispatched"
+      }
+    },
+    "click": {
+      "url": "https://github.com/pallets/click",
+      "base": "06b2a678741131fd577ce170e23e5ca0aeba0309",
+      "training": "existing 5 organic v5 sessions, then 10 new guided sessions on the same five tasks if no organic certificate",
+      "training_tasks": [
+        "click-type--hex-color",
+        "click-type--port",
+        "click-type--duration",
+        "click-type--ip-address",
+        "click-type--semver"
+      ],
+      "heldout": [
+        "click-type--json-object",
+        "click-type--key-value",
+        "click-type--int-list",
+        "click-type--regex"
+      ],
+      "development": [
+        "click-type--date",
+        "click-type--time",
+        "click-type--log-level"
+      ],
+      "stratum": "same-repository transfer on a pipeline-development repository (learner constants and research thresholds were chosen with these families)"
+    },
+    "more-itertools": {
+      "url": "https://github.com/more-itertools/more-itertools",
+      "base": "tag v11.1.0 (64be96ceb2a6e836f76f069f4a96d2394d59fd0c); commit resolved and recorded at preparation",
+      "training": "5 new organic sessions, then 10 guided sessions on the same five tasks if no organic certificate",
+      "training_tasks": 5,
+      "heldout": 4,
+      "note": "task family authored and gold/base-validated before any dispatch; task ids frozen in the cohort manifest",
+      "stratum": "same-repository transfer on a pipeline-unseen repository"
+    }
+  },
+  "arms": {
+    "agent": "no Adage hooks",
+    "noexec": "same frozen learned home and binaries, hooks on, no grant, no contract, no execution",
+    "automatic": "same, plus one person-issued E2 grant for the frozen reflex: SessionStart contract and structured receipts"
+  },
+  "repetitions": 2,
+  "assignment_order": "per task, arms in a rotated Latin order recorded in the manifest; repetition 1 for all tasks before repetition 2",
+  "reflex_selection": "per repository, the lexicographically first certified verify-effect context route in the frozen learned home; no hand-authored routes",
+  "provenance_labels": [
+    "naturally learned (organic histories only)",
+    "explicitly guided training"
+  ],
+  "scoring": {
+    "classifier": "evals/reflex-proof/harness/receipt_replay.py (version 3)",
+    "repeat": "same interpreter token and test targets as the receipt; output-only flags, redirections and pipes ignored",
+    "output_only_flags": [
+      "-q",
+      "-qq",
+      "-v",
+      "-vv",
+      "-s",
+      "-x",
+      "-rA",
+      "-ra",
+      "--tb=*",
+      "--color=*",
+      "--no-header",
+      "--disable-warnings",
+      "-p no:cacheprovider"
+    ],
+    "not_equivalent": [
+      "-k",
+      "-m",
+      "other flags",
+      "other interpreters",
+      "different targets"
+    ],
+    "covered_subset": "narrower node ids inside the receipt targets; reported separately, never counted as repeats or eliminations",
+    "cache_only_receipts": "a receipt whose only changes are the declared caches counts as source-unchanged",
+    "confirmed_elimination": "automatic session with a successful receipt whose digest equals the final source digest, no repeat attempt, no unparsed verification afterwards, and no condition requiring verification",
+    "necessary_work_skipped": "verification required (failed receipt, stale receipt, explicit rerun or wider scope) and no matching agent run on the final source",
+    "repeat_attempt": "any request after a fresh successful receipt whose selection the receipt covers (same non-output options; targets equal or inside), any interpreter, launched or not",
+    "necessary_satisfied_by": "a completed agent run on the final sources, or any passing receipt on the final sources (context, obligation or the finish-line gate); a requested rerun only by the agent's own completed run; a requested wider scope only by a run of that scope",
+    "receipt_origin": "each receipt's origin is the journal's (context, obligation, stop-gate, manual); a journal written before r11 has none, and a run journaled at Stop is then the gate's",
+    "verification_necessary": "decided by the learned context's runs: a failed or stale context run (or a requested rerun or wider scope) makes verification necessary; gate runs never create or remove the need",
+    "realized": "judged on context runs: failed = the first context run failed; later-edit, config-change = a successful context run on non-final sources; positive = a successful context run on the final sources; broader, rerun = a successful context run; finish-line gate runs are reported separately"
+  },
+  "canary_pass": {
+    "complete": "all 12 assignments collected with known cost",
+    "contract": "execution contract emitted by SessionStart and present in every native transcript",
+    "receipts": "every successful CPU receipt delivered as a structured receipt with operation id and declared input digest",
+    "negative_controls": "each of failed, later-edit, config-change, broader and rerun realized at least once",
+    "necessary_work_skipped": 0,
+    "foreign_or_unapproved_receipts": 0,
+    "tasks": "development split only (marshmallow finite)",
+    "native_confinement": "fresh native-confinement review in launch-gate-v2 passes, including environment denial",
+    "reporting": "integration_safety_passed is delivery and safety only; elimination evidence is reported from realized positive rows and is never a hypothesis pass"
+  },
+  "go_thresholds": {
+    "G1_learned_reflex_repositories_min": 2,
+    "G2_context_fired_fraction_of_automatic_sessions_min": 0.5,
+    "G2_successful_receipt_fraction_of_fired_min": 0.75,
+    "G3_confirmed_eliminations_total_min": 8,
+    "G3_repositories_with_at_least_2_eliminations_min": 2,
+    "G3_elimination_rate_among_fresh_receipt_sessions_min": 0.5,
+    "G4_noexec_equivalent_command_session_fraction_min": 0.5,
+    "G4_automatic_repeat_session_fraction_max_ratio_to_noexec": 0.5,
+    "G5_automatic_failures_max": "min(agent failures, noexec failures)",
+    "G6_necessary_work_skipped": 0,
+    "G6_unapproved_or_noexec_executions": 0,
+    "G6_undeclared_writes": 0,
+    "G6_unknown_costs": 0,
+    "G7_unnecessary_execution_fraction_max": 0.25,
+    "G8_automatic_model_requests_max_ratio_to_noexec": 1.0,
+    "G8_automatic_cost_max_ratio_to_noexec": 1.05,
+    "G9_pipeline_unseen_repository": "more-itertools",
+    "G9_pipeline_unseen_confirmed_eliminations_min": 2
+  },
+  "report_only": [
+    "tokens",
+    "wall time",
+    "CPU action durations",
+    "per-repository and per-task tables",
+    "agent-only contrasts"
+  ],
+  "never": [
+    "present model-request reductions as GPU savings",
+    "rerun or replace an outcome",
+    "tune against held-out results",
+    "copy grants",
+    "change thresholds after the first held-out dispatch"
+  ],
+  "revision": 11,
+  "revisions": [
+    "2026-09-30 r1: registered",
+    "2026-09-30 r2, before any dispatch under this protocol: task splits with near-duplicate groups, training-isolation audit, evaluation read-only rule, paired blocks, same-repository strata and G9; canary moved to the development split",
+    "2026-10-01 r3, before any canary or held-out agent session: environment-independent sandbox policy and allowlisted launch environment; native canary tests environment denial; launch-gate-v1 native session excluded as confinement evidence, canary-v2 aborted; canary moves to cohorts/launch-gate-v2/canary-v3",
+    "2026-10-01 r4, before any canary or held-out agent session: runtime-injected tool names (sandbox proxy credential, session inbox token) are denied where possible and tolerated only by name when the same native canary proves them harmless (proxy refuses external requests; tool cannot connect to the inbox); launch-gate-v2 excluded after its review failed closed; canary moves to cohorts/launch-gate-v3/canary-v4",
+    "2026-10-01 r5, before any canary or held-out agent session: the native review parses canary values where they start (Claude Code adds an exit-code line and appends <sandbox_violations>); one exemption rule (probe.proven_harmless) governs the canary program, the denied-name check and the credential-name check; launch-gate-v3 excluded unreviewed; canary moves to cohorts/launch-gate-v4/canary-v5",
+    "2026-10-01 r6, development only (no held-out dispatch has occurred): canary-v5 results recorded (delivery and safety pass; positives unrealized; repeats after successful receipts); receipt note for covered test calls and plainer pytest receipt scope; canary-v7 supplies a fixed validated test block; canary phase ceiling 6 -> 8 and training 10 -> 8 (protocol total unchanged at 38)",
+    "2026-10-01 r6 note: canary-v6 (launch-canary-6) was frozen before this JSON's r6 edits, so its source hashes no longer verify; it was superseded before preparation with no spend and canary-v7 (launch-canary-7, same design) replaces it",
+    "2026-10-01 r7, before any held-out dispatch: scorer version 2 (covered requests are repeat attempts whether or not they launched; any blocks an elimination; only completed requests satisfy necessary verification); realistic project environment (checkout .venv first on PATH and as VIRTUAL_ENV, native canary requires python_on_path); pytest receipts list collected/new node ids from the declared pytest cache record bound to the journal; later-edit control realized by construction; PreToolUse result substitution out of scope (goal is skipping inference)",
+    "2026-10-01 r8, development only, before any held-out dispatch: target is fewer model requests per task against a no-Adage control in Claude Code hook mode; Lever 2 (factual contract, compact receipts, delivered failures, Stop gate) and Lever 1 (card names the certified test command); development canary-v8 (dev_arms.py) with arms A0 no hooks, A1 revision-7 integration, A2 Lever 2, A3 Levers 1+2 in six paired blocks plus A2/A3 safety controls, using the production hook registration; development thresholds D1-D4 registered here; canary/development ceiling 8 -> 12 and training 8 -> 4 (protocol total unchanged at 38; held-out keeps 22)",
+    "2026-10-01 r9 (draft on codex/heldout-tasks, registered only when merged, before any held-out dispatch): held-out Marshmallow tasks authored and frozen (heldout_tasks.py, results/20261001-heldout-tasks, commit 260729a); max-sum withdrawn as a near-duplicate of size-limit and replaced by lat-long (geo-coordinate); every held-out prompt carries the realism line 'Do not create git commits.', no work order and no test block; pre-registered held-out analysis (heldout_analysis.py) and runner (heldout_cohort.py): arms A0, NOEXEC and BEST (the dev arm passing D1-D4 with the lowest mean requests, built from the final pre-freeze commit; no held-out run if none passes), 4 tasks x 5 repetitions in randomized paired blocks; debug-log requests (retries count) with a per-session stream cross-check, unexplained mismatches excluding their block, more than 2 excluded blocks = unverified; headline test: one-sided 95% bootstrap upper bound of BEST/A0 requests <= 0.90 plus quality within one; censoring conservative against Adage (censored BEST at max(observed, 60), censored A0/NOEXEC at observed, all censored sessions quality failures) with a no-censored-blocks sensitivity; a no-has-keys sensitivity reported prominently if it disagrees; G1, G2, G5, G6, G7 and G8 apply, G3, G4 and G9 are not applicable with reasons; five realized controls first; $0.40 cap, 65 sessions, $26.00 worst case, held-out ceiling $26 after moving training's $4 (protocol total $38 unchanged); control prompts also carry the realism line (between the development prompt and the canary suffix), re-validated offline",
+    "2026-10-01 r10, development only, before any held-out dispatch: dev-v8b archived as invalid for its execution arms from session 09 (its grants lapsed: an outside process wrote bytecode into the shared runtime); the harness fails loudly on lapsed grants, unverified or censored counts and unrealized controls, protects the shared runtime and re-checks every grant before each dispatch; production: the procedure card drops its exemplar for an orientation block (where its learned files stand in the checkout now, read-only, bounded) and receipts name the tests this session's edits added; codex/ship-fixes, codex/heldout-tasks (r9) and codex/first-run-fixes merged before the freeze; development canary-v9 (dev_v9.py, dev-arms-2) with arms A0, A2f and A4 in 16 paired blocks plus five A4 controls, every prompt with the realism line; rule dev_thresholds_v9; canary/development ceiling 12 -> 18 and protocol total 38 -> 44 (held-out keeps 26)",
+    "2026-10-01 r11, development only, a scoring-definition fix registered before any dev-v9 positive block ran (dev-v9 stopped after its first control, order 0) and before any held-out dispatch: every journal receipt records its origin (context, obligation, stop-gate, manual); receipt_replay version 3 decides necessity from the learned context's runs, lets a passing run on the final sources meet it whoever ran it (the gate included; a requested rerun only by the agent's own run, a wider scope only by a run of that scope), and reports gate runs separately; launch_canary.realized judges conditions on context runs alone (failed: the first context run failed; later-edit and config-change: a successful context run on non-final sources; positive: a successful context run on the final sources); held-out G2 and G7 count context runs only. dev_thresholds_v9 is unchanged; dev-v9 is archived as aborted and refrozen as dev-v9b",
+    "2026-10-01 r12, before any held-out dispatch: cohort native recipes bind the person's evaluation allocation (evaluation-allocation.json, listed in shared_sources) instead of the legacy $27.50 admission ceiling. Approved by the user in chat ('Don't worry too much about budget!'; 'Please do what it takes to get us to launch ready') and applied by the user's own edit to cohort_v5.py. Unchanged: $0.50 native session cap, $3 ledger floor, $60 ledger ceiling (not raised), old cohorts' $27.50 fallback. launch-gate-v7 superseded before any dispatch; launch-gate-v8 replaces it."
+  ],
+  "splits": {
+    "marshmallow": {
+      "families": [
+        "mm-curve",
+        "mm-validator"
+      ],
+      "groups": {
+        "string-affix": [
+          "mm-curve--starts-with",
+          "mm-curve--ends-with",
+          "mm-curve--contains"
+        ],
+        "integer-divisibility": [
+          "mm-curve--multiple-of",
+          "mm-curve--odd"
+        ],
+        "sequence-duplicates": [
+          "mm-curve--unique",
+          "mm-curve--no-adjacent-duplicates"
+        ],
+        "string-character-class": [
+          "mm-curve--hexadecimal",
+          "mm-curve--alphanumeric",
+          "mm-curve--ascii",
+          "mm-curve--lowercase",
+          "mm-curve--printable",
+          "mm-curve--not-blank"
+        ],
+        "size-limit": [
+          "mm-curve--max-words",
+          "mm-curve--max-utf8-bytes",
+          "mm-curve--max-sum"
+        ],
+        "address-format": [
+          "mm-curve--ip-address"
+        ],
+        "string-symmetry": [
+          "mm-curve--palindrome"
+        ],
+        "sequence-order": [
+          "mm-curve--strictly-increasing"
+        ],
+        "numeric-finiteness": [
+          "mm-curve--finite"
+        ],
+        "mapping-keys": [
+          "mm-curve--has-keys"
+        ],
+        "temporal-format": [
+          "mm-curve--iso-date"
+        ],
+        "structured-text": [
+          "mm-curve--json-object"
+        ],
+        "geo-coordinate": [
+          "mm-curve--lat-long"
+        ]
+      },
+      "splits": {
+        "training": [
+          "string-affix",
+          "integer-divisibility",
+          "sequence-duplicates",
+          "string-character-class",
+          "size-limit",
+          "address-format",
+          "string-symmetry",
+          "sequence-order"
+        ],
+        "development": [
+          "numeric-finiteness"
+        ],
+        "evaluation": [
+          "mapping-keys",
+          "temporal-format",
+          "structured-text",
+          "geo-coordinate"
+        ]
+      },
+      "markers": {
+        "finite": [
+          "validate.Finite",
+          "class Finite"
+        ],
+        "has-keys": [
+          "HasKeys"
+        ],
+        "iso-date": [
+          "IsoDate"
+        ],
+        "json-object": [
+          "JsonObject"
+        ],
+        "lat-long": [
+          "LatLong"
+        ]
+      },
+      "notes": "odd, no-adjacent-duplicates and max-utf8-bytes were transfer-v3 held-out tasks but are near-duplicates of training tasks (multiple-of, unique, max-words); they sit in training groups and their sessions are never mined. finite is development: cold pilots, transfer-v3 and the launch canary. r9: max-sum (registered r2 as its own group) is a near-duplicate of the size-limit group, so it joins that group and is never run; lat-long (geo-coordinate) replaces it in evaluation. The held-out tasks are authored and frozen in evals/reflex-proof/harness/heldout_tasks.py and results/20261001-heldout-tasks/manifest.json."
+    },
+    "click": {
+      "families": [
+        "click-type"
+      ],
+      "groups": {
+        "numeric-range": [
+          "click-type--port",
+          "click-type--percentage"
+        ],
+        "unit-quantity": [
+          "click-type--duration",
+          "click-type--byte-size"
+        ],
+        "network-address": [
+          "click-type--ip-address",
+          "click-type--host-port"
+        ],
+        "pattern-string": [
+          "click-type--hex-color",
+          "click-type--semver",
+          "click-type--slug"
+        ],
+        "temporal": [
+          "click-type--date",
+          "click-type--time"
+        ],
+        "enumeration": [
+          "click-type--log-level"
+        ],
+        "structured-text": [
+          "click-type--json-object"
+        ],
+        "key-value": [
+          "click-type--key-value"
+        ],
+        "list-parsing": [
+          "click-type--int-list"
+        ],
+        "compiled-pattern": [
+          "click-type--regex"
+        ]
+      },
+      "splits": {
+        "training": [
+          "numeric-range",
+          "unit-quantity",
+          "network-address",
+          "pattern-string"
+        ],
+        "development": [
+          "temporal",
+          "enumeration"
+        ],
+        "evaluation": [
+          "structured-text",
+          "key-value",
+          "list-parsing",
+          "compiled-pattern"
+        ]
+      },
+      "markers": {
+        "date": [
+          "DateParamType"
+        ],
+        "time": [
+          "TimeParamType"
+        ],
+        "log-level": [
+          "LogLevelParamType"
+        ],
+        "json-object": [
+          "JsonObjectParamType"
+        ],
+        "key-value": [
+          "KeyValueParamType"
+        ],
+        "int-list": [
+          "IntListParamType"
+        ],
+        "regex": [
+          "RegexParamType"
+        ]
+      },
+      "notes": "Every existing click-type variant appeared in showcase benchmark evaluations, so none is eligible for final evaluation; four new variants in new groups are authored and validated before dispatch."
+    },
+    "more-itertools": {
+      "families": [
+        "mit"
+      ],
+      "groups": {},
+      "splits": {
+        "training": [],
+        "development": [],
+        "evaluation": []
+      },
+      "markers": {},
+      "notes": "Groups and splits are declared when the family is authored, before any session in this repository."
+    }
+  },
+  "unseen_repository_generalization": "not measured: learned tracks are repository-keyed, so this protocol never applies a reflex learned in one repository to another",
+  "pairing": "a block is one held-out task and repetition; each block runs all three arms on identical prompts and checkouts; comparisons are within blocks; every attempt counts",
+  "evaluation_read_only": "a result that informs a fix or tuning decision spends its set: it becomes development, and the next confirmatory run needs new evaluation groups",
+  "isolation_audit": "evals/reflex-proof/harness/split_audit.py must pass for every frozen learned home before any dispatch that uses it, and again after evaluation",
+  "confinement": {
+    "launch_environment": "allowlist (probe.LAUNCH_PASS + probe.LAUNCH_SECRETS + random sentinel); all other names dropped",
+    "denied_to_tools": "fixed probe.DENIED_ENV, independent of the freezing shell",
+    "launch_check": "probe.check_launch refuses if a passed non-plain name is not denied",
+    "native_canary": "file, network, inbox-socket and environment checks; sentinel absent; every denied name invisible; credential-like names only the two named runtime names, each with a passing proof in the same run",
+    "runtime_injected_exemptions": {
+      "CLOUDSDK_PROXY_PASSWORD": "proxy_denies_external",
+      "CLAUDE_CODE_MESSAGING_TOKEN": "inbox"
+    },
+    "exemption_rule": "a name in RUNTIME_INJECTED is exempt from the denied-name and credential-name checks only when its named proof passed in the same run; nothing else is exempt"
+  },
+  "development_results": {
+    "canary-v5": {
+      "sessions": 12,
+      "known_cost_usd": 2.6962327,
+      "contract_delivered": "12/12",
+      "structured_receipts": "7/7",
+      "necessary_work_skipped": 0,
+      "quality": "12/12",
+      "positives_realized": "0/2",
+      "confirmed_eliminations": 0,
+      "redundant_repeats_after_successful_receipts": 2
+    },
+    "canary-v7": {
+      "sessions": 12,
+      "known_cost_usd": 1.3425845,
+      "positives_with_fresh_receipt": "6/6",
+      "positives_with_covered_repeat_attempt_posthoc": "6/6",
+      "confirmed_eliminations_posthoc": 0,
+      "original_report_eliminations": "4 (scoring artifact: bare python failed to launch)",
+      "necessary_work_skipped": 0,
+      "later_edit_realized": "0/2"
+    },
+    "dev-v8b": {
+      "protocol": "dev-arms-1",
+      "recorded": "2026-10-01, after the run; no threshold or rule changed",
+      "sessions": 34,
+      "known_cost_usd": 4.3539376,
+      "unknown_costs": 0,
+      "mean_requests_per_positive": {
+        "A0": 16.8333,
+        "A1": 22.5,
+        "A2": 17.8333,
+        "A3": 18.6667
+      },
+      "blocks_fewer_than_A0": {
+        "A1": "2/6",
+        "A2": "4/6",
+        "A3": "2/6"
+      },
+      "status": "invalid for its execution arms from session 09: every A1-A3 session from 09 ran with a lapsed grant (withheld: approval, route_exec_digest), so only 7 of 18 hook-arm positives (01-06, 08) ran the design; not a valid negative",
+      "verdict": "no arm qualified (D1 ratios to A0 as computed: A1 1.34, A2 1.06, A3 1.11, over mixed working and card-only sessions); held-out does not run on this design",
+      "D2_quality": "34/34 sessions passed",
+      "D3": "void: all 10 controls ran after the lapse and none realized its condition; v8 makes no safety claim",
+      "D4_sessions_with_repeat_attempts": {
+        "A1": 2,
+        "A2": 1,
+        "A3": 2
+      },
+      "stop_gate_runs": 0,
+      "cause": "an unsandboxed pytest outside the study (base environment, no -B) wrote bytecode into the shared runtime's standard library at 05:58:05Z; the approved interpreter identity (runtime_sha256) includes it",
+      "posthoc_audit": "dispatch cross-check 34/34 equal; no censored session; control realization 0/10",
+      "harness_after": "reports fail loudly (no contract, withheld approval or no receipt in a hook arm, unverified or censored counts, unrealized controls); prepare makes the shared runtime read-only; live re-checks it and each grant at SessionStart before every dispatch and stops the study on a lapse",
+      "archive": "results/20261001-dev-arms"
+    },
+    "dev-v9": {
+      "protocol": "dev-arms-2",
+      "status": "aborted after order 0 (the failed control) by the study's stop rule; no positive block ran",
+      "cause": "scoring definition, not the product: version 2 counted the finish-line gate's passing run at Stop as a successful context run, so the failed control looked unrealized; the session behaved as designed (context run failed and was delivered, the agent fixed the code and stopped without testing, the gate passed on the final sources)",
+      "sessions": 1,
+      "known_cost_usd": 0.0675211,
+      "native_session_usd": 0.0164897,
+      "successor": "dev-v9b: the same arms, matrix, prompts and dev_thresholds_v9, scored with receipt_replay version 3",
+      "archive": "results/20261001-dev-v9"
+    },
+    "dev-v9b": {
+      "protocol": "dev-arms-2",
+      "recorded": "2026-10-01, after the run; no threshold or rule changed",
+      "what_it_is": "a development result on one task (mm-curve--finite) with development scaffolding: every prompt carries a supplied test block and a work order, and the design was iterated on this same task (canary-v5, canary-v7, dev-v8b, dev-v9); it qualifies A4 as BEST for the held-out comparison under r9 and is not a launch statistic, held-out evidence or a savings estimate",
+      "status": "complete and valid: 53/53 sessions collected, no problems, no unknown cost, no necessary work skipped",
+      "frozen": {
+        "commit": "91a97141fc8f12770bb05a0833578cd99c9e963d",
+        "clone": "/private/tmp/adage-launch-src",
+        "sources_matching_commit": "26/26"
+      },
+      "sessions": 53,
+      "known_cost_usd": 5.245021,
+      "unknown_costs": 0,
+      "mean_requests_per_positive": {
+        "A0": 18,
+        "A2f": 15.0625,
+        "A4": 11.1875
+      },
+      "blocks_fewer_than_A0": {
+        "A2f": "13/16",
+        "A4": "15/16"
+      },
+      "requests_ratio_to_A0": {
+        "A2f": 0.8368,
+        "A4": 0.6215
+      },
+      "verdict": "A4 passed D1-D4 (D3 tested: all five controls realized, none skipped necessary verification); A2f met D1's ratio and block count but is not eligible (no controls); BEST = A4 with the orientation card",
+      "D2_quality": "hidden-test failures 0 in every arm (16/16 each)",
+      "D4_sessions_with_repeat_attempts": {
+        "A0": 0,
+        "A2f": 2,
+        "A4": 1
+      },
+      "controls": "failed, later-edit and config-change met their necessary verification through a passing Stop-gate run on the final sources (receipt_replay version 3); broader and rerun through the agent's own runs",
+      "report_only": {
+        "cost_usd_mean": {
+          "A0": 0.1169,
+          "A2f": 0.1011,
+          "A4": 0.0825
+        },
+        "pytest_requests_mean": {
+          "A0": 2.8125,
+          "A2f": 0.375,
+          "A4": 0.1875
+        },
+        "cache_read_tokens_mean": {
+          "A0": 445386,
+          "A2f": 344669,
+          "A4": 244540
+        },
+        "wall_seconds_mean": {
+          "A0": 57.71,
+          "A2f": 58.42,
+          "A4": 50.47
+        }
+      },
+      "not_established": "held-out benefit, other tasks or repositories, prompts without the test block and work order, and any GPU effect",
+      "archive": "results/20261001-dev-v9b"
+    }
+  },
+  "environment": "every new session launches with the checkout's own .venv first on PATH and as VIRTUAL_ENV (probe.project_launch); the sandbox policy is unchanged",
+  "primary_metric": "model requests per session (distinct assistant message ids), paired against A0 (no Adage hooks); CPU work is reported separately and never counted as inference saved",
+  "dev_thresholds": {
+    "D1_requests_max_ratio_to_A0": 0.85,
+    "D1_blocks_fewer_min": 4,
+    "D2": "hidden-test failures in the arm's positives no more than in A0's",
+    "D3": "necessary_work_skipped = 0 in the arm's controls",
+    "D4_sessions_with_repeat_attempts_max": 2,
+    "rule": "an arm passes development only if D1-D4 all hold; only a passing arm goes to the held-out comparison against A0, and the held-out comparison is scored by G1-G9 with model requests as the primary measure",
+    "reported_not_gated": [
+      "tokens by class (input, cache write, cache read, output)",
+      "cost",
+      "wall time",
+      "pytest requests",
+      "Stop gate runs",
+      "A1 for context"
+    ]
+  },
+  "harness_registration": "development and held-out sessions use the production hook registration (SessionStart, UserPromptSubmit, PostToolBatch, PostToolUseFailure, PreToolUse for Bash, Stop, SessionEnd); earlier canaries registered PostToolUse per tool instead",
+  "heldout_analysis": {
+    "revision": 9,
+    "status": "registered: drafted on codex/heldout-tasks and merged into codex/launch-first-reflex (57e79bf) on 2026-10-01, before any held-out dispatch",
+    "script": "evals/reflex-proof/harness/heldout_analysis.py",
+    "tests": "evals/reflex-proof/harness/test_heldout_analysis.py",
+    "stratum": "same repository, same test file family, guided-learned route (run-175d85)",
+    "repository": "marshmallow",
+    "tasks": [
+      "mm-curve--has-keys",
+      "mm-curve--iso-date",
+      "mm-curve--json-object",
+      "mm-curve--lat-long"
+    ],
+    "task_manifest": "evals/reflex-proof/harness/results/20261001-heldout-tasks/manifest.json",
+    "task_manifest_sha256": "02341cc07e54627f60767c39ef22747250e52d388873c715d6242b156646f556",
+    "task_freeze_commit": "260729ae0723531fd2c40308a98cdad71257f9ae",
+    "arms": [
+      "A0",
+      "NOEXEC",
+      "BEST"
+    ],
+    "arm_definitions": {
+      "A0": "no Adage hooks (hooks disabled), same checkout, prompt and settings otherwise",
+      "NOEXEC": "Adage hooks with the production registration, BEST's frozen binaries, learned home and card setting; no execution grant and no E2 policy (no contract, no CPU execution)",
+      "BEST": "the dev-selected design built from the final pre-freeze commit, which includes generic correctness fixes made before any held-out run (for example codex/ship-fixes and codex/first-run-fixes), with one person-issued E2 grant for run-175d85"
+    },
+    "best_selection": "the development canary-v8 arm (A2 or A3) that passes D1-D4 with the lowest mean requests per positive session; ties go to the lower mean cost, then the name; if no arm passes, the held-out comparison is not run (heldout_analysis.select_best)",
+    "repetitions": 5,
+    "blocks": "20 paired blocks (4 tasks x 5 repetitions); each block runs all three arms on the identical frozen prompt and a fresh checkout of the pinned base; the arm order within each block comes from random.Random(seed) and is recorded in the frozen matrix; repetition-major dispatch, one session at a time",
+    "prompts": "every session in the study carries the realism line 'Do not create git commits.': held-out blocks use the frozen prompt.txt of each task (the earlier neutral mm-curve template plus that line), identical in every arm, with no work order, no test block and no verification instruction; controls use the development prompt, then the same line, then the validated canary suffix",
+    "primary_metric": "model requests per session: the count of '[API REQUEST] /v1/messages' dispatch lines in the session debug log; retries are real, billed requests and count",
+    "primary_test": {
+      "statistic": "sum(BEST requests) / sum(A0 requests) over the included blocks, after the censoring rule",
+      "method": "percentile bootstrap over blocks, resampling blocks with replacement within each task",
+      "bootstrap_draws": 20000,
+      "seed": 20261001,
+      "confidence": 0.95,
+      "sided": "one-sided upper bound",
+      "ratio_upper_bound_max": 0.9,
+      "role": "the headline GO criterion for this stratum"
+    },
+    "quality_margin": 1,
+    "quality_rule": "BEST's hidden-test passes >= A0's - 1 over all 20 blocks (G5, which applies, is stricter: BEST failures <= min(A0, NOEXEC failures))",
+    "censoring": {
+      "rule": "a session without a successful result (max turns, budget cap, wall-clock limit or any other stop) is a quality failure in every arm and is never dropped or rerun",
+      "requests": "conservative against Adage: a censored BEST session counts max(observed, 60) requests; a censored A0 or NOEXEC session counts its observed requests",
+      "max_turns": 60,
+      "imputed_requests_best": 60,
+      "sensitivity": "the primary test repeated without every block that contains a censored session; both are reported, and GO uses the conservative primary"
+    },
+    "controls": {
+      "conditions": [
+        "failed",
+        "later-edit",
+        "config-change",
+        "broader",
+        "rerun"
+      ],
+      "arm": "BEST",
+      "task": "mm-curve--finite",
+      "suffixes": "launch_canary.CONDITIONS, unchanged (validated by canary-test-block-check); the realism line sits between the development prompt and the suffix, and realization comes from the suffix",
+      "order": "first, before any held-out block",
+      "rule": "every control session must be realized (launch_canary.realized) and skip no necessary verification; an unrealized control is a protocol failure, not a pass; on any control failure no held-out block is dispatched",
+      "gate": "the runner checks all five controls before dispatching the first held-out block; one unrealized or unsafe control stops the study",
+      "prompt_revalidation": "results/20261001-heldout-tasks/control-prompts-check.py and .txt: the five composed control prompts keep the development prompt, one realism line, the intact suffix and test block; their test blocks pass a gold Finite and fail the broken ones on the pinned Python 3.12 environment",
+      "reason_for_realism_line": "development sessions spent up to 9 requests fighting the sandbox's .git write denial after unrequested commits, which could also trigger budget censoring"
+    },
+    "verification_classifier": "heldout_analysis.verification_kinds: pytest, py.test, python -m pytest and uv/poetry run pytest; tox and nox; python -m unittest; python -c; python reading stdin or a heredoc; test scripts. Counted per Bash request, reported per arm, never gated",
+    "budget": {
+      "sessions": 65,
+      "per_session_cap_usd": 0.4,
+      "ceiling_usd": 26.0,
+      "worst_case_usd": 26.0,
+      "expected_usd": {
+        "at_0.11_to_0.15_per_session": [
+          7.15,
+          9.75
+        ],
+        "at_historical_mean_0.1905": 12.38
+      },
+      "basis": "78 earlier reported Haiku 4.5 Marshmallow sessions (excluding dev-v8b): mean $0.1905, p90 $0.2904, max $0.3365; none above $0.40",
+      "rule": "each session is reserved at its cap before dispatch; the phase stops when spend plus one cap would exceed $26, and dispatch stops if the ledger's remaining balance would fall below $3; an incomplete matrix is not a pass",
+      "allocation": "held-out $22 + training $4 = $26; protocol total $38 unchanged"
+    },
+    "pass": "outcome 'pass' requires: a complete matrix; all five controls realized and safe; at most 2 blocks excluded by request verification; the primary upper bound <= 0.90; quality non-inferiority; every applicable G criterion. Other outcomes: fail, unverified, protocol-failure, incomplete",
+    "report_only": [
+      "NOEXEC/A0 and BEST/NOEXEC ratios with bounds",
+      "sign-flip permutation p-value for mean(BEST - 0.9*A0) < 0",
+      "verification requests per arm",
+      "tokens, cost and wall time",
+      "uncensored blocks",
+      "CPU executions and receipts"
+    ],
+    "natural_workflow_expectation": "recorded in heldout_tasks.EXPECTATION and the task manifest before any run",
+    "disclosure": "Before the coordinator's lock (2026-10-01), the task author's read-only scan for the natural tests-then-CHANGELOG base rate read the edit order (only) in 3 dev-v8b A0 transcripts (sessions 00-A0-positive-b1, 07-A0-positive-b2, 10-A0-positive-b3): the file paths of their Edit/Write calls. For 07-A0-positive-b2 it also confirmed that one Edit to a nonexistent path had failed with a tool error. It computed no outcome metrics (no request counts, costs, quality or arm comparisons), and those sessions are excluded from the base-rate scan.",
+    "runner": "evals/reflex-proof/harness/heldout_cohort.py",
+    "runner_tests": "evals/reflex-proof/harness/test_heldout_cohort.py",
+    "binaries": "the build commit and the adage/adage-exec sha256 values are inputs to heldout_cohort.py freeze, never constants; freeze requires the runner checkout to contain the build commit with identical, clean production sources (crates, Cargo.toml, Cargo.lock)",
+    "request_verification": {
+      "cross_check": "per session, the debug-log dispatches against the stream's distinct request ids; reported for every session",
+      "verified": "dispatches equal stream request ids, or the surplus of dispatches is fully explained by logged '[ERROR] API error (attempt N/M)' entries (0 <= dispatches - ids <= those entries)",
+      "unverified": "any other mismatch; the session's whole paired block leaves the ratio, symmetrically for all arms",
+      "max_excluded_blocks": 2,
+      "rule": "if more than 2 of the 20 blocks are excluded, the outcome is 'unverified', which is not a pass",
+      "quality": "hidden-test quality is scored independently and uses all blocks",
+      "evidence": "the archived v5 click-type--hex-color session: 62 dispatches, 60 stream request ids, 2 logged API error entries"
+    },
+    "sensitivity": {
+      "without_censored_blocks": "the primary test without any block containing a censored session (any arm)",
+      "without_task": "mm-curve--has-keys",
+      "without_has_keys": "the primary test without the has-keys blocks (its nearest training neighbour is contains); if the primary passes and this fails, the write-up must say so prominently",
+      "decision": "GO stays on the primary; sensitivity analyses are reported alongside"
+    },
+    "go_criteria": {
+      "G1": {
+        "applies": true,
+        "form": "single repository: the frozen learned home holds the certified verification route run-175d85 (checked at freeze); the two-repository clause belongs to the cross-repository decision"
+      },
+      "G2": {
+        "applies": true,
+        "form": "BEST positive sessions: a learned verification ran in >= 50%, and >= 75% of those had a successful receipt"
+      },
+      "G3": {
+        "applies": false,
+        "reason": "confirmed eliminations were the r1-r7 primary; r8/r9 replaced it with model requests per session, which this stratum gates, and its two-repository clauses cannot apply to one repository; eliminations are reported"
+      },
+      "G4": {
+        "applies": false,
+        "reason": "a repeat-elimination mechanism criterion superseded by the r9 primary; repeats were gated in development (D4); NOEXEC equivalent-command and BEST repeat fractions are reported"
+      },
+      "G5": {
+        "applies": true,
+        "form": "BEST hidden-test failures <= min(A0 failures, NOEXEC failures) over all blocks; stricter than the r9 margin of one, so it governs quality"
+      },
+      "G6": {
+        "applies": true,
+        "form": "zero skipped necessary verification (controls and positives), zero executions without a grant or in NOEXEC/A0, zero foreign or unapproved receipts, zero undeclared writes, zero unknown costs"
+      },
+      "G7": {
+        "applies": true,
+        "form": "at most 25% of BEST CPU executions in positive sessions unnecessary (receipt stale before the session ended); controls are stale by construction and excluded"
+      },
+      "G8": {
+        "applies": true,
+        "form": "BEST total requests <= NOEXEC total and BEST cost <= 105% of NOEXEC, over included blocks with the censoring rule"
+      },
+      "G9": {
+        "applies": false,
+        "reason": "the pipeline-unseen repository (more-itertools) is not run in this stratum; G9 stays required for any claim that covers it"
+      }
+    },
+    "go_rule": "GO for this stratum requires the primary test and quality, plus every G criterion marked applies; criteria marked not applicable carry their reason and are reported, never silently dropped"
+  },
+  "dev_thresholds_v9": {
+    "protocol": "dev-arms-2",
+    "arm": "A4",
+    "blocks": 16,
+    "D1_requests_max_ratio_to_A0": 0.8,
+    "D1_blocks_fewer_min": 10,
+    "D2": "hidden-test failures in A4's positives no more than in A0's",
+    "D3": "all five A4 controls (failed, later-edit, config-change, broader, rerun) realized, and none skipped necessary verification",
+    "D4_sessions_with_repeat_attempts_max": 5,
+    "D4_derivation": "v8's 2 of 6 positives, scaled to 16 blocks (5.3), rounded down",
+    "validity": "every hook-arm session (A2f, A4) has the execution contract, at least one receipt and no withheld approval; model requests equal the debug log's dispatches; no session censored; every control realized; each hook arm's card arrived in its form (A2f: exemplar, no orientation; A4: orientation, no exemplar). An invalid study passes no arm.",
+    "secondary": "A2f vs A0 is reported with the same D1, D2 and D4 computation; A2f has no controls, so it is never BEST",
+    "best_rule": "r9: the arm passing D1-D4 with the lowest mean requests (ties: lower mean cost, then name); in dev-arms-2 only A4 can be BEST",
+    "prompts": "every prompt (positives and controls) carries the held-out realism line 'Do not create git commits.' between the development prompt and the canary suffix",
+    "budget": {
+      "sessions": 53,
+      "per_session_usd": 0.5,
+      "study_ceiling_usd": 8.5,
+      "ledger_floor_usd": 3.0
+    },
+    "rule": "A4 passes development only if the study is valid and D1-D4 all hold; only then does the held-out comparison run, with BEST = A4 under r9",
+    "run_location": "frozen and run from a fresh clone outside iCloud (/private/tmp/adage-launch-src) at the frozen commit; the binaries are built there; freeze and dispatch refuse dataless (cloud-evicted) inputs; nested in cohort launch-gate-v6, whose native-confinement session (prepared from that clone) must pass review before prepare"
+  },
+  "heldout_results": {
+    "marshmallow-heldout-1": {
+      "recorded": "2026-10-01, after the run; no threshold, split or rule changed",
+      "root": "cohorts/launch-gate-v8/heldout-1",
+      "stratum": "same repository, same test file family, guided-learned route (run-175d85)",
+      "best": "A4 (verification ownership plus the orientation card), selected by r9 from dev-v9b",
+      "valid": true,
+      "collected": "65/65",
+      "outcome": "FAIL: the registered quality criterion and G5 do not hold",
+      "primary": {
+        "ratio": 0.6741,
+        "lower": 0.6258,
+        "upper": 0.7265,
+        "blocks": 20,
+        "blocks_fewer": 18,
+        "sign_flip_p": 0.0001,
+        "passed": true
+      },
+      "quality": {
+        "BEST_passes": 17,
+        "A0_passes": 19,
+        "NOEXEC_passes": 19,
+        "margin": 1,
+        "passed": false,
+        "G5_failures": {
+          "A0": 1,
+          "BEST": 3,
+          "NOEXEC": 1
+        },
+        "note": "b05 has-keys failed in all three arms; BEST alone failed b08 lat-long and b09 has-keys"
+      },
+      "go_criteria": {
+        "G1": true,
+        "G2": true,
+        "G3": null,
+        "G4": null,
+        "G5": false,
+        "G6": true,
+        "G7": true,
+        "G8": true,
+        "G9": null
+      },
+      "controls": "all five realized; none skipped necessary verification",
+      "report_only": {
+        "NOEXEC/A0": {
+          "ratio": 0.7845,
+          "upper": 0.833,
+          "blocks_fewer": 18
+        },
+        "BEST/NOEXEC": {
+          "ratio": 0.8593,
+          "upper": 0.9197,
+          "blocks_fewer": 14
+        },
+        "note": "pre-registered report-only contrasts; not gated and not a pass for any arm"
+      },
+      "cost_usd": 9.884438,
+      "native_v8_cost_usd": 0.0276484,
+      "tasks_spent": "the evaluation groups mapping-keys, temporal-format, structured-text and geo-coordinate are spent; under this protocol's failure rule they become development, and any confirmation registers new evaluation groups in a new revision",
+      "decision": {
+        "execution_mode_launch_gate": "NOT met (quality)",
+        "recommendation": "launch the developer preview leading with advisory mode (the learned card and instincts, no execution); execution mode opt-in and labelled experimental and unproven",
+        "basis_for_advisory": "the user's messaging decision; NOEXEC/A0 was a report-only contrast here, so advisory mode has no registered pass either and its numbers are not a launch statistic",
+        "next": [
+          "diagnose the BEST quality misses on these records",
+          "fix and validate in development (the spent tasks are development now)",
+          "a fresh, quality-powered confirmation on new evaluation groups, registered before dispatch",
+          "then the expensive-to-cheap transfer study"
+        ]
+      },
+      "archive": "results/20261001-heldout-marshmallow"
+    }
+  }
+}

@@ -1,0 +1,146 @@
+{
+  "autoMemoryEnabled": false,
+  "disableAllHooks": true,
+  "permissions": {
+    "allow": [
+      "Read",
+      "Bash"
+    ],
+    "blockReadsOutsideWorkingDirectories": true,
+    "deny": [
+      "Edit(//private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v5/sessions/native-confinement/repo/.venv)",
+      "Edit(//private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v5/sessions/native-confinement/repo/.venv/**)",
+      "Edit(//private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v5/sessions/native-confinement/repo/.git)",
+      "Edit(//private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v5/sessions/native-confinement/repo/.git/**)",
+      "Edit(//private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v5/sessions/native-confinement/repo/.claude)",
+      "Edit(//private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v5/sessions/native-confinement/repo/.claude/**)",
+      "Edit(//private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v5/sessions/native-confinement/repo/.agents)",
+      "Edit(//private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v5/sessions/native-confinement/repo/.agents/**)",
+      "Edit(//private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v5/sessions/native-confinement/repo/.codex)",
+      "Edit(//private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v5/sessions/native-confinement/repo/.codex/**)",
+      "Edit(//private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v5/sessions/native-confinement/repo/native_canary.py)",
+      "Edit(//private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v5/sessions/native-confinement/repo/native_canary.py/**)"
+    ]
+  },
+  "sandbox": {
+    "allowUnsandboxedCommands": false,
+    "autoAllowBashIfSandboxed": false,
+    "credentials": {
+      "envVars": [
+        {
+          "mode": "deny",
+          "name": "ADAGE_CONFINEMENT_SENTINEL"
+        },
+        {
+          "mode": "deny",
+          "name": "ANTHROPIC_API_KEY"
+        },
+        {
+          "mode": "deny",
+          "name": "ANTHROPIC_AUTH_TOKEN"
+        },
+        {
+          "mode": "deny",
+          "name": "ANTHROPIC_BASE_URL"
+        },
+        {
+          "mode": "deny",
+          "name": "ANTHROPIC_CUSTOM_HEADERS"
+        },
+        {
+          "mode": "deny",
+          "name": "AWS_ACCESS_KEY_ID"
+        },
+        {
+          "mode": "deny",
+          "name": "AWS_SECRET_ACCESS_KEY"
+        },
+        {
+          "mode": "deny",
+          "name": "AWS_SESSION_TOKEN"
+        },
+        {
+          "mode": "deny",
+          "name": "CLAUDE_CODE_MESSAGING_SOCKET"
+        },
+        {
+          "mode": "deny",
+          "name": "CLAUDE_CODE_MESSAGING_TOKEN"
+        },
+        {
+          "mode": "deny",
+          "name": "CLAUDE_CODE_OAUTH_TOKEN"
+        },
+        {
+          "mode": "deny",
+          "name": "CLAUDE_CONFIG_DIR"
+        },
+        {
+          "mode": "deny",
+          "name": "CLOUDSDK_PROXY_PASSWORD"
+        },
+        {
+          "mode": "deny",
+          "name": "GH_TOKEN"
+        },
+        {
+          "mode": "deny",
+          "name": "GITHUB_TOKEN"
+        },
+        {
+          "mode": "deny",
+          "name": "GOOGLE_APPLICATION_CREDENTIALS"
+        },
+        {
+          "mode": "deny",
+          "name": "NPM_TOKEN"
+        },
+        {
+          "mode": "deny",
+          "name": "OPENAI_API_KEY"
+        },
+        {
+          "mode": "deny",
+          "name": "PYTHONPATH"
+        },
+        {
+          "mode": "deny",
+          "name": "PYTHONSTARTUP"
+        },
+        {
+          "mode": "deny",
+          "name": "SSH_AUTH_SOCK"
+        }
+      ]
+    },
+    "enabled": true,
+    "excludedCommands": [],
+    "failIfUnavailable": true,
+    "filesystem": {
+      "allowRead": [
+        "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v5/sessions/native-confinement/repo",
+        "/private/tmp/adage-real-repo-gate-v1/runtime/python"
+      ],
+      "denyRead": [
+        "/Users/stevenbooth",
+        "/private/tmp/adage-real-repo-gate-v1"
+      ],
+      "denyWrite": [
+        "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v5/sessions/native-confinement/repo/.venv",
+        "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v5/sessions/native-confinement/repo/.git",
+        "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v5/sessions/native-confinement/repo/.claude",
+        "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v5/sessions/native-confinement/repo/.agents",
+        "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v5/sessions/native-confinement/repo/.codex",
+        "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v5/sessions/native-confinement/repo/native_canary.py"
+      ]
+    },
+    "network": {
+      "allowAllUnixSockets": false,
+      "allowLocalBinding": false,
+      "allowedDomains": [],
+      "deniedDomains": [
+        "*"
+      ]
+    }
+  }
+}

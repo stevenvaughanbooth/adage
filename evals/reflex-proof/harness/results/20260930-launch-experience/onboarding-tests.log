@@ -1,0 +1,37 @@
+   Compiling adage-pack v0.1.0 (/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/crates/adage-pack)
+   Compiling adage-exec v0.1.0 (/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/crates/adage-exec)
+   Compiling adage-train v0.1.0 (/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/crates/adage-train)
+   Compiling adage-cli v0.1.0 (/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/crates/adage-cli)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 8.34s
+     Running tests/fresh_install.rs (target/debug/deps/fresh_install-687ee7ff4718dc1b)
+
+running 9 tests
+test b5_install_write_shows_the_diff_and_keeps_a_backup ... ok
+test b11_an_unwritable_data_directory_is_said_once_and_clearly ... ok
+test l2_graph_refuses_unknown_options ... ok
+test b7_status_shows_the_evidence_the_decision_used ... ok
+test b4_switching_models_requeues_what_was_learned_with_the_old_one ... ok
+test b3_status_and_watch_show_the_bundled_model ... ok
+test b10_a_fresh_install_is_healthy_and_counts_past_traces ... ok
+test b2_outside_a_repository_nothing_is_learned_or_said ... ok
+test l5_doctor_flags_plugin_and_settings_registered_together ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 20.39s
+
+     Running tests/zero_config_plugin.rs (target/debug/deps/zero_config_plugin-ae07870f63f8758c)
+
+running 11 tests
+test instincts_rebind_when_the_checkout_changes ... ok
+test pretool_rewrites_to_the_verified_environment ... ok
+test pricing_honesty ... ok
+test savings_gate ... ok
+test no_history_instincts ... ok
+test worktree_keys ... ok
+test notice_throttle ... ok
+test index_self_heal ... ok
+test model_blocked ... ok
+test exec_marker_without_plugin ... ok
+test zero_config_plugin ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.88s
+

@@ -1,0 +1,54 @@
+{
+  "all_journal_receipts": [],
+  "block": 18,
+  "collection_errors": [],
+  "condition": "positive",
+  "contract_emitted": false,
+  "cost_usd": 0.12745660000000003,
+  "exec_decisions": [],
+  "final_generation": "9f57927436f58bfc4900ccd0276b08b9ae26be7d88bb24b700c71d6b48bf336f",
+  "heldout_arm": "A0",
+  "order": 56,
+  "protocol": "heldout-cohort-1",
+  "provenance": {
+    "cwd": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/56-A0-b18-iso-date/repo",
+    "destination": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/56-A0-b18-iso-date/native-transcript.jsonl",
+    "session_id": "8a55bc13-e14b-4be8-aa9e-d28e4ad3ed8b",
+    "sha256": "4d80099962e4f9d73d0a00102d20c43684140e6b3d1cb7d7bf0a929f7fcee8d8",
+    "source": "/Users/stevenbooth/.claude/projects/-private-tmp-adage-real-repo-gate-v1-cohorts-launch-gate-v8-heldout-1-sessions-56-A0-b18-iso-date-repo/8a55bc13-e14b-4be8-aa9e-d28e4ad3ed8b.jsonl",
+    "synthetic": false
+  },
+  "quality": {
+    "changed_files": [
+      "CHANGELOG.rst",
+      "src/marshmallow/validate.py",
+      "tests/test_validate.py"
+    ],
+    "checks": {
+      "tests": true
+    },
+    "ci_passed": true,
+    "dependency_mode": "frozen prepared environment; no rescue install",
+    "elapsed_s": 1.59,
+    "exit_code": 0,
+    "hidden_collection_integrity": {
+      "expected_count": 13,
+      "extra": [],
+      "missing": [],
+      "observed_count": 13,
+      "passed": true,
+      "unsuccessful": []
+    },
+    "hidden_failed": [],
+    "hidden_passed": true,
+    "n_tests": 1231,
+    "passed": true,
+    "rescue_error": null,
+    "suite_failed": [],
+    "tail": "........................................................................ [ 29%]\n........................................................................ [ 35%]\n........................................................................ [ 40%]\n........................................................................ [ 46%]\n........................................................................ [ 52%]\n........................................................................ [ 58%]\n........................................................................ [ 64%]\n........................................................................ [ 70%]\n........................................................................ [ 76%]\n........................................................................ [ 81%]\n........................................................................ [ 87%]\n........................................................................ [ 93%]\n........................................................................ [ 99%]\n.......                                                                  [100%]\n1231 passed in 0.96s",
+    "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+  },
+  "replay": {},
+  "task": "mm-curve--iso-date",
+  "timeline": {}
+}

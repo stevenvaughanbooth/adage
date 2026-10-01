@@ -1,0 +1,34 @@
+{
+ "mm-curve--finite--automatic.json": {
+  "source": "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--finite/automatic/production-hooks.jsonl",
+  "source_sha256": "8d790967dd2084f39a4a3599a13256d885d8bacae67f26f7eea58188d48eec32"
+ },
+ "mm-curve--finite--learned.json": {
+  "source": "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--finite/learned/production-hooks.jsonl",
+  "source_sha256": "022ebb994a8eb91132cdb32677c26a2025b6198fdb6d212eed4260a7428410ad"
+ },
+ "mm-curve--max-utf8-bytes--automatic.json": {
+  "source": "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--max-utf8-bytes/automatic/production-hooks.jsonl",
+  "source_sha256": "1bf5430c6dbfcfc71ccf5820b6456cf0dcffbcd265c1f92a59c5bd8236c931c1"
+ },
+ "mm-curve--max-utf8-bytes--learned.json": {
+  "source": "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--max-utf8-bytes/learned/production-hooks.jsonl",
+  "source_sha256": "ab54f3f1440065ab363a621a084d3a0bb5c727a4ec269eda7acd4cc07844b758"
+ },
+ "mm-curve--no-adjacent-duplicates--automatic.json": {
+  "source": "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--no-adjacent-duplicates/automatic/production-hooks.jsonl",
+  "source_sha256": "ce43776f5d1132e0db94f56837fb52282f7c5079434e23c251337269a039c1b2"
+ },
+ "mm-curve--no-adjacent-duplicates--learned.json": {
+  "source": "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--no-adjacent-duplicates/learned/production-hooks.jsonl",
+  "source_sha256": "37c47b53985d0dc364240c65a0484723f38894a21508adaa9147c606c911f93e"
+ },
+ "mm-curve--odd--automatic.json": {
+  "source": "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--odd/automatic/production-hooks.jsonl",
+  "source_sha256": "dac4f89b450be3350dd69375974385e061c2c1ffb83acc86c9b6e0a57f9823b1"
+ },
+ "mm-curve--odd--learned.json": {
+  "source": "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--odd/learned/production-hooks.jsonl",
+  "source_sha256": "ccdeff407694b149edc40042bc3575bda0b1326a8e272e3c59e9ce6f2d90b34c"
+ }
+}

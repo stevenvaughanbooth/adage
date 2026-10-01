@@ -1,0 +1,126 @@
+{
+  "all_journal_receipts": [],
+  "block": 5,
+  "card_exemplar": false,
+  "card_oriented": false,
+  "censored": [],
+  "collection_errors": [],
+  "condition": "positive",
+  "contract_emitted": false,
+  "cost_usd": 0.09851240000000001,
+  "dev_arm": "A0",
+  "exec_decisions": [],
+  "final_generation": "afa57e822f84279ca77692b8fbab44840e0e0097c8db0b7b02820a000aedf610",
+  "gate_runs": [],
+  "observed_dispatches": [
+    {
+      "request_id": "b039bf02-fa32-40ad-bee6-35b2fec2017d",
+      "source": "sdk"
+    },
+    {
+      "request_id": "e004d03f-f498-4d14-a6f1-3f8a157d49ad",
+      "source": "sdk"
+    },
+    {
+      "request_id": "a85602f4-225c-4e30-b34f-9ea380e78f3e",
+      "source": "sdk"
+    },
+    {
+      "request_id": "df0868df-4589-47cf-a7f1-e92b57c9ec74",
+      "source": "sdk"
+    },
+    {
+      "request_id": "69a68406-9f20-4c08-be1a-b99344197891",
+      "source": "sdk"
+    },
+    {
+      "request_id": "d1324d71-3d1a-47bc-af9c-e580a64f9485",
+      "source": "sdk"
+    },
+    {
+      "request_id": "5f6dc94e-3797-4a29-b808-ef82cde77ba3",
+      "source": "sdk"
+    },
+    {
+      "request_id": "b89eccf3-c20e-4d26-a027-be6e8f4134e8",
+      "source": "sdk"
+    },
+    {
+      "request_id": "4e3b578d-fec9-4172-974a-de7b3435034e",
+      "source": "sdk"
+    },
+    {
+      "request_id": "21097972-bcf5-4119-af5d-7aebac25ad60",
+      "source": "sdk"
+    },
+    {
+      "request_id": "527ac418-d52b-4763-8b15-745fb39cfe99",
+      "source": "sdk"
+    },
+    {
+      "request_id": "3fd6b5bc-7a0c-43a1-9a68-bb9c0da52602",
+      "source": "sdk"
+    },
+    {
+      "request_id": "46044aa6-a446-454f-a1de-447e2f179faa",
+      "source": "sdk"
+    },
+    {
+      "request_id": "72e3408d-5120-4107-b7d9-b618001e7017",
+      "source": "sdk"
+    }
+  ],
+  "order": 19,
+  "protocol": "dev-arms-2",
+  "provenance": {
+    "cwd": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v6/dev-v9b/sessions/19-A0-positive-b05/repo",
+    "destination": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v6/dev-v9b/sessions/19-A0-positive-b05/native-transcript.jsonl",
+    "session_id": "00a6e7cc-f836-48fb-8586-a7c0537fbae4",
+    "sha256": "6bfa75e970e6e6a480458288c516ef62d1b7a28eaf865f48db5bf9ef37f119ab",
+    "source": "/Users/stevenbooth/.claude/projects/-private-tmp-adage-real-repo-gate-v1-cohorts-launch-gate-v6-dev-v9b-sessions-19-A0-positive-b05-repo/00a6e7cc-f836-48fb-8586-a7c0537fbae4.jsonl",
+    "synthetic": false
+  },
+  "pytest_requests": 2,
+  "quality": {
+    "changed_files": [
+      "CHANGELOG.rst",
+      "src/marshmallow/validate.py",
+      "tests/test_validate.py"
+    ],
+    "checks": {
+      "tests": true
+    },
+    "ci_passed": true,
+    "dependency_mode": "frozen prepared environment; no rescue install",
+    "elapsed_s": 1.69,
+    "exit_code": 0,
+    "hidden_collection_integrity": {
+      "expected_count": 11,
+      "extra": [],
+      "missing": [],
+      "observed_count": 11,
+      "passed": true,
+      "unsuccessful": []
+    },
+    "hidden_failed": [],
+    "hidden_passed": true,
+    "n_tests": 1204,
+    "passed": true,
+    "rescue_error": null,
+    "suite_failed": [],
+    "tail": "........................................................................ [ 23%]\n........................................................................ [ 29%]\n........................................................................ [ 35%]\n........................................................................ [ 41%]\n........................................................................ [ 47%]\n........................................................................ [ 53%]\n........................................................................ [ 59%]\n........................................................................ [ 65%]\n........................................................................ [ 71%]\n........................................................................ [ 77%]\n........................................................................ [ 83%]\n........................................................................ [ 89%]\n........................................................................ [ 95%]\n....................................................                     [100%]\n1204 passed in 1.18s",
+    "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+  },
+  "replay": {},
+  "requests": 14,
+  "stop_gate_outputs": [],
+  "task": "mm-curve--finite",
+  "timeline": {},
+  "tokens": {
+    "cache_read": 330154,
+    "cache_write": 19907,
+    "input": 113,
+    "output": 5114
+  },
+  "wall_seconds": 50.569704
+}

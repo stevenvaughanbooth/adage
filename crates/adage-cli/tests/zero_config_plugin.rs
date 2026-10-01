@@ -527,8 +527,10 @@ fn instincts_rebind_when_the_checkout_changes() {
 
 /// PreToolUse delivery of U11: with the project's environment verified at bind time, a test run
 /// under the system Python runs with `.venv/bin/python` instead (only the interpreter prefix
-/// changes, through Claude Code's `updatedInput`), a `pip install` into the system Python is
-/// refused, and the card says how many commands were rewritten. Golden hook output.
+/// changes, through Claude Code's `updatedInput`; at the repository root the command names it as
+/// the note does, relative, as a person's permission rules would), a `pip install` into the
+/// system Python is refused, and the card says how many commands were rewritten. Golden hook
+/// output.
 #[cfg(unix)]
 #[test]
 #[cfg_attr(not(debug_assertions), ignore = "requires debug-only ADAGE_TEST_NO_SPAWN instrumentation")]
@@ -565,7 +567,7 @@ fn pretool_rewrites_to_the_verified_environment() {
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
             "updatedInput": {
-                "command": format!("{} -m pytest tests/test_formatting.py -xvs 2>&1 | head -50", py.display()),
+                "command": ".venv/bin/python -m pytest tests/test_formatting.py -xvs 2>&1 | head -50",
                 "description": "Run the tests"
             },
             "additionalContext": "Adage pointed this test run at the project's environment (.venv/bin/python): the system Python lacks the project and its test dependencies. Nothing else in the command changed."
@@ -618,7 +620,31 @@ fn pretool_rewrites_to_the_verified_environment() {
     let v: Value = serde_json::from_str(out.trim()).unwrap();
     assert!(v["hookSpecificOutput"].get("updatedInput").is_none(), "{out}");
     let advice = v["hookSpecificOutput"]["additionalContext"].as_str().unwrap();
-    assert!(advice.contains(&format!("`{} -m pytest -q tests`", py.display())), "{advice}");
+    assert!(advice.contains("`.venv/bin/python -m pytest -q tests`"), "{advice}");
+    // First-run QA item 7: a rule for the interpreter as the person writes it admits the
+    // rewrite made at the root.
+    std::fs::write(
+        repo.join(".claude/settings.local.json"),
+        r#"{"permissions":{"allow":["Bash(pytest:*)","Bash(.venv/bin/python -m pytest:*)"]}}"#,
+    )
+    .unwrap();
+    let out = pre("pytest -q tests");
+    let v: Value = serde_json::from_str(out.trim()).unwrap();
+    assert_eq!(v["hookSpecificOutput"]["updatedInput"]["command"], ".venv/bin/python -m pytest -q tests", "{out}");
+    // From a subdirectory the relative word would name another file: the absolute interpreter,
+    // and both notes name that.
+    std::fs::create_dir_all(repo.join("tests")).unwrap();
+    let out = w.hook(
+        "PreToolUse",
+        &repo.join("tests"),
+        "s1",
+        json!({ "tool_name": "Bash", "tool_input": { "command": "python -m pytest test_formatting.py" } }),
+    );
+    let v: Value = serde_json::from_str(out.trim()).unwrap_or_else(|_| panic!("{out}"));
+    let abs = py.display().to_string();
+    assert_eq!(v["hookSpecificOutput"]["updatedInput"]["command"], format!("{abs} -m pytest test_formatting.py"));
+    assert!(v["systemMessage"].as_str().unwrap().contains(&abs), "{out}");
+    assert!(v["hookSpecificOutput"]["additionalContext"].as_str().unwrap().contains(&format!("({abs})")), "{out}");
     std::fs::remove_file(repo.join(".claude/settings.local.json")).unwrap();
     // A session started in an activated environment: that environment's `python` is left alone.
     let o = w.run_env(
@@ -630,10 +656,12 @@ fn pretool_rewrites_to_the_verified_environment() {
     // Recorded (never the command itself), and visible on the card: rewrites only.
     let recs: Vec<Value> = adage_store::spool::read_all(&w.p("data/sessions/s1.spool")).unwrap();
     let pre: Vec<&Value> = recs.iter().filter(|r| r["kind"] == "pretool").collect();
-    assert_eq!(pre.len(), 3, "{recs:?}");
+    assert_eq!(pre.len(), 5, "{recs:?}");
     assert_eq!(pre[0]["pretool"], json!({ "rewrite": "test", "interpreter": ".venv/bin/python" }));
     assert_eq!(pre[1]["pretool"], json!({ "advise": "pip-install", "interpreter": ".venv/bin/python" }));
     assert_eq!(pre[2]["pretool"], json!({ "advise": "permissions", "interpreter": ".venv/bin/python" }));
+    assert_eq!(pre[3]["pretool"], json!({ "rewrite": "test", "interpreter": ".venv/bin/python" }));
+    assert_eq!(pre[4]["pretool"], json!({ "rewrite": "test", "interpreter": ".venv/bin/python" }));
     assert!(!serde_json::to_string(&recs).unwrap().contains("test_formatting"), "no command text in the spool");
     let key = pre[0]["repo"].as_str().unwrap();
     let slug: String =
@@ -641,7 +669,7 @@ fn pretool_rewrites_to_the_verified_environment() {
     std::fs::create_dir_all(w.p("data/ledger")).unwrap();
     std::fs::write(w.p("data/ledger").join(format!("{slug}.jsonl")), "").unwrap();
     let card = w.card(&repo);
-    assert!(card.contains("rewrote 1 command to use the project's environment"), "{card}");
+    assert!(card.contains("rewrote 3 commands to use the project's environment"), "{card}");
 }
 
 /// Spools and a ledger for a synthetic population of `n_t` treated and `n_c` control sessions of

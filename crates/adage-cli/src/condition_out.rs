@@ -36,6 +36,8 @@ pub struct Run<'a> {
     pub elapsed_ms: u64,
     /// Reflexes that wait for a decision in `adage review` after this run.
     pub waiting: usize,
+    /// End with what to run next (`adage init`, which runs it as a step, prints its own).
+    pub next: bool,
 }
 
 pub fn render<W: Write>(o: &mut Out<W>, run: &Run) -> io::Result<()> {
@@ -83,15 +85,24 @@ pub fn render<W: Write>(o: &mut Out<W>, run: &Run) -> io::Result<()> {
             .unwrap_or(16)
             .clamp(16, 34);
         for t in &rr.tracks {
-            o.line(
-                &Line::new()
-                    .text("  ")
-                    .text(short_name(&t.name, repo))
-                    .faint(format!("@{}", t.version))
-                    .sep()
-                    .quiet(t.change.clone()),
-            )?;
-            let Some((track, _)) = snap.and_then(|s| s.get(&t.name)) else { continue };
+            let track = snap.and_then(|s| s.get(&t.name)).map(|(track, _)| track);
+            let mut head = Line::new()
+                .text("  ")
+                .text(short_name(&t.name, repo))
+                .faint(format!("@{}", t.version))
+                .sep()
+                .quiet(t.change.clone());
+            // A track this run left as it was: its count, not every reflex again.
+            let unchanged = t.change == "unchanged";
+            if let Some(track) = track.filter(|_| unchanged) {
+                head = head.sep().quiet(words::count(track.routes.len(), "reflex"));
+            }
+            o.line(&head)?;
+            let Some(track) = track.filter(|_| !unchanged) else { continue };
+            if track.routes.iter().all(|r| r.is_instinct()) {
+                instinct_lines(o, &track.routes, "    ")?;
+                continue;
+            }
             for r in &track.routes {
                 let glyph = if r.is_instinct() { Glyph::Instinct } else { Glyph::Reflex };
                 let mut l = Line::new()
@@ -120,12 +131,27 @@ pub fn render<W: Write>(o: &mut Out<W>, run: &Run) -> io::Result<()> {
         if let Some(ir) = &rr.instincts {
             o.line(&Line::new().text("  ").extend(instincts_line(ir)))?;
             if run.command != "condition" {
-                for s in ir.skipped.iter().take(12) {
-                    o.line(&Line::new().text("    ").faint("not bound").pad_to(16).quiet(s.clone()))?;
+                // `U3: after pytest fails with "…", make test: already bound by U11`, once per
+                // instinct and reason, with how many triggers it covers.
+                let key = |s: &&String| {
+                    let (id, rest) = s.split_once(": ").unwrap_or(("", s));
+                    format!("{id}\n{}", rest.rsplit_once(": ").map_or(rest, |(_, why)| why))
+                };
+                for g in words::group(ir.skipped.iter(), key).into_iter().take(12) {
+                    let text = match g.len() {
+                        1 => g[0].clone(),
+                        n => match g[0].split_once(": ") {
+                            Some((id, rest)) => format!("{id}: {n} triggers, e.g. {rest}"),
+                            None => g[0].clone(),
+                        },
+                    };
+                    o.line(&Line::new().text("    ").faint("not bound").pad_to(16).quiet(text))?;
                 }
             }
         }
-        // What learning mined, compiled and kept (`adage_learn::engine::EngineReport`).
+        // What learning mined, compiled and kept (`adage_learn::engine::EngineReport`): the
+        // patterns, what they compiled to, and the reflexes kept, summed by where each came from
+        // (a pattern, a value estimate, a procedure card…), so the numbers add up.
         if run.command == "condition" {
             let e = &rr.engine;
             let mut l = Line::new()
@@ -134,11 +160,13 @@ pub fn render<W: Write>(o: &mut Out<W>, run: &Run) -> io::Result<()> {
                 .pad_to(16)
                 .text(words::count(e.sessions, "trace"))
                 .sep()
-                .text(format!("{} patterns selected", e.reflexes))
+                .text(format!("{} → {} compiled", words::count(e.reflexes, "pattern"), e.compiled))
                 .sep()
-                .text(format!("{} compiled", words::count(e.compiled, "reflex")))
-                .sep()
-                .text(format!("{} kept", e.routes));
+                .text(format!("{} kept", words::count(e.routes, "reflex")));
+            let from: Vec<String> = e.kept_by.iter().map(|(k, n)| kept_from(k, *n)).collect();
+            if !from.is_empty() && e.kept_by.values().sum::<usize>() == e.routes {
+                l = l.quiet(format!(": {}", from.join(", ")));
+            }
             if e.contexts > 0 {
                 l = l.quiet(format!(" ({} with a context trigger)", e.contexts));
             }
@@ -190,6 +218,9 @@ pub fn render<W: Write>(o: &mut Out<W>, run: &Run) -> io::Result<()> {
     if nexts.is_empty() {
         nexts.push(("adage status".into(), "every reflex in effect".into()));
     }
+    if !run.next {
+        return Ok(());
+    }
     o.blank()?;
     for (i, (cmd, why)) in nexts.iter().enumerate() {
         if i == 0 {
@@ -197,6 +228,51 @@ pub fn render<W: Write>(o: &mut Out<W>, run: &Run) -> io::Result<()> {
         } else {
             o.also(cmd, why)?;
         }
+    }
+    Ok(())
+}
+
+/// `1 from a mined pattern`, `2 procedure cards`: one source of the reflexes a run kept.
+fn kept_from(kind: &str, n: usize) -> String {
+    match kind {
+        "procedure card" => words::count(n, "procedure card"),
+        "mined pattern" => format!("{n} from {}", if n == 1 { "a mined pattern" } else { "mined patterns" }),
+        "value estimate" => format!("{n} from {}", if n == 1 { "a value estimate" } else { "value estimates" }),
+        "lookup" => words::count(n, "lookup"),
+        "prompt intent" => format!("{n} from {}", if n == 1 { "a prompt intent" } else { "prompt intents" }),
+        other => format!("{n} {other}"),
+    }
+}
+
+/// An instinct track's reflexes, one line per instinct and step (`U11 run .venv/bin/python -m
+/// pytest · 9 triggers, e.g. …`): its reflexes differ only in the failure each answers.
+pub(crate) fn instinct_lines<W: Write>(o: &mut Out<W>, routes: &[adage_tracks::Route], indent: &str) -> io::Result<()> {
+    let label = |r: &adage_tracks::Route| match r.origin() {
+        adage_tracks::Origin::Instinct { instinct, .. } if !instinct.is_empty() => instinct,
+        _ => "instinct".to_string(),
+    };
+    let groups = words::group(routes.iter(), |r| {
+        format!("{}\n{}\n{:?}\n{:?}", label(r), crate::share::describe_step(&r.step), r.strength, r.state)
+    });
+    for g in groups {
+        let r = g[0];
+        let when = words::trigger(&r.trigger);
+        let w = indent.chars().count();
+        let mut l = Line::new()
+            .text(indent)
+            .strength(words::strength(r.strength))
+            .pad_to(w + 11)
+            .glyph(Role::Accent, Glyph::Instinct)
+            .text(" ")
+            .text(label(r))
+            .pad_to(w + 18)
+            .text(crate::share::describe_step(&r.step))
+            .sep()
+            .quiet(if g.len() == 1 { format!("when {when}") } else { format!("{} triggers, e.g. {when}", g.len()) });
+        if r.state != RouteState::Firm {
+            l = l.sep().quiet(words::lifecycle(r.state));
+        }
+        o.line(&l)?;
     }
     Ok(())
 }

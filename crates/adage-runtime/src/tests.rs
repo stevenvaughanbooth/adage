@@ -518,6 +518,140 @@ fn a_card_is_said_once_at_a_close_prompt_or_at_the_first_edit_of_its_files_when_
     }
 }
 
+#[test]
+fn a_card_names_the_test_command_of_an_execution_certified_verification_unless_turned_off() {
+    let (dir, index, table) = card_fixture(0.9);
+    let mut index = index;
+    let mut check = index.routes[0].clone();
+    check.route = route(
+        "check-1",
+        Trigger::Context { items: vec![adage_tracks::CtxItem::Edit { glob: "flag_*.go".into() }], within: 3 },
+        Step::Run { command: "go test ./...".into() },
+        vec![],
+        Effect::Verify,
+        Strength::Prime,
+    );
+    check.route.evidence.execution =
+        Some(adage_tracks::ExecutionEvidence { opportunities: 5, successful: 5, sessions: 5 });
+    index.routes.push(check);
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: Some(&fake_embed),
+        params: Default::default(),
+    };
+    let card = |on: bool| {
+        let mut st = SessionState::default();
+        let d = with_card_checks(on, || decide(&ctx, &mut st, &Event::Prompt { text: "add a test flag".into() }));
+        d.directives.into_iter().find(|x| x.route == "card-1").unwrap().text
+    };
+    assert!(card(true).contains("\nTests in these sessions ran with: `go test ./...`."), "{}", card(true));
+    assert!(!card(false).contains("Tests in these sessions"));
+    // Without execution evidence the command is not named: only certified verifications are.
+    let mut index2 = index.clone();
+    index2.routes.last_mut().unwrap().route.evidence.execution = None;
+    let ctx2 = Ctx {
+        index: &index2,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: Some(&fake_embed),
+        params: Default::default(),
+    };
+    let mut st = SessionState::default();
+    let d = decide(&ctx2, &mut st, &Event::Prompt { text: "add a test flag".into() });
+    assert!(!d.directives.iter().any(|x| x.text.contains("Tests in these sessions")));
+}
+
+/// dev-v8: the exemplar ("copy the format") sent a third of card sessions paging and grepping for
+/// its idioms. The card now says where its files stand in the checkout, read when it is said; the
+/// earlier form stays available as an evaluation knob.
+#[test]
+fn a_card_says_where_its_files_stand_now_instead_of_quoting_an_exemplar_unless_turned_off() {
+    let (dir, mut index, table) = card_fixture(0.9);
+    std::fs::create_dir_all(dir.path().join("docs")).unwrap();
+    std::fs::write(dir.path().join("docs/flags.md"), "# Flags\n\nSome text.\n").unwrap();
+    let card = index.routes.iter_mut().find(|r| r.route.id == "card-1").unwrap();
+    let Step::Card { card } = &mut card.route.step else { unreachable!() };
+    card.exemplars =
+        vec![adage_tracks::card::Exemplar { path: "docs/flags.md".into(), lines: vec!["## --hex".into()] }];
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: Some(&fake_embed),
+        params: Default::default(),
+    };
+    let card = |on: bool| {
+        let mut st = SessionState::default();
+        let d = with_card_orientation(on, || decide(&ctx, &mut st, &Event::Prompt { text: "add a test flag".into() }));
+        d.directives.into_iter().find(|x| x.route == "card-1").unwrap().text
+    };
+    let oriented = card(true);
+    assert!(oriented.contains("Where those files stand in this checkout now"), "{oriented}");
+    assert!(oriented.contains("  - docs/flags.md: 3 lines."), "{oriented}");
+    assert!(!oriented.contains("copy the format") && !oriented.contains("## --hex"), "{oriented}");
+    let earlier = card(false);
+    assert!(earlier.contains("copy the format") && earlier.contains("    | ## --hex"), "{earlier}");
+    assert!(!earlier.contains("Where those files stand"), "{earlier}");
+}
+
+/// The tests an edit adds to a test file are remembered by name, for the receipt to name them.
+#[test]
+fn edits_that_add_tests_are_remembered_for_the_receipt() {
+    let (dir, index, table) = fixture();
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: None,
+        params: Default::default(),
+    };
+    let path = |rel: &str| dir.path().join(rel).to_string_lossy().to_string();
+    let call = |tool: &str, input: Value| Call { tool: tool.into(), input, output: String::new(), failed: false };
+    let mut st = SessionState::default();
+    let batch = Event::Batch {
+        calls: vec![
+            call(
+                "Edit",
+                json!({ "file_path": path("tests/test_v.py"), "old_string": "def test_old():\n    pass\n",
+                         "new_string": "def test_old():\n    pass\n\n\ndef test_finite_a():\n    pass\n\nasync def test_finite_b():\n    pass\n" }),
+            ),
+            call(
+                "Write",
+                json!({ "file_path": path("src/v.py"), "content": "def test_not_a_test_file():\n    pass\n" }),
+            ),
+            call(
+                "MultiEdit",
+                json!({ "file_path": path("tests/test_w.py"), "edits": [{ "old_string": "x", "new_string": "    def test_method(self):\n" }] }),
+            ),
+        ],
+    };
+    decide(&ctx, &mut st, &batch);
+    assert_eq!(st.new_tests, ["test_finite_a", "test_finite_b", "test_method"]);
+    // A failed edit adds nothing; the same name is kept once.
+    let failed = Call {
+        failed: true,
+        ..call("Write", json!({ "file_path": path("tests/test_z.py"), "content": "def test_z(): pass\n" }))
+    };
+    decide(&ctx, &mut st, &Event::Batch { calls: vec![failed] });
+    assert_eq!(st.new_tests.len(), 3);
+    // The fast path never skips a batch that adds a test.
+    let t = adage_tracks::triggers::Triggers::default();
+    let quiet = || Some(SessionState::default());
+    let adds = Event::Batch {
+        calls: vec![call(
+            "Write",
+            json!({ "file_path": path("tests/test_q.py"), "content": "def test_q():\n    pass\n" }),
+        )],
+    };
+    assert!(!crate::fast::skip(&t, &adds, &dir.path().to_string_lossy(), quiet));
+}
+
 /// Review S7: a grey-zone card waits only for the prompt that came close to it. Prompt 1 is close
 /// and edits nothing of the card; prompt 2 is an unrelated task that edits a card file: no card.
 #[test]

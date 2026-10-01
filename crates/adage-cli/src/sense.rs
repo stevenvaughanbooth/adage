@@ -223,6 +223,13 @@ fn redacted(s: &str) -> String {
     scrub(s, home().as_deref())
 }
 
+/// A history directory as a source line names it: whole, with the home directory as `~`. It is a
+/// place the person configured, not trace content, so it is not scrubbed for secrets (which cut
+/// a long directory name in half).
+fn place(d: &std::path::Path) -> String {
+    crate::detect::tilde(d)
+}
+
 /// `W-1042` → `W-####`: the shape of an id, never the id.
 fn shape(v: &str) -> String {
     v.chars().map(|c| if c.is_ascii_digit() { '#' } else { c }).collect()
@@ -402,19 +409,19 @@ fn discover(o: &Options, paths: &Paths) -> (Vec<PathBuf>, String) {
     let mut source: Vec<String> = Vec::new();
     if let Some(d) = &codex {
         let (found, _) = adage_learn::codex::discover(d);
-        source.push(format!("{} Codex rollout(s) in {}", found.len(), redacted(&d.display().to_string())));
+        source.push(format!("{} Codex rollout(s) in {}", found.len(), place(d)));
         files.extend(found);
     }
     if !o.transcripts.is_empty() {
         source.push(format!("{} file(s) given with --transcripts", o.transcripts.len()));
     }
     if let Some(d) = dir {
-        source.push(format!("Claude Code history in {}", redacted(&d.display().to_string())));
+        source.push(format!("Claude Code history in {}", place(&d)));
         files.extend(adage_learn::import::discover(&d));
     }
     if !explicit {
         if let Some(d) = &cfg.learn_opencode_exports {
-            source.push(format!("OpenCode exports in {}", redacted(&d.display().to_string())));
+            source.push(format!("OpenCode exports in {}", place(d)));
             files.extend(crate::history::opencode_exports(d));
         }
     }

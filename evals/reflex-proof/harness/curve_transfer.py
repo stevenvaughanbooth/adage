@@ -111,8 +111,8 @@ def freeze(root, cumulative_root, controls):
     # The replacement replay preserves the original cohort's executables. Both rebuilt
     # binaries remain explicitly pinned and enter the new study's frozen input hashes.
     binaries = {name: str((cumulative / name).resolve(strict=True)) for name in ("adage", "adage-exec")}
-    expected = {"adage": "64dee0b72e8721df7c7ccb23777eeb816310f64139f6af4bd06bdb365b40d2a7",
-                "adage-exec": "39acd547b28a08d4daec615c83ddfd373acc970e7b30442f9e7213f58f7a898d"}
+    expected = {"adage": "dc4c454dcae3b756215a8dbb6edeafa8d08d45317f0464524cf427049ec2b607",
+                "adage-exec": "8a4d9500d363f9c3c1b2643c3b7402511ea04e522f58f9c4f7ca0b9b16a993a7"}
     if any(pairs.sha(Path(path)) != expected[name] for name, path in binaries.items()) or record["binary_sha256"] != expected["adage"]:
         raise ValueError("conditioned release binary mismatch")
     review = native / "native-confinement-reviewed.json"

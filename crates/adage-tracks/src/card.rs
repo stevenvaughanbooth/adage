@@ -255,6 +255,18 @@ fn path_text(p: &str) -> String {
 /// The card's text, from fixed headings (the research's, as measured). Every exemplar line is
 /// quoted (`    | `): it is data from an earlier session, not an instruction.
 pub fn text(c: &Card) -> String {
+    render(c, None)
+}
+
+/// The card without its exemplars, with `orientation` (the runtime's facts about the card's files
+/// in the checkout now, already bounded and quoted) where they stood. An exemplar invited a search
+/// for its idioms (dev-v8: paged reads and greps); the orientation says where things are instead.
+pub fn text_oriented(c: &Card, orientation: Option<&str>) -> String {
+    render(c, Some(orientation.unwrap_or_default()))
+}
+
+/// `oriented`: `None` renders the exemplars; `Some(block)` leaves them out and puts the block there.
+fn render(c: &Card, oriented: Option<&str>) -> String {
     let mut s = format!(
         "How changes of this kind were done here before: learned from {} earlier session{} of the same kind of task in this repository ({} passed the project's checks). Use it as a checklist; the specifics of your task differ.\n",
         c.sessions,
@@ -265,7 +277,11 @@ pub fn text(c: &Card) -> String {
     for f in &c.files {
         s.push_str(&format!("  - {} ({}/{} sessions)\n", path_text(&f.path), f.sessions, c.sessions));
     }
-    if !c.exemplars.is_empty() {
+    if let Some(block) = oriented.filter(|b| !b.trim().is_empty()) {
+        s.push_str(block.trim_end());
+        s.push('\n');
+    }
+    if oriented.is_none() && !c.exemplars.is_empty() {
         s.push_str("What the edit looked like last time (another variant; copy the format, not the content):\n");
         for e in &c.exemplars {
             s.push_str(&format!("  {}:\n", e.path));
@@ -366,6 +382,21 @@ mod tests {
         let mut bad = sample();
         bad.prompts.push(vec![1; 9]);
         assert!(check(&bad).is_err());
+    }
+
+    #[test]
+    fn an_oriented_card_puts_the_checkouts_facts_where_the_exemplar_was() {
+        let c = sample();
+        let block = "Where those files stand in this checkout now:\n  - src/v.py: 12 lines.";
+        let t = text_oriented(&c, Some(block));
+        assert!(!t.contains("What the edit looked like last time") && !t.contains("    | class A(V):"), "{t}");
+        let (files, orient, commands) =
+            (t.find("Files such a change touched").unwrap(), t.find(block).unwrap(), t.find("Commands:").unwrap());
+        assert!(files < orient && orient < commands, "{t}");
+        let bare = text_oriented(&c, None);
+        assert!(!bare.contains("    | class A(V):") && bare.contains("Commands:"), "{bare}");
+        assert_eq!(text(&c), render(&c, None), "the shipped card is unchanged");
+        assert!(text(&c).contains("    | class A(V):"));
     }
 
     /// Review B3: a card that quotes a secret, or names a secret-holding file, is refused whole.

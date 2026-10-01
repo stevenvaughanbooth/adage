@@ -5,7 +5,7 @@
 //! [`skip`] says an event can be skipped only when running [`crate::decide`] on it would give no
 //! directive, no judgement and no stop request, and would change nothing in the session state that
 //! a later decision reads (`emitted`, `pending`, `obligations`, `stop_requests`, `prompts`
-//! while it is 0, and the context state `ctx`). What a skipped event leaves out is measurement
+//! while it is 0, the context state `ctx`, and `new_tests`, which a later receipt reads). What a skipped event leaves out is measurement
 //! only: the `batches` and `history` counters, and its spool record, so `adage graph` lists
 //! commands only from recorded
 //! events. Runs of a dead end's avoided commands are always recorded (they are words in the
@@ -17,7 +17,7 @@
 //! | --- | --- |
 //! | session start, session end | always: nothing decides on them |
 //! | prompt | no intent routes; no prompt route's span kind in the text; no prompt token a prompt route's learned value type accepts; not the session's first prompt (`prompts` > 0) |
-//! | batch | no pending judgement, no obligation and no procedure card waiting for an edit (`card_waiting`) in the state; no call might match ([`Triggers::call_might_match`]) |
+//! | batch | no pending judgement, no obligation and no procedure card waiting for an edit (`card_waiting`) in the state; no call might match ([`Triggers::call_might_match`]); no edit adds a test function to a test file (`new_tests`, which a receipt names) |
 //! | failure | no call might match, and no pending judgement (a failure of a directed command judges it `misfired`) |
 //! | stop | no obligation both unmet and not yet requested |
 //!
@@ -57,6 +57,10 @@ pub fn skip(t: &Triggers, ev: &Event, cwd: &str, state: impl FnOnce() -> Option<
         }
         Event::Batch { calls } => {
             if t.calls_matter() && calls.iter().any(|c| t.call_might_match(&haystack(cwd, &c.tool, &c.input))) {
+                return false;
+            }
+            // A test an edit adds is remembered (`new_tests`) for the receipt that names it.
+            if calls.iter().any(|c| !crate::added_tests(c, std::path::Path::new(cwd)).is_empty()) {
                 return false;
             }
             // A procedure card waiting for the session's first edit of one of its files (a prompt

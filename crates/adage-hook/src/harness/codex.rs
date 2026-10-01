@@ -72,7 +72,7 @@ impl Adapter for Codex {
     fn render(&self, event: &str, out: Output) -> Option<String> {
         Some(match out {
             Output::Continue(reason) => json!({ "decision": "block", "reason": reason }).to_string(),
-            Output::Context(text) => {
+            Output::Context(text) | Output::SessionContext { context: text, .. } => {
                 json!({ "hookSpecificOutput": { "hookEventName": event, "additionalContext": text } }).to_string()
             }
             // Codex documents no person-only channel: notices go to the card and `adage watch`.

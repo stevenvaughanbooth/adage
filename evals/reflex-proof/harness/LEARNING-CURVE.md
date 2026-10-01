@@ -168,6 +168,13 @@ executables with both hashes pinned, and a local replay of the identical ten his
 new transfer root and obtain fresh human grants before any model call; task prompts, scoring and
 all eight assignments remain unchanged.
 
+The second preparation also stopped before dispatch: first the missing explicit E2 policy opt-in,
+then pytest's hidden `.pytest_cache/.gitignore`, which the wildcard intentionally did not cover.
+The human's staged approval run passed pytest (exit 0), but no grant was saved because that changed
+file was outside the contract. The next preparation adds only that exact cache file, opts in via
+the human-run approval script in the four temporary homes, and again rebuilds, replays and pins
+both binaries before dispatch. Preserve these setup failures; none is a successful live transfer.
+
 ## Offline preparation
 
 ```sh

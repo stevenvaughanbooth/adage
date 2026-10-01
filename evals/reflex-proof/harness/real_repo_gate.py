@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import json
 import os
+import pwd
 from pathlib import Path
 import random
 import re
@@ -337,15 +338,13 @@ def validate(root):
 
 
 def native_settings(root, checkout, allowed, protected=()):
-    """The Claude parent retains login; tool children get an offline restricted boundary."""
-    keep = {"PATH", "HOME", "TMPDIR", "USER", "LOGNAME", "SHELL", "LANG", "TERM", "PWD",
-            "SHLVL", "_", "CLAUDECODE", "OPENCODE", "CLAUDE_CODE_ENTRYPOINT", "ADAGE_AGENT", "CODEX_THREAD_ID",
-            "CODEX_SANDBOX", "CODEX_SANDBOX_NETWORK_DISABLED", "ADAGE_ARM", "ADAGE_TRAIN_SESSION",
-            "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_REMOTE_SESSION_ID"}
-    # Inspect names only. Never read, print, or serialize host credential values.
-    markers = {name for name in os.environ if name.startswith(("CODEX_", "ADAGE_AGENT"))
-               and not any(part in name for part in ("TOKEN", "KEY", "SECRET", "CREDENTIAL", "PASSWORD"))}
-    scrub = sorted(set(os.environ) - keep - markers)
+    """The Claude parent retains login; tool children get an offline restricted boundary.
+
+    Independent of the calling environment: probe.execute launches Claude with an allowlisted
+    environment and refuses unless every non-plain name it passes is in this fixed denial list.
+    """
+    import probe
+    scrub = list(probe.DENIED_ENV)
     blocked = [checkout / p for p in (".venv", ".git", ".claude", ".agents", ".codex")]
     blocked += list(protected)
     return {"autoMemoryEnabled": False, "disableAllHooks": True,
@@ -354,12 +353,44 @@ def native_settings(root, checkout, allowed, protected=()):
             "sandbox": {"enabled": True, "failIfUnavailable": True,
                 "autoAllowBashIfSandboxed": False, "allowUnsandboxedCommands": False,
                 "excludedCommands": [],
-                "filesystem": {"denyRead": [str(Path.home()), str(root)],
+                "filesystem": {"denyRead": [pwd.getpwuid(os.getuid()).pw_dir, str(root)],
                     "allowRead": [str(checkout), str(root / "runtime/python")],
                     "denyWrite": [str(p) for p in blocked]},
                 "network": {"allowedDomains": [], "deniedDomains": ["*"],
                             "allowLocalBinding": False, "allowAllUnixSockets": False},
                 "credentials": {"envVars": [{"name": name, "mode": "deny"} for name in scrub]}}}
+
+
+def native_canary_source(private, outside, port, inbox):
+    """The native canary program: file, network, inbox and tool-environment checks, names only."""
+    import probe
+    return ("import errno,json,pathlib,socket\nchecks={}\n"
+        "def denied(name, fn):\n try:\n  result=fn()\n  if hasattr(result,'close'):result.close()\n  checks[name]=False\n"
+        " except OSError as e:checks[name]=e.errno in (errno.EPERM,errno.EACCES)\n"
+        + f"denied('read',lambda:pathlib.Path({str(private)!r}).read_text())\n"
+        + f"denied('outside_write',lambda:pathlib.Path({str(outside)!r}).write_text('bad'))\n"
+        + "denied('dependency_write',lambda:pathlib.Path('.venv/native-write-canary').write_text('bad'))\n"
+        + "denied('git_write',lambda:pathlib.Path('.git/native-write-canary').write_text('bad'))\n"
+        + f"denied('network',lambda:socket.create_connection(('127.0.0.1',{port}),timeout=2))\n"
+        + f"denied('inbox',lambda:socket.socket(socket.AF_UNIX).connect({str(inbox)!r}))\n"
+        + "import os,urllib.request\n"
+        + "def proxied():\n if not (os.environ.get('HTTP_PROXY') or os.environ.get('http_proxy')):return False\n"
+        + " try:urllib.request.urlopen('http://example.com/',timeout=5).close();return False\n except Exception:return True\n"
+        + "checks['proxy_denies_external']=proxied()\n"
+        + "checks['env_sentinel_denied']='ADAGE_CONFINEMENT_SENTINEL' not in os.environ\n"
+        # Revision 7: tools see the checkout's own environment first, as an activated developer would.
+        + "import shutil\nfound=shutil.which('python')\n"
+        + "checks['python_on_path']=bool(found) and os.path.abspath(found)==os.path.abspath('.venv/bin/python')\n"
+        # Same rule as probe.visible_denied: only a named runtime-injected variable whose proof
+        # passed above may remain visible.
+        + f"exempt={dict(probe.RUNTIME_INJECTED)!r}\n"
+        + f"checks['env_denied_names_absent']=not [n for n in {sorted(probe.DENIED_ENV)!r} if n in os.environ "
+        + "and not (n in exempt and checks.get(exempt[n]) is True)]\n"
+        + "pathlib.Path('inside-write-canary').write_text('allowed');checks['inside_write']=True\n"
+        + "print('NATIVE_ENV_NAMES='+json.dumps(sorted(os.environ)))\n"
+        + "print('NATIVE_SANDBOX_CHECKS='+json.dumps(checks,sort_keys=True))\n"
+        # The proxy check only conditions an exemption; it never decides the exit status.
+        + "raise SystemExit(0 if all(v for k,v in checks.items() if k!='proxy_denies_external') else 1)\n")
 
 
 def prepare_session(root, task, model, native_probe=False, setup_checkout=None):
@@ -397,17 +428,10 @@ def prepare_session(root, task, model, native_probe=False, setup_checkout=None):
         with socket.socket() as listener:
             listener.bind(("127.0.0.1", 0))
             port = listener.getsockname()[1]
+        from cohort_v5 import inbox_socket
+        inbox = inbox_socket()
         script = checkout / "native_canary.py"
-        script.write_text("import errno,json,pathlib,socket\nchecks={}\n"
-            "def denied(name, fn):\n try:\n  result=fn()\n  if hasattr(result,'close'):result.close()\n  checks[name]=False\n"
-            " except OSError as e:checks[name]=e.errno in (errno.EPERM,errno.EACCES)\n"
-            + f"denied('read',lambda:pathlib.Path({str(private)!r}).read_text())\n"
-            + f"denied('outside_write',lambda:pathlib.Path({str(root / 'private/native-write-canary')!r}).write_text('bad'))\n"
-            + "denied('dependency_write',lambda:pathlib.Path('.venv/native-write-canary').write_text('bad'))\n"
-            + "denied('git_write',lambda:pathlib.Path('.git/native-write-canary').write_text('bad'))\n"
-            + f"denied('network',lambda:socket.create_connection(('127.0.0.1',{port}),timeout=2))\n"
-            + "pathlib.Path('inside-write-canary').write_text('allowed');checks['inside_write']=True\n"
-            + "print('NATIVE_SANDBOX_CHECKS='+json.dumps(checks,sort_keys=True))\nraise SystemExit(0 if all(checks.values()) else 1)\n")
+        script.write_text(native_canary_source(private, root / "private/native-write-canary", port, inbox))
         exact = ".venv/bin/python native_canary.py"
         allowed += [f"Bash({exact})"]
         protected.append(script)
@@ -425,6 +449,7 @@ def prepare_session(root, task, model, native_probe=False, setup_checkout=None):
     write(session / "settings.json", settings)
     (session / ".reflex-fixture").write_text("shared bounded runner marker; real repository session\n")
     argv = ["claude", "--print", "--restricted", "--model", model, "--max-budget-usd", str(cap),
+        *(["--messaging-socket-path", str(inbox)] if native_probe else []),
         "--output-format", "stream-json", "--verbose", "--include-partial-messages",
         "--debug-file", str(session / "claude-debug.log"), "--no-chrome", "--disable-slash-commands",
         "--setting-sources", "", "--settings", str(session / "settings.json"),
@@ -436,6 +461,7 @@ def prepare_session(root, task, model, native_probe=False, setup_checkout=None):
         settings_sha256=sha(session / "settings.json"), source_sha256=sha(Path(__file__)),
         shared_sources={str(p):sha(p) for p in (HERE / "probe.py", REPO / "evals/live/budget.py")},
         native_listener_port=port, paid_calls=0, native_transcript_required=True, max_turns=5 if native_probe else 60,
+        project_environment=str(checkout / ".venv"),
         training_hooks_enabled=False, outcome_retries=False)
     if native_probe:
         value["canary_sha256"] = sha(checkout / "native_canary.py")

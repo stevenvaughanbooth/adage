@@ -55,9 +55,10 @@ fn s<'a>(v: &'a Value, path: &[&str]) -> Option<&'a str> {
     path.iter().try_fold(v, |v, k| v.get(*k))?.as_str()
 }
 
+/// Text Adage wrote (a directive, or a Stop-hook continuation: `render::is_finish_line`), never a
+/// prompt the person typed.
 fn own_text(t: &str) -> bool {
-    let t = t.trim_start();
-    t.starts_with("<adage-reflex ") || t.starts_with("Adage finish-line check:")
+    t.trim_start().starts_with("<adage-reflex ") || adage_runtime::render::is_finish_line(t)
 }
 
 /// Parse one export. `None` for sub-agent sessions and sessions without a usable prompt.

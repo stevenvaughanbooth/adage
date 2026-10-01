@@ -1,0 +1,50 @@
+{
+ "00-positive-1": {
+  "source": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v4/canary-v5/sessions/00-positive-1/production-hooks.jsonl",
+  "source_sha256": "fb366a742f91c8dc90d7f08d1b5cea38f7f471d5539fbaf42c7782f2517030c0"
+ },
+ "01-failed-1": {
+  "source": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v4/canary-v5/sessions/01-failed-1/production-hooks.jsonl",
+  "source_sha256": "7a20b0331897e8107ac0a6992784d36d5682becabad6c68e2471377ba43680c3"
+ },
+ "02-later-edit-1": {
+  "source": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v4/canary-v5/sessions/02-later-edit-1/production-hooks.jsonl",
+  "source_sha256": "67d19780be59529b4f48a57910b93573af00f3293bff8d8d2e48bddfaf7833df"
+ },
+ "03-config-change-1": {
+  "source": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v4/canary-v5/sessions/03-config-change-1/production-hooks.jsonl",
+  "source_sha256": "192cc86c589d7357f5b45576bdb4a09624f7ea93deef79caed92077803df2b11"
+ },
+ "04-broader-1": {
+  "source": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v4/canary-v5/sessions/04-broader-1/production-hooks.jsonl",
+  "source_sha256": "326afe38dd3818f291452887079c57770fc81adff188a0aa7b8de1475744971c"
+ },
+ "05-rerun-1": {
+  "source": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v4/canary-v5/sessions/05-rerun-1/production-hooks.jsonl",
+  "source_sha256": "75b4713a0a8bd05749f732f3b5ea91201e1ed0bd62904f61016c096facd543a1"
+ },
+ "06-positive-2": {
+  "source": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v4/canary-v5/sessions/06-positive-2/production-hooks.jsonl",
+  "source_sha256": "a648c40fcd9ce5ac477d42e3668973c14fb1518b03164ad887617bce65211e01"
+ },
+ "07-failed-2": {
+  "source": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v4/canary-v5/sessions/07-failed-2/production-hooks.jsonl",
+  "source_sha256": "a26d2d52852b43b7375d13b46e1462dd5e97c14a43b5099bc11c76b2e973c62d"
+ },
+ "08-later-edit-2": {
+  "source": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v4/canary-v5/sessions/08-later-edit-2/production-hooks.jsonl",
+  "source_sha256": "be90f98d935a22faf86aca9a1523c4787688f1ddef384e86d8082ce05725947b"
+ },
+ "09-config-change-2": {
+  "source": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v4/canary-v5/sessions/09-config-change-2/production-hooks.jsonl",
+  "source_sha256": "82cf654fa4e0d5bea0aa1589562f7fc43513dc76e013c122afbe819cde3a9078"
+ },
+ "10-broader-2": {
+  "source": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v4/canary-v5/sessions/10-broader-2/production-hooks.jsonl",
+  "source_sha256": "fa8b64c2a4907db241c7c0403b6190658ba6947958834ad69d03d4ff46aca656"
+ },
+ "11-rerun-2": {
+  "source": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v4/canary-v5/sessions/11-rerun-2/production-hooks.jsonl",
+  "source_sha256": "9408ef181203087074d061d948725185d94cd00756d6cf4767be41a13c6dc4b9"
+ }
+}

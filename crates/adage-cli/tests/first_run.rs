@@ -169,6 +169,37 @@ fn init_yes_fetches_the_model_and_survives_a_failed_download() {
     assert!(!w.p("data/models/potion-code-16m-v2").exists());
 }
 
+/// QA first-run #14: `init --yes` registers no hooks (`adage install … --write` does), and says
+/// so where a scripted run reads it last, rather than ending as if setup were complete.
+#[test]
+fn init_yes_says_whether_hooks_are_registered() {
+    let w = World::new();
+    std::fs::create_dir_all(w.p("home/.claude")).unwrap();
+    let o = w.run(&["init", "--yes"]);
+    let t = text(&o);
+    assert!(o.status.success(), "{t}");
+    assert!(t.contains("--yes does not register them"), "{t}");
+    assert!(t.contains("hooks       not registered: claude-code sessions will not hear from Adage"), "{t}");
+    assert!(t.contains("next  adage install claude-code --write"), "{t}");
+    let o = w.run(&["install", "claude-code", "--write", "--scope", "user"]);
+    assert!(o.status.success(), "{}", text(&o));
+    let t = text(&w.run(&["init", "--yes"]));
+    assert!(t.contains("hooks       registered: claude-code (~/.claude/settings.json)"), "{t}");
+    assert!(!t.contains("next  adage install"), "{t}");
+}
+
+/// QA first-run #15: an empty `CODEX_HOME` is not Codex (no Codex steps, no Codex warning).
+#[test]
+fn an_empty_codex_home_is_not_codex() {
+    let w = World::new();
+    std::fs::create_dir_all(w.p("codex")).unwrap();
+    let t = text(&w.run(&["init"]));
+    assert!(t.contains("codex        not found"), "{t}");
+    std::fs::write(w.p("codex/config.toml"), "").unwrap();
+    let t = text(&w.run(&["init"]));
+    assert!(t.contains("codex        found"), "{t}");
+}
+
 #[test]
 fn init_scopes_the_sense_to_a_repository() {
     let w = World::new();

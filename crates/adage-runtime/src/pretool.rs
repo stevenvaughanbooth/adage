@@ -28,6 +28,10 @@ pub struct Env {
     pub interpreter: String,
     /// The same, as a person reads it (`.venv/bin/python`).
     pub shown: String,
+    /// The interpreter relative to `root`, as it goes into a command whose every rewritten part
+    /// runs at the root (`.venv/bin/python`, shell-quoted if needed): what the person reads and
+    /// what their permission rules name. `None`: always [`Env::interpreter`].
+    pub relative: Option<String>,
     /// pytest is installed in the environment.
     pub pytest: bool,
     /// Modules it imports that the system Python may lack: the project's own packages and the
@@ -49,7 +53,9 @@ pub struct Env {
 pub enum Pre {
     /// Run this command instead (the interpreter prefix swapped); `kind` is `test` or `repro`.
     /// `segments` are the simple commands rewritten, before and after, for permission rules.
-    Rewrite { command: String, kind: &'static str, segments: Vec<(String, String)> },
+    /// `interpreter` is the word substituted: [`Env::relative`] when every rewritten part runs at
+    /// the root, else [`Env::interpreter`]; notes name exactly this.
+    Rewrite { command: String, kind: &'static str, segments: Vec<(String, String)>, interpreter: String },
     /// Let the command run as written, and tell the agent this (`kind`: `pip-install`, or
     /// `permissions` for a rewrite the person's permission rules would not admit).
     Advise { reason: String, kind: &'static str },
@@ -458,8 +464,10 @@ pub fn plan(command: &str, env: &Env, read: impl Fn(&str) -> Option<String>) -> 
             }
         }
     }
-    let mut edits: Vec<(usize, usize, String)> = Vec::new();
-    let mut segments = Vec::new();
+    // Each rewrite: the command word's range, the simple command's range, whether it becomes
+    // `<interpreter> -m pytest` (a bare `pytest`), and whether it runs at the root.
+    let mut planned: Vec<(usize, usize, usize, usize, bool, bool)> = Vec::new();
+    let root = normal(&env.root);
     let mut kind = "";
     for (c, dir) in list.iter().zip(&dirs) {
         let Some(k) = command_index(command, c) else { continue };
@@ -474,9 +482,9 @@ pub fn plan(command: &str, env: &Env, read: impl Fn(&str) -> Option<String>) -> 
         }
         let first = args.first().copied();
         let second = args.get(1).copied();
-        let with = if matches!(word, "pytest" | "py.test") && env.pytest {
+        let bare_pytest = if matches!(word, "pytest" | "py.test") && env.pytest {
             kind = "test";
-            format!("{} -m pytest", env.interpreter)
+            true
         } else if same_python(word, env) {
             let test = first == Some("-m") && second == Some("pytest") && env.pytest;
             let repro = !env.modules.is_empty()
@@ -498,23 +506,35 @@ pub fn plan(command: &str, env: &Env, read: impl Fn(&str) -> Option<String>) -> 
             if kind != "test" {
                 kind = if test { "test" } else { "repro" };
             }
-            env.interpreter.clone()
+            false
         } else {
             continue;
         };
         let (s, e) = (c.words[0].start, c.words.last().map_or(w.end, |l| l.end));
-        let before = &command[s..e];
-        segments.push((before.to_string(), format!("{}{with}{}", &command[s..w.start], &command[w.end..e])));
-        edits.push((w.start, w.end, with));
+        let at_root = !root.as_os_str().is_empty() && *dir == root;
+        planned.push((w.start, w.end, s, e, bare_pytest, at_root));
     }
-    if edits.is_empty() {
+    if planned.is_empty() {
         return None;
+    }
+    // The repository-relative interpreter only when every rewritten part runs at the root: a
+    // relative word after a `cd` would name another directory's interpreter.
+    let interpreter = match &env.relative {
+        Some(r) if planned.iter().all(|p| p.5) => r.clone(),
+        _ => env.interpreter.clone(),
+    };
+    let mut segments = Vec::new();
+    let mut edits: Vec<(usize, usize, String)> = Vec::new();
+    for (ws, we, s, e, bare_pytest, _) in planned {
+        let with = if bare_pytest { format!("{interpreter} -m pytest") } else { interpreter.clone() };
+        segments.push((command[s..e].to_string(), format!("{}{with}{}", &command[s..ws], &command[we..e])));
+        edits.push((ws, we, with));
     }
     let mut out = command.to_string();
     for (s, e, with) in edits.into_iter().rev() {
         out.replace_range(s..e, &with);
     }
-    Some(Pre::Rewrite { command: out, kind, segments })
+    Some(Pre::Rewrite { command: out, kind, segments, interpreter })
 }
 
 /// Whether a Claude Code `permissions.allow` rule admits a shell command: `Bash` or `Bash(*)`
@@ -591,12 +611,12 @@ pub fn shell_word(p: &str) -> String {
     }
 }
 
-/// The line the agent (and the person) reads beside a rewritten command.
-pub fn rewrite_note(env: &Env, kind: &str) -> String {
+/// The line the agent (and the person) reads beside a rewritten command: `interpreter` is the
+/// word substituted ([`Pre::Rewrite`]), so the note names exactly what runs.
+pub fn rewrite_note(interpreter: &str, kind: &str) -> String {
     let what = if kind == "test" { "test run" } else { "Python run" };
     format!(
-        "Adage pointed this {what} at the project's environment ({}): the system Python lacks the project and its test dependencies. Nothing else in the command changed.",
-        env.shown
+        "Adage pointed this {what} at the project's environment ({interpreter}): the system Python lacks the project and its test dependencies. Nothing else in the command changed."
     )
 }
 
@@ -608,6 +628,7 @@ mod tests {
         Env {
             interpreter: "/w/click/.venv/bin/python".into(),
             shown: ".venv/bin/python".into(),
+            relative: None,
             pytest: true,
             modules: vec!["click".into(), "pytest".into()],
             root: "/w/click".into(),
@@ -663,6 +684,36 @@ mod tests {
             panic!()
         };
         assert_eq!(segments, [("pytest -q".to_string(), "/w/click/.venv/bin/python -m pytest -q".to_string())]);
+    }
+
+    /// First-run QA item 7: at the root, the rewrite substitutes the repository-relative
+    /// interpreter the note names (and the person's permission rules can name); after a `cd`, or
+    /// from a subdirectory, the absolute one, and the note names that instead.
+    #[test]
+    fn at_the_root_the_relative_interpreter_is_substituted_and_named() {
+        let rel = Env { relative: Some(".venv/bin/python".into()), ..env() };
+        let rewrite = |cmd: &str, e: &Env| match plan(cmd, e, |_| None) {
+            Some(Pre::Rewrite { command, interpreter, segments, .. }) => (command, interpreter, segments),
+            other => panic!("{cmd}: {other:?}"),
+        };
+        let (cmd, word, segments) = rewrite("python -m pytest tests/test_x.py -q 2>&1 | tail -5", &rel);
+        assert_eq!(cmd, ".venv/bin/python -m pytest tests/test_x.py -q 2>&1 | tail -5");
+        assert_eq!(word, ".venv/bin/python");
+        assert_eq!(segments[0].1, ".venv/bin/python -m pytest tests/test_x.py -q");
+        assert_eq!(rewrite_note(&word, "test"), "Adage pointed this test run at the project's environment (.venv/bin/python): the system Python lacks the project and its test dependencies. Nothing else in the command changed.");
+        assert!(keeps_permissions(&segments, &[String::from("Bash(.venv/bin/python -m pytest:*)")], Some("dontAsk")));
+        assert_eq!(
+            rewrite("pytest -q && cd /w/click && pytest -x", &rel).0,
+            ".venv/bin/python -m pytest -q && cd /w/click && .venv/bin/python -m pytest -x"
+        );
+        // A part that runs elsewhere in the checkout: the absolute interpreter, everywhere, and named.
+        let (cmd, word, _) = rewrite("pytest -q && cd tests && pytest -x", &rel);
+        assert_eq!(cmd, "/w/click/.venv/bin/python -m pytest -q && cd tests && /w/click/.venv/bin/python -m pytest -x");
+        assert_eq!(word, "/w/click/.venv/bin/python");
+        assert!(rewrite_note(&word, "test").contains("(/w/click/.venv/bin/python)"));
+        let sub = Env { cwd: "/w/click/tests".into(), ..rel.clone() };
+        assert_eq!(rewrite("python -m pytest test_x.py", &sub).1, "/w/click/.venv/bin/python");
+        assert_eq!(rewrite("cd .. && python -m pytest tests", &sub).1, ".venv/bin/python", "back at the root");
     }
 
     #[test]

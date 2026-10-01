@@ -263,7 +263,10 @@ impl Signals {
     }
 
     pub fn note(&mut self, text: &str) {
-        if !(text.contains("<adage-reflex") || text.contains("<adage-data") || text.contains("Adage finish-line check"))
+        if !(text.contains("<adage-reflex")
+            || text.contains("<adage-data")
+            || text.contains("<adage-receipt")
+            || text.contains("Adage finish-line check"))
         {
             return;
         }
@@ -312,6 +315,12 @@ impl Signals {
         }
         if text.contains("<adage-data") && !SIGNAL_TAG.captures_iter(text).any(|t| EXEC_ATTR.is_match(&t[1])) {
             // Execution output with no whole E1 wrapper beside it: it could have steered anything.
+            self.steered = true;
+            self.push(String::new(), None, true);
+        }
+        if text.contains("<adage-receipt") {
+            // A receipt for work Adage already ran (a PreToolUse note): the agent may skip or
+            // change a run because of it, so nothing after it is the agent's own demonstration.
             self.steered = true;
             self.push(String::new(), None, true);
         }
@@ -475,7 +484,13 @@ pub fn parse_transcript(path: &Path, table: &CommandTable, repo_override: Option
         match rec.get("type").and_then(|v| v.as_str()) {
             Some("user") => {
                 let content = &rec["message"]["content"];
-                if let Some(s) = content.as_str() {
+                // A Stop-hook continuation Adage wrote, should Claude Code record it as a user
+                // message: Adage's direction, never the person's prompt.
+                let own = |t: &str| adage_runtime::render::is_finish_line(t);
+                if let Some(s) = content.as_str().filter(|s| own(s)) {
+                    signals.at(uses.len());
+                    signals.note(s);
+                } else if let Some(s) = content.as_str() {
                     if rec.get("isMeta").and_then(|v| v.as_bool()) != Some(true) && !is_synthetic_prompt(s) {
                         prompts.push(s);
                         if prompt.is_none() {
@@ -492,7 +507,10 @@ pub fn parse_transcript(path: &Path, table: &CommandTable, repo_override: Option
                             let failed = it.get("is_error").and_then(|v| v.as_bool()).unwrap_or(false);
                             results.insert(tid, (text_of(it.get("content").unwrap_or(&Value::Null)), failed));
                         } else if let Some(t) = it.get("text").and_then(|v| v.as_str()) {
-                            if !is_synthetic_prompt(t) {
+                            if own(t) {
+                                signals.at(uses.len());
+                                signals.note(t);
+                            } else if !is_synthetic_prompt(t) {
                                 typed.get_or_insert(t);
                                 if prompt.is_none() {
                                     prompt = Some(t.to_string());
@@ -830,6 +848,10 @@ mod tests {
 
     #[test]
     fn a_directive_is_read_for_what_it_named_and_where() {
+        // A session-wide execution contract steers the entire continuation even before
+        // an action runs; never relearn it as an organic demonstration.
+        let (_, contract) = read("<adage-reflex track=\"adage/execution@1\" route=\"session-contract\" strength=\"prime\" kind=\"execution-contract\">Use successful current receipts as evidence.</adage-reflex>");
+        assert!(contract[0].all);
         let (d, f) = read(
             "<adage-reflex track=\"t@1.0.0\" route=\"finish-line-1\" strength=\"fire\" kind=\"obligation\">\nIn this repository, changes to files matching schema/*.json must be followed by running:\n  make gen\nx\n</adage-reflex>",
         );
@@ -851,6 +873,42 @@ mod tests {
         // The finish-line stop request names its step.
         let (d, f) = read("Adage finish-line check: this session changed files matching x, and this repository requires running `make gen` after such changes");
         assert_eq!((d, f[0].commands.clone()), (v(&[FINISH_LINE_STOP]), v(&["make gen"])));
+    }
+
+    /// F3 and F8: what Adage writes at a Stop (the finish-line gate's failure) and before a tool
+    /// call (a receipt) is its own text in a Claude Code transcript, whether it is recorded as hook
+    /// output or as a user message: the session is steered, and the text is never a prompt.
+    #[test]
+    fn stop_gate_text_and_receipts_are_adages_own_in_claude_transcripts() {
+        let gate = adage_runtime::render::stop_gate_failed(".venv/bin/python -m pytest tests -q", Some(1), None);
+        let receipt = "<adage-receipt operation=\"0123456789ab\">\nAdage's run of `make test` in this session passed on files identical to the current ones.\n</adage-receipt>";
+        let rec = |v: serde_json::Value| format!("{v}\n");
+        let head =
+            rec(serde_json::json!({"type":"user","sessionId":"s","cwd":"/tmp/x","timestamp":"2026-09-01T00:00:00Z",
+            "message":{"role":"user","content":"Fix the schema"}}));
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("s.jsonl");
+        for (shape, finish_line) in [
+            (serde_json::json!({"type":"user","sessionId":"s","message":{"role":"user","content":gate}}), true),
+            (
+                serde_json::json!({"type":"user","sessionId":"s","message":{"role":"user",
+                    "content":[{"type":"text","text":format!("Stop hook feedback:\n{gate}")}]}}),
+                true,
+            ),
+            (serde_json::json!({"type":"system","subtype":"stop_hook_summary","sessionId":"s","content":gate}), true),
+            (
+                serde_json::json!({"type":"attachment","sessionId":"s","attachment":{"type":"hook_additional_context",
+                    "hookEvent":"PreToolUse","content":[receipt]}}),
+                false,
+            ),
+        ] {
+            std::fs::write(&p, head.clone() + &rec(shape.clone())).unwrap();
+            let s = parse_transcript(&p, &CommandTable::load(), Some("r")).unwrap();
+            assert!(s.steered, "{shape}");
+            assert_eq!((s.prompt.as_str(), s.prompt_count()), ("Fix the schema", 1), "{shape}");
+            assert_eq!(s.directed.contains(FINISH_LINE_STOP), finish_line, "{shape}");
+            assert!(s.exposed_to(&[".venv/bin/python -m pytest tests -q"], false), "{shape}");
+        }
     }
 
     #[test]

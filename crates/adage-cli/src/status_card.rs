@@ -201,12 +201,13 @@ fn repo_rows(paths: &Paths, repo: &str, root: &Path, index: &Index, now: u64) ->
         },
     ));
     if r.execution_only > 0 {
+        // Main's layout, with first-run-fixes' plain words: what such a reflex does until delegated.
         out.push((
             "",
             Line::new()
                 .text(format!("{} execution-only", r.execution_only))
                 .sep()
-                .quiet("authority: ")
+                .quiet("silent until delegated: ")
                 .cmd("adage delegate status"),
         ));
     }
@@ -273,6 +274,9 @@ fn repo_rows(paths: &Paths, repo: &str, root: &Path, index: &Index, now: u64) ->
         }
         // Adage acting, not advising: always visible (docs/execution.md, rewrites).
         if c.rewritten > 0 {
+            // Said as it stands now (first-run-fixes): the switch that turns rewrites off, or that
+            // they are off; in main's layout.
+            let now_on = cfg.config.runtime_rewrite && !adage_hook::rewrite_off(paths).exists();
             out.push((
                 "rewrites",
                 Line::new()
@@ -282,8 +286,8 @@ fn repo_rows(paths: &Paths, repo: &str, root: &Path, index: &Index, now: u64) ->
                         plural(c.rewritten, "command", "commands")
                     ))
                     .sep()
-                    .quiet("off: ")
-                    .cmd("adage delegate rewrites off"),
+                    .quiet(if now_on { "turn off: " } else { "now off; turn on: " })
+                    .cmd(if now_on { "adage delegate rewrites off" } else { "adage delegate rewrites on" }),
             ));
         }
         for (i, l) in savings_values(s).into_iter().enumerate() {

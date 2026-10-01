@@ -21,15 +21,21 @@ def policy(authority, checkout, runtime, protected=()):
     return settings
 
 
-def startup_argv(argv):
-    """Identical startup isolation for native, training and paired assignments."""
+def inbox_socket():
+    """A fresh private inbox path; Claude starts an inbox regardless, this only fixes its path."""
     inbox = Path(tempfile.mkdtemp(prefix="adage-np5-", dir="/tmp")).resolve()
     inbox.chmod(0o700)
     socket = inbox / "inbox.sock"
     if len(os.fsencode(socket)) >= 100:
         raise ValueError("messaging socket exceeds portable native limit")
+    return socket
+
+
+def startup_argv(argv):
+    """Identical startup isolation for native, training and paired assignments."""
     argv = list(argv)
-    argv[-1:-1] = ["--messaging-socket-path", str(socket)]
+    if "--messaging-socket-path" not in argv:
+        argv[-1:-1] = ["--messaging-socket-path", str(inbox_socket())]
     return ["/usr/bin/env", "CLAUDE_CODE_PROFILE_STARTUP=1", *argv]
 
 
@@ -55,6 +61,12 @@ def prepare_cohort(authority, destination):
         shutil.copy2(authority / name, destination / name)
     value["trusted_reuse"] = {relative:str((destination / relative).resolve()) for relative in
                              ("runtime/python", "cache/uv", "cache/repobench", "bases", "private/validation")}
+    # The person's ledger allocation, as every study recipe in this authority binds it (approved by
+    # the user on 2026-10-01). Without it a native recipe falls back to the legacy $27.50 admission
+    # ceiling, which the shared ledger has since passed. The per-session cap and $3 floor are unchanged.
+    allocation = authority / "evaluation-allocation.json"
+    if allocation.is_file():
+        value["budget_allocation_sha256"] = gate.sha(allocation)
     gate.write(destination / "manifest.json", value)
     gate.append(destination / "attempts.jsonl", dict(status="cohort-prepared", paid_calls=0,
         protocol_revision=5, budget_authority=str(authority), old_training_excluded=True))
@@ -82,6 +94,10 @@ def finalize_recipe(value, root, native=False):
     value["argv"] = startup_argv(value["argv"])
     sources = (Path(__file__), Path(pairs.__file__), root / "manifest.json", authority / "manifest.json",
                root / "confinement.json", root / "validation.json")
+    if control.get("budget_allocation_sha256"):
+        value["budget_allocation_sha256"] = control["budget_allocation_sha256"]
+        sources += (authority / "evaluation-allocation.json",)  # run-session refuses if it changes
+        gate.budget_limit(value)  # fails here, before any spend, if the allocation changed or is invalid
     value["shared_sources"].update({str(p):gate.sha(p) for p in sources})
     gate.validate_authority(value)
     gate.write(session / "manifest.json", value)

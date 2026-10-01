@@ -71,7 +71,9 @@ impl Adapter for OpenCode {
     fn render(&self, _event: &str, out: Output) -> Option<String> {
         Some(match out {
             Output::Continue(reason) => json!({ "continue": reason }).to_string(),
-            Output::Context(text) => json!({ "context": text }).to_string(),
+            Output::Context(text) | Output::SessionContext { context: text, .. } => {
+                json!({ "context": text }).to_string()
+            }
             Output::Notice(_) | Output::Rewrite { .. } => return None,
         })
     }

@@ -1,0 +1,265 @@
+{
+  "all_journal_receipts": [],
+  "block": 9,
+  "collection_errors": [],
+  "condition": "positive",
+  "contract_emitted": false,
+  "cost_usd": 0.09803719999999999,
+  "exec_decisions": [],
+  "final_generation": "a1355930fb34588c5631a4ff39f68476465408040af18359e24109ec9e7baaab",
+  "heldout_arm": "NOEXEC",
+  "order": 30,
+  "protocol": "heldout-cohort-1",
+  "provenance": {
+    "cwd": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/30-NOEXEC-b09-has-keys/repo",
+    "destination": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/30-NOEXEC-b09-has-keys/native-transcript.jsonl",
+    "session_id": "0ee47011-0c3b-4408-a722-c8d14769d03d",
+    "sha256": "19fbc469543de05107fcd617350ad7f43f51ca6472c4b026f0c908dac286cb48",
+    "source": "/Users/stevenbooth/.claude/projects/-private-tmp-adage-real-repo-gate-v1-cohorts-launch-gate-v8-heldout-1-sessions-30-NOEXEC-b09-has-keys-repo/0ee47011-0c3b-4408-a722-c8d14769d03d.jsonl",
+    "synthetic": false
+  },
+  "quality": {
+    "changed_files": [
+      "CHANGELOG.rst",
+      "src/marshmallow/validate.py",
+      "tests/test_validate.py"
+    ],
+    "checks": {
+      "tests": true
+    },
+    "ci_passed": true,
+    "dependency_mode": "frozen prepared environment; no rescue install",
+    "elapsed_s": 1.68,
+    "exit_code": 0,
+    "hidden_collection_integrity": {
+      "expected_count": 11,
+      "extra": [],
+      "missing": [],
+      "observed_count": 11,
+      "passed": true,
+      "unsuccessful": []
+    },
+    "hidden_failed": [],
+    "hidden_passed": true,
+    "n_tests": 1206,
+    "passed": true,
+    "rescue_error": null,
+    "suite_failed": [],
+    "tail": "........................................................................ [ 23%]\n........................................................................ [ 29%]\n........................................................................ [ 35%]\n........................................................................ [ 41%]\n........................................................................ [ 47%]\n........................................................................ [ 53%]\n........................................................................ [ 59%]\n........................................................................ [ 65%]\n........................................................................ [ 71%]\n........................................................................ [ 77%]\n........................................................................ [ 83%]\n........................................................................ [ 89%]\n........................................................................ [ 95%]\n......................................................                   [100%]\n1206 passed in 1.06s",
+    "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+  },
+  "replay": {
+    "arm": "NOEXEC",
+    "confirmed_elimination": false,
+    "context_receipts": 0,
+    "covered_subsets": 0,
+    "final_source_verified": true,
+    "gate_runs": [],
+    "necessary_work_skipped": false,
+    "opaque": 0,
+    "receipts": 0,
+    "redundant_repeats": 0,
+    "repeat_attempts": 0,
+    "repeat_attempts_not_completed": 0,
+    "requests": [
+      {
+        "adage_pre_context": false,
+        "classification": "before_receipt",
+        "command": ".venv/bin/python -m pytest tests/test_validate.py::test_has_keys_valid tests/test_validate.py::test_has_keys_invalid_missing_key tests/test_validate.py::test_has_keys_invalid_not_mapping tests/test_validate.py::test_has_keys_custom_error tests/test_validate.py::test_has_keys_single_key -v",
+        "completed": true,
+        "covered": false,
+        "digest": "a1355930fb34588c5631a4ff39f68476465408040af18359e24109ec9e7baaab",
+        "id": "toolu_01CQaSKQmBRoUys5XLYJ15Re",
+        "receipt_note": false,
+        "segment": ".venv/bin/python -m pytest tests/test_validate.py::test_has_keys_valid tests/test_validate.py::test_has_keys_invalid_missing_key tests/test_validate.py::test_has_keys_invalid_not_mapping tests/test_validate.py::test_has_keys_custom_error tests/test_validate.py::test_has_keys_single_key -v"
+      },
+      {
+        "adage_pre_context": false,
+        "classification": "before_receipt",
+        "command": ".venv/bin/python -m pytest tests/test_validate.py -q",
+        "completed": true,
+        "covered": false,
+        "digest": "a1355930fb34588c5631a4ff39f68476465408040af18359e24109ec9e7baaab",
+        "id": "toolu_01VF2feV8kdrexajpcX7MJa4",
+        "receipt_note": false,
+        "segment": ".venv/bin/python -m pytest tests/test_validate.py -q"
+      }
+    ],
+    "successful_receipts": 0,
+    "verification_necessary": false,
+    "version": 3
+  },
+  "task": "mm-curve--has-keys",
+  "timeline": {
+    "arm": "NOEXEC",
+    "events": [
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+        "id": "toolu_01DkxyZYeD5LUnA783bMzny3",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+        "id": "toolu_012kEAC8vtjnNk34g6ezEt6H",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+        "id": "toolu_01HoDfMUsqvJRxy2LTvjPeuk",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+        "id": "toolu_01Fo6Y2wN9Bj7fXoACGJ5LYb",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+        "id": "toolu_019mcRaDcbchmaPMQtiHxX4f",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+        "id": "toolu_017WdTuDivabXmCGBhf1vgek",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "2858257febc6c27cb8449c692a237416a09b415be0fe0c3cc775c5c2d45e1b23",
+        "id": "toolu_012eH7RPmMGdiTyVo1EYe87Y",
+        "kind": "tool",
+        "name": "Edit",
+        "path": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/30-NOEXEC-b09-has-keys/repo/src/marshmallow/validate.py",
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "f6ea604cdeee8cbd0e8739eb3daa6e774b2cb0449d4eb95e83d252c581c65807",
+        "id": "toolu_01BcY6PToXVby9xt1C4cjR62",
+        "kind": "tool",
+        "name": "Edit",
+        "path": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/30-NOEXEC-b09-has-keys/repo/src/marshmallow/validate.py",
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "f6ea604cdeee8cbd0e8739eb3daa6e774b2cb0449d4eb95e83d252c581c65807",
+        "id": "toolu_018QXgryJk4vvXBMq6sVx988",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "3c6391f5a56d76acacd8cbb6c348045409f66d0fdc2a30beec1bbf647c04b5b1",
+        "id": "toolu_0122HmYNkZ6cHKed3VVJAyXW",
+        "kind": "tool",
+        "name": "Edit",
+        "path": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/30-NOEXEC-b09-has-keys/repo/tests/test_validate.py",
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "a1355930fb34588c5631a4ff39f68476465408040af18359e24109ec9e7baaab",
+        "id": "toolu_016iTAcZSvcZ8Zr8G1tY6ASq",
+        "kind": "tool",
+        "name": "Edit",
+        "path": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/30-NOEXEC-b09-has-keys/repo/CHANGELOG.rst",
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": ".venv/bin/python -m pytest tests/test_validate.py::test_has_keys_valid tests/test_validate.py::test_has_keys_invalid_missing_key tests/test_validate.py::test_has_keys_invalid_not_mapping tests/test_validate.py::test_has_keys_custom_error tests/test_validate.py::test_has_keys_single_key -v",
+        "completed": true,
+        "digest": "a1355930fb34588c5631a4ff39f68476465408040af18359e24109ec9e7baaab",
+        "id": "toolu_01CQaSKQmBRoUys5XLYJ15Re",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": ".venv/bin/python -m pytest tests/test_validate.py -q",
+        "completed": true,
+        "digest": "a1355930fb34588c5631a4ff39f68476465408040af18359e24109ec9e7baaab",
+        "id": "toolu_01VF2feV8kdrexajpcX7MJa4",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": ".venv/bin/python -c \"from marshmallow.validate import HasKeys; print(HasKeys(['test'])); print(HasKeys(['id', 'name'])({'id': 1, 'name': 'test'}))\"",
+        "completed": true,
+        "digest": "a1355930fb34588c5631a4ff39f68476465408040af18359e24109ec9e7baaab",
+        "id": "toolu_017nVjpr7AygJik52vRbHMvF",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": ".venv/bin/python -c \"\nfrom marshmallow.validate import HasKeys\nfrom marshmallow.exceptions import ValidationError\n\n# Test with dict\nv = HasKeys(['id', 'name'])\n\n# Valid case\ntry:\n    result = v({'id': 1, 'name': 'test'})\n    print('\u2713 Dict with all keys passed')\nexcept ValidationError:\n    print('\u2717 Dict with all keys failed')\n\n# Valid case with extra keys\ntry:\n    result = v({'id': 1, 'name': 'test', 'extra': 'data'})\n    print('\u2713 Dict with extra keys passed')\nexcept ValidationError:\n    print('\u2717 Dict with extra keys failed')\n\n# Invalid case - missing key\ntry:\n    result = v({'id': 1})\n    print('\u2717 Dict missing key should have failed')\nexcept ValidationError as e:\n    print(f'\u2713 Dict missing key failed with: {e.messages}')\n\n# Invalid case - not a mapping\ntry:\n    result = v([1, 2, 3])\n    print('\u2717 List should have failed')\nexcept ValidationError as e:\n    print(f'\u2713 List failed with: {e.messages}')\n\n# Custom error message\nv_custom = HasKeys(['id'], error='Missing {keys} in {input}')\ntry:\n    result = v_custom({'name': 'test'})\n    print('\u2717 Custom error should have been raised')\nexcept ValidationError as e:\n    print(f'\u2713 Custom error message: {e.messages}')\n\"",
+        "completed": true,
+        "digest": "a1355930fb34588c5631a4ff39f68476465408040af18359e24109ec9e7baaab",
+        "id": "toolu_01HXbRN1NEdAMB3fi2Scmgdm",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      }
+    ],
+    "final_digest": "a1355930fb34588c5631a4ff39f68476465408040af18359e24109ec9e7baaab",
+    "root": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/30-NOEXEC-b09-has-keys/repo"
+  }
+}

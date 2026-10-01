@@ -39,7 +39,11 @@ eval gates and the L0 bench against its baseline.
 
 ## Status
 
-v0.1: Claude Code, plus OpenCode and Codex adapters and importers, built against their
+v0.1, unreleased (build from source; see the [README](../README.md#install)). Execution
+(`adage-exec`) runs on macOS and Linux only; on Windows, Adage advises but executes nothing, and its
+hook invocation there is untested.
+
+Claude Code, plus OpenCode and Codex adapters and importers, built against their
 documentation and source and verified end to end by the harness simulator (condition on each
 harness's mock history, replay a held-out session through its native hooks in both arms), but not
 yet run against a live installation — see [docs/harnesses.md](harnesses.md#verification). Reflexes travel

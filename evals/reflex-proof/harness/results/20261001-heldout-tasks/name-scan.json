@@ -1,0 +1,45 @@
+{
+  "authorities": [
+    "/private/tmp/adage-real-repo-gate-v1",
+    "/private/tmp/adage-learning-curve-v2",
+    "/private/tmp/adage-learning-curve-v1"
+  ],
+  "skipped": "cohorts/launch-gate-v5/dev-v8b",
+  "files_scanned": 671,
+  "names": {
+    "has-keys": [
+      "HasKeys",
+      "has-keys",
+      "has_keys"
+    ],
+    "iso-date": [
+      "IsoDate",
+      "iso-date",
+      "iso_date"
+    ],
+    "json-object": [
+      "JsonObject",
+      "json-object",
+      "json_object"
+    ],
+    "lat-long": [
+      "LatLong",
+      "lat-long",
+      "lat_long"
+    ],
+    "max-sum": [
+      "MaxSum",
+      "max-sum",
+      "max_sum"
+    ]
+  },
+  "hits": [],
+  "excluded_repository_text": {
+    "strings": [
+      "iso_datetime",
+      "from_iso_date"
+    ],
+    "occurrences": 648
+  },
+  "families_seen": []
+}

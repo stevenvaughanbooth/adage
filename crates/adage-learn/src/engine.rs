@@ -51,6 +51,10 @@ pub struct EngineReport {
     pub compiled: usize,
     /// Routes that passed judgement.
     pub routes: usize,
+    /// `routes` by where each came from (`mined pattern`, `value estimate`, `lookup`, `prompt
+    /// intent`, `procedure card`): what `adage condition` sums its count from.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub kept_by: BTreeMap<String, usize>,
     /// Routes compiled with a context trigger (matched at hook time).
     pub contexts: usize,
     /// Prompt-intent prototypes that cleared the purity bar (none without an embedding model).
@@ -1189,7 +1193,25 @@ pub fn run(ss: &[&Session], cfg: &LearnConfig, priors: &[Route], model: Option<&
         }
     }
     report.routes = routes.len();
+    for j in &routes {
+        *report.kept_by.entry(kept_kind(j).to_string()).or_default() += 1;
+    }
     EngineRun { routes, report, counts: learned.counts }
+}
+
+/// Where a kept route came from, for [`EngineReport::kept_by`].
+fn kept_kind(j: &Judged) -> &'static str {
+    if matches!(j.route.step, Step::Card { .. }) {
+        "procedure card"
+    } else if matches!(j.route.trigger, Trigger::Intent { .. }) {
+        "prompt intent"
+    } else if j.why.pattern.contains("=tests_of=>") || j.why.pattern.contains("=value=>") {
+        "value estimate"
+    } else if j.why.pattern.contains("=flow=>") {
+        "lookup"
+    } else {
+        "mined pattern"
+    }
 }
 
 /// For a route that was in service and was not learned again: `Some(verdict)` from the scorer's

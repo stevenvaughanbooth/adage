@@ -1,7 +1,8 @@
 # How Adage works
 
 This is the product behavior reference for the README, CLI, TUI and launch copy.
-Updated 2026-09-30 against the launch worktree, based on merged main `0c28814`.
+Updated 2026-10-01 against the launch branch (`codex/launch-first-reflex`, with main's learner
+fixes from PR #21 merged). Adage is an unreleased developer preview, built from source.
 Implementation changes must update this page and the relevant operational guide in the same change.
 The older numbered [architecture document](Adage%20%E2%80%94%20Architecture.md) is a historical
 implementation snapshot, not the current feature checklist.
@@ -21,6 +22,8 @@ no applicable history or declared conventions must receive an honest “nothing 
 
 See [zero-config behavior](zero-config.md), [live learning](live-learning.md) and
 [harness integration](harnesses.md) for exact commands, source locations and settings.
+The operational [first-reflex guide](first-reflex.md) walks through setup, empty-history states,
+the separate execution-policy and per-reflex decisions, and checking that an action replaced work.
 Noninteractive previews remain read-only; installing hooks is an explicit setup operation.
 
 ## Accumulated prediction and current execution limits
@@ -47,6 +50,69 @@ prior sessions and executes that learned context on a fresh session with an inte
 Real-session predictive savings still require held-out evidence; the first replay of the frozen
 real-repository training histories produced zero executable certificates.
 
+### Verification ownership (opt-in E2)
+
+When a person has opted this machine in to E2 (`adage delegate policy --max-level e2`), approved
+one learned verification for the repository (`adage review delegate … --level e2 --effect verify`)
+and turned on the execution companion (`adage delegate on`), Adage takes responsibility for that
+verification in treated sessions on Claude Code and Codex:
+
+- **The SessionStart contract.** The agent receives a short, factual note, separate from the
+  person's startup notice: which command Adage runs (approved by a person, sandboxed), after
+  which edits, and that it runs it again at finish if files changed since; its results arrive with
+  the tool results, with the tests it ran, and a failure comes back with the failing tests. At
+  most two commands are named. Only an approval whose key still matches the route is named: a
+  lapsed or revoked one promises nothing. Control sessions receive no contract. It is a statement
+  of fact, not a promise that a stored approval will run; every execution check still applies.
+- **Receipts.** A completed learned-context action delivers a short receipt: the command, the
+  result, the exit status, the duration and a short receipt id. A passing pytest run adds how many
+  tests it collected and names tests from pytest's declared cache record (never from output),
+  preferring the tests this session's edits added ("the tests added in this session: …"). The
+  journal keeps the declared-input digest; it is not a freshness certificate for the whole
+  repository, and raw stdout is not exposed. A later test call that a fresh passing receipt
+  already covers gets a note saying so; it is never refused.
+- **The finish-line check (Stop gate).** When the agent finishes, if that verification ran
+  earlier in the session and has not passed on the current inputs, Adage runs it again through
+  the same gates. Passed: the turn ends and the person sees one line. Failed: the agent continues
+  once, with the failing tests, in a continuation marked as Adage's, not the user's. A second
+  failure ends the turn with a line for the person; at most two gate runs per session. An
+  unconfirmed run tells the agent not to retry and pauses actions in that worktree until a person
+  acknowledges recovery. OpenCode never runs the gate.
+- **Lapse notices.** A grant is bound to its approval key (repository, command definition,
+  pinned scripts, effect, outputs, sandbox profile and, for project Python, the environment and
+  interpreter). When the key stops matching, nothing runs, and the person is told: one line at
+  most once per session (Claude Code; the agent never sees it) naming the grant, the field that
+  changed and the `adage review delegate …` command that approves it again after checking the
+  change. `adage delegate status` and `adage review` list every lapsed grant.
+
+The contract marks the session as guided for learning, conservatively excluding its continuation
+from organic demonstrations. This integration has local regression coverage. On real tasks it
+has one development result (dev-v9b: one task, with development scaffolding, iterated on that
+task), and the held-out comparison (four new tasks, 2026-10-01) found execution mode at 0.67× the
+agent alone's model requests but with hidden tests 17/20 against 19/20, so it did not pass the
+registered quality rule and stays experimental. See the
+[launch evidence index](../evals/reflex-proof/LAUNCH-STATUS.md) and the exact mechanics in
+[execution](execution.md#the-finish-line-check-stop-gate).
+
+### The orientation in delivered procedure cards
+
+A delivered procedure card no longer quotes the exemplar lines the latest passing session added.
+In their place it says where the card's files stand in the checkout when the card is delivered:
+each file's line count, a Python source's last top-level definitions with their lines, a test
+file's last lines and a changelog's first headings. This is Adage's own read-only process on the
+CPU: it runs no command, reads only the card's own files (never patterns, dotfiles, ignored or
+secret-holding files, symlinks, files outside the checkout or files over 1 MiB), withholds any line
+that looks like a secret, and is bounded at about 1,200 tokens. The learned card keeps its
+exemplars; `ADAGE_CARD_ORIENTATION=0` delivers the earlier form. See
+[training](training.md#recurring-tasks-procedure-cards).
+
+A failed verification names its failing tests from pytest's declared failure record, and describes
+each from the test's own source, read from the bytes the run used: which parametrized case the id
+names, with its value, and the test's one check. When this session added the test, the receipt
+says so and asks the agent to check it against the request before changing the implementation.
+pytest's own messages are output and are not passed on
+([execution](execution.md#the-finish-line-check-stop-gate)).
+
 The launch evaluation must measure accumulated learning on chronological histories and
 prediction on later unseen sessions: avoided failures, eliminated agent actions, task quality,
 unnecessary executions, abstentions, and net cost/time. A five-session zero-candidate checkpoint
@@ -72,6 +138,13 @@ now demonstrates the full E1 chain on three held-out triage tasks: default learn
 prior sessions, one human grant, complete CPU-produced results, zero agent lookup actions, and
 correct answers. The same reflex in suggest mode required one lookup action per task. This
 validates that mechanism; broader coding-task savings and platform reliability remain separate.
+
+The [real-coding transfer pilot](../evals/reflex-proof/harness/results/20260930-live-cpu-transfer/FINDINGS.md)
+now connects ten explicitly guided prior sessions to successful automatic pytest execution on
+four different coding tasks. All four automatic outputs passed independent checks, versus three
+of four baseline outputs. Every automatic session nevertheless requested the test command again
+after receiving its completion context. Thus CPU execution is demonstrated in this pilot, while
+the action-elimination launch gate remains unmet. No physical GPU savings were measured.
 
 ## From history to a reflex
 
@@ -214,7 +287,13 @@ Keep these claims separate:
 
 Prototype cards, synthetic repository sessions, historical replay estimates and current shipped
 live runs are different evidence classes. A speedup measured in one must not be promoted into a
-universal savings claim. Existing benchmark results and their limits are in [evals.md](evals.md);
+universal savings claim. Development results (such as dev-v9b, one task with development
+scaffolding) are not launch statistics. Adage saves model calls by handling learned reflexes and
+instincts on the CPU; claims are stated in model requests, tokens and API cost. GPU use and energy
+are not measured, so no GPU or energy savings may be claimed.
+The launch studies used one model (Claude Haiku 4.5) on one repository (Marshmallow); they do
+not establish generality across repositories or models, and transfer to cheaper models is
+untested. Existing benchmark results and their limits are in [evals.md](evals.md);
 the launch work's new measurements and outstanding gates are in the
 [reflex proof ledger](../evals/reflex-proof/README.md).
 

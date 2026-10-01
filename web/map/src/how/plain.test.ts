@@ -81,3 +81,16 @@ describe("chips", () => {
     expect([chipMark({ text: "", ok: true }), chipMark({ text: "", ok: false }), chipMark({ text: "" })]).toEqual(["✓", "✗", null]);
   });
 });
+
+describe("the site's added terms", () => {
+  it("define each form once across both lists, in a sentence, and mark through the segmenter", async () => {
+    const { MORE_TERMS, segmenter } = await import("./glossary");
+    const forms = [...TERMS, ...MORE_TERMS].flatMap((t) => t.forms.map((f) => f.toLowerCase()));
+    expect(new Set(forms).size).toBe(forms.length);
+    for (const t of MORE_TERMS) expect(t.def, t.id).toMatch(/^[A-Z].*[.!?"]$/);
+    const split = segmenter([...TERMS, ...MORE_TERMS]);
+    const marked = split("Held-out tasks: fewer model requests per reflex, with hidden tests.")
+      .filter((p) => typeof p !== "string").map((p) => (p as { text: string }).text);
+    expect(marked).toEqual(["Held-out", "model requests", "reflex", "hidden tests"]);
+  });
+});

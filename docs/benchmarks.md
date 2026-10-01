@@ -1,6 +1,7 @@
 # Benchmarks and evidence
 
-Every number Adage publishes, with its caveats and links to the data and code. The [README](../README.md#results) carries the short version.
+Every number Adage publishes, with its caveats and links to the data and code. The [README](../README.md#evidence-so-far) carries the short version, and the launch site's
+"How we tested" page explains each study in plain words.
 
 ## Launch evidence: CPU execution and cross-session learning
 
@@ -11,30 +12,68 @@ task. Automatic argument binding also abstains when a prompt contains multiple d
 values. See [complete lookup results](execution.md#e1-prefetch-adage-exec-hook)
 and the [action-elimination gate](../evals/reflex-proof/harness/ACTION-GATE.md).
 
-That [gate now passes](../evals/reflex-proof/harness/results/20260929-learned-action-gate/FINDINGS.md):
-on three held-out work-item triage tasks, automatic execution removed all three agent lookup
-actions and reduced observed model requests from six to three, with all answers correct.
-This is a small generated-repository mechanism proof, not a general coding speedup claim.
-The [launch evidence index](../evals/reflex-proof/LAUNCH-STATUS.md) tracks real-repository validation,
-release gates, failed attempts and evaluation spending.
-Across [two runs of four cold-start tasks](../evals/reflex-proof/harness/results/20260930-cold-start-replication/FINDINGS.md)
-on Marshmallow, shipped instincts passed **8/8 outputs versus 6/8** for the agent alone, with **8.8%
-lower reported API cost** and **10.5% fewer observed model requests**. Three of eight pairs cost more
-with instincts. The repeat alone saved only 0.6% and had equal request counts. This small,
-single-repository result measures advisory value, not automatic CPU execution.
-The latest [15-session real-repository learning pilot](../evals/reflex-proof/harness/results/20260930-learning-curve-native/report.json)
-passed independent task grading on 12/15 outputs but learned zero automatically executable actions.
-Real-coding CPU savings remain unproven; the full result is retained alongside the mechanism proof.
-A separate [five-session guided routine check](../evals/reflex-proof/harness/results/20260930-guided-demonstrations/FINDINGS.md)
-also produced zero executable candidates despite five eventual test-command successes. Its audit
-identified a mining/admission gap and insufficient trigger-specific evidence; the launch gate remains open.
-The [mining integration fix](../evals/reflex-proof/harness/results/20260930-execution-prefix-integration/FINDINGS.md)
-now preserves executable prefixes: replaying those five histories compiles nine candidates instead
-of zero. Those five histories alone do not pass the unchanged execution evidence gate; compilation is not a savings result.
-A [separately registered five-session follow-up](../evals/reflex-proof/harness/results/20260930-cumulative-guided/FINDINGS.md)
-then brings the retained history to ten sessions and certifies four triggers for one test routine,
-with **9/10 qualifying continuations**. This connects real traces to an executable learned artifact;
-live automatic action elimination remains a separate, human-approved evaluation.
+This is the full launch history, in order, misses included; the [README](../README.md#evidence-so-far)
+has the result. **What we measure, and what we don't.** Adage saves model calls by handling learned
+reflexes and instincts on your CPU; we measure that in model requests, tokens and API cost. GPU use
+and energy are not measured. The launch studies used Claude Haiku 4.5 on one repository,
+[Marshmallow](https://github.com/marshmallow-code/marshmallow); the
+[launch evidence index](../evals/reflex-proof/LAUNCH-STATUS.md) keeps every record, failures included,
+and the [launch gate protocol](launch-gate-protocol.md) has every pass rule as it was written
+before dispatch.
+
+- **Generated-repository mechanism proof.** On three held-out work-item triage tasks, an approved
+  learned lookup [removed all three agent lookups](../evals/reflex-proof/harness/results/20260929-learned-action-gate/FINDINGS.md)
+  and reduced observed model requests from six to three, with all answers correct. This is a small
+  mechanism proof, not a general coding speedup claim.
+- **Advisory instincts, cold start.** Across [two runs of four cold-start tasks](../evals/reflex-proof/harness/results/20260930-cold-start-replication/FINDINGS.md)
+  on Marshmallow, shipped instincts passed **8/8 outputs versus 6/8** for the agent alone, with
+  **8.8% lower reported API cost** and **10.5% fewer observed model requests**. Three of eight pairs
+  cost more with instincts. The repeat alone saved only 0.6% and had equal request counts. This
+  measures advisory value, not automatic CPU execution.
+- **Learning an executable routine.** The [15-session learning pilot](../evals/reflex-proof/harness/results/20260930-learning-curve-native/report.json)
+  passed independent grading on 12/15 outputs but learned zero executable actions. A
+  [five-session guided check](../evals/reflex-proof/harness/results/20260930-guided-demonstrations/FINDINGS.md)
+  also produced zero; the [mining fix](../evals/reflex-proof/harness/results/20260930-execution-prefix-integration/FINDINGS.md)
+  that followed compiles candidates from the same histories, and a
+  [five-session follow-up](../evals/reflex-proof/harness/results/20260930-cumulative-guided/FINDINGS.md)
+  certifies one pytest routine from ten guided sessions (**9/10 qualifying continuations**).
+  Unguided sessions have not produced an executable routine yet.
+- **Running it on new tasks.** In the [real-repository transfer study](../evals/reflex-proof/harness/results/20260930-live-cpu-transfer/FINDINGS.md),
+  the routine ran successfully in 4/4 automatic sessions, but every agent ran the same tests
+  again: **0/4 action eliminations**.
+- **Development canaries.** canary-v5 and canary-v7 produced 0 genuine eliminations; dev-v8 is
+  [invalid for its execution arms](../evals/reflex-proof/harness/results/20261001-dev-arms/FINDINGS.md)
+  (an approval lapsed mid-study) and counts neither way; dev-v9's first attempt
+  [stopped after one control](../evals/reflex-proof/harness/results/20261001-dev-v9/ABORTED.json) on a
+  scoring bug, fixed before any positive block ran.
+- **dev-v9b, a development result on one task.** With verification ownership and the orientation
+  card, the Adage arm used **0.62× the model requests** of no Adage (11.2 against 18.0 per
+  session), fewer in 15 of 16 paired blocks, with 16/16 hidden-test passes in each arm
+  ([RESULT.json](../evals/reflex-proof/harness/results/20261001-dev-v9b/RESULT.json)). Every prompt
+  carried development scaffolding, and the design was iterated on this task. It is not a launch
+  statistic.
+- **Held-out comparison (2026-10-01).** Four new tasks, frozen before any result was read
+  ([tasks](../evals/reflex-proof/harness/results/20261001-heldout-tasks/README.md)), five
+  repetitions in 20 paired blocks, prompts without scaffolding, three arms: the agent alone (A0),
+  advisory mode (NOEXEC: hooks, instincts and the orientation card, no execution) and execution mode
+  (BEST = A4: advisory plus person-approved CPU test runs and the Stop gate). 65 sessions, all
+  collected; no block excluded; no session censored.
+  - **Advisory mode** (the registered report-only contrast NOEXEC/A0): **0.7845×** model requests
+    (95% interval 0.7374 to 0.8330; fewer in 18/20 blocks; sign-flip p 0.0023), 455 against 580
+    requests (22.75 against 29.0 per session), cost $2.6998 against $4.0192 (32.8% lower), hidden
+    tests 19/20 in both arms.
+  - **Execution mode** (the gated primary BEST/A0): **0.6741×** (0.6258 to 0.7265; 18/20 blocks;
+    p 0.0001), 391 requests (19.55 per session), cost $2.7014, hidden tests **17/20** against 19/20.
+    The quality rule (BEST passes at least A0's minus one) and G5 did not hold, so **the registered
+    outcome is FAIL** for this stratum. One of the three BEST failures was a block (has-keys,
+    block 5) where all three arms failed. Every other applicable criterion (G1, G2, G6, G7, G8)
+    held; both sensitivity analyses clear the bound (0.7265 without censored blocks, 0.6987 without
+    has-keys); execution against advisory is 0.8593× (upper 0.9197, not under the bound).
+  - **Safety controls:** all five realized; no necessary work skipped.
+  - The report and its decision record are published unchanged with the site
+    ([report](../web/site/public/evidence/heldout-report.json), [record](../web/site/public/evidence/heldout-record.md)).
+    Advisory mode leads the product story; execution mode stays opt-in and experimental until a new
+    registered test shows it keeps quality.
 
 ## Real-repository benchmarks
 
@@ -52,6 +91,11 @@ validator, add a flag. Adage groups those sessions into a **family** and compile
 a **procedure card**: a 350–700-token reflex listing the files edited, in order, with the lines
 added last time, the test command that works, and the commands that kept failing. When a new prompt
 matches the family (by local embedding similarity), the card is delivered once, at the prompt.
+
+The results in this section measured that form of the card. The delivered card now leaves out the
+lines added last time and says instead where the card's files stand in the checkout (the
+orientation, [docs/how-it-works.md](how-it-works.md#the-orientation-in-delivered-procedure-cards));
+none of these benchmarks covers that change.
 
 **The shipped product on five repositories (pre-registered showcase).** The product ran as a user
 installs it. Its background learner formed each family's card by itself from 4 ordinary Haiku
@@ -171,7 +215,8 @@ in Go, Rust, TypeScript and C), each task is new, so there is less to learn from
 - **Pass rate:** Adage does not change it on these tasks; failed sessions are wrong fixes, not
   process. No harm was measured in 196 real-repository sessions. Those sessions predate the
   pre-call rewrite and default-on cards, which the live validation re-checks.
-- **Stronger models gain less:** Sonnet-class agents already avoid most procedural waste.
+- **Stronger models gained less here:** in these runs, Sonnet-class agents already avoided most
+  procedural waste.
 
 **What this means for you:** these experiments identify recurring procedures as a promising target;
 they do not establish a savings percentage for a new repository. The shipped-product recurring
@@ -180,10 +225,10 @@ task interval above includes zero. Direct CPU action elimination has its own
 remain pending. The status card measures your own sessions, with a control, before showing a
 dollar figure.
 
-The next [cross-session evaluation](../evals/reflex-proof/harness/LEARNING-CURVE.md) measures learning
-after 0, 3, 5, 10 and 15 related tasks, then compares four new tasks with no Adage, shipped instincts,
-learned guidance, and approved CPU execution. This is a prospective protocol, not a measured savings
-claim; correctness and duplicate agent work are part of its acceptance criteria.
+The [cross-session evaluation](../evals/reflex-proof/harness/LEARNING-CURVE.md) measured learning
+after 0, 3, 5, 10 and 15 related tasks on Marshmallow. Every checkpoint produced zero executable
+candidates, so its automatic arm never ran; [launch evidence](#launch-evidence-cpu-execution-and-cross-session-learning)
+has what followed.
 
 ## Results on generated sandboxes
 
@@ -240,7 +285,8 @@ Sonnet found every convention on its own:
 
 Adage's effect therefore moved from avoiding failures (Haiku: 78% → 100% hidden checks) to
 **skipping exploration**: agents went to the lookup and the linked files directly. That halved the
-turns before the first edit and cut cost by 24%, with quality unchanged. The weaker the agent is at
-finding conventions, the more Adage adds.
+turns before the first edit and cut cost by 24%, with quality unchanged. In these two sandboxes,
+Adage added more for the agent that was weaker at finding conventions; two sandboxes do not show
+how that carries to other models or repositories.
 
 Results are in [demo/results/20260923-1249-harbor-dispatch-claude-sonnet-5](../demo/results/20260923-1249-harbor-dispatch-claude-sonnet-5/).

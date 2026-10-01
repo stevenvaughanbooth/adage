@@ -1,0 +1,10 @@
+{
+  "answer": "**FILE_ marker:** `FILE_bdc323465b5816735838`\n\n**HOOK_ receipt marker:** `HOOK_b0d32a735319d85db52c`",
+  "arm": "replacement",
+  "cost_usd": 0.0051864,
+  "hook_received": true,
+  "limitation": "one diagnostic sample; not production execution or action avoidance",
+  "original_received": true,
+  "passed": true,
+  "result_is_error": false
+}

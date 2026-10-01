@@ -9,6 +9,8 @@
 //! adage delegate rewrites <on|off>                         rewrites to the project's environment
 //!                                                          alone (no adage-exec needed)
 //! adage delegate [status] [--repo <dir>] [--json]          registrations, and grants per repository
+//! adage delegate policy [--max-level e1|e2]                this machine's execution policy, and
+//!                                                          its file; e2 opts in to actions
 //! adage review delegate <track> <reflex> --level e1 [--raw] [--fields '<json>']
 //!                         [--exit-when field=value]... [--timeout-ms n] [--repo <dir>] [--by <name>]
 //! adage review delegate <track> <reflex> --level e2 [--outputs <glob>]... [--cache <glob>]...
@@ -20,8 +22,8 @@
 //! approved explicitly, for one reflex in one repository, never automatically. Before recording
 //! anything, `delegate --level e2` stages the action once in the sandbox (nothing is applied)
 //! and shows the full diff it would make to its declared outputs now; a staged run that changes
-//! anything else, or fails, approves nothing. Policy must allow E2 (`max_level = "E2"`: actions
-//! are a beta behind gate G4).
+//! anything else, or fails, approves nothing. Policy must allow E2 (`max_level = "E2"`, which a
+//! person sets with `adage delegate policy --max-level e2`: actions are an opt-in beta).
 //!
 //! A reflex that runs a **vendored script** (L-vendor, §1.7) shows the script's full text, from
 //! the read-only CAS, and needs policy's `allow_vendor_scripts`; it is never approved
@@ -53,8 +55,7 @@ use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-const USAGE: &str =
-    "usage: adage delegate <on [--bin <adage-exec>] | off | rewrites <on|off> | status [--json]> [--repo <dir>]";
+const USAGE: &str = "usage: adage delegate <on [--bin <adage-exec>] | off | rewrites <on|off> | status [--json] | policy [--max-level e1|e2]> [--repo <dir>]";
 const REVIEW_USAGE: &str = "usage: adage review delegate <track> <reflex> --level e1 [--raw] [--fields '<json>'] [--exit-when field=value]... [--timeout-ms n] [--repo <dir>] [--by <name>]
        adage review delegate <track> <reflex> --level e2 [--outputs <glob>]... [--cache <glob>]... [--effect verify|regenerate] [--timeout-ms n] [--repo <dir>] [--by <name>]
        adage review revoke <track> <reflex> [--repo <dir>]";
@@ -139,6 +140,7 @@ pub fn delegate(args: &[String], paths: &Paths) -> Result<()> {
             _ => bail!("{USAGE}"),
         },
         Some("status") => status(&args[1..], paths),
+        Some("policy") => policy(&args[1..], paths),
         None => status(args, paths),
         Some(a) if a.starts_with("--") => status(args, paths),
         _ => bail!("{USAGE}"),
@@ -267,6 +269,59 @@ fn switch(on: bool, args: &[String], paths: &Paths) -> Result<()> {
     Ok(())
 }
 
+/// `adage delegate policy [--max-level e1|e2]`: this machine's execution policy and the file it is
+/// kept in. `--max-level e2` (a person's decision, refused in an agent session) opts in to E2
+/// actions: it writes `max_level = "E2"` under `[exec]` in `$ADAGE_HOME/policy.toml`, with
+/// automatic approval off and the sandbox required; each action still needs its own approval.
+/// `--max-level e1` only turns execution down, so it runs from a script too.
+fn policy(args: &[String], paths: &Paths) -> Result<()> {
+    let file = adage_exec::policy::personal_path(&paths.root);
+    let set = match flag(args, "--max-level") {
+        Some(v) => Some(Level::parse(&v).with_context(|| format!("--max-level {v:?} is not e1 or e2"))?),
+        None => None,
+    };
+    if set == Some(Level::E2) {
+        require_person("delegate policy --max-level e2")?;
+    }
+    if let Some(level) = set {
+        adage_exec::policy::set_max_level(&paths.root, level)?;
+    }
+    let pol = adage_exec::policy::load(&paths.root)?;
+    let max = pol.max_level.as_str().to_uppercase();
+    let mut o = Out::stdout();
+    o.header("delegate policy", &[&format!("max level {max}"), if set.is_some() { "updated" } else { "unchanged" }])?;
+    o.blank()?;
+    kv(
+        &mut o,
+        "max level",
+        Line::new().text(max.clone()).sep().quiet(if pol.max_level == Level::E2 {
+            "approved actions may run from hooks, each after its own approval"
+        } else {
+            "read-only lookups at most; no actions"
+        }),
+    )?;
+    kv(&mut o, "automatic", Line::new().text(if pol.auto_approve { "inert lookups" } else { "off" }))?;
+    kv(&mut o, "sandbox", Line::new().text(if pol.require_sandbox { "required" } else { "not required" }))?;
+    kv(&mut o, "file", Line::new().text(file.display().to_string()))?;
+    if let Some(managed) = pol.sources.iter().find(|s| s.ends_with("(managed)")) {
+        kv(&mut o, "managed", Line::new().text(managed.clone()).sep().quiet("its limits win"))?;
+    }
+    o.blank()?;
+    if set.is_some_and(|l| l > pol.max_level) {
+        o.note(&format!("A managed policy caps execution at {max} on this machine; your file asks for more."))?;
+        o.blank()?;
+    }
+    if pol.max_level == Level::E2 {
+        o.next(
+            "adage review delegate <track> <reflex> --level e2 --effect verify",
+            "approve one reflex's action (it is staged once first, and nothing runs until you approve)",
+        )?;
+    } else {
+        o.next("adage delegate policy --max-level e2", "opt in to E2 actions on this machine (your decision)")?;
+    }
+    Ok(())
+}
+
 fn status(args: &[String], paths: &Paths) -> Result<()> {
     let root = repo_root(args)?;
     let mut regs = Vec::new();
@@ -291,8 +346,13 @@ fn status(args: &[String], paths: &Paths) -> Result<()> {
         }));
     }
     let enabled = marker(paths).is_file();
+    let lapsed = lapsed_here(paths, root.as_deref(), &store);
+    // A harness registered twice runs every hook twice (`adage doctor` says the same).
+    let dups = install::duplicates(&crate::detect::registrations(root.as_deref()), root.as_deref());
     if args.iter().any(|a| a == "--json") {
-        let v = json!({ "enabled": enabled, "registrations": regs, "grants": grants });
+        let duplicates: Vec<Value> =
+            dups.iter().map(|d| json!({ "harness": d.harness, "places": d.places, "fix": d.fix })).collect();
+        let v = json!({ "enabled": enabled, "registrations": regs, "grants": grants, "lapsed": lapsed, "duplicates": duplicates });
         println!("{}", serde_json::to_string_pretty(&v)?);
         return Ok(());
     }
@@ -318,6 +378,11 @@ fn status(args: &[String], paths: &Paths) -> Result<()> {
     if enabled {
         kv(&mut o, "plugin", Line::new().quiet("Claude Code: the adage-exec plugin serves"))?;
     }
+    for d in &dups {
+        o.blank()?;
+        o.warn(&format!("{} is registered twice ({}): every hook runs twice", d.harness, d.places.join(" and ")))?;
+        o.line(&Line::new().text("  ").faint("fix ").text(d.fix.replace('`', "")))?;
+    }
     for (repo, gs) in &grants {
         o.blank()?;
         o.line(&Line::new().bold(Role::Ink, repo.clone()))?;
@@ -337,13 +402,48 @@ fn status(args: &[String], paths: &Paths) -> Result<()> {
             o.line(&l)?;
         }
     }
+    print_lapsed(&mut o, &lapsed)?;
     o.blank()?;
-    if grants.is_empty() {
+    if let Some(cmd) = dups.first().and_then(|d| d.fix.split('`').nth(1)) {
+        o.next(cmd, "leaves one registration")?;
+    } else if grants.is_empty() {
         o.next("adage review delegate <track> <reflex> --level e1|e2", "no reflex is delegated on this machine")?;
     } else if !enabled {
         o.next("adage delegate on", "hooks run nothing delegated until it is on")?;
     } else {
         o.next("adage-exec doctor", "the sandbox this machine can enforce")?;
+    }
+    Ok(())
+}
+
+/// The grants for the repository at `root` (if any) that no longer match what would run there:
+/// their routes do nothing until a person approves them again.
+pub(crate) fn lapsed_here(paths: &Paths, root: Option<&Path>, store: &Store) -> Vec<route::Lapse> {
+    let Some(root) = root else { return Vec::new() };
+    let index = Index::load(&paths.index());
+    let keys: std::collections::BTreeSet<&str> = index.routes.iter().map(|r| r.repo.as_str()).collect();
+    let Some(key) = repo::lookup_key(root, Some(&paths.repo_keys()), &keys) else { return Vec::new() };
+    let planned = route::plan_grants(&key, root, &index, &paths.tracks(), store, &CommandTable::load());
+    route::lapses(&planned, store)
+}
+
+/// The lapsed grants, each with what changed and the command that approves it again.
+pub(crate) fn print_lapsed<W: std::io::Write>(o: &mut Out<W>, lapsed: &[route::Lapse]) -> Result<()> {
+    if lapsed.is_empty() {
+        return Ok(());
+    }
+    o.blank()?;
+    o.warn(&format!(
+        "{} no longer {} what would run here, so {} nothing until approved again",
+        crate::words::count(lapsed.len(), "delegation"),
+        if lapsed.len() == 1 { "matches" } else { "match" },
+        if lapsed.len() == 1 { "it runs" } else { "they run" }
+    ))?;
+    for l in lapsed {
+        o.blank()?;
+        o.line(&Line::new().bold(Role::Ink, l.route.clone()).sep().text(l.level.as_str().to_uppercase()))?;
+        kv(o, "changed", Line::new().text(l.what()))?;
+        kv(o, "approve", Line::new().cmd(l.reapprove.clone()).faint(" (after checking the change)"))?;
     }
     Ok(())
 }
@@ -454,7 +554,7 @@ fn preview<W: std::io::Write>(
     o.flush()?;
     let staged = adage_exec::stage::stage(req, &ctx).map_err(|r| {
         let help = if r.stage == "policy" {
-            "E2 is a beta: set max_level = \"E2\" under [exec] in policy.toml to opt in"
+            "E2 actions are opt-in: run `adage delegate policy --max-level e2` yourself, then approve again"
         } else {
             "fix what it needs, then delegate again"
         };
@@ -603,12 +703,18 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
         if level == Level::E2 && e.contains("caps execution") {
             crate::hint(
                 e,
-                "E2 actions are a beta behind gate G4: set max_level = \"E2\" under [exec] in policy.toml to opt in",
+                format!(
+                    "E2 actions are opt-in: run `adage delegate policy --max-level e2` yourself (it sets max_level = \"E2\" under [exec] in {})",
+                    adage_exec::policy::personal_path(&paths.root).display()
+                ),
             )
         } else if e.contains("allow_vendor_scripts") {
             crate::hint(
                 e,
-                "set allow_vendor_scripts = true under [exec] in policy.toml to allow vendored scripts on this machine",
+                format!(
+                    "set allow_vendor_scripts = true under [exec] in {} to allow vendored scripts on this machine",
+                    adage_exec::policy::personal_path(&paths.root).display()
+                ),
             )
         } else {
             anyhow::anyhow!(e)
@@ -652,6 +758,18 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
         o.kv("inferred", Line::new().text(note.to_string()))?;
     }
     o.kv("sandbox", Line::new().text(req.profile.summary()))?;
+    // A timeout outside the level's bounds is clamped (`Limits::with_timeout`): say so, and to what.
+    if let Some(asked) = timeout_ms.filter(|ms| *ms != req.profile.limits.wall_ms) {
+        let max =
+            if level == Level::E2 { adage_exec::limits::E2_MAX_WALL_MS } else { adage_exec::limits::E1_MAX_WALL_MS };
+        o.kv(
+            "timeout",
+            Line::new().text(format!("{} ms", req.profile.limits.wall_ms)).sep().quiet(format!(
+                "--timeout-ms {asked} was clamped: {} allows at most {max} ms",
+                level.as_str().to_uppercase()
+            )),
+        )?;
+    }
     if let (Level::E2, Some(a)) = (level, &req.action) {
         o.kv(
             "runs",

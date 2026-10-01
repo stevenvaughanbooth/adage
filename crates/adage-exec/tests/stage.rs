@@ -381,6 +381,7 @@ fn three_refusals_revoke_the_approval() {
             fields: None,
             backend: StageBackend::Copy,
             stderr: vec![],
+            rewritten: vec![],
             plan: stage::Plan { refused: vec![("src/a".into(), "outside")], ..Default::default() },
         };
         let done = adage_exec::journal::finish(
@@ -392,6 +393,7 @@ fn three_refusals_revoke_the_approval() {
                 occurrence: &n.to_string(),
                 approved_on: on,
                 request: &req,
+                origin: adage_exec::journal::RunOrigin::Manual,
             },
         );
         assert_eq!(done.revoked, n == 2, "third counted refusal revokes: {:?}", done.outcome);

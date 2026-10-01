@@ -1,0 +1,82 @@
+diff --git a/CHANGELOG.rst b/CHANGELOG.rst
+index 802ce0d..9bef514 100644
+--- a/CHANGELOG.rst
++++ b/CHANGELOG.rst
+@@ -6,6 +6,7 @@ Changelog
+ 
+ Features:
+ 
++- Add `marshmallow.validate.Odd` validator for validating odd integers.
+ - Simplify `get_value` to match actual usage (:pr:`3024`).
+ 
+ Bug fixes:
+diff --git a/src/marshmallow/validate.py b/src/marshmallow/validate.py
+index 35c0e8b..2959a5d 100644
+--- a/src/marshmallow/validate.py
++++ b/src/marshmallow/validate.py
+@@ -706,3 +706,26 @@ class ContainsNoneOf(NoneOf):
+             if val in self.iterable:
+                 raise ValidationError(self._format_error(value))
+         return value
++
++
++class Odd(Validator):
++    """Validator which succeeds if the ``value`` is an odd integer.
++
++    :param error: Error message to raise in case of a validation error.
++        Can be interpolated with `{input}`.
++
++    .. versionadded:: 4.4.0
++    """
++
++    default_message = "Must satisfy Odd."
++
++    def __init__(self, *, error: str | None = None):
++        self.error: str = error or self.default_message
++
++    def _format_error(self, value: typing.Any) -> str:
++        return self.error.format(input=value)
++
++    def __call__(self, value: int) -> int:
++        if value % 2 != 1:
++            raise ValidationError(self._format_error(value))
++        return value
+diff --git a/tests/test_validate.py b/tests/test_validate.py
+index 752e544..df4488b 100644
+--- a/tests/test_validate.py
++++ b/tests/test_validate.py
+@@ -1099,3 +1099,34 @@ def test_and():
+ 
+     errors = excinfo.value.messages
+     assert errors == ["Not an even value.", "Must be less than or equal to 6."]
++
++
++def test_odd():
++    validator = validate.Odd()
++    assert validator(1) == 1
++    assert validator(3) == 3
++    assert validator(-1) == -1
++    assert validator(-3) == -3
++
++    with pytest.raises(ValidationError, match="Must satisfy Odd."):
++        validator(0)
++
++    with pytest.raises(ValidationError, match="Must satisfy Odd."):
++        validator(2)
++
++    with pytest.raises(ValidationError, match="Must satisfy Odd."):
++        validator(4)
++
++    with pytest.raises(ValidationError, match="Must satisfy Odd."):
++        validator(-2)
++
++
++def test_odd_custom_message():
++    validator = validate.Odd(error="{input} is not odd")
++    with pytest.raises(ValidationError, match="4 is not odd"):
++        validator(4)
++
++
++def test_odd_repr():
++    assert repr(validate.Odd()) == "<Odd(error='Must satisfy Odd.')>"
++    assert repr(validate.Odd(error="custom")) == "<Odd(error='custom')>"

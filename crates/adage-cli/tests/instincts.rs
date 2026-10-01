@@ -383,6 +383,37 @@ fn codex_instinct_golden() {
     assert!(t.contains("Makefile declares this."), "{t}");
 }
 
+/// QA first-run #11: binding again with nothing new changes nothing (no new version, no new
+/// index generation, no "evidence updated"), also after a learn whose traces informed each
+/// route's estimate: a bind without traces keeps that estimate rather than replacing it with
+/// the built-in prior.
+#[test]
+fn rebinding_with_nothing_new_changes_nothing() {
+    let w = World::new();
+    w.bind();
+    let dir = w.p(&format!("adage/tracks/{TRACK}"));
+    // As a learn with traces leaves the track: estimates resting on 4 traces each.
+    let mut t = adage_tracks::io::read(&dir).unwrap();
+    for r in t.routes.iter_mut() {
+        if let Some(u) = r.evidence.uplift.as_mut() {
+            (u.traces, u.traces_took) = (4, 1);
+        }
+    }
+    t.manifest.track.version = "0.1.1".into();
+    adage_tracks::io::write(&dir, &t).unwrap();
+    let generation = |w: &World| -> String {
+        let idx: Value = serde_json::from_str(&std::fs::read_to_string(w.p("adage/index.json")).unwrap()).unwrap();
+        idx["generation"].as_str().unwrap().to_string()
+    };
+    let out = w.bind();
+    assert!(out.contains(&format!("{TRACK}@0.1.1 · unchanged")), "{out}");
+    let g = generation(&w);
+    let out = w.bind();
+    assert!(out.contains(&format!("{TRACK}@0.1.1 · unchanged")) && !out.contains("evidence updated"), "{out}");
+    assert_eq!(generation(&w), g, "same index");
+    assert_eq!(adage_tracks::io::read(&dir).unwrap().routes, t.routes, "the estimates are kept");
+}
+
 #[test]
 fn doctor_review_and_pack_approval() {
     let w = World::new().with_pnpm();
@@ -412,8 +443,13 @@ fn doctor_review_and_pack_approval() {
     // `npm ci` (no package-lock.json) and `yarn install` (missing, or refused by corepack) →
     // `pnpm install`; `npm install` refuses nothing here, so it binds nothing.
     assert_eq!(nascent.len(), 4, "npm ci and yarn install → pnpm install: {q:#}");
+    // Install steps wait for a person; instincts in effect are listed but wait for nothing
+    // (QA first-run #3), and are shown once per instinct and step, with what triggers each.
+    assert_eq!(q["waiting"], 4, "{q:#}");
+    assert!(inst.iter().all(|r| r["trigger"].as_str().is_some_and(|t| !t.is_empty())), "{q:#}");
     let text = w.ok(&["review"]);
     assert!(text.contains("instinct U1 (from Makefile)"), "{text}");
+    assert!(text.contains("4 reflexes wait for a decision") && text.contains("Instincts in effect"), "{text}");
     // Approving one environment step approves its pack's (the one N1's routes came from) for this
     // repository.
     let out = w.ok(&["review", "approve", TRACK, nascent[0]]);

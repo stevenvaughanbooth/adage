@@ -32,8 +32,8 @@ pub fn require_person(cmd: &str) -> Result<()> {
     if let Some(var) = crate::install::AGENT_ENV.iter().find(|v| std::env::var_os(v).is_some_and(|x| !x.is_empty())) {
         return Err(crate::hint(
             format!(
-                "`adage {cmd}` is a decision for a person (it changes what is shared, trusted or \
-                 configured), so it will not run inside an agent session ({var} is set)"
+                "`adage {cmd}` is a decision for a person ({}), so it will not run inside an agent session ({var} is set)",
+                what_it_changes(cmd)
             ),
             format!("run `adage {cmd}` yourself, in a terminal"),
         ));
@@ -48,6 +48,23 @@ pub fn require_person(cmd: &str) -> Result<()> {
         ));
     }
     Ok(())
+}
+
+/// Why a command is a person's decision, in its own terms, for the refusal inside an agent session.
+fn what_it_changes(cmd: &str) -> &'static str {
+    let verb = cmd.split_whitespace().collect::<Vec<_>>();
+    match verb.as_slice() {
+        ["review", "delegate" | "revoke", ..] | ["delegate", "on", ..] => {
+            "it changes what Adage may run on this machine"
+        }
+        ["review", ..] => "it changes which reflexes your agents receive, and how strongly",
+        ["share", ..] => "it publishes a signed pack of your reflexes",
+        ["add", ..] => "it installs a pack and trusts its signer",
+        ["train", "accept", ..] => "it installs a reviewed pack of reflexes",
+        ["config", "set", ..] => "it changes Adage's settings",
+        ["init", ..] => "it downloads into Adage's data directory and binds instincts",
+        _ => "it changes what is shared, trusted or configured",
+    }
 }
 
 /// The files of a track directory that go into a pack (Design §10.1). `scripts/` travels only
@@ -204,4 +221,22 @@ pub fn share(args: &[String], paths: &Paths) -> Result<()> {
         ));
     }
     crate::share_pack::share(name, &out, key.as_deref(), args, paths)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::what_it_changes;
+
+    /// QA first-run #15: each refusal names what that command changes.
+    #[test]
+    fn refusals_say_what_each_command_changes() {
+        assert_eq!(what_it_changes("review delegate"), "it changes what Adage may run on this machine");
+        assert_eq!(what_it_changes("delegate on"), "it changes what Adage may run on this machine");
+        assert_eq!(
+            what_it_changes("review approve"),
+            "it changes which reflexes your agents receive, and how strongly"
+        );
+        assert_eq!(what_it_changes("share"), "it publishes a signed pack of your reflexes");
+        assert_eq!(what_it_changes("config set learn.auto"), "it changes Adage's settings");
+    }
 }

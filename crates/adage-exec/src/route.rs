@@ -413,7 +413,9 @@ pub fn plan(
         };
         let (outputs, cache) = terms.map(|t| (t.outputs.clone(), t.cache.clone())).unwrap_or_default();
         let action = ActionSpec { kind, outputs, cache };
-        action.validate().map_err(|e| format!("{e} (declare them at approval: --outputs <glob>)"))?;
+        action.validate().map_err(|e| {
+            format!("{e} (declare source outputs with --outputs <glob>, or disposable caches with --cache <glob>; use explicit repository directories, not a root wildcard)")
+        })?;
         (effect, Some(action))
     } else {
         (Effect::Observe, None)
@@ -542,6 +544,162 @@ pub fn find<'a>(index: &'a Index, repo: &str, track: &str, route: &str) -> Optio
 /// Where the installed tracks live under a data directory.
 pub fn tracks_dir(home: &Path) -> PathBuf {
     adage_store::Paths::at(home).tracks()
+}
+
+/// One grant for a repository, its route, and the route's request planned now with the grant's
+/// own terms (or why it cannot be planned).
+pub struct Planned<'a> {
+    pub approval: &'a crate::approvals::Approval,
+    pub route: &'a IndexedRoute,
+    pub plan: Result<Plan, String>,
+}
+
+impl Planned<'_> {
+    /// The grant still matches what would run now (this one, or another with the same key).
+    pub fn current(&self, store: &crate::approvals::Store) -> bool {
+        self.key().is_some_and(|k| store.find(&k).is_some())
+    }
+
+    fn key(&self) -> Option<crate::approvals::ApprovalKey> {
+        let p = self.plan.as_ref().ok()?;
+        Some(crate::approvals::ApprovalKey::for_request(&p.request, &self.approval.key.repo))
+    }
+}
+
+/// Every grant for `repo_key` whose route is in the index, each planned once against `root`.
+pub fn plan_grants<'a>(
+    repo_key: &str,
+    root: &Path,
+    index: &'a Index,
+    tracks: &Path,
+    store: &'a crate::approvals::Store,
+    table: &CommandTable,
+) -> Vec<Planned<'a>> {
+    store
+        .approvals
+        .iter()
+        .filter(|a| a.key.repo == repo_key)
+        .filter_map(|a| {
+            let (track, id) = a.route.rsplit_once('/')?;
+            let route = find(index, repo_key, track, id)?;
+            let plan = plan(route, index, root, tracks, a.key.level, a.terms.as_ref(), table);
+            Some(Planned { approval: a, route, plan })
+        })
+        .collect()
+}
+
+/// A grant whose route's request no longer matches it (`exec-changed`): the route runs nothing
+/// until a person approves it again. Said to the person, never silently withheld.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Lapse {
+    /// `track/route`.
+    pub route: String,
+    pub level: Level,
+    /// The approval-key fields that changed, or why the route can no longer be planned.
+    pub changed: Vec<String>,
+    /// The command that approves it again, with the terms it was approved with.
+    pub reapprove: String,
+}
+
+impl Lapse {
+    /// What changed, in a person's words, with the approval-key fields in parentheses: "its
+    /// command, output contract or Python environment changed (route_exec_digest)".
+    pub fn what(&self) -> String {
+        let mut words = Vec::new();
+        let mut fields = Vec::new();
+        for f in &self.changed {
+            let w = match f.as_str() {
+                "route_exec_digest" => "its command, output contract or Python environment",
+                "argv_templates" => "its command",
+                "scripts" => "a script it runs",
+                "profile_id" => "its sandbox profile or timeout",
+                "effect" => "its effect",
+                "level" => "its level",
+                "output_mode" => "its output mode",
+                "signer" => "its pack's signer",
+                "repo" => "its repository",
+                _ => {
+                    words.push(f.clone());
+                    continue;
+                }
+            };
+            words.push(w.to_string());
+            fields.push(f.as_str());
+        }
+        match fields.is_empty() {
+            true => words.join("; "),
+            false => format!("{} changed ({})", words.join(", "), fields.join(", ")),
+        }
+    }
+
+    /// One line for the person: which grant stopped matching, what changed, and how to approve it
+    /// again.
+    pub fn notice(&self) -> String {
+        format!(
+            "adage: the {} approval for {} no longer matches ({}), so it does not run. Check the change, then run `{}` yourself; `adage delegate status` lists every grant.",
+            self.level.as_str().to_uppercase(),
+            self.route,
+            self.what(),
+            self.reapprove
+        )
+    }
+}
+
+/// The command that approves `a` again with the terms it was approved with (E1 output fields are
+/// left to the person: `--fields` is long, and shown by `adage delegate status --json`).
+pub fn reapprove_command(a: &crate::approvals::Approval) -> String {
+    let (track, id) = a.route.rsplit_once('/').unwrap_or((a.route.as_str(), ""));
+    let mut cmd = format!("adage review delegate {track} {id} --level {}", a.key.level.as_str());
+    if let Some(t) = &a.terms {
+        if let Some(e) = t.effect {
+            cmd.push_str(&format!(" --effect {}", e.as_str()));
+        }
+        for o in &t.outputs {
+            cmd.push_str(&format!(" --outputs '{o}'"));
+        }
+        for c in &t.cache {
+            cmd.push_str(&format!(" --cache '{c}'"));
+        }
+        if t.raw {
+            cmd.push_str(" --raw");
+        }
+        if !t.fields.is_empty() {
+            cmd.push_str(" --fields '…'");
+        }
+        for (k, v) in &t.exit_when {
+            cmd.push_str(&format!(" --exit-when {k}={v}"));
+        }
+        if let Some(ms) = t.timeout_ms {
+            cmd.push_str(&format!(" --timeout-ms {ms}"));
+        }
+    }
+    cmd
+}
+
+/// The lapsed grants among `planned` (one per route and level; none when another grant for that
+/// route and level still matches).
+pub fn lapses(planned: &[Planned<'_>], store: &crate::approvals::Store) -> Vec<Lapse> {
+    let mut out: Vec<Lapse> = Vec::new();
+    // An automatic approval is granted again while its route stays in the automatic class.
+    for p in planned.iter().filter(|p| !p.approval.auto) {
+        let a = p.approval;
+        let same = |q: &&Planned<'_>| q.approval.route == a.route && q.approval.key.level == a.key.level;
+        if planned.iter().filter(same).any(|q| q.current(store))
+            || out.iter().any(|l| l.route == a.route && l.level == a.key.level)
+        {
+            continue;
+        }
+        let changed = match (&p.plan, p.key()) {
+            (_, Some(k)) => a.key.diff(&k).into_iter().map(|c| c.field.to_string()).collect(),
+            (Err(e), None) => vec![format!("it cannot be planned now: {}", crate::reason_text(e))],
+            (Ok(_), None) => vec![],
+        };
+        if changed.is_empty() {
+            continue;
+        }
+        out.push(Lapse { route: a.route.clone(), level: a.key.level, changed, reapprove: reapprove_command(a) });
+    }
+    out
 }
 
 #[cfg(test)]

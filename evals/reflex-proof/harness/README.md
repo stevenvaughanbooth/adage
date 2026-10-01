@@ -83,3 +83,29 @@ Completed real-run evidence: [2026-09-29 findings](results/20260929-claude-2.1.2
 Use `probe.py export ROOT DESTINATION` to preserve fixture logs and a narrow diagnostic
 milestone extraction. It excludes the broad debug log; the source remains in the private
 temporary run directory. Capture copies before temporary-directory cleanup.
+
+## Launch gate tools
+
+The registered protocol is `docs/launch-gate-protocol.md`; `launch_gate_protocol.json` governs.
+
+- `receipt_replay.py`: classifies agent pytest requests against CPU receipts from native hook
+  records (repeats, covered subsets, failed or stale receipts, reruns, wider scope).
+- `split_audit.py`: pre-dispatch training-isolation audit of a learning run against the splits.
+- `launch_canary.py`: production contract and receipt canary with negative controls. `freeze`,
+  `prepare`, `approval-script`, `verify-grants`, `collect` and `report` spend nothing; `live` is
+  paid and refuses nested agent sessions. It never writes grants.
+- `launch_gate_score.py`: the registered GO thresholds applied to collected held-out rows.
+- `heldout_tasks.py`: the held-out Marshmallow tasks (has-keys, iso-date, json-object,
+  lat-long; max-sum withdrawn). `validate` scores base, gold and broken implementations offline,
+  on a copied pinned substrate; `archive` freezes the prompts, hidden tests and patches with their
+  hashes (`results/20261001-heldout-tasks`).
+- `heldout_analysis.py`: the revision 9 draft held-out analysis. It covers:
+  - BEST selection, the paired matrix, budget and the verification classifier;
+  - request verification and the exclusion of unverified blocks;
+  - conservative censoring and the sensitivity analyses;
+  - the G1-G9 applicability and the bootstrap verdict.
+
+  It is pure and offline.
+- `heldout_cohort.py`: the revision 9 held-out runner (A0, NOEXEC and BEST). Its subcommands are
+  `freeze` (the dev report, build commit and binary hashes are inputs), `prepare`, `approval-script`
+  (BEST homes only), `verify-grants`, `live` (paid; controls first) and `report`.

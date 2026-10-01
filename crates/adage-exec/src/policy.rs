@@ -196,6 +196,38 @@ fn read(path: &Path) -> Result<Option<RawPolicy>> {
     }
 }
 
+/// The personal policy file: `$ADAGE_HOME/policy.toml`.
+pub fn personal_path(adage_home: &Path) -> PathBuf {
+    adage_home.join("policy.toml")
+}
+
+/// Set the personal ceiling (`adage delegate policy --max-level`, a person's decision): `max_level`
+/// under `[exec]`, with automatic approval off and the sandbox required, every other setting kept
+/// as it is. The result must load as a valid policy, or nothing is written. Returns the file.
+pub fn set_max_level(adage_home: &Path, max: Level) -> Result<PathBuf> {
+    let file = personal_path(adage_home);
+    let mut table: toml::Table = match std::fs::read_to_string(&file) {
+        Ok(text) => {
+            text.parse().with_context(|| format!("{} cannot be parsed; fix or remove it first", file.display()))?
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => toml::Table::new(),
+        Err(e) => return Err(e).with_context(|| format!("reading {}", file.display())),
+    };
+    let exec = table.entry("exec").or_insert_with(|| toml::Value::Table(toml::Table::new()));
+    let Some(exec) = exec.as_table_mut() else {
+        bail!("{}: [exec] is not a table; fix or remove it first", file.display())
+    };
+    exec.insert("max_level".into(), toml::Value::String(max.as_str().to_uppercase()));
+    exec.insert("auto_approve".into(), toml::Value::String("off".into()));
+    exec.insert("require_sandbox".into(), toml::Value::Boolean(true));
+    let body = toml::to_string_pretty(&table)?;
+    let raw: RawPolicy =
+        toml::from_str(&body).with_context(|| format!("{} would not be a valid policy", file.display()))?;
+    merge(Some(&raw), None)?;
+    adage_store::config::write_atomic(&file, body.as_bytes()).with_context(|| format!("writing {}", file.display()))?;
+    Ok(file)
+}
+
 /// Load the effective policy. A file that exists but does not parse is an error: execution then
 /// refuses rather than guessing.
 pub fn load(adage_home: &Path) -> Result<Policy> {
@@ -316,6 +348,28 @@ mod tests {
         assert!(merge(Some(&raw("[exec]\nauto_approve = \"yes\"\n")), None).is_err());
         assert!(merge(Some(&raw("[effects]\ndeny = [\"everything\"]\n")), None).is_err());
         assert!(toml::from_str::<RawPolicy>("[exec]\nsurprise = 1\n").is_err());
+    }
+
+    /// `adage delegate policy --max-level`: the ceiling, with automatic approval off and the
+    /// sandbox required, every other setting kept; an invalid file is never overwritten.
+    #[test]
+    fn setting_the_ceiling_keeps_other_settings_and_stays_conservative() {
+        let home = tempfile::tempdir().unwrap();
+        let file = set_max_level(home.path(), Level::E2).unwrap();
+        assert_eq!(file, home.path().join("policy.toml"));
+        let p = load(home.path()).unwrap();
+        assert_eq!(p.max_level, Level::E2);
+        assert!(!p.auto_approve && p.require_sandbox);
+        std::fs::write(&file, "[exec]\nmax_level = \"E1\"\nauto_approve = \"inert-observe\"\nenv = [\"JAVA_HOME\"]\n[effects]\ndeny = [\"environment\"]\n").unwrap();
+        set_max_level(home.path(), Level::E2).unwrap();
+        let p = load(home.path()).unwrap();
+        assert_eq!((p.max_level, p.auto_approve, p.env.clone()), (Level::E2, false, vec!["JAVA_HOME".to_string()]));
+        assert_eq!(p.effects_deny, vec![Effect::Environment]);
+        set_max_level(home.path(), Level::E1).unwrap();
+        assert_eq!(load(home.path()).unwrap().max_level, Level::E1);
+        std::fs::write(&file, "[exec]\nsurprise = 1\n").unwrap();
+        assert!(set_max_level(home.path(), Level::E2).is_err());
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "[exec]\nsurprise = 1\n", "left as it was");
     }
 
     #[test]

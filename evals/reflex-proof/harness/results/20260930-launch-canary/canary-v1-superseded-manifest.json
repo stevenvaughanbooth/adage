@@ -1,0 +1,427 @@
+{
+  "binaries": {
+    "adage": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v1/canary-v1/bin/adage",
+    "adage-exec": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v1/canary-v1/bin/adage-exec"
+  },
+  "binary_sha256": {
+    "adage": "41684cdbfb3d64d8f1987944822455eee3f1cc8b2ca75010c3d9ab118c0eee3b",
+    "adage-exec": "2c511ee5e5e8c6d6434321a92583556a3ffc6bd04080d37ff9a541c2a9e5d50f"
+  },
+  "binary_source_commit": "594f4eeecd91e0f01a194bb3f5314cc02f1b8ef0",
+  "budget": {
+    "per_session_usd": 1.5,
+    "sessions": 12,
+    "study_ceiling_usd": 6.0
+  },
+  "budget_allocation_sha256": "f0981c0a547be249b0ba75fa75e735cbcda73860fedb900b84dee3320396848c",
+  "budget_authority": "/private/tmp/adage-real-repo-gate-v1",
+  "caches": [
+    ".pytest_cache/**",
+    "tests/__pycache__/**",
+    "src/**/__pycache__/**",
+    ".pytest_cache/.gitignore"
+  ],
+  "cohort_root": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v1",
+  "command": ".venv/bin/python -m pytest tests/test_validate.py -q",
+  "conditions": {
+    "broader": [
+      "\n\nBefore finishing, make sure the repository's entire test suite under tests/ passes.\n",
+      false,
+      [
+        [],
+        [
+          "tests"
+        ]
+      ]
+    ],
+    "config-change": [
+      "\n\nWork in this order: implement the validator, add the tests to tests/test_validate.py, add the CHANGELOG.rst entry, and finally add `xfail_strict = true` to the [tool.pytest.ini_options] table in pyproject.toml.\n",
+      false,
+      null
+    ],
+    "failed": [
+      "\n\nWork in this order: first add the new tests to tests/test_validate.py, then add the CHANGELOG.rst entry, and only then implement the validator in src/marshmallow/validate.py.\n",
+      false,
+      null
+    ],
+    "later-edit": [
+      "\n\nWork in this order: implement the validator, add the tests to tests/test_validate.py, add the CHANGELOG.rst entry, and finally add a short usage example to the new validator's docstring in src/marshmallow/validate.py.\n",
+      false,
+      null
+    ],
+    "positive": [
+      "",
+      false,
+      null
+    ],
+    "rerun": [
+      "\n\nWhen you are done, run `.venv/bin/python -m pytest tests/test_validate.py -q` yourself and quote its final summary line.\n",
+      true,
+      null
+    ]
+  },
+  "evidence_class": "integration canary and negative controls on training-pool tasks; not held-out evidence",
+  "families": [
+    {
+      "archive": {
+        "archive": "evals/showcase/live/mm-validator/adage-home.tgz",
+        "eligibility": "production learner decides; retain influence and exclude steered evidence",
+        "sessions": [
+          {
+            "directed": [
+              "card-ab0b203001"
+            ],
+            "ending": {
+              "asked_for_help": false,
+              "cut_off": false
+            },
+            "id": "484e2137-355b-450f-b4db-d7cb9b078f37",
+            "influence_present": true,
+            "member": "adage-home/cache/sessions/f3a9bf5181b559b4.json",
+            "outcome": null,
+            "sha256": "39b71fef4f9a4b917a3830b7814f1dcff2f4652f592c520a4f157609ce719d5e",
+            "steered": true
+          },
+          {
+            "directed": [],
+            "ending": {
+              "asked_for_help": false,
+              "cut_off": false
+            },
+            "id": "15178ed2-db36-487f-b1f4-de072bf2078f",
+            "influence_present": false,
+            "member": "adage-home/cache/sessions/547686e96e93d3b0.json",
+            "outcome": null,
+            "sha256": "0d531b3f5360473e9fd7431b77881ef5823d875b05400ff83fbb8b0921a21dea",
+            "steered": false
+          },
+          {
+            "directed": [
+              "card-ab0b203001"
+            ],
+            "ending": {
+              "asked_for_help": false,
+              "cut_off": false
+            },
+            "id": "30364f4c-3f5b-4374-8f41-617de6429966",
+            "influence_present": true,
+            "member": "adage-home/cache/sessions/0ad86956b917f1cc.json",
+            "outcome": null,
+            "sha256": "f9253b970028218d00111816dc8900c04b2e308a9c38fc62f29f8b0b7c112430",
+            "steered": true
+          },
+          {
+            "directed": [],
+            "ending": {
+              "asked_for_help": false,
+              "cut_off": false
+            },
+            "id": "f48527ee-2aa8-4274-9aff-b4b9ad179bb8",
+            "influence_present": false,
+            "member": "adage-home/cache/sessions/c9b2388c4a5a0dc9.json",
+            "outcome": null,
+            "sha256": "284ee49529acaeb725538c393935cdfc1a95881b62d78bbb38172dbaf3aec312",
+            "steered": false
+          }
+        ],
+        "sha256": "85c0def7848ea4de659bd951f851363ffb2d9c3e04d2534dd021290c97f578b5"
+      },
+      "base": "7f0792bd",
+      "base_full": "7f0792bd7a06f72e393ec866ac1e89e1502ccfe1",
+      "checkout": "/private/tmp/adage-real-repo-gate-v1/bases/mm-validator",
+      "dependencies": [
+        "Using Python 3.12.14 environment at: bases/mm-validator/.venv",
+        "iniconfig==2.3.0",
+        "-e file:///private/tmp/adage-real-repo-gate-v1/bases/mm-validator",
+        "packaging==26.3",
+        "pluggy==1.6.0",
+        "pygments==2.21.0",
+        "pytest==9.1.1",
+        "python-dateutil==2.9.0.post0",
+        "pytz==2026.3.post1",
+        "simplejson==4.1.2",
+        "six==1.17.0"
+      ],
+      "family": "mm-curve",
+      "heldout": [],
+      "python_actual": "Python 3.12.14",
+      "repo": "marshmallow",
+      "train": [
+        "mm-curve--hexadecimal",
+        "mm-curve--ends-with",
+        "mm-curve--ip-address",
+        "mm-curve--not-blank",
+        "mm-curve--ascii",
+        "mm-curve--contains",
+        "mm-curve--lowercase",
+        "mm-curve--alphanumeric",
+        "mm-curve--max-words",
+        "mm-curve--palindrome",
+        "mm-curve--strictly-increasing",
+        "mm-curve--printable"
+      ],
+      "url": "https://github.com/marshmallow-code/marshmallow"
+    }
+  ],
+  "frozen_inputs": {
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/index.json": "773d862672bc1bfb8052985fd945c6409042bb16c853d0b8d5c4873707e46fd4",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/.follow-weights.json": "f7c8445ebffc47fe0da42dda78769350000d0aaf9cf4076bf9ec9e21947dbdb6",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/.instincts-binding.json": "e06f161274b767fc5d07650c4dea6e81a6894095aa3d72a15230ccaa58debc0a",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-0cdcfb.yaml": "b017f1e5c092f8a3cab9c839d305f9d02347e26d1ca855a542917ee0401d1b2c",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-1fbe94.yaml": "13f6c7b7c75e7ac6f65e28fec4e5948f10be977f90e601e0a0cab73967ec62f5",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-527c67.yaml": "16cd307646e7ec87c9d34ef55f7d3cc3c1ded135660b0f840323e42a820dc917",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-5347bf.yaml": "aba400e00de15fc124d4d1b52de6aace654e07b463da05b570940c224ec6f105",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-855e84.yaml": "de7298ead0c286cc8cc22a4e314917e73f5f76853011b1efb4c65e17dff7840e",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-923c12.yaml": "325c85566f74611886f2fce44bf07be23f4e4f71917fda708104cb90446539e8",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-93981f.yaml": "d69486e1d3d649b5b7df60b53cf107e8580299e703d84636013372ccc6de0885",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-95d94b.yaml": "55e4c5686acccae41f6563cbe1a84a201e892529a587caeabb3536834907da10",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-97f983.yaml": "02583380828abb5151792050fa1948e2647e0e8931cd09fd0dce5b24e04c6ed0",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-9aeb2e.yaml": "cd99aec49054a5b4d1861a526b7abbc34bef930d9183f35e6861003dff2ab9d3",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-a6ab60.yaml": "bbd442e2d68ba4164e0da807f42effe038ab68e6da5c6402eb95820a7437e760",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-c7dcb6.yaml": "9167714caa75a7a29ccbbca1b5f69cefa0e24e3c50d51deed5317fb85d15c85f",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-d9d28b.yaml": "64005051dacb212142f7a65989ce5a7e0685eb63104175c4e8e0849756426788",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-dec50b.yaml": "53fb570d091fdfbdd10f17ad9a7556957aeaf313f20e9ce45a8b9ecd44019ec8",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-565bfd.yaml": "6b2e9bd45774ddd225886f9977030d663c6cdb85289e9f904aac6e2bd7759e16",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-580139.yaml": "8ce07d14df0634d6a5a19450782241dfbb56ba2f5f4672fd53011c3ad21efacc",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-983271.yaml": "c5086ee69e8e9da6393d554dee3763d95e1c3a890990f3737e2f1b5b978cd559",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-aa69ba.yaml": "bc37b5dca829f7d05cbe9252ecce7786d6d57c930f2592f34655b2cb37578870",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-b46676.yaml": "5f63af11f3930d5d1b67d1085e49ae500d2d4f6adfd226427f4886c8ba0d7fd4",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-b87800.yaml": "e369eacc9405f9f1db7f56d3ac1477a140eb635e1449339d5ce0209f2297c713",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-c243e0.yaml": "7a557dd9a242cee14b7f64f23c9df42848fd59e6ba503dd406c3b8ea49e11066",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-eae4d7.yaml": "1dd5949f45e0ae49e7eff3a30be0aa72f954e0551b725c5aef8c05b41511ed5a",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-ed6cec.yaml": "40d24f76c36b2bf4217f6f572d5aa72999d0d4788ec837e777c297425f7242e2",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-f38551.yaml": "2d56511b5d91d840d0b73fd776309f4674490994a72c863725011b1eb96a4e11",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u6-d18b41.yaml": "9d619e3d7969ddd6de024c7f4793a58b4b38cece1bb20565997985de8a2d705a",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/instincts/track.toml": "fb378257a429f2ab8b571c9f9a01b65e78097162ae8839ae464f5874cecad046",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/learned/.why.json": "092d1307532cabaab3c3844a1cc715d66725cbcae607acbe45b86879e6199da4",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/learned/routes/card-ba8fc2a013.yaml": "458919f7d863fc6ba0a198adb67aff7a4feb34f092c0d1f370a9d01280615673",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/learned/routes/run-175d85.yaml": "fbea7d14b6cbe9315d75feacc42bac617048625761de112828d80098ef87190a",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/learned/routes/run-70684c.yaml": "eca3bf7881d268b5d3880954c0ad1dc5c6768a135cce6d739f04bca4eea6fdbe",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/learned/routes/run-74eb07.yaml": "4d04c5db72a2b69c34ac7282e5a2f84995fee54a3ddef4a0a008cb867aa6464d",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/learned/routes/run-a35e0a.yaml": "64cf7ee8e47ac8011f146a7e5aa358b03046df012de9e609c9f2ac3852af6c4e",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home/tracks/github-com-marshmallow-code-marshmallow/learned/track.toml": "45b613752afda11abaf6a4ad91fa302245195c369c69ac5fe6a1f605b9e3a77c",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/attempt.json": "d497a06f3a36f3abed427a047b68d71aa26a2028881c87e29d43131e93cdf311",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-v2/manifest.json": "8fd609bbfe1440e889cd7d6ad340997c6b34c883a2b3c9e8d92bffa5b9bdcb53",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-v2/validation.json": "98143be5da762fbf5af9f011c5b429dea9867782ffc46e228db29b59a8866d03",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v1/canary-v1/bin/adage": "41684cdbfb3d64d8f1987944822455eee3f1cc8b2ca75010c3d9ab118c0eee3b",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v1/canary-v1/bin/adage-exec": "2c511ee5e5e8c6d6434321a92583556a3ffc6bd04080d37ff9a541c2a9e5d50f",
+    "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v1/manifest.json": "2a866bda101c3b556f63431d6f53554bf11da74cdec673a19cb3f8b76110b929"
+  },
+  "grants_written": false,
+  "learned_files": {
+    "index.json": "773d862672bc1bfb8052985fd945c6409042bb16c853d0b8d5c4873707e46fd4",
+    "tracks/github-com-marshmallow-code-marshmallow/.follow-weights.json": "f7c8445ebffc47fe0da42dda78769350000d0aaf9cf4076bf9ec9e21947dbdb6",
+    "tracks/github-com-marshmallow-code-marshmallow/.instincts-binding.json": "e06f161274b767fc5d07650c4dea6e81a6894095aa3d72a15230ccaa58debc0a",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-0cdcfb.yaml": "b017f1e5c092f8a3cab9c839d305f9d02347e26d1ca855a542917ee0401d1b2c",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-1fbe94.yaml": "13f6c7b7c75e7ac6f65e28fec4e5948f10be977f90e601e0a0cab73967ec62f5",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-527c67.yaml": "16cd307646e7ec87c9d34ef55f7d3cc3c1ded135660b0f840323e42a820dc917",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-5347bf.yaml": "aba400e00de15fc124d4d1b52de6aace654e07b463da05b570940c224ec6f105",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-855e84.yaml": "de7298ead0c286cc8cc22a4e314917e73f5f76853011b1efb4c65e17dff7840e",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-923c12.yaml": "325c85566f74611886f2fce44bf07be23f4e4f71917fda708104cb90446539e8",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-93981f.yaml": "d69486e1d3d649b5b7df60b53cf107e8580299e703d84636013372ccc6de0885",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-95d94b.yaml": "55e4c5686acccae41f6563cbe1a84a201e892529a587caeabb3536834907da10",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-97f983.yaml": "02583380828abb5151792050fa1948e2647e0e8931cd09fd0dce5b24e04c6ed0",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-9aeb2e.yaml": "cd99aec49054a5b4d1861a526b7abbc34bef930d9183f35e6861003dff2ab9d3",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-a6ab60.yaml": "bbd442e2d68ba4164e0da807f42effe038ab68e6da5c6402eb95820a7437e760",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-c7dcb6.yaml": "9167714caa75a7a29ccbbca1b5f69cefa0e24e3c50d51deed5317fb85d15c85f",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-d9d28b.yaml": "64005051dacb212142f7a65989ce5a7e0685eb63104175c4e8e0849756426788",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/dead-end-dec50b.yaml": "53fb570d091fdfbdd10f17ad9a7556957aeaf313f20e9ce45a8b9ecd44019ec8",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-565bfd.yaml": "6b2e9bd45774ddd225886f9977030d663c6cdb85289e9f904aac6e2bd7759e16",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-580139.yaml": "8ce07d14df0634d6a5a19450782241dfbb56ba2f5f4672fd53011c3ad21efacc",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-983271.yaml": "c5086ee69e8e9da6393d554dee3763d95e1c3a890990f3737e2f1b5b978cd559",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-aa69ba.yaml": "bc37b5dca829f7d05cbe9252ecce7786d6d57c930f2592f34655b2cb37578870",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-b46676.yaml": "5f63af11f3930d5d1b67d1085e49ae500d2d4f6adfd226427f4886c8ba0d7fd4",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-b87800.yaml": "e369eacc9405f9f1db7f56d3ac1477a140eb635e1449339d5ce0209f2297c713",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-c243e0.yaml": "7a557dd9a242cee14b7f64f23c9df42848fd59e6ba503dd406c3b8ea49e11066",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-eae4d7.yaml": "1dd5949f45e0ae49e7eff3a30be0aa72f954e0551b725c5aef8c05b41511ed5a",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-ed6cec.yaml": "40d24f76c36b2bf4217f6f572d5aa72999d0d4788ec837e777c297425f7242e2",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u11-f38551.yaml": "2d56511b5d91d840d0b73fd776309f4674490994a72c863725011b1eb96a4e11",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/routes/instinct-u6-d18b41.yaml": "9d619e3d7969ddd6de024c7f4793a58b4b38cece1bb20565997985de8a2d705a",
+    "tracks/github-com-marshmallow-code-marshmallow/instincts/track.toml": "fb378257a429f2ab8b571c9f9a01b65e78097162ae8839ae464f5874cecad046",
+    "tracks/github-com-marshmallow-code-marshmallow/learned/.why.json": "092d1307532cabaab3c3844a1cc715d66725cbcae607acbe45b86879e6199da4",
+    "tracks/github-com-marshmallow-code-marshmallow/learned/routes/card-ba8fc2a013.yaml": "458919f7d863fc6ba0a198adb67aff7a4feb34f092c0d1f370a9d01280615673",
+    "tracks/github-com-marshmallow-code-marshmallow/learned/routes/run-175d85.yaml": "fbea7d14b6cbe9315d75feacc42bac617048625761de112828d80098ef87190a",
+    "tracks/github-com-marshmallow-code-marshmallow/learned/routes/run-70684c.yaml": "eca3bf7881d268b5d3880954c0ad1dc5c6768a135cce6d739f04bca4eea6fdbe",
+    "tracks/github-com-marshmallow-code-marshmallow/learned/routes/run-74eb07.yaml": "4d04c5db72a2b69c34ac7282e5a2f84995fee54a3ddef4a0a008cb867aa6464d",
+    "tracks/github-com-marshmallow-code-marshmallow/learned/routes/run-a35e0a.yaml": "64cf7ee8e47ac8011f146a7e5aa358b03046df012de9e609c9f2ac3852af6c4e",
+    "tracks/github-com-marshmallow-code-marshmallow/learned/track.toml": "45b613752afda11abaf6a4ad91fa302245195c369c69ac5fe6a1f605b9e3a77c"
+  },
+  "learned_home": "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/cumulative-launch-10/adage-home",
+  "learned_provenance": "explicitly guided demonstrations (cumulative-launch-10); fixed route, not new learning",
+  "matrix": [
+    {
+      "arm": "automatic",
+      "condition": "positive",
+      "order": 0,
+      "prompt": "Add a new validator to marshmallow: `marshmallow.validate.Hexadecimal(*, error=None)`, which succeeds if the input is a non-empty string made only of hexadecimal digits (`0-9`, `a-f`, `A-F`, no prefix). Its default error message is `Not a valid hexadecimal string.`; a custom `error` message may interpolate `{input}`. Examples of valid input: `'deadBEEF'`. Examples of invalid input: `'0x1f'`.\n\nFollow the conventions of the existing validators, include tests and a docstring, and add a changelog entry.",
+      "repetition": 1,
+      "task": "mm-curve--hexadecimal"
+    },
+    {
+      "arm": "automatic",
+      "condition": "failed",
+      "order": 1,
+      "prompt": "Add a new validator to marshmallow: `marshmallow.validate.EndsWith(suffix, *, error=None)`, which succeeds if the input string ends with `suffix`. Its default error message is `Must end with {suffix}.`; a custom `error` message may interpolate `{input}` and `{suffix}`. Examples of valid input: `EndsWith('.py')`: `'main.py'`. Examples of invalid input: `'main.pyc'`.\n\nFollow the conventions of the existing validators, include tests and a docstring, and add a changelog entry.\n\nWork in this order: first add the new tests to tests/test_validate.py, then add the CHANGELOG.rst entry, and only then implement the validator in src/marshmallow/validate.py.\n",
+      "repetition": 1,
+      "task": "mm-curve--ends-with"
+    },
+    {
+      "arm": "automatic",
+      "condition": "later-edit",
+      "order": 2,
+      "prompt": "Add a new validator to marshmallow: `marshmallow.validate.IPAddress(version=None, *, error=None)`, which succeeds if the input string is an IP address; `version` may be `4` or `6` to accept only that version (the default `None` accepts both). Its default error message is `Not a valid IP address.`; a custom `error` message may interpolate `{input}` and `{version}`. Examples of valid input: `'127.0.0.1'`. Examples of invalid input: `'256.0.0.1'`.\n\nFollow the conventions of the existing validators, include tests and a docstring, and add a changelog entry.\n\nWork in this order: implement the validator, add the tests to tests/test_validate.py, add the CHANGELOG.rst entry, and finally add a short usage example to the new validator's docstring in src/marshmallow/validate.py.\n",
+      "repetition": 1,
+      "task": "mm-curve--ip-address"
+    },
+    {
+      "arm": "automatic",
+      "condition": "config-change",
+      "order": 3,
+      "prompt": "Add a new validator to marshmallow: `marshmallow.validate.NotBlank(*, error=None)`, which succeeds if the input string contains at least one non-whitespace character. Its default error message is `Field may not be blank.`; a custom `error` message may interpolate `{input}`. Examples of valid input: `'a'`. Examples of invalid input: `''`.\n\nFollow the conventions of the existing validators, include tests and a docstring, and add a changelog entry.\n\nWork in this order: implement the validator, add the tests to tests/test_validate.py, add the CHANGELOG.rst entry, and finally add `xfail_strict = true` to the [tool.pytest.ini_options] table in pyproject.toml.\n",
+      "repetition": 1,
+      "task": "mm-curve--not-blank"
+    },
+    {
+      "arm": "automatic",
+      "condition": "broader",
+      "order": 4,
+      "prompt": "Add a new validator to marshmallow: `marshmallow.validate.Ascii(*, error=None)`, which succeeds if the input string contains only ASCII characters. Its default error message is `Must contain only ASCII characters.`; a custom `error` message may interpolate `{input}`. Examples of valid input: `'hello'`. Examples of invalid input: `'h\u00e9llo'`.\n\nFollow the conventions of the existing validators, include tests and a docstring, and add a changelog entry.\n\nBefore finishing, make sure the repository's entire test suite under tests/ passes.\n",
+      "repetition": 1,
+      "task": "mm-curve--ascii"
+    },
+    {
+      "arm": "automatic",
+      "condition": "rerun",
+      "order": 5,
+      "prompt": "Add a new validator to marshmallow: `marshmallow.validate.Contains(item, *, error=None)`, which succeeds if `item` is in the input (a substring of a string, or a member of a list). Its default error message is `Must contain {item}.`; a custom `error` message may interpolate `{input}` and `{item}`. Examples of valid input: `Contains('x')`: `'axb'`. Examples of invalid input: `'abc'`.\n\nFollow the conventions of the existing validators, include tests and a docstring, and add a changelog entry.\n\nWhen you are done, run `.venv/bin/python -m pytest tests/test_validate.py -q` yourself and quote its final summary line.\n",
+      "repetition": 1,
+      "task": "mm-curve--contains"
+    },
+    {
+      "arm": "automatic",
+      "condition": "positive",
+      "order": 6,
+      "prompt": "Add a new validator to marshmallow: `marshmallow.validate.Lowercase(*, error=None)`, which succeeds if the input string is entirely lower-case (`value == value.lower()`). Its default error message is `Must be lowercase.`; a custom `error` message may interpolate `{input}`. Examples of valid input: `'abc'`. Examples of invalid input: `'Abc'`.\n\nFollow the conventions of the existing validators, include tests and a docstring, and add a changelog entry.",
+      "repetition": 2,
+      "task": "mm-curve--lowercase"
+    },
+    {
+      "arm": "automatic",
+      "condition": "failed",
+      "order": 7,
+      "prompt": "Add a new validator to marshmallow: `marshmallow.validate.Alphanumeric(*, error=None)`, which succeeds if the input is a non-empty string made only of ASCII letters and digits. Its default error message is `Must contain only letters and digits.`; a custom `error` message may interpolate `{input}`. Examples of valid input: `'abc123'`. Examples of invalid input: `'a-b'`.\n\nFollow the conventions of the existing validators, include tests and a docstring, and add a changelog entry.\n\nWork in this order: first add the new tests to tests/test_validate.py, then add the CHANGELOG.rst entry, and only then implement the validator in src/marshmallow/validate.py.\n",
+      "repetition": 2,
+      "task": "mm-curve--alphanumeric"
+    },
+    {
+      "arm": "automatic",
+      "condition": "later-edit",
+      "order": 8,
+      "prompt": "Add a new validator to marshmallow: `marshmallow.validate.MaxWords(max, *, error=None)`, which succeeds if the input string has at most `max` words (separated by whitespace). Its default error message is `Must have at most {max} words.`; a custom `error` message may interpolate `{input}` and `{max}`. Examples of valid input: `MaxWords(3)`: `'one two three'`. Examples of invalid input: `'a b c d'`.\n\nFollow the conventions of the existing validators, include tests and a docstring, and add a changelog entry.\n\nWork in this order: implement the validator, add the tests to tests/test_validate.py, add the CHANGELOG.rst entry, and finally add a short usage example to the new validator's docstring in src/marshmallow/validate.py.\n",
+      "repetition": 2,
+      "task": "mm-curve--max-words"
+    },
+    {
+      "arm": "automatic",
+      "condition": "config-change",
+      "order": 9,
+      "prompt": "Add a new validator to marshmallow: `marshmallow.validate.Palindrome(*, error=None)`, which accepts strings equal to their reversal (case-sensitive, including empty strings). Its default error message is `Must satisfy Palindrome.`; a custom `error` message may interpolate `{input}`. Examples of valid input: `'level'`. Examples of invalid input: `'Level'`.\n\nFollow the conventions of the existing validators, include tests and a docstring, and add a changelog entry.\n\nWork in this order: implement the validator, add the tests to tests/test_validate.py, add the CHANGELOG.rst entry, and finally add `xfail_strict = true` to the [tool.pytest.ini_options] table in pyproject.toml.\n",
+      "repetition": 2,
+      "task": "mm-curve--palindrome"
+    },
+    {
+      "arm": "automatic",
+      "condition": "broader",
+      "order": 10,
+      "prompt": "Add a new validator to marshmallow: `marshmallow.validate.StrictlyIncreasing(*, error=None)`, which accepts numeric sequences whose adjacent elements strictly increase; empty and single-element sequences pass. Its default error message is `Must satisfy StrictlyIncreasing.`; a custom `error` message may interpolate `{input}`. Examples of valid input: `[1, 3, 8]`. Examples of invalid input: `[1, 1]`.\n\nFollow the conventions of the existing validators, include tests and a docstring, and add a changelog entry.\n\nBefore finishing, make sure the repository's entire test suite under tests/ passes.\n",
+      "repetition": 2,
+      "task": "mm-curve--strictly-increasing"
+    },
+    {
+      "arm": "automatic",
+      "condition": "rerun",
+      "order": 11,
+      "prompt": "Add a new validator to marshmallow: `marshmallow.validate.Printable(*, error=None)`, which accepts non-empty strings containing only printable characters according to Python str.isprintable(). Its default error message is `Must satisfy Printable.`; a custom `error` message may interpolate `{input}`. Examples of valid input: `'hello world'`. Examples of invalid input: `''`.\n\nFollow the conventions of the existing validators, include tests and a docstring, and add a changelog entry.\n\nWhen you are done, run `.venv/bin/python -m pytest tests/test_validate.py -q` yourself and quote its final summary line.\n",
+      "repetition": 2,
+      "task": "mm-curve--printable"
+    }
+  ],
+  "model": "claude-haiku-4-5-20251001",
+  "preparation_python": "/private/tmp/adage-real-repo-gate-v1/runtime/python/cpython-3.12-macos-aarch64-none/bin/python3.12",
+  "protocol": "launch-canary-1",
+  "python_requested": "3.12",
+  "root": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v1/canary-v1",
+  "route": "github-com-marshmallow-code-marshmallow/learned/run-175d85",
+  "source_sha256": {
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/lab/research/recurring-workflows/families.py": "0592230842e8f6cf0f7f8696464027da464cd41bbe997be1950a2deec49c41d1",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/live/budget.py": "de4f9c2376204ac2e6ffff71ec43bcbf9318366c7f8a1eb5d1aed186279c27d2",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/live/runner.py": "914ebd5dfc0238b17d1038e9fe706da947f42f91ab5a80c133c8bc0350e81f19",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/reflex-proof/harness/REAL-REPO-PAIRS.md": "d5a6b7859bb23de1601f19b5fb7816dfbfc699e85b826d300bb72203d1bba396",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/reflex-proof/harness/bash_action_audit.py": "1b1ff9d152f96c347682006f972c43516293e03c1ab7dc3d2a59726bbbdf94a7",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/reflex-proof/harness/cohort_v5.py": "3062d384fc293a1fde6f0f3e137b69082e796f9fa7a90fada30eac9474b3a19d",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/reflex-proof/harness/curve_sessions.py": "eb606e8e6878460a2e4732b9d7c4fc0e046e7b5d9d0e80a5aab9e9a9e1c4b7db",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/reflex-proof/harness/curve_tasks.py": "9be77f97b2d3b7de606b11a03b73df7cab0f55cdc83251f1a7863a1ef5aba229",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/reflex-proof/harness/launch_canary.py": "b9fc8131273643bddaf6646590168fb91aea36afcbdb2c8db6778547098a71a0",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/reflex-proof/harness/probe.py": "920bb93a30b74c87357da044bc2aea575a69cfa8931390d304f16f5b3d660446",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/reflex-proof/harness/real_repo_gate.py": "e4b819a851e1e5325983259b4946abe4e6b050801d33fce08e85311a7cb9d76e",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/reflex-proof/harness/real_repo_pairs.py": "4b1aac547369157a8faedfed372741e811d3ad972baf3d075f09a225e1374f8a",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/reflex-proof/harness/receipt_replay.py": "68b3fca5c3cf1235b280abf5a0cb446d65415ee0f3b55c8e2ab6e040396935de",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/repobench/common.py": "ecbc22b6a895453319709cdca73fa478e76786929f535196bc0b7ee9fc4ec44d",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/repobench/repos.json": "1bdb8ffb5b64411d5913549aec287f091b08e6a7096e9ad5c70c5b7c1b1b5030",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/repobench/sandbox.py": "3579ef53fe4db9a28a046727fef916b8f810cb39557110e9a2d1733b1abf912c",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/repobench/score.py": "e63d2c3bb7ffe9049bf95e7a712f562c4ed87a5000b6b7da63e89d863de9ebdd",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/showcase/fam_python.py": "9a7e2c5137e90b7ff1f07a9f1518baa15fba791560dc234c2fad366871d227c9",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/showcase/families.py": "275d9c0113f8e9fdd1ef75562cff112c61934e00926b7e2f54f11514378616a8",
+    "/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d/evals/showcase/sc_score.py": "338307033ea3c76df0c0ec965ba1290991862b02f752b0a6985a25a94bf13e61"
+  },
+  "task_sha256": {
+    "mm-curve--alphanumeric": {
+      "hidden.py": "64defca93e733b6af7d0aadb7ede335e2f2aed272d7753318ef5816e11b644fe",
+      "prompt.txt": "69352f0b05aa5c693538443a869fc239a015d24aa9f467fb5f047185730c784c"
+    },
+    "mm-curve--ascii": {
+      "hidden.py": "49656fab23e65716aa2170663ed1a4e52c093472739fdfedfb351de7f750a5e9",
+      "prompt.txt": "4286b02d923297ccc948b10b141ecbdb744ab9a73d477112d68f40ce7867878c"
+    },
+    "mm-curve--contains": {
+      "hidden.py": "a5bf76253b16da9abee369bb01859fde001155737ca348f092415d4e3def909c",
+      "prompt.txt": "cdcee4c5cae764fc8cfb18d833bcef20089ea5be2f16de2218cfe6b3fc0cf885"
+    },
+    "mm-curve--ends-with": {
+      "hidden.py": "845955b6e099e6333f72c839808bb7248260b7d9b96330fccffeec5e8ecd019b",
+      "prompt.txt": "78761b384c97db816431645edb484fc65970f7a09252a02acff675ab41cdebfd"
+    },
+    "mm-curve--hexadecimal": {
+      "hidden.py": "04b85bf34041c00316266e4eb11f3d0336ebb745cb448ef1956d71225e81bcc9",
+      "prompt.txt": "568768373d249ef9a624a3b62476ecd6f9015dae5599cb7465c54ec4f217ce89"
+    },
+    "mm-curve--ip-address": {
+      "hidden.py": "fc9586f73ee142cadff0d049da0460a2fec39c3f6d84001c682767abc1269ae4",
+      "prompt.txt": "9783edff9181d861905b6ad61041939a892e26c6e81b23a540d3c3a0de32fa09"
+    },
+    "mm-curve--lowercase": {
+      "hidden.py": "c9a657bcbd697a25e99fa97098ccb592e1f69e1f248104991f01796d2bad110e",
+      "prompt.txt": "0fb9a41efc8e8d76c5a12370c46964a21207157489bb429499a8400ac6c42a55"
+    },
+    "mm-curve--max-words": {
+      "hidden.py": "e5e345f7de45d1ccf1a18c77278052aee06c02c50b8a098bbbc747f43fcf53cf",
+      "prompt.txt": "57773daf1542c89558e91cfaf813c9dadf78a29f0e917d6c621e6e7f00f9000e"
+    },
+    "mm-curve--not-blank": {
+      "hidden.py": "e6e1ec923ce7a49e50b43c3473bd2eaa02ed01b89e09a961ebb3f7cde5832bb9",
+      "prompt.txt": "7bf170d1d3e25ab206706a20069d9f387996f1731d32ae48ad3ea65d5c38d03f"
+    },
+    "mm-curve--palindrome": {
+      "hidden.py": "481d8b3dee6d26b9db2937d12e7af7d8b4332345388a9aa7ec6527b739a76330",
+      "prompt.txt": "86a18e029828aa2a9c09e58b9057d2550b1557191a8d40871566c7edffbd6a1c"
+    },
+    "mm-curve--printable": {
+      "hidden.py": "1afe5f18bb98190ceebac1ad761c52abf3438686cc6e65f62dfd380fc5529460",
+      "prompt.txt": "a9ee1afcfb08071b80d8b137710aaaf6e6dfde20884878d82fefcde879d53550"
+    },
+    "mm-curve--strictly-increasing": {
+      "hidden.py": "65bc15052dcf9e7711941a06c78112e22c3baee5c320544ac2cc19eb7e9fbb61",
+      "prompt.txt": "dd1843031a41606cdeb79fdbfc13598b7044303d3780184a7f1fd23be343882f"
+    }
+  }
+}

@@ -1,0 +1,310 @@
+{
+  "all_journal_receipts": [],
+  "block": 4,
+  "collection_errors": [],
+  "condition": "positive",
+  "contract_emitted": false,
+  "cost_usd": 0.12622660000000002,
+  "exec_decisions": [],
+  "final_generation": "0e023100b17fa90df3b17c5dbe1b846f1d1b9c50d1ddbfcff2bf7d6fb336737d",
+  "heldout_arm": "NOEXEC",
+  "order": 14,
+  "protocol": "heldout-cohort-1",
+  "provenance": {
+    "cwd": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/14-NOEXEC-b04-lat-long/repo",
+    "destination": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/14-NOEXEC-b04-lat-long/native-transcript.jsonl",
+    "session_id": "2a32b91b-c410-4f65-be3a-cdf7e1779b3c",
+    "sha256": "50e7b6a61a1bfe77736155085016176710ccc4f68ae8c0fbc55f2993ca796657",
+    "source": "/Users/stevenbooth/.claude/projects/-private-tmp-adage-real-repo-gate-v1-cohorts-launch-gate-v8-heldout-1-sessions-14-NOEXEC-b04-lat-long-repo/2a32b91b-c410-4f65-be3a-cdf7e1779b3c.jsonl",
+    "synthetic": false
+  },
+  "quality": {
+    "changed_files": [
+      "CHANGELOG.rst",
+      "src/marshmallow/validate.py",
+      "tests/test_validate.py"
+    ],
+    "checks": {
+      "tests": true
+    },
+    "ci_passed": true,
+    "dependency_mode": "frozen prepared environment; no rescue install",
+    "elapsed_s": 1.48,
+    "exit_code": 0,
+    "hidden_collection_integrity": {
+      "expected_count": 13,
+      "extra": [],
+      "missing": [],
+      "observed_count": 13,
+      "passed": true,
+      "unsuccessful": []
+    },
+    "hidden_failed": [],
+    "hidden_passed": true,
+    "n_tests": 1213,
+    "passed": true,
+    "rescue_error": null,
+    "suite_failed": [],
+    "tail": "........................................................................ [ 23%]\n........................................................................ [ 29%]\n........................................................................ [ 35%]\n........................................................................ [ 41%]\n........................................................................ [ 47%]\n........................................................................ [ 53%]\n........................................................................ [ 59%]\n........................................................................ [ 65%]\n........................................................................ [ 71%]\n........................................................................ [ 77%]\n........................................................................ [ 83%]\n........................................................................ [ 89%]\n........................................................................ [ 94%]\n.............................................................            [100%]\n1213 passed in 1.02s",
+    "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+  },
+  "replay": {
+    "arm": "NOEXEC",
+    "confirmed_elimination": false,
+    "context_receipts": 0,
+    "covered_subsets": 0,
+    "final_source_verified": true,
+    "gate_runs": [],
+    "necessary_work_skipped": false,
+    "opaque": 0,
+    "receipts": 0,
+    "redundant_repeats": 0,
+    "repeat_attempts": 0,
+    "repeat_attempts_not_completed": 0,
+    "requests": [
+      {
+        "adage_pre_context": false,
+        "classification": "before_receipt",
+        "command": ".venv/bin/python -m pytest tests/test_validate.py::test_latlong -v",
+        "completed": false,
+        "covered": false,
+        "digest": "0e023100b17fa90df3b17c5dbe1b846f1d1b9c50d1ddbfcff2bf7d6fb336737d",
+        "id": "toolu_01FW6soDdRbr4MYVjRNmVvFi",
+        "receipt_note": false,
+        "segment": ".venv/bin/python -m pytest tests/test_validate.py::test_latlong -v"
+      },
+      {
+        "adage_pre_context": false,
+        "classification": "before_receipt",
+        "command": ".venv/bin/python -m pytest tests/test_validate.py -k latlong -v",
+        "completed": true,
+        "covered": false,
+        "digest": "0e023100b17fa90df3b17c5dbe1b846f1d1b9c50d1ddbfcff2bf7d6fb336737d",
+        "id": "toolu_01CB91MaRevb6ywWbWdDXZzB",
+        "receipt_note": false,
+        "segment": ".venv/bin/python -m pytest tests/test_validate.py -k latlong -v"
+      },
+      {
+        "adage_pre_context": false,
+        "classification": "before_receipt",
+        "command": ".venv/bin/python -m pytest tests/test_validate.py -q",
+        "completed": true,
+        "covered": false,
+        "digest": "0e023100b17fa90df3b17c5dbe1b846f1d1b9c50d1ddbfcff2bf7d6fb336737d",
+        "id": "toolu_01QzAyQr8Sa8KSorCoTKXaQ2",
+        "receipt_note": false,
+        "segment": ".venv/bin/python -m pytest tests/test_validate.py -q"
+      },
+      {
+        "classification": "opaque_shell",
+        "command": ".venv/bin/python << 'EOF'\nfrom marshmallow.validate import LatLong\n\n# Test valid coordinates\nv = LatLong()\nprint(\"Valid (0, 0):\", v((0, 0)))\nprint(\"Valid (90, 180):\", v((90, 180)))\nprint(\"Valid (-90, -180):\", v((-90, -180)))\nprint(\"Valid (45.5, -120.5):\", v((45.5, -120.5)))\n\n# Test invalid coordinates\ntry:\n    v((91, 0))\nexcept Exception as e:\n    print(f\"Invalid (91, 0): {type(e).__name__} - {e}\")\n\ntry:\n    v((0, 181))\nexcept Exception as e:\n    print(f\"Invalid (0, 181): {type(e).__name__} - {e}\")\n\n# Test custom error message\nv_custom = LatLong(error=\"Invalid coordinates: {input}\")\ntry:\n    v_custom((91, 0))\nexcept Exception as e:\n    print(f\"Custom error: {e}\")\n\n# Test repr\nprint(f\"Repr: {repr(v)}\")\nprint(f\"Repr with custom error: {repr(v_custom)}\")\nEOF\n",
+        "digest": "0e023100b17fa90df3b17c5dbe1b846f1d1b9c50d1ddbfcff2bf7d6fb336737d",
+        "id": "toolu_01578EF9od4teSXrfA8ptw1y"
+      },
+      {
+        "classification": "opaque_shell",
+        "command": ".venv/bin/python << 'EOF'\nfrom marshmallow import validate\n\n# Check if LatLong is accessible\nprint(\"LatLong accessible:\", hasattr(validate, 'LatLong'))\n\n# Test via the validate module\nv = validate.LatLong()\nprint(\"Test (0, 0):\", v((0, 0)))\nEOF\n",
+        "digest": "0e023100b17fa90df3b17c5dbe1b846f1d1b9c50d1ddbfcff2bf7d6fb336737d",
+        "id": "toolu_012E6JNVGu7DHNZw76wufKAK"
+      }
+    ],
+    "successful_receipts": 0,
+    "verification_necessary": false,
+    "version": 3
+  },
+  "task": "mm-curve--lat-long",
+  "timeline": {
+    "arm": "NOEXEC",
+    "events": [
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+        "id": "toolu_01K5HTXd1bCLptNXEA1XQRH3",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+        "id": "toolu_01KK6YwNr9qf1G2givN5ompN",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+        "id": "toolu_01AtUGw62N8qRYDguekgyatC",
+        "kind": "tool",
+        "name": "Grep",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+        "id": "toolu_01RPuj9Urs5idCdioKN59pXq",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+        "id": "toolu_01LW6EKpJ4BLDZ2QH7WTuShf",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "2690d811800b3950bd3ba06eb8da92559547bb5248cefbf62625dfa88375cc25",
+        "id": "toolu_01GYfRkqxuVRD5ekYPm5dabJ",
+        "kind": "tool",
+        "name": "Edit",
+        "path": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/14-NOEXEC-b04-lat-long/repo/src/marshmallow/validate.py",
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "2690d811800b3950bd3ba06eb8da92559547bb5248cefbf62625dfa88375cc25",
+        "id": "toolu_01S7XwjZiFmqpmBpQXujvSrA",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "4fce4f97b0a8df79fcf54cad8e502d40c7d148e2f923ee544bfa763b2e14a365",
+        "id": "toolu_012191PS6jPpSDD8FHv3TKrY",
+        "kind": "tool",
+        "name": "Edit",
+        "path": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/14-NOEXEC-b04-lat-long/repo/tests/test_validate.py",
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "0e023100b17fa90df3b17c5dbe1b846f1d1b9c50d1ddbfcff2bf7d6fb336737d",
+        "id": "toolu_01XBrj3zBV8YFrojP7BdRfkF",
+        "kind": "tool",
+        "name": "Edit",
+        "path": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/14-NOEXEC-b04-lat-long/repo/CHANGELOG.rst",
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": ".venv/bin/python -m pytest tests/test_validate.py::test_latlong -v",
+        "completed": false,
+        "digest": "0e023100b17fa90df3b17c5dbe1b846f1d1b9c50d1ddbfcff2bf7d6fb336737d",
+        "id": "toolu_01FW6soDdRbr4MYVjRNmVvFi",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": ".venv/bin/python -m pytest tests/test_validate.py -k latlong -v",
+        "completed": true,
+        "digest": "0e023100b17fa90df3b17c5dbe1b846f1d1b9c50d1ddbfcff2bf7d6fb336737d",
+        "id": "toolu_01CB91MaRevb6ywWbWdDXZzB",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": ".venv/bin/python -m pytest tests/test_validate.py -q",
+        "completed": true,
+        "digest": "0e023100b17fa90df3b17c5dbe1b846f1d1b9c50d1ddbfcff2bf7d6fb336737d",
+        "id": "toolu_01QzAyQr8Sa8KSorCoTKXaQ2",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": ".venv/bin/python << 'EOF'\nfrom marshmallow.validate import LatLong\n\n# Test valid coordinates\nv = LatLong()\nprint(\"Valid (0, 0):\", v((0, 0)))\nprint(\"Valid (90, 180):\", v((90, 180)))\nprint(\"Valid (-90, -180):\", v((-90, -180)))\nprint(\"Valid (45.5, -120.5):\", v((45.5, -120.5)))\n\n# Test invalid coordinates\ntry:\n    v((91, 0))\nexcept Exception as e:\n    print(f\"Invalid (91, 0): {type(e).__name__} - {e}\")\n\ntry:\n    v((0, 181))\nexcept Exception as e:\n    print(f\"Invalid (0, 181): {type(e).__name__} - {e}\")\n\n# Test custom error message\nv_custom = LatLong(error=\"Invalid coordinates: {input}\")\ntry:\n    v_custom((91, 0))\nexcept Exception as e:\n    print(f\"Custom error: {e}\")\n\n# Test repr\nprint(f\"Repr: {repr(v)}\")\nprint(f\"Repr with custom error: {repr(v_custom)}\")\nEOF\n",
+        "completed": true,
+        "digest": "0e023100b17fa90df3b17c5dbe1b846f1d1b9c50d1ddbfcff2bf7d6fb336737d",
+        "id": "toolu_01578EF9od4teSXrfA8ptw1y",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "0e023100b17fa90df3b17c5dbe1b846f1d1b9c50d1ddbfcff2bf7d6fb336737d",
+        "id": "toolu_01Pm8WsNTeNfo1HnsYgxMA6E",
+        "kind": "tool",
+        "name": "Grep",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": ".venv/bin/python << 'EOF'\nfrom marshmallow import validate\n\n# Check if LatLong is accessible\nprint(\"LatLong accessible:\", hasattr(validate, 'LatLong'))\n\n# Test via the validate module\nv = validate.LatLong()\nprint(\"Test (0, 0):\", v((0, 0)))\nEOF\n",
+        "completed": true,
+        "digest": "0e023100b17fa90df3b17c5dbe1b846f1d1b9c50d1ddbfcff2bf7d6fb336737d",
+        "id": "toolu_012E6JNVGu7DHNZw76wufKAK",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": "git status",
+        "completed": true,
+        "digest": "0e023100b17fa90df3b17c5dbe1b846f1d1b9c50d1ddbfcff2bf7d6fb336737d",
+        "id": "toolu_01NJR3L23tU4SKefj7EzSvFA",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": "cd /private/tmp/adage-real-repo-gate-v8/heldout-1/sessions/14-NOEXEC-b04-lat-long/repo && git diff src/marshmallow/validate.py | head -80",
+        "completed": true,
+        "digest": "0e023100b17fa90df3b17c5dbe1b846f1d1b9c50d1ddbfcff2bf7d6fb336737d",
+        "id": "toolu_017fjTSQMhjg6vrhwy4bQkvA",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      }
+    ],
+    "final_digest": "0e023100b17fa90df3b17c5dbe1b846f1d1b9c50d1ddbfcff2bf7d6fb336737d",
+    "root": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/14-NOEXEC-b04-lat-long/repo"
+  }
+}

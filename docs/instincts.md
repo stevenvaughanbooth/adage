@@ -44,8 +44,9 @@ unsafe command bodies, or an absent environment can correctly leave an instinct 
 remaining catalogue entries are detectors still to build, and ship in no pack. `adage packs` lists
 the packs, which apply to the repository, and turns any off (`instincts.disabled`).
 
-Run `adage init --yes --repo /path/to/repo` to install available harness integration and bind
-these defaults without transcripts. Noninteractive `adage init` previews setup without writing.
+Run `adage init --yes --repo /path/to/repo` to bind these defaults without transcripts; it
+registers no hooks (it says whether they are registered, and `adage install <harness> --write`
+registers them). Noninteractive `adage init` previews setup without writing.
 In a terminal, the interactive wizard's Condition step binds defaults alongside learned reflexes. With automatic
 learning enabled, SessionStart requests a background bootstrap for a new or changed checkout;
 the hook itself does not wait for binding, so a first event can arrive before that work finishes.

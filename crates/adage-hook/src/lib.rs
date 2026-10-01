@@ -35,7 +35,7 @@ use harness::Output;
 use serde_json::{json, Value};
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const MAX_STDIN: u64 = 8 << 20;
 
@@ -117,6 +117,28 @@ pub struct Delivery {
     /// Execution may have effects that require inspection. This warning takes precedence over
     /// ordinary directives and must survive context overflow; it never implies a safe retry.
     pub recovery: Option<String>,
+    /// An approved action was selected for this Stop's obligation request (whatever its outcome):
+    /// the Stop gate does not also run at this event, so one hook never stages two actions within
+    /// its timeout.
+    pub at_stop_action: bool,
+    /// One line for the person: a grant no longer matches what would run, so its action was
+    /// withheld (which field changed, and how to approve it again). Shown at most once per
+    /// session; the agent never sees it.
+    pub notice: Option<String>,
+}
+
+/// Whether this session has not yet had a lapsed-grant notice; marks it as having had one.
+fn first_lapse_notice(paths: &Paths, session: &str) -> bool {
+    state::update::<SessionState, _>(&paths.state(session), |st| !std::mem::replace(&mut st.lapse_noticed, true))
+        .unwrap_or(false)
+}
+
+/// What [`respond`] decided for one event, before rendering.
+#[derive(Debug, Default)]
+struct Responded {
+    out: Option<Output>,
+    /// [`Delivery::at_stop_action`].
+    at_stop_action: bool,
 }
 
 const RECOVERY_NOTICE: &str = "Adage cannot confirm an execution outcome. Do not retry the action automatically. Inspect the worktree and execution journal, then ask the person to resolve recovery.";
@@ -150,11 +172,78 @@ fn fitted_context(all: String, e0: impl FnOnce() -> String, applied: bool, max: 
 /// A step after `decide()` that may change what directives are delivered as (Track C §3.2).
 pub trait Extension: Sync {
     fn deliver(&self, turn: &Turn<'_>, directives: &[Directive]) -> Delivery;
+    /// Optional responsibility contract. No action runs here; the caller gates treatment.
+    fn session_context(&self, _repo_key: &str, _root: &Path, _index: &Index, _paths: &Paths) -> Option<String> {
+        None
+    }
+    /// The session start's texts: the contract ([`Extension::session_context`]) and one line for
+    /// the person (a grant that no longer matches what would run). An extension that can find
+    /// both in one pass overrides this.
+    fn session_texts(&self, repo_key: &str, root: &Path, index: &Index, paths: &Paths) -> SessionTexts {
+        SessionTexts { context: self.session_context(repo_key, root, index, paths), notice: None }
+    }
     /// The exec-only reflexes (`(track, route id)`, vendored scripts) this extension would carry
     /// out in this repository, so `decide()` may direct them. Asked only when the index holds one.
     fn exec_only(&self, _repo_key: &str, _index: &Index, _paths: &Paths) -> Vec<(String, String)> {
         Vec::new()
     }
+    /// A fact for a tool call about to run (`PreToolUse`): completed work it would repeat, checked
+    /// now. Context only, never a refusal; it goes beside any interpreter advice.
+    fn pretool_context(&self, _call: &PreCall<'_>) -> Option<String> {
+        None
+    }
+    /// The finish-line verification (Claude Code `Stop`): run an approved learned check whose
+    /// result on the current inputs is not yet known, and say what happened.
+    fn stop_gate(&self, _call: &StopCall<'_>) -> Option<StopGate> {
+        None
+    }
+}
+
+/// What [`Extension::session_texts`] says at a session start.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SessionTexts {
+    /// For the model.
+    pub context: Option<String>,
+    /// For the person only (Claude Code's `systemMessage`), at most once per session.
+    pub notice: Option<String>,
+}
+
+/// A `Stop` event, as [`Extension::stop_gate`] sees it.
+pub struct StopCall<'a> {
+    pub harness: &'a str,
+    pub repo_key: &'a str,
+    pub root: &'a Path,
+    pub session: &'a str,
+    pub paths: &'a Paths,
+    pub index: &'a Index,
+    pub stop_hook_active: bool,
+    /// When the gate must be finished, applying included: the Stop hook's registered timeout,
+    /// less what this event already spent and a reserve for what follows. A gate that cannot
+    /// finish by then does not start.
+    pub deadline: Instant,
+}
+
+/// What a Stop gate decided: continue the agent with this reason (a failure it must see), or let
+/// the turn end with a line for the person. A `Block` reason is a Stop continuation like any
+/// other Adage writes ([`render::finish_line`]): the hook and the learners recognise it as
+/// Adage's own text.
+#[derive(Debug, Clone, PartialEq)]
+pub enum StopGate {
+    Block(String),
+    Notice(String),
+}
+
+/// A Bash call about to run, as [`Extension::pretool_context`] sees it.
+pub struct PreCall<'a> {
+    pub repo_key: &'a str,
+    pub root: &'a Path,
+    /// The session's working directory at this call (the payload's `cwd`): a relative command
+    /// runs from here, which need not be the repository root.
+    pub cwd: &'a Path,
+    pub session: &'a str,
+    pub paths: &'a Paths,
+    pub index: &'a Index,
+    pub command: &'a str,
 }
 
 /// How a binary runs the pipeline.
@@ -219,9 +308,13 @@ pub fn main(harness: String, event: String, opts: Options) -> ! {
 }
 
 pub fn run(harness: &str, event: &str, opts: Options) -> Result<Option<String>, Failure> {
+    // The harness's timeout for this hook counts from about now.
+    let started = Instant::now();
     // Read (or drain) stdin first, whatever happens next.
     let payload = read_payload(&mut std::io::stdin().lock());
-    let Some(adapter) = harness::adapter(harness) else { return Err(Failure::new("config", "unknown harness")) };
+    if harness::adapter(harness).is_none() {
+        return Err(Failure::new("config", "unknown harness"));
+    }
     if std::env::var("ADAGE_DISABLE").is_ok_and(|v| v == "1") {
         return Ok(None);
     }
@@ -232,7 +325,23 @@ pub fn run(harness: &str, event: &str, opts: Options) -> Result<Option<String>, 
         // panic message can: it must never reach the log.
         panic!("injected fault while handling {buf}");
     }
-    let p: Value = serde_json::from_str(&buf)
+    handle(harness, event, &buf, opts, &Paths::from_env(), started)
+}
+
+/// One hook event, once its payload is read: everything [`run`] does after stdin and the kill
+/// switches, with Adage's data directory given (`paths`). `started` is when the hook process
+/// began: the harness's registered timeout counts from then, and the Stop gate's budget is what
+/// is left of it.
+pub fn handle(
+    harness: &str,
+    event: &str,
+    buf: &str,
+    opts: Options,
+    paths: &Paths,
+    started: Instant,
+) -> Result<Option<String>, Failure> {
+    let Some(adapter) = harness::adapter(harness) else { return Err(Failure::new("config", "unknown harness")) };
+    let p: Value = serde_json::from_str(buf)
         .map_err(|e| Failure::new("payload", format!("stdin is not a JSON payload ({:?})", e.classify())))?;
     let Some(harness::Envelope { session, cwd }) = adapter.envelope(&p) else {
         return Err(Failure::new("payload", "no session id or working directory"));
@@ -246,9 +355,8 @@ pub fn run(harness: &str, event: &str, opts: Options) -> Result<Option<String>, 
     if root.join(".adage/disabled").exists() {
         return Ok(None);
     }
-    let paths = Paths::from_env();
     if event == "PreToolUse" {
-        return pretool(adapter, &p, &session, &cwd, &root, &paths);
+        return pretool(adapter, &p, &session, &cwd, &root, paths, opts.extension);
     }
     // A damaged index (a truncated write, a disk error) is served as empty and rebuilt: the
     // session start asks the learner to recompile it (docs/zero-config.md §5).
@@ -259,21 +367,101 @@ pub fn run(harness: &str, event: &str, opts: Options) -> Result<Option<String>, 
         Some(find) => find().ok_or_else(|| Failure::new("condition", "finding the adage binary: not found")),
         None => std::env::current_exe().map_err(|e| Failure::io("condition", "finding the adage binary", &e)),
     };
-    if matches!(adapter.translate(event, &p, &cwd.to_string_lossy()), Some(Event::SessionStart)) {
-        let start =
-            Start { adapter, harness, event, session: &session, root: &root, in_repo, paths: &paths, index: &index };
-        return session_start(&start, damaged, &learner);
+    let translated = adapter.translate(event, &p, &cwd.to_string_lossy());
+    if matches!(translated, Some(Event::SessionStart)) {
+        let start = Start { adapter, harness, event, session: &session, root: &root, in_repo, paths, index: &index };
+        return session_start(&start, damaged, &learner, opts.extension);
     }
-    let out = respond(adapter, harness, event, &p, &session, &cwd, &root, &paths, opts, &index);
+    // Decide first, always: the session's bookkeeping (a learned obligation's Stop request, an
+    // at-Stop action) must not depend on what the finish-line gate finds (review F1).
+    let responded = respond(adapter, harness, event, &p, &session, &cwd, &root, paths, opts, &index);
+    let out = match (translated, opts.extension) {
+        (Some(Event::Stop { stop_hook_active }), Some(x)) if in_repo => {
+            // One hook never stages two actions: when an approved action already ran for this
+            // Stop's obligation, the gate waits for the next Stop (review F4).
+            let acted = responded.as_ref().is_ok_and(|r| r.at_stop_action);
+            let gate = if acted {
+                None
+            } else {
+                let keys: std::collections::BTreeSet<&str> = index.routes.iter().map(|r| r.repo.as_str()).collect();
+                repo::lookup_key(&root, Some(&paths.repo_keys()), &keys).and_then(|repo_key| {
+                    let call = StopCall {
+                        harness,
+                        repo_key: &repo_key,
+                        root: &root,
+                        session: &session,
+                        paths,
+                        index: &index,
+                        stop_hook_active,
+                        deadline: stop_deadline(started),
+                    };
+                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| x.stop_gate(&call))).ok().flatten()
+                })
+            };
+            if let Some(g) = &gate {
+                let ts = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+                let rec = json!({ "ts": ts, "event": event, "kind": "stop_gate", "blocked": matches!(g, StopGate::Block(_)) });
+                if let Err(e) = spool::append(&paths.spool(&session), &rec) {
+                    let f = Failure::io("spool", "appending to the session spool", &e);
+                    failopen::record(&paths.root, harness, event, &f);
+                }
+            }
+            match (gate, responded) {
+                (None, r) => r.map(|r| r.out),
+                (Some(g), Err(f)) => {
+                    // The decision failed (and ran nothing); the gate's result still stands.
+                    failopen::record(&paths.root, harness, event, &f);
+                    Ok(Some(gate_output(g)))
+                }
+                (Some(g), Ok(r)) => Ok(Some(with_gate(g, r.out))),
+            }
+            .map(|o| o.and_then(|o| adapter.render(event, o)))
+        }
+        _ => responded.map(|r| r.out.and_then(|o| adapter.render(event, o))),
+    };
     if in_repo && adapter.is_learn_point(event) {
         let transcript = p.get("transcript_path").and_then(|v| v.as_str());
         let learned = learner()
-            .and_then(|l| autolearn::on_turn_end(&paths, &root, adapter.name(), transcript, &l, false).map(drop));
+            .and_then(|l| autolearn::on_turn_end(paths, &root, adapter.name(), transcript, &l, false).map(drop));
         if let Err(f) = learned {
             failopen::record(&paths.root, harness, event, &f);
         }
     }
     out
+}
+
+/// Kept back from the Stop hook's registered timeout for what follows the gate (the spool
+/// record, the learner request, the output).
+const STOP_RESERVE: Duration = Duration::from_secs(2);
+
+/// When the Stop gate must be done, applying included: the registered timeout of a Stop hook
+/// that runs actions ([`harness::ACTION_HOOK_TIMEOUT_S`]) from the hook's start, less
+/// [`STOP_RESERVE`]. Whatever the event already spent is deducted.
+fn stop_deadline(started: Instant) -> Instant {
+    started + Duration::from_secs(u64::from(harness::ACTION_HOOK_TIMEOUT_S)) - STOP_RESERVE
+}
+
+/// A gate result alone.
+fn gate_output(g: StopGate) -> Output {
+    match g {
+        StopGate::Block(reason) => Output::Continue(reason),
+        StopGate::Notice(n) => Output::Notice(n),
+    }
+}
+
+/// The gate's result with the decision's output for the same Stop. A failing gate's
+/// continuation and a learned obligation's request (or an action's) both reach the agent, in one
+/// continuation; a passing gate's line for the person yields to anything for the agent.
+fn with_gate(g: StopGate, decided: Option<Output>) -> Output {
+    match (g, decided) {
+        (StopGate::Block(reason), Some(Output::Continue(other))) => {
+            Output::Continue(render::join_finish_lines(&reason, &other))
+        }
+        // A Stop carries no context: anything else decided here has no channel at a Stop.
+        (StopGate::Block(reason), _) => Output::Continue(reason),
+        (StopGate::Notice(_), Some(o)) => o,
+        (StopGate::Notice(n), None) => Output::Notice(n),
+    }
 }
 
 /// The marker `adage delegate rewrites off` (and `delegate off`) writes: no `PreToolUse` rewrite on
@@ -365,6 +553,7 @@ fn pretool(
     cwd: &Path,
     root: &Path,
     paths: &Paths,
+    extension: Option<&'static dyn Extension>,
 ) -> Result<Option<String>, Failure> {
     use adage_runtime::pretool::{self, Pre};
     if adapter.name() != "claude" || p.get("tool_name").and_then(Value::as_str) != Some("Bash") {
@@ -378,19 +567,52 @@ fn pretool(
     if !command.split(|c: char| !(c.is_ascii_alphanumeric() || c == '.' || c == '_')).any(python_word) {
         return Ok(None);
     }
+    let key = repo::repo_key_cached(root, &paths.repo_keys());
+    // A current receipt covering this call, whatever the interpreter advice below decides. Only
+    // treated sessions hold receipts; the extension rechecks freshness now.
+    let control = || {
+        state::try_read::<SessionState>(&paths.state(session))
+            .ok()
+            .flatten()
+            .is_some_and(|s| s.arm == Some(Arm::Control))
+    };
+    // Like every other extension call: a panic loses only this note, never the call's rewrite.
+    let receipt = extension.filter(|_| !control()).and_then(|x| {
+        let index = Index::try_load(&paths.index()).unwrap_or_default();
+        let call = PreCall { repo_key: &key, root, cwd, session, paths, index: &index, command };
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| x.pretool_context(&call))).ok().flatten()
+    });
+    // A receipt delivered with no rewrite or advice beside it is recorded too (with no `pretool`
+    // action), so evaluation sees every delivery.
+    let only_receipt = || {
+        let text = receipt.clone()?;
+        let st = state::try_read::<SessionState>(&paths.state(session)).ok().flatten();
+        let ts = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+        let rec = json!({ "ts": ts, "event": "PreToolUse", "kind": "pretool", "arm": st.as_ref().and_then(|s| s.arm),
+                          "propensity": st.as_ref().and_then(|s| s.propensity), "repo": key, "receipt": true });
+        if let Err(e) = spool::append(&paths.spool(session), &rec) {
+            // Measurement is lost, but the note stands.
+            failopen::record(
+                &paths.root,
+                adapter.name(),
+                "PreToolUse",
+                &Failure::io("spool", "appending to the session spool", &e),
+            );
+        }
+        adapter.render("PreToolUse", Output::Context(text))
+    };
     // The person started the session in an environment of their choosing (a virtualenv, a conda
     // environment): `python` and `pip` are that environment's, and Adage leaves them alone.
     if ["VIRTUAL_ENV", "CONDA_PREFIX"].iter().any(|v| std::env::var_os(v).is_some_and(|x| !x.is_empty())) {
-        return Ok(None);
+        return Ok(only_receipt());
     }
     // Off with `runtime.rewrite = false` (`adage delegate rewrites off`), or the older marker.
     let cfg = adage_store::config::load(paths).config;
     if !cfg.runtime_rewrite || rewrite_off(paths).exists() {
-        return Ok(None);
+        return Ok(only_receipt());
     }
-    let key = repo::repo_key_cached(root, &paths.repo_keys());
-    let Some(binding) = adage_learn::instincts::binding(&paths.tracks(), &key) else { return Ok(None) };
-    let Some(mut env) = binding.env else { return Ok(None) };
+    let Some(binding) = adage_learn::instincts::binding(&paths.tracks(), &key) else { return Ok(only_receipt()) };
+    let Some(mut env) = binding.env else { return Ok(only_receipt()) };
     let venv = root.join(env.interpreter.strip_suffix("/bin/python").unwrap_or(".venv"));
     if Path::new(&binding.root) != root {
         // Another checkout of the repository (a per-task worktree, a fresh clone) until the
@@ -405,7 +627,7 @@ fn pretool(
             .any(|e| e.path().join("site-packages/pytest/__init__.py").is_file());
         let usable = root.join(&env.interpreter).is_file() && venv.join("pyvenv.cfg").is_file() && pytest;
         if !(usable && env_of_checkout(&venv, root, Path::new(&binding.root))) {
-            return Ok(None);
+            return Ok(only_receipt());
         }
         env.pytest = true;
         env.modules.clear();
@@ -416,12 +638,15 @@ fn pretool(
         matches!(&r.route.evidence.origin, Some(adage_tracks::Origin::Instinct { instinct, .. }) if instinct == "U11")
     });
     if !u11 {
-        return Ok(None);
+        return Ok(only_receipt());
     }
     let abs = root.join(&env.interpreter);
     let e = pretool::Env {
         interpreter: pretool::shell_word(&abs.to_string_lossy()),
         shown: env.interpreter.clone(),
+        // At the root, the command names the interpreter as the person (and their permission
+        // rules) do: `.venv/bin/python` (first-run QA item 7).
+        relative: Path::new(&env.interpreter).is_relative().then(|| pretool::shell_word(&env.interpreter)),
         pytest: env.pytest,
         modules: env.modules.clone(),
         root: root.to_path_buf(),
@@ -434,10 +659,10 @@ fn pretool(
         let small = std::fs::metadata(&p).is_ok_and(|m| m.is_file() && m.len() <= 256 << 10);
         small.then(|| std::fs::read_to_string(&p).ok()).flatten()
     };
-    let Some(mut pre) = pretool::plan(command, &e, read) else { return Ok(None) };
+    let Some(mut pre) = pretool::plan(command, &e, read) else { return Ok(only_receipt()) };
     // A rewrite the person's permission rules would treat differently from the command as written
     // is advice instead (review S4).
-    if let Pre::Rewrite { command: new, kind, segments } = &pre {
+    if let Pre::Rewrite { command: new, kind, segments, .. } = &pre {
         let mode = p.get("permission_mode").and_then(Value::as_str);
         if !pretool::keeps_permissions(segments, &claude_allow_rules(root), mode) {
             pre = Pre::Advise { reason: pretool::permission_advice(&e, kind, new), kind: "permissions" };
@@ -457,28 +682,34 @@ fn pretool(
     })
     .map_err(|e| Failure::io("state", "assigning the session's arm", &e))?;
     let control = arm == Some(Arm::Control);
+    // The receipt leads: a covered run is evidence already in hand, the interpreter is secondary.
+    let lead = |text: String| match &receipt {
+        Some(r) => format!("{r}\n{text}"),
+        None => text,
+    };
     let (what, out) = match &pre {
-        Pre::Rewrite { command: new, kind, .. } => {
+        Pre::Rewrite { command: new, kind, interpreter, .. } => {
             let mut updated = input.clone();
             updated["command"] = Value::String(new.clone());
+            // Both notes name the interpreter word that was substituted, as it now reads in the command.
             let notice = format!(
                 "adage: pointed this {} at {} (the project's environment).",
                 if *kind == "test" { "test run" } else { "Python run" },
-                env.interpreter
+                interpreter
             );
             (
                 json!({ "rewrite": kind, "interpreter": env.interpreter }),
-                Output::Rewrite { input: updated, context: pretool::rewrite_note(&e, kind), notice },
+                Output::Rewrite { input: updated, context: lead(pretool::rewrite_note(interpreter, kind)), notice },
             )
         }
         // Advice, never a refusal: the command runs as written, and the person's own permission
         // rules decide it (review B2).
         Pre::Advise { reason, kind } => {
-            (json!({ "advise": kind, "interpreter": env.interpreter }), Output::Context(reason.clone()))
+            (json!({ "advise": kind, "interpreter": env.interpreter }), Output::Context(lead(reason.clone())))
         }
     };
     let ts = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
-    let mut rec = json!({ "ts": ts, "event": "PreToolUse", "kind": "pretool", "arm": arm, "propensity": propensity, "repo": key, "pretool": what });
+    let mut rec = json!({ "ts": ts, "event": "PreToolUse", "kind": "pretool", "arm": arm, "propensity": propensity, "repo": key, "pretool": what, "receipt": receipt.is_some() });
     if control {
         rec["withheld"] = json!(true);
     }
@@ -520,6 +751,7 @@ fn session_start(
     s: &Start<'_>,
     damaged: bool,
     learner: &dyn Fn() -> Result<PathBuf, Failure>,
+    extension: Option<&dyn Extension>,
 ) -> Result<Option<String>, Failure> {
     let keys: std::collections::BTreeSet<&str> = s.index.routes.iter().map(|r| r.repo.as_str()).collect();
     let routed = repo::lookup_key(s.root, Some(&s.paths.repo_keys()), &keys);
@@ -580,12 +812,40 @@ fn session_start(
             failopen::record(&s.paths.root, s.harness, s.event, &f);
         }
     }
+    let context = if !damaged
+        && s.adapter.name() != "opencode"
+        && state::try_read::<SessionState>(&s.paths.state(s.session))
+            .ok()
+            .flatten()
+            .is_some_and(|st| st.arm == Some(Arm::Treated))
+    {
+        extension
+            .and_then(|ext| {
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    ext.session_texts(&key, s.root, s.index, s.paths)
+                }))
+                .ok()
+            })
+            .unwrap_or_default()
+    } else {
+        SessionTexts::default()
+    };
+    // A grant that stopped matching is said once per session, beside any other notice.
+    let lapse = context.notice.filter(|_| cfg.ui_notices && first_lapse_notice(s.paths, s.session));
+    let context = context.context.filter(|text| text.len() <= s.adapter.max_context());
     if damaged || !cfg.ui_notices {
-        return Ok(None);
+        return Ok(
+            context.and_then(|context| s.adapter.render(s.event, Output::SessionContext { context, notice: None }))
+        );
     }
-    let text = if bootstrap && first {
+    // Set up from a terminal (`adage init --yes`, `adage condition`): reflexes are in place before
+    // the first session here, so there is no bootstrap to announce. Say what is in effect, once.
+    let ready = first && !bootstrap && cfg.learn_auto && routed.is_some();
+    let text = if (bootstrap || ready) && first {
         let now = autolearn::now_ms();
-        match autolearn::write_json(&q.shown(), &autolearn::Shown { id: "bootstrap".into(), at: now }) {
+        let id = if ready { "ready" } else { "bootstrap" };
+        match autolearn::write_json(&q.shown(), &autolearn::Shown { id: id.into(), at: now }) {
+            Ok(()) if ready => Some(ready_notice(s.index, &key)),
             Ok(()) => Some(first_notice(s.root, &cfg)),
             // The data directory cannot be written: nothing can be learned, and a notice shown now
             // could not be remembered, so it would repeat at every session start. Say what is
@@ -595,7 +855,14 @@ fn session_start(
     } else {
         autolearn::take_notice(s.paths, &key)
     };
-    Ok(text.and_then(|t| s.adapter.render(s.event, Output::Notice(t))))
+    let text = match (text, lapse) {
+        (Some(t), Some(l)) => Some(format!("{t}\n{l}")),
+        (t, l) => t.or(l),
+    };
+    Ok(match context {
+        Some(context) => s.adapter.render(s.event, Output::SessionContext { context, notice: text }),
+        None => text.and_then(|t| s.adapter.render(s.event, Output::Notice(t))),
+    })
 }
 
 /// What the first session in a repository says: how many of its earlier traces Adage is learning
@@ -613,6 +880,28 @@ fn first_notice(root: &Path, cfg: &adage_store::config::Config) -> String {
         1 => "adage: learning from 1 past session in this repo; reflexes arrive within a minute. Nothing runs without you.".into(),
         n => format!("adage: learning from {n} past sessions in this repo; reflexes arrive within a minute. Nothing runs without you."),
     }
+}
+
+/// What the first session says in a repository set up from a terminal: what is in effect (as the
+/// status card counts it: reflexes said to the agent, learned and instincts) and that Adage keeps
+/// learning.
+fn ready_notice(index: &Index, repo: &str) -> String {
+    let (mut learned, mut instincts) = (0usize, 0usize);
+    for r in index.for_repo(repo).filter(|r| !r.exec_only()) {
+        if r.route.is_instinct() {
+            instincts += 1;
+        } else {
+            learned += 1;
+        }
+    }
+    let n = |k: usize, one: &str, many: &str| if k == 1 { format!("1 {one}") } else { format!("{k} {many}") };
+    let what = match (learned, instincts) {
+        (0, 0) => return "adage: set up in this repo; it keeps learning as you work. Nothing runs without you.".into(),
+        (0, i) => n(i, "instinct", "instincts"),
+        (l, 0) => n(l, "reflex", "reflexes"),
+        (l, i) => format!("{} and {}", n(l, "reflex", "reflexes"), n(i, "instinct", "instincts")),
+    };
+    format!("adage: {what} active in this repo; it keeps learning as you work. Nothing runs without you.")
 }
 
 /// The one line said when the data directory cannot be written (at most once per data
@@ -652,7 +941,7 @@ fn record_start(s: &Start<'_>, repo_key: &str) -> Result<(), Failure> {
         .map_err(|e| Failure::io("spool", "appending to the session spool", &e))
 }
 
-/// Decide and render: everything after the kill switches.
+/// Decide: everything after the kill switches, up to rendering.
 #[allow(clippy::too_many_arguments)]
 fn respond(
     adapter: &dyn harness::Adapter,
@@ -665,19 +954,19 @@ fn respond(
     paths: &Paths,
     opts: Options,
     index: &Index,
-) -> Result<Option<String>, Failure> {
+) -> Result<Responded, Failure> {
     let keys: std::collections::BTreeSet<&str> = index.routes.iter().map(|r| r.repo.as_str()).collect();
     let Some(repo_key) = repo::lookup_key(root, Some(&paths.repo_keys()), &keys) else {
-        return Ok(None); // nothing installed for this repository: the common, cheapest path
+        return Ok(Responded::default()); // nothing installed for this repository: the common, cheapest path
     };
     // An event this adapter does not act on.
-    let Some(ev) = adapter.translate(event, p, &cwd.to_string_lossy()) else { return Ok(None) };
+    let Some(ev) = adapter.translate(event, p, &cwd.to_string_lossy()) else { return Ok(Responded::default()) };
     // An event that cannot change any decision stops here, before the command table, the state
     // lock and the spool (Design §13.2; `adage_runtime::fast`).
     let state_path = paths.state(session);
     let read_state = || state::try_read::<SessionState>(&state_path).ok().flatten();
     if fast::skip(&index.triggers(&repo_key), &ev, &cwd.to_string_lossy(), read_state) {
-        return Ok(None);
+        return Ok(Responded::default());
     }
     let table = CommandTable::load();
     // The embedding model is opened only if the runtime asks, which it does only at a prompt in a
@@ -729,8 +1018,18 @@ fn respond(
             });
             let before: Vec<(String, bool)> =
                 st.obligations.iter().map(|o| (o.route.clone(), o.stop_requested)).collect();
+            // ADAGE_CARD_CHECKS=0 (an evaluation knob, like ADAGE_ARM) leaves the card's test-command
+            // line out.
+            let card_checks = std::env::var("ADAGE_CARD_CHECKS").map_or(true, |v| v != "0");
+            // ADAGE_CARD_ORIENTATION=0 (likewise) gives the card its earlier form: the exemplar of the
+            // last edit instead of where its files stand in the checkout now.
+            let card_orientation = std::env::var("ADAGE_CARD_ORIENTATION").map_or(true, |v| v != "0");
             let d = adage_runtime::with_follow_weights(weights.clone(), || {
-                adage_runtime::with_exec_only(exec_only.clone(), || decide(&ctx, st, &ev))
+                adage_runtime::with_card_checks(card_checks, || {
+                    adage_runtime::with_card_orientation(card_orientation, || {
+                        adage_runtime::with_exec_only(exec_only.clone(), || decide(&ctx, st, &ev))
+                    })
+                })
             });
             let stims = stimuli(&before, &st.obligations, matches!(ev, Event::Batch { .. }));
             (d, st.arm, propensity, stims)
@@ -804,19 +1103,35 @@ fn respond(
         failopen::record(&paths.root, harness, event, &Failure::io("spool", "appending to the session spool", &e));
     }
 
+    let at_stop_action = delivery.at_stop_action;
+    let done = |out: Option<Output>| Ok(Responded { out, at_stop_action });
     if let Some(warning) = delivery.recovery.take() {
-        return Ok(bounded_notice(warning, RECOVERY_NOTICE, adapter.max_context()).and_then(|text| {
-            adapter.render(
-                event,
-                if matches!(ev, Event::Stop { .. }) { Output::Continue(text) } else { Output::Context(text) },
-            )
+        return done(bounded_notice(warning, RECOVERY_NOTICE, adapter.max_context()).map(|text| {
+            // At a Stop the warning is a continuation, marked as Adage's own text like every other.
+            if matches!(ev, Event::Stop { .. }) {
+                Output::Continue(render::finish_line(&text))
+            } else {
+                Output::Context(text)
+            }
         }));
     }
     if let Some(reason) = decision.continue_reason {
-        return Ok(adapter.render(event, Output::Continue(reason)));
+        return done(Some(Output::Continue(reason)));
     }
+    // A grant that stopped matching: one line for the person, once per session, beside whatever
+    // the agent receives (never at a Stop, which has no such channel).
+    let lapse = delivery.notice.take().filter(|_| {
+        !matches!(ev, Event::Stop { .. })
+            && adage_store::config::load(paths).config.ui_notices
+            && first_lapse_notice(paths, session)
+    });
+    let with_lapse = |text: String| match &lapse {
+        Some(n) if !text.is_empty() => Output::SessionContext { context: text, notice: Some(n.clone()) },
+        Some(n) => Output::Notice(n.clone()),
+        None => Output::Context(text),
+    };
     if decision.directives.is_empty() && delivery.extra.is_empty() {
-        return Ok(None);
+        return done(lapse.map(Output::Notice));
     }
     let max = adapter.max_context();
     let e0 = || decision.directives.iter().map(render::wrap_directive).collect::<Vec<_>>().join("\n\n");
@@ -829,19 +1144,135 @@ fn respond(
     // An applied action cannot fall back to its original "run this" directive on overflow.
     let mut text = fitted_context(all.join("\n\n"), e0, !delivery.met.is_empty(), max);
     if text.is_empty() {
-        return Ok(None);
+        return done(lapse.map(Output::Notice));
     }
     // Design W8 (spill overflow to a file) cannot arise: the longest decision validation allows
     // fits every harness's cap (`the_largest_decision_fits_every_harness_cap`). This is a backstop.
     if text.len() > max {
         text.truncate(text.char_indices().take_while(|(i, _)| *i < max).last().map(|(i, _)| i).unwrap_or(0));
     }
-    Ok(adapter.render(event, Output::Context(text)))
+    done(Some(with_lapse(text)))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn session_contract_and_person_notice_use_separate_channels() {
+        use crate::harness::Adapter;
+        let value = harness::claude::Claude
+            .render(
+                "SessionStart",
+                Output::SessionContext { context: "model contract".into(), notice: Some("person notice".into()) },
+            )
+            .unwrap();
+        let value: Value = serde_json::from_str(&value).unwrap();
+        assert_eq!(value["hookSpecificOutput"]["additionalContext"], "model contract");
+        assert_eq!(value["systemMessage"], "person notice");
+    }
+
+    #[test]
+    fn pretool_receipt_context_reaches_a_python_test_call_without_any_rewrite() {
+        struct Receipts;
+        impl Extension for Receipts {
+            fn deliver(&self, _: &Turn<'_>, _: &[Directive]) -> Delivery {
+                Delivery::default()
+            }
+            fn pretool_context(&self, call: &PreCall<'_>) -> Option<String> {
+                call.command.contains("pytest").then(|| format!("receipt for {}", call.session))
+            }
+        }
+        static RECEIPTS: Receipts = Receipts;
+        let temp = tempfile::tempdir().unwrap();
+        let paths = Paths::at(temp.path().join("home"));
+        let root = temp.path().join("repo");
+        std::fs::create_dir_all(&root).unwrap();
+        let call = |command: &str| {
+            let p = json!({ "tool_name": "Bash", "tool_input": { "command": command } });
+            pretool(&harness::claude::Claude, &p, "s-1", &root, &root, &paths, Some(&RECEIPTS)).unwrap()
+        };
+        let out: Value =
+            serde_json::from_str(&call(".venv/bin/python -m pytest tests/test_x.py::t -q").unwrap()).unwrap();
+        assert_eq!(out["hookSpecificOutput"]["additionalContext"], "receipt for s-1");
+        assert!(out["hookSpecificOutput"].get("updatedInput").is_none(), "context only, never a rewrite or refusal");
+        assert!(out["hookSpecificOutput"].get("permissionDecision").is_none());
+        assert!(call(".venv/bin/python -c 'print(1)'").is_none());
+        assert!(call("git status").is_none());
+        // F8: a receipt delivered alone is recorded, with no rewrite or advice in the record.
+        let recs: Vec<Value> = spool::read_all(&paths.spool("s-1")).unwrap();
+        assert_eq!(recs.len(), 1, "{recs:?}");
+        assert_eq!((recs[0]["kind"].as_str(), recs[0]["receipt"].as_bool()), (Some("pretool"), Some(true)));
+        assert!(recs[0].get("pretool").is_none(), "{recs:?}");
+        state::update::<SessionState, _>(&paths.state("s-1"), |st| st.arm = Some(Arm::Control)).unwrap();
+        assert!(call(".venv/bin/python -m pytest tests/test_x.py -q").is_none(), "never in the control arm");
+        let p = json!({ "tool_name": "Bash", "tool_input": { "command": "python -m pytest" } });
+        assert!(pretool(&harness::claude::Claude, &p, "s-1", &root, &root, &paths, None).unwrap().is_none());
+    }
+
+    /// F8: `pretool_context` is wrapped like every other extension call: a panic there loses only
+    /// the note, and the hook still answers.
+    #[test]
+    fn a_panicking_receipt_check_loses_only_the_note() {
+        struct Panics;
+        impl Extension for Panics {
+            fn deliver(&self, _: &Turn<'_>, _: &[Directive]) -> Delivery {
+                Delivery::default()
+            }
+            fn pretool_context(&self, _: &PreCall<'_>) -> Option<String> {
+                panic!("a receipt check that panics")
+            }
+        }
+        static PANICS: Panics = Panics;
+        let temp = tempfile::tempdir().unwrap();
+        let paths = Paths::at(temp.path().join("home"));
+        let root = temp.path().join("repo");
+        std::fs::create_dir_all(&root).unwrap();
+        let p = json!({ "tool_name": "Bash", "tool_input": { "command": ".venv/bin/python -m pytest tests -q" } });
+        let out = pretool(&harness::claude::Claude, &p, "s-1", &root, &root, &paths, Some(&PANICS));
+        assert!(matches!(out, Ok(None)), "{out:?}");
+    }
+
+    #[test]
+    fn session_contract_is_treatment_only_and_independent_of_ui_notices() {
+        struct Contract;
+        impl Extension for Contract {
+            fn deliver(&self, _: &Turn<'_>, _: &[Directive]) -> Delivery {
+                Delivery::default()
+            }
+            fn session_context(&self, _: &str, _: &Path, _: &Index, _: &Paths) -> Option<String> {
+                Some("test execution contract".into())
+            }
+        }
+        let temp = tempfile::tempdir().unwrap();
+        let paths = Paths::at(temp.path().join("home"));
+        std::fs::create_dir_all(&paths.root).unwrap();
+        std::fs::write(paths.root.join("config.toml"), "[learn]\nauto = false\n[ui]\nnotices = \"off\"\n").unwrap();
+        let index = Index::default();
+        let start = Start {
+            adapter: &harness::claude::Claude,
+            harness: "claude",
+            event: "SessionStart",
+            session: "contract-test",
+            root: temp.path(),
+            in_repo: true,
+            paths: &paths,
+            index: &index,
+        };
+        let learner = || Err(Failure::new("test", "no learner needed"));
+        for (arm, expected) in [(Arm::Control, false), (Arm::Treated, true)] {
+            state::update::<SessionState, _>(&paths.state(start.session), |st| st.arm = Some(arm)).unwrap();
+            let result = session_start(&start, false, &learner, Some(&Contract)).unwrap();
+            assert_eq!(result.is_some(), expected);
+            if let Some(result) = result {
+                let result: Value = serde_json::from_str(&result).unwrap();
+                assert_eq!(result["hookSpecificOutput"]["additionalContext"], "test execution contract");
+                assert!(result.get("systemMessage").is_none());
+            }
+        }
+        assert!(session_start(&start, true, &learner, Some(&Contract)).unwrap().is_none());
+        assert!(session_start(&start, false, &learner, None).unwrap().is_none());
+    }
 
     #[test]
     fn execution_fallback_never_reintroduces_an_action_after_an_uncertain_result() {
@@ -905,6 +1336,226 @@ mod tests {
             fresh,
             ..Default::default()
         }
+    }
+
+    /// A stand-in for adage-exec: its finish-line gate answers from a script (one answer per Stop,
+    /// in order), and it counts how often it was asked.
+    struct Scripted {
+        answers: std::sync::Mutex<Vec<StopGate>>,
+        asked: std::sync::atomic::AtomicUsize,
+    }
+
+    impl Extension for Scripted {
+        fn deliver(&self, _: &Turn<'_>, _: &[Directive]) -> Delivery {
+            Delivery::default()
+        }
+        fn stop_gate(&self, _: &StopCall<'_>) -> Option<StopGate> {
+            self.asked.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            let mut a = self.answers.lock().unwrap();
+            (!a.is_empty()).then(|| a.remove(0))
+        }
+    }
+
+    fn scripted(answers: Vec<StopGate>) -> &'static Scripted {
+        Box::leak(Box::new(Scripted { answers: std::sync::Mutex::new(answers), asked: Default::default() }))
+    }
+
+    /// A treated session in a repository whose one learned reflex is a finish-line obligation:
+    /// after an edit to `registry/*.csv`, run `make gen`.
+    struct ObligationWorld {
+        _temp: tempfile::TempDir,
+        root: PathBuf,
+        paths: Paths,
+    }
+
+    impl ObligationWorld {
+        fn new() -> Self {
+            use adage_tracks::{index::IndexedRoute, Evidence, Route, RouteState, Step, Strength, Trigger};
+            let temp = tempfile::tempdir().unwrap();
+            let root = temp.path().canonicalize().unwrap().join("acme");
+            std::fs::create_dir_all(root.join(".git")).unwrap();
+            std::fs::create_dir_all(root.join("registry")).unwrap();
+            let paths = Paths::at(temp.path().join("home"));
+            std::fs::create_dir_all(&paths.root).unwrap();
+            std::fs::write(paths.root.join("config.toml"), "[learn]\nauto = false\n").unwrap();
+            let route = Route {
+                id: "regenerate-registry".into(),
+                summary: String::new(),
+                trigger: Trigger::AfterEdit { paths: "registry/*.csv".into() },
+                step: Step::Run { command: "make gen".into() },
+                slots: vec![],
+                effect: adage_core::Effect::Regenerate,
+                strength: Strength::Fire,
+                state: RouteState::Firm,
+                exit: vec![],
+                evidence: Evidence { support: 5, opportunities: 5, days: 3, ..Default::default() },
+                authored: false,
+            };
+            let index = Index {
+                generation: "obligation-world".into(),
+                routes: vec![IndexedRoute {
+                    repo: "acme".into(),
+                    track: "acme/finish-lines".into(),
+                    version: "0.1.0".into(),
+                    exec: None,
+                    route,
+                }],
+                ..Default::default()
+            };
+            index.write_atomic(&paths.index()).unwrap();
+            state::update::<SessionState, _>(&paths.state("s"), |st| st.arm = Some(Arm::Treated)).unwrap();
+            ObligationWorld { _temp: temp, root, paths }
+        }
+
+        fn event(&self, ext: &'static dyn Extension, event: &str, extra: Value) -> Option<Value> {
+            let mut p = json!({ "session_id": "s", "cwd": self.root });
+            for (k, v) in extra.as_object().unwrap() {
+                p[k] = v.clone();
+            }
+            let opts = Options { learner: None, extension: Some(ext) };
+            let out = handle("claude", event, &p.to_string(), opts, &self.paths, Instant::now()).unwrap();
+            out.map(|o| serde_json::from_str(&o).unwrap())
+        }
+
+        fn edit(&self, ext: &'static dyn Extension) -> Option<Value> {
+            let call = json!({ "tool_name": "Edit", "tool_use_id": "t1", "tool_response": "ok",
+                               "tool_input": { "file_path": self.root.join("registry/currencies.csv") } });
+            self.event(ext, "PostToolBatch", json!({ "tool_calls": [call] }))
+        }
+
+        fn stop(&self, ext: &'static dyn Extension, active: bool) -> Option<Value> {
+            self.event(ext, "Stop", json!({ "stop_hook_active": active }))
+        }
+
+        fn state(&self) -> SessionState {
+            state::try_read::<SessionState>(&self.paths.state("s")).unwrap().unwrap()
+        }
+    }
+
+    /// F1: a Stop-gate block no longer hides a learned finish-line obligation. The gate fails at
+    /// the first Stop and the obligation is due there too: the agent gets both in one
+    /// continuation. At the next Stop the gate passes, and the obligation has been requested.
+    #[test]
+    fn a_failing_stop_gate_keeps_the_learned_obligation_request() {
+        let w = ObligationWorld::new();
+        let failed = render::stop_gate_failed(".venv/bin/python -m pytest tests -q", Some(1), None);
+        let ext = scripted(vec![
+            StopGate::Block(failed.clone()),
+            StopGate::Notice(
+                "adage: ran `.venv/bin/python -m pytest tests -q` at finish: passed (exit 0, 1.0 s).".into(),
+            ),
+        ]);
+        let directive = w.edit(ext).expect("the edit arms the obligation");
+        assert!(directive["hookSpecificOutput"]["additionalContext"].as_str().unwrap().contains("make gen"));
+        let first = w.stop(ext, false).expect("the gate failed: the agent continues");
+        assert_eq!(first["decision"], "block");
+        let reason = first["reason"].as_str().unwrap();
+        assert!(reason.contains("it failed (exit 1)"), "the gate's failure: {reason}");
+        assert!(reason.contains("running `make gen`"), "the obligation's request is not lost: {reason}");
+        assert!(harness::is_own_text(reason), "{reason}");
+        let st = w.state();
+        assert!(st.obligations[0].stop_requested && st.stop_requests == 1, "{:?}", st.obligations);
+        // The agent fixes the failure and finishes again: the gate passes; nothing is lost.
+        let second = w.stop(ext, true).expect("the person's line");
+        assert!(second["systemMessage"].as_str().unwrap().contains("passed"), "{second}");
+        assert_eq!(ext.asked.load(std::sync::atomic::Ordering::SeqCst), 2);
+        assert_eq!(w.state().stop_requests, 1, "requested once");
+    }
+
+    /// F4: when an approved action already ran for this Stop's obligation request, the gate does
+    /// not also run in the same hook (two staged runs could outlast the Stop hook's timeout); it
+    /// runs at the next Stop. The gate's deadline is the registered timeout from the hook's start,
+    /// less a reserve, so what the event already spent is deducted.
+    #[test]
+    fn an_action_at_stop_leaves_the_gate_for_the_next_stop() {
+        struct ActsAtStop {
+            asked: std::sync::atomic::AtomicUsize,
+            deadlines: std::sync::Mutex<Vec<Instant>>,
+        }
+        impl Extension for ActsAtStop {
+            fn deliver(&self, turn: &Turn<'_>, _: &[Directive]) -> Delivery {
+                let at_stop: Vec<String> = turn.stimuli.iter().filter(|s| s.at_stop).map(|s| s.route.clone()).collect();
+                // As adage-exec does for an applied at-Stop action: met, and the request withdrawn.
+                Delivery {
+                    at_stop_action: !at_stop.is_empty(),
+                    stop: (!at_stop.is_empty()).then_some(None),
+                    met: at_stop,
+                    ..Delivery::default()
+                }
+            }
+            fn stop_gate(&self, call: &StopCall<'_>) -> Option<StopGate> {
+                self.asked.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                self.deadlines.lock().unwrap().push(call.deadline);
+                Some(StopGate::Notice("adage: ran `make test` at finish: passed (exit 0, 0.1 s).".into()))
+            }
+        }
+        let ext: &'static ActsAtStop =
+            Box::leak(Box::new(ActsAtStop { asked: Default::default(), deadlines: Default::default() }));
+        let w = ObligationWorld::new();
+        w.edit(ext).expect("the obligation is announced");
+        assert!(w.stop(ext, false).is_none(), "the action met the obligation: the turn ends");
+        assert_eq!(ext.asked.load(std::sync::atomic::Ordering::SeqCst), 0, "no gate beside an action");
+        assert!(w.state().obligations[0].met);
+        let before = Instant::now();
+        let next = w.stop(ext, false).expect("the gate runs at the next Stop");
+        assert!(next["systemMessage"].as_str().unwrap().contains("passed"), "{next}");
+        assert_eq!(ext.asked.load(std::sync::atomic::Ordering::SeqCst), 1);
+        let deadline = ext.deadlines.lock().unwrap()[0];
+        let timeout = Duration::from_secs(u64::from(harness::ACTION_HOOK_TIMEOUT_S));
+        assert!(deadline <= before + timeout - STOP_RESERVE + Duration::from_secs(1), "within the timeout");
+        // Time the event already spent is deducted.
+        let started = Instant::now() - Duration::from_secs(10);
+        assert_eq!(stop_deadline(started), started + timeout - STOP_RESERVE);
+    }
+
+    /// A grant that stopped matching is told to the person (Claude Code's `systemMessage`, never
+    /// the model), at most once per session: at the session start, or beside the first event
+    /// whose action it withheld.
+    #[test]
+    fn a_lapsed_grant_notice_is_shown_once_per_session() {
+        const LINE: &str = "adage: the E2 approval for acme/finish-lines/x no longer matches (…), so it does not run.";
+        struct Lapsed;
+        impl Extension for Lapsed {
+            fn deliver(&self, _: &Turn<'_>, _: &[Directive]) -> Delivery {
+                Delivery { notice: Some(LINE.into()), ..Delivery::default() }
+            }
+            fn session_texts(&self, _: &str, _: &Path, _: &Index, _: &Paths) -> SessionTexts {
+                SessionTexts { context: Some("contract".into()), notice: Some(LINE.into()) }
+            }
+        }
+        static LAPSED: Lapsed = Lapsed;
+        let w = ObligationWorld::new();
+        let start = |session: &str| {
+            let p = json!({ "session_id": session, "cwd": w.root, "source": "startup" });
+            let opts = Options { learner: None, extension: Some(&LAPSED) };
+            handle("claude", "SessionStart", &p.to_string(), opts, &w.paths, Instant::now())
+                .unwrap()
+                .map(|o| serde_json::from_str::<Value>(&o).unwrap())
+        };
+        let first = start("s").expect("contract and notice");
+        assert_eq!(first["systemMessage"], LINE, "{first}");
+        assert_eq!(first["hookSpecificOutput"]["additionalContext"], "contract");
+        let again = start("s").expect("the contract again");
+        assert!(again.get("systemMessage").is_none(), "once per session: {again}");
+        let edit = w.edit(&LAPSED).expect("the obligation's directive");
+        assert!(edit.get("systemMessage").is_none(), "already told this session: {edit}");
+        // Another session: told once, beside the directive the event delivers.
+        state::update::<SessionState, _>(&w.paths.state("s2"), |st| st.arm = Some(Arm::Treated)).unwrap();
+        let event = |session: &str| {
+            let call = json!({ "tool_name": "Edit", "tool_use_id": "t2", "tool_response": "ok",
+                               "tool_input": { "file_path": w.root.join("registry/currencies.csv") } });
+            let p = json!({ "session_id": session, "cwd": w.root, "tool_calls": [call] });
+            let opts = Options { learner: None, extension: Some(&LAPSED) };
+            handle("claude", "PostToolBatch", &p.to_string(), opts, &w.paths, Instant::now())
+                .unwrap()
+                .map(|o| serde_json::from_str::<Value>(&o).unwrap())
+        };
+        let told = event("s2").expect("directive and notice");
+        assert_eq!(told["systemMessage"], LINE, "{told}");
+        assert!(told["hookSpecificOutput"]["additionalContext"].as_str().unwrap().contains("make gen"), "{told}");
+        assert!(!told["hookSpecificOutput"]["additionalContext"].as_str().unwrap().contains("no longer matches"));
+        let quiet = event("s2");
+        assert!(quiet.as_ref().is_none_or(|q| q.get("systemMessage").is_none()), "{quiet:?}");
     }
 
     #[test]

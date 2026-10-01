@@ -27,6 +27,19 @@ how strongly it may be directed, and typed slot contracts: a value from the prom
 only if it matches the contract learned from real values (`^W-\d{4}$`), and file paths only if they
 are safe, repository-relative, and exist.
 
+**Procedure cards and the orientation.** A task the repository keeps repeating gets a procedure
+card ([benchmarks](benchmarks.md#recurring-work-the-procedure-a-repository-repeats)): the files to edit, in order,
+the commands that worked and those that failed, and the finishing check. When a card is
+delivered, it now also says where its files stand in your checkout at that moment: each file's
+line count, the last top-level definitions of a Python source with their line numbers, a test
+file's last lines and a changelog's first headings. Adage reads those files itself, read-only, on
+the CPU; no command runs. In exchange, the delivered card no longer quotes the lines added last
+time (the learned card keeps them). It skips dotfiles, ignored and secret-holding files,
+symlinks and files over 1 MiB, withholds any line that looks like a secret, and adds at most about
+1,200 tokens. `ADAGE_CARD_ORIENTATION=0` delivers the earlier form. The card benchmarks
+measured that earlier form; the orientation has been measured only in the one-task development
+study described in the [README](../README.md#evidence-so-far).
+
 ## Tracks, packs and execution
 
 Reflexes live in **tracks** on disk, and travel as signed, closed **packs** you can review, commit
@@ -59,8 +72,8 @@ the table is shown as tokens and turns only. `adage savings --json` has the whol
 **What never happens without you:** nothing is ever run on the agent's behalf unless you turn on
 delegation at a terminal; install steps (environment changes) wait for `adage review`; no hook or
 learner touches the network; settings files change only when you install the plugin or run
-`adage install … --write` (which shows the diff, asks before writing and keeps the previous file
-as `<file>.adage-bak`).
+`adage install … --write` or `--remove` (which show the diff, ask before writing, keep the previous
+file as `<file>.adage-bak`, and leave the rest of your settings as you wrote them).
 
 **The one change Adage makes by default** (Claude Code): when a Python repository's own `.venv` was
 verified to have pytest and the project, a test run or scratch repro the agent starts under the
@@ -74,31 +87,106 @@ nothing is refused. `adage delegate rewrites off` (or `adage config set runtime.
 turns this off, from a script too, and `adage delegate rewrites on` back on
 ([docs/execution.md](execution.md#rewrites-to-the-projects-environment-pretooluse-u11)).
 
-## Other ways to install
+## When Adage runs your checks (opt-in)
 
-From a tagged release, for macOS (arm64, x64), Linux (x64, arm64; static) and Windows (x64):
+By default Adage only advises. You can let it run one learned test command itself, on the CPU,
+inside an OS sandbox, on macOS or Linux. That takes three decisions, all yours, made at a terminal
+(each refuses to run inside an agent session):
 
 ```bash
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/stevenvaughanbooth/adage/releases/latest/download/adage-cli-installer.sh | sh
-powershell -ExecutionPolicy Bypass -c "irm https://github.com/stevenvaughanbooth/adage/releases/latest/download/adage-cli-installer.ps1 | iex"
-brew install stevenvaughanbooth/tap/adage   # not published yet: once the first release is out
-npm install -g @adage-sh/cli               # not published yet: once the first release is out
-cargo install --locked --git https://github.com/stevenvaughanbooth/adage adage-cli
+adage delegate policy --max-level e2    # 1. allow approved actions on this machine
+adage review                            #    find the learned verification's track and reflex
+adage review delegate TRACK REFLEX --level e2 --effect verify \
+  --cache '.pytest_cache/**' --cache '.pytest_cache/.gitignore' --timeout-ms 20000 --repo .
+                                        # 2. approve that one command (it is staged once first)
+adage delegate on --repo .              # 3. let the hooks call adage-exec
+adage delegate status --repo .          # registrations, approvals, and any that lapsed
 ```
 
-Three binaries ship: `adage`; `adage-exec`, which runs the reflexes you let act (`adage delegate`;
-Linux and macOS); and `adage-train`, which compiles a skill into reflexes (`adage train`). The npm
-package carries all three. The other channels install each on its own: `adage-exec-installer.sh`
-and `adage-train-installer.sh` beside `adage-cli-installer.sh`, `brew install
-stevenvaughanbooth/tap/adage-exec` (and `adage-train`), or `cargo install --locked --git … adage-exec`
-(and `adage-train`). Put them beside `adage` or on `PATH`.
+`adage-exec` is a separate binary (`cargo install --locked --git … adage-exec`). Plain
+`adage delegate policy` shows this machine's execution policy and the file it is kept in
+(`$ADAGE_HOME/policy.toml`). `--max-level e2` writes `max_level = "E2"`, `auto_approve = "off"`
+and `require_sandbox = true` under `[exec]`, keeping the rest of the file; `--max-level e1` turns
+actions off again. A managed policy can still cap it. The opt-in alone runs nothing: each command
+needs its own approval. Which caches a command may write depends on the command; the
+[first-reflex guide](first-reflex.md#enable-one-verification-reflex) walks through a pytest
+example.
 
-Every release archive has a SHA-256 checksum, a Sigstore build-provenance attestation
-(`gh attestation verify <file> --repo stevenvaughanbooth/adage`) and a CycloneDX SBOM. The release
-workflow publishes the Claude Code plugins, with those binaries bundled and checksummed, to the
-`marketplace` branch that `/plugin install` reads; the plugin verifies its binary against
-`dist/SHA256SUMS` at every session start, falls back to `adage` on `PATH`, and otherwise says in one
-line what to install.
+In a session where such an approval is current, Adage owns that verification:
+
+- **At session start**, the agent gets a short, factual note: which command Adage runs (approved
+  by a person, sandboxed), after which edits, and that it runs it again when the agent finishes if
+  files changed since. Results come back with the agent's tool results, with the tests that ran; a
+  failure comes back with the failing tests. Control sessions get no note, and neither does an
+  approval that no longer matches.
+- **After the agent's edits**, Adage runs the command and hands the agent a receipt: the result,
+  exit code, time, a receipt id, how many tests pytest collected, and, by name, the tests the agent
+  added in this session. Names come from pytest's own cache record, never from the output. If the
+  agent then starts a test run that a fresh passing receipt already covers, it gets a note saying
+  so. The note is a fact, never a refusal: the call still runs.
+- **When the agent finishes** (Claude Code and Codex; not OpenCode), if the check ran earlier in the
+  session and has not passed on the files as they are now, Adage runs it again. If it passes, the
+  turn ends, and you see one line such as ``adage: ran `make test` at finish: passed (exit 0,
+  0.1 s).`` If it fails, the agent is asked once to continue, with the failing tests named, in a
+  message that begins `Adage finish-line check:` and says it comes from Adage, not from you. A
+  second failure ends the turn with one line for you; the check runs at most twice per session. If
+  Adage cannot confirm that a run completed, the agent is told not to retry, and actions in that
+  worktree pause until you inspect it (`adage-exec journal --repo .`) and acknowledge it
+  (`adage-exec recover --id <id> --acknowledge`).
+- **When an approval lapses.** An approval is bound to the exact command, its scripts and, for
+  project Python, the environment and interpreter. When one of those changes, the approval stops
+  matching and nothing runs. Adage tells you, in one line the agent never sees (Claude Code; not
+  when notices are off), at most once per session: which approval, what changed, and the
+  `adage review delegate …` command that approves it again once you have checked the change.
+  `adage delegate status` and `adage review` list every lapsed approval.
+
+To stop, `adage delegate off --repo .` (approvals are kept), or `adage review revoke TRACK REFLEX
+--repo .` for one approval. What this has shown so far: in one development study on one task,
+sessions with it and the orientation card used fewer model requests than sessions without Adage;
+on held-out tasks it saved more calls still but missed the registered quality rule, so it stays
+experimental ([README](../README.md#evidence-so-far)). The full
+mechanics are in [execution](execution.md#the-finish-line-check-stop-gate).
+
+## Other ways to install
+
+Today, only building from source works (it needs access to the private repository):
+
+```bash
+cargo install --locked --git https://github.com/stevenvaughanbooth/adage adage-cli
+# or, from a checkout of this repository:
+cargo install --locked --path crates/adage-cli
+```
+
+**Not published yet:** everything below waits for the first tagged release; none exists yet.
+Once it is out, for macOS (arm64, x64), Linux (x64, arm64; static) and Windows (x64):
+
+```bash
+# not published yet: these URLs, the tap and the npm package do not exist until the first release
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/stevenvaughanbooth/adage/releases/latest/download/adage-cli-installer.sh | sh
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/stevenvaughanbooth/adage/releases/latest/download/adage-cli-installer.ps1 | iex"
+brew install stevenvaughanbooth/tap/adage
+npm install -g @adage-sh/cli
+```
+
+The release plugin is designed to carry checksummed binaries for macOS (arm64, x64), Linux (x64,
+arm64) and Windows (x64). No release has been built yet, and native Linux and Windows runs remain
+unverified. Native Windows hook invocation is untested, and automatic execution requires macOS or
+Linux (including WSL).
+
+Three binaries: `adage`; `adage-exec`, which runs the reflexes you let act (`adage delegate`;
+Linux and macOS); and `adage-train`, which compiles a skill into reflexes (`adage train`). From
+source, install each on its own: `cargo install --locked --git … adage-exec` (and `adage-train`).
+After the first release, the npm package will carry all three, and the other channels will install
+each on its own: `adage-exec-installer.sh` and `adage-train-installer.sh` beside
+`adage-cli-installer.sh`, or `brew install stevenvaughanbooth/tap/adage-exec` (and `adage-train`).
+Put them beside `adage` or on `PATH`.
+
+The release workflow is built so that every release archive will have a SHA-256 checksum, a
+Sigstore build-provenance attestation (`gh attestation verify <file> --repo
+stevenvaughanbooth/adage`) and a CycloneDX SBOM, and so that it publishes the Claude Code plugins,
+with those binaries bundled and checksummed, to the `marketplace` branch that `/plugin install`
+reads. It has not run on a tag yet. The plugin checks its binary against `dist/SHA256SUMS` at every
+session start, falls back to `adage` on `PATH`, and otherwise says in one line what to install.
 
 ## Commands
 
@@ -129,10 +217,13 @@ adage train accept x                                       # install the reviewe
 ```
 
 At a terminal, `init` is a wizard: it detects your harnesses and, one step at a time, asks before
-it registers hooks (showing the exact file and diff), fetches the embedding model, conditions
+it registers hooks (showing the exact file and diff), offers to fetch an embedding model only when
+none is available (one is bundled in the binary, so usually there is nothing to fetch), conditions
 the repository for the first time, and turns automatic conditioning on if it is off; it ends with the doctor's
 summary. Piped, inside an agent session, or with `--print`, it prints the same report and writes
-nothing; `--yes` downloads the embedding model and binds this repository's instincts. `sense` reads
+nothing; `--yes` binds this repository's instincts (and fetches the selected model only when none
+is available), but registers no hooks (it ends by saying whether they are registered;
+`adage install <harness> --write` registers them). `sense` reads
 the same traces `condition` does and lists the reflexes `condition` would form as candidates, with
 prompts shown only as short redacted snippets. With no history yet, plain `adage condition`
 inside a repository binds available instincts from its files; `--instincts-only` requests that
@@ -216,8 +307,9 @@ Decisions, installs and settings refuse inside an agent session, as their comman
 
 ## Claude Code
 
-Installed from the marketplace (above), the plugin needs nothing else. To try the plugin from a
-source checkout instead (it then uses the binary `plugin/build.sh` stages, or `adage` on `PATH`):
+Once the marketplace is published (not yet), the plugin installed from it will need nothing else.
+Until then, try the plugin from a source checkout (it then uses the binary `plugin/build.sh`
+stages, or `adage` on `PATH`):
 
 ```bash
 # 1. Build the binaries and stage them into the plugins
@@ -244,7 +336,11 @@ adage condition --codex-sessions ~/.codex/sessions   # Codex rollouts
 
 `--write` installs into the repository (`.opencode/plugins/adage.js`, `.codex/hooks.json`) or, with
 `--scope user`, the harness's documented user location; it never runs inside an agent session.
-`adage install claude-code` does the same for Claude Code settings. What each harness supports, and
+`adage install claude-code` does the same for Claude Code settings. A harness already registered for
+the repository (in the other scope, or by the Claude Code plugin) is not registered again, since a
+second registration runs every hook twice; `adage doctor` flags one made by hand. To remove Adage's
+hooks, `adage install <harness> --remove [--scope user]` shows the diff, keeps `<file>.adage-bak`, and
+leaves your own hooks and settings as they were. What each harness supports, and
 what it cannot do yet (Codex reports no tool failures to hooks, so only reflexes that react to a
 failed command stay silent there; learned dead ends are announced at the first prompt), is in
 [docs/harnesses.md](harnesses.md).
@@ -318,11 +414,15 @@ the same reflex yourself, your first-hand reflex wins. Adding a newer version ke
 decisions for every reflex that survives. An unknown signer needs `--trust`. Both commands refuse to run inside an agent
 session (`CLAUDECODE`) or without a terminal; `ADAGE_ALLOW_NONINTERACTIVE=1` lifts only the terminal check.
 
-**Review:** `adage review [--json]` lists the reflexes that need a person's decision: new reflexes from
+**Review:** `adage review [--json] [--verbose]` lists the reflexes that need a person's decision: new reflexes from
 `adage condition`, reflexes whose strength or evidence changed materially since the last decision (shape,
 strength, a Wilson lower bound moving by 0.10, or support doubling or halving), imports forming,
 extinguished reflexes that came back stronger, and reflexes agents keep ignoring in treated traces. Each
-entry shows its evidence, effect and ceiling, and the exact directive text with example slot values.
+entry shows its trigger, evidence (in plain counts; `--verbose` adds the bounds, uplift and the graph
+engine's reasons), effect and ceiling, and the exact directive text with example slot values.
+Instincts in effect are listed once per instinct and step, with what triggers each, and wait for no
+decision; an execution-only routine waits once, for its evidence, and is then listed as ready to
+delegate.
 A pinned reflex is never overwritten: when learning (or a re-import) finds a materially different
 version, it waits as *proposed*, with a diff; `approve` applies it (still pinned) and `dismiss` keeps
 yours. `adage review <approve|extinguish|weaken|strengthen|pin|dismiss> <track> <reflex> [--by <name>]` records the decision

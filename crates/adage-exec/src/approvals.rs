@@ -287,7 +287,7 @@ pub fn auto_eligible(req: &ExecRequest, ctx: &AutoContext) -> Result<(), Vec<Str
         Origin::Pack { .. } => why.push("the pack's signer is not trusted or it has not passed forming".into()),
     }
     if !ctx.policy_auto {
-        why.push("automatic approval is off (policy exec.auto_approve; off by default until gate G3)".into());
+        why.push("automatic approval is off (policy exec.auto_approve; off by default)".into());
     }
     if why.is_empty() {
         Ok(())

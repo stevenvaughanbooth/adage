@@ -1,0 +1,40 @@
+{
+  "scope": "post-stdin-fix authored edit diagnostic; not production or real-repository launch evidence",
+  "excluded": "receipt-edit-v1: launcher-text contamination observed; read receipt-v3 behavioral comparison also suspect and excluded",
+  "attempts": 8,
+  "cost_usd": 0.1513985,
+  "arms": {
+    "baseline": {
+      "n": 2,
+      "sessions_with_agent_commands": 2,
+      "successful_cpu_receipts": 0,
+      "quality_passed": 2,
+      "total_agent_tools": 10,
+      "cost_usd": 0.0388555
+    },
+    "generic": {
+      "n": 2,
+      "sessions_with_agent_commands": 2,
+      "successful_cpu_receipts": 2,
+      "quality_passed": 2,
+      "total_agent_tools": 10,
+      "cost_usd": 0.039452299999999996
+    },
+    "typed": {
+      "n": 2,
+      "sessions_with_agent_commands": 1,
+      "successful_cpu_receipts": 2,
+      "quality_passed": 2,
+      "total_agent_tools": 9,
+      "cost_usd": 0.036664
+    },
+    "ownership": {
+      "n": 2,
+      "sessions_with_agent_commands": 0,
+      "successful_cpu_receipts": 2,
+      "quality_passed": 2,
+      "total_agent_tools": 8,
+      "cost_usd": 0.0364267
+    }
+  }
+}

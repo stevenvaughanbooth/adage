@@ -27,6 +27,22 @@ pub enum Phase {
     Acknowledged,
 }
 
+/// What started an operation. A learned context's prediction and the finish-line gate run the
+/// same approved command, so a reader (an evaluation, `adage review`) cannot tell them apart by
+/// the command or the event: the journal says.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RunOrigin {
+    /// A learned context's prediction (a reflex that fired on the session's events).
+    Context,
+    /// A learned finish-line obligation, at an edit or at Stop.
+    Obligation,
+    /// The finish-line gate: a stale or never-passed verification run when the agent stops.
+    StopGate,
+    /// A person's `adage-exec run`.
+    Manual,
+}
+
 /// Latest durable state of one operation. Old outcome-only telemetry rows are readable as
 /// completed receipts with an empty id/worktree; they never act as replay reservations.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -48,6 +64,9 @@ pub struct Receipt {
     pub input_digest: String,
     #[serde(default)]
     pub outputs: BTreeMap<String, stage::FileState>,
+    /// What started it; `None` in a journal written before origins were recorded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<RunOrigin>,
 }
 
 impl Receipt {
@@ -138,6 +157,8 @@ pub struct Commit<'a> {
     pub occurrence: &'a str,
     pub approved_on: &'a str,
     pub request: &'a ExecRequest,
+    /// What started it, recorded on the receipt (never part of its identity).
+    pub origin: RunOrigin,
 }
 
 #[derive(Debug)]
@@ -184,6 +205,7 @@ fn finish_inner(staged: &Staged, c: &Commit<'_>, after_apply: impl FnOnce() -> i
         outcome: Outcome::Unknown { reason: format!("operation {id} was prepared without a durable completion; inspect the worktree before acknowledging it") },
         input_digest: crate::sha256_hex(crate::canonical_json(&staged.inputs).as_bytes()),
         outputs: BTreeMap::new(),
+        origin: Some(c.origin),
     };
     {
         let _journal_lock = match journal_lock(c.home) {
@@ -357,6 +379,7 @@ mod tests {
                 fields: None,
                 backend: StageBackend::Copy,
                 stderr: vec![],
+                rewritten: vec![],
             }
         }
 
@@ -368,6 +391,7 @@ mod tests {
                 occurrence,
                 approved_on: "approved",
                 request: &self.req,
+                origin: RunOrigin::Obligation,
             }
         }
 
@@ -400,6 +424,24 @@ mod tests {
         assert!(!later.replayed);
         assert_ne!(later.id, first.id);
         assert_eq!(list(&f.home).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn a_receipt_records_its_origin_without_it_entering_the_identity() {
+        let f = Fixture::new();
+        let gate = Commit { origin: RunOrigin::StopGate, ..f.commit("one") };
+        let done = finish(&f.staged(), &gate);
+        let row = list(&f.home).unwrap().pop().unwrap();
+        assert_eq!(row.origin, Some(RunOrigin::StopGate));
+        let json = serde_json::to_value(&row).unwrap();
+        assert_eq!(json["origin"], "stop-gate");
+        // The same occurrence from another origin is the same operation: identity is unchanged.
+        let again = finish(&f.staged(), &f.commit("one"));
+        assert!(again.replayed && again.id == done.id);
+        // A journal written before origins were recorded still reads.
+        let mut old = json.clone();
+        old.as_object_mut().unwrap().remove("origin");
+        assert_eq!(serde_json::from_value::<Receipt>(old).unwrap().origin, None);
     }
 
     #[test]

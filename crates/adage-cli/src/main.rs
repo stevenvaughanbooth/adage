@@ -30,6 +30,7 @@ use adage_hook::harness;
 mod hook;
 mod init;
 mod install;
+mod jsonedit;
 mod learnlog;
 mod map;
 mod marketplace_cmd;
@@ -63,8 +64,15 @@ use std::path::PathBuf;
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.first().map(String::as_str) == Some("hook") {
+        let (harness, event) = (args.get(1).cloned().unwrap_or_default(), args.get(2).cloned().unwrap_or_default());
+        // No harness runs `adage hook` without both words, or with a harness Adage does not know:
+        // that is someone typing it. Say how it is used, and record nothing: a typo is not a hook
+        // that failed (a fail-open record would then flag the card for a week).
+        if harness::adapter(&harness).is_none() || event.is_empty() {
+            hook::usage(&harness, &event);
+        }
         // Fail open, always: no panic, error, or timeout may block or disturb the agent.
-        hook::main(args.get(1).cloned().unwrap_or_default(), args.get(2).cloned().unwrap_or_default());
+        hook::main(harness, event);
     }
     match on_big_stack(move || run(&args)) {
         Some(Ok(())) => {}
@@ -263,7 +271,11 @@ fn run(args: &[String]) -> Result<()> {
 }
 
 /// `adage condition [--transcripts <file>...] [--claude-projects <dir>] [--codex-sessions <dir>] [--cwd-prefix <path>]
-///               [--outcomes <json>] [--repo <key>] [--demo] [--no-cache] [--no-instincts] [--json]`
+///               [--repo-root <dir>] [--outcomes <json>] [--repo <key>] [--demo] [--no-cache] [--no-instincts] [--json]`
+///
+/// `--repo-root <dir>` conditions one repository: only traces recorded in one of its checkouts
+/// are read, its instincts bind from that root, and with no such trace its instincts alone are
+/// bound (as `--instincts-only`). Without it, every repository the sources hold is conditioned.
 ///
 /// Thresholds: `--demo`, else `learn.thresholds` (`adage config`). Parses are cached under
 /// `$ADAGE_HOME/cache/sessions` unless `--no-cache` or `learn.parse_cache = false` (the result is
@@ -282,9 +294,30 @@ pub(crate) fn check_dirs(dirs: &[(&str, Option<&std::path::Path>)]) -> Result<()
     Ok(())
 }
 
+/// `--repo-root <dir>`: the repository it names (its root, found from `dir`) and the key its
+/// reflexes are stored under (`--repo <key>` when given, as `--instincts-only` derives it).
+fn repo_scope(args: &[String], paths: &Paths) -> Result<Option<(PathBuf, String)>> {
+    let Some(dir) = flag(args, "--repo-root").map(PathBuf::from) else { return Ok(None) };
+    let canon = dir
+        .canonicalize()
+        .map_err(|e| hint(format!("{}: {e}", dir.display()), "pass the repository's directory: --repo-root <dir>"))?;
+    let Some(root) = adage_core::repo::find_root(&canon) else {
+        return Err(hint(
+            format!("{} is not inside a git repository", dir.display()),
+            "pass a repository's directory: --repo-root <dir>",
+        ));
+    };
+    let key = adage_core::repo::key_with(flag(args, "--repo").as_deref(), || {
+        adage_core::repo::repo_key_cached(&root, &paths.repo_keys())
+    });
+    Ok(Some((root, key)))
+}
+
 fn condition(args: &[String], paths: &Paths) -> Result<()> {
     let started = std::time::Instant::now();
     let settings = adage_store::config::load(paths).config;
+    // One repository (`--repo-root`): only traces recorded in one of its checkouts are read.
+    let scope = repo_scope(args, paths)?;
     let explicit =
         args.iter().any(|a| matches!(a.as_str(), "--transcripts" | "--codex-sessions" | "--claude-projects"));
     let (cp, cs) =
@@ -337,14 +370,23 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
     if let Some(prefix) = flag(args, "--cwd-prefix") {
         transcripts = adage_learn::scope::recorded_inside(transcripts, &[PathBuf::from(prefix)]);
     }
+    if let Some((root, _)) = &scope {
+        transcripts = adage_learn::scope::recorded_inside(transcripts, &adage_learn::scope::checkouts(root));
+    }
     if transcripts.is_empty() {
         // A fresh repository can already benefit from instincts bound to its real files. An
         // explicit empty source still fails, so a typo never looks like successful learning.
-        if !explicit
+        let instincts = !explicit
             && flag(args, "--cwd-prefix").is_none()
             && settings.instincts_enabled
-            && !args.iter().any(|a| a == "--no-instincts")
-        {
+            && !args.iter().any(|a| a == "--no-instincts");
+        if instincts && scope.is_some() {
+            // `instincts_only` binds the `--repo-root` repository, under the same key.
+            adage_term::Out::stderr()
+                .note("no past traces found; binding this repository's instincts from its files")?;
+            return instincts_only(args, paths);
+        }
+        if instincts {
             if let Some(root) = std::env::current_dir().ok().and_then(|d| adage_core::repo::find_root(&d)) {
                 let own = adage_core::repo::repo_key_cached(&root, &paths.repo_keys());
                 if flag(args, "--repo").as_deref().is_none_or(|r| r.trim() == own) {
@@ -356,6 +398,8 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
         }
         let source = if let Some(p) = flag(args, "--cwd-prefix") {
             format!("none has a working directory under {p}")
+        } else if let Some((root, _)) = &scope {
+            format!("none was recorded in {}", root.display())
         } else if explicit || args.iter().any(|a| a == "--claude-projects") {
             "the sources you named hold no traces".to_string()
         } else {
@@ -385,7 +429,9 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
         // the one the next session works in.
         // Only when the checkout is the repository being learned: `--repo <key>` names another
         // repository's traces from anywhere (an eval harness's working directory).
-        if let Some(root) = std::env::current_dir().ok().and_then(|d| adage_core::repo::find_root(&d)) {
+        if let Some((root, key)) = &scope {
+            ic.roots.insert(key.clone(), root.clone());
+        } else if let Some(root) = std::env::current_dir().ok().and_then(|d| adage_core::repo::find_root(&d)) {
             let own = adage_core::repo::repo_key_cached(&root, &paths.repo_keys());
             if flag(args, "--repo").as_deref().is_none_or(|k| k.trim() == own) {
                 ic.roots.insert(own, root);
@@ -404,7 +450,7 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
         repo_override: flag(args, "--repo"),
         models: Some(paths.models()),
         cache,
-        only_repo: None,
+        only_repo: scope.as_ref().map(|(_, key)| key.clone()),
     };
     // One writer of the tracks and index at a time (automatic learners, review decisions).
     writable_data_dir(paths)?;
@@ -442,6 +488,7 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
             changes: &changes,
             elapsed_ms: started.elapsed().as_millis() as u64,
             waiting: waiting(paths),
+            next: true,
         };
         condition_out::render(&mut adage_term::Out::stdout(), &run)?;
     }
@@ -453,6 +500,11 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
 /// is `--repo-path` (default: the current directory), resolved to its root; its key is `--repo <key>`
 /// when given (as `adage condition --repo` keys reflexes), else derived from the root.
 pub(crate) fn instincts_only(args: &[String], paths: &Paths) -> Result<()> {
+    instincts_only_then(args, paths, true)
+}
+
+/// [`instincts_only`], with its `next` lines (`adage init` prints its own after it) or without.
+pub(crate) fn instincts_only_then(args: &[String], paths: &Paths, next: bool) -> Result<()> {
     let started = std::time::Instant::now();
     let dir = match flag(args, "--repo-path").or_else(|| flag(args, "--repo-root")) {
         Some(d) => PathBuf::from(d),
@@ -492,14 +544,15 @@ pub(crate) fn instincts_only(args: &[String], paths: &Paths) -> Result<()> {
         changes: &changes,
         elapsed_ms: started.elapsed().as_millis() as u64,
         waiting: waiting(paths),
+        next,
     };
     condition_out::render(&mut adage_term::Out::stdout(), &run)?;
     Ok(())
 }
 
-/// Reflexes that wait for a decision in `adage review`.
-fn waiting(paths: &Paths) -> usize {
-    review::standings(paths).map(|s| s.values().filter(|s| !s.reasons.is_empty()).count()).unwrap_or(0)
+/// Reflexes that wait for a decision in `adage review` (an instinct in effect waits for none).
+pub(crate) fn waiting(paths: &Paths) -> usize {
+    review::standings(paths).map(|s| s.values().filter(|s| review::waits(&s.reasons)).count()).unwrap_or(0)
 }
 
 /// Append one `learn.log` line per repository this `adage condition` learned (`crate::learnlog`), or
@@ -641,6 +694,12 @@ fn status(paths: &Paths, json: bool) -> Result<()> {
             head = head.sep().quiet(origin(t));
         }
         o.line(&head)?;
+        // Instincts once per instinct and step, with what triggers them (their ids say nothing);
+        // `--json` lists each.
+        if !t.routes.is_empty() && t.routes.iter().all(|r| r.is_instinct()) {
+            condition_out::instinct_lines(&mut o, &t.routes, "  ")?;
+            continue;
+        }
         for r in &t.routes {
             let e = &r.evidence;
             let glyph = if instinct(t, r) { Glyph::Instinct } else { Glyph::Reflex };
@@ -665,11 +724,22 @@ fn status(paths: &Paths, json: bool) -> Result<()> {
             if valued {
                 o.line(&detail(evidence))?;
             }
-            if let Some(u) = &e.uplift {
-                o.line(&detail(format!("uplift: {}", u.line())))?;
+            // What is known of how agents take the step unaided, when anything is (a prior alone
+            // shows nothing; `--json` and `adage review --verbose` have the estimate).
+            if let Some(u) = evidence::uplift_plain(r) {
+                o.line(&detail(format!("unaided: {u}")))?;
+            }
+            if let Some(q) = evidence::quiet_plain(r) {
+                o.line(&detail(q))?;
             }
             if let Some(ob) = evidence::obligation(r) {
                 o.line(&detail(ob))?;
+            }
+            if evidence::execution(r).is_some() {
+                o.line(&detail(
+                    "execution only: never said to the agent, and silent (Stop included) until delegated with an E2 grant · adage review"
+                        .to_string(),
+                ))?;
             }
         }
     }
@@ -703,6 +773,12 @@ fn report(paths: &Paths, json: bool) -> Result<()> {
                         let n = r["decision"][k].as_array().map(|a| a.len()).unwrap_or(0) as u64;
                         *totals.entry(k.to_string()).or_default() += n;
                     }
+                    // `would_have` is recorded in both arms (what would have been said); only in a
+                    // control trace was it withheld.
+                    if r["arm"] == "control" {
+                        let n = r["decision"]["would_have"].as_array().map(|a| a.len()).unwrap_or(0) as u64;
+                        *totals.entry("withheld".to_string()).or_default() += n;
+                    }
                     for j in r["decision"]["judgements"].as_array().into_iter().flatten() {
                         *totals.entry(j["kind"].as_str().unwrap_or("?").to_string()).or_default() += 1;
                     }
@@ -727,15 +803,13 @@ fn report(paths: &Paths, json: bool) -> Result<()> {
         return Ok(o.next("adage doctor", "check that hooks are installed")?);
     }
     let n = |k: &str| totals.get(k).copied().unwrap_or(0);
-    o.kv(
-        "directives",
-        Line::new()
-            .text(format!("{} sent", n("directives")))
-            .sep()
-            .quiet(format!("{} withheld (control)", n("would_have"))),
-    )?;
+    let mut sent = Line::new().text(format!("{} sent", n("directives")));
+    if n("withheld") > 0 {
+        sent = sent.sep().quiet(format!("{} withheld in control traces (Adage stayed quiet there)", n("withheld")));
+    }
+    o.kv("directives", sent)?;
     // Judgements, in the lexicon's words: what agents did with what Adage said.
-    let known = ["directives", "would_have", "stop_requests"];
+    let known = ["directives", "would_have", "withheld", "stop_requests"];
     for (k, v) in totals.iter().filter(|(k, _)| !known.contains(&k.as_str())) {
         let role = match k.as_str() {
             "followed" | "met" | "hit_avoided" => Role::Fire,

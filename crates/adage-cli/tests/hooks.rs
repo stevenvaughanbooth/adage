@@ -485,16 +485,24 @@ fn internal_errors_are_recorded_and_nothing_to_do_is_not() {
     // Errors: a payload that is not JSON, one with no session, and an unknown harness.
     w.run(&["hook", "claude", "UserPromptSubmit"], format!("not json {p}").as_bytes(), &[]);
     w.run(&["hook", "codex", "Stop"], json!({ "cwd": w.repo(), "prompt": "W-2042" }).to_string().as_bytes(), &[]);
-    w.run(&["hook", "nosuchharness", "Stop"], p.as_bytes(), &[]);
+    let (out, err, code) = w.run(&["hook", "nosuchharness", "Stop"], p.as_bytes(), &[]);
+    let mut expected =
+        vec!["payload: stdin is not a JSON payload (Syntax)", "payload: no session id or working directory"];
+    if exec_parity() {
+        expected.push("config: unknown harness");
+    } else {
+        // `adage hook` with a harness it does not know is someone typing it (QA first-run #9):
+        // usage on stderr, nothing on stdout, nothing recorded, and still exit 0 from a pipe.
+        assert_eq!((out.as_str(), code), ("", 0));
+        assert!(err.contains("unknown harness `nosuchharness`") && err.contains("usage: adage hook"), "{err}");
+        for args in [&["hook"][..], &["hook", "claude"]] {
+            let (out, err, code) = w.run(args, b"", &[]);
+            assert_eq!((out.as_str(), code), ("", 0), "{args:?}");
+            assert!(err.contains("usage: adage hook <claude|opencode|codex> <event>"), "{args:?}: {err}");
+        }
+    }
     let errors: Vec<String> = fail_open_log(&w).iter().map(|e| e["error"].as_str().unwrap().to_string()).collect();
-    assert_eq!(
-        errors,
-        [
-            "payload: stdin is not a JSON payload (Syntax)",
-            "payload: no session id or working directory",
-            "config: unknown harness"
-        ]
-    );
+    assert_eq!(errors, expected);
     let text = std::fs::read_to_string(w.p("adage/fail-open.log")).unwrap();
     assert!(!text.contains("W-2042") && !text.contains(&*w.root.to_string_lossy()), "{text}");
     // No data directory: nothing is recorded, and none is created.

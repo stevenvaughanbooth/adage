@@ -3,6 +3,14 @@
 Status: 2026-09-29, launch action gate based on merged main `9877af3`. The complete learned
 lookup mechanism now passes; broad coding-task value remains the question.
 
+> **Later results (2026-10-01).** This plan predates the real-repository studies. Since then: the
+> learned CPU transfer study found 0/4 action eliminations; development canaries v5 and v7 found 0
+> genuine eliminations; dev-v8 is invalid; dev-v9b is a valid development result on one task with
+> development scaffolding (0.62× the requests of no Adage), not a launch statistic; the held-out
+> comparison found advisory mode at 0.78× with the same hidden-test passes (19/20) and execution
+> mode at 0.67× but 17/20, below its registered quality rule. All used Claude Haiku 4.5 on Marshmallow, and no GPU or energy
+> measurements were made. See the [launch evidence index](../evals/reflex-proof/LAUNCH-STATUS.md).
+
 ## Objective
 
 Show that a procedure learned from agent traces can execute at a harness boundary without an intervening model request, preserve task correctness, and reduce total task cost or latency. Separate four claims: execution works; learning generalizes; automatic execution helps; shared reflexes transfer. No result in one category substitutes for another.
@@ -24,11 +32,11 @@ This plan includes future experiments. The authoritative current behavior is
 
 ## Worktree and integration boundary
 
-Work in the isolated worktree at `/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile`.
+Work in an isolated worktree of this repository.
 The original `codex/reflex-proof` work merged as PR #7; `codex/launch-action-gate` continues from
 merged main `9877af3`. The primary checkout has not been edited by this experiment.
 
-The earlier five-miner assessment and intermediate branch `f8e7d29` do not describe current main. Current main already has a generic graph learner, local CPU embeddings, shared hook pipeline, E1 read prefetch, E2 staged execution, exact local approvals, signed packs with vendored scripts, skill compilation, and measured savings. Preserve these components. Separate `adage` and `adage-exec` entry points share the hook pipeline; that is not a reason to merge or replace them.
+The earlier five-miner assessment and intermediate branch `f8e7d29` do not describe current main. Current main already has a generic graph learner, local CPU embeddings, shared hook pipeline, E1 read prefetch, E2 staged execution, exact local approvals, signed packs with vendored scripts, skill compilation, and advisory savings measured in benchmarks (not CPU execution savings). Preserve these components. Separate `adage` and `adage-exec` entry points share the hook pipeline; that is not a reason to merge or replace them.
 
 Do not port the intermediate branch's storage architecture by assumption. Advice evidence, approval authority, completed execution and measured utility are distinct facts. Main applied E2 changes before best-effort telemetry append. This work replaces that write path with durable preparation/completion in the existing actions spool and explicit unknown-outcome recovery; it does not introduce another store. See the [current behavior reference](how-it-works.md) and [evidence ledger](../evals/reflex-proof/README.md) for implementation status.
 

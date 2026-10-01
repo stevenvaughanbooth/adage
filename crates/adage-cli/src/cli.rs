@@ -209,6 +209,9 @@ pub struct ReviewArgs {
     /// Machine-readable queue (agents may read it).
     #[arg(long)]
     pub json: bool,
+    /// The statistics behind each reflex too (bounds, uplift, the graph engine's reasons).
+    #[arg(long, short = 'v')]
+    pub verbose: bool,
     #[command(subcommand)]
     pub decision: Option<ReviewDecision>,
 }
@@ -355,7 +358,9 @@ pub struct ConditionArgs {
     /// Condition one repository quietly, as hooks do after a session.
     #[arg(long, hide = true)]
     pub auto: bool,
-    #[arg(long, value_name = "DIR", hide = true)]
+    /// Condition only this repository: traces recorded in its checkouts, and its instincts
+    /// (default: every repository in the history sources).
+    #[arg(long, value_name = "DIR")]
     pub repo_root: Option<PathBuf>,
     #[arg(long, value_name = "MS", hide = true)]
     pub after: Option<u64>,
@@ -524,6 +529,13 @@ pub enum DelegateAction {
         #[arg(value_parser = ["on", "off"])]
         state: String,
     },
+    /// This machine's execution policy, and where it is kept; --max-level e2 opts in to actions.
+    Policy {
+        /// The highest level reflexes may run at: e1 (read-only lookups) or e2 (approved actions
+        /// from hooks; a person's decision).
+        #[arg(long, value_name = "LEVEL", value_parser = ["e1", "e2", "E1", "E2"])]
+        max_level: Option<String>,
+    },
 }
 
 #[derive(ValueEnum, Clone, Debug)]
@@ -535,17 +547,24 @@ pub enum Harness {
 }
 
 #[derive(Args, Debug)]
+#[command(
+    group(clap::ArgGroup::new("change").args(["write", "remove"])),
+    after_help = "Writing skips a harness already registered elsewhere for this repository (the other scope, or the Claude Code plugin): a second registration runs every hook twice. `--remove` takes Adage's hooks out again; your own hooks and settings stay as they are."
+)]
 pub struct InstallArgs {
     /// The agent harness to register Adage's hooks with.
     pub harness: Harness,
     /// Print the registration (the default).
-    #[arg(long, conflicts_with = "write")]
+    #[arg(long, conflicts_with_all = ["write", "remove"])]
     pub print: bool,
     /// Write it (a diff is shown first, and a terminal asks before writing).
     #[arg(long)]
     pub write: bool,
-    /// With --write: write without asking.
-    #[arg(long, short = 'y', requires = "write")]
+    /// Remove Adage's hooks from the scope's file (a diff is shown first; a backup is kept).
+    #[arg(long)]
+    pub remove: bool,
+    /// With --write or --remove: do it without asking.
+    #[arg(long, short = 'y', requires = "change")]
     pub yes: bool,
     /// This repository only (project, the default) or every repository (user).
     #[arg(long, value_parser = ["project", "user"])]
@@ -1064,11 +1083,16 @@ mod tests {
             &["delegate", "status", "--json"],
             &["delegate", "--json"],
             &["delegate", "rewrites", "off"],
+            &["delegate", "policy"],
+            &["delegate", "policy", "--max-level", "e2"],
         ] {
             let m = command(&Theme::plain()).try_get_matches_from(std::iter::once(&"adage").chain(args));
             assert!(m.is_ok(), "{args:?}: {m:?}");
         }
         assert!(command(&Theme::plain()).try_get_matches_from(["adage", "delegate", "rewrites", "maybe"]).is_err());
+        assert!(command(&Theme::plain())
+            .try_get_matches_from(["adage", "delegate", "policy", "--max-level", "e3"])
+            .is_err());
     }
 
     #[test]

@@ -485,10 +485,40 @@ pub fn plan_repo(
         }
         // What delivering each changes (uplift, `value::assess`): one agents already take unaided
         // waits, nascent, until a person approves the route itself (approving the pack does not).
-        let gated: BTreeSet<String> =
-            crate::value::assess(&mut routes, seen.sessions, repo, judged, seen.priors, seen.uplift_min)
+        // A bind without traces (`condition --instincts-only`, `init --yes`) keeps each route's
+        // estimate from the last learn that had them, unless the runtime has judged it since: the
+        // built-in priors alone would replace an estimate that rests on traces, and every rerun
+        // would look like new evidence (a new version, a new index generation) when nothing is.
+        let kept: BTreeMap<String, adage_tracks::Uplift> = if seen.sessions.is_empty() {
+            prev.iter()
+                .flat_map(|t| &t.routes)
+                .filter_map(|p| {
+                    let u = p.evidence.uplift.as_ref()?;
+                    let j = judged.get(&(repo.to_string(), p.id.clone())).copied().unwrap_or_default();
+                    let same = (u.control, u.control_took, u.delivered, u.followed)
+                        == (j.control_total, j.control_followed, j.total(), j.followed + j.misfired);
+                    (same && (u.traces > 0 || u.prior_fitted)).then(|| (p.id.clone(), u.clone()))
+                })
+                .collect()
+        } else {
+            BTreeMap::new()
+        };
+        let (mut fresh, mut carried): (Vec<Route>, Vec<Route>) =
+            routes.into_iter().partition(|r| !kept.contains_key(&r.id) || r.authored);
+        let mut gated: BTreeSet<String> =
+            crate::value::assess(&mut fresh, seen.sessions, repo, judged, seen.priors, seen.uplift_min)
                 .into_iter()
                 .collect();
+        for r in carried.iter_mut() {
+            let u = kept[&r.id].clone();
+            if u.gated && r.state.is_live() && r.evidence.execution.is_none() {
+                r.state = RouteState::Nascent;
+                gated.insert(r.id.clone());
+            }
+            r.evidence.uplift = Some(u);
+        }
+        routes = fresh;
+        routes.append(&mut carried);
         rep.quiet = gated.iter().cloned().collect();
         routes = review::reconcile(prev.as_ref(), &reviews, routes);
         // A person approved this route's pack's environment steps for the repository.

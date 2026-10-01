@@ -123,9 +123,10 @@ fn contextual(t: &str) -> bool {
     CONTEXT_TAG.captures(t).is_some_and(|c| c[1] == c[2])
 }
 
+/// Text Adage wrote (a directive, or a Stop-hook continuation: `render::is_finish_line`), never a
+/// prompt the person typed.
 fn own_text(t: &str) -> bool {
-    let t = t.trim_start();
-    t.starts_with("<adage-reflex ") || t.starts_with("Adage finish-line check:")
+    t.trim_start().starts_with("<adage-reflex ") || adage_runtime::render::is_finish_line(t)
 }
 
 /// The shell command an argv runs: `["bash", "-lc", cmd]` → `cmd`; anything else is joined.

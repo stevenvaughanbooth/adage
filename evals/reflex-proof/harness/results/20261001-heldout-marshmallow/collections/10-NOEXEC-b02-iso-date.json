@@ -1,0 +1,452 @@
+{
+  "all_journal_receipts": [],
+  "block": 2,
+  "collection_errors": [],
+  "condition": "positive",
+  "contract_emitted": false,
+  "cost_usd": 0.183568,
+  "exec_decisions": [],
+  "final_generation": "5bef3c65df83024ba49c63a7a02cd776930b29e7f66673d45f9c059f945f757b",
+  "heldout_arm": "NOEXEC",
+  "order": 10,
+  "protocol": "heldout-cohort-1",
+  "provenance": {
+    "cwd": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/10-NOEXEC-b02-iso-date/repo",
+    "destination": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/10-NOEXEC-b02-iso-date/native-transcript.jsonl",
+    "session_id": "a26ba4e8-5c15-48ba-a486-38bf1ba23e0c",
+    "sha256": "7757d34eafb738ac38bda9cfc14cd64d5f77b214923f7149c0c7f0c796030399",
+    "source": "/Users/stevenbooth/.claude/projects/-private-tmp-adage-real-repo-gate-v1-cohorts-launch-gate-v8-heldout-1-sessions-10-NOEXEC-b02-iso-date-repo/a26ba4e8-5c15-48ba-a486-38bf1ba23e0c.jsonl",
+    "synthetic": false
+  },
+  "quality": {
+    "changed_files": [
+      "CHANGELOG.rst",
+      "src/marshmallow/validate.py",
+      "tests/test_validate.py"
+    ],
+    "checks": {
+      "tests": true
+    },
+    "ci_passed": true,
+    "dependency_mode": "frozen prepared environment; no rescue install",
+    "elapsed_s": 1.5,
+    "exit_code": 0,
+    "hidden_collection_integrity": {
+      "expected_count": 13,
+      "extra": [],
+      "missing": [],
+      "observed_count": 13,
+      "passed": true,
+      "unsuccessful": []
+    },
+    "hidden_failed": [],
+    "hidden_passed": true,
+    "n_tests": 1209,
+    "passed": true,
+    "rescue_error": null,
+    "suite_failed": [],
+    "tail": "........................................................................ [ 23%]\n........................................................................ [ 29%]\n........................................................................ [ 35%]\n........................................................................ [ 41%]\n........................................................................ [ 47%]\n........................................................................ [ 53%]\n........................................................................ [ 59%]\n........................................................................ [ 65%]\n........................................................................ [ 71%]\n........................................................................ [ 77%]\n........................................................................ [ 83%]\n........................................................................ [ 89%]\n........................................................................ [ 95%]\n.........................................................                [100%]\n1209 passed in 0.94s",
+    "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+  },
+  "replay": {
+    "arm": "NOEXEC",
+    "confirmed_elimination": false,
+    "context_receipts": 0,
+    "covered_subsets": 0,
+    "final_source_verified": true,
+    "gate_runs": [],
+    "necessary_work_skipped": false,
+    "opaque": 0,
+    "receipts": 0,
+    "redundant_repeats": 0,
+    "repeat_attempts": 0,
+    "repeat_attempts_not_completed": 0,
+    "requests": [
+      {
+        "adage_pre_context": false,
+        "classification": "before_receipt",
+        "command": ".venv/bin/python -m pytest tests/test_validate.py::test_isodate_valid -v",
+        "completed": true,
+        "covered": false,
+        "digest": "1d99e10dfd17fccafef045804aada826bcf6b2319d2810500cd76f992a8472b3",
+        "id": "toolu_01EEfAEE1YviwfAfFyJ1i1ts",
+        "receipt_note": false,
+        "segment": ".venv/bin/python -m pytest tests/test_validate.py::test_isodate_valid -v"
+      },
+      {
+        "adage_pre_context": false,
+        "classification": "before_receipt",
+        "command": ".venv/bin/python -m pytest tests/test_validate.py -k isodate -v",
+        "completed": false,
+        "covered": false,
+        "digest": "1d99e10dfd17fccafef045804aada826bcf6b2319d2810500cd76f992a8472b3",
+        "id": "toolu_014ZYNXppv2popoSWYiJdQj5",
+        "receipt_note": false,
+        "segment": ".venv/bin/python -m pytest tests/test_validate.py -k isodate -v"
+      },
+      {
+        "adage_pre_context": false,
+        "classification": "before_receipt",
+        "command": ".venv/bin/python -m pytest tests/test_validate.py -k isodate -v",
+        "completed": true,
+        "covered": false,
+        "digest": "024d914550cc0b47b5cf1c52c83a1b3feb7b28dce2b3627c2aae445bfb137116",
+        "id": "toolu_01XKzcAg3Ktjj9aDaQ7NjeZZ",
+        "receipt_note": false,
+        "segment": ".venv/bin/python -m pytest tests/test_validate.py -k isodate -v"
+      },
+      {
+        "adage_pre_context": false,
+        "classification": "before_receipt",
+        "command": ".venv/bin/python -m pytest tests/test_validate.py -q",
+        "completed": true,
+        "covered": false,
+        "digest": "5bef3c65df83024ba49c63a7a02cd776930b29e7f66673d45f9c059f945f757b",
+        "id": "toolu_0164KDC13CRAyztnGAL9X8wC",
+        "receipt_note": false,
+        "segment": ".venv/bin/python -m pytest tests/test_validate.py -q"
+      },
+      {
+        "adage_pre_context": false,
+        "classification": "before_receipt",
+        "command": ".venv/bin/python -m pytest tests/ -q --tb=short 2>&1 | tail -20",
+        "completed": true,
+        "covered": false,
+        "digest": "5bef3c65df83024ba49c63a7a02cd776930b29e7f66673d45f9c059f945f757b",
+        "id": "toolu_014cc9fheM9PiXCoq25P5V5J",
+        "receipt_note": false,
+        "segment": ".venv/bin/python -m pytest tests/ -q --tb=short"
+      },
+      {
+        "adage_pre_context": false,
+        "classification": "before_receipt",
+        "command": ".venv/bin/python -m pytest tests/test_validate.py -k isodate -v",
+        "completed": true,
+        "covered": false,
+        "digest": "5bef3c65df83024ba49c63a7a02cd776930b29e7f66673d45f9c059f945f757b",
+        "id": "toolu_01WgX8ad8iHC4AHY3j4PD38A",
+        "receipt_note": false,
+        "segment": ".venv/bin/python -m pytest tests/test_validate.py -k isodate -v"
+      }
+    ],
+    "successful_receipts": 0,
+    "verification_necessary": false,
+    "version": 3
+  },
+  "task": "mm-curve--iso-date",
+  "timeline": {
+    "arm": "NOEXEC",
+    "events": [
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+        "id": "toolu_01QJifSbqGWQigyUenmcMvPe",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+        "id": "toolu_01DHX4Auj1tqCneyxDYrJyya",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+        "id": "toolu_013guzKD4t7gRKzyuPtCHpsE",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+        "id": "toolu_01WuoQ5njq1rNA6WpKxLca2W",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+        "id": "toolu_01Js4sdaichfNzFwnPdYM7cf",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+        "id": "toolu_01L5jAEzDgEnrXvuP7G7djGr",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "c79483a8779b2dd8fa07901d76f11c5f31995e0488f11247341c8fa667c091f0",
+        "id": "toolu_01RWV34C9LskU8QJWWzamRDm",
+        "kind": "tool",
+        "name": "Edit",
+        "path": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/10-NOEXEC-b02-iso-date/repo/src/marshmallow/validate.py",
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "3828843e8580e56642928c8edef21f0292797b6fcb9f2f7106069b0bb6ce1407",
+        "id": "toolu_019y2rsKMH2sggDEg71hw29d",
+        "kind": "tool",
+        "name": "Edit",
+        "path": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/10-NOEXEC-b02-iso-date/repo/src/marshmallow/validate.py",
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "3828843e8580e56642928c8edef21f0292797b6fcb9f2f7106069b0bb6ce1407",
+        "id": "toolu_012gZ93bsDJtknUt8E4NHz67",
+        "kind": "tool",
+        "name": "Edit",
+        "path": "/private/tmp/adage-real-repo-gate-v8-heldout-1/sessions/10-NOEXEC-b02-iso-date/repo/tests/test_validate.py",
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": "pwd",
+        "completed": true,
+        "digest": "3828843e8580e56642928c8edef21f0292797b6fcb9f2f7106069b0bb6ce1407",
+        "id": "toolu_01KnP7RzbFB5dWPzVQoKCR9h",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "1d99e10dfd17fccafef045804aada826bcf6b2319d2810500cd76f992a8472b3",
+        "id": "toolu_01CQmqcAjanWfsMhvdyWj2zt",
+        "kind": "tool",
+        "name": "Edit",
+        "path": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/10-NOEXEC-b02-iso-date/repo/tests/test_validate.py",
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": ".venv/bin/python -m pytest tests/test_validate.py::test_isodate_valid -v",
+        "completed": true,
+        "digest": "1d99e10dfd17fccafef045804aada826bcf6b2319d2810500cd76f992a8472b3",
+        "id": "toolu_01EEfAEE1YviwfAfFyJ1i1ts",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": ".venv/bin/python -m pytest tests/test_validate.py -k isodate -v",
+        "completed": false,
+        "digest": "1d99e10dfd17fccafef045804aada826bcf6b2319d2810500cd76f992a8472b3",
+        "id": "toolu_014ZYNXppv2popoSWYiJdQj5",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": ".venv/bin/python -c \"\nfrom marshmallow import validate\nvalidator = validate.IsoDate()\n\ninvalid_formats = [\n    '20240229',\n    '2024-2-29',\n    '2024-02-9',\n    '2024/02/29',\n    '02-29-2024',\n    '2024-02-29T00:00:00',\n    '2024-02-29 ',\n    ' 2024-02-29',\n]\n\nfor invalid in invalid_formats:\n    try:\n        result = validator(invalid)\n        print(f'{invalid!r} did NOT raise an error, returned: {result!r}')\n    except Exception as e:\n        print(f'{invalid!r} raised: {type(e).__name__}')\n\"\n",
+        "completed": true,
+        "digest": "1d99e10dfd17fccafef045804aada826bcf6b2319d2810500cd76f992a8472b3",
+        "id": "toolu_01V8SXRQkduBocuC4UbV9Dki",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "024d914550cc0b47b5cf1c52c83a1b3feb7b28dce2b3627c2aae445bfb137116",
+        "id": "toolu_018bvEPoeHzdbrhptjAjaR7T",
+        "kind": "tool",
+        "name": "Edit",
+        "path": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/10-NOEXEC-b02-iso-date/repo/src/marshmallow/validate.py",
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": ".venv/bin/python -m pytest tests/test_validate.py -k isodate -v",
+        "completed": true,
+        "digest": "024d914550cc0b47b5cf1c52c83a1b3feb7b28dce2b3627c2aae445bfb137116",
+        "id": "toolu_01XKzcAg3Ktjj9aDaQ7NjeZZ",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "5bef3c65df83024ba49c63a7a02cd776930b29e7f66673d45f9c059f945f757b",
+        "id": "toolu_01XkxHD4f4dtzs7LwnhsbSvz",
+        "kind": "tool",
+        "name": "Edit",
+        "path": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/10-NOEXEC-b02-iso-date/repo/CHANGELOG.rst",
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": ".venv/bin/python -m pytest tests/test_validate.py -q",
+        "completed": true,
+        "digest": "5bef3c65df83024ba49c63a7a02cd776930b29e7f66673d45f9c059f945f757b",
+        "id": "toolu_0164KDC13CRAyztnGAL9X8wC",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": ".venv/bin/python -c \"\nfrom marshmallow.validate import IsoDate\nfrom marshmallow import validate\n\n# Verify the validator can be instantiated\nvalidator = validate.IsoDate()\nprint(f'IsoDate validator created: {validator!r}')\n\n# Test a valid date\nprint(f'Valid date test: {validator(\\\"2024-02-29\\\")!r}')\n\n# Test an invalid date\ntry:\n    validator('2023-02-29')\nexcept Exception as e:\n    print(f'Invalid date test: raised {type(e).__name__}: {e.messages}')\n\n# Test with custom error\nvalidator_custom = validate.IsoDate(error='Custom error: {input}')\ntry:\n    validator_custom('invalid')\nexcept Exception as e:\n    print(f'Custom error test: {e.messages}')\n\"\n",
+        "completed": true,
+        "digest": "5bef3c65df83024ba49c63a7a02cd776930b29e7f66673d45f9c059f945f757b",
+        "id": "toolu_01MEgjnYsmo8uGTeAYpVnxBa",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": "grep -n \"__all__\" src/marshmallow/validate.py",
+        "completed": true,
+        "digest": "5bef3c65df83024ba49c63a7a02cd776930b29e7f66673d45f9c059f945f757b",
+        "id": "toolu_014UKgXSt8Hntpz3Z1UXdsP6",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": "grep -n \"IsoDate\\|from.*validate\" src/marshmallow/__init__.py | head -20",
+        "completed": true,
+        "digest": "5bef3c65df83024ba49c63a7a02cd776930b29e7f66673d45f9c059f945f757b",
+        "id": "toolu_01HCpE7XJFvBKbXiTRMKrEuq",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "5bef3c65df83024ba49c63a7a02cd776930b29e7f66673d45f9c059f945f757b",
+        "id": "toolu_01YHm7rBgzAnMtFE2T2favzo",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": ".venv/bin/python -m pytest tests/ -q --tb=short 2>&1 | tail -20",
+        "completed": true,
+        "digest": "5bef3c65df83024ba49c63a7a02cd776930b29e7f66673d45f9c059f945f757b",
+        "id": "toolu_014cc9fheM9PiXCoq25P5V5J",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": ".venv/bin/python -c \"\nfrom marshmallow import validate\n\nvalidator = validate.IsoDate()\n\n# Test various formats\ntest_cases = [\n    ('2024-02-29', True),   # Valid leap year date\n    ('2023-02-28', True),   # Valid non-leap year date\n    ('2024-01-01', True),   # Valid first day of year\n    ('2024-12-31', True),   # Valid last day of year\n    ('20240229', False),    # No dashes\n    ('2024-2-29', False),   # Missing leading zero on month\n    ('2024-02-9', False),   # Missing leading zero on day\n    ('2024/02/29', False),  # Wrong delimiter\n    ('02-29-2024', False),  # Wrong order\n    ('2024-02-29T00:00:00', False),  # With time component\n    ('2024-02-30', False),  # Invalid day for February\n    ('2024-13-01', False),  # Invalid month\n    ('2023-02-29', False),  # Invalid leap year date\n    ('not-a-date', False),  # Not a date at all\n    (None, False),          # Not a string\n    (12345, False),         # Not a string\n]\n\nfor value, should_pass in test_cases:\n    try:\n        result = validator(value)\n        if should_pass:\n            print(f'\u2713 {value!r} passed as expected')\n        else:\n            print(f'\u2717 {value!r} should have failed but passed')\n    except Exception as e:\n        if not should_pass:\n            print(f'\u2713 {value!r} failed as expected')\n        else:\n            print(f'\u2717 {value!r} should have passed but failed: {e}')\n\"\n",
+        "completed": true,
+        "digest": "5bef3c65df83024ba49c63a7a02cd776930b29e7f66673d45f9c059f945f757b",
+        "id": "toolu_01Uj5qpFNsnUex4u99nQ46Zj",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "5bef3c65df83024ba49c63a7a02cd776930b29e7f66673d45f9c059f945f757b",
+        "id": "toolu_01T1VJfrnsCF5Ze2Y9WN77Z2",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "5bef3c65df83024ba49c63a7a02cd776930b29e7f66673d45f9c059f945f757b",
+        "id": "toolu_012ufKgmzpKhvWcpn6Jm9zvw",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "5bef3c65df83024ba49c63a7a02cd776930b29e7f66673d45f9c059f945f757b",
+        "id": "toolu_01Bp4XtaLcR1eiPBvKDP6zYq",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": ".venv/bin/python -m pytest tests/test_validate.py -k isodate -v",
+        "completed": true,
+        "digest": "5bef3c65df83024ba49c63a7a02cd776930b29e7f66673d45f9c059f945f757b",
+        "id": "toolu_01WgX8ad8iHC4AHY3j4PD38A",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      }
+    ],
+    "final_digest": "5bef3c65df83024ba49c63a7a02cd776930b29e7f66673d45f9c059f945f757b",
+    "root": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v8/heldout-1/sessions/10-NOEXEC-b02-iso-date/repo"
+  }
+}

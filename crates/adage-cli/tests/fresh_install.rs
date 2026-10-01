@@ -211,6 +211,46 @@ fn b2_outside_a_repository_nothing_is_learned_or_said() {
     assert_eq!(w.spawned().len(), 1);
 }
 
+/// QA first-run #8 and #5: a repository set up from a terminal (its reflexes indexed before any
+/// session) says what is in effect at its first session, once; and `adage report` counts what was
+/// withheld from control traces only, not every directive again.
+#[test]
+#[cfg_attr(not(debug_assertions), ignore = "requires debug-only ADAGE_TEST_NO_SPAWN instrumentation")]
+fn a_repository_set_up_from_a_terminal_says_so_at_its_first_session() {
+    let w = World::new();
+    let repo = w.repo("work/click");
+    let key = adage_core::repo::repo_key(&repo);
+    let start =
+        route("tests-first", Trigger::SessionStart, Step::Run { command: "make test".into() }, Strength::Prime, 9, 10);
+    let mut t = track("click", vec![start]);
+    t.manifest.scope.repo = key;
+    io::write(&w.data.join("tracks/click/learned"), &t).unwrap();
+    let o = w.run_in(&repo, &["condition", "--instincts-only"], "", &[]);
+    assert!(o.status.success(), "{}", text(&o));
+    let first = w.hook("SessionStart", &repo, "s1");
+    let msg: Value = serde_json::from_str(first.trim()).unwrap_or_else(|_| panic!("a notice: {first:?}"));
+    assert_eq!(
+        msg["systemMessage"],
+        "adage: 1 reflex active in this repo; it keeps learning as you work. Nothing runs without you."
+    );
+    assert_eq!(w.hook("SessionStart", &repo, "s2"), "", "said once");
+    // A treated session: its directive is sent, and nothing was withheld.
+    let prompt = |sid: &str, arm: &str| {
+        let p = json!({ "session_id": sid, "cwd": repo, "hook_event_name": "UserPromptSubmit", "prompt": "fix it", "transcript_path": "/dev/null" });
+        let o = w.run_in(&w.root, &["hook", "claude", "UserPromptSubmit"], &p.to_string(), &[("ADAGE_ARM", arm)]);
+        String::from_utf8_lossy(&o.stdout).to_string()
+    };
+    assert!(prompt("s1", "treated").contains("make test"));
+    let t = text(&w.run(&["report"]));
+    assert!(t.contains("directives  1 sent") && !t.contains("withheld"), "{t}");
+    // A control session: what it would have said is withheld, and counted as such.
+    assert_eq!(prompt("s3", "control"), "");
+    let t = text(&w.run(&["report"]));
+    assert!(t.contains("directives  1 sent · 1 withheld in control traces"), "{t}");
+    let j: Value = serde_json::from_slice(&w.run(&["report", "--json"]).stdout).unwrap();
+    assert_eq!((j["totals"]["directives"].as_u64(), j["totals"]["withheld"].as_u64()), (Some(1), Some(1)), "{j}");
+}
+
 /// B3: `adage status` and the `adage watch` header show the bundled model, not "no model", and do
 /// not send the person to `adage models fetch`.
 #[test]
@@ -463,15 +503,110 @@ fn l5_doctor_flags_plugin_and_settings_registered_together() {
     std::fs::copy(bin, staged.join("adage")).unwrap();
     let v = w.doctor(&repo);
     assert!(warnings(&v).iter().all(|c| !c.contains("twice")), "{:?}", warnings(&v));
-    let o = w.run_in(
-        &w.root,
-        &["install", "claude-code", "--write", "--scope", "user", "--bin", bin],
-        "",
-        &[("ADAGE_ALLOW_NONINTERACTIVE", "1")],
-    );
-    assert!(o.status.success(), "{}", text(&o));
+    // `install --write` does not add a second registration beside the plugin's (QA first-run #2).
+    let person = [("ADAGE_ALLOW_NONINTERACTIVE", "1")];
+    let o = w.run_in(&w.root, &["install", "claude-code", "--write", "--scope", "user", "--bin", bin], "", &person);
+    let t = text(&o);
+    assert!(o.status.success() && t.contains("already registered") && t.contains("the Adage plugin"), "{t}");
+    assert!(t.contains("would run every hook twice"), "{t}");
+    assert!(!w.p("home/.claude/settings.json").exists(), "nothing written");
+    // One made otherwise (by hand, or by an older Adage): doctor says so, with the removal.
+    let o = w.run_in(&w.root, &["install", "claude-code", "--print", "--bin", bin], "", &[]);
+    std::fs::write(w.p("home/.claude/settings.json"), &o.stdout).unwrap();
     let v = w.doctor(&repo);
-    let twice: Vec<String> = warnings(&v).into_iter().filter(|c| c.contains("twice")).collect();
+    let twice: Vec<&Value> =
+        v["checks"].as_array().unwrap().iter().filter(|c| c["check"].as_str().unwrap().contains("twice")).collect();
     assert_eq!(twice.len(), 1, "{:?}", warnings(&v));
-    assert!(twice[0].contains("registered by the Adage plugin and in ~/.claude/settings.json"), "{twice:?}");
+    let detail = twice[0]["detail"].as_str().unwrap();
+    assert!(detail.contains("registered by the Adage plugin and in ~/.claude/settings.json"), "{detail}");
+    let fix = twice[0]["fix"].as_str().unwrap();
+    assert!(fix.contains("`adage install claude-code --remove --scope user`"), "{fix}");
+    let o = w.run_in(&w.root, &["install", "claude-code", "--remove", "--scope", "user"], "", &person);
+    assert!(o.status.success() && text(&o).contains("removed"), "{}", text(&o));
+    assert!(warnings(&w.doctor(&repo)).iter().all(|c| !c.contains("twice")));
+}
+
+/// QA first-run #2: a user-scope registration, then the documented project-scope default: no
+/// second copy is written; one made by hand is flagged by `doctor` and `delegate status`, each
+/// naming the `--remove` that leaves one.
+#[test]
+fn a_second_registration_is_refused_and_flagged() {
+    let w = World::new();
+    let repo = w.repo("work/acme");
+    let bin = env!("CARGO_BIN_EXE_adage");
+    let person = [("ADAGE_ALLOW_NONINTERACTIVE", "1")];
+    let o = w.run_in(&repo, &["install", "claude-code", "--write", "--scope", "user", "--bin", bin], "", &person);
+    assert!(o.status.success(), "{}", text(&o));
+    let local = repo.join(".claude/settings.local.json");
+    let o = w.run_in(&repo, &["install", "claude-code", "--write", "--bin", bin], "", &person);
+    let t = text(&o);
+    assert!(o.status.success() && t.contains("already registered") && t.contains("~/.claude/settings.json"), "{t}");
+    assert!(t.contains("adage install claude-code --remove --scope user"), "{t}");
+    assert!(!local.exists(), "no second copy");
+    // Written by hand: doctor warns, and so does `delegate status`.
+    std::fs::create_dir_all(local.parent().unwrap()).unwrap();
+    std::fs::copy(w.p("home/.claude/settings.json"), &local).unwrap();
+    let v = w.doctor(&repo);
+    let twice: Vec<&Value> =
+        v["checks"].as_array().unwrap().iter().filter(|c| c["check"] == "hooks: claude-code (twice)").collect();
+    assert_eq!(twice.len(), 1, "{v:#}");
+    assert_eq!(twice[0]["status"], "warn");
+    assert!(twice[0]["fix"].as_str().unwrap().contains("`adage install claude-code --remove --scope project`"));
+    let o = w.run_in(&repo, &["delegate", "status"], "", &[]);
+    let t = text(&o);
+    assert!(
+        t.contains("claude-code is registered twice")
+            && t.contains("adage install claude-code --remove --scope project"),
+        "{t}"
+    );
+    let j: Value = serde_json::from_slice(&w.run_in(&repo, &["delegate", "status", "--json"], "", &[]).stdout).unwrap();
+    assert_eq!(j["duplicates"][0]["harness"], "claude-code", "{j:#}");
+    // The fix it names leaves one.
+    let o = w.run_in(&repo, &["install", "claude-code", "--remove", "--scope", "project"], "", &person);
+    assert!(o.status.success(), "{}", text(&o));
+    assert!(warnings(&w.doctor(&repo)).iter().all(|c| !c.contains("twice")));
+}
+
+/// QA first-run #12 and #10: a user-scope install keeps the person's settings as they wrote
+/// them (key order, formatting, their own hooks), and `--remove` takes Adage's hooks out again,
+/// leaving the file exactly as it was; both keep a backup.
+#[test]
+fn install_keeps_the_persons_settings_and_remove_restores_them() {
+    let w = World::new();
+    let settings = w.p("home/.claude/settings.json");
+    let mine = "{\n  \"model\": \"sonnet\",\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"echo mine\"\n          }\n        ]\n      }\n    ]\n  },\n  \"env\": {\"A\": \"1\"}\n}\n";
+    std::fs::write(&settings, mine).unwrap();
+    let person = [("ADAGE_ALLOW_NONINTERACTIVE", "1")];
+    let args = ["install", "claude-code", "--write", "--scope", "user", "--bin", "/opt/adage"];
+    let o = w.run_in(&w.root, &args, "", &person);
+    let t = text(&o);
+    assert!(o.status.success(), "{t}");
+    // The diff only adds: nothing of the person's is shown as removed and re-added.
+    assert!(!t.lines().any(|l| l.trim_start().starts_with("- ")), "{t}");
+    let after = std::fs::read_to_string(&settings).unwrap();
+    assert!(after.starts_with("{\n  \"model\": \"sonnet\",\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"echo mine\""), "{after}");
+    assert!(after.ends_with("  },\n  \"env\": {\"A\": \"1\"}\n}\n"), "{after}");
+    let v: Value = serde_json::from_str(&after).unwrap();
+    assert_eq!(v["hooks"]["Stop"].as_array().unwrap().len(), 2, "theirs kept, ours added");
+    assert_eq!(std::fs::read_to_string(w.p("home/.claude/settings.json.adage-bak")).unwrap(), mine);
+    // Removed: exactly what the person had, and a backup of what was there.
+    let o = w.run_in(&w.root, &["install", "claude-code", "--remove", "--scope", "user"], "", &person);
+    let t = text(&o);
+    assert!(o.status.success() && t.contains("removed") && t.contains("settings.json.adage-bak"), "{t}");
+    assert_eq!(std::fs::read_to_string(&settings).unwrap(), mine);
+    assert_eq!(std::fs::read_to_string(w.p("home/.claude/settings.json.adage-bak")).unwrap(), after);
+    // Again: nothing to remove.
+    let o = w.run_in(&w.root, &["install", "claude-code", "--remove", "--scope", "user"], "", &person);
+    assert!(o.status.success() && text(&o).contains("nothing to remove"), "{}", text(&o));
+    // Inside an agent session, it refuses, as --write does.
+    let o = w.run_in(&w.root, &["install", "claude-code", "--remove", "--scope", "user"], "", &[("CLAUDECODE", "1")]);
+    assert!(!o.status.success() && text(&o).contains("will not run inside one"), "{}", text(&o));
+    // OpenCode: Adage's plugin file is removed, with a backup.
+    let plugin = w.p("xdg/opencode/plugins/adage.js");
+    let o =
+        w.run_in(&w.root, &["install", "opencode", "--write", "--scope", "user", "--bin", "/opt/adage"], "", &person);
+    assert!(o.status.success() && plugin.exists(), "{}", text(&o));
+    let o = w.run_in(&w.root, &["install", "opencode", "--remove", "--scope", "user"], "", &person);
+    assert!(o.status.success() && !plugin.exists(), "{}", text(&o));
+    assert!(w.p("xdg/opencode/plugins/adage.js.adage-bak").exists());
 }

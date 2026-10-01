@@ -1,0 +1,33 @@
+{
+  "passed": false,
+  "confirmed_eliminations": 0,
+  "totals": {
+    "learned": {
+      "assignments": 4,
+      "quality_passes": 3,
+      "cost_usd": 0.9829461,
+      "known_costs": 4,
+      "model_requests": 152,
+      "agent_actions": 151,
+      "execution_attempts": 0,
+      "journal_receipts": 0
+    },
+    "automatic": {
+      "assignments": 4,
+      "quality_passes": 4,
+      "cost_usd": 0.8479369000000001,
+      "known_costs": 4,
+      "model_requests": 130,
+      "agent_actions": 126,
+      "execution_attempts": 4,
+      "journal_receipts": 4
+    }
+  },
+  "limitations": [
+    "Ten instruction-guided demonstrations across five repeated tasks; not autonomous discovery.",
+    "Four transfer tasks excluded from learning but previously observed in two cold pilots; not globally unseen benchmarks.",
+    "All eight assignments remain in the denominator, including failures and missing runs.",
+    "Only identical fixed pytest commands qualify for confirmed elimination; unknown shell behavior disqualifies.",
+    "API requests and tokens do not measure GPU utilization or energy."
+  ]
+}

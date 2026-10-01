@@ -116,6 +116,25 @@ pub fn wrap_origin(
     wrap_exec(track, version, route, kind, strength, body, origin, "")
 }
 
+/// A result block: the wrapper's attributes carry provenance (`exec="e2"`, which learning reads), and
+/// the body is the fact alone, with no origin footer.
+fn wrap_result(
+    track: &str,
+    version: &str,
+    route: &str,
+    kind: &str,
+    strength: Strength,
+    body: &str,
+    exec: &str,
+) -> String {
+    let wrapped = wrap_exec(track, version, route, kind, strength, body, None, exec);
+    let footer = format!("\n{}\n</adage-reflex>", footer(None));
+    match wrapped.strip_suffix(&footer) {
+        Some(head) => format!("{head}\n</adage-reflex>"),
+        None => wrapped,
+    }
+}
+
 /// [`wrap_origin`], with `exec="<level>"` after the other attributes when `exec` is not empty: a
 /// directive whose route Adage ran (Track C §3.4). Learning reads the attribute: after it, the
 /// agent's actions are not its own (`adage_learn::import::Signals`).
@@ -185,14 +204,631 @@ pub fn action_applied(d: &crate::Directive, edited: &str, command: &str, changed
 }
 
 /// A completed CPU action nominated by a learned context, with no edit obligation.
-pub fn action_predicted(d: &crate::Directive, command: &str, changed: &[String], verify: bool) -> String {
-    let outcome = if verify {
-        "verification succeeded; no repository files changed".to_string()
-    } else {
-        format!("updated {} declared output files", changed.len())
+pub struct CpuReceipt<'a> {
+    /// Tests the run collected, from the action's declared pytest cache (never stdout).
+    pub tests: Option<&'a TestEvidence>,
+    pub operation: &'a str,
+    /// Digest of the executor's declared inputs, not a claim about all repository files.
+    pub input_digest: &'a str,
+    pub exit: Option<i32>,
+    pub duration_ms: u64,
+}
+
+/// What a passing pytest run's declared cache shows it collected: node ids new since the last
+/// recorded run here (bounded), and the collected total when no earlier record existed. `yours`:
+/// `new` lists instead the run's tests that this session's edits added (by function name).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct TestEvidence {
+    pub collected: Option<usize>,
+    pub new: Vec<String>,
+    pub more_new: usize,
+    pub yours: bool,
+}
+
+pub fn action_predicted(
+    d: &crate::Directive,
+    command: &str,
+    changed: &[String],
+    verify: bool,
+    receipt: &CpuReceipt<'_>,
+) -> String {
+    // Factual, short, fact first: what ran, the result, which tests, and how long it stays current.
+    let seconds = receipt.duration_ms as f64 / 1000.0;
+    let result = if verify { "passed".to_string() } else { format!("updated {} declared output files", changed.len()) };
+    let mut body = format!(
+        "Adage ran `{}` after your edits: {result} (exit {}, {seconds:.1} s; receipt {}).",
+        sanitise(command),
+        receipt.exit.map_or("unknown".into(), |e| e.to_string()),
+        short_id(receipt.operation),
+    );
+    if let Some(t) = receipt.tests {
+        body.push_str(&format!("\n{}", tests_line(t)));
+    }
+    if verify {
+        body.push_str("\nNo files have changed since it ran. The result covers single tests inside its targets and stays current until a file changes; Adage runs it again when you finish if one does.");
+    }
+    wrap_result(&d.track, &d.version, &d.route, &d.kind, d.strength, &body, "e2")
+}
+
+/// The tests a passing run collected, from its declared pytest record: "Tests: 228 collected;
+/// exit 0; new since the last recorded run: a, b." The record lists collected node ids, skipped
+/// and expected failures included, so it says what was collected and how the run exited, never
+/// that every test passed.
+fn tests_line(t: &TestEvidence) -> String {
+    let mut line = String::from("Tests:");
+    if let Some(n) = t.collected {
+        line.push_str(&format!(" {n} collected; exit 0"));
+    }
+    if !t.new.is_empty() {
+        let names: Vec<String> = t.new.iter().map(|n| sanitise(n)).collect();
+        let sep = if t.collected.is_some() { ";" } else { "" };
+        let what = if t.yours { "the tests added in this session" } else { "new since the last recorded run" };
+        line.push_str(&format!("{sep} {what}: {}", names.join(", ")));
+        if t.more_new > 0 {
+            line.push_str(&format!(" (+{} more)", t.more_new));
+        }
+    }
+    line.push('.');
+    line
+}
+
+#[cfg(test)]
+mod result_text_tests {
+    use super::*;
+
+    fn d() -> crate::Directive {
+        crate::Directive {
+            route: "run-1".into(),
+            track: "repo/learned".into(),
+            version: "0.1.0".into(),
+            strength: Strength::Prime,
+            text: "x".into(),
+            kind: "run".into(),
+            origin: None,
+        }
+    }
+
+    #[test]
+    fn results_are_short_factual_and_carry_provenance_in_attributes_only() {
+        let t = TestEvidence { collected: Some(228), new: vec!["tests/t.py::test_a".into()], ..Default::default() };
+        let ok = action_predicted(
+            &d(),
+            ".venv/bin/python -m pytest tests/t.py -q",
+            &[],
+            true,
+            &CpuReceipt {
+                tests: Some(&t),
+                operation: "0123456789abcdef0123",
+                input_digest: "d".repeat(64).leak(),
+                exit: Some(0),
+                duration_ms: 1620,
+            },
+        );
+        assert!(ok.contains("exec=\"e2\"") && ok.contains("passed (exit 0, 1.6 s; receipt 0123456789ab)"), "{ok}");
+        // F7: the record counts collected tests, skipped and expected failures included.
+        assert!(
+            ok.contains("Tests: 228 collected; exit 0; new since the last recorded run: tests/t.py::test_a."),
+            "{ok}"
+        );
+        assert!(!ok.contains("all passing"), "{ok}");
+        let yours = TestEvidence { yours: true, ..t.clone() };
+        let named = action_predicted(
+            &d(),
+            "cmd",
+            &[],
+            true,
+            &CpuReceipt { tests: Some(&yours), operation: "op", input_digest: "d", exit: Some(0), duration_ms: 1 },
+        );
+        assert!(
+            named.contains("Tests: 228 collected; exit 0; the tests added in this session: tests/t.py::test_a."),
+            "{named}"
+        );
+        for banned in ["COMPLETED CPU ACTION", "not requested by the user", "dddddddd", "Do not", "Learned by Adage"] {
+            assert!(!ok.contains(banned), "{banned}: {ok}");
+        }
+        let record = FailureRecord {
+            refreshed: true,
+            failing: Listed { names: vec!["tests/t.py::test_a".into()], more: 2 },
+            collection: Listed { names: vec!["tests/t_c.py".into()], more: 0 },
+            uncleared: Listed { names: vec!["tests/t.py::test_old".into()], more: 0 },
+            cases: vec![],
+        };
+        let failed = action_failed(&d(), "cmd", Some(1), Some(&record), "0123456789abcdef");
+        assert!(
+            failed.contains("it failed (exit 1; receipt 0123456789ab). Nothing was changed.")
+                && failed.contains("Failing tests: tests/t.py::test_a (+2 more).")
+                && failed.contains("Collection errors (the file could not be imported) in: tests/t_c.py.")
+                && failed.contains("Recorded as failing before this run and not cleared by it: tests/t.py::test_old."),
+            "{failed}"
+        );
+        let stale = action_failed(&d(), "cmd", Some(1), Some(&FailureRecord::default()), "0123456789abcdef");
+        assert!(
+            stale.contains("not updated by this run, so no failing test names") && !stale.contains("Failing tests")
+        );
+        let gate = stop_gate_failed("cmd", Some(1), None);
+        assert!(gate.contains("as you finished: it failed (exit 1)") && !gate.contains("Failing tests"));
+        assert_eq!(card_checks_line(&[".venv/bin/python -m pytest tests/t.py -q"]).unwrap(),
+                   "Tests in these sessions ran with: `.venv/bin/python -m pytest tests/t.py -q`. Python here is `.venv/bin/python`.");
+        assert_eq!(card_checks_line(&["make test"]).unwrap(), "Tests in these sessions ran with: `make test`.");
+        assert!(card_checks_line(&[]).is_none());
+    }
+
+    /// The passing receipt is exactly as before the failure detail: same sentences, same order.
+    #[test]
+    fn the_pass_receipt_is_unchanged() {
+        let t = TestEvidence {
+            collected: None,
+            new: vec!["tests/test_validate.py::test_latlong_invalid[invalid_latlong12]".into()],
+            more_new: 0,
+            yours: true,
+        };
+        let receipt = CpuReceipt {
+            tests: Some(&t),
+            operation: "959cb36ea93c0123",
+            input_digest: "d",
+            exit: Some(0),
+            duration_ms: 1620,
+        };
+        let ok = action_predicted(&d(), ".venv/bin/python -m pytest tests/test_validate.py -q", &[], true, &receipt);
+        assert_eq!(
+            ok,
+            "<adage-reflex track=\"repo/learned@0.1.0\" route=\"run-1\" strength=\"prime\" kind=\"run\" exec=\"e2\">\n\
+             Adage ran `.venv/bin/python -m pytest tests/test_validate.py -q` after your edits: passed (exit 0, 1.6 s; receipt 959cb36ea93c).\n\
+             Tests: the tests added in this session: tests/test_validate.py::test_latlong_invalid[invalid_latlong12].\n\
+             No files have changed since it ran. The result covers single tests inside its targets and stays current until a file changes; Adage runs it again when you finish if one does.\n\
+             </adage-reflex>"
+        );
+    }
+
+    fn b08_case(added: bool) -> FailingCase {
+        FailingCase {
+            id: "tests/test_validate.py::test_latlong_invalid[invalid_latlong12]".into(),
+            facts: Some(crate::pytest_case::CaseFacts {
+                def_line: 1061,
+                case: Some((1052, Some("invalid_latlong = [45, 90]".into()))),
+                cases_line: None,
+                check: Some((1063, "with pytest.raises(ValidationError):".into())),
+            }),
+            added,
+        }
+    }
+
+    fn failed_with(cases: Vec<FailingCase>) -> FailureRecord {
+        let names: Vec<String> = cases.iter().map(|c| c.id.clone()).take(12).collect();
+        FailureRecord { refreshed: true, failing: Listed { names, more: 0 }, cases, ..Default::default() }
+    }
+
+    /// The b08 shape: the failing case's value and the test's one check, from its source, and a
+    /// flag that this session added the test, in the receipt and in the finish-line continuation.
+    #[test]
+    fn a_failing_case_is_described_and_flagged_when_the_session_added_it() {
+        let r = failed_with(vec![b08_case(true)]);
+        let failed = action_failed(
+            &d(),
+            ".venv/bin/python -m pytest tests/test_validate.py -q",
+            Some(1),
+            Some(&r),
+            "959cb36ea93c0123",
+        );
+        let body = "Adage ran `.venv/bin/python -m pytest tests/test_validate.py -q` after your edits: it failed (exit 1; receipt 959cb36ea93c). Nothing was changed.\n\
+             Failing tests: tests/test_validate.py::test_latlong_invalid[invalid_latlong12].\n\
+             From the test source the run used (pytest's own failure messages are not passed on):\n\
+             test_latlong_invalid[invalid_latlong12] is the case invalid_latlong = [45, 90] (tests/test_validate.py line 1052); the test's only check is line 1063: with pytest.raises(ValidationError):\n\
+             test_latlong_invalid[invalid_latlong12] was added in this session; check it against the request before changing the implementation.";
+        assert!(failed.contains(&format!("exec=\"e2\">\n{body}\n</adage-reflex>")), "{failed}");
+        let gate = stop_gate_failed(".venv/bin/python -m pytest tests/test_validate.py -q", Some(1), Some(&r));
+        assert!(gate.contains("with pytest.raises(ValidationError): test_latlong_invalid[invalid_latlong12] was added in this session"), "{gate}");
+        assert!(gate.starts_with(FINISH_LINE) && gate.ends_with(NOT_FROM_USER) && !gate.contains('\n'), "{gate}");
+        // Not added in this session: the same facts, no flag.
+        let r = failed_with(vec![b08_case(false)]);
+        for text in [stop_gate_failed("cmd", Some(1), Some(&r)), action_failed(&d(), "cmd", Some(1), Some(&r), "op")] {
+            assert!(
+                text.contains("is the case invalid_latlong = [45, 90]") && !text.contains("added in this session"),
+                "{text}"
+            );
+        }
+        // Without its value or its case: where it is defined.
+        let mut c = b08_case(false);
+        c.facts =
+            Some(crate::pytest_case::CaseFacts { def_line: 1061, case: None, cases_line: Some(1040), check: None });
+        let text = action_failed(&d(), "cmd", Some(1), Some(&failed_with(vec![c])), "op");
+        assert!(
+            text.contains("test_latlong_invalid[invalid_latlong12] is defined at tests/test_validate.py line 1061; its cases are listed from line 1040."),
+            "{text}"
+        );
+        // No source facts: no detail line, only the flag.
+        let mut c = b08_case(true);
+        c.facts = None;
+        let text = action_failed(&d(), "cmd", Some(1), Some(&failed_with(vec![c])), "op");
+        assert!(!text.contains("From the test source") && text.contains("was added in this session"), "{text}");
+        // Several cases of one added function, and another: counted, then named.
+        let mut many: Vec<FailingCase> =
+            (0..3).map(|i| FailingCase { id: format!("tests/t.py::test_a[v{i}]"), facts: None, added: true }).collect();
+        many.push(FailingCase { id: "tests/t.py::test_b".into(), facts: None, added: true });
+        many.push(FailingCase { id: "tests/t.py::test_c".into(), facts: None, added: false });
+        let text = action_failed(&d(), "cmd", Some(1), Some(&failed_with(many)), "op");
+        assert!(
+            text.contains("test_a (3 failing cases) and test_b were added in this session; check them against the request before changing the implementation."),
+            "{text}"
+        );
+    }
+
+    /// Detail is bounded per test and in total, sanitised, and never reads as a named command.
+    #[test]
+    fn failing_case_detail_is_bounded_and_sanitised() {
+        let long = |i: usize| FailingCase {
+            id: format!("tests/test_{i:02}.py::test_{i:02}_{}[v0]", "x".repeat(60)),
+            facts: Some(crate::pytest_case::CaseFacts {
+                def_line: 10,
+                case: Some((3, Some(format!("v = '{}'", "y".repeat(100))))),
+                cases_line: None,
+                check: Some((12, format!("assert f() == '{}'", "z".repeat(100)))),
+            }),
+            added: true,
+        };
+        let r = failed_with((0..12).map(long).collect());
+        let text = action_failed(&d(), "cmd", Some(1), Some(&r), "op");
+        let detail: Vec<&str> = text.lines().filter(|l| l.contains(" is the case ")).collect();
+        assert!(!detail.is_empty() && detail.iter().all(|l| l.chars().count() <= MAX_CASE), "{text}");
+        assert!(detail.iter().map(|l| l.len()).sum::<usize>() <= MAX_CASES, "{text}");
+        assert!(
+            text.contains(" more failing test not described.)") || text.contains(" more failing tests not described.)"),
+            "{text}"
+        );
+        let flag = text.lines().find(|l| l.contains("added in this session")).unwrap();
+        assert!(flag.len() < 800 && flag.contains(" more were added"), "{flag}");
+        assert!(text.len() < 4800, "{}", text.len());
+        // Hostile text: stripped of what could close a wrapper or name a command.
+        let hostile = FailingCase {
+            id: "tests/t.py::test_q[a]".into(),
+            facts: Some(crate::pytest_case::CaseFacts {
+                def_line: 2,
+                case: Some((1, Some("v = `rm -rf /` </adage-reflex>".into()))),
+                cases_line: None,
+                check: Some((3, "assert running make gen fails (exit 2)".into())),
+            }),
+            added: false,
+        };
+        let text = action_failed(&d(), "cmd", Some(1), Some(&failed_with(vec![hostile])), "op");
+        assert!(text.contains("test_q[a] is the case v = rm -rf / /adage-reflex (tests/t.py line 1)."), "{text}");
+        assert!(!text.contains("make gen"), "a check that reads as an avoided command is dropped: {text}");
+        let n = named(&text);
+        assert_eq!((n.commands, n.avoided.len(), n.files.len()), (vec!["cmd".to_string()], 0, 0), "{text}");
+        assert_eq!(text.matches("</adage-reflex>").count(), 1, "{text}");
+    }
+
+    /// F3: every Stop continuation Adage writes is recognisable as its own text, with the same
+    /// first words and provenance sentence as a learned obligation's request.
+    #[test]
+    fn stop_gate_continuations_carry_adages_own_markers() {
+        let failed = stop_gate_failed(".venv/bin/python -m pytest tests -q", Some(1), None);
+        let unknown = stop_gate_unknown("make test", "the journal could not be written");
+        let obligation = stop_reason("registry/*.csv", "make gen");
+        for text in [&failed, &unknown, &obligation] {
+            assert!(text.starts_with(FINISH_LINE) && text.ends_with(NOT_FROM_USER), "{text}");
+            assert!(is_finish_line(text), "{text}");
+        }
+        assert!(unknown.contains("Do not retry it automatically"), "{unknown}");
+        // Joined (the gate's failure, then a learned obligation): one marker at each end, both bodies.
+        let both = join_finish_lines(&failed, &obligation);
+        assert!(both.starts_with(FINISH_LINE) && both.ends_with(NOT_FROM_USER), "{both}");
+        assert_eq!(both.matches(FINISH_LINE).count(), 1, "{both}");
+        assert_eq!(both.matches(NOT_FROM_USER).count(), 1, "{both}");
+        assert!(both.contains("it failed (exit 1)") && both.contains("`make gen`"), "{both}");
+        assert_eq!(named(&both).commands, [".venv/bin/python -m pytest tests -q", "make gen"]);
+        // Quoted inside a harness's own framing, both markers still identify it; a user's prompt does not.
+        assert!(is_finish_line(&format!("Stop hook feedback:\n{failed}")));
+        assert!(!is_finish_line("please add an Adage finish-line check: to the docs"));
+        assert_eq!(finish_line(&failed), failed, "idempotent");
+    }
+}
+
+/// The first 12 characters of an operation id: enough to find it in the journal.
+fn short_id(id: &str) -> String {
+    sanitise(id).chars().take(12).collect()
+}
+
+/// Names from a run's declared record, bounded: the first few, and how many more.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Listed {
+    pub names: Vec<String>,
+    pub more: usize,
+}
+
+impl Listed {
+    pub fn is_empty(&self) -> bool {
+        self.names.is_empty() && self.more == 0
+    }
+}
+
+/// What a failed pytest run's declared failure record (`.pytest_cache/v/cache/lastfailed`) shows
+/// about *this* run, never its output. pytest's record is cumulative: it keeps a failure until
+/// that test passes or is skipped, so only what this run changed can be attributed to it. A
+/// record this run did not rewrite says nothing about it (`refreshed` false), and no names are
+/// given then.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FailureRecord {
+    /// The run rewrote the record: the lists below are about this run.
+    pub refreshed: bool,
+    /// Tests this run added to the record: they failed in this run.
+    pub failing: Listed,
+    /// Test files this run recorded as failing to collect (an import or syntax error).
+    pub collection: Listed,
+    /// Failures recorded before this run that it did not clear: they failed again or did not run.
+    pub uncleared: Listed,
+    /// The listed failing tests (`failing`, then `uncleared`) as far as Adage can describe them
+    /// beyond their names ([`FailingCase`]).
+    pub cases: Vec<FailingCase>,
+}
+
+/// A failing test as a failed run's receipt describes it beyond its name. pytest's failure
+/// messages are the run's output, which Adage never passes on; what is given instead is what the
+/// test's own source says ([`crate::pytest_case::facts`], from the file the run used) and whether
+/// this session's edits added it.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FailingCase {
+    /// The node id, as the record names it.
+    pub id: String,
+    /// Facts from the test's source, when it could be read.
+    pub facts: Option<crate::pytest_case::CaseFacts>,
+    /// Its test function was added by this session's edits (the runtime's `new_tests`).
+    pub added: bool,
+}
+
+/// One failing test's sentence is cut to this many characters.
+const MAX_CASE: usize = 320;
+/// All failing tests' sentences together, in bytes.
+const MAX_CASES: usize = 2400;
+
+/// The sentences that describe failing tests beyond their names: a line of source facts for each
+/// test that has some ([`case_sentence`]), within [`MAX_CASES`], and one sentence naming those
+/// that this session added.
+fn case_sentences(cases: &[FailingCase]) -> Vec<String> {
+    let mut out = Vec::new();
+    let (mut used, mut omitted) = (0usize, 0usize);
+    let mut lines = Vec::new();
+    for c in cases {
+        let Some(s) = case_sentence(c) else { continue };
+        if used + s.len() > MAX_CASES {
+            omitted += 1;
+            continue;
+        }
+        used += s.len();
+        lines.push(s);
+    }
+    if !lines.is_empty() {
+        out.push("From the test source the run used (pytest's own failure messages are not passed on):".to_string());
+        out.extend(lines);
+        if omitted > 0 {
+            out.push(format!("({omitted} more failing test{} not described.)", if omitted == 1 { "" } else { "s" }));
+        }
+    }
+    out.extend(added_sentence(cases));
+    out
+}
+
+/// A node id without its file: `Class::test_x[case]`.
+fn short_label(id: &str) -> String {
+    sanitise(id.split_once("::").map_or(id, |(_, rest)| rest))
+}
+
+/// One failing test's source facts in a sentence: which parametrized case it is (with its value
+/// when it can be shown), where, and its check when it has exactly one. `None` when there is
+/// nothing to say, or when the sentence would read as one of Adage's named commands or files
+/// ([`named`]).
+fn case_sentence(c: &FailingCase) -> Option<String> {
+    let f = c.facts.as_ref()?;
+    let label = short_label(&c.id);
+    let file = sanitise(c.id.split_once("::")?.0);
+    let mut s = match (&f.case, f.cases_line) {
+        (Some((line, Some(value))), _) => format!("{label} is the case {} ({file} line {line})", sanitise(value)),
+        (Some((line, None)), _) => format!("{label} is the case at {file} line {line}"),
+        (None, Some(cases)) => {
+            format!("{label} is defined at {file} line {}; its cases are listed from line {cases}", f.def_line)
+        }
+        (None, None) => format!("{label} is defined at {file} line {}", f.def_line),
     };
-    let body = format!("Adage ran `{}` automatically after a learned context matched: {outcome}. This action is complete; do not repeat it.", sanitise(command));
-    wrap_exec(&d.track, &d.version, &d.route, &d.kind, d.strength, &body, d.origin.as_ref(), "e2")
+    let base = s.clone();
+    if let Some((line, text)) = &f.check {
+        s.push_str(&format!("; the test's only check is line {line}: {}", sanitise(text)));
+    }
+    // A sentence ends with a full stop, unless it ends with a quoted line's own colon.
+    let end = |mut s: String| {
+        if !s.ends_with(':') {
+            s.push('.');
+        }
+        s
+    };
+    let fits = |s: &str| s.chars().count() <= MAX_CASE && named(s).is_empty();
+    [end(s), end(base)].into_iter().find(|s| fits(s))
+}
+
+/// The sentence naming the failing tests this session's edits added: by their case when a test
+/// function has one listed, else by function with its count. Bounded with the cases' list.
+fn added_sentence(cases: &[FailingCase]) -> Option<String> {
+    let mut funcs: Vec<(String, Vec<String>)> = Vec::new();
+    for c in cases.iter().filter(|c| c.added) {
+        let label = short_label(&c.id);
+        let func = label.split_once('[').map_or(label.as_str(), |(f, _)| f).to_string();
+        match funcs.iter_mut().find(|(f, _)| *f == func) {
+            Some((_, ids)) => ids.push(label),
+            None => funcs.push((func, vec![label])),
+        }
+    }
+    let all: Vec<String> = funcs
+        .into_iter()
+        .map(|(f, ids)| match ids.as_slice() {
+            [one] => one.clone(),
+            _ => format!("{f} ({} failing cases)", ids.len()),
+        })
+        .collect();
+    // Bounded: the names that fit in 600 bytes, then how many more.
+    let mut names: Vec<String> = Vec::new();
+    let mut used = 0;
+    for n in &all {
+        if used + n.len() > 600 {
+            break;
+        }
+        used += n.len() + 2;
+        names.push(n.clone());
+    }
+    if names.len() < all.len() {
+        names.push(format!("{} more", all.len() - names.len()));
+    }
+    let (one, them) = match names.len() {
+        0 => return None,
+        1 => (true, names[0].clone()),
+        n => (false, format!("{} and {}", names[..n - 1].join(", "), names[n - 1])),
+    };
+    Some(if one {
+        format!("{them} was added in this session; check it against the request before changing the implementation.")
+    } else {
+        format!("{them} were added in this session; check them against the request before changing the implementation.")
+    })
+}
+
+/// The failing tests a run's declared pytest record names, bounded: "a, b (+3 more)".
+fn failing_list(l: &Listed) -> String {
+    let names: Vec<String> = l.names.iter().map(|n| sanitise(n)).collect();
+    let mut s = names.join(", ");
+    if l.more > 0 {
+        s.push_str(&format!(" (+{} more)", l.more));
+    }
+    s
+}
+
+/// The sentences a failure record supports, each about this run only.
+fn failure_sentences(r: &FailureRecord) -> Vec<String> {
+    if !r.refreshed {
+        return vec![
+            "pytest's failure record was not updated by this run, so no failing test names are given here.".into()
+        ];
+    }
+    let mut out = Vec::new();
+    if !r.failing.is_empty() {
+        out.push(format!("Failing tests: {}.", failing_list(&r.failing)));
+    }
+    if !r.collection.is_empty() {
+        out.push(format!("Collection errors (the file could not be imported) in: {}.", failing_list(&r.collection)));
+    }
+    if !r.uncleared.is_empty() {
+        out.push(format!("Recorded as failing before this run and not cleared by it: {}.", failing_list(&r.uncleared)));
+    }
+    out.extend(case_sentences(&r.cases));
+    out
+}
+
+/// A learned verification Adage ran that failed: the exit status and, from the declared pytest
+/// record, what failed in this run ([`FailureRecord`]). Nothing was applied.
+pub fn action_failed(
+    d: &crate::Directive,
+    command: &str,
+    exit: Option<i32>,
+    record: Option<&FailureRecord>,
+    operation: &str,
+) -> String {
+    let mut body = format!(
+        "Adage ran `{}` after your edits: it failed (exit {}; receipt {}). Nothing was changed.",
+        sanitise(command),
+        exit.map_or("unknown".into(), |e| e.to_string()),
+        short_id(operation)
+    );
+    for s in record.map(failure_sentences).unwrap_or_default() {
+        body.push('\n');
+        body.push_str(&s);
+    }
+    wrap_result(&d.track, &d.version, &d.route, &d.kind, d.strength, &body, "e2")
+}
+
+/// The first words of every Stop-hook continuation Adage writes. Where a continuation re-enters
+/// as a user message (Codex turns a Stop `block` reason into the next user prompt), these words
+/// are how the hook and the learners know it as Adage's own text, never the user's prompt.
+pub const FINISH_LINE: &str = "Adage finish-line check:";
+/// The provenance sentence that ends every Stop-hook continuation Adage writes.
+pub const NOT_FROM_USER: &str = "This reminder is from Adage, not from the user.";
+
+/// `body` as a Stop-hook continuation: [`FINISH_LINE`] first and [`NOT_FROM_USER`] last, each
+/// added only when missing (so joining two continuations keeps one of each at the ends).
+pub fn finish_line(body: &str) -> String {
+    let body = body.trim();
+    let mut s = if body.starts_with(FINISH_LINE) { body.to_string() } else { format!("{FINISH_LINE} {body}") };
+    if !s.ends_with(NOT_FROM_USER) {
+        s.push(' ');
+        s.push_str(NOT_FROM_USER);
+    }
+    s
+}
+
+/// Whether `text` is a Stop-hook continuation Adage wrote: it begins with [`FINISH_LINE`], or a
+/// harness quoted it inside framing of its own and both markers are there.
+pub fn is_finish_line(text: &str) -> bool {
+    let t = text.trim_start();
+    t.starts_with(FINISH_LINE) || (t.contains(FINISH_LINE) && t.contains(NOT_FROM_USER))
+}
+
+/// Two Stop-hook continuations due at the same Stop (the finish-line gate's, then a learned
+/// obligation's) as one: both bodies, one marker at each end.
+pub fn join_finish_lines(first: &str, second: &str) -> String {
+    let strip = |s: &str| {
+        let s = s.trim();
+        let s = s.strip_prefix(FINISH_LINE).unwrap_or(s).trim();
+        s.strip_suffix(NOT_FROM_USER).unwrap_or(s).trim().to_string()
+    };
+    finish_line(&format!("{} Also: {}", strip(first), strip(second)))
+}
+
+/// The Stop-gate continuation when the approved verification failed as the agent finished.
+pub fn stop_gate_failed(command: &str, exit: Option<i32>, record: Option<&FailureRecord>) -> String {
+    let mut s = format!(
+        "Adage ran `{}` (person-approved) as you finished: it failed (exit {}).",
+        sanitise(command),
+        exit.map_or("unknown".into(), |e| e.to_string())
+    );
+    for line in record.map(failure_sentences).unwrap_or_default() {
+        s.push(' ');
+        s.push_str(&line);
+    }
+    s.push_str(" The task is not finished until it passes; Adage runs it again when you finish.");
+    finish_line(&s)
+}
+
+/// The Stop-gate continuation when the run's completion could not be confirmed: like an action's
+/// (`adage-exec`'s `act`), the agent is told not to retry it and to have a person inspect it.
+pub fn stop_gate_unknown(command: &str, reason: &str) -> String {
+    finish_line(&format!(
+        "Adage cannot confirm that its run of `{}` as you finished completed: {}. Do not retry it automatically; inspect the worktree and ask the person to acknowledge recovery.",
+        sanitise(command),
+        sanitise(reason).trim_end_matches('.')
+    ))
+}
+
+/// The person's one line when the Stop gate ran (Claude Code shows it; the model never sees it).
+pub fn stop_gate_notice(command: &str, passed: bool, exit: Option<i32>, duration_ms: u64) -> String {
+    format!(
+        "adage: ran `{}` at finish: {} (exit {}, {:.1} s).",
+        sanitise(command),
+        if passed { "passed" } else { "failed" },
+        exit.map_or("unknown".into(), |e| e.to_string()),
+        duration_ms as f64 / 1000.0
+    )
+}
+
+/// The card's line naming the test command an execution-certified learned verification uses
+/// (`cmd`), with its interpreter when it is the project's own environment. A fact about the
+/// repository, not a directive: execution-only routes still never become advice.
+pub fn card_checks_line(commands: &[&str]) -> Option<String> {
+    let cmds: Vec<String> = commands.iter().map(|c| sanitise(c)).filter(|c| !c.is_empty()).take(2).collect();
+    let first = cmds.first()?;
+    let interpreter = first
+        .split_whitespace()
+        .next()
+        .filter(|w| w.ends_with("/bin/python") && !w.starts_with('/'))
+        .map(|w| format!(" Python here is `{w}`."))
+        .unwrap_or_default();
+    Some(format!(
+        "Tests in these sessions ran with: {}.{interpreter}",
+        cmds.iter().map(|c| format!("`{c}`")).collect::<Vec<_>>().join(", ")
+    ))
 }
 
 /// A directive whose approved action Adage could not complete: the plain E0 directive, and why
@@ -282,6 +918,20 @@ fn finish_basis(r: &Route) -> String {
 }
 
 /// The body text for a route with its slots bound, or `None` if it cannot be rendered safely.
+/// A procedure card without its exemplar, with the orientation block ([`crate::orient::block`],
+/// already bounded and quoted) where it stood; checked as [`route_text`] checks a card.
+pub fn oriented_card_text(r: &Route, orientation: Option<&str>) -> Option<String> {
+    let Step::Card { card } = &r.step else { return None };
+    adage_tracks::card::check(card).ok()?;
+    let mut text = adage_tracks::card::text_oriented(card, orientation);
+    let exit = exit_clause(&r.exit);
+    if !exit.trim().is_empty() {
+        text.push('\n');
+        text.push_str(exit.trim_start());
+    }
+    Some(text)
+}
+
 pub fn route_text(r: &Route, bound: &[(String, String)]) -> Option<String> {
     let exit = exit_clause(&r.exit);
     match (&r.step, &r.trigger) {
