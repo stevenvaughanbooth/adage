@@ -254,6 +254,54 @@ code { font: 0.92em var(--mono); background: var(--raised); border: 1px solid va
 .card h3 { margin: 0 0 8px; font: 700 19px/1.2 var(--display); }
 .card p { margin: 0; font-size: 15px; color: var(--ink-2); }
 
+/* ---- packs: what a pack is, file by file (src/packs.ts) ---- */
+.pack-explorer { display: grid; grid-template-columns: minmax(240px, .8fr) minmax(0, 1.6fr); gap: 32px; margin-top: 40px; }
+.pack-pick { display: flex; flex-direction: column; justify-content: center; gap: 10px; }
+.pack-pick button { padding: 20px; display: grid; gap: 7px; text-align: left; border: 1px solid var(--line); border-radius: 14px; background: transparent; color: var(--ink-2); cursor: pointer; transition: border-color 200ms, background 200ms; }
+.pack-pick button[aria-pressed="true"] { background: var(--raised); border-color: var(--memory); color: var(--ink-1); }
+.pack-pick button span { font: 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--memory-soft); }
+.pack-pick button b { font: 600 17px/1.25 var(--mono); overflow-wrap: anywhere; }
+.pack-pick button small { font-size: 14px; color: var(--ink-2); }
+.pack-window { min-width: 0; display: grid; grid-template-columns: minmax(168px, .42fr) minmax(0, 1fr); border: 1px solid var(--line-strong); border-radius: 18px; background: var(--glass); overflow: hidden; }
+.pack-files { display: flex; flex-direction: column; gap: 2px; padding: 14px 10px; border-right: 1px solid var(--line); background-image: radial-gradient(var(--line-strong) 1px, transparent 1px); background-size: 20px 20px; }
+.pack-files button { text-align: left; border: 0; border-radius: 8px; background: none; padding: 7px 10px; font: 12.5px/1.35 var(--mono); color: var(--ink-2); cursor: pointer; overflow-wrap: anywhere; }
+.pack-files button:hover { color: var(--ink-1); }
+.pack-files button[aria-pressed="true"] { background: var(--raised); color: var(--ink-1); box-shadow: inset 0 0 0 1px var(--line-strong); }
+.pack-view { min-width: 0; display: grid; gap: 14px; align-content: start; padding: 20px 24px 22px; }
+.pack-what { margin: 0; min-height: 4.6em; font-size: 14.5px; color: var(--ink-2); max-width: 62ch; }
+.pack-view pre { margin: 0; height: 330px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 12.5px/1.7 var(--mono); }
+.pack-view pre code { background: none; border: 0; padding: 0; font: inherit; color: var(--ink-1); }
+.pack-view mark { border-radius: 4px; padding: 0 2px; }
+.pack-view mark.blank { background: color-mix(in srgb, var(--memory) 22%, transparent); color: var(--memory-soft); }
+.pack-view mark.filled { background: color-mix(in srgb, var(--fire) 18%, transparent); color: var(--fire); }
+.pack-fill { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; font-size: 13px; color: var(--ink-3); }
+.pack-lead { margin: 0; max-width: 72ch; color: var(--ink-2); }
+.pack-note { max-width: 85ch; font-size: 13px; color: var(--ink-2); margin-top: 22px; }
+.base-packs { list-style: none; margin: 24px 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px 16px; }
+.base-packs li { display: grid; gap: 8px; align-content: start; padding-top: 14px; border-top: 1px solid var(--line-strong); }
+.base-packs code { justify-self: start; overflow-wrap: anywhere; }
+.base-packs span { font-size: 14.5px; color: var(--ink-2); }
+#packs .steps code { display: inline-block; margin-top: 14px; font-size: 12.5px; overflow-wrap: anywhere; }
+#packs .mmore { margin-top: 28px; }
+#packs .mmore .kinds { margin-top: 14px; }
+/* A skill next to a pack: plain cells (the reflex table's last column holds a lamp and a quote). */
+.kinds.compare td:last-child { display: table-cell; color: var(--ink-1); }
+@media (max-width: 960px) {
+  .pack-explorer { grid-template-columns: 1fr; gap: 16px; }
+  .base-packs { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 560px) {
+  .pack-window { grid-template-columns: 1fr; }
+  .pack-files { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid var(--line); }
+  .pack-view { padding: 16px; }
+  .pack-view pre { height: 300px; }
+  .pack-pick button { padding: 14px 16px; }
+  .pack-pick button small { display: none; }
+  .base-packs { grid-template-columns: 1fr; }
+  .kinds.compare td:last-child { display: block; }
+}
+@media (prefers-reduced-motion: reduce) { .pack-pick button { transition: none; } }
+
 /* ---- get started ---- */
 .split { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(32px, 5vw, 72px); align-items: center; }
 [hidden] { display: none !important; }
