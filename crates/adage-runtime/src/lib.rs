@@ -8,6 +8,7 @@ pub mod context;
 pub mod fast;
 pub mod orient;
 pub mod pretool;
+pub mod pytest_case;
 pub mod rebuild;
 pub mod render;
 

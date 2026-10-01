@@ -106,6 +106,13 @@ that looks like a secret, and is bounded at about 1,200 tokens. The learned card
 exemplars; `ADAGE_CARD_ORIENTATION=0` delivers the earlier form. See
 [training](training.md#recurring-tasks-procedure-cards).
 
+A failed verification names its failing tests from pytest's declared failure record, and describes
+each from the test's own source, read from the bytes the run used: which parametrized case the id
+names, with its value, and the test's one check. When this session added the test, the receipt
+says so and asks the agent to check it against the request before changing the implementation.
+pytest's own messages are output and are not passed on
+([execution](execution.md#the-finish-line-check-stop-gate)).
+
 The launch evaluation must measure accumulated learning on chronological histories and
 prediction on later unseen sessions: avoided failures, eliminated agent actions, task quality,
 unnecessary executions, abstentions, and net cost/time. A five-session zero-candidate checkpoint
