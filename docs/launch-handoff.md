@@ -108,13 +108,93 @@ to dataless placeholders. A sandboxed tool reads such a file as empty: a test fi
 runs 0 tests, and an `include_str!` asset (the intent vocabulary) builds empty. Studies therefore
 freeze and run from the clone in `/private/tmp`, and freeze and dispatch refuse dataless inputs.
 
-**Before any held-out freeze:**
-1. Merge `origin/main` into `codex/launch-first-reflex`. Main now has PR #21 (the learner-regression
-   fixes, the bench re-bless and the `no_spawn` allowlist) and `adage update` (#17, #18).
-2. Rerun the full suite in a clean clone outside iCloud. It should now be fully green.
-3. Build the held-out binaries from that merged tree.
+### Held-out phase: prepared, not frozen
 
-dev-v9b doesn't need this: the learner is not used in development.
+Nothing here is a result. Held-out runs only if dev-v9b's report is valid and A4 passes
+`dev_thresholds_v9`. Then BEST is A4, by r9's rule.
+
+**Done so far:**
+- **`origin/main` is merged** (PR #21's learner fixes, the bench re-bless, the `no_spawn`
+  allowlist, and `adage update` from #17 and #18). The merge was made in a clean clone outside
+  iCloud, `/private/tmp/adage-heldout-src`. The workspace suite and the harness suite were rerun
+  there.
+- **An offline dry run of the whole freeze pipeline passed** (`harness/heldout_dryrun.py`):
+  - **Inputs.** It used a scratch copy of the authority, a scratch cohort with a synthetic review
+    marked `dry_run`, held-out controls validated on a copy of the substrate, a copy of the learned
+    home, and a simulated `dev-arms-2` report.
+  - **Results.**
+    - `freeze`: 65 sessions, BEST = A4 with the orientation card, $0.40 cap, $26 worst case.
+    - `prepare`: 65 assignments; the scratch runtime was made read-only.
+    - `approval-script`: 25 BEST homes.
+    - `verify-grants`: it failed only on the 25 missing person-issued grants, as expected.
+    - `report`: an INCOMPLETE decision record, as expected with no sessions.
+  - **Two runner bugs fixed, with tests:**
+    - `prepare` recomputed the held-out tasks' hidden-test identities by running each gold
+      environment inside the study sandbox. That environment is bound to its validation's own
+      runtime copy, which the sandbox cannot read, so it failed. `freeze` now copies the identities
+      from that validation and checks them against the frozen hidden tests.
+    - The report's lapse list overwrote the analysis's own `problems`. It is now kept apart, as
+      `lapses`.
+
+  The registered r9 to r11 rules are unchanged.
+- **The decision record is scaffolded.** `heldout_cohort.py report` now also writes
+  `reports/heldout-<time>.md` (`harness/heldout_writeup.py`). Its sections, in order:
+  1. the outcome;
+  2. the primary bound;
+  3. quality;
+  4. each G criterion;
+  5. the sensitivity analyses;
+  6. censoring;
+  7. the request cross-check;
+  8. the controls;
+  9. the report-only contrasts;
+  10. what the result does not establish.
+
+  All numbers come from the report.
+
+**What a held-out freeze still needs** (all user or person steps):
+1. **A valid, passing dev-v9b report.** Use the path that `dev_v9.py report` prints.
+2. **A native cohort for this clone.** The `launch-gate-v6` review binds the dev clone's paths, so
+   `launch-gate-v7` must be prepared from `/private/tmp/adage-heldout-src`. Its native session is
+   paid (at most $0.50) and must pass review. The runner sources are byte-identical to v6's.
+3. **Validated held-out controls on the real substrate.** This step copies the runtime and caches,
+   and runs only the copies.
+4. **Binaries built from this clone**, with their hashes passed to `freeze`.
+5. **Grants issued by the person** for BEST's 25 homes.
+
+**Budget.** Held-out's worst case is $26 (65 sessions at $0.40). After dev-v9b, at most $35.27 less
+dev-v9b's spend remains, and the $3 ledger floor stops held-out first if both studies hit their
+worst cases. Expected held-out spend is about $7 to $10.
+
+Held-out commands, for when a passing dev-v9b report exists. Run them in a normal terminal, one at
+a time, and stop on any error:
+
+```sh
+cd /private/tmp/adage-heldout-src
+git pull --ff-only                                     # the final pre-freeze commit, then no edits
+cargo build --release --locked -p adage-cli -p adage-exec
+shasum -a 256 target/release/adage target/release/adage-exec
+cd evals/reflex-proof/harness
+A=/private/tmp/adage-real-repo-gate-v1; C=$A/cohorts/launch-gate-v7; H=$C/heldout-1
+DEV=<the dev-v9b report path>
+python3 cohort_v5.py prepare-cohort $A $C              # offline
+python3 cohort_v5.py prepare-session $C                # offline
+python3 real_repo_gate.py run-session $C/sessions/native-confinement/manifest.json   # paid, <= $0.50
+python3 curve_sessions.py review-native $C             # offline; must pass
+python3 heldout_tasks.py validate $A/heldout-controls-1 --authority $A   # offline; runs copies only
+python3 heldout_cohort.py freeze $H --cohort $C --cumulative $A/cohorts/curve-guided-v2/cumulative-launch-10 \
+  --dev-controls $A/cohorts/curve-v2 --heldout-controls $A/heldout-controls-1 --dev-report $DEV \
+  --binaries /private/tmp/adage-heldout-src/target/release --build-commit $(git rev-parse HEAD) \
+  --adage-sha256 <sha> --adage-exec-sha256 <sha> --audit-authority /private/tmp/adage-learning-curve-v2
+python3 heldout_cohort.py prepare $H                   # offline, ~30 min (65 checkouts)
+less $H/approve-heldout.sh && sh $H/approve-heldout.sh  # the person issues 25 grants
+python3 heldout_cohort.py verify-grants $H
+python3 heldout_cohort.py live $H                      # paid: 65 sessions, $0.40 cap; controls first; stops on any lapse
+python3 heldout_cohort.py report $H                    # writes reports/heldout-<time>.json and .md
+```
+
+**Held-out result:** not run. There are no numbers. The decision record (`reports/heldout-<time>.md`)
+is the result.
 
 dev-v9b commands. Run them in a normal terminal, one at a time, and stop on any error. `prepare`
 runs again for the new root (53 fresh checkouts). The grants must be issued again: the new root's

@@ -90,6 +90,12 @@ The arms run in 16 paired blocks, with five A4 controls. The rule was registered
 needs at most 0.80 times A0's requests, fewer requests in at least 10 of 16 blocks, and a valid
 study. No statistic exists yet.
 
+The held-out comparison (Marshmallow, revisions 9 to 11) is prepared but not frozen. Its freeze
+pipeline passed an offline dry run with a simulated development report. It runs only if dev-v9b's A4
+passes. **Held-out result: not run, and no numbers exist.** Once it runs, its decision record (the
+primary bound, quality, the G criteria, the sensitivity analyses and censoring) will be linked here
+as written.
+
 The ledger after dev-v8b: 163 attempts, $24.6504369 admitted ($24.1504369 measured plus $0.50
 conservative), $35.3495631 remaining of $60. After the `launch-gate-v6` native session ($0.0164897)
 and dev-v9's one session ($0.0675211): 165 attempts, $24.7344477 admitted, $35.2655523 remaining.

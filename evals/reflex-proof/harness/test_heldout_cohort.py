@@ -200,6 +200,21 @@ class Freeze(unittest.TestCase):
                 runner.hook(path, {})
                 self.assertNotIn("ADAGE_CARD_ORIENTATION", os.environ)
 
+    def test_the_report_keeps_the_analysis_problems_beside_any_lapse_and_writes_the_decision_record(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            m = dict(best=dict(arm="A4"), route="r", build_commit="c", binary_sha256={})
+            analyzed = dict(outcome="incomplete", problems=["incomplete blocks: [1]"], protocol="p", stratum="s")
+            lapsed = [dict(order=7, arm="BEST", condition="positive", problem="withheld")]
+            with patch.object(runner, "verify", return_value=m), patch.object(runner, "rows_of", return_value=[]), \
+                    patch.object(runner.analysis, "analyze", return_value=analyzed), \
+                    patch.object(runner, "lapses", return_value=lapsed):
+                result = runner.report(root)
+            self.assertEqual(result["problems"], ["incomplete blocks: [1]"], "a lapse never overwrites them")
+            self.assertEqual((result["valid"], result["lapses"]), (False, lapsed))
+            records = sorted(p.suffix for p in (root / "reports").iterdir())
+            self.assertEqual(records, [".json", ".md"])
+
     def test_a_best_session_with_a_lapsed_grant_invalidates_the_report(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -215,6 +230,28 @@ class Freeze(unittest.TestCase):
             self.assertEqual([p["order"] for p in problems], [best["order"]], "NOEXEC has no grant to lapse")
             self.assertIn("withheld (approval: exec-changed)", problems[0]["problem"])
             self.assertNotIn("no receipt", problems[0]["problem"], "a context that does not fire is measured, not a lapse")
+
+    def test_held_out_identities_come_from_their_validation_and_must_match_the_frozen_hidden_tests(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, controls = Path(tmp) / "study", Path(tmp) / "controls"
+            for task in heldout_tasks.EVALUATION:
+                hidden = root / "private/tasks" / task / "hidden.py"
+                hidden.parent.mkdir(parents=True)
+                hidden.write_text("def test_%s(): pass\n" % task.split("--")[1].replace("-", "_"))
+                runner.pairs.write(controls / "private/hidden-identities" / (task + ".json"),
+                                   dict(task=task, identities=[["c", "t"]], hidden_sha256=runner.pairs.sha(hidden),
+                                        control_exit=0))
+            copied = runner.copy_identities(root, controls)
+            self.assertEqual(sorted(p.name for p in copied), sorted(t + ".json" for t in heldout_tasks.EVALUATION))
+            # A stale identity file (other hidden tests) or a missing one refuses the freeze.
+            task = heldout_tasks.EVALUATION[0]
+            runner.pairs.write(controls / "private/hidden-identities" / (task + ".json"),
+                               dict(task=task, identities=[["c", "t"]], hidden_sha256="0" * 64, control_exit=0))
+            with self.assertRaisesRegex(ValueError, "do not match"):
+                runner.copy_identities(root, controls)
+            (controls / "private/hidden-identities" / (task + ".json")).unlink()
+            with self.assertRaisesRegex(ValueError, "missing"):
+                runner.copy_identities(root, controls)
 
     def test_binaries_are_bound_by_given_hashes_and_build_commit(self):
         with tempfile.TemporaryDirectory() as tmp:

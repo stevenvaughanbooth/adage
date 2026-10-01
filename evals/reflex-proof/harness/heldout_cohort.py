@@ -34,6 +34,7 @@ import dev_arms
 import dev_v9
 import heldout_analysis as analysis
 import heldout_tasks
+import heldout_writeup
 import launch_canary as canary
 import real_repo_pairs as pairs
 import receipt_replay
@@ -54,7 +55,8 @@ MAX_TURNS = analysis.MAX_TURNS
 
 
 def sources():
-    files = [Path(__file__), Path(analysis.__file__), Path(heldout_tasks.__file__), Path(dev_v9.__file__)]
+    files = [Path(__file__), Path(analysis.__file__), Path(heldout_tasks.__file__), Path(dev_v9.__file__),
+             Path(heldout_writeup.__file__)]
     return {**dev_arms.sources(), **{str(p.resolve()): pairs.sha(p) for p in files}}
 
 
@@ -141,6 +143,27 @@ def check_heldout_controls(controls):
     return m, validation
 
 
+def copy_identities(root, heldout_controls):
+    """The held-out tasks' hidden-test identities, from the validation that built their gold
+    checkouts. Each gold environment is bound to that validation's own runtime copy, which a study's
+    sandbox cannot read, so `prepare` must not recompute them (the held-out dry run found this).
+    Each must match the frozen hidden tests. Returns the copied paths, which freeze binds."""
+    out = []
+    target = root / "private/hidden-identities"
+    target.mkdir(parents=True, exist_ok=True)
+    for task in heldout_tasks.EVALUATION:
+        source = heldout_controls / "private/hidden-identities" / (task + ".json")
+        if not source.is_file():
+            raise ValueError("validated hidden-test identities missing for %s (heldout_tasks.py validate)" % task)
+        value = pairs.read(source)
+        if (value.get("hidden_sha256") != pairs.sha(root / "private/tasks" / task / "hidden.py")
+                or not value.get("identities") or value.get("control_exit") != 0):
+            raise ValueError("hidden-test identities for %s do not match the frozen hidden tests" % task)
+        shutil.copy2(source, target / source.name)
+        out.append(target / source.name)
+    return out
+
+
 def prompts(root, rows):
     """Blocks: the frozen held-out prompt (it ends with the realism line). Controls: the development
     prompt, the same realism line, then the validated canary suffix, which alone realizes the control."""
@@ -199,6 +222,7 @@ def freeze(root, cohort, cumulative, dev_controls, heldout_controls, dev_report,
         task_sha[task] = {n: pairs.sha(root / "private/tasks" / task / n) for n in ("prompt.txt", "hidden.py")}
     if task_sha[analysis.CONTROL_TASK] != old["task_sha256"][analysis.CONTROL_TASK]:
         raise ValueError("validated development task material changed")
+    identities = copy_identities(root, heldout_controls)
     rows = prompts(root, analysis.matrix(heldout_tasks.EVALUATION))
     (root / "bin").mkdir()
     bins = {}
@@ -209,7 +233,7 @@ def freeze(root, cohort, cumulative, dev_controls, heldout_controls, dev_report,
         raise ValueError("binary copy differs from the bound hashes")
     inputs = [root / "isolation-audit.json", cumulative / "attempt.json", cohort / "manifest.json",
               dev_controls / "manifest.json", dev_controls / "validation.json", heldout_controls / "manifest.json",
-              heldout_controls / "validation.json", TASK_MANIFEST, Path(best["report"]),
+              heldout_controls / "validation.json", TASK_MANIFEST, Path(best["report"]), *identities,
               *(home / n for n in record["artifact_sha256"]), *map(Path, bins.values())]
     budget = analysis.budget(len(rows))
     if not budget["fits"]:
@@ -557,11 +581,16 @@ def report(root):
     root = Path(root).resolve(strict=True)
     m = verify(root)
     rows = rows_of(root, m)
-    problems = lapses(root, m)
+    # Lapsed grants are kept apart from the analysis's own problems (an unrealized control, incomplete
+    # blocks), which they must never overwrite (the held-out dry run found that they did).
+    lapsed = lapses(root, m)
     result = dict(analysis.analyze(rows, m["best"]["arm"], route=m["route"]), best=m["best"], build_commit=m["build_commit"],
                   binary_sha256=m["binary_sha256"], assignments=len(rows),
-                  collected=sum(r.get("status") == "collected" for r in rows), valid=not problems, problems=problems)
-    pairs.write(root / "reports" / ("heldout-" + str(time.time_ns()) + ".json"), result)
+                  collected=sum(r.get("status") == "collected" for r in rows), valid=not lapsed, lapses=lapsed)
+    stamp = str(time.time_ns())
+    pairs.write(root / "reports" / ("heldout-" + stamp + ".json"), result)
+    # The decision record, keyed to the registered criteria and filled only from this report.
+    (root / "reports" / ("heldout-" + stamp + ".md")).write_text(heldout_writeup.render(result))
     return result
 
 
@@ -600,8 +629,8 @@ def main():
                  "live": live, "report": report}[args.command](args.path.resolve(strict=True))
     print(json.dumps(value, indent=2, default=str))
     if args.command == "report" and not value["valid"]:
-        sys.exit("INVALID: %d BEST session(s) ran with a lapsed grant; this report is not evidence (see `problems`)"
-                 % len(value["problems"]))
+        sys.exit("INVALID: %d BEST session(s) ran with a lapsed grant; this report is not evidence (see `lapses`)"
+                 % len(value["lapses"]))
 
 
 if __name__ == "__main__":
