@@ -279,8 +279,9 @@ Keep these claims separate:
 Prototype cards, synthetic repository sessions, historical replay estimates and current shipped
 live runs are different evidence classes. A speedup measured in one must not be promoted into a
 universal savings claim. Development results (such as dev-v9b, one task with development
-scaffolding) are not launch statistics. Model requests and API cost are not GPU or energy
-measurements: no GPU, energy or inference savings have been measured, so none may be claimed.
+scaffolding) are not launch statistics. Adage saves model calls by handling learned reflexes and
+instincts on the CPU; claims are stated in model requests, tokens and API cost. GPU use and energy
+are not measured, so no GPU or energy savings may be claimed.
 The launch studies used one model (Claude Haiku 4.5) on one repository (Marshmallow); they do
 not establish generality across repositories or models, and transfer to cheaper models is
 untested. Existing benchmark results and their limits are in [evals.md](evals.md);

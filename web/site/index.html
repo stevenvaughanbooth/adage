@@ -27,7 +27,7 @@
 
 <div class="film" id="film" tabindex="-1" role="dialog" aria-modal="true" aria-label="Adage teaser film" aria-describedby="film-desc">
   <video id="film-video" playsinline preload="none" tabindex="-1"></video>
-  <p class="sr" id="film-desc">A 45-second film: an agent repeats work, Adage learns paths through its traces, and hooks deliver learned reflexes. The cinematic GPU-to-CPU sequence represents replacing repeated model deliberation with local matching. It is a visual metaphor: Adage has not measured any GPU, energy or inference savings. The film ends on Adage. Press Escape or the Skip intro button to go to the page.</p>
+  <p class="sr" id="film-desc">A 45-second film: an agent repeats work, Adage learns paths through its traces, and hooks deliver learned reflexes. The cinematic GPU-to-CPU sequence shows Adage's idea: predictable steps are handled on your CPU, so the agent needs fewer model calls. The GPU imagery is a metaphor; GPU use and energy are not measured. The film ends on Adage. Press Escape or the Skip intro button to go to the page.</p>
   <button class="film-close film-ui" id="film-close" type="button" aria-label="Close the teaser"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 2l10 10M12 2L2 12"/></svg></button>
   <button class="film-play" id="film-play" type="button" hidden>&#9654;&#xFE0E; Play the teaser with sound &middot; 0:45</button>
   <div class="film-bar film-ui">
@@ -121,7 +121,7 @@ $ make check
       <summary>What actually moves off the model?</summary>
       <p><b>By default:</b> local CPU matching delivers guidance; supported pre-call instincts can correct a command to the repository's verified environment without another model request. The agent still executes its tools.</p>
       <p><b>With separate execution approval:</b> <code>adage-exec</code> can prefetch a read-only result or run a staged action in a sandbox and apply permitted outputs. Choosing and running that invocation needs no model request; the agent may still reason over its result.</p>
-      <p>A learned command is not automatically approved to run. A delivered directive is not proof of a saved model turn. Each behavior has its own evidence. Model requests and API cost are not GPU measurements: no GPU, energy or inference savings have been measured.</p>
+      <p>A learned command is not automatically approved to run. A delivered directive is not proof of a saved model turn. Each behavior has its own evidence. Adage saves model calls by handling learned reflexes and instincts on your CPU; we count that in model requests, tokens and API cost. GPU use and energy are not measured.</p>
     </details>
     <div class="story-inputs">
       <p><span>Ready on day one</span><b>Instincts</b>Bind known moves to your repository's tools.</p>

@@ -106,8 +106,9 @@ generated-repository proof at the end. Every record, including the failures, is 
   sandbox, an approved learned lookup [removed all three agent lookups](evals/reflex-proof/harness/results/20260929-learned-action-gate/FINDINGS.md)
   (observed model requests 6 → 3), with every answer correct.
 
-**Not measured or not shown.** GPU use, energy and inference savings were never measured: model
-requests and API cost are not GPU measurements. Nothing here shows that these effects carry over
+**What we measure, and what we don't.** Adage saves model calls by handling learned reflexes and
+instincts on your CPU; we measure that in model requests, tokens and API cost. GPU use and energy
+are not measured. Nothing here shows that these effects carry over
 to other repositories or other models, and transfer to cheaper models is untested. The earlier
 advisory [benchmarks](#benchmarks) are separate studies with their own caveats.
 
