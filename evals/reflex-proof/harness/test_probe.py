@@ -97,9 +97,13 @@ class FixtureTests(unittest.TestCase):
         fake = ("import json,sys; print(json.dumps({'type':'result','subtype':'success',"
                 "'is_error':False,'total_cost_usd':0,'result':sys.stdin.read()}))")
         manifest = self.root / "manifest.json"
+        # The launch check reads --settings; deny every name the launch may pass, as native settings do.
+        settings = self.root / "settings.json"
+        settings.write_text(json.dumps({"sandbox": {"credentials": {"envVars": [
+            {"name": n, "mode": "deny"} for n in probe.DENIED_ENV]}}}))
         manifest.write_text(json.dumps(dict(root=str(self.root), budget_usd=1,
             expected_claude_version=probe.EXPECTED_VERSION,
-            argv=[sys.executable, "-c", fake, "--max-budget-usd", "1"])))
+            argv=[sys.executable, "-c", fake, "--max-budget-usd", "1", "--settings", str(settings)])))
         launcher = ("import sys; from pathlib import Path; from unittest.mock import patch; "
             f"sys.path.insert(0,{str(probe.HERE)!r}); import probe\n"
             f"with patch('probe.subprocess.check_output',return_value={probe.EXPECTED_VERSION!r}):\n"
