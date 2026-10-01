@@ -171,19 +171,27 @@ Vocabulary shown by default:
 Replace `main.rs:129,140`. Bare `adage` prints the card whether stdout is a TTY, a pipe or `!adage` in Claude Code. `adage ui` opens the app. `--help` shows usage.
 
 ```text
-adage 0.1.0 · github.com/acme/billing                         ● healthy
-  14 reflexes active: 4 instincts, 9 learned, 1 from your team
-  learning after each session · last: 2 min ago, 1 change
-  last 30 days: 61 sessions · 188 directives · 152 followed · 7 dead ends headed off
-  savings: ~$0.034 and 3.1 turns per session (95% CI $0.011–0.058)
-           ≈ $1.87 over 55 sessions, vs 6 where Adage stayed quiet
-  1 install step waits for you → adage review
-  adage ui · adage map · adage doctor
+adage 0.1.0 · github.com/acme/billing · ● healthy
+
+reflexes    14 active: 4 instincts, 9 learned, 1 from your team
+learning    after each session · last: 2 min ago, 1 change
+activity    last 30 days: 61 sessions · 188 directives · 152 followed · 7 dead ends headed off
+savings     ✓ ~$0.034 and 3.1 turns per session, API-list equivalent (95% CI $0.011–$0.058)
+            ≈ $1.87 over 55 sessions, vs 6 where Adage stayed quiet (priced as of 2026-06-24)
+            ended asking you for help: 3% with Adage, 5% without
+waiting     1 install step waits for you → adage review
+embeddings  potion-base-8m-i8 (bundled)
+
+next  adage review · 1 install step waits for you
+      adage ui · review, health and settings
+      adage map · explore reflexes in the browser
+      adage doctor · check binary, data, hooks and model
 ```
 
 - **Outside a repo**: one line per repo, with the same columns.
-- **Health dot**: the worst doctor status, with the single fix line for it.
-- **Before the gate**, the savings line reads: `measuring savings: 4 of 10 quiet sessions so far (Adage stays quiet in 1 of 10 sessions so its effect can be measured)`.
+- **Health lamp**: the worst doctor status, in the header, with the single fix line for it (`fix`).
+- **Layout**: the output grammar (docs/design/style.md): header, the 12-column key column, verdict marks, `next`; colour only on a terminal.
+- **Before the gate**, the savings row reads `○ measuring: 4 of 10 quiet sessions so far`, with `Adage stays quiet in 1 of 10 sessions so its effect can be measured` under it.
 
 ### 3.5 Consent moments that stay
 
