@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#050507" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#ececef" media="(prefers-color-scheme: light)">
 <title>How it works · Adage</title>
-<meta name="description" content="How Adage turns agent traces into reflexes: reading transcripts, mining repeated steps, choosing by compression, judging evidence and uplift, grouping intents and recurring tasks, sealing the index, deciding at the hook and measuring against a control arm. With the math.">
+<meta name="description" content="How Adage plugs into Claude Code, and how it turns agent traces into reflexes: reading transcripts, mining repeated steps, choosing by compression, judging evidence and uplift, grouping intents and recurring tasks, sealing the index, deciding at the hook and measuring against a control arm. With the math.">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="canonical" href="__SITE_URL__/how">
 <meta property="og:type" content="article">
@@ -28,6 +28,7 @@
   <nav class="nav" aria-label="Site">
     <a href="/how" aria-current="page">How it works</a>
     <a href="/#evidence">Evidence</a>
+    <a href="/how-we-tested">How we tested</a>
     <a href="/#start">Get started</a>
     <button class="themebtn" id="theme" type="button">Day</button>
     <a class="pill" href="/#access">Get early access</a>
@@ -35,10 +36,190 @@
 </header>
 
 <main id="main">
+<section class="plug" id="plug" aria-labelledby="plug-h">
+  <div class="wrap plug-head">
+    <div>
+    <p class="kicker">How it works</p>
+    <h1 class="display" id="plug-h">How Adage plugs into <span class="soft">Claude Code.</span></h1>
+    </div>
+    <div>
+    <p class="lede">Claude Code lets outside tools speak at fixed moments in every session. Adage listens at those moments, answers on your CPU in milliseconds, and hands the agent what it needs right then: where things stand, and checks already done. The model still does the thinking. It just needs fewer calls to get there.</p>
+    <ul class="plug-legend" aria-label="What runs where">
+      <li><i class="remote" aria-hidden="true"></i>The model: remote, on GPUs, one call per turn</li>
+      <li><i class="local" aria-hidden="true"></i>Adage: your CPU, local, sandboxed, no network</li>
+      <li><i class="approve" aria-hidden="true"></i>Runs a command only with a person's approval</li>
+    </ul>
+    <p class="howtips">Scroll through one session, start to finish. Hover, tap or tab to a <span class="termdemo">dotted word</span> to see what it means; “Technical detail” opens the precise account.</p>
+    </div>
+  </div>
+  <div class="wrap plug-grid">
+    <figure class="plug-fig" id="plug-fig" data-step="loop">
+      <svg viewBox="0 0 560 600" role="img" aria-labelledby="plug-fig-t">
+        <title id="plug-fig-t">The agent loop: you send a request to Claude Code, which calls the remote model for each next step and runs tools on your machine. Adage attaches at the hooks along that loop (SessionStart, the prompt, PreToolUse, PostToolBatch, Stop, SessionEnd) and runs on your CPU; any command it runs needs a person's approval. After the session, it learns from the trace.</title>
+        <defs>
+          <marker id="plug-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker>
+        </defs>
+        <g class="hk zone remote" data-hook="loop sum">
+          <rect x="16" y="16" width="528" height="118" rx="18"/>
+          <text class="zl" x="34" y="40">MODEL · REMOTE GPUs</text>
+        </g>
+        <g class="hk zone local" data-hook="loop sum">
+          <rect x="16" y="150" width="528" height="434" rx="18"/>
+          <text class="zl" x="34" y="174">YOUR MACHINE · CPU</text>
+        </g>
+        <text class="hk plug-count" data-hook="loop sum" x="526" y="40" text-anchor="end">development study: {{ev:dev-v9b:arms.A0.mean_requests|fixed1}} → {{ev:dev-v9b:arms.A4.mean_requests|fixed1}} calls per session</text>
+
+        <g class="node model hk" data-hook="loop sum">
+          <rect x="200" y="56" width="160" height="56" rx="12"/>
+          <text x="280" y="80" text-anchor="middle" class="nt">Model</text>
+          <text x="280" y="99" text-anchor="middle" class="ns">decides the next step</text>
+        </g>
+        <g class="node hk" data-hook="loop prompt sum">
+          <rect x="36" y="200" width="96" height="48" rx="12"/>
+          <text x="84" y="229" text-anchor="middle" class="nt">You</text>
+        </g>
+        <g class="node agent hk" data-hook="loop start prompt pre post stop learn sum">
+          <rect x="200" y="196" width="160" height="56" rx="12"/>
+          <text x="280" y="220" text-anchor="middle" class="nt">Claude Code</text>
+          <text x="280" y="239" text-anchor="middle" class="ns">the agent loop</text>
+        </g>
+        <g class="node hk" data-hook="loop pre post sum">
+          <rect x="416" y="200" width="122" height="48" rx="12"/>
+          <text x="477" y="221" text-anchor="middle" class="nt">Tools</text>
+          <text x="477" y="238" text-anchor="middle" class="ns">read · edit · run</text>
+        </g>
+
+        <g class="flow">
+          <path class="hk call" data-hook="loop sum" d="M262 196V116" marker-end="url(#plug-arrow)"/>
+          <text class="hk fl" data-hook="loop sum" x="254" y="160" text-anchor="end">model call</text>
+          <path class="hk" data-hook="loop sum" d="M298 116V192" marker-end="url(#plug-arrow)"/>
+          <text class="hk fl" data-hook="loop sum" x="306" y="160">next step</text>
+          <path class="hk" data-hook="loop prompt sum" d="M132 224H196" marker-end="url(#plug-arrow)"/>
+          <path class="hk" data-hook="loop pre sum" d="M360 213H412" marker-end="url(#plug-arrow)"/>
+          <path class="hk" data-hook="loop post sum" d="M416 236H364" marker-end="url(#plug-arrow)"/>
+        </g>
+
+        <g class="rail">
+          <path class="hk tie" data-hook="start" d="M60 296L208 252"/>
+          <path class="hk tie" data-hook="prompt" d="M148 296L164 226"/>
+          <path class="hk tie" data-hook="pre" d="M236 296L386 215"/>
+          <path class="hk tie" data-hook="post" d="M324 296L390 238"/>
+          <path class="hk tie" data-hook="stop" d="M412 296L352 252"/>
+          <path class="hk tie" data-hook="learn" d="M500 296L300 252"/>
+          <g class="hk pin" data-hook="start sum"><circle cx="60" cy="304" r="8"/><text x="60" y="330" text-anchor="middle">SessionStart</text><text class="ps" x="60" y="344" text-anchor="middle">the start</text></g>
+          <g class="hk pin" data-hook="prompt sum"><circle cx="148" cy="304" r="8"/><text x="148" y="330" text-anchor="middle">Prompt</text><text class="ps" x="148" y="344" text-anchor="middle">your request</text></g>
+          <g class="hk pin" data-hook="pre sum"><circle cx="236" cy="304" r="8"/><text x="236" y="330" text-anchor="middle">PreToolUse</text><text class="ps" x="236" y="344" text-anchor="middle">before a run</text></g>
+          <g class="hk pin" data-hook="post sum"><circle cx="324" cy="304" r="8"/><text x="324" y="330" text-anchor="middle">PostToolBatch</text><text class="ps" x="324" y="344" text-anchor="middle">after edits</text></g>
+          <g class="hk pin" data-hook="stop sum"><circle cx="412" cy="304" r="8"/><text x="412" y="330" text-anchor="middle">Stop</text><text class="ps" x="412" y="344" text-anchor="middle">“done”</text></g>
+          <g class="hk pin" data-hook="learn sum"><circle cx="500" cy="304" r="8"/><text x="500" y="330" text-anchor="middle">SessionEnd</text><text class="ps" x="500" y="344" text-anchor="middle">afterwards</text></g>
+          <path class="hk drop" data-hook="start" d="M60 352V420"/>
+          <path class="hk drop" data-hook="prompt" d="M148 352V420"/>
+          <path class="hk drop" data-hook="pre" d="M236 352V420"/>
+          <path class="hk drop" data-hook="post" d="M324 352V420"/>
+          <path class="hk drop" data-hook="stop" d="M412 352V420"/>
+          <path class="hk drop" data-hook="learn" d="M500 352V528"/>
+        </g>
+
+        <g class="adage hk" data-hook="start prompt pre post stop learn sum">
+          <rect x="36" y="420" width="488" height="88" rx="14"/>
+          <text x="56" y="448" class="nt">Adage</text>
+          <text x="114" y="448" class="ns">your CPU · local · no network · fails open</text>
+          <text class="cap" data-cap="loop" x="56" y="480">listens at the hooks; one session in ten it stays silent, as a control</text>
+          <text class="cap" data-cap="start" x="56" y="480">names the approved check it will run, and when</text>
+          <text class="cap" data-cap="prompt" x="56" y="480">matches the task · procedure card · where the files stand now</text>
+          <text class="cap" data-cap="pre" x="56" y="480">points the command at the project's own environment</text>
+          <text class="cap" data-cap="post" x="56" y="480">runs the approved tests in a sandbox · hands back a receipt</text>
+          <text class="cap" data-cap="stop" x="56" y="480">finish-line check: a pass ends the turn, a failure goes back</text>
+          <text class="cap" data-cap="learn" x="56" y="480">starts the learner for this repository, in the background</text>
+          <text class="cap" data-cap="sum" x="56" y="480">fewer model calls, the same hidden tests passing</text>
+        </g>
+        <g class="hk approve" data-hook="start post stop learn">
+          <rect x="384" y="430" width="128" height="26" rx="13"/>
+          <text x="448" y="447" text-anchor="middle">person-approved</text>
+        </g>
+        <g class="hk learnrow" data-hook="learn sum">
+          <rect x="36" y="528" width="488" height="40" rx="12"/>
+          <text x="280" y="553" text-anchor="middle">trace → learner → reflexes → your review → the next session</text>
+        </g>
+      </svg>
+    </figure>
+
+    <ol class="plug-steps">
+      <li class="plug-step" id="plug-loop" data-step="loop">
+        <p class="plug-when">The agent loop</p>
+        <h2>Every turn of the loop is one model call.</h2>
+        <p>You ask. Claude Code sends the conversation to the model, which runs on GPUs in a data centre, and gets back the next step: read a file, make an edit, run a command. The tool runs on your machine, its result goes back to the model, and the loop turns again until the work is done.</p>
+        <p>Claude Code lets outside tools speak at fixed moments in that loop, called hooks. Adage listens at them. It answers on your CPU, with no network, and never calls a model of its own.</p>
+        <details class="plug-more"><summary>Technical detail</summary><div>
+          <p>The Claude Code plugin registers <code>SessionStart</code>, <code>UserPromptSubmit</code>, <code>PreToolUse</code> (Bash only), <code>PostToolBatch</code>, <code>PostToolUseFailure</code>, <code>Stop</code> and <code>SessionEnd</code> (<code>plugin/claude-code/hooks/hooks.json</code>). Each call is a short-lived <code>adage hook claude &lt;event&gt;</code> process with a budget of a few seconds (30 seconds for the two that can run a check). On any error it fails open: the agent carries on as if Adage were not installed. About one session in ten is a silent control, so its effect can be measured.</p>
+        </div></details>
+      </li>
+      <li class="plug-step" id="plug-start" data-step="start">
+        <p class="plug-when"><code>SessionStart</code> · before the first word</p>
+        <h2>It says which check it will run for you.</h2>
+        <p>If a person has approved one of this repository's checks, the agent hears it up front, in one plain sentence: which tests Adage runs, after which edits, and that it runs them again at the end. No approval, no sentence.</p>
+        <blockquote class="plug-quote">In this repository Adage runs <code>.venv/bin/python -m pytest tests/test_validate.py -q</code> (approved by a person, sandboxed) after edits to tests/*.py then CHANGELOG.rst, and again when you finish if files changed since.</blockquote>
+        <details class="plug-more"><summary>Technical detail</summary><div>
+          <p><code>adage-exec</code>'s SessionStart adds an <code>&lt;adage-reflex … kind="execution-contract"&gt;</code> block naming at most two current verification grants. Only a grant whose approval key still matches is named: a lapsed one promises nothing, and the person is told instead, in a line the agent never sees. Control sessions get no note. Source: <code>crates/adage-exec/src/hook.rs</code>.</p>
+        </div></details>
+      </li>
+      <li class="plug-step" id="plug-prompt" data-step="prompt">
+        <p class="plug-when"><code>UserPromptSubmit</code> · your request arrives</p>
+        <h2>It recognises the task, and says where things stand.</h2>
+        <p>Adage compares your request with the tasks this repository keeps repeating, using a small model built into the binary. On a match it hands over a procedure card, once: the files to touch, the commands that worked and the ones that failed. Then it reads those files itself, read-only, and adds where they stand right now: line counts, the last definitions, the end of the test file, the changelog's head. The agent goes straight to the right line instead of paging through files.</p>
+        <details class="plug-more"><summary>Technical detail</summary><div>
+          <p>Matching runs locally against a bundled static embedding model (potion-base-8M, int8); a card is delivered once per session when the prompt's similarity to its family clears <code>learn.card_threshold</code> (0.811). The orientation (<code>crates/adage-runtime/src/orient.rs</code>) reads only the card's own files, skips dotfiles, ignored, secret-holding and symlinked files and anything over 1 MiB, withholds secret-looking lines, and stays under about 1,200 tokens. Instincts and learned reflexes for the prompt are matched here too.</p>
+        </div></details>
+      </li>
+      <li class="plug-step" id="plug-pre" data-step="pre">
+        <p class="plug-when"><code>PreToolUse</code> · before a command runs</p>
+        <h2>It fixes the command before it can fail.</h2>
+        <p>Instincts know how your repository is set up. If the agent starts the tests with the system Python, Adage points the command at the project's own verified environment before it runs, so it does not fail and cost another call. If Adage's passing check already covers the test run the agent is about to start, the agent gets a note saying so. A note, never a refusal: the command still runs.</p>
+        <details class="plug-more"><summary>Technical detail</summary><div>
+          <p>The rewrite uses Claude Code's <code>updatedInput</code> and changes only the interpreter word of a top-level command (<code>python3 -m pytest</code> becomes <code>.venv/bin/python -m pytest</code>), never text in a heredoc, a quoted string or a <code>-c</code> payload. It is on by default in Claude Code, shown to you each time, and <code>adage delegate rewrites off</code> turns it off. The receipt note needs a passing run in this session on byte-identical inputs.</p>
+        </div></details>
+      </li>
+      <li class="plug-step" id="plug-post" data-step="post">
+        <p class="plug-when"><code>PostToolBatch</code> · after the edits, before the next model call</p>
+        <h2>It runs the approved check itself, on your CPU.</h2>
+        <p>When the agent's edits match the learned pattern (here: the tests, then the changelog), Adage runs the person-approved test command in a sandbox, right there on your CPU, and hands back a short receipt: whether it passed, how long it took, and the agent's own new tests by name. It arrives with the tool results, before the model decides what to do next, so the agent has no reason to spend calls running the tests and reading their output.</p>
+        <blockquote class="plug-quote"><span class="plug-q-label">A receipt, as Adage writes it (example values)</span>Adage ran <code>.venv/bin/python -m pytest tests/test_validate.py -q</code> after your edits: passed (exit 0, 1.2 s; receipt 3f9c2a7e01b4). Tests: 1202 collected; exit 0; the tests added in this session: test_finite.</blockquote>
+        <details class="plug-more"><summary>Technical detail</summary><div>
+          <p><code>PostToolBatch</code> fires once the agent's batch of tool calls has resolved and before the next model request. A learned context (an edit to <code>tests/*.py</code>, then <code>CHANGELOG.rst</code>, within eight events) nominates the command; the person's E2 grant authorises exactly that command; <code>adage-exec</code> stages the inputs, runs it in an OS sandbox with no network, journals it and applies only declared outputs (pytest's cache). Test names come from pytest's own cache record, never from its output. Learned directives (for example "after editing <code>schema/*.json</code>, run <code>make gen</code>") arrive here too, and a failing command gets dead-end advice at <code>PostToolUseFailure</code>.</p>
+        </div></details>
+      </li>
+      <li class="plug-step" id="plug-stop" data-step="stop">
+        <p class="plug-when"><code>Stop</code> · the agent says it is done</p>
+        <h2>It checks the finish line.</h2>
+        <p>If the code changed since the last passing run, Adage runs the approved check once more. A pass lets the agent stop, and you see one line. A failure goes back to the agent with the failing tests named, marked as coming from Adage, not from you. It runs at most twice a session, so it can never loop.</p>
+        <details class="plug-more"><summary>Technical detail</summary><div>
+          <p>The finish-line check (the Stop gate) goes through the same request, policy, sandbox, staging and journal as any action; a failure continues the agent once with a message that begins <code>Adage finish-line check:</code>. A learned finish-line step due at the same moment (such as <code>make gen</code> after a schema edit) is asked in the same continuation. If Adage cannot confirm a run completed, it tells the agent not to retry and pauses actions in that worktree until a person looks.</p>
+        </div></details>
+      </li>
+      <li class="plug-step" id="plug-learn" data-step="learn">
+        <p class="plug-when"><code>SessionEnd</code> · after the session</p>
+        <h2>It learns, and you decide what may run.</h2>
+        <p>When a session stops or ends, Adage starts a background learner for this repository. It reads the trace Claude Code left on your machine and turns steps that keep paying off into reflexes. Instincts work from day one; learned reflexes take over as evidence builds. New ones wait for your review, and nothing runs until a person approves that exact command. Change the command, its scripts or its environment, and the approval stops matching.</p>
+        <details class="plug-more"><summary>Technical detail</summary><div>
+          <p>The learner (<code>adage condition --auto</code>) runs detached, at most once per <code>learn.min_interval_secs</code> (120 s) per repository, and never touches the network. Letting Adage run a check takes three decisions at a terminal, each refused inside an agent session: <code>adage delegate policy --max-level e2</code>, <code>adage review delegate …</code> for one command, and <code>adage delegate on</code>.</p>
+        </div></details>
+      </li>
+      <li class="plug-step" id="plug-sum" data-step="sum">
+        <p class="plug-when">What it adds up to</p>
+        <h2>No hook skips a model call. The agent just needs fewer of them.</h2>
+        <p>The model still does the thinking. Adage takes the predictable parts off its plate (finding where things are, running and reading the checks), so each call goes further.</p>
+        <p class="plug-result"><b>{{ev:dev-v9b:arms.A0.mean_requests|fixed1}} → {{ev:dev-v9b:arms.A4.mean_requests|fixed1}}</b><span>model calls per session in the development study, with hidden tests {{ev:dev-v9b:arms.A4.hidden_test_passes}}/{{ev:dev-v9b:arms.A4.sessions}} in both arms. Development evidence: one task, with extra help in every prompt.</span></p>
+        <div data-heldout="brief">{{heldout:brief}}</div>
+        <p class="plug-links"><a class="btn" href="/how-we-tested">How we tested it</a><a class="textlink" href="#walk">How it learns, stage by stage ↓</a></p>
+      </li>
+    </ol>
+  </div>
+</section>
+
 <section class="howintro" aria-labelledby="how-h1">
   <div class="wrap">
-    <p class="kicker">How it works</p>
-    <h1 class="display" id="how-h1">From a transcript to a reflex, <span class="soft">stage by stage.</span></h1>
+    <p class="kicker">How it learns</p>
+    <h2 class="display" id="how-h1">From a transcript to a reflex, <span class="soft">stage by stage.</span></h2>
     <p class="lede">Your coding agent keeps rediscovering how your repository works. Adage watches what worked in past sessions, turns the habits that keep paying off into reflexes, and hands your agent the right next step at the right moment. Then it checks that it helped.</p>
     <p class="howtips">Take the quick tour below, or switch to the full tour for every step. Hover, tap or tab to a <span class="termdemo">dotted word</span> to see what it means.</p>
     <ol class="stagemap" id="stagemap" aria-label="The stages"></ol>

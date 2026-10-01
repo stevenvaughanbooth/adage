@@ -42,6 +42,7 @@
   <nav class="nav" aria-label="Site">
     <a href="/how">How it works</a>
     <a href="#evidence">Evidence</a>
+    <a href="/how-we-tested">How we tested</a>
     <a href="#start">Get started</a>
     <button class="themebtn" id="theme" type="button">Day</button>
     <a class="pill" href="#access">Get early access</a>
@@ -121,7 +122,7 @@ $ make check
       <summary>What actually moves off the model?</summary>
       <p><b>By default:</b> local CPU matching delivers guidance; supported pre-call instincts can correct a command to the repository's verified environment without another model request. The agent still executes its tools.</p>
       <p><b>With separate execution approval:</b> <code>adage-exec</code> can prefetch a read-only result or run a staged action in a sandbox and apply permitted outputs. Choosing and running that invocation needs no model request; the agent may still reason over its result.</p>
-      <p>A learned command is not automatically approved to run. A delivered directive is not proof of a saved model turn. Each behavior has its own evidence. Adage saves model calls by handling learned reflexes and instincts on your CPU; we count that in model requests, tokens and API cost. GPU use and energy are not measured.</p>
+      <p>A learned command is not automatically approved to run. A delivered directive is not proof of a saved model turn. Each behavior has its own evidence. Adage saves model calls by handling learned reflexes and instincts on your CPU; we count that in model requests, tokens and API cost. GPU use and energy are not measured. <a href="/how-we-tested">How we tested it →</a></p>
     </details>
     <div class="story-inputs">
       <p><span>Ready on day one</span><b>Instincts</b>Bind known moves to your repository's tools.</p>
@@ -192,52 +193,64 @@ $ make check
   <div class="wrap">
     <p class="kicker reveal">Evidence</p>
     <h2 class="display reveal" id="ev-h">Measured against a control, <span class="soft">not a vibe.</span></h2>
-    <p class="lede reveal">Real agents, headless, on sandbox repositories whose conventions they cannot guess and on real open-source repositories. The same work, with and without Adage, scored by hidden tests. The comparisons below measure advice and procedure cards; they do not measure automatic CPU action replacement.</p>
+    <p class="lede reveal">Your agent stops re-exploring and re-checking the same things. Adage saves model calls by handling learned reflexes and instincts on your CPU; we count that in model requests, tokens and API cost, against the same task without Adage, scored by hidden tests. GPU use and energy are not measured. It is strongest on the work a repository repeats; a novel task still needs the model.</p>
+
+    <article class="trial current-proof launch-proof reveal" aria-labelledby="launch-proof-h">
+      <header><p class="kicker">Launch study · development result · October 1, 2026</p><h3 id="launch-proof-h">The agent stops re-checking what Adage already checked.</h3><p>Adage runs the person-approved tests on your CPU and hands back a receipt; a card says where the files stand · Claude Haiku 4.5 · Marshmallow · {{ev:dev-v9b:blocks}} paired blocks</p></header>
+      <dl class="stats">
+        <div><dt>Model requests per session</dt><dd><span class="sr">without Adage </span><span class="was">{{ev:dev-v9b:arms.A0.mean_requests|fixed1}}</span><span class="arrow" aria-hidden="true">→</span><span class="sr">, with Adage </span><span class="now">{{ev:dev-v9b:arms.A4.mean_requests|fixed1}}</span><small>{{ev:dev-v9b:comparison.A4.ratio|x2}} · fewer in {{ev:dev-v9b:comparison.A4.blocks_fewer}} of {{ev:dev-v9b:blocks}} paired blocks</small></dd></div>
+        <div><dt>Hidden tests passed</dt><dd><span class="now">{{ev:dev-v9b:arms.A4.hidden_test_passes}}/{{ev:dev-v9b:arms.A4.sessions}}</span><small>with Adage · {{ev:dev-v9b:arms.A0.hidden_test_passes}}/{{ev:dev-v9b:arms.A0.sessions}} without</small></dd></div>
+        <div><dt>Cost per session (API list price)</dt><dd><span class="sr">without Adage </span><span class="was">{{ev:dev-v9b:arms.A0.cost_usd_mean|usd3}}</span><span class="arrow" aria-hidden="true">→</span><span class="sr">, with Adage </span><span class="now">{{ev:dev-v9b:arms.A4.cost_usd_mean|usd3}}</span><small>cache-read tokens {{ev:dev-v9b:arms.A0.tokens_mean.cache_read|kilo}} → {{ev:dev-v9b:arms.A4.tokens_mean.cache_read|kilo}}</small></dd></div>
+      </dl>
+      <p class="note">Development evidence, not the launch number: one task, the one the design was tuned on, with a supplied test block and a work order in every prompt. All five safety controls kept their necessary checks. The held-out comparison on new tasks is the one that counts:</p>
+      <div class="launch-heldout" data-heldout="brief">{{heldout:brief}}</div>
+      <p class="launch-cta"><a class="btn primary" href="/how-we-tested">How we tested, misses included</a><a class="textlink" href="/evidence/dev-v9b.json">The numbers behind this card</a></p>
+    </article>
 
     <article class="trial current-proof reveal" aria-labelledby="cold-proof-h">
-      <header><p class="kicker">Latest · cold-start pilot + replication · September 30, 2026</p><h3 id="cold-proof-h">Cold-start value, measured twice.</h3><p>Shipped instincts · Claude Haiku 4.5 · Marshmallow · four coding tasks, two runs per arm</p></header>
+      <header><p class="kicker">Cold-start pilot + replication · September 30, 2026</p><h3 id="cold-proof-h">Cold-start value, measured twice.</h3><p>Shipped instincts · Claude Haiku 4.5 · Marshmallow · {{ev:cold-start:unique_tasks}} coding tasks, {{ev:cold-start:repetitions_per_arm_per_task}} runs per arm</p></header>
       <dl class="stats">
-        <div><dt>Reported API cost</dt><dd><span class="now">8.8% lower</span><small>$1.9430 agent alone · $1.7720 with instincts</small></dd></div>
-        <div><dt>Observed model requests</dt><dd><span class="now">10.5% fewer</span><small>304 agent alone · 272 with instincts</small></dd></div>
-        <div><dt>Outputs passing independent checks</dt><dd><span class="now">8/8</span><small>with instincts · 6/8 agent alone</small></dd></div>
+        <div><dt>Reported API cost</dt><dd><span class="now">{{ev:cold-start:cost_reduction_percent|fixed1}}% lower</span><small>{{ev:cold-start:totals.agent.reported_cost_usd|usd4}} agent alone · {{ev:cold-start:totals.instincts.reported_cost_usd|usd4}} with instincts</small></dd></div>
+        <div><dt>Observed model requests</dt><dd><span class="now">{{ev:cold-start:request_reduction_percent|fixed1}}% fewer</span><small>{{ev:cold-start:totals.agent.observed_model_requests}} agent alone · {{ev:cold-start:totals.instincts.observed_model_requests}} with instincts</small></dd></div>
+        <div><dt>Outputs passing independent checks</dt><dd><span class="now">{{ev:cold-start:totals.instincts.quality_passed}}/{{ev:cold-start:totals.instincts.assignments}}</span><small>with instincts · {{ev:cold-start:totals.agent.quality_passed}}/{{ev:cold-start:totals.agent.assignments}} agent alone</small></dd></div>
       </dl>
-      <p class="note">No training sessions or learned routes. Shipped advisory hints point test runs toward the repository's Python environment. All sixteen outcomes are included; three of eight task pairs cost more with instincts.</p>
-      <p class="note">The first run saved 16.3%; the reversed-order repeat saved only 0.6%, with equal request counts and all tasks passing in both arms. This small, single-repository pilot is not a general savings estimate. It does not demonstrate automatic CPU action replacement or measure GPU savings.</p>
-      <p class="note"><a href="https://github.com/stevenvaughanbooth/adage/blob/0584c9e/evals/reflex-proof/harness/results/20260930-cold-start-replication/FINDINGS.md">Read the methodology and limitations →</a> <span aria-hidden="true">·</span> <a href="/evidence/cold-start.json">Inspect all sixteen outcomes</a></p>
+      <p class="note">No training sessions or learned routes. Shipped advisory hints point test runs toward the repository's Python environment. All {{ev:cold-start:assignment_denominator}} outcomes are included; {{ev:cold-start:cost_regression_pairs}} of {{ev:cold-start:paired_comparisons}} task pairs cost more with instincts.</p>
+      <p class="note">The first run saved {{ev:cold-start:rounds.0.cost_reduction_percent|fixed1}}%; the reversed-order repeat saved only {{ev:cold-start:rounds.1.cost_reduction_percent|fixed1}}%, with equal request counts and all tasks passing in both arms. This small, single-repository pilot is not a general savings estimate. It does not demonstrate automatic CPU action replacement or measure GPU savings.</p>
+      <p class="note"><a href="https://github.com/stevenvaughanbooth/adage/blob/0584c9e/evals/reflex-proof/harness/results/20260930-cold-start-replication/FINDINGS.md">Read the methodology and limitations →</a> <span aria-hidden="true">·</span> <a href="/evidence/cold-start.json">Inspect all {{ev:cold-start:assignment_denominator}} outcomes</a></p>
     </article>
     <article class="trial current-proof reveal" aria-labelledby="current-proof-h">
-      <header><p class="kicker">Learned procedure cards · shipped product validation</p><h3 id="current-proof-h">A new task family. A real repository.</h3><p>Claude Haiku 4.5 · unjs/ufo · 16 paired sessions in 8 task clusters · pre-registered protocol</p></header>
+      <header><p class="kicker">Learned procedure cards · shipped product validation</p><h3 id="current-proof-h">A new task family. A real repository.</h3><p>Claude Haiku 4.5 · unjs/ufo · {{ev:benchmarks:card_validation.pairs}} paired sessions in {{ev:benchmarks:card_validation.clusters}} task clusters · pre-registered protocol</p></header>
       <dl class="stats">
-        <div><dt>Estimated cost change</dt><dd><span class="now">−10.3%</span><small>90% interval: −20.1% to +2.0%</small></dd></div>
-        <div><dt>Hidden checks passed</dt><dd><span class="now">16/16</span><small>with Adage · 15/16 without</small></dd></div>
-        <div><dt>Procedure card delivery</dt><dd><span class="now">16/16</span><small>matching tasks · 0/8 unrelated tasks</small></dd></div>
+        <div><dt>Estimated cost change</dt><dd><span class="now">{{ev:benchmarks:card_validation.cost_change_percent|signed1}}%</span><small>90% interval: {{ev:benchmarks:card_validation.cost_interval_90.0|signed1}}% to {{ev:benchmarks:card_validation.cost_interval_90.1|signed1}}%</small></dd></div>
+        <div><dt>Hidden checks passed</dt><dd><span class="now">{{ev:benchmarks:card_validation.hidden_passes_adage}}/{{ev:benchmarks:card_validation.pairs}}</span><small>with Adage · {{ev:benchmarks:card_validation.hidden_passes_control}}/{{ev:benchmarks:card_validation.pairs}} without</small></dd></div>
+        <div><dt>Procedure card delivery</dt><dd><span class="now">{{ev:benchmarks:card_validation.card_delivered}}/{{ev:benchmarks:card_validation.card_sessions}}</span><small>matching tasks · {{ev:benchmarks:card_validation.unrelated_delivered}}/{{ev:benchmarks:card_validation.unrelated_prompts}} unrelated tasks</small></dd></div>
       </dl>
-      <p class="note">The card reached the right tasks. Cost savings are plausible, not established: the interval includes no benefit. Tested at commit <code>acdb0a4</code> on September 29, 2026; later card-grouping and judge changes are not covered. With only 8 clusters, this nominal 90% interval has roughly 85% coverage. The larger numbers below and in the teaser come from earlier sandbox or prototype studies.</p>
+      <p class="note">The card reached the right tasks. Cost savings are plausible, not established: the interval includes no benefit. Tested at commit <code>{{ev:benchmarks:card_validation.commit}}</code> on September 29, 2026; later card-grouping and judge changes are not covered. With only {{ev:benchmarks:card_validation.clusters}} clusters, this nominal 90% interval has roughly 85% coverage. The larger numbers below and in the teaser come from earlier sandbox or prototype studies.</p>
     </article>
     <div class="runs">
       <article class="trial reveal" aria-labelledby="run1">
         <header>
           <h3 id="run1">Claude Haiku 4.5</h3>
-          <p>Python sandbox repository · round 2 · 18 sessions with Adage, 18 without</p>
+          <p>Python sandbox repository · round 2 · {{ev:benchmarks:sandbox_haiku.sessions_per_arm}} sessions with Adage, {{ev:benchmarks:sandbox_haiku.sessions_per_arm}} without</p>
         </header>
         <dl class="stats">
-          <div><dt>Turns before the first edit (median)</dt><dd><span class="sr">without Adage </span><span class="was">20</span><span class="arrow" aria-hidden="true">→</span><span class="sr">, with Adage </span><span class="now">2</span></dd></div>
-          <div><dt>Cost per run (mean)</dt><dd><span class="sr">without Adage </span><span class="was">$0.135</span><span class="arrow" aria-hidden="true">→</span><span class="sr">, with Adage </span><span class="now">$0.053</span></dd></div>
-          <div><dt>Hidden checks passed</dt><dd><span class="sr">without Adage </span><span class="was">78%</span><span class="arrow" aria-hidden="true">→</span><span class="sr">, with Adage </span><span class="now">100%</span><small>not significant at n = 18</small></dd></div>
+          <div><dt>Turns before the first edit (median)</dt><dd><span class="sr">without Adage </span><span class="was">{{ev:benchmarks:sandbox_haiku.first_edit_turns_median.without}}</span><span class="arrow" aria-hidden="true">→</span><span class="sr">, with Adage </span><span class="now">{{ev:benchmarks:sandbox_haiku.first_edit_turns_median.with}}</span></dd></div>
+          <div><dt>Cost per run (mean)</dt><dd><span class="sr">without Adage </span><span class="was">{{ev:benchmarks:sandbox_haiku.cost_per_run_usd.without|usd3}}</span><span class="arrow" aria-hidden="true">→</span><span class="sr">, with Adage </span><span class="now">{{ev:benchmarks:sandbox_haiku.cost_per_run_usd.with|usd3}}</span></dd></div>
+          <div><dt>Hidden checks passed</dt><dd><span class="sr">without Adage </span><span class="was">{{ev:benchmarks:sandbox_haiku.hidden_checks_percent.without}}%</span><span class="arrow" aria-hidden="true">→</span><span class="sr">, with Adage </span><span class="now">{{ev:benchmarks:sandbox_haiku.hidden_checks_percent.with}}%</span><small>not significant at n = {{ev:benchmarks:sandbox_haiku.sessions_per_arm}}</small></dd></div>
         </dl>
         <p class="note">The loop at work: in round 1, agents that no longer explored hit a dead end Adage had exposed (<code>pytest</code> first). Round 2 learned it as an inhibit reflex, and it disappeared.</p>
       </article>
       <article class="trial reveal" aria-labelledby="run2">
         <header>
           <h3 id="run2">Claude Sonnet 5</h3>
-          <p>TypeScript service on Node · round 2 · 18 sessions with Adage, 18 without</p>
+          <p>TypeScript service on Node · round 2 · {{ev:benchmarks:sandbox_sonnet.sessions_per_arm}} sessions with Adage, {{ev:benchmarks:sandbox_sonnet.sessions_per_arm}} without</p>
         </header>
         <dl class="stats">
-          <div><dt>Turns before the first edit (median)</dt><dd><span class="sr">without Adage </span><span class="was">6</span><span class="arrow" aria-hidden="true">→</span><span class="sr">, with Adage </span><span class="now">3</span><small>over the sessions that made an edit</small></dd></div>
-          <div><dt>Cost per run (mean)</dt><dd><span class="sr">without Adage </span><span class="was">$0.086</span><span class="arrow" aria-hidden="true">→</span><span class="sr">, with Adage </span><span class="now">$0.065</span></dd></div>
-          <div><dt>Hidden checks passed</dt><dd><span class="sr">without Adage </span><span class="was">100%</span><span class="arrow" aria-hidden="true">→</span><span class="sr">, with Adage </span><span class="now">100%</span></dd></div>
+          <div><dt>Turns before the first edit (median)</dt><dd><span class="sr">without Adage </span><span class="was">{{ev:benchmarks:sandbox_sonnet.first_edit_turns_median.without}}</span><span class="arrow" aria-hidden="true">→</span><span class="sr">, with Adage </span><span class="now">{{ev:benchmarks:sandbox_sonnet.first_edit_turns_median.with}}</span><small>over the sessions that made an edit</small></dd></div>
+          <div><dt>Cost per run (mean)</dt><dd><span class="sr">without Adage </span><span class="was">{{ev:benchmarks:sandbox_sonnet.cost_per_run_usd.without|usd3}}</span><span class="arrow" aria-hidden="true">→</span><span class="sr">, with Adage </span><span class="now">{{ev:benchmarks:sandbox_sonnet.cost_per_run_usd.with|usd3}}</span></dd></div>
+          <div><dt>Hidden checks passed</dt><dd><span class="sr">without Adage </span><span class="was">{{ev:benchmarks:sandbox_sonnet.hidden_checks_percent.without}}%</span><span class="arrow" aria-hidden="true">→</span><span class="sr">, with Adage </span><span class="now">{{ev:benchmarks:sandbox_sonnet.hidden_checks_percent.with}}%</span></dd></div>
         </dl>
-        <p class="note">A stronger model found every convention on its own. Adage's effect moved from avoiding failures to skipping exploration: half the turns before the first edit, 24% lower cost, quality unchanged.</p>
+        <p class="note">A stronger model found every convention on its own. Adage's effect moved from avoiding failures to skipping exploration: half the turns before the first edit, {{ev:benchmarks:sandbox_sonnet.cost_cut_percent}}% lower cost, quality unchanged.</p>
       </article>
       <article class="trial reveal" aria-labelledby="run3">
         <header>
@@ -245,24 +258,24 @@ $ make check
           <p>Claude Haiku 4.5 on real open-source repositories · a card learned from 4 earlier sessions · each session paired with a control on the same task</p>
         </header>
         <dl class="stats">
-          <div><dt>Cost per task: new parameter type (click), new validator (marshmallow)</dt><dd><span class="now">−18.8%</span><small>interval −25.8% to −11.6% · hidden tests 20/24 with, 19/24 without</small></dd></div>
-          <div><dt>Cost per task: new flag type (urfave/cli, Go)</dt><dd><span class="now">−33.8%</span><small>interval −44.3% to −23.6% · hidden tests 2/12 in both arms</small></dd></div>
+          <div><dt>Cost per task: new parameter type (click), new validator (marshmallow)</dt><dd><span class="now">{{ev:benchmarks:card_prototype.python.cost_change_percent|signed1}}%</span><small>interval {{ev:benchmarks:card_prototype.python.cost_interval_90.0|signed1}}% to {{ev:benchmarks:card_prototype.python.cost_interval_90.1|signed1}}% · hidden tests {{ev:benchmarks:card_prototype.python.hidden_passes_with}}/{{ev:benchmarks:card_prototype.python.of}} with, {{ev:benchmarks:card_prototype.python.hidden_passes_without}}/{{ev:benchmarks:card_prototype.python.of}} without</small></dd></div>
+          <div><dt>Cost per task: new flag type (urfave/cli, Go)</dt><dd><span class="now">{{ev:benchmarks:card_prototype.go.cost_change_percent|signed1}}%</span><small>interval {{ev:benchmarks:card_prototype.go.cost_interval_90.0|signed1}}% to {{ev:benchmarks:card_prototype.go.cost_interval_90.1|signed1}}% · hidden tests {{ev:benchmarks:card_prototype.go.hidden_passes_with}}/{{ev:benchmarks:card_prototype.go.of}} in both arms</small></dd></div>
         </dl>
         <p class="note">Read the Go row with care: half its control sessions hit the 60-turn cap. The card was a Python prototype in these runs; the shipped card is on by default. Its completed fresh-family validation is shown above.</p>
       </article>
       <article class="trial reveal" aria-labelledby="run4">
         <header>
           <h3 id="run4">A compiled skill</h3>
-          <p>A repository workflow skill compiled by <code>adage train</code> · 12 sessions per arm</p>
+          <p>A repository workflow skill compiled by <code>adage train</code> · {{ev:benchmarks:compiled_skill.sessions_per_arm}} sessions per arm</p>
         </header>
         <dl class="stats">
-          <div><dt>Hidden tests passed</dt><dd><span class="sr">with neither </span><span class="was">9/12</span><span class="arrow" aria-hidden="true">→</span><span class="sr">, compiled </span><span class="now">12/12</span><small>the skill in context: 12/12</small></dd></div>
-          <div><dt>Cost per session</dt><dd><span class="sr">with neither </span><span class="was">$0.122</span><span class="arrow" aria-hidden="true">→</span><span class="sr">, compiled </span><span class="now">$0.034</span><small>the skill in context: $0.032</small></dd></div>
+          <div><dt>Hidden tests passed</dt><dd><span class="sr">with neither </span><span class="was">{{ev:benchmarks:compiled_skill.hidden_passes.neither}}/{{ev:benchmarks:compiled_skill.sessions_per_arm}}</span><span class="arrow" aria-hidden="true">→</span><span class="sr">, compiled </span><span class="now">{{ev:benchmarks:compiled_skill.hidden_passes.compiled}}/{{ev:benchmarks:compiled_skill.sessions_per_arm}}</span><small>the skill in context: {{ev:benchmarks:compiled_skill.hidden_passes.in_context}}/{{ev:benchmarks:compiled_skill.sessions_per_arm}}</small></dd></div>
+          <div><dt>Cost per session</dt><dd><span class="sr">with neither </span><span class="was">{{ev:benchmarks:compiled_skill.cost_per_session_usd.neither|usd3}}</span><span class="arrow" aria-hidden="true">→</span><span class="sr">, compiled </span><span class="now">{{ev:benchmarks:compiled_skill.cost_per_session_usd.compiled|usd3}}</span><small>the skill in context: {{ev:benchmarks:compiled_skill.cost_per_session_usd.in_context|usd3}}</small></dd></div>
         </dl>
         <p class="note">The compiled reflexes keep the skill's effect without its text in context. The repository is a lab sandbox, and a skill that is mostly judgment stays text.</p>
       </article>
     </div>
-    <p class="caveat reveal">Published with their caveats. The two sandbox runs reused round 1's work items in round 2, fixed the arm order and shared the operator's auto-memory, so treat them as indicative until they are repeated under the stricter protocol. The card intervals are 90% bootstrap intervals clustered by task; with 6–12 tasks per comparison, read them as closer to 80%. On one-off bug fixes the effect is small: the <code>.venv</code> instinct took the system-Python dead end from 5 of 6 sessions to 0 of 6, and every lever a hook can pull was worth 0–4% of cost. Every install keeps about one session in ten as a control, and <code>adage savings</code> states what Adage saves on your own work only once 10 control and 30 treated sessions have finished.</p>
+    <p class="caveat reveal">Published with their caveats. The two sandbox runs reused round 1's work items in round 2, fixed the arm order and shared the operator's auto-memory, so treat them as indicative until they are repeated under the stricter protocol. The card intervals are 90% bootstrap intervals clustered by task; with 6–12 tasks per comparison, read them as closer to 80%. On one-off bug fixes the effect is small: the <code>.venv</code> instinct took the system-Python dead end from {{ev:benchmarks:one_off_fixes.venv_dead_end_sessions.without}} of {{ev:benchmarks:one_off_fixes.venv_dead_end_sessions.of}} sessions to {{ev:benchmarks:one_off_fixes.venv_dead_end_sessions.with}} of {{ev:benchmarks:one_off_fixes.venv_dead_end_sessions.of}}, and every lever a hook can pull was worth {{ev:benchmarks:one_off_fixes.hook_levers_cost_percent.0}}–{{ev:benchmarks:one_off_fixes.hook_levers_cost_percent.1}}% of cost. Every install keeps about one session in ten as a control, and <code>adage savings</code> states what Adage saves on your own work only once 10 control and 30 treated sessions have finished.</p>
   </div>
 </section>
 
@@ -290,7 +303,7 @@ $ make check
     </div>
     <div class="term reveal" role="region" aria-label="Install and set up">
       <div class="term-top" aria-hidden="true"><i></i><i></i><i></i></div>
-      <pre><code><span class="c"># not published yet: in Claude Code, once the first release ships</span>
+      <pre tabindex="0"><code><span class="c"># not published yet: in Claude Code, once the first release ships</span>
 /plugin marketplace add stevenvaughanbooth/adage
 /plugin install adage@adage
 <span class="c"># then start a coding session in your repo</span></code></pre>

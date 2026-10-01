@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#050507" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#ececef" media="(prefers-color-scheme: light)">
+<title>How we tested · Adage</title>
+<meta name="description" content="How we test whether Adage lets a coding agent do the same correct work with fewer model calls: paired comparisons, hidden tests, safety controls, pass rules written first, and every attempt kept, misses included.">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="canonical" href="__SITE_URL__/how-we-tested">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Adage">
+<meta property="og:title" content="How we tested Adage">
+<meta property="og:description" content="Fewer model calls, the same correct code. Exactly how we checked, misses included.">
+<meta property="og:url" content="__SITE_URL__/how-we-tested">
+<meta property="og:image" content="__SITE_URL__/og.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<noscript><style>.reveal { opacity: 1 !important; transform: none !important; }</style></noscript>
+<script type="module" src="/src/evidence-page.ts"></script>
+</head>
+<body class="evpage">
+<a class="skiplink" href="#main">Skip to content</a>
+
+<header class="top static">
+  <a class="mark" href="/" aria-label="Adage, home">Adage</a>
+  <nav class="nav" aria-label="Site">
+    <a href="/how">How it works</a>
+    <a href="/how-we-tested" aria-current="page">How we tested</a>
+    <a href="/#start">Get started</a>
+    <button class="themebtn" id="theme" type="button">Day</button>
+    <a class="pill" href="/#access">Get early access</a>
+  </nav>
+</header>
+
+<main id="main">
+<section class="ev-intro" id="question" aria-labelledby="ev-h1">
+  <div class="wrap ev-intro-grid">
+    <div class="ev-intro-text">
+    <p class="kicker">How we tested</p>
+    <h1 class="display" id="ev-h1">Fewer model calls. The same correct code. <span class="soft">Here is exactly how we checked.</span></h1>
+    <p class="lede">Your coding agent spends model calls re-exploring your repository and re-checking work it has already checked. Adage learns the work your repository repeats and handles the predictable steps on your CPU, so the agent spends its calls on the actual problem.</p>
+    <div class="ev-question">
+      <p class="ev-q-label">The question every study asks</p>
+      <p class="ev-q">Can Adage handle predictable steps on your CPU so the agent needs fewer model calls, without hurting correctness?</p>
+      <p class="ev-q-note">It is strongest on recurring task patterns in a repository it has learned. A novel task still needs the model's reasoning, and Adage leaves that alone.</p>
+    </div>
+    </div>
+    <div class="ev-intro-proof">
+
+    <figure class="ev-example" aria-labelledby="ev-example-h">
+      <figcaption>
+        <p class="kicker" id="ev-example-h">A running example</p>
+        <p class="ev-ex-lead">Ask an agent to add a new validator to <a href="https://github.com/marshmallow-code/marshmallow">Marshmallow</a>, a Python library. It writes the code, adds tests and a changelog line. Each dot is one model call.</p>
+      </figcaption>
+      <div class="ev-runs">
+        <div class="ev-run">
+          <p class="ev-run-h"><b>The agent alone</b><span><b>{{ev:dev-v9b:arms.A0.mean_requests|fixed1}}</b> calls per session</span></p>
+          <p class="ev-dots" data-dots="{{ev:dev-v9b:arms.A0.mean_requests}}" aria-hidden="true"></p>
+          <p class="ev-run-note">It looks around the repository to find where things go, runs the tests, reads the output, and often runs them again to be sure.</p>
+        </div>
+        <div class="ev-run adage">
+          <p class="ev-run-h"><b>With Adage</b><span><b>{{ev:dev-v9b:arms.A4.mean_requests|fixed1}}</b> calls per session</span></p>
+          <p class="ev-dots" data-dots="{{ev:dev-v9b:arms.A4.mean_requests}}" aria-hidden="true"></p>
+          <p class="ev-run-note">A learned card says where the files stand right now. After the edits, Adage runs the approved tests itself, on your CPU, and hands back a receipt naming the agent's new tests.</p>
+        </div>
+      </div>
+      <p class="ev-ex-foot"><b>Development evidence, not the launch number:</b> one task, {{ev:dev-v9b:blocks}} paired runs, with extra help in every prompt. Hidden tests passed {{ev:dev-v9b:arms.A4.hidden_test_passes}}/{{ev:dev-v9b:arms.A4.sessions}} with Adage and {{ev:dev-v9b:arms.A0.hidden_test_passes}}/{{ev:dev-v9b:arms.A0.sessions}} alone. The held-out test on new tasks is the one that counts; it is <a href="#heldout">below</a>.</p>
+    </figure>
+    <div class="ev-status" data-heldout="brief">{{heldout:brief}}</div>
+    </div>
+  </div>
+</section>
+
+<section class="band ev-fair" id="fair" aria-labelledby="fair-h">
+  <div class="wrap">
+    <p class="kicker reveal">How we test fairly</p>
+    <h2 class="display reveal" id="fair-h">Same task, with and without. <span class="soft">Rules first, results after.</span></h2>
+    <p class="lede reveal">A tool that saves calls by cutting corners is easy to build. These six rules are how we make sure Adage does not.</p>
+    <ol class="ev-rules">
+      <li class="reveal"><span class="ev-n">01</span><h3>Paired comparisons</h3><p>Every task runs as a paired comparison, with Adage and without it: same repository, same prompt, a fresh checkout each time. Comparing pairs keeps a hard task from looking like a slow tool.</p></li>
+      <li class="reveal"><span class="ev-n">02</span><h3>Hidden tests</h3><p>The agent never sees the tests that grade its work. Fewer calls only count if the code is still right.</p></li>
+      <li class="reveal"><span class="ev-n">03</span><h3>Safety controls</h3><p>Before any comparison, runs where checking again is the right move: a failing test, a later edit, a changed config, a broader change, an explicit request to rerun. Adage must never let the agent skip necessary work. One miss stops the study.</p></li>
+      <li class="reveal"><span class="ev-n">04</span><h3>A person approves, a sandbox runs</h3><p>Adage runs only the exact command a person approved, inside an operating-system sandbox, on the CPU. If the command or its environment changes, the approval stops matching and nothing runs.</p></li>
+      <li class="reveal"><span class="ev-n">05</span><h3>Pass rules written first</h3><p>The line a result must clear is written down and committed before the first session, and never moved after. Revisions are dated and come before the runs they affect.</p></li>
+      <li class="reveal"><span class="ev-n">06</span><h3>Every attempt kept</h3><p>Failures, invalid runs and aborted studies stay in the record with their costs. Nothing is rerun to get a better number.</p></li>
+    </ol>
+    <aside class="ev-callout reveal" aria-labelledby="heldout-def-h">
+      <h3 id="heldout-def-h">What “held-out” means</h3>
+      <p>We improved Adage on a development task, so a good score there proves little. Held-out tasks are new tasks, written and frozen before any result was read, and never used for tuning. They answer the real question: does it work on the next task, the one nobody tuned for?</p>
+    </aside>
+    <details class="ev-more reveal">
+      <summary>More detail: how a session is counted</summary>
+      <div class="ev-more-body">
+        <p><b>Model requests</b> are counted from Claude Code's own debug log: one line per request it sends, retries included, since they are billed too. Each session is cross-checked against the request ids in its output stream; a gap that logged API errors do not explain makes the session unverified, and its whole paired block leaves the comparison, for every arm alike.</p>
+        <p><b>The headline test</b> is the ratio of total requests, Adage over alone, across the paired blocks. Its one-sided 95% upper bound comes from a bootstrap that resamples blocks within each task, 20,000 draws, with a fixed seed. Quality must not fall: Adage's hidden-test passes must be at least the agent alone's, minus one.</p>
+        <p><b>Censoring works against Adage.</b> A session that stops early (its turn limit, its budget, the clock) is a quality failure in every arm, and only Adage's is raised to 60 requests. Two sensitivity analyses run alongside: without censored blocks, and without the task closest to anything in training.</p>
+        <p><b>Arms.</b> The held-out study has three: the agent alone; Adage's hooks and card with no approved check; and Adage with the approved check. The middle one shows how much comes from advice alone. Every model is Claude Haiku 4.5; cost is the API list price.</p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<section class="band alt ev-journey" id="journey" aria-labelledby="journey-h">
+  <div class="wrap">
+    <p class="kicker reveal">The journey, honestly</p>
+    <h2 class="display reveal" id="journey-h">Every study, in order. <span class="soft">Most of them showed us what was missing.</span></h2>
+    <p class="lede reveal">Running a check on the CPU was the easy part. Getting the agent to trust it, and not run the same check again, took six attempts. Here is each one, with its result as recorded.</p>
+    <ol class="ev-timeline">
+      <li class="ev-t reveal" data-result="good">
+        <p class="ev-t-when">Sep 30 · advice only</p>
+        <h3>Cold start: instincts, no learning yet</h3>
+        <p>Shipped instincts pointed test runs at the repository's own Python environment. Across {{ev:cold-start:assignment_denominator}} assignments (four tasks, two runs per arm): <b>{{ev:cold-start:cost_reduction_percent|fixed1}}% lower cost</b>, <b>{{ev:cold-start:request_reduction_percent|fixed1}}% fewer model requests</b>, and {{ev:cold-start:totals.instincts.quality_passed}}/{{ev:cold-start:totals.instincts.assignments}} outputs passing against {{ev:cold-start:totals.agent.quality_passed}}/{{ev:cold-start:totals.agent.assignments}}.</p>
+        <p class="ev-t-catch">The catch: {{ev:cold-start:cost_regression_pairs}} of {{ev:cold-start:paired_comparisons}} pairs cost more, and the reversed-order repeat saved only {{ev:cold-start:rounds.1.cost_reduction_percent|fixed1}}%. Advice, not CPU execution.</p>
+        <p class="ev-t-src"><a href="/evidence/cold-start.json">All sixteen outcomes</a> · <a href="https://github.com/stevenvaughanbooth/adage/blob/main/evals/reflex-proof/harness/results/20260930-cold-start-replication/FINDINGS.md">findings</a></p>
+      </li>
+      <li class="ev-t reveal" data-result="miss">
+        <p class="ev-t-when">Sep 30 · first CPU transfer</p>
+        <h3>The check ran. The agent ran it again anyway.</h3>
+        <p>A test routine learned from ten guided sessions ran on the CPU in 4 of 4 sessions, and every output passed. But every agent then ran the same tests itself: <b>0 of 4</b> agent actions removed.</p>
+        <p class="ev-t-catch">The lesson: doing the work is not enough. The agent has to know it was done, and trust it.</p>
+        <p class="ev-t-src"><a href="https://github.com/stevenvaughanbooth/adage/blob/main/evals/reflex-proof/harness/results/20260930-live-cpu-transfer/FINDINGS.md">findings</a></p>
+      </li>
+      <li class="ev-t reveal" data-result="miss">
+        <p class="ev-t-when">Oct 1 · development v5 and v7</p>
+        <h3>Receipts and a session note: still repeated</h3>
+        <p>Structured receipts and an upfront note about what Adage runs reached every session, and every safety control kept its necessary work. Genuine removals: <b>0</b> in both. v7 first reported 4; they were test runs that failed to launch, and a stricter re-score found 0.</p>
+        <p class="ev-t-src"><a href="https://github.com/stevenvaughanbooth/adage/blob/main/evals/reflex-proof/harness/results/20260930-launch-canary/canary-v5/FINDINGS.md">v5</a> · <a href="https://github.com/stevenvaughanbooth/adage/blob/main/evals/reflex-proof/harness/results/20260930-launch-canary/canary-v7/FINDINGS.md">v7</a></p>
+      </li>
+      <li class="ev-t reveal" data-result="invalid">
+        <p class="ev-t-when">Oct 1 · development v8</p>
+        <h3>Invalid: an approval lapsed mid-study</h3>
+        <p>From session 9 on, a process outside the study wrote into the shared Python runtime, so the approved command no longer matched and Adage, correctly, ran nothing. Only 7 of 18 Adage sessions ran the design. It counts neither for nor against.</p>
+        <p class="ev-t-catch">The fix: the study now fails loudly on any lapse, protects the runtime, and checks every approval before each session. People now see a lapse too.</p>
+        <p class="ev-t-src"><a href="https://github.com/stevenvaughanbooth/adage/blob/main/evals/reflex-proof/harness/results/20261001-dev-arms/FINDINGS.md">findings</a></p>
+      </li>
+      <li class="ev-t reveal" data-result="invalid">
+        <p class="ev-t-when">Oct 1 · development v9</p>
+        <h3>Stopped after one control, on a scoring bug</h3>
+        <p>The scorer read the finish-line check's passing run as the learned check's, so a failing-test control looked unrealized and the stop rule ended the study. The scoring was fixed before any comparison ran; the pass rule did not change.</p>
+        <p class="ev-t-src"><a href="https://github.com/stevenvaughanbooth/adage/blob/main/evals/reflex-proof/harness/results/20261001-dev-v9/ABORTED.json">abort record</a></p>
+      </li>
+      <li class="ev-t reveal" data-result="good">
+        <p class="ev-t-when">Oct 1 · development v9b</p>
+        <h3>{{ev:dev-v9b:arms.A4.mean_requests|fixed1}} model calls instead of {{ev:dev-v9b:arms.A0.mean_requests|fixed1}}</h3>
+        <p>With Adage the agent needed <b>{{ev:dev-v9b:comparison.A4.ratio|x2}}</b> the model requests of the agent alone, fewer in {{ev:dev-v9b:comparison.A4.blocks_fewer}} of {{ev:dev-v9b:blocks}} paired blocks. Hidden tests: {{ev:dev-v9b:arms.A4.hidden_test_passes}}/{{ev:dev-v9b:arms.A4.sessions}} in both arms. Cost per session: {{ev:dev-v9b:arms.A4.cost_usd_mean|usd3}} against {{ev:dev-v9b:arms.A0.cost_usd_mean|usd3}}. All five safety controls kept their necessary checks. It passed its development rule.</p>
+        <p class="ev-t-catch">Read it as development evidence: one task, the one we tuned on, with a supplied test block and a work order in every prompt. It earned a held-out test; it is not the launch number.</p>
+        <p class="ev-t-src"><a href="/evidence/dev-v9b.json">the numbers</a> · <a href="https://github.com/stevenvaughanbooth/adage/blob/main/evals/reflex-proof/harness/results/20261001-dev-v9b/RESULT.json">RESULT.json</a></p>
+      </li>
+      <li class="ev-t reveal" data-result="pending">
+        <p class="ev-t-when">Oct 1 · held-out</p>
+        <h3>Four new tasks, no extra help in the prompts</h3>
+        <p>The comparison that counts. <a href="#heldout">Its status and result →</a></p>
+      </li>
+    </ol>
+    <div class="ev-changed reveal">
+      <h3>What changed to get there</h3>
+      <div class="ev-changed-grid">
+        <div>
+          <p class="ev-changed-k">Verification ownership</p>
+          <p>Adage now owns the check a person approved. At the start of the session it tells the agent which command it runs and when. After matching edits it runs it on the CPU and hands back a receipt naming the agent's own new tests. When the agent finishes, it runs it again if the code changed. The agent stops re-checking because the check is visibly done.</p>
+        </div>
+        <div>
+          <p class="ev-changed-k">The orientation card</p>
+          <p>The procedure card used to show an example to copy, and agents went paging through files to imitate it. Now it says where each file stands right now: line counts, the last definitions, the end of the test file, the changelog's head. Adage reads them itself, read-only, in under 1,200 tokens.</p>
+        </div>
+      </div>
+      <details class="ev-more">
+        <summary>More detail: each development arm</summary>
+        <div class="ev-more-body">
+          <div class="ev-table" role="region" aria-label="dev-v9b arms" tabindex="0"><table>
+            <thead><tr><th scope="col">Arm</th><th scope="col">Requests / session</th><th scope="col">Ratio</th><th scope="col">Blocks fewer</th><th scope="col">Hidden tests</th><th scope="col">Cost / session</th><th scope="col">Test-run requests</th><th scope="col">Cache-read tokens</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">The agent alone</th><td>{{ev:dev-v9b:arms.A0.mean_requests|fixed2}}</td><td>–</td><td>–</td><td>{{ev:dev-v9b:arms.A0.hidden_test_passes}}/{{ev:dev-v9b:arms.A0.sessions}}</td><td>{{ev:dev-v9b:arms.A0.cost_usd_mean|usd4}}</td><td>{{ev:dev-v9b:arms.A0.verification_requests_mean|fixed2}}</td><td>{{ev:dev-v9b:arms.A0.tokens_mean.cache_read|kilo}}</td></tr>
+              <tr><th scope="row">Ownership, earlier card</th><td>{{ev:dev-v9b:arms.A2f.mean_requests|fixed2}}</td><td>{{ev:dev-v9b:comparison.A2f.ratio|x2}}</td><td>{{ev:dev-v9b:comparison.A2f.blocks_fewer}}/{{ev:dev-v9b:blocks}}</td><td>{{ev:dev-v9b:arms.A2f.hidden_test_passes}}/{{ev:dev-v9b:arms.A2f.sessions}}</td><td>{{ev:dev-v9b:arms.A2f.cost_usd_mean|usd4}}</td><td>{{ev:dev-v9b:arms.A2f.verification_requests_mean|fixed2}}</td><td>{{ev:dev-v9b:arms.A2f.tokens_mean.cache_read|kilo}}</td></tr>
+              <tr><th scope="row">Ownership plus orientation</th><td>{{ev:dev-v9b:arms.A4.mean_requests|fixed2}}</td><td>{{ev:dev-v9b:comparison.A4.ratio|x2}}</td><td>{{ev:dev-v9b:comparison.A4.blocks_fewer}}/{{ev:dev-v9b:blocks}}</td><td>{{ev:dev-v9b:arms.A4.hidden_test_passes}}/{{ev:dev-v9b:arms.A4.sessions}}</td><td>{{ev:dev-v9b:arms.A4.cost_usd_mean|usd4}}</td><td>{{ev:dev-v9b:arms.A4.verification_requests_mean|fixed2}}</td><td>{{ev:dev-v9b:arms.A4.tokens_mean.cache_read|kilo}}</td></tr>
+            </tbody>
+          </table></div>
+          <p>The development rule, written before the study: at most {{ev:dev-v9b:rule.max_ratio|fixed2}}× the agent alone's requests, fewer in at least {{ev:dev-v9b:rule.min_blocks_fewer}} of {{ev:dev-v9b:blocks}} blocks, no more hidden-test failures, and every safety control realized with no necessary check skipped. Only the orientation arm ran the controls, so only it could pass. {{ev:dev-v9b:sessions}} sessions in all, ${{ev:dev-v9b:cost_usd|fixed2}}.</p>
+        </div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<section class="band ev-result" id="heldout" aria-labelledby="heldout-h">
+  <div class="wrap">
+    <p class="kicker reveal">The held-out result</p>
+    <h2 class="display reveal" id="heldout-h">New tasks. No tuning. <span class="soft">Published as it comes out.</span></h2>
+    <p class="lede reveal">Four tasks Adage was never tuned on, each run five times in every arm. Prompts carry no work order, no test block and no instruction to run tests: what a person would actually type.</p>
+    <div class="ev-heldout reveal" data-heldout="full">{{heldout:full}}</div>
+  </div>
+</section>
+
+<section class="band alt ev-limits" id="limits" aria-labelledby="limits-h">
+  <div class="wrap">
+    <p class="kicker reveal">Limits and what's next</p>
+    <h2 class="display reveal" id="limits-h">What this does not show yet, <span class="soft">and what we test next.</span></h2>
+    <div class="ev-limit-grid">
+      <div class="reveal">
+        <h3>What we have not shown</h3>
+        <ul class="ev-list">
+          <li><b>One repository, one model.</b> Every launch study used Marshmallow and Claude Haiku 4.5. Other repositories and other models are untested.</li>
+          <li><b>A guided start.</b> The routine Adage runs was learned from ten guided sessions. Fifteen unguided sessions have not produced one yet.</li>
+          <li><b>Model calls, not GPUs.</b> We count model requests, tokens and API cost. GPU use and energy are not measured.</li>
+          <li><b>Repeating work only.</b> The gain comes from work a repository repeats. A novel task still needs the model's reasoning.</li>
+        </ul>
+      </div>
+      <div class="reveal">
+        <h3>What we test next</h3>
+        <ul class="ev-list next">
+          <li><b>Expensive to cheap.</b> Learn from sessions with a strong model, then see whether a cheaper model, with Adage, can do the same work.</li>
+          <li><b>More repositories.</b> Including one the learning pipeline has never seen.</li>
+          <li><b>Learning without guidance.</b> Executable routines from ordinary, unguided sessions.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="band ev-repro" id="reproduce" aria-labelledby="repro-h">
+  <div class="wrap">
+    <p class="kicker reveal">Reproduce it</p>
+    <h2 class="display reveal" id="repro-h">Every rule, record and script <span class="soft">is in the repository.</span></h2>
+    <ul class="ev-repro-grid">
+      <li class="reveal"><h3>The protocol</h3><p>Every pass rule and dated revision, as written before the runs it governs.</p><a href="https://github.com/stevenvaughanbooth/adage/blob/main/docs/launch-gate-protocol.md"><code>docs/launch-gate-protocol.md</code></a></li>
+      <li class="reveal"><h3>The evidence index</h3><p>Every study with its result, failures and spending ledger.</p><a href="https://github.com/stevenvaughanbooth/adage/blob/main/evals/reflex-proof/LAUNCH-STATUS.md"><code>evals/reflex-proof/LAUNCH-STATUS.md</code></a></li>
+      <li class="reveal"><h3>Raw archives</h3><p>Per-session records, reports and hashes for each study.</p><a href="https://github.com/stevenvaughanbooth/adage/tree/main/evals/reflex-proof/harness/results"><code>evals/reflex-proof/harness/results/</code></a></li>
+      <li class="reveal"><h3>The scripts</h3><p>The runner, the registered analysis and the decision record.</p><a href="https://github.com/stevenvaughanbooth/adage/tree/main/evals/reflex-proof/harness"><code>heldout_cohort.py · heldout_analysis.py · heldout_writeup.py</code></a></li>
+    </ul>
+    <details class="ev-more reveal">
+      <summary>More detail: the held-out commands</summary>
+      <div class="ev-more-body">
+        <p>From <code>evals/reflex-proof/harness</code>, with <code>$H</code> the frozen held-out root. <code>live</code> is the only paid step; it dispatches in the frozen order, controls first, and stops on any lapse. <a href="https://github.com/stevenvaughanbooth/adage/blob/main/docs/launch-handoff.md">The handoff</a> has the full sequence.</p>
+        <pre class="ev-pre"><code>python3 heldout_cohort.py prepare $H        # offline: fresh checkouts, read-only runtime
+python3 heldout_cohort.py verify-grants $H  # a person issued exactly the reviewed approvals
+python3 heldout_cohort.py live $H           # paid: 65 sessions, one at a time
+python3 heldout_cohort.py report $H         # the registered analysis and its decision record</code></pre>
+        <p>The page you are reading draws its numbers from <a href="/evidence/heldout.json"><code>/evidence/heldout.json</code></a>, <a href="/evidence/dev-v9b.json"><code>dev-v9b.json</code></a> and <a href="/evidence/cold-start.json"><code>cold-start.json</code></a>, each naming the archived file and hash it came from.</p>
+      </div>
+    </details>
+    <p class="ctarow reveal"><a class="btn primary" href="/how">See how Adage plugs into Claude Code</a><a class="btn" href="/#access">Get early access</a></p>
+  </div>
+</section>
+</main>
+
+<footer class="foot">
+  <div class="wrap footrow">
+    <span class="mark small">Adage</span>
+    <span>Agent traces become reflexes.</span>
+    <span class="muted">Apache-2.0</span>
+  </div>
+</footer>
+</body>
+</html>

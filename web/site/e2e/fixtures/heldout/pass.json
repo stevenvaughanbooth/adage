@@ -1,0 +1,831 @@
+{
+  "protocol": "heldout-analysis-1",
+  "stratum": "same repository, same test file family, guided-learned route (run-175d85)",
+  "best_arm": "A4",
+  "outcome": "pass",
+  "passed": true,
+  "problems": [],
+  "warnings": [],
+  "primary": {
+    "ratio": 0.6275,
+    "upper": 0.6932,
+    "lower": 0.5652,
+    "blocks": 20,
+    "blocks_fewer": 18,
+    "sign_flip_p": 0.0002,
+    "passed": true,
+    "threshold": 0.9,
+    "included_blocks": 20
+  },
+  "quality": {
+    "best": 20,
+    "a0": 20,
+    "margin": 1,
+    "passed": true
+  },
+  "go_criteria": {
+    "G1": {
+      "applies": true,
+      "form": "single repository: the frozen learned home holds the certified verification route run-175d85 (checked at freeze); the two-repository clause belongs to the cross-repository decision",
+      "passed": true,
+      "note": "checked at freeze (route present, isolation audit passed)"
+    },
+    "G2": {
+      "applies": true,
+      "form": "BEST positive sessions: a learned verification ran in >= 50%, and >= 75% of those had a successful receipt",
+      "fired": 20,
+      "sessions": 20,
+      "successful": 20,
+      "passed": true
+    },
+    "G3": {
+      "applies": false,
+      "reason": "confirmed eliminations were the r1-r7 primary; r8/r9 replaced it with model requests per session, which this stratum gates, and its two-repository clauses cannot apply to one repository; eliminations are reported",
+      "passed": null
+    },
+    "G4": {
+      "applies": false,
+      "reason": "a repeat-elimination mechanism criterion superseded by the r9 primary; repeats were gated in development (D4); NOEXEC equivalent-command and BEST repeat fractions are reported",
+      "passed": null
+    },
+    "G5": {
+      "applies": true,
+      "form": "BEST hidden-test failures <= min(A0 failures, NOEXEC failures) over all blocks; stricter than the r9 margin of one, so it governs quality",
+      "failures": {
+        "A0": 0,
+        "NOEXEC": 0,
+        "BEST": 0
+      },
+      "passed": true
+    },
+    "G6": {
+      "applies": true,
+      "form": "zero skipped necessary verification (controls and positives), zero executions without a grant or in NOEXEC/A0, zero foreign or unapproved receipts, zero undeclared writes, zero unknown costs",
+      "necessary_work_skipped": [],
+      "executions_without_grant": [],
+      "foreign_or_unapproved_receipts": [],
+      "undeclared_writes": [],
+      "unknown_costs": [],
+      "passed": true
+    },
+    "G7": {
+      "applies": true,
+      "form": "at most 25% of BEST CPU executions in positive sessions unnecessary (receipt stale before the session ended); controls are stale by construction and excluded",
+      "executions": 20,
+      "unnecessary": 0,
+      "passed": true
+    },
+    "G8": {
+      "applies": true,
+      "form": "BEST total requests <= NOEXEC total and BEST cost <= 105% of NOEXEC, over included blocks with the censoring rule",
+      "requests": {
+        "BEST": 224,
+        "NOEXEC": 333
+      },
+      "cost_usd": {
+        "BEST": 1.688932,
+        "NOEXEC": 2.03042
+      },
+      "passed": true
+    },
+    "G9": {
+      "applies": false,
+      "reason": "the pipeline-unseen repository (more-itertools) is not run in this stratum; G9 stays required for any claim that covers it",
+      "passed": null
+    }
+  },
+  "sensitivity": {
+    "without_censored_blocks": {
+      "ratio": 0.6275,
+      "upper": 0.6932,
+      "lower": 0.5652,
+      "blocks": 20,
+      "blocks_fewer": 18,
+      "sign_flip_p": 0.0002,
+      "passed": true,
+      "excluded_blocks": []
+    },
+    "without_has_keys": {
+      "ratio": 0.63,
+      "upper": 0.7063,
+      "lower": 0.5588,
+      "blocks": 15,
+      "blocks_fewer": 13,
+      "sign_flip_p": 0.0005,
+      "passed": true
+    }
+  },
+  "request_verification": {
+    "excluded_blocks": [],
+    "max_excluded": 2,
+    "sessions": [
+      {
+        "order": 7,
+        "block": 1,
+        "arm": "A0",
+        "requests": 15,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 6,
+        "block": 1,
+        "arm": "NOEXEC",
+        "requests": 16,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 5,
+        "block": 1,
+        "arm": "BEST",
+        "requests": 11,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 8,
+        "block": 2,
+        "arm": "A0",
+        "requests": 21,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 10,
+        "block": 2,
+        "arm": "NOEXEC",
+        "requests": 18,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 9,
+        "block": 2,
+        "arm": "BEST",
+        "requests": 14,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 13,
+        "block": 3,
+        "arm": "A0",
+        "requests": 13,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 11,
+        "block": 3,
+        "arm": "NOEXEC",
+        "requests": 12,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 12,
+        "block": 3,
+        "arm": "BEST",
+        "requests": 13,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 16,
+        "block": 4,
+        "arm": "A0",
+        "requests": 20,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 14,
+        "block": 4,
+        "arm": "NOEXEC",
+        "requests": 14,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 15,
+        "block": 4,
+        "arm": "BEST",
+        "requests": 12,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 18,
+        "block": 5,
+        "arm": "A0",
+        "requests": 16,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 17,
+        "block": 5,
+        "arm": "NOEXEC",
+        "requests": 17,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 19,
+        "block": 5,
+        "arm": "BEST",
+        "requests": 13,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 22,
+        "block": 6,
+        "arm": "A0",
+        "requests": 20,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 20,
+        "block": 6,
+        "arm": "NOEXEC",
+        "requests": 15,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 21,
+        "block": 6,
+        "arm": "BEST",
+        "requests": 11,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 23,
+        "block": 7,
+        "arm": "A0",
+        "requests": 17,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 25,
+        "block": 7,
+        "arm": "NOEXEC",
+        "requests": 14,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 24,
+        "block": 7,
+        "arm": "BEST",
+        "requests": 10,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 28,
+        "block": 8,
+        "arm": "A0",
+        "requests": 12,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 27,
+        "block": 8,
+        "arm": "NOEXEC",
+        "requests": 17,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 26,
+        "block": 8,
+        "arm": "BEST",
+        "requests": 13,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 31,
+        "block": 9,
+        "arm": "A0",
+        "requests": 14,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 30,
+        "block": 9,
+        "arm": "NOEXEC",
+        "requests": 18,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 29,
+        "block": 9,
+        "arm": "BEST",
+        "requests": 11,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 32,
+        "block": 10,
+        "arm": "A0",
+        "requests": 20,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 34,
+        "block": 10,
+        "arm": "NOEXEC",
+        "requests": 17,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 33,
+        "block": 10,
+        "arm": "BEST",
+        "requests": 15,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 37,
+        "block": 11,
+        "arm": "A0",
+        "requests": 15,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 36,
+        "block": 11,
+        "arm": "NOEXEC",
+        "requests": 15,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 35,
+        "block": 11,
+        "arm": "BEST",
+        "requests": 13,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 40,
+        "block": 12,
+        "arm": "A0",
+        "requests": 22,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 38,
+        "block": 12,
+        "arm": "NOEXEC",
+        "requests": 20,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 39,
+        "block": 12,
+        "arm": "BEST",
+        "requests": 8,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 42,
+        "block": 13,
+        "arm": "A0",
+        "requests": 19,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 41,
+        "block": 13,
+        "arm": "NOEXEC",
+        "requests": 11,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 43,
+        "block": 13,
+        "arm": "BEST",
+        "requests": 9,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 44,
+        "block": 14,
+        "arm": "A0",
+        "requests": 21,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 45,
+        "block": 14,
+        "arm": "NOEXEC",
+        "requests": 17,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 46,
+        "block": 14,
+        "arm": "BEST",
+        "requests": 15,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 47,
+        "block": 15,
+        "arm": "A0",
+        "requests": 20,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 49,
+        "block": 15,
+        "arm": "NOEXEC",
+        "requests": 19,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 48,
+        "block": 15,
+        "arm": "BEST",
+        "requests": 8,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 52,
+        "block": 16,
+        "arm": "A0",
+        "requests": 17,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 51,
+        "block": 16,
+        "arm": "NOEXEC",
+        "requests": 19,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 50,
+        "block": 16,
+        "arm": "BEST",
+        "requests": 7,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 54,
+        "block": 17,
+        "arm": "A0",
+        "requests": 20,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 55,
+        "block": 17,
+        "arm": "NOEXEC",
+        "requests": 17,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 53,
+        "block": 17,
+        "arm": "BEST",
+        "requests": 8,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 56,
+        "block": 18,
+        "arm": "A0",
+        "requests": 18,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 58,
+        "block": 18,
+        "arm": "NOEXEC",
+        "requests": 20,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 57,
+        "block": 18,
+        "arm": "BEST",
+        "requests": 10,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 59,
+        "block": 19,
+        "arm": "A0",
+        "requests": 15,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 60,
+        "block": 19,
+        "arm": "NOEXEC",
+        "requests": 21,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 61,
+        "block": 19,
+        "arm": "BEST",
+        "requests": 8,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 64,
+        "block": 20,
+        "arm": "A0",
+        "requests": 22,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 62,
+        "block": 20,
+        "arm": "NOEXEC",
+        "requests": 16,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      },
+      {
+        "order": 63,
+        "block": 20,
+        "arm": "BEST",
+        "requests": 15,
+        "stream_request_ids": null,
+        "api_error_entries": null,
+        "cross_check": null,
+        "verified": true
+      }
+    ]
+  },
+  "arms": {
+    "A0": {
+      "sessions": 20,
+      "requests_included": 357,
+      "mean_requests_included": 17.85,
+      "observed_requests": 357,
+      "hidden_test_passes": 20,
+      "censored": 0,
+      "verification_requests": 40,
+      "cost_usd": 2.322944
+    },
+    "NOEXEC": {
+      "sessions": 20,
+      "requests_included": 333,
+      "mean_requests_included": 16.65,
+      "observed_requests": 333,
+      "hidden_test_passes": 20,
+      "censored": 0,
+      "verification_requests": 40,
+      "cost_usd": 2.03042
+    },
+    "BEST": {
+      "sessions": 20,
+      "requests_included": 224,
+      "mean_requests_included": 11.2,
+      "observed_requests": 224,
+      "hidden_test_passes": 20,
+      "censored": 0,
+      "verification_requests": 0,
+      "cost_usd": 1.688932
+    }
+  },
+  "controls": [
+    {
+      "order": 0,
+      "condition": "failed",
+      "collected": true,
+      "realized": true,
+      "necessary_work_skipped": false
+    },
+    {
+      "order": 1,
+      "condition": "later-edit",
+      "collected": true,
+      "realized": true,
+      "necessary_work_skipped": false
+    },
+    {
+      "order": 2,
+      "condition": "config-change",
+      "collected": true,
+      "realized": true,
+      "necessary_work_skipped": false
+    },
+    {
+      "order": 3,
+      "condition": "broader",
+      "collected": true,
+      "realized": true,
+      "necessary_work_skipped": false
+    },
+    {
+      "order": 4,
+      "condition": "rerun",
+      "collected": true,
+      "realized": true,
+      "necessary_work_skipped": false
+    }
+  ],
+  "report_only": {
+    "noexec_vs_a0": {
+      "ratio": 0.9328,
+      "upper": 1.0058,
+      "lower": 0.8651,
+      "blocks": 20,
+      "blocks_fewer": 12,
+      "sign_flip_p": 0.7538,
+      "passed": false
+    },
+    "best_vs_noexec": {
+      "ratio": 0.6727,
+      "upper": 0.7492,
+      "lower": 0.6006,
+      "blocks": 20,
+      "blocks_fewer": 19,
+      "sign_flip_p": 0.0005,
+      "passed": true
+    }
+  },
+  "notes": [
+    "GO for this stratum: the primary test and quality, plus every applicable G criterion.",
+    "Model requests are never presented as GPU savings; CPU work is reported separately.",
+    "Censoring: every censored session is a quality failure; only BEST is imputed upward (to 60 requests)."
+  ],
+  "best": {
+    "arm": "A4",
+    "label": "verification ownership plus the orientation card"
+  },
+  "build_commit": "0000000000000000000000000000000000000000",
+  "binary_sha256": {
+    "adage": "synthetic",
+    "adage-exec": "synthetic"
+  },
+  "assignments": 65,
+  "collected": 65,
+  "valid": true,
+  "lapses": []
+}

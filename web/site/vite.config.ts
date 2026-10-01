@@ -1,14 +1,20 @@
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { defineConfig, type Plugin } from "vite";
+import { fillTokens } from "./src/evidence/tokens";
 
 // The site's absolute URL, for canonical and Open Graph tags: SITE_URL, or the production domain
 // Vercel provides at build time.
 const site = (process.env.SITE_URL ?? (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "")).replace(/\/$/, "");
 
+// The evidence numbers: read from public/evidence/*.json at build time (src/evidence/tokens.ts).
+const evidence = (name: string): unknown =>
+  JSON.parse(readFileSync(fileURLToPath(new URL(`./public/evidence/${name}.json`, import.meta.url)), "utf8"));
+
 const html = (): Plugin => ({
   name: "adage-site-html",
-  transformIndexHtml(src) {
-    let out = src.replaceAll("__SITE_URL__", site);
+  transformIndexHtml(src, ctx) {
+    let out = fillTokens(src.replaceAll("__SITE_URL__", site), evidence, ctx.path);
     // Without the film, the page must not open on its (empty) overlay.
     if (process.env.VITE_FILM === "off") out = out.replace('<div class="film" id="film"', '<div class="film" id="film" hidden');
     return out;
@@ -30,12 +36,14 @@ export default defineConfig({
     assetsInlineLimit: 0,
     chunkSizeWarningLimit: 900,
     rollupOptions: {
-      input: { main: "index.html", how: "how.html", notfound: "404.html" },
+      input: { main: "index.html", how: "how.html", tested: "how-we-tested.html", notfound: "404.html" },
       // Chunks (Rolldown groups): three.js is shared by the hero and /how; the hero's scene and the
       // walkthrough's chapters stay with their own pages, so the words paint before either arrives.
       output: {
         advancedChunks: {
           groups: [
+            // The glossary alone, so the evidence page's dotted words do not pull in the chapters.
+            { name: "glossary", test: /[\\/]map[\\/]src[\\/]how[\\/]glossary\.ts$/, priority: 2 },
             { name: "three", test: /[\\/]node_modules[\\/]three[\\/]/ },
             { name: "scene", test: /[\\/]src[\\/]hero[\\/]/ },
             { name: "how", test: /[\\/]map[\\/]src[\\/]how[\\/]/ },

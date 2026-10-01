@@ -269,6 +269,9 @@ jobs:
       - name: registration API contract
         run: pnpm test:api
         working-directory: web/site
+      - name: held-out evidence converter
+        run: pnpm test:evidence
+        working-directory: web/site
       - name: browser for the e2e suite
         run: pnpm exec playwright install --with-deps chromium
         working-directory: web/site

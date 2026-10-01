@@ -1,0 +1,60 @@
+{
+  "schema": "adage-benchmarks-1",
+  "about": "The earlier advisory results the home page shows: procedure cards, sandbox demos and a compiled skill. They measure advice, not CPU execution. Each entry names its source; docs/benchmarks.md has every interval and caveat.",
+  "card_validation": {
+    "what": "Learned procedure card, shipped product, pre-registered; a new task family on unjs/ufo (TypeScript)",
+    "model": "Claude Haiku 4.5",
+    "pairs": 16,
+    "clusters": 8,
+    "cost_change_percent": -10.3,
+    "cost_interval_90": [-20.1, 2.0],
+    "hidden_passes_adage": 16,
+    "hidden_passes_control": 15,
+    "card_delivered": 16,
+    "card_sessions": 16,
+    "unrelated_delivered": 0,
+    "unrelated_prompts": 8,
+    "commit": "acdb0a4",
+    "date": "2026-09-29",
+    "source": "evals/launch/go-validation/RESULTS.md"
+  },
+  "sandbox_haiku": {
+    "what": "Python sandbox repository, round 2",
+    "model": "Claude Haiku 4.5",
+    "sessions_per_arm": 18,
+    "first_edit_turns_median": { "without": 20, "with": 2 },
+    "cost_per_run_usd": { "without": 0.135, "with": 0.053 },
+    "hidden_checks_percent": { "without": 78, "with": 100 },
+    "source": "demo/results"
+  },
+  "sandbox_sonnet": {
+    "what": "TypeScript service on Node, round 2",
+    "model": "Claude Sonnet 5",
+    "sessions_per_arm": 18,
+    "first_edit_turns_median": { "without": 6, "with": 3 },
+    "cost_per_run_usd": { "without": 0.086, "with": 0.065 },
+    "cost_cut_percent": 24,
+    "hidden_checks_percent": { "without": 100, "with": 100 },
+    "source": "demo/results/20260923-1249-harbor-dispatch-claude-sonnet-5"
+  },
+  "card_prototype": {
+    "what": "Procedure-card prototype on real open-source repositories, a card learned from 4 earlier sessions",
+    "model": "Claude Haiku 4.5",
+    "python": { "cost_change_percent": -18.8, "cost_interval_90": [-25.8, -11.6], "hidden_passes_with": 20, "hidden_passes_without": 19, "of": 24 },
+    "go": { "cost_change_percent": -33.8, "cost_interval_90": [-44.3, -23.6], "hidden_passes_with": 2, "hidden_passes_without": 2, "of": 12 },
+    "source": "evals/lab/research/recurring-workflows/README.md"
+  },
+  "compiled_skill": {
+    "what": "A repository workflow skill compiled by adage train",
+    "sessions_per_arm": 12,
+    "hidden_passes": { "neither": 9, "in_context": 12, "compiled": 12 },
+    "cost_per_session_usd": { "neither": 0.122, "in_context": 0.032, "compiled": 0.034 },
+    "source": "docs/benchmarks.md#compiled-skills-a-skills-effect-without-its-text-in-context"
+  },
+  "one_off_fixes": {
+    "what": "One-off bug fixes on real repositories",
+    "venv_dead_end_sessions": { "without": 5, "with": 0, "of": 6 },
+    "hook_levers_cost_percent": [0, 4],
+    "source": "evals/lab/research/BRIEF.md"
+  }
+}

@@ -219,7 +219,8 @@ test.describe("/how", () => {
   test("steps through chapters with the buttons, the keys and the URL", async ({ page }) => {
     await page.goto("/how?ch=judge&step=2");
     await toWalk(page);
-    await expect(page.getByRole("heading", { level: 1 })).toContainText("From a transcript to a reflex");
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("How Adage plugs into Claude Code");
+    await expect(page.getByRole("heading", { level: 2, name: /From a transcript to a reflex/ })).toBeVisible();
     await expect(page.locator("#capmeta")).toContainText("04 Check the evidence");
     await page.getByRole("button", { name: "Full tour" }).click();
     await expect(page.locator("#count")).toHaveText(/^3 \/ \d+$/);

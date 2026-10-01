@@ -17,7 +17,9 @@
     "media": "node scripts/media.mjs",
     "e2e": "playwright test",
     "test:e2e": "playwright test",
-    "test:api": "node --experimental-strip-types --test scripts/waitlist.test.mjs"
+    "test:api": "node --experimental-strip-types --test scripts/waitlist.test.mjs",
+    "test:evidence": "node --test scripts/heldout-evidence.test.mjs",
+    "heldout": "node scripts/heldout-evidence.mjs"
   },
   "dependencies": {
     "@fontsource-variable/bricolage-grotesque": "^5.3.0",

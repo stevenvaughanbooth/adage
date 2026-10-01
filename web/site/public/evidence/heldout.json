@@ -1,0 +1,46 @@
+{
+  "schema": "adage-heldout-evidence-1",
+  "status": "pending",
+  "study": {
+    "name": "Held-out comparison",
+    "repository": "Marshmallow",
+    "model": "Claude Haiku 4.5",
+    "tasks": [
+      "mm-curve--has-keys",
+      "mm-curve--iso-date",
+      "mm-curve--json-object",
+      "mm-curve--lat-long"
+    ],
+    "repetitions": 5,
+    "blocks": 20,
+    "sessions": 65,
+    "controls": [
+      "failed",
+      "later-edit",
+      "config-change",
+      "broader",
+      "rerun"
+    ],
+    "arms": {
+      "A0": "The agent alone (no Adage)",
+      "NOEXEC": "Adage's hooks and card, no approved check",
+      "BEST": "Adage with the person-approved check (A4: verification ownership plus the orientation card)"
+    },
+    "pass_rule": {
+      "threshold": 0.9,
+      "confidence": 0.95,
+      "quality_margin": 1,
+      "text": "The one-sided 95% upper bound of Adage's model requests divided by the agent alone's, over the paired blocks, is at most 0.90, and Adage's hidden-test passes are at least the agent alone's minus one. Every applicable G criterion must also hold."
+    },
+    "frozen": "The four tasks were frozen on 2026-10-01 before any development result was read and were never used for tuning. Their prompts carry no work order, no test block and no instruction to run tests.",
+    "protocol": {
+      "analysis": "heldout-analysis-1",
+      "revisions": "launch-gate-1 revisions 9 to 11",
+      "document": "docs/launch-gate-protocol.md",
+      "code": "evals/reflex-proof/harness/heldout_analysis.py",
+      "tasks": "evals/reflex-proof/harness/results/20261001-heldout-tasks/README.md"
+    }
+  },
+  "result": null,
+  "source": null
+}
