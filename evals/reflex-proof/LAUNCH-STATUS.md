@@ -50,6 +50,36 @@ re-score finds 0. The structured receipt and startup contract have not been show
 the model's action. Revision 7 makes the measurement honest: covered attempts count even when
 they fail to launch, sessions use the checkout's own environment, and receipts list tests.
 
+The third development canary ([dev-v8b](harness/results/20261001-dev-arms/FINDINGS.md), 34
+sessions, $4.3539376) targeted fewer model requests than a no-Adage arm. **It is invalid for its
+execution arms from session 09 on, and it is not a valid negative result.**
+
+From session 09 on, every hook-arm session ran with a lapsed grant: a process outside the study
+wrote bytecode into the shared Python runtime, and the approved interpreter identity includes
+it. Only 7 of the 18 hook-arm positives ran the design. The lapse was silent, and the harness kept
+dispatching card-only sessions under execution-arm labels.
+
+The report's mean requests per positive were:
+
+| Arm | Mean requests per positive |
+| --- | --- |
+| No Adage (A0) | 16.8 |
+| Revision-7 integration (A1) | 22.5 |
+| Lever 2 (A2) | 17.8 |
+| Levers 1 and 2 (A3) | 18.7 |
+
+These means mix working sessions with card-only ones, so they test neither lever.
+- No arm qualified, so held-out does not run on this design.
+- No control realized its condition, so dev-v8b makes no safety claim.
+- The Stop gate never ran.
+- Model requests are not GPU measurements, and no savings claim follows.
+
+The harness now fails loudly on any of these. It also protects the shared runtime and checks
+every grant before each dispatch.
+
+The ledger after this run: 163 attempts, $24.6504369 admitted ($24.1504369 measured plus $0.50
+conservative), $35.3495631 remaining of $60.
+
 The subsequent [edit-receipt diagnostic](harness/results/20260930-edit-receipt-ablation/summary.json)
 is an authored fixture, not a launch benchmark. After fixing inherited-stdin contamination,
 two runs per arm observed verifier requests in baseline 2/2, generic receipt 2/2, structured

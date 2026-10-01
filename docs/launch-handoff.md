@@ -22,8 +22,15 @@ new dispatch; never reset it, double-dispatch, or treat an unknown bill as zero.
 
 ## Latest checkpoint: launch gate protocol (resume here)
 
-Branch `codex/launch-first-reflex`, PR #16 (draft). Ledger: 128 attempts, $20.2683707 admitted,
-$39.7316293 remaining. New charges in this checkpoint:
+Branch `codex/launch-first-reflex`, PR #16 (draft).
+
+Ledger: 163 attempts, all settled or cap-charged.
+- Admitted: $24.6504369 ($24.1504369 measured plus the $0.50 conservative charge).
+- Remaining: $35.3495631.
+
+New charges in this checkpoint:
+- the development canary-v8 `dev-v8b` (34 sessions, $4.3539376);
+- the passing `launch-gate-v5` native session ($0.0281286);
 - the development canary-v7 ($1.3425845);
 - three excluded native-confinement sessions: `launch-gate-v1` ($0.0258378), `launch-gate-v2`
   ($0.0278896) and `launch-gate-v3` ($0.0140024);
@@ -121,20 +128,48 @@ commands below from its `evals/reflex-proof/harness`, or refreeze new roots from
     - discovery prefetch is skipped, because no learned lookup routes exist for this family;
     - firing at the tests edit is left out, because it would change the approval key's input
       scope.
-  - **Development canary-v8** (`dev_arms.py`, `cohorts/launch-gate-v5/dev-v8b`) is frozen, not run
-    ([status](../evals/reflex-proof/harness/results/20261001-dev-arms/FINDINGS.md)). It compares
-    A0 (no hooks), A1 (revision-7 binaries), A2 (Lever 2) and A3 (Levers 1+2) in six paired blocks,
-    plus A2/A3 safety controls, using the production hook registration and thresholds D1-D4.
+  - **Development canary-v8** (`dev_arms.py`, `cohorts/launch-gate-v5/dev-v8b`) compares A0 (no
+    hooks), A1 (revision-7 binaries), A2 (Lever 2) and A3 (Levers 1+2) in six paired blocks, plus
+    A2/A3 safety controls, using the production hook registration and thresholds D1-D4.
+
+- **dev-v8b ran, and it is invalid for its execution arms from session 09. It is not a valid
+  negative result** ([findings](../evals/reflex-proof/harness/results/20261001-dev-arms/FINDINGS.md)).
+  All 34 sessions were collected, for $4.3539376.
+  - **What went wrong.** From session 09, every A1-A3 session ran with a lapsed grant: the spool
+    shows `withheld: approval` for `route_exec_digest`. Those sessions had no receipts and no Stop
+    gate, and from session 10 they had no contract. Only 7 of the 18 hook-arm positives (01-06, 08)
+    ran the design.
+  - **Cause.** A concurrent PR review ran the base environment's pytest unsandboxed and without
+    `-B`. That wrote bytecode into the shared runtime's standard library at 05:58:05Z, and the
+    approved interpreter identity includes that library.
+  - **What the report computed.** Mean requests per positive: A0 16.8, A1 22.5, A2 17.8, A3 18.7.
+    No arm met D1, but these means mix working and card-only sessions, so they test neither lever.
+    No arm qualified, so held-out does not run on this design. A1 was notably worse than A0. The
+    Stop gate never ran.
+  - **No safety claim.** All ten controls ran after the lapse, and none realized its condition. D3
+    was never tested.
+  - **Post hoc audit** (`dev-v8b/posthoc-audit.json`). Requests equal the debug-log dispatches in
+    34/34 sessions, and no session was censored.
+  - **Harness, prospective.** Reports now fail loudly on:
+    - a hook-arm session with no contract, a withheld approval or no receipt;
+    - unverified or censored counts;
+    - unrealized controls.
+
+    `prepare` makes the shared runtime read-only. Before every dispatch, `live` re-checks it, and
+    checks each grant by running the session's own binary at SessionStart. Any lapse stops the
+    study. The product-side digest fix and a lapse notice a person can see are on
+    `codex/ship-fixes`.
+  - **No new design has started.**
 
 Blocked on three things, none of which an agent may bypass:
 
 1. **Paid runs need a normal terminal.** `probe.execute` refuses nested Claude sessions.
-2. **Grants need the person.** `approve-dev-arms.sh` (sha256 `2290b18c…`) is prepared; run it only
-   after reading it.
+2. **Grants need the person.** The person issued the dev-v8b grants (`approve-dev-arms.sh`,
+   sha256 `2290b18c…`); no grant is pending.
 3. **Learning needs the learner fix.** About 22 learning-quality tests fail on main since PR #14.
    Cohort training replay, checkpoints and frozen learned homes wait for that fix and a rebuild.
 
-Development canary-v8 commands, from `evals/reflex-proof/harness` in a normal terminal (one at a time; stop on error):
+Development canary-v8 commands (all run on 2026-10-01 and kept for the record; never rerun an outcome), from `evals/reflex-proof/harness` in a normal terminal:
 
 ```sh
 A=/private/tmp/adage-real-repo-gate-v1; C=$A/cohorts/launch-gate-v5; R=$C/dev-v8b

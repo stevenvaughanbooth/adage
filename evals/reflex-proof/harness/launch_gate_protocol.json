@@ -415,6 +415,38 @@
       "original_report_eliminations": "4 (scoring artifact: bare python failed to launch)",
       "necessary_work_skipped": 0,
       "later_edit_realized": "0/2"
+    },
+    "dev-v8b": {
+      "protocol": "dev-arms-1",
+      "recorded": "2026-10-01, after the run; no threshold or rule changed",
+      "sessions": 34,
+      "known_cost_usd": 4.3539376,
+      "unknown_costs": 0,
+      "mean_requests_per_positive": {
+        "A0": 16.8333,
+        "A1": 22.5,
+        "A2": 17.8333,
+        "A3": 18.6667
+      },
+      "blocks_fewer_than_A0": {
+        "A1": "2/6",
+        "A2": "4/6",
+        "A3": "2/6"
+      },
+      "status": "invalid for its execution arms from session 09: every A1-A3 session from 09 ran with a lapsed grant (withheld: approval, route_exec_digest), so only 7 of 18 hook-arm positives (01-06, 08) ran the design; not a valid negative",
+      "verdict": "no arm qualified (D1 ratios to A0 as computed: A1 1.34, A2 1.06, A3 1.11, over mixed working and card-only sessions); held-out does not run on this design",
+      "D2_quality": "34/34 sessions passed",
+      "D3": "void: all 10 controls ran after the lapse and none realized its condition; v8 makes no safety claim",
+      "D4_sessions_with_repeat_attempts": {
+        "A1": 2,
+        "A2": 1,
+        "A3": 2
+      },
+      "stop_gate_runs": 0,
+      "cause": "an unsandboxed pytest outside the study (base environment, no -B) wrote bytecode into the shared runtime's standard library at 05:58:05Z; the approved interpreter identity (runtime_sha256) includes it",
+      "posthoc_audit": "dispatch cross-check 34/34 equal; no censored session; control realization 0/10",
+      "harness_after": "reports fail loudly (no contract, withheld approval or no receipt in a hook arm, unverified or censored counts, unrealized controls); prepare makes the shared runtime read-only; live re-checks it and each grant at SessionStart before every dispatch and stops the study on a lapse",
+      "archive": "results/20261001-dev-arms"
     }
   },
   "environment": "every new session launches with the checkout's own .venv first on PATH and as VIRTUAL_ENV (probe.project_launch); the sandbox policy is unchanged",

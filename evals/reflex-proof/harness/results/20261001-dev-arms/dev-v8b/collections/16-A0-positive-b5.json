@@ -1,0 +1,63 @@
+{
+  "all_journal_receipts": [],
+  "block": 5,
+  "collection_errors": [],
+  "condition": "positive",
+  "contract_emitted": false,
+  "cost_usd": 0.1120566,
+  "dev_arm": "A0",
+  "final_generation": "cb8c59c8a59a4d58e15cd2074848275609cb08f193970b8cf0490accf90a673b",
+  "order": 16,
+  "protocol": "dev-arms-1",
+  "provenance": {
+    "cwd": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v5/dev-v8b/sessions/16-A0-positive-b5/repo",
+    "destination": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v5/dev-v8b/sessions/16-A0-positive-b5/native-transcript.jsonl",
+    "session_id": "b4e547ef-3046-429e-a98f-d687f76b11ec",
+    "sha256": "7b6443771cdd29b60bc1e2fec02062d777738674cdec77edf328e40ea804eb20",
+    "source": "/Users/stevenbooth/.claude/projects/-private-tmp-adage-real-repo-gate-v1-cohorts-launch-gate-v5-dev-v8b-sessions-16-A0-positive-b5-repo/b4e547ef-3046-429e-a98f-d687f76b11ec.jsonl",
+    "synthetic": false
+  },
+  "pytest_requests": 2,
+  "quality": {
+    "changed_files": [
+      "CHANGELOG.rst",
+      "src/marshmallow/validate.py",
+      "tests/test_validate.py"
+    ],
+    "checks": {
+      "tests": true
+    },
+    "ci_passed": true,
+    "dependency_mode": "frozen prepared environment; no rescue install",
+    "elapsed_s": 1.95,
+    "exit_code": 0,
+    "hidden_collection_integrity": {
+      "expected_count": 11,
+      "extra": [],
+      "missing": [],
+      "observed_count": 11,
+      "passed": true,
+      "unsuccessful": []
+    },
+    "hidden_failed": [],
+    "hidden_passed": true,
+    "n_tests": 1204,
+    "passed": true,
+    "rescue_error": null,
+    "suite_failed": [],
+    "tail": "........................................................................ [ 23%]\n........................................................................ [ 29%]\n........................................................................ [ 35%]\n........................................................................ [ 41%]\n........................................................................ [ 47%]\n........................................................................ [ 53%]\n........................................................................ [ 59%]\n........................................................................ [ 65%]\n........................................................................ [ 71%]\n........................................................................ [ 77%]\n........................................................................ [ 83%]\n........................................................................ [ 89%]\n........................................................................ [ 95%]\n....................................................                     [100%]\n1204 passed in 1.38s",
+    "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+  },
+  "replay": {},
+  "requests": 15,
+  "stop_gate_outputs": [],
+  "task": "mm-curve--finite",
+  "timeline": {},
+  "tokens": {
+    "cache_read": 373336,
+    "cache_write": 21546,
+    "input": 121,
+    "output": 6302
+  },
+  "wall_seconds": 63.20137
+}

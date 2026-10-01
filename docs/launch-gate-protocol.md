@@ -250,6 +250,49 @@ scope, and the trigger stays as learned.
 **Budget.** The canary/development ceiling rises from $8 to $12 and training falls from $8 to $4.
 The protocol total ($38) and the held-out reserve ($22) are unchanged.
 
+### Development canary-v8 result (dev-v8b, recorded 2026-10-01 under r8)
+
+dev-v8b is **invalid for its execution arms from session 09 onward. It is not a valid negative
+result.** No threshold or rule changed. The record is in
+[the dev-v8b findings](../evals/reflex-proof/harness/results/20261001-dev-arms/FINDINGS.md).
+
+All 34 sessions ran, at a known cost of $4.3539376.
+
+**What happened.** Starting with session 09, every hook-arm session (A1-A3) ran with a lapsed
+grant. The spool records `withheld: approval` with `route_exec_digest`. A process outside the study
+ran Python unsandboxed and without `-B`. It wrote bytecode into the shared runtime's standard
+library, which the approved interpreter identity includes. Those sessions therefore had no
+receipts and no Stop gate, and from session 10 on they had no contract. Only 7 of the 18 hook-arm
+positives (01-06 and 08) ran the design.
+
+**What the report computed.** The mean requests per positive were:
+- A0: 16.8;
+- A1: 22.5;
+- A2: 17.8;
+- A3: 18.7.
+
+No arm met D1. However, those means mix the 7 sessions that ran the design with 11 card-only
+sessions, so they test neither lever.
+
+**Consequences.**
+- No arm qualified for held-out, and held-out does not run on this design.
+- v8 makes no safety claim. All ten controls ran after the lapse and none realized its condition,
+  so D3 was never tested.
+- The Stop gate never ran.
+- A1, whose highest counts all came after the lapse, was notably worse than A0.
+
+**Post hoc audit.** Requests equal debug-log dispatches in 34 of 34 sessions, and no session was
+censored.
+
+**Harness changes (prospective).**
+- Reports are now invalid and exit non-zero when any of these occur:
+  - a hook-arm session had no contract, a withheld approval or no receipt;
+  - counts are unverified or censored;
+  - a control was not realized.
+- `prepare` makes the shared runtime read-only and records its digest.
+- Before every dispatch, `live` re-checks the runtime and checks the session's grant with its own
+  binary at SessionStart. It stops the study on any lapse.
+
 ## Phase 2: cohort (step 3)
 
 Learning waits for the learner-regression fix on main; nothing is frozen with the broken learner.
