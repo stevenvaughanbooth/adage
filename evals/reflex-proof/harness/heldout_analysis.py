@@ -4,20 +4,29 @@
 Stratum: same repository, same test file family, guided-learned route (run-175d85).
 
 - Arms: A0 (no Adage hooks), NOEXEC (Adage hooks, BEST's binaries and card setting, no execution
-  grant) and BEST, the development arm chosen by `select_best` from the development canary-v8
-  report: the arm passing D1-D4 with the lowest mean requests. If none passes, nothing here runs.
+  grant) and BEST: the development design chosen by `select_best` from the development canary-v8
+  report (the arm passing D1-D4 with the lowest mean requests), built from the final pre-freeze
+  commit, which includes generic correctness fixes made before any held-out run. If no arm passes,
+  nothing here runs.
 - Matrix: four held-out tasks x five repetitions = 20 paired blocks; each block runs the three arms
   on one task and repetition in a seeded random order recorded in the matrix. The five safety
   controls run first, in BEST, on the development task with the validated canary suffixes.
 - Primary metric: model requests per session, the count of `[API REQUEST]` dispatch lines in the
-  debug log, which must match the stream's distinct request ids one to one.
-- Primary test: the one-sided 95% upper bound of the paired ratio sum(BEST)/sum(A0) over blocks
-  (percentile bootstrap over blocks, stratified by task) is at most 0.90, and BEST's hidden-test
-  passes are at least A0's minus one.
-- Censoring: a session without a successful result (max turns, budget cap, wall clock or any other
-  stop) is a quality failure and counts max(observed, 60) requests. It is never dropped.
-- Controls: every control session must be realized (launch_canary.realized) and keep necessary
-  work; an unrealized control is a protocol failure, not a pass.
+  debug log (retries are real, billed requests and count). Cross-check per session against the
+  stream's distinct request ids: a mismatch fully explained by logged `[ERROR] API error (attempt
+  ...)` entries is verified; an unexplained mismatch makes the session unverified, and its whole
+  paired block leaves the ratio (all arms alike). More than 2 of 20 blocks excluded: unverified.
+- Primary test (the headline GO criterion for this stratum): the one-sided 95% upper bound of the
+  paired ratio sum(BEST)/sum(A0) over included blocks (percentile bootstrap over blocks, stratified
+  by task) is at most 0.90, and BEST's hidden-test passes are at least A0's minus one (all blocks).
+- Censoring, conservative against Adage: a session without a successful result is a quality failure
+  in every arm. For requests, a censored BEST session counts max(observed, 60); a censored A0 or
+  NOEXEC session counts its observed requests. Sensitivity: the same test without any block that
+  contains a censored session. Sensitivity: the same test without the has-keys blocks; if the
+  primary passes and that fails, the report says so prominently. GO uses the primary.
+- G1-G9: each is marked applies or not applicable with a reason (`GO_CRITERIA`); every applicable
+  criterion must also pass. Controls must be realized (launch_canary.realized) and skip no
+  necessary work; an unrealized control is a protocol failure, not a pass.
 - Verification requests: Bash requests running pytest in any form (pytest, py.test, python -m
   pytest, uv run pytest), tox or nox, python -m unittest, inline Python checks (python -c, python
   reading stdin or a heredoc) or a test script. Reported, never gated.
@@ -25,6 +34,7 @@ Stratum: same repository, same test file family, guided-learned route (run-175d8
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import math
 import random
@@ -38,17 +48,46 @@ ARMS = ("A0", "NOEXEC", "BEST")
 CANDIDATES = ("A2", "A3")
 CONTROLS = ("failed", "later-edit", "config-change", "broader", "rerun")
 CONTROL_TASK = "mm-curve--finite"
+SENSITIVITY_TASK = "mm-curve--has-keys"
 REPETITIONS = 5
 MAX_TURNS = 60
 CAP_REQUESTS = MAX_TURNS
-SESSION_CAP_USD = 0.33
-CEILING_USD = 22.0
+SESSION_CAP_USD = 0.40
+CEILING_USD = 26.0
 RATIO_MAX = 0.90
 CONFIDENCE = 0.95
 BOOTSTRAP = 20000
 SEED = 20261001
 QUALITY_MARGIN = 1
+MAX_EXCLUDED_BLOCKS = 2
+UNNECESSARY_MAX = 0.25
+G2_FIRED_MIN, G2_SUCCESS_MIN = 0.5, 0.75
+G8_COST_MAX_RATIO = 1.05
+CACHES = (".pytest_cache/**", "tests/__pycache__/**", "src/**/__pycache__/**", ".pytest_cache/.gitignore")
 DEBUG_REQUEST = re.compile(r"^\S+ \[DEBUG\] \[API REQUEST\] /v1/messages x-client-request-id=([\w-]+) source=(\w+)$")
+API_ERROR = re.compile(r"^\S+ \[ERROR\] API error \(attempt \d+/\d+\)")
+GO_CRITERIA = {
+    "G1": dict(applies=True, form="single repository: the frozen learned home holds the certified verification route "
+               "run-175d85 (checked at freeze); the two-repository clause belongs to the cross-repository decision"),
+    "G2": dict(applies=True, form="BEST positive sessions: a learned verification ran in >= 50%, and >= 75% of those "
+               "had a successful receipt"),
+    "G3": dict(applies=False, reason="confirmed eliminations were the r1-r7 primary; r8/r9 replaced it with model "
+               "requests per session, which this stratum gates, and its two-repository clauses cannot apply to one "
+               "repository; eliminations are reported"),
+    "G4": dict(applies=False, reason="a repeat-elimination mechanism criterion superseded by the r9 primary; repeats "
+               "were gated in development (D4); NOEXEC equivalent-command and BEST repeat fractions are reported"),
+    "G5": dict(applies=True, form="BEST hidden-test failures <= min(A0 failures, NOEXEC failures) over all blocks; "
+               "stricter than the r9 margin of one, so it governs quality"),
+    "G6": dict(applies=True, form="zero skipped necessary verification (controls and positives), zero executions "
+               "without a grant or in NOEXEC/A0, zero foreign or unapproved receipts, zero undeclared writes, zero "
+               "unknown costs"),
+    "G7": dict(applies=True, form="at most 25% of BEST CPU executions in positive sessions unnecessary (receipt "
+               "stale before the session ended); controls are stale by construction and excluded"),
+    "G8": dict(applies=True, form="BEST total requests <= NOEXEC total and BEST cost <= 105% of NOEXEC, over "
+               "included blocks with the censoring rule"),
+    "G9": dict(applies=False, reason="the pipeline-unseen repository (more-itertools) is not run in this stratum; G9 "
+               "stays required for any claim that covers it"),
+}
 
 
 def select_best(dev_report):
@@ -87,7 +126,7 @@ def budget(sessions, cap=SESSION_CAP_USD, ceiling=CEILING_USD, typical=(0.11, 0.
     """Every session is reserved at its cap before dispatch, so the cap bounds the worst case."""
     worst = round(sessions * cap, 4)
     return dict(sessions=sessions, per_session_cap_usd=cap, worst_case_usd=worst, ceiling_usd=ceiling,
-                fits=worst <= ceiling, max_sessions_at_cap=int(ceiling // cap),
+                fits=worst <= ceiling + 1e-9, max_sessions_at_cap=int(round(ceiling / cap, 6)),
                 expected_usd=[round(sessions * t, 2) for t in typical],
                 expected_at_historical_mean_usd=round(sessions * historical_mean, 2),
                 worst_case_at_r8_cap_usd=round(sessions * 1.5, 2))
@@ -186,19 +225,27 @@ def bash_commands(stream):
             for b in (row.get("message") or {}).get("content", []) if b.get("type") == "tool_use" and b.get("name") == "Bash"]
 
 
+
+
 # ---------------------------------------------------------------------------------- per session
 
 def requests(debug_text, stream_observations):
-    """Debug-log dispatches (primary) and the stream's distinct request ids (cross-check)."""
+    """Debug-log dispatches (the primary count, retries included) and the per-session cross-check.
+
+    Verified when the stream's distinct request ids equal the dispatches, or when the surplus of
+    dispatches is fully explained by logged `[ERROR] API error (attempt ...)` entries."""
     import probe
-    dispatches = [m[1] for line in debug_text.splitlines() if (m := DEBUG_REQUEST.fullmatch(line))]
+    lines = debug_text.splitlines()
+    dispatches = [m[1] for line in lines if (m := DEBUG_REQUEST.fullmatch(line))]
+    errors = sum(1 for line in lines if API_ERROR.match(line))
     ids = []
     for item in stream_observations:
         for rid in probe.explicit_request_ids(item.get("value")):
             if rid not in ids:
                 ids.append(rid)
-    return dict(requests=len(dispatches), stream_request_ids=len(ids),
-                cross_check=len(dispatches) == len(ids) and len(set(dispatches)) == len(dispatches))
+    surplus = len(dispatches) - len(ids)
+    return dict(requests=len(dispatches), stream_request_ids=len(ids), api_error_entries=errors,
+                cross_check=surplus == 0, verified=0 <= surplus <= errors and len(set(dispatches)) == len(dispatches))
 
 
 def censored(row):
@@ -213,22 +260,25 @@ def session_row(session, assignment):
     collection = json.loads((session / "collection.json").read_text()) if (session / "collection.json").exists() else {}
     debug = (session / "claude-debug.log").read_text(errors="replace") if (session / "claude-debug.log").exists() else ""
     commands = bash_commands(read("stdout.jsonl"))
-    row = dict(assignment, status="collected" if summary else "uncollected",
-               result_status=summary.get("result_status"), result_is_error=summary.get("result_is_error"),
-               num_turns=summary.get("num_turns"), cost_usd=summary.get("total_cost_usd"), usage=summary.get("usage"),
-               quality_passed=(collection.get("quality") or {}).get("passed") is True,
-               verification_requests=sum(bool(verification_kinds(c)) for c in commands),
-               verification_kinds=[verification_kinds(c) for c in commands if verification_kinds(c)],
-               replay=collection.get("replay"), timeline=collection.get("timeline"),
-               **requests(debug, read("stream-observations.jsonl")))
-    return row
+    return dict(assignment, status="collected" if summary and collection else "uncollected",
+                result_status=summary.get("result_status"), result_is_error=summary.get("result_is_error"),
+                num_turns=summary.get("num_turns"), cost_usd=summary.get("total_cost_usd"), usage=summary.get("usage"),
+                session_id=(collection.get("provenance") or {}).get("session_id"),
+                quality_passed=(collection.get("quality") or {}).get("passed") is True,
+                verification_requests=sum(bool(verification_kinds(c)) for c in commands),
+                verification_kinds=[verification_kinds(c) for c in commands if verification_kinds(c)],
+                replay=collection.get("replay"), timeline=collection.get("timeline"),
+                receipts=collection.get("all_journal_receipts") or [],
+                **requests(debug, read("stream-observations.jsonl")))
 
 
 # ------------------------------------------------------------------------------------- analysis
 
-def effective(row):
+def effective(row, arm):
+    """Requests and quality after censoring, conservative against Adage: only BEST is imputed upward."""
     if censored(row):
-        return dict(requests=max(row.get("requests") or 0, CAP_REQUESTS), passed=False, censored=True)
+        observed = row.get("requests") or 0
+        return dict(requests=max(observed, CAP_REQUESTS) if arm == "BEST" else observed, passed=False, censored=True)
     return dict(requests=row["requests"], passed=row.get("quality_passed") is True, censored=False)
 
 
@@ -265,75 +315,149 @@ def compare(blocks, x, y, seed=SEED, draws=BOOTSTRAP):
     for b in blocks.values():
         by_task.setdefault(b["task"], []).append((b[x]["requests"], b[y]["requests"]))
     pairs = [p for ps in by_task.values() for p in ps]
+    if not pairs:
+        return dict(ratio=None, upper=None, lower=None, blocks=0, blocks_fewer=0, sign_flip_p=None, passed=False)
     bounds = bootstrap_bounds(by_task, seed=seed, draws=draws)
     return dict(ratio=round(_ratio(pairs), 4), upper=round(bounds["upper"], 4), lower=round(bounds["lower"], 4),
                 blocks=len(pairs), blocks_fewer=sum(a < b for a, b in pairs),
-                sign_flip_p=round(sign_flip_p(pairs, seed=seed, draws=draws), 4))
+                sign_flip_p=round(sign_flip_p(pairs, seed=seed, draws=draws), 4), passed=bounds["upper"] <= RATIO_MAX)
 
 
-def analyze(rows, best_arm=None, seed=SEED, draws=BOOTSTRAP):
-    """The registered verdict. Every assigned row counts; nothing is dropped or rerun."""
+def control_rows(rows):
     import launch_canary
-    problems = []
-    controls = [r for r in rows if r["condition"] != "positive"]
-    control_rows = []
-    for c in controls:
+    out = []
+    for c in rows:
         collected = c.get("status") == "collected"
-        realized = collected and launch_canary.realized(c)
-        skipped = bool((c.get("replay") or {}).get("necessary_work_skipped"))
-        control_rows.append(dict(order=c.get("order"), condition=c["condition"], collected=collected,
-                                 realized=realized, necessary_work_skipped=skipped))
-        if not realized:
+        out.append(dict(order=c.get("order"), condition=c["condition"], collected=collected,
+                        realized=bool(collected and launch_canary.realized(c)),
+                        necessary_work_skipped=bool((c.get("replay") or {}).get("necessary_work_skipped"))))
+    return out
+
+
+def _receipts(row):
+    return [e for e in (row.get("timeline") or {}).get("events", []) if e.get("kind") == "receipt"]
+
+
+def _ok(e):
+    return e.get("phase") == "completed" and e.get("outcome") == "applied"
+
+
+def _declared(path):
+    return any(fnmatch.fnmatch(path, glob) for glob in CACHES)
+
+
+def go_criteria(rows, blocks, included, eff, route=None):
+    """G1-G9 for this stratum: applicable ones are evaluated, the others carry their reason."""
+    best = [r for r in rows if r["arm"] == "BEST" and r["condition"] == "positive"]
+    hooks_without_grant = [r for r in rows if r["arm"] in ("A0", "NOEXEC") and (r.get("receipts") or _receipts(r))]
+    fired = [r for r in best if _receipts(r)]
+    succeeded = [r for r in fired if any(_ok(e) for e in _receipts(r))]
+    foreign = [r.get("order") for r in rows if r["arm"] == "BEST" for g in r.get("receipts") or []
+               if (route and g.get("route") != route) or (r.get("session_id") and g.get("session") not in (None, r["session_id"]))]
+    undeclared = sorted({c.get("path") for r in rows for g in r.get("receipts") or []
+                         for c in (g.get("outcome") or {}).get("changed", []) if not _declared(c.get("path") or "")})
+    skipped = [r.get("order") for r in rows if (r.get("replay") or {}).get("necessary_work_skipped")]
+    unknown = [r.get("order") for r in rows if r.get("cost_usd") is None]
+    executions = [(e, r) for r in best for e in _receipts(r) if _ok(e)]
+    unnecessary = [e for e, r in executions if e.get("digest") != (r.get("timeline") or {}).get("final_digest")]
+    failures = {a: sum(not eff[n][a]["passed"] for n in blocks) for a in ARMS}
+    req = {a: sum(eff[n][a]["requests"] for n in included) for a in ARMS}
+    cost = {a: sum(blocks[n][a].get("cost_usd") or 0 for n in included) for a in ARMS}
+    values = {
+        "G1": dict(passed=None, note="checked at freeze (route present, isolation audit passed)"),
+        "G2": dict(fired=len(fired), sessions=len(best), successful=len(succeeded),
+                   passed=bool(best) and len(fired) >= G2_FIRED_MIN * len(best)
+                   and len(succeeded) >= G2_SUCCESS_MIN * len(fired)),
+        "G5": dict(failures=failures, passed=failures["BEST"] <= min(failures["A0"], failures["NOEXEC"])),
+        "G6": dict(necessary_work_skipped=skipped, executions_without_grant=[r.get("order") for r in hooks_without_grant],
+                   foreign_or_unapproved_receipts=foreign, undeclared_writes=undeclared, unknown_costs=unknown,
+                   passed=not (skipped or hooks_without_grant or foreign or undeclared or unknown)),
+        "G7": dict(executions=len(executions), unnecessary=len(unnecessary),
+                   passed=len(unnecessary) <= UNNECESSARY_MAX * len(executions)),
+        "G8": dict(requests=dict(BEST=req["BEST"], NOEXEC=req["NOEXEC"]), cost_usd=dict(BEST=round(cost["BEST"], 6),
+                   NOEXEC=round(cost["NOEXEC"], 6)),
+                   passed=req["BEST"] <= req["NOEXEC"] and cost["BEST"] <= G8_COST_MAX_RATIO * cost["NOEXEC"] + 1e-9),
+    }
+    out = {}
+    for g, spec in GO_CRITERIA.items():
+        out[g] = dict(spec, **values.get(g, dict(passed=None)))
+    out["G1"]["passed"] = True if route else None
+    return out
+
+
+def analyze(rows, best_arm=None, seed=SEED, draws=BOOTSTRAP, route="github-com-marshmallow-code-marshmallow/learned/run-175d85"):
+    """The registered verdict. Every assigned row counts; nothing is rerun. Returns `outcome`: pass,
+    fail, unverified, protocol-failure or incomplete."""
+    problems = []
+    controls = control_rows([r for r in rows if r["condition"] != "positive"])
+    for c in controls:
+        if not c["realized"]:
             problems.append("control %s unrealized (protocol failure)" % c["condition"])
-        if skipped:
-            problems.append("control %s skipped necessary verification" % c["condition"])
+        if c["necessary_work_skipped"]:
+            problems.append("control %s skipped necessary verification (protocol failure)" % c["condition"])
     if sorted(c["condition"] for c in controls) != sorted(CONTROLS):
-        problems.append("the five registered controls are not all assigned")
+        problems.append("the five registered controls are not all assigned (protocol failure)")
     blocks = {}
     for r in rows:
         if r["condition"] == "positive":
             blocks.setdefault(r["block"], dict(task=r["task"]))[r["arm"]] = r
-    for number, b in sorted(blocks.items()):
-        missing = [a for a in ARMS if a not in b or b[a].get("status") != "collected"]
-        if missing:
-            problems.append("block %s incomplete: %s" % (number, ", ".join(missing)))
+    incomplete = [n for n, b in sorted(blocks.items()) if any(a not in b or b[a].get("status") != "collected" for a in ARMS)]
     tasks = sorted({b["task"] for b in blocks.values()})
-    if len(tasks) < 4 or any(sum(b["task"] == t for b in blocks.values()) < REPETITIONS for t in tasks):
-        problems.append("fewer than four tasks x five repetitions")
-    unverified = [r.get("order") for r in rows if r["condition"] == "positive" and r.get("status") == "collected"
-                  and not r.get("cross_check")]
-    if unverified:
-        problems.append("request count cross-check failed for sessions %s" % unverified)
-    if problems and any("incomplete" in p for p in problems):
-        return dict(protocol=PROTOCOL, stratum=STRATUM, best_arm=best_arm, passed=False, problems=problems,
-                    controls=control_rows)
-    eff = {n: dict(task=b["task"], **{a: effective(b[a]) for a in ARMS}) for n, b in blocks.items()}
-    arms = {}
-    for a in ARMS:
-        rs = [b[a] for b in blocks.values()]
-        arms[a] = dict(sessions=len(rs), requests=sum(e[a]["requests"] for e in eff.values()),
-                       mean_requests=round(sum(e[a]["requests"] for e in eff.values()) / len(rs), 3),
-                       hidden_test_passes=sum(e[a]["passed"] for e in eff.values()),
-                       censored=sum(e[a]["censored"] for e in eff.values()),
-                       verification_requests=sum(r.get("verification_requests") or 0 for r in rs),
-                       cost_usd=round(sum(r.get("cost_usd") or 0 for r in rs), 6),
-                       unknown_costs=sum(r.get("cost_usd") is None for r in rs))
-    primary = compare(eff, "BEST", "A0", seed, draws)
-    quality = arms["BEST"]["hidden_test_passes"] >= arms["A0"]["hidden_test_passes"] - QUALITY_MARGIN
-    if any(r.get("cost_usd") is None for r in rows):
-        problems.append("unknown session costs")
-    test = primary["upper"] <= RATIO_MAX
-    return dict(protocol=PROTOCOL, stratum=STRATUM, best_arm=best_arm, problems=problems,
-                passed=not problems and test and quality,
-                primary=dict(primary, threshold=RATIO_MAX, passed=test),
-                quality=dict(best=arms["BEST"]["hidden_test_passes"], a0=arms["A0"]["hidden_test_passes"],
-                             margin=QUALITY_MARGIN, passed=quality),
-                arms=arms, controls=control_rows,
-                report_only=dict(noexec_vs_a0=compare(eff, "NOEXEC", "A0", seed, draws),
-                                 best_vs_noexec=compare(eff, "BEST", "NOEXEC", seed, draws),
-                                 uncensored_blocks=sum(not any(e[a]["censored"] for a in ARMS) for e in eff.values())),
-                notes=["Model requests are never presented as GPU savings; CPU work is reported separately.",
-                       "Censored sessions count as failures at max(observed, %d) requests." % CAP_REQUESTS])
+    if incomplete or len(tasks) < 4 or any(sum(b["task"] == t for b in blocks.values()) < REPETITIONS for t in tasks):
+        return dict(protocol=PROTOCOL, stratum=STRATUM, best_arm=best_arm, passed=False, outcome="incomplete",
+                    problems=problems + ["incomplete blocks: %s" % incomplete], controls=controls)
+    eff = {n: {a: effective(b[a], a) for a in ARMS} for n, b in blocks.items()}
+    excluded = sorted(n for n, b in blocks.items() if not all(b[a].get("verified") for a in ARMS))
+    included = [n for n in sorted(blocks) if n not in excluded]
+    pick = lambda numbers: {n: dict(task=blocks[n]["task"], **eff[n]) for n in numbers}  # noqa: E731
+    primary = compare(pick(included), "BEST", "A0", seed, draws)
+    no_censored = [n for n in included if not any(eff[n][a]["censored"] for a in ARMS)]
+    no_has_keys = [n for n in included if blocks[n]["task"] != SENSITIVITY_TASK]
+    sensitivity = dict(without_censored_blocks=dict(compare(pick(no_censored), "BEST", "A0", seed, draws),
+                                                    excluded_blocks=[n for n in included if n not in no_censored]),
+                       without_has_keys=compare(pick(no_has_keys), "BEST", "A0", seed, draws))
+    passes = {a: sum(eff[n][a]["passed"] for n in blocks) for a in ARMS}
+    quality = passes["BEST"] >= passes["A0"] - QUALITY_MARGIN
+    criteria = go_criteria(rows, blocks, included, eff, route)
+    applicable_ok = all(v["passed"] is not False for v in criteria.values() if v["applies"])
+    arms = {a: dict(sessions=len(blocks), requests_included=sum(eff[n][a]["requests"] for n in included),
+                    mean_requests_included=round(sum(eff[n][a]["requests"] for n in included) / len(included), 3) if included else None,
+                    observed_requests=sum(blocks[n][a].get("requests") or 0 for n in blocks), hidden_test_passes=passes[a],
+                    censored=sum(eff[n][a]["censored"] for n in blocks),
+                    verification_requests=sum(blocks[n][a].get("verification_requests") or 0 for n in blocks),
+                    cost_usd=round(sum(blocks[n][a].get("cost_usd") or 0 for n in blocks), 6)) for a in ARMS}
+    verification = dict(excluded_blocks=excluded, max_excluded=MAX_EXCLUDED_BLOCKS,
+                        sessions=[dict(order=blocks[n][a].get("order"), block=n, arm=a, requests=blocks[n][a].get("requests"),
+                                       stream_request_ids=blocks[n][a].get("stream_request_ids"),
+                                       api_error_entries=blocks[n][a].get("api_error_entries"),
+                                       cross_check=blocks[n][a].get("cross_check"), verified=blocks[n][a].get("verified"))
+                                  for n in sorted(blocks) for a in ARMS])
+    if any("protocol failure" in p for p in problems):
+        outcome = "protocol-failure"
+    elif len(excluded) > MAX_EXCLUDED_BLOCKS:
+        outcome = "unverified"
+        problems.append("%d of %d blocks have an unverified request count (more than %d)" % (
+            len(excluded), len(blocks), MAX_EXCLUDED_BLOCKS))
+    else:
+        outcome = "pass" if primary["passed"] and quality and applicable_ok else "fail"
+    warnings = []
+    if primary["passed"] and not sensitivity["without_has_keys"]["passed"]:
+        warnings.append("PROMINENT: the primary passes, but the sensitivity analysis without the has-keys blocks "
+                        "fails (upper bound %s > %.2f)." % (sensitivity["without_has_keys"]["upper"], RATIO_MAX))
+    if primary["passed"] and not sensitivity["without_censored_blocks"]["passed"]:
+        warnings.append("The primary passes, but the sensitivity analysis without censored blocks fails.")
+    return dict(protocol=PROTOCOL, stratum=STRATUM, best_arm=best_arm, outcome=outcome, passed=outcome == "pass",
+                problems=problems, warnings=warnings,
+                primary=dict(primary, threshold=RATIO_MAX, included_blocks=len(included)),
+                quality=dict(best=passes["BEST"], a0=passes["A0"], margin=QUALITY_MARGIN, passed=quality),
+                go_criteria=criteria, sensitivity=sensitivity, request_verification=verification, arms=arms,
+                controls=controls,
+                report_only=dict(noexec_vs_a0=compare(pick(included), "NOEXEC", "A0", seed, draws),
+                                 best_vs_noexec=compare(pick(included), "BEST", "NOEXEC", seed, draws)),
+                notes=["GO for this stratum: the primary test and quality, plus every applicable G criterion.",
+                       "Model requests are never presented as GPU savings; CPU work is reported separately.",
+                       "Censoring: every censored session is a quality failure; only BEST is imputed upward (to %d requests)."
+                       % CAP_REQUESTS])
 
 
 def main():

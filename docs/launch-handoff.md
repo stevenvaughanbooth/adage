@@ -157,8 +157,18 @@ frozen at `260729a` before any v8 result was read:
   near-duplicate;
 - validated offline; see `evals/reflex-proof/harness/results/20261001-heldout-tasks/README.md`.
 
-The r9 held-out analysis (`heldout_analysis.py`, A0/NOEXEC/BEST, 4 x 5 paired blocks) is drafted
-with tests. It is registered only when merged. The cohort runner that dispatches it is not written.
+The r9 held-out analysis (`heldout_analysis.py`, A0/NOEXEC/BEST, 4 x 5 paired blocks) and the
+runner (`heldout_cohort.py`) are drafted with tests. Both are registered only when merged.
+
+`freeze` needs:
+- the dev-v8b report (BEST by rule);
+- a validated held-out controls root (`heldout_tasks.py validate`, under the authority);
+- the 19-task development controls;
+- the build commit and the two binary hashes.
+
+BEST is built after the dev result and after `codex/ship-fixes` and `codex/first-run-fixes` land.
+Then: `prepare`, review and run `approve-heldout.sh` (a person), `verify-grants`, `live`, `report`.
+The held-out budget is $26 at a $0.40 cap per session.
 
 ## What is established
 
