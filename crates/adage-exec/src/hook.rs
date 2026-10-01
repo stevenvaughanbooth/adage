@@ -460,6 +460,7 @@ fn stop_gate(call: &StopCall<'_>) -> Option<StopGate> {
             occurrence: &format!("stop-gate:{gates}:{digest}"),
             approved_on: &a.approved_on,
             request: &req,
+            origin: crate::journal::RunOrigin::StopGate,
         },
     );
     Some(gate_answer(&completed.outcome, &command, &staged, may_block, call.stop_hook_active))
@@ -1003,6 +1004,11 @@ fn act(turn: &Turn<'_>, directives: &[Directive], candidates: &[Candidate<'_>]) 
             occurrence: &occurrence,
             approved_on: &a.approved_on,
             request: &req,
+            origin: if s.context.is_some() {
+                crate::journal::RunOrigin::Context
+            } else {
+                crate::journal::RunOrigin::Obligation
+            },
         },
     );
     let outcome = completed.outcome;
@@ -1423,6 +1429,7 @@ mod prediction_tests {
     /// A completed, applied receipt for the fixture's route in `session`, on `digest`.
     fn record_receipt(f: &Fixture, session: &str, digest: &str) {
         let r = crate::journal::Receipt {
+            origin: Some(crate::journal::RunOrigin::Context),
             id: String::new(),
             ts: "fixture".into(),
             session: session.into(),
@@ -1590,6 +1597,7 @@ mod prediction_tests {
             outputs
                 .insert(PYTEST_NODEIDS.to_string(), crate::stage::FileState::File { sha256: sha.into(), exec: false });
             let r = crate::journal::Receipt {
+                origin: None,
                 id: String::new(),
                 ts: "fixture".into(),
                 session: "fixture-session".into(),
@@ -1749,6 +1757,7 @@ mod prediction_tests {
             crate::stage::Outcome::Refused { stage: "verify".into(), reason: "x".into(), counts: true },
         ] {
             let r = crate::journal::Receipt {
+                origin: None,
                 id: String::new(),
                 ts: "fixture".into(),
                 session: "fixture-session".into(),
@@ -2000,6 +2009,7 @@ mod prediction_tests {
         assert!(text.contains("after your edits: passed (exit 0") && text.contains("exec=\"e2\""), "{text}");
         let receipt = crate::journal::list(&f.paths.root).unwrap().pop().unwrap();
         assert!(text.contains(&receipt.id[..12]) && !text.contains(&receipt.input_digest), "{text}");
+        assert_eq!(receipt.origin, Some(crate::journal::RunOrigin::Context), "the journal says what started it");
         assert!(text.contains("stays current until a file changes"), "{text}");
         assert!(!text.contains("COMPLETED CPU ACTION") && !text.contains("not requested by the user"), "{text}");
         assert!(!text.contains("after your edit to"));
@@ -2088,7 +2098,11 @@ mod prediction_tests {
         let o = st.obligations.iter().find(|o| o.route == "regenerate-registry").unwrap();
         assert!(o.stop_requested && st.stop_requests == 1, "{st:?}");
         assert_eq!(st.stop_gates, 2);
-        assert_eq!(crate::journal::list(&f.paths.root).unwrap().len(), 3, "the context run and two gate runs");
+        let origins: Vec<_> = crate::journal::list(&f.paths.root).unwrap().iter().map(|r| r.origin).collect();
+        // dev-v9: a gate run's pass must never be read as the context run's (it made a failed
+        // control look unrealized), so each receipt records which one it was.
+        use crate::journal::RunOrigin::{Context, StopGate};
+        assert_eq!(origins, [Some(Context), Some(StopGate), Some(StopGate)], "the context run and two gate runs");
     }
 
     /// Review F4: the gate starts a run only when, staged and applied, it ends before the hook's
@@ -2122,6 +2136,7 @@ mod prediction_tests {
         f.approve();
         let id = "0123456789abcdef".repeat(4);
         let prepared = crate::journal::Receipt {
+            origin: None,
             id: id.clone(),
             ts: "fixture".into(),
             session: "the-killed-session".into(),

@@ -570,6 +570,7 @@ mod tests {
             outcome: Outcome::Unknown { reason: "completion lost".into() },
             input_digest: String::new(),
             outputs: Default::default(),
+            origin: None,
         };
         assert!(receipt_label(&receipt).contains("Unknown · inspect"));
         receipt.phase = Phase::Acknowledged;

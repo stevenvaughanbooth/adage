@@ -229,6 +229,7 @@ fn cmd_run(a: &Args) -> Result<i32> {
                 occurrence: &occurrence,
                 approved_on: &approved_on,
                 request: &req,
+                origin: adage_exec::journal::RunOrigin::Manual,
             },
         );
         let outcome = completed.outcome;
