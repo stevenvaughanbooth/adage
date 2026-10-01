@@ -6,6 +6,7 @@
 
 pub mod context;
 pub mod fast;
+pub mod orient;
 pub mod pretool;
 pub mod rebuild;
 pub mod render;
@@ -162,6 +163,62 @@ pub struct SessionState {
     /// Stop-gate runs this session (adage-exec): at most two, and only the first may block.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub stop_gates: u32,
+    /// Test functions this session's edits added to test files, by name, in order (bounded): a
+    /// verification receipt names these as the agent's own tests (adage-exec).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub new_tests: Vec<String>,
+}
+
+/// At most this many test names are kept per session ([`SessionState::new_tests`]).
+pub const MAX_NEW_TESTS: usize = 64;
+
+/// `def test…` names (sync or async, at any indentation) in a text an edit wrote.
+fn test_names(text: &str) -> Vec<&str> {
+    text.lines()
+        .filter_map(|l| {
+            let l = l.trim_start();
+            let r = l.strip_prefix("async def ").or_else(|| l.strip_prefix("def "))?;
+            let end = r.find(|c: char| !(c.is_ascii_alphanumeric() || c == '_')).unwrap_or(r.len());
+            let name = &r[..end];
+            (name.starts_with("test") && name.len() <= 100).then_some(name)
+        })
+        .collect()
+}
+
+/// The test functions a successful edit adds to a test file ([`orient::is_test_file`]): names in
+/// what it wrote that were not in what it replaced (an Edit's or MultiEdit's `new_string`s over
+/// their `old_string`s; a Write's whole content).
+pub(crate) fn added_tests(call: &Call, root: &std::path::Path) -> Vec<String> {
+    if call.failed || !matches!(call.tool.as_str(), "Edit" | "MultiEdit" | "Write") {
+        return Vec::new();
+    }
+    let Some(path) = call.input.get("file_path").and_then(Value::as_str) else { return Vec::new() };
+    if !orient::is_test_file(&repo::relativize(root, path)) {
+        return Vec::new();
+    }
+    let field = |v: &Value, k: &str| v.get(k).and_then(Value::as_str).map(str::to_string);
+    let mut pairs: Vec<(String, String)> = Vec::new();
+    if let Some(t) = field(&call.input, "content") {
+        pairs.push((t, String::new()));
+    }
+    if let Some(t) = field(&call.input, "new_string") {
+        pairs.push((t, field(&call.input, "old_string").unwrap_or_default()));
+    }
+    for e in call.input.get("edits").and_then(Value::as_array).into_iter().flatten() {
+        if let Some(t) = field(e, "new_string") {
+            pairs.push((t, field(e, "old_string").unwrap_or_default()));
+        }
+    }
+    let mut out: Vec<String> = Vec::new();
+    for (new, old) in &pairs {
+        let before = test_names(old);
+        for name in test_names(new) {
+            if !before.contains(&name) && !out.iter().any(|n| n == name) {
+                out.push(name.to_string());
+            }
+        }
+    }
+    out
 }
 
 fn is_zero(n: &u32) -> bool {
@@ -261,6 +318,31 @@ thread_local! {
     static EXEC_ONLY: std::cell::RefCell<Vec<(String, String)>> = const { std::cell::RefCell::new(Vec::new()) };
     static FOLLOW_WEIGHTS: std::cell::RefCell<Option<adage_core::judge::Weights>> = const { std::cell::RefCell::new(None) };
     static CARD_CHECKS: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+    static CARD_ORIENTATION: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+}
+
+/// Run `f` with procedure cards oriented (`true`, the default: no exemplar; where the card's files
+/// stand in the checkout now, [`orient::block`]) or as cards were before (`false`: the exemplar of
+/// the last edit, no orientation). The second is an evaluation knob for the card's earlier form.
+pub fn with_card_orientation<R>(on: bool, f: impl FnOnce() -> R) -> R {
+    struct Reset(bool);
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            CARD_ORIENTATION.with(|c| c.set(self.0));
+        }
+    }
+    let _reset = Reset(CARD_ORIENTATION.with(|c| c.replace(on)));
+    f()
+}
+
+/// A card route's text: oriented ([`with_card_orientation`]) or as before; any other route's text.
+fn card_text(ctx: &Ctx<'_>, route: &adage_tracks::Route) -> Option<String> {
+    match &route.step {
+        Step::Card { card } if CARD_ORIENTATION.with(|c| c.get()) => {
+            render::oriented_card_text(route, orient::block(ctx.root, card).as_deref())
+        }
+        _ => render::route_text(route, &[]),
+    }
 }
 
 /// Run `f` with procedure cards naming (`true`, the default) or leaving out the test command of the
@@ -550,7 +632,7 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
             match match_card(ctx, &cards, text, &mut emb) {
                 Some((ir, true)) => {
                     if ok(st, &out, ir, inhibits_left) {
-                        if let Some(mut t) = render::route_text(&ir.route, &[]) {
+                        if let Some(mut t) = card_text(ctx, &ir.route) {
                             // Execution-only verifications are out of play as advice; the card may still
                             // name their command as a fact about the repository.
                             let all: Vec<&IndexedRoute> = ctx.index.for_repo(&ctx.repo).collect();
@@ -611,6 +693,11 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
             // A failed call the failure hook just reported, listed again in this batch.
             let mut open_failure = syms.as_ref().and_then(|_| st.ctx.open_failure(&net));
             for call in calls {
+                for name in added_tests(call, ctx.root) {
+                    if st.new_tests.len() < MAX_NEW_TESTS && !st.new_tests.contains(&name) {
+                        st.new_tests.push(name);
+                    }
+                }
                 // A piped command exits with its last stage's status: `pytest … | head` exits 0
                 // when pytest could not even start. Its output still says so (`outcome`).
                 let piped = !call.failed && call_command(call).is_some_and(outcome::piped);
@@ -665,7 +752,7 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                                 if let Some(ir) = hit {
                                     st.card_waiting = None;
                                     if emit_ok(st, &out, &ir.route.id) {
-                                        if let Some(t) = render::route_text(&ir.route, &[]) {
+                                        if let Some(t) = card_text(ctx, &ir.route) {
                                             out.push(directive(ir, t));
                                         }
                                     }

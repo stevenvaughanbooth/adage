@@ -956,9 +956,14 @@ fn respond(
             // ADAGE_CARD_CHECKS=0 (an evaluation knob, like ADAGE_ARM) leaves the card's test-command
             // line out.
             let card_checks = std::env::var("ADAGE_CARD_CHECKS").map_or(true, |v| v != "0");
+            // ADAGE_CARD_ORIENTATION=0 (likewise) gives the card its earlier form: the exemplar of the
+            // last edit instead of where its files stand in the checkout now.
+            let card_orientation = std::env::var("ADAGE_CARD_ORIENTATION").map_or(true, |v| v != "0");
             let d = adage_runtime::with_follow_weights(weights.clone(), || {
                 adage_runtime::with_card_checks(card_checks, || {
-                    adage_runtime::with_exec_only(exec_only.clone(), || decide(&ctx, st, &ev))
+                    adage_runtime::with_card_orientation(card_orientation, || {
+                        adage_runtime::with_exec_only(exec_only.clone(), || decide(&ctx, st, &ev))
+                    })
                 })
             });
             let stims = stimuli(&before, &st.obligations, matches!(ev, Event::Batch { .. }));

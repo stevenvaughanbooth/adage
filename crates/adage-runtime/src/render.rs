@@ -215,12 +215,14 @@ pub struct CpuReceipt<'a> {
 }
 
 /// What a passing pytest run's declared cache shows it collected: node ids new since the last
-/// recorded run here (bounded), and the collected total when no earlier record existed.
+/// recorded run here (bounded), and the collected total when no earlier record existed. `yours`:
+/// `new` lists instead the run's tests that this session's edits added (by function name).
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct TestEvidence {
     pub collected: Option<usize>,
     pub new: Vec<String>,
     pub more_new: usize,
+    pub yours: bool,
 }
 
 pub fn action_predicted(
@@ -260,7 +262,8 @@ fn tests_line(t: &TestEvidence) -> String {
     if !t.new.is_empty() {
         let names: Vec<String> = t.new.iter().map(|n| sanitise(n)).collect();
         let sep = if t.collected.is_some() { ";" } else { "" };
-        line.push_str(&format!("{sep} new since the last recorded run: {}", names.join(", ")));
+        let what = if t.yours { "the tests added in this session" } else { "new since the last recorded run" };
+        line.push_str(&format!("{sep} {what}: {}", names.join(", ")));
         if t.more_new > 0 {
             line.push_str(&format!(" (+{} more)", t.more_new));
         }
@@ -287,7 +290,7 @@ mod result_text_tests {
 
     #[test]
     fn results_are_short_factual_and_carry_provenance_in_attributes_only() {
-        let t = TestEvidence { collected: Some(228), new: vec!["tests/t.py::test_a".into()], more_new: 0 };
+        let t = TestEvidence { collected: Some(228), new: vec!["tests/t.py::test_a".into()], ..Default::default() };
         let ok = action_predicted(
             &d(),
             ".venv/bin/python -m pytest tests/t.py -q",
@@ -308,6 +311,18 @@ mod result_text_tests {
             "{ok}"
         );
         assert!(!ok.contains("all passing"), "{ok}");
+        let yours = TestEvidence { yours: true, ..t.clone() };
+        let named = action_predicted(
+            &d(),
+            "cmd",
+            &[],
+            true,
+            &CpuReceipt { tests: Some(&yours), operation: "op", input_digest: "d", exit: Some(0), duration_ms: 1 },
+        );
+        assert!(
+            named.contains("Tests: 228 collected; exit 0; the tests added in this session: tests/t.py::test_a."),
+            "{named}"
+        );
         for banned in ["COMPLETED CPU ACTION", "not requested by the user", "dddddddd", "Do not", "Learned by Adage"] {
             assert!(!ok.contains(banned), "{banned}: {ok}");
         }
@@ -628,6 +643,20 @@ fn finish_basis(r: &Route) -> String {
 }
 
 /// The body text for a route with its slots bound, or `None` if it cannot be rendered safely.
+/// A procedure card without its exemplar, with the orientation block ([`crate::orient::block`],
+/// already bounded and quoted) where it stood; checked as [`route_text`] checks a card.
+pub fn oriented_card_text(r: &Route, orientation: Option<&str>) -> Option<String> {
+    let Step::Card { card } = &r.step else { return None };
+    adage_tracks::card::check(card).ok()?;
+    let mut text = adage_tracks::card::text_oriented(card, orientation);
+    let exit = exit_clause(&r.exit);
+    if !exit.trim().is_empty() {
+        text.push('\n');
+        text.push_str(exit.trim_start());
+    }
+    Some(text)
+}
+
 pub fn route_text(r: &Route, bound: &[(String, String)]) -> Option<String> {
     let exit = exit_clause(&r.exit);
     match (&r.step, &r.trigger) {

@@ -506,14 +506,23 @@ fn valid_nodeid(id: &str) -> bool {
         && name.chars().all(|c| c.is_ascii_alphanumeric() || "_:.-[]".contains(c))
 }
 
+/// A node id's test function: its last part, without parameters (`a.py::C::test_x[1]` → `test_x`).
+fn test_function(id: &str) -> &str {
+    let last = id.rsplit("::").next().unwrap_or(id);
+    last.split_once('[').map_or(last, |(name, _)| name)
+}
+
 /// The applied run's test evidence: its pytest record, bound to the journal (the file now in the
 /// worktree must be the applied output the receipt recorded), restricted to the command's targets.
+/// The tests this session's edits added (`edited`, by function name: the runtime's `new_tests`)
+/// are named when the record has them; otherwise the ids new since the last recorded run.
 fn test_evidence(
     turn: &Turn<'_>,
     req: &crate::request::ExecRequest,
     command: &str,
     operation: Option<&str>,
     before: Option<&std::collections::BTreeSet<String>>,
+    edited: &[String],
 ) -> Option<render::TestEvidence> {
     let before = before?;
     let call = pytest_call(&command.split_whitespace().collect::<Vec<_>>())?;
@@ -525,13 +534,19 @@ fn test_evidence(
     }
     let after = pytest_nodeids(turn.root, req, command)?;
     let inside = |id: &String| in_targets(id, &call.targets);
-    let new: Vec<String> = after.difference(before).filter(|id| inside(id)).cloned().collect();
     let collected = before.is_empty().then(|| after.iter().filter(|id| inside(id)).count());
+    let yours: Vec<String> =
+        after.iter().filter(|id| inside(id) && edited.iter().any(|n| n == test_function(id))).cloned().collect();
+    let (new, yours) = if yours.is_empty() {
+        (after.difference(before).filter(|id| inside(id)).cloned().collect::<Vec<String>>(), false)
+    } else {
+        (yours, true)
+    };
     if collected.is_none() && new.is_empty() {
         return None;
     }
     let more_new = new.len().saturating_sub(MAX_LISTED_TESTS);
-    Some(render::TestEvidence { collected, new: new.into_iter().take(MAX_LISTED_TESTS).collect(), more_new })
+    Some(render::TestEvidence { collected, new: new.into_iter().take(MAX_LISTED_TESTS).collect(), more_new, yours })
 }
 
 /// pytest options that change only what is printed or when a passing run stops, never which
@@ -998,7 +1013,10 @@ fn act(turn: &Turn<'_>, directives: &[Directive], candidates: &[Candidate<'_>]) 
             } else {
                 let paths: Vec<String> = changed.iter().map(|l| l.path.clone()).collect();
                 let tests = (ir.route.effect == adage_core::Effect::Verify)
-                    .then(|| test_evidence(turn, &req, s.command, completed.id.as_deref(), nodeids_before.as_ref()))
+                    .then(|| {
+                        let edited = &state.new_tests;
+                        test_evidence(turn, &req, s.command, completed.id.as_deref(), nodeids_before.as_ref(), edited)
+                    })
                     .flatten();
                 let text = if s.context.is_some() {
                     render::action_predicted(
@@ -1533,14 +1551,29 @@ mod prediction_tests {
         let event = Event::Batch { calls: vec![] };
         let turn = f.turn(&event);
         write_receipt("not-the-applied-output");
-        assert!(test_evidence(&turn, &req, command, Some(""), Some(&before)).is_none(), "unbound record is ignored");
+        assert!(
+            test_evidence(&turn, &req, command, Some(""), Some(&before), &[]).is_none(),
+            "unbound record is ignored"
+        );
         write_receipt(&crate::sha256_hex(&std::fs::read(&record).unwrap()));
-        let t = test_evidence(&turn, &req, command, Some(""), Some(&before)).unwrap();
+        let t = test_evidence(&turn, &req, command, Some(""), Some(&before), &[]).unwrap();
         assert_eq!(t.collected, Some(2), "only the command's targets, only well-formed ids");
         assert_eq!(t.new, vec!["tests/test_x.py::test_new[a-b]".to_string(), "tests/test_x.py::test_one".to_string()]);
         // With an earlier record, only the new ids are listed and no total is claimed.
         let earlier: std::collections::BTreeSet<String> = ["tests/test_x.py::test_one".to_string()].into();
-        let t = test_evidence(&turn, &req, command, Some(""), Some(&earlier)).unwrap();
+        // The session's own new tests, by function name, are named instead (dev-v8: a fresh
+        // home listed the first 12 of 69 ids, never the agent's own).
+        let mine = test_evidence(&turn, &req, command, Some(""), Some(&before), &["test_one".to_string()]).unwrap();
+        assert_eq!(
+            (mine.collected, mine.new.clone(), mine.yours),
+            (Some(2), vec!["tests/test_x.py::test_one".to_string()], true)
+        );
+        let param = test_evidence(&turn, &req, command, Some(""), Some(&before), &["test_new".to_string()]).unwrap();
+        assert_eq!(param.new, vec!["tests/test_x.py::test_new[a-b]".to_string()], "parameters are the same test");
+        let absent = test_evidence(&turn, &req, command, Some(""), Some(&before), &["test_gone".to_string()]).unwrap();
+        assert!(!absent.yours && absent.new.len() == 2, "a name the record lacks falls back to the listing");
+        assert_eq!(test_function("a.py::C::test_x[1-2]"), "test_x");
+        let t = test_evidence(&turn, &req, command, Some(""), Some(&earlier), &[]).unwrap();
         assert_eq!((t.collected, t.new.len()), (None, 1));
         let text = render::action_predicted(
             &Directive {
