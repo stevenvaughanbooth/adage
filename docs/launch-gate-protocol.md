@@ -454,9 +454,14 @@ gate) are reported apart and are never counted as inference saved.
 
 **Held-out run location.** The held-out phase runs from a separate fresh clone,
 `/private/tmp/adage-heldout-src`, which contains the main merge (`32e1cfa`). The confinement review
-binds runner sources by path, so this clone gets its own native-confinement cohort,
-`launch-gate-v7`. Its native session ($0.50 cap) must pass review before held-out `prepare`. This
-follows the existing confinement rule and changes no rule.
+binds runner sources by path, so this clone gets its own native-confinement cohort. Its native
+session ($0.50 cap) must pass review before held-out `prepare`. This follows the existing
+confinement rule and changes no rule.
+
+`launch-gate-v7` was prepared offline, but its native recipe cannot be admitted: cohort native
+recipes carry no ledger allocation, so they fall back to the legacy $27.50 admission ceiling, which
+the ledger has passed. The remedy needs the user's decision and is recorded in the handoff. Nothing
+was dispatched.
 
 ## Phase 2: cohort (step 3)
 

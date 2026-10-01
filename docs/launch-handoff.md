@@ -140,12 +140,62 @@ to dataless placeholders. A sandboxed tool reads such a file as empty: a test fi
 runs 0 tests, and an `include_str!` asset (the intent vocabulary) builds empty. Studies therefore
 freeze and run from the clone in `/private/tmp`, and freeze and dispatch refuse dataless inputs.
 
-### Held-out phase: prepared, not frozen
+### Held-out phase: inputs ready, not frozen; blocked on native admission (resume here)
 
-Nothing here is a result. Held-out runs only if dev-v9b's report is valid and A4 passes
-`dev_thresholds_v9`. Then BEST is A4, by r9's rule.
+Nothing here is a result. dev-v9b's report is valid and A4 passed `dev_thresholds_v9`, so BEST is
+A4 with the orientation card, by r9's rule.
 
-**Done so far:**
+**Done offline on 2026-10-01** (record: [`results/20261001-heldout-inputs/INPUTS.json`](../evals/reflex-proof/harness/results/20261001-heldout-inputs/INPUTS.json)):
+- **Binaries** were built in `/private/tmp/adage-heldout-src` at `8770f8c` with
+  `cargo build --release --locked -p adage-cli -p adage-exec`:
+  - `adage`: `63475c2ee97abf6c3982a37d6c77e4637c5fa52e92612b51a7ca3f3bec913903`;
+  - `adage-exec`: `c77b985973f218fd21eb5cc589f50a46fad0ec3840ac7027ef1d2b29dc12636c`.
+
+  The production sources are unchanged since the main merge (`32e1cfa`). A later harness-only
+  commit keeps them bindable, because `freeze` checks the crates and lockfile, not HEAD.
+- **Held-out controls are validated on the real substrate** (`$A/heldout-controls-1`).
+  - The validation is complete and valid, with 0 paid calls.
+  - The validation ran only its own copies:
+    - every venv home and the manifest interpreter are inside the copy;
+    - no scoring profile allows the authority's runtime;
+    - the shared runtime library is unchanged (`7ef262dc…`) and still read-only.
+- **Native cohort `launch-gate-v7`** is prepared from this clone (`prepare-cohort` and
+  `prepare-session`, offline). It has not been reviewed or run.
+- **A read-only freeze preflight passed on the real inputs**
+  (`results/20261001-heldout-inputs/freeze-preflight.py`). It wrote nothing:
+  - design A4, with the orientation card;
+  - binaries bound to `8770f8c`;
+  - the controls match the frozen tasks, base and dependencies;
+  - the training-isolation audit passed;
+  - 65 sessions, 25 of them BEST, with a $26 worst case.
+
+**Blocker: the native session cannot be admitted.**
+- **Why.** `cohort_v5` native recipes carry no `budget_allocation_sha256`, so `run-session` admits
+  them under the legacy $27.50 ceiling (`real_repo_gate.budget_limit`). The ledger has already
+  admitted $29.9794687. Every study recipe binds the person's allocation and its $60 ceiling, but
+  this recipe does not.
+- **What happens if it is run.** The refusal happens before dispatch and writes nothing, but its
+  message is "a reported cost exceeded its reserved cap; stop and reconcile". That message is
+  misleading here. **Do not reconcile anything, and do not run v7's native session.**
+- **Proposed remedy, which needs the user's approval.** New cohorts would bind
+  `evaluation-allocation.json` into their native recipe, as every study recipe already does. The
+  recipe would also list the allocation among its shared sources, so a changed allocation refuses
+  dispatch. Tests would cover this.
+  - The $0.50 session cap and the $3 floor are unchanged.
+  - Old cohorts keep the $27.50 fallback.
+
+  The auto-mode classifier stopped the agent from making this change on its own, as a weakening of
+  a spending guard. With approval, an agent would:
+  1. commit the change;
+  2. mark `launch-gate-v7` superseded (its recipe binds the old `cohort_v5.py`; nothing was
+     dispatched);
+  3. prepare `launch-gate-v8`;
+  4. freeze `heldout-1` in it;
+  5. write `approve-heldout.sh`.
+
+  Because `cohort_v5.py` is a held-out source, the held-out freeze waits for this decision.
+
+**Done earlier:**
 - **`origin/main` is merged** (PR #21's learner fixes, the bench re-bless, the `no_spawn`
   allowlist, and `adage update` from #17 and #18). The merge was made in a clean clone outside
   iCloud, `/private/tmp/adage-heldout-src`. The workspace suite and the harness suite were rerun
@@ -184,46 +234,35 @@ Nothing here is a result. Held-out runs only if dev-v9b's report is valid and A4
 
   All numbers come from the report.
 
-**What a held-out freeze still needs** (all user or person steps):
-1. **A valid, passing dev-v9b report.** Use the path that `dev_v9.py report` prints.
-2. **A native cohort for this clone.** The `launch-gate-v6` review binds the dev clone's paths, so
-   `launch-gate-v7` must be prepared from `/private/tmp/adage-heldout-src`. Its native session is
-   paid (at most $0.50) and must pass review. The runner sources are byte-identical to v6's.
-3. **Validated held-out controls on the real substrate.** This step copies the runtime and caches,
-   and runs only the copies.
-4. **Binaries built from this clone**, with their hashes passed to `freeze`.
-5. **Grants issued by the person** for BEST's 25 homes.
+**Budget (live ledger, 2026-10-01 after dev-v9b).**
+- **Ledger.** 218 attempts, all settled. $29.9794687 admitted, $30.0205313 remaining.
+- **Worst case.** The native session ($0.50) plus held-out ($26.00: 65 sessions at $0.40) is $26.50.
+  That leaves $3.5205313, which is $0.5205313 above the $3 floor. **It fits, and no remedy is
+  needed.**
+- **Checks before the 65th held-out session, in the worst case:**
+  - floor: 60 − (56.0794687 + 0.40) = 3.5205313 ≥ 3;
+  - study ceiling: 25.60 + 0.40 ≤ 26.00.
+- **Expected held-out spend** is about $7 to $10.
 
-**Budget.** Held-out's worst case is $26 (65 sessions at $0.40). After dev-v9b, at most $35.27 less
-dev-v9b's spend remains, and the $3 ledger floor stops held-out first if both studies hit their
-worst cases. Expected held-out spend is about $7 to $10.
+The only budget problem is the native recipe's admission ceiling, described above.
 
-Held-out commands, for when a passing dev-v9b report exists. Run them in a normal terminal, one at
-a time, and stop on any error:
+Held-out commands, **after the native-admission remedy is approved and applied** and an agent has
+frozen `heldout-1` in the new cohort (assumed here to be `launch-gate-v8`). Run them in a normal
+terminal, one at a time, and stop on any error:
 
 ```sh
-cd /private/tmp/adage-heldout-src
-git pull --ff-only                                     # the final pre-freeze commit, then no edits
-cargo build --release --locked -p adage-cli -p adage-exec
-shasum -a 256 target/release/adage target/release/adage-exec
-cd evals/reflex-proof/harness
-A=/private/tmp/adage-real-repo-gate-v1; C=$A/cohorts/launch-gate-v7; H=$C/heldout-1
-DEV=<the dev-v9b report path>
-python3 cohort_v5.py prepare-cohort $A $C              # offline
-python3 cohort_v5.py prepare-session $C                # offline
+cd /private/tmp/adage-heldout-src/evals/reflex-proof/harness
+A=/private/tmp/adage-real-repo-gate-v1; C=$A/cohorts/launch-gate-v8; H=$C/heldout-1
 python3 real_repo_gate.py run-session $C/sessions/native-confinement/manifest.json   # paid, <= $0.50
 python3 curve_sessions.py review-native $C             # offline; must pass
-python3 heldout_tasks.py validate $A/heldout-controls-1 --authority $A   # offline; runs copies only
-python3 heldout_cohort.py freeze $H --cohort $C --cumulative $A/cohorts/curve-guided-v2/cumulative-launch-10 \
-  --dev-controls $A/cohorts/curve-v2 --heldout-controls $A/heldout-controls-1 --dev-report $DEV \
-  --binaries /private/tmp/adage-heldout-src/target/release --build-commit $(git rev-parse HEAD) \
-  --adage-sha256 <sha> --adage-exec-sha256 <sha> --audit-authority /private/tmp/adage-learning-curve-v2
-python3 heldout_cohort.py prepare $H                   # offline, ~30 min (65 checkouts)
-less $H/approve-heldout.sh && sh $H/approve-heldout.sh  # the person issues 25 grants
-python3 heldout_cohort.py verify-grants $H
-python3 heldout_cohort.py live $H                      # paid: 65 sessions, $0.40 cap; controls first; stops on any lapse
-python3 heldout_cohort.py report $H                    # writes reports/heldout-<time>.json and .md
+python3 heldout_cohort.py prepare $H                   # offline, ~30 min (65 checkouts); keeps the shared runtime read-only
+less $H/approve-heldout.sh && sh $H/approve-heldout.sh  # the person issues 25 grants (BEST homes only)
+python3 heldout_cohort.py verify-grants $H             # read-only
+python3 heldout_cohort.py live $H                      # paid: 65 sessions, $0.40 cap, $26 ceiling; controls first; stops on any lapse
+python3 heldout_cohort.py report $H                    # writes reports/heldout-<time>.json and .md; exits non-zero if invalid
 ```
+
+`heldout_tasks.py validate` is done (`$A/heldout-controls-1`); do not run it again.
 
 **Held-out result:** not run. There are no numbers. The decision record (`reports/heldout-<time>.md`)
 is the result.
@@ -367,8 +406,9 @@ Blocked on three things, none of which an agent may bypass:
 
 1. **Paid runs need a normal terminal.** `probe.execute` refuses nested Claude sessions.
 2. **Grants need the person.** The person issued the dev-v8b grants (`approve-dev-arms.sh`,
-   sha256 `2290b18c…`). dev-v9b's `approve-dev-v9.sh` (sha256 `ec674a11…`, 37 new homes) is prepared
-   and pending: run it only after `prepare`, and after reading it.
+   sha256 `2290b18c…`) and dev-v9b's (`approve-dev-v9.sh`, sha256 `ec674a11…`, 37 homes).
+   Held-out's `approve-heldout.sh` (25 BEST homes) is written at freeze, which waits for the
+   native-admission decision. Run it only after `prepare`, and after reading it.
 3. **Learning needs the learner fix.** About 22 learning-quality tests fail on main since PR #14.
    Cohort training replay, checkpoints and frozen learned homes wait for that fix and a rebuild.
 

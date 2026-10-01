@@ -120,8 +120,11 @@ dispatch. Mean model requests per positive:
   saved.
 
 The held-out comparison (Marshmallow, revisions 9 to 11) is the evidence that counts. It runs from
-its own clone (`/private/tmp/adage-heldout-src`, with main merged) under a new native cohort,
-`launch-gate-v7`, with BEST = A4. **Held-out result: not run, and no numbers exist.** Once it runs,
+its own clone (`/private/tmp/adage-heldout-src`, with main merged) under a new native cohort, with
+BEST = A4. Its inputs are ready, and a read-only freeze preflight passed on them
+([inputs](harness/results/20261001-heldout-inputs/INPUTS.json)). It is not frozen yet: the new
+cohort's native session cannot be admitted under the legacy ledger ceiling, and the remedy needs the
+user's decision. **Held-out result: not run, and no numbers exist.** Once it runs,
 its decision record will be linked here as written. The record covers the primary bound, quality,
 the G criteria, the sensitivity analyses and censoring.
 
