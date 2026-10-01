@@ -172,6 +172,79 @@ impl Extension for Prefetch {
     }
 }
 
+/// pytest's own record of collected node ids, a cache file the approval declares.
+const PYTEST_NODEIDS: &str = ".pytest_cache/v/cache/nodeids";
+const MAX_LISTED_TESTS: usize = 12;
+
+/// The node ids in the worktree's pytest record, when this is a pytest verification whose approval
+/// declares that cache file: `Some(empty)` when there is no record yet, `None` when not applicable
+/// or unreadable. Only well-formed `path.py::name` ids inside the repository are kept.
+fn pytest_nodeids(
+    root: &std::path::Path,
+    req: &crate::request::ExecRequest,
+    command: &str,
+) -> Option<std::collections::BTreeSet<String>> {
+    let declared = req.action.as_ref().is_some_and(|a| crate::stage::matches_any(&a.cache, PYTEST_NODEIDS));
+    if !declared || pytest_call(&command.split_whitespace().collect::<Vec<_>>()).is_none() {
+        return None;
+    }
+    let path = root.join(PYTEST_NODEIDS);
+    let meta = match std::fs::symlink_metadata(&path) {
+        Ok(m) => m,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Some(Default::default()),
+        Err(_) => return None,
+    };
+    if !meta.is_file() || meta.len() > 4 << 20 {
+        return None;
+    }
+    let ids: Vec<String> = serde_json::from_slice(&std::fs::read(&path).ok()?).ok()?;
+    Some(ids.into_iter().filter(|id| valid_nodeid(id)).collect())
+}
+
+fn valid_nodeid(id: &str) -> bool {
+    let Some((file, name)) = id.split_once("::") else { return false };
+    id.len() <= 200
+        && file.ends_with(".py")
+        && !file.starts_with('/')
+        && !file.split('/').any(|p| p == ".." || p.is_empty())
+        && file.chars().all(|c| c.is_ascii_alphanumeric() || "_./-".contains(c))
+        && !name.is_empty()
+        && name.chars().all(|c| c.is_ascii_alphanumeric() || "_:.-[]".contains(c))
+}
+
+/// The applied run's test evidence: its pytest record, bound to the journal (the file now in the
+/// worktree must be the applied output the receipt recorded), restricted to the command's targets.
+fn test_evidence(
+    turn: &Turn<'_>,
+    req: &crate::request::ExecRequest,
+    command: &str,
+    operation: Option<&str>,
+    before: Option<&std::collections::BTreeSet<String>>,
+) -> Option<render::TestEvidence> {
+    let before = before?;
+    let call = pytest_call(&command.split_whitespace().collect::<Vec<_>>())?;
+    let receipt =
+        crate::journal::list(&turn.paths.root).ok()?.into_iter().rev().find(|r| Some(r.id.as_str()) == operation)?;
+    let crate::stage::FileState::File { sha256, .. } = receipt.outputs.get(PYTEST_NODEIDS)? else { return None };
+    if crate::sha256_hex(&std::fs::read(turn.root.join(PYTEST_NODEIDS)).ok()?) != *sha256 {
+        return None;
+    }
+    let after = pytest_nodeids(turn.root, req, command)?;
+    let inside = |id: &String| {
+        let file = id.split_once("::").map_or("", |(f, _)| f);
+        call.targets
+            .iter()
+            .any(|t| file == t || file.starts_with(&format!("{t}/")) || id.starts_with(&format!("{t}::")))
+    };
+    let new: Vec<String> = after.difference(before).filter(|id| inside(id)).cloned().collect();
+    let collected = before.is_empty().then(|| after.iter().filter(|id| inside(id)).count());
+    if collected.is_none() && new.is_empty() {
+        return None;
+    }
+    let more_new = new.len().saturating_sub(MAX_LISTED_TESTS);
+    Some(render::TestEvidence { collected, new: new.into_iter().take(MAX_LISTED_TESTS).collect(), more_new })
+}
+
 /// pytest options that change only what is printed or when a passing run stops, never which
 /// tests run (registered with the launch-gate scorer).
 const OUTPUT_FLAGS: &[&str] =
@@ -309,6 +382,16 @@ fn covering_receipt(call: &PreCall<'_>) -> Option<String> {
         return None;
     }
     let elsewhere = asked.iter().any(|c| c.interpreter != done.interpreter);
+    // A bare `python` is the project's interpreter only when no other environment is active.
+    let project_env =
+        std::path::Path::new(&done.interpreter).parent().and_then(|bin| bin.parent()).map(|e| call.root.join(e));
+    let active = std::env::var_os("VIRTUAL_ENV").filter(|v| !v.is_empty()).map(std::path::PathBuf::from);
+    if elsewhere
+        && active
+            .is_some_and(|a| Some(a.canonicalize().unwrap_or(a)) != project_env.map(|p| p.canonicalize().unwrap_or(p)))
+    {
+        return None;
+    }
     Some(format!(
         "<adage-receipt operation=\"{}\">\nAdage already ran `{}` in this session (exit 0) on repository files (its environment included, declared caches aside) that are byte-identical now; it ran every test this command selects{}. Use that receipt as verification evidence instead of rerunning those tests solely to repeat the check; run them if you need their detailed output.\n</adage-receipt>",
         render::sanitise(&r.id),
@@ -532,6 +615,7 @@ fn act(turn: &Turn<'_>, directives: &[Directive], candidates: &[Candidate<'_>]) 
         Some(id) => format!("native:{id}:{}", s.route),
         None => format!("counter:{}:{}:{}:{}", turn.event, state.prompts, state.batches, s.route),
     };
+    let nodeids_before = pytest_nodeids(turn.root, &req, s.command);
     let staged = match crate::stage::stage(&req, &ctx) {
         Ok(x) => x,
         Err(r) => {
@@ -596,6 +680,9 @@ fn act(turn: &Turn<'_>, directives: &[Directive], candidates: &[Candidate<'_>]) 
                 out.stop = Some(None);
             } else {
                 let paths: Vec<String> = changed.iter().map(|l| l.path.clone()).collect();
+                let tests = (ir.route.effect == adage_core::Effect::Verify)
+                    .then(|| test_evidence(turn, &req, s.command, completed.id.as_deref(), nodeids_before.as_ref()))
+                    .flatten();
                 let text = if s.context.is_some() {
                     render::action_predicted(
                         &dir,
@@ -603,6 +690,7 @@ fn act(turn: &Turn<'_>, directives: &[Directive], candidates: &[Candidate<'_>]) 
                         &paths,
                         ir.route.effect == adage_core::Effect::Verify,
                         &render::CpuReceipt {
+                            tests: tests.as_ref(),
                             operation: completed.id.as_deref().unwrap_or_default(),
                             input_digest: &crate::sha256_hex(crate::canonical_json(&staged.inputs).as_bytes()),
                             exit: staged.exit,
@@ -1055,6 +1143,90 @@ mod prediction_tests {
         std::fs::remove_dir_all(f.root.join(".pytest_cache")).unwrap();
         std::fs::write(f.root.join("tests/test_x.py"), "def test_one():\n    assert False\n").unwrap();
         assert!(call(node, "fixture-session").is_none(), "a later edit makes the receipt stale");
+    }
+
+    #[test]
+    fn receipt_lists_tests_from_the_declared_pytest_record_bound_to_the_journal() {
+        let f = pytest_fixture();
+        let req = route::plan(
+            &f.index.routes[0],
+            &f.index,
+            &f.root,
+            &f.paths.tracks(),
+            Level::E2,
+            Store::load(&approvals::path(&f.paths.root)).unwrap().approvals[0].terms.as_ref(),
+            &CommandTable::load(),
+        )
+        .unwrap()
+        .request;
+        let command = ".venv/bin/python -m pytest tests/test_x.py -q";
+        let record = f.root.join(PYTEST_NODEIDS);
+        std::fs::create_dir_all(record.parent().unwrap()).unwrap();
+        let ids = |v: &[&str]| serde_json::to_vec(&v).unwrap();
+        let before = pytest_nodeids(&f.root, &req, command).unwrap();
+        assert!(before.is_empty(), "no record yet");
+        std::fs::write(
+            &record,
+            ids(&[
+                "tests/test_x.py::test_one",
+                "tests/test_x.py::test_new[a-b]",
+                "tests/other.py::t",
+                "/etc/x.py::t",
+                "bad id",
+            ]),
+        )
+        .unwrap();
+        let write_receipt = |sha: &str| {
+            let mut outputs = BTreeMap::new();
+            outputs
+                .insert(PYTEST_NODEIDS.to_string(), crate::stage::FileState::File { sha256: sha.into(), exec: false });
+            let r = crate::journal::Receipt {
+                id: String::new(),
+                ts: "fixture".into(),
+                session: "fixture-session".into(),
+                repo: "fixture".into(),
+                worktree: String::new(),
+                route: "fixture/context/predict-check".into(),
+                approved_on: "fixture-only".into(),
+                level: "e2".into(),
+                phase: crate::journal::Phase::Completed,
+                outcome: crate::stage::Outcome::Applied { changed: vec![], discarded: 0 },
+                input_digest: "x".into(),
+                outputs,
+            };
+            std::fs::create_dir_all(f.paths.root.join("exec")).unwrap();
+            adage_store::spool::append(&crate::stage::spool_path(&f.paths.root), &r).unwrap();
+        };
+        let event = Event::Batch { calls: vec![] };
+        let turn = f.turn(&event);
+        write_receipt("not-the-applied-output");
+        assert!(test_evidence(&turn, &req, command, Some(""), Some(&before)).is_none(), "unbound record is ignored");
+        write_receipt(&crate::sha256_hex(&std::fs::read(&record).unwrap()));
+        let t = test_evidence(&turn, &req, command, Some(""), Some(&before)).unwrap();
+        assert_eq!(t.collected, Some(2), "only the command's targets, only well-formed ids");
+        assert_eq!(t.new, vec!["tests/test_x.py::test_new[a-b]".to_string(), "tests/test_x.py::test_one".to_string()]);
+        // With an earlier record, only the new ids are listed and no total is claimed.
+        let earlier: std::collections::BTreeSet<String> = ["tests/test_x.py::test_one".to_string()].into();
+        let t = test_evidence(&turn, &req, command, Some(""), Some(&earlier)).unwrap();
+        assert_eq!((t.collected, t.new.len()), (None, 1));
+        let text = render::action_predicted(
+            &Directive {
+                route: "predict-check".into(),
+                track: "fixture/context".into(),
+                version: "0.1.0".into(),
+                strength: Strength::Fire,
+                text: "x".into(),
+                kind: "run".into(),
+                origin: None,
+            },
+            command,
+            &[],
+            true,
+            &render::CpuReceipt { tests: Some(&t), operation: "op", input_digest: "d", exit: Some(0), duration_ms: 5 },
+        );
+        assert!(text.contains("new since the last recorded run here: tests/test_x.py::test_new[a-b]"), "{text}");
+        assert!(text.contains("Do not rerun these tests unless you change code or configuration again"), "{text}");
+        assert!(!pytest_nodeids(&f.root, &req, "sh tools/check.sh").is_some(), "only pytest commands");
     }
 
     #[test]

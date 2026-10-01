@@ -398,11 +398,6 @@ fn pretool(
     if !command.split(|c: char| !(c.is_ascii_alphanumeric() || c == '.' || c == '_')).any(python_word) {
         return Ok(None);
     }
-    // The person started the session in an environment of their choosing (a virtualenv, a conda
-    // environment): `python` and `pip` are that environment's, and Adage leaves them alone.
-    if ["VIRTUAL_ENV", "CONDA_PREFIX"].iter().any(|v| std::env::var_os(v).is_some_and(|x| !x.is_empty())) {
-        return Ok(None);
-    }
     let key = repo::repo_key_cached(root, &paths.repo_keys());
     // A current receipt covering this call, whatever the interpreter advice below decides. Only
     // treated sessions hold receipts; the extension rechecks freshness now.
@@ -417,6 +412,11 @@ fn pretool(
         x.pretool_context(&PreCall { repo_key: &key, root, session, paths, index: &index, command })
     });
     let only_receipt = || receipt.clone().and_then(|t| adapter.render("PreToolUse", Output::Context(t)));
+    // The person started the session in an environment of their choosing (a virtualenv, a conda
+    // environment): `python` and `pip` are that environment's, and Adage leaves them alone.
+    if ["VIRTUAL_ENV", "CONDA_PREFIX"].iter().any(|v| std::env::var_os(v).is_some_and(|x| !x.is_empty())) {
+        return Ok(only_receipt());
+    }
     // Off with `runtime.rewrite = false` (`adage delegate rewrites off`), or the older marker.
     let cfg = adage_store::config::load(paths).config;
     if !cfg.runtime_rewrite || rewrite_off(paths).exists() {

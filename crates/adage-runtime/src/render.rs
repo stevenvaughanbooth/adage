@@ -186,11 +186,22 @@ pub fn action_applied(d: &crate::Directive, edited: &str, command: &str, changed
 
 /// A completed CPU action nominated by a learned context, with no edit obligation.
 pub struct CpuReceipt<'a> {
+    /// Tests the run collected, from the action's declared pytest cache (never stdout).
+    pub tests: Option<&'a TestEvidence>,
     pub operation: &'a str,
     /// Digest of the executor's declared inputs, not a claim about all repository files.
     pub input_digest: &'a str,
     pub exit: Option<i32>,
     pub duration_ms: u64,
+}
+
+/// What a passing pytest run's declared cache shows it collected: node ids new since the last
+/// recorded run here (bounded), and the collected total when no earlier record existed.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct TestEvidence {
+    pub collected: Option<usize>,
+    pub new: Vec<String>,
+    pub more_new: usize,
 }
 
 pub fn action_predicted(
@@ -217,7 +228,25 @@ pub fn action_predicted(
     } else {
         "This is completed work for the stated command and staged inputs. Use it as evidence within that scope. It does not verify later edits, a changed environment, or additional test scopes."
     };
-    let body = format!("COMPLETED CPU ACTION\nAdage ran `{}` automatically after a learned context matched: {outcome}.\nReceipt: {data}\n{scope} No raw command output is included.", sanitise(command));
+    let tests = receipt.tests.map(|t| {
+        let mut line = String::from("Tests it ran with no failure or error (exit 0):");
+        if let Some(n) = t.collected {
+            line.push_str(&format!(" {n} collected"));
+        }
+        if !t.new.is_empty() {
+            let names: Vec<String> = t.new.iter().map(|n| sanitise(n)).collect();
+            line.push_str(&format!(
+                "{} new since the last recorded run here: {}",
+                if t.collected.is_some() { ";" } else { "" },
+                names.join(", ")
+            ));
+            if t.more_new > 0 {
+                line.push_str(&format!(" (+{} more)", t.more_new));
+            }
+        }
+        format!("{line}.\nDo not rerun these tests unless you change code or configuration again; run them only if you need their detailed output.\n")
+    });
+    let body = format!("COMPLETED CPU ACTION\nAdage ran `{}` automatically after a learned context matched: {outcome}.\nReceipt: {data}\n{}{scope} No raw command output is included.", sanitise(command), tests.unwrap_or_default());
     wrap_exec(&d.track, &d.version, &d.route, &d.kind, d.strength, &body, d.origin.as_ref(), "e2")
 }
 
