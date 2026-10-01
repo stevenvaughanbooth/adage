@@ -460,8 +460,12 @@ fn add_claimed_steps(all: &mut Vec<adage_tracks::Track>, transcripts: &[PathBuf]
         let route = match &c.kind {
             ClaimKind::Verify { command } => {
                 let Some(route) = adage_learn::claims::claimed_verify_route(&refs, command, cfg) else { continue };
-                let directs =
-                    |r: &adage_tracks::Route| matches!(&r.step, adage_tracks::Step::Run { command: x } if x == command);
+                // An execution-only route is never delivered as advice, so it does not direct the
+                // step the claim asks for.
+                let directs = |r: &adage_tracks::Route| {
+                    r.evidence.execution.is_none()
+                        && matches!(&r.step, adage_tracks::Step::Run { command: x } if x == command)
+                };
                 if all.iter().any(|t| t.routes.iter().any(directs)) {
                     continue;
                 }
