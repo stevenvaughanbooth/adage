@@ -115,6 +115,9 @@ def freeze(root, cohort, cumulative, controls, binaries, authorities):
     parent = pairs.read(cohort / "manifest.json")
     if cohort not in root.parents:
         raise ValueError("the study must nest within its native-confinement cohort")
+    # Every input local: the checkout (sources, .git, the crates the binaries came from), the
+    # binaries, the learned home and the task controls. An evicted file reads as empty.
+    canary.require_local([gate.REPO, Path(binaries), cumulative, controls, cohort / "manifest.json"])
     protocol = json.loads(canary.GATE.read_text())
     if THRESHOLDS not in protocol:
         raise ValueError("the dev-v9 thresholds must be registered in the protocol before freezing")
@@ -391,6 +394,7 @@ def live(root, wall_seconds=600):
         raise ValueError("person-issued grants are missing or differ from the reviewed script")
     canary.isolation(m)
     canary.require_runtime(root, m)
+    canary.require_local([*m["source_sha256"], *m["binaries"].values()])
     authority = Path(m["budget_authority"])
     for row in m["matrix"]:
         a = pairs.read(session_dir(root, row) / "manifest.json")

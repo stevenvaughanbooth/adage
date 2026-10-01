@@ -160,6 +160,7 @@ def freeze(root, cohort, cumulative, dev_controls, heldout_controls, dev_report,
     dev_controls, heldout_controls = Path(dev_controls).resolve(strict=True), Path(heldout_controls).resolve(strict=True)
     if cohort not in root.parents:
         raise ValueError("the study must nest within its native-confinement cohort")
+    canary.require_local([gate.REPO, Path(binaries), cumulative, dev_controls, heldout_controls, Path(dev_report)])
     best = design(dev_report)
     commit, digests = bind_binaries(binaries, build_commit, binary_sha256)
     parent = pairs.read(cohort / "manifest.json")
@@ -475,6 +476,7 @@ def live(root, wall_seconds=600):
         raise ValueError("person-issued grants are missing or differ from the reviewed script")
     canary.isolation(m)
     canary.require_runtime(root, m)
+    canary.require_local([*m["source_sha256"], *m["binaries"].values()])
     authority = Path(m["budget_authority"])
     for row in m["matrix"]:
         a = pairs.read(session_dir(root, row) / "manifest.json")

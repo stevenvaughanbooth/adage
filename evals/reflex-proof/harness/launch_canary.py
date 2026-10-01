@@ -492,6 +492,42 @@ def session_problems(rows, executes=lambda row: True):
     return out
 
 
+# macOS SF_DATALESS: a cloud placeholder (iCloud "Optimize Storage") whose bytes are not on this
+# disk. In a sandbox it reads as empty: a test file runs no tests, a source hashes as nothing.
+SF_DATALESS = 0x40000000
+
+
+def _files(p, skip):
+    if not p.is_dir():
+        return [p]
+    out = []
+    for d, dirs, fs in os.walk(p):
+        dirs[:] = [x for x in dirs if x not in skip]
+        out += [Path(d) / f for f in fs]
+    return out
+
+
+def dataless(paths, skip=("target",)):
+    """Files under `paths` that a cloud provider has evicted (none where the flag does not exist)."""
+    out = []
+    for p in map(Path, paths):
+        for f in _files(p, skip):
+            try:
+                if getattr(os.lstat(f), "st_flags", 0) & SF_DATALESS:
+                    out.append(str(f))
+            except OSError:
+                continue
+    return out
+
+
+def require_local(paths):
+    """Refuse when any input is a cloud placeholder: freeze and run only from local files."""
+    bad = dataless(paths)
+    if bad:
+        raise ValueError("%d input file(s) are dataless cloud placeholders (first: %s); run from a checkout "
+                         "outside iCloud-synced folders" % (len(bad), bad[0]))
+
+
 def runtime_lib(m):
     """The shared interpreter's library. Every grant binds it (project Python's `runtime_sha256`)."""
     return Path(m["preparation_python"]).resolve(strict=True).parents[1] / "lib"

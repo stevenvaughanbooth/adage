@@ -4,6 +4,7 @@ from pathlib import Path
 import shlex
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import launch_canary as canary
 
@@ -197,6 +198,31 @@ class SessionIntegrity(unittest.TestCase):
                 self.assertEqual([s["status"] for s in stopped], ["stopped", "stopped"])
             finally:
                 self.unprotect(tmp)
+
+    def test_cloud_placeholders_are_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / "src").mkdir()
+            (tmp / "target").mkdir()
+            for rel in ("src/a.py", "src/b.py", "target/big.rlib"):
+                (tmp / rel).write_text("x")
+            canary.require_local([tmp])
+            real = canary.os.lstat
+
+            class Stat:
+                def __init__(self, st, flags):
+                    self.st, self.st_flags = st, flags
+
+                def __getattr__(self, name):
+                    return getattr(self.st, name)
+
+            def lstat(p):
+                st = real(p)
+                return Stat(st, canary.SF_DATALESS if str(p).endswith(("b.py", "big.rlib")) else 0)
+            with patch.object(canary.os, "lstat", lstat):
+                self.assertEqual(canary.dataless([tmp]), [str(tmp / "src/b.py")], "build output is not an input")
+                with self.assertRaisesRegex(ValueError, "dataless"):
+                    canary.require_local([tmp / "src"])
 
     def test_grant_preflight_runs_the_session_start_hook_on_a_throwaway_home(self):
         with tempfile.TemporaryDirectory() as tmp:
