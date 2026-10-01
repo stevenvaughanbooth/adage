@@ -23,8 +23,10 @@ new dispatch; never reset it, double-dispatch, or treat an unknown bill as zero.
 ## Latest checkpoint: launch gate protocol (resume here)
 
 Branch `codex/launch-first-reflex`, PR #16 (draft). This checkpoint spent nothing: the ledger is
-unchanged at 100 attempts, $16.1474504 admitted, $43.8525496 remaining. The work so far was done
-in an agent worktree; any checkout of this branch has the same harness files.
+unchanged at 100 attempts, $16.1474504 admitted, $43.8525496 remaining. The frozen cohort and
+canary manifests bind absolute harness paths in the agent worktree
+`/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d`; run the
+commands below from its `evals/reflex-proof/harness`, or refreeze new roots from another checkout.
 
 - [Launch gate protocol](launch-gate-protocol.md) (`launch-gate-1`, revision 2) and its governing
   JSON (`evals/reflex-proof/harness/launch_gate_protocol.json`) were registered before any dispatch:
