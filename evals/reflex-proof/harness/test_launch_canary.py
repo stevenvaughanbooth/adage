@@ -120,6 +120,57 @@ class Realized(unittest.TestCase):
         self.assertTrue(canary.realized(self.row("rerun", [ok])))
         self.assertFalse(canary.realized(self.row("broader", [])))
 
+    def test_the_finish_line_gate_never_unrealizes_a_condition(self):
+        """dev-v9 stopped at its failed control: the gate's passing run at Stop was read as a
+        successful context run. Realization is judged on the learned context's runs alone."""
+        ctx = lambda outcome, digest: dict(kind="receipt", phase="completed", outcome=outcome, digest=digest,  # noqa: E731
+                                           origin="context", at="PostToolBatch")
+        gate = lambda outcome, digest: dict(kind="receipt", phase="completed", outcome=outcome, digest=digest,  # noqa: E731
+                                            origin="stop-gate", at="Stop")
+        cases = [
+            ("failed", [ctx("failed", "a"), gate("applied", "b")], "b", True),
+            ("failed", [ctx("failed", "a"), gate("failed", "b")], "b", True),
+            ("failed", [gate("failed", "b")], "b", False),  # no context run: nothing was tested
+            ("failed", [ctx("applied", "a"), gate("applied", "b")], "b", False),  # the first context run passed
+            ("later-edit", [ctx("applied", "a"), gate("applied", "b")], "b", True),
+            ("later-edit", [ctx("applied", "b"), gate("applied", "b")], "b", False),  # the receipt covers the end
+            ("config-change", [ctx("applied", "a"), gate("failed", "b")], "b", True),
+            ("positive", [ctx("applied", "b")], "b", True),
+            ("positive", [ctx("applied", "a"), gate("applied", "b")], "b", False),  # only the gate covered the end
+            ("broader", [ctx("applied", "a"), gate("applied", "a")], "a", True),
+            ("rerun", [gate("applied", "a")], "a", False),
+        ]
+        for condition, receipts, final, expected in cases:
+            self.assertEqual(canary.realized(self.row(condition, receipts, final=final)), expected, (condition, receipts))
+        # A journal written before origins were recorded: the gate's run is the one at Stop.
+        old = [dict(ctx("failed", "a"), origin=None), dict(gate("applied", "b"), origin=None)]
+        self.assertTrue(canary.realized(self.row("failed", old, final="b")))
+
+
+class ArchivedDevV9(unittest.TestCase):
+    """The aborted dev-v9's only session (00-A4-failed), from its archived hook record: the agent
+    edited tests and CHANGELOG first, the context run failed, the agent fixed the code and stopped
+    without testing, and the gate passed at finish. That is the failed control, realized, with its
+    necessary verification met by the gate."""
+
+    def test_the_failed_control_is_realized_and_its_necessary_work_met(self):
+        base = Path(__file__).parent / "results/20261001-dev-v9/sessions/00-A4-failed"
+        timeline = canary.receipt_replay.extract(base / "production-hooks.compact.jsonl", "A4")
+        receipts = [e for e in timeline["events"] if e["kind"] == "receipt"]
+        self.assertEqual([(e["origin"], e["outcome"], e["origin_recorded"]) for e in receipts],
+                         [("context", "failed", False), ("stop-gate", "applied", False)])
+        self.assertEqual(receipts[1]["command"], canary.COMMAND, "the gate ran the route's own command")
+        self.assertFalse(receipts[1]["completion_delivered"], "a passing gate run is a line for the person")
+        replay = canary.receipt_replay.replay(timeline)
+        self.assertTrue(replay["verification_necessary"])
+        self.assertFalse(replay["necessary_work_skipped"])
+        self.assertEqual([(g["outcome"], g["covers_final"]) for g in replay["gate_runs"]], [("applied", True)])
+        row = dict(condition="failed", timeline=timeline, replay=replay)
+        self.assertTrue(canary.realized(row))
+        # The archived collection was scored by version 2, which got both wrong.
+        old = json.loads((base / "collection.json").read_text())
+        self.assertEqual((old["replay"]["version"], old["replay"]["necessary_work_skipped"]), (2, True))
+
 
 def spool(path, *records):
     """Adage's spool framing: magic, little-endian length, four reserved bytes, then the JSON record."""

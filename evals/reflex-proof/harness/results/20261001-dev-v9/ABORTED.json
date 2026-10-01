@@ -1,0 +1,37 @@
+{
+ "status": "aborted after order 0 by the study stop rule; no positive block ran",
+ "stop_records": [
+  {
+   "reason": "order 0: the failed control was not realized; the study cannot be valid",
+   "status": "stopped",
+   "timestamp_ns": 1790865617235373000
+  }
+ ],
+ "cause": "harness scoring definition, not the product: launch_canary.realized (receipt_replay version 2) counted the finish-line gate's passing run at Stop as a successful context run, so the failed control looked unrealized. The session did what the design intends: the agent edited tests and CHANGELOG first, the learned context run failed and was delivered with its failing tests, the agent fixed validate.py (two edits) and stopped without running tests itself, and the gate ran the approved command at finish and passed on the final sources.",
+ "sessions": [
+  {
+   "order": 0,
+   "session": "00-A4-failed",
+   "cost_usd": 0.06752110000000001,
+   "requests": 13,
+   "quality_passed": true
+  }
+ ],
+ "ledger": {
+  "dev_v9_session_usd": 0.0675211,
+  "launch_gate_v6_native_session_usd": 0.0164897,
+  "after": {
+   "attempts": 165,
+   "measured_usd": 24.2344477,
+   "admitted_usd": 24.7344477,
+   "remaining_usd": 35.2655523
+  }
+ },
+ "sources": {
+  "production-hooks.jsonl": "b986140c54055d97baee845f4ea4e0ad1e297c710efd226d09810c51bf8424c7",
+  "collection.json": "0625e422ab55d479b79d0cbeae85691fb59a1785bc16e495ec882aa42c11190e",
+  "native-transcript.jsonl": "05b5152ff03516ba11c26ccf860f9c008650c8a568faf04dc009efcd42edad01"
+ },
+ "successor": "dev-v9b: the same design and thresholds (dev_thresholds_v9), scored with receipt_replay version 3",
+ "raw": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v6/dev-v9"
+}

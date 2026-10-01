@@ -165,6 +165,25 @@ class Rule(unittest.TestCase):
             r["replay"] = dict(repeat_attempts=1)
         self.assertFalse(v9.summarize(rows, T)["verdict"]["A4"]["D4_repeat_sessions"])
 
+    def test_gate_runs_are_reported_on_their_own_and_never_unrealize_a_control(self):
+        rows = study([14] * 16)
+        failed = rows[0]
+        self.assertEqual(failed["condition"], "failed")
+        # dev-v9's order 0: the context run failed, the agent fixed the code, the gate passed at finish.
+        failed["timeline"] = dict(events=[dict(kind="receipt", phase="completed", outcome="failed", digest="a",
+                                               origin="context", at="PostToolBatch"),
+                                          dict(kind="receipt", phase="completed", outcome="applied", digest="b",
+                                               origin="stop-gate", at="Stop")], final_digest="b")
+        failed["gate_runs"] = [dict(outcome="applied", digest="b", covers_final=True)]
+        out = v9.summarize(rows, T)
+        self.assertTrue(out["valid"], out["problems"])
+        self.assertEqual(out["controls"][0]["gate_runs"], failed["gate_runs"])
+        self.assertTrue(out["controls"][0]["realized"])
+        positives = study([14] * 16)
+        positives[7]["gate_runs"] = [dict(outcome="applied", digest="a", covers_final=True)]
+        arm = v9.summarize(positives, T)["arms"]["A4"]["gate_runs"]
+        self.assertEqual(arm, dict(sessions=1, runs=1, passed=1, covered_final=1))
+
     def test_lapses_unrealized_controls_and_the_wrong_card_invalidate_the_study(self):
         for change in (lambda rs: rs[7].update(contract_emitted=False),
                        lambda rs: rs[6].update(exec_decisions=[dict(withheld="approval", reason="exec-changed")]),

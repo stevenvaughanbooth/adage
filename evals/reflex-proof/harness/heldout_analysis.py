@@ -336,7 +336,11 @@ def control_rows(rows):
 
 
 def _receipts(row):
-    return [e for e in (row.get("timeline") or {}).get("events", []) if e.get("kind") == "receipt"]
+    """The learned context's runs (G2, G7). The finish-line gate's runs are reported apart: a gate
+    pass is never the context firing or succeeding (receipt_replay version 3, revision 11)."""
+    import receipt_replay
+    return [e for e in (row.get("timeline") or {}).get("events", [])
+            if e.get("kind") == "receipt" and receipt_replay.origin(e) == "context"]
 
 
 def _ok(e):

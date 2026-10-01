@@ -15,6 +15,17 @@ options, targets equal or inside), whatever its interpreter and whether or not i
 bare `python` that fails with "command not found" is still a request the model made. Any repeat
 attempt blocks a confirmed elimination. Only requests that completed (a PostToolUse exists) can
 satisfy necessary verification; timelines without that field are treated as completed.
+
+Version 3 (launch-gate-1 revision 11, before any dev-v9 positive block): every receipt carries its
+origin, from the journal (`context`, `obligation`, `stop-gate`, `manual`) or, for a journal written
+before origins were recorded, inferred from its hook event (a run journaled at Stop is the gate's).
+Whether verification is necessary is decided by the learned context's runs alone: a failed or
+stale context run makes it necessary. A passing run on the final sources satisfies it, whoever ran
+it: the agent, the context, or the finish-line gate. Two exceptions apply. A requested rerun is
+satisfied only by the agent's own completed run, because the user asked the agent. A requested
+wider scope is satisfied only by a run of that scope. Gate runs are also reported on their own.
+dev-v9 stopped at its first control because version 2 read the gate's passing run as the
+context's.
 """
 import argparse
 import json
@@ -22,7 +33,7 @@ from pathlib import Path
 import re
 import shlex
 
-VERSION = 2
+VERSION = 3
 OUTPUT_FLAGS = {"-q", "-qq", "-v", "-vv", "-rA", "-ra", "-s", "-x", "--no-header", "--disable-warnings",
                 "--quiet", "--verbose"}
 OUTPUT_PREFIXES = ("--tb=", "--color=")
@@ -31,7 +42,8 @@ VALUED = {"-k", "-m", "-p", "-c", "-o", "--deselect", "--rootdir", "--ignore", "
 REDIRECTS = re.compile(r"(?<=\s)(?:2>&1|[12]?>\s*/dev/null)(?=\s|$)")
 REDUNDANT = ("exact_repeat", "equivalent_repeat")
 NECESSARY = ("after_failed_receipt", "after_relevant_change", "requested_rerun", "different_scope")
-RAN = re.compile(r"Adage ran `([^`]+)`")
+RAN = re.compile(r"(?:Adage|adage:) ran `([^`]+)`")
+GATE = "stop-gate"
 
 
 def segments(command):
@@ -120,17 +132,23 @@ def classify(request, receipt, rerun_requested=False):
     return "different_scope"
 
 
-def hook_text(output):
-    """The model- or person-facing text of a hook's output: additionalContext, a Stop reason, or a
-    person notice."""
+def hook_text(output, model_only=False):
+    """The model- or person-facing text of a hook's output: additionalContext, a Stop reason, or
+    (unless `model_only`) a person notice."""
     if not output:
         return ""
     try:
         value = json.loads(output)
     except json.JSONDecodeError:
         return ""
-    return ((value.get("hookSpecificOutput") or {}).get("additionalContext") or value.get("reason")
-            or value.get("systemMessage") or "")
+    model = (value.get("hookSpecificOutput") or {}).get("additionalContext") or value.get("reason")
+    return model or ("" if model_only else value.get("systemMessage") or "")
+
+
+def origin(event):
+    """A receipt event's origin: recorded by the journal, or inferred from the hook event for a
+    journal that predates the field (a run journaled at Stop is the finish-line gate's)."""
+    return event.get("origin") or (GATE if event.get("at") == "Stop" else "context")
 
 
 def extract(hooks_path, arm=None):
@@ -176,23 +194,39 @@ def extract(hooks_path, arm=None):
                     seen.add(call.get("tool_use_id"))
                     events.append(tool(call, row.get("before", {}).get("digest")))
         for entry in row.get("journal_new") or []:
-            text = hook_text(row.get("output"))
-            match = RAN.search(text)
+            match = RAN.search(hook_text(row.get("output")))
             outcome = entry.get("outcome", {})
+            # The command: as the hook's text names it, or else this route's last named command
+            # (a gate run is the route's own command; a silent notice may not name it).
+            command = match.group(1) if match else next(
+                (e["command"] for e in reversed(events) if e["kind"] == "receipt" and e.get("route") == entry.get("route")
+                 and e.get("command")), None)
             events.append(dict(kind="receipt", operation=entry.get("id"), route=entry.get("route"),
-                command=match.group(1) if match else None, phase=entry.get("phase"),
+                command=command, phase=entry.get("phase"),
                 outcome=outcome.get("outcome"), changed=[c.get("path") for c in outcome.get("changed", [])],
-                digest=row.get("after", {}).get("digest"), completion_delivered=bool(match), at=event))
+                digest=row.get("after", {}).get("digest"),
+                completion_delivered=bool(RAN.search(hook_text(row.get("output"), model_only=True))), at=event,
+                origin=entry.get("origin") or (GATE if event == "Stop" else "context"),
+                origin_recorded="origin" in entry))
         if event in ("Stop", "SessionEnd"):
             final = row.get("after", {}).get("digest")
     return dict(arm=arm, root=root, events=events, final_digest=final)
+
+
+def gate_runs(timeline):
+    """The finish-line gate's runs, on their own: outcome, digest, and whether they verified the
+    final sources (passed on them)."""
+    final = timeline.get("final_digest")
+    return [dict(operation=e.get("operation"), outcome=e.get("outcome"), digest=e.get("digest"),
+                 covers_final=e.get("phase") == "completed" and e.get("outcome") == "applied" and e.get("digest") == final)
+            for e in timeline["events"] if e["kind"] == "receipt" and origin(e) == GATE]
 
 
 def stop_gate_replay(timeline):
     """Offline prediction of the revision-8 Stop gate on a recorded session: it runs when a learned
     context run happened and no successful run covers the final sources (a later edit, or only a
     failed run). Whether it would pass is unknowable offline."""
-    receipts = [e for e in timeline["events"] if e["kind"] == "receipt" and e.get("at") != "Stop"]
+    receipts = [e for e in timeline["events"] if e["kind"] == "receipt" and origin(e) == "context"]
     ok = [e for e in receipts if e.get("phase") == "completed" and e.get("outcome") == "applied"]
     final = timeline.get("final_digest")
     runs = bool(receipts) and not any(e["digest"] == final for e in ok)
@@ -212,7 +246,7 @@ def replay(timeline, rerun_requested=False, broader_required=None):
         if event["kind"] == "receipt":
             parts = segments(event["command"] or "")
             call = pytest_call(parts[0], root) if parts and len(parts) == 1 else None
-            receipt = dict(command=event["command"], call=call, digest=event["digest"],
+            receipt = dict(command=event["command"], call=call, digest=event["digest"], origin=origin(event),
                 succeeded=event["phase"] == "completed" and event["outcome"] == "applied" and call is not None)
             receipts.append(receipt)
             continue
@@ -236,24 +270,32 @@ def replay(timeline, rerun_requested=False, broader_required=None):
                 classification=classify(request, receipt, rerun_requested)))
     final = timeline.get("final_digest")
     succeeded = [r for r in receipts if r["succeeded"]]
+    context = [r for r in receipts if r["origin"] == "context"]
     redundant = [r for r in rows if r["classification"] in REDUNDANT]
     opaque = [r for r in rows if r["classification"] == "opaque_verification"]
+    # Any passing run on the final sources verified them: the context's, an obligation's or the gate's.
     fresh_final = any(r["digest"] == final for r in succeeded)
+    context_final = any(r["digest"] == final for r in context if r["succeeded"])
     attempts = [r for r in rows if r.get("covered")]
     at_final = [pytest_call(shlex.split(r["segment"]), root) for r in rows
                 if "segment" in r and r["digest"] == final and r.get("completed", True)]
     if broader_required is not None:
-        satisfied = any(c[2] in {tuple(t) for t in broader_required} for c in at_final)
+        wide = {tuple(t) for t in broader_required}
+        satisfied = any(c[2] in wide for c in at_final) or any(
+            r["digest"] == final and r["call"][2] in wide for r in succeeded)
     elif rerun_requested:
-        satisfied = bool(at_final)
+        satisfied = bool(at_final)  # the user asked the agent to run it: only its own run counts
     else:
         satisfied = fresh_final or bool(at_final)
-    necessary = bool(rerun_requested or broader_required is not None or (receipts and not fresh_final))
+    # Necessity comes from the learned context's runs: a failed or stale one makes verification
+    # necessary; a passing gate run never creates or removes the need, it can only meet it.
+    necessary = bool(rerun_requested or broader_required is not None or (context and not context_final))
     return dict(version=VERSION, arm=timeline.get("arm"), requests=rows, receipts=len(receipts),
+        context_receipts=len(context), gate_runs=gate_runs(timeline),
         successful_receipts=len(succeeded), redundant_repeats=len(redundant), repeat_attempts=len(attempts),
         repeat_attempts_not_completed=sum(not r.get("completed", True) for r in attempts),
         covered_subsets=sum(r["classification"] == "covered_subset" for r in rows), opaque=len(opaque),
-        confirmed_elimination=bool(fresh_final and not attempts and not redundant and not opaque and not necessary),
+        confirmed_elimination=bool(context_final and not attempts and not redundant and not opaque and not necessary),
         verification_necessary=necessary, necessary_work_skipped=necessary and not satisfied,
         final_source_verified=fresh_final or bool(at_final))
 

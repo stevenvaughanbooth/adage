@@ -18,6 +18,12 @@ nested-session guard stays in probe.execute). No helper writes grants or policy.
 metric is model requests per session; CPU work is reported separately and never counted as
 inference saved.
 
+dev-v9 stopped at its first control because the scoring (receipt_replay version 2) read the
+finish-line gate's passing run as the context's. Its successor, dev-v9b, keeps the design and the
+registered rule, and scores with version 3. Realization and necessity come from the context's
+runs; gate runs are reported on their own, and a gate pass on the final sources meets necessary
+verification.
+
 dev-v8b's lessons are built in:
 - `prepare` makes the shared runtime library read-only before any grant.
 - Before every dispatch, `live` re-checks it and each hook-arm grant at SessionStart.
@@ -377,6 +383,7 @@ def collect(manifest):
         wall_seconds=((run.get("end_monotonic_ns") or 0) - (run.get("start_monotonic_ns") or 0)) / 1e9 or None,
         timeline=timeline, replay=replay, all_journal_receipts=attempt("journal", lambda: pairs.journal(m), []) if hooks else [],
         stop_gate_outputs=[receipt_replay.hook_text(h.get("output")) for h in hooks if h.get("event") == "Stop" and h.get("output")],
+        gate_runs=receipt_replay.gate_runs(timeline) if timeline else [],
         contract_emitted=any(canary.contract_in(h.get("output")) for h in hooks if h.get("event") == "SessionStart"),
         # The card's form, wherever it arrived (at the prompt, or at the first edit of a card file).
         card_oriented=any("Where those files stand in this checkout now" in (h.get("output") or "") for h in hooks),
@@ -475,6 +482,11 @@ def summarize(rows, thresholds):
             quality_failures=sum((r.get("quality") or {}).get("passed") is not True for r in rs),
             sessions_with_repeat_attempts=sum((r.get("replay") or {}).get("repeat_attempts", 0) > 0 for r in rs),
             stop_gate_runs=sum(bool(r.get("stop_gate_outputs")) for r in rs),
+            # The finish-line gate's runs, reported on their own (never a context run).
+            gate_runs=dict(sessions=sum(bool(r.get("gate_runs")) for r in rs),
+                           runs=sum(len(r.get("gate_runs") or []) for r in rs),
+                           passed=sum(g.get("outcome") == "applied" for r in rs for g in r.get("gate_runs") or []),
+                           covered_final=sum(bool(g.get("covers_final")) for r in rs for g in r.get("gate_runs") or [])),
             card_oriented=sum(bool(r.get("card_oriented")) for r in rs),
             card_exemplar=sum(bool(r.get("card_exemplar")) for r in rs))
     blocks = {}
@@ -519,7 +531,8 @@ def summarize(rows, thresholds):
     report = dict(valid=not problems, problems=problems, arms=arms, paired_blocks=blocks,
                   controls=[{k: r.get(k) for k in ("order", "dev_arm", "condition", "requests", "cost_usd")} |
                             dict(realized=canary.realized(r), necessary_work_skipped=(r.get("replay") or {}).get("necessary_work_skipped"),
-                                 stop_gate_outputs=r.get("stop_gate_outputs")) for r in controls],
+                                 verification_necessary=(r.get("replay") or {}).get("verification_necessary"),
+                                 gate_runs=r.get("gate_runs"), stop_gate_outputs=r.get("stop_gate_outputs")) for r in controls],
                   necessary_work_skipped=skipped, verdict=verdict, candidates=list(CONTROL_ARMS))
     report["best"] = heldout_analysis.select_best(report, candidates=CONTROL_ARMS)
     return report

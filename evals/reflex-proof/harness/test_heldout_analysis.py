@@ -344,8 +344,13 @@ class GoCriteria(unittest.TestCase):
         def more_than_noexec(out):
             for r in positives(out, "NOEXEC"):
                 r["requests"] = 1
+        def only_the_gate_ran(out):
+            # A passing gate run at Stop is not the learned context firing (revision 11).
+            for r in positives(out, "BEST"):
+                r["timeline"] = dict(events=[dict(receipt("final"), origin="stop-gate", at="Stop")], final_digest="final")
         cases = [(no_firing, "G2"), (noexec_executes, "G6"), (foreign, "G6"), (undeclared, "G6"),
-                 (unknown_cost, "G6"), (skipped, "G6"), (stale, "G7"), (more_than_noexec, "G8")]
+                 (unknown_cost, "G6"), (skipped, "G6"), (stale, "G7"), (more_than_noexec, "G8"),
+                 (only_the_gate_ran, "G2")]
         for edit, g in cases:
             result = run(rows(edit=edit))
             self.assertFalse(result["go_criteria"][g]["passed"], (edit.__name__, g))

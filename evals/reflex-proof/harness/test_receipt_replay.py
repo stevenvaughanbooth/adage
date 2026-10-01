@@ -21,6 +21,56 @@ def timeline(*events, final="a"):
     return dict(root="/repo", events=list(events), final_digest=final)
 
 
+def gate(digest="a", outcome="applied", command=CMD):
+    return dict(receipt(digest, outcome=outcome, command=command), origin="stop-gate", at="Stop")
+
+
+def ctx(digest="a", outcome="applied"):
+    return dict(receipt(digest, outcome=outcome), origin="context", at="PostToolBatch")
+
+
+class GateRuns(unittest.TestCase):
+    """Version 3: a finish-line gate run never decides whether verification was necessary; a gate
+    pass on the final sources meets the need (except a requested rerun or a wider scope)."""
+
+    def test_failed_context_run_then_a_gate_pass_on_the_final_sources_meets_the_need(self):
+        r = rr.replay(timeline(ctx("a", "failed"), tool(path="src/v.py", name="Edit", digest="a"), gate("b"), final="b"))
+        self.assertTrue(r["verification_necessary"])
+        self.assertFalse(r["necessary_work_skipped"])
+        self.assertEqual(r["gate_runs"], [dict(operation=None, outcome="applied", digest="b", covers_final=True)])
+        self.assertFalse(r["confirmed_elimination"], "the gate's run is not the context's elimination")
+
+    def test_a_failing_gate_run_or_one_on_stale_sources_does_not_meet_it(self):
+        failing = rr.replay(timeline(ctx("a", "failed"), gate("b", "failed"), final="b"))
+        self.assertTrue(failing["necessary_work_skipped"])
+        stale = rr.replay(timeline(ctx("a"), gate("b"), final="c"))
+        self.assertTrue(stale["verification_necessary"] and stale["necessary_work_skipped"])
+        self.assertEqual(stale["gate_runs"][0]["covers_final"], False)
+
+    def test_a_passing_context_run_on_the_final_sources_needs_nothing_more(self):
+        r = rr.replay(timeline(ctx("a"), final="a"))
+        self.assertFalse(r["verification_necessary"])
+        self.assertTrue(r["confirmed_elimination"])
+        self.assertEqual(r["gate_runs"], [])
+
+    def test_a_requested_rerun_or_wider_scope_is_not_met_by_the_gate(self):
+        rerun = rr.replay(timeline(ctx("a"), gate("a"), final="a"), rerun_requested=True)
+        self.assertTrue(rerun["necessary_work_skipped"], "the user asked the agent to run it")
+        wider = rr.replay(timeline(ctx("a"), gate("a"), final="a"), broader_required=[[], ["tests"]])
+        self.assertTrue(wider["necessary_work_skipped"], "the gate ran the narrow command")
+        whole = rr.replay(timeline(ctx("a"), gate("a", command=".venv/bin/python -m pytest tests -q"), final="a"),
+                          broader_required=[[], ["tests"]])
+        self.assertFalse(whole["necessary_work_skipped"], "a gate run of the wider scope would meet it")
+
+    def test_an_older_timeline_infers_the_gate_from_its_stop_event(self):
+        old = dict(receipt("b"), at="Stop")  # journaled before origins were recorded
+        self.assertEqual(rr.origin(old), "stop-gate")
+        self.assertEqual(rr.origin(dict(receipt("a"), at="PostToolBatch")), "context")
+        self.assertEqual(rr.origin(receipt("a")), "context", "canary timelines before the gate existed")
+        r = rr.replay(timeline(dict(receipt("a", outcome="failed"), at="PostToolBatch"), old, final="b"))
+        self.assertTrue(r["verification_necessary"] and not r["necessary_work_skipped"])
+
+
 class ArchivedTransfer(unittest.TestCase):
     """The frozen study's 0/4 result is reproduced from native hook records, not reinterpreted."""
 

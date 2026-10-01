@@ -4,7 +4,8 @@ Registered 2026-09-30 (revision 2 the same day; revisions 3 to 8 on 2026-10-01).
 to 5 preceded any canary agent session; revisions 6 to 8 follow development canaries and precede
 any held-out dispatch. Revision 9 was drafted on `codex/heldout-tasks` and merged into
 `codex/launch-first-reflex` at `57e79bf` on 2026-10-01, before any held-out dispatch. Revision 10
-(development only) follows it, also before any held-out dispatch. The
+(development only) follows it, also before any held-out dispatch. Revision 11 (a scoring-definition
+fix) was registered after dev-v9's first control and before any of its positive blocks. The
 machine-readable copy is `evals/reflex-proof/harness/launch_gate_protocol.json`; when the two
 differ, the JSON governs. Revisions get a dated entry below and must precede the dispatch they
 affect. Splits and thresholds cannot change after the first held-out dispatch.
@@ -366,6 +367,46 @@ byte-identical to those that `launch-gate-v5` reviewed, but a native review bind
 cohort, `launch-gate-v6`, is therefore prepared from the clone. Its native-confinement session (paid,
 $0.50 cap) must run and pass review before dev-v9's `prepare`.
 
+### Revision 11 (development): scoring that tells the context's runs from the gate's
+
+dev-v9 stopped by its own rule after order 0, the failed control, which it reported as "not
+realized". The session did exactly what the design intends:
+- the agent edited the tests and CHANGELOG first;
+- the learned context ran pytest, and the run failed;
+- the failure was delivered with its failing tests;
+- the agent fixed `validate.py` with two edits and stopped without running any tests;
+- the finish-line gate ran the approved command at Stop, and it passed on the final sources.
+
+Version 2 of the scoring read the gate's passing run as a successful context run, so the control
+could not be realized. That is a scoring-definition error, not a product failure. This fix was
+registered before any positive block ran, and `dev_thresholds_v9` is unchanged.
+
+**Production.** Every journal receipt now records its origin: `context`, `obligation`,
+`stop-gate` or `manual`. The origin never enters the receipt's identity. A journal written before
+this revision has no origin, so a run journaled at Stop is read as the gate's.
+
+**Scoring** (`receipt_replay` version 3, `launch_canary.realized`).
+- **Necessity** is decided by the learned context's runs alone. A failed or stale context run makes
+  verification necessary. So do a requested rerun and a requested wider scope.
+- **What meets it.** Any passing run on the final sources meets the need: the agent's, the
+  context's, or the gate's. There are two exceptions. A requested rerun is met only by the agent's
+  own run, because the user asked the agent. A wider scope is met only by a run of that scope.
+- **Realization** is judged on context runs:
+  - failed: the first context run failed;
+  - later-edit and config-change: a successful context run on sources that are not the final ones;
+  - positive: a successful context run on the final sources;
+  - broader and rerun: a successful context run.
+- **Gate runs** are reported apart: their count, outcome, and whether they covered the final
+  sources.
+- **Held-out G2 and G7** count context runs only.
+
+**dev-v9b.** dev-v9 is archived as aborted (`results/20261001-dev-v9`). It cost $0.0675211 for
+one session, plus $0.0164897 for the `launch-gate-v6` native session. dev-v9b refreezes the same
+design with these scoring sources, from a fresh clone at the same path outside iCloud. The
+`launch-gate-v6` native review still applies: the runner sources it binds (`probe`,
+`real_repo_gate`, `real_repo_pairs`, `cohort_v5`, `budget`) are unchanged, byte for byte, at the
+same paths.
+
 ## Phase 2: cohort (step 3)
 
 Learning waits for the learner-regression fix on main; nothing is frozen with the broken learner.
@@ -593,6 +634,16 @@ evaluation groups is registered.
 ## Revisions
 
 - 2026-09-30 r1: registered.
+- 2026-10-01 r11, development only, a scoring-definition fix registered after dev-v9's first control
+  (order 0) and before any of its positive blocks, and before any held-out dispatch:
+  - journal receipts record their origin;
+  - `receipt_replay` version 3 takes necessity from context runs; any passing run on the final
+    sources meets it, the gate's included (a rerun only by the agent's own run, a wider scope only
+    by a run of that scope); gate runs are reported apart;
+  - realization is judged on context runs;
+  - held-out G2 and G7 count context runs only;
+  - `dev_thresholds_v9` is unchanged; dev-v9 is aborted and archived, and dev-v9b is frozen;
+  - ledger at r11: 165 attempts, $24.7344477 admitted, $35.2655523 remaining.
 - 2026-10-01 r10, development only, before any held-out dispatch:
   - dev-v8b archived as invalid for its execution arms from session 09;
   - fail-loud reports, a protected runtime, and a grant check before every dispatch;

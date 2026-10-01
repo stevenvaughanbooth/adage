@@ -31,7 +31,9 @@
     "r9_note": "r9 (draft): the $4 training allocation moves to held-out (held-out $26, training $0); Click and more-itertools training gets a new allocation later. The protocol total stays $38. The ledger had $39.7316293 remaining before development canary-v8.",
     "admission_spend_at_r10_usd": 24.6504369,
     "attempts_at_r10": 163,
-    "r10_note": "r10 (development budget): the canary/development ceiling rises from $12 to $18 for development canary-v9 (study ceiling $8.50, $0.50 per session) and a new native-confinement session for cohort launch-gate-v6 ($0.50 cap); the protocol total rises from $38 to $44; held-out keeps $26 and training $0. Ledger at r10: $24.6504369 admitted (163 attempts), $35.3495631 remaining of $60. Worst case after both: $33.6504369 admitted, $26.3495631 remaining; held-out's $3 ledger floor then leaves $23.3495631 for its $26 worst case, so held-out would stop at the floor before its own ceiling if every study hit its worst case (expected spend is far below: dev-v9 about $6.6, a native session about $0.03). The ledger ceiling ($60) is unchanged."
+    "r10_note": "r10 (development budget): the canary/development ceiling rises from $12 to $18 for development canary-v9 (study ceiling $8.50, $0.50 per session) and a new native-confinement session for cohort launch-gate-v6 ($0.50 cap); the protocol total rises from $38 to $44; held-out keeps $26 and training $0. Ledger at r10: $24.6504369 admitted (163 attempts), $35.3495631 remaining of $60. Worst case after both: $33.6504369 admitted, $26.3495631 remaining; held-out's $3 ledger floor then leaves $23.3495631 for its $26 worst case, so held-out would stop at the floor before its own ceiling if every study hit its worst case (expected spend is far below: dev-v9 about $6.6, a native session about $0.03). The ledger ceiling ($60) is unchanged.",
+    "admission_spend_at_r11_usd": 24.7344477,
+    "attempts_at_r11": 165
   },
   "model": "claude-haiku-4-5-20251001",
   "claude_cli": "2.1.282",
@@ -101,7 +103,7 @@
     "explicitly guided training"
   ],
   "scoring": {
-    "classifier": "evals/reflex-proof/harness/receipt_replay.py (version 2)",
+    "classifier": "evals/reflex-proof/harness/receipt_replay.py (version 3)",
     "repeat": "same interpreter token and test targets as the receipt; output-only flags, redirections and pipes ignored",
     "output_only_flags": [
       "-q",
@@ -130,7 +132,10 @@
     "confirmed_elimination": "automatic session with a successful receipt whose digest equals the final source digest, no repeat attempt, no unparsed verification afterwards, and no condition requiring verification",
     "necessary_work_skipped": "verification required (failed receipt, stale receipt, explicit rerun or wider scope) and no matching agent run on the final source",
     "repeat_attempt": "any request after a fresh successful receipt whose selection the receipt covers (same non-output options; targets equal or inside), any interpreter, launched or not",
-    "necessary_satisfied_by": "completed requests only (a PostToolUse exists)"
+    "necessary_satisfied_by": "a completed agent run on the final sources, or any passing receipt on the final sources (context, obligation or the finish-line gate); a requested rerun only by the agent's own completed run; a requested wider scope only by a run of that scope",
+    "receipt_origin": "each receipt's origin is the journal's (context, obligation, stop-gate, manual); a journal written before r11 has none, and a run journaled at Stop is then the gate's",
+    "verification_necessary": "decided by the learned context's runs: a failed or stale context run (or a requested rerun or wider scope) makes verification necessary; gate runs never create or remove the need",
+    "realized": "judged on context runs: failed = the first context run failed; later-edit, config-change = a successful context run on non-final sources; positive = a successful context run on the final sources; broader, rerun = a successful context run; finish-line gate runs are reported separately"
   },
   "canary_pass": {
     "complete": "all 12 assignments collected with known cost",
@@ -177,7 +182,7 @@
     "copy grants",
     "change thresholds after the first held-out dispatch"
   ],
-  "revision": 10,
+  "revision": 11,
   "revisions": [
     "2026-09-30 r1: registered",
     "2026-09-30 r2, before any dispatch under this protocol: task splits with near-duplicate groups, training-isolation audit, evaluation read-only rule, paired blocks, same-repository strata and G9; canary moved to the development split",
@@ -189,7 +194,8 @@
     "2026-10-01 r7, before any held-out dispatch: scorer version 2 (covered requests are repeat attempts whether or not they launched; any blocks an elimination; only completed requests satisfy necessary verification); realistic project environment (checkout .venv first on PATH and as VIRTUAL_ENV, native canary requires python_on_path); pytest receipts list collected/new node ids from the declared pytest cache record bound to the journal; later-edit control realized by construction; PreToolUse result substitution out of scope (goal is skipping inference)",
     "2026-10-01 r8, development only, before any held-out dispatch: target is fewer model requests per task against a no-Adage control in Claude Code hook mode; Lever 2 (factual contract, compact receipts, delivered failures, Stop gate) and Lever 1 (card names the certified test command); development canary-v8 (dev_arms.py) with arms A0 no hooks, A1 revision-7 integration, A2 Lever 2, A3 Levers 1+2 in six paired blocks plus A2/A3 safety controls, using the production hook registration; development thresholds D1-D4 registered here; canary/development ceiling 8 -> 12 and training 8 -> 4 (protocol total unchanged at 38; held-out keeps 22)",
     "2026-10-01 r9 (draft on codex/heldout-tasks, registered only when merged, before any held-out dispatch): held-out Marshmallow tasks authored and frozen (heldout_tasks.py, results/20261001-heldout-tasks, commit 260729a); max-sum withdrawn as a near-duplicate of size-limit and replaced by lat-long (geo-coordinate); every held-out prompt carries the realism line 'Do not create git commits.', no work order and no test block; pre-registered held-out analysis (heldout_analysis.py) and runner (heldout_cohort.py): arms A0, NOEXEC and BEST (the dev arm passing D1-D4 with the lowest mean requests, built from the final pre-freeze commit; no held-out run if none passes), 4 tasks x 5 repetitions in randomized paired blocks; debug-log requests (retries count) with a per-session stream cross-check, unexplained mismatches excluding their block, more than 2 excluded blocks = unverified; headline test: one-sided 95% bootstrap upper bound of BEST/A0 requests <= 0.90 plus quality within one; censoring conservative against Adage (censored BEST at max(observed, 60), censored A0/NOEXEC at observed, all censored sessions quality failures) with a no-censored-blocks sensitivity; a no-has-keys sensitivity reported prominently if it disagrees; G1, G2, G5, G6, G7 and G8 apply, G3, G4 and G9 are not applicable with reasons; five realized controls first; $0.40 cap, 65 sessions, $26.00 worst case, held-out ceiling $26 after moving training's $4 (protocol total $38 unchanged); control prompts also carry the realism line (between the development prompt and the canary suffix), re-validated offline",
-    "2026-10-01 r10, development only, before any held-out dispatch: dev-v8b archived as invalid for its execution arms from session 09 (its grants lapsed: an outside process wrote bytecode into the shared runtime); the harness fails loudly on lapsed grants, unverified or censored counts and unrealized controls, protects the shared runtime and re-checks every grant before each dispatch; production: the procedure card drops its exemplar for an orientation block (where its learned files stand in the checkout now, read-only, bounded) and receipts name the tests this session's edits added; codex/ship-fixes, codex/heldout-tasks (r9) and codex/first-run-fixes merged before the freeze; development canary-v9 (dev_v9.py, dev-arms-2) with arms A0, A2f and A4 in 16 paired blocks plus five A4 controls, every prompt with the realism line; rule dev_thresholds_v9; canary/development ceiling 12 -> 18 and protocol total 38 -> 44 (held-out keeps 26)"
+    "2026-10-01 r10, development only, before any held-out dispatch: dev-v8b archived as invalid for its execution arms from session 09 (its grants lapsed: an outside process wrote bytecode into the shared runtime); the harness fails loudly on lapsed grants, unverified or censored counts and unrealized controls, protects the shared runtime and re-checks every grant before each dispatch; production: the procedure card drops its exemplar for an orientation block (where its learned files stand in the checkout now, read-only, bounded) and receipts name the tests this session's edits added; codex/ship-fixes, codex/heldout-tasks (r9) and codex/first-run-fixes merged before the freeze; development canary-v9 (dev_v9.py, dev-arms-2) with arms A0, A2f and A4 in 16 paired blocks plus five A4 controls, every prompt with the realism line; rule dev_thresholds_v9; canary/development ceiling 12 -> 18 and protocol total 38 -> 44 (held-out keeps 26)",
+    "2026-10-01 r11, development only, a scoring-definition fix registered before any dev-v9 positive block ran (dev-v9 stopped after its first control, order 0) and before any held-out dispatch: every journal receipt records its origin (context, obligation, stop-gate, manual); receipt_replay version 3 decides necessity from the learned context's runs, lets a passing run on the final sources meet it whoever ran it (the gate included; a requested rerun only by the agent's own run, a wider scope only by a run of that scope), and reports gate runs separately; launch_canary.realized judges conditions on context runs alone (failed: the first context run failed; later-edit and config-change: a successful context run on non-final sources; positive: a successful context run on the final sources); held-out G2 and G7 count context runs only. dev_thresholds_v9 is unchanged; dev-v9 is archived as aborted and refrozen as dev-v9b"
   ],
   "splits": {
     "marshmallow": {
@@ -457,6 +463,16 @@
       "posthoc_audit": "dispatch cross-check 34/34 equal; no censored session; control realization 0/10",
       "harness_after": "reports fail loudly (no contract, withheld approval or no receipt in a hook arm, unverified or censored counts, unrealized controls); prepare makes the shared runtime read-only; live re-checks it and each grant at SessionStart before every dispatch and stops the study on a lapse",
       "archive": "results/20261001-dev-arms"
+    },
+    "dev-v9": {
+      "protocol": "dev-arms-2",
+      "status": "aborted after order 0 (the failed control) by the study's stop rule; no positive block ran",
+      "cause": "scoring definition, not the product: version 2 counted the finish-line gate's passing run at Stop as a successful context run, so the failed control looked unrealized; the session behaved as designed (context run failed and was delivered, the agent fixed the code and stopped without testing, the gate passed on the final sources)",
+      "sessions": 1,
+      "known_cost_usd": 0.0675211,
+      "native_session_usd": 0.0164897,
+      "successor": "dev-v9b: the same arms, matrix, prompts and dev_thresholds_v9, scored with receipt_replay version 3",
+      "archive": "results/20261001-dev-v9"
     }
   },
   "environment": "every new session launches with the checkout's own .venv first on PATH and as VIRTUAL_ENV (probe.project_launch); the sandbox policy is unchanged",

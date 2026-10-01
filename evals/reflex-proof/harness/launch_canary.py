@@ -392,19 +392,29 @@ def collect(manifest):
 
 
 def realized(row):
-    """Whether the session actually produced the condition it was assigned (all rows are kept)."""
+    """Whether the session actually produced the condition it was assigned (all rows are kept).
+
+    Judged on the learned context's runs alone (receipt_replay version 3). The finish-line gate's
+    run at Stop is how a failed or stale context run is meant to end, so it never unrealizes a
+    condition. dev-v9 stopped at its failed control because this rule once counted the gate's
+    passing run as a successful context run.
+    - failed: the first context run failed;
+    - later-edit, config-change: a successful context run on sources that are not the final ones;
+    - positive: a successful context run on the final sources;
+    - broader, rerun: a successful context run (the replay judges the rest).
+    """
     r = row.get("replay") or {}
     events = (row.get("timeline") or {}).get("events", [])
-    receipts = [e for e in events if e.get("kind") == "receipt"]
-    ok = [e for e in receipts if e.get("phase") == "completed" and e.get("outcome") == "applied"]
+    context = [e for e in events if e.get("kind") == "receipt" and receipt_replay.origin(e) == "context"
+               and e.get("phase") == "completed"]
+    ok = [e for e in context if e.get("outcome") == "applied"]
     final = (row.get("timeline") or {}).get("final_digest")
     c = row["condition"]
     if c == "failed":
-        return bool(receipts) and not ok
+        return bool(context) and context[0].get("outcome") == "failed"
     if c in ("later-edit", "config-change"):
-        return bool(ok) and all(e["digest"] != final for e in ok)
+        return any(e["digest"] != final for e in ok)
     if c == "positive":
-        # A positive needs a successful receipt that still covers the final sources.
         return any(e["digest"] == final for e in ok) and bool(r)
     return bool(ok) and bool(r)
 
