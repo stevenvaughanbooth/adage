@@ -478,7 +478,7 @@ fn no_history_instincts() {
         "an instinct directive in session 1: {out:?}"
     );
     let card = w.card(&repo);
-    assert!(card.contains("learning: 0 of ~5 sessions needed"), "{card}");
+    assert!(card.contains("0 of ~5 sessions needed"), "{card}");
     assert!(card.contains("instincts active meanwhile"), "{card}");
 }
 
@@ -695,7 +695,7 @@ fn savings_gate() {
 
     population(&w, &key, 25, 4, 0.20, 0.05, 0.5, 1);
     let card = w.card(&repo);
-    assert!(card.contains("measuring savings: 4 of 10 quiet sessions so far"), "{card}");
+    assert!(card.contains("measuring: 4 of 10 quiet sessions so far"), "{card}");
     assert!(!card.contains('$'), "no dollars below the gate:\n{card}");
 
     population(&w, &key, 40, 12, 0.20, 0.10, 1.0, 2);
@@ -718,7 +718,7 @@ fn savings_gate() {
     // A clear saving: the card says it, with its interval and the guardrail.
     population(&w, &key, 40, 12, 0.20, 0.10, 0.5, 4);
     let card = w.card(&repo);
-    assert!(card.contains("savings: ~$") && card.contains("API-list equivalent") && card.contains("95% CI"), "{card}");
+    assert!(card.contains("✓ ~$") && card.contains("API-list equivalent") && card.contains("95% CI"), "{card}");
     assert!(card.contains("ended asking you for help"), "the guardrail beside it:\n{card}");
 
     population(&w, &key, 40, 12, 0.30, -0.12, 0.5, 3);
@@ -812,7 +812,7 @@ fn model_blocked() {
     assert!(context(&out).contains("make test"), "{out}");
     w.hook("Stop", &repo, "s1", json!({ "stop_hook_active": false }));
     let card = w.card(&repo);
-    assert!(card.contains("embeddings: potion-base-8m-i8 (bundled)"), "{card}");
+    assert!(card.contains("embeddings  potion-base-8m-i8 (bundled)"), "{card}");
     assert!(!card.contains("hashed fallback"), "{card}");
     assert_eq!(
         std::fs::read_to_string(&calls).unwrap().lines().count(),
