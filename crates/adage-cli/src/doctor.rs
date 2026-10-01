@@ -371,6 +371,36 @@ fn packs_check(paths: &Paths) -> Check {
     )
 }
 
+/// Where packs come from (`adage marketplace`): the marketplace built into this binary must be
+/// readable, and how its packs stand here is reported. Installing them is learning's job (or
+/// `adage marketplace update`'s), so one not installed yet, or installed at other bytes, is not a
+/// warning: the next sync puts it right, and binding reads the verified copy in the binary.
+fn marketplace_check(paths: &Paths) -> Check {
+    use adage_pack::marketplace::Installed;
+    let m = match adage_pack::builtin::marketplace() {
+        Ok(m) => m,
+        Err(e) => {
+            return fail(
+                "marketplace",
+                format!("the marketplace built into Adage cannot be read: {e}"),
+                "reinstall Adage: this build's base instincts are damaged",
+            )
+        }
+    };
+    let status = m.status(&paths.tracks());
+    let current = status.iter().filter(|(_, i)| *i == Installed::Current).count();
+    let which = format!("{} (built into Adage {})", m.name(), env!("CARGO_PKG_VERSION"));
+    let packs = crate::words::count(status.len(), "pack");
+    pass(
+        "marketplace",
+        if current == status.len() {
+            format!("{which}: {packs}, every one installed as pinned")
+        } else {
+            format!("{which}: {packs}, {current} installed as pinned; the next condition (or `adage marketplace update`) installs the rest")
+        },
+    )
+}
+
 fn model_check(paths: &Paths, idx: &Index) -> Check {
     use adage_intent::model::{self, Source};
     let wants = idx.routes.iter().any(|r| matches!(r.route.trigger, Trigger::Intent { .. }));
@@ -790,6 +820,7 @@ pub fn checks(paths: &Paths, repo_root: Option<&Path>) -> Vec<Check> {
         tracks_check(&scan),
         instincts_check(paths, &scan, &idx),
         packs_check(paths),
+        marketplace_check(paths),
         model_check(paths, &idx),
     ];
     checks.extend(hooks_checks(repo_root, exe.as_deref()));

@@ -351,6 +351,7 @@ impl Cx {
             id: r.id.clone(),
             summary: r.summary.clone(),
             shape,
+            detector: None,
             trigger,
             entry: true,
             inputs,

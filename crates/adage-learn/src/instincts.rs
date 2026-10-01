@@ -50,14 +50,18 @@ pub const EXTINGUISH_P_POSITIVE: f64 = 0.1;
 /// ...over at least this many judgements.
 pub const EXTINGUISH_MIN_JUDGEMENTS: u32 = 5;
 
+/// `instincts.packs = auto`: every instinct pack available (the built-in marketplace's base packs,
+/// and any added with `adage add`).
+pub const AUTO: &str = "auto";
+
 /// How learning binds instincts (`instincts.*` in `config.toml`).
 #[derive(Debug, Clone)]
 pub struct Config {
     /// `instincts.enabled`.
     pub enabled: bool,
-    /// `instincts.packs`: packs to bind (only `core` exists).
+    /// `instincts.packs`: the instinct packs to bind, [`AUTO`] or pack names.
     pub packs: Vec<String>,
-    /// `instincts.disabled`: catalogue ids never to bind.
+    /// `instincts.disabled`: pack names (`adage/lockfiles`) and catalogue ids (`U3`) never to bind.
     pub disabled: BTreeSet<String>,
     /// The spools directory (`$ADAGE_HOME/sessions`), whose judgements extinguish instinct routes.
     pub spools: Option<PathBuf>,
@@ -69,7 +73,7 @@ impl Default for Config {
     fn default() -> Self {
         Config {
             enabled: true,
-            packs: vec!["core".into()],
+            packs: vec![AUTO.into()],
             disabled: BTreeSet::new(),
             spools: None,
             roots: BTreeMap::new(),
@@ -78,9 +82,61 @@ impl Default for Config {
 }
 
 impl Config {
-    /// Whether the catalogue's pack is enabled.
+    /// Whether instincts bind at all.
     pub fn binds(&self) -> bool {
-        self.enabled && self.packs.iter().any(|p| p == adage_instincts::pack().0)
+        self.enabled && !self.packs.is_empty()
+    }
+
+    /// Whether the instinct pack `name` is turned on: named in `instincts.packs` (or `auto`) and
+    /// not in `instincts.disabled`.
+    pub fn wants(&self, name: &str) -> bool {
+        self.binds() && self.packs.iter().any(|p| p == AUTO || p == name) && !self.disabled.contains(name)
+    }
+
+    /// The catalogue ids turned off (`instincts.disabled` entries that name no pack).
+    pub fn disabled_ids(&self) -> BTreeSet<String> {
+        self.disabled.iter().filter(|d| !d.contains('/')).cloned().collect()
+    }
+
+    /// What a binding records of the packs it was made with ([`selection`]).
+    pub fn selection(&self) -> String {
+        selection(&self.packs, &self.disabled)
+    }
+}
+
+/// The packs a binding was made with, as a short fingerprint: the built-in marketplace this build
+/// ships (`adage_pack::builtin::fingerprint`) and the choice of packs (`instincts.packs`,
+/// `instincts.disabled`). Either changing binds each repository's instincts again. Cheap: the
+/// session-start hook computes it from the settings it has read.
+pub fn selection<A: AsRef<str>, B: AsRef<str>>(packs: &[A], disabled: impl IntoIterator<Item = B>) -> String {
+    let mut on: Vec<&str> = packs.iter().map(AsRef::as_ref).collect();
+    on.sort_unstable();
+    on.dedup();
+    let mut off: Vec<String> = disabled.into_iter().map(|d| d.as_ref().to_string()).collect();
+    off.sort_unstable();
+    off.dedup();
+    adage_core::repo::short_hash(&format!(
+        "{}\n{}\n{}",
+        adage_pack::builtin::fingerprint(),
+        on.join(","),
+        off.join(",")
+    ))
+}
+
+/// The instinct packs `cfg` turns on, of those available on this machine
+/// ([`adage_pack::instincts::available`]), and why any available pack could not be read.
+pub fn packs(cfg: &Config, tracks_root: &Path) -> (Vec<adage_pack::Pack>, Vec<String>) {
+    let (available, problems) = adage_pack::instincts::available(tracks_root);
+    let on = available.into_iter().map(|(p, _)| p).filter(|p| cfg.wants(&p.manifest.pack.name)).collect();
+    (on, problems.into_iter().map(|(who, why)| format!("{who}: {why}")).collect())
+}
+
+/// Pre-install the built-in marketplace's packs (Adage's base instincts) where `adage add` installs
+/// a pack, verified against their pins ([`adage_pack::builtin::install`]). Binding reads them from
+/// the binary, so a failure here is reported and never stops learning.
+pub fn preinstall(tracks_root: &Path) {
+    if let Err(e) = adage_pack::builtin::install(tracks_root) {
+        eprintln!("adage: the base instinct packs could not be installed: {e:#}");
     }
 }
 
@@ -96,6 +152,9 @@ pub struct InstinctReport {
     pub nascent: usize,
     /// Candidates not bound, and why (`U3: 2 test entry points`, `declared: Makefile: …`).
     pub skipped: Vec<String>,
+    /// The instinct packs that bound something here (`adage/python-env@0.1.0`).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub packs: Vec<String>,
     /// Routes extinguished this run because agents followed them and they failed.
     pub extinguished: Vec<String>,
     /// Instinct routes a learned route with the same id took over this run.
@@ -129,14 +188,20 @@ pub struct Binding {
     /// (`adage_instincts::verify_env`): what a `PreToolUse` interpreter rewrite may use.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub env: Option<adage_instincts::VerifiedEnv>,
+    /// The packs the instincts were bound with ([`selection`]): a build that ships other base
+    /// packs, or another choice of packs, binds them again.
+    #[serde(default)]
+    pub packs: String,
 }
 
-/// Record that the repository's instincts are bound against `root` as its files are now.
-pub fn record_binding(tracks_root: &Path, repo: &str, root: &Path) {
+/// Record that the repository's instincts are bound against `root` as its files are now, with the
+/// packs `cfg` selects.
+pub fn record_binding(tracks_root: &Path, repo: &str, root: &Path, cfg: &Config) {
     let b = Binding {
         root: root.to_string_lossy().into(),
         declared: adage_instincts::fingerprint(root),
         env: adage_instincts::verify_env(root),
+        packs: cfg.selection(),
     };
     let p = binding_path(tracks_root, repo);
     if let (Some(dir), Ok(body)) = (p.parent(), serde_json::to_vec(&b)) {
@@ -152,10 +217,12 @@ pub fn binding(tracks_root: &Path, repo: &str) -> Option<Binding> {
 
 /// Whether the repository's instincts should be bound again against the live checkout `root` (the
 /// session's): never bound, bound against another checkout (paths named in old traces, another
-/// worktree), or its declared files changed since (a `.venv` made, a Makefile edited).
-pub fn stale_binding(tracks_root: &Path, repo: &str, root: &Path) -> bool {
-    binding(tracks_root, repo)
-        .is_none_or(|b| b.root != root.to_string_lossy() || b.declared != adage_instincts::fingerprint(root))
+/// worktree), its declared files changed since (a `.venv` made, a Makefile edited), or other packs
+/// are selected now (`selection`: [`selection`] of the current settings).
+pub fn stale_binding(tracks_root: &Path, repo: &str, root: &Path, selection: &str) -> bool {
+    binding(tracks_root, repo).is_none_or(|b| {
+        b.root != root.to_string_lossy() || b.declared != adage_instincts::fingerprint(root) || b.packs != selection
+    })
 }
 
 /// Runtime judgements of one route: the treated arm's (the directive was delivered), and the
@@ -376,10 +443,21 @@ pub fn plan_repo(
         rejections.extend(
             reviews.routes.iter().filter(|(_, v)| v.decision == Decision::Extinguished).map(|(id, _)| id.clone()),
         );
-        let opts = adage_instincts::BindOptions { disabled: cfg.disabled.clone() };
+        // Bound through the instinct packs turned on: what their templates admit, filled in by the
+        // detectors they name from this checkout's files.
         let others: Vec<Route> = learned.iter().filter(|r| !r.is_instinct()).cloned().collect();
-        let result = adage_instincts::bind_with(root, &others, &rejections, &opts);
-        rep.skipped = result.skipped.iter().map(|(i, why)| format!("{i}: {why}")).take(64).collect();
+        let (packs, problems) = packs(cfg, tracks_root);
+        let refs: Vec<&adage_pack::Pack> = packs.iter().collect();
+        let bound = adage_pack::instincts::bind(&refs, root, &others, &rejections, &cfg.disabled_ids());
+        rep.packs = packs
+            .iter()
+            .map(|p| (&p.manifest.pack.name, &p.manifest.pack.version))
+            .filter(|(name, _)| bound.of_pack(name).next().is_some())
+            .map(|(name, version)| format!("{name}@{version}"))
+            .collect();
+        let result = bound.into_result();
+        rep.skipped =
+            problems.into_iter().chain(result.skipped.iter().map(|(i, why)| format!("{i}: {why}"))).take(64).collect();
         for p in prev.iter().flat_map(|t| &t.routes).filter(|r| r.state.is_live()) {
             let taken = result
                 .skipped
@@ -413,13 +491,17 @@ pub fn plan_repo(
                 .collect();
         rep.quiet = gated.iter().cloned().collect();
         routes = review::reconcile(prev.as_ref(), &reviews, routes);
-        let pack_approved = reviews.packs.contains_key(&cat.pack.name);
+        // A person approved this route's pack's environment steps for the repository.
+        let pack_approved = |r: &Route| match r.origin() {
+            adage_tracks::Origin::Instinct { pack, .. } => reviews.packs.contains_key(&pack),
+            _ => false,
+        };
         for r in routes.iter_mut() {
             // Capped whatever a decision says: prime, forming at most.
             r.strength = Strength::Prime;
             match r.state {
                 RouteState::Firm => r.state = RouteState::Forming,
-                RouteState::Nascent if pack_approved && !gated.contains(&r.id) => r.state = RouteState::Forming,
+                RouteState::Nascent if pack_approved(r) && !gated.contains(&r.id) => r.state = RouteState::Forming,
                 _ => {}
             }
         }
@@ -523,6 +605,9 @@ pub fn learn_only(
     index_path: &Path,
     cfg: &Config,
 ) -> Result<crate::Report> {
+    if cfg.binds() {
+        preinstall(tracks_root);
+    }
     let judged = cfg.spools.as_deref().map(judgements).unwrap_or_default();
     let others = other_routes(tracks_root, repo);
     let (ir, plan) = plan_repo(repo, Some(root), tracks_root, &others, cfg, &Seen::of(&judged), &review::today())?;
@@ -533,7 +618,7 @@ pub fn learn_only(
         rr.tracks.push(tr);
     }
     if let Some(r) = &ir.root {
-        record_binding(tracks_root, repo, r);
+        record_binding(tracks_root, repo, r, cfg);
     }
     rr.instincts = Some(ir);
     report.repos.insert(repo.to_string(), rr);
@@ -596,19 +681,29 @@ mod tests {
     fn a_binding_is_stale_for_another_checkout_or_changed_files() {
         let d = tempfile::tempdir().unwrap();
         let tracks = d.path().join("tracks");
+        let cfg = Config::default();
+        let now = cfg.selection();
         let (live, old) = (d.path().join("live"), d.path().join("old"));
         for r in [&live, &old] {
             std::fs::create_dir_all(r).unwrap();
             std::fs::write(r.join("pyproject.toml"), "[project]\nname = 'click'\n").unwrap();
         }
-        assert!(stale_binding(&tracks, "click", &live), "never bound");
-        record_binding(&tracks, "click", &old);
-        assert!(stale_binding(&tracks, "click", &live), "bound against another checkout");
-        record_binding(&tracks, "click", &live);
-        assert!(!stale_binding(&tracks, "click", &live));
+        assert!(stale_binding(&tracks, "click", &live, &now), "never bound");
+        record_binding(&tracks, "click", &old, &cfg);
+        assert!(stale_binding(&tracks, "click", &live, &now), "bound against another checkout");
+        record_binding(&tracks, "click", &live, &cfg);
+        assert!(!stale_binding(&tracks, "click", &live, &now));
+        // Another choice of packs binds again.
+        let off = Config { disabled: ["adage/lockfiles".to_string()].into(), ..Config::default() };
+        assert!(stale_binding(&tracks, "click", &live, &off.selection()), "a pack turned off");
+        assert_eq!(
+            selection(&["auto", "auto"], ["adage/lockfiles", "adage/lockfiles"]),
+            off.selection(),
+            "as the hook computes it"
+        );
         std::fs::create_dir_all(live.join(".venv/bin")).unwrap();
         std::fs::write(live.join(".venv/pyvenv.cfg"), "home = /usr/bin\n").unwrap();
-        assert!(stale_binding(&tracks, "click", &live), "a .venv made since");
+        assert!(stale_binding(&tracks, "click", &live, &now), "a .venv made since");
         // The record is a hidden file beside the tracks, never a track.
         assert!(io::read_all(&tracks).unwrap().is_empty());
     }

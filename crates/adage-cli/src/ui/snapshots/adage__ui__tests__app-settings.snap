@@ -27,10 +27,10 @@ expression: text
    how similar a prompt must be to a family's prompts for its procedure card (0.5 to 0.99)
  instincts.enabled        true     (default)
    bind Adage's built-in defaults (instincts) from each repository's declared files
- instincts.packs          core     (default)
-   instinct packs to bind, comma-separated (only core exists)
+ instincts.packs          auto     (default)
+   instinct packs to bind, comma-separated: auto (every installed instinct pack) or names, e.g. adage/python-env
  instincts.disabled       ""       (default)
-   instinct ids never to bind, comma-separated, e.g. U3,N1 (see docs/instincts.md)
+   instinct packs or ids never to bind, comma-separated, e.g. adage/lockfiles,U3 (see docs/instincts.md)
  ui.notices               daily    (default)
    one-line notices at session start (Claude Code): daily, only when something is new; or off
  runtime.control          0.1      (default)

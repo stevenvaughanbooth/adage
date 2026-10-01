@@ -18,8 +18,8 @@
 //!
 //! [instincts]
 //! enabled = true             # bind Adage's built-in defaults from each repository's files
-//! packs = ["core"]           # instinct packs to bind
-//! disabled = []              # instinct ids never to bind, e.g. ["U3", "N1"]
+//! packs = ["auto"]           # instinct packs to bind: auto (every one installed) or their names
+//! disabled = []              # packs or instinct ids never to bind, e.g. ["adage/lockfiles", "U3"]
 //! ```
 //!
 //! Every key has a default, so a missing file is the default configuration. Environment
@@ -222,9 +222,9 @@ pub const KEYS: &[Key] = &[
     Key {
         name: "instincts.packs",
         kind: Kind::Ids,
-        default: "core",
+        default: "auto",
         env: None,
-        doc: "instinct packs to bind, comma-separated (only core exists)",
+        doc: "instinct packs to bind, comma-separated: auto (every installed instinct pack) or names, e.g. adage/python-env",
         guarded: true,
     },
     Key {
@@ -232,7 +232,7 @@ pub const KEYS: &[Key] = &[
         kind: Kind::Ids,
         default: "",
         env: None,
-        doc: "instinct ids never to bind, comma-separated, e.g. U3,N1 (see docs/instincts.md)",
+        doc: "instinct packs or ids never to bind, comma-separated, e.g. adage/lockfiles,U3 (see docs/instincts.md)",
         guarded: false,
     },
     Key {
@@ -322,8 +322,14 @@ fn from_text(kind: Kind, s: &str) -> Result<toml::Value, String> {
         },
         Kind::Ids => {
             let ids = split_ids(s);
+            // An id (`U3`, `auto`) or a pack name (`adage/python-env`).
             let ok = |i: &String| {
-                !i.is_empty() && i.len() <= 32 && i.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_')
+                i.len() <= 64
+                    && i.split('/').count() <= 2
+                    && i.split('/').all(|p| {
+                        p.as_bytes().first().is_some_and(|c| c.is_ascii_alphanumeric())
+                            && p.bytes().all(|c| c.is_ascii_alphanumeric() || b"-_.".contains(&c))
+                    })
             };
             if ids.len() > 64 || !ids.iter().all(ok) {
                 return Err(format!("{s:?} is not a comma-separated list of ids"));
@@ -514,7 +520,7 @@ mod tests {
         assert!(c.learn_parse_cache);
         assert_eq!(c.runtime_control, 0.1);
         assert!(c.instincts_enabled);
-        assert_eq!(c.instincts_packs, vec!["core".to_string()]);
+        assert_eq!(c.instincts_packs, vec!["auto".to_string()]);
         assert!(c.instincts_disabled.is_empty());
         assert!(l.values.values().all(|(_, s)| *s == Source::Default));
         assert_eq!(l.values.len(), KEYS.len());
@@ -575,6 +581,7 @@ mod tests {
         assert_eq!(set(&paths, "learn.thresholds", "demo").unwrap(), "demo");
         assert_eq!(set(&paths, "runtime.control", "0.2").unwrap(), "0.2");
         assert_eq!(set(&paths, "learn.codex_sessions", "~/.codex/sessions").unwrap(), "~/.codex/sessions");
+        assert_eq!(set(&paths, "instincts.disabled", "adage/lockfiles, U3").unwrap(), "adage/lockfiles,U3");
         assert_eq!(set(&paths, "instincts.disabled", "U3, N1").unwrap(), "U3,N1");
         assert_eq!(set(&paths, "instincts.enabled", "false").unwrap(), "false");
         for (k, v) in [
@@ -587,6 +594,8 @@ mod tests {
             ("learn.nope", "1"),
             ("instincts.disabled", "U3;rm -rf"),
             ("instincts.packs", "a b"),
+            ("instincts.packs", "adage/python-env/x"),
+            ("instincts.disabled", "../lockfiles"),
         ] {
             assert!(set(&paths, k, v).is_err(), "{k} = {v} must be refused");
         }

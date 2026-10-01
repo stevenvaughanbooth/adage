@@ -1,5 +1,5 @@
 //! Resolution against a repository (Track C §2.3): applicability, requirements, L-ref pins, the
-//! runtime form, determinism, and the core instincts pack.
+//! runtime form, determinism, and instinct packs.
 
 mod common;
 
@@ -267,32 +267,54 @@ fn instinct_repo(dir: &Path) -> PathBuf {
     root
 }
 
+/// The built-in marketplace's packs.
+fn base_packs() -> Vec<Pack> {
+    adage_pack::builtin::marketplace().unwrap().packs.iter().map(|(_, p)| p.clone()).collect()
+}
+
 #[test]
-fn the_core_instincts_pack_binds_exactly_what_the_instinct_binder_binds() {
+fn an_instinct_pack_binds_what_its_detector_fills_in() {
     let d = tempfile::tempdir().unwrap();
     let root = instinct_repo(d.path());
     let none = BTreeSet::new();
     let direct = adage_instincts::bind(&root, &[], &none);
     assert!(direct.routes.len() >= 2, "the fixture binds several instincts: {direct:?}");
-    let up = adage_pack::instincts::core_instincts(&root, &[], &none).unwrap().expect("instincts bind");
-    let (pack, skipped) = (up.pack, up.skipped);
-    assert!(skipped.is_empty(), "{skipped:?}");
-    assert_eq!(pack.manifest.pack.name, adage_pack::instincts::CORE_PACK);
-    assert_eq!(pack.manifest.pack.origin, adage_pack::PackOrigin::Instinct);
-    assert!(
-        matches!(&pack.manifest.applicability, adage_pack::Applicability::Detector { detector, .. } if detector == "*")
-    );
-    // It survives its own serialisation, CLOSURE included.
-    assert_eq!(Pack::from_files(&pack.files().unwrap()).unwrap(), pack);
-
-    let tools: Vec<&str> = pack.manifest.requires.tools.iter().map(|t| t.name.as_str()).collect();
-    let b = bind(&pack, &Target::checkout(&root), &env(d.path(), &tools));
-    assert_eq!(b.applies, Applies::Yes);
-    assert!(b.inert().next().is_none(), "{:?}", b.inert().collect::<Vec<_>>());
-    let through_pack: Vec<adage_tracks::Route> = b.live().map(|r| r.route.clone().unwrap()).collect();
-    assert_eq!(through_pack, direct.routes, "the pack path binds the binder's routes, byte for byte");
-    for r in b.live() {
-        assert!(r.exec().is_some_and(|e| e.max_level == Level::E0), "instincts request nothing");
+    // Together, the base packs bind exactly what the binder binds, each route naming its pack.
+    let packs = base_packs();
+    let refs: Vec<&Pack> = packs.iter().collect();
+    let together = adage_pack::instincts::bind(&refs, &root, &[], &none, &none);
+    let ids = |rs: &[adage_tracks::Route]| rs.iter().map(|r| r.id.clone()).collect::<Vec<_>>();
+    assert_eq!(ids(&together.routes), ids(&direct.routes));
+    for (a, b) in together.routes.iter().zip(&direct.routes) {
+        assert_eq!(
+            (&a.trigger, &a.step, a.effect, a.state, &a.exit),
+            (&b.trigger, &b.step, b.effect, b.state, &b.exit)
+        );
+        let (pack, _) = &together.templates[&a.id];
+        assert_eq!(a.evidence.provenance, format!("instinct:{pack}@0.1.0"));
+    }
+    // One pack at a time (as `adage add` binds a pack it installs): live at E0, and each route
+    // filled in by the pack's own detector.
+    for pack in &packs {
+        assert_eq!(pack.manifest.pack.origin, adage_pack::PackOrigin::Instinct);
+        // It survives its own serialisation, CLOSURE included.
+        assert_eq!(&Pack::from_files(&pack.files().unwrap()).unwrap(), pack);
+        let b = bind(pack, &Target::checkout(&root), &env(d.path(), &[]));
+        if b.applies != Applies::Yes {
+            assert!(b.routes.is_empty(), "{b:?}");
+            continue;
+        }
+        assert!(b.inert().next().is_none(), "{:?}", b.inert().collect::<Vec<_>>());
+        let adage_pack::Applicability::Detector { detector, .. } = &pack.manifest.applicability else { panic!() };
+        for r in b.live() {
+            assert!(r.exec().is_some_and(|e| e.max_level == Level::E0), "instincts request nothing");
+            let route = r.route.clone().unwrap();
+            assert_eq!(route.evidence.provenance, format!("instinct:{}@0.1.0", pack.manifest.pack.name));
+            assert!(
+                matches!(route.origin(), adage_tracks::Origin::Instinct { instinct, .. } if &instinct == detector),
+                "{route:?}"
+            );
+        }
     }
 }
 
@@ -301,30 +323,39 @@ fn detector_packs_apply_where_their_detector_fires() {
     let d = tempfile::tempdir().unwrap();
     let root = instinct_repo(d.path());
     let empty = checkout(&d.path().join("empty"), "github.com/acme/empty");
-    let det = |detector: &str, catalogue: &str| {
-        let mut p = lref_pack("kind = \"any\"");
-        p.manifest.pack.origin = adage_pack::PackOrigin::Instinct;
-        for r in &mut p.routes {
-            r.strength = adage_tracks::Strength::Prime;
-            if r.shape == adage_pack::Shape::Avoid {
-                r.strength = adage_tracks::Strength::Inhibit;
-            }
-        }
-        p.routes.retain(|r| r.shape != adage_pack::Shape::Avoid);
-        p.manifest.applicability =
-            adage_pack::Applicability::Detector { detector: detector.into(), catalogue: catalogue.into() };
-        p
-    };
-    let cat = adage_pack::bind::catalogue_id();
+    let base = |name: &str| base_packs().into_iter().find(|p| p.manifest.pack.name == name).unwrap();
     // U1 (a Makefile test target that wraps the runner) fires in the fixture, not in an empty repo.
-    let p = det("*", &cat);
+    let p = base("adage/test-wrapper");
     assert_eq!(applies(&p, &Target::checkout(&root)), Applies::Yes);
     assert!(matches!(applies(&p, &Target::checkout(&empty)), Applies::No(_)));
-    // An unknown catalogue or detector: every route inert, with the reason.
-    let p = det("U5", "core@9.9.9");
+    // A catalogue this build does not have: every template inert, with the reason.
+    let mut p = base("adage/regenerate");
+    p.manifest.applicability =
+        adage_pack::Applicability::Detector { detector: "U5".into(), catalogue: "core@9.9.9".into() };
     let b = bind(&p, &Target::checkout(&root), &env(d.path(), &["make"]));
+    assert!(!b.routes.is_empty());
     assert!(b.routes.iter().all(|r| r.status.reason().is_some_and(|w| w.contains("core@9.9.9"))), "{b:?}");
-    let p = det("Z9", &cat);
+    // A detector this build does not have.
+    let mut p = base("adage/regenerate");
+    p.manifest.applicability =
+        adage_pack::Applicability::Detector { detector: "*".into(), catalogue: "core@0.1.0".into() };
+    for r in &mut p.routes {
+        r.detector = Some("Z9".into());
+    }
     let b = bind(&p, &Target::checkout(&root), &env(d.path(), &["make"]));
     assert!(b.routes.iter().all(|r| r.status.reason().is_some_and(|w| w.contains("Z9"))), "{b:?}");
+}
+
+#[test]
+fn a_newer_compatible_catalogue_still_binds_a_pack() {
+    use adage_pack::bind::catalogue_compatible as ok;
+    assert!(ok("core@0.1.0", "core@0.1.0"));
+    assert!(ok("core@0.1.0", "core@0.1.7"), "a patch release keeps the pack's detectors");
+    assert!(!ok("core@0.1.0", "core@0.2.0"), "0.x: a minor release may change what detectors find");
+    assert!(!ok("core@0.1.3", "core@0.1.2"), "a pack written for a newer catalogue waits for it");
+    assert!(ok("core@1.2.0", "core@1.4.1"));
+    assert!(!ok("core@1.2.0", "core@2.0.0"));
+    assert!(!ok("core@0.0.3", "core@0.0.4"), "0.0.x: exact");
+    assert!(!ok("other@0.1.0", "core@0.1.0"));
+    assert!(!ok("core@0.1", "core@0.1.0"));
 }

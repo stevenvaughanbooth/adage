@@ -52,7 +52,7 @@ pub struct BindingFile {
 }
 
 pub fn pack_dir(paths: &Paths, name: &str) -> PathBuf {
-    paths.tracks().join(IMPORTED_DIR).join(name)
+    adage_pack::install::pack_dir(&paths.tracks(), name)
 }
 
 pub fn bound_base(paths: &Paths, name: &str) -> PathBuf {
@@ -181,6 +181,14 @@ pub fn bind_installed(
 ) -> Result<Vec<Bound>> {
     let name = &pack.manifest.pack.name;
     let base = bound_base(paths, name);
+    // An instinct pack's templates are filled in per repository by learning, with the other
+    // instinct packs (`adage_learn::instincts`); it has no bound track of its own.
+    if matches!(pack.manifest.applicability, adage_pack::Applicability::Detector { .. }) {
+        if base.exists() {
+            std::fs::remove_dir_all(&base)?;
+        }
+        return Ok(Vec::new());
+    }
     let recorded: Vec<PathBuf> = bindings(paths)
         .into_iter()
         .filter(|(d, b)| &b.pack == name && d.starts_with(&base))

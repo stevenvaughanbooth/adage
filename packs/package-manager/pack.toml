@@ -1,0 +1,32 @@
+format = "adage-pack/1"
+
+[pack]
+name = "adage/package-manager"
+version = "0.1.0"
+origin = "instinct"
+description = "Use the repository's declared Node package manager. When npm, or the other of pnpm and yarn, refuses this repository, Adage names the declared one (pnpm install, pnpm test). An install changes the environment, so it waits for your approval in adage review."
+
+[applicability]
+kind = "detector"
+detector = "N1"
+catalogue = "core@0.1.0"
+
+[requires]
+templates = [
+    "advise:package-manager@1",
+    "advise@1",
+    "after@1",
+]
+
+[exec]
+requested = "E0"
+
+[provenance]
+tool = "adage 0.1.0"
+
+[provenance.origins]
+organic = 0
+synthetic = 0
+declared = 0
+instinct = 0
+imported = 0

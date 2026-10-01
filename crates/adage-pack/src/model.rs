@@ -241,6 +241,12 @@ pub struct RouteV2 {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub summary: String,
     pub shape: Shape,
+    /// A **template** (instinct packs only): the compiled detector (`U11`) that fills its blanks
+    /// from each repository's declared files, so one fixed route stands for every route the
+    /// detector binds there. Its trigger and step hold blanks ([`BLANK_RUNNER`], …) where a
+    /// learned route holds values ([`crate::instincts`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detector: Option<String>,
     pub trigger: TriggerV2,
     /// A route with `entry: false` is reachable only through another route's `links`.
     #[serde(default = "yes", skip_serializing_if = "is_true")]
@@ -262,6 +268,22 @@ pub struct RouteV2 {
     /// Not part of the route exec digest.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub evidence: Option<RouteEvidence>,
+}
+
+/// A template's blanks: what the detector fills in, by where each stands. An `after_failure`
+/// trigger is `{runner}` failing with `{signature}`, an `after_command` trigger is `{runner}`, an
+/// `after_edit` trigger is `{paths}`; a run step's argv is `["{command}"]`; an advise step's slots
+/// are each `{<slot>}`.
+pub const BLANK_RUNNER: &str = "{runner}";
+pub const BLANK_SIGNATURE: &str = "{signature}";
+pub const BLANK_PATHS: &str = "{paths}";
+pub const BLANK_COMMAND: &str = "{command}";
+
+impl RouteV2 {
+    /// Whether this route is a template a detector fills ([`RouteV2::detector`]).
+    pub fn is_template(&self) -> bool {
+        self.detector.is_some()
+    }
 }
 
 fn yes() -> bool {
