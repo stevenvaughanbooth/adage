@@ -33,7 +33,7 @@ canary manifests bind absolute harness paths in the agent worktree
 `/Users/stevenbooth/Documents/skill-compile/.claude/worktrees/agent-ac9ae5e561a996d9d`; run the
 commands below from its `evals/reflex-proof/harness`, or refreeze new roots from another checkout.
 
-- [Launch gate protocol](launch-gate-protocol.md) (`launch-gate-1`, revision 7) and its governing
+- [Launch gate protocol](launch-gate-protocol.md) (`launch-gate-1`, revision 8) and its governing
   JSON (`evals/reflex-proof/harness/launch_gate_protocol.json`) were registered before any dispatch:
   task splits with near-duplicate groups, arms, paired blocks, budgets and the GO thresholds G1-G9.
   `launch_gate_score.py` applies those thresholds; its tests pin every failure mode.
@@ -107,24 +107,44 @@ commands below from its `evals/reflex-proof/harness`, or refreeze new roots from
   (`launch-canary-8`) but **not frozen**, awaiting the next design direction. Freezing it needs a
   new native cohort, because the runner sources changed.
 
+- **Revision 8: fewer model requests.** No hook can skip a mid-turn model request, so savings
+  can only come from the agent needing fewer requests.
+  - **Lever 2 (production code):**
+    - a short factual contract naming the approved command and that Adage runs it again at finish;
+    - compact receipts (command, result, exit, time, short id, tests, freshness), with no header,
+      digests or origin footer;
+    - failed learned verifications delivered with their failing tests;
+    - a Stop gate that runs a stale or never-passed approved verification when the agent finishes
+      and continues the agent once on failure (at most two runs).
+  - **Lever 1:** the card names the certified test command.
+  - **Not done:**
+    - discovery prefetch is skipped, because no learned lookup routes exist for this family;
+    - firing at the tests edit is left out, because it would change the approval key's input
+      scope.
+  - **Development canary-v8** (`dev_arms.py`, `cohorts/launch-gate-v5/dev-v8b`) is frozen, not run
+    ([status](../evals/reflex-proof/harness/results/20261001-dev-arms/FINDINGS.md)). It compares
+    A0 (no hooks), A1 (revision-7 binaries), A2 (Lever 2) and A3 (Levers 1+2) in six paired blocks,
+    plus A2/A3 safety controls, using the production hook registration and thresholds D1-D4.
+
 Blocked on three things, none of which an agent may bypass:
 
 1. **Paid runs need a normal terminal.** `probe.execute` refuses nested Claude sessions.
-2. **Grants need the person.** `approve-canary.sh` (sha256 `24fc4857…`) is prepared; run it only
+2. **Grants need the person.** `approve-dev-arms.sh` (sha256 `2290b18c…`) is prepared; run it only
    after reading it.
 3. **Learning needs the learner fix.** About 22 learning-quality tests fail on main since PR #14.
    Cohort training replay, checkpoints and frozen learned homes wait for that fix and a rebuild.
 
-Canary commands, from `evals/reflex-proof/harness` in a normal terminal (one at a time; stop on error):
+Development canary-v8 commands, from `evals/reflex-proof/harness` in a normal terminal (one at a time; stop on error):
 
 ```sh
-A=/private/tmp/adage-real-repo-gate-v1; C=$A/cohorts/launch-gate-v4; R=$C/canary-v7
-# The launch-gate-v4 native session already ran and its review passed; do not rerun them.
-python3 launch_canary.py prepare $R                                                  # offline, several minutes
-less $R/approve-canary.sh && sh $R/approve-canary.sh                                 # the person issues 12 grants
-python3 launch_canary.py verify-grants $R                                            # read-only
-python3 launch_canary.py live $R                                                     # paid, 12 sessions, $5.20 study ceiling
-python3 launch_canary.py report $R
+A=/private/tmp/adage-real-repo-gate-v1; C=$A/cohorts/launch-gate-v5; R=$C/dev-v8b
+python3 real_repo_gate.py run-session $C/sessions/native-confinement/manifest.json   # paid, <= $0.50 cap
+python3 curve_sessions.py review-native $C                                           # offline; must pass
+python3 dev_arms.py prepare $R                                                       # offline, ~15 minutes (34 checkouts)
+less $R/approve-dev-arms.sh && sh $R/approve-dev-arms.sh                             # the person issues 28 grants
+python3 dev_arms.py verify-grants $R                                                 # read-only
+python3 dev_arms.py live $R                                                          # paid, 34 sessions, $6.50 study ceiling
+python3 dev_arms.py report $R
 ```
 
 After the canary: if it passes, prepare the cohort (author and validate the new Marshmallow,
