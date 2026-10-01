@@ -36,7 +36,33 @@ pub(crate) fn checkpoint() -> Result<(), String> {
 const MAX_FILES: usize = 40_000;
 const MAX_BYTES: u64 = 1 << 30;
 /// v1: private staged venv, plain editable paths rebased, -B and a fresh -X pycache_prefix.
-pub const ADAPTER_VERSION: u32 = 1;
+/// v2: `__pycache__` directories are left out of the digests ([`bytecode_cache`]) and removed
+/// from both private copies, and child interpreters get the private prefix too.
+pub const ADAPTER_VERSION: u32 = 2;
+
+/// Whether `rel` lies in a `__pycache__` directory: bytecode caches, left out of the environment
+/// and runtime digests. Python writes them as it runs (every ordinary `python` or `pytest` run
+/// compiles some), and hashing them made any run outside Adage lapse the person's approval: 126
+/// stdlib `.pyc` files written into a shared runtime silently withheld every later action and
+/// session contract.
+///
+/// This is safe only because an approved run never reads `__pycache__` in either tree:
+/// - every staged project-Python run starts with `-B -X pycache_prefix=<fresh scratch dir>`
+///   (`crate::stage::stage_with`), so the interpreter reads and writes bytecode caches only
+///   under that private, empty prefix; child interpreters inherit `PYTHONPYCACHEPREFIX` (the same
+///   directory) and `PYTHONDONTWRITEBYTECODE`;
+/// - [`prepare`] removes every `__pycache__` directory from the private copies of the
+///   environment and the runtime before anything runs, so nothing excluded here is present.
+///
+/// Project Python is valid only for an E2 verify action ([`validate_command`]), and E2 runs only
+/// staged (`crate::run::execute` refuses E2): there is no other path that runs it.
+///
+/// Everything else stays in the digest, bytecode included: a bare `*.pyc` or `*.pyo` outside
+/// `__pycache__` can be imported without any source, so it is code, and adding or changing one
+/// lapses the approval, as does any source, configuration or interpreter change.
+fn bytecode_cache(rel: &Path) -> bool {
+    rel.components().any(|c| c.as_os_str() == "__pycache__")
+}
 
 /// The complete local dependency identity approved with one exact command. Paths to the base
 /// runtime are local authority, never portable authority inherited from an imported pack.
@@ -91,7 +117,12 @@ fn entries(root: &Path) -> Result<Vec<PathBuf>, String> {
             checkpoint()?;
             let e = e.map_err(|e| e.to_string())?;
             let p = e.path();
-            if e.file_type().map_err(|e| e.to_string())?.is_dir() {
+            let dir = e.file_type().map_err(|e| e.to_string())?.is_dir();
+            // Bytecode caches: never read by a staged run, never in a digest ([`bytecode_cache`]).
+            if dir && e.file_name() == "__pycache__" {
+                continue;
+            }
+            if dir {
                 dirs.push(p.clone());
             }
             out.push(p);
@@ -113,6 +144,10 @@ fn tree_hash(root: &Path, executable: Option<&Path>) -> Result<String, String> {
     for p in entries(root)? {
         checkpoint()?;
         let rel = p.strip_prefix(root).map_err(|e| e.to_string())?;
+        // `entries` already skips `__pycache__`; this keeps the rule in one place.
+        if bytecode_cache(rel) {
+            continue;
+        }
         hash.update(rel.as_os_str().as_encoded_bytes());
         hash.update([0]);
         let m = std::fs::symlink_metadata(&p).map_err(|e| e.to_string())?;
@@ -324,6 +359,9 @@ pub(crate) fn prepare(req: &ExecRequest, repo: &Path, scratch: &Path, home: Opti
     if tree_hash(&runtime.join("lib"), None)? != identity.runtime_sha256 {
         return Err("copied Python runtime differs from the approved runtime".into());
     }
+    // Caches the digest leaves out are not executed either (`-X pycache_prefix` already keeps the
+    // interpreter from reading them; this is the second wall).
+    remove_bytecode(&runtime.join("lib"), false)?;
     let binary = runtime.join("bin").join(identity.executable.file_name().ok_or("invalid interpreter name")?);
     std::fs::copy(&identity.executable, &binary).map_err(|e| e.to_string())?;
     if crate::sha256_hex(&regular(&binary, 128 << 20)?) != identity.executable_sha256 {
@@ -356,24 +394,32 @@ pub(crate) fn prepare(req: &ExecRequest, repo: &Path, scratch: &Path, home: Opti
         + "\n";
     std::fs::write(config_path, config).map_err(|e| e.to_string())?;
     // Remove bytecode from the private environment rather than use cached dependencies.
-    let mut dirs = vec![dest.clone()];
+    remove_bytecode(&dest, true)?;
+    let original = req.repo_root.canonicalize().map_err(|e| e.to_string())?;
+    pth_paths(&dest, &original, Some(repo))?;
+    Ok(dest.join("bin").join(Path::new(&identity.program).file_name().ok_or("invalid interpreter name")?))
+}
+
+/// Remove every `__pycache__` directory under `root` (a private copy), and with `all_pyc` every
+/// other `.pyc` file too.
+fn remove_bytecode(root: &Path, all_pyc: bool) -> Result<(), String> {
+    let mut dirs = vec![root.to_path_buf()];
     while let Some(d) = dirs.pop() {
         for e in std::fs::read_dir(d).map_err(|e| e.to_string())? {
             checkpoint()?;
             let e = e.map_err(|e| e.to_string())?;
             let p = e.path();
-            if e.file_name() == "__pycache__" && e.file_type().map_err(|e| e.to_string())?.is_dir() {
+            let dir = e.file_type().map_err(|e| e.to_string())?.is_dir();
+            if dir && e.file_name() == "__pycache__" {
                 std::fs::remove_dir_all(p).map_err(|e| e.to_string())?;
-            } else if e.file_type().map_err(|e| e.to_string())?.is_dir() {
+            } else if dir {
                 dirs.push(p);
-            } else if p.extension().is_some_and(|x| x == "pyc") {
+            } else if all_pyc && p.extension().is_some_and(|x| x == "pyc") {
                 std::fs::remove_file(p).map_err(|e| e.to_string())?;
             }
         }
     }
-    let original = req.repo_root.canonicalize().map_err(|e| e.to_string())?;
-    pth_paths(&dest, &original, Some(repo))?;
-    Ok(dest.join("bin").join(Path::new(&identity.program).file_name().ok_or("invalid interpreter name")?))
+    Ok(())
 }
 
 #[cfg(all(test, unix))]
@@ -533,17 +579,42 @@ mod tests {
         }
     }
 
+    /// A bare `.pyc` or `.pyo` outside `__pycache__` is importable without any source: injected
+    /// bytecode is code, and it lapses the approval, beside its source or not.
     #[test]
     fn dependency_and_runtime_bytecode_churn_lapses_approval() {
-        let (d, repo) = fixture();
-        for relative in ["runtime/lib/python3.12/injected.pyc", "runtime/lib/python3.12/__pycache__/os.cpython-312.pyc"]
-        {
+        for relative in [
+            "runtime/lib/python3.12/injected.pyc",
+            "runtime/lib/python3.12/os.pyc",
+            "runtime/lib/python3.12/legacy.pyo",
+            "repo/.venv/lib/python3.12/site-packages/speedups.pyc",
+        ] {
+            let (d, repo) = fixture();
             let old = request(&repo);
-            let file = d.path().join(relative);
+            std::fs::write(d.path().join(relative), b"unapproved bytecode").unwrap();
+            assert!(validate(&old).is_err(), "{relative}");
+            assert_ne!(old.exec_digest(), request(&repo).exec_digest(), "{relative}");
+        }
+    }
+
+    /// Bytecode caches Python writes into `__pycache__` as it runs, in `.venv` or the runtime
+    /// `lib` (a stdlib `__pycache__` filled by any ordinary run), never lapse an approval: a
+    /// staged run never reads them ([`bytecode_cache`]).
+    #[test]
+    fn pycache_churn_never_lapses_an_approval() {
+        let (d, repo) = fixture();
+        let old = request(&repo);
+        let key = crate::approvals::ApprovalKey::for_request(&old, "repo");
+        for cache in [
+            "runtime/lib/python3.12/__pycache__/os.cpython-312.pyc",
+            "runtime/lib/python3.12/encodings/__pycache__/__init__.cpython-312.pyc",
+            "repo/.venv/lib/python3.12/site-packages/__pycache__/_virtualenv.cpython-312.pyc",
+        ] {
+            let file = d.path().join(cache);
             std::fs::create_dir_all(file.parent().unwrap()).unwrap();
-            std::fs::write(file, b"unapproved bytecode").unwrap();
-            assert!(validate(&old).is_err());
-            assert_ne!(old.exec_digest(), request(&repo).exec_digest());
+            std::fs::write(file, b"bytecode written by an ordinary run").unwrap();
+            validate(&old).unwrap_or_else(|e| panic!("{cache}: {e}"));
+            assert_eq!(key, crate::approvals::ApprovalKey::for_request(&request(&repo), "repo"), "{cache}");
         }
     }
 
@@ -590,12 +661,17 @@ mod tests {
     fn preparation_rebases_plain_editable_paths_without_mutating_staged_inputs() {
         let (d, repo) = fixture();
         let req = request(&repo);
+        // Written after approval by an ordinary run: still approved, and never copied in to run.
+        let cache = d.path().join("runtime/lib/python3.12/__pycache__/os.cpython-312.pyc");
+        std::fs::create_dir_all(cache.parent().unwrap()).unwrap();
+        std::fs::write(&cache, b"cached").unwrap();
         let staged = d.path().join("staged");
         crate::stage::copy_tree(&repo, &staged, &mut MAX_FILES.clone(), &mut MAX_BYTES.clone()).unwrap();
         let scratch = d.path().join("scratch");
         std::fs::create_dir_all(&scratch).unwrap();
         let python = prepare(&req, &staged, &scratch, None).unwrap();
         assert!(python.canonicalize().unwrap().starts_with(scratch.canonicalize().unwrap().join("python-runtime/bin")));
+        assert!(!scratch.join("python-runtime/lib/python3.12/__pycache__").exists(), "caches are not executed");
         std::fs::write(d.path().join("runtime/lib/python3.12/os.py"), "changed after snapshot").unwrap();
         assert_eq!(
             std::fs::read_to_string(scratch.join("python-runtime/lib/python3.12/os.py")).unwrap(),

@@ -167,6 +167,10 @@ pub struct SessionState {
     /// verification receipt names these as the agent's own tests (adage-exec).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub new_tests: Vec<String>,
+    /// The person was told this session that a grant no longer matches (adage-exec): at most
+    /// once per session.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub lapse_noticed: bool,
 }
 
 /// At most this many test names are kept per session ([`SessionState::new_tests`]).

@@ -422,9 +422,11 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
     let items = queue(&all, &judged, &index, paths);
     let inert = crate::packs::inert_routes(paths);
     let attested = attestations(paths);
-    let revoked = adage_exec::approvals::Store::load(&adage_exec::approvals::path(&paths.root))
-        .map(|s| s.revoked)
-        .unwrap_or_default();
+    let store = adage_exec::approvals::Store::load(&adage_exec::approvals::path(&paths.root)).unwrap_or_default();
+    // Grants here that no longer match what would run: a person's decision again.
+    let here = std::env::current_dir().ok().and_then(|d| adage_core::repo::find_root(&d));
+    let lapsed = crate::exec::lapsed_here(paths, here.as_deref(), &store);
+    let revoked = store.revoked;
     if as_json {
         let rows: Vec<Value> = items
             .iter()
@@ -476,7 +478,7 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
         println!(
             "{}",
             serde_json::to_string_pretty(
-                &json!({ "count": rows.len(), "queue": rows, "inert": inert, "attestations": attestations, "exec_revoked": revoked,
+                &json!({ "count": rows.len(), "queue": rows, "inert": inert, "attestations": attestations, "exec_revoked": revoked, "exec_lapsed": lapsed,
                          "exec_last_withheld": adage_exec::last_withheld(&paths.root) })
             )?
         );
@@ -496,6 +498,7 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
     o.header("review", &[&waiting, &quiet_fact])?;
     print_inert(&mut o, &inert)?;
     print_revoked(&mut o, &revoked)?;
+    crate::exec::print_lapsed(&mut o, &lapsed)?;
     print_attested(&mut o, &attested)?;
     // Why the last prefetch or action was not delivered (every withheld stage records a reason).
     if let Some(w) = adage_exec::last_withheld(&paths.root) {

@@ -35,7 +35,8 @@ use std::path::PathBuf;
 pub enum Output {
     /// Directive text (already wrapped and capped) for the model's next turn.
     Context(String),
-    /// Session responsibility context, with an optional separate person-only notice.
+    /// Context for the model with a separate person-only notice: the session start's contract,
+    /// or an event's directives beside a lapsed-grant line (`Delivery::notice`).
     SessionContext { context: String, notice: Option<String> },
     /// A stop-hook request to continue, with its reason (fixed template).
     Continue(String),

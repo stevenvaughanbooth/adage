@@ -346,8 +346,9 @@ fn status(args: &[String], paths: &Paths) -> Result<()> {
         }));
     }
     let enabled = marker(paths).is_file();
+    let lapsed = lapsed_here(paths, root.as_deref(), &store);
     if args.iter().any(|a| a == "--json") {
-        let v = json!({ "enabled": enabled, "registrations": regs, "grants": grants });
+        let v = json!({ "enabled": enabled, "registrations": regs, "grants": grants, "lapsed": lapsed });
         println!("{}", serde_json::to_string_pretty(&v)?);
         return Ok(());
     }
@@ -392,6 +393,7 @@ fn status(args: &[String], paths: &Paths) -> Result<()> {
             o.line(&l)?;
         }
     }
+    print_lapsed(&mut o, &lapsed)?;
     o.blank()?;
     if grants.is_empty() {
         o.next("adage review delegate <track> <reflex> --level e1|e2", "no reflex is delegated on this machine")?;
@@ -399,6 +401,38 @@ fn status(args: &[String], paths: &Paths) -> Result<()> {
         o.next("adage delegate on", "hooks run nothing delegated until it is on")?;
     } else {
         o.next("adage-exec doctor", "the sandbox this machine can enforce")?;
+    }
+    Ok(())
+}
+
+/// The grants for the repository at `root` (if any) that no longer match what would run there:
+/// their routes do nothing until a person approves them again.
+pub(crate) fn lapsed_here(paths: &Paths, root: Option<&Path>, store: &Store) -> Vec<route::Lapse> {
+    let Some(root) = root else { return Vec::new() };
+    let index = Index::load(&paths.index());
+    let keys: std::collections::BTreeSet<&str> = index.routes.iter().map(|r| r.repo.as_str()).collect();
+    let Some(key) = repo::lookup_key(root, Some(&paths.repo_keys()), &keys) else { return Vec::new() };
+    let planned = route::plan_grants(&key, root, &index, &paths.tracks(), store, &CommandTable::load());
+    route::lapses(&planned, store)
+}
+
+/// The lapsed grants, each with what changed and the command that approves it again.
+pub(crate) fn print_lapsed<W: std::io::Write>(o: &mut Out<W>, lapsed: &[route::Lapse]) -> Result<()> {
+    if lapsed.is_empty() {
+        return Ok(());
+    }
+    o.blank()?;
+    o.warn(&format!(
+        "{} no longer {} what would run here, so {} nothing until approved again",
+        crate::words::count(lapsed.len(), "delegation"),
+        if lapsed.len() == 1 { "matches" } else { "match" },
+        if lapsed.len() == 1 { "it runs" } else { "they run" }
+    ))?;
+    for l in lapsed {
+        o.blank()?;
+        o.line(&Line::new().bold(Role::Ink, l.route.clone()).sep().text(l.level.as_str().to_uppercase()))?;
+        kv(o, "changed", Line::new().text(l.what()))?;
+        kv(o, "approve", Line::new().cmd(l.reapprove.clone()).faint(" (after checking the change)"))?;
     }
     Ok(())
 }
