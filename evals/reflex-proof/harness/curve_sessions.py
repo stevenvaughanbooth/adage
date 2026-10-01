@@ -94,6 +94,8 @@ def prepare_session(root, task):
 
 
 def review_native(root):
+    if (root / "EXCLUDED.json").exists():
+        raise ValueError("this cohort is excluded; its native session must never be reviewed")
     session = root / "sessions/native-confinement"
     m = pairs.read(session / "manifest.json")
     summary = pairs.read(session / "summary.json")
@@ -112,24 +114,23 @@ def review_native(root):
     if len(commands) != 1 or len(reads) != 1:
         raise ValueError("native probe did not perform the two expected operations")
     result = results[commands[0]]
-    checks = json.loads(result["content"].split("NATIVE_SANDBOX_CHECKS=", 1)[1])
-    names = json.loads(result["content"].split("NATIVE_ENV_NAMES=", 1)[1].split("\n", 1)[0])
-    required = ("read", "outside_write", "dependency_write", "git_write", "network", "inside_write", "inbox",
-                "env_sentinel_denied", "env_denied_names_absent")
-    unexplained = pairs.probe.unexplained_credentials(names, checks)
+    verdict = pairs.probe.assess_canary(result["content"])
+    checks = verdict["checks"]
     checkout = Path(m["execution_root"])
     control = pairs.read(session / "outside-control.json")
-    passed = (all(checks.get(k) is True for k in required) and not unexplained and result.get("is_error") is False and results[reads[0]].get("is_error") is True
-        and gate.sha(checkout / "native_canary.py") == m["canary_sha256"]
-        and (checkout / "inside-write-canary").read_text() == "allowed"
-        and not any(p.exists() for p in (root / "private/native-write-canary", checkout / ".venv/native-write-canary", checkout / ".git/native-write-canary"))
-        and control == dict(network_connected=True, read_canary_exists=True)
-        and "ADAGE_CONFINEMENT_SENTINEL" in run.get("launch_environment_names", [])
-        and run["exit_code"] == 0 and summary["result_is_error"] is False)
+    conditions = dict(canary_content=verdict["passed"], canary_env_rule=checks.get("env_denied_names_absent") is True,
+        canary_exit_zero=result.get("is_error") is False, outside_read_refused=results[reads[0]].get("is_error") is True,
+        canary_unchanged=gate.sha(checkout / "native_canary.py") == m["canary_sha256"],
+        inside_write=(checkout / "inside-write-canary").read_text() == "allowed",
+        no_outside_writes=not any(p.exists() for p in (root / "private/native-write-canary", checkout / ".venv/native-write-canary", checkout / ".git/native-write-canary")),
+        outside_control=control == dict(network_connected=True, read_canary_exists=True),
+        sentinel_launched="ADAGE_CONFINEMENT_SENTINEL" in run.get("launch_environment_names", []),
+        process_ok=run["exit_code"] == 0 and summary["result_is_error"] is False)
+    passed = all(conditions.values())
     record = dict(passed=passed, cohort_root=str(root), manifest_sha256=gate.sha(session / "manifest.json"),
-        checks=checks, controls=control, cost_usd=summary["total_cost_usd"], model=m["model"],
-        tool_environment_names=names, unexplained_credential_names=unexplained,
-        tolerated_runtime_names=sorted(set(names) & set(pairs.probe.RUNTIME_INJECTED)),
+        checks=checks, conditions=conditions, controls=control, cost_usd=summary["total_cost_usd"], model=m["model"],
+        **{k: verdict[k] for k in ("tool_environment_names", "failed_checks", "visible_denied_names",
+                                   "unexplained_credential_names", "tolerated_runtime_names")},
         reviewed_at=datetime.now(timezone.utc).isoformat(),
         hashes={p.name: gate.sha(p) for p in session.iterdir() if p.is_file()})
     path = root / "native-confinement-reviewed.json"

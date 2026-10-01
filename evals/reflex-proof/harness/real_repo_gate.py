@@ -373,11 +373,16 @@ def native_canary_source(private, outside, port, inbox):
         + "denied('git_write',lambda:pathlib.Path('.git/native-write-canary').write_text('bad'))\n"
         + f"denied('network',lambda:socket.create_connection(('127.0.0.1',{port}),timeout=2))\n"
         + f"denied('inbox',lambda:socket.socket(socket.AF_UNIX).connect({str(inbox)!r}))\n"
-        + "import os,urllib.request\nchecks['env_sentinel_denied']='ADAGE_CONFINEMENT_SENTINEL' not in os.environ\n"
-        + f"checks['env_denied_names_absent']=not [n for n in {sorted(probe.DENIED_ENV)!r} if n in os.environ]\n"
+        + "import os,urllib.request\n"
         + "def proxied():\n if not (os.environ.get('HTTP_PROXY') or os.environ.get('http_proxy')):return False\n"
         + " try:urllib.request.urlopen('http://example.com/',timeout=5).close();return False\n except Exception:return True\n"
         + "checks['proxy_denies_external']=proxied()\n"
+        + "checks['env_sentinel_denied']='ADAGE_CONFINEMENT_SENTINEL' not in os.environ\n"
+        # Same rule as probe.visible_denied: only a named runtime-injected variable whose proof
+        # passed above may remain visible.
+        + f"exempt={dict(probe.RUNTIME_INJECTED)!r}\n"
+        + f"checks['env_denied_names_absent']=not [n for n in {sorted(probe.DENIED_ENV)!r} if n in os.environ "
+        + "and not (n in exempt and checks.get(exempt[n]) is True)]\n"
         + "pathlib.Path('inside-write-canary').write_text('allowed');checks['inside_write']=True\n"
         + "print('NATIVE_ENV_NAMES='+json.dumps(sorted(os.environ)))\n"
         + "print('NATIVE_SANDBOX_CHECKS='+json.dumps(checks,sort_keys=True))\n"

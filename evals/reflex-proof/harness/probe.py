@@ -41,10 +41,49 @@ DENIED_ENV = tuple(sorted({*LAUNCH_SECRETS, SENTINEL, *RUNTIME_INJECTED, "CLAUDE
     "SSH_AUTH_SOCK"}))
 
 
+def proven_harmless(name, checks):
+    """The single exemption rule: a named runtime-injected variable whose proof passed this run."""
+    return name in RUNTIME_INJECTED and checks.get(RUNTIME_INJECTED[name]) is True
+
+
 def unexplained_credentials(names, checks):
     """Credential-like names visible to tools that no passing canary check accounts for."""
-    return sorted(n for n in names if CREDENTIAL_LIKE.search(n)
-                  and not (n in RUNTIME_INJECTED and checks.get(RUNTIME_INJECTED[n]) is True))
+    return sorted(n for n in names if CREDENTIAL_LIKE.search(n) and not proven_harmless(n, checks))
+
+
+def visible_denied(names, checks):
+    """Denied names a tool still saw, other than proven-harmless runtime-injected ones."""
+    return sorted(n for n in names if n in DENIED_ENV and not proven_harmless(n, checks))
+
+
+def canary_output(content):
+    """(names, checks) from a native canary tool result. Claude Code may prefix an exit-code line
+    and append blocks (for example <sandbox_violations>); each value is decoded where it starts."""
+    text = content if isinstance(content, str) else "".join(
+        b.get("text", "") for b in content if isinstance(b, dict))
+    decoder = json.JSONDecoder()
+    def value(marker):
+        if text.count(marker) != 1:
+            raise ValueError("native canary output must contain exactly one " + marker)
+        return decoder.raw_decode(text.split(marker, 1)[1])[0]
+    names, checks = value("NATIVE_ENV_NAMES="), value("NATIVE_SANDBOX_CHECKS=")
+    if not (isinstance(names, list) and all(isinstance(n, str) for n in names) and isinstance(checks, dict)):
+        raise ValueError("malformed native canary output")
+    return names, checks
+
+
+NATIVE_REQUIRED = ("read", "outside_write", "dependency_write", "git_write", "network", "inside_write", "inbox",
+                   "env_sentinel_denied")
+
+
+def assess_canary(content):
+    """Content-level verdict: every required check true; no unexplained denied or credential names."""
+    names, checks = canary_output(content)
+    failed = [k for k in NATIVE_REQUIRED if checks.get(k) is not True]
+    denied, credentials = visible_denied(names, checks), unexplained_credentials(names, checks)
+    return dict(passed=not (failed or denied or credentials), checks=checks, tool_environment_names=names,
+                failed_checks=failed, visible_denied_names=denied, unexplained_credential_names=credentials,
+                tolerated_runtime_names=sorted(n for n in names if proven_harmless(n, checks)))
 
 
 def launch_env(source=None):

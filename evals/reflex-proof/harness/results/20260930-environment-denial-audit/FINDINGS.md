@@ -105,3 +105,26 @@ Changes:
 
 `launch-gate-v2` is preserved and excluded (its failed review is immutable); `canary-v3` was never
 prepared. The successor is `launch-gate-v3/canary-v4`.
+
+## Revision 5: one exemption rule and a tolerant parser
+
+The `launch-gate-v3` native session ($0.0140024) showed the revision-4 design working at the
+boundary. Denial removed `CLAUDE_CODE_MESSAGING_TOKEN` and `_SOCKET`, the inbox was unreachable,
+the proxy refused `example.com`, and the sentinel was absent. Two defects remained:
+
+1. **Parser.** Claude Code prefixes the Bash result with `Exit code N` and appends a
+   `<sandbox_violations>` block (here the proxy's refusal of `example.com:80`). The review assumed
+   the checks JSON ended the result and crashed before writing. `probe.canary_output` now decodes
+   each marked value where it starts and requires exactly one of each marker.
+2. **Contradiction.** `CLOUDSDK_PROXY_PASSWORD` survived denial. The canary program's own
+   `env_denied_names_absent` check had no exemption, so it reported false and the canary exited 1,
+   even though the review would have exempted the name. Now one rule, `probe.proven_harmless`,
+   applies in the canary program, the review's denied-name check (`probe.visible_denied`) and the
+   credential-name check: a name in `RUNTIME_INJECTED` whose named proof passed in the same run.
+
+The session is excluded and was never reviewed. The review now refuses any cohort with
+`EXCLUDED.json`. A dry run of the full review logic on its archived transcript writes nothing
+(`../20260930-launch-canary/canary-v4-aborted/dry-run-review.txt`). The content verdict passes,
+tolerating only `CLOUDSDK_PROXY_PASSWORD`. The only failing conditions are the two produced by
+the old canary program: its own environment flag and its exit status. The new program applies
+the exemption itself, which a test confirms. This is a test fixture, not confinement evidence.

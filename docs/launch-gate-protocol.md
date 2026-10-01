@@ -1,6 +1,6 @@
 # Launch gate protocol: learned-action replacement (launch-gate-1)
 
-Registered 2026-09-30 (revision 2 the same day; revisions 3 and 4 on 2026-10-01, before any
+Registered 2026-09-30 (revision 2 the same day; revisions 3 to 5 on 2026-10-01, before any
 canary or held-out agent session). The
 machine-readable copy is `evals/reflex-proof/harness/launch_gate_protocol.json`; when the two
 differ, the JSON governs. Revisions get a dated entry below and must precede the dispatch they
@@ -95,8 +95,8 @@ runner must do the same for each learned home before its first held-out dispatch
 
 ## Phase 1: canary and negative controls (steps 1 and 2)
 
-Study root `cohorts/launch-gate-v3/canary-v4` in the native-confinement cohort
-`cohorts/launch-gate-v3`. Production binaries are built from the PR head and hash-pinned. One fixed
+Study root `cohorts/launch-gate-v4/canary-v5` in the native-confinement cohort
+`cohorts/launch-gate-v4`. Production binaries are built from the PR head and hash-pinned. One fixed
 learned route (`run-175d85`, guided provenance, from `cumulative-launch-10`, which passes the audit)
 runs `.venv/bin/python -m pytest tests/test_validate.py -q` after a test edit then a changelog edit.
 Twelve automatic sessions, all on the development task (finite), two per condition:
@@ -148,6 +148,15 @@ socket must be refused with a permission error. The inbox check is required in e
 pattern exemption exists. The sentinel check, the denied-name check and every other
 credential-like name remain strict. The `launch-gate-v2` native session ($0.0278896) failed this
 review closed before the change and is excluded; `canary-v3` was never prepared.
+
+Revision 5 states the single exemption rule, `probe.proven_harmless`. A name is exempt only if it
+is in `RUNTIME_INJECTED` and its named proof passed in the same run. The same rule governs the
+canary program's own denied-name check and exit status, the review's denied-name check, and the
+credential-name check. The review now decodes each canary value where it starts, because Claude
+Code adds an exit-code line and appends a `<sandbox_violations>` block. The `launch-gate-v3`
+native session ($0.0140024) exposed both problems. It is excluded and never reviewed: the review
+semantics changed after seeing its output, and the review refuses excluded cohorts. A
+content-level dry run on its archived tool result is a test fixture, not evidence.
 
 ## Phase 2: cohort (step 3)
 
@@ -223,6 +232,10 @@ evaluation groups is registered.
 ## Revisions
 
 - 2026-09-30 r1: registered.
+- 2026-10-01 r5, before any canary or held-out agent session: tolerant canary-output parsing,
+  a single exemption rule, review refuses excluded cohorts; `launch-gate-v3` excluded unreviewed;
+  the canary moves to `launch-gate-v4/canary-v5`. Ledger at r5: 103 attempts, $16.2151802
+  admitted, $43.7848198 remaining.
 - 2026-10-01 r4, before any canary or held-out agent session: runtime-injected names denied
   where possible and tolerated only by name with a same-run proof (proxy refusal, inbox
   unreachable); `launch-gate-v2` excluded; the canary moves to `launch-gate-v3/canary-v4`. Ledger at

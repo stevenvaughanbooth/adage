@@ -151,5 +151,64 @@ class RuntimeInjectedNames(unittest.TestCase):
         self.assertNotIn(probe.SENTINEL, probe.RUNTIME_INJECTED)
 
 
+class NativeCanaryOutput(unittest.TestCase):
+    """Built from the archived launch-gate-v3 tool result: an exit-code prefix, the two canary lines,
+    then a <sandbox_violations> block that Claude Code appends. Fixture, not confinement evidence."""
+    FIXTURE = Path(__file__).parent / "results/20260930-launch-canary/canary-v4-aborted/native-canary-tool-result.json"
+
+    def fixture(self):
+        return json.loads(self.FIXTURE.read_text())
+
+    def test_parser_tolerates_prefixes_and_appended_blocks(self):
+        content = self.fixture()["content"]
+        self.assertTrue(content.startswith("Exit code 1\n") and content.rstrip().endswith("</sandbox_violations>"))
+        with self.assertRaises(json.JSONDecodeError):
+            json.loads(content.split("NATIVE_SANDBOX_CHECKS=", 1)[1])  # The original parser's failure.
+        names, checks = probe.canary_output(content)
+        self.assertIn("CLOUDSDK_PROXY_PASSWORD", names)
+        self.assertIs(checks["inbox"], True)
+        names, _ = probe.canary_output([{"type": "text", "text": content}])
+        self.assertIn("PATH", names)
+        for bad in (content + "\nNATIVE_SANDBOX_CHECKS={}", content.replace("NATIVE_ENV_NAMES=", "X="),
+                    content.replace("NATIVE_ENV_NAMES=[", "NATIVE_ENV_NAMES={")):
+            with self.assertRaises((ValueError, json.JSONDecodeError)):
+                probe.canary_output(bad)
+
+    def test_dry_run_on_the_archived_shape_passes_only_with_the_proven_exemption(self):
+        content = self.fixture()["content"]
+        verdict = probe.assess_canary(content)
+        self.assertTrue(verdict["passed"], verdict)
+        self.assertEqual(verdict["tolerated_runtime_names"], ["CLOUDSDK_PROXY_PASSWORD"])
+        self.assertEqual((verdict["visible_denied_names"], verdict["unexplained_credential_names"]), ([], []))
+        unproven = probe.assess_canary(content.replace('"proxy_denies_external": true', '"proxy_denies_external": false'))
+        self.assertFalse(unproven["passed"])
+        self.assertEqual(unproven["visible_denied_names"], ["CLOUDSDK_PROXY_PASSWORD"])
+        self.assertEqual(unproven["unexplained_credential_names"], ["CLOUDSDK_PROXY_PASSWORD"])
+        leaked = probe.assess_canary(content.replace('"PATH", ', '"PATH", "GITHUB_TOKEN", "' + probe.SENTINEL + '", '))
+        self.assertFalse(leaked["passed"])
+        self.assertEqual(leaked["visible_denied_names"], [probe.SENTINEL, "GITHUB_TOKEN"])
+        no_inbox = probe.assess_canary(content.replace('"inbox": true', '"inbox": false'))
+        self.assertEqual(no_inbox["failed_checks"], ["inbox"])
+
+    def test_canary_program_applies_the_same_exemption_rule(self):
+        import real_repo_gate as gate
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d).resolve()
+            work = root / "repo"
+            for sub in (".venv", ".git"):
+                (work / sub).mkdir(parents=True)
+            (work / "native_canary.py").write_text(gate.native_canary_source(root / "p", root / "o", 9, root / "i.sock"))
+            def run(extra):
+                out = subprocess.run([sys.executable, "native_canary.py"], cwd=work, capture_output=True, text=True,
+                                     env={"PATH": "/usr/bin:/bin", "CLOUDSDK_PROXY_PASSWORD": "x", **extra})
+                return probe.canary_output(out.stdout)[1]
+            # A closed local proxy refuses the external request, which proves the proxy credential grants nothing.
+            proven = run({"HTTP_PROXY": "http://127.0.0.1:9"})
+            self.assertIs(proven["proxy_denies_external"], True)
+            self.assertIs(proven["env_denied_names_absent"], True)
+            self.assertIs(run({})["env_denied_names_absent"], False)
+            self.assertIs(run({"HTTP_PROXY": "http://127.0.0.1:9", "GITHUB_TOKEN": "t"})["env_denied_names_absent"], False)
+
+
 if __name__ == "__main__":
     unittest.main()
