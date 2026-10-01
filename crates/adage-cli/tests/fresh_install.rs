@@ -438,7 +438,7 @@ fn b10_a_fresh_install_is_healthy_and_counts_past_traces() {
     let card = text(&o);
     assert!(card.lines().next().unwrap().contains("● healthy"), "{card}");
     assert!(!card.contains("0 of ~5"), "10 past traces are counted: {card}");
-    assert!(card.contains("learning after each session · first run at your next agent session here"), "{card}");
+    assert!(card.contains("learning    after each session · first run at your next agent session here"), "{card}");
 }
 
 /// B11: a data directory that cannot be written: one clear notice at the first session start,

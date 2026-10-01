@@ -199,9 +199,11 @@ test("how it works steps through every chapter, from the keyboard", async ({ pag
   await ready(page);
   await page.keyboard.press("ArrowLeft");
   await expect(page).toHaveURL(/ch=read/);
-  // The scoring step computes its numbers and draws its figure.
+  // The scoring step computes its numbers and draws its figure, under "More detail".
   await page.goto(`${DEMO}/?view=how&ch=subgraphs&step=9`);
   await ready(page);
+  await expect(caption.getByText(/scores it cautiously: 0\.59/)).toBeVisible();
+  await caption.getByRole("button", { name: "More detail" }).click();
   await expect(caption.getByText("lower bound 0.59 ≥ 0.50")).toBeVisible();
   await expect(caption.getByRole("img", { name: /Figure/ })).toBeVisible();
   expect(errors).toEqual([]);

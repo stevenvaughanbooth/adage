@@ -126,27 +126,35 @@ the line names the plugin's own binary instead, so the command works as written)
 From a terminal, `brew install stevenvaughanbooth/tap/adage` or `npm install -g @adage-sh/cli`
 (**not published yet:** until the first release is out, the tap and the npm package do not exist;
 build from source with `cargo install --locked --git https://github.com/stevenvaughanbooth/adage
-adage-cli`), then run `adage init` inside your repository to connect a detected agent and learn
+adage-cli`; `adage update` later rebuilds from `main` the same way (a binary built in a checkout's
+`target/` is updated in place: `git pull`, then `cargo build`), or upgrades through npm or
+Homebrew when that is how it was installed), then run `adage init` inside your repository to connect a detected agent and learn
 from its previous sessions. For scripted setup, use `adage install claude-code --write --scope user`
 (or `codex`, `opencode`) and `adage condition --repo-root .`. Plain `adage`, anywhere (a terminal, a pipe, or
 `!adage` inside Claude Code), prints where things stand. An illustrative card (the numbers are made
 up to show every line; measured numbers are in [Benchmarks](#benchmarks)):
 
 ```text
-adage 0.1.0 · github.com/acme/billing                          ● healthy
-  14 reflexes active: 4 instincts, 9 learned, 1 from your team
-  learning after each session · last: 2 min ago, 1 change
-  last 30 days: 61 sessions · 188 directives · 152 followed · 7 dead ends headed off
-  savings: ~$0.034 and 3.1 turns per session, API-list equivalent (95% CI $0.011–$0.058)
-           ≈ $1.87 over 55 sessions, vs 6 where Adage stayed quiet (priced as of 2026-06-24)
-  ended asking you for help: 3% with Adage, 5% without
-  1 install step waits for you → adage review
-  adage ui · adage map · adage doctor
+adage 0.1.0 · github.com/acme/billing · ● healthy
+
+reflexes    14 active: 4 instincts, 9 learned, 1 from your team
+learning    after each session · last: 2 min ago, 1 change
+activity    last 30 days: 61 sessions · 188 directives · 152 followed · 7 dead ends headed off
+savings     ✓ ~$0.034 and 3.1 turns per session, API-list equivalent (95% CI $0.011–$0.058)
+            ≈ $1.87 over 55 sessions, vs 6 where Adage stayed quiet (priced as of 2026-06-24)
+            ended asking you for help: 3% with Adage, 5% without
+waiting     1 install step waits for you → adage review
+embeddings  potion-base-8m-i8 (bundled)
+
+next  adage review · 1 install step waits for you
+      adage ui · review, health and settings
+      adage map · explore reflexes in the browser
+      adage doctor · check binary, data, hooks and model
 ```
 
 **What is measured, honestly.** Adage stays quiet in 1 session in 10 (the control), so its effect
 can be measured. Until a repository has 10 quiet sessions and 30 with Adage, the card shows counts
-of what happened, never dollars (`measuring savings: 4 of 10 quiet sessions so far`). After that
+of what happened, never dollars (`○ measuring: 4 of 10 quiet sessions so far`). After that
 it shows the saving per session with a 95% interval, or "no measurable difference yet", or, if
 that is what the sessions say, "Adage appears to add ~$x per session". Dollars are API-list
 equivalents from a dated price table (subscription users do not pay per token); a model not in

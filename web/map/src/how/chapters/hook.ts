@@ -627,7 +627,8 @@ function build(stage: Stage, ctx: { graph: Graph | null; repo: boolean }): Built
   const traces = useRepo ? `your ${S.length} most recent traces` : `the ${S.length} sample traces`;
   const text: Omit<Step, "state">[] = [
     {
-      title: "Every hook event is a decision point",
+      title: "Moments to speak up",
+      plain: "As the agent works, it pauses at set moments: a session starts, a request arrives, a command runs, the agent wants to stop. At each one Adage gets a chance to speak.",
       body: useRepo
         ? `Each row is one of ${traces}; each dot is a hook event the map recorded: a prompt, a tool batch, a failure, a stop. For each, the hook reads the payload, translates it through the harness adapter, and asks a pure function, decide(), what to say.`
         : `Each row is one of ${traces}, replayed as hook events: a session start, a prompt, tool batches, a failure, a stop. For each, the hook reads the payload, translates it through the harness adapter, and asks a pure function, decide(), what to say.`,
@@ -637,7 +638,8 @@ function build(stage: Stage, ctx: { graph: Graph | null; repo: boolean }): Built
       ],
     },
     {
-      title: "The fast path skips what cannot matter",
+      title: "Skipping what cannot matter",
+      plain: "Most moments cannot match anything, so Adage skips them in a couple of milliseconds and the agent never waits.",
       body: useRepo
         ? `Before the state lock, the hook asks whether an event could change anything. Skipped events leave no spool record, so all ${passed.length} of the events shown here are ones that passed; the map never sees the rest.`
         : `Before the state lock, the hook asks whether an event could change anything. ${skipped} of ${all.length} events here stop: ${skippedBy("start")} session starts, ${skippedBy("stop")} stops with no finish line open, and ${skippedBy("batch") + skippedBy("failure")} batches with no trigger word while nothing was pending. The check is on words, not parsed commands, so a read of src/registry/load.ts passes: it contains every piece of the glob src/*.ts.`,
@@ -648,7 +650,9 @@ function build(stage: Stage, ctx: { graph: Graph | null; repo: boolean }): Built
       figure: latencyFigure,
     },
     {
-      title: "A hash picks the arm",
+      title: "A fair coin picks the comparison group",
+      plain: "To prove Adage helps, about 1 in 10 sessions is quietly left alone, like the placebo group in a trial. The choice is random but repeatable: the same session always lands in the same group.",
+      math: "hook",
       body: `The trace id is hashed: x is the first 4 bytes of sha256("adage-arm:" + id), little-endian, divided by u32::MAX. A trace is control if x is below the share, ${CONTROL_SHARE} unless ADAGE_CONTROL or runtime.control says otherwise. ${
         useRepo
           ? `Computed here in your browser for your ${S.length} traces, ${agree} of ${S.length} land on the arm the hook recorded; an arm forced with ADAGE_ARM, or drawn with another share, would not.`
@@ -657,7 +661,10 @@ function build(stage: Stage, ctx: { graph: Graph | null; repo: boolean }): Built
       chips: [{ text: `control share ${CONTROL_SHARE}` }, { text: "same id → same arm, every event" }, { text: "stored with its propensity" }],
     },
     {
-      title: "decide() answers by event",
+      title: "The right word at the right moment",
+      plain: "At each moment Adage checks what it learned. At the start it warns that npm test fails here; after a registry edit it reminds the agent to run make gen; and it asks the agent not to stop before it has.",
+      math: "hook",
+      key: true,
       body: useRepo
         ? `Above each event are the reflexes it directed, coloured by strength: ${delivered} delivered in treated traces, ${would} recorded as would-have in control traces. A prompt runs inhibit announcements first, then prompt reflexes by strength and support, then intent; a batch judges follows and opens finish lines; a failure fires only on its signature; a stop asks at most ${MAX_STOP_REQUESTS} times. On Claude Code one more event comes before a shell command runs: the one change Adage makes by default. A Python test run under the system Python is pointed at the project's verified .venv, the person sees each rewrite, and adage delegate rewrites off turns it off.`
         : `At the first prompt the dead end is announced (inhibit). An edit to registry/*.csv raises the finish line and opens an obligation; make gen meets it in ${met} traces. ${stops.length ? `${stops.map((x) => x.s.name).join(", ")} tries to stop without it, so the stop hook asks the agent to run it first.` : ""} Edits to src/*.ts raise a candidate: run npm test. On Claude Code one more event comes before a shell command runs: the one change Adage makes by default. A Python test run under the system Python is pointed at the project's verified .venv, the person sees each rewrite, and adage delegate rewrites off turns it off.`,
@@ -670,7 +677,9 @@ function build(stage: Stage, ctx: { graph: Graph | null; repo: boolean }): Built
       ],
     },
     {
-      title: "Caps and the inhibit lock",
+      title: "Short and consistent",
+      plain: "Adage keeps it short: at most 3 suggestions at once and 8 per session, and once it has warned about something, it never recommends it.",
+      math: "hook",
       body: struck.length
         ? `Two rules prune what decide() found. At most ${MAX_PER_DECISION} directives per decision and ${MAX_PER_SESSION} per trace. And once an inhibit has spoken, nothing it avoids is said: the dead end announced at the first prompt says npm test fails, so ${struck.length} npm test candidates are struck, with their pending judgements.`
         : `Two rules prune what decide() found. At most ${MAX_PER_DECISION} directives per decision and ${MAX_PER_SESSION} per trace; here the most in one decision is ${perDecision} and in one trace ${perSession}. And once an inhibit has spoken, nothing it avoids is said. A struck directive leaves no trace in the record, so none shows here.`,
@@ -681,7 +690,9 @@ function build(stage: Stage, ctx: { graph: Graph | null; repo: boolean }): Built
       ],
     },
     {
-      title: "Only a checked value reaches the template",
+      title: "Only checked values get through",
+      plain: "When a suggestion includes something from your request, like a ticket number, the value must look exactly like a real one. Adage never copies free text into the agent's instructions.",
+      math: "hook",
       body: `An example from acme-billing: the prompt "${EX.prompt}" meets the work-item lookup reflex. A value binds only if it matches the slot contract ${EX.contract} and is a plain token: at most ${PLAIN_MAX} characters, no leading dash, only letters, digits and _./:@=+,-. It fills a fixed template; the track never supplies prose.`,
       chips: [
         { text: `${checks.filter((c) => c.contract && c.plain).length} of ${checks.length} values bind` },
@@ -690,12 +701,17 @@ function build(stage: Stage, ctx: { graph: Graph | null; repo: boolean }): Built
       ],
     },
     {
-      title: "Three batches decide followed or ignored",
+      title: "Did the agent take the advice?",
+      plain: "Adage then watches the agent's next few actions to see whether it took the advice, and records the answer.",
+      math: "hook",
       body: `The directive is pending for ${FOLLOW_WINDOW} tool batches. Each batch's commands are matched on their canonical key: the directed command, or it with options added. Batch ${hit + 1} runs the lookup, so the directive is judged followed. Had ${FOLLOW_WINDOW} batches passed without it, it would count as ignored.${useRepo ? ` In your recorded decisions: ${followed} followed, ${ignored} ignored, ${met} finish lines met.` : ""}`,
       chips: [{ text: `follow window ${FOLLOW_WINDOW} batches` }, { text: "pattern::meets" }, { text: "followed · ignored · misfired" }],
     },
     {
-      title: "Control records, and stays silent",
+      title: "The comparison group stays silent",
+      plain: "In the left-alone sessions Adage notes what it would have said, but says nothing. That gives a fair comparison: what agents did with the advice, against what they did without it.",
+      math: "hook",
+      key: true,
       body: `The same decision runs in both arms. Treated traces received ${delivered} directive${delivered === 1 ? "" : "s"}; the ${control.length} control trace${control.length === 1 ? "" : "s"} logged ${would} would-have directive${would === 1 ? "" : "s"} and received none, and no command of theirs was rewritten. That gives the next chapter its comparison: what agents did with a reflex, against what they did without it.`,
       chips: [{ text: "would_have: both arms" }, { text: "directives: treated only" }, { text: `control ≈ ${Math.round(CONTROL_SHARE * 100)}% of traces` }],
     },
@@ -756,11 +772,11 @@ function latencyFigure(g: CanvasRenderingContext2D, w: number, h: number, pal: P
 
 export const hook: Chapter = {
   id: "hook",
-  title: "Decide at the hook",
+  title: "Speak up at the right moment",
+  technical: "Decide at the hook",
   status: "Built",
   kind: "built",
-  summary:
-    "Each hook event runs a pure decision against the index. About one trace in ten is control: Adage records what it would have said and stays silent.",
+  summary: "As the agent works, Adage checks each moment against what it learned and, when something matches, hands the agent a one-line suggestion. Otherwise it stays silent.",
   source: "crates/adage-hook · crates/adage-runtime/src/{lib,fast,render}.rs",
   usesRepo: true,
   build,

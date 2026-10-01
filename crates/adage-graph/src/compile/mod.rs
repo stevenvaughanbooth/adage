@@ -318,6 +318,9 @@ pub struct Compiled {
     pub execution_candidate: bool,
     /// Passed the original advisory value/guard gate, independently of execution admission.
     pub advisory_eligible: bool,
+    /// Compiled from a reflex retained for execution judgement only: it never shadows a route of
+    /// the same id that an advisory reflex compiled.
+    pub execution_only: bool,
 }
 
 /// A reflex that compiled to nothing, and why.

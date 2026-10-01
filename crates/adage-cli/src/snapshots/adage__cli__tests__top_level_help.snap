@@ -37,6 +37,7 @@ Setup:
   models       the optional embedding model
   config       settings
   completions  shell completions
+  update       update Adage itself
 
 Evaluation:
   eval         offline replay evaluation

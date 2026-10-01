@@ -1,17 +1,23 @@
-//! Bare `adage`: the status card (docs/zero-config.md §3.4). The same few lines whether stdout is
-//! a terminal, a pipe, or `!adage` inside Claude Code: what Adage is doing for this repository,
-//! whether it is healthy, what it has measured, and the one thing that waits for a person.
+//! Bare `adage`: the status card (docs/zero-config.md §3.4). The same lines whether stdout is a
+//! terminal, a pipe, or `!adage` inside Claude Code: what Adage is doing for this repository,
+//! whether it is healthy, what it has measured, and the one thing that waits for a person. It
+//! prints through the output grammar (docs/design/style.md): header, key column, `next`; colour
+//! only on a terminal.
 //!
 //! ```text
-//! adage 0.1.0 · github.com/acme/billing                         ● healthy
-//!   14 reflexes active: 4 instincts, 9 learned, 1 from your team
-//!   learning after each session · last: 2m ago, 1 change
-//!   last 30 days: 61 sessions · 188 directives · 152 followed · 7 dead ends headed off
-//!   savings: ~$0.034 and 3.1 turns per session, API-list equivalent (95% CI $0.011–$0.058)
-//!            ≈ $1.87 over 55 sessions, vs 6 where Adage stayed quiet (priced as of 2026-06-24)
-//!   1 install step waits for you → adage review
-//!   » today: adage: 2 new reflexes active.
-//!   embeddings: potion-base-8m-i8 (bundled) · adage ui · adage map · adage doctor
+//! adage 0.1.0 · github.com/acme/billing · ● healthy
+//!
+//! reflexes    14 active: 4 instincts, 9 learned, 1 from your team
+//! learning    after each session · last: 2 min ago, 1 change
+//! activity    last 30 days: 61 sessions · 188 directives · 152 followed · 7 dead ends headed off
+//! savings     ✓ ~$0.034 and 3.1 turns per session, API-list equivalent (95% CI $0.011–$0.058)
+//!             ≈ $1.87 over 55 sessions, vs 6 where Adage stayed quiet (priced as of 2026-06-24)
+//! waiting     1 install step → adage review
+//! today       » adage: 2 new reflexes active.
+//! embeddings  potion-base-8m-i8 (bundled)
+//!
+//! next  adage review · 1 install step waits for you
+//!       adage ui · review, health and settings
 //! ```
 //!
 //! Outside a repository it lists every repository with reflexes, one line each. It only reads:
@@ -21,6 +27,7 @@ use crate::autolearn::{read_json, Queue, RunState};
 use crate::doctor::{self, Status};
 use crate::savings;
 use adage_store::Paths;
+use adage_term::{Glyph, Line, Out, Role};
 use adage_tracks::Index;
 use anyhow::Result;
 use std::collections::BTreeMap;
@@ -83,19 +90,63 @@ fn plural(n: usize, one: &str, many: &str) -> String {
     format!("{n} {}", if n == 1 { one } else { many })
 }
 
-/// The health dot: the worst doctor status, and the single fix line for it.
-fn health(paths: &Paths, root: Option<&Path>) -> (String, Option<String>) {
+/// The health lamp: the worst doctor status, and the single fix line for it.
+fn health(paths: &Paths, root: Option<&Path>) -> (Line, Option<Line>) {
     let checks = doctor::checks(paths, root);
     let worst =
         checks.iter().find(|c| c.status == Status::Fail).or_else(|| checks.iter().find(|c| c.status == Status::Warn));
     match worst {
-        None => ("● healthy".into(), None),
+        None => (Line::new().glyph(Role::Fire, Glyph::Lamp).text(" healthy"), None),
         Some(c) => {
-            let word = if c.status == Status::Fail { "problem" } else { "check" };
-            let fix = c.fix.clone().map(|f| format!("{}: {} → {f}", c.check, c.detail));
-            (format!("● {word}: {}", c.check), fix)
+            let (role, word) =
+                if c.status == Status::Fail { (Role::Inhibit, "problem") } else { (Role::Prime, "check") };
+            let fix = c.fix.clone().map(|f| arrow(Line::new().text(format!("{}: {}", c.check, c.detail)), &f));
+            (Line::new().glyph(role, Glyph::Lamp).text(format!(" {word}: {}", c.check)), fix)
         }
     }
+}
+
+/// `text → command`, the command in the command colour.
+fn arrow(line: Line, command: &str) -> Line {
+    line.text(" ").glyph(Role::Ink3, Glyph::Arrow).text(" ").cmd(command)
+}
+
+/// The savings verdict's mark (docs/design/style.md, Colour): `✓` saved, `✗` adds cost, `○`
+/// measuring or no measurable difference.
+fn verdict_mark(v: savings::Verdict) -> Line {
+    match v {
+        savings::Verdict::Saved => Line::new().glyph(Role::Fire, Glyph::Ok),
+        savings::Verdict::AddsCost => Line::new().glyph(Role::Inhibit, Glyph::Fail),
+        _ => Line::new().glyph(Role::Ink3, Glyph::Off),
+    }
+}
+
+/// The savings lines as card values: the mark on the first, `savings: ` dropped (the key says
+/// it), and the reason Adage stays quiet on its own faint line.
+fn savings_values(s: &savings::Summary) -> Vec<Line> {
+    let mut out = Vec::new();
+    for (i, l) in savings::lines(s).into_iter().enumerate() {
+        let l = l.trim_start();
+        if i > 0 {
+            out.push(Line::new().text(l));
+            continue;
+        }
+        let mark = verdict_mark(s.verdict).text(" ");
+        let l = l.strip_prefix("savings: ").unwrap_or(l);
+        match l.strip_prefix("measuring savings: ").and_then(|m| m.split_once(" (")) {
+            Some((count, why)) => {
+                out.push(mark.text("measuring: ").text(count));
+                out.push(Line::new().faint(format!("  {}", why.trim_end_matches(')'))));
+            }
+            None => out.push(mark.text(l)),
+        }
+    }
+    out
+}
+
+/// One repository's savings, in a few words, for the list outside a repository.
+fn savings_brief(s: &savings::Summary) -> Line {
+    savings_values(s).into_iter().next().unwrap_or_default()
 }
 
 /// Is Adage connected to any agent here: hooks registered (settings, plugin files, the Claude
@@ -121,9 +172,9 @@ fn traces_so_far(paths: &Paths, repo: &str, root: &Path) -> usize {
     own.max(found)
 }
 
-/// The lines for one repository (after the header).
-fn repo_lines(paths: &Paths, repo: &str, root: &Path, index: &Index, now: u64) -> Vec<String> {
-    let mut out = Vec::new();
+/// The rows for one repository (after the header): a key, or `""` to continue the row above.
+fn repo_rows(paths: &Paths, repo: &str, root: &Path, index: &Index, now: u64) -> Vec<(&'static str, Line)> {
+    let mut out: Vec<(&'static str, Line)> = Vec::new();
     let r = reflexes(index, repo);
     let mut parts = Vec::new();
     if r.instincts > 0 {
@@ -140,14 +191,25 @@ fn repo_lines(paths: &Paths, repo: &str, root: &Path, index: &Index, now: u64) -
     if r.team > 0 {
         parts.push(format!("{} from your team", r.team));
     }
-    out.push(if r.total() == 0 {
-        "no reflexes active yet".to_string()
-    } else {
-        let label = if r.execution_only > 0 { "indexed" } else { "active" };
-        format!("{} {label}: {}", plural(r.total(), "reflex", "reflexes"), parts.join(", "))
-    });
+    out.push((
+        "reflexes",
+        if r.total() == 0 {
+            Line::new().quiet("none active yet")
+        } else {
+            let label = if r.execution_only > 0 { "indexed" } else { "active" };
+            Line::new().bold(Role::Ink, r.total().to_string()).text(format!(" {label}: ")).quiet(parts.join(", "))
+        },
+    ));
     if r.execution_only > 0 {
-        out.push(format!("{} execution-only: silent until delegated → adage delegate status", r.execution_only));
+        // Main's layout, with first-run-fixes' plain words: what such a reflex does until delegated.
+        out.push((
+            "",
+            Line::new()
+                .text(format!("{} execution-only", r.execution_only))
+                .sep()
+                .quiet("silent until delegated: ")
+                .cmd("adage delegate status"),
+        ));
     }
 
     // Learning.
@@ -157,16 +219,21 @@ fn repo_lines(paths: &Paths, repo: &str, root: &Path, index: &Index, now: u64) -
     let own = traces_so_far(paths, repo, root);
     if !cfg.config.learn_auto {
         let (_, source) = &cfg.values["learn.auto"];
-        out.push(format!("learning is off ({source}) → adage config set learn.auto true"));
-    } else if r.learned == 0 && own < SESSIONS_NEEDED {
-        out.push(format!(
-            "learning: {own} of ~{SESSIONS_NEEDED} sessions needed before Adage forms its own reflexes{}",
-            if r.instincts > 0 {
-                format!("; {} active meanwhile", plural(r.instincts, "instinct", "instincts"))
-            } else {
-                String::new()
-            }
+        out.push((
+            "learning",
+            arrow(
+                Line::new().push(Role::Prime, "off").quiet(format!(" ({source})")),
+                "adage config set learn.auto true",
+            ),
         ));
+    } else if r.learned == 0 && own < SESSIONS_NEEDED {
+        let mut l = Line::new()
+            .bold(Role::Ink, format!("{own} of ~{SESSIONS_NEEDED}"))
+            .text(" sessions needed before Adage forms its own reflexes");
+        if r.instincts > 0 {
+            l = l.sep().quiet(format!("{} active meanwhile", plural(r.instincts, "instinct", "instincts")));
+        }
+        out.push(("learning", l));
     } else {
         let last = crate::learnlog::read(paths).into_iter().rev().find(|l| l["repo"].as_str() == Some(repo));
         let when = match (&last, &run) {
@@ -184,7 +251,7 @@ fn repo_lines(paths: &Paths, repo: &str, root: &Path, index: &Index, now: u64) -
             (None, Some(s)) if s.finished_at.is_some() => format!("last: {}", ago(now, s.finished_at.unwrap_or(0))),
             _ => "first run at your next agent session here".into(),
         };
-        out.push(format!("learning after each session · {when}"));
+        out.push(("learning", Line::new().text("after each session").sep().quiet(when)));
     }
 
     // Counts and savings.
@@ -192,28 +259,42 @@ fn repo_lines(paths: &Paths, repo: &str, root: &Path, index: &Index, now: u64) -
     if let Some(s) = &summary {
         let c = &s.counts;
         if c.sessions > 0 {
-            out.push(format!(
-                "last {} days: {} · {} · {} followed · {} headed off",
-                c.days,
-                plural(c.sessions, "session", "sessions"),
-                plural(c.directives, "directive", "directives"),
-                c.followed,
-                plural(c.dead_ends_headed_off, "dead end", "dead ends"),
+            out.push((
+                "activity",
+                Line::new()
+                    .faint(format!("last {} days: ", c.days))
+                    .text(plural(c.sessions, "session", "sessions"))
+                    .sep()
+                    .text(plural(c.directives, "directive", "directives"))
+                    .sep()
+                    .text(format!("{} followed", c.followed))
+                    .sep()
+                    .text(format!("{} headed off", plural(c.dead_ends_headed_off, "dead end", "dead ends"))),
             ));
         }
         // Adage acting, not advising: always visible (docs/execution.md, rewrites).
         if c.rewritten > 0 {
-            // Said as it stands now: the switch that turns rewrites off, or that they are off.
+            // Said as it stands now (first-run-fixes): the switch that turns rewrites off, or that
+            // they are off; in main's layout.
             let now_on = cfg.config.runtime_rewrite && !adage_hook::rewrite_off(paths).exists();
-            out.push(format!(
-                "rewrote {} to use the project's environment ({})",
-                plural(c.rewritten, "command", "commands"),
-                if now_on { "turn off: adage delegate rewrites off" } else { "now off: adage delegate rewrites on" }
+            out.push((
+                "rewrites",
+                Line::new()
+                    .glyph(Role::Accent, Glyph::Rewrite)
+                    .text(format!(
+                        " rewrote {} to use the project's environment",
+                        plural(c.rewritten, "command", "commands")
+                    ))
+                    .sep()
+                    .quiet(if now_on { "turn off: " } else { "now off; turn on: " })
+                    .cmd(if now_on { "adage delegate rewrites off" } else { "adage delegate rewrites on" }),
             ));
         }
-        out.extend(savings::lines(s));
+        for (i, l) in savings_values(s).into_iter().enumerate() {
+            out.push((if i == 0 { "savings" } else { "" }, l));
+        }
         if let Some(g) = savings::guardrail(s) {
-            out.push(g);
+            out.push(("", Line::new().quiet(g)));
         }
     }
 
@@ -221,21 +302,20 @@ fn repo_lines(paths: &Paths, repo: &str, root: &Path, index: &Index, now: u64) -
     // so they wait for a person too, but they are not install steps).
     let (steps, quiet) = waiting(paths, repo);
     if steps > 0 {
-        out.push(format!(
-            "{} for you → adage review",
-            if steps == 1 { "1 install step waits".to_string() } else { format!("{steps} install steps wait") }
-        ));
+        let what = if steps == 1 { "1 install step waits".to_string() } else { format!("{steps} install steps wait") };
+        out.push(("waiting", arrow(Line::new().push(Role::Prime, what).text(" for you"), "adage review")));
     }
     if quiet > 0 {
-        out.push(format!(
-            "{} quiet: agents already do {}, so {} for you to approve → adage review",
+        let l = Line::new().glyph(Role::Ink3, Glyph::Quiet).text(format!(
+            " {} quiet: agents already do {}, so {} for you to approve",
             plural(quiet, "reflex", "reflexes"),
             if quiet == 1 { "it" } else { "them" },
             if quiet == 1 { "it waits" } else { "they wait" }
         ));
+        out.push((if steps > 0 { "" } else { "waiting" }, arrow(l, "adage review")));
     }
     if let Some(n) = notice_today(paths, repo, now) {
-        out.push(format!("» today: {n}"));
+        out.push(("today", Line::new().glyph(Role::Accent, Glyph::Notice).text(format!(" {n}"))));
     }
     out
 }
@@ -285,66 +365,136 @@ pub fn embeddings(paths: &Paths) -> (String, bool) {
 
 /// Bare `adage`.
 pub fn run(paths: &Paths) -> Result<()> {
-    print!("{}", card(paths, std::env::current_dir().ok().as_deref()));
+    let mut o = Out::stdout();
+    for l in card(paths, std::env::current_dir().ok().as_deref()) {
+        o.line(&l)?;
+    }
+    o.flush()?;
     Ok(())
 }
 
-pub fn card(paths: &Paths, cwd: Option<&Path>) -> String {
+/// A row in the key column (`kv`), or its continuation when `key` is empty.
+fn kv(key: &str, value: Line) -> Line {
+    Line::new().faint(key).pad_to(adage_term::out::KEY_WIDTH).extend(value)
+}
+
+/// `next  command · why`, then further commands aligned under it.
+fn next(rows: &[(&str, &str)]) -> Vec<Line> {
+    rows.iter()
+        .enumerate()
+        .map(|(i, (cmd, why))| {
+            let l = if i == 0 { Line::new().bold(Role::Accent, "next") } else { Line::new() };
+            l.pad_to(6).cmd(*cmd).sep().quiet(*why)
+        })
+        .collect()
+}
+
+fn header(version: &str) -> Line {
+    Line::new().bold(Role::Accent, "adage").text(" ").quiet(version)
+}
+
+/// The card, as lines to print through [`Out`].
+pub fn card(paths: &Paths, cwd: Option<&Path>) -> Vec<Line> {
     let now = crate::learnlog::now_ms();
     let version = env!("CARGO_PKG_VERSION");
     let root = cwd.and_then(adage_core::repo::find_root);
     let index = Index::load(&paths.index());
-    let mut s = String::new();
+    let mut s = Vec::new();
     if !connected(paths, root.as_deref()) {
-        s.push_str(&format!("adage {version}\n"));
-        s.push_str("  Not connected to any agent yet.\n");
+        s.push(header(version).sep().push(Role::Prime, "not connected to any agent yet"));
+        s.push(Line::new());
         let found: Vec<&str> =
             crate::detect::harnesses().into_iter().filter(|h| h.found()).map(|h| h.harness).collect();
+        let mut steps: Vec<(String, String)> = Vec::new();
         if found.contains(&"claude-code") {
-            s.push_str("  Claude Code found → in Claude Code: /plugin marketplace add stevenvaughanbooth/adage, then /plugin install adage@adage\n");
-            s.push_str("                       or, from here: adage install claude-code --write --scope user\n");
+            s.push(kv(
+                "claude-code",
+                Line::new()
+                    .quiet("in Claude Code: ")
+                    .cmd("/plugin marketplace add stevenvaughanbooth/adage")
+                    .quiet(", then ")
+                    .cmd("/plugin install adage@adage"),
+            ));
+            s.push(kv("", Line::new().quiet("or, from here: ").cmd("adage install claude-code --write --scope user")));
         }
         for h in found.iter().filter(|h| **h != "claude-code") {
-            s.push_str(&format!("  {h} found → adage install {h} --write --scope user\n"));
+            steps.push((format!("adage install {h} --write --scope user"), format!("connect {h}")));
+            s.push(kv(h, Line::new().quiet("found")));
         }
         if found.is_empty() {
-            s.push_str("  No agent found: install Claude Code, Codex or OpenCode, then run adage again.\n");
+            s.push(Line::new().quiet("No agent found: install Claude Code, Codex or OpenCode, then run adage again."));
         }
-        s.push_str("  adage --help · adage doctor\n");
+        s.push(Line::new());
+        steps.push(("adage init".into(), "guided setup: hooks, model, first conditioning".into()));
+        steps.push(("adage doctor".into(), "check binary, data, hooks and model".into()));
+        let rows: Vec<(&str, &str)> = steps.iter().map(|(a, b)| (a.as_str(), b.as_str())).collect();
+        s.extend(next(&rows));
         return s;
     }
     let (dot, fix) = health(paths, root.as_deref());
     let (embed, fallback) = embeddings(paths);
-    let grey = if fallback { "  (no embedding model: hashed fallback)" } else { "" };
+    let mut review = None;
     match &root {
         Some(root) => {
             let repo = crate::ui::health::repo_key(paths, root, &index);
-            let head = format!("adage {version} · {repo}");
-            s.push_str(&format!("{head:<62} {dot}{grey}\n"));
-            for l in repo_lines(paths, &repo, root, &index, now) {
-                s.push_str(&format!("  {l}\n"));
+            s.push(header(version).sep().text(&repo).sep().extend(dot));
+            s.push(Line::new());
+            let (steps, _) = waiting(paths, &repo);
+            if steps > 0 {
+                review = Some(if steps == 1 {
+                    "1 install step waits for you".to_string()
+                } else {
+                    format!("{steps} install steps wait for you")
+                });
+            }
+            for (k, v) in repo_rows(paths, &repo, root, &index, now) {
+                s.push(kv(k, v));
             }
         }
         None => {
-            s.push_str(&format!("{:<62} {dot}{grey}\n", format!("adage {version}")));
+            s.push(header(version).sep().extend(dot));
+            s.push(Line::new());
             let mut repos: BTreeMap<&str, ()> = BTreeMap::new();
             for r in &index.routes {
                 repos.insert(r.repo.as_str(), ());
             }
             if repos.is_empty() {
-                s.push_str("  no reflexes yet: start an agent session in a repository\n");
+                s.push(Line::new().quiet("no reflexes yet: start an agent session in a repository"));
             }
+            let width = repos.keys().map(|r| r.len()).max().unwrap_or(0) + 2;
             for repo in repos.keys() {
                 let r = reflexes(&index, repo);
-                let line = savings::read(paths, repo).map(|x| savings::lines(&x).remove(0)).unwrap_or_default();
-                s.push_str(&format!("  {repo:<40} {:>3} reflexes  {line}\n", r.total()));
+                let mut l = Line::new()
+                    .text(*repo)
+                    .pad_to(width)
+                    .bold(Role::Ink, format!("{:>3}", r.total()))
+                    .quiet(if r.total() == 1 { " reflex" } else { " reflexes" });
+                if let Some(x) = savings::read(paths, repo) {
+                    l = l.pad_to(width + 14).extend(savings_brief(&x));
+                }
+                s.push(l);
             }
         }
     }
     if let Some(f) = fix {
-        s.push_str(&format!("  {f}\n"));
+        s.push(kv("fix", f));
     }
-    s.push_str(&format!("  embeddings: {embed} · adage ui · adage map · adage doctor\n"));
+    let mut e = Line::new().text(embed);
+    if fallback {
+        e = e.faint("  (no embedding model: hashed fallback)");
+    }
+    s.push(kv("embeddings", e));
+    s.push(Line::new());
+    let mut rows: Vec<(&str, &str)> = Vec::new();
+    if let Some(why) = &review {
+        rows.push(("adage review", why));
+    }
+    rows.extend([
+        ("adage ui", "review, health and settings"),
+        ("adage map", "explore reflexes in the browser"),
+        ("adage doctor", "check binary, data, hooks and model"),
+    ]);
+    s.extend(next(&rows));
     s
 }
 

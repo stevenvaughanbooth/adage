@@ -57,6 +57,6 @@ describe("judge the evidence", () => {
     const built = judge.build(quiet, { graph, repo: true });
     expect(built.source).toContain("your 2 reflexes");
     expect(built.steps.at(-1)!.title).toBe("Your reflexes against the bar");
-    expect(judge.build(quiet, { graph: null, repo: false }).steps.at(-1)!.title).toBe("A recorded index");
+    expect(judge.build(quiet, { graph: null, repo: false }).steps.at(-1)!.title).toBe("The demo's finished reflexes");
   });
 });

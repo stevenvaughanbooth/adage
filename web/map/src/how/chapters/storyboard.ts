@@ -14,6 +14,7 @@ interface Beat {
 export function storyboard(c: { id: string; title: string; status: string; kind: Status; summary: string; source: string; beats: Beat[] }): Chapter {
   return {
     ...c,
+    technical: c.title,
     usesRepo: false,
     build(stage: Stage) {
       const ids: string[] = [];
@@ -39,6 +40,7 @@ export function storyboard(c: { id: string; title: string; status: string; kind:
           const chips: Chip[] = (b.chips ?? []).map((text) => ({ text }));
           return {
             title: b.title,
+            plain: b.body,
             body: b.body,
             chips,
             state: { dots, links: { lane: 0.3 }, cam: { target: [-0.6, -1, 0.6], yaw: -0.2 + s * 0.08, pitch: 0.75, dist: 25 } },

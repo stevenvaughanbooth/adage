@@ -453,6 +453,7 @@ impl<'a> Builder<'a> {
             fixed_id,
             execution_candidate: r.execution_candidate,
             advisory_eligible,
+            execution_only: r.execution_only,
         });
     }
 
@@ -1192,16 +1193,21 @@ pub fn compile(input: &Input) -> Output {
             });
             continue;
         }
-        // One route per id: the one with the most support (ties: the earlier pattern).
-        let better = |k: &Compiled| {
-            (c.route.evidence.support, std::cmp::Reverse(&c.why.pattern))
-                > (k.route.evidence.support, std::cmp::Reverse(&k.why.pattern))
-        };
-        if kept.get(&c.route.id).is_none_or(better) {
+        // One route per id: an advisory reflex's before an execution-only one's (a prefix kept
+        // for execution judgement often has more support than the closed pattern that absorbs
+        // it, and must not shadow its advice), then the one with the most support (ties: the
+        // earlier pattern). The advisory route keeps its own judgement: a certificate would turn
+        // it into an execution-only route, which is never delivered as advice.
+        if kept.get(&c.route.id).is_none_or(|k| rank(&c) > rank(k)) {
             kept.insert(c.route.id.clone(), c);
         }
     }
     let mut routes: Vec<Compiled> = kept.into_values().collect();
     routes.truncate(MAX_ROUTES);
     Output { routes, dropped: b.dropped }
+}
+
+/// The order among compiled routes of one id (greater wins).
+fn rank(c: &Compiled) -> (bool, u32, std::cmp::Reverse<&str>) {
+    (!c.execution_only, c.route.evidence.support, std::cmp::Reverse(c.why.pattern.as_str()))
 }

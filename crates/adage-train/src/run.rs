@@ -460,8 +460,12 @@ fn add_claimed_steps(all: &mut Vec<adage_tracks::Track>, transcripts: &[PathBuf]
         let route = match &c.kind {
             ClaimKind::Verify { command } => {
                 let Some(route) = adage_learn::claims::claimed_verify_route(&refs, command, cfg) else { continue };
-                let directs =
-                    |r: &adage_tracks::Route| matches!(&r.step, adage_tracks::Step::Run { command: x } if x == command);
+                // An execution-only route is never delivered as advice, so it does not direct the
+                // step the claim asks for.
+                let directs = |r: &adage_tracks::Route| {
+                    r.evidence.execution.is_none()
+                        && matches!(&r.step, adage_tracks::Step::Run { command: x } if x == command)
+                };
                 if all.iter().any(|t| t.routes.iter().any(directs)) {
                     continue;
                 }
@@ -792,4 +796,82 @@ pub fn render_describe(d: &serde_json::Value) -> String {
         let _ = writeln!(s, "    settings {}", e["settings"]);
     }
     s
+}
+
+#[cfg(test)]
+mod claimed_step_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn an_execution_only_route_does_not_stand_in_for_a_claimed_check() {
+        // Every exploration session edits, then runs `make test`, as the claim asks. A learned
+        // route running it suppresses the claimed check only when it is delivered as advice.
+        let tmp = tempfile::tempdir().unwrap();
+        let skill = tmp.path().join("SKILL.md");
+        std::fs::write(
+            &skill,
+            "---\nname: acme\ndescription: Acme.\n---\n\nAlways run `make test` before you finish.\n",
+        )
+        .unwrap();
+        let options = crate::plan::PlanOptions {
+            from: skill,
+            repo: Some(tmp.path().to_path_buf()),
+            seed: 1,
+            sessions: 4,
+            model: "fake".into(),
+        };
+        let plan = crate::plan::build(&options).unwrap();
+        let cwd = tmp.path().to_string_lossy().to_string();
+        let transcripts: Vec<PathBuf> = (0..5)
+            .map(|i| {
+                let sid = format!("explore-{i}");
+                let mut lines = vec![json!({"type":"user","sessionId":sid,"cwd":cwd,"message":{"content":"Fix it"}})];
+                let calls = [
+                    ("Write", json!({"file_path":format!("{cwd}/acme/billing.py"),"content":"pass"})),
+                    ("Bash", json!({"command":"make test"})),
+                ];
+                for (n, (tool, input)) in calls.into_iter().enumerate() {
+                    let id = format!("tool-{n}");
+                    lines.push(json!({"type":"assistant","sessionId":sid,"cwd":cwd,"message":{"id":format!("m{n}"),
+                        "model":"m","content":[{"type":"tool_use","id":id,"name":tool,"input":input}]}}));
+                    lines.push(json!({"type":"user","sessionId":sid,"cwd":cwd,"message":{"content":[
+                        {"type":"tool_result","tool_use_id":id,"is_error":false,"content":"ok"}]}}));
+                }
+                let path = tmp.path().join(format!("{sid}.jsonl"));
+                std::fs::write(&path, lines.iter().map(|v| v.to_string()).collect::<Vec<_>>().join("\n")).unwrap();
+                path
+            })
+            .collect();
+        let cfg = LearnConfig::default();
+        let claimed = |learned: adage_tracks::Route| {
+            let mut all = vec![adage_tracks::Track {
+                manifest: adage_tracks::Manifest {
+                    track: adage_tracks::TrackInfo {
+                        name: "acme/learned".into(),
+                        version: "0.1.0".into(),
+                        description: String::new(),
+                        provenance: String::new(),
+                    },
+                    scope: adage_tracks::Scope { repo: plan.repo.key.clone() },
+                    gauge: adage_tracks::Gauge::default(),
+                },
+                routes: vec![learned],
+            }];
+            add_claimed_steps(&mut all, &transcripts, &plan, &cfg);
+            all.iter().flat_map(|t| &t.routes).any(|r| r.id.starts_with("finish-check-"))
+        };
+        let table = adage_core::CommandTable::load();
+        let sessions: Vec<adage_learn::import::Session> =
+            transcripts.iter().filter_map(|p| adage_learn::read_session(p, &table, Some(&plan.repo.key))).collect();
+        let refs: Vec<&adage_learn::import::Session> = sessions.iter().collect();
+        let mut advice =
+            adage_learn::claims::claimed_verify_route(&refs, "make test", &cfg).expect("the claim is followed");
+        advice.id = "run-learned".into();
+        assert!(!claimed(advice.clone()), "advice running the check already directs it");
+        let mut execution = advice;
+        execution.evidence.execution =
+            Some(adage_tracks::ExecutionEvidence { opportunities: 5, successful: 5, sessions: 5 });
+        assert!(claimed(execution), "an execution-only route is never delivered as advice");
+    }
 }

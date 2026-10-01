@@ -4,7 +4,7 @@
 
 import { defineConfig, devices } from "@playwright/test";
 import { existsSync, mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { DEMO_PORT, EMPTY_PORT } from "./e2e/ports";
 
@@ -13,6 +13,9 @@ const bin = process.env.ADAGE_BIN ?? join(repo, "target/debug/adage");
 // The preinstalled Chromium, where there is one (no `playwright install` needed).
 if (!process.env.PLAYWRIGHT_BROWSERS_PATH && existsSync("/opt/pw-browsers")) process.env.PLAYWRIGHT_BROWSERS_PATH = "/opt/pw-browsers";
 
+const rustup = process.env.RUSTUP_HOME ?? join(homedir(), ".rustup");
+const cargo = process.env.CARGO_HOME ?? join(homedir(), ".cargo");
+
 function server(port: number, extra: string) {
   const home = mkdtempSync(join(tmpdir(), "adage-e2e-"));
   const build = process.env.ADAGE_BIN ? "" : `cargo build -q -p adage-cli --manifest-path '${repo}/Cargo.toml' && `;
@@ -20,7 +23,8 @@ function server(port: number, extra: string) {
     command: `${build}exec '${bin}' map --no-open --port ${port} ${extra}`,
     url: `http://127.0.0.1:${port}/api/v1/graph`,
     cwd: home,
-    env: { HOME: home, ADAGE_HOME: join(home, ".adage"), NO_COLOR: "1" },
+    // The throwaway HOME must not hide the toolchain: rustup and cargo keep theirs under the real one.
+    env: { HOME: home, ADAGE_HOME: join(home, ".adage"), NO_COLOR: "1", RUSTUP_HOME: rustup, CARGO_HOME: cargo },
     reuseExistingServer: false,
     timeout: 600_000,
     stdout: "ignore" as const,
