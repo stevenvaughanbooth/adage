@@ -16,6 +16,15 @@ paths that get work done, and compiles them into reflexes: small, typed, determi
 with their evidence attached. At each decision point the matching reflex tells the agent what to
 do next. Adage never runs the commands it directs; execution is a separate, opt-in binary.
 
+### Fixes from the architecture work
+
+- **`adage install claude-code --scope user` honours `CLAUDE_CONFIG_DIR`.** It wrote
+  `~/.claude/settings.json` regardless, so with the variable set the hooks were never loaded and
+  `adage doctor` could not see them. Install and detection now share one table of where each
+  harness keeps Adage's registration.
+- **Review decisions in `adage ui` take the tracks lock**, as `adage review <verb>` always did, so
+  a decision can no longer race an automatic learner writing the same track.
+
 ### Launch clarity and local experience
 
 - **Adage owns an approved verification.** With E2 allowed and one learned verification approved,
