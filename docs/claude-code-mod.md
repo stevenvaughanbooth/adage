@@ -391,6 +391,106 @@ down. The reflex and receipt paths above apply unchanged; predictions (§3.2) st
   detached learner. The mod's `session.end` hook only flushes the ledger line; "all `session.end`
   hooks together" share 1.5 s, so nothing waits there.
 
+### 3.11 Noticed: learning the person can watch [Q12]
+
+Adage learns after the session, from the trace, and the person hears about it a day later in one
+line. The mod can show the learning while it happens, at three moments, without turning any of
+them into a directive.
+
+**The pattern Adage has seen before.** The runtime already matches *context triggers*, "two or
+three earlier events, in order" over the last sixteen (Architecture §4.3.2), for reflexes that are
+in service. Two kinds of pattern are matched but never delivered: a **nascent** reflex (it waits
+for review) and a **candidate** the learner has counted but that has not cleared `min_support`
+(five unsteered sessions by default). Today neither leaves a trace in the session. The design adds
+a `candidates` table to the index, compiled with the same no-match fast-path words as every other
+trigger, so the common path stays at 1.8 ms; at `PostToolBatch` the binary matches them as it
+matches a reflex, spools a `noticed` record (`kind: "noticed"`, the route or candidate id, its
+support so far, never a directive), and prints nothing to the model. The mod reads the record off
+the command hook's result (§3.1 extended with a `noticed` field in `additionalContext`'s sibling,
+or off the feed) and draws one line under the batch:
+
+```text
+ ● Edit(acme/invoice.py)
+ ● Bash(make test)
+   ◠ adage noticed · make test after editing acme/** · seen in 3 earlier sessions · a reflex forms at 5
+```
+
+```text
+   ◠ adage noticed · ./scripts/wi-lookup then reading the files it names · this reflex waits for your review (adage review)
+```
+
+The rules that keep it from becoming noise: only sequences (a context trigger of two or more
+events, or a prompt family followed by its command), never a single call; once per candidate per
+session; nothing for a pattern that is already a firm reflex (that is a directive, §3.1); plain
+counts, never a prediction of what the agent should do next. Both arms draw it, because a note
+about learning changes neither the model's path nor the person's view of which arm they are in.
+
+**The learner, live.** The feed (§2) carries `learn.log` lines as they are written, and the
+learner's state file says when the next run starts (`<slug>.spawn.json`, `after`). The band's
+last cell counts down to it (`learning in 38 s`), turns to `learning…` while the lock is held, and
+when the line lands the mod raises one toast with the change that matters most, in the lexicon's
+words:
+
+```text
+ adage learned from this session
+ ◠ codegen-after-registry  prime → fire  (9 of 9 sessions)
+```
+
+**The reflex that just formed from what you did.** When a `noticed` candidate reaches support in
+the learn that follows this session, the toast says so and names the session as the one that
+tipped it: `◠ test-after-acme-edit formed · this session was its 5th`. That is the moment the
+product's promise ("your agent keeps relearning the same lessons; Adage remembers them") becomes
+something the person has watched happen.
+
+- **Binary:** the `candidates` table in the index, the `noticed` record, and a `--follow --json`
+  feed that includes the learner's state. The "familiar-command computation" F14 lists as not
+  built is the same count by another name (sessions and days a command has run in), so one
+  implementation serves both.
+- **Model:** nothing. **Control:** drawn in both arms. **Hosts:** drawn where the mod draws; in
+  `-p` the record is spooled and nothing else.
+
+### 3.12 Skills: select them deterministically, and verify them where they run [Q13]
+
+Skill selection is the model's judgment today: it reads the skill list in the prompt and decides.
+Adage's compiler (`adage train SKILL.md`) turns a skill's commands into verified reflexes, and
+`training.md` lists what stays text: judgment, and "a command with no stimulus". F14 lists "skill
+triggers" as not built. The mods API gives three handles on skills, and together they make a new
+response kind, **`skill`**: stimulus → *use this skill now*.
+
+| Handle | Documented shape | What Adage does with it |
+| --- | --- | --- |
+| `turn.step`, yielding a `Skill` tool call | The engine's Skill tool takes `{ skill: string, args?: string }`; a yielded `tool` + `input` + `stop` chunk is recorded and run (§3.2) | **Invoke.** At the step where a `fire` skill reflex matches, the mod yields `Skill { skill: 'release-checklist' }` and no request is sent. The engine runs the Skill tool; the skill's text enters the transcript as the tool's result; the model's next step proceeds with the skill loaded, at the moment the pattern says, every time |
+| `skill.prompt` | "Fires when the engine expands a skill's prompt for the model (`/name`, the Skill tool, a preload)"; `e` is `{ skill, text }`; return `{ text }` | **Verify in place.** For a skill Adage has trained in this repository, the mod rewrites the text as the model reads it: each step the replay verified carries one plain line (`verified here 2026-09-30: make test passes; the lookup is ./scripts/wi-lookup {id}`), a step the replay found stale carries its correction, and the environment Adage bound (`.venv/bin/python`) replaces a bare `python`. The skill file is untouched; the model reads the repository's truth |
+| `skill.prompt` as an observation | The same event, every invocation, with the skill's name | **Learn selection.** Each invocation is spooled with what preceded it (the prompt family, the last edits, the last commands), so the learner can form a `skill` reflex from how skills are actually used here: "in sessions whose prompt looks like *cut a release*, the release-checklist skill was invoked after the version bump, 7 of 8 times". Transcripts record Skill tool uses too, so history before the mod counts |
+| `$.agent.register({ skills })`, `agent.spawn` | An agent definition's `skills` are "preloaded into the agent's context before its first turn"; a spawn's `prompt` is rewritable | **Equip subagents.** A skill reflex whose stimulus is a delegation (the `Agent` call's description, which `PreToolUse` on `Agent` carries, S5 Q7) prepends `Use the <skill> skill for this.` to the subagent's prompt |
+| `tool.describe` on `Skill` | The Skill tool's description, cached for the session | **Advise, cached.** The standing list of skills that apply in this repository and when (from the `skill` reflexes), once, in the tool's own description |
+
+Three delivery levels, like every other reflex, so the same `skill` reflex works on every harness:
+
+1. **Advise** (every harness, today's channel): `<adage-reflex kind="skill">` in `additionalContext`
+   at the stimulus: "In this repository the release-checklist skill is used at this point. Ignore
+   this if the user is asking for something else." The model still chooses.
+2. **Invoke** (Claude Code with the mod): the `turn.step` yield above. A skill invocation loads
+   text; it runs no command and edits no file, so its ceiling is **Observe**, not Regenerate: it
+   needs no `delegate` grant, only a `fire` reflex, the two bounds of §3.2 (never two predicted
+   steps in a row, a per-session cap) and `skills.invoke` on (§5, default on). The model's next
+   step can still ignore the skill; what is deterministic is *that it was offered, in full, at
+   that moment*, which is the part that varied before.
+3. **Verify in place** (Claude Code with the mod): the `skill.prompt` rewrite, for any skill
+   `adage train` has compiled here, at every invocation however it was triggered.
+
+What the person sees: the invoked skill's tool row carries `◠ adage invoked this skill: <reflex>,
+no model request`; a verified skill's row carries `◠ adage verified 3 of 5 steps here · step 2
+corrected`. In the control arm nothing is invoked or rewritten and the `would_have` is spooled.
+
+- **Binary:** the `skill` response kind in tracks and the index (stimulus: intent family,
+  after-edit glob, context trigger or delegation; response: a skill name and optional args); the
+  learner's rule for forming one from Skill tool uses in traces; `adage train` recording per-step
+  verification so `skill.prompt` has something to say. **Model:** at level 1 a plain block; at
+  level 2 the skill's own text as a tool result; at level 3 the skill's text with plain,
+  factual lines added. **Hosts:** level 1 everywhere; levels 2 and 3 wherever hooks run,
+  `-p` included, which is the first place to measure them.
+
 ## 4. Looks: every render site, and what Adage draws there
 
 `ui.render` fires for each render site; a hook can "change a detail" (`next({ ...e, props })`),
@@ -404,6 +504,8 @@ down. The reflex and receipt paths above apply unchanged; predictions (§3.2) st
 | `UserMessage` | One dim line under the prompt per reflex fired at it: `◠ lookup-work-item · fire · ./scripts/wi-lookup W-2042 --json` | A prompt-triggered reflex | `Box` column: `await next(e)` first, then the lines; `e.props.isExpanded` (ctrl+o) returns `next(e)` alone |
 | `ToolUse` | A marker line under the row: `↪ adage: pointed this test run at .venv/bin/python` for a rewrite; `◠ adage ran this step on the CPU: <reflex>, no model request` for a predicted call; `◠ dead end headed off: <reflex>` for a followed `avoid` | Matched by `e.requestId` (the `tool_use_id`) against `$.state` | `Box` with the engine's row then one `Text dimColor` |
 | `ToolResult` | The receipt card in place of pytest's output: receipt id, result, duration, the tests named, the session's own tests first, and the one line saying the output is not shown | A receipt answered as the result (§3.3) or delivered beside one | Return a tree, no `next`; `Markdown` for the test list |
+| `ToolGroup` or the last `ToolUse` of a batch | `◠ adage noticed · <sequence> · seen in 3 earlier sessions · a reflex forms at 5`, or `· waits for your review` | A `noticed` record for this batch (§3.11), once per candidate per session | `Box` with the engine's row then one `Text dimColor` |
+| `ToolUse` for `Skill` | `◠ adage invoked this skill: <reflex>, no model request`; `◠ adage verified 3 of 5 steps here · step 2 corrected` | A skill reflex invoked or a trained skill expanded (§3.12) | As the other `ToolUse` markers |
 | `Spinner` | `Thinking · adage ◠ 1…` while a reflex was delivered this turn | `e.props.suffix` | `next({ ...e, props: { ...e.props, suffix } })` |
 | `TurnDuration` (terminal) | `Worked for 1m 48s · adage: 2 requests saved, 1 dead end headed off` | A turn with Adage activity | `next({ ...e, props: { ...e.props, word } })` or a `Box` beside the reference |
 | `AbovePrompt` | One line, like `token-weather`: `◠ adage  3 reflexes this session · 2 requests saved · ● healthy · learning in 38 s`; a second line while a learner runs or a grant lapsed | Always, unless `band: false` or the session is headless | Sized to `e.props.bodyColumns`; `next(e)` when nothing to say so other mods' bands show |
@@ -488,7 +590,9 @@ under `pluginConfigs`; a change reloads the mod with the new `options`:
   "pane":           { "type": "string",  "title": "Watch pane", "description": "Open the live pane unasked in a wide terminal", "options": ["auto", "manual"], "default": "manual" },
   "notices":        { "type": "string",  "title": "Notices", "description": "The one-line notice at session start", "options": ["daily", "off"], "default": "daily" },
   "hold_dead_ends": { "type": "boolean", "title": "Hold known dead ends", "description": "Ask before a command Adage has learned fails here (never in claude -p)", "default": false },
-  "routine_model":  { "type": "string",  "title": "Route routine steps to", "description": "A model alias for steps a fire reflex covers, or empty to route nothing", "default": "" }
+  "routine_model":  { "type": "string",  "title": "Route routine steps to", "description": "A model alias for steps a fire reflex covers, or empty to route nothing", "default": "" },
+  "noticed":        { "type": "boolean", "title": "Show what Adage noticed", "description": "A line when a sequence of calls matches one Adage is still learning", "default": true },
+  "skills_invoke":  { "type": "boolean", "title": "Invoke skills from reflexes", "description": "Load a skill at the step a fire reflex names, without a model request to choose it", "default": true }
 }
 ```
 
@@ -546,6 +650,8 @@ measures the Desktop app before anything above is promised there.
 | **M3 · Trust it** | §3.4 rewrites through `$.tool.check`; §3.3 receipts as results; `PreToolUse` identity dedup in the binary; the `ToolResult` card | Q2 (Layer 2), Q4 |
 | **M4 · Measure it** | §3.10: `adage ledger note`, harness-priced cost, latency and version in the spool and `doctor`; `session.append` provenance in the learner if Q5 finds it | Q5 |
 | **M5 · Skip it** | §3.2 `TurnStep` in the binary with the `predict` effect, the two bounds, the control-arm `would_have`; §3.7 cached delivery; §3.8 compaction; §3.6 routing behind its option | Q9, Q10, Q11 |
+| **M6 · Notice and learn in view** | §3.11: the `candidates` table, the `noticed` record, the learner's state in the feed, the toasts | Q12 |
+| **M7 · Skills** | §3.12: the `skill` response kind, the learner's rule from Skill tool uses, `adage train`'s per-step verification record, the `turn.step` invoke, the `skill.prompt` rewrite | Q13 |
 
 Documentation moves with each milestone, as `how-it-works.md` requires: `harnesses.md` gains a
 "Claude Code mod" section marked documented/inferred/measured; `live-learning.md` records the
@@ -563,7 +669,8 @@ number and leave quality to be proven:
 | Model requests per task | Execution mode 0.67× the agent alone, with every session still asking for the test again | §3.2 removes the request that asks for a predicted step; §3.3 removes the duplicate run's request pair; §3.7 shortens every request | `demo/run.py all`, treated vs control, S9 Q10 |
 | API cost per task | Priced from token counts after the fact | §3.6 routes routine steps to a cheaper model; §3.7 moves standing text into the cached prefix; §3.10 prices from the harness | Same runner, S9 Q11; the ledger's `cost.source: harness` |
 | Hidden-test quality | 17/20 against the baseline's 19/20, which kept execution mode experimental | Must not move: the gate for every item above | Same runner |
-| What the person sees of Adage per session | One line a day, or a second terminal | §4: every fired reflex, rewrite, receipt and saved request, where it happened | Q3, Q3b; a usability pass on the demo recording |
+| What the person sees of Adage per session | One line a day, or a second terminal | §4: every fired reflex, rewrite, receipt and saved request, where it happened; §3.11: the learning itself | Q3, Q3b, Q12; a usability pass on the demo recording |
+| Skill selected at the moment the procedure says | The model's judgment, each time | §3.12: invoked by the reflex at that step, verified in place | Q13: invocations at the right step over the skill-steered sessions `adage train` already runs |
 
 Whether the first row reaches ten times fewer requests on real tasks is what Q10 finds out; the
 mechanism that could get there is documented, the authority model that keeps it safe is Adage's
@@ -576,6 +683,6 @@ about in a daily line.
 All in [S9](../spikes/S9-claude-mods/SPIKE.md): coexistence and dedup (Q1), latency (Q2), surfaces
 and silence (Q3, Q3b), `$.tool.check` agreement (Q4), provenance and cost on disk (Q5), fail-open
 and reload (Q6), hosts (Q7), API drift (Q8), the skipped request (Q9), the gate (Q10), routing
-(Q11). Two product decisions sit outside the spike: whether `hold_dead_ends` exists at all (§3.5),
+(Q11), noticed candidates on the fast path (Q12), skill invocation and rewrite (Q13). Two product decisions sit outside the spike: whether `hold_dead_ends` exists at all (§3.5),
 and whether a person-verified approval inside the harness is ever designed, which would be the
 only way review and delegation reach the pane.
