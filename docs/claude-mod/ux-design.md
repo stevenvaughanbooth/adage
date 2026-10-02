@@ -67,7 +67,7 @@ Key names are words: `enter`, `esc`, `tab`; no `⏎` or `▁`.
 | --- | --- | --- |
 | **(a) The plugin user** who never opens a terminal | `/plugin install adage@adage`, then sessions | See reflexes fire, see what Adage did instead of asking the model, and make every decision Adage needs (enable a reflex, let it run a step, use a team's reflexes) with one or two presses in the session; never be sent to a terminal |
 | **(b) The CLI user** who ran `adage init` | Has the terminal programs too | Not be told twice; the pane is the same information as `adage watch`, one window instead of two |
-| **(c) The team lead** who shares packs | Reviews, delegates, signs | See which reflexes are a teammate's, copy the exact command to approve or revoke at a terminal |
+| **(c) The team lead** who shares packs | Reviews, delegates, signs | See which reflexes are a teammate's, approve or revoke with a press in the pane, and still find the exact terminal command when they want it |
 | **(d) Headless** (`claude -p`, the SDK, CI, the demo runner) | No one is looking | See nothing, be asked nothing: the hooks run, no site is drawn |
 
 ## 3. The screen map
@@ -117,7 +117,7 @@ Q7). The permission prompt is not a render site and is never touched.
 | Toast | The learner finished with a change; a grant lapsed; the finish line continuing; a copy confirmation | One per learn; one per lapse per session; one per gate; one per copy |
 | `$.ui.status` | Warnings only (the engine prefixes it `⚠ adage:`, so the text carries no prefix) | Until cleared |
 | `AskUserQuestion` | Untouched (it is the model's question tool) | |
-| `$.ui.ask` | Never: no hook of the mod waits on a person | |
+| `$.ui.ask` | A decision Adage needs (§4.17), at `turn.complete` only, when the model is idle | One per turn end; one per reflex per day; never inside a hook with a budget |
 
 ## 4. The session, state by state
 
@@ -320,44 +320,65 @@ The binary answers nothing; the band returns `next(e)`; `/adage` prints the card
 
 ### 4.17 Adage asks (architecture §3.12)
 
-When the learner's line lands and a reflex waits for a decision, one row appears above the
-prompt at the end of the turn, in a small pane of its own (`adage-ask`, 1–3 rows, not focused:
-typing continues into the prompt):
+When the learner's line lands and a reflex waits for a decision, Adage asks at the end of the
+turn, in the dialog Claude Code itself uses to ask a question (`$.ui.ask`): the question above
+a numbered list of answers, answered with the dialog's own digits or dismissed with the
+dialog's own key. Nothing of Adage's is drawn around it; it is the engine's dialog with Adage's
+words.
 
 ```text
- ◠ test-after-acme-edit waits for your review · 1 enable · 2 not this one · 3 why          esc: later
+ test-after-acme-edit waits for your review
+   1. enable
+   2. not this one
+   3. why
 ```
 
-The digits are the pane's hotkeys (the pane is not the band, so a digit does not fire from an
-empty prompt; verify in Q3b, else the row takes focus on `/adage review` only and shows no
-digits). `1` records the decision through the press token and the row thanks in place for 2 s
-(`◠ test-after-acme-edit is on · it is said to the agent from now on`), then goes. `2` records
-`dismiss`; the ask never returns. `3` opens the inspect pane with the evidence. `esc` or a new
-prompt hides the row; a hidden ask returns at most once more, a day later, and is always in the
-Reflexes tab under **waiting for you**. Several asks queue; the row shows one at a time with
-`1 of 3`.
+`enable` records the decision through the press and a 2 s toast says `test-after-acme-edit is
+on`. `not this one` records `dismiss`; the ask never returns. `why` opens the pane, focused, on
+that reflex's evidence, with the same answers as `Button`s (`e enable`, `n not this one`).
+Dismissing the dialog is `later`: the ask returns at most once more, a day later, and is always
+under **waiting for you** in the pane. At most one ask per turn end; when several wait, the band's
+second line says `» 3 need review · /adage review` and the pane lists them.
 
-Weightier decisions take two presses, with the facts between them:
+Weightier decisions take two acts, with the facts between them:
 
 ```text
- ◠ codegen-after-schema can run make gen for you, sandboxed · 1 see what it would change · 2 not now
+ codegen-after-schema can run make gen for you, sandboxed
+   1. see what it would do
+   2. not now
 ```
 
+The first answer opens the pane, focused, with everything the terminal shows a person today:
+
 ```text
- make gen would change 1 file in this repository (acme/generated/models.py, +4 −0)
- nothing else is written; it runs in a sandbox with no network · 1 allow · 2 not now         esc: later
- ─ diff ──────────────────────────────────────────────────────────────────────────────────
+ ◠ codegen-after-schema · run make gen after a schema/*.json edit
+ runs    make gen                                  sandbox  read-only, no network, this repository
+ writes  acme/generated/models.py                  caches   none
+ effect  regenerate                                scripts  tools/gen.py  sha256 9f3a…  (text below)
+ this turns on sandboxed execution for this machine; Adage only ever runs steps you allow one by one
+ takes effect in your next session
+ ─ what it would do now ────────────────────────────────────────────────────────────────────
+ acme/generated/models.py  +4 −0
  +    currency: str = "USD"
+ …
+ a: allow · n: not now · c: copy the terminal command                                esc: later
 ```
 
-The first execution ask on a machine adds one line before the diff: `this turns on sandboxed
-execution for this machine; Adage only ever runs steps you allow one by one`. A prediction ask
-says `can run its step without asking the model · the step still meets your permission rules`.
-A team-pack ask names the signer and lists the packs; `why` shows the key.
+`allow` confirms against the digest the stage produced; if the repository moved meanwhile, the
+pane redraws the fresh diff and asks again. The first-execution line appears once per machine.
+An E1 grant shows argv, the input contracts, the output mode and the proposed fields instead of
+a diff. A prediction ask says `can run its step without asking the model`, and `why` shows what
+will and will not meet a permission dialog. A team-pack ask names the signer and, under `why`,
+the key's fingerprint, the packs, and the commit that added them with its author and date, with
+the sentence `this is the same trust you give CLAUDE.md`.
 
-Rules: one ask per reflex per day at most; never during a turn; never a modal; never a strength
-or lifecycle word; the terminal command for the same decision is in the inspect pane for persona
-(b), never in the row; a dismissed ask is a recorded `dismiss`, not a hidden one.
+Rules: one ask per reflex per day at most; never during a turn; never inside a hook with a
+budget; never a strength or lifecycle word; the dialog's keys are the engine's, and Adage's own
+hotkeys are lowercase letters in a focused pane only; the terminal command for the same decision
+is in the pane for persona (b), dim, with `Copy`, never in the dialog; a dismissed ask is a
+recorded `dismiss`, not a hidden one; if no press is held (the window was missed, or the mod
+reloaded mid-session), the dialog still asks and its answer is kept for the next session start,
+with the band saying `» kept for your next session · /adage review`.
 
 ### 4.18 The first ten minutes with no terminal
 
@@ -365,7 +386,7 @@ or lifecycle word; the terminal command for the same decision is in the inspect 
 repo…`, the band's `learning…`, then the toast `adage learned from 23 sessions`. First prompt: a
 reflex fires and its line appears under the prompt. End of the first or second turn: the first
 ask, usually a nascent reflex (`waits for your review · enable`). A few sessions in: the first
-execution ask with its diff, two presses, and from then on `make gen` runs for them. Nothing in
+execution ask with its terms and diff, two acts, and from their next session `make gen` runs for them. Nothing in
 this journey is a command, a copy, or a terminal; `Explore in browser` is there when they want
 the whole picture.
 
@@ -455,7 +476,7 @@ for strength (`all · fire · prime · inhibit`) and a `Select` for lifecycle. T
 row, worded as the lexicon words it (`make it a direct instruction`, `make it a suggestion`,
 `retire it`, `enable it`, `pin it`, `dismiss it`), and a press records the decision through the
 press token with a 2 s thanks in place. An execution or prediction grant is offered as in §4.17
-(two presses, the diff between). For persona (b) the expanded row also shows the equivalent
+(two acts, the facts between). For persona (b) the expanded row also shows the equivalent
 terminal command, dim, with `Copy`; a toast confirms a copy: `copied: adage review strengthen
 acme-billing/learned read-linked-files`.
 
@@ -482,13 +503,16 @@ warning from §9.1. Live on a Desktop without `$.process`: §4.12's line.
 | `/adage watch`, `/adage reflexes`, `/adage health` | Opens the pane on that tab; prints nothing | none |
 | `/adage why` | The last directive this session: its text as the model read it, route, track, evidence line, followed or not; for a skill, the verified steps; with nothing fired (either arm): `No reflex has spoken in this session yet.` | none |
 | `/adage off` | Runs `adage off` (plan A6): `adage is off for this repository (.adage/disabled). /adage on turns it back on.` | none |
-| `/adage on` | A press: runs `adage on --press <token>`; `adage is on for this repository.` (if the token is missing, the row says `turn it on` and the press does it) | none |
+| `/adage on` | Opens the ask `adage is off in this repository · turn it on / leave it off`; the answer runs `adage on` through the press; then `adage is on for this repository.` | none |
 | `/adage review` | Opens the pane on **waiting for you** | none |
-| `/adage map` | `Explore in browser`: starts `adage map` if needed and opens the link | none |
+| `/adage map` | `Explore in browser`: starts `adage map --no-open` on a free port if needed and opens the link | none |
 | `/adage pause` | `adage is paused for this session · /adage pause resumes` / `adage resumed` | none |
 
-`immediate: true` on every command (they run mid-turn). Nothing else is registered: no `review`,
-`delegate`, `install`, `config set` of a guarded key.
+One registration, `/adage`, with the argument hint `[watch|reflexes|health|review|why|off|on|map|
+pause]`; the verb is parsed from the arguments (the mods API has no subcommands of its own), and
+an unknown verb prints the card. `immediate: true` (they run mid-turn). No command handler runs
+a person-only verb; `/adage on` opens the ask. Nothing else is registered: no `install`, no
+`config set` of a guarded key.
 
 ## 8. Settings
 
@@ -502,12 +526,12 @@ under `pluginConfigs`; a change reloads the mod.
 | `noticed` | Show what Adage noticed | boolean | on | A line when a sequence of calls matches one Adage is still learning |
 | `skills_invoke` | Invoke skills from reflexes | boolean | off | Load a skill at the step a granted reflex names, without a model request to choose it |
 | `routine_model` | Route routine steps to | string | empty | A model alias for steps a fire reflex covers, or empty to route nothing |
-| `asks` | Ask me in the session | boolean | on | One line when a reflex waits for your decision; off keeps every decision at the terminal |
 
 Not here: the notice cadence (`ui.notices` in `config.toml`, so `/config` and `adage config`
 never disagree); execution policy, grants and trust, which are decisions made by a press (§4.17)
-or at a terminal and never a settings row; and a hold on known dead ends (an open question,
-architecture §10).
+or at a terminal and never a settings row; a switch for asking (a decision is never hidden
+behind a setting: dismiss it and it waits in the pane); and a hold on known dead ends (an open
+question, architecture §10).
 
 ## 9. Degraded and error states
 
@@ -520,16 +544,16 @@ architecture §10).
 | **9.5 Lapsed grant** | §4.5 | toast, band line 2 |
 | **9.6 Harness newer than validated** | `» Claude Code 2.1.3xx is newer than this plugin was tested with (2.1.287) · run adage doctor` on the band's second line, until the first prompt is submitted, once per new harness version per machine | band |
 | **9.7 Narrow terminal, unasked pane** | Nothing; the pane waits; `/adage` opens it inline | |
-| **9.8 Review waiting** | `» 2 reflexes wait for you · /adage review`, while any ask is pending and the ask row is hidden | band line 2 |
+| **9.8 Review waiting** | `» 2 need review · /adage review`, while any ask is pending and not shown | band line 2 |
 | **9.9 Recovery required** (an interrupted E2 action) | `⚠ adage: an action was interrupted; inspect the worktree, then run adage-exec recover --id … --acknowledge in a terminal` (recovery is the one act that stays at a terminal: it needs a person looking at the worktree) | status until acknowledged |
-| **9.12 No press token** (the window was missed, or the mod reloaded mid-session) | The ask row still appears but its buttons read `after your next /clear`, and the inspect pane shows the terminal command | row |
+| **9.12 No press token** (the window was missed, or the mod reloaded mid-session) | The dialog still asks; the answer is kept and applied at the next session start, and the band says `» kept for your next session · /adage review`; the pane shows the terminal command for anyone who wants it now | dialog, band |
 | **9.10 Desktop without `$.process`** | §4.12 | pane empty state |
 | **9.11 Off, learning off, paused, outside a repository** | §4.13–4.16 | band, card |
 
 Rules: a warning uses `$.ui.status` (the engine's `⚠ adage:` fits, so no template starts with
 `adage:`); an attention item uses the band's second line with `»`; a fact uses a toast. Every
-degraded line names the command that fixes it and says `in a terminal` when the command is
-person-only, as `zero-config.md` words it ("run adage review in a terminal").
+degraded line names what fixes it: a `/adage` verb where one exists, and `in a terminal` only for
+recovery, the one act that stays there.
 
 ## 10. Copy deck
 
@@ -559,19 +583,20 @@ lines of about 40 columns.
 | `band.paused` | `◠ adage  paused · /adage pause` | bodyColumns |
 | `band.learning` | `◠ adage  learning…` (bootstrap) | bodyColumns |
 | `band.lapsed` | `» {n} grant{s} lapsed · /adage health` | bodyColumns |
-| `band.review` | `» {n} reflex{es} wait{s} for you · /adage review` | bodyColumns |
-| `ask.review` | `◠ {route} waits for your review · 1 enable · 2 not this one · 3 why` / `esc: later` | bodyColumns |
-| `ask.review.done` | `◠ {route} is on · it is said to the agent from now on` | bodyColumns |
-| `ask.exec` | `◠ {route} can run {command} for you, sandboxed · 1 see what it would change · 2 not now` | bodyColumns |
-| `ask.exec.diff` | `{command} would change {n} file{s} in this repository ({files})` / `nothing else is written; it runs in a sandbox with no network · 1 allow · 2 not now` / the diff as `Code` | pane |
-| `ask.exec.first` | `this turns on sandboxed execution for this machine; Adage only ever runs steps you allow one by one` | bodyColumns |
-| `ask.exec.done` | `◠ {route} will run {command} for you from now on · /adage review to change that` | bodyColumns |
-| `ask.predict` | `◠ {route} can run its step without asking the model · 1 allow · 2 not now · 3 why` | bodyColumns |
-| `ask.predict.detail` | `the step still meets your permission rules; a dialog appears where it would for the agent's own call · 1 allow · 2 not now` | pane |
-| `ask.trust` | `◠ {n} team reflexes signed by {signer} are in this repository · 1 use them · 2 not now · 3 why` | bodyColumns |
-| `ask.on` | `◠ adage is off here · 1 turn it on` | bodyColumns |
-| `ask.queue` | `{i} of {n}` | 8 |
-| `ask.notoken` | `after your next /clear` | 24 |
+| `band.review` | `» {n} need review · /adage review` | bodyColumns |
+| `band.kept` | `» kept for your next session · /adage review` | bodyColumns |
+| `ask.review` | question `{route} waits for your review` · answers `enable` / `not this one` / `why` | the dialog's |
+| `ask.review.done` | toast `{route} is on` | 1 × 40 |
+| `ask.exec` | question `{route} can run {command} for you, sandboxed` · answers `see what it would do` / `not now` | the dialog's |
+| `ask.exec.pane` | `runs {argv}` · `writes {outputs}` · `caches {caches}` · `effect {effect}` · `sandbox read-only, no network, this repository` · `scripts {path} sha256 {hash}` (text below) · `takes effect in your next session` · `─ what it would do now ─` · the diff as `Code` · `a: allow · n: not now · c: copy the terminal command` / `esc: later` | pane |
+| `ask.exec.first` | `this turns on sandboxed execution for this machine; Adage only ever runs steps you allow one by one` | pane |
+| `ask.exec.e1` | `runs {argv}` · `inputs {contracts}` · `output {mode}` · `fields {proposed}` | pane |
+| `ask.exec.done` | toast `{route} runs {command} for you from your next session` | 2 × 40 |
+| `ask.predict` | question `{route} can run its step without asking the model` · answers `allow` / `not now` / `why` | the dialog's |
+| `ask.predict.pane` | `the step still meets your permission rules; a dialog appears where it would for the agent's own call` · `a: allow · n: not now` | pane |
+| `ask.trust` | question `{n} team reflexes are in this repository, signed by {signer}` · answers `use them` / `not now` / `why` | the dialog's |
+| `ask.trust.pane` | `key {fingerprint}` · `packs {list}` · `added in {commit} by {author} on {date}` · `this is the same trust you give CLAUDE.md` · `u: use them · n: not now` | pane |
+| `ask.on` | question `adage is off in this repository` · answers `turn it on` / `leave it off` | the dialog's |
 | `pane.waiting` | `waiting for you` | |
 | `pane.verb.{strengthen\|weaken\|extinguish\|approve\|pin\|dismiss}` | `make it a direct instruction` / `make it a suggestion` / `retire it` / `enable it` / `pin it` / `dismiss it` | |
 | `pane.explore` | `Explore in browser` | |
@@ -612,9 +637,10 @@ used (the word is grant); "saved" is not used.
 ## 11. Interaction details
 
 - **Focus.** The pane takes the keyboard only when opened by `/adage …` (the engine grants
-  `focus` with an empty prompt), by ctrl+x tab, or by a click. `esc` returns it and closes the
-  pane. While focused: `tab` walks controls, arrows and page keys scroll, `enter` presses or
-  submits, hotkeys press footer buttons. The band has no controls.
+  `focus` with an empty prompt), by a `why` or `see what it would do` answer, by ctrl+x tab, or
+  by a click. `esc` returns it and closes the pane. While focused: `tab` walks controls, arrows
+  and page keys scroll, `enter` presses or submits, lowercase hotkeys press buttons. The band has
+  no controls. An ask is the engine's dialog and has the engine's keys.
 - **Inspect** opens a second pane as a dialog over the first (`focus`, `closeOnEscape`,
   `rows: 12`); `esc` closes it and returns to the Live tab with the row still selected.
 - **Copy** uses `$.ui.copy` on the surface the press came from; when the result says the copy
@@ -650,8 +676,8 @@ used (the word is grant); "saved" is not used.
 - The arm, anywhere.
 - Any text to the model. The `<adage-reflex>` blocks are unchanged by this document.
 - A status-line entry for normal operation (the engine's `⚠` prefix makes it a warning channel).
-- Digit hotkeys, uppercase hotkeys, bound arrows, a takeover of the screen, a second window, a
-  question dialog.
+- Digit hotkeys of Adage's own (the digits in an ask are the engine's dialog's), uppercase
+  hotkeys, bound arrows, a takeover of the screen, a second window, a dialog during a turn.
 
 ## 14. Usability check (part of the test plan, T-U-01)
 

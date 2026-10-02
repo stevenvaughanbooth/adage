@@ -369,12 +369,14 @@ already said, from the state it already keeps, and the payload carries no messag
 
 ### What a mod should not do
 
-- **Hold or grant execution authority.** F11 ("Refuse trust changes inside an agent session") and
-  the grant key design stand. `$.ui.ask` is tempting for "approve this reflex?", and the
-  `tool.call` input even carries `consent` ("the person's own words for the press that raised the
-  call"), but a press in a Claude Code dialog is not the terminal the design requires, and the
-  binary's environment checks (`crate::install::AGENT_ENV`) would refuse it anyway. A `/adage
-  review` command should print what `adage review` prints and tell the person where to decide.
+- **Decide anything itself.** F11's purpose stands: a decision is a person's, never the model's.
+  The design (architecture §3.12) lets a person make it from the session, in `$.ui.ask`'s dialog,
+  with a single-use token the binary issues once before the agent's first action; the binary's
+  environment check (`AGENT_ENV`) is replaced at specific call sites by a check that accepts
+  that token. What the mod must never do is run such a verb from a hook, a timer, a feed line or
+  a command handler, or hold the token anywhere but engine memory. Q14 measures the two facts the
+  design rests on. The claim is provenance and a guard against steering, never a boundary against
+  an agent that runs as the same user.
 - **Run the learner or anything long.** `$.process.run` is one shot and waits (30 s default,
   ten minutes at most); a background child belongs to `$.process.spawn`, whose "loop is the
   child's life" and ends with the module. The binary already starts the learner detached from
@@ -509,7 +511,7 @@ script in the folder, per the spikes README.
 | Q11 | **Routing.** `next({ ...e, model: 'haiku', effort: 'low' })` on steps the matcher marks routine: cost per task and quality against the unrouted arm | The same runner, a second treated arm | Reported as numbers; no pass bar, since the quality rule decides |
 | Q12 | **Noticed, on the fast path.** A `candidates` table of sub-support sequences in the index: what it adds to the no-match path (the 1.76 ms p95 of §9) and to a `PostToolBatch` with a context match; how often a `noticed` line would draw per session over the demo's seeded histories, and whether a person reads it as learning or as noise | `hook_latency` with candidates compiled for the acme-billing fixture; the twelve seeded sessions replayed; one person's read of the recording | ≤ 0.3 ms added at no match; at most one line per candidate per session; nothing for a single call |
 | Q13 | **Skills.** A `turn.step` hook that yields a `Skill` tool call: does the engine run the Skill tool, does the skill's text enter the transcript as its result, and does the model's next step proceed with it loaded? Does a `skill.prompt` rewrite reach the model for a `/name`, a Skill tool call and a subagent preload alike? Is a Skill tool use recorded in the transcript `.jsonl` so the learner can count it? | The probe mod with a fixture skill in `.claude/skills/`, in `-p` and interactive; `claude --debug`; the transcript file | The skill's text appears once as the tool result and the next step cites it in 10 of 10 runs; the rewrite is what the model reads at all three entry points; Skill tool uses are on disk with their inputs |
-| Q14 | **The press.** A person-only decision made from a mod `Button` with a session-bound token (design §3.12): is the token issued only in the window between the hooks' `SessionStart` and the first prompt, and can any agent action land in that window? Is the mod's `$.process.run` stdout absent from the transcript, the debug log and every file the agent can read? Does `/resume` reissue inside the window and nothing else? Do the `adage-ask` pane's digit hotkeys stay out of the empty prompt? | The probe mod issuing and holding a token; an agent told to enable a reflex and to read the token; `claude --debug`; the transcript; `/resume` and `/clear` | The agent fails at both in 10 of 10 sessions while a person's press succeeds; the token appears in no file; `/resume` reissues once; a digit typed into the empty prompt never presses the row |
+| Q14 | **The press.** A person-only decision made from the engine's own dialog (`$.ui.ask` at `turn.complete`) with a single-use token the binary issues once (design §3.12): does the mod's `classic.SessionStart` hook run after the command hooks' `SessionStart`, so the token is claimed before any agent action? Do `/clear` and `/resume` arrive as `classic.SessionStart` with their `source`? Does a `$.ui.ask` from `turn.complete` wait on the person without a budget, and does its dialog read as Claude Code's own? Are the mod's `$.process.run` stdin and stdout absent from the transcript, the debug log, `ps` and every file? Can the model invoke a registered command? What does `$.state` survive? | The probe mod issuing and holding a token; `/clear`, `/resume`, auto-compaction; a model told to enable a reflex without editing its environment, writing under `$ADAGE_HOME` or hand-writing a hook payload; `claude --debug`; the transcript | Each fact observed and written down; the model's attempt refuses while a person's answer succeeds and shows `via: press`; the token appears in no file or process list; a `no` on the ordering or the budget sends the design back before A7 |
 
 ## Pass / fail
 
@@ -520,8 +522,9 @@ Layer 2 ships only if Q2 (Layer 2) and Q4 pass. Layer 3 ships only if Q5 finds t
 disk. Layer 4 is the spike's real bet: Q9 says whether the mechanism exists as documented, and Q10
 whether it moves the launch gate that execution mode could not. It ships only behind the same E2
 grants, policy and control arm as any action, and only with Q10's quality at the baseline.
-Review, delegation and setup do not ship in a pane whatever the spike finds; that needs the
-approval design named above, which is not this spike's question.
+Review and delegation ship in the session only with the press design of architecture §3.12 and
+only if Q14 holds; setup (`install`, guarded `config set`) and recovery stay at a terminal
+whatever the spike finds.
 
 The spike fails, and the command hooks remain the whole integration, if a mod cannot coexist
 with the plugin's command hooks without double delivery (Q1), or if `$.process` is unavailable in
