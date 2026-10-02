@@ -32,6 +32,7 @@
 
 use crate::harness::{claude, codex, opencode};
 use adage_core::repo;
+use adage_trace::Harness;
 use anyhow::{bail, Context, Result};
 use serde_json::{json, Value};
 use std::io::IsTerminal;
@@ -50,42 +51,25 @@ fn flag(args: &[String], name: &str) -> Option<String> {
     args.iter().position(|a| a == name).and_then(|i| args.get(i + 1).cloned())
 }
 
-fn home(rel: &str) -> Result<PathBuf> {
-    let home = adage_store::home_dir().context("HOME is not set")?;
-    Ok(home.join(rel))
-}
-
-/// `$var` if set and non-empty, else `~/<home_rel>`.
-fn env_dir(var: &str, home_rel: &str) -> Result<PathBuf> {
-    match std::env::var_os(var).filter(|v| !v.is_empty()) {
-        Some(v) => Ok(PathBuf::from(v)),
-        None => home(home_rel),
-    }
-}
-
-/// A harness's registration for one binary: what to write, and where each scope puts it.
+/// A harness's registration for one binary: what to write, and where each scope puts it
+/// ([`crate::placement`]).
 pub(crate) struct Registration {
     content: String,
     project_rel: &'static str,
-    user_path: fn() -> Result<PathBuf>,
+    user_path: Box<dyn Fn() -> Result<PathBuf>>,
 }
 
 fn registration(harness: &str, bin: &str) -> Result<Registration> {
-    let (content, project_rel, user_path): (String, &'static str, fn() -> Result<PathBuf>) = match harness {
-        "claude-code" | "claude" => {
-            (serde_json::to_string_pretty(&claude::settings(bin))?, ".claude/settings.local.json", || {
-                home(".claude/settings.json")
-            })
-        }
-        "codex" => (serde_json::to_string_pretty(&codex::settings(bin))?, ".codex/hooks.json", || {
-            env_dir("CODEX_HOME", ".codex").map(|d| d.join("hooks.json"))
-        }),
-        "opencode" => (opencode::plugin_source(bin), ".opencode/plugins/adage.js", || {
-            env_dir("XDG_CONFIG_HOME", ".config").map(|d| d.join("opencode/plugins/adage.js"))
-        }),
-        _ => bail!("{USAGE}"),
+    let Some(h) = Harness::parse(harness) else { bail!("{USAGE}") };
+    let content = match h {
+        Harness::ClaudeCode => serde_json::to_string_pretty(&claude::settings(bin))?,
+        Harness::Codex => serde_json::to_string_pretty(&codex::settings(bin))?,
+        Harness::OpenCode => opencode::plugin_source(bin),
     };
-    Ok(Registration { content, project_rel, user_path })
+    let p = crate::placement::of(h);
+    let (dir, file) = (p.config_dir, p.user_install);
+    let user_path = Box::new(move || dir().map(|d| d.join(file)).context("HOME is not set"));
+    Ok(Registration { content, project_rel: p.project_install, user_path })
 }
 
 /// The adage binary hooks should run: `--bin`, else this one; absolute, in plain form.

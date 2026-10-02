@@ -37,6 +37,7 @@ mod marketplace_cmd;
 mod models;
 mod packs;
 mod packs_cmd;
+mod placement;
 mod proposal;
 mod redact;
 mod reimport;
