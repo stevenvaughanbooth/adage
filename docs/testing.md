@@ -63,7 +63,7 @@ Each component is tested through its own crate, without the others:
 | Canonical model | `adage-trace` | unit tests |
 | Ingestion | `adage-ingest` | decoders fed bytes from memory (`source.rs`), the format registry against each format's reader (`format.rs`) |
 | Learning engine | `adage-graph`, `adage-learn` | sessions built in memory (`adage-graph/tests/common`), end to end over transcripts (`adage-learn/tests/end_to_end.rs`) |
-| Live interaction | `adage-runtime`, `adage-hook` | `decide()` as a function of index, state, event and policy (`adage-runtime/src/tests.rs`) |
+| Live interaction | `adage-runtime`, `adage-hook` | `decide()` as a function of index, state, event, policy and checkout (`adage-runtime/src/tests.rs`) |
 | Application | `adage-app` | decisions against a temporary `ADAGE_HOME` (`review.rs` tests), without the binary |
 | Harnesses | `adage-hook::harness`, `adage-sim` | each adapter's translation; one scenario rendered in every harness's formats |
 | Front ends | `adage-cli` | the binary end to end (`tests/`), frames as snapshots (`ui/tests.rs`) |

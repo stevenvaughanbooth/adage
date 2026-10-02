@@ -342,6 +342,7 @@ pub fn evaluate(p: &Prepared, opts: &Options) -> Result<Report> {
         let rep = replay::replay(
             &t,
             &adage_runtime::Ctx {
+                checkout: &adage_runtime::checkout::Disk,
                 index,
                 repo: repo_key.to_string(),
                 root: &sandbox.root,

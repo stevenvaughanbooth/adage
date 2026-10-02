@@ -1043,6 +1043,7 @@ fn respond(
         exact_keys: false,
     };
     let ctx = Ctx {
+        checkout: &adage_runtime::checkout::Disk,
         index,
         repo: repo_key.clone(),
         root,

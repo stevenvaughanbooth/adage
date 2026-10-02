@@ -79,6 +79,7 @@ fn assert_routine(index: Index, expected: &str) {
     assert!(route.route.state.is_live(), "zero advisory uplift must not extinguish executable knowledge");
     let table = adage_core::CommandTable::load();
     let ctx = adage_runtime::Ctx {
+        checkout: &adage_runtime::checkout::Disk,
         index: &index,
         repo: "routine".into(),
         root: Path::new("/fixture/routine"),

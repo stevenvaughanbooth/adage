@@ -192,6 +192,7 @@ fn mines_intent_routes_and_the_runtime_matches_new_phrasings() {
     let root = tempfile::tempdir().unwrap();
     let table = CommandTable::load();
     let ctx = Ctx {
+        checkout: &adage_runtime::checkout::Disk,
         index: &index,
         repo: "acme-docs".into(),
         root: root.path(),

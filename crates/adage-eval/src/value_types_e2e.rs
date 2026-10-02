@@ -115,6 +115,7 @@ pub fn run(
     let root = home.path().join("root");
     std::fs::create_dir_all(&root)?;
     let ctx = Ctx {
+        checkout: &adage_runtime::checkout::Disk,
         index: &index,
         repo: repo.to_string(),
         root: &root,

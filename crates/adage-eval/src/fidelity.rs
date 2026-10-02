@@ -92,6 +92,7 @@ pub fn run_with(dir: &Path, round: &str, exact_keys: bool) -> Result<FidelityRep
         let r = replay::replay(
             &t,
             &adage_runtime::Ctx {
+                checkout: &adage_runtime::checkout::Disk,
                 index: &index,
                 repo: ds.manifest.repo.clone(),
                 root: &sandbox.root,
@@ -224,6 +225,7 @@ pub fn run_learned(dir: &Path, round: &str, exact_keys: bool) -> Result<LearnedF
         let r = replay::replay(
             &t,
             &adage_runtime::Ctx {
+                checkout: &adage_runtime::checkout::Disk,
                 index,
                 repo: ds.manifest.repo.clone(),
                 root: &sandbox.root,

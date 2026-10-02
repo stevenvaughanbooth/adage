@@ -677,6 +677,7 @@ pub fn directives(policy: &Policy, t: &Transcript, acts: &[Act], task: &str, sto
         Policy::Runtime { index, repo, root, table, params, embed, cases } => {
             let root_s = root.to_string_lossy().to_string();
             let ctx = Ctx {
+                checkout: &adage_runtime::checkout::Disk,
                 index,
                 repo: repo.to_string(),
                 root,

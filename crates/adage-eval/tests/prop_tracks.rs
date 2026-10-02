@@ -493,6 +493,7 @@ fn check(
     let index = Index::compile(&[track]);
     let table = CommandTable::load();
     let ctx = Ctx {
+        checkout: &adage_runtime::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: &root,
@@ -717,6 +718,7 @@ fn interlocking_holds_for_colliding_route_sets() {
         let root = dir.path().canonicalize().unwrap();
         let root_s = root.to_string_lossy().to_string();
         let ctx = Ctx {
+            checkout: &adage_runtime::checkout::Disk,
             index: &index,
             repo: "acme".into(),
             root: &root,

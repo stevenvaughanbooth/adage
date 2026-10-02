@@ -144,6 +144,7 @@ fn contexts_fire_in_replay_and_the_fast_path_stays_exact_on_newkinds() {
             let r = replay::replay(
                 &t,
                 &adage_runtime::Ctx {
+                    checkout: &adage_runtime::checkout::Disk,
                     index: &index,
                     repo: repo.to_string(),
                     root: &b.join("repo"),

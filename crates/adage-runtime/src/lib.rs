@@ -4,6 +4,7 @@
 //! which directives to emit. No I/O except checking that bound repository paths exist. The CLI
 //! owns reading payloads, locking state, writing spools, and printing harness output.
 
+pub mod checkout;
 pub mod context;
 pub mod fast;
 pub mod orient;
@@ -283,6 +284,8 @@ pub struct Ctx<'a> {
     pub index: &'a Index,
     pub repo: String,
     pub root: &'a Path,
+    /// What the decision may read of the checkout at `root` ([`checkout::Disk`] in the hook).
+    pub checkout: &'a dyn checkout::Checkout,
     pub table: &'a CommandTable,
     pub embed: Option<Embed<'a>>,
     /// Limits: the follow window, directives per session and per decision, stop requests,
@@ -355,7 +358,7 @@ impl Policy {
 fn card_text(ctx: &Ctx<'_>, route: &adage_tracks::Route) -> Option<String> {
     match &route.step {
         Step::Card { card } if ctx.policy.card_orientation => {
-            render::oriented_card_text(route, orient::block(ctx.root, card).as_deref())
+            render::oriented_card_text(route, orient::block(ctx.checkout, ctx.root, card).as_deref())
         }
         _ => render::route_text(route, &[]),
     }
@@ -880,7 +883,7 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                                                 None => None,
                                             }
                                         }
-                                        _ => bind_result_route(&ir.route, &call.output, ctx.root),
+                                        _ => bind_result_route(&ir.route, &call.output, ctx),
                                     };
                                     if let Some(t) = text {
                                         out.push(directive(ir, t));
@@ -1201,15 +1204,15 @@ fn plain_token(v: &str) -> bool {
         && v.chars().all(|c| c.is_ascii_alphanumeric() || "_./:@=+,-".contains(c))
 }
 
-fn contract_ok(c: &Contract, v: &str, root: &Path) -> bool {
-    contract_ok_typed(c, None, v, root)
+fn contract_ok(c: &Contract, v: &str, ctx: &Ctx) -> bool {
+    contract_ok_typed(c, None, v, ctx)
 }
 
 /// [`contract_ok`], where a slot with a learned value type is checked by the O(len) matcher
 /// instead of a compiled regex: only when the type's runs write exactly the contract's regex
 /// (`io::validate` refuses a track where they do not), so the two are the same language and no
 /// regex is compiled in the hook (Track G §4.3, §7.4).
-fn contract_ok_typed(c: &Contract, t: Option<&adage_tracks::ValueType>, v: &str, root: &Path) -> bool {
+fn contract_ok_typed(c: &Contract, t: Option<&adage_tracks::ValueType>, v: &str, ctx: &Ctx) -> bool {
     if !plain_token(v) {
         return false;
     }
@@ -1221,14 +1224,8 @@ fn contract_ok_typed(c: &Contract, t: Option<&adage_tracks::ValueType>, v: &str,
             _ => Regex::new(regex).map(|r| r.is_match(v)).unwrap_or(false),
         },
         Contract::RepoPath => {
-            if !repo::is_safe_relative(v) {
-                return false;
-            }
-            // Resolve symlinks: the real file must still be inside the repository.
-            match (root.canonicalize(), root.join(v).canonicalize()) {
-                (Ok(r), Ok(p)) => p.starts_with(&r) && p.is_file(),
-                _ => false,
-            }
+            // Symlinks resolved: the real file must still be inside the repository.
+            repo::is_safe_relative(v) && ctx.checkout.is_file(ctx.root, v)
         }
     }
 }
@@ -1244,7 +1241,7 @@ fn bind_prompt_route(r: &Route, spans: &[spans::Span], text: &str, ctx: &Ctx) ->
     for s in &r.slots {
         let v = match &s.source {
             SlotSource::Prompt { span } => {
-                spans.iter().find(|x| x.kind == *span && contract_ok(&s.contract, &x.value, ctx.root))?.value.clone()
+                spans.iter().find(|x| x.kind == *span && contract_ok(&s.contract, &x.value, ctx))?.value.clone()
             }
             SlotSource::PromptValue { vtype, mentions } => {
                 let toks = toks
@@ -1253,7 +1250,7 @@ fn bind_prompt_route(r: &Route, spans: &[spans::Span], text: &str, ctx: &Ctx) ->
                     .find(|(t, m)| {
                         (mentions.is_empty() || mentions.contains(m))
                             && adage_core::vtype::matches(&vtype.runs, &t.text)
-                            && contract_ok_typed(&s.contract, Some(vtype), &t.text, ctx.root)
+                            && contract_ok_typed(&s.contract, Some(vtype), &t.text, ctx)
                     })?
                     .0
                     .text
@@ -1320,7 +1317,7 @@ fn bind_output_route(r: &Route, output: &str, ctx: &Ctx) -> Option<(String, Stri
     for s in &r.slots {
         let SlotSource::OutputValue { field, vtype } = &s.source else { return None };
         let v = output_values(output, field.as_deref()).into_iter().find(|v| {
-            adage_core::vtype::matches(&vtype.runs, v) && contract_ok_typed(&s.contract, Some(vtype), v, ctx.root)
+            adage_core::vtype::matches(&vtype.runs, v) && contract_ok_typed(&s.contract, Some(vtype), v, ctx)
         })?;
         bound.push((s.name.clone(), v));
     }
@@ -1338,7 +1335,7 @@ fn bind_edit_slots(r: &Route, rel: &str, ctx: &Ctx) -> Option<Vec<(String, Strin
                     return None;
                 }
                 let seg = rel.split('/').filter(|x| !x.is_empty()).nth(*depth as usize)?;
-                if !contract_ok(&s.contract, seg, ctx.root) {
+                if !contract_ok(&s.contract, seg, ctx) {
                     return None;
                 }
                 bound.push((s.name.clone(), seg.to_string()));
@@ -1351,7 +1348,7 @@ fn bind_edit_slots(r: &Route, rel: &str, ctx: &Ctx) -> Option<Vec<(String, Strin
                 let tests: Vec<&str> = map
                     .get(rel)?
                     .iter()
-                    .filter(|t| contract_ok(&s.contract, t, ctx.root))
+                    .filter(|t| contract_ok(&s.contract, t, ctx))
                     .take(*k as usize)
                     .map(String::as_str)
                     .collect();
@@ -1367,7 +1364,7 @@ fn bind_edit_slots(r: &Route, rel: &str, ctx: &Ctx) -> Option<Vec<(String, Strin
 }
 
 /// Bind a route's result-field slot from the triggering command's JSON output.
-fn bind_result_route(r: &Route, output: &str, root: &Path) -> Option<String> {
+fn bind_result_route(r: &Route, output: &str, ctx: &Ctx) -> Option<String> {
     let Step::ReadBatch { slot, max } = &r.step else { return None };
     let s = r.slots.iter().find(|s| &s.name == slot)?;
     let SlotSource::ResultField { field } = &s.source else { return None };
@@ -1377,7 +1374,7 @@ fn bind_result_route(r: &Route, output: &str, root: &Path) -> Option<String> {
             // Plain-text output, or the "*paths" pseudo-field: repository paths it mentions.
             None => spans::extract(output).into_iter().filter(|x| x.kind == SpanKind::Path).map(|x| x.value).collect(),
         };
-    let files: Vec<String> = candidates.into_iter().filter(|p| contract_ok(&s.contract, p, root)).take(*max).collect();
+    let files: Vec<String> = candidates.into_iter().filter(|p| contract_ok(&s.contract, p, ctx)).take(*max).collect();
     if files.is_empty() {
         return None;
     }

@@ -90,7 +90,8 @@ TraceSource ──bytes──► Format (sniffed) ──► Session
   content sniffing that was spread across the learner and the savings ledger.
 - **`Locator`**: the one place a decoder may need this machine. `LocalCheckout` finds the git
   checkout and its key. `AsRecorded` trusts the trace alone, which is how traces collected on
-  other machines decode with no local checkout (tested in `source.rs`).
+  other machines decode with no local checkout (tested in `source.rs`). A batch takes its locator
+  in `batch::Options`, and the parse cache keeps each locator's parses apart.
 
 Day 0 and live learning use the same path. `adage init` and `adage condition` ingest a whole source
 (`ingest`); a session's Stop hook names its trace, and the learner decodes it through the same
@@ -102,6 +103,11 @@ Day 0 and live learning use the same path. `adage init` and `adage condition` in
   an `Output` back into the bytes the harness expects.
 - **`decide(ctx, state, event) -> Decision`**: the runtime's single entry point. The hook does
   the I/O around it: reading the index, locking state, appending spools.
+- **`Checkout`** (`adage-runtime::checkout`, on `Ctx`): everything a decision reads of the working
+  tree, which is a card's orientation and whether a repository-path slot names a file. `Disk` reads this
+  machine's checkout; `Unread` reads nothing (a replay, a remote service). Nothing else in the
+  runtime touches the filesystem (tested in `tests.rs` with a checkout that exists only behind
+  the port).
 
 ### Learning engine (`adage-learn`, `adage-graph`)
 
@@ -126,7 +132,8 @@ Day 0 and live learning use the same path. `adage init` and `adage condition` in
 | Status, listings and the map's read model still live in the CLI as untyped JSON, in three shapes for one reflex | Next: move the read model into `adage-app` with typed results. Unifying the shapes changes the CLI's `--json` output and the web map's types, so it needs a decision |
 | Install and detection kept separate tables of where each harness's registration lives, and had drifted (`CLAUDE_CONFIG_DIR`) | **Done**: `adage-cli/src/placement.rs`, one table per `Harness` for both |
 | The learner writes files directly; learning always reprocesses all history | Next: a store port for what learning materializes, then incremental learning over new sessions only |
-| `decide()` still reads the checkout for card orientation and repository-path contracts | Next: a filesystem port on `Ctx` |
+| `decide()` read the checkout directly for card orientation and repository-path contracts | **Done**: the `Checkout` port on `Ctx` |
+| Simulator-fixture tests decoded through this machine's checkouts | **Done**: the learner's fixture tests decode `AsRecorded`; the CLI end-to-end tests, which run the binary here, state their one precondition (`adage_sim::assume_no_checkout_at_cwd`) |
 
 ## Testing by component
 

@@ -193,6 +193,7 @@ fn a_family_with_a_passing_trace_gets_a_card_delivered_once_on_its_own_kind_of_t
     let root = tempfile::tempdir().unwrap();
     let table = CommandTable::load();
     let ctx = Ctx {
+        checkout: &adage_runtime::checkout::Disk,
         index: &index,
         repo: "acme-lib".into(),
         root: root.path(),

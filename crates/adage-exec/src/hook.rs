@@ -1416,6 +1416,7 @@ mod prediction_tests {
         fn selected(&self, path: &str) -> (Event, Vec<Directive>) {
             let table = CommandTable::load();
             let ctx = Ctx {
+                checkout: &adage_runtime::checkout::Disk,
                 index: &self.index,
                 repo: "fixture".into(),
                 root: &self.root,
@@ -2008,6 +2009,7 @@ mod prediction_tests {
         f.approve(); // A test-only grant in this temporary home, never a real user's approval.
         let table = CommandTable::load();
         let ctx = Ctx {
+            checkout: &adage_runtime::checkout::Disk,
             index: &f.index,
             repo: "fixture".into(),
             root: &f.root,
