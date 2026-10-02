@@ -14,10 +14,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-/// Milliseconds since the Unix epoch.
-pub fn now_ms() -> u64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
-}
+pub use adage_core::time::now_ms;
 
 /// Debug builds only: `record` writes the learner command a hook would start to
 /// `learn-queue/spawn-record.jsonl` instead of starting it; `fail` makes starting it fail.

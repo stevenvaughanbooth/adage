@@ -500,7 +500,7 @@ pub fn run(o: &Options, paths: &Paths) -> Result<Sense> {
         mined.append(&mut a.mined);
     }
     let settings = adage_store::config::load(paths).config;
-    let mut cfg = if o.demo { LearnConfig::demo() } else { crate::autolearn::thresholds(settings.learn_thresholds) };
+    let mut cfg = if o.demo { LearnConfig::demo() } else { LearnConfig::for_thresholds(settings.learn_thresholds) };
     cfg.cards = crate::autolearn::card_params(&settings, paths);
     let (report, planned) = adage_learn::plan(mined, Some(&paths.models()), &paths.tracks(), &cfg)?;
     sense.thresholds = report.thresholds.clone();

@@ -546,16 +546,8 @@ impl Verb {
     }
 }
 
-/// A stored route state as a lifecycle word.
-pub fn lifecycle(s: RouteState) -> &'static str {
-    match s {
-        RouteState::Nascent => "nascent",
-        RouteState::Forming => "forming",
-        RouteState::Firm => "firm",
-        RouteState::Extinguished => "extinguished",
-        RouteState::Dormant => "dormant",
-    }
-}
+/// A lifecycle state in the lexicon's words (one definition: [`crate::words::lifecycle`]).
+pub use crate::words::lifecycle;
 
 /// What a decision did.
 #[derive(Debug, Clone)]
@@ -610,6 +602,24 @@ pub fn decide(
     paths: &Paths,
 ) -> Result<Outcome> {
     let _tracks = adage_store::lock::exclusive(&paths.tracks_lock())?;
+    apply(verb, spec, route_id, by, paths)
+}
+
+/// [`decide`], waiting at most `patience` for the tracks lock: for a front end that must not
+/// freeze while a learn run holds it (`adage ui`). A decision that cannot get the lock in time is
+/// refused, with nothing written, and can be made again in a moment.
+pub fn decide_within(
+    _person: &Person,
+    verb: Verb,
+    spec: &str,
+    route_id: &str,
+    by: Option<String>,
+    paths: &Paths,
+    patience: std::time::Duration,
+) -> Result<Outcome> {
+    let Some(_tracks) = adage_store::lock::exclusive_within(&paths.tracks_lock(), patience)? else {
+        anyhow::bail!("a learn run is writing the reflexes now; nothing was recorded, so try again in a moment");
+    };
     apply(verb, spec, route_id, by, paths)
 }
 
@@ -942,6 +952,20 @@ mod tests {
         assert!(rx.recv_timeout(std::time::Duration::from_millis(300)).is_err(), "decided while the lock was held");
         drop(held);
         assert_eq!(decider.join().unwrap().unwrap(), Strength::Prime);
+    }
+
+    /// A front end that must not freeze is refused, not blocked, while a learner holds the lock.
+    #[test]
+    fn a_bounded_decision_is_refused_while_the_lock_is_held() {
+        let (_d, paths) = home(vec![route("t", Strength::Fire, RouteState::Firm)]);
+        let held = adage_store::lock::exclusive(&paths.tracks_lock()).unwrap();
+        let person = Person::for_tests();
+        let wait = std::time::Duration::from_millis(50);
+        let busy = decide_within(&person, Verb::Weaken, "acme/learned", "t", None, &paths, wait).unwrap_err();
+        assert!(format!("{busy:#}").contains("try again"), "{busy:#}");
+        drop(held);
+        let o = decide_within(&person, Verb::Weaken, "acme/learned", "t", None, &paths, wait).unwrap();
+        assert_eq!(o.after.strength, Strength::Prime);
     }
 
     #[test]

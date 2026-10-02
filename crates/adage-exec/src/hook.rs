@@ -964,7 +964,9 @@ fn act(turn: &Turn<'_>, directives: &[Directive], candidates: &[Candidate<'_>]) 
         }
     };
     if !turn.harness.capabilities().actions {
-        not_run(&mut out, "harness", "actions do not run under OpenCode, whose hook bridge waits one second");
+        // Named from the harness: only a hook that can wait for a run carries actions out.
+        let reason = format!("actions do not run under {}, whose hooks cannot wait for a run", turn.harness.display());
+        not_run(&mut out, "harness", &reason);
         return out;
     }
     let table = CommandTable::load();

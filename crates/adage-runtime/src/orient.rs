@@ -36,8 +36,9 @@ pub fn block(checkout: &dyn Checkout, root: &Path, card: &Card) -> Option<String
         "Where those files stand in this checkout now (read when this prompt arrived; line numbers count from 1):\n",
     );
     let mut any = false;
+    let read = checkout.reader(root);
     for f in &card.files {
-        let Some(facts) = file_facts(checkout, root, &f.path) else { continue };
+        let Some(facts) = file_facts(&*read, &f.path) else { continue };
         if out.len() + facts.len() > MAX_BYTES {
             break;
         }
@@ -150,8 +151,8 @@ fn headings(lines: &[&str]) -> Vec<usize> {
     out
 }
 
-fn file_facts(checkout: &dyn Checkout, root: &Path, rel: &str) -> Option<String> {
-    let text = checkout.text(root, rel)?;
+fn file_facts(read: &dyn Fn(&str) -> Option<String>, rel: &str) -> Option<String> {
+    let text = read(rel)?;
     let lines: Vec<&str> = text.lines().collect();
     let n = lines.len();
     let shown = crate::render::sanitise(rel);

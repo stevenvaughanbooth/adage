@@ -53,7 +53,7 @@ pub use adage_hook::autolearn::{on_turn_end, read_json, write_json, Queue, Reque
 #[allow(unused_imports)]
 pub use adage_hook::autolearn::{SPAWN_RECORD, TEST_SPAWN_ENV};
 use adage_learn::{diff, Inputs, LearnConfig};
-use adage_store::config::{self, Config, Thresholds};
+use adage_store::config::{self, Config};
 use adage_store::{lock, Paths};
 use anyhow::{bail, Result};
 use std::collections::BTreeSet;
@@ -77,13 +77,6 @@ pub fn instinct_config(cfg: &Config, paths: &Paths) -> adage_learn::instincts::C
         disabled: cfg.instincts_disabled.iter().cloned().collect(),
         spools: Some(paths.sessions()),
         roots: Default::default(),
-    }
-}
-
-pub fn thresholds(t: Thresholds) -> LearnConfig {
-    match t {
-        Thresholds::Default => LearnConfig::default(),
-        Thresholds::Demo => LearnConfig::demo(),
     }
 }
 
@@ -180,7 +173,7 @@ fn learn_once(paths: &Paths, cfg: &Config, root: &Path, repo: &str, transcripts:
         cache: cfg.learn_parse_cache.then(|| paths.cache().join("sessions")),
         only_repo: Some(repo.to_string()),
     };
-    let mut lc = thresholds(cfg.learn_thresholds);
+    let mut lc = LearnConfig::for_thresholds(cfg.learn_thresholds);
     // The hook named this repository's root: instincts bind from its files, even before any of
     // its sessions has steps to learn from (day 0).
     let mut ic = instinct_config(cfg, paths);

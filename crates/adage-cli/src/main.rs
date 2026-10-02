@@ -451,7 +451,7 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
     let cfg = if args.iter().any(|a| a == "--demo") {
         LearnConfig::demo()
     } else {
-        autolearn::thresholds(settings.learn_thresholds)
+        adage_learn::LearnConfig::for_thresholds(settings.learn_thresholds)
     };
     let mut cfg = cfg;
     // Instincts are bound after learning, per repository, unless turned off (config, or --no-instincts).

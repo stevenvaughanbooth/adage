@@ -755,17 +755,7 @@ pub fn join_finish_lines(first: &str, second: &str) -> String {
 
 /// The Stop-gate continuation when the approved verification failed as the agent finished.
 pub fn stop_gate_failed(command: &str, exit: Option<i32>, record: Option<&FailureRecord>) -> String {
-    let mut s = format!(
-        "Adage ran `{}` (person-approved) as you finished: it failed (exit {}).",
-        sanitise(command),
-        exit.map_or("unknown".into(), |e| e.to_string())
-    );
-    for line in record.map(failure_sentences).unwrap_or_default() {
-        s.push(' ');
-        s.push_str(&line);
-    }
-    s.push_str(" The task is not finished until it passes; Adage runs it again when you finish.");
-    finish_line(&s)
+    adage_trace::wire::stop_gate_failed(&sanitise(command), exit, &record.map(failure_sentences).unwrap_or_default())
 }
 
 /// The Stop-gate continuation when the run's completion could not be confirmed: like an action's

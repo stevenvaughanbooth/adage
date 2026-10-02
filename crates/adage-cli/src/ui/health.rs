@@ -90,9 +90,7 @@ fn lamp(s: Status) -> Lamp {
     }
 }
 
-fn now_ms() -> u64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
-}
+use adage_core::time::now_ms;
 
 /// Fail-open errors in the last [`RECENT_DAYS`] days.
 fn fail_open_recent(paths: &Paths) -> usize {

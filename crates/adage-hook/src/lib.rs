@@ -374,7 +374,7 @@ pub fn handle(
     }
     // Decide first, always: the session's bookkeeping (a learned obligation's Stop request, an
     // at-Stop action) must not depend on what the finish-line gate finds (review F1).
-    let responded = respond(adapter, harness, event, &p, &session, &cwd, &root, paths, opts, &index);
+    let responded = respond(adapter, event, &p, &session, &cwd, &root, paths, opts, &index);
     let out = match (translated, opts.extension) {
         (Some(Event::Stop { stop_hook_active }), Some(x)) if in_repo => {
             // One hook never stages two actions: when an approved action already ran for this
@@ -795,7 +795,7 @@ fn session_start(
         }
     } else if routed.is_none() {
         // No reflexes here yet, and none on the way this session: seen, not exposed.
-        record_seen(s.paths, s.session, s.adapter.name(), s.event, &Event::SessionStart, &key);
+        record_seen(s.paths, s.session, s.adapter, s.event, &Event::SessionStart, &key);
     }
     // Instincts bind against the live checkout, this session's (docs/instincts.md): bound against
     // another one (a per-task worktree, a clone the traces name), or before its declared files
@@ -924,6 +924,14 @@ fn unwritable_notice(paths: &Paths, e: &std::io::Error) -> Option<String> {
     ))
 }
 
+/// Name the harness on a spool record unless it is Claude Code (the records before there were
+/// others): the one place that rule lives.
+fn name_harness(rec: &mut Value, adapter: &dyn harness::Adapter) {
+    if adapter.harness() != Harness::ClaudeCode {
+        rec["harness"] = json!(adapter.name());
+    }
+}
+
 /// Assign the session's arm (if it has none yet) and spool one `session_start` record.
 fn record_start(s: &Start<'_>, repo_key: &str) -> Result<(), Failure> {
     let arm_env = std::env::var("ADAGE_ARM").ok();
@@ -940,10 +948,7 @@ fn record_start(s: &Start<'_>, repo_key: &str) -> Result<(), Failure> {
     .map_err(|e| Failure::io("state", "assigning the session's arm", &e))?;
     let ts = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
     let mut rec = json!({ "ts": ts, "event": s.event, "kind": "session_start", "arm": arm, "propensity": propensity, "repo": repo_key, "generation": s.index.generation });
-    // Spool records name the harness unless it is Claude Code (the records before there were others).
-    if s.adapter.harness() != Harness::ClaudeCode {
-        rec["harness"] = json!(s.adapter.name());
-    }
+    name_harness(&mut rec, s.adapter);
     spool::append(&s.paths.spool(s.session), &rec)
         .map_err(|e| Failure::io("spool", "appending to the session spool", &e))
 }
@@ -953,7 +958,7 @@ fn record_start(s: &Start<'_>, repo_key: &str) -> Result<(), Failure> {
 /// Adage sees (docs/design/everyday-ux.md, state S1). Nothing else: no arm or propensity (the
 /// savings estimate counts only sessions exposed to reflexes), no decision (a rebuild replays only
 /// decisions), and no command, path or prompt. A failure is recorded and forgotten.
-fn record_seen(paths: &Paths, session: &str, harness: &str, event: &str, ev: &Event, repo_key: &str) {
+fn record_seen(paths: &Paths, session: &str, adapter: &dyn harness::Adapter, event: &str, ev: &Event, repo_key: &str) {
     let calls = match ev {
         Event::Batch { calls } => calls.len(),
         Event::Failure { .. } => 1,
@@ -964,11 +969,14 @@ fn record_seen(paths: &Paths, session: &str, harness: &str, event: &str, ev: &Ev
     if calls > 0 {
         rec["calls"] = json!(calls);
     }
-    if harness != "claude" {
-        rec["harness"] = json!(harness);
-    }
+    name_harness(&mut rec, adapter);
     if let Err(e) = spool::append(&paths.spool(session), &rec) {
-        failopen::record(&paths.root, harness, event, &Failure::io("spool", "appending to the session spool", &e));
+        failopen::record(
+            &paths.root,
+            adapter.name(),
+            event,
+            &Failure::io("spool", "appending to the session spool", &e),
+        );
     }
 }
 
@@ -976,7 +984,6 @@ fn record_seen(paths: &Paths, session: &str, harness: &str, event: &str, ev: &Ev
 #[allow(clippy::too_many_arguments)]
 fn respond(
     adapter: &dyn harness::Adapter,
-    harness: &str,
     event: &str,
     p: &Value,
     session: &str,
@@ -993,7 +1000,7 @@ fn respond(
         if root.join(".git").exists() {
             if let Some(ev) = adapter.translate(event, p, &cwd.to_string_lossy()) {
                 let key = repo::repo_key_cached(root, &paths.repo_keys());
-                record_seen(paths, session, adapter.name(), event, &ev, &key);
+                record_seen(paths, session, adapter, event, &ev, &key);
             }
         }
         return Ok(Responded::default());
@@ -1122,7 +1129,7 @@ fn respond(
             }
         });
         if let Err(e) = marked {
-            failopen::record(&paths.root, harness, event, &Failure::io("state", "marking obligations met", &e));
+            failopen::record(&paths.root, adapter.name(), event, &Failure::io("state", "marking obligations met", &e));
         }
     }
     match delivery.stop.take() {
@@ -1135,9 +1142,7 @@ fn respond(
     // `propensity`: the probability of `arm` at assignment (control share, or one minus it; 1 when
     // `ADAGE_ARM` forced it), for inverse-propensity weighting (Design §11, §14.1).
     let mut rec = json!({ "ts": ts, "event": event, "kind": ev.name(), "arm": arm, "propensity": propensity, "repo": repo_key, "generation": index.generation, "decision": decision });
-    if adapter.harness() != Harness::ClaudeCode {
-        rec["harness"] = json!(adapter.name());
-    }
+    name_harness(&mut rec, adapter);
     if let Some(x) = delivery.spool.take() {
         rec["exec"] = x;
     }
@@ -1146,7 +1151,12 @@ fn respond(
     }
     if let Err(e) = spool::append(&paths.spool(session), &rec) {
         // Measurement is lost, but the decision stands: record it and carry on.
-        failopen::record(&paths.root, harness, event, &Failure::io("spool", "appending to the session spool", &e));
+        failopen::record(
+            &paths.root,
+            adapter.name(),
+            event,
+            &Failure::io("spool", "appending to the session spool", &e),
+        );
     }
 
     let at_stop_action = delivery.at_stop_action;

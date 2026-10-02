@@ -168,7 +168,11 @@ fn changed_since(root: &Path, base: &str) -> Result<Vec<String>> {
     };
     let merge_base = git(&["merge-base", base, "HEAD"])?;
     let mut paths: BTreeSet<String> = BTreeSet::new();
-    for args in [vec!["diff", "--name-only", merge_base.trim()], vec!["diff", "--name-only", "HEAD"]] {
+    // `--no-renames`: a moved file is listed at both paths, so the package it left is tested too.
+    for args in [
+        vec!["diff", "--name-only", "--no-renames", merge_base.trim()],
+        vec!["diff", "--name-only", "--no-renames", "HEAD"],
+    ] {
         paths.extend(git(&args)?.lines().filter(|l| !l.is_empty()).map(str::to_string));
     }
     Ok(paths.into_iter().collect())

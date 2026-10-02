@@ -75,12 +75,13 @@ fn list(paths: &Paths, as_json: bool, verbose: bool) -> Result<()> {
     let all = discover(&paths.tracks())?;
     let judged = judgements(paths);
     let index = Index::compile_root(&paths.tracks(), &all.iter().map(|i| i.track.clone()).collect::<Vec<_>>()).0;
-    let items = queue(&all, &judged, &index, paths, here().as_deref());
+    // The checkout the person is in, once: the queue's grants and the lapsed ones are both for it.
+    let here = here();
+    let items = queue(&all, &judged, &index, paths, here.as_deref());
     let inert = crate::packs::inert_routes(paths);
     let attested = attestations(paths);
     let store = adage_exec::approvals::Store::load(&adage_exec::approvals::path(&paths.root)).unwrap_or_default();
     // Grants here that no longer match what would run: a person's decision again.
-    let here = std::env::current_dir().ok().and_then(|d| adage_core::repo::find_root(&d));
     let lapsed = crate::exec::lapsed_here(paths, here.as_deref(), &store);
     let revoked = store.revoked;
     if as_json {
@@ -602,7 +603,9 @@ fn decide(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
 pub(crate) fn decide_quietly(verb: &str, spec: &str, route_id: &str, paths: &Paths) -> Result<Decided> {
     let person = adage_app::person::require(&format!("review {verb}"))?;
     let Some(verb) = Verb::parse(verb) else { bail!("{USAGE}") };
-    Ok(report(adage_app::review::decide(&person, verb, spec, route_id, None, paths)?))
+    // `adage ui` decides on its event loop: it waits a moment for a running learner, never longer.
+    let wait = std::time::Duration::from_secs(2);
+    Ok(report(adage_app::review::decide_within(&person, verb, spec, route_id, None, paths, wait)?))
 }
 
 /// What a decision did: the header's facts and the rows under it.

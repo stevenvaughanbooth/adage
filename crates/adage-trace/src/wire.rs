@@ -30,6 +30,22 @@ pub fn is_finish_line(text: &str) -> bool {
     t.starts_with(FINISH_LINE) || (t.contains(FINISH_LINE) && t.contains(NOT_FROM_USER))
 }
 
+/// The Stop-gate continuation when the person-approved check Adage ran as the agent finished
+/// failed: `command` as shown (already sanitised), its exit code, and the sentences that say what
+/// failed. The runtime writes it; ingestion reads it back as Adage's own text, never a prompt.
+pub fn stop_gate_failed(command: &str, exit: Option<i32>, sentences: &[String]) -> String {
+    let mut s = format!(
+        "Adage ran `{command}` (person-approved) as you finished: it failed (exit {}).",
+        exit.map_or("unknown".into(), |e| e.to_string())
+    );
+    for line in sentences {
+        s.push(' ');
+        s.push_str(line);
+    }
+    s.push_str(" The task is not finished until it passes; Adage runs it again when you finish.");
+    finish_line(&s)
+}
+
 /// What a rendered directive body names (Track G §3.2, steering by influence): the commands it
 /// directs or recommends, the runners it says to avoid, and the files it lists. The inverse of
 /// `adage_runtime::render::route_text` and `stop_reason` for every template: a command is an indented line (`  cmd`,

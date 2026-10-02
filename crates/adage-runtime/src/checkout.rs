@@ -6,6 +6,9 @@
 
 use std::path::Path;
 
+/// Reads files of one checkout by repository-relative path ([`Checkout::reader`]).
+pub type Reader<'a> = Box<dyn Fn(&str) -> Option<String> + 'a>;
+
 /// The checkout a decision may read.
 pub trait Checkout: Sync {
     /// The text of the file at `rel` under `root`, if Adage may read it: the gate is
@@ -15,6 +18,12 @@ pub trait Checkout: Sync {
     /// Whether `rel` names a regular file inside the checkout at `root`, symlinks resolved (a
     /// repository-path slot's contract). `rel` is already a safe relative path.
     fn is_file(&self, root: &Path, rel: &str) -> bool;
+    /// A reader of several files under `root`, as [`Checkout::text`] reads each: for reading a
+    /// card's files, so an implementation can do its per-checkout work (resolving the root,
+    /// loading ignore rules) once.
+    fn reader<'a>(&'a self, root: &'a Path) -> Reader<'a> {
+        Box::new(move |rel| self.text(root, rel))
+    }
 }
 
 /// The checkout on this machine.
@@ -25,6 +34,12 @@ impl Checkout for Disk {
     fn text(&self, root: &Path, rel: &str) -> Option<String> {
         let base = root.canonicalize().ok()?;
         crate::orient::readable(&base, rel, &adage_core::gitignore::Ignore::new(root))
+    }
+
+    fn reader<'a>(&'a self, root: &'a Path) -> Reader<'a> {
+        let Ok(base) = root.canonicalize() else { return Box::new(|_| None) };
+        let ignore = adage_core::gitignore::Ignore::new(root);
+        Box::new(move |rel| crate::orient::readable(&base, rel, &ignore))
     }
 
     fn is_file(&self, root: &Path, rel: &str) -> bool {
@@ -64,6 +79,8 @@ mod tests {
         assert_eq!(Disk.text(root, "src/a.py").as_deref(), Some("x = 1\n"));
         assert!(Disk.is_file(root, "src/a.py"));
         assert_eq!(Disk.text(root, ".env"), None, "a dotfile is never read");
+        let read = Disk.reader(root);
+        assert_eq!((read("src/a.py").as_deref(), read(".env")), (Some("x = 1\n"), None), "the reader gates alike");
         assert!(!Disk.is_file(root, "src"), "a directory is not a file");
         assert!(!Disk.is_file(root, "src/missing.py"));
         assert_eq!(Unread.text(root, "src/a.py"), None);

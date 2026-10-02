@@ -18,6 +18,7 @@ pub mod shell;
 pub mod spans;
 pub mod table;
 pub mod template;
+pub mod time;
 pub mod tokens;
 pub mod tools;
 pub mod types;

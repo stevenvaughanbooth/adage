@@ -43,9 +43,7 @@ use std::io::Write;
 /// Rotated (to `learn.log.1`) when it reaches this size.
 pub const ROTATE_BYTES: u64 = 256 << 10;
 
-pub fn now_ms() -> u64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
-}
+pub use adage_core::time::now_ms;
 
 /// Append one line, rotating first if the log is full.
 pub fn append(paths: &Paths, line: &Value) -> std::io::Result<()> {
