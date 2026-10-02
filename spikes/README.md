@@ -16,6 +16,7 @@ ends with a recommendation.
 | [S6 · SSH signing](S6-ssh-signing/SPIKE.md) | Can tracks be signed with agent-held keys and verified natively with namespaces? | A7 | 1 | ✅ Native — signs via ssh-agent and verifies in Rust |
 | [S7 · Clustering at scale](S7-clustering/SPIKE.md) | Which clustering method is deterministic and scales to hundreds of thousands of prompts? | Intent pipeline | 2 | ✅ Pass on determinism, scale, purity; ❌ ARI ≥ 0.8 unreachable (supervised oracle 0.75) — **exact kNN + deterministic Louvain**, per repo: ARI 0.42, 300k in 8.0 min / 768 MB global, 17 s per repo; purity step lifts directive precision 0.57 → 0.87 |
 | [S8 · Normaliser coverage](S8-normaliser/SPIKE.md) | How far do tree-sitter-bash and per-command grammars get on real transcripts? | Normaliser | 2 | ✅ Pass — 98.2% normalised, 315 fixtures; promoted to adage-core |
+| [S9 · Claude Code mods](S9-claude-mods/SPIKE.md) | Can an in-process mod beside the command hooks give the person a status line, a pane and the engine's permission check, additively and fail-open, without touching the decision core? | A3, A8, A9, F3, F14 | 3 | 📝 Brief written (2026-10-02, against Claude Code 2.1.287); not yet run |
 
 ## Conventions
 
