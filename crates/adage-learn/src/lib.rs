@@ -20,7 +20,6 @@ pub mod value;
 
 pub use adage_ingest::{cache, codex, opencode, scope};
 
-use adage_core::CommandTable;
 use adage_tracks::proposals::Proposals;
 use adage_tracks::{io, Gauge, Index, Manifest, Route, Scope, Track, TrackInfo, Trigger};
 use anyhow::Result;
@@ -166,54 +165,32 @@ impl Planned {
 pub use adage_ingest::read_session;
 pub use adage_tracks::layout::{follow_weights_path, read_follow_weights, slug};
 
-/// `adage condition`: import sessions, mine routes, write tracks, compile the index.
+/// `adage condition`: ingest the traces, then learn from their sessions ([`learn_sessions`]).
 pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &LearnConfig) -> Result<Report> {
-    let table = CommandTable::load();
-    let mut sessions: Vec<Session> = Vec::new();
-    let (mut read, mut steered) = (0, 0);
-    let mut cache = inputs.cache.as_deref().map(cache::Cache::open);
-    // Repository keys by root, found once per run.
-    let mut keys: BTreeMap<PathBuf, String> = BTreeMap::new();
-    let mut repo_of = |root: &Path| -> String {
-        keys.entry(root.to_path_buf()).or_insert_with(|| adage_core::repo::repo_key(root)).clone()
+    let opts = adage_ingest::batch::Options {
+        repo_override: inputs.repo_override.clone(),
+        only_repo: inputs.only_repo.clone(),
+        cache: inputs.cache.clone(),
     };
-    let (over, only) = (inputs.repo_override.as_deref(), inputs.only_repo.as_deref());
-    for p in &inputs.transcripts {
-        let got = match cache.as_mut() {
-            Some(c) => c.read(p, &table, over, only, &mut repo_of),
-            None => match read_session(p, &table, over) {
-                None => cache::Read::Nothing,
-                Some(s) if only.is_some_and(|r| r != s.repo) => cache::Read::Elsewhere,
-                Some(s) => cache::Read::Session(Box::new(s)),
-            },
-        };
-        match got {
-            cache::Read::Elsewhere => {}
-            // A file with no session belongs to no repository: counted only in a full run.
-            cache::Read::Nothing => read += usize::from(only.is_none()),
-            cache::Read::Session(s) => {
-                let mut s = *s;
-                read += 1;
-                steered += usize::from(s.steered);
-                s.outcome = inputs.outcomes.get(&s.id).copied();
-                if !s.steps.is_empty() {
-                    sessions.push(s);
-                }
-            }
-        }
+    let mut batch = adage_ingest::batch::read(&inputs.transcripts, &opts);
+    for s in &mut batch.sessions {
+        s.outcome = inputs.outcomes.get(&s.id).copied();
     }
-    // Which repository each checkout is, for when it is deleted (a removed worktree). Not under an
-    // override, which is not the checkout's own key.
-    if over.is_none() {
-        let checkouts: BTreeMap<&Path, &str> = sessions.iter().map(|s| (s.root.as_path(), s.repo.as_str())).collect();
-        for (root, repo) in checkouts {
-            adage_core::repo::remember_key(root, repo);
-        }
-    }
-    let (hits, misses) = cache.as_ref().map(|c| (c.hits, c.misses)).unwrap_or((0, 0));
-    if let Some(c) = cache {
-        c.save();
-    }
+    learn_sessions(batch, inputs.only_repo.as_deref(), inputs.models.as_deref(), tracks_root, index_path, cfg)
+}
+
+/// The learning engine's entry: learn from canonical sessions (an ingested batch, whatever its
+/// traces came from), write the tracks, and compile the index. With `only`, learn that repository
+/// alone; with no session for it yet, bind its instincts from its files (day 0).
+pub fn learn_sessions(
+    batch: adage_ingest::batch::Batch,
+    only: Option<&str>,
+    models: Option<&Path>,
+    tracks_root: &Path,
+    index_path: &Path,
+    cfg: &LearnConfig,
+) -> Result<Report> {
+    let adage_ingest::batch::Batch { sessions, read, steered, cache_hits: hits, cache_misses: misses } = batch;
     if let (Some(repo), true, Some(ic)) = (only, sessions.is_empty(), cfg.instincts.as_ref()) {
         // No session to learn from yet: bind the repository's instincts from its files (day 0),
         // when its root is known and they are not bound against it as its files are now.
@@ -245,7 +222,7 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
         instincts::preinstall(tracks_root);
     }
     let weights = follow_weights(&sessions);
-    let (mut report, planned) = plan(sessions, inputs.models.as_deref(), tracks_root, cfg)?;
+    let (mut report, planned) = plan(sessions, models, tracks_root, cfg)?;
     report.sessions_read = read;
     report.sessions_steered = steered;
     (report.cache_hits, report.cache_misses) = (hits, misses);

@@ -15,8 +15,10 @@
 //! - [`format`]: what the bytes mean ([`format::Format`], one per harness history format).
 //! - [`locate`]: which repository a trace belongs to ([`locate::Locator`]).
 //! - [`signals`]: what every decoder shares (prompts, Adage's own directives, canonical steps).
+//! - [`batch`]: a batch of local traces read for one learn run (day 0 or live).
 //! - [`cache`]: the per-transcript parse cache; [`scope`]: picking one repository's local traces.
 
+pub mod batch;
 pub mod cache;
 pub mod claude;
 pub mod codex;
