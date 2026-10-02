@@ -124,7 +124,7 @@ Day 0 and live learning use the same path. `adage init` and `adage condition` in
 | The map API's JSON could drift from what the web map is tested with | **Pinned**: a contract test against the web map's fixtures |
 | Harness names compared as strings in about 30 places | **Done**: `Harness` and `Capabilities`; behaviour by capability |
 | Status, listings and the map's read model still live in the CLI as untyped JSON, in three shapes for one reflex | Next: move the read model into `adage-app` with typed results. Unifying the shapes changes the CLI's `--json` output and the web map's types, so it needs a decision |
-| Install locations and detection per harness live in the CLI | Next: give each `Harness` its install and detection data |
+| Install and detection kept separate tables of where each harness's registration lives, and had drifted (`CLAUDE_CONFIG_DIR`) | **Done**: `adage-cli/src/placement.rs`, one table per `Harness` for both |
 | The learner writes files directly; learning always reprocesses all history | Next: a store port for what learning materializes, then incremental learning over new sessions only |
 | `decide()` still reads the checkout for card orientation and repository-path contracts | Next: a filesystem port on `Ctx` |
 
