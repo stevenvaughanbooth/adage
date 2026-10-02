@@ -12,15 +12,15 @@
 //! | `session.idle` | `event` hook, `session.idle` | `stop_hook_active` |
 //! | `session.deleted` | `event` hook, `session.deleted` | — |
 
-use super::{calls, is_own_text, Adapter, Event, Output};
+use super::{calls, is_own_text, Adapter, Event, Harness, Output};
 use adage_core::tools::from_opencode;
 use serde_json::{json, Value};
 
 pub struct OpenCode;
 
 impl Adapter for OpenCode {
-    fn name(&self) -> &'static str {
-        "opencode"
+    fn harness(&self) -> Harness {
+        Harness::OpenCode
     }
 
     fn translate(&self, event: &str, p: &Value, cwd: &str) -> Option<Event> {

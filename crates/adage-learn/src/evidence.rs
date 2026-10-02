@@ -68,6 +68,15 @@ impl Default for LearnConfig {
 }
 
 impl LearnConfig {
+    /// The bars a home conditions with (`learn.thresholds` in its config): the one mapping the
+    /// learner, `adage sense` and the map all use.
+    pub fn for_thresholds(t: adage_store::config::Thresholds) -> LearnConfig {
+        match t {
+            adage_store::config::Thresholds::Default => LearnConfig::default(),
+            adage_store::config::Thresholds::Demo => LearnConfig::demo(),
+        }
+    }
+
     /// Uplift gating's bar for this run: `uplift_min`, except for traces made by agents that were
     /// given the steps (`adage train`'s exploration sessions, provenance `synthetic:…`), which say
     /// nothing of what agents do unaided (0: estimated and shown, never gated).

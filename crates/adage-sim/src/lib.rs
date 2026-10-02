@@ -28,6 +28,20 @@ pub fn fixtures_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../sim/fixtures")
 }
 
+/// End-to-end tests run Adage's binary on this machine, where a trace's repository is found from
+/// the checkout at its recorded directory ([`scenario::CWD`]). The fixtures' expected keys assume
+/// there is none; call this first so a stray checkout there fails with this message rather than
+/// as a mismatched key. Tests below the binary decode with `adage_ingest::AsRecorded` instead and
+/// need no such precondition.
+pub fn assume_no_checkout_at_cwd() {
+    assert!(
+        !Path::new(scenario::CWD).exists(),
+        "{} exists on this machine; the simulator's fixtures were recorded there and these tests \
+         assume it does not (remove it)",
+        scenario::CWD
+    );
+}
+
 /// Every fixture file: (path relative to the fixture directory, contents).
 pub fn render_all() -> Vec<(String, String)> {
     let cwd = scenario::CWD;

@@ -10,6 +10,7 @@ pub mod codex;
 pub mod opencode;
 
 use adage_runtime::Call;
+pub use adage_trace::Harness;
 
 /// The hook timeout, in seconds, of the events an E2 action runs at (the edit and Stop events)
 /// when the registration runs `adage-exec`: an action's wall limit (20 s) stays well under it.
@@ -58,8 +59,12 @@ pub struct Envelope {
 }
 
 pub trait Adapter: Sync {
-    /// The name recorded in spools.
-    fn name(&self) -> &'static str;
+    /// Which harness this adapts.
+    fn harness(&self) -> Harness;
+    /// The name in hook registrations and spools ([`Harness::hook_name`]).
+    fn name(&self) -> &'static str {
+        self.harness().hook_name()
+    }
     /// Session and cwd from the native payload. `None` → do nothing.
     fn envelope(&self, p: &Value) -> Option<Envelope> {
         Some(Envelope {
@@ -100,12 +105,17 @@ pub fn tool_event_identity(harness: &str, event: &str, mut ids: Vec<&str>) -> Op
     serde_json::to_string(&(harness, event, ids)).ok()
 }
 
-pub fn adapter(harness: &str) -> Option<&'static dyn Adapter> {
-    match harness {
-        "claude" => Some(&claude::Claude),
-        "opencode" => Some(&opencode::OpenCode),
-        "codex" => Some(&codex::Codex),
-        _ => None,
+/// The adapter registered as `adage hook <name>` ([`Harness::hook_name`]).
+pub fn adapter(name: &str) -> Option<&'static dyn Adapter> {
+    Harness::ALL.into_iter().find(|h| h.hook_name() == name).map(adapter_for)
+}
+
+/// Every harness's adapter: one arm per harness, so a new [`Harness`] cannot go without one.
+pub fn adapter_for(h: Harness) -> &'static dyn Adapter {
+    match h {
+        Harness::ClaudeCode => &claude::Claude,
+        Harness::Codex => &codex::Codex,
+        Harness::OpenCode => &opencode::OpenCode,
     }
 }
 

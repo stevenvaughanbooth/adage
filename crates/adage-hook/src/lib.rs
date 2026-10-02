@@ -31,7 +31,7 @@ use adage_runtime::{assign, decide, fast, rebuild, render, Arm, Ctx, Directive, 
 use adage_store::{spool, state, Paths};
 use adage_tracks::Index;
 use failopen::Failure;
-use harness::Output;
+use harness::{Harness, Output};
 use serde_json::{json, Value};
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -41,7 +41,7 @@ const MAX_STDIN: u64 = 8 << 20;
 
 /// What one event is about, for an [`Extension`].
 pub struct Turn<'a> {
-    pub harness: &'a str,
+    pub harness: Harness,
     /// The native event name.
     pub event: &'a str,
     /// Opaque native tool-call identity. None means retries cannot be identified reliably.
@@ -210,7 +210,7 @@ pub struct SessionTexts {
 
 /// A `Stop` event, as [`Extension::stop_gate`] sees it.
 pub struct StopCall<'a> {
-    pub harness: &'a str,
+    pub harness: Harness,
     pub repo_key: &'a str,
     pub root: &'a Path,
     pub session: &'a str,
@@ -374,7 +374,7 @@ pub fn handle(
     }
     // Decide first, always: the session's bookkeeping (a learned obligation's Stop request, an
     // at-Stop action) must not depend on what the finish-line gate finds (review F1).
-    let responded = respond(adapter, harness, event, &p, &session, &cwd, &root, paths, opts, &index);
+    let responded = respond(adapter, event, &p, &session, &cwd, &root, paths, opts, &index);
     let out = match (translated, opts.extension) {
         (Some(Event::Stop { stop_hook_active }), Some(x)) if in_repo => {
             // One hook never stages two actions: when an approved action already ran for this
@@ -386,7 +386,7 @@ pub fn handle(
                 let keys: std::collections::BTreeSet<&str> = index.routes.iter().map(|r| r.repo.as_str()).collect();
                 repo::lookup_key(&root, Some(&paths.repo_keys()), &keys).and_then(|repo_key| {
                     let call = StopCall {
-                        harness,
+                        harness: adapter.harness(),
                         repo_key: &repo_key,
                         root: &root,
                         session: &session,
@@ -556,7 +556,8 @@ fn pretool(
     extension: Option<&'static dyn Extension>,
 ) -> Result<Option<String>, Failure> {
     use adage_runtime::pretool::{self, Pre};
-    if adapter.name() != "claude" || p.get("tool_name").and_then(Value::as_str) != Some("Bash") {
+    if !adapter.harness().capabilities().pre_tool_rewrite || p.get("tool_name").and_then(Value::as_str) != Some("Bash")
+    {
         return Ok(None);
     }
     let input = p.get("tool_input").cloned().unwrap_or(Value::Null);
@@ -611,7 +612,7 @@ fn pretool(
     if !cfg.runtime_rewrite || rewrite_off(paths).exists() {
         return Ok(only_receipt());
     }
-    let Some(binding) = adage_learn::instincts::binding(&paths.tracks(), &key) else { return Ok(only_receipt()) };
+    let Some(binding) = adage_pack::binding::binding(&paths.tracks(), &key) else { return Ok(only_receipt()) };
     let Some(mut env) = binding.env else { return Ok(only_receipt()) };
     let venv = root.join(env.interpreter.strip_suffix("/bin/python").unwrap_or(".venv"));
     if Path::new(&binding.root) != root {
@@ -794,7 +795,7 @@ fn session_start(
         }
     } else if routed.is_none() {
         // No reflexes here yet, and none on the way this session: seen, not exposed.
-        record_seen(s.paths, s.session, s.adapter.name(), s.event, &Event::SessionStart, &key);
+        record_seen(s.paths, s.session, s.adapter, s.event, &Event::SessionStart, &key);
     }
     // Instincts bind against the live checkout, this session's (docs/instincts.md): bound against
     // another one (a per-task worktree, a clone the traces name), or before its declared files
@@ -805,11 +806,11 @@ fn session_start(
         && !damaged
         && learns
         && cfg.instincts_enabled
-        && adage_learn::instincts::stale_binding(
+        && adage_pack::binding::stale_binding(
             &s.paths.tracks(),
             &key,
             s.root,
-            &adage_learn::instincts::selection(&cfg.instincts_packs, &cfg.instincts_disabled),
+            &adage_pack::binding::selection(&cfg.instincts_packs, &cfg.instincts_disabled),
         );
     if bootstrap || rebind {
         let asked = learner().and_then(|l| autolearn::on_turn_end(s.paths, s.root, s.adapter.name(), None, &l, true));
@@ -818,7 +819,7 @@ fn session_start(
         }
     }
     let context = if !damaged
-        && s.adapter.name() != "opencode"
+        && s.adapter.harness().capabilities().session_contract
         && state::try_read::<SessionState>(&s.paths.state(s.session))
             .ok()
             .flatten()
@@ -878,7 +879,7 @@ fn first_notice(root: &Path, cfg: &adage_store::config::Config) -> String {
         .clone()
         .or_else(|| adage_store::home_dir().map(|h| h.join(".claude").join("projects")));
     let n = projects
-        .map(|p| adage_learn::scope::count_claude_sessions(&p, &adage_learn::scope::checkouts(root)))
+        .map(|p| adage_ingest::scope::count_claude_sessions(&p, &adage_ingest::scope::checkouts(root)))
         .unwrap_or(0);
     match n {
         0 => "adage: learning from this repo as you work; its first reflexes form in a few sessions. Nothing runs without you.".into(),
@@ -923,6 +924,14 @@ fn unwritable_notice(paths: &Paths, e: &std::io::Error) -> Option<String> {
     ))
 }
 
+/// Name the harness on a spool record unless it is Claude Code (the records before there were
+/// others): the one place that rule lives.
+fn name_harness(rec: &mut Value, adapter: &dyn harness::Adapter) {
+    if adapter.harness() != Harness::ClaudeCode {
+        rec["harness"] = json!(adapter.name());
+    }
+}
+
 /// Assign the session's arm (if it has none yet) and spool one `session_start` record.
 fn record_start(s: &Start<'_>, repo_key: &str) -> Result<(), Failure> {
     let arm_env = std::env::var("ADAGE_ARM").ok();
@@ -939,9 +948,7 @@ fn record_start(s: &Start<'_>, repo_key: &str) -> Result<(), Failure> {
     .map_err(|e| Failure::io("state", "assigning the session's arm", &e))?;
     let ts = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
     let mut rec = json!({ "ts": ts, "event": s.event, "kind": "session_start", "arm": arm, "propensity": propensity, "repo": repo_key, "generation": s.index.generation });
-    if s.adapter.name() != "claude" {
-        rec["harness"] = json!(s.adapter.name());
-    }
+    name_harness(&mut rec, s.adapter);
     spool::append(&s.paths.spool(s.session), &rec)
         .map_err(|e| Failure::io("spool", "appending to the session spool", &e))
 }
@@ -951,7 +958,7 @@ fn record_start(s: &Start<'_>, repo_key: &str) -> Result<(), Failure> {
 /// Adage sees (docs/design/everyday-ux.md, state S1). Nothing else: no arm or propensity (the
 /// savings estimate counts only sessions exposed to reflexes), no decision (a rebuild replays only
 /// decisions), and no command, path or prompt. A failure is recorded and forgotten.
-fn record_seen(paths: &Paths, session: &str, harness: &str, event: &str, ev: &Event, repo_key: &str) {
+fn record_seen(paths: &Paths, session: &str, adapter: &dyn harness::Adapter, event: &str, ev: &Event, repo_key: &str) {
     let calls = match ev {
         Event::Batch { calls } => calls.len(),
         Event::Failure { .. } => 1,
@@ -962,11 +969,14 @@ fn record_seen(paths: &Paths, session: &str, harness: &str, event: &str, ev: &Ev
     if calls > 0 {
         rec["calls"] = json!(calls);
     }
-    if harness != "claude" {
-        rec["harness"] = json!(harness);
-    }
+    name_harness(&mut rec, adapter);
     if let Err(e) = spool::append(&paths.spool(session), &rec) {
-        failopen::record(&paths.root, harness, event, &Failure::io("spool", "appending to the session spool", &e));
+        failopen::record(
+            &paths.root,
+            adapter.name(),
+            event,
+            &Failure::io("spool", "appending to the session spool", &e),
+        );
     }
 }
 
@@ -974,7 +984,6 @@ fn record_seen(paths: &Paths, session: &str, harness: &str, event: &str, ev: &Ev
 #[allow(clippy::too_many_arguments)]
 fn respond(
     adapter: &dyn harness::Adapter,
-    harness: &str,
     event: &str,
     p: &Value,
     session: &str,
@@ -991,7 +1000,7 @@ fn respond(
         if root.join(".git").exists() {
             if let Some(ev) = adapter.translate(event, p, &cwd.to_string_lossy()) {
                 let key = repo::repo_key_cached(root, &paths.repo_keys());
-                record_seen(paths, session, adapter.name(), event, &ev, &key);
+                record_seen(paths, session, adapter, event, &ev, &key);
             }
         }
         return Ok(Responded::default());
@@ -1015,8 +1024,6 @@ fn respond(
         let v = m.embed(&normalize(text))?;
         Some((m.id, v))
     };
-    let ctx =
-        Ctx { index, repo: repo_key.clone(), root, table: &table, embed: Some(&embed), params: Default::default() };
     let arm_env = std::env::var("ADAGE_ARM").ok();
     // ADAGE_CONTROL, else `runtime.control` in config.toml, else 0.1.
     let share: f64 = adage_store::config::load(paths).config.runtime_control;
@@ -1030,7 +1037,28 @@ fn respond(
         _ => Vec::new(),
     };
     // The learned follow judge's weights for this repository (fitted at learn time), if any.
-    let weights = adage_learn::read_follow_weights(&paths.tracks(), &repo_key);
+    let weights = adage_tracks::layout::read_follow_weights(&paths.tracks(), &repo_key);
+    let policy = adage_runtime::Policy {
+        // ADAGE_CARD_CHECKS=0 (an evaluation knob, like ADAGE_ARM) leaves the card's test-command
+        // line out.
+        card_checks: std::env::var("ADAGE_CARD_CHECKS").map_or(true, |v| v != "0"),
+        // ADAGE_CARD_ORIENTATION=0 (likewise) gives the card its earlier form: the exemplar of the
+        // last edit instead of where its files stand in the checkout now.
+        card_orientation: std::env::var("ADAGE_CARD_ORIENTATION").map_or(true, |v| v != "0"),
+        follow_weights: weights,
+        exec_only,
+        exact_keys: false,
+    };
+    let ctx = Ctx {
+        checkout: &adage_runtime::checkout::Disk,
+        index,
+        repo: repo_key.clone(),
+        root,
+        table: &table,
+        embed: Some(&embed),
+        params: Default::default(),
+        policy,
+    };
     // A state that can no longer be read is rebuilt from the session's spool, if it is small
     // enough to replay quickly (it is read under the state lock).
     let rebuild = || {
@@ -1055,19 +1083,7 @@ fn respond(
             });
             let before: Vec<(String, bool)> =
                 st.obligations.iter().map(|o| (o.route.clone(), o.stop_requested)).collect();
-            // ADAGE_CARD_CHECKS=0 (an evaluation knob, like ADAGE_ARM) leaves the card's test-command
-            // line out.
-            let card_checks = std::env::var("ADAGE_CARD_CHECKS").map_or(true, |v| v != "0");
-            // ADAGE_CARD_ORIENTATION=0 (likewise) gives the card its earlier form: the exemplar of the
-            // last edit instead of where its files stand in the checkout now.
-            let card_orientation = std::env::var("ADAGE_CARD_ORIENTATION").map_or(true, |v| v != "0");
-            let d = adage_runtime::with_follow_weights(weights.clone(), || {
-                adage_runtime::with_card_checks(card_checks, || {
-                    adage_runtime::with_card_orientation(card_orientation, || {
-                        adage_runtime::with_exec_only(exec_only.clone(), || decide(&ctx, st, &ev))
-                    })
-                })
-            });
+            let d = decide(&ctx, st, &ev);
             let stims = stimuli(&before, &st.obligations, matches!(ev, Event::Batch { .. }));
             (d, st.arm, propensity, stims)
         })
@@ -1080,7 +1096,7 @@ fn respond(
         let directives_due = decision.continue_reason.is_none() && !decision.directives.is_empty();
         if directives_due || !stims.is_empty() {
             let turn = Turn {
-                harness,
+                harness: adapter.harness(),
                 event,
                 event_identity: adapter.event_identity(event, p),
                 ev: &ev,
@@ -1113,7 +1129,7 @@ fn respond(
             }
         });
         if let Err(e) = marked {
-            failopen::record(&paths.root, harness, event, &Failure::io("state", "marking obligations met", &e));
+            failopen::record(&paths.root, adapter.name(), event, &Failure::io("state", "marking obligations met", &e));
         }
     }
     match delivery.stop.take() {
@@ -1126,9 +1142,7 @@ fn respond(
     // `propensity`: the probability of `arm` at assignment (control share, or one minus it; 1 when
     // `ADAGE_ARM` forced it), for inverse-propensity weighting (Design §11, §14.1).
     let mut rec = json!({ "ts": ts, "event": event, "kind": ev.name(), "arm": arm, "propensity": propensity, "repo": repo_key, "generation": index.generation, "decision": decision });
-    if adapter.name() != "claude" {
-        rec["harness"] = json!(adapter.name());
-    }
+    name_harness(&mut rec, adapter);
     if let Some(x) = delivery.spool.take() {
         rec["exec"] = x;
     }
@@ -1137,7 +1151,12 @@ fn respond(
     }
     if let Err(e) = spool::append(&paths.spool(session), &rec) {
         // Measurement is lost, but the decision stands: record it and carry on.
-        failopen::record(&paths.root, harness, event, &Failure::io("spool", "appending to the session spool", &e));
+        failopen::record(
+            &paths.root,
+            adapter.name(),
+            event,
+            &Failure::io("spool", "appending to the session spool", &e),
+        );
     }
 
     let at_stop_action = delivery.at_stop_action;

@@ -8,7 +8,7 @@
 //! carries no failure signal, so failure-triggered routes cannot fire on Codex today.
 
 use super::claude::response_text;
-use super::{calls, is_own_text, Adapter, Event, Output};
+use super::{calls, is_own_text, Adapter, Event, Harness, Output};
 use adage_core::tools::from_codex;
 use serde_json::{json, Value};
 
@@ -20,8 +20,8 @@ fn failed(resp: &Value) -> bool {
 }
 
 impl Adapter for Codex {
-    fn name(&self) -> &'static str {
-        "codex"
+    fn harness(&self) -> Harness {
+        Harness::Codex
     }
 
     fn event_identity(&self, event: &str, p: &Value) -> Option<String> {

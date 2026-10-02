@@ -16,6 +16,7 @@
 
 use crate::bridge;
 use crate::evidence::{days, median, models, outcome_lift, shell_join, strength_with_lift, LearnConfig, MaxRank};
+use crate::import::Exposure as _;
 use crate::import::Session;
 use adage_core::spans::SpanKind;
 use adage_core::{tokens, vtype, Effect};
@@ -293,7 +294,7 @@ mod tests {
             turn: i,
             key: adage_core::keys::template_key(&action),
             norm: adage_core::Normalized { action, effect, mutating: false, confidence: 1.0, note: String::new() },
-            call: adage_runtime::Call {
+            call: adage_trace::Call {
                 tool: "Bash".into(),
                 input: serde_json::Value::Null,
                 output: "ok".into(),

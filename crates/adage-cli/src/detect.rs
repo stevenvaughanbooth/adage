@@ -6,10 +6,12 @@
 //! `adage install`: `CLAUDE_CONFIG_DIR` (default `~/.claude`), `XDG_CONFIG_HOME` (default
 //! `~/.config`) for OpenCode, and `CODEX_HOME` (default `~/.codex`).
 
+use adage_trace::Harness;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
-pub const HARNESSES: [&str; 3] = ["claude-code", "opencode", "codex"];
+/// Every harness, in the order registrations are listed.
+pub const HARNESSES: [&str; 3] = [Harness::ClaudeCode.id(), Harness::OpenCode.id(), Harness::Codex.id()];
 
 fn env_path(var: &str) -> Option<PathBuf> {
     std::env::var_os(var).filter(|v| !v.is_empty()).map(PathBuf::from)
@@ -126,11 +128,8 @@ pub fn harnesses() -> Vec<Detected> {
     HARNESSES
         .iter()
         .map(|&h| {
-            let (bin, dir) = match h {
-                "claude-code" => ("claude", claude_dir()),
-                "opencode" => ("opencode", opencode_dir()),
-                _ => ("codex", codex_dir()),
-            };
+            let p = crate::placement::of(Harness::parse(h).expect("HARNESSES are harness ids"));
+            let (bin, dir) = (p.command, (p.config_dir)());
             let mut evidence = Vec::new();
             if let Some(p) = on_path(bin) {
                 evidence.push(format!("`{bin}` on PATH ({})", tilde(&p)));
@@ -244,18 +243,22 @@ fn opencode_binary(p: &Path) -> Option<Option<PathBuf>> {
 /// Every registration of Adage's hooks, in user scope and in `repo` (a repository root) if given.
 pub fn registrations(repo: Option<&Path>) -> Vec<Registration> {
     let mut out = Vec::new();
+    // Settings files: every harness's user scope, then the repository's (in harness order).
+    let settings_harnesses: Vec<Harness> = Harness::ALL
+        .into_iter()
+        .filter(|h| crate::placement::of(*h).kind == crate::placement::Kind::Settings)
+        .collect();
     let mut settings: Vec<(&'static str, PathBuf)> = Vec::new();
-    if let Some(d) = claude_dir() {
-        settings.push(("claude-code", d.join("settings.json")));
-        settings.push(("claude-code", d.join("settings.local.json")));
-    }
-    if let Some(d) = codex_dir() {
-        settings.push(("codex", d.join("hooks.json")));
+    for &h in &settings_harnesses {
+        let p = crate::placement::of(h);
+        if let Some(d) = (p.config_dir)() {
+            settings.extend(p.user_files.iter().map(|f| (h.id(), d.join(f))));
+        }
     }
     if let Some(r) = repo {
-        settings.push(("claude-code", r.join(".claude/settings.json")));
-        settings.push(("claude-code", r.join(".claude/settings.local.json")));
-        settings.push(("codex", r.join(".codex/hooks.json")));
+        for &h in &settings_harnesses {
+            settings.extend(crate::placement::of(h).project_files.iter().map(|f| (h.id(), r.join(f))));
+        }
     }
     for (h, p) in settings {
         if let Some(doc) = read_json(&p) {
@@ -273,19 +276,23 @@ pub fn registrations(repo: Option<&Path>) -> Vec<Registration> {
             }
         }
     }
-    let mut plugins: Vec<PathBuf> = opencode_dir().map(|d| d.join("plugins/adage.js")).into_iter().collect();
-    if let Some(r) = repo {
-        plugins.push(r.join(".opencode/plugins/adage.js"));
-    }
-    for p in plugins {
-        if let Some(bin) = opencode_binary(&p) {
-            out.push(Registration {
-                harness: "opencode",
-                location: p,
-                binary: bin,
-                kind: "plugin",
-                events: Vec::new(),
-            });
+    for h in Harness::ALL.into_iter().filter(|h| crate::placement::of(*h).kind == crate::placement::Kind::Plugin) {
+        let p = crate::placement::of(h);
+        let mut plugins: Vec<PathBuf> =
+            (p.config_dir)().map(|d| p.user_files.iter().map(|f| d.join(f)).collect()).unwrap_or_default();
+        if let Some(r) = repo {
+            plugins.extend(p.project_files.iter().map(|f| r.join(f)));
+        }
+        for path in plugins {
+            if let Some(bin) = opencode_binary(&path) {
+                out.push(Registration {
+                    harness: h.id(),
+                    location: path,
+                    binary: bin,
+                    kind: "plugin",
+                    events: Vec::new(),
+                });
+            }
         }
     }
     // The Claude Code plugin stages its binary in its data directory (`${CLAUDE_PLUGIN_DATA}`,

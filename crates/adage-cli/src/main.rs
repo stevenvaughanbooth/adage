@@ -21,8 +21,8 @@ mod condition_out;
 mod config;
 mod detect;
 mod doctor;
-mod evidence;
 mod exec;
+use adage_app::{evidence, words};
 use adage_hook::failopen;
 mod graph;
 mod history;
@@ -38,6 +38,7 @@ mod marketplace_cmd;
 mod models;
 mod packs;
 mod packs_cmd;
+mod placement;
 mod proposal;
 mod redact;
 mod reimport;
@@ -52,7 +53,6 @@ mod train;
 mod tty;
 mod ui;
 mod update;
-mod words;
 
 // Commands run on the hook's stack size (`adage_hook::STACK`).
 use adage_hook::on_big_stack;
@@ -125,24 +125,7 @@ fn main() {
 }
 
 /// An error that knows the next step: `main` prints `help` as its `╰─ help` line.
-#[derive(Debug)]
-pub(crate) struct Hint {
-    what: String,
-    help: String,
-}
-
-impl std::fmt::Display for Hint {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.what)
-    }
-}
-
-impl std::error::Error for Hint {}
-
-/// `what` failed; `help` says what to run instead.
-pub(crate) fn hint(what: impl Into<String>, help: impl Into<String>) -> anyhow::Error {
-    anyhow::Error::new(Hint { what: what.into(), help: help.into() })
-}
+pub(crate) use adage_app::error::{hint, Hint};
 
 /// `what` failed for each of `causes` (printed as `├─ cause` lines); `help` says what to do.
 pub(crate) fn refusal(what: impl Into<String>, mut causes: Vec<String>, help: impl Into<String>) -> anyhow::Error {
@@ -468,7 +451,7 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
     let cfg = if args.iter().any(|a| a == "--demo") {
         LearnConfig::demo()
     } else {
-        autolearn::thresholds(settings.learn_thresholds)
+        adage_learn::LearnConfig::for_thresholds(settings.learn_thresholds)
     };
     let mut cfg = cfg;
     // Instincts are bound after learning, per repository, unless turned off (config, or --no-instincts).
@@ -666,29 +649,20 @@ fn status(paths: &Paths, json: bool) -> Result<()> {
     let instinct =
         |t: &adage_tracks::Track, r: &adage_tracks::Route| r.is_instinct() || adage_tracks::index::is_instinct_track(t);
     if json {
-        let tracks: Vec<serde_json::Value> = tracks
+        // Every reflex as every surface shows it (`adage_app::reflex::Reflex`), grouped by track.
+        let installed = crate::review::discover(&paths.tracks())?;
+        let tracks: Vec<serde_json::Value> = installed
             .iter()
-            .enumerate()
-            .map(|(i, t)| {
+            .map(|inst| {
+                let t = &inst.track;
+                let whys = adage_tracks::why::load(&inst.dir);
                 serde_json::json!({
                     "track": t.manifest.track.name,
+                    "reference": inst.reference,
                     "version": t.manifest.track.version,
                     "repo": t.manifest.scope.repo,
-                    "origin": origin(t),
-                    "reflexes": t.routes.iter().map(|r| serde_json::json!({
-                        "id": r.id,
-                        "kind": if instinct(t, r) { "instinct" } else { "reflex" },
-                        "strength": r.strength,
-                        "lifecycle": words::lifecycle(r.state),
-                        "support": r.evidence.support,
-                        "opportunities": r.evidence.opportunities,
-                        "rate": r.evidence.rate,
-                        "lower_bound": r.evidence.lower_bound,
-                        "effect": r.effect.as_str(),
-                        "evidence": evidence::describe(r, whys[i].get(&r.id)),
-                        "uplift": r.evidence.uplift.as_ref().map(|u| u.line()),
-                        "obligation": evidence::obligation(r),
-                    })).collect::<Vec<_>>(),
+                    "kind": origin(t),
+                    "reflexes": t.routes.iter().map(|r| adage_app::reflex::Reflex::of(inst, r, whys.get(&r.id))).collect::<Vec<_>>(),
                 })
             })
             .collect();

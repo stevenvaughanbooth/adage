@@ -124,7 +124,7 @@ fn replay_reproduces_the_live_round2_decisions() {
     // a forked skill's tool calls fired hooks but live in a subagent transcript).
     //
     // The recorded hooks matched commands by exact template key; replay compares under that
-    // matching (`--exact-keys`, `adage_runtime::with_exact_key_matching`). Under the current
+    // matching (`--exact-keys`, `adage_runtime::Policy::exact_keys`). Under the current
     // matching (the command-pattern algebra), exactly four control sessions differ, each by one
     // would-have linked-files directive the live hook did not make: the trigger was mined from
     // `python3 scripts/wi-lookup {id}` and the agent ran `./scripts/wi-lookup W-…`, the same script.
@@ -365,7 +365,8 @@ fn eval_output_is_deterministic() {
 }
 
 /// The generated datasets on disk are exactly what the generators write. After changing a
-/// generator on purpose: `ADAGE_EVAL_BLESS=1 cargo test -p adage-eval --test gates`.
+/// generator on purpose: `ADAGE_BLESS=1 cargo test -p adage-eval --test gates` (the variable
+/// every golden in the workspace is re-blessed with; `ADAGE_EVAL_BLESS=1` still works).
 #[test]
 fn generated_datasets_are_up_to_date() {
     for (name, gen) in [
@@ -373,7 +374,7 @@ fn generated_datasets_are_up_to_date() {
         ("adversarial", adage_eval::generate::adversarial),
     ] {
         let committed = datasets().join(name);
-        if std::env::var("ADAGE_EVAL_BLESS").is_ok_and(|v| v == "1") {
+        if ["ADAGE_BLESS", "ADAGE_EVAL_BLESS"].iter().any(|k| std::env::var(k).is_ok_and(|v| v == "1")) {
             let _ = std::fs::remove_dir_all(&committed);
             gen(&committed).unwrap();
             continue;

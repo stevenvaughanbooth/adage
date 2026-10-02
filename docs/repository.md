@@ -34,7 +34,7 @@
 | `docs/` | [Design spec](Adage%20—%20Design%20Spec.md) · [Architecture](Adage%20—%20Architecture.md) · [Implementation plan](Adage%20—%20Implementation%20Plan.md) |
 | `spikes/` | The experiments that settled the architecture — see [the board](../spikes/README.md) |
 
-`cargo test --workspace --locked` runs the suite, including the normaliser's golden fixtures, the
+`cargo test --workspace --locked` runs the suite, including the normaliser's table-driven cases, the
 eval gates and the L0 bench against its baseline.
 
 ## Status

@@ -41,6 +41,7 @@
 //! comes from A under the ceiling: fire on a positive lower bound, prime on a positive mean with
 //! P(A > 0) ≥ 0.8, else nothing.
 
+use crate::import::Exposure as _;
 use crate::import::Session;
 use crate::outcome::{self, Env, Runner, Situation, SituationKey};
 use adage_core::Effect;

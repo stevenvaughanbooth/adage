@@ -11,14 +11,19 @@
   {
    "id": "lookup-work-item",
    "summary": "work items are looked up with scripts/wi-lookup",
+   "gist": "work items are looked up with scripts/wi-lookup",
    "track": "acme-billing/learned",
    "version": "0.3.0",
    "reference": "acme-billing/learned",
    "repo": "acme-billing",
    "imported": false,
    "in_index": true,
+   "execution_only": false,
    "instinct": false,
-   "origin": null,
+   "origin": {
+    "kind": "learned",
+    "label": null
+   },
    "review": {
     "verbs": [
      "approve",
@@ -26,7 +31,8 @@
      "weaken",
      "pin"
     ],
-    "reasons": []
+    "reasons": [],
+    "next": null
    },
    "strength": "fire",
    "ceiling": "fire",
@@ -90,14 +96,19 @@
   {
    "id": "read-linked-files",
    "summary": "files a lookup lists are read together",
+   "gist": "files a lookup lists are read together",
    "track": "acme-billing/learned",
    "version": "0.3.0",
    "reference": "acme-billing/learned",
    "repo": "acme-billing",
    "imported": false,
    "in_index": true,
+   "execution_only": false,
    "instinct": false,
-   "origin": null,
+   "origin": {
+    "kind": "learned",
+    "label": null
+   },
    "review": {
     "verbs": [
      "approve",
@@ -105,7 +116,8 @@
      "weaken",
      "pin"
     ],
-    "reasons": []
+    "reasons": [],
+    "next": null
    },
    "strength": "fire",
    "ceiling": "fire",
@@ -170,21 +182,27 @@
   {
    "id": "dead-end-d41b1e",
    "summary": "unittest cannot run here; make test works",
+   "gist": "unittest cannot run here; make test works",
    "track": "acme-billing/learned",
    "version": "0.3.0",
    "reference": "acme-billing/learned",
    "repo": "acme-billing",
    "imported": false,
    "in_index": true,
+   "execution_only": false,
    "instinct": false,
-   "origin": null,
+   "origin": {
+    "kind": "learned",
+    "label": null
+   },
    "review": {
     "verbs": [
      "approve",
      "extinguish",
      "pin"
     ],
-    "reasons": []
+    "reasons": [],
+    "next": null
    },
    "strength": "inhibit",
    "ceiling": "inhibit",
@@ -250,14 +268,19 @@
   {
    "id": "start-with-make-test",
    "summary": "“run the tests” means make test",
+   "gist": "“run the tests” means make test",
    "track": "acme-billing/learned",
    "version": "0.3.0",
    "reference": "acme-billing/learned",
    "repo": "acme-billing",
    "imported": false,
    "in_index": true,
+   "execution_only": false,
    "instinct": false,
-   "origin": null,
+   "origin": {
+    "kind": "learned",
+    "label": null
+   },
    "review": {
     "verbs": [
      "approve",
@@ -265,7 +288,8 @@
      "strengthen",
      "pin"
     ],
-    "reasons": []
+    "reasons": [],
+    "next": null
    },
    "strength": "prime",
    "ceiling": "fire",
@@ -329,21 +353,31 @@
   {
    "id": "finish-line/regenerate",
    "summary": "edits to schema/*.json must be followed by make gen",
+   "gist": "edits to schema/*.json must be followed by make gen",
    "track": "adage/finish-line",
    "version": "0.1.0",
    "reference": "acme-billing/instincts",
    "repo": "acme-billing",
    "imported": false,
    "in_index": true,
+   "execution_only": false,
    "instinct": true,
-   "origin": "instinct U1 (from Makefile)",
+   "origin": {
+    "kind": "instinct",
+    "label": "instinct U1 (from Makefile)",
+    "pack": "adage/regenerate",
+    "instinct": "U1",
+    "declared": "Makefile",
+    "version": "0.1.0"
+   },
    "review": {
     "verbs": [
      "approve",
      "extinguish",
      "pin"
     ],
-    "reasons": []
+    "reasons": [],
+    "next": null
    },
    "strength": "prime",
    "ceiling": "prime",
@@ -407,14 +441,19 @@
   {
    "id": "regen-openapi-client",
    "summary": "openapi edits need make client",
+   "gist": "openapi edits need make client",
    "track": "acme-billing/learned",
    "version": "0.3.0",
    "reference": "acme-billing/learned",
    "repo": "acme-billing",
    "imported": false,
    "in_index": false,
+   "execution_only": false,
    "instinct": false,
-   "origin": null,
+   "origin": {
+    "kind": "learned",
+    "label": null
+   },
    "review": {
     "verbs": [
      "approve",
@@ -426,7 +465,8 @@
       "kind": "nascent",
       "why": "an environment step, nascent until a person approves it"
      }
-    ]
+    ],
+    "next": null
    },
    "strength": "prime",
    "ceiling": "fire",
@@ -490,14 +530,19 @@
   {
    "id": "read-adr-before-schema",
    "summary": "schema changes start from ADR 0007",
+   "gist": "schema changes start from ADR 0007",
    "track": "acme-billing/learned",
    "version": "0.3.0",
    "reference": "acme-billing/learned",
    "repo": "acme-billing",
    "imported": false,
    "in_index": false,
+   "execution_only": false,
    "instinct": false,
-   "origin": null,
+   "origin": {
+    "kind": "learned",
+    "label": null
+   },
    "review": {
     "verbs": [
      "approve",
@@ -509,7 +554,8 @@
       "kind": "new",
       "why": "learned by `adage condition` and never reviewed"
      }
-    ]
+    ],
+    "next": null
    },
    "strength": "prime",
    "ceiling": "fire",
@@ -574,21 +620,27 @@
   {
    "id": "prefer-uv-pip",
    "summary": "pip is externally managed here; uv works",
+   "gist": "pip is externally managed here; uv works",
    "track": "team/python-basics",
    "version": "1.2.0",
    "reference": "@imported/team/python-basics",
    "repo": "acme-billing",
    "imported": true,
    "in_index": true,
+   "execution_only": false,
    "instinct": false,
-   "origin": null,
+   "origin": {
+    "kind": "imported",
+    "label": null
+   },
    "review": {
     "verbs": [
      "approve",
      "extinguish",
      "pin"
     ],
-    "reasons": []
+    "reasons": [],
+    "next": null
    },
    "strength": "prime",
    "ceiling": "inhibit",
@@ -654,14 +706,19 @@
   {
    "id": "lint-after-edit",
    "summary": "agents already run make lint after an edit",
+   "gist": "agents already run make lint after an edit",
    "track": "acme-billing/learned",
    "version": "0.3.0",
    "reference": "acme-billing/learned",
    "repo": "acme-billing",
    "imported": false,
    "in_index": false,
+   "execution_only": false,
    "instinct": false,
-   "origin": null,
+   "origin": {
+    "kind": "learned",
+    "label": null
+   },
    "review": {
     "verbs": [
      "approve",
@@ -673,7 +730,8 @@
       "kind": "quiet",
       "why": "uplift +0.04 (lower bound -0.03): followed 0.95 when told, 0.91 unaided; 9 of 10 traces did it unaided. Quiet: agents already do this, so delivering it changes little; `approve` delivers it anyway"
      }
-    ]
+    ],
+    "next": null
    },
    "strength": "prime",
    "ceiling": "fire",
@@ -751,21 +809,27 @@
   {
    "id": "card-add-invoice-field",
    "summary": "adding a field to an invoice",
+   "gist": "adding a field to an invoice",
    "track": "acme-billing/learned",
    "version": "0.3.0",
    "reference": "acme-billing/learned",
    "repo": "acme-billing",
    "imported": false,
    "in_index": true,
+   "execution_only": false,
    "instinct": false,
-   "origin": null,
+   "origin": {
+    "kind": "learned",
+    "label": null
+   },
    "review": {
     "verbs": [
      "approve",
      "extinguish",
      "pin"
     ],
-    "reasons": []
+    "reasons": [],
+    "next": null
    },
    "strength": "prime",
    "ceiling": "prime",

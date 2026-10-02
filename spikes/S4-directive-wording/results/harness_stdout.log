@@ -1,6 +1,0 @@
-Canonical matrix: 68 runs (3 arms x 4 tasks x 5 repeats + 4 tasks x 2 baseline repeats)
-[001] 001-A-T1-r1  arm=A task=T1 repeat=1
-[002] 002-A-T1-r2  arm=A task=T1 repeat=2
-  !! usage_limit detected — stopping the harness per the safety rule (no retry loop). See /Users/stevenbooth/Documents/skill-compile/spikes/S4-directive-wording/results/transcripts/002-A-T1-r2.stderr.log
-Stopping after 3 run(s) attempted due to 'usage_limit'.
-Done. Total rows in /Users/stevenbooth/Documents/skill-compile/spikes/S4-directive-wording/results/run_log.csv: 3. Runs counted against budget so far: 3.

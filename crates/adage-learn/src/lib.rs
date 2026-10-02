@@ -2,11 +2,9 @@
 //! versioned track per repository (`<repo>/learned`), bind instincts, compile the index.
 
 pub mod bridge;
-pub mod cache;
 pub mod cards;
 pub mod cases;
 pub mod claims;
-pub mod codex;
 pub mod diff;
 pub mod dormant;
 pub mod effects;
@@ -16,15 +14,15 @@ pub mod graph;
 pub mod import;
 pub mod instincts;
 pub mod ledger;
-pub mod opencode;
 pub mod outcome;
-pub mod scope;
+pub mod store;
 pub mod testmap;
 pub mod value;
 
-use adage_core::CommandTable;
+pub use adage_ingest::{cache, codex, opencode, scope};
+
 use adage_tracks::proposals::Proposals;
-use adage_tracks::{io, Gauge, Index, Manifest, Route, Scope, Track, TrackInfo, Trigger};
+use adage_tracks::{io, Gauge, Manifest, Route, Scope, Track, TrackInfo, Trigger};
 use anyhow::Result;
 pub use evidence::LearnConfig;
 use import::Session;
@@ -88,23 +86,6 @@ pub struct Inputs {
     /// Learn only this repository (automatic learning): sessions of other repositories are not
     /// read into the run, not counted in `sessions_read`, and their tracks are left as they are.
     pub only_repo: Option<String>,
-}
-
-pub fn slug(repo: &str) -> String {
-    let old: String =
-        repo.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '-' }).collect();
-    // Preserve published track paths. Repository identities remain unchanged in Scope, but the
-    // directory name must fit track validation, including the longest suffix this learner emits.
-    if io::safe_name(&format!("{old}/{}", instincts::TRACK)) {
-        return old;
-    }
-    use sha2::{Digest, Sha256};
-    let digest = Sha256::digest(repo.as_bytes());
-    let hash: String = digest[..8].iter().map(|b| format!("{b:02x}")).collect();
-    let readable: String = old.to_ascii_lowercase().chars().take(64).collect();
-    let readable = readable.trim_matches(['-', '_']);
-    let readable = if readable.is_empty() { "unnamed" } else { readable };
-    format!("repo-{readable}-{hash}")
 }
 
 /// Semantic-version bump from the difference between the previous and new routes (Design §10.9).
@@ -182,73 +163,56 @@ impl Planned {
     }
 }
 
-/// Read one session file: a Claude Code transcript, an OpenCode `opencode export` file, or a Codex
-/// rollout (recognised by content).
-pub fn read_session(path: &Path, table: &CommandTable, repo_override: Option<&str>) -> Option<Session> {
-    if let Some(lines) = codex::read_rollout(path) {
-        return codex::parse_rollout(&lines, table, repo_override);
+pub use adage_ingest::read_session;
+pub use adage_tracks::layout::{follow_weights_path, read_follow_weights, slug};
+
+/// `adage condition`: ingest the traces, then learn from their sessions ([`learn_sessions`]).
+pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &LearnConfig) -> Result<Report> {
+    let opts = adage_ingest::batch::Options {
+        repo_override: inputs.repo_override.clone(),
+        only_repo: inputs.only_repo.clone(),
+        cache: inputs.cache.clone(),
+        ..Default::default()
+    };
+    let mut batch = adage_ingest::batch::read(&inputs.transcripts, &opts);
+    for s in &mut batch.sessions {
+        s.outcome = inputs.outcomes.get(&s.id).copied();
     }
-    match opencode::read_export(path) {
-        Some(v) => opencode::parse_export(&v, table, repo_override),
-        None => import::parse_transcript(path, table, repo_override),
-    }
+    learn_sessions(batch, inputs.only_repo.as_deref(), inputs.models.as_deref(), tracks_root, index_path, cfg)
 }
 
-/// `adage condition`: import sessions, mine routes, write tracks, compile the index.
-pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &LearnConfig) -> Result<Report> {
-    let table = CommandTable::load();
-    let mut sessions: Vec<Session> = Vec::new();
-    let (mut read, mut steered) = (0, 0);
-    let mut cache = inputs.cache.as_deref().map(cache::Cache::open);
-    // Repository keys by root, found once per run.
-    let mut keys: BTreeMap<PathBuf, String> = BTreeMap::new();
-    let mut repo_of = |root: &Path| -> String {
-        keys.entry(root.to_path_buf()).or_insert_with(|| adage_core::repo::repo_key(root)).clone()
-    };
-    let (over, only) = (inputs.repo_override.as_deref(), inputs.only_repo.as_deref());
-    for p in &inputs.transcripts {
-        let got = match cache.as_mut() {
-            Some(c) => c.read(p, &table, over, only, &mut repo_of),
-            None => match read_session(p, &table, over) {
-                None => cache::Read::Nothing,
-                Some(s) if only.is_some_and(|r| r != s.repo) => cache::Read::Elsewhere,
-                Some(s) => cache::Read::Session(Box::new(s)),
-            },
-        };
-        match got {
-            cache::Read::Elsewhere => {}
-            // A file with no session belongs to no repository: counted only in a full run.
-            cache::Read::Nothing => read += usize::from(only.is_none()),
-            cache::Read::Session(s) => {
-                let mut s = *s;
-                read += 1;
-                steered += usize::from(s.steered);
-                s.outcome = inputs.outcomes.get(&s.id).copied();
-                if !s.steps.is_empty() {
-                    sessions.push(s);
-                }
-            }
-        }
-    }
-    // Which repository each checkout is, for when it is deleted (a removed worktree). Not under an
-    // override, which is not the checkout's own key.
-    if over.is_none() {
-        let checkouts: BTreeMap<&Path, &str> = sessions.iter().map(|s| (s.root.as_path(), s.repo.as_str())).collect();
-        for (root, repo) in checkouts {
-            adage_core::repo::remember_key(root, repo);
-        }
-    }
-    let (hits, misses) = cache.as_ref().map(|c| (c.hits, c.misses)).unwrap_or((0, 0));
-    if let Some(c) = cache {
-        c.save();
-    }
+/// The learning engine's entry: learn from canonical sessions (an ingested batch, whatever its
+/// traces came from), write the tracks, and compile the index. With `only`, learn that repository
+/// alone; with no session for it yet, bind its instincts from its files (day 0).
+pub fn learn_sessions(
+    batch: adage_ingest::batch::Batch,
+    only: Option<&str>,
+    models: Option<&Path>,
+    tracks_root: &Path,
+    index_path: &Path,
+    cfg: &LearnConfig,
+) -> Result<Report> {
+    learn_sessions_into(batch, only, models, tracks_root, &store::Files::new(tracks_root, index_path), cfg)
+}
+
+/// [`learn_sessions`], materializing into `store` ([`store::Store`]). What was learned before is
+/// read from `tracks_root`; everything the run decides is written only through `store`.
+pub fn learn_sessions_into(
+    batch: adage_ingest::batch::Batch,
+    only: Option<&str>,
+    models: Option<&Path>,
+    tracks_root: &Path,
+    store: &dyn store::Store,
+    cfg: &LearnConfig,
+) -> Result<Report> {
+    let adage_ingest::batch::Batch { sessions, read, steered, cache_hits: hits, cache_misses: misses } = batch;
     if let (Some(repo), true, Some(ic)) = (only, sessions.is_empty(), cfg.instincts.as_ref()) {
         // No session to learn from yet: bind the repository's instincts from its files (day 0),
         // when its root is known and they are not bound against it as its files are now.
         let bound = io::read(&tracks_root.join(slug(repo)).join(instincts::TRACK)).is_ok();
         let fresh = |root: &Path| bound && !instincts::stale_binding(tracks_root, repo, root, &ic.selection());
         if let Some(root) = ic.roots.get(repo).filter(|r| !fresh(r)) {
-            let mut report = instincts::learn_only(repo, root, tracks_root, index_path, ic)?;
+            let mut report = instincts::learn_only_into(repo, root, tracks_root, store, ic)?;
             report.sessions_read = read;
             report.sessions_steered = steered;
             report.thresholds = thresholds(cfg);
@@ -261,7 +225,7 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
         let report = Report {
             sessions_read: read,
             sessions_steered: steered,
-            index_generation: Index::load(index_path).generation,
+            index_generation: store.index_generation(),
             thresholds: thresholds(cfg),
             cache_hits: hits,
             cache_misses: misses,
@@ -270,37 +234,29 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
         return Ok(report);
     }
     if cfg.instincts.as_ref().is_some_and(instincts::Config::binds) {
-        instincts::preinstall(tracks_root);
+        store.install_base_packs();
     }
     let weights = follow_weights(&sessions);
-    let (mut report, planned) = plan(sessions, inputs.models.as_deref(), tracks_root, cfg)?;
+    let (mut report, planned) = plan(sessions, models, tracks_root, cfg)?;
     report.sessions_read = read;
     report.sessions_steered = steered;
     (report.cache_hits, report.cache_misses) = (hits, misses);
     for p in &planned {
-        p.write()?;
+        store.write_track(p)?;
     }
     for (repo, rr) in &report.repos {
         if let (Some(root), Some(ic)) = (rr.instincts.as_ref().and_then(|i| i.root.as_deref()), cfg.instincts.as_ref())
         {
-            instincts::record_binding(tracks_root, repo, root, ic);
+            store.write_binding(repo, &instincts::binding_now(root, ic));
         }
     }
     for (repo, w) in &weights {
-        write_follow_weights(tracks_root, repo, w);
+        store.write_follow_weights(repo, w);
     }
-    let all = io::read_all(tracks_root)?;
-    let (index, conflicts) = Index::compile_root(tracks_root, &all);
-    index.write_atomic(index_path)?;
-    report.index_generation = index.generation.clone();
-    report.conflicts = conflicts;
+    let index = store.compile_index()?;
+    report.index_generation = index.generation;
+    report.conflicts = index.conflicts;
     Ok(report)
-}
-
-/// Where a repository's learned follow-judge weights are kept (`adage_core::judge`), beside its
-/// tracks (a hidden file: never a track). The hook hands them to the runtime.
-pub fn follow_weights_path(tracks_root: &Path, repo: &str) -> PathBuf {
-    tracks_root.join(slug(repo)).join(".follow-weights.json")
 }
 
 /// The learned follow judge's weights per repository, from its sessions' shell commands: in how
@@ -315,19 +271,6 @@ fn follow_weights(sessions: &[Session]) -> BTreeMap<String, adage_core::judge::W
         }
     }
     by.into_iter().map(|(r, pairs)| (r.to_string(), adage_core::judge::Weights::fit(pairs))).collect()
-}
-
-fn write_follow_weights(tracks_root: &Path, repo: &str, w: &adage_core::judge::Weights) {
-    let p = follow_weights_path(tracks_root, repo);
-    if let (Some(dir), Ok(body)) = (p.parent(), serde_json::to_vec(w)) {
-        let _ = std::fs::create_dir_all(dir);
-        let _ = adage_store::config::write_atomic(&p, &body);
-    }
-}
-
-/// A repository's learned follow-judge weights, if it has any.
-pub fn read_follow_weights(tracks_root: &Path, repo: &str) -> Option<adage_core::judge::Weights> {
-    std::fs::read(follow_weights_path(tracks_root, repo)).ok().and_then(|b| serde_json::from_slice(&b).ok())
 }
 
 fn thresholds(cfg: &LearnConfig) -> String {

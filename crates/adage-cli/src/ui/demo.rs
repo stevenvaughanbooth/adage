@@ -318,9 +318,7 @@ fn run_hook(exe: &Path, home: &DemoHome, arm: &str, event: &str, payload: &Value
     }
 }
 
-fn now_ms() -> u64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
-}
+use adage_core::time::now_ms;
 
 /// A simulated learning run: the track re-learned with this round's evidence, the index
 /// recompiled, and one `learn.log` line in the live-learning format.

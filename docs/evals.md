@@ -137,7 +137,7 @@ adage eval generate adversarial evals/datasets/adversarial
 
 The generated datasets are compared byte for byte with their generators in
 `generated_datasets_are_up_to_date`. After a deliberate change, rewrite them with
-`ADAGE_EVAL_BLESS=1 cargo test -p adage-eval --test gates`.
+`ADAGE_BLESS=1 cargo test -p adage-eval --test gates`.
 
 **Adversarial.** The dataset attacks every input path:
 

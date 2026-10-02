@@ -1,6 +1,7 @@
-"""Offline tests for the skill lab (no sessions, no model): python3 -m pytest evals/lab/skills -q"""
+"""Offline tests for the skill lab (no sessions, no model): `python3 -m unittest discover` here."""
 
 import sys
+import unittest
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -72,8 +73,11 @@ def test_bash_segments():
     assert classify_bash('git commit -m "$(cat <<EOF\nx\nEOF\n)"', "/r")[0] == "vcs"
 
 
+def load_tests(loader, tests, pattern):
+    """Every `test_*` function, as unittest runs them (discovery finds no TestCase here otherwise)."""
+    funcs = [f for name, f in sorted(globals().items()) if name.startswith("test_") and callable(f)]
+    return unittest.TestSuite(unittest.FunctionTestCase(f) for f in funcs)
+
+
 if __name__ == "__main__":
-    for name, fn in sorted(globals().items()):
-        if name.startswith("test_"):
-            fn()
-            print("ok", name)
+    unittest.main()

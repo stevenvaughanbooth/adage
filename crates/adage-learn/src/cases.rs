@@ -574,7 +574,7 @@ pub fn task_groups(prompts: &[Vec<i16>], tau: f64) -> Vec<usize> {
 pub fn steps_of_call(
     turn: u32,
     prompt: u16,
-    call: &adage_runtime::Call,
+    call: &adage_trace::Call,
     root: &std::path::Path,
     table: &adage_core::CommandTable,
 ) -> Vec<StepObs> {

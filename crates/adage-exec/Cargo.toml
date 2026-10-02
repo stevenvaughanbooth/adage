@@ -26,7 +26,7 @@ adage-runtime = { path = "../adage-runtime" }
 adage-pack = { path = "../adage-pack" }
 adage-hook = { path = "../adage-hook" }
 # The safety oracle re-checks every block `adage-exec hook` delivers (check_data_block).
-adage-eval = { path = "../adage-eval" }
+adage-safety = { path = "../adage-safety" }
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true

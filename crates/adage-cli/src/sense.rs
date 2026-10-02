@@ -500,7 +500,7 @@ pub fn run(o: &Options, paths: &Paths) -> Result<Sense> {
         mined.append(&mut a.mined);
     }
     let settings = adage_store::config::load(paths).config;
-    let mut cfg = if o.demo { LearnConfig::demo() } else { crate::autolearn::thresholds(settings.learn_thresholds) };
+    let mut cfg = if o.demo { LearnConfig::demo() } else { LearnConfig::for_thresholds(settings.learn_thresholds) };
     cfg.cards = crate::autolearn::card_params(&settings, paths);
     let (report, planned) = adage_learn::plan(mined, Some(&paths.models()), &paths.tracks(), &cfg)?;
     sense.thresholds = report.thresholds.clone();
@@ -597,7 +597,7 @@ fn candidates(p: &adage_learn::Planned) -> Vec<Candidate> {
         status: status.into(),
         strength: strength_str(r.strength).into(),
         effect: r.effect.as_str().into(),
-        trigger: redacted(crate::graph::trigger(&r.trigger)["label"].as_str().unwrap_or_default()),
+        trigger: redacted(adage_app::graph::trigger(&r.trigger)["label"].as_str().unwrap_or_default()),
         step: redacted(&crate::share::describe_step(&r.step)),
         support: r.evidence.support,
         opportunities: r.evidence.opportunities,

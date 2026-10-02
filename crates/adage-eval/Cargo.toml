@@ -13,6 +13,7 @@ slow = []
 [dependencies]
 adage-core = { path = "../adage-core" }
 adage-tracks = { path = "../adage-tracks" }
+adage-safety = { path = "../adage-safety" }
 adage-runtime = { path = "../adage-runtime" }
 adage-learn = { path = "../adage-learn" }
 adage-intent = { path = "../adage-intent" }

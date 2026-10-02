@@ -49,6 +49,7 @@ struct World {
 
 impl World {
     fn new() -> World {
+        adage_sim::assume_no_checkout_at_cwd();
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().canonicalize().unwrap();
         std::fs::create_dir_all(root.join("home")).unwrap();

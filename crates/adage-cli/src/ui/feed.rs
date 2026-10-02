@@ -127,20 +127,12 @@ impl FeedItem {
 
 /// The harness's short name for narrow panes.
 pub fn harness_short(h: &str) -> &str {
-    match h {
-        "claude" | "claude-code" => "cc",
-        "opencode" => "oc",
-        "codex" => "cx",
-        other => other,
-    }
+    adage_trace::Harness::parse(h).map_or(h, |h| h.short())
 }
 
 /// The harness's name as a row shows it.
 pub fn harness_name(h: &str) -> &str {
-    match h {
-        "claude-code" => "claude",
-        other => other,
-    }
+    adage_trace::Harness::parse(h).map_or(h, |h| h.hook_name())
 }
 
 /// The normalised event name (`adage_runtime::Event::name`) as shown.

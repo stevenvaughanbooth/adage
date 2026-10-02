@@ -1,1 +1,0 @@
-Identity added: /Users/stevenbooth/Documents/skill-compile/spikes/S6-ssh-signing/keys/dev_ed25519 (adage-spike-dev)

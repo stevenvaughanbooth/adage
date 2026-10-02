@@ -10,11 +10,13 @@ homepage.workspace = true
 
 [dependencies]
 adage-core = { path = "../adage-core" }
+adage-trace = { path = "../adage-trace" }
 adage-store = { path = "../adage-store" }
 adage-tracks = { path = "../adage-tracks" }
 adage-intent = { path = "../adage-intent" }
 adage-runtime = { path = "../adage-runtime" }
-adage-learn = { path = "../adage-learn" }
+adage-ingest = { path = "../adage-ingest" }
+adage-pack = { path = "../adage-pack" }
 serde.workspace = true
 serde_json.workspace = true
 

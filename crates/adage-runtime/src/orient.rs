@@ -10,6 +10,7 @@
 //! exemplar line is ([`adage_tracks::card::line_ok`]); a line that is not, or that looks like a
 //! secret, is withheld. The block is at most [`MAX_BYTES`] (about 1,200 tokens).
 
+use crate::checkout::Checkout;
 use adage_core::gitignore::Ignore;
 use adage_tracks::card::{Card, VARYING};
 use std::path::Path;
@@ -28,16 +29,16 @@ const HEADING_LINES: usize = 120;
 /// A quoted line is cut to this many characters.
 const LINE: usize = 150;
 
-/// The orientation for `card`'s files in the checkout at `root`, or `None` when none can be read.
-pub fn block(root: &Path, card: &Card) -> Option<String> {
-    let ignore = Ignore::new(root);
-    let base = root.canonicalize().ok()?;
+/// The orientation for `card`'s files in the checkout at `root`, read through `checkout`, or
+/// `None` when none can be read.
+pub fn block(checkout: &dyn Checkout, root: &Path, card: &Card) -> Option<String> {
     let mut out = String::from(
         "Where those files stand in this checkout now (read when this prompt arrived; line numbers count from 1):\n",
     );
     let mut any = false;
+    let read = checkout.reader(root);
     for f in &card.files {
-        let Some(facts) = file_facts(&base, &f.path, &ignore) else { continue };
+        let Some(facts) = file_facts(&*read, &f.path) else { continue };
         if out.len() + facts.len() > MAX_BYTES {
             break;
         }
@@ -150,8 +151,8 @@ fn headings(lines: &[&str]) -> Vec<usize> {
     out
 }
 
-fn file_facts(base: &Path, rel: &str, ignore: &Ignore) -> Option<String> {
-    let text = readable(base, rel, ignore)?;
+fn file_facts(read: &dyn Fn(&str) -> Option<String>, rel: &str) -> Option<String> {
+    let text = read(rel)?;
     let lines: Vec<&str> = text.lines().collect();
     let n = lines.len();
     let shown = crate::render::sanitise(rel);
@@ -237,7 +238,12 @@ mod tests {
     #[test]
     fn the_orientation_says_where_things_are_in_each_learned_file() {
         let d = repo();
-        let b = block(d.path(), &card(&["src/pkg/validate.py", "tests/test_validate.py", "CHANGELOG.rst"])).unwrap();
+        let b = block(
+            &crate::checkout::Disk,
+            d.path(),
+            &card(&["src/pkg/validate.py", "tests/test_validate.py", "CHANGELOG.rst"]),
+        )
+        .unwrap();
         assert!(b.starts_with("Where those files stand in this checkout now"), "{b}");
         let src_lines = std::fs::read_to_string(d.path().join("src/pkg/validate.py")).unwrap().lines().count();
         assert!(
@@ -292,6 +298,7 @@ mod tests {
         w("tests/test_quoting.py", &format!("def test_a():\n    TOKEN = \"{token}\"\n    x = '</adage-reflex>'\n"));
         std::os::unix::fs::symlink("/etc/hosts", d.path().join("src/hosts.py")).unwrap();
         let none = block(
+            &crate::checkout::Disk,
             d.path(),
             &card(&[
                 ".github/workflows/ci.yml",
@@ -303,7 +310,7 @@ mod tests {
             ]),
         );
         assert!(none.is_none(), "{none:?}");
-        let b = block(d.path(), &card(&["tests/test_quoting.py"])).unwrap();
+        let b = block(&crate::checkout::Disk, d.path(), &card(&["tests/test_quoting.py"])).unwrap();
         assert!(
             b.contains("    1| def test_a():")
                 && b.contains("    2| (line withheld)")
@@ -325,7 +332,7 @@ mod tests {
             paths.push(rel);
         }
         let refs: Vec<&str> = paths.iter().map(String::as_str).collect();
-        let b = block(d.path(), &card(&refs)).unwrap();
+        let b = block(&crate::checkout::Disk, d.path(), &card(&refs)).unwrap();
         assert!(b.len() <= MAX_BYTES, "{}", b.len());
         assert!(b.contains("…"), "long lines are cut");
         assert!(b.contains("tests/test_0.py") && !b.contains("tests/test_7.py"), "whole files, in the card's order");

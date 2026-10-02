@@ -10,7 +10,7 @@
 //!   bound again; a rejected instinct route stays in the track, extinguished, so the decision shows.
 //!   Environment-effect instincts (`pnpm install`) are nascent until a person approves one: that
 //!   approves the pack's environment steps for the repository (`Reviews::packs`).
-//! - **Auto-extinguish.** The runtime judges every instinct directive ([`adage_runtime::Judgement`]).
+//! - **Auto-extinguish.** The runtime judges every instinct directive (`adage_runtime::Judgement`).
 //!   From the spools, an instinct route is extinguished ([`should_extinguish`]) when it
 //!   misfired at least [`EXTINGUISH_MISFIRED`] times (the agent ran the directed command and it
 //!   failed for want of its environment or target), no fewer than its working follows; or when,
@@ -28,6 +28,8 @@
 //! - **Capped.** Prime, forming at most (never firm), never an obligation or a Stop request
 //!   (the runtime's part).
 
+pub use adage_pack::binding::{binding, binding_path, selection, stale_binding, Binding};
+
 use crate::{bump, slug, Planned, TrackReport};
 use adage_tracks::review::{self, Decision, Review};
 use adage_tracks::{io, Gauge, Manifest, Route, RouteState, Scope, Strength, Track, TrackInfo};
@@ -38,7 +40,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 /// The track instincts are written to, under the repository's directory.
-pub const TRACK: &str = "instincts";
+pub const TRACK: &str = adage_tracks::layout::INSTINCTS_TRACK;
 /// misfired judgements that extinguish an instinct route.
 pub const EXTINGUISH_MISFIRED: u32 = 3;
 /// With a control-arm comparison, an ignore rate whose Wilson lower bound reaches this
@@ -104,25 +106,6 @@ impl Config {
     }
 }
 
-/// The packs a binding was made with, as a short fingerprint: the built-in marketplace this build
-/// ships (`adage_pack::builtin::fingerprint`) and the choice of packs (`instincts.packs`,
-/// `instincts.disabled`). Either changing binds each repository's instincts again. Cheap: the
-/// session-start hook computes it from the settings it has read.
-pub fn selection<A: AsRef<str>, B: AsRef<str>>(packs: &[A], disabled: impl IntoIterator<Item = B>) -> String {
-    let mut on: Vec<&str> = packs.iter().map(AsRef::as_ref).collect();
-    on.sort_unstable();
-    on.dedup();
-    let mut off: Vec<String> = disabled.into_iter().map(|d| d.as_ref().to_string()).collect();
-    off.sort_unstable();
-    off.dedup();
-    adage_core::repo::short_hash(&format!(
-        "{}\n{}\n{}",
-        adage_pack::builtin::fingerprint(),
-        on.join(","),
-        off.join(",")
-    ))
-}
-
 /// The instinct packs `cfg` turns on, of those available on this machine
 /// ([`adage_pack::instincts::available`]), and why any available pack could not be read.
 pub fn packs(cfg: &Config, tracks_root: &Path) -> (Vec<adage_pack::Pack>, Vec<String>) {
@@ -172,57 +155,21 @@ pub struct InstinctReport {
     pub root: Option<PathBuf>,
 }
 
-/// Where the checkout a repository's instincts were bound against is recorded, beside its tracks
-/// (a hidden file: never a track).
-pub fn binding_path(tracks_root: &Path, repo: &str) -> PathBuf {
-    tracks_root.join(slug(repo)).join(".instincts-binding.json")
-}
-
-/// What a binding was made from: the checkout and its declared files' fingerprint
-/// (`adage_instincts::fingerprint`).
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, serde::Deserialize)]
-pub struct Binding {
-    pub root: String,
-    pub declared: String,
-    /// The checkout's project environment, verified from its files at bind time
-    /// (`adage_instincts::verify_env`): what a `PreToolUse` interpreter rewrite may use.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub env: Option<adage_instincts::VerifiedEnv>,
-    /// The packs the instincts were bound with ([`selection`]): a build that ships other base
-    /// packs, or another choice of packs, binds them again.
-    #[serde(default)]
-    pub packs: String,
-}
-
 /// Record that the repository's instincts are bound against `root` as its files are now, with the
 /// packs `cfg` selects.
 pub fn record_binding(tracks_root: &Path, repo: &str, root: &Path, cfg: &Config) {
-    let b = Binding {
+    crate::store::write_binding_at(tracks_root, repo, &binding_now(root, cfg));
+}
+
+/// How a repository's instincts are bound against the checkout at `root` now: what it declares,
+/// its verification environment, and the packs selected.
+pub fn binding_now(root: &Path, cfg: &Config) -> Binding {
+    Binding {
         root: root.to_string_lossy().into(),
         declared: adage_instincts::fingerprint(root),
         env: adage_instincts::verify_env(root),
         packs: cfg.selection(),
-    };
-    let p = binding_path(tracks_root, repo);
-    if let (Some(dir), Ok(body)) = (p.parent(), serde_json::to_vec(&b)) {
-        let _ = std::fs::create_dir_all(dir);
-        let _ = adage_store::config::write_atomic(&p, &body);
     }
-}
-
-/// The recorded binding of a repository's instincts, if any.
-pub fn binding(tracks_root: &Path, repo: &str) -> Option<Binding> {
-    std::fs::read(binding_path(tracks_root, repo)).ok().and_then(|b| serde_json::from_slice(&b).ok())
-}
-
-/// Whether the repository's instincts should be bound again against the live checkout `root` (the
-/// session's): never bound, bound against another checkout (paths named in old traces, another
-/// worktree), its declared files changed since (a `.venv` made, a Makefile edited), or other packs
-/// are selected now (`selection`: [`selection`] of the current settings).
-pub fn stale_binding(tracks_root: &Path, repo: &str, root: &Path, selection: &str) -> bool {
-    binding(tracks_root, repo).is_none_or(|b| {
-        b.root != root.to_string_lossy() || b.declared != adage_instincts::fingerprint(root) || b.packs != selection
-    })
 }
 
 /// Runtime judgements of one route: the treated arm's (the directive was delivered), and the
@@ -660,8 +607,19 @@ pub fn learn_only(
     index_path: &Path,
     cfg: &Config,
 ) -> Result<crate::Report> {
+    learn_only_into(repo, root, tracks_root, &crate::store::Files::new(tracks_root, index_path), cfg)
+}
+
+/// [`learn_only`], writing to `store`; the reflexes already learned are read from `tracks_root`.
+pub fn learn_only_into(
+    repo: &str,
+    root: &Path,
+    tracks_root: &Path,
+    store: &dyn crate::store::Store,
+    cfg: &Config,
+) -> Result<crate::Report> {
     if cfg.binds() {
-        preinstall(tracks_root);
+        store.install_base_packs();
     }
     let judged = cfg.spools.as_deref().map(judgements).unwrap_or_default();
     let others = other_routes(tracks_root, repo);
@@ -669,19 +627,17 @@ pub fn learn_only(
     let mut report = crate::Report::default();
     let mut rr = crate::RepoReport::default();
     if let Some((tr, p)) = plan {
-        p.write()?;
+        store.write_track(&p)?;
         rr.tracks.push(tr);
     }
     if let Some(r) = &ir.root {
-        record_binding(tracks_root, repo, r, cfg);
+        store.write_binding(repo, &binding_now(r, cfg));
     }
     rr.instincts = Some(ir);
     report.repos.insert(repo.to_string(), rr);
-    let all = io::read_all(tracks_root)?;
-    let (index, conflicts) = adage_tracks::Index::compile_root(tracks_root, &all);
-    index.write_atomic(index_path)?;
+    let index = store.compile_index()?;
     report.index_generation = index.generation;
-    report.conflicts = conflicts;
+    report.conflicts = index.conflicts;
     Ok(report)
 }
 

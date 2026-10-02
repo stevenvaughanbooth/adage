@@ -1,0 +1,21 @@
+[package]
+name = "adage-safety"
+description = "The safety oracle: an independent re-check that every directive and data block Adage delivers is one of its fixed, allowed forms"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# Layer 3 (docs/architecture.md): depends on the model only, never on the runtime it re-checks.
+[dependencies]
+adage-core = { path = "../adage-core" }
+adage-tracks = { path = "../adage-tracks" }
+serde.workspace = true
+serde_json.workspace = true
+regex.workspace = true
+once_cell.workspace = true
+
+[dev-dependencies]
+# The tests hold the runtime's own rendering to the oracle; the library never links it.
+adage-runtime = { path = "../adage-runtime" }
+tempfile = "3"

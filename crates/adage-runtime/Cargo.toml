@@ -8,6 +8,7 @@ publish.workspace = true
 
 [dependencies]
 adage-core = { path = "../adage-core" }
+adage-trace = { path = "../adage-trace" }
 adage-tracks = { path = "../adage-tracks" }
 adage-intent = { path = "../adage-intent" }
 serde.workspace = true

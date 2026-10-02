@@ -765,7 +765,7 @@ fn install(w: &World, cwd: &Path, args: &[&str], env: &[(&str, &str)]) -> (Strin
         .env("XDG_CONFIG_HOME", w.p("home/.config"))
         .env("CODEX_HOME", w.p("home/.codex"))
         .env("ADAGE_ALLOW_NONINTERACTIVE", "1");
-    for v in ["CLAUDECODE", "OPENCODE", "CODEX_SANDBOX", "CODEX_SANDBOX_NETWORK_DISABLED"] {
+    for v in ["CLAUDECODE", "OPENCODE", "CODEX_SANDBOX", "CODEX_SANDBOX_NETWORK_DISABLED", "CLAUDE_CONFIG_DIR"] {
         c.env_remove(v);
     }
     for (k, v) in env {
@@ -880,6 +880,26 @@ fn install_write_user_scope_uses_documented_paths_only() {
         vec![".claude/settings.json", ".codex/hooks.json", ".config/opencode/plugins/adage.js"]
     );
     assert_eq!(files(&repo), Vec::<String>::new(), "user scope never touches the repository");
+}
+
+/// Claude Code reads its user settings from `CLAUDE_CONFIG_DIR` when set; so does the hook's own
+/// settings check. `adage install` once wrote `~/.claude/settings.json` regardless, so with the
+/// variable set its hooks were never loaded and detection could not see them.
+#[test]
+#[cfg(unix)]
+fn install_writes_claude_code_settings_where_claude_code_reads_them() {
+    if exec_parity() {
+        return; // `adage install` is adage's
+    }
+    let w = World::new();
+    let repo = git_repo(&w, "proj");
+    let dir = w.p("claude-config");
+    let env = [("CLAUDE_CONFIG_DIR", dir.to_str().unwrap())];
+    let (_, err, code) =
+        install(&w, &repo, &["claude-code", "--write", "--scope", "user", "--bin", "/opt/adage"], &env);
+    assert_eq!(code, 0, "{err}");
+    assert_eq!(files(&dir), vec!["settings.json"]);
+    assert!(!w.p("home/.claude").exists(), "nothing under ~/.claude when CLAUDE_CONFIG_DIR is set");
 }
 
 #[test]

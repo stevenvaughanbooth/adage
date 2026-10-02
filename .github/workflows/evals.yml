@@ -113,18 +113,10 @@ jobs:
           name: eval-reports-${{ matrix.name }}
           path: eval-reports/
 
-      - name: live runner dry run (no agents)
-        run: python3 -m unittest evals/live/test_runner.py evals/live/test_budget.py
-
-      # Generated sandboxes (evals/gen): determinism, schema, the self-check of the smoke suite, and
-      # the scripted rehearsal's `adage condition` check (uses target/debug/adage, built above). The
-      # node-npm bundles are checked with the runner's Node and skipped if it has none.
-      - name: procedural sandbox generator
-        run: python3 -m unittest discover evals/gen
-
-      - name: external benchmark protocol (no Harbor, no agents)
-        run: python3 -m unittest discover evals/external
-
-      # The replay savings metric's helpers (evals/replay); the end-to-end case uses target/debug/adage.
-      - name: replay savings helpers
-        run: python3 -m unittest discover evals/replay
+      # Every Python suite under evals/, each from its own import root (xtask/src/suites.rs): the
+      # live runner's dry run (no agents), the procedural sandbox generator (determinism, schema,
+      # the smoke suite's self-check and the scripted rehearsal, using target/debug/adage built
+      # above), the external benchmark protocol (no Harbor, no agents), the replay savings helpers,
+      # the reflex-proof harness and the lab's offline studies.
+      - name: Python suites
+        run: cargo xtask test python

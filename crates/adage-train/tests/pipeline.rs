@@ -1,5 +1,5 @@
 //! The whole pipeline against the fake harness: plan → run (exploration, mining, validation) →
-//! report, on a committed fixture repository (the acme sandbox) and a fixture SKILL.md whose test
+//! report, on the acme sandbox (`evals/sandboxes/acme-billing`) and a fixture SKILL.md whose test
 //! command is stale and whose regenerate step is right.
 
 use adage_train::fake::{Fake, FakeWorld};
@@ -12,6 +12,11 @@ use std::process::Command;
 
 fn fixtures() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
+}
+
+/// The acme repository: the shared acme-billing sandbox.
+fn acme() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../evals/sandboxes/acme-billing")
 }
 
 fn copy_dir(src: &Path, dst: &Path) {
@@ -51,7 +56,7 @@ fn git(dir: &Path, args: &[&str]) {
 /// The acme sandbox as a git repository with an origin (so its key differs from a clone's).
 fn repo(tmp: &Path) -> PathBuf {
     let r = tmp.join("acme");
-    copy_dir(&fixtures().join("acme"), &r);
+    copy_dir(&acme(), &r);
     git(&r, &["init", "-q"]);
     git(&r, &["add", "."]);
     git(&r, &["commit", "-q", "-m", "fixture"]);

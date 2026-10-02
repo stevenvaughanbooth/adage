@@ -14,10 +14,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-/// Milliseconds since the Unix epoch.
-pub fn now_ms() -> u64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
-}
+pub use adage_core::time::now_ms;
 
 /// Debug builds only: `record` writes the learner command a hook would start to
 /// `learn-queue/spawn-record.jsonl` instead of starting it; `fail` makes starting it fail.
@@ -120,7 +117,7 @@ pub struct Queue {
 
 impl Queue {
     pub fn new(paths: &Paths, repo: &str) -> Queue {
-        Queue { dir: paths.learn_queue(), slug: adage_learn::slug(repo) }
+        Queue { dir: paths.learn_queue(), slug: adage_tracks::layout::slug(repo) }
     }
     fn file(&self, suffix: &str) -> PathBuf {
         self.dir.join(format!("{}{suffix}", self.slug))

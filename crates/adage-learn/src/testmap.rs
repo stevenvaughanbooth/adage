@@ -21,6 +21,7 @@
 //!   mapped test after editing its source). A check after an edit is suggested, never fired: prime
 //!   at most.
 
+use crate::import::Exposure as _;
 use crate::import::Session;
 use crate::outcome::{self, Runner};
 use crate::value::{self, Priors, Statics};
