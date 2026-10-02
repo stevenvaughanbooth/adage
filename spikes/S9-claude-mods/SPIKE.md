@@ -6,11 +6,17 @@ point), F14 (the status line and `suggest` mode, listed as not built) · **Wave:
 session per question that needs a person at the prompt; Q9–Q11 reuse the demo runner and its
 budget (two arms on the four held-out tasks, Haiku), one more day
 
-Research date: **2026-10-02**, against Claude Code **2.1.287**. Every claim about mods below is
-marked **documented** (stated in the `claude-code` declaration file that build writes for a mod,
-`types/claude-code.d.ts`, about 20,000 lines, or in the `plugin-authoring` skill that ships with
-the CLI), **inferred** (our reading of those sources, not run), or **to verify** (what this spike
-measures). Nothing here was run against a live Claude Code yet; that is the point of the spike.
+Research date: **2026-10-02**, against Claude Code **2.1.287**, the release that turned mods on by
+default. Every claim about mods below is marked **documented** (stated in the public docs,
+[overview](https://code.claude.com/docs/en/plugins/mods/overview),
+[events](https://code.claude.com/docs/en/plugins/mods/events),
+[API](https://code.claude.com/docs/en/plugins/mods/api),
+[interface](https://code.claude.com/docs/en/plugins/mods/interface) and
+[reference](https://code.claude.com/docs/en/plugins/mods/reference), or in the `claude-code`
+declaration file that build writes for a mod, `types/claude-code.d.ts`, about 20,000 lines, which
+the reference calls the authority), **inferred** (our reading of those sources, not run), or **to
+verify** (what this spike measures). The design that builds on this brief is
+[docs/claude-code-mod.md](../../docs/claude-code-mod.md). Nothing here was run against a live Claude Code yet; that is the point of the spike.
 The API is early access: the skill says it "moves between releases: the declaration file is the
 authority". Treat every type name below as true of 2.1.287 and re-read the file before building.
 
@@ -154,12 +160,14 @@ export const register: Register = on => {
 
 What this layer gives, with nothing else changed:
 
-- **The status line F14 asks for.** One pinned line under the prompt, replaced at each decision:
-  which event, how many reflexes, a rewrite (`↪`), a receipt, the finish line. Cleared when the
-  session is in the control arm or no route matched (the binary prints nothing; the mod sees an
-  empty `additionalContext` and clears the line). Words and glyphs follow the lexicon and the
-  style guide, because the text is for the person; the directive text the model reads is never
-  touched.
+- **The line F14 asks for, as a band.** The API page says `$.ui.status` "starts with `⚠` and the
+  mod's name", so the engine's warning glyph would sit on every Adage line; the band above the
+  prompt (`AbovePrompt`, the site the `token-weather` sample draws in) is Adage's own to draw,
+  one line replaced at each decision: which event, how many reflexes, a rewrite (`↪`), a receipt,
+  the finish line. Neutral when the session is in the control arm or no route matched (the binary
+  prints nothing; the mod sees an empty `additionalContext`). `$.ui.status` is kept for warnings,
+  where the glyph fits. Words and glyphs follow the lexicon and the style guide, because the text
+  is for the person; the directive text the model reads is never touched.
 - **`adage watch` inside Claude Code.** A `Pane` (docked beside a fullscreen transcript, inline
   above the prompt otherwise, or opened by `/adage watch`) that draws what `adage watch` draws,
   fed by one long-lived child, `adage watch --follow --json` (to add), through `$.process.spawn`.
@@ -478,15 +486,15 @@ script in the folder, per the spikes README.
 
 | # | Question | How | Pass |
 | --- | --- | --- | --- |
-| Q1 | **Coexistence.** Can `hooks/hooks.json` carry both `hooks` and `modules`? When a mod hooks `classic.UserPromptSubmit` and calls `next(e)`, does the plugin's own command hook run once beneath and its `additionalContext` arrive in the result? Can a mod answer without `next` and suppress it, so Layer 2 never double-delivers? Does the result expose `systemMessage`? | A probe mod that logs `e` and `next(e)`'s result per event to a file under the spike folder; one `-p` run exercising every event (S5's `probe-prompt.txt`) | A written recipe with no event delivered twice and no event lost, each hook event's result shape recorded verbatim |
+| Q1 | **Coexistence.** The docs settle the shape: `hooks/hooks.json` "can also hold settings hooks under `hooks`" beside `modules` (reference, Files), the plugin's own `PreToolUse` command hook runs "after the last mod calls `next`, as part of Claude Code's own behavior", and a mod that answers `tool.call` without `next` "keeps them from running" (events, order). To measure: that `next(e)` on each `classic.*` event resolves to the command hook's `additionalContext` once; that a `tool.call` rewrite followed by the `PreToolUse` command hook is deduplicated by the binary's `tool_use_id` identity (to add for `PreToolUse`), with one spool record; whether the result exposes `systemMessage` | A probe mod that logs `e` and `next(e)`'s result per event to a file under the spike folder; one `-p` run exercising every event (S5's `probe-prompt.txt`) | No event delivered twice to the model and none lost; one spool record per `tool_use_id`; each event's result shape recorded verbatim |
 | Q2 | **Latency.** Layer 1: the engine's dispatch cost of an observing hook over the command hook, at no-match and at a match. Layer 2: `$.process.run` of the binary from `tool.call` and `prompt.submit` against the command hook, end to end as the model sees it | `hook_latency`-style runs; `claude --debug` timestamps for the engine side | Layer 1 adds ≤ 1 ms p95; Layer 2 stays inside §9's budget (≤ 10 ms p95 no-match, ≤ 25 ms with intent), else Layer 2 is dropped |
 | Q3 | **Surfaces and silence.** `$.ui.status` and a `Pane` draw on the terminal (main screen and fullscreen) and the desktop app; `claude plugin test` mounts the pane on `terminal` and `desktop`; a `-p` run and a control session show nothing and change no output | An interactive session per surface; `plugin test`; a `-p` run diffed against one without the mod | Identical model-facing output with and without the mod in `-p`; a pane and status line on both surfaces |
 | Q3b | **The watch pane's feed and keys.** A `$.process.spawn` child (`adage watch --follow --json`, a stub for the spike) lives the session and ends with the module; the pane draws 200 rows at 2 Hz under the redraw cap; hotkeys `p`/`f`/`v`, an `Input` filter and Enter-to-inspect behave as the table in [TUI fit](#tui-fit-adage-watch-yes-adage-ui-no) says; the `ToolUse` and `UserMessage` row decorations draw and the transcript keeps them | The probe mod with the demo spools (`adage watch --demo`) as its feed; `plugin test` for the keys | No dropped rows at 2 Hz; the child is gone after `/clear` and exit; every row of the mapping table measured as Direct, Close or Out |
 | Q4 | **`$.tool.check` for rewrites.** With `Bash(pytest:*)` allowed in settings, and separately with `--allowedTools "Bash(pytest:*)"` on the command line, does `$.tool.check` on the rewritten `.venv/bin/python -m pytest …` answer `deny`/`ask` where the U11 planner's own reading answers "would lose the rule", and `allow` where a rule for `.venv/bin/python` exists? | Four settings fixtures × the probe mod; compare with `adage_runtime::pretool`'s verdict on the same inputs | `$.tool.check` agrees with the planner on every settings-file case and answers the command-line case the planner cannot see |
 | Q5 | **Provenance and cost.** A row appended with `$.session.append` carries `origin.plugin` in the transcript `.jsonl` the learner reads; `turn.complete.usage` and `$.session.usage().cost` match the transcript's own token counts and the ledger's priced estimate within pricing error | Append one row, read the transcript file; compare figures for three sessions | `origin` is on disk in a stable field; usage agrees within 1 % of the transcript's counts |
 | Q6 | **Fail-open and reload.** A hook that throws, one that sleeps past 10 s, a missing binary, a syntax error in the module: the session continues and the command hooks still serve; a hot reload re-runs `register` without losing `$.state`; `claude plugin validate --strict` passes on the real plugin folder with the module added | Fault injection in the probe mod; `--debug` log lines | Every fault leaves the command hooks' output unchanged and leaves one debug line naming the mod |
-| Q7 | **Hosts.** Where is `$.process` available ("CLI only" in the declaration): the terminal, the desktop app's Code tab, VS Code, `-p`, the SDK. On Windows, does the mod load and can it run `adage.exe`, where the `sh` shim is unverified | One session per host, the probe mod logging `$.session.surfaces()` and a `$.process.run(['adage','version'])` result | A table of hosts with yes/no per noun; Windows measured, not inferred |
-| Q8 | **Drift.** Diff `types/claude-code.d.ts` as written by 2.1.221 (the spikes' pinned environment) and 2.1.287; count the renamed or removed events and nouns the sketch above uses | `diff`, grep for each name | A churn figure per release that sets how the CI gate (Q6's `validate --strict` against a pinned CLI version) must be run |
+| Q7 | **Hosts.** The overview's table is documented: hooks run in the terminal, the Desktop app's Code tab (not WSL), the VS Code chat panel, `-p`, the SDK, Remote Control and cloud sessions; drawing only in the terminal and the Desktop app. Left to measure: `$.process` on the Desktop app ("CLI only" in the declaration, unrestricted on the API page); on Windows, whether the mod loads and can run `adage.exe`, where the `sh` shim is unverified | One session per host, the probe mod logging `$.session.surfaces()` and a `$.process.run(['adage','version'])` result | A table of hosts with yes/no per noun; Windows and the Desktop app measured, not inferred |
+| Q8 | **Drift.** The reference points at the public copy of the declaration file, `mods/types/claude-code.d.ts` in the Claude Code repository, so churn is its git history: count the renamed or removed events, props and nouns the sketches here use between the releases since mods shipped, and against 2.1.221 (the spikes' pinned environment) | `git log -p` on that file, grep for each name | A churn figure per release that sets how the CI gate (Q6's `validate --strict` against a pinned CLI version) must be run |
 | Q9 | **The request not sent.** A `turn.step` hook that yields a `tool`, `input` and `stop` chunk and returns without `next`: is the call recorded in the transcript, run through `tool.call`, `PreToolUse` and the permission dialog, and does the loop continue with its result? Does the result carry `usage: null`, and does the session's cost stay flat for that step? Does the model's next step read the fabricated assistant turn as its own and carry on? | The probe mod on the acme-billing sandbox (`demo/`), predicting the `make gen` after a `registry/*.csv` edit and the `make test` after a source edit from a fixed table; `claude --debug`; the transcript `.jsonl` | The call runs under the person's rules, the step costs zero, and the next model step proceeds in 10 of 10 runs; otherwise Layer 4 is out |
 | Q10 | **Does it move the gate?** The transfer pilot's measure: model requests per task and hidden-test quality, treated against control, with Layer 4 predicting only what today's E2 grants cover | `demo/run.py all` with the probe mod in the treated arm, Haiku, the four held-out tasks | Fewer model requests than the 0.67× execution mode reached, with hidden tests at the baseline's 19/20; a quality drop is a fail whatever the saving |
 | Q11 | **Routing.** `next({ ...e, model: 'haiku', effort: 'low' })` on steps the matcher marks routine: cost per task and quality against the unrouted arm | The same runner, a second treated arm | Reported as numbers; no pass bar, since the quality rule decides |
