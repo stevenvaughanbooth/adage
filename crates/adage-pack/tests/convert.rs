@@ -87,7 +87,7 @@ fn converting_is_deterministic() {
 
 #[test]
 fn the_instinct_catalogue_bound_on_acme_becomes_an_instinct_pack() {
-    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("../adage-instincts/tests/fixtures/acme");
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../evals/sandboxes/acme-billing");
     let bound = adage_instincts::bind(&fixture, &[], &BTreeSet::new());
     assert!(bound.routes.len() >= 4, "{:?}", bound.routes.iter().map(|r| &r.id).collect::<Vec<_>>());
     let track = Track {

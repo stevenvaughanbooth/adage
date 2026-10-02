@@ -9,8 +9,14 @@ use adage_tracks::{
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
+/// A fixture repository by name. `acme` is the shared acme-billing sandbox
+/// (`evals/sandboxes/acme-billing`), the one copy every crate's tests read.
 fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures").join(name)
+    let here = Path::new(env!("CARGO_MANIFEST_DIR"));
+    match name {
+        "acme" => here.join("../../evals/sandboxes/acme-billing"),
+        _ => here.join("tests/fixtures").join(name),
+    }
 }
 
 fn bound(name: &str) -> BindResult {

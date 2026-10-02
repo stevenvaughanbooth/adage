@@ -31,7 +31,7 @@ use std::process::Command;
 /// Paths outside every package that packages read, and which packages read them. A prefix ending
 /// in `/` matches a directory; any other prefix matches that file exactly.
 pub const READS: &[(&str, &[&str])] = &[
-    ("evals/sandboxes/", &["adage-cli", "adage-exec", "adage-learn"]),
+    ("evals/sandboxes/", &["adage-cli", "adage-exec", "adage-instincts", "adage-learn", "adage-pack", "adage-train"]),
     ("evals/datasets/", &["adage-graph", "adage-eval"]),
     ("evals/gen/", &["adage-cli", "adage-instincts"]),
     ("evals/lab/", &["adage-eval", "adage-train"]),
