@@ -1,7 +1,0 @@
-{
-  "status": "preflight-blocked-before-dispatch",
-  "paid_sessions": 0,
-  "human_approval_attempt": "reported done; CLI rejected cache glob .pytest_cache/**",
-  "preflight_error": "all exact automatic candidates need human grants before dispatch",
-  "remedy": "narrow pytest cache-only validation exception; remove unscoped root wildcard; rebuild, replay same ten histories and freeze replacement before dispatch"
-}

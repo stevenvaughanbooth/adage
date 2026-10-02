@@ -1,5 +1,0 @@
-Add a new validator to marshmallow: `marshmallow.validate.Hexadecimal(*, error=None)`, which succeeds if the input is a non-empty string made only of hexadecimal digits (`0-9`, `a-f`, `A-F`, no prefix). Its default error message is `Not a valid hexadecimal string.`; a custom `error` message may interpolate `{input}`. Examples of valid input: `'deadBEEF'`. Examples of invalid input: `'0x1f'`.
-
-Follow the conventions of the existing validators, include tests and a docstring, and add a changelog entry.
-
-Repository workflow for this instruction-guided demonstration: after implementing the code, tests, and documentation, run `.venv/bin/python -m pytest tests/test_validate.py -q` from the repository root. Report its actual result; do not claim success if it fails.

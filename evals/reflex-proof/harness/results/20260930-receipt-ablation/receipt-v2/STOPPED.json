@@ -1,9 +1,0 @@
-{
-  "reason": "generic first repetition never read fixture; requested denied directory search and stopped",
-  "paid_assignments": [
-    "1-baseline",
-    "1-generic"
-  ],
-  "unattempted_assignments": 6,
-  "decision": "exclude entire cohort from receipt comparison; preserve both outcomes; next protocol supplies absolute paths and explicit Read step uniformly"
-}

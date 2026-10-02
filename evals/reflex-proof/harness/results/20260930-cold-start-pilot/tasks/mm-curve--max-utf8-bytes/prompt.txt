@@ -1,3 +1,0 @@
-Add a new validator to marshmallow: `marshmallow.validate.MaxUtf8Bytes(max, *, error=None)`, which accepts strings whose UTF-8 encoding is at most `max` bytes long (including empty strings). Its default error message is `Must occupy at most {max} UTF-8 bytes.`; a custom `error` message may interpolate `{input}` and `{max}`. Examples of valid input: `MaxUtf8Bytes(4)`: `'abcd'`. Examples of invalid input: `'abcde'`.
-
-Follow the conventions of the existing validators, include tests and a docstring, and add a changelog entry.

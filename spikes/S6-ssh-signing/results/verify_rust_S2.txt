@@ -1,1 +1,0 @@
-GOOD signature: namespace="adage-track" principal(s)=["steven"] key=SHA256:RRS1qaB387PKzfCznKbu671wfEMVUfDtUg0KIWhXLZE alg=Ed25519

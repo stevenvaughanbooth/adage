@@ -16,6 +16,8 @@
 
 mod affected;
 #[cfg(test)]
+mod hygiene;
+#[cfg(test)]
 mod layers;
 
 use anyhow::{anyhow, bail, Context, Result};
