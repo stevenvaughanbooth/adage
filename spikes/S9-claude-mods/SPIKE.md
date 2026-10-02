@@ -156,11 +156,11 @@ What this layer gives, with nothing else changed:
   empty `additionalContext` and clears the line). Words and glyphs follow the lexicon and the
   style guide, because the text is for the person; the directive text the model reads is never
   touched.
-- **`adage watch` inside Claude Code.** A `Pane` (docked from 144 columns in the fullscreen
-  terminal layout, inline below that, or opened by `/adage watch`) that draws what `adage watch
-  --once` draws, from `adage status --json` and `adage savings --json` on a `$.clock.every`
-  timer, read through `$.process.run`. No split terminal, no second program. On the desktop app
-  and VS Code the same tree draws with their element tables.
+- **`adage watch` inside Claude Code.** A `Pane` (docked beside a fullscreen transcript, inline
+  above the prompt otherwise, or opened by `/adage watch`) that draws what `adage watch` draws,
+  fed by one long-lived child, `adage watch --follow --json` (to add), through `$.process.spawn`.
+  No split terminal, no second program. On the desktop app and VS Code the same tree draws with
+  their element tables. The fit is worked through in [TUI fit](#tui-fit-adage-watch-yes-adage-ui-no).
 - **Toasts for the rare, important moments**: a learner finished and a reflex changed strength
   (`learn.log` tail), a lapsed grant, a finish-line continuation. These replace nothing: the
   `systemMessage` notice stays for hosts without a mod.
@@ -272,6 +272,106 @@ per event, §9); what changes is the engine's dispatch around it, which is Q2.
 - **Replace the command hooks.** They are the floor: documented, stable across releases, the only
   path on hosts where `$.process` is unavailable, and what Codex's adapter mirrors.
 
+## TUI fit: `adage watch` yes, `adage ui` no
+
+Adage has two terminal programs (`crates/adage-cli/src/ui`, about 10,000 lines of Rust with
+tests): `adage watch`, a compact live pane for a split terminal (now, conditioning, health; eleven
+keys), and `adage ui`, a full-screen app with five tabs (Live, Reflexes, Map, Health, Settings), a
+command palette, review decisions on the Reflexes tab and one-key fixes on the Health tab. Both are
+drawn by pure functions from state to frame, with state read from files only (spools, `learn.log`,
+`doctor`'s checks, `config.toml`). The question is which of the two a mod can be, and should be.
+
+### What the drawing model is (documented)
+
+A mod draws a **tree of plain data**, not a screen: `Box` (flex layout, borders, padding, absolute
+placement), `Text` (colour "a theme key or a raw color", `dimColor`, `bold`, `inverse`, wrap or
+truncate), `Button`, `Input`, `Select`, `Link` (https, or `http://localhost`), `Code`, `Markdown`,
+and on the terminal `Raster` (a cell grid up to 512 × 256, repainted by `$.ui.blit` at up to 60
+frames a second) and `Image`. The engine validates the tree; one it refuses is replaced by its own
+drawing and named in the debug log.
+
+A **`Pane`** is the one site a plugin opens. It is seated by the surface: `dock`, floor to ceiling
+beside a fullscreen transcript (the terminal from 110 columns once asked, 144 unasked), or
+`inline`, a block above the prompt as tall as it asks for ("up to what the layout spares, not a
+third" by default). Several open panes are tabs behind one shown pane. The person's size wins over
+the plugin's. The hook is given `bodyColumns` and `placement`, and is re-run on a width change, a
+props change or a `$.state` write that it read; `$.ui.invalidate` redraws at most ten times a
+second, thirty for the shown pane. There is no alternate screen, no takeover, and no second
+window: a mod is always *beside* the conversation.
+
+The **keyboard** is a focus ring, not a keymap. Keys reach a pane only while it holds the focus
+(opened with `focus`, ctrl+x tab, or a click); Tab and the arrows walk its `Button`s, `Input`s and
+`Select`s, Enter presses, Esc returns the keys to the prompt (and closes the pane when opened
+`closeOnEscape`). Wheel and page keys move an engine-owned window over the tree (`ui.scroll`). A
+`Button` may carry a `hotkey`, one digit or lowercase letter that presses it while the site holds
+the focus, and the engine's own keybinding chords can press one from the prompt (`action`). Full
+key control exists in one place: a `Client` element, a surface module of the plugin's that draws
+its region with its own `onKey`, `onPointer`, local state and frame clock, "a second per call at
+most", talking to the hooks module by `post`. That is a small immediate-mode renderer in
+TypeScript, which is what ratatui is in Rust.
+
+### Mapping `adage watch`
+
+| `adage watch` today | In a pane | Fit |
+| --- | --- | --- |
+| Three sections (now, conditioning, health), 60 × 20 and up | `Box` columns with a dim rule each, sized to `bodyColumns`; `rows: 20` asked for inline, the dock as the person sized it | Direct |
+| Feed rows: time, session, harness, event, glyph, strength lamp, reflex, command, truncated to width | One `Text` per row, `wrap="truncate-end"`; strength as colour or spelled out; glyphs from the lexicon table | Direct. `NO_COLOR` has no equivalent in the mod; theme keys follow the person's Claude Code theme instead |
+| Health lamps re-checked every few seconds | `$.clock.every` or the feed child's own health lines; `●`/`○` with `color` | Direct |
+| `p` pause, `f` scope, `v` quiet, `m` map | Four `plain` `Button`s with `hotkey`s `p`, `f`, `v`, `m` in a footer row, pressed while the pane has focus | Close. Hotkeys work only while the pane holds the focus (ctrl+x tab first); from the prompt, `/adage pause` |
+| `/` filter, 60 characters | An `Input` with `onInput`, filtering the drawn rows | Direct |
+| `j`/`k`, arrows, PgUp/PgDn, `G` | Arrows and page keys scroll the engine's window for free; `j`/`k` as hotkeys on two plain Buttons, or dropped | Partial; `G` becomes `$.ui.scroll({ to: 'end' })` on a Button |
+| `Enter` inspects the selected row (the exact directive and its evidence) | Each row a `plain` `Button` whose `onPress` opens a second pane (a tab) drawing the record as `Markdown` and `Code`, or a popup pane `focus`, `closeOnEscape`, `rows: 12` | Direct, and better: the inspected text is selectable in the dock and the popup is a real dialog |
+| `m` shows how to open the map | A `Link` to the running `adage map` on `http://localhost:<port>`, one click | Better |
+| Pulse animation on a new row | `$.ui.invalidate` every 60 ms for a second, within the 30 a second cap | Direct |
+| Follows the spools and `learn.log` by offset, probes the learners' locks twice a second | Not in the mod: `$.fs.read` returns at most 4 MiB and the spool is CRC-framed. The binary does it, as now, and emits one JSON line per change: `adage watch --follow --json`, a session-long child of `$.process.spawn` whose loop ends with the module | The right seam: every parser, lock probe and word table stays in Rust; the mod holds a list of records and draws |
+
+Everything on the watch screen maps, most of it directly. Two things get better (inspect and the
+map link), two get worse (single-key bindings need the pane focused first; no `NO_COLOR` or
+`--plain` mode, since the engine owns the palette), and nothing is lost that the person cannot
+also get from the terminal program, which stays.
+
+### Mapping `adage ui`
+
+| `adage ui` tab | In a mod | Fit |
+| --- | --- | --- |
+| Live | The watch pane above | Direct |
+| Reflexes: every reflex by track, fuzzy filter, strength and lifecycle filters, evidence, directive text | A second pane fed by `adage graph --json`: a tree of `Button` rows, an `Input` filter, `Markdown` detail. Read-only | Good |
+| Reflexes: `a`pprove, `e`xtinguish, `w`eaken, `s`trengthen, pi`n`, dismiss, `d`elegate, which "run exactly what `adage review` runs" after asking | **Blocked by Adage's own rule, not by the API.** A `$.process.run` child inherits the engine's environment, and `CLAUDECODE` is set there: `adage review`, `delegate`, `install --write` and `config set` for the sensitive keys refuse under `AGENT_ENV` (F11, `crates/adage-cli/src/install.rs`). A mod could pass `env` without it; doing so is the trust change inside an agent session the design refuses, so the pane shows the equivalent command and `$.ui.copy` puts it on the clipboard | Out, until there is "a design for a person-verified approval inside the harness" (`docs/zero-config.md`). Mods supply the primitive that design would need (a `ui.press` only a person can make, never the model; a mod must then register no tool that acts) but the design is a separate decision |
+| Map: stimulus → reflex → response as a layered graph; `o` opens it in the browser | A `Raster` can draw the graph; a `Link` opens `adage map` | Possible; low value against the browser map one click away |
+| Health: every doctor check; `Enter` fixes the selected one (install hooks after confirming the diff, fetch the model, condition now, open the settings, open the fail-open log) | Checks draw fine from `adage doctor --json`. Of the fixes, `condition now` is allowed from anywhere; `install hooks` and the settings that need a person are refused as above; `fetch the model` is a download the person should start themselves | Half: show every check, fix only what the binary allows from a session |
+| Settings: toggle the keys that "only tune Adage or turn something down" | `userConfig` rows in Claude Code's own `/config` menu (`notices`, `rewrites`, `control`), each change reloading the mod; `config set` from the mod for keys allowed from a session | Good, and native |
+| Command palette over every action and reflex | `/adage <verb>` commands registered with `$.command.register`, the typeahead as the palette | Different, native |
+| The `init` wizard | Stays in the terminal | Out |
+
+The full-screen app does not map, for two reasons that are independent of each other. The
+drawing model is a sidebar, not an application: one shown pane, a focus ring, no keymap, a third
+of the height inline. And the actions that make `adage ui` more than a viewer are person-only by
+Adage's design, so a pane that offered them would either refuse at the press or quietly weaken
+F11. Neither reason argues against the watch pane; both argue for keeping `adage ui` as the
+place decisions are made.
+
+### The verdict, and what makes the port cheap
+
+A mod is a good fit for **the watch pane and the status line**, a fair fit for a **read-only
+reflexes browser**, a native fit for **settings and commands**, and the wrong fit for **review,
+delegation and setup**. The thing that makes the port cheap is already in the repository: the
+view is a pure function of state the binary reads from files, so the split is state in Rust
+(`adage watch --follow --json`), view in TypeScript, and the Rust frame tests have a twin in
+`claude plugin test`'s `ui.mount` over `terminal` and `desktop`. The thing to decide first is the
+colour rule: the style guide says the terminal's own colours win, and in a pane the engine's
+theme keys are that rule; Adage's one accent would come from `cargo xtask tokens` writing a
+`tokens.ts` beside `tokens.rs`, never a hex literal in the module.
+
+Two deeper hooks are worth one experiment each, since they put Adage's output *on the row it is
+about* rather than beside it, which no command hook can do:
+
+- `ui.render` on `ToolUse` for a Bash call Adage rewrote: wrap `next(e)` and add one dim `↪` line
+  under the tool row naming the interpreter word that changed. The person sees the rewrite where
+  the command is, and the transcript keeps it.
+- `ui.render` on `UserMessage` for a prompt a reflex fired at: one dim line under the person's
+  prompt, `◠ lookup-work-item · fire`, drawn from what the `classic.UserPromptSubmit` hook saw
+  and held in `$.state` under the prompt's id. The directive text itself stays hidden, as now.
+
 ## Method
 
 Isolated as S5 was: `--plugin-dir` on a copy of `plugin/claude-code` with the mod added, a
@@ -285,6 +385,7 @@ script in the folder, per the spikes README.
 | Q1 | **Coexistence.** Can `hooks/hooks.json` carry both `hooks` and `modules`? When a mod hooks `classic.UserPromptSubmit` and calls `next(e)`, does the plugin's own command hook run once beneath and its `additionalContext` arrive in the result? Can a mod answer without `next` and suppress it, so Layer 2 never double-delivers? Does the result expose `systemMessage`? | A probe mod that logs `e` and `next(e)`'s result per event to a file under the spike folder; one `-p` run exercising every event (S5's `probe-prompt.txt`) | A written recipe with no event delivered twice and no event lost, each hook event's result shape recorded verbatim |
 | Q2 | **Latency.** Layer 1: the engine's dispatch cost of an observing hook over the command hook, at no-match and at a match. Layer 2: `$.process.run` of the binary from `tool.call` and `prompt.submit` against the command hook, end to end as the model sees it | `hook_latency`-style runs; `claude --debug` timestamps for the engine side | Layer 1 adds ≤ 1 ms p95; Layer 2 stays inside §9's budget (≤ 10 ms p95 no-match, ≤ 25 ms with intent), else Layer 2 is dropped |
 | Q3 | **Surfaces and silence.** `$.ui.status` and a `Pane` draw on the terminal (main screen and fullscreen) and the desktop app; `claude plugin test` mounts the pane on `terminal` and `desktop`; a `-p` run and a control session show nothing and change no output | An interactive session per surface; `plugin test`; a `-p` run diffed against one without the mod | Identical model-facing output with and without the mod in `-p`; a pane and status line on both surfaces |
+| Q3b | **The watch pane's feed and keys.** A `$.process.spawn` child (`adage watch --follow --json`, a stub for the spike) lives the session and ends with the module; the pane draws 200 rows at 2 Hz under the redraw cap; hotkeys `p`/`f`/`v`, an `Input` filter and Enter-to-inspect behave as the table in [TUI fit](#tui-fit-adage-watch-yes-adage-ui-no) says; the `ToolUse` and `UserMessage` row decorations draw and the transcript keeps them | The probe mod with the demo spools (`adage watch --demo`) as its feed; `plugin test` for the keys | No dropped rows at 2 Hz; the child is gone after `/clear` and exit; every row of the mapping table measured as Direct, Close or Out |
 | Q4 | **`$.tool.check` for rewrites.** With `Bash(pytest:*)` allowed in settings, and separately with `--allowedTools "Bash(pytest:*)"` on the command line, does `$.tool.check` on the rewritten `.venv/bin/python -m pytest …` answer `deny`/`ask` where the U11 planner's own reading answers "would lose the rule", and `allow` where a rule for `.venv/bin/python` exists? | Four settings fixtures × the probe mod; compare with `adage_runtime::pretool`'s verdict on the same inputs | `$.tool.check` agrees with the planner on every settings-file case and answers the command-line case the planner cannot see |
 | Q5 | **Provenance and cost.** A row appended with `$.session.append` carries `origin.plugin` in the transcript `.jsonl` the learner reads; `turn.complete.usage` and `$.session.usage().cost` match the transcript's own token counts and the ledger's priced estimate within pricing error | Append one row, read the transcript file; compare figures for three sessions | `origin` is on disk in a stable field; usage agrees within 1 % of the transcript's counts |
 | Q6 | **Fail-open and reload.** A hook that throws, one that sleeps past 10 s, a missing binary, a syntax error in the module: the session continues and the command hooks still serve; a hot reload re-runs `register` without losing `$.state`; `claude plugin validate --strict` passes on the real plugin folder with the module added | Fault injection in the probe mod; `--debug` log lines | Every fault leaves the command hooks' output unchanged and leaves one debug line naming the mod |
@@ -295,8 +396,10 @@ script in the folder, per the spikes README.
 
 The spike passes if Q1, Q2 (Layer 1), Q3 and Q6 pass: an observing mod can be shipped in
 `plugin/claude-code` as an additive file, costing nothing measurable, silent in headless and
-control sessions, failing open, and validated in CI. Layer 2 ships only if Q2 (Layer 2) and Q4
-pass. Layer 3 ships only if Q5 finds the origin on disk.
+control sessions, failing open, and validated in CI. The watch pane ships only if Q3b passes.
+Layer 2 ships only if Q2 (Layer 2) and Q4 pass. Layer 3 ships only if Q5 finds the origin on
+disk. Review, delegation and setup do not ship in a pane whatever the spike finds; that needs the
+approval design named above, which is not this spike's question.
 
 The spike fails, and the command hooks remain the whole integration, if a mod cannot coexist
 with the plugin's command hooks without double delivery (Q1), or if `$.process` is unavailable in
@@ -310,9 +413,11 @@ the terminal CLI (Q7), or if the dispatch cost breaks §9's budget (Q2).
 - `scripts/check-plugin.mjs` learns the module path; CI adds `claude plugin test
   plugin/claude-code` and keeps `claude plugin validate --strict`, both against a pinned CLI
   version (Q8 says how often it must move).
-- `adage status --json` and `adage savings --json` are the pane's data; a `adage ledger note`
-  subcommand takes a harness-priced line (Layer 3). No new crate; nothing on the hook path
-  changes.
+- `adage watch --follow --json` (the spools, `learn.log` and the health lamps as JSON lines, from
+  the same `tail`, `learnlog` and `health` modules the terminal pane uses) is the pane's feed;
+  `adage graph --json` and `adage doctor --json` the reflexes and health views; a `adage ledger
+  note` subcommand takes a harness-priced line (Layer 3). `cargo xtask tokens` writes a
+  `tokens.ts` beside `tokens.rs`. No new crate; nothing on the hook path changes.
 - `docs/harnesses.md` gets a "Claude Code mod" section marked documented/inferred/measured like
   the others; `docs/live-learning.md` records the harness cost source; Architecture §15.2 F14's
   "status line" moves to built.
