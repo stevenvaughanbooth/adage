@@ -42,6 +42,19 @@ pub struct Change {
     pub to: Option<String>,
     /// The evidence, as counts: `24/25`, `9/9 · lb 0.70`, `6/8 → 7/8`.
     pub numbers: String,
+    /// What the reflex tells the agent (`Route::gist`, recorded since it was added); empty before.
+    pub gist: String,
+}
+
+impl Change {
+    /// The reflex as the ticker names it: what it tells the agent, else its id.
+    pub fn name(&self) -> &str {
+        if self.gist.is_empty() {
+            &self.route
+        } else {
+            &self.gist
+        }
+    }
 }
 
 /// A run's summary.
@@ -195,6 +208,7 @@ fn run(v: &Value, ts: u64, repo: Option<String>) -> Vec<Tick> {
                 from: None,
                 to: Some(change),
                 numbers,
+                gist: String::new(),
             }),
             run: None,
         });
@@ -238,6 +252,8 @@ fn change(c: &Value, ts: u64, repo: Option<String>) -> Tick {
     let (from, to) = (s(c, "from"), s(c, "to"));
     let kind = s(c, "change").unwrap_or("");
     let summary = s(c, "summary").unwrap_or("");
+    let gist = s(c, "gist").unwrap_or("").to_string();
+    let name = if gist.is_empty() { route.clone() } else { gist.clone() };
     let (what, from_w, to_w) = match kind {
         "strength" | "aspect" => ("strength", strength_of(from), strength_of(to)),
         "new" => ("new", None, strength_of(to)),
@@ -266,11 +282,11 @@ fn change(c: &Value, ts: u64, repo: Option<String>) -> Tick {
     Tick {
         ts,
         tone: Tone::Change,
-        text: format!("{long_track}{route} {transition}{nums_s}"),
-        short: format!("{short_track}{route} {transition}{nums_s}"),
+        text: format!("{long_track}{name} {transition}{nums_s}"),
+        short: format!("{short_track}{name} {transition}{nums_s}"),
         strength: to.and_then(parse_strength),
         repo,
-        change: Some(Change { route, track, what, from: from_w, to: to_w, numbers: nums }),
+        change: Some(Change { route, track, what, from: from_w, to: to_w, numbers: nums, gist }),
         run: None,
     }
 }

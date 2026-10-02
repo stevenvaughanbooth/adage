@@ -1,5 +1,7 @@
-//! Where `adage condition` and `adage sense` read history from. An explicit source that finds nothing
-//! is an error, never a silent fallback to the person's Claude Code history.
+//! Where `adage condition` and `adage sense` read history from: by default, what was recorded in
+//! the repository they run in (`--all` for every repository's), from Claude Code history and,
+//! once its hooks are registered, Codex's. An explicit source that finds nothing is an error,
+//! never a silent fallback to the person's Claude Code history.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -48,6 +50,24 @@ fn adage(home: &Path, args: &[&str]) -> (String, String, bool) {
     (String::from_utf8_lossy(&o.stdout).into(), String::from_utf8_lossy(&o.stderr).into(), o.status.success())
 }
 
+/// Register Adage's Codex hooks for every repository (`adage install codex --scope user --write`):
+/// only then is Codex history read by default.
+fn register_codex(home: &Path) {
+    let mut c = Command::new(env!("CARGO_BIN_EXE_adage"));
+    c.args(["install", "codex", "--scope", "user", "--write"])
+        .current_dir(home)
+        .env("HOME", home)
+        .env("USERPROFILE", home)
+        .env("ADAGE_HOME", home.join("adage"))
+        .env("CODEX_HOME", home.join(".codex"))
+        .env("ADAGE_ALLOW_NONINTERACTIVE", "1");
+    for v in ["CLAUDECODE", "OPENCODE", "CODEX_SANDBOX", "CODEX_SANDBOX_NETWORK_DISABLED"] {
+        c.env_remove(v);
+    }
+    let o = c.output().unwrap();
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+}
+
 #[test]
 fn a_missing_explicit_directory_is_an_error_in_both_commands() {
     let home = home_with_history();
@@ -92,10 +112,13 @@ fn codex_history_is_learned_and_sensed_with_its_harness() {
         .iter()
         .any(|h| h == "codex")));
 
-    let (_, err, ok) = adage(home.path(), &["condition", "--demo", "--codex-sessions", s]);
+    let (out, err, ok) = adage(home.path(), &["condition", "--demo", "--codex-sessions", s]);
     assert!(ok, "{err}");
     let tracks = walk(&home.path().join("adage/tracks"));
-    let manifest = tracks.iter().find(|p| p.ends_with("track.toml")).expect("a track was learned");
+    let manifest = tracks
+        .iter()
+        .find(|p| p.ends_with("track.toml"))
+        .unwrap_or_else(|| panic!("a track was learned:\n{out}{err}\n{tracks:#?}"));
     let text = std::fs::read_to_string(manifest).unwrap();
     assert!(text.contains("harness = [\"codex\"]"), "{text}");
 }
@@ -112,21 +135,33 @@ fn copy_tree(from: &Path, to: &Path) {
 }
 
 #[test]
-fn default_discovery_includes_old_codex_history_and_respects_off() {
+fn default_discovery_reads_codex_history_once_its_hooks_are_registered_and_respects_off() {
     let home = tempfile::tempdir().unwrap();
     copy_tree(&fixtures().join("codex/sessions"), &home.path().join(".codex/sessions"));
-    let (out, err, ok) = adage(home.path(), &["sense", "--json"]);
+    // Outside a repository, every repository's history is read only when asked for.
+    for command in ["sense", "condition"] {
+        let (_, err, ok) = adage(home.path(), &[command, "--json"]);
+        assert!(!ok && err.contains("not inside a repository") && err.contains("--all"), "{command}: {err}");
+    }
+    // Claude Code history alone until Codex's hooks are registered.
+    let (out, err, ok) = adage(home.path(), &["sense", "--all", "--json"]);
+    assert!(ok, "{err}");
+    let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(v["sessions"], 0, "{out}");
+    assert!(!v["source"].as_str().unwrap().contains("Codex"), "{out}");
+    register_codex(home.path());
+    let (out, err, ok) = adage(home.path(), &["sense", "--all", "--json"]);
     assert!(ok, "{err}");
     let v: serde_json::Value = serde_json::from_str(&out).unwrap();
     assert!(v["sessions"].as_u64().unwrap() > 0, "{out}");
     assert!(v["source"].as_str().unwrap().contains("Codex rollout"));
-    let (out, err, ok) = adage(home.path(), &["condition", "--json"]);
+    let (out, err, ok) = adage(home.path(), &["condition", "--all", "--json"]);
     assert!(ok, "{err}");
     let learned: serde_json::Value = serde_json::from_str(&out).unwrap();
     assert_eq!(learned["sessions_read"], v["sessions"]);
 
     std::fs::write(home.path().join("adage/config.toml"), "[learn]\ncodex_sessions = \"\"\n").unwrap();
-    let (out, err, ok) = adage(home.path(), &["sense", "--json"]);
+    let (out, err, ok) = adage(home.path(), &["sense", "--all", "--json"]);
     assert!(ok, "{err}");
     let v: serde_json::Value = serde_json::from_str(&out).unwrap();
     assert_eq!(v["sessions"], 0);
@@ -144,10 +179,10 @@ fn configured_sources_are_shared_by_preview_and_learning_and_explicit_sources_re
         format!("[learn]\nthresholds = \"demo\"\ncodex_sessions = {:?}\n", source.to_str().unwrap()),
     )
     .unwrap();
-    let (out, err, ok) = adage(home.path(), &["sense", "--json"]);
+    let (out, err, ok) = adage(home.path(), &["sense", "--all", "--json"]);
     assert!(ok, "{err}");
     let preview: serde_json::Value = serde_json::from_str(&out).unwrap();
-    let (out, err, ok) = adage(home.path(), &["condition", "--json"]);
+    let (out, err, ok) = adage(home.path(), &["condition", "--all", "--json"]);
     assert!(ok, "{err}");
     let learned: serde_json::Value = serde_json::from_str(&out).unwrap();
     assert!(preview["sessions"].as_u64().unwrap() > 0);
@@ -209,6 +244,7 @@ fn repo_root_conditions_only_that_repository() {
         let text = original.replace("/fixture/acme-billing", repo.to_str().unwrap());
         std::fs::write(source.join(format!("rollout-{name}.jsonl")), text).unwrap();
     }
+    register_codex(home.path());
     let app = work.join("app");
     let (out, err, ok) = adage(home.path(), &["condition", "--repo-root", app.to_str().unwrap(), "--json"]);
     assert!(ok, "{err}");
@@ -216,20 +252,26 @@ fn repo_root_conditions_only_that_repository() {
     assert_eq!(report["sessions_read"], 1, "only the trace recorded in this repository: {out}");
     let repos: Vec<&String> = report["repos"].as_object().unwrap().keys().collect();
     assert!(repos.iter().all(|k| !k.contains("other")), "{repos:?}");
-    // From inside the repository, as the docs write it.
-    let o = Command::new(env!("CARGO_BIN_EXE_adage"))
-        .args(["condition", "--repo-root", ".", "--json"])
-        .current_dir(&app)
-        .env("HOME", home.path())
-        .env("USERPROFILE", home.path())
-        .env("ADAGE_HOME", home.path().join("adage"))
-        .env("CODEX_HOME", home.path().join(".codex"))
-        .env_remove("CLAUDE_CONFIG_DIR")
-        .output()
-        .unwrap();
-    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
-    let report: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
-    assert_eq!(report["sessions_read"], 1);
+    // From inside the repository, as the docs write it, and with nothing named: the repository it
+    // runs in is the default; `--all` reads every one.
+    let in_app = |args: &[&str]| {
+        let o = Command::new(env!("CARGO_BIN_EXE_adage"))
+            .args(args)
+            .current_dir(&app)
+            .env("HOME", home.path())
+            .env("USERPROFILE", home.path())
+            .env("ADAGE_HOME", home.path().join("adage"))
+            .env("CODEX_HOME", home.path().join(".codex"))
+            .env_remove("CLAUDE_CONFIG_DIR")
+            .output()
+            .unwrap();
+        assert!(o.status.success(), "{args:?}: {}", String::from_utf8_lossy(&o.stderr));
+        serde_json::from_slice::<serde_json::Value>(&o.stdout).unwrap()
+    };
+    assert_eq!(in_app(&["condition", "--repo-root", ".", "--json"])["sessions_read"], 1);
+    assert_eq!(in_app(&["condition", "--json"])["sessions_read"], 1, "the repository it runs in");
+    assert_eq!(in_app(&["sense", "--json"])["sessions"], 1, "sense reads as condition does");
+    assert_eq!(in_app(&["sense", "--all", "--json"])["sessions"], 2, "--all reads every repository's");
     // A repository with no traces: its own instincts, not every other repository's traces.
     let fresh = home.path().join("fresh");
     copy_tree(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../evals/sandboxes/acme-billing"), &fresh);
@@ -254,6 +296,7 @@ fn cwd_prefix_uses_recorded_path_components_with_json_whitespace() {
         let text = original.replace("/fixture/acme-billing", cwd).replace("\"cwd\":", "\"cwd\": ");
         std::fs::write(source.join(format!("rollout-{name}.jsonl")), text).unwrap();
     }
+    register_codex(home.path());
     let (out, err, ok) = adage(home.path(), &["condition", "--cwd-prefix", "/work/app", "--json"]);
     assert!(ok, "{err}");
     let report: serde_json::Value = serde_json::from_str(&out).unwrap();

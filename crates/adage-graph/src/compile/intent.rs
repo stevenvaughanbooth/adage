@@ -107,6 +107,11 @@ pub fn candidates(a: &Annotated, influence: &[Influence], table: &CommandTable) 
         if !matches!(effect, Effect::Observe | Effect::Verify) || takes_value(av) {
             continue;
         }
+        // A command that gives an agent nothing to go on (`echo ---` between outputs, `pwd`,
+        // `sleep`) is never how a task starts, however often traces ran it.
+        if adage_core::action::classify_argv(av).role == adage_core::action::Role::Trivial {
+            continue;
+        }
         let identity = events::act_identity(av);
         if influence.iter().any(|d| d.at_step as usize <= i && d.names_act(&identity)) {
             continue;
@@ -384,5 +389,16 @@ mod tests {
         // A word the prompt shares with a command is not a value.
         let c = candidates(&trace("Fix the failing tests", &["scripts/check tests"]), &[], &table);
         assert_eq!(c.len(), 1);
+    }
+
+    /// Regression (2026-10-01, a real repository): agents print `echo ---` between outputs, and
+    /// "requests like these usually start by running `echo ---`" was learned. A command that gives
+    /// an agent nothing to go on is never a task's first step.
+    #[test]
+    fn a_trivial_command_is_never_how_a_task_starts() {
+        let table = CommandTable::load();
+        let c = candidates(&trace("Fix the failing tests", &["echo ---", "pwd", "scripts/check tests"]), &[], &table);
+        let lits: Vec<&str> = c.iter().map(|x| x.literal.as_str()).collect();
+        assert_eq!(lits, ["scripts/check tests"]);
     }
 }

@@ -967,8 +967,15 @@ pub fn route_text(r: &Route, bound: &[(String, String)]) -> Option<String> {
             sanitise(&bind(command, bound)),
             exit.trim_start()
         )),
+        // The command alone on its line, as in every other template: an agent copies that line,
+        // and an exit clause beside it would be copied as arguments.
         (Step::Run { command }, _) => {
-            Some(format!("A known next step here is:\n  {}{}", sanitise(&bind(command, bound)), exit))
+            let mut text = format!("A known next step here is:\n  {}", sanitise(&bind(command, bound)));
+            if !exit.is_empty() {
+                text.push('\n');
+                text.push_str(exit.trim_start());
+            }
+            Some(text)
         }
         (Step::ReadBatch { slot, .. }, _) => {
             // Each path was validated individually; render each whole, never a truncated list.

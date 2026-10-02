@@ -219,8 +219,11 @@ pub fn gather(paths: &Paths, root: Option<&Path>) -> Health {
     });
     // Any live-conditioning check short of pass (a failed run, a stuck learner, a backlog) dims it.
     let learning_trouble = checks.iter().any(|c| c.check.starts_with("auto-learn") && c.status != Status::Pass);
+    // Recorded, never read: this repository is not one `learn.repos` names.
+    let left_out = key.as_deref().is_some_and(|k| !loaded.config.learns(k));
     lights.push(match (&auto_learn, learning_trouble) {
         (_, true) => Light::new("auto-condition", Lamp::Warn).hint("adage doctor"),
+        (Some((true, _)), false) if left_out => Light::new("not conditioned here", Lamp::Off).hint("adage init"),
         (Some((true, _)), false) => Light::new("auto-condition", Lamp::Ok),
         _ => Light::new("auto-condition off", Lamp::Off),
     });

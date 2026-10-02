@@ -22,6 +22,19 @@ pub const MAX_WALK_ENTRIES: usize = 5_000;
 /// Directory depth below the root a walk descends to.
 pub const MAX_WALK_DEPTH: usize = 8;
 
+/// Why a file that is there was not read: a cloud drive keeps it only in the cloud, and Adage never
+/// waits for a download (`adage_core::cloud`).
+pub const OFFLOADED: &str = "only in the cloud, not downloaded";
+/// Why a file that is there was not read, for any other failure.
+pub const UNREADABLE: &str = "could not be read";
+
+/// Whether a skip reason (a [`RepoFiles::notes`] value, or a `declared` reason in
+/// `BindResult::skipped`) says a file is there but was not read: the binder's view of the
+/// repository is incomplete, which is not evidence that anything is gone.
+pub fn unread(why: &str) -> bool {
+    why.ends_with(OFFLOADED) || why.ends_with(UNREADABLE)
+}
+
 /// Directories a walk never enters: dependencies, build outputs, virtual environments, VCS data,
 /// test fixtures.
 const SKIP_DIRS: &[&str] = &[
@@ -56,6 +69,8 @@ pub struct RepoFiles {
     root: PathBuf,
     reads: Cell<usize>,
     notes: RefCell<BTreeMap<String, String>>,
+    /// What git ignores here: a walk lists the repository's files, not its local output.
+    ignore: adage_core::gitignore::Ignore,
 }
 
 /// A repository-relative path Adage itself may form: no absolute path, no `..`, nothing that is not
@@ -73,7 +88,12 @@ impl RepoFiles {
     /// `None` if `root` is not a directory.
     pub fn open(root: &Path) -> Option<RepoFiles> {
         let root = std::fs::canonicalize(root).ok()?;
-        root.is_dir().then(|| RepoFiles { root, reads: Cell::new(0), notes: RefCell::new(BTreeMap::new()) })
+        root.is_dir().then(|| RepoFiles {
+            ignore: adage_core::gitignore::Ignore::new(&root),
+            root,
+            reads: Cell::new(0),
+            notes: RefCell::new(BTreeMap::new()),
+        })
     }
 
     /// Files skipped, and why: `rel → reason`.
@@ -145,10 +165,8 @@ impl RepoFiles {
         if !self.take_read(rel) {
             return None;
         }
-        let mut buf = Vec::new();
-        let f = std::fs::File::open(&real).ok()?;
         // The size can change between the check and the read: bound the read itself.
-        f.take(MAX_FILE_BYTES + 1).read_to_end(&mut buf).ok()?;
+        let buf = self.read_capped(rel, &real, MAX_FILE_BYTES + 1)?;
         if buf.len() as u64 > MAX_FILE_BYTES {
             self.note(rel, "larger than 64 KiB");
             return None;
@@ -182,8 +200,7 @@ impl RepoFiles {
         if !self.take_read(rel) {
             return None;
         }
-        let mut buf = Vec::new();
-        std::fs::File::open(&real).ok()?.take(MAX_FILE_BYTES + 1).read_to_end(&mut buf).ok()?;
+        let mut buf = self.read_capped(rel, &real, MAX_FILE_BYTES + 1)?;
         let partial = buf.len() as u64 > MAX_FILE_BYTES;
         if partial {
             buf.truncate(MAX_FILE_BYTES as usize);
@@ -205,14 +222,27 @@ impl RepoFiles {
         if !std::fs::metadata(&real).ok()?.is_file() || !self.take_read(rel) {
             return None;
         }
-        let mut buf = Vec::new();
-        std::fs::File::open(&real).ok()?.take(HEAD_BYTES as u64).read_to_end(&mut buf).ok()?;
+        let buf = self.read_capped(rel, &real, HEAD_BYTES as u64)?;
         Some(String::from_utf8_lossy(&buf).into_owned())
     }
 
+    /// At most `cap` bytes from the start of the file at `real`. A file that is there but cannot
+    /// be read is recorded ([`OFFLOADED`] or [`UNREADABLE`]): missing information, not a missing
+    /// file.
+    fn read_capped(&self, rel: &str, real: &Path, cap: u64) -> Option<Vec<u8>> {
+        let mut buf = Vec::new();
+        if std::fs::File::open(real).and_then(|f| f.take(cap).read_to_end(&mut buf)).is_err() {
+            self.note(rel, if adage_core::cloud::is_offloaded(real) { OFFLOADED } else { UNREADABLE });
+            return None;
+        }
+        Some(buf)
+    }
+
     /// Regular files under the repository, sorted, never following a symlink, never entering
-    /// [`SKIP_DIRS`] or hidden directories other than `.github`, bounded by [`MAX_WALK_ENTRIES`]
-    /// and [`MAX_WALK_DEPTH`].
+    /// [`SKIP_DIRS`], hidden directories other than `.github`, or a directory git ignores, and
+    /// never listing a file git ignores (run output and local files are not the repository's, and
+    /// would spend the budget a clean clone spends on its sources), bounded by
+    /// [`MAX_WALK_ENTRIES`] and [`MAX_WALK_DEPTH`].
     pub fn walk(&self) -> Vec<String> {
         let mut out = Vec::new();
         let mut seen = 0usize;
@@ -237,10 +267,14 @@ impl RepoFiles {
                 }
                 if ft.is_dir() {
                     let hidden = name.starts_with('.') && name != ".github";
-                    if depth < MAX_WALK_DEPTH && !hidden && !SKIP_DIRS.contains(&name.as_str()) {
+                    if depth < MAX_WALK_DEPTH
+                        && !hidden
+                        && !SKIP_DIRS.contains(&name.as_str())
+                        && !self.ignore.ignored_dir(&child)
+                    {
                         stack.push((dir.join(&name), child, depth + 1));
                     }
-                } else if ft.is_file() {
+                } else if ft.is_file() && !self.ignore.ignored(&child) {
                     out.push(child);
                 }
             }
@@ -253,6 +287,29 @@ impl RepoFiles {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_walk_lists_the_repositorys_files_not_the_output_git_ignores() {
+        // A checkout with more ignored run output than the whole walk budget, sorting before the
+        // sources (`demo/` before `src/`): the walk must still reach the sources, as in a clean clone.
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path();
+        std::fs::create_dir_all(root.join(".git")).unwrap();
+        std::fs::write(root.join(".gitignore"), "demo/results/*/raw/\n*.log\n").unwrap();
+        let raw = root.join("demo/results/run-1/raw");
+        std::fs::create_dir_all(&raw).unwrap();
+        for i in 0..=MAX_WALK_ENTRIES {
+            std::fs::write(raw.join(format!("{i}.json")), "{}").unwrap();
+        }
+        std::fs::write(root.join("demo/results/run-1/summary.md"), "# run 1\n").unwrap();
+        std::fs::write(root.join("demo/run.log"), "noise\n").unwrap();
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::write(root.join("src/tokens.rs"), "// @generated by xtask\n").unwrap();
+        let f = RepoFiles::open(root).unwrap();
+        let all = f.walk();
+        assert_eq!(all, [".gitignore", "demo/results/run-1/summary.md", "src/tokens.rs"]);
+        assert!(f.notes().is_empty(), "{:?}", f.notes());
+    }
 
     #[test]
     fn relative_paths_are_plain() {

@@ -8,6 +8,7 @@
 //! claude_projects = ""       # Claude Code history ("" = ~/.claude/projects)
 //! codex_sessions = "auto"    # Codex rollouts: "auto" ($CODEX_HOME/sessions once Codex hooks are registered), a directory, or "" (none)
 //! opencode_exports = ""      # a directory of `opencode export` files ("" = none)
+//! repos = "all"              # repositories to learn from: all, or keys, e.g. ["github.com/acme/billing"]
 //! parse_cache = true         # keep parsed transcripts under cache/sessions (faster re-learning)
 //!
 //! [ui]
@@ -57,6 +58,9 @@ impl Thresholds {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Config {
     pub learn_auto: bool,
+    /// `learn.repos`: the repositories whose history Adage reads, by key; `None` is `all`.
+    /// Hooks still record sessions everywhere they are registered.
+    pub learn_repos: Option<Vec<String>>,
     pub learn_min_interval_secs: u64,
     pub learn_thresholds: Thresholds,
     /// `None` = the default location, `~/.claude/projects`.
@@ -84,6 +88,13 @@ pub struct Config {
     pub instincts_packs: Vec<String>,
     /// Instinct ids never to bind.
     pub instincts_disabled: Vec<String>,
+}
+
+impl Config {
+    /// Does Adage read history for the repository with this key (`learn.repos`)?
+    pub fn learns(&self, repo: &str) -> bool {
+        self.learn_repos.as_ref().is_none_or(|keys| keys.iter().any(|k| k == repo))
+    }
 }
 
 /// Where a value came from.
@@ -121,6 +132,9 @@ enum Kind {
     /// A list of short ids (`[A-Za-z0-9_-]`, at most 32 characters each, at most 64 of them),
     /// given on the command line comma-separated; `""` for none.
     Ids,
+    /// `all`, or a list of repository keys (`github.com/acme/billing`, `notes@1a2b3c4d5e6f`),
+    /// given on the command line comma-separated; `""` for none.
+    Repos,
 }
 
 /// One documented key.
@@ -185,6 +199,14 @@ pub const KEYS: &[Key] = &[
         default: "",
         env: None,
         doc: "a directory of `opencode export` files automatic conditioning reads (\"\" = none)",
+        guarded: true,
+    },
+    Key {
+        name: "learn.repos",
+        kind: Kind::Repos,
+        default: "all",
+        env: None,
+        doc: "repositories to condition on, comma-separated keys as `adage init` lists them, or all",
         guarded: true,
     },
     Key {
@@ -336,6 +358,17 @@ fn from_text(kind: Kind, s: &str) -> Result<toml::Value, String> {
             }
             Ok(toml::Value::Array(ids.into_iter().map(toml::Value::String).collect()))
         }
+        Kind::Repos if s == "all" => Ok(toml::Value::String(s.into())),
+        Kind::Repos => {
+            let keys = split_ids(s);
+            let ok = |k: &String| {
+                k != "all" && k.len() <= 512 && !k.chars().any(|c| c.is_whitespace() || c.is_control() || c == '"')
+            };
+            if keys.len() > 256 || !keys.iter().all(ok) {
+                return Err(format!("{s:?} is not all, or a comma-separated list of repository keys"));
+            }
+            Ok(toml::Value::Array(keys.into_iter().map(toml::Value::String).collect()))
+        }
     }
 }
 
@@ -352,8 +385,8 @@ fn from_toml(kind: Kind, v: &toml::Value) -> Result<String, String> {
         (Kind::Share, toml::Value::Float(x)) => x.to_string(),
         (Kind::Share, toml::Value::Integer(n)) => n.to_string(),
         (Kind::Thresholds | Kind::Dir | Kind::DirOrAuto | Kind::Notices, toml::Value::String(s)) => s.clone(),
-        (Kind::Ids, toml::Value::String(s)) => s.clone(),
-        (Kind::Ids, toml::Value::Array(a)) => {
+        (Kind::Ids | Kind::Repos, toml::Value::String(s)) => s.clone(),
+        (Kind::Ids | Kind::Repos, toml::Value::Array(a)) => {
             let ids: Option<Vec<&str>> = a.iter().map(|v| v.as_str()).collect();
             ids.ok_or_else(|| format!("{v} is not a list of ids"))?.join(",")
         }
@@ -437,6 +470,7 @@ fn load_from(file: &Path, env: &dyn Fn(&str) -> Option<String>) -> Loaded {
     let text = |n: &str| values[n].0.clone();
     let config = Config {
         learn_auto: parse_bool(&text("learn.auto")).unwrap_or(true),
+        learn_repos: Some(text("learn.repos")).filter(|s| s != "all").map(|s| split_ids(&s)),
         learn_min_interval_secs: text("learn.min_interval_secs").parse().unwrap_or(120),
         learn_thresholds: if text("learn.thresholds") == "demo" { Thresholds::Demo } else { Thresholds::Default },
         learn_claude_projects: home_relative(&text("learn.claude_projects")),
@@ -522,6 +556,8 @@ mod tests {
         assert!(c.instincts_enabled);
         assert_eq!(c.instincts_packs, vec!["auto".to_string()]);
         assert!(c.instincts_disabled.is_empty());
+        assert_eq!(c.learn_repos, None, "every repository");
+        assert!(c.learns("github.com/acme/billing"));
         assert!(l.values.values().all(|(_, s)| *s == Source::Default));
         assert_eq!(l.values.len(), KEYS.len());
     }
@@ -584,6 +620,10 @@ mod tests {
         assert_eq!(set(&paths, "instincts.disabled", "adage/lockfiles, U3").unwrap(), "adage/lockfiles,U3");
         assert_eq!(set(&paths, "instincts.disabled", "U3, N1").unwrap(), "U3,N1");
         assert_eq!(set(&paths, "instincts.enabled", "false").unwrap(), "false");
+        assert_eq!(
+            set(&paths, "learn.repos", "github.com/acme/billing, notes@1a2b3c4d5e6f").unwrap(),
+            "github.com/acme/billing,notes@1a2b3c4d5e6f"
+        );
         for (k, v) in [
             ("learn.min_interval_secs", "soon"),
             ("learn.min_interval_secs", "100000"),
@@ -596,6 +636,8 @@ mod tests {
             ("instincts.packs", "a b"),
             ("instincts.packs", "adage/python-env/x"),
             ("instincts.disabled", "../lockfiles"),
+            ("learn.repos", "all, github.com/acme/billing"),
+            ("learn.repos", "github.com/acme/my billing"),
         ] {
             assert!(set(&paths, k, v).is_err(), "{k} = {v} must be refused");
         }
@@ -604,9 +646,12 @@ mod tests {
         assert_eq!(l.config.learn_min_interval_secs, 30);
         assert_eq!(l.config.learn_thresholds, Thresholds::Demo);
         assert_eq!(l.config.runtime_control, 0.2);
-        assert!(l.config.learn_codex_sessions.unwrap().ends_with(".codex/sessions"));
+        assert!(l.config.learn_codex_sessions.as_ref().unwrap().ends_with(".codex/sessions"));
         assert_eq!(l.config.instincts_disabled, vec!["U3".to_string(), "N1".to_string()]);
         assert!(!l.config.instincts_enabled);
+        let repos = vec!["github.com/acme/billing".to_string(), "notes@1a2b3c4d5e6f".to_string()];
+        assert_eq!(l.config.learn_repos, Some(repos));
+        assert!(l.config.learns("notes@1a2b3c4d5e6f") && !l.config.learns("github.com/acme/other"));
         assert_eq!(l.problems, vec!["unknown key other.kept (ignored)".to_string()], "the list reads back cleanly");
         let text = std::fs::read_to_string(paths.config()).unwrap();
         assert!(text.contains("kept = 1"), "{text}");

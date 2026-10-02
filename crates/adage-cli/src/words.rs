@@ -91,9 +91,6 @@ pub fn prose(s: &str) -> String {
         [
             (r"\broute\(s\)", "reflex(es)"),
             (r"\bsession\(s\)", "trace(s)"),
-            (r"\bgreen\b", "fire"),
-            (r"\byellow\b", "prime"),
-            (r"\bred\b", "inhibit"),
             (r"\broutes\b", "reflexes"),
             (r"\broute\b", "reflex"),
             (r"\bsessions\b", "traces"),
@@ -130,6 +127,20 @@ pub fn prose(s: &str) -> String {
             .collect::<Vec<_>>()
             .join(" ")
     };
+    // Colours were strengths only in the change lines learn.log wrote before the lexicon
+    // (`yellow → green`): those are translated, and a colour anywhere else is just a colour.
+    static TRANSITION: OnceLock<regex::Regex> = OnceLock::new();
+    let transition = TRANSITION
+        .get_or_init(|| regex::Regex::new(r"\b(green|yellow|red) → (green|yellow|red)\b").expect("static pattern"));
+    let strength = |c: &str| match c {
+        "green" => "fire",
+        "yellow" => "prime",
+        _ => "inhibit",
+    };
+    let words = |t: &str| {
+        let t = transition.replace_all(t, |c: &regex::Captures| format!("{} → {}", strength(&c[1]), strength(&c[2])));
+        words(&t)
+    };
     s.split('`')
         .enumerate()
         .map(|(i, part)| if i % 2 == 1 { part.to_string() } else { words(part) })
@@ -162,6 +173,8 @@ mod tests {
             "finish line reflex prime → fire (8 of 8 traces, lower bound 0.50)"
         );
         assert_eq!(prose("reduced credit"), "reduced credit", "whole words only");
+        // A colour is a strength only in a stored transition; elsewhere it is a colour.
+        assert_eq!(prose("the CI badge is red, then green"), "the CI badge is red, then green");
         assert_eq!(
             prose("rejected on 2026-09-01; agents derailed, consider demoting it"),
             "extinguished on 2026-09-01; agents ignored, consider weakening it"

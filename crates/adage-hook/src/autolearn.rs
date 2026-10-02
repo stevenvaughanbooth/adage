@@ -2,9 +2,10 @@
 //! --auto`, in `adage-cli/src/autolearn.rs`, which documents the queue files).
 //!
 //! When a session stops or ends, after its normal decision, the hook calls [`on_turn_end`]. If
-//! `learn.auto` is on it records a request for the repository and, unless a learner for it is
-//! already running or scheduled, starts one: the adage binary (`learner`), detached, in its own
-//! process group, with no standard streams. Nothing here changes what the hook prints.
+//! `learn.auto` is on and `learn.repos` names the repository (`all`, the default, names every
+//! one), it records a request for the repository and, unless a learner for it is already running
+//! or scheduled, starts one: the adage binary (`learner`), detached, in its own process group,
+//! with no standard streams. Nothing here changes what the hook prints.
 
 use crate::failopen::Failure;
 use adage_store::config;
@@ -162,6 +163,9 @@ pub enum Triggered {
     Off,
     /// The directory is not a repository (no `.git`): there is nothing to learn there.
     NotARepository,
+    /// The repository is not one `learn.repos` names: its sessions are recorded, its history is
+    /// not read.
+    NotChosen,
     /// Recorded; a learner is running (it re-checks the queue before it exits).
     Running,
     /// Recorded; a learner has already been started to learn at a later time.
@@ -189,6 +193,9 @@ pub fn on_turn_end(
         return Ok(Triggered::NotARepository);
     }
     let repo = adage_core::repo::repo_key_cached(root, &paths.repo_keys());
+    if !cfg.learns(&repo) {
+        return Ok(Triggered::NotChosen);
+    }
     // The checkout can be gone before its learner runs (a worktree removed as its task ends).
     adage_core::repo::remember_key_cached(root, &repo, &paths.repo_keys());
     let q = Queue::new(paths, &repo);

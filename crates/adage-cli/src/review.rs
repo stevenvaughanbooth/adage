@@ -517,13 +517,11 @@ fn list(paths: &Paths, as_json: bool, verbose: bool) -> Result<()> {
     }
     let mut o = Out::stdout();
     // What waits for a decision, and what is only listed: instincts in effect, and approved
-    // routines that run once delegated.
+    // routines that run once delegated. Of what waits: what needs a person, and what is in use
+    // and only worth a look (docs/design/everyday-ux.md §5.3).
     let (deciding, listed): (Vec<&Item>, Vec<&Item>) = items.iter().partition(|it| waits(&it.reasons));
-    let waiting = match deciding.len() {
-        0 => "nothing waits for a decision".to_string(),
-        1 => "1 reflex waits for a decision".to_string(),
-        n => format!("{n} reflexes wait for a decision"),
-    };
+    let (needs, look) = waiting_counts(deciding.iter().map(|it| it.reasons.as_slice()));
+    let waiting = waiting_words(needs, look).unwrap_or_else(|| "nothing waits for a decision".to_string());
     // Quiet reflexes wait too, but they are not install steps: agents already take their step.
     let quiet_n = deciding.iter().filter(|it| it.reasons.iter().any(|(k, _)| *k == "quiet")).count();
     let quiet_fact = if quiet_n > 0 { format!("{quiet_n} quiet") } else { String::new() };
@@ -941,6 +939,40 @@ fn verbs(r: &Route, proposed: bool) -> Vec<&'static str> {
 pub(crate) struct Standing {
     pub(crate) verbs: Vec<&'static str>,
     pub(crate) reasons: Vec<(&'static str, String)>,
+}
+
+/// Whether a review reason holds its reflex back until a person decides (a nascent step, a quiet
+/// reflex, an execution grant), rather than only being worth a look at a reflex already in use
+/// (an instinct, a new or changed reflex, an imported one, one agents ignore).
+pub(crate) fn needs_person(kind: &str) -> bool {
+    matches!(kind, "quiet" | "approval" | "execution")
+}
+
+/// What `adage review` has, by what it asks of a person: `1 needs you · 3 to look over`
+/// (docs/design/everyday-ux.md §5.3). `None` when there is nothing.
+pub(crate) fn waiting_words(needs: usize, look: usize) -> Option<String> {
+    let mut parts = Vec::new();
+    if needs > 0 {
+        parts.push(format!("{needs} need{} you", if needs == 1 { "s" } else { "" }));
+    }
+    if look > 0 {
+        parts.push(format!("{look} to look over"));
+    }
+    (!parts.is_empty()).then(|| parts.join(" · "))
+}
+
+/// Count reflexes by what their reasons ask of a person: `(needs you, to look over)`.
+pub(crate) fn waiting_counts<'a>(reasons: impl Iterator<Item = &'a [(&'static str, String)]>) -> (usize, usize) {
+    let (mut needs, mut look) = (0, 0);
+    // Only what waits for a decision: an instinct in effect is listed, never waiting (`waits`).
+    for r in reasons.filter(|r| waits(r)) {
+        if r.iter().any(|(k, _)| needs_person(k)) {
+            needs += 1;
+        } else {
+            look += 1;
+        }
+    }
+    (needs, look)
 }
 
 pub(crate) fn standings(paths: &Paths) -> Result<BTreeMap<(String, String), Standing>> {

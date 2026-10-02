@@ -782,7 +782,9 @@ fn session_start(
             (Some(_), None) => true,
         }
     };
-    let bootstrap = cfg.learn_auto && (damaged || (routed.is_none() && stale()));
+    // A repository `learn.repos` leaves out is recorded, never learned (`autolearn::on_turn_end`).
+    let learns = cfg.learn_auto && cfg.learns(&key);
+    let bootstrap = learns && (damaged || (routed.is_none() && stale()));
     // The bootstrap session is a session in this repository too: its reflexes arrive while it
     // runs, so it is assigned its arm now and counted by the savings estimate like any other
     // (without this record it never was, and the card's session count lagged one behind).
@@ -790,6 +792,9 @@ fn session_start(
         if let Err(f) = record_start(s, &key) {
             failopen::record(&s.paths.root, s.harness, s.event, &f);
         }
+    } else if routed.is_none() {
+        // No reflexes here yet, and none on the way this session: seen, not exposed.
+        record_seen(s.paths, s.session, s.adapter.name(), s.event, &Event::SessionStart, &key);
     }
     // Instincts bind against the live checkout, this session's (docs/instincts.md): bound against
     // another one (a per-task worktree, a clone the traces name), or before its declared files
@@ -798,7 +803,7 @@ fn session_start(
     // ships other base packs. A few dozen `stat`s decide it (`adage_instincts::fingerprint`).
     let rebind = !bootstrap
         && !damaged
-        && cfg.learn_auto
+        && learns
         && cfg.instincts_enabled
         && adage_learn::instincts::stale_binding(
             &s.paths.tracks(),
@@ -941,6 +946,30 @@ fn record_start(s: &Start<'_>, repo_key: &str) -> Result<(), Failure> {
         .map_err(|e| Failure::io("spool", "appending to the session spool", &e))
 }
 
+/// One record that a session event happened in a repository with no reflexes yet: the event, the
+/// repository and how many tool calls, so `adage watch` and the status card show every session
+/// Adage sees (docs/design/everyday-ux.md, state S1). Nothing else: no arm or propensity (the
+/// savings estimate counts only sessions exposed to reflexes), no decision (a rebuild replays only
+/// decisions), and no command, path or prompt. A failure is recorded and forgotten.
+fn record_seen(paths: &Paths, session: &str, harness: &str, event: &str, ev: &Event, repo_key: &str) {
+    let calls = match ev {
+        Event::Batch { calls } => calls.len(),
+        Event::Failure { .. } => 1,
+        _ => 0,
+    };
+    let ts = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+    let mut rec = json!({ "ts": ts, "event": event, "kind": ev.name(), "repo": repo_key, "unrouted": true });
+    if calls > 0 {
+        rec["calls"] = json!(calls);
+    }
+    if harness != "claude" {
+        rec["harness"] = json!(harness);
+    }
+    if let Err(e) = spool::append(&paths.spool(session), &rec) {
+        failopen::record(&paths.root, harness, event, &Failure::io("spool", "appending to the session spool", &e));
+    }
+}
+
 /// Decide: everything after the kill switches, up to rendering.
 #[allow(clippy::too_many_arguments)]
 fn respond(
@@ -957,7 +986,15 @@ fn respond(
 ) -> Result<Responded, Failure> {
     let keys: std::collections::BTreeSet<&str> = index.routes.iter().map(|r| r.repo.as_str()).collect();
     let Some(repo_key) = repo::lookup_key(root, Some(&paths.repo_keys()), &keys) else {
-        return Ok(Responded::default()); // nothing installed for this repository: the common, cheapest path
+        // Nothing installed for this repository: the common, cheapest path. In a repository the
+        // session is still seen (outside one there is nothing to learn).
+        if root.join(".git").exists() {
+            if let Some(ev) = adapter.translate(event, p, &cwd.to_string_lossy()) {
+                let key = repo::repo_key_cached(root, &paths.repo_keys());
+                record_seen(paths, session, adapter.name(), event, &ev, &key);
+            }
+        }
+        return Ok(Responded::default());
     };
     // An event this adapter does not act on.
     let Some(ev) = adapter.translate(event, p, &cwd.to_string_lossy()) else { return Ok(Responded::default()) };

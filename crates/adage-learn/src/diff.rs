@@ -42,6 +42,11 @@ pub struct Change {
     pub from: Option<Strength>,
     pub to: Option<Strength>,
     pub summary: String,
+    /// What the reflex tells the agent (`Route::gist`), so a change reads as what it is about,
+    /// not only its id (docs/design/everyday-ux.md, rule 4). For display only: never written to
+    /// learn.log, which holds no command, path or prompt.
+    #[serde(skip)]
+    pub gist: String,
 }
 
 /// A repository's learned tracks at one moment, by track name.
@@ -136,7 +141,9 @@ pub fn diff(before: &Snapshot, after: &Snapshot) -> Vec<Change> {
             from,
             to,
             summary,
+            gist: String::new(),
         };
+        let first = out.len();
         for id in ids {
             let (o, n) = (old.get(id), new.get(id));
             let was = o.filter(|r| in_service(r));
@@ -233,6 +240,10 @@ pub fn diff(before: &Snapshot, after: &Snapshot) -> Vec<Change> {
                     format!("pinned {k}: a change is proposed in `adage review`"),
                 ));
             }
+        }
+        // Each change says what its reflex tells the agent: as it is now, or as it was if it left.
+        for c in &mut out[first..] {
+            c.gist = new.get(&c.route).or_else(|| old.get(&c.route)).map(Route::gist).unwrap_or_default();
         }
     }
     out.sort_by(|a, b| (&a.track, &a.route, a.change).cmp(&(&b.track, &b.route, b.change)));
