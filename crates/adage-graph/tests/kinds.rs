@@ -92,7 +92,9 @@ fn check(name: &str, sessions: &[EventSession], convs: &[Conv]) -> Result {
 #[test]
 fn datasets_parity() {
     for name in ["demo-haiku45", "synthetic"] {
-        let Some(sessions) = support::dataset(name) else { continue };
+        // The conventions label what agents did, steered by Adage or not, so recall is measured on
+        // every step (the learner's discount of its own influence is tested in adage-learn).
+        let Some(sessions) = support::dataset_with(name, support::Influence::Ignored) else { continue };
         let convs = conventions(&support::repo_root().join("evals/datasets").join(name).join("conventions.json"));
         let r = check(name, &sessions, &convs);
         assert!(r.missing.is_empty(), "{name}: missing {:?}", r.missing);

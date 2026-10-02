@@ -111,6 +111,10 @@ Day 0 and live learning use the same path. `adage init` and `adage condition` in
 
 ### Learning engine (`adage-learn`, `adage-graph`)
 
+- `adage_graph::canonical` reads the canonical `Session` (`adage-trace`) as the engine's input,
+  and reads the directives a session received as influence, which the miner discounts. The
+  engine takes the canonical model directly. Its tests read traces through `adage-ingest`, as
+  the learner does.
 - `adage_graph::learn(sessions, params) -> Learned` is pure: the same sessions in, the same
   routes out (`tests/determinism.rs`).
 - `adage_learn::plan` turns sessions into planned tracks. `learn_sessions_into` materializes

@@ -1,166 +1,55 @@
-//! Test support for the G2 miner: a Claude Code transcript reader built on adage-core only (the
-//! graph crate never depends on adage-learn), and helpers to find datasets and generated bundles.
+//! Test support for the G2 miner: traces read through ingestion and the engine's canonical bridge
+//! (as the learner reads them), helpers to find datasets and generated bundles, and synthetic
+//! sessions.
 #![allow(dead_code)]
 
-use adage_core::types::CanonicalAction;
-use adage_core::{keys, repo, tools, CommandTable};
+use adage_core::CommandTable;
+use adage_graph::canonical;
 use adage_graph::events::{self, EventSession};
 use adage_graph::input::{Prompt, Session, Step};
 use serde_json::Value;
-use std::collections::HashMap;
-use std::io::BufRead;
 use std::path::{Path, PathBuf};
 
-fn text_of(content: &Value) -> String {
-    match content {
-        Value::String(s) => s.clone(),
-        Value::Array(items) => items
-            .iter()
-            .filter_map(|i| i.get("text").and_then(|t| t.as_str()).map(str::to_string))
-            .collect::<Vec<_>>()
-            .join("\n"),
-        _ => String::new(),
-    }
+/// How a trace's directives from Adage are read.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Influence {
+    /// As the learner reads them: what a directive named is exposure, never evidence.
+    Kept,
+    /// Not at all: every step counts as the agent's own. For measuring the engine's recall
+    /// against ground truth labelled on what agents did, steered or not (the learner's discount
+    /// of its own influence is tested in `adage-learn`).
+    Ignored,
 }
 
-fn synthetic(s: &str) -> bool {
-    let t = s.trim_start();
-    t.is_empty() || t.starts_with("<local-command") || t.starts_with("<command-") || t.starts_with("<system-reminder")
+/// One trace, read as the learner reads it: decoded by ingestion (`adage_ingest`, its format
+/// recognised by content) into the canonical session, then bridged to the engine's input
+/// (`adage_graph::canonical`), with `task` as its ground-truth label.
+pub fn read_transcript(path: &Path, table: &CommandTable, task: Option<String>) -> Option<EventSession> {
+    read_trace(path, table, task, Influence::Kept)
 }
 
-/// A transcript read: the session's events and the repository root it ran in.
-pub struct Read {
-    pub session: EventSession,
-    pub root: PathBuf,
-}
-
-/// Read one Claude Code transcript (every prompt, each tool call's canonical actions).
-pub fn read_transcript(path: &Path, table: &CommandTable, task: Option<String>) -> Option<Read> {
-    let f = std::fs::File::open(path).ok()?;
-    let mut id = String::new();
-    let mut cwd: Option<String> = None;
-    let mut day = String::new();
-    // (uses seen before it, text)
-    let mut prompts: Vec<(usize, String)> = Vec::new();
-    let mut uses: Vec<(u32, String, String, Value)> = Vec::new();
-    let mut results: HashMap<String, (String, bool)> = HashMap::new();
-    let mut turn_of: HashMap<String, u32> = HashMap::new();
-    for line in std::io::BufReader::new(f).lines() {
-        let Ok(line) = line else { break };
-        let Ok(rec) = serde_json::from_str::<Value>(&line) else { continue };
-        if rec.get("isSidechain").and_then(|v| v.as_bool()) == Some(true) {
-            continue;
-        }
-        if id.is_empty() {
-            if let Some(s) = rec.get("sessionId").and_then(|v| v.as_str()) {
-                id = s.to_string();
-            }
-        }
-        if cwd.is_none() {
-            cwd = rec.get("cwd").and_then(|v| v.as_str()).map(str::to_string);
-        }
-        if day.is_empty() {
-            if let Some(ts) = rec.get("timestamp").and_then(|v| v.as_str()) {
-                day = ts.chars().take(10).collect();
-            }
-        }
-        match rec.get("type").and_then(|v| v.as_str()) {
-            Some("user") => {
-                let content = &rec["message"]["content"];
-                if let Some(s) = content.as_str() {
-                    if rec.get("isMeta").and_then(|v| v.as_bool()) != Some(true) && !synthetic(s) {
-                        prompts.push((uses.len(), s.to_string()));
-                    }
-                } else if let Some(items) = content.as_array() {
-                    for it in items {
-                        if it.get("type").and_then(|v| v.as_str()) == Some("tool_result") {
-                            let tid = it.get("tool_use_id").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                            let failed = it.get("is_error").and_then(|v| v.as_bool()).unwrap_or(false);
-                            results.insert(tid, (text_of(it.get("content").unwrap_or(&Value::Null)), failed));
-                        } else if let Some(t) = it.get("text").and_then(|v| v.as_str()) {
-                            if !synthetic(t) {
-                                prompts.push((uses.len(), t.to_string()));
-                            }
-                        }
-                    }
-                }
-            }
-            Some("assistant") => {
-                let msg = &rec["message"];
-                let mid = msg.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                if let Some(items) = msg.get("content").and_then(|c| c.as_array()) {
-                    for it in items {
-                        if it.get("type").and_then(|v| v.as_str()) == Some("tool_use") {
-                            let next = turn_of.len() as u32;
-                            let turn = *turn_of.entry(mid.clone()).or_insert(next);
-                            uses.push((
-                                turn,
-                                it.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                                it.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                                it.get("input").cloned().unwrap_or(Value::Null),
-                            ));
-                        }
-                    }
-                }
-            }
-            _ => {}
-        }
+fn read_trace(path: &Path, table: &CommandTable, task: Option<String>, influence: Influence) -> Option<EventSession> {
+    let mut s = adage_ingest::read_session(path, table, None)?;
+    if influence == Influence::Ignored {
+        s.influence.clear();
     }
-    let cwd = cwd?;
-    if prompts.is_empty() {
-        return None;
-    }
-    let cwd_path = PathBuf::from(&cwd);
-    let root = repo::find_root(&cwd_path).unwrap_or(cwd_path);
-    let root_str = root.to_string_lossy().to_string();
-    let mut steps = Vec::new();
-    let mut turns = Vec::new();
-    let mut effects = Vec::new();
-    let mut step_of_use = Vec::with_capacity(uses.len() + 1);
-    for (turn, tid, name, input) in &uses {
-        step_of_use.push(steps.len());
-        let (output, failed) = results.get(tid).cloned().unwrap_or_default();
-        let flat = keys::flatten(&tools::normalize_tool(name, input, &root_str, table));
-        let count = flat.len();
-        let or_chain = keys::has_or_chain(input);
-        for (i, mut n) in flat.into_iter().enumerate() {
-            keys::canonicalise(&mut n, &root);
-            let rel = keys::action_path(&n.action).map(|p| repo::relativize(&root, p));
-            let failed = keys::sub_action_failed(i, count, failed, or_chain);
-            let step = match &n.action {
-                CanonicalAction::Exec { argv, .. } => {
-                    Some(Step::Exec { argv: argv.clone(), output: output.clone(), failed })
-                }
-                CanonicalAction::Read { .. } | CanonicalAction::List { .. } | CanonicalAction::Search { .. } => {
-                    rel.map(|path| Step::Read { path })
-                }
-                CanonicalAction::Edit { .. } | CanonicalAction::Write { .. } => rel.map(|path| Step::Edit { path }),
-                _ => None,
-            };
-            if let Some(step) = step {
-                let eff = matches!(step, Step::Exec { .. }).then_some(n.effect);
-                steps.push(step);
-                turns.push(*turn);
-                effects.push(eff);
-            }
-        }
-    }
-    step_of_use.push(steps.len());
-    let prompts = prompts
-        .into_iter()
-        .map(|(u, text)| Prompt { text, at_step: step_of_use[u.min(step_of_use.len() - 1)] as u32 })
-        .collect();
-    let input = Session { id, prompts, steps };
-    let meta = events::Meta { day: Some(day), task, turns: Some(turns), effects: Some(effects), ..Default::default() };
-    Some(Read { session: events::from_input(&input, &meta, table), root })
+    let mut e = canonical::events(&canonical::annotate(&s), &s);
+    e.task = task;
+    Some(e)
 }
 
 pub fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
-/// A dataset's sessions (every session in its manifest), with their tasks.
+/// A dataset's sessions (every session in its manifest), with their tasks, as the learner reads
+/// them.
 pub fn dataset(name: &str) -> Option<Vec<EventSession>> {
+    dataset_with(name, Influence::Kept)
+}
+
+/// A dataset's sessions, with their directives read as `influence` says.
+pub fn dataset_with(name: &str, influence: Influence) -> Option<Vec<EventSession>> {
     let dir = repo_root().join("evals/datasets").join(name);
     let m: Value = serde_json::from_str(&std::fs::read_to_string(dir.join("manifest.json")).ok()?).ok()?;
     let table = CommandTable::load();
@@ -168,8 +57,8 @@ pub fn dataset(name: &str) -> Option<Vec<EventSession>> {
     for s in m["sessions"].as_array()? {
         let file = dir.join(s["file"].as_str()?);
         let task = s["task"].as_str().map(str::to_string).or_else(|| s["id"].as_str().map(str::to_string));
-        if let Some(r) = read_transcript(&file, &table, task) {
-            out.push(r.session);
+        if let Some(s) = read_trace(&file, &table, task, influence) {
+            out.push(s);
         }
     }
     out.sort_by(|a, b| a.id.cmp(&b.id));
@@ -192,8 +81,7 @@ pub fn bundle(dir: &Path) -> Vec<EventSession> {
         }
     }
     files.sort();
-    let mut out: Vec<EventSession> =
-        files.iter().filter_map(|f| read_transcript(f, &table, None)).map(|r| r.session).collect();
+    let mut out: Vec<EventSession> = files.iter().filter_map(|f| read_transcript(f, &table, None)).collect();
     out.sort_by(|a, b| a.id.cmp(&b.id));
     out
 }
