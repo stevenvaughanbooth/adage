@@ -120,7 +120,10 @@ fn init_detects_harnesses_prints_snippets_and_writes_nothing() {
         ".opencode/plugins/adage.js",
         "3  Embedding model",
         "adage models fetch",
-        "4  Sense your traces",
+        "4  Repositories to condition on",
+        "[x] ",
+        "no Claude Code sessions yet · this repository",
+        "5  Sense this repository's traces",
         "No traces to sense in that source",
     ] {
         assert!(t.contains(s), "init output lacks {s:?}:\n{t}");
@@ -155,7 +158,10 @@ fn init_yes_fetches_the_model_and_survives_a_failed_download() {
     let o = w.run(&["init", "--yes"]);
     let t = text(&o);
     assert!(o.status.success(), "{t}");
-    assert!(t.contains("bundled in this binary") && !t.contains("fetching") && t.contains("Sense your traces"), "{t}");
+    assert!(
+        t.contains("bundled in this binary") && !t.contains("fetching") && t.contains("Sense this repository's traces"),
+        "{t}"
+    );
     // A model that is selected and missing is fetched, and a failed download is survived.
     let o = w.cmd(&["init", "--yes"]).env("ADAGE_EMBED_MODEL", "potion-code-16m-v2").output().unwrap();
     let t = text(&o);
@@ -163,7 +169,7 @@ fn init_yes_fetches_the_model_and_survives_a_failed_download() {
     assert!(
         t.contains("fetching potion-code-16m-v2")
             && t.contains("could not fetch it")
-            && t.contains("Sense your traces"),
+            && t.contains("Sense this repository's traces"),
         "{t}"
     );
     assert!(!w.p("data/models/potion-code-16m-v2").exists());
@@ -204,9 +210,60 @@ fn an_empty_codex_home_is_not_codex() {
 fn init_scopes_the_sense_to_a_repository() {
     let w = World::new();
     let o = w.run(&["init", "--repo", w.p("work").to_str().unwrap()]);
-    assert!(o.status.success() && text(&o).contains("sense your agents' existing traces for work"), "{}", text(&o));
+    assert!(o.status.success() && text(&o).contains("5. sense this repository's existing traces"), "{}", text(&o));
     let o = w.run(&["init", "--repo", w.p("home").to_str().unwrap()]);
     assert!(!o.status.success() && text(&o).contains("not inside a git repository"), "{}", text(&o));
+}
+
+/// `init` lists the repositories Claude Code has sessions in, from its project directories alone,
+/// with the current one ticked (docs/design/everyday-ux.md §5.5); `--yes` conditions on the ticked
+/// ones (`learn.repos`), and what a person chose stays ticked.
+#[test]
+fn init_lists_the_repositories_claude_code_worked_in() {
+    let w = World::new();
+    std::fs::create_dir_all(w.p("other/.git")).unwrap();
+    std::fs::write(w.p("other/.git/config"), "[remote \"origin\"]\n\turl = git@github.com:acme/other.git\n").unwrap();
+    let session = |cwd: &Path, n: usize| {
+        let slug: String =
+            cwd.to_string_lossy().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect();
+        let dir = w.p("home/.claude/projects").join(slug);
+        std::fs::create_dir_all(&dir).unwrap();
+        for i in 0..n {
+            std::fs::write(dir.join(format!("s{i}.jsonl")), format!("{}\n", json!({"type": "user", "cwd": cwd})))
+                .unwrap();
+        }
+    };
+    session(&w.p("work"), 1);
+    session(&w.p("other/src"), 3);
+    session(&w.p("gone"), 2); // a directory since deleted
+                              // The fixtures are under the temporary directory, as `HOME` is: there it is not left out.
+    let run = |args: &[&str]| {
+        let o = w.cmd(args).output().unwrap();
+        assert!(o.status.success(), "{}", text(&o));
+        text(&o)
+    };
+    let t = run(&["init"]);
+    let line =
+        |label: &str| t.lines().find(|l| l.contains(label)).unwrap_or_else(|| panic!("no {label}:\n{t}")).to_string();
+    let work = w.p("work").display().to_string();
+    assert!(line(&work).contains("[x] ") && line(&work).contains("1 session · last today · this repository"), "{t}");
+    let other = line("github.com/acme/other");
+    assert!(other.contains("[ ] ") && other.contains("3 sessions · last today"), "{t}");
+    assert!(!t.contains(&w.p("gone").display().to_string()), "a deleted directory is left out:\n{t}");
+    assert!(
+        t.contains("`adage init` at a terminal lets you pick") || t.contains("adage init at a terminal lets you pick"),
+        "{t}"
+    );
+    assert!(!w.p("data/config.toml").exists(), "printing only");
+    // --yes conditions on the ticked one.
+    let t = run(&["init", "--yes"]);
+    assert!(t.contains("Adage conditions on the one ticked (learn.repos)"), "{t}");
+    let chosen = run(&["config", "get", "learn.repos"]);
+    assert!(chosen.trim().starts_with("work@") && !chosen.contains(','), "{chosen}");
+    // Another repository chosen since: both stay ticked.
+    run(&["config", "set", "learn.repos", &format!("{},github.com/acme/other", chosen.trim())]);
+    let t = run(&["init"]);
+    assert!(t.lines().find(|l| l.contains("github.com/acme/other")).unwrap().contains("[x] "), "{t}");
 }
 
 #[test]

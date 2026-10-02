@@ -145,6 +145,48 @@ pub fn count_claude_sessions(projects: &Path, roots: &[PathBuf]) -> usize {
         .sum()
 }
 
+/// A working directory Claude Code recorded sessions in: one project directory under
+/// `~/.claude/projects`, its sessions (top-level transcripts; sub-agents' are not counted), and
+/// when the newest was last written (milliseconds since the Unix epoch).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Workdir {
+    pub cwd: PathBuf,
+    pub sessions: usize,
+    pub last_ms: u64,
+}
+
+/// Every working directory Claude Code recorded sessions in, newest first, without parsing a
+/// transcript: per project directory, its transcripts are listed and only the newest one's head is
+/// read for its recorded `cwd` ([`recorded_cwd`]; the directory's name is lossy). A directory
+/// whose transcripts record no `cwd` is left out.
+pub fn claude_workdirs(projects: &Path) -> Vec<Workdir> {
+    let mut out = Vec::new();
+    for d in std::fs::read_dir(projects).into_iter().flatten().flatten() {
+        let mut files: Vec<(u64, PathBuf)> = std::fs::read_dir(d.path())
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|f| f.path())
+            .filter(|p| p.extension().is_some_and(|x| x == "jsonl"))
+            .map(|p| (modified_ms(&p), p))
+            .collect();
+        files.sort_by(|a, b| b.cmp(a));
+        // The newest transcript names the directory; an empty or unreadable one defers to the next.
+        let Some(cwd) = files.iter().take(3).find_map(|(_, p)| recorded_cwd(p)) else { continue };
+        out.push(Workdir { cwd, sessions: files.len(), last_ms: files[0].0 });
+    }
+    out.sort_by(|a, b| b.last_ms.cmp(&a.last_ms).then_with(|| a.cwd.cmp(&b.cwd)));
+    out
+}
+
+fn modified_ms(p: &Path) -> u64 {
+    std::fs::metadata(p)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map_or(0, |d| d.as_millis() as u64)
+}
+
 /// Of these transcripts (Codex rollouts, OpenCode exports), those recorded inside `roots`.
 pub fn recorded_inside(files: Vec<PathBuf>, roots: &[PathBuf]) -> Vec<PathBuf> {
     files.into_iter().filter(|p| recorded_cwd(p).is_some_and(|c| inside(&c, roots))).collect()
@@ -194,5 +236,33 @@ mod tests {
         let got = claude_transcripts(&projects, &[PathBuf::from("/r/app")]);
         assert_eq!(got, vec![a, sub]);
         assert_eq!(count_claude_sessions(&projects, &[PathBuf::from("/r/app")]), 3, "names only: d counts");
+    }
+
+    #[test]
+    fn working_directories_come_from_the_newest_transcripts_head() {
+        let d = tempfile::tempdir().unwrap();
+        let projects = d.path().join("projects");
+        let write = |dir: &str, name: &str, line: &str, age_s: u64| {
+            let p = projects.join(dir);
+            std::fs::create_dir_all(&p).unwrap();
+            let f = p.join(name);
+            std::fs::write(&f, format!("{line}\n")).unwrap();
+            let t = std::time::SystemTime::now() - std::time::Duration::from_secs(age_s);
+            std::fs::File::options().write(true).open(&f).unwrap().set_modified(t).unwrap();
+        };
+        let cwd = |c: &str| serde_json::json!({"type":"user","cwd":c}).to_string();
+        write("-r-app", "a.jsonl", &cwd("/r/app"), 300);
+        write("-r-app", "b.jsonl", &cwd("/r/app"), 60);
+        std::fs::create_dir_all(projects.join("-r-app/b/subagents")).unwrap();
+        write("-r-app/b/subagents", "s.jsonl", &cwd("/r/app"), 10);
+        write("-r-old", "c.jsonl", &cwd("/r/old"), 86_400);
+        // The newest transcript records nothing yet: the next one names the directory.
+        write("-r-new", "d.jsonl", &cwd("/r/new"), 7_200);
+        write("-r-new", "e.jsonl", r#"{"type":"summary"}"#, 0);
+        write("-r-none", "f.jsonl", r#"{"type":"summary"}"#, 0);
+        let got = claude_workdirs(&projects);
+        let names: Vec<(&str, usize)> = got.iter().map(|w| (w.cwd.to_str().unwrap(), w.sessions)).collect();
+        assert_eq!(names, vec![("/r/new", 2), ("/r/app", 2), ("/r/old", 1)], "newest first; sub-agents not counted");
+        assert!(got[0].last_ms > got[1].last_ms && got[1].last_ms > got[2].last_ms);
     }
 }

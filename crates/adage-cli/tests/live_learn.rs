@@ -318,7 +318,7 @@ fn learn_auto_logs_what_changed() {
     assert_eq!(log[1]["index_generation"], log[0]["index_generation"]);
 
     // A manual learn writes the same kind of line, with trigger manual, one per repository.
-    let o = w.cmd(&["condition", "--demo"]).output().unwrap();
+    let o = w.cmd(&["condition", "--all", "--demo"]).output().unwrap();
     assert!(o.status.success(), "{}", World::text(&o));
     let all = w.log();
     let manual: Vec<&Value> = all.iter().skip(2).collect();
@@ -464,6 +464,54 @@ fn a_real_stop_hook_learns_in_the_background() {
 
 /// Doctor's live-learning checks flag a failed learn, a stuck learner and a request left waiting.
 #[test]
+fn a_learner_is_stuck_relative_to_how_long_it_usually_takes() {
+    let w = World::new();
+    w.config("[learn]\nmin_interval_secs = 0\n");
+    w.claude_stop("u1");
+    let req = w.requests().remove(0);
+    let repo = req["repo"].as_str().unwrap().to_string();
+    let slug = repo.replace(|c: char| !c.is_ascii_alphanumeric() && c != '-' && c != '_', "-");
+    let file = |s: &str| w.q().join(format!("{slug}{s}"));
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
+    // Automatic runs take about 8 s here (a manual run's 0.3 s is not the learner's).
+    let run = |ts: u64, ms: u64, trigger: &str| json!({ "ts": ts, "kind": "condition", "trigger": trigger, "repo": repo, "duration_ms": ms, "changes": [] });
+    let log: Vec<String> =
+        [run(now - 900_000, 7_500, "auto"), run(now - 800_000, 300, "manual"), run(now - 700_000, 8_000, "auto")]
+            .iter()
+            .map(Value::to_string)
+            .collect();
+    std::fs::write(w.home().join("learn.log"), log.join("\n") + "\n").unwrap();
+    let _lock = adage_store::lock::try_exclusive(&file(".lock")).unwrap().unwrap();
+    let running_since = |ms_ago: u64| {
+        let s = json!({ "pid": 4343, "started_at": now - ms_ago, "outcome": "running", "processed": 0 });
+        std::fs::write(file(".state.json"), s.to_string()).unwrap();
+    };
+    let lock_check = || -> Value {
+        let o = w.cmd(&["doctor", "--json"]).output().unwrap();
+        let d: Value = serde_json::from_slice(&o.stdout).unwrap();
+        d["checks"].as_array().unwrap().iter().find(|c| c["check"] == "auto-learn lock").cloned().unwrap()
+    };
+    let card = || {
+        let o = w.cmd(&[]).current_dir(w.repo()).env("ADAGE_COLOR", "never").output().unwrap();
+        String::from_utf8_lossy(&o.stdout).to_string()
+    };
+    // Thirty seconds into a run that usually takes 8 s: running, not stuck.
+    running_since(30_000);
+    assert_eq!(lock_check()["status"], "pass");
+    let c = card();
+    assert!(c.contains("learning    running for 3") && c.contains(" s (usually 8 s)"), "{c}");
+    assert!(!c.contains("longer than it should"), "{c}");
+    // Five minutes in: stuck (the old fixed rule waited fifteen), and both surfaces say so.
+    running_since(300_000);
+    let stuck = lock_check();
+    assert_eq!(stuck["status"], "warn", "{stuck}");
+    let detail = stuck["detail"].as_str().unwrap();
+    assert!(detail.contains("running for 5 min (usually 8 s)") && detail.contains("4343"), "{detail}");
+    let c = card();
+    assert!(c.contains("running for 5 min (usually 8 s) longer than it should"), "{c}");
+}
+
+#[test]
 fn doctor_reports_failed_stuck_and_waiting_learners() {
     let w = World::new();
     w.config("[learn]\nmin_interval_secs = 0\n");
@@ -511,4 +559,48 @@ fn doctor_reports_failed_stuck_and_waiting_learners() {
     // Config problems are reported too.
     w.config("[learn]\nauto = \"sometimes\"\n");
     assert_eq!(check(&doctor(), "config")["status"], "warn");
+}
+
+/// `learn.repos` names the repositories whose history is read (docs/design/everyday-ux.md §5.5):
+/// a session ending in one it leaves out is recorded, starts no learner, and a learner asked for
+/// before the choice reads nothing; doctor and the card say so.
+#[test]
+#[cfg_attr(not(debug_assertions), ignore = "requires debug-only ADAGE_TEST_NO_SPAWN instrumentation")]
+fn a_repository_left_out_of_learn_repos_is_recorded_never_conditioned() {
+    let w = World::new();
+    w.history();
+    let other = "[learn]\nmin_interval_secs = 0\nrepos = [\"github.com/acme/other\"]\n";
+    w.config(other);
+    w.claude_stop("r1");
+    assert!(w.spawns().is_empty() && w.requests().is_empty(), "left out: no learner, no request");
+    // Every repository (the default): it is learned.
+    w.config("[learn]\nmin_interval_secs = 0\n");
+    w.claude_stop("r2");
+    assert_eq!(w.spawns().len(), 1);
+    let key = w.requests()[0]["repo"].as_str().unwrap().to_string();
+    // Left out again before its learner ran: the learner reads nothing and drops the request.
+    w.config(other);
+    let o = w.cmd(&["condition", "--auto", "--repo-root", &w.repo()]).output().unwrap();
+    assert!(o.status.success(), "{}", World::text(&o));
+    assert!(w.log().is_empty(), "nothing read, nothing logged");
+    assert!(w.requests().is_empty(), "nothing left waiting");
+    let o = w.cmd(&["doctor", "--json"]).output().unwrap();
+    let d: Value = serde_json::from_slice(&o.stdout).unwrap();
+    let auto = d["checks"].as_array().unwrap().iter().find(|c| c["check"] == "auto-learn").unwrap();
+    assert!(
+        auto["detail"].as_str().unwrap().contains("the repository you chose (github.com/acme/other; learn.repos)"),
+        "{auto}"
+    );
+    let mut card = w.cmd(&[]);
+    card.current_dir(w.repo());
+    let text = World::text(&card.output().unwrap());
+    assert!(text.contains("not here") && text.contains("adage init"), "{text}");
+    let mut watch = w.cmd(&["watch", "--once", "--size", "118x30"]);
+    watch.current_dir(w.repo());
+    let text = World::text(&watch.output().unwrap());
+    assert!(text.contains("not conditioned here"), "the live pane's health row says so: {text}");
+    // Chosen: learned again.
+    w.config(&format!("[learn]\nmin_interval_secs = 0\nrepos = [\"github.com/acme/other\", \"{key}\"]\n"));
+    w.claude_stop("r3");
+    assert_eq!(w.spawns().len(), 2, "chosen: a learner starts");
 }

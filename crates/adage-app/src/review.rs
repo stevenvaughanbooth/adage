@@ -140,6 +140,27 @@ pub fn waits(reasons: &[(&'static str, String)]) -> bool {
     reasons.iter().any(|(k, _)| !LISTED_ONLY.contains(k))
 }
 
+/// Whether a review reason holds its reflex back until a person decides (a nascent step, a quiet
+/// reflex, an execution grant), rather than only being worth a look at a reflex already in use
+/// (an instinct, a new or changed reflex, an imported one, one agents ignore).
+pub fn needs_person(kind: &str) -> bool {
+    matches!(kind, "quiet" | "approval" | "execution")
+}
+
+/// Count reflexes by what their reasons ask of a person: `(needs you, to look over)`.
+pub fn waiting_counts<'a>(reasons: impl Iterator<Item = &'a [(&'static str, String)]>) -> (usize, usize) {
+    let (mut needs, mut look) = (0, 0);
+    // Only what waits for a decision: an instinct in effect is listed, never waiting (`waits`).
+    for r in reasons.filter(|r| waits(r)) {
+        if r.iter().any(|(k, _)| needs_person(k)) {
+            needs += 1;
+        } else {
+            look += 1;
+        }
+    }
+    (needs, look)
+}
+
 /// Kept quiet by its uplift: agents already take its step unaided (`adage_learn::value::assess`).
 pub fn quiet(r: &Route) -> bool {
     r.evidence.uplift.as_ref().is_some_and(|u| u.gated)

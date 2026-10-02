@@ -6,42 +6,40 @@ Agent traces become reflexes.
 
 Usage: adage [OPTIONS] [COMMAND]
 
-Start:
-  init         set Adage up: harnesses, hooks, past traces
-  doctor       check that everything is healthy
-
 Every day:
-  status       reflexes and instincts in effect, with evidence
-  watch        live pane for a split terminal
-  ui           the full-screen app
-  map          open the map in your browser
-  review       reflexes waiting for you
-  savings      what Adage saves here
+  watch        what Adage sees and says, live (a pane for a split terminal)
+  review       the reflexes Adage formed: look them over, approve, extinguish
+  map          explore reflexes and their evidence in your browser
+
+When something is off:
+  doctor       what is wrong, and the fix for each problem
+
+Set up:
+  init         set Adage up: harnesses, hooks, past traces
+  install      register Adage's hooks with one agent
+  packs        base instincts and added packs: list, turn on, turn off
+  config       settings
+  update       update Adage itself
 
 Conditioning:
   sense        what your agents actually do (read-only)
-  condition    condition reflexes from traces
+  condition    condition reflexes from traces now
   report       what Adage said, and what agents did
   graph        Adage's state as a graph
   train        compile a skill into reflexes
 
-Packs:
-  packs        base instincts and added packs
+Sharing:
   marketplace  where packs come from
   share        build and sign a pack
   add          verify and install a pack
 
-Execution:
+More:
+  ui           the full-screen app: live, reflexes, map, health, settings
+  status       reflexes and instincts in effect, with evidence
+  savings      what Adage saves here
   delegate     let hooks run delegated reflexes, and rewrites
-
-Setup:
-  install      one harness's hook registration
   models       the optional embedding model
-  config       settings
   completions  shell completions
-  update       update Adage itself
-
-Evaluation:
   eval         offline replay evaluation
 
 
@@ -51,8 +49,8 @@ Options:
   -V, --version  Print version
 
 
-Start with adage init. `adage <command> --help` explains each command.
-Bare `adage` prints the status card; `adage ui` opens the app.
+Bare adage answers "is it working here?": the status card.
+New here? Start with adage init. `adage <command> --help` explains each command.
 Environment: ADAGE_HOME (data directory), ADAGE_DISABLE=1 (kill switch),
 ADAGE_ARM=treated|control, ADAGE_CONTROL (control share), ADAGE_AUTO_LEARN=0|1,
 ADAGE_ALLOW_NONINTERACTIVE=1 (share and add in CI).

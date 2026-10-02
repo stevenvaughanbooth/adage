@@ -100,10 +100,62 @@ fn health(paths: &Paths, root: Option<&Path>) -> (Line, Option<Line>) {
         Some(c) => {
             let (role, word) =
                 if c.status == Status::Fail { (Role::Inhibit, "problem") } else { (Role::Prime, "check") };
-            let fix = c.fix.clone().map(|f| arrow(Line::new().text(format!("{}: {}", c.check, c.detail)), &f));
-            (Line::new().glyph(role, Glyph::Lamp).text(format!(" {word}: {}", c.check)), fix)
+            let (line, command) = brief(c);
+            (
+                Line::new().glyph(role, Glyph::Lamp).text(format!(" {word}: {}", c.label)),
+                Some(arrow(Line::new().text(line), &command)),
+            )
         }
     }
+}
+
+/// One problem as one plain line for the card, and where it is fixed: its own command when the fix
+/// is a single `adage …` command, else `adage doctor`, which has the whole sentence
+/// (docs/design/everyday-ux.md, rule 6).
+fn brief(c: &doctor::Check) -> (String, String) {
+    // Hooks: say which of their problems it is (not registered, cannot run, out of date).
+    if let Some(harness) = c.check.strip_prefix("hooks: ").and_then(|h| h.split(' ').next()) {
+        let line = if c.check.ends_with("(out of date)") {
+            format!("{harness} hooks need updating for this version of Adage")
+        } else if c.check.ends_with("(twice)") {
+            format!("{harness} hooks are registered twice")
+        } else if c.detail.contains("not registered") {
+            format!("Adage is not connected to {harness} yet")
+        } else {
+            format!("{harness} hooks cannot run")
+        };
+        let command = c.fix.as_deref().and_then(single_command).unwrap_or_else(|| "adage doctor".into());
+        return (line, command);
+    }
+    let line = match c.check.as_str() {
+        "cloud files" => "some files are only in the cloud, so Adage sees less of this repository",
+        "auto-learn lock" => "learning is taking far longer than it usually does",
+        "auto-learn runs" => "learning failed on its last run",
+        "auto-learn queue" => "sessions are waiting to be learned from",
+        "index" => "Adage cannot read its compiled reflexes",
+        "tracks" => "some reflexes could not be read",
+        "fail-open errors" => "hooks ran into errors recently",
+        "embedding model" => "the embedding model needs attention",
+        "data directory" => "Adage cannot use its data directory",
+        "config" => "a setting in config.toml is ignored",
+        _ => "",
+    };
+    let line = if line.is_empty() { format!("{} needs a look", c.label) } else { line.to_string() };
+    let command = c.fix.as_deref().and_then(single_command).unwrap_or_else(|| "adage doctor".into());
+    (line, command)
+}
+
+/// The command a fix leads with, if it is an `adage` command: the whole fix when it is one bare
+/// command, else the backticked command it starts with (`` `adage install codex --write` adds
+/// it ``). A fix in prose has none.
+fn single_command(fix: &str) -> Option<String> {
+    let fix = fix.trim();
+    let cmd = match fix.strip_prefix('`') {
+        Some(rest) => rest.split_once('`')?.0,
+        None if !fix.contains([',', ';', '(']) => fix,
+        None => return None,
+    };
+    cmd.starts_with("adage ").then(|| cmd.to_string())
 }
 
 /// `text → command`, the command in the command colour.
@@ -172,6 +224,22 @@ fn traces_so_far(paths: &Paths, repo: &str, root: &Path) -> usize {
     own.max(found)
 }
 
+/// A learner running for `repo` now, as the card's learning line (`running for 4 min (usually
+/// 8 s)`), and whether it is stuck (`crate::learning`): then the line says so in the prime colour.
+fn running(paths: &Paths, repo: &str, now: u64) -> Option<(Line, bool)> {
+    let learning = crate::learning::of(paths, repo, &crate::learnlog::read(paths));
+    let since = learning.running_since?;
+    let mut l = Line::new().text(format!("running for {}", crate::learning::duration(now.saturating_sub(since))));
+    if let Some(u) = learning.usual_ms {
+        l = l.quiet(format!(" (usually {})", crate::learning::duration(u)));
+    }
+    let stuck = learning.stuck(now);
+    if stuck {
+        l = l.text(" ").push(Role::Prime, "longer than it should");
+    }
+    Some((l, stuck))
+}
+
 /// The rows for one repository (after the header): a key, or `""` to continue the row above.
 fn repo_rows(paths: &Paths, repo: &str, root: &Path, index: &Index, now: u64) -> Vec<(&'static str, Line)> {
     let mut out: Vec<(&'static str, Line)> = Vec::new();
@@ -226,6 +294,18 @@ fn repo_rows(paths: &Paths, repo: &str, root: &Path, index: &Index, now: u64) ->
                 "adage config set learn.auto true",
             ),
         ));
+    } else if !cfg.config.learns(repo) {
+        // Recorded, never read: the person chose other repositories (`learn.repos`).
+        out.push((
+            "learning",
+            arrow(
+                Line::new().push(Role::Prime, "not here").quiet(" (learn.repos leaves this repository out)"),
+                "adage init",
+            ),
+        ));
+    } else if let Some((l, stuck)) = running(paths, repo, now) {
+        // A learner is running: for how long, against how long it usually takes.
+        out.push(("learning", if stuck { arrow(l, "adage doctor") } else { l }));
     } else if r.learned == 0 && own < SESSIONS_NEEDED {
         let mut l = Line::new()
             .bold(Role::Ink, format!("{own} of ~{SESSIONS_NEEDED}"))
@@ -235,7 +315,9 @@ fn repo_rows(paths: &Paths, repo: &str, root: &Path, index: &Index, now: u64) ->
         }
         out.push(("learning", l));
     } else {
-        let last = crate::learnlog::read(paths).into_iter().rev().find(|l| l["repo"].as_str() == Some(repo));
+        let log = crate::learnlog::read(paths);
+        let usual = crate::learning::of(paths, repo, &log).usual_ms;
+        let last = log.into_iter().rev().find(|l| l["repo"].as_str() == Some(repo));
         let when = match (&last, &run) {
             (Some(l), _) if l["kind"] == "condition_error" => {
                 format!(
@@ -251,7 +333,11 @@ fn repo_rows(paths: &Paths, repo: &str, root: &Path, index: &Index, now: u64) ->
             (None, Some(s)) if s.finished_at.is_some() => format!("last: {}", ago(now, s.finished_at.unwrap_or(0))),
             _ => "first run at your next agent session here".into(),
         };
-        out.push(("learning", Line::new().text("after each session").sep().quiet(when)));
+        let mut l = Line::new().text("after each session").sep().quiet(when);
+        if let Some(u) = usual {
+            l = l.sep().quiet(format!("usually {}", crate::learning::duration(u)));
+        }
+        out.push(("learning", l));
     }
 
     // Counts and savings.
@@ -259,10 +345,18 @@ fn repo_rows(paths: &Paths, repo: &str, root: &Path, index: &Index, now: u64) ->
     if let Some(s) = &summary {
         let c = &s.counts;
         if c.sessions > 0 {
+            // A count that began inside the window says when (sessions before then were not
+            // recorded), rather than passing for the whole window.
+            let window_start = now.saturating_sub(c.days * 86_400_000);
+            let span = if c.since > window_start + 86_400_000 {
+                format!("recorded since {}: ", ago(now, c.since))
+            } else {
+                format!("last {} days: ", c.days)
+            };
             out.push((
                 "activity",
                 Line::new()
-                    .faint(format!("last {} days: ", c.days))
+                    .faint(span)
                     .text(plural(c.sessions, "session", "sessions"))
                     .sep()
                     .text(plural(c.directives, "directive", "directives"))
@@ -437,7 +531,12 @@ pub fn card(paths: &Paths, cwd: Option<&Path>) -> Vec<Line> {
     match &root {
         Some(root) => {
             let repo = crate::ui::health::repo_key(paths, root, &index);
-            s.push(header(version).sep().text(&repo).sep().extend(dot));
+            let mut h = header(version).sep().text(&repo);
+            // A linked worktree is the same repository; say which checkout this is.
+            if root.join(".git").is_file() {
+                h = h.quiet(format!(" (worktree {})", adage_core::repo::dir_name(root)));
+            }
+            s.push(h.sep().extend(dot));
             s.push(Line::new());
             let (steps, _) = waiting(paths, &repo);
             if steps > 0 {
@@ -502,6 +601,60 @@ pub fn card(paths: &Paths, cwd: Option<&Path>) -> Vec<Line> {
 mod tests {
     use super::*;
     use adage_hook::autolearn::{Notice, Shown};
+
+    /// The card's fix line is one plain line ending in the fix's own command, or `adage doctor`
+    /// when the fix is prose (docs/design/everyday-ux.md, rule 6).
+    #[test]
+    fn a_problem_is_one_line_and_its_command() {
+        let check = |id: &str, detail: &str, fix: &str| doctor::Check {
+            check: id.into(),
+            label: doctor::label(id),
+            status: Status::Warn,
+            detail: detail.into(),
+            fix: Some(fix.into()),
+        };
+        let cases = [
+            (
+                check(
+                    "cloud files",
+                    "a cloud drive (iCloud Drive or another sync app) keeps 1368 git objects …",
+                    "move the repository out of the synced folder (for example to ~/code), or …",
+                ),
+                ("some files are only in the cloud, so Adage sees less of this repository", "adage doctor"),
+            ),
+            (
+                check(
+                    "hooks: claude-code (out of date)",
+                    "the registered hooks lack PreToolUse",
+                    "`adage install claude-code --scope user --write` adds it",
+                ),
+                (
+                    "claude-code hooks need updating for this version of Adage",
+                    "adage install claude-code --scope user --write",
+                ),
+            ),
+            (
+                check(
+                    "hooks: codex",
+                    "codex is installed, but Adage's hooks are not registered with it",
+                    "`adage install codex --write` (this repository) or add `--scope user`",
+                ),
+                ("Adage is not connected to codex yet", "adage install codex --write"),
+            ),
+            (
+                check(
+                    "auto-learn lock",
+                    "learning is taking far longer than it usually does: …",
+                    "stop that learner (kill <pid>); the next session that ends starts a new one",
+                ),
+                ("learning is taking far longer than it usually does", "adage doctor"),
+            ),
+            (check("packs", "a pack's digest changed", "adage add <pack>"), ("packs needs a look", "adage add <pack>")),
+        ];
+        for (c, (line, command)) in cases {
+            assert_eq!(brief(&c), (line.to_string(), command.to_string()), "{}", c.check);
+        }
+    }
 
     #[test]
     fn quiet_reflexes_are_not_install_steps_and_todays_notice_shows() {

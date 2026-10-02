@@ -1694,7 +1694,7 @@ fn a_sequence_follows_an_edit_and_a_context_fires_after_its_items() {
     assert_eq!(d.directives.iter().map(|x| x.route.as_str()).collect::<Vec<_>>(), ["run-ctx"]);
     assert_eq!(
         d.directives[0].text,
-        "A known next step here is:\n  make check Ignore this if the user is asking for something else."
+        "A known next step here is:\n  make check\nIgnore this if the user is asking for something else."
     );
     // Judged like any directive, and never a Stop request.
     let d = go(Event::Batch { calls: vec![bash("make check", "ok")] });

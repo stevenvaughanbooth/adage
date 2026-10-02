@@ -16,15 +16,18 @@ applicable instincts from repository files even when there are no traces. Skippi
 does not enable that harness's automatic history discovery. `init --print` is a read-only preview.
 
 Manual `adage sense` and `adage condition` use the configured Claude Code history, Codex rollouts
-and OpenCode exports. Without source overrides, Claude history is under `CLAUDE_CONFIG_DIR/projects`
-(else `~/.claude/projects`); Codex history is under `CODEX_HOME/sessions` (else `~/.codex/sessions`).
-Manual discovery of Codex history does not require hooks to be installed; `learn.codex_sessions = ""`
-disables it. A configured directory replaces that harness's default location. OpenCode exports
-require `learn.opencode_exports` or an explicit `--transcripts` file.
+and OpenCode exports, and read only what was recorded in the repository they run in, picked as the
+learner picks it (step 4 below); `--all` reads every repository's, and outside a repository they
+ask for `--all` rather than read everything. Without source overrides, Claude history is under
+`CLAUDE_CONFIG_DIR/projects` (else `~/.claude/projects`); Codex history is under
+`CODEX_HOME/sessions` (else `~/.codex/sessions`) and, with `learn.codex_sessions = auto`, is read
+once Codex hooks are registered; `learn.codex_sessions = ""` disables it. A configured directory
+replaces that harness's default location. OpenCode exports require `learn.opencode_exports` or an
+explicit `--transcripts` file.
 
 Explicit `--transcripts`, `--claude-projects` and `--codex-sessions` replace all default sources;
-an empty explicit source is never silently replaced by other history. Plain `condition` learns
-all discovered repositories. `--cwd-prefix <path>` filters by recorded path components (so
+an empty explicit source is never silently replaced by other history, and every repository they
+hold is learned. `--cwd-prefix <path>` filters by recorded path components (so
 `/work/app` does not include `/work/app-other`). With no default history in a repository, it binds
 available file-based instincts; explicit empty sources still report an error. `--no-instincts`
 and `instincts.enabled = false` suppress the no-history fallback.
@@ -46,6 +49,7 @@ thresholds = "default"    # evidence bars: "default", or "demo" (lower); `adage 
 claude_projects = ""      # Claude Code history ("" = CLAUDE_CONFIG_DIR/projects, else ~/.claude/projects)
 codex_sessions = "auto"   # Codex rollouts: "auto" ($CODEX_HOME/sessions once Codex hooks are registered), a directory, or "" (none)
 opencode_exports = ""     # a directory of `opencode export` files ("" = none)
+repos = "all"             # repositories whose history is read: "all", or keys, e.g. ["github.com/acme/billing"]
 parse_cache = true        # keep parsed transcripts in cache/sessions (owner-only; faster re-learning)
 
 [instincts]
@@ -66,6 +70,7 @@ control = 0.1             # share of sessions held out as the control arm (0–1
 | `learn.claude_projects` | `""` | — |
 | `learn.codex_sessions` | `auto` | — |
 | `learn.opencode_exports` | `""` | — |
+| `learn.repos` | `all` | — |
 | `learn.parse_cache` | `true` | — (`adage condition --no-cache` skips it for one run) |
 | `ui.notices` | `daily` | — |
 | `runtime.control` | `0.1` | `ADAGE_CONTROL` (any number; 1 or more is shadow mode, as before) |
@@ -81,8 +86,9 @@ adage config get <key>           one effective value
 adage config set <key> <value>   validated, written atomically
 ```
 
-Keys that change what Adage learns from or how much evidence it needs (`learn.thresholds`,
-`learn.claude_projects`, `learn.codex_sessions`, `learn.opencode_exports`, `instincts.packs`) need
+Keys that change what Adage learns from or how much evidence it needs (`learn.repos`,
+`learn.thresholds`, `learn.claude_projects`, `learn.codex_sessions`, `learn.opencode_exports`,
+`instincts.packs`) need
 a person: a terminal (or `ADAGE_ALLOW_NONINTERACTIVE=1`), never inside an agent session. Every
 other key only tunes Adage or turns something down, and can be set from anywhere.
 
@@ -91,8 +97,8 @@ other key only tunes Adage or turns something down, and can be set from anywhere
 ## How it runs
 
 1. **Trigger.** On Claude Code and Codex `Stop` and `SessionEnd`, and OpenCode `session.idle` and
-   `session.deleted`, after its normal decision, the hook (if `learn.auto` is on and the
-   repository has no `.adage/disabled`) writes the repository's request marker. Then, unless a
+   `session.deleted`, after its normal decision, the hook (if `learn.auto` is on, `learn.repos`
+   names the repository, and it has no `.adage/disabled`) writes the repository's request marker. Then, unless a
    learner holds the repository's lock or one is already scheduled, it starts
    `adage condition --auto --repo-root <root>` detached (its own process group on Unix; a detached
    process group on Windows; no standard streams). If the last learn for the repository started

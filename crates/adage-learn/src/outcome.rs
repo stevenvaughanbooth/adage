@@ -121,6 +121,13 @@ impl Runner {
     }
 }
 
+/// Whether a test family is given the tests to run as file paths (`pytest tests/test_core.py`,
+/// `npx vitest run src/a.test.ts`). Cargo selects tests by name, `go test` by package, and tox and
+/// nox by environment, so a list of files would break their command line.
+pub fn takes_test_files(family: &str) -> bool {
+    !matches!(family, "cargo test" | "cargo nextest" | "go test" | "tox" | "nox")
+}
+
 /// The ecosystem of a test family.
 pub fn ecosystem(family: &str) -> &'static str {
     match family {
@@ -385,6 +392,19 @@ pub fn situations(s: &Session, env_kind: &str) -> Vec<Situation> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Regression (2026-10-01, a real repository): "the tests of what was edited" bound test file
+    /// paths into `cargo test adage-cli {tests}`, which cargo rejects. Only runners that take test
+    /// files as arguments get that reflex.
+    #[test]
+    fn only_runners_that_take_test_files_are_given_them() {
+        for f in ["pytest", "unittest", "vitest", "jest", "mocha"] {
+            assert!(takes_test_files(f), "{f}");
+        }
+        for f in ["cargo test", "cargo nextest", "go test", "tox", "nox"] {
+            assert!(!takes_test_files(f), "{f}");
+        }
+    }
 
     fn av(s: &str) -> Vec<String> {
         s.split_whitespace().map(str::to_string).collect()

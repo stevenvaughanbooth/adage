@@ -59,7 +59,7 @@ static T_FINISH: Lazy<Regex> = Lazy::new(|| {
     .unwrap()
 });
 static T_RUN: Lazy<Regex> =
-    Lazy::new(|| Regex::new(&format!(r"^A known next step here is:\n  (?P<cmd>[^\n]*?)(?: {EXIT})?$")).unwrap());
+    Lazy::new(|| Regex::new(&format!(r"^A known next step here is:\n  (?P<cmd>[^\n]*)(?:{EXIT_LINE})?$")).unwrap());
 /// After a failure (an instinct's dead end): the command to run instead, the exit on its own line.
 static T_FAILED: Lazy<Regex> = Lazy::new(|| {
     Regex::new(&format!(r"^That failed\. In this repository, run this instead:\n  (?P<cmd>[^\n]*)\n{EXIT}$")).unwrap()

@@ -6,8 +6,11 @@
 //!    never writes a harness's configuration.
 //! 3. The embedding model: the one bundled in this binary serves; a selected model that is not
 //!    installed is fetched with `--yes` (`adage models fetch <key>`).
-//! 4. Runs `adage sense` over existing history (read-only), for the repository at `--repo` if
-//!    given, else for every repository.
+//! 4. Lists the repositories Claude Code has sessions in (from its project directories; no
+//!    transcript is parsed), with the current one ticked. With `--yes`, the current one is added
+//!    to the ones Adage conditions on (`learn.repos`, [`crate::repos`]).
+//! 5. Runs `adage sense` over the current repository's history (read-only).
+//! 6. Shows which instincts would bind here, from the repository's files; with `--yes`, binds them.
 //!
 //! At a terminal (stdin and stdout both terminals, outside any agent session, and without
 //! `--print` or `--yes`) `init` is a guided wizard instead (`crate::ui::wizard`): it asks
@@ -19,6 +22,7 @@
 
 use crate::detect;
 use adage_core::repo;
+use adage_store::config::Source;
 use adage_store::Paths;
 use adage_term::{Line, Out, Role};
 use anyhow::{bail, Context, Result};
@@ -80,14 +84,15 @@ pub fn init(args: &[String], paths: &Paths) -> Result<()> {
         if yes { "download" } else { "offer" }
     )))?;
     out.line(&Line::new().faint(format!(
-        "  4. sense your agents' existing traces{}: which reflexes they would form (read-only);",
-        match (&repo_arg, &repo_key) {
-            (Some(_), Some(k)) => format!(" for {k}"),
-            _ => String::new(),
-        }
+        "  4. list the repositories your Claude Code sessions were in{};",
+        if yes && root.is_some() { ", and condition on this one" } else { " (nothing is read yet)" }
     )))?;
     out.line(&Line::new().faint(format!(
-        "  5. show which instincts (Adage's built-in reflexes) would bind in this repository, from its files alone{}.",
+        "  5. sense {} existing traces: which reflexes they would form (read-only);",
+        if root.is_some() { "this repository's" } else { "a repository's" }
+    )))?;
+    out.line(&Line::new().faint(format!(
+        "  6. show which instincts (Adage's built-in reflexes) would bind in this repository, from its files alone{}.",
         if yes { ", and bind them" } else { "" }
     )))?;
     if let Some(v) = agent {
@@ -230,16 +235,31 @@ pub fn init(args: &[String], paths: &Paths) -> Result<()> {
     }
     o.flush()?;
 
-    // 4. Sense.
-    step(4, "Sense your traces")?;
-    o.blank()?;
-    o.flush()?;
-    let opts = crate::sense::Options { repo: repo_arg.as_ref().and(repo_key.clone()), ..Default::default() };
-    let s = crate::sense::run(&opts, paths)?;
-    crate::sense::print_text(&s)?;
+    // 4. Repositories: which ones Adage conditions on.
+    step(4, "Repositories to condition on")?;
+    repositories(root.as_deref(), repo_key.as_deref(), yes, paths)?;
 
-    // 5. Instincts: what Adage's built-in defaults would bind here, from this repository's files.
-    step(5, "Instincts (day 0)")?;
+    // 5. Sense this repository's traces.
+    step(5, "Sense this repository's traces")?;
+    match &root {
+        Some(r) => {
+            o.blank()?;
+            o.flush()?;
+            let opts = crate::sense::Options { root: Some(r.clone()), ..Default::default() };
+            let s = crate::sense::run(&opts, paths)?;
+            crate::sense::print_text(&s)?;
+        }
+        None => o.line(
+            &Line::new()
+                .text("  ")
+                .quiet("Not inside a repository: run it inside one, or ")
+                .cmd("adage sense --all")
+                .quiet(" for every repository's traces."),
+        )?,
+    }
+
+    // 6. Instincts: what Adage's built-in defaults would bind here, from this repository's files.
+    step(6, "Instincts (day 0)")?;
     instincts(root.as_deref(), yes, paths)?;
     let mut out = Out::stdout();
     out.blank()?;
@@ -284,16 +304,77 @@ pub fn init(args: &[String], paths: &Paths) -> Result<()> {
         out.next("adage doctor", "checks the whole setup at any time")?;
         out.also("adage watch", "live pane for a split terminal")?;
     }
-    let waiting = if yes { crate::waiting(paths) } else { 0 };
-    if waiting > 0 {
-        let why = if waiting == 1 {
-            "1 reflex waits for a decision".to_string()
-        } else {
-            format!("{waiting} reflexes wait for a decision")
-        };
+    let (needs, look) = if yes { crate::waiting(paths) } else { (0, 0) };
+    if let Some(why) = crate::review::waiting_words(needs, look) {
         out.also("adage review", &why)?;
     }
     out.flush()?;
+    Ok(())
+}
+
+/// The most repositories listed; the rest are counted.
+const REPOS_SHOWN: usize = 12;
+
+/// The repositories Claude Code has sessions in, ticked when Adage conditions on them
+/// (`learn.repos`, with the current one ticked). With `--yes` inside a repository, the ticked ones
+/// are stored, unless every repository was chosen on purpose (`learn.repos = "all"`).
+fn repositories(root: Option<&std::path::Path>, here: Option<&str>, yes: bool, paths: &Paths) -> Result<()> {
+    let mut o = Out::stdout();
+    let found = crate::repos::found(paths);
+    let chosen = crate::repos::preselected(paths, &found, here);
+    let rows = crate::repos::rows(found, &chosen, here.zip(root));
+    let now = crate::learnlog::now_ms();
+    let w = rows.iter().take(REPOS_SHOWN).map(|f| f.label().chars().count()).max().unwrap_or(0) + 2;
+    for f in rows.iter().take(REPOS_SHOWN) {
+        let on = chosen.contains(&f.key);
+        let mut l = Line::new().text("  ").text(if on { "[x] " } else { "[ ] " });
+        l = if on { l.bold(Role::Ink, f.label()) } else { l.text(f.label()) };
+        l = l.pad_to(6 + w).quiet(crate::repos::usage(f, now));
+        if Some(f.key.as_str()) == here {
+            l = l.sep().faint("this repository");
+        }
+        o.line(&l)?;
+    }
+    if rows.len() > REPOS_SHOWN {
+        o.line(&Line::new().text("  ").faint(format!("… and {} more", rows.len() - REPOS_SHOWN)))?;
+    }
+    if rows.is_empty() {
+        o.line(&Line::new().text("  ").quiet("No Claude Code sessions found yet."))?;
+    }
+    let loaded = adage_store::config::load(paths);
+    let all_on_purpose =
+        loaded.config.learn_repos.is_none() && loaded.get("learn.repos").is_some_and(|(_, s)| *s != Source::Default);
+    let say = |o: &mut Out<_>, l: Line| o.line(&Line::new().text("  ").extend(l));
+    if all_on_purpose {
+        say(&mut o, Line::new().quiet("learn.repos is all: Adage conditions on every repository you work in."))?;
+        o.flush()?;
+        return Ok(());
+    }
+    if yes && root.is_some() {
+        crate::repos::choose(paths, &chosen)?;
+        say(
+            &mut o,
+            Line::new()
+                .quiet(format!(
+                    "Adage conditions on the {} ticked (learn.repos); ",
+                    if chosen.len() == 1 { "one" } else { "ones" }
+                ))
+                .cmd("adage init")
+                .quiet(" at a terminal picks others."),
+        )?;
+    } else {
+        say(
+            &mut o,
+            Line::new()
+                .quiet("Adage reads only the repositories ticked, and only their Claude Code sessions (Codex's once its hooks are registered). ")
+                .cmd("adage init")
+                .quiet(" at a terminal lets you pick; ")
+                .cmd("--yes")
+                .quiet(" takes these."),
+        )?;
+    }
+    say(&mut o, Line::new().faint("Sessions in other repositories are recorded, not read."))?;
+    o.flush()?;
     Ok(())
 }
 

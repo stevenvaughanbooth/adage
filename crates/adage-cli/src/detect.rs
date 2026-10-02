@@ -156,6 +156,8 @@ pub struct Registration {
     /// `settings` (hooks in a settings file), `plugin` (the OpenCode plugin file), or
     /// `plugin-data` (the Claude Code plugin's staged binary).
     pub kind: &'static str,
+    /// For `settings`: the hook events Adage's entries are registered under there.
+    pub events: Vec<String>,
 }
 
 fn read_json(p: &Path) -> Option<Value> {
@@ -166,10 +168,10 @@ fn read_json(p: &Path) -> Option<Value> {
     serde_json::from_slice(&bytes).ok()
 }
 
-/// Binaries named by Adage's own hook entries in a Claude Code or Codex settings document.
-fn hook_binaries(doc: &Value, harness: &str) -> Vec<PathBuf> {
+/// Adage's own hook entries in a Claude Code or Codex settings document: `(event, binary)`.
+fn adage_hooks(doc: &Value, harness: &str) -> Vec<(String, PathBuf)> {
     let mut out = Vec::new();
-    for entries in doc.get("hooks").and_then(|h| h.as_object()).into_iter().flat_map(|o| o.values()) {
+    for (event, entries) in doc.get("hooks").and_then(|h| h.as_object()).into_iter().flatten() {
         for h in entries
             .as_array()
             .into_iter()
@@ -188,14 +190,32 @@ fn hook_binaries(doc: &Value, harness: &str) -> Vec<PathBuf> {
                 _ => cmd.split_once(" hook codex ").map(|(b, _)| unquote(b)),
             };
             if let Some(b) = bin.filter(|b| !b.is_empty()) {
-                let b = PathBuf::from(b);
-                if !out.contains(&b) {
-                    out.push(b);
-                }
+                out.push((event.clone(), PathBuf::from(b)));
             }
         }
     }
     out
+}
+
+/// Binaries named by Adage's own hook entries in a Claude Code or Codex settings document.
+fn hook_binaries(doc: &Value, harness: &str) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = Vec::new();
+    for (_, b) in adage_hooks(doc, harness) {
+        if !out.contains(&b) {
+            out.push(b);
+        }
+    }
+    out
+}
+
+/// The hook events this version of Adage registers for `harness` (what `adage install` writes).
+pub fn wanted_events(harness: &str) -> Vec<String> {
+    let doc = match harness {
+        "claude-code" => adage_hook::harness::claude::settings("adage"),
+        "codex" => adage_hook::harness::codex::settings("adage"),
+        _ => return Vec::new(),
+    };
+    doc["hooks"].as_object().map(|o| o.keys().cloned().collect()).unwrap_or_default()
 }
 
 /// Undo `harness::codex::sh_quote`.
@@ -242,8 +262,17 @@ pub fn registrations(repo: Option<&Path>) -> Vec<Registration> {
     }
     for (h, p) in settings {
         if let Some(doc) = read_json(&p) {
+            let mut events: Vec<String> = adage_hooks(&doc, h).into_iter().map(|(e, _)| e).collect();
+            events.sort();
+            events.dedup();
             for b in hook_binaries(&doc, h) {
-                out.push(Registration { harness: h, location: p.clone(), binary: Some(b), kind: "settings" });
+                out.push(Registration {
+                    harness: h,
+                    location: p.clone(),
+                    binary: Some(b),
+                    kind: "settings",
+                    events: events.clone(),
+                });
             }
         }
     }
@@ -256,7 +285,13 @@ pub fn registrations(repo: Option<&Path>) -> Vec<Registration> {
         }
         for path in plugins {
             if let Some(bin) = opencode_binary(&path) {
-                out.push(Registration { harness: h.id(), location: path, binary: bin, kind: "plugin" });
+                out.push(Registration {
+                    harness: h.id(),
+                    location: path,
+                    binary: bin,
+                    kind: "plugin",
+                    events: Vec::new(),
+                });
             }
         }
     }
@@ -272,7 +307,13 @@ pub fn registrations(repo: Option<&Path>) -> Vec<Registration> {
         for d in dirs {
             let bin = d.join("bin/adage");
             if bin.symlink_metadata().is_ok() {
-                out.push(Registration { harness: "claude-code", location: d, binary: Some(bin), kind: "plugin-data" });
+                out.push(Registration {
+                    harness: "claude-code",
+                    location: d,
+                    binary: Some(bin),
+                    kind: "plugin-data",
+                    events: Vec::new(),
+                });
             }
         }
     }

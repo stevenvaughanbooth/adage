@@ -66,6 +66,8 @@ pub struct FeedItem {
     pub acts: Vec<Act>,
     /// Calls observed in this event (tool batches).
     pub observed: usize,
+    /// The repository has no reflexes yet: the session is seen, and nothing is decided.
+    pub unrouted: bool,
     /// Each directive delivered (or withheld), exactly as the agent saw (or would have seen) it:
     /// `(reflex, text)`.
     pub texts: Vec<(String, String)>,
@@ -293,7 +295,9 @@ pub fn from_record(session: &str, rec: &Value) -> FeedItem {
         repo: rec["repo"].as_str().unwrap_or("").to_string(),
         control,
         acts,
-        observed: d["observed"].as_array().map_or(0, |a| a.len()),
+        // A seen-only record (no reflexes here yet) counts its calls; a decision lists them.
+        observed: d["observed"].as_array().map_or_else(|| rec["calls"].as_u64().unwrap_or(0) as usize, |a| a.len()),
+        unrouted: rec["unrouted"] == true,
         texts,
     }
 }

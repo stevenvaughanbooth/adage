@@ -19,8 +19,10 @@
 //! repository or every repository; a harness already registered for this repository, in either
 //! scope or by the Claude Code plugin, defaults to keeping that registration, and is never
 //! registered a second time); the embedding model (bundled in adage, so usually nothing
-//! to do; offered for download only when none is usable); a first `adage condition`;
-//! auto-condition; then the doctor's summary and what to run next. `y` takes the first choice,
+//! to do; offered for download only when none is usable); which repositories to condition on
+//! (those Claude Code has sessions in, the current one ticked: `learn.repos`, [`crate::repos`]);
+//! a first `adage condition` of each one ticked; auto-condition; then the doctor's summary and
+//! what to run next. `y` takes the first choice,
 //! `n` skips, `q` (or esc) stops: nothing already done is undone, and nothing else is written.
 
 use super::app::install_confirm;
@@ -47,6 +49,7 @@ pub enum Kind {
     Harnesses,
     Hooks(&'static str),
     Model,
+    Repos,
     Learn,
     AutoLearn,
     Finish,
@@ -71,6 +74,7 @@ impl Step {
             Kind::Harnesses => "Harnesses".into(),
             Kind::Hooks(h) => format!("Hooks · {h}"),
             Kind::Model => "Embedding model".into(),
+            Kind::Repos => "Repositories to condition on".into(),
             Kind::Learn => "Condition from past traces".into(),
             Kind::AutoLearn => "Auto-condition".into(),
             Kind::Finish => "Ready".into(),
@@ -83,6 +87,7 @@ pub enum Cmd {
     Quit,
     Install(Box<Plan>),
     FetchModel,
+    ChooseRepos,
     Learn,
     AutoLearn,
     Replan,
@@ -112,6 +117,15 @@ pub struct Wizard {
     pub root: Option<std::path::PathBuf>,
     /// The highlighted choice of the current step.
     pub choice: usize,
+    /// The repositories step: every repository with Claude Code sessions (the current one
+    /// first), and which are ticked.
+    pub repos: Vec<crate::repos::Found>,
+    pub ticked: Vec<bool>,
+    /// The current repository's key.
+    pub here: Option<String>,
+    /// `learn.repos = "all"`, chosen on purpose: kept unless a box is unticked.
+    pub all_repos: bool,
+    pub now_ms: u64,
 }
 
 impl Wizard {
@@ -120,7 +134,7 @@ impl Wizard {
         for d in detected.iter().filter(|d| d.found()) {
             steps.push(Step { kind: Kind::Hooks(d.harness), status: StepStatus::Todo });
         }
-        for k in [Kind::Model, Kind::Learn, Kind::AutoLearn, Kind::Finish] {
+        for k in [Kind::Model, Kind::Repos, Kind::Learn, Kind::AutoLearn, Kind::Finish] {
             steps.push(Step { kind: k, status: StepStatus::Todo });
         }
         Wizard {
@@ -141,7 +155,54 @@ impl Wizard {
             has_repo,
             root: None,
             choice: 0,
+            repos: vec![],
+            ticked: vec![],
+            here: None,
+            all_repos: false,
+            now_ms: 0,
         }
+    }
+
+    /// Ask about these repositories, with `chosen` ticked.
+    pub fn set_repos(&mut self, rows: Vec<crate::repos::Found>, chosen: &[String]) {
+        self.ticked = rows.iter().map(|f| chosen.contains(&f.key)).collect();
+        self.repos = rows;
+    }
+
+    /// The ticked repositories.
+    pub fn chosen(&self) -> Vec<&crate::repos::Found> {
+        self.repos.iter().zip(&self.ticked).filter(|(_, t)| **t).map(|(f, _)| f).collect()
+    }
+
+    /// What the repositories step did: `conditions on github.com/acme/app`, `conditions on 3:
+    /// a, b, c`.
+    pub fn chosen_note(&self) -> String {
+        let names: Vec<String> = self.chosen().iter().map(|f| f.label()).collect();
+        match names.len() {
+            0 => "conditions on none · sessions are recorded, not read".into(),
+            1 => format!("conditions on {}", names[0]),
+            n if n <= 3 => format!("conditions on {n}: {}", names.join(", ")),
+            n => format!("conditions on {n}: {}, …", names[..3].join(", ")),
+        }
+    }
+
+    /// The repositories step's keys: up and down move, space ticks, `a` ticks all, `n` none,
+    /// Enter (or `y`) stores the choice.
+    fn repos_key(&mut self, code: KeyCode) -> Option<Cmd> {
+        let n = self.repos.len();
+        match code {
+            KeyCode::Up | KeyCode::Char('k') => self.choice = self.choice.saturating_sub(1),
+            KeyCode::Down | KeyCode::Char('j') if self.choice + 1 < n => self.choice += 1,
+            KeyCode::Char(' ') if n > 0 => self.ticked[self.choice] = !self.ticked[self.choice],
+            KeyCode::Char('a') => self.ticked.iter_mut().for_each(|t| *t = true),
+            KeyCode::Char('n') => self.ticked.iter_mut().for_each(|t| *t = false),
+            KeyCode::Enter | KeyCode::Char('y') if n == 0 => {
+                return self.advance(StepStatus::Done("no Claude Code sessions yet · nothing to choose".into()))
+            }
+            KeyCode::Enter | KeyCode::Char('y') => return Some(Cmd::ChooseRepos),
+            _ => {}
+        }
+        None
     }
 
     pub fn current(&self) -> &Kind {
@@ -211,6 +272,22 @@ impl Wizard {
             }
             Kind::Model if self.model.is_some() => vec!["Continue".into()],
             Kind::Model => vec!["Fetch it · SHA-256 verified".into(), "Skip for now".into()],
+            Kind::Repos if self.repos.is_empty() => vec!["Continue".into()],
+            Kind::Repos => {
+                let w = self.repos.iter().map(|f| f.label().chars().count()).max().unwrap_or(0).min(REPO_LABEL);
+                self.repos
+                    .iter()
+                    .zip(&self.ticked)
+                    .map(|(f, on)| {
+                        let label = clip(&f.label(), w);
+                        let here =
+                            if self.here.as_deref() == Some(f.key.as_str()) { " · this repository" } else { "" };
+                        let usage = crate::repos::usage(f, self.now_ms);
+                        format!("{} {label:<w$}  {usage}{here}", if *on { "[x]" } else { "[ ]" })
+                    })
+                    .collect()
+            }
+            Kind::Learn if self.chosen().is_empty() => vec!["Continue".into()],
             Kind::Learn => vec!["Condition now".into(), "Skip · it runs by itself as traces end".into()],
             Kind::AutoLearn if self.auto_learn.as_ref().is_some_and(|(on, _)| *on) => vec!["Keep it on".into()],
             Kind::AutoLearn => vec!["Turn it on".into(), "Leave it off".into()],
@@ -256,6 +333,9 @@ impl Wizard {
         }
         if self.progress.is_some() {
             return None; // a job is running
+        }
+        if *self.current() == Kind::Repos && self.output.is_empty() {
+            return self.repos_key(code);
         }
         let n = self.choices().len();
         let registered =
@@ -332,6 +412,9 @@ impl Wizard {
                 self.advance(StepStatus::Done(format!("{m} ready")))
             }
             Kind::Model if yes => Some(Cmd::FetchModel),
+            Kind::Learn if yes && self.chosen().is_empty() => {
+                self.advance(StepStatus::Done("no repository chosen".into()))
+            }
             Kind::Learn if yes => Some(Cmd::Learn),
             // Already on (by default, in the file, or ADAGE_AUTO_LEARN): nothing to write.
             Kind::AutoLearn if yes && self.auto_learn.as_ref().is_some_and(|(on, _)| *on) => {
@@ -517,10 +600,32 @@ fn body(w: &Wizard, t: &Theme, width: usize) -> Vec<Line<'static>> {
                 plain,
             )),
         },
-        Kind::Learn => out.extend(text(
-            "Condition this repository from existing Claude Code history, Codex history when registered, and configured OpenCode exports. Bind instincts from its files, learn reflexes, and compile the index hooks read. It only reads transcripts; it never runs anything they contain.",
+        Kind::Repos if w.repos.is_empty() => out.extend(text(
+            "No Claude Code sessions found yet. Adage conditions on each repository you work in until you choose (`adage init` again, once there are some).",
             plain,
         )),
+        Kind::Repos => {
+            out.extend(text(
+                "Adage reads only the repositories you tick, and only their Claude Code sessions (Codex's too once its hooks are registered). Sessions elsewhere are recorded, not read.",
+                plain,
+            ));
+            if w.all_repos {
+                out.extend(text("Now: every repository (learn.repos = all); untick one to choose instead.", t.dim()));
+            }
+        }
+        Kind::Learn if w.chosen().is_empty() => {
+            out.extend(text("No repository chosen, so there is nothing to condition on yet.", plain))
+        }
+        Kind::Learn => {
+            let what = match w.chosen().as_slice() {
+                [one] => one.label(),
+                many => format!("the {} repositories you chose", many.len()),
+            };
+            out.extend(text(
+                &format!("Condition {what} from existing Claude Code history (Codex's when its hooks are registered, and configured OpenCode exports). Bind instincts from the files, learn reflexes, and compile the index hooks read. It only reads transcripts; it never runs anything they contain."),
+                plain,
+            ))
+        }
         Kind::AutoLearn => {
             out.extend(text(
                 "Condition in the background whenever an agent's trace ends, so reflexes keep up with how your agents work.",
@@ -572,9 +677,28 @@ fn body(w: &Wizard, t: &Theme, width: usize) -> Vec<Line<'static>> {
     out
 }
 
+/// The most choices shown at once; the list scrolls with the highlight.
+const MAX_CHOICES: usize = 8;
+/// The widest repository name shown before it is cut.
+const REPO_LABEL: usize = 40;
+
+/// `s` cut to `width` characters, ending in `…` when cut.
+fn clip(s: &str, width: usize) -> String {
+    if s.chars().count() <= width {
+        s.to_string()
+    } else {
+        let mut out: String = s.chars().take(width.saturating_sub(1)).collect();
+        out.push('…');
+        out
+    }
+}
+
 fn hint(w: &Wizard) -> &'static str {
     if w.progress.is_some() {
         return "working… q stops";
+    }
+    if *w.current() == Kind::Repos && w.output.is_empty() && !w.repos.is_empty() {
+        return "↑↓ move · space tick · a all · n none · enter continue · q stop";
     }
     if w.choices().len() > 1 {
         if matches!(w.current(), Kind::Hooks(_)) && w.output.is_empty() {
@@ -602,9 +726,14 @@ fn render(area: Rect, buf: &mut ratatui::buffer::Buffer, w: &Wizard, ctx: &Ctx) 
         Span::styled(format!("{}  ", t.glyph(Glyph::Active)), t.accent()),
         Span::styled(w.steps[w.cur].title(), t.bold()),
     ])];
-    // The body scrolls (PgUp/PgDn) inside what is left once the choices and hint are placed.
+    // The body scrolls (PgUp/PgDn) inside what is left once the choices and hint are placed. A
+    // long list of choices shows a window around the highlighted one.
     let choices = w.choices();
-    let fixed = 1 + 1 + if choices.len() > 1 || w.progress.is_some() { choices.len() + 1 } else { 0 } + 2;
+    let listed = choices.len() > 1 || (*w.current() == Kind::Repos && !w.repos.is_empty());
+    let window = choices.len().min(MAX_CHOICES);
+    let first = w.choice.saturating_sub(window / 2).min(choices.len() - window);
+    let more = choices.len() > window;
+    let fixed = 1 + 1 + if listed || w.progress.is_some() { window + 1 + usize::from(more) } else { 0 } + 2;
     let room = (area.height as usize).saturating_sub(fixed);
     let b = body(w, t, width);
     w.max_scroll.set(b.len().saturating_sub(room) as u16);
@@ -624,14 +753,21 @@ fn render(area: Rect, buf: &mut ratatui::buffer::Buffer, w: &Wizard, ctx: &Ctx) 
             Span::styled(t.ch("─", "-").repeat(bar_w - done), t.dim()),
             Span::styled(format!("  {status}"), t.dim()),
         ]));
-    } else if choices.len() > 1 {
+    } else if listed {
         lines.push(Line::from(rail(t, true)));
-        for (i, c) in choices.iter().enumerate() {
+        for (i, c) in choices.iter().enumerate().skip(first).take(window) {
             let sel = i == w.choice;
             lines.push(Line::from(vec![
                 rail(t, true),
                 Span::styled(if sel { format!("{} ", t.glyph(Glyph::Pointer)) } else { "  ".into() }, t.accent()),
-                Span::styled(c.clone(), if sel { t.bold() } else { t.dim() }),
+                Span::styled(clip(c, width.saturating_sub(2)), if sel { t.bold() } else { t.dim() }),
+            ]));
+        }
+        if more {
+            let below = choices.len() - first - window;
+            lines.push(Line::from(vec![
+                rail(t, true),
+                Span::styled(format!("  {first} above · {below} below"), t.dim()),
             ]));
         }
     }
@@ -832,6 +968,16 @@ pub fn run(ctx: Ctx) -> Result<()> {
     let loaded = config::load(&ctx.paths);
     w.auto_learn = loaded.get("learn.auto").map(|(_, src)| (loaded.config.learn_auto, src.to_string()));
     w.config_path = detect::tilde(&ctx.paths.config());
+    // Repositories with Claude Code sessions: project directories listed, one transcript head
+    // read per directory; nothing parsed.
+    w.here = ctx.root.as_deref().map(|r| adage_core::repo::repo_key_cached(r, &ctx.paths.repo_keys()));
+    w.all_repos = loaded.config.learn_repos.is_none()
+        && loaded.get("learn.repos").is_some_and(|(_, src)| *src != config::Source::Default);
+    w.now_ms = crate::learnlog::now_ms();
+    let found = crate::repos::found(&ctx.paths);
+    let chosen = crate::repos::preselected(&ctx.paths, &found, w.here.as_deref());
+    let rows = crate::repos::rows(found, &chosen, w.here.as_deref().zip(ctx.root.as_deref()));
+    w.set_repos(rows, &chosen);
     let mut job: Option<(Job, Kind)> = None;
     let rows = ratatui::crossterm::terminal::size().map(|(_, h)| h).unwrap_or(24);
     let mut t = Term::inline(VIEW_HEIGHT.min(rows.saturating_sub(2)).max(8)).map_err(|e| {
@@ -918,8 +1064,22 @@ pub fn run(ctx: Ctx) -> Result<()> {
                 w.progress = Some(("starting…".into(), 0.0));
                 None
             }
+            // Every repository still ticked: kept as `all` when that was the choice already.
+            Cmd::ChooseRepos if w.all_repos && w.ticked.iter().all(|t| *t) => {
+                w.advance(StepStatus::Done("every repository (learn.repos = all)".into()))
+            }
+            Cmd::ChooseRepos => {
+                let keys: Vec<String> = w.chosen().iter().map(|f| f.key.clone()).collect();
+                match crate::repos::choose(&ctx.paths, &keys) {
+                    Ok(()) => w.advance(StepStatus::Done(w.chosen_note())),
+                    Err(e) => w.advance(StepStatus::Failed(format!("{e:#}"))),
+                }
+            }
             Cmd::Learn => {
-                job = Some((jobs::learn_now(ctx.paths.clone(), ctx.root.clone()), Kind::Learn));
+                // The ticked repositories still on this machine, the current one first.
+                let roots: Vec<(String, std::path::PathBuf)> =
+                    w.chosen().iter().filter(|f| f.root.is_dir()).map(|f| (f.label(), f.root.clone())).collect();
+                job = Some((jobs::learn_now(ctx.paths.clone(), roots), Kind::Learn));
                 w.progress = Some(("reading traces…".into(), 0.1));
                 None
             }

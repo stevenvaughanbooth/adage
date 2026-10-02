@@ -39,7 +39,8 @@
 use crate::share::describe_step;
 use crate::words;
 pub(crate) use adage_app::review::{
-    ceiling_str, first_hand, origin_label, preview, waits, Installed, Standing, LISTED_ONLY,
+    ceiling_str, first_hand, needs_person, origin_label, preview, waiting_counts, waits, Installed, Standing,
+    LISTED_ONLY,
 };
 use adage_app::review::{judgements, queue, verbs, Already, Outcome, QueueItem as Item, Verb};
 use adage_store::Paths;
@@ -144,13 +145,11 @@ fn list(paths: &Paths, as_json: bool, verbose: bool) -> Result<()> {
     }
     let mut o = Out::stdout();
     // What waits for a decision, and what is only listed: instincts in effect, and approved
-    // routines that run once delegated.
+    // routines that run once delegated. Of what waits: what needs a person, and what is in use
+    // and only worth a look (docs/design/everyday-ux.md §5.3).
     let (deciding, listed): (Vec<&Item>, Vec<&Item>) = items.iter().partition(|it| waits(&it.reasons));
-    let waiting = match deciding.len() {
-        0 => "nothing waits for a decision".to_string(),
-        1 => "1 reflex waits for a decision".to_string(),
-        n => format!("{n} reflexes wait for a decision"),
-    };
+    let (needs, look) = waiting_counts(deciding.iter().map(|it| it.reasons.as_slice()));
+    let waiting = waiting_words(needs, look).unwrap_or_else(|| "nothing waits for a decision".to_string());
     // Quiet reflexes wait too, but they are not install steps: agents already take their step.
     let quiet_n = deciding.iter().filter(|it| it.reasons.iter().any(|(k, _)| *k == "quiet")).count();
     let quiet_fact = if quiet_n > 0 { format!("{quiet_n} quiet") } else { String::new() };
@@ -541,6 +540,19 @@ fn print_inert<W: std::io::Write>(o: &mut Out<W>, inert: &[crate::packs::InertRo
         o.line(&row("why", Line::new().text(format!("inert: {}", i.reason))))?;
     }
     Ok(())
+}
+
+/// What `adage review` has, by what it asks of a person: `1 needs you · 3 to look over`
+/// (docs/design/everyday-ux.md §5.3). `None` when there is nothing.
+pub(crate) fn waiting_words(needs: usize, look: usize) -> Option<String> {
+    let mut parts = Vec::new();
+    if needs > 0 {
+        parts.push(format!("{needs} need{} you", if needs == 1 { "s" } else { "" }));
+    }
+    if look > 0 {
+        parts.push(format!("{look} to look over"));
+    }
+    (!parts.is_empty()).then(|| parts.join(" · "))
 }
 
 fn decide(verb: &str, args: &[String], paths: &Paths) -> Result<()> {

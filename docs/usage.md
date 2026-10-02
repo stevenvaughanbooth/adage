@@ -193,9 +193,9 @@ session start, falls back to `adage` on `PATH`, and otherwise says in one line w
 `adage --help` lists every command; `adage <command> --help` its options.
 
 ```bash
-adage init             # guided setup at a terminal: hooks, model, first conditioning, live conditioning
-adage sense            # read-only: which reflexes your traces would form, per repository
-adage condition        # form them: read your agents' traces, bind instincts, compile the index
+adage init             # guided setup at a terminal: hooks, model, which repositories, first conditioning
+adage sense            # read-only: which reflexes this repository's traces would form
+adage condition        # form them: read this repository's traces, bind instincts, compile the index
 adage watch            # in a split pane: Adage's health, hook activity and conditioning, live
 adage map              # the map of your reflexes in the browser (read-only, loopback only)
 adage ui               # the full terminal app: reflexes, map, health, settings
@@ -218,27 +218,32 @@ adage train accept x                                       # install the reviewe
 
 At a terminal, `init` is a wizard: it detects your harnesses and, one step at a time, asks before
 it registers hooks (showing the exact file and diff), offers to fetch an embedding model only when
-none is available (one is bundled in the binary, so usually there is nothing to fetch), conditions
-the repository for the first time, and turns automatic conditioning on if it is off; it ends with the doctor's
-summary. Piped, inside an agent session, or with `--print`, it prints the same report and writes
-nothing; `--yes` binds this repository's instincts (and fetches the selected model only when none
-is available), but registers no hooks (it ends by saying whether they are registered;
-`adage install <harness> --write` registers them). `sense` reads
-the same traces `condition` does and lists the reflexes `condition` would form as candidates, with
-prompts shown only as short redacted snippets. With no history yet, plain `adage condition`
-inside a repository binds available instincts from its files; `--instincts-only` requests that
-explicitly. `doctor` exits
+none is available (one is bundled in the binary, so usually there is nothing to fetch), asks which
+repositories to condition on, conditions each one ticked for the first time, and turns automatic
+conditioning on if it is off; it ends with the doctor's summary. The repositories are the ones
+Claude Code has sessions in, found from its project directories without parsing a transcript, most
+recently used first, with the current one ticked (space ticks, `a` all, `n` none); the choice is
+stored as `learn.repos`. Sessions in other repositories are still recorded where hooks are
+registered, but their history is not read. Piped, inside an agent session, or with `--print`, it
+prints the same report and writes nothing; `--yes` conditions on this repository (adding it to
+`learn.repos`, unless that is `all` on purpose), binds its instincts (and fetches the selected
+model only when none is available), but registers no hooks (it ends by saying whether they are
+registered; `adage install <harness> --write` registers them). `sense` reads the same traces
+`condition` does and lists the reflexes `condition` would form as candidates, with prompts shown
+only as short redacted snippets. With no history yet, plain `adage condition` inside a repository
+binds available instincts from its files; `--instincts-only` requests that explicitly. `doctor` exits
 non-zero only when a check fails. From a source checkout, `cargo build --release --locked -p
 adage-cli -p adage-exec -p adage-train` builds all three into `target/release/`. Every command
 ends with the next one to run; `--plain` drops colour and glyphs, and `NO_COLOR` is honoured.
 
-Manual `sense` and `condition` discover existing Claude Code history (`CLAUDE_CONFIG_DIR/projects`,
-else `~/.claude/projects`), Codex history (`CODEX_HOME/sessions`, else `~/.codex/sessions`), and
-configured OpenCode exports. The `learn.*` source settings apply to both; `learn.codex_sessions = ""`
-disables Codex discovery. Explicit `--transcripts`, `--claude-projects`, or `--codex-sessions`
-replace defaults. The wizard conditions only the selected repository; plain `condition` processes
-all discovered repositories. Automatic Codex discovery requires registered Codex hooks or a Codex
-hook request. History is read locally; conditioning never executes its commands.
+Manual `sense` and `condition` read the traces recorded in the repository they run in, as the
+background learner does: Claude Code history (`CLAUDE_CONFIG_DIR/projects`, else
+`~/.claude/projects`), Codex history (`CODEX_HOME/sessions`, else `~/.codex/sessions`) once Codex
+hooks are registered, and configured OpenCode exports. `--all` reads every repository's; outside a
+repository they ask for it rather than read everything. The `learn.*` source settings apply to
+both; `learn.codex_sessions = ""` disables Codex discovery. Explicit `--transcripts`,
+`--claude-projects`, or `--codex-sessions` replace defaults. History is read locally;
+conditioning never executes its commands.
 
 See [How Adage works](how-it-works.md) for the current behavior and limits, and
 [live learning](live-learning.md) for discovery and background learning. Conditioning and
@@ -376,6 +381,7 @@ adage config set learn.min_interval_secs 300  # condition each repository at mos
 | `learn.claude_projects` | `""` | Claude Code history (`""` = `~/.claude/projects`) |
 | `learn.codex_sessions` | `auto` | Codex rollouts: `auto` reads `$CODEX_HOME/sessions` (this repository's only) once Codex hooks are registered; a directory; or `""` for none |
 | `learn.opencode_exports` | `""` | A directory of `opencode export` files automatic learning reads |
+| `learn.repos` | `all` | The repositories whose history is read, by key (`adage init` picks them); sessions elsewhere are recorded, not read |
 | `learn.parse_cache` | `true` | Keep parsed transcripts in `cache/sessions` (owner-only), so re-learning parses only what changed |
 | `learn.cards` | `true` | Procedure cards for recurring tasks (embedded with the installed or bundled model) ([docs/training.md](training.md#recurring-tasks-procedure-cards)) |
 | `learn.card_threshold` | `0.811` | A prompt's best similarity to a family's prompts that delivers its card (strict: it recognises phrasing close to earlier prompts, not paraphrases) |

@@ -647,7 +647,7 @@ fn learn_then_share_carries_the_lookup_with_its_script_pinned_against_repo_root(
         vec!["condition", "--demo", "--no-instincts", "--no-cache", "--repo", "acme-billing", "--transcripts"];
     args.extend(files.iter().map(String::as_str));
     let t = ok(w.run("sender", &w.p("elsewhere"), &args));
-    assert!(t.contains("lookup-work-item"), "{t}");
+    assert!(t.contains("on a prompt that names a ticket, run"), "the lookup, by what it tells the agent: {t}");
 
     // Without a root, the lookup cannot be carried (the only route here), and the message names
     // the flag that fixes it.

@@ -54,14 +54,15 @@ fn watch_demo_replays_real_hook_decisions() {
     for s in [
         "adage watch  harbor-dispatch",
         "demo",
-        "→ ◠ lookup-incident          FIRE",
-        "○ would fire lookup-incident (withheld)",
-        "✓ followed lookup-incident",
-        "✗ ignored lookup-incident",
-        "→ ◠ dead-end-npm-test        INHIBIT",
+        "→ ◠ FIRE       bin/fetch-incident INC-",
+        "○ would fire bin/fetch-incident INC-",
+        "✓ followed bin/fetch-incident INC-",
+        "✗ ignored bin/fetch-incident INC-",
+        "→ ◠ INHIBIT    npm run check",
         "■ finish line: asked the agent to continue",
-        "✓ finish line met codegen-after-registry",
-        "read-linked-files         prime → fire",
+        "✓ finish line met: npm run codegen",
+        "after bin/fetch-incident {id}, read",
+        "prime → fire",
         "hooks claude",
         "auto-condition",
     ] {
@@ -119,7 +120,7 @@ fn init_without_a_terminal_keeps_the_printed_report() {
         .output()
         .unwrap();
     let t = text(&o);
-    assert!(o.status.success() && t.contains("1  Harnesses") && t.contains("4  Sense your traces"), "{t}");
+    assert!(o.status.success() && t.contains("1  Harnesses") && t.contains("5  Sense this repository's traces"), "{t}");
     let o = run(&root, &root.join("work"), &["init", "--nope"]);
     assert!(!o.status.success() && text(&o).contains("unexpected argument '--nope'"), "{}", text(&o));
 }

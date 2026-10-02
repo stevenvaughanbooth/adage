@@ -507,6 +507,22 @@ fn hooks_checks(repo_root: Option<&Path>, exe: Option<&Path>) -> Vec<Check> {
             let fix = if dup.plugin { format!("{}; or uninstall the plugin", dup.fix) } else { dup.fix };
             out.push(warn(&format!("{name} (twice)"), detail, fix));
         }
+        // Out of date: an event this version uses that no registration has. Registrations add up
+        // (the harness runs every settings file's hooks), so only what all of them lack is missing.
+        let have: std::collections::BTreeSet<&str> =
+            mine.iter().filter(|r| r.kind == "settings").flat_map(|r| r.events.iter().map(String::as_str)).collect();
+        let missing: Vec<String> =
+            detect::wanted_events(d.harness).into_iter().filter(|e| !have.contains(e.as_str())).collect();
+        if !have.is_empty() && !missing.is_empty() {
+            let user =
+                mine.iter().any(|r| r.kind == "settings" && repo_root.is_none_or(|root| !r.location.starts_with(root)));
+            let them = if missing.len() == 1 { "it" } else { "them" };
+            out.push(warn(
+                &format!("{name} (out of date)"),
+                format!("the registered hooks lack {}, which this version of Adage uses", missing.join(", ")),
+                format!("`adage install {}{} --write` adds {them}", d.harness, if user { " --scope user" } else { "" }),
+            ));
+        }
         for r in mine {
             let at = detect::tilde(&r.location);
             match &r.binary {
@@ -532,6 +548,93 @@ fn hooks_checks(repo_root: Option<&Path>, exe: Option<&Path>) -> Vec<Check> {
         }
     }
     out
+}
+
+/// How many directory entries the cloud scan reads, for the work tree and again for the git object
+/// store: enough to see the pattern, cheap enough for `adage ui`, which re-runs the checks every few
+/// seconds.
+const CLOUD_SCAN: usize = 2_000;
+
+/// This repository's files a cloud drive has offloaded (`adage_core::cloud`). Adage skips them
+/// rather than wait for a download, so it says so once, with the fix; no line when there are none.
+fn cloud_check(repo_root: Option<&Path>) -> Option<Check> {
+    cloud_check_with(repo_root?, &adage_core::cloud::is_offloaded)
+}
+
+fn cloud_check_with(root: &Path, offloaded: &dyn Fn(&Path) -> bool) -> Option<Check> {
+    let sorted = |dir: &Path| {
+        let mut v: Vec<std::fs::DirEntry> = std::fs::read_dir(dir).map(|d| d.flatten().collect()).unwrap_or_default();
+        v.sort_by_key(|e| e.file_name());
+        v
+    };
+    // The work tree to the depth Adage reads it (manifests, CI workflows), skipping hidden
+    // directories other than `.github` and build output, as the instincts' walk does.
+    let (mut files, mut seen) = (Vec::new(), 0usize);
+    let mut stack = vec![(root.to_path_buf(), 0usize)];
+    while let Some((dir, depth)) = stack.pop() {
+        for e in sorted(&dir) {
+            if seen == CLOUD_SCAN {
+                break;
+            }
+            seen += 1;
+            let (p, name) = (e.path(), e.file_name().to_string_lossy().into_owned());
+            match e.file_type() {
+                Ok(t) if t.is_dir() => {
+                    let skip = (name.starts_with('.') && name != ".github")
+                        || matches!(name.as_str(), "target" | "node_modules");
+                    if depth < 2 && !skip {
+                        stack.push((p, depth + 1));
+                    }
+                }
+                Ok(t) if t.is_file() && offloaded(&p) => {
+                    files.push(p.strip_prefix(root).unwrap_or(&p).to_string_lossy().into_owned());
+                }
+                _ => {}
+            }
+        }
+    }
+    // The object store: loose objects and packs, in the common git directory (a linked worktree's
+    // objects are its main checkout's).
+    let (mut objects, mut read) = (0usize, 0usize);
+    // Normalised: a worktree's `commondir` is relative (`../..`).
+    let common = adage_core::gitobj::dirs(root).map(|(_, common)| repo::lexical_normalise(&common));
+    if let Some(common) = &common {
+        'store: for d in sorted(&common.join("objects")) {
+            for o in sorted(&d.path()) {
+                if read == CLOUD_SCAN {
+                    break 'store;
+                }
+                read += 1;
+                objects += usize::from(offloaded(&o.path()));
+            }
+        }
+    }
+    if files.is_empty() && objects == 0 {
+        return None;
+    }
+    let plural = |n: usize, one: &str| if n == 1 { format!("1 {one}") } else { format!("{n} {one}s") };
+    let mut what = Vec::new();
+    if objects > 0 {
+        what.push(plural(objects, "git object"));
+    }
+    if !files.is_empty() {
+        what.push(plural(files.len(), "file"));
+    }
+    let example = files.first().map(|f| format!(" (such as {f})")).unwrap_or_default();
+    let at_least = if seen == CLOUD_SCAN || read == CLOUD_SCAN { "at least " } else { "" };
+    // The folder to move or keep downloaded: the main checkout, which a linked worktree's objects
+    // live in (and, in Claude Code's `.claude/worktrees/`, the worktree itself).
+    let repository =
+        common.as_deref().filter(|c| c.file_name().is_some_and(|n| n == ".git")).and_then(Path::parent).unwrap_or(root);
+    Some(warn(
+        "cloud files",
+        format!(
+            "a cloud drive (iCloud Drive or another sync app) keeps {at_least}{} of the repository at {} only in the cloud{example}; Adage skips those instead of waiting for a download, so it sees less of this repository",
+            what.join(" and "),
+            detect::tilde(repository)
+        ),
+        "move the repository out of the synced folder (for example to ~/code), or in Finder Control-click its folder and choose Keep Downloaded",
+    ))
 }
 
 fn plugin_check(repo_root: Option<&Path>, exe: Option<&Path>) -> Option<Check> {
@@ -584,15 +687,23 @@ fn kill_switches(repo_root: Option<&Path>) -> Check {
 }
 
 fn spools(paths: &Paths) -> Check {
-    let (mut bytes, mut sessions) = (0u64, 0usize);
+    let (mut bytes, mut sessions, mut newest) = (0u64, 0usize, None);
     for e in std::fs::read_dir(paths.sessions()).into_iter().flatten().flatten() {
-        if let Ok(m) = e.metadata() {
-            bytes += m.len();
+        let Ok(m) = e.metadata() else { continue };
+        bytes += m.len();
+        if e.path().extension().is_some_and(|x| x == "spool") {
+            sessions += 1;
+            newest = newest.max(m.modified().ok());
         }
-        sessions += usize::from(e.path().extension().is_some_and(|x| x == "spool"));
     }
     let mb = bytes as f64 / (1 << 20) as f64;
-    let detail = format!("{sessions} trace spool(s), {mb:.1} MB in {}", detect::tilde(&paths.sessions()));
+    // Evidence that hooks fire (docs/design/everyday-ux.md, rule 1): a session last reached Adage
+    // then, in any repository.
+    let heard = match newest.and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()) {
+        Some(t) => format!("; the newest {}", ago(crate::learnlog::now_ms(), t.as_millis() as u64)),
+        None => "; no session has reached Adage yet".into(),
+    };
+    let detail = format!("{sessions} trace spool(s), {mb:.1} MB in {}{heard}", detect::tilde(&paths.sessions()));
     if bytes > SPOOL_WARN_BYTES {
         warn(
             "session spools",
@@ -627,10 +738,20 @@ fn fail_open(paths: &Paths) -> Check {
     }
 }
 
-/// A learner holding its repository's lock for longer than this is reported as stuck.
-const STUCK_MS: u64 = 15 * 60_000;
 /// A request still waiting this long after it could have been learned is backlog.
 const BACKLOG_SLACK_MS: u64 = 5 * 60_000;
+
+/// The subject for the repositories `learn.repos` names: `the repository you chose (a; learn.repos)
+/// is`, `the 3 repositories you chose (a, b, c; learn.repos) are`.
+fn chosen(keys: &[String]) -> String {
+    match keys {
+        [one] => format!("the repository you chose ({one}; learn.repos) is"),
+        _ if keys.len() <= 3 => {
+            format!("the {} repositories you chose ({}; learn.repos) are", keys.len(), keys.join(", "))
+        }
+        _ => format!("the {} repositories you chose ({}, …; learn.repos) are", keys.len(), keys[..2].join(", ")),
+    }
+}
 
 fn ago(now: u64, ts: u64) -> String {
     let s = now.saturating_sub(ts) / 1000;
@@ -661,10 +782,15 @@ fn live_learning(paths: &Paths) -> Vec<Check> {
     });
     let source = &loaded.values["learn.auto"].1;
     out.push(if cfg.learn_auto {
+        let which = match &cfg.learn_repos {
+            None => "each repository is".to_string(),
+            Some(keys) if keys.is_empty() => "no repository is (learn.repos is empty; `adage init` picks some), so none is".to_string(),
+            Some(keys) => chosen(keys),
+        };
         pass(
             "auto-learn",
             format!(
-                "on ({source}): each repository is conditioned in the background when a session stops, at most every {}s, {} thresholds",
+                "on ({source}): {which} conditioned in the background when a session stops, at most every {}s, {} thresholds",
                 cfg.learn_min_interval_secs,
                 cfg.learn_thresholds.as_str()
             ),
@@ -688,11 +814,12 @@ fn live_learning(paths: &Paths) -> Vec<Check> {
         return out;
     }
     // The last automatic learn per repository, from learn.log.
+    let log = crate::learnlog::read(paths);
     let mut last: std::collections::BTreeMap<String, serde_json::Value> = Default::default();
-    for l in crate::learnlog::read(paths) {
+    for l in &log {
         if l["trigger"] == "auto" {
             if let Some(r) = l["repo"].as_str() {
-                last.insert(r.to_string(), l);
+                last.insert(r.to_string(), l.clone());
             }
         }
     }
@@ -700,6 +827,10 @@ fn live_learning(paths: &Paths) -> Vec<Check> {
     for slug in &slugs {
         let file = |suffix: &str| dir.join(format!("{slug}{suffix}"));
         let Some(req) = read_json::<Request>(&file(".json")) else { continue };
+        // A repository taken out of `learn.repos`: its requests are never served, by choice.
+        if !cfg.learns(&req.repo) {
+            continue;
+        }
         // A request for a directory that is not (or no longer) a repository — a session opened in
         // `~` or `/` by an older Adage, a checkout since deleted — can never be conditioned: it is
         // not a problem to fix.
@@ -730,16 +861,23 @@ fn live_learning(paths: &Paths) -> Vec<Check> {
                 _ => runs.push(format!("{repo} (not conditioned automatically yet)")),
             },
         }
-        let started = state.as_ref().map(|s| s.started_at).unwrap_or(0);
-        let waiting = spawned.after > now;
-        if held
-            && !waiting
-            && state.as_ref().is_some_and(|s| s.outcome == "running")
-            && now.saturating_sub(started) > STUCK_MS
-        {
-            let pid = state.as_ref().map(|s| s.pid).unwrap_or(0);
-            stuck.push(format!("{repo} (learner pid {pid}, started {})", ago(now, started)));
+        // Stuck relative to how long a run usually takes (`crate::learning`); a learner waiting for
+        // its interval to end has not started.
+        let learning = crate::learning::of(paths, repo, &log);
+        let is_stuck = spawned.after <= now && learning.stuck(now);
+        if is_stuck {
+            let since = learning.running_since.unwrap_or(now);
+            let usual = learning
+                .usual_ms
+                .map_or("no run has finished yet".to_string(), |u| format!("usually {}", crate::learning::duration(u)));
+            stuck.push(format!(
+                "{repo}: running for {} ({usual}), learner pid {}",
+                crate::learning::duration(now.saturating_sub(since)),
+                learning.pid.unwrap_or(0)
+            ));
         }
+        // A request behind a learner that holds the lock is that learner's: if it is stuck, the
+        // lock check says so (one problem, one line), not the queue.
         let processed = state.as_ref().map(|s| s.processed).unwrap_or(0);
         let due =
             req.requested_at.max(spawned.after).saturating_add(cfg.learn_min_interval_secs * 1000 + BACKLOG_SLACK_MS);
@@ -766,8 +904,8 @@ fn live_learning(paths: &Paths) -> Vec<Check> {
     if !stuck.is_empty() {
         out.push(warn(
             "auto-learn lock",
-            format!("a learner has held its lock for over {} minutes: {}", STUCK_MS / 60_000, shown(&stuck)),
-            "stop that process; the lock is released when it exits and the next session stop starts a new learner",
+            format!("learning is taking far longer than it usually does: {}", shown(&stuck)),
+            "stop that learner (kill <pid>); the next session that ends starts a new one. A learner usually stalls reading files only in the cloud (see cloud files)",
         ));
     } else {
         out.push(pass("auto-learn lock", "no learner stuck"));
@@ -825,6 +963,7 @@ pub fn checks(paths: &Paths, repo_root: Option<&Path>) -> Vec<Check> {
     ];
     checks.extend(hooks_checks(repo_root, exe.as_deref()));
     checks.extend(plugin_check(repo_root, exe.as_deref()));
+    checks.extend(cloud_check(repo_root));
     checks.push(kill_switches(repo_root));
     checks.push(rewrites_check(paths));
     checks.push(spools(paths));
@@ -911,6 +1050,43 @@ pub fn doctor(args: &[String], paths: &Paths) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cloud_files_name_what_is_only_in_the_cloud_and_say_nothing_otherwise() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path();
+        for f in [".github/workflows/ci.yml", "Cargo.toml", ".git/objects/ab/cdef", ".git/objects/12/3456"] {
+            std::fs::create_dir_all(root.join(f).parent().unwrap()).unwrap();
+            std::fs::write(root.join(f), "x").unwrap();
+        }
+        // A worktree elsewhere in the repository (`.claude/worktrees`) is not this checkout's files.
+        std::fs::create_dir_all(root.join(".claude/worktrees/wt")).unwrap();
+        std::fs::write(root.join(".claude/worktrees/wt/Cargo.toml"), "x").unwrap();
+        assert!(cloud_check_with(root, &|_| false).is_none(), "no line when everything is on this Mac");
+
+        let c = cloud_check_with(root, &|p: &Path| {
+            p.ends_with(".github/workflows/ci.yml") || p.ends_with("ab/cdef") || p.starts_with(root.join(".claude"))
+        })
+        .unwrap();
+        assert_eq!(c.status, Status::Warn);
+        let at = format!("keeps 1 git object and 1 file of the repository at {} only", detect::tilde(root));
+        assert!(c.detail.contains(&at), "{}", c.detail);
+        assert!(c.detail.contains("only in the cloud (such as .github/workflows/ci.yml);"), "{}", c.detail);
+        assert!(c.detail.contains("instead of waiting for a download"), "{}", c.detail);
+        assert!(c.fix.as_deref().unwrap().contains("Keep Downloaded"));
+
+        // In a linked worktree, the objects are the main checkout's, and that is the folder to move.
+        let wt = root.join(".claude/worktrees/wt");
+        std::fs::create_dir_all(root.join(".git/worktrees/wt")).unwrap();
+        std::fs::write(root.join(".git/worktrees/wt/commondir"), "../..\n").unwrap();
+        std::fs::write(wt.join(".git"), format!("gitdir: {}\n", root.join(".git/worktrees/wt").display())).unwrap();
+        let c = cloud_check_with(&wt, &|p: &Path| p.ends_with("ab/cdef")).unwrap();
+        assert!(
+            c.detail.contains(&format!("keeps 1 git object of the repository at {} only", detect::tilde(root))),
+            "{}",
+            c.detail
+        );
+    }
 
     #[test]
     fn rewrites_say_their_state_and_the_switch_the_other_way() {
