@@ -37,14 +37,14 @@ edge knows a harness's format.
 
 | Component | Crates | Owns | Input → output |
 | --- | --- | --- | --- |
-| **Canonical model** | `adage-trace` | `Call`, `Event`, `Session`, how Adage's own text reads in a trace (`wire`) | — (types only, no I/O) |
-| **Ingestion** | `adage-ingest` | Trace sources, one decoder per history format, repository identity, the parse cache | trace bytes → `Session` |
-| **Learning engine** | `adage-learn` (orchestration), `adage-graph` (mining), `adage-instincts`, `adage-intent` | Mining, scoring, selection, compiling routes, versioning tracks | `Session`s → tracks and the index |
-| **Live interaction** | `adage-runtime` (decisions), `adage-hook` (the pipeline) | Matching the index against a live session, obligations, rendering directives | `Event` + state → `Decision` |
-| **Store** | `adage-tracks` (tracks, index, reviews, proposals), `adage-store` (state, spools, config, locks) | The materialized output and every file format under `$ADAGE_HOME` | — |
-| **Application / API** | `adage-cli` today | Status, reflex and candidate listings, promotion, the map's HTTP API | requests → typed results |
-| **Harnesses** | `adage-hook::harness`, `adage-ingest::{claude,codex,opencode}`, `plugin/` | Native payloads, native histories, installs | native ↔ canonical |
-| **Execution** | `adage-exec` | Running approved routes in a sandbox | — |
+| **Canonical model** | `adage-trace` | `Call`, `Event`, `Session`, `Harness` and its capabilities, how Adage's own text reads in a trace (`wire`) | — (types only, no I/O) |
+| **Ingestion** | `adage-ingest` | Trace sources, one decoder per history format, repository identity, the parse cache, batches for a learn run | trace bytes → `Session` |
+| **Learning engine** | `adage-learn` (orchestration, `learn_sessions`), `adage-graph` (mining), `adage-instincts`, `adage-intent` | Mining, scoring, selection, compiling routes, versioning tracks | `Session`s → tracks and the index |
+| **Live interaction** | `adage-runtime` (decisions), `adage-hook` (the pipeline) | Matching the index against a live session, obligations, rendering directives | `Event` + state + `Policy` → `Decision` |
+| **Store** | `adage-tracks` (tracks, index, reviews, proposals, `layout`, and the `matching` primitives learner and runtime share), `adage-store` (state, spools, config, locks) | The materialized output and every file format under `$ADAGE_HOME` | — |
+| **Application / API** | `adage-app` (review queue and decisions), `adage-cli` (the rest, and the front ends) | Status, reflex and candidate listings, promotion, the map's HTTP API | requests → typed results |
+| **Harnesses** | `adage_trace::Harness`, `adage-hook::harness` (live adapters), `adage-ingest::{claude,codex,opencode}` (history formats), `adage-cli` install and detect, `plugin/` | Native payloads, native histories, installs | native ↔ canonical |
+| **Execution** | `adage-exec`, `adage-safety` (the independent oracle every delivered block is re-checked by) | Running approved routes in a sandbox | — |
 
 ## Layers
 
@@ -53,18 +53,20 @@ A crate links only crates in strictly lower layers. Tests (dev-dependencies) are
 | Layer | Crates | Role |
 | --- | --- | --- |
 | 0 | `adage-core`, `adage-sign`, `adage-term`, `adage-store`, `adage-sim`, `xtask` | Kernel primitives: the shell normaliser and command table, signing, terminal tokens, file primitives |
-| 1 | `adage-trace`, `adage-tracks`, `adage-intent` | Canonical models: traces, tracks and the index, the intent model |
-| 2 | `adage-ingest`, `adage-graph`, `adage-runtime`, `adage-instincts` | Engines. Siblings never link each other: ingestion knows no learning, the runtime knows no learner |
-| 3 | `adage-pack` | Distribution |
-| 4 | `adage-learn` | Learning orchestration: ingest → mine → write tracks and the index |
-| 5 | `adage-hook`, `adage-eval` | The live pipeline; offline evaluation |
-| 6 | `adage-exec` | Execution |
-| 7 | `adage-cli`, `adage-train` | Binaries and their application logic |
+| 1 | `adage-trace`, `adage-intent` | The canonical trace model; the intent model |
+| 2 | `adage-tracks` | The reflex model (tracks, the index) and the matching primitives the learner and the runtime share |
+| 3 | `adage-ingest`, `adage-graph`, `adage-runtime`, `adage-instincts`, `adage-safety` | Engines. Siblings never link each other: ingestion knows no learning, the runtime knows no learner |
+| 4 | `adage-pack` | Distribution, and the record of how instincts were bound |
+| 5 | `adage-learn` | Learning orchestration: ingest → mine → write tracks and the index |
+| 6 | `adage-hook`, `adage-eval` | The live pipeline; offline evaluation |
+| 7 | `adage-exec` | Execution |
+| 8 | `adage-app` | The application layer: the operations front ends call |
+| 9 | `adage-cli`, `adage-train` | Binaries: argument parsing, rendering, the TUI, the HTTP server |
 
 Some edges are forbidden even when the layers allow them (`FORBIDDEN` in `xtask/src/layers.rs`).
-Ingestion never links tracks or the store, the runtime never links the store, and the live hook
-never links the learner. Today's violations are listed as `EXCEPTIONS`, each with the work that
-removes it. The test fails on any violation that is not listed, and on a listed one that has been
+Ingestion never links tracks or the store, the runtime never links the store, the live hook
+never links the learner, and execution never links the learner or the eval harness. Violations
+would be listed as `EXCEPTIONS`, each with the work that removes it; today there are none. The test fails on any violation that is not listed, and on a listed one that has been
 fixed, so the list can only shrink.
 
 ## Ports
@@ -113,13 +115,18 @@ Day 0 and live learning use the same path. `adage init` and `adage condition` in
 | Gap | Status |
 | --- | --- |
 | Canonical types split across the runtime and the learner; learner importers linked the live runtime | **Done**: `adage-trace` |
-| Trace parsing inside the learner; content sniffing duplicated; repository identity probed the local disk | **Done**: `adage-ingest`, with `TraceSource`, `Format` and `Locator` |
-| No enforced layering | **Done**: `xtask/src/layers.rs` |
+| Trace parsing inside the learner; content sniffing duplicated; repository identity probed the local disk | **Done**: `adage-ingest`, with `TraceSource`, `Format` and `Locator`; traces from another machine decode and learn with no checkout here |
+| The learning engine read transcript files itself | **Done**: `learn_sessions` takes canonical sessions; `adage_ingest::batch` reads local history for day 0 and live learning alike |
+| No enforced layering | **Done**: `xtask/src/layers.rs`, no exceptions |
 | CI tests every crate on every change | **Done**: `cargo xtask affected` |
-| The runtime's decision reads hidden thread-local switches and the filesystem; the hook links the learner for read-side helpers; execution links the eval crate | Next: phase 3 (see `EXCEPTIONS`) |
-| No application layer: promotion rules, status and listings live in the CLI binary, and the map API returns untyped JSON | Phase 4: an application crate with typed, versioned results that the CLI, TUI and HTTP server all call |
-| A harness's knowledge spans about 12 files (install, detect, capabilities, history format) | Phase 5: one harness descriptor |
-| The learner writes files directly; learning always reprocesses all history | Phase 6: a store port, then incremental learning |
+| `decide()` read hidden thread-local switches; the hook linked the learner; execution linked the eval harness | **Done**: `Policy` on `Ctx`; read-side helpers in `adage_tracks::layout` and `adage_pack::binding`; the oracle in `adage-safety` |
+| Promotion rules lived in the CLI binary, and the TUI skipped the tracks lock | **Done**: `adage_app::review`, which takes the lock and needs a `Person` |
+| The map API's JSON could drift from what the web map is tested with | **Pinned**: a contract test against the web map's fixtures |
+| Harness names compared as strings in about 30 places | **Done**: `Harness` and `Capabilities`; behaviour by capability |
+| Status, listings and the map's read model still live in the CLI as untyped JSON, in three shapes for one reflex | Next: move the read model into `adage-app` with typed results. Unifying the shapes changes the CLI's `--json` output and the web map's types, so it needs a decision |
+| Install locations and detection per harness live in the CLI | Next: give each `Harness` its install and detection data |
+| The learner writes files directly; learning always reprocesses all history | Next: a store port for what learning materializes, then incremental learning over new sessions only |
+| `decide()` still reads the checkout for card orientation and repository-path contracts | Next: a filesystem port on `Ctx` |
 
 ## Testing by component
 
