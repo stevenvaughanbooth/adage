@@ -1,7 +1,7 @@
 # Adage in Claude Code: the mod
 
 > Status: **proposed 2026-10-02**, against Claude Code 2.1.287, the first release with mods on by
-> default. A design, not a report: nothing here has run. Spike [S9](../spikes/S9-claude-mods/SPIKE.md)
+> default. A design, not a report: nothing here has run. Spike [S9](../../spikes/S9-claude-mods/SPIKE.md)
 > holds the questions that must pass before each part ships, and every claim about the mods API
 > below is from the public docs ([overview](https://code.claude.com/docs/en/plugins/mods/overview),
 > [events](https://code.claude.com/docs/en/plugins/mods/events),
@@ -9,8 +9,11 @@
 > [interface](https://code.claude.com/docs/en/plugins/mods/interface),
 > [reference](https://code.claude.com/docs/en/plugins/mods/reference)) or the declaration file
 > Claude Code writes for a mod (`claude-code.d.ts`), which the reference calls the authority.
-> Words follow the [lexicon](lexicon.md); what the person sees follows the
-> [style guide](design/style.md); what the model reads stays plain and factual.
+> Words follow the [lexicon](../lexicon.md); what the person sees follows the
+> [style guide](../design/style.md); what the model reads stays plain and factual. The
+> person-facing detail is in [ux-design.md](ux-design.md), the build order in
+> [implementation-plan.md](implementation-plan.md), and how it is tested in
+> [test-plan.md](test-plan.md).
 
 A mod is a plugin whose TypeScript runs *inside* Claude Code: functions the engine calls on every
 tool call, prompt, model request, transcript row and screen draw, with an API (`$`) to the screen,
@@ -680,7 +683,7 @@ about in a daily line.
 
 ## 10. Open questions
 
-All in [S9](../spikes/S9-claude-mods/SPIKE.md): coexistence and dedup (Q1), latency (Q2), surfaces
+All in [S9](../../spikes/S9-claude-mods/SPIKE.md): coexistence and dedup (Q1), latency (Q2), surfaces
 and silence (Q3, Q3b), `$.tool.check` agreement (Q4), provenance and cost on disk (Q5), fail-open
 and reload (Q6), hosts (Q7), API drift (Q8), the skipped request (Q9), the gate (Q10), routing
 (Q11), noticed candidates on the fast path (Q12), skill invocation and rewrite (Q13). Two product decisions sit outside the spike: whether `hold_dead_ends` exists at all (§3.5),

@@ -16,7 +16,9 @@ default. Every claim about mods below is marked **documented** (stated in the pu
 declaration file that build writes for a mod, `types/claude-code.d.ts`, about 20,000 lines, which
 the reference calls the authority), **inferred** (our reading of those sources, not run), or **to
 verify** (what this spike measures). The design that builds on this brief is
-[docs/claude-code-mod.md](../../docs/claude-code-mod.md). Nothing here was run against a live Claude Code yet; that is the point of the spike.
+[docs/claude-mod/](../../docs/claude-mod/README.md): the architecture, the user experience, the
+implementation plan and the test plan. Nothing here was run against a live Claude Code yet; that
+is the point of the spike.
 The API is early access: the skill says it "moves between releases: the declaration file is the
 authority". Treat every type name below as true of 2.1.287 and re-read the file before building.
 
