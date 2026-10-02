@@ -113,8 +113,12 @@ Day 0 and live learning use the same path. `adage init` and `adage condition` in
 
 - `adage_graph::learn(sessions, params) -> Learned` is pure: the same sessions in, the same
   routes out (`tests/determinism.rs`).
-- `adage_learn::plan` turns sessions into planned tracks; `learn` writes them and recompiles the
-  index.
+- `adage_learn::plan` turns sessions into planned tracks. `learn_sessions_into` materializes
+  them through a **`Store`** (`adage_learn::store`): tracks, instinct bindings, follow-judge
+  weights, then the index, compiled once after every row. `Files` is `$ADAGE_HOME`'s layout. A
+  team service implements the same methods, and a test learns into a store held in memory with
+  nothing written to disk (`tests/remote_sessions.rs`). What was learned before (earlier tracks,
+  review decisions, proposals) is still read from the tracks directory.
 
 ## Where we are
 
@@ -131,7 +135,8 @@ Day 0 and live learning use the same path. `adage init` and `adage condition` in
 | Harness names compared as strings in about 30 places | **Done**: `Harness` and `Capabilities`; behaviour by capability |
 | Status, listings and the map's read model still live in the CLI as untyped JSON, in three shapes for one reflex | Next: move the read model into `adage-app` with typed results. Unifying the shapes changes the CLI's `--json` output and the web map's types, so it needs a decision |
 | Install and detection kept separate tables of where each harness's registration lives, and had drifted (`CLAUDE_CONFIG_DIR`) | **Done**: `adage-cli/src/placement.rs`, one table per `Harness` for both |
-| The learner writes files directly; learning always reprocesses all history | Next: a store port for what learning materializes, then incremental learning over new sessions only |
+| The learner wrote files directly | **Done**: every write goes through `adage_learn::store::Store` |
+| Learning reads its earlier results from the tracks directory, and reprocesses all history each run (the parse cache makes re-reading cheap, not the mining) | Next: the store's read side (earlier tracks, decisions, proposals) as the same port, then incremental mining over new sessions only. Mining is pure over sessions (`adage-graph`'s determinism test), so incremental mining needs mergeable counts, not a new boundary |
 | `decide()` read the checkout directly for card orientation and repository-path contracts | **Done**: the `Checkout` port on `Ctx` |
 | Simulator-fixture tests decoded through this machine's checkouts | **Done**: the learner's fixture tests decode `AsRecorded`; the CLI end-to-end tests, which run the binary here, state their one precondition (`adage_sim::assume_no_checkout_at_cwd`) |
 

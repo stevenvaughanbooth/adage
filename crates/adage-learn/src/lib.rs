@@ -15,13 +15,14 @@ pub mod import;
 pub mod instincts;
 pub mod ledger;
 pub mod outcome;
+pub mod store;
 pub mod testmap;
 pub mod value;
 
 pub use adage_ingest::{cache, codex, opencode, scope};
 
 use adage_tracks::proposals::Proposals;
-use adage_tracks::{io, Gauge, Index, Manifest, Route, Scope, Track, TrackInfo, Trigger};
+use adage_tracks::{io, Gauge, Manifest, Route, Scope, Track, TrackInfo, Trigger};
 use anyhow::Result;
 pub use evidence::LearnConfig;
 use import::Session;
@@ -191,6 +192,19 @@ pub fn learn_sessions(
     index_path: &Path,
     cfg: &LearnConfig,
 ) -> Result<Report> {
+    learn_sessions_into(batch, only, models, tracks_root, &store::Files::new(tracks_root, index_path), cfg)
+}
+
+/// [`learn_sessions`], materializing into `store` ([`store::Store`]). What was learned before is
+/// read from `tracks_root`; everything the run decides is written only through `store`.
+pub fn learn_sessions_into(
+    batch: adage_ingest::batch::Batch,
+    only: Option<&str>,
+    models: Option<&Path>,
+    tracks_root: &Path,
+    store: &dyn store::Store,
+    cfg: &LearnConfig,
+) -> Result<Report> {
     let adage_ingest::batch::Batch { sessions, read, steered, cache_hits: hits, cache_misses: misses } = batch;
     if let (Some(repo), true, Some(ic)) = (only, sessions.is_empty(), cfg.instincts.as_ref()) {
         // No session to learn from yet: bind the repository's instincts from its files (day 0),
@@ -198,7 +212,7 @@ pub fn learn_sessions(
         let bound = io::read(&tracks_root.join(slug(repo)).join(instincts::TRACK)).is_ok();
         let fresh = |root: &Path| bound && !instincts::stale_binding(tracks_root, repo, root, &ic.selection());
         if let Some(root) = ic.roots.get(repo).filter(|r| !fresh(r)) {
-            let mut report = instincts::learn_only(repo, root, tracks_root, index_path, ic)?;
+            let mut report = instincts::learn_only_into(repo, root, tracks_root, store, ic)?;
             report.sessions_read = read;
             report.sessions_steered = steered;
             report.thresholds = thresholds(cfg);
@@ -211,7 +225,7 @@ pub fn learn_sessions(
         let report = Report {
             sessions_read: read,
             sessions_steered: steered,
-            index_generation: Index::load(index_path).generation,
+            index_generation: store.index_generation(),
             thresholds: thresholds(cfg),
             cache_hits: hits,
             cache_misses: misses,
@@ -220,7 +234,7 @@ pub fn learn_sessions(
         return Ok(report);
     }
     if cfg.instincts.as_ref().is_some_and(instincts::Config::binds) {
-        instincts::preinstall(tracks_root);
+        store.install_base_packs();
     }
     let weights = follow_weights(&sessions);
     let (mut report, planned) = plan(sessions, models, tracks_root, cfg)?;
@@ -228,22 +242,20 @@ pub fn learn_sessions(
     report.sessions_steered = steered;
     (report.cache_hits, report.cache_misses) = (hits, misses);
     for p in &planned {
-        p.write()?;
+        store.write_track(p)?;
     }
     for (repo, rr) in &report.repos {
         if let (Some(root), Some(ic)) = (rr.instincts.as_ref().and_then(|i| i.root.as_deref()), cfg.instincts.as_ref())
         {
-            instincts::record_binding(tracks_root, repo, root, ic);
+            store.write_binding(repo, &instincts::binding_now(root, ic));
         }
     }
     for (repo, w) in &weights {
-        write_follow_weights(tracks_root, repo, w);
+        store.write_follow_weights(repo, w);
     }
-    let all = io::read_all(tracks_root)?;
-    let (index, conflicts) = Index::compile_root(tracks_root, &all);
-    index.write_atomic(index_path)?;
-    report.index_generation = index.generation.clone();
-    report.conflicts = conflicts;
+    let index = store.compile_index()?;
+    report.index_generation = index.generation;
+    report.conflicts = index.conflicts;
     Ok(report)
 }
 
@@ -259,14 +271,6 @@ fn follow_weights(sessions: &[Session]) -> BTreeMap<String, adage_core::judge::W
         }
     }
     by.into_iter().map(|(r, pairs)| (r.to_string(), adage_core::judge::Weights::fit(pairs))).collect()
-}
-
-fn write_follow_weights(tracks_root: &Path, repo: &str, w: &adage_core::judge::Weights) {
-    let p = follow_weights_path(tracks_root, repo);
-    if let (Some(dir), Ok(body)) = (p.parent(), serde_json::to_vec(w)) {
-        let _ = std::fs::create_dir_all(dir);
-        let _ = adage_store::config::write_atomic(&p, &body);
-    }
 }
 
 fn thresholds(cfg: &LearnConfig) -> String {

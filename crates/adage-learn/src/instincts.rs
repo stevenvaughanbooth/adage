@@ -158,16 +158,17 @@ pub struct InstinctReport {
 /// Record that the repository's instincts are bound against `root` as its files are now, with the
 /// packs `cfg` selects.
 pub fn record_binding(tracks_root: &Path, repo: &str, root: &Path, cfg: &Config) {
-    let b = Binding {
+    crate::store::write_binding_at(tracks_root, repo, &binding_now(root, cfg));
+}
+
+/// How a repository's instincts are bound against the checkout at `root` now: what it declares,
+/// its verification environment, and the packs selected.
+pub fn binding_now(root: &Path, cfg: &Config) -> Binding {
+    Binding {
         root: root.to_string_lossy().into(),
         declared: adage_instincts::fingerprint(root),
         env: adage_instincts::verify_env(root),
         packs: cfg.selection(),
-    };
-    let p = binding_path(tracks_root, repo);
-    if let (Some(dir), Ok(body)) = (p.parent(), serde_json::to_vec(&b)) {
-        let _ = std::fs::create_dir_all(dir);
-        let _ = adage_store::config::write_atomic(&p, &body);
     }
 }
 
@@ -606,8 +607,19 @@ pub fn learn_only(
     index_path: &Path,
     cfg: &Config,
 ) -> Result<crate::Report> {
+    learn_only_into(repo, root, tracks_root, &crate::store::Files::new(tracks_root, index_path), cfg)
+}
+
+/// [`learn_only`], writing to `store`; the reflexes already learned are read from `tracks_root`.
+pub fn learn_only_into(
+    repo: &str,
+    root: &Path,
+    tracks_root: &Path,
+    store: &dyn crate::store::Store,
+    cfg: &Config,
+) -> Result<crate::Report> {
     if cfg.binds() {
-        preinstall(tracks_root);
+        store.install_base_packs();
     }
     let judged = cfg.spools.as_deref().map(judgements).unwrap_or_default();
     let others = other_routes(tracks_root, repo);
@@ -615,19 +627,17 @@ pub fn learn_only(
     let mut report = crate::Report::default();
     let mut rr = crate::RepoReport::default();
     if let Some((tr, p)) = plan {
-        p.write()?;
+        store.write_track(&p)?;
         rr.tracks.push(tr);
     }
     if let Some(r) = &ir.root {
-        record_binding(tracks_root, repo, r, cfg);
+        store.write_binding(repo, &binding_now(r, cfg));
     }
     rr.instincts = Some(ir);
     report.repos.insert(repo.to_string(), rr);
-    let all = io::read_all(tracks_root)?;
-    let (index, conflicts) = adage_tracks::Index::compile_root(tracks_root, &all);
-    index.write_atomic(index_path)?;
+    let index = store.compile_index()?;
     report.index_generation = index.generation;
-    report.conflicts = conflicts;
+    report.conflicts = index.conflicts;
     Ok(report)
 }
 
