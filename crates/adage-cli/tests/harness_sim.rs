@@ -29,6 +29,7 @@ impl Sandbox {
     /// A checkout named `acme-billing` (so its repository key matches the mock history's) with the
     /// files the linked-files route may name.
     fn new() -> Sandbox {
+        adage_sim::assume_no_checkout_at_cwd();
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().canonicalize().unwrap();
         for d in

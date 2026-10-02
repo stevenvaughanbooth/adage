@@ -30,6 +30,6 @@ pub mod signals;
 pub mod source;
 
 pub use adage_trace::Session;
-pub use format::{decode_trace, read_session, Decode, Format};
+pub use format::{decode_trace, read_session, read_trace, Decode, Format};
 pub use locate::{AsRecorded, LocalCheckout, Locator};
 pub use source::{ingest, ingest_one, TraceRef, TraceSource};

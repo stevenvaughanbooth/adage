@@ -18,8 +18,14 @@ pub struct Located {
 
 /// Finds the repository a recorded working directory belongs to.
 pub trait Locator: Sync {
+    /// A short name for this way of locating, distinct per implementation: parses cached under one
+    /// locator are never served under another.
+    fn id(&self) -> &'static str;
     /// `explicit` (`--repo`) names the repository outright; the root is still found.
     fn locate(&self, cwd: &Path, explicit: Option<&str>) -> Located;
+    /// Remember which repository a checkout is, for when it is gone (a removed worktree). Only a
+    /// locator that reads this machine has anything to remember.
+    fn remember(&self, _root: &Path, _repo: &str) {}
 }
 
 /// The checkout on this machine: a removed Claude Code agent worktree keeps its repository
@@ -29,6 +35,10 @@ pub trait Locator: Sync {
 pub struct LocalCheckout;
 
 impl Locator for LocalCheckout {
+    fn id(&self) -> &'static str {
+        "local"
+    }
+
     fn locate(&self, cwd: &Path, explicit: Option<&str>) -> Located {
         let root = match worktree_root(cwd) {
             // Paths are relative to the worktree the agent worked in; its key is its repository's
@@ -39,6 +49,10 @@ impl Locator for LocalCheckout {
         let repo = repo::key_for(&root, explicit);
         Located { root, repo }
     }
+
+    fn remember(&self, root: &Path, repo: &str) {
+        repo::remember_key(root, repo);
+    }
 }
 
 /// The trace alone, with no access to this machine: the recorded directory is the root, and the
@@ -48,6 +62,10 @@ impl Locator for LocalCheckout {
 pub struct AsRecorded;
 
 impl Locator for AsRecorded {
+    fn id(&self) -> &'static str {
+        "as-recorded"
+    }
+
     fn locate(&self, cwd: &Path, explicit: Option<&str>) -> Located {
         let root = repo::lexical_normalise(cwd);
         let repo = repo::key_with(explicit, || repo::dir_name(&root));

@@ -97,6 +97,7 @@ fn an_empty_explicit_source_never_falls_back_to_claude_history() {
 
 #[test]
 fn codex_history_is_learned_and_sensed_with_its_harness() {
+    adage_sim::assume_no_checkout_at_cwd();
     let home = tempfile::tempdir().unwrap();
     let sessions = fixtures().join("codex/sessions");
     let s = sessions.to_str().unwrap();

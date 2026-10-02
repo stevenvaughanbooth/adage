@@ -20,7 +20,8 @@
 //! transcripts hold (prompts and tool output), so they are created readable by the owner only on
 //! Unix. Entries whose transcript no longer exists are dropped when the manifest is saved.
 
-use adage_core::CommandTable;
+use crate::format::Decode;
+use crate::locate::{LocalCheckout, Locator};
 use adage_trace::Session;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -110,8 +111,13 @@ fn write_private_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 impl Cache {
     /// The cache under `dir` (`$ADAGE_HOME/cache/sessions`). An unreadable or foreign manifest is
     /// an empty cache.
-    pub fn open(dir: &Path) -> Cache {
-        let parser = parser_id();
+    pub fn open(dir: &Path, locator: &dyn Locator) -> Cache {
+        // A parse records its locator's root, so each locator other than this machine's keeps its
+        // own entries (the local one keeps the plain id, so existing caches stay valid).
+        let mut parser = parser_id();
+        if locator.id() != LocalCheckout.id() {
+            parser = format!("{parser}+{}", locator.id());
+        }
         let manifest = std::fs::read(dir.join(MANIFEST))
             .ok()
             .and_then(|b| serde_json::from_slice::<Manifest>(&b).ok())
@@ -120,17 +126,17 @@ impl Cache {
         Cache { dir: dir.to_path_buf(), parser, manifest, fresh: BTreeMap::new(), hits: 0, misses: 0 }
     }
 
-    /// Read `path` as [`crate::read_session`] would. With `only_repo`, a session of another
+    /// Read `path` as [`crate::read_trace`] would. With `only_repo`, a session of another
     /// repository is reported as [`Read::Elsewhere`], without loading it when the cache already
     /// knows its root.
     pub fn read(
         &mut self,
         path: &Path,
-        table: &CommandTable,
-        repo_override: Option<&str>,
+        cx: &Decode<'_>,
         only_repo: Option<&str>,
         repo_of: &mut dyn FnMut(&Path) -> String,
     ) -> Read {
+        let repo_override = cx.repo_override;
         let meta = match std::fs::metadata(path) {
             Ok(m) => m,
             // Out of this process's sight but not verifiably gone (a sandboxed learner): the parse
@@ -164,7 +170,7 @@ impl Cache {
         }
         // A miss: parse, and remember the parse (with the repository left to be derived again).
         self.misses += 1;
-        let parsed = crate::read_session(path, table, repo_override);
+        let parsed = crate::format::read_trace(path, cx);
         let entry = Entry { size, mtime_ns, root: parsed.as_ref().map(|s| s.root.clone()) };
         let stored = match &parsed {
             Some(s) => {

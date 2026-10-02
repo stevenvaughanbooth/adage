@@ -171,6 +171,7 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
         repo_override: inputs.repo_override.clone(),
         only_repo: inputs.only_repo.clone(),
         cache: inputs.cache.clone(),
+        ..Default::default()
     };
     let mut batch = adage_ingest::batch::read(&inputs.transcripts, &opts);
     for s in &mut batch.sessions {

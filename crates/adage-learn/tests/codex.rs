@@ -3,14 +3,14 @@
 //! hand-built edge cases. Golden files in `tests/golden/`; regenerate with `ADAGE_BLESS=1`.
 
 use adage_core::CommandTable;
+use adage_ingest::{batch, read_trace, AsRecorded, Decode};
 use adage_learn::codex::{discover, parse_rollout, read_rollout};
 use adage_learn::import::Exposure as _;
 use adage_learn::opencode::read_export;
-use adage_learn::{learn, Inputs, LearnConfig};
+use adage_learn::{learn_sessions, LearnConfig};
 use adage_sim::{codex as sim, scenario, CODEX_SEED};
 use adage_tracks::{Index, SlotSource, Step, Strength, Trigger};
 use serde_json::{json, Value};
-use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 fn golden(name: &str, got: &str) {
@@ -33,9 +33,17 @@ fn fixtures() -> Vec<(PathBuf, bool, scenario::Session)> {
         .collect()
 }
 
+/// A fixture rollout decoded as recorded: the simulator's sessions ran in a directory that need
+/// not exist here, and what is checked out on this machine must not change them.
+fn recorded(path: &Path) -> adage_trace::Session {
+    let t = CommandTable::load();
+    let cx = Decode { table: &t, locator: &AsRecorded, repo_override: None, subagent: false };
+    read_trace(path, &cx).unwrap_or_else(|| panic!("{}: a usable session", path.display()))
+}
+
 fn describe(path: &Path) -> String {
-    let lines = read_rollout(path).expect("recognised as a rollout");
-    let s = parse_rollout(&lines, &CommandTable::load(), None).expect("a usable session");
+    assert!(read_rollout(path).is_some(), "recognised as a rollout");
+    let s = recorded(path);
     let mut got = format!(
         "file {}\nid {}\nrepo {}\nroot {}\nmodel {:?}\nday {}\nprompt {:?}\nsteered {}\n",
         path.file_name().unwrap().to_string_lossy(),
@@ -71,10 +79,8 @@ fn rollout_fixtures_golden() {
 
 #[test]
 fn every_fixture_parses_with_its_prompt_and_calls() {
-    let t = CommandTable::load();
     for (path, _, s) in fixtures() {
-        let lines = read_rollout(&path).unwrap();
-        let got = parse_rollout(&lines, &t, None).unwrap_or_else(|| panic!("{}", path.display()));
+        let got = recorded(&path);
         assert_eq!(got.prompt, s.prompt, "{}", s.name);
         let calls: usize = s.turns.iter().map(|t| t.calls.len()).sum();
         let distinct: std::collections::BTreeSet<u32> = got.steps.iter().map(|x| x.turn).collect();
@@ -89,15 +95,10 @@ fn every_fixture_parses_with_its_prompt_and_calls() {
 fn learns_all_four_route_kinds_from_codex_rollouts() {
     let d = tempfile::tempdir().unwrap();
     let files: Vec<PathBuf> = fixtures().into_iter().map(|f| f.0).collect();
-    let inputs = Inputs {
-        transcripts: files,
-        outcomes: BTreeMap::new(),
-        repo_override: None,
-        models: None,
-        cache: None,
-        only_repo: None,
-    };
-    let rep = learn(&inputs, &d.path().join("tracks"), &d.path().join("index.json"), &LearnConfig::demo()).unwrap();
+    let batch = batch::read(&files, &batch::Options { locator: &AsRecorded, ..Default::default() });
+    let rep =
+        learn_sessions(batch, None, None, &d.path().join("tracks"), &d.path().join("index.json"), &LearnConfig::demo())
+            .unwrap();
     assert_eq!((rep.sessions_read, rep.sessions_used), (12, 12));
     assert!(rep.repos.contains_key("acme-billing"), "the repository key is the checkout's directory name");
     let index = Index::load(&d.path().join("index.json"));
@@ -228,7 +229,7 @@ fn every_prompt_is_kept_and_anchored() {
     assert_eq!(s.prompt, s.prompts[0].text);
     // The committed fixtures: every step serves a prompt the session has.
     for (path, _, _) in fixtures() {
-        let s = parse_rollout(&read_rollout(&path).unwrap(), &t, None).unwrap();
+        let s = recorded(&path);
         assert_eq!(s.prompts[0].text, s.prompt, "{}", path.display());
         assert!(s.steps.iter().all(|x| (x.prompt as usize) < s.prompts.len()));
     }

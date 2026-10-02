@@ -84,7 +84,13 @@ pub fn detect_path(path: &Path) -> Option<&'static dyn Format> {
 /// Read one session file on this machine: a Claude Code transcript, an OpenCode `opencode export`
 /// file, or a Codex rollout (recognised by content).
 pub fn read_session(path: &Path, table: &CommandTable, repo_override: Option<&str>) -> Option<Session> {
-    let cx = Decode { subagent: crate::claude::is_subagent(path), ..Decode::local(table, repo_override) };
+    read_trace(path, &Decode::local(table, repo_override))
+}
+
+/// Read the trace file at `path` through `cx`, whose locator decides what repository it is. Whether
+/// it is a sub-agent's own trace is read from the path.
+pub fn read_trace(path: &Path, cx: &Decode<'_>) -> Option<Session> {
+    let cx = Decode { subagent: crate::claude::is_subagent(path), ..*cx };
     decode_trace(std::fs::File::open(path).ok()?, &cx)
 }
 
