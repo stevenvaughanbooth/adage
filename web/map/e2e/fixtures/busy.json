@@ -17,6 +17,7 @@
    "repo": "acme-billing",
    "imported": false,
    "in_index": true,
+   "execution_only": false,
    "instinct": false,
    "origin": null,
    "review": {
@@ -96,6 +97,7 @@
    "repo": "acme-billing",
    "imported": false,
    "in_index": true,
+   "execution_only": false,
    "instinct": false,
    "origin": null,
    "review": {
@@ -176,6 +178,7 @@
    "repo": "acme-billing",
    "imported": false,
    "in_index": true,
+   "execution_only": false,
    "instinct": false,
    "origin": null,
    "review": {
@@ -256,6 +259,7 @@
    "repo": "acme-billing",
    "imported": false,
    "in_index": true,
+   "execution_only": false,
    "instinct": false,
    "origin": null,
    "review": {
@@ -335,6 +339,7 @@
    "repo": "acme-billing",
    "imported": false,
    "in_index": true,
+   "execution_only": false,
    "instinct": true,
    "origin": "instinct U1 (from Makefile)",
    "review": {
@@ -413,6 +418,7 @@
    "repo": "acme-billing",
    "imported": false,
    "in_index": false,
+   "execution_only": false,
    "instinct": false,
    "origin": null,
    "review": {
@@ -496,6 +502,7 @@
    "repo": "acme-billing",
    "imported": false,
    "in_index": false,
+   "execution_only": false,
    "instinct": false,
    "origin": null,
    "review": {
@@ -580,6 +587,7 @@
    "repo": "acme-billing",
    "imported": true,
    "in_index": true,
+   "execution_only": false,
    "instinct": false,
    "origin": null,
    "review": {
@@ -660,6 +668,7 @@
    "repo": "acme-billing",
    "imported": false,
    "in_index": false,
+   "execution_only": false,
    "instinct": false,
    "origin": null,
    "review": {
@@ -757,6 +766,7 @@
    "repo": "acme-billing",
    "imported": false,
    "in_index": true,
+   "execution_only": false,
    "instinct": false,
    "origin": null,
    "review": {

@@ -906,4 +906,53 @@ mod tests {
         assert!(d("exec .venv/bin/python -m pytest", "exec .venv/bin/python -m pytest {path} -xvs"));
         assert!(!d("exec .venv/bin/python -m pytest", "exec python -m pytest {path}"));
     }
+
+    /// The `/api/v1/graph` contract: what `adage map` serves has the fields the web map's
+    /// fixtures (`web/map/e2e/fixtures/busy.json`, written by `make.mjs` to the served shape) give
+    /// it, at the top level and on every reflex. A field added, renamed or removed on either side
+    /// fails here, so the server and the UI cannot drift apart unnoticed.
+    #[test]
+    fn the_served_graph_has_the_fields_the_web_map_is_tested_with() {
+        use adage_tracks::*;
+        let d = tempfile::tempdir().unwrap();
+        let paths = adage_store::Paths::at(d.path());
+        let route = Route {
+            id: "verify".into(),
+            summary: "run the tests".into(),
+            trigger: Trigger::SessionStart,
+            step: Step::Run { command: "make test".into() },
+            slots: vec![],
+            effect: adage_core::Effect::Verify,
+            strength: Strength::Prime,
+            state: RouteState::Firm,
+            exit: vec![Exit::IntentChanges],
+            evidence: Evidence { support: 5, opportunities: 6, days: 2, ..Default::default() },
+            authored: false,
+        };
+        let track = Track {
+            manifest: Manifest {
+                track: TrackInfo {
+                    name: "acme/learned".into(),
+                    version: "0.1.0".into(),
+                    description: "t".into(),
+                    provenance: "learned".into(),
+                },
+                scope: Scope { repo: "acme".into() },
+                gauge: Gauge::default(),
+            },
+            routes: vec![route],
+        };
+        io::write(&paths.tracks().join("acme/learned"), &track).unwrap();
+        Index::compile(&[track]).write_atomic(&paths.index()).unwrap();
+        let served = super::build(&paths, 10).unwrap();
+        let fixture: serde_json::Value =
+            serde_json::from_str(include_str!("../../../web/map/e2e/fixtures/busy.json")).unwrap();
+        let keys = |v: &serde_json::Value| -> std::collections::BTreeSet<String> {
+            v.as_object().map(|o| o.keys().cloned().collect()).unwrap_or_default()
+        };
+        assert_eq!(keys(&served), keys(&fixture), "top-level fields of /api/v1/graph");
+        let (ours, theirs) = (&served["routes"][0], &fixture["routes"][0]);
+        assert!(ours.is_object() && theirs.is_object(), "a reflex on each side");
+        assert_eq!(keys(ours), keys(theirs), "fields of a reflex in /api/v1/graph");
+    }
 }

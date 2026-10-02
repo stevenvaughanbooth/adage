@@ -35,6 +35,7 @@ function route(o) {
     repo: REPO,
     imported: o.imported ?? false,
     in_index: o.state !== "nascent",
+    execution_only: o.execution_only ?? false,
     instinct: o.instinct ?? false,
     origin: o.origin ?? null,
     review: { verbs: o.verbs, reasons: o.reasons ?? [] },
