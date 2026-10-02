@@ -11,6 +11,7 @@
   {
    "id": "finish-line/regenerate",
    "summary": "edits to schema/*.json must be followed by make gen",
+   "gist": "edits to schema/*.json must be followed by make gen",
    "track": "adage/finish-line",
    "version": "0.1.0",
    "reference": "acme-billing/instincts",

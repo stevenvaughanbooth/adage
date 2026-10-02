@@ -29,6 +29,7 @@ function route(o) {
   return {
     id: o.id,
     summary: o.summary,
+    gist: o.gist ?? o.summary,
     track: o.track,
     version: o.version,
     reference: o.reference ?? o.track,

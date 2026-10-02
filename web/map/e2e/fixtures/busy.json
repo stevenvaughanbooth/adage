@@ -11,6 +11,7 @@
   {
    "id": "lookup-work-item",
    "summary": "work items are looked up with scripts/wi-lookup",
+   "gist": "work items are looked up with scripts/wi-lookup",
    "track": "acme-billing/learned",
    "version": "0.3.0",
    "reference": "acme-billing/learned",
@@ -91,6 +92,7 @@
   {
    "id": "read-linked-files",
    "summary": "files a lookup lists are read together",
+   "gist": "files a lookup lists are read together",
    "track": "acme-billing/learned",
    "version": "0.3.0",
    "reference": "acme-billing/learned",
@@ -172,6 +174,7 @@
   {
    "id": "dead-end-d41b1e",
    "summary": "unittest cannot run here; make test works",
+   "gist": "unittest cannot run here; make test works",
    "track": "acme-billing/learned",
    "version": "0.3.0",
    "reference": "acme-billing/learned",
@@ -253,6 +256,7 @@
   {
    "id": "start-with-make-test",
    "summary": "“run the tests” means make test",
+   "gist": "“run the tests” means make test",
    "track": "acme-billing/learned",
    "version": "0.3.0",
    "reference": "acme-billing/learned",
@@ -333,6 +337,7 @@
   {
    "id": "finish-line/regenerate",
    "summary": "edits to schema/*.json must be followed by make gen",
+   "gist": "edits to schema/*.json must be followed by make gen",
    "track": "adage/finish-line",
    "version": "0.1.0",
    "reference": "acme-billing/instincts",
@@ -412,6 +417,7 @@
   {
    "id": "regen-openapi-client",
    "summary": "openapi edits need make client",
+   "gist": "openapi edits need make client",
    "track": "acme-billing/learned",
    "version": "0.3.0",
    "reference": "acme-billing/learned",
@@ -496,6 +502,7 @@
   {
    "id": "read-adr-before-schema",
    "summary": "schema changes start from ADR 0007",
+   "gist": "schema changes start from ADR 0007",
    "track": "acme-billing/learned",
    "version": "0.3.0",
    "reference": "acme-billing/learned",
@@ -581,6 +588,7 @@
   {
    "id": "prefer-uv-pip",
    "summary": "pip is externally managed here; uv works",
+   "gist": "pip is externally managed here; uv works",
    "track": "team/python-basics",
    "version": "1.2.0",
    "reference": "@imported/team/python-basics",
@@ -662,6 +670,7 @@
   {
    "id": "lint-after-edit",
    "summary": "agents already run make lint after an edit",
+   "gist": "agents already run make lint after an edit",
    "track": "acme-billing/learned",
    "version": "0.3.0",
    "reference": "acme-billing/learned",
@@ -760,6 +769,7 @@
   {
    "id": "card-add-invoice-field",
    "summary": "adding a field to an invoice",
+   "gist": "adding a field to an invoice",
    "track": "acme-billing/learned",
    "version": "0.3.0",
    "reference": "acme-billing/learned",

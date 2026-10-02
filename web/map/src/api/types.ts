@@ -136,6 +136,8 @@ export interface Live {
 export interface Route {
   id: string;
   summary?: string;
+  /** What the reflex tells the agent, in one sentence a person reads at a glance (`Route::gist`). */
+  gist?: string;
   track: string;
   version: string;
   /** The track's directory under the tracks directory: what `adage review` takes. */
