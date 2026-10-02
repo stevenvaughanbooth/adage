@@ -3,10 +3,13 @@
 > Status: **proposed 2026-10-02**. The plan for [architecture.md](architecture.md) (the
 > design), [ux-design.md](ux-design.md) (what the person sees) and
 > [spikes/S9](../../spikes/S9-claude-mods/SPIKE.md) (what must be measured first); the tests it
-> names are specified in [test-plan.md](test-plan.md).
+> names are specified in [test-plan.md](test-plan.md) by id (`T-<chunk>-<nn>`).
 > Written against the code at commit `0eb40ae` on `main`; every path and line below was read in
 > that tree. It is meant to be worked chunk by chunk by an agent: each chunk names its files, its
-> contract, its tests and the criteria that close it. Nothing here is implemented.
+> contract, its tests and the criteria that close it. Nothing here is implemented. Revised once
+> after review: the first draft's grant mode would have broken existing E2 grants, its candidate
+> mining could not produce a candidate, and several acceptance criteria could not be met with the
+> fixtures named; this version fixes each and says where it departs from the first design draft.
 
 ## 0. How to work this plan
 
@@ -17,23 +20,34 @@
   matching thematic subsection (`### Runtime`, `### Execution (opt-in)`, `### Seeing it`, …), as a
   bullet opening with a bold lead sentence. Commit with `git commit -s` (DCO).
 - **The floor never moves.** Every chunk leaves `adage hook claude <event>` byte-identical for
-  the events it does not add (the goldens in `crates/adage-cli/tests/golden/` and the exec parity
-  test `crates/adage-exec/tests/parity.rs` pin this). A new event is a new golden step, re-blessed
-  with `ADAGE_BLESS=1 cargo test -p adage-cli --test hooks`, and the diff is reviewed.
+  the events and payloads it does not add (the goldens in `crates/adage-cli/tests/golden/` and
+  the exec parity test `crates/adage-exec/tests/parity.rs` pin this). A new event is a new golden
+  step, re-blessed with `ADAGE_BLESS=1 cargo test -p adage-cli --test hooks`, and the diff is
+  reviewed. A field the mod needs is emitted only when the mod's payload asks for it, so a command
+  hook's output never changes.
 - **Fail open, always.** Anything on the hook path exits 0 and prints nothing on any error
-  (`CONTRIBUTING.md`). The mod does the same in TypeScript: a missing binary, a timeout or bad
-  JSON is `undefined` and `next(e)`.
+  (`CONTRIBUTING.md`). The mod does the same in TypeScript: a missing binary, a timeout, a
+  non-zero exit or bad JSON is a tagged failure and `next(e)`.
 - **The binary decides; the mod bridges and draws.** No reflex, grant, arm, bound or threshold is
   evaluated in TypeScript. Where this plan says "the mod asks", it means one `$.process.run` of
-  `adage hook claude <Event>` with the payload on stdin and JSON on stdout, exactly as a command
-  hook would (`docs/claude-code-mod.md` §2).
+  `<bin> hook claude <Event>` with the payload on stdin and JSON on stdout, exactly as a command
+  hook would (architecture §2). The argv the mod may run is an allow-list (B1).
 - **Words.** Person-facing text follows `docs/lexicon.md` and `docs/design/style.md`; the model's
   text stays plain and factual (`<adage-reflex>` blocks, fixed templates in
-  `crates/adage-runtime/src/render.rs`).
+  `crates/adage-runtime/src/render.rs`, `render::sanitise` on anything that came from a sandbox).
+- **Tests.** Integration tests build their own `World` per file (`crates/adage-cli/tests/hooks.rs`,
+  `harness_sim.rs`, `zero_config_plugin.rs` each define one); every `World` sets a fresh
+  `ADAGE_HOME`, `ADAGE_AUTO_LEARN=0` and `ADAGE_ARM=treated`, and removes `CLAUDECODE`,
+  `OPENCODE`, `CODEX_SANDBOX*` and `ADAGE_DISABLE`. A test that exercises the control arm sets
+  `ADAGE_ARM=control`; a test that runs a person-only verb removes `ADAGE_ARM` too (it is in
+  adage-exec's `AGENT_ENV`) and sets `ADAGE_ALLOW_NONINTERACTIVE=1`. CI runs
+  `cargo test --workspace --exclude adage-eval --locked` (`ci.yml:101`); the eval gates run
+  weekly and before the chunks §5 names.
 - **Order.** Workstream A (foundation in the binary) has no Claude Code dependency and starts
-  now. Workstream B (the mod) needs S9's Q1, Q2, Q3 and Q6 to pass first. Workstream C (acting
-  in the model's place) needs S9's Q9. Workstream D (noticed, skills) is independent of the mod
-  on the binary side and needs the mod only to draw. Workstream E (evaluation) grows with each.
+  now. Workstream B (the mod) needs S9's Q1, Q2 (Layer 1), Q3 and Q6 to pass first. Workstream C
+  (acting in the model's place) needs Q2 (Layer 2), Q4 and Q9. Workstream D (noticed, skills) is
+  independent of the mod on the binary side and needs the mod only to draw. Workstream E
+  (evaluation) grows with each.
 
 ## 1. Where things stand (the touch points)
 
@@ -41,43 +55,44 @@ What the design needs, against what the code has. Lines are from the tree named 
 
 | Need | Today | Where |
 | --- | --- | --- |
-| A per-`tool_use_id` identity for `PreToolUse`, so the mod and the command hook never both decide | `Claude::event_identity` answers only `PostToolBatch`, `PostToolUse`, `PostToolUseFailure`; `pretool()` never calls it; the only dedup anywhere is adage-exec's journal occurrence id | `crates/adage-hook/src/harness/claude.rs:60-72`, `crates/adage-hook/src/lib.rs:549-722`, `crates/adage-exec/src/hook.rs:1036-1039` |
-| An event between "tool results in" and "next request out" | None. `Event` is `SessionStart, Prompt, Batch, Failure, Stop, SessionEnd`; `fast::skip` and `decide` match on it exhaustively | `crates/adage-runtime/src/lib.rs:81-101`, `:559-577`; `crates/adage-runtime/src/fast.rs:40` |
-| An authority to predict a call | Grants are `ApprovalKey { repo, route_exec_digest, argv_templates, scripts, effect, level: E1\|E2, output_mode, profile_id, signer }`; `Effect` is a six-variant ordered enum whose order is security-relevant in four places; `--effect` on `review delegate` accepts `verify`/`regenerate` | `crates/adage-exec/src/approvals.rs:22`, `crates/adage-core/src/types.rs:11`, `crates/adage-cli/src/cli.rs:266`, `crates/adage-cli/src/exec.rs:620-871` |
-| Sub-support patterns at hook time | The miner keeps a negative border, support in `[s_min − border, s_min)`, `border: 2`, for incremental mining only (`border::Incremental` stores border patterns with their session ids); but labels with session support below `s_min` are removed from the alphabet before mining, so a command seen in three sessions can be in no pattern at all; `judge` returns `Err("… fewer than min_support")` and the compiled `Route` is thrown away into `EngineReport.dropped`; `Index` holds `routes`, `triggers`, `contexts`; nascent routes are filtered out at compile (`RouteState::is_live`) | `crates/adage-graph/src/mine/mod.rs:41-79, 262-273`, `mine/seq.rs:341-382`, `mine/border.rs:55-151`; `crates/adage-learn/src/engine.rs:68, 645-653, 766-767, 972-974`; `crates/adage-tracks/src/index.rs:19-33, 157-164` |
-| A `skill` response | `Step` is `Run, ReadBatch, Avoid, Advise, Sequence, Card`; `shape()` and `SHAPES` list seven; Skill tool uses are imported as `CanonicalAction::Control { tool: "Skill <name>" }` with key `control Skill <name>`, effect Observe, "never directed", and the learner's bridge drops every `Control` action before the graph sees it (`input::Step` is `Exec \| Read \| Edit`, `NodeType` has no skill); the steering detector `render::named` cannot read a body it does not know and then marks the session steered by everything after it (`Directed.all`) | `crates/adage-tracks/src/model.rs:186-209, 507-522`; `crates/adage-core/src/tools.rs:72-86`; `crates/adage-learn/src/bridge.rs:69`; `crates/adage-graph/src/input.rs:26-33`, `events.rs:27-34`, `mine/mod.rs:467-475`; `crates/adage-runtime/src/render.rs:1058-1107`; `crates/adage-learn/src/import.rs:187-199` |
-| Verified skill steps a hook can read | `adage train` writes `procedure.json` (deterministic, digested, "for people only") and `review.json`; `Verified { NotReplayed, Works, Stale }` per candidate; no dated record outside the pack; precedent for one is `train/cards.json` | `crates/adage-pack/src/procedure.rs:32-79`, `crates/adage-train/src/compile.rs:38-62`, `crates/adage-train/src/skill.rs:297`, `crates/adage-learn/src/cards.rs:64-69` |
-| A machine-readable live feed | `adage watch` tails spools and `learn.log` through `SpoolTail`/`LineTail` into `FeedItem`s and draws with ratatui; `--once` prints a frame; no `--follow --json`; the map has an SSE stream | `crates/adage-cli/src/ui/tail.rs:31,105`, `ui/feed.rs:16-56, 238`, `ui/watch.rs:176`, `map/events.rs`, `map/http.rs:191` |
-| Harness-priced cost | `Cost { usd, source }`; Claude sessions are priced from a pinned table (`priced@<date>`), Codex `none`, OpenCode `harness`; summaries come from transcripts | `crates/adage-learn/src/ledger.rs:30-41, 96-115` |
-| Evidence that the mod saves requests | `demo/run.py` records `num_turns` and `total_cost_usd`, not requests; the registered metric is API request lines in the debug log with a one-sided bootstrap bound | `demo/run.py:198-219`; `evals/reflex-proof/harness/heldout_analysis.py:233-249, 287, 315`; `docs/launch-gate-protocol.md` |
-| JSON surfaces for a pane | `graph --json`, `doctor --json`, `status --json`, `delegate status --json`, `savings --json` exist; the status card has no `--json` | `crates/adage-cli/src/graph.rs:342,711`, `doctor.rs:887`, `main.rs:590`, `exec.rs:325`, `savings.rs:678` |
+| A per-`tool_use_id` identity for `PreToolUse`, so the mod and the command hook never both decide | `Claude::event_identity` answers only `PostToolBatch`, `PostToolUse`, `PostToolUseFailure`, and only to hand adage-exec a journal occurrence id; `pretool()` never calls it and exits on a word scan before any I/O | `crates/adage-hook/src/harness/claude.rs:60-72`, `crates/adage-hook/src/lib.rs:559-569`, `crates/adage-exec/src/hook.rs:1036-1039` |
+| An event between "tool results in" and "next request out" | None. `Event` is `SessionStart, Prompt, Batch, Failure, Stop, SessionEnd`; `fast::skip` and `decide` match on it exhaustively; `decide()` is pure and learns of exec-only routes through a thread-local | `crates/adage-runtime/src/lib.rs:81-101`, `:559-577`, `:1030 with_exec_only`; `crates/adage-runtime/src/fast.rs:40` |
+| The command a pending directive named | `Pending { route, expect_key, expect_head, batches_left }`: the canonical key, not the bound command text | `crates/adage-runtime/src/lib.rs:103-112`, `:1238-1245` |
+| An authority to predict a call | Grants are `ApprovalKey { repo, route_exec_digest, argv_templates, scripts, effect, level: E1\|E2, output_mode, profile_id, signer }`; every lookup selects by `(repo, route, level)` and only then checks the full key; `Store::approve` deletes the older approval for the same route and level; `--effect` on `review delegate` accepts `verify`/`regenerate` | `crates/adage-exec/src/approvals.rs:22, 200-236`, `crates/adage-exec/src/hook.rs:195, 774, 931-945, 990, 1228`, `crates/adage-exec/src/route.rs:570-589, 681-705`, `crates/adage-cli/src/cli.rs:251-267` |
+| Sub-support patterns at hook time | The alphabet floor is `c >= s_min` in `Db::build`; mining targets and expansions need support `>= s_min`; border children are dropped unless `record_all`; `mine()` runs with `record_all = false` and keeps frequent patterns only; `border::Incremental` is used only in `tests/border.rs`; `judge`'s `Trigger::Context` arm returns `Ok` unconditionally (only after-edit and after-command routes hit the support error); nascent routes are filtered at compile | `crates/adage-graph/src/mine/mod.rs:46-47, 82-84, 257-273, 505-512`, `mine/seq.rs:3, 95-114, 367, 380-381`, `mine/border.rs`; `crates/adage-learn/src/engine.rs:131, 745-767`; `crates/adage-tracks/src/index.rs:19-33, 157-164, 199-223` |
+| A `skill` response | `Step` is `Run, ReadBatch, Avoid, Advise, Sequence, Card`; `shape()` and `SHAPES` list seven; Skill tool uses are imported as `CanonicalAction::Control { tool: "Skill <name>" }`, effect Observe, and the learner's bridge drops every `Control` action; `render::named` records every backquoted span as a command | `crates/adage-tracks/src/model.rs:186-209, 507-541`; `crates/adage-core/src/tools.rs:72-86`; `crates/adage-learn/src/bridge.rs:69`; `crates/adage-graph/src/input.rs:26-33`, `events.rs:27-34`, `mine/mod.rs:467-475`; `crates/adage-runtime/src/render.rs:1058-1107`; `crates/adage-learn/src/import.rs:187-199` |
+| Verified skill steps a hook can read | `adage train` writes `procedure.json` (deterministic, digested) and `review.json` to a staged pack under `train/skills/<name>/`; `Verified { NotReplayed, Works, Stale }` per candidate; `train accept` is the person's step | `crates/adage-pack/src/procedure.rs:32-79`, `crates/adage-train/src/compile.rs:38-62`, `crates/adage-train/src/skill.rs:297`, `crates/adage-cli/src/train.rs:85` |
+| A machine-readable live feed | `adage watch` tails spools and `learn.log` into `FeedItem`s whose `seq` is "assigned by the live view" and draws with ratatui; `--once` prints a frame; the feed's acts include `Withheld`, `Unaided`, `NotReached`, `StopWithheld` and records carry the arm | `crates/adage-cli/src/ui/tail.rs:31-33, 105-107`, `ui/feed.rs:24-64, 238-276`, `ui/watch.rs:37-44, 176` |
+| Harness-priced cost | `Cost { usd, source }`; Claude sessions priced from a pinned table; `.seen.json` keyed by a hash of the transcript path; `Ledger::update` rewrites the file by session id without a lock | `crates/adage-learn/src/ledger.rs:7, 30-62, 381, 435-455` |
+| Evidence that the mod saves requests | `demo/run.py` records `num_turns` and `total_cost_usd`, not requests, and wires hooks through `--settings` built by `hooks-config`; the registered metric is the debug log's dispatch count cross-checked against the stream's explicit request ids; the development harness `dev_v9.py` has arms `A0, A2f, A4`, 16 blocks and the registered `dev_thresholds_v9` rule | `demo/run.py:36, 105-113, 140-149, 198-219`; `evals/reflex-proof/harness/heldout_analysis.py:67, 233-249`, `probe.py:155-156`, `dev_v9.py:57-74, 515-527`; `docs/launch-gate-protocol.md:340-352, 561-611` |
+| JSON surfaces for a pane | `graph --json`, `doctor --json`, `status --json`, `delegate status --json`, `savings --json` exist; the status card has no `--json`; no `adage off`/`on`; `adage-exec` has `hook, run, approve, revoke, status, doctor, journal, recover` only | `crates/adage-cli/src/graph.rs:342,711`, `doctor.rs:887`, `main.rs:211-270, 590`, `exec.rs:325`, `savings.rs:678`; `crates/adage-exec/src/main.rs:428-446` |
+| The plugin's CI | The `plugin` job installs `@anthropic-ai/claude-code` unpinned and runs `validate --strict` only | `.github/workflows/ci.yml:195-214` |
 
 ## 2. What changes where
 
 ### 2.1 The learner (`adage-learn`, `adage-graph`)
 
-1. **Candidates become an output, not a `Dropped` reason.** Two changes in the miner and one in
-   the judge. (a) The alphabet floor: `prepare` (`mine/mod.rs:262-273`) drops labels with
-   session support below `s_min`; it drops below `s_min − border` instead, so a command seen in
-   three of five sessions can take part in a border pattern. Patterns still need `s_min` to be
-   frequent; the border is what `border::Incremental` already stores (`mine/border.rs:55-151`:
-   pattern, sessions, parent, extension). The learn-time cost is measured (D1's acceptance:
-   `condition --auto` with one transcript changed stays within Track G §9's 150 ms target on the
-   sim's history; a full learn within 1.3× of before). (b) The border patterns are passed to
-   `select` and `compile` as today's reflexes are, flagged `candidate`; the compiler produces the
-   `Route` it would have produced. (c) Where `judge` refuses that route for support alone
-   (`engine.rs:766`, and the `Trigger::Context` arm at `:745`), the route is kept as a
-   `Candidate { id, trigger, step, support, s_min, days, last_seen, review: false }` instead of
-   going to `EngineReport.dropped`. Only triggers of two or more events (`Trigger::Context`) and
-   the prompt-family → command shape qualify; one-event after-command or after-edit patterns do
-   not (the design's rule: a sequence, never a single call). Candidates are written beside the
-   tracks as `<tracks>/<repo>/learned/candidates.json` (not a track: no review, no strength, no
-   delivery) and compiled into the index (§2.3). A **nascent** route (`RouteState::Nascent`,
-   environment steps waiting for review, `model.rs:550`) is compiled as a candidate with
-   `review: true` so the person is told it waits. `learn.log`'s `changes[]` gains
+1. **Candidates are mined in a pass of their own.** The routes' mining is untouched: lowering
+   its alphabet floor would insert events between the items of today's patterns (`gap` and
+   `within` count alphabet events, `mine/mod.rs:46-47`) and change reflexes in service. Instead
+   `adage-graph` gains `mine_candidates(db_input, params)`: a second `Db` built with the floor at
+   `s_min − border` (`Db::build`, `:257-267`), `seq::mine` run with the border recorded
+   (`record_all`, `seq.rs:380-381`), and only patterns with support in `[s_min − border, s_min)`
+   and a `Context` trigger of two or more events kept (one-event after-edit or after-command
+   patterns and prompt-family patterns do not qualify: the design's rule is a sequence, never a
+   single call, and the runtime notices by walking a context net). They are scored and compiled
+   as reflexes are (`select.rs:533 select`, `compile/shapes.rs:1094`), flagged
+   `Compiled.candidate: true`; the engine branches on the flag **before** `judge`
+   (`engine.rs:745`), so a candidate is never judged into `routes`, and writes
+   `Candidate { id, trigger, step, support, s_min, days, last_seen, review: false }` to
+   `<tracks>/<repo>/learned/candidates.json`. A candidate's id is the stable id the same pattern
+   gets as a route (`compile/ids.rs`), so the day it crosses `s_min` the person sees one name.
+   A **nascent** route with a `Context` trigger (`RouteState::Nascent`, `model.rs:550`) is also
+   written as a candidate with `review: true`. `learn.log`'s `changes[]` gains
    `change: "candidate"` (`diff.rs:27-35 ChangeKind`) with `support` and `s_min`, and the line
-   that turns a candidate into a route names the session ids that tipped it (the `sessions` of
-   the border entry), which is what the "this session was its 5th" toast reads.
+   that turns a candidate into a route names the session ids that tipped it (the border entry's
+   `sessions`). Acceptance pins that the learned routes, the goldens and the route-fidelity gates
+   are unchanged and that the miner's `truncated` flag stays false on every dataset.
 2. **Skill selection is learned.** Today the bridge drops every `Control` action (`bridge.rs:69`
    `_ => {}`) and the graph's `input::Step` is `Exec | Read | Edit` (`input.rs:26-33`). Add
    `input::Step::Skill { name }` and `NodeType::Skill` (`events.rs:27-34`), map
@@ -85,321 +100,444 @@ What the design needs, against what the code has. Lines are from the tree named 
    admit it in `target_label` (`mine/mod.rs:467-475`) as a continuation target only (never a
    context item on its own), and give the compiler a `skill` shape (`compile/shapes.rs:1094
    compile`, beside `fixed_command` at `:224`): continuation one Skill node → `Step::Skill {
-   skill }`, effect `Observe`, the same support, rate and uplift gates as `run`. Every other
-   `Control` tool stays out. The delegation stimulus is already a key: `control Task
+   skill }`, the same support, rate and uplift gates as `run`, strength ceiling **prime**. Every
+   other `Control` tool stays out. The delegation stimulus is already a key: `control Task
    <subagent_type>` (`tools.rs:77-81`) becomes a `CtxItem::Act`. `StepObs` is unchanged by this
    (the key already carries the name), so no cache format bump here.
-3. **Adage's predicted calls are not organic evidence.** The importer marks steering from
-   `<adage-reflex>` markers (`import.rs:173-199`, `Directed`). A predicted call is recognised by
-   its `tool_use_id` prefix `adage_` in the transcript (the mod mints it, §2.5) and recorded on
-   `StepObs` as `by: By::Adage` (new field, `#[serde(default)]`, and `cache.rs:72 SESSION_FORMAT`
-   bumps to 5 so cached parses are rebuilt), excluded from `support` the way exposed sessions are
-   (`exposed()` in `engine.rs:664`). When S9 Q5 finds the row's `origin` on disk, read that too.
-   The skill directive's body must be readable by `render::named` (`render.rs:1058-1107`), else
-   `Directed.all` marks the whole rest of the session steered: `named` gains the skill template
-   and `Directed` gains `skills: Vec<String>`, and exposure (`engine.rs:118-135`) treats a named
-   skill as it treats a named command.
-4. **The ledger takes a harness-priced line.** `SessionSummary` gains optional `steps:
-   Vec<StepUsage { index, model, input, output, cache_read, cache_write, predicted: bool }>`,
-   `hook_ms: Vec<u32>` and `harness_version`; a line with `cost.source = "harness"` for a session
-   id replaces the transcript-priced one for that session (`ledger.rs:381`, the `.seen.json`
-   dedupe).
+3. **Adage's predicted calls are not organic evidence.** `By { Agent, Adage }` is defined once in
+   `adage-core` and carried on `runtime::Call` (`runtime/src/lib.rs:73`; `Call` has no `Default`,
+   so every literal site gains `by: By::Agent`) and, through `StepObs.call`, into the importer
+   (`import.rs:13, 26`); no second `by` field. The importer sets it from the `tool_use_id` prefix
+   `adage_` in the transcript (the mod mints `adage_<route>_<turn>_<index>`, one format in the
+   spike, the design and the tests), bumps `cache.rs:72 SESSION_FORMAT` to 5 so cached parses are
+   rebuilt, and excludes such steps from `support` the way exposed sessions are (`exposed()`,
+   defined at `engine.rs:131`, called at `:664`). `render::named` (`render.rs:1058-1107`) matches
+   the skill template **before** its backquote scan, so the skill name lands in a new
+   `Named.skills` and `Directed.skills` (`import.rs:187`), not in `commands`; exposure
+   (`engine.rs:118-135`) treats a named skill as it treats a named command. When S9 Q5 finds the
+   row's `origin` on disk, read that too.
+4. **The ledger takes a harness-priced line without changing its schema.** `adage ledger note`
+   appends to `ledger/harness.jsonl`, not to the ledger; the learner, when it writes the ledger
+   under its lock, merges one harness line per session id (`SessionSummary` gains optional
+   `steps: Vec<StepUsage { index, model, input, output, cache_read, cache_write, predicted }>`,
+   `hook_ms: Vec<u32>`, `harness_version`), prefers the harness line for `cost` and never lets
+   a later transcript pass replace it (`ledger.rs:381`). `model_turns` counts steps the model
+   answered; `predicted_steps` counts the rest, so the savings estimate sees a predicted step as a
+   model turn not spent (`savings.rs:405`). Integrity: a note is accepted only for a session id
+   whose spool holds a `session_start` in this repository and whose `harness_version` is a
+   version string; one line per session; the agent cannot mint a session it did not have.
 
 ### 2.2 The harness (`adage-hook`, `adage-runtime`, `adage-exec`)
 
-1. **`PreToolUse` identity.** `Claude::event_identity` gains a `"PreToolUse"` arm on
-   `tool_use_id`; `pretool()` records the identity in a bounded ring on `SessionState`
-   (`seen_pretool: Vec<String>`, 64 entries, `#[serde(default)]`) under the state lock before any
-   receipt or planner work, and returns `Ok(None)` with no spool record on a repeat.
+1. **`PreToolUse` identity, two phases, one record.** The payload the mod sends gains two optional
+   fields a command hook never sends: `dry_run: true` (return the plan, spool nothing) and
+   `verdict: { engine?: "same" | "differs", answered?: "receipt" }` (decide finally, spool once).
+   `pretool()` records the `tool_use_id` (as a 64-bit hash) in a bounded ring on `SessionState`
+   (`seen_pretool`, 64 entries, `#[serde(default)]`) **after** the word scan at `lib.rs:566-569`
+   and before any receipt or planner work, on every path that prints (the rewrite, the
+   receipt-only record at `:587-603`, the control arm's `Ok(None)` at `:719`), and returns
+   `Ok(None)` with no record on a repeat. A `dry_run` call records nothing. The spooled `pretool`
+   record gains `checked_by: "engine" | "planner"`.
 2. **`TurnStep`.** A new `Event::TurnStep { turn_id, index, model, agent: Option<String> }`,
    translated from a Claude payload the mod builds (§2.5), decided by a new arm of `decide()`
    that **predicts only what Adage has already directed**: a `pending` directive whose
-   `expect_key` has not been observed, or an armed, unmet obligation, whose route holds a current
-   `predict` grant (§2.2.3) and whose step is a `Run` with every slot bound, a `Sequence`'s first
-   command, or a `Skill`. Two bounds live in the state: `last_step_predicted: Option<(String,
-   u32)>` (never two predicted steps in a row) and `predictions: u32` (default cap 6, config
-   `runtime.predict_cap`). `Decision` gains `predicted: Option<Prediction { route, track, tool,
-   input, kind }>` and `would_predict` for the control arm. `fast::skip` answers `false` for
-   `TurnStep` when the state has a pending directive or an armed obligation, `true` otherwise, so
-   the common case costs the state read alone. A new `Output::Predict { .. }` renders on Claude as
-   `{"predict": {"tool": …, "input": {…}, "route": …, "track": …, "kind": …}}` and as `None` on
-   the other adapters.
+   `expect_key` has not been observed, or an armed, unmet obligation, in delivery order, whose
+   route is in the predictable set (below), whose step is a `Run` with every slot bound, a
+   `Sequence`'s first command, or a `Skill`, and whose bound command is non-empty. `Pending` gains
+   `#[serde(default)] command: String`, filled where the directive is bound (`bind_prompt_route`,
+   `pending_for`, `:1238-1245`). The arm answers nothing at `index == 0`, re-checks
+   `interlock::avoids` against the session's inhibits (`approach_lock`, `:1074-1080`), and holds
+   two bounds in the state: `last_step_predicted: Option<(String, u32)>` (never two predicted
+   steps in a row) and `predictions: u32` (default cap 6, config `runtime.predict_cap`).
+   `Decision` gains `predicted: Option<Prediction { route, track, tool, input, kind }>` with `kind
+   ∈ { obligation, run, sequence, skill }`, `would_predict`, `routine`, `would_route`.
+   `fast::skip` answers `false` for `TurnStep` when the state has a pending directive or an armed
+   obligation, `true` otherwise. The grant is read in `respond()` before the state lock, like
+   exec-only routes (`lib.rs:988-994`), as `Extension::predict_grants(repo) -> BTreeSet<RouteId>`
+   (empty without adage-exec), and handed to `decide()` through a thread-local
+   `with_predict_grants`, so adage-runtime names no adage-exec type. A new `Output::Predict`
+   renders on Claude as `{"predict": {…}}` and as `None` on the other adapters
+   (`codex.rs:79`, `opencode.rs:77`). The spool record kind `turn_step` is added to every
+   consumer: `rebuild::kind_of` (`rebuild.rs:45-58`), `ui/feed.rs::from_record` (`:238`),
+   `savings.rs:336`, `graph.rs::event` (`:774`), `adage-eval/src/transcript.rs:319-328 hook_name`,
+   `crates/adage-cli/tests/g4_hook.rs:131-139`.
 3. **The `predict` grant.** Not a new `Effect` (its order is security-relevant in `run.rs:453,
-   461`, `route.rs:404`, `policy.rs:163`, and thirteen match sites would change). A new field on
-   `ApprovalKey`, `mode: GrantMode { Execute, Predict }` with `#[serde(default)] = Execute`, so
-   every stored approval still parses and a predict key never equals an execute key; `profile_id`
-   is the literal `harness` for predict (no sandbox is involved: the harness runs the agent's own
-   tool under the person's permission mode). `adage review delegate <track> <route> --predict`
-   writes it (person-only, as every delegate verb: `exec.rs:621 require_person`), requires policy
-   `max_level >= e2` (`policy.rs:250 permits`), skips the E2 staged preview (nothing is staged),
-   and records `basis` as the route's evidence. Lapse, revoke and `delegate status` work unchanged
-   through `Store::lapsed`, `route::lapses` and `reapprove_command` (`route.rs:594-681`), which
-   gains ` --predict`. A machine switch `adage delegate predict on|off` writes `exec/predict-off`
-   like `rewrite-off` (`lib.rs:469`); on requires a terminal.
-4. **Provenance of a predicted call.** The Claude adapter reads `tool_use_id` on `PreToolUse`,
-   `PostToolBatch` and `PostToolUseFailure`; an id with the `adage_` prefix sets `Call.by =
-   By::Adage` (new field, default `Agent`). `decide()` judges such a call `Judgement::Predicted {
-   route }` instead of `Followed`, and the receipt path in adage-exec treats it as Adage's own
-   run for the purpose of the duplicate-run rule.
+   461`, `route.rs:404`, `policy.rs:163`). A new field on `ApprovalKey`, `mode: GrantMode {
+   Execute, Predict }` with `#[serde(default)] = Execute`, level `E2`, `profile_id` the literal
+   `harness`. Because every lookup selects by `(repo, route, level)` first, **`mode` joins every
+   selector**: `Store::approve` (`approvals.rs:232-236`), `revoke_automatically` (`:210-212`),
+   `lapsed` (`:200-206`), `Revocation`, `plan_grants` and `lapses` (`route.rs:570-589,
+   681-705`, which plan a predict key on its own path: no action spec, no sandbox profile), and
+   the four hook sites (`hook.rs:195 exec_only`, `:774 covering_receipt`, `:931 E2 actions`,
+   `:1228 E1 prefetch`), each filtering `mode == Execute`. A route with an `Execute` grant and a
+   `Predict` grant keeps both through approve, revoke and lapse. `adage review delegate <track>
+   <route> --predict` writes it (person-only, `exec.rs:621 require_person`; exclusive with
+   `--effect` and `--level`), and refuses when the route's effect is above Regenerate, when
+   `policy.effects_deny` names it, when it is an environment action and the policy does not allow
+   them, when the route is `exec_only`, or when the route already holds an `Execute` grant for
+   the same step (two paths would run it). `reapprove_command` (`route.rs:650`) appends
+   `--predict`. A machine switch `adage delegate predict on|off` (beside `rewrites` in
+   `exec.rs:132-180`) writes `exec/predict-off` like `rewrite-off`; `on` requires a person.
+   `adage-exec` gains a `version` verb (the mod's activation probe, §2.6).
+4. **Provenance of a predicted call.** The Claude adapter reads `tool_use_id` on `PostToolBatch`
+   and `PostToolUseFailure` (`claude.rs:42-53 call_from` drops it today) and sets `Call.by =
+   By::Adage` for the `adage_` prefix; `PreToolUse` reads it directly in `pretool()`. `decide()`
+   judges such a call `Judgement::Predicted { route }` instead of `Followed`; downstream it is
+   excluded from follow rates and strength evidence (`evidence.rs`, `review.rs`, `ui/routes.rs`),
+   is not extinction evidence (`instincts.rs`), counts in `savings.rs` as a model turn not spent,
+   and draws in the feed as a "chose" row (`ui/feed.rs`, `ui/view.rs`, `graph.rs`); the receipt
+   path in adage-exec treats it as Adage's own run for the duplicate-run rule.
 5. **Receipt as the result.** `Extension::pretool_context` returns a string today
    (`lib.rs:190-194`, `adage-exec/src/hook.rs:177, 751`). It returns `PreNote { text, fresh:
-   bool, result: Option<String> }`: `fresh` when `covering_receipt` found a completed, applied
-   run on byte-identical inputs covering the call, and `result` the receipt as the tool's stdout
-   would read. `Output::Rewrite` and `Output::Context` carry the note unchanged; the mod (not the
-   command hook) answers the tool call with `result` when `fresh` (design §3.3). The command-hook
-   path is unchanged, so the floor still delivers the note as context.
+   bool, result: Option<String>, covering: String }`: `fresh` when `covering_receipt` found a
+   completed, applied run on byte-identical inputs covering the call, `result` the receipt as the
+   tool's stdout would read, `covering` the command that ran. The `receipt` object is rendered
+   **only** when the payload carried `dry_run` or `verdict` (a command hook's output is
+   unchanged, so the golden does not move). The receipt check stays pytest-and-Verify only
+   (`hook.rs:757-768`); widening it is not in this plan.
 6. **`noticed`.** After `fire_contexts` (`lib.rs:1179`), a second walk over the candidate net
    with `st.cand_ctx.recent()` (§2.3.2); every id it returns goes to `Decision.noticed:
-   Vec<Noticed { candidate, support, s_min, review }>` and never to `out`; `SessionState.noticed:
-   Vec<String>` keeps each candidate to once per session. Both arms record it (it is not a
-   directive). The spool record carries it inside `decision`, so `rebuild` needs no new kind,
-   and `rebuild` replays `cand_ctx` from `decision.cand_ctx` as it replays `ctx`.
-7. **`SkillPrompt`.** A new Claude-only event, `adage hook claude SkillPrompt`, payload
+   Vec<Noticed { candidate, support, s_min, review }>` and never to `out`; `SessionState.noticed`
+   keeps each candidate to once per session, bounded at 64 like `MAX_NEW_TESTS`
+   (`runtime/src/lib.rs:178`). Both arms record it (it is not a directive). The spool record
+   carries it inside `decision`, so `rebuild` needs no new kind, and `rebuild` replays `cand_ctx`
+   as it replays `ctx`. The no-routes early exit (`lib.rs:958-960`) becomes "no routes and no
+   candidates".
+7. **`SkillPrompt`.** A new Claude-only event, `<bin> hook claude SkillPrompt`, payload
    `{ session_id, cwd, skill, text }`, answered `{ "text": <annotated> }` or `{}`. It reads
-   `$ADAGE_HOME/train/skills/<prefix>/verified.json` (§2.4) for a pack whose `procedure.skill.name`
-   equals `skill` and whose repository matches, and appends one plain line per verified or stale
-   step under a fixed heading. It is spooled as `kind: "skill_prompt"` with the skill name and the
-   number of lines added; nothing in the control arm (the text is unchanged there, and
-   `would_annotate` is recorded).
-8. **Latency on record.** The spool record gains `duration_us` (the hook's own wall time from
-   `started`), as zero-config P1 asks, so `doctor` can report a p95 per repository without the
-   mod; the mod's measurement (the engine's dispatch time) goes to the ledger line (§2.1.4).
+   `$ADAGE_HOME/train/skills/<name>/verified.json` (§2.4) **only for a pack the person has
+   accepted** (`train.rs:85`), whose `skill.name` equals `skill` and whose repository matches,
+   and appends one plain line per verified or stale step under a fixed heading, every line
+   through `render::sanitise`. It assigns the arm if none is assigned yet, as `pretool` does
+   (`lib.rs:674-683`); in the control arm the text is unchanged and `would_annotate` is spooled
+   (`kind: "skill_prompt"`).
+8. **`Standing`.** A read-only Claude-only event, `<bin> hook claude Standing`, answered
+   `{ standing, environment }` (architecture §3.6): the repository's applicable procedure cards'
+   titles and the instincts' one-liners in `render.rs`'s fixed templates, ≤ 2,000 characters,
+   deterministic for the session; the U11 environment sentence when bound. It sets
+   `SessionState.has_standing` so the per-event delivery of the same text is suppressed. Empty in
+   the control arm. It does not touch `record_start`, the learner spawn or `take_notice`
+   (`lib.rs:756-865`), which stay the command hooks' `SessionStart`.
+9. **Latency on record.** Every spool record gains `duration_us` (the hook's own wall time from
+   `started`, a lower bound that excludes the spawn): the decision record (`lib.rs:1091`), the
+   `pretool` records (`:591`, `:712`), `stop_gate` (`:403`) and `record_start` (`:936`); `started`
+   is passed into `respond` and `pretool`. `doctor`'s new check reads it (§2.5) and caches its
+   result for a few seconds, because `watch` and `ui` re-run `checks()` (`doctor.rs:810-812`).
 
 ### 2.3 Tracks and the index (`adage-tracks`)
 
 1. **`Step::Skill { skill: String, args: Option<String> }`**, shape `"skill"`, `SHAPES` grows to
-   eight; `io::validate` requires a safe id (`[A-Za-z0-9_-]`, 1–64) and no slots; `ceiling` is
-   `Observe`'s. `render::route_text` gets a fixed template: "In this repository the `{skill}`
-   skill is used at this point. Ignore this if the user is asking for something else." Follow is
-   judged on the key `control Skill {skill}` with `pattern::meets`.
+   eight; `io::validate` requires a safe id (`[A-Za-z0-9_-]`, 1–64), no slots, and refuses
+   `Inhibit` (a skill is never a dead end); `ceiling` is **prime** (`model.rs:533-541`).
+   `render::route_text` gets a fixed template: "In this repository the `{skill}` skill is used at
+   this point. Ignore this if the user is asking for something else." Follow is judged on the key
+   `control Skill {skill}` with `pattern::meets`. Exhaustive `Step` matches that gain an arm:
+   `adage-tracks/src/io.rs:344`, `interlock.rs:203`, `adage-runtime/src/lib.rs:346`,
+   `render.rs:935-1049`, `adage-pack/src/convert.rs:303` (`Skill => Err(..)`: packs are deferred),
+   `adage-eval/src/safety.rs:242`, `score.rs:378, 574`, `savings_replay.rs:456`,
+   `conventions.rs:423`, `lib.rs:225`, `adage-cli/src/graph.rs:153, 175`, `share.rs:177`,
+   `ui/routes.rs:270`; wildcard arms to review by hand (they compile silently):
+   `adage-learn/src/value.rs:732`, `dormant.rs:219`, `adage-tracks/src/interlock.rs:91-99`,
+   `engine.rs:118`. `cargo clippy --workspace --all-targets -- -D warnings` is the checklist for
+   the exhaustive ones.
 2. **`Index.candidates: BTreeMap<repo, Vec<Candidate>>`** and **`Index.candidate_contexts:
-   BTreeMap<repo, CtxNet>`**, both `#[serde(default)]` and derived like `triggers` and
-   `contexts` (not part of `generation`; the twenty recorded indexes under `evals/datasets/*/
-   recorded/` and the one `fast_path_changes_no_decision` loads must keep parsing). The
-   candidates get a net of their own, not nodes in the routes' net: the routes' `CtxNet.digest`
-   is the alphabet's hash, and a changed digest resets every session's context state
-   (`adage-runtime/src/context.rs:72-76`); candidates change at nearly every learn, and a
-   relearn must not reset route matching mid-session. `Triggers::of` folds every candidate
-   item's words and globs in, so the fast path never skips an event that could notice. The
-   runtime keeps a second ring, `SessionState.cand_ctx: CtxState`, symbolised from the same
-   event by a second `Symbols` over the candidate net (only when that net is non-empty).
+   BTreeMap<repo, CtxNet>`**, both `#[serde(default)]`. `Index::compile(tracks)` has 58 callers
+   and derives `triggers` and `contexts` from `routes` (`index.rs:199-210`); candidates are not
+   derivable from tracks, so `compile_root` (`:216-223`, where `exec_bindings` is read) reads
+   `candidates.json` beside the `learned` track, and `compile` itself is unchanged, as are its
+   callers and `index_is_deterministic`. The candidates get a net of their own: the routes'
+   `CtxNet.digest` is the alphabet's hash, a changed digest resets every session's context state
+   (`adage-runtime/src/context.rs:72-76`), and candidates change at nearly every learn.
+   `Triggers::of` (`triggers.rs:102`) folds every candidate item's words and globs in. The runtime
+   keeps a second ring, `SessionState.cand_ctx: CtxState`, symbolised from the same event by a
+   second `Symbols` over the candidate net (only when that net is non-empty). The 26 recorded
+   indexes under `evals/datasets/*/recorded/` keep parsing.
 3. **`Candidate`** lives in `adage-tracks/src/model.rs` beside `Route`; `io` reads and writes
-   `candidates.json` next to a repository's `learned` track with the same owner-only mode as the
-   index (`io::write_private`).
+   `candidates.json` with the same owner-only mode as the index (`io::write_private`).
+4. **Older binaries.** An index holding a `Step::Skill` fails to parse in a binary from before
+   D3 (`index.rs:287` → `Damaged` → relearn), and two binaries on one machine (an npm `adage`
+   beside the plugin's) would flip the index back and forth. The index gains a `format: u32`
+   field that older binaries ignore and newer ones read; D3 bumps it, `doctor` warns when the
+   binaries on `PATH` and in the plugin differ in major version, and `docs/live-learning.md`
+   states the minimum-version rule.
 
 ### 2.4 Training (`adage-train`)
 
-1. **`verified.json`** beside the staged pack: `$ADAGE_HOME/train/skills/<prefix>/verified.json`,
-   `{ schema: "adage-train-verified/1", skill: { name, sha256 }, repo, steps: [{ id, command,
-   result: "works" | "stale" | "not-replayed", signature?, date, sandbox }] }`, written in
-   `skill.rs::stage` (`:297`) from `Candidate.verified` and `Report.sandbox`. It is outside the pack
-   on purpose: a date would break the pack's deterministic digest (the `cards.json` precedent).
-2. `adage train accept` leaves it in place; `adage train` on a changed skill (new `sha256`)
-   replaces it.
+1. **`verified.json`** beside the staged pack: `$ADAGE_HOME/train/skills/<name>/verified.json`,
+   `{ schema: "adage-train-verified/1", skill: { name, sha256, inert: bool }, repo, steps: [{
+   id, command, result: "works" | "stale" | "not-replayed", signature?, date, sandbox }] }`,
+   written in `skill.rs::stage` (`:297`) from `Candidate.verified` and `Report.sandbox`.
+   `inert` is true when the SKILL.md holds no dynamic-context block (`` !`…` ``) and no
+   `context: fork`; a skill that is not inert is never predicted (§2.2.2 checks the flag for
+   `Skill` steps). It is outside the pack on purpose: a date would break the pack's deterministic
+   digest (the `cards.json` precedent).
+2. `adage train accept` marks it accepted (`accepted_at`); `SkillPrompt` and `TurnStep` read only
+   accepted files; `adage train` on a changed skill (new `sha256`) replaces it unaccepted.
 
 ### 2.5 The CLI and surfaces (`adage-cli`)
 
-1. **`adage watch --follow --json`**: `ui/watch.rs` gains a mode that needs no terminal, emits
-   one JSON line per `FeedItem` (`ui/feed.rs:56`), per `learn.log` line and per health change,
-   from the same `Sources` (`watch.rs:16`), with `--since <offset>` for a reconnect; the
-   terminal frame is untouched. Health lamps every few seconds as today (`LOCK_EVERY`).
-2. **`adage ledger note`**: reads one JSON object from stdin (§2.1.4's shape), validates it,
-   writes the ledger line and refreshes the savings summary (`savings.rs:415 refresh`). Allowed
-   from inside a session (it tunes nothing).
+1. **`adage watch --follow --json --session <id> [--since <cursor>]`**: `ui/watch.rs` gains a
+   mode that needs no terminal and bypasses the ratatui `Live` view (`watch.rs:37-44`), emitting
+   one JSON line per `FeedItem` (`ui/feed.rs:56`), per `learn.log` line (`kind: "learn"`), per
+   health change (`kind: "health"`, the lights as `health::gather` builds them) and per learner
+   state change (`kind: "learner"`, `waiting | running | idle`, `next_at`), from the same
+   `Sources` (`watch.rs:16`). Every line carries an opaque `cursor` (the spool paths and offsets
+   from `SpoolTail.cursors`, `tail.rs:33`, plus the `LineTail.offset`, `:107`, encoded as one
+   string); `--since <cursor>` resumes a new process from it. For the `--session` id, the stream
+   **omits** the `control` flag, `would_have`, `would_predict`, `would_continue`, withheld
+   pre-tool records and the `Withheld`, `Unaided`, `NotReached` and `StopWithheld` acts. It exits
+   0 on stdin EOF, SIGTERM or the parent's death. The record shape is documented in
+   `docs/live-learning.md` under "Streams to follow".
+2. **`adage ledger note`** (`cli.rs` and the `main.rs` dispatch): reads one JSON object from
+   stdin (§2.1.4's shape), validates it against the spool, appends to `ledger/harness.jsonl`,
+   and refreshes the savings summary (`savings.rs:415 refresh`). Allowed from inside a session
+   (it tunes nothing; integrity per §2.1.4).
 3. **`adage review delegate … --predict`**, **`adage delegate predict on|off`**, and
-   `delegate status --json` showing `mode`.
-4. **`adage doctor`** gains the hook p95 check from spool `duration_us` (a warning above 10 ms
-   no-match, per Architecture §9's budget) and a line for the harness version last seen.
+   `delegate status --json` showing `mode` (`exec.rs:325`).
+4. **`adage doctor`** gains the hook p95 check from spool `duration_us` over `batch` records
+   with an empty `would_have` (warn above 10,000 µs, fail above 25,000, `pass` with the detail
+   "too few hooks to measure" under 20 records), cached, and a line for the harness version last
+   seen; `doctor --json` gains a structured `action` beside the prose `fix` (`doctor.rs:242`) so a
+   pane can tell "run `adage condition`" from a terminal-only fix.
 5. **`cargo xtask tokens`** gains a third output, `plugin/claude-code/hooks/tokens.ts`
    (`xtask/src/main.rs:74-80` `outputs`), with the glyph table (UTF-8 and ASCII) and the roles the
-   mod maps to theme keys; the staleness test asserts it like the other two.
-6. **The status card** gains `--json` (`status_card.rs:367`), the same rows the card prints.
+   mod maps to theme keys; `the_committed_tokens_are_current` (`xtask/src/main.rs:414`) asserts
+   it like the other two.
+6. **The status card** gains `--json` (`status_card.rs:367`; a top-level flag at `main.rs:268`),
+   the same rows the card prints, and swaps `adage ui …` for `/adage watch` when the caller says
+   it draws in a session (`--for-session`).
+7. **`adage off` and `adage on`** (new, A6): `off` writes `<root>/.adage/disabled` and is
+   allowed anywhere (it turns something down, `docs/live-learning.md`); `on` removes it and
+   requires a person (`require_person`, `share.rs:29-49`); both exit 0 outside a repository with
+   one line.
 
-### 2.6 The mod (`plugin/claude-code`)
+### 2.6 The mod (`plugin/claude-code`, `plugin/claude-code-exec`)
 
 Files as in the design §2: `hooks/hooks.json` gains `"modules": ["./register.ts"]` beside the
-seven command hooks; `hooks/register.ts`, `bridge.ts`, `decide.ts`, `draw/*.tsx`, `feed.ts`,
-`commands.ts`, `tokens.ts` (generated), `*.test.ts`; `types/index.d.ts`; `plugin.json` gains
-`"types"` and `userConfig`. The same module ships in `plugin/claude-code-exec`. `scripts/
-check-plugin.mjs` learns the module files and `types`. CI's `plugin` job runs `claude plugin test`
-after `validate --strict`.
+command hooks; `hooks/register.ts` (the activation probe, `active`), `bridge.ts` (`ask()` with
+tagged results, `env: { CLAUDECODE: '1' }`, the argv allow-list `hook | version | watch | graph |
+doctor | status | ledger note | off`), `decide.ts`, `draw/*.tsx`, `feed.ts`, `commands.ts`,
+`tokens.ts` (generated), `*.test.ts`; `types/index.d.ts`; `plugin.json` gains `"types"` and
+`userConfig` (`band`, `pane`, `noticed`, `skills_invoke` default off, `routine_model`). The same
+module ships in `plugin/claude-code-exec`, where hook events go to `adage-exec` and CLI verbs to
+`adage`, which `plugin/build.sh` stages beside it (its `SHA256SUMS` step already lists both
+names) and the exec shim links into `$DATA/bin`. The mod never falls back to `PATH` when its
+linked binary is `scripts/quiet`. `ADAGE_MOD_OBSERVE=1` (read through `$.env.get` at `register`)
+puts the mod in observe mode: only the `classic.*` observers and `ui.render` register. `scripts/
+check-plugin.mjs` learns the module files, `types`, the allow-list and the pinned CLI version.
+CI's `plugin` job pins `@anthropic-ai/claude-code@2.1.287`, runs `claude plugin test` after
+`validate --strict`, and diffs a fresh `validate --strict` output against the committed
+`VALIDATE.txt`. `turn.complete` calls `adage ledger note` (§2.1.4).
 
 ### 2.7 Evaluation (`adage-sim`, `demo/`, `evals/`, `adage-eval`)
 
 1. **The simulator** emits `PreToolUse` (per Bash call, with `tool_use_id`), `TurnStep` (per
-   turn, after the batch) and `SkillPrompt` payloads for Claude (`crates/adage-sim/src/claude.rs`
-   beside `turn_hooks` at `:158`), and `scenario::Replay` gains per-turn expectations
-   (`predict`, `noticed`); `harness_sim.rs::replay_claude` asserts them in both arms and
-   `check_graph` counts predictions.
-2. **The demo runner** gains a `mod` arm (`claude -p … --plugin-dir plugin/claude-code`; hooks
-   run headless, drawing does not) and a `requests` metric counted as the registered protocol
-   counts it: `[DEBUG] [API REQUEST]` lines under `--debug`, cross-checked against distinct
-   assistant message ids (`heldout_analysis.py:233-249`). `report.py::compare` already takes arm
-   names.
+   turn, after the batch), `Standing` and `SkillPrompt` payloads for Claude
+   (`crates/adage-sim/src/claude.rs` beside `turn_hooks` at `:158`), and `scenario::Replay` gains
+   per-turn expectations (`predict`, `noticed`). `scenario::history` gains a deliberately
+   sub-support sequence: in 2 of the 12 history sessions the agent runs `make lint` right after
+   `make test` (a two-event context with support 2, below `--demo`'s `min_support = 3`,
+   `select.rs:72-75`, and inside the border); `cargo run -p adage-sim` regenerates the fixtures
+   and `committed_fixtures_are_current` enforces it. `harness_sim.rs::replay_claude` asserts the
+   expectations in both arms and `check_graph` counts predictions.
+2. **The demo runner** gains arms `a0` (no hooks), `mod-observe` and `mod` beside `control` and
+   `adage` (`run.py:105-113`); the mod arms load the plugin only (`--plugin-dir`, with the binary
+   `plugin/build.sh` staged and the same `ADAGE_HOME`), never `--settings` from `hooks-config`
+   as well, so no hook runs twice; `DEMO_MODEL` stays `claude-sonnet-5` unless set. A `requests`
+   metric counted as `heldout_analysis.requests()` counts it: `[DEBUG] [API REQUEST]` dispatches
+   under `--debug`, cross-checked against the stream's distinct explicit request ids, which must
+   be unique (`heldout_analysis.py:67, 233-249`, `probe.py:155-156`); `report.py::compare`
+   already takes arm names. `score.py`'s real keys (`passed, ci_passed, hidden_passed,
+   hidden_tests_run, stale_generated, ci_tail, hidden_tail`) are all recorded.
 3. **The offline replay gate** `fast_path_changes_no_decision` (`adage_eval::replay`) covers
-   `TurnStep` and candidates: a skipped event's full decision must be empty, `noticed` included.
-4. **The reflex-proof harness** gets a `MOD` arm beside `BEST` with the D1–D4 development
-   thresholds; a registered held-out run only after the development loop passes.
+   `TurnStep` (one injected after each `Batch`) and candidates: a skipped event's full decision
+   must be empty, `noticed` included. A new test loads every recorded index (26).
+4. **The reflex-proof harness** gets a `MOD` arm (hooks as `A4`, `--plugin-dir`, the `predict`
+   grant issued as the human step) judged by the registered `dev_thresholds_v9` rule with its own
+   five realized controls, under a new protocol revision registered before any positive block
+   runs; a registered held-out run on new groups only after the development loop passes.
 
 ## 3. The chunks
 
-Each chunk: what it delivers, the files, the contract, the tests, the acceptance criteria, an
-estimate in engineer-days, and what it depends on. Chunks in one workstream are ordered.
+Each chunk: what it delivers, the files, the contract, the tests (by test-plan id), the
+acceptance criteria, an estimate in engineer-days, and what it depends on. Chunks in one
+workstream are ordered.
 
 ### Workstream A · Foundation in the binary (no Claude Code dependency)
 
-#### A1 · `PreToolUse` identity dedup
+#### A1 · `PreToolUse` identity dedup and the two-phase payload
 
-- **Delivers.** One decision per `tool_use_id` however many times the event is delivered.
-- **Files.** `crates/adage-hook/src/harness/claude.rs:60-72` (`event_identity` gains
-  `"PreToolUse" => vec![p.get("tool_use_id")?.as_str()?]`); `crates/adage-runtime/src/lib.rs:137`
-  (`SessionState.seen_pretool: Vec<String>`, `#[serde(default, skip_serializing_if =
-  "Vec::is_empty")]`, bounded at 64, oldest dropped); `crates/adage-hook/src/lib.rs:549-570`
-  (before the receipt and planner: `state::update` records the identity; a repeat returns
-  `Ok(None)`); `crates/adage-runtime/src/rebuild.rs` (the ring is not rebuilt: a rebuilt state
-  starts empty, which is fail-open).
+- **Delivers.** One decision per `tool_use_id` however many times the event is delivered, and
+  the `dry_run` / `verdict` fields the mod will use.
+- **Files.** `crates/adage-hook/src/lib.rs:549-722` (after the word scan at `:566-569`: read
+  `dry_run` and `verdict`; `state::update` records the hashed identity on every printing path,
+  `:587-603`, `:712`, `:719`; a repeat returns `Ok(None)`; `checked_by` on the record);
+  `crates/adage-runtime/src/lib.rs:137` (`SessionState.seen_pretool: Vec<u64>`,
+  `#[serde(default, skip_serializing_if = "Vec::is_empty")]`, bounded at 64, oldest dropped);
+  `harness/claude.rs:60-72` (`event_identity` gains `"PreToolUse"`); `rebuild.rs` (the ring is
+  not rebuilt: a rebuilt state starts empty, which is fail-open).
 - **Contract.** A `PreToolUse` payload with a `tool_use_id` seen in this session produces no
-  output and no spool record. A payload without `tool_use_id` is decided as today.
-- **Tests.** Unit: `harness/mod.rs identity_tests` gains the PreToolUse case. Integration
-  (`crates/adage-cli/tests/hooks.rs`): the same PreToolUse payload twice gives one rewrite then
-  nothing, and the spool has one `pretool` record; 65 distinct ids keep deciding (the ring
-  bound). Golden: `claude_scenario` gains a `PreToolUse` step with a rewrite (the U11 fixture
-  from `zero_config_plugin.rs`'s environment) so the output is pinned; parity re-blessed.
+  output and no spool record. A payload without `tool_use_id` is decided as today. A `dry_run`
+  payload prints the plan and records nothing. A payload with no Python word costs what it costs
+  today (no I/O).
+- **Tests.** T-A1-01 … T-A1-07.
 - **Acceptance.** `cargo test -p adage-hook -p adage-cli --test hooks` green; one spool record
-  per id in the integration test; the Claude golden diff shows only the added step; p95 of the
-  PreToolUse no-match path unchanged within 0.1 ms in `hook_latency` (add a `pretool_no_match`
-  scenario).
-- **Estimate.** 1 day. **Depends on.** Nothing.
+  per id in the integration test; the Claude golden unchanged (the U11 rewrite is pinned in
+  `zero_config_plugin.rs`, where the environment fixture lives; `claude_scenario`'s new
+  `PreToolUse` step prints `(nothing)` because its `World` binds no environment); paired
+  `hook_latency <before>,<after> - 500` shows the `pretool_no_match` p95 difference within 0.3 ms.
+- **Estimate.** 1.5 days. **Depends on.** Nothing.
 
 #### A2 · Spool `duration_us` and the doctor p95 check
 
-- **Files.** `crates/adage-hook/src/lib.rs:1091` (the decision record), `:712` (`pretool`),
-  `:936` (`session_start`): add `"duration_us": started.elapsed().as_micros()` (pass `started`
-  into `respond` and `pretool`); `crates/adage-cli/src/doctor.rs:812` (`checks()` gains `hook
-  latency`: p95 of `duration_us` over the last 500 records of this repository's sessions; warn
-  above 10,000 µs for `batch` records with empty `would_have`, fail above 25,000); `ui/feed.rs`
-  ignores the field.
-- **Tests.** Unit for the percentile over synthetic spools (nearest rank, as
-  `release_plugin_startup` computes it); `doctor --json` shows the new check with `status:
-  pass|warn|fail`; the `fresh_install.rs` snapshots re-blessed if the card changed.
+- **Files.** `crates/adage-hook/src/lib.rs:1091, 591, 712, 403, 936` (every record site; pass
+  `started` into `respond` and `pretool`); `crates/adage-cli/src/doctor.rs:812` (`checks()` gains
+  `hook latency`, cached for 5 s; §2.5.4's thresholds and the under-20 rule), `doctor.rs:242`
+  (the structured `action`); `ui/feed.rs` ignores the field.
+- **Tests.** T-A2-01 … T-A2-04.
 - **Acceptance.** `adage doctor --json | jq '.checks[] | select(.check=="hook latency")'` present
-  on a seeded home; the no-match hook cost unchanged within 0.1 ms p95.
+  on a seeded home; paired `hook_latency` shows the no-match cost within 0.3 ms.
 - **Estimate.** 1 day. **Depends on.** Nothing.
 
 #### A3 · `adage watch --follow --json`
 
-- **Delivers.** The pane's feed and the band's countdown without a terminal.
-- **Files.** `crates/adage-cli/src/ui/watch.rs` (a `follow_json(ctx, since)` loop over
-  `Sources::poll`, writing one line per `FeedItem`, per `learn.log` line
-  `{"kind":"learn", …}` and per health change `{"kind":"health", lamps:[…]}`; also
-  `{"kind":"learner", state: "waiting"|"running"|"idle", next_at}` from
-  `<slug>.spawn.json`/`.lock`); `ui/mod.rs:100` (accept `--follow`, `--json`, `--since`); the
-  record shape documented in `docs/live-learning.md` under "Streams to follow".
-- **Contract.** NDJSON on stdout, one object per line, `seq` monotonic per run, `--since <seq>`
-  resumes; exits 0 on stdin EOF or SIGTERM; never writes to the terminal.
-- **Tests.** `crates/adage-cli/tests/watch.rs` gains `follow_json_streams_spool_and_learn_log`:
-  start the command, append a spool record and a `learn.log` line, read two JSON lines within
-  2 s, send EOF, exit 0. A `--since` test.
-- **Acceptance.** 200 rows at 2 Hz for 60 s with no dropped `seq`; memory flat (the ring is
-  bounded at 500 rows); the terminal pane's snapshots unchanged.
-- **Estimate.** 2 days. **Depends on.** Nothing.
+- **Delivers.** The pane's feed and the band's countdown without a terminal, resumable, and
+  silent about the current session's arm.
+- **Files.** `crates/adage-cli/src/ui/watch.rs` (`follow_json(ctx, session, since)` over
+  `Sources::poll`, bypassing `Live`); `ui/feed.rs` (the cursor; the per-session filter);
+  `ui/mod.rs:100` (accept `--follow`, `--json`, `--session`, `--since`); `docs/live-learning.md`
+  "Streams to follow".
+- **Contract.** NDJSON on stdout, one object per line, each with `kind`, `cursor` and the
+  record; `--since <cursor>` resumes exactly after that line in a new process; for `--session
+  <id>` no line names the arm or a withheld act; exits 0 on stdin EOF, SIGTERM or parent death;
+  never writes an escape sequence.
+- **Tests.** T-A3-01 … T-A3-06.
+- **Acceptance.** 200 rows at 2 Hz for 60 s with no gap across one forced restart (`--since`);
+  RSS, sampled from `/proc/self/status` on Linux, flat within 10 MiB; the terminal pane's
+  snapshots unchanged.
+- **Estimate.** 2.5 days. **Depends on.** Nothing.
 
-#### A4 · `adage ledger note` and harness-priced cost
+#### A4 · `adage ledger note` and the harness ledger file
 
-- **Files.** `crates/adage-learn/src/ledger.rs:30-41` (`StepUsage`, `hook_ms`,
-  `harness_version` on `SessionSummary`; `Ledger::note(summary)` writing the line and marking
-  the session in `.seen.json` as harness-priced so a later transcript summary does not replace
-  it); `crates/adage-cli/src/ledger.rs` (new: `adage ledger note` reads stdin, validates, calls
-  `Ledger::note`, then `savings::refresh`); `savings.rs:370 gather` prefers `source: harness`;
-  `docs/live-learning.md` "Files".
+- **Files.** `crates/adage-learn/src/ledger.rs:30-62` (`StepUsage`, `hook_ms`, `harness_version`
+  on `SessionSummary`; `Ledger::merge_harness(path)` under the ledger lock), `:381` (never
+  replace a harness line); `crates/adage-cli/src/ledger.rs` (new), `cli.rs`, `main.rs`
+  (dispatch); `savings.rs:370 gather` prefers `source: harness`, `:405` counts `predicted_steps`
+  as turns not spent; `docs/live-learning.md` "Files".
 - **Contract.** stdin: `{ "session_id", "repo", "harness": "claude-code", "harness_version",
   "started_at", "ended_at", "steps": [{ "index", "model", "input", "output", "cache_read",
-  "cache_write", "predicted" }], "cost_usd"?, "hook_ms": [..] }`. A second line for the same
-  session replaces the first. Exit 2 on a malformed line, nothing written.
-- **Tests.** Unit: a harness line wins over a priced one; `cost.source == "harness"`;
-  `predicted` steps are counted as zero-cost steps and listed. Integration: `savings --json`
-  reflects the line; `pricing_honesty` still passes for transcripts with unknown models.
+  "cache_write", "predicted" }], "cost_usd"?, "hook_ms": [..] }`. Accepted only when the spool
+  holds `session_start` for the session in this repository; a second note for the same session
+  replaces the first in `harness.jsonl`. Exit 2 on a malformed or unmatched line, nothing
+  written.
+- **Tests.** T-A4-01 … T-A4-05.
 - **Acceptance.** `echo '<line>' | adage ledger note && adage savings --json` shows the session
-  with `source: harness`; the Hajek estimator's inputs are unchanged for sessions without a
-  note (the `savings_gate` test passes).
+  with `source: harness` after the learner's next merge; `savings_gate` and `pricing_honesty`
+  (`zero_config_plugin.rs:717, 760`) pass with a `population()` that includes a harness line with
+  predicted steps.
 - **Estimate.** 2 days. **Depends on.** Nothing.
 
 #### A5 · JSON for the pane: status card `--json`, `tokens.ts`
 
-- **Files.** `crates/adage-cli/src/status_card.rs:367` (`--json` emits the rows); `xtask/src/
-  main.rs:74-80` (third output `TS_OUT = plugin/claude-code/hooks/tokens.ts`: `export const
-  GLYPHS = { reflex: ['◠','~'], instinct: ['◉','(o)'], rewrite: ['↪','=>'], … }` and `export const
-  ROLES = { accent: 'accent', fire: 'success', prime: 'warning', inhibit: 'error', … }` mapping
-  Adage roles to Claude Code theme keys, generated from the tokens' `glyph` and role groups);
-  the staleness test asserts three outputs; `docs/design/style.md` notes the third output.
-- **Acceptance.** `cargo xtask tokens --check` passes with the committed `tokens.ts`;
+- **Files.** `crates/adage-cli/src/status_card.rs:367`, `main.rs:268` (`--json`,
+  `--for-session`); `xtask/src/main.rs:74-80, 414` (third output `plugin/claude-code/hooks/
+  tokens.ts`: `GLYPHS` with UTF-8 and ASCII twins from the tokens' `glyph` group, `ROLES` mapping
+  Adage roles to Claude Code theme keys); `docs/design/style.md` notes the third output.
+- **Tests.** T-A5-01, T-A5-02.
+- **Acceptance.** `the_committed_tokens_are_current` passes with the committed `tokens.ts`;
   `adage --json` parses and matches the card's rows one to one in a snapshot test.
 - **Estimate.** 1 day. **Depends on.** Nothing.
+
+#### A6 · `adage off`, `adage on`, `adage-exec version`
+
+- **Files.** `crates/adage-cli/src/cli.rs:30-125` (`Off`, `On`), `main.rs:211-270` (dispatch),
+  a new `switch.rs` (`off` writes `<root>/.adage/disabled`; `on` removes it behind
+  `require_person`); `crates/adage-exec/src/main.rs:428-446` (`version` prints the crate version;
+  `hook` stays first so the no-match path is untouched); `docs/live-learning.md` (the kill
+  switches); the status card's first line when off.
+- **Contract.** `adage off` exits 0 and creates the file, idempotent, allowed under `AGENT_ENV`;
+  `adage on` refuses under `AGENT_ENV` with the person-only message and otherwise removes the
+  file; both exit 0 with one line outside a repository.
+- **Tests.** T-A6-01 … T-A6-03.
+- **Acceptance.** The hooks print nothing after `adage off` in the integration `World`; `adage
+  on` with `CLAUDECODE=1` exits non-zero and leaves the file; `adage-exec version` prints one
+  line and `adage-exec hook` latency is unchanged (paired run).
+- **Estimate.** 0.5 day. **Depends on.** Nothing.
 
 ### Workstream B · The mod: see it (Layer 1 of the design)
 
 Needs S9 Q1, Q2 (Layer 1), Q3 and Q6 to have passed. Every chunk here ships behind
-`claude plugin validate --strict` and `claude plugin test` in CI.
+`claude plugin validate --strict` and `claude plugin test` in CI on the pinned CLI.
 
-#### B1 · The module skeleton, the bridge, and CI
+#### B1 · The module skeleton, the bridge, activation, and CI
 
-- **Files.** `plugin/claude-code/hooks/hooks.json` (add `"modules": ["./register.ts"]`),
-  `hooks/register.ts`, `hooks/bridge.ts` (`ask($, event, payload, timeoutMs)`: `$.process.run`
-  of `$DATA/bin/adage hook claude <event>` with stdin, fail-open), `types/index.d.ts`
-  (`PluginState` for `adage`: `session`, `fired`, `rewrites`, `rows`), `.claude-plugin/plugin.json`
-  (`types`, `userConfig` rows `band`, `pane`, `notices`, `noticed`, `skills_invoke`,
-  `hold_dead_ends`, `routine_model`), `hooks/bridge.test.ts` (stubbed `$.process.run`: exit 0
-  with JSON, exit 1, timeout, not JSON, missing binary → `undefined` in all but the first);
-  `scripts/check-plugin.mjs` (allow `modules`, require each module file to exist, require `types`
-  to exist, keep every other rule); `.github/workflows/ci.yml` `plugin` job (add `claude plugin
-  test plugin/claude-code` and the exec plugin); the same files mirrored into
-  `plugin/claude-code-exec` with the binary name `adage-exec`.
-- **Where the binary is.** The shim links `${CLAUDE_PLUGIN_DATA}/bin/adage`; the mod reads
-  `$.env.get('CLAUDE_PLUGIN_DATA')` (to verify: the engine's process environment carries it, or
-  the mod derives it from `$.plugin.root` as the shim's `session-start` does) and falls back to
-  `adage` on `PATH` through `$.process.run(['adage','version'])`.
-- **Acceptance.** `claude plugin validate --strict plugin/claude-code` lists exactly the hooks and
-  calls the module makes (`hooks:` and `calls:` lines reviewed and committed as
-  `plugin/claude-code/VALIDATE.txt` so a drift shows in review); `claude plugin test` passes; a
-  session with the mod loaded shows `1 mod active · adage` under `/plugin`; with the binary
-  removed every hook returns `next(e)` and the session is unchanged (`-p` diff identical).
-- **Estimate.** 2 days. **Depends on.** S9 Q1, Q6.
+- **Files.** `plugin/claude-code/hooks/hooks.json` (`"modules": ["./register.ts"]`),
+  `hooks/register.ts` (the probe: `[hookBin, 'version']`; `active`; every registration wrapped;
+  `ADAGE_MOD_OBSERVE`), `hooks/bridge.ts` (`ask()` per architecture §2 rule 1; `hookBinary($)` =
+  `$DATA/bin/<adage|adage-exec>`, `cliBinary($)` = `$DATA/bin/adage`; the allow-list; `env: {
+  CLAUDECODE: '1' }`), `types/index.d.ts` (`PluginState`: `session`, `fired`, `rewrites`,
+  `rows`, `noticed`, `standing`, `environment`, `hookMs`, `feed`), `.claude-plugin/plugin.json`
+  (`types`, `userConfig`), `hooks/bridge.test.ts`, `hooks/register.test.ts`;
+  `scripts/check-plugin.mjs` (allow `modules`, require each module file and `types`, check the
+  allow-list literal and the CLI pin, keep every other rule); `.github/workflows/ci.yml:195-214`
+  (`npm install -g @anthropic-ai/claude-code@2.1.287`, `claude plugin test` for both plugins,
+  `claude plugin validate --strict > /tmp/v && diff /tmp/v plugin/claude-code/VALIDATE.txt`);
+  the same files mirrored into `plugin/claude-code-exec`; `plugin/build.sh` stages `adage` into
+  the exec plugin's `dist/<target>/` and the exec shim links it.
+- **Where the binaries are.** The shim links `${CLAUDE_PLUGIN_DATA}/bin/<name>`; the mod reads
+  `$.env.get('CLAUDE_PLUGIN_DATA')` (Q1 verifies the engine's process carries it; else the mod
+  derives it from `$.plugin.root` as the shim does). No `PATH` fallback when the link is
+  `scripts/quiet`; a `PATH` fallback only when no link exists at all.
+- **Tests.** T-B1-01 … T-B1-06.
+- **Acceptance.** `claude plugin validate --strict` output committed as `VALIDATE.txt` and
+  diffed in CI; `claude plugin test` passes on the pinned CLI; a session with the mod loaded shows
+  `1 mod active · adage` under `/plugin`; with both plugins installed exactly one copy is active
+  (the other's probe prints nothing); with the binary removed every hook returns `next(e)` and
+  the hook outputs and spool records are identical to a run without the mod.
+- **Estimate.** 2.5 days. **Depends on.** A6, S9 Q1, Q6.
 
 #### B2 · Observe the command hooks; the rows and the band
 
 - **Files.** `hooks/decide.ts` (`classic.UserPromptSubmit`, `classic.PostToolBatch`,
-  `classic.PostToolUseFailure`, `classic.Stop`, `classic.SessionStart`: `await next(e)`, parse
-  `<adage-reflex …>` attributes (`track`, `route`, `strength`, `kind`, `origin`) and the
-  `noticed`/`predicted` fields of the record once A6/C1 land, update `$.state`); `hooks/draw/
-  rows.tsx` (`ui.render` on `UserMessage`, `ToolUse`, `ToolGroup`, `Spinner`, `TurnDuration`,
-  `InfoNotice`: the lines of design §4, each a `Box` with the engine's reference then one dim
-  `Text`); `hooks/draw/band.tsx` (`AbovePrompt`: one line, `next(e)` when nothing to say);
-  `hooks/draw/*.test.tsx` (`ui.mount` per site over `['terminal','desktop']`, fixture state).
-- **Rules enforced in code.** No `ui.render` hook registered when `session.start`'s
-  `isInteractive` is false; nothing drawn per event when the state's arm is unknown or the
-  record is empty; theme keys from `tokens.ts`, never a literal.
-- **Acceptance.** `claude plugin test` green on both surfaces for every site; the `-p` run of
-  `demo/run.py one W-2041 adage` with `--plugin-dir` produces a transcript identical to the one
-  without the mod (hooks observe, nothing changes); an interactive session on the acme-billing
-  sandbox shows the prompt line, the tool-row marker and the band as in design §1 (screenshot
-  recorded in `spikes/S9-claude-mods/results/`).
+  `classic.PostToolUseFailure`, `classic.Stop`: `await next(e)`, parse `<adage-reflex …>`
+  attributes, update `$.state`; the avoid marker and `noticed` come from the feed, not from
+  stdout); `hooks/draw/rows.tsx` (`ui.render` on `UserMessage` keyed by prompt order, `ToolUse`,
+  `ToolGroup`, `Spinner`, `TurnDuration`, `InfoNotice` as a redraw of the engine's notice: the
+  lines of ux-design §10, each a `Box` with the engine's reference then one dim `Text`);
+  `hooks/draw/band.tsx` (`AbovePrompt` per ux-design §5, `next(e)` when nothing to say);
+  `hooks/draw/*.test.tsx` (`ui.mount` per site over `['terminal','desktop']`, fixture state per
+  test-plan §6).
+- **Rules enforced in code.** `ui.render` hooks return `next(e)` while `active` is false or the
+  session is not interactive; nothing drawn per event when the record is empty; theme keys from
+  `tokens.ts`, never a literal; no strength or lifecycle word outside the pane; no string starts
+  with `adage:` on `$.ui.status`.
+- **Tests.** T-B2-01 … T-B2-11; T-X-06, T-X-07.
+- **Acceptance.** `claude plugin test` green on both surfaces for every site; the `mod-observe`
+  arm's hook outputs and spool records for a recorded payload stream equal the `adage` arm's
+  byte for byte (E1's recorded replay, run early with the stream alone); an interactive session
+  on the acme-billing sandbox shows the prompt line, the tool-row marker and the band as in
+  design §1 (recording in `spikes/S9-claude-mods/results/`).
 - **Estimate.** 4 days. **Depends on.** B1, S9 Q3.
 
 #### B3 · The pane and `/adage …`
 
-- **Files.** `hooks/feed.ts` (`$.process.spawn(['<bin>','watch','--follow','--json','--repo',
-  cwd])` from `session.start`, rows into `$.state`, restart with `--since` on exit while the
-  module lives), `hooks/draw/pane.tsx` (tabs Live, Reflexes, Health per design §4.1; rows as
-  `plain` Buttons; the inspect pane; `Copy command` via `$.ui.copy`; a `Link` to the map),
-  `hooks/commands.ts` (`/adage`, `/adage watch|reflexes|health|why|off|on|pause`; `off`/`on`
-  through `adage` writing `.adage/disabled`), `hooks/draw/card.tsx` (`CommandOutput` for
-  `/adage` and `/adage why` from `adage --json` and the spool's last decision).
-- **Acceptance.** Q3b's criteria: no dropped `seq` at 2 Hz; the child is gone after `/clear`
-  and exit (`ps` in the test harness); every row of the design's `adage watch` mapping table
-  measured Direct, Close or Out and recorded; `adage review` is never run by the mod (grep the
-  validate output: no `process.run` argv containing `review`, `delegate`, `install`, `config
-  set` in `VALIDATE.txt`).
-- **Estimate.** 5 days. **Depends on.** A3, A5, B2.
+- **Files.** `hooks/feed.ts` (`$.process.spawn([cliBin, 'watch', '--follow', '--json', '--repo',
+  cwd, '--session', id, '--since', cursor])` from `session.start`, line buffering, rows into
+  `$.state`, restart from the last cursor, three failures → `feed: 'stopped'`; the reconnect
+  logic as pure functions), `hooks/draw/pane.tsx` (tabs Live, Reflexes, Health per ux-design
+  §6; lowercase hotkeys `l`, `r`, `t`; rows as `plain` Buttons; the inspect pane; a `Copy` per
+  `review.verbs` entry via `$.ui.copy`; `Select`s for strength and lifecycle; a `Link` to the
+  map), `hooks/commands.ts` (`/adage`, `/adage watch|reflexes|health|why|off|on|pause` per
+  ux-design §7; `off` runs `adage off`; `on` prints and copies the terminal command),
+  `hooks/draw/card.tsx` (`CommandOutput` for `/adage` from `adage --json --for-session` and
+  `/adage why` from the feed's last decision for this session).
+- **Tests.** T-B3-01 … T-B3-10; T-X-04.
+- **Acceptance.** Q3b's criteria: no gap at 2 Hz across a restart; the child is gone after
+  `/clear` and exit (`ps` in the live probe); every row of the design's `adage watch` mapping
+  table measured Direct, Close or Out and recorded; the recorded argv across every L7 fixture is
+  within the allow-list; the pane in a control-arm fixture is byte-identical to a treated
+  no-match fixture.
+- **Estimate.** 5 days. **Depends on.** A3, A5, A6, B2.
 
 ### Workstream C · Act in the model's place (Layers 2 and 4)
 
@@ -407,276 +545,261 @@ Needs S9 Q1, Q2 (Layer 1), Q3 and Q6 to have passed. Every chunk here ships behi
 
 - **Delivers.** The decision "predict this call now, or nothing", on the CPU, for a directive
   Adage already delivered.
-- **Files.** `crates/adage-runtime/src/lib.rs:81` (`Event::TurnStep { turn_id, index, model,
-  agent }`, `name() = "turn_step"`), `:137` (`SessionState.last_step_predicted`,
-  `predictions`), `:250-304` (`Prediction`, `Decision.predicted`, `Decision.would_predict`,
-  `Judgement::Predicted`), `:559` (the `decide` arm: for each `pending` whose `expect_key` is
-  unobserved and each armed unmet obligation, in delivery order, the first with a current
-  `predict` grant and a fully bound command; bounds checked; control arm records
-  `would_predict`), `fast.rs:40` (the `TurnStep` arm), `rebuild.rs` (replays `predicted`);
-  `crates/adage-hook/src/harness/mod.rs:35` (`Output::Predict { tool, input, route, track, kind
-  }`), `harness/claude.rs:74-123` (`translate` reads `turn_id`, `index`, `model`, `agent_id`;
-  `render` emits `{"predict": …}`), `codex.rs:72`, `opencode.rs:71` (`Predict → None`);
-  `crates/adage-hook/src/lib.rs:946` (`respond` passes the grant lookup through the extension:
-  `Extension::predict_grant(repo, route) -> Option<Grant>`; without adage-exec the answer is
-  `None` and nothing is predicted). `Call.by` and the `adage_` prefix on `PreToolUse`,
-  `PostToolBatch`, `PostToolUseFailure` in `claude.rs:42-53`.
+- **Files.** `crates/adage-runtime/src/lib.rs:81` (`Event::TurnStep`, `name() = "turn_step"`),
+  `:103-112` (`Pending.command`), `:137` (`last_step_predicted`, `predictions`), `:250-304`
+  (`Prediction`, `Decision.predicted`, `would_predict`, `routine`, `would_route`,
+  `Judgement::Predicted`), `:559` (the arm per §2.2.2), `:1030` (`with_predict_grants` beside
+  `with_exec_only`), `:1238-1245` (fill `command`), `fast.rs:40`, `rebuild.rs:45-58`;
+  `crates/adage-hook/src/harness/mod.rs:35` (`Output::Predict`), `harness/claude.rs:42-53`
+  (`call_from` keeps `tool_use_id`; `Call.by`), `:74-123` (`translate`, `render`), `codex.rs:79`,
+  `opencode.rs:77`; `crates/adage-hook/src/lib.rs:946-994` (`Extension::predict_grants(repo)`,
+  default empty; collected before the lock); `crates/adage-core` (`By`); the `turn_step` consumers
+  listed in §2.2.2; `docs/how-it-works.md` (the prediction behaviour row).
 - **Contract.** stdin: `{ "session_id", "cwd", "hook_event_name": "TurnStep", "turn_id",
   "index", "model", "agent_id"? }`. stdout: nothing, or `{ "predict": { "tool": "Bash", "input":
   { "command": "make gen" }, "route", "track", "kind": "obligation" | "run" | "sequence" |
-  "skill" } }`. Never two predictions in a row for one `turn_id`; at most `runtime.predict_cap`
-  per session; nothing in the control arm; nothing without a grant.
-- **Tests.** Unit (`adage-runtime/src/tests.rs`): a pending directive with a grant predicts
-  once; the next `TurnStep` without an intervening batch predicts nothing; a batch that observes
-  the key clears it; the cap; the control arm's `would_predict`; a `Skill` step predicts the
-  Skill tool. Integration (`hooks.rs`): the golden gains `TurnStep` steps (one predicting, one
-  silent); `hook_latency` gains `turn_step_nothing_pending` (must skip) and
-  `turn_step_predicts`. Replay gate: `fast_path_changes_no_decision` over `TurnStep`.
-- **Acceptance.** `turn_step_nothing_pending` p95 ≤ the `batch_no_match` p95 + 0.3 ms;
-  `turn_step_predicts` p95 ≤ 10 ms; goldens re-blessed with only the added steps; the control
-  arm emits nothing in the sim (C4).
-- **Estimate.** 4 days. **Depends on.** A1 (shared `tool_use_id` handling).
+  "skill" } }` (a pending directive's kind is `run` or `sequence`; an armed obligation's is
+  `obligation`). Never at `index 0`; never two predictions in a row for one `turn_id`; at most
+  `runtime.predict_cap` per session; never a route the interlock inhibits; nothing in the control
+  arm (`would_predict` spooled); nothing without a grant (so nothing from `adage hook`).
+- **Tests.** T-C1-01 … T-C1-13; T-X-01, T-X-05.
+- **Acceptance.** Paired `hook_latency`: `turn_step_nothing_pending` p95 within 0.3 ms of
+  `batch_no_match`; `turn_step_predicts` (run against `adage-exec` with a seeded
+  `exec/approvals.json`, `policy.toml` and a pending directive, which `hook_latency` learns to
+  write) p95 ≤ 10 ms; the Claude golden gains one silent `TurnStep` step and parity holds; the
+  control arm emits nothing in the sim (C4).
+- **Estimate.** 4.5 days. **Depends on.** A1 (shared payload handling).
 
 #### C2 · The `predict` grant in adage-exec and the CLI
 
-- **Files.** `crates/adage-exec/src/approvals.rs:22` (`mode: GrantMode`, default `Execute`;
-  `for_request` sets it from the request; `diff` names it), `request.rs` (`ExecRequest.mode`),
-  `route.rs:264 plan` (a `Predict` request plans no action spec and no sandbox profile:
-  `profile_id = "harness"`), `:594-681` (`Lapse::what` wording for `mode`; `reapprove_command`
-  appends `--predict`), `hook.rs` (`impl Extension::predict_grant`: the current approval for
-  `(repo, route)` with `mode == Predict`, current key, policy permits), `policy.rs:250`
-  (`permits` requires `max_level >= E2` for predict); `crates/adage-cli/src/cli.rs:251-266`
-  (`--predict` on `DelegateRoute`, exclusive with `--effect`), `exec.rs:620-871` (the branch:
-  no preview, `basis` from evidence, `terms.effect = route.effect`), `exec.rs:277` (`delegate
-  predict on|off`: writes or removes `exec/predict-off`; `on` requires a person), `exec.rs:325`
-  (`status --json` shows `mode`); `docs/execution.md` (a "Predicted calls" section beside
-  "Approvals" and "Policy").
-- **Tests.** Unit: a predict key never equals an execute key for the same route; an old
-  `approvals.json` without `mode` loads as `Execute`; lapse on a changed template names the field;
-  `permits` refuses predict at `max_level e1`. Integration (`crates/adage-cli/tests/exec.rs`):
-  `review delegate … --predict` refuses inside an agent session (`CLAUDECODE` set), succeeds at a
-  terminal, shows in `delegate status --json` with `mode: predict`, and `predict off` stops C1
-  from predicting (the hook returns nothing).
+- **Files.** `crates/adage-exec/src/approvals.rs:22, 200-236` (`mode: GrantMode`, default
+  `Execute`; `approve`, `revoke_automatically`, `lapsed`, `Revocation`, `diff` all mode-aware),
+  `request.rs` (`ExecRequest.mode`), `route.rs:264 plan` (a `Predict` request plans no action
+  spec and no sandbox profile: `profile_id = "harness"`), `:570-589, 681-705` (`plan_grants`,
+  `lapses` on the predict path; `Lapse::what` wording), `:650` (`reapprove_command` appends
+  `--predict`), `hook.rs:195, 774, 931, 1228` (`mode == Execute` filters), `hook.rs` (`impl
+  Extension::predict_grants`: current approvals with `mode == Predict`, current key, policy
+  permits, `exec/predict-off` absent), `policy.rs:250` (`permits` for predict: `max_level >= E2`,
+  effect ≤ Regenerate, `effects_deny`, `allow_environment_actions`); `crates/adage-cli/src/
+  cli.rs:251-266` (`--predict`, exclusive with `--effect` and `--level`), `exec.rs:620-871` (the
+  branch: no preview, `basis` from evidence, the refusals of §2.2.3), `exec.rs:132-180` (`delegate
+  predict on|off`), `exec.rs:325` (`status --json` shows `mode`); `docs/execution.md` ("Predicted
+  calls" beside "Approvals" and "Policy"); `docs/claude-mod/architecture.md` §3.2 if any wording
+  moves.
+- **Tests.** T-C2-01 … T-C2-09; T-X-11.
 - **Acceptance.** `adage review delegate <track> <route> --predict` round-trips through
-  `delegate status`, `revoke`, and a lapse notice; `adage-exec hook` parity with `adage hook`
-  holds with no grants.
-- **Estimate.** 3 days. **Depends on.** C1.
+  `delegate status`, `revoke`, and a lapse notice; a route holding both grants keeps both through
+  approve, revoke and lapse, and its E2 action and receipts still run; `adage-exec hook` parity
+  with `adage hook` holds with no grants.
+- **Estimate.** 3.5 days. **Depends on.** C1.
 
 #### C3 · Receipt as the result, rewrites checked by the engine
 
 - **Files.** `crates/adage-hook/src/lib.rs:190-194` (`pretool_context` returns `PreNote`),
-  `adage-exec/src/hook.rs:751` (`covering_receipt` fills `fresh` and `result`), `harness/
-  claude.rs:117` (`Output::Rewrite` and `Context` carry `receipt: { fresh, result }` in a
-  sibling JSON field the command hook renders too, so the mod reads one shape); the mod's
-  `hooks/decide.ts` (`tool.call { tool: 'Bash' }`: ask `PreToolUse`; if `receipt.fresh` return
-  `{ result: { stdout: receipt.result, stderr: '', interrupted: false }, context: [note] }`; else
-  if a rewrite, `$.tool.check` then `next({ ...e, command })` with `$.ui.notice`; else
-  `next(e)`); `hooks/draw/rows.tsx` (`ToolResult` receipt card).
-- **Tests.** Rust unit: `fresh` is true only for an applied run on identical inputs covering the
-  call; false after any file in the snapshot changes. Mod tests: the three branches with stubbed
-  `ask` and `$.tool.check` answers (`allow`, `ask`, `deny`); the `deny` branch never rewrites.
-  S9 Q4's four settings fixtures recorded.
-- **Acceptance.** In the acme-billing demo with E2 on, a second `make test` after a passing
-  Adage run returns the receipt as the result and runs no process (verified by the sandbox's
-  command log); the no-mod path still gets the note as context (golden unchanged apart from the
-  new field); `$.tool.check` agrees with `pretool::keeps_permissions` on every settings fixture.
-- **Estimate.** 3 days. **Depends on.** A1, B1, C1 (for `by: Adage`), S9 Q4.
+  `:549-722` (the `dry_run` plan and the `verdict` decision; `receipt` rendered only for those
+  payloads), `adage-exec/src/hook.rs:751` (`covering_receipt` fills `fresh`, `result`,
+  `covering`; `answered: 'receipt'` marks the obligation met and the receipt used); the mod's
+  `hooks/decide.ts` (`tool.call { tool: 'Bash' }` per architecture §3.3 and §3.4: dry run →
+  `$.tool.check` on the original → receipt only on `allow` → final ask → result; or two checks →
+  `verdict.engine` → final ask → `next({ ...e, command })` with `$.ui.notice`), `hooks/draw/
+  rows.tsx` (`ToolResult` receipt card only when answered; the dim line beside a real run).
+- **Tests.** T-C3-01 … T-C3-07.
+- **Acceptance.** In the `zero_config_plugin.rs` Python fixture (the U11 environment, an E2
+  `verify` grant seeded, a passing run journaled), the mod's dry run reports `fresh` and the
+  final call spools one `pretool` record with `answered: receipt`; the command hook's output for
+  the same payload without `dry_run` is unchanged (golden); `$.tool.check` agreement with
+  `pretool::keeps_permissions` recorded on every settings fixture (Q4).
+- **Estimate.** 3 days. **Depends on.** A1, B1, C1 (for `by: Adage`), S9 Q2 (Layer 2), Q4.
 
 #### C4 · The mod's `turn.step` and the simulator
 
-- **Files.** `hooks/decide.ts` (`turn.step` generator per design §3.2: main loop only, ask
-  `TurnStep`, yield `tool`/`input`/`stop`, return the result; a `Skill` prediction yields the
-  `Skill` tool with `{ skill, args? }` and checks `$.command.list()` lists the skill first);
-  `hooks/draw/rows.tsx` (the "ran this step on the CPU" marker keyed by the `adage_` id);
-  `crates/adage-sim/src/claude.rs` (`turn_step_hook(turn, sid, cwd)` payloads between batches;
-  `pretool_hook` per Bash call with `tool_use_id`), `scenario.rs:417 Replay` (`predict` and
-  `pretool` expectations per turn), `crates/adage-cli/tests/harness_sim.rs:192 replay_claude`
-  (asserts a prediction at the registry-edit turn when the grant is present, nothing in control,
-  nothing without the grant; `check_graph` counts `predicted`); `cargo run -p adage-sim`
-  regenerates fixtures.
-- **Acceptance.** S9 Q9's criteria in a live session (10 of 10 runs); the sim passes in both
-  arms; `claude plugin test` covers the generator with a stubbed `ask` (yields exactly three
-  chunks, returns `stopReason: 'tool_use'`, `usage: null`); with the binary missing the step is
-  forwarded unchanged.
-- **Estimate.** 4 days. **Depends on.** C1, C2, B1, S9 Q9.
+- **Files.** `hooks/decide.ts` (`turn.step` generator per architecture §3.2: main loop only,
+  `index > 0`, ask `TurnStep` with a 250 ms timeout, yield `tool`/`input`/`stop`, return the
+  result; a `Skill` prediction yields the `Skill` tool with `{ skill, args? }` and checks
+  `$.command.list()` lists the skill first; `routine` → `next({ ...e, model, effort })` only when
+  `routine_model` is set); `hooks/draw/rows.tsx` (the "chose this step" marker keyed by the
+  `adage_` id); `crates/adage-sim/src/claude.rs` (`turn_step_hook`, `pretool_hook`,
+  `standing_hook`), `scenario.rs:417 Replay` (`predict` and `pretool` expectations per turn),
+  `crates/adage-cli/tests/harness_sim.rs:192 replay_claude` (a prediction at the schema-edit turn
+  under `adage-exec` with the grant, nothing in control, nothing without the grant, nothing from
+  `adage`; `check_graph` counts `predicted`); `cargo run -p adage-sim` regenerates fixtures.
+- **Tests.** T-C4-01 … T-C4-06.
+- **Acceptance.** S9 Q9's criteria in a live session (10 of 10 runs, the permission dialog met
+  for a predicted call, the `adage_` id preserved in the transcript on disk); the sim passes in
+  both arms; `claude plugin test` covers the generator with a stubbed `ask`; with the binary
+  missing the step is forwarded unchanged.
+- **Estimate.** 4 days. **Depends on.** C1, C2, B1, S9 Q2 (Layer 2), Q9.
 
-#### C5 · Cached delivery, compaction, routing
+#### C5 · Standing text, compaction, routing
 
-- **Files.** `hooks/decide.ts` (`prompt.compose` appends `adage:procedures` from the
-  `SessionStart` answer's standing text, a new field `standing` the binary adds beside the
-  contract: the applicable procedure cards' titles and the instincts' one-liners, fixed for the
-  session; `tool.describe { tool: 'Bash' }` appends the environment note when U11 is bound;
-  `session.compact` drops Adage's rows and adds the instruction; `turn.step` routes with
-  `next({ ...e, model, effort })` when the answer says `routine` and `routine_model` is set);
-  `crates/adage-hook/src/lib.rs:750 session_start` (`standing` in the output JSON);
-  `crates/adage-hook/src/lib.rs` (`TurnStep` answers `routine: true` when a fire reflex is
-  pending without a grant).
-- **Tests.** Mod tests for each hook with fixtures; a Rust unit for `standing`'s size bound
-  (≤ 2,000 characters) and stability (identical across two `SessionStart`s in one session).
-- **Acceptance.** The system prompt's `adage:procedures` section is byte-identical across every
-  request of a session (read with `$.prompt.compose()` in a test); the per-event
-  `additionalContext` for standing text is no longer emitted when the mod reports the section is
-  in place (the binary reads a `has_standing: true` flag the mod passes on `SessionStart`'s
-  stdin, absent for command hooks); Q11 reported.
+- **Files.** `crates/adage-hook/src/lib.rs` (the `Standing` event per §2.2.8;
+  `SessionState.has_standing`), `harness/claude.rs` (`translate`, `render` for `{ standing,
+  environment }`); the mod's `hooks/decide.ts` (`prompt.compose` appends `adage:procedures` from
+  `$.state.standing`; `tool.describe { tool: 'Bash' }` appends `environment`; `session.compact`
+  adds the instruction and filters rows only when Q5 found a structural handle);
+  `crates/adage-runtime/src/lib.rs` (`routine` only when the payload says `routine_model` is set;
+  `would_route` in control).
+- **Tests.** T-C5-01 … T-C5-05.
+- **Acceptance.** The `adage:procedures` section is byte-identical across every request of a
+  session (`$.prompt.compose()` read in a Q2 probe); the per-event delivery of standing text is
+  not emitted once `has_standing` is set; a control session answers empty `standing` and never
+  `routine`; Q11 reported.
 - **Estimate.** 3 days. **Depends on.** B2, C1.
 
 ### Workstream D · Noticed and skills (binary first, mod to draw)
 
 #### D1 · Candidates in the learner and the index
 
-- **Files.** `crates/adage-graph/src/mine/mod.rs:262-273` (the alphabet floor becomes
-  `s_min − border`), `mine/mod.rs:505-524` (`mine()` returns border patterns beside the frequent
-  ones, flagged), `select.rs:603-688` (border patterns scored and carried as candidates, never
-  selected), `compile/shapes.rs:1094` (compiled like a reflex, `Compiled.candidate: bool`);
-  `crates/adage-tracks/src/model.rs` (`Candidate`), `io.rs` (read/write `candidates.json`),
-  `index.rs:19-33, 199-210` (`candidates`, `candidate_contexts`, `Triggers::of` over candidate
-  items), `triggers.rs:102`, `context.rs:51` (`CtxNet::of_candidates`); `crates/adage-learn/
-  src/engine.rs:745-767, 965-976` (keep as candidate instead of `Err` when `Compiled.candidate`
-  and the trigger qualifies), `lib.rs:292-296` (write `candidates.json` under `tracks.lock`,
-  compile into the index; nascent routes → `review: true` candidates), `diff.rs:27-45`
-  (`ChangeKind::Candidate`, and the tipping session ids on `New`); `docs/live-learning.md`,
-  `docs/how-it-works.md` ("From history to a reflex": a candidate is counted, never delivered),
-  `docs/tracks/track-g-graph-engine.md` §9 (the floor).
+- **Files.** `crates/adage-graph/src/mine/mod.rs` (`mine_candidates`: the second `Db` at floor
+  `s_min − border` from `:257-267`, `seq::mine` with the border recorded, the `[s_min − border,
+  s_min)` and `Context ≥ 2` filters), `select.rs:533` (score border patterns, carry as
+  candidates, never select), `compile/shapes.rs:1094` (`Compiled.candidate`); `crates/adage-tracks/
+  src/model.rs` (`Candidate`), `io.rs` (`candidates.json`), `index.rs:19-33, 216-223`
+  (`candidates`, `candidate_contexts`, `format`; `compile_root` reads the file), `triggers.rs:102`,
+  `context.rs:51` (`CtxNet::of_candidates`); `crates/adage-learn/src/engine.rs:745` (branch on
+  `Compiled.candidate` before `judge`), `lib.rs:292-296` (write `candidates.json` under
+  `tracks.lock`; nascent `Context` routes → `review: true`), `diff.rs:27-45` (`ChangeKind::
+  Candidate`, the tipping session ids on `New`); `crates/adage-cli/src/main.rs:590` (`status
+  --json` lists `candidates`); `crates/adage-sim/src/scenario.rs` (the 2-of-12 `make test` →
+  `make lint` sequence; fixtures regenerated); `docs/live-learning.md`, `docs/how-it-works.md`
+  ("From history to a reflex": a candidate is counted, never delivered),
+  `docs/tracks/track-g-graph-engine.md` §9 (the candidate pass).
 - **Contract.** `candidates.json`: `{ "schema": "adage-candidates/1", "repo", "s_min",
-  "candidates": [{ "id", "trigger", "step", "support", "days", "last_seen", "review" }] }`,
-  ids `candidate-<stable(context ‖ step)>` so a candidate that crosses `s_min` becomes the
-  reflex with the matching stable id (`compile/ids.rs`).
-- **Tests.** `adage-learn` unit: a pattern with support `s_min − 1` over qualifying triggers
-  yields a candidate, not a route; `s_min − 3` yields nothing; a one-event after-edit pattern
-  yields nothing; the next learn with one more supporting session turns it into a route with the
-  same stable id. `adage-tracks` unit: `Triggers::of` includes candidate words; `CtxNet::walk`
-  returns `cand:` ids; the index round-trips. Determinism: `index_is_deterministic` with
-  candidates.
-- **Acceptance.** `adage condition --demo` on the sim's twelve sessions writes at least one
-  candidate on the acme-billing fixture (the registry sequence appears in three of twelve, below
-  `s_min` under default thresholds and above the border) and the index's `candidates` lists it;
-  `hook_latency` `batch_no_match` p95 within +0.3 ms of before with candidates compiled; learn
-  time on the sim's 36 sessions within 1.3× of before and `condition --auto` with one changed
-  transcript under 150 ms; `cargo test -p adage-graph --test border` (incremental equals full)
-  still passes with the lower floor; every recorded index under `evals/datasets/` still loads.
-- **Estimate.** 5 days. **Depends on.** Nothing.
+  "candidates": [{ "id", "trigger", "step", "support", "days", "last_seen", "review" }] }`, ids
+  the stable route ids (`compile/ids.rs`). The routes' mining input, result and `truncated` flag
+  are unchanged by the pass.
+- **Tests.** T-D1-01 … T-D1-10.
+- **Acceptance.** `adage condition --demo` on the sim's twelve sessions writes the `make test →
+  make lint` candidate (support 2, `s_min` 3) and `status --json` lists it; the routes compiled
+  from the sim and from every dataset are unchanged (`adage-learn/tests/golden.rs` and the
+  route-fidelity gates); `truncated` is false on every dataset; the fast path's skip rate over the
+  sim and the dataset replays is reported before and after; paired `hook_latency`
+  `batch_no_match` p95 within +0.3 ms with candidates compiled; `learn_bench` (300 × 2) within
+  1.3× of before, measured and pasted; `condition --auto` with one changed transcript under
+  150 ms; `cargo test -p adage-graph --test border` still passes; every recorded index loads.
+- **Estimate.** 6 days. **Depends on.** Nothing.
 
 #### D2 · `noticed` at hook time
 
-- **Files.** `crates/adage-runtime/src/lib.rs:137` (`SessionState.cand_ctx`, `noticed`),
-  `:559-567` (a second `Symbols` over `ctx.index.candidate_contexts(&repo)`), `:960-986,
-  1025-1033, 673-678` (push the same symbols into `cand_ctx`), after `:1179 fire_contexts` (the
-  candidate walk into `d.noticed`, once per session), `:287 Decision.noticed`, `Decision.cand_ctx`;
-  `rebuild.rs` (replays both); `crates/adage-cli/src/ui/feed.rs:16 Act::Noticed { candidate,
-  support, s_min, review }`, `graph.rs:774 event()` includes it; `savings.rs:336` ignores it;
-  `adage_eval::replay` gate covers it (a skipped event's `noticed` must be empty too).
+- **Files.** `crates/adage-runtime/src/lib.rs:137` (`SessionState.cand_ctx`, `noticed` bounded
+  at 64), `:559-567` (a second `Symbols` over `ctx.index.candidate_contexts(&repo)`), `:958-960`
+  (the early exit considers candidates), `:960-986, 1025-1033, 673-678` (push the same symbols
+  into `cand_ctx`), after `:1179 fire_contexts` (the candidate walk into `d.noticed`, once per
+  session), `:287 Decision.noticed`, `Decision.cand_ctx`; `rebuild.rs` (replays both);
+  `crates/adage-cli/src/ui/feed.rs:16 Act::Noticed { candidate, support, s_min, review }`,
+  `graph.rs:774 event()` includes it; `savings.rs:336` ignores it; `adage_eval::replay` gate
+  covers it.
 - **Contract.** In the spool record's `decision`: `"noticed": [{ "candidate", "support", "s_min",
-  "review" }]`; nothing in `additionalContext`; both arms.
-- **Tests.** Runtime unit: a candidate's context fires `noticed` exactly once per session and
-  never a directive; the same events with the route live fire the directive and no `noticed`.
-  Integration: the sim's held-out session notices the registry candidate at the `make gen` turn
-  in both arms (`replay_claude`), and `adage watch --once` shows the row.
-- **Acceptance.** Replay gate green (`fast_path_changes_no_decision` over every dataset with
-  candidates compiled); the sim passes; p95 as D1.
+  "review" }]`; nothing in `additionalContext`; both arms; once per candidate per session.
+- **Tests.** T-D2-01 … T-D2-07.
+- **Acceptance.** Replay gate green over every dataset with candidates compiled; the sim's
+  held-out session notices the `make lint` candidate in both arms and `adage watch --once` shows
+  the row; a live route fires its directive and no `noticed`; p95 as D1.
 - **Estimate.** 2 days. **Depends on.** D1.
 
 #### D3 · The `skill` response kind
 
-- **Files.** `crates/adage-tracks/src/model.rs:186-209, 507-522` (`Step::Skill`, shape, `SHAPES`
-  to eight), `io.rs:242-371, 406-414` (validation; `Skill` allowed under `Prompt`, `Intent`,
-  `AfterEdit`, `Context`), `interlock.rs:203`; `crates/adage-runtime/src/render.rs:935-1049`
-  (`route_text`: the template), `:1058-1107` (`named` reads the template back), `lib.rs:1196-1203`
-  (`fire_contexts` admits a `Skill` step), and the follow judge on `control Skill {skill}`;
-  `crates/adage-learn/src/bridge.rs:69`, `crates/adage-graph/src/input.rs:26-33`, `events.rs:27-34`,
-  `mine/mod.rs:467-475`, `compile/shapes.rs:1094, 224`, `compile/ids.rs:50`, `compile/mod.rs:367
-  commands()` (a `Skill` step has no command); `crates/adage-learn/src/engine.rs` (judge `skill`
-  like `run`), `import.rs:187-199` (`Directed.skills`); the exhaustive `Step` matches in
-  `adage-eval` (`score.rs:378, 574`, `savings_replay.rs:456`, `conventions.rs:423`, `lib.rs:225`)
-  and `adage-cli` (`graph.rs:153, 175`, `share.rs:177`, `ui/routes.rs:270`, `review.rs:191, 629,
-  1155`); `adage-eval` fixtures with a Skill tool use; `docs/training.md` ("What does not compile
-  yet" loses the "command with no stimulus" item for the skill case), `docs/how-it-works.md` (a
-  fifth behaviour row).
+- **Files.** `crates/adage-tracks/src/model.rs:186-209, 507-541` (`Step::Skill`, shape, `SHAPES`
+  to eight, ceiling prime), `io.rs:242-371, 406-414` (validation; `Skill` allowed under `Prompt`,
+  `Intent`, `AfterEdit`, `Context`; `Inhibit` refused), `index.rs:287` (`format`);
+  `crates/adage-runtime/src/render.rs:935-1049` (`route_text`: the template), `:1058-1107`
+  (`named` matches the template first; `Named.skills`), `lib.rs:1196-1203` (`fire_contexts` admits
+  a `Skill` step), and the follow judge on `control Skill {skill}`; `crates/adage-learn/src/
+  bridge.rs:69`, `crates/adage-graph/src/input.rs:26-33`, `events.rs:27-34`, `mine/mod.rs:467-475`,
+  `compile/shapes.rs:1094, 224`, `compile/ids.rs:50`; `crates/adage-learn/src/engine.rs` (judge
+  `skill` like `run`), `import.rs:187-199` (`Directed.skills`); the match sites of §2.3.1;
+  `adage-eval` fixtures with a Skill tool use; `docs/training.md`, `docs/how-it-works.md` (a
+  fifth behaviour row), `docs/live-learning.md` (the minimum-version rule).
 - **Packs, deferred.** `adage-pack`'s `Shape`, `TriggerV2` and `StepV2` have no skill (and no
   context trigger), every struct is `deny_unknown_fields`, and `convert.rs:198, 255-306` refuses
-  what it does not know. A `skill` route is learned and delivered locally in this chunk;
-  sharing it in a pack is a format revision (`adage-pack/2`) scheduled after D4 and not needed
-  for the mod.
-- **Tests.** Unit: validation accepts `release-checklist`, refuses `../x` and a 65-character
-  name; `shape()` is `skill`; the directive renders the fixed template and `named` reads the
-  skill back; a session that calls `Skill { skill }` within the window is `Followed`; the
-  bridge maps a `Skill` control action and nothing else. Learner (`adage-learn/tests/golden.rs`
-  with `Tx::call("Skill", …)`): six synthetic sessions whose prompts share a family and whose
-  agent invoked the skill after the version bump compile to a `skill` route at prime; four do
-  not; a session with the skill directive is steered by that skill alone, not `all`.
+  what it does not know; `convert.rs:303` gains `Skill => Err(..)`. A `skill` route is learned
+  and delivered locally in this chunk; sharing it in a pack is a format revision (`adage-pack/2`)
+  scheduled after D4 and not needed for the mod.
+- **Tests.** T-D3-01 … T-D3-08.
 - **Acceptance.** `cargo test -p adage-tracks -p adage-graph -p adage-learn -p adage-runtime
-  -p adage-eval -p adage-cli` green; the `claude-code` golden gains a prompt step delivering a
-  `skill` directive (`kind="skill"`) and is re-blessed; the eval gates unchanged (the
+  -p adage-eval -p adage-cli` green; `cargo clippy --workspace --all-targets -- -D warnings`
+  clean; the `claude-code` golden gains a prompt step delivering a `skill` directive
+  (`kind="skill"`) and is re-blessed; the eval gates unchanged (the
   `replay_with_the_learned_index_gives_every_recorded_directive` whitelist lists the new id).
 - **Estimate.** 5 days. **Depends on.** Nothing.
 
 #### D4 · `verified.json` and `SkillPrompt`
 
-- **Files.** `crates/adage-train/src/skill.rs:297 stage` (write `verified.json`),
-  `crates/adage-train/src/compile.rs:38-62` (expose `Verified` per step with the step id);
+- **Files.** `crates/adage-train/src/skill.rs:297 stage` (write `verified.json` with `inert`),
+  `crates/adage-train/src/compile.rs:38-62` (expose `Verified` per step with the step id),
+  `crates/adage-cli/src/train.rs:85` (`accept` marks `accepted_at`);
   `crates/adage-hook/src/lib.rs:358` (a `SkillPrompt` branch like `PreToolUse`: Claude only;
-  find `train/skills/*/verified.json` whose `skill.name == skill` and whose `repo` matches the
-  session's; append lines; spool `kind: "skill_prompt"`), `harness/claude.rs` (`translate` and
-  `render` for `{ "text": … }`); the mod's `hooks/decide.ts` (`skill.prompt` → ask `SkillPrompt`
-  → `{ text }`); `docs/training.md` (a "Verified in place" subsection).
+  accepted packs only; arm assignment; `render::sanitise`; spool `kind: "skill_prompt"`),
+  `harness/claude.rs` (`translate` and `render` for `{ "text": … }`); `docs/training.md` (a
+  "Verified in place" subsection). The mod's `skill.prompt` hook (`hooks/decide.ts`: ask
+  `SkillPrompt` → `{ text }` or `next(e)`) is a one-day addendum that lands with D5.
 - **Contract.** stdin `{ "session_id", "cwd", "hook_event_name": "SkillPrompt", "skill", "text"
   }`; stdout `{ "text": "<original>\n\n<fixed heading>\n<one line per step>" }` or nothing. The
   heading is a fixed template: "Adage verified these steps in this repository on <date>:".
-  Lines name the step's command and `works`/`stale (<signature>)`. Plain and factual; at most
-  2,400 bytes added.
-- **Tests.** Train: `verified.json` is written with one entry per candidate and is not part of
-  the pack digest (`adage-pack` validation unchanged). Hook: a matching skill gets the lines, a
-  non-matching name gets nothing, the control arm gets nothing and spools `would_annotate`.
-  Mod: `skill.prompt` with a stubbed answer rewrites `text`; without an answer `next(e)`.
+  Lines name the step's command and `works`/`stale (<signature>)`, sanitised. Plain and factual;
+  at most 2,400 bytes added. Nothing for an unaccepted pack.
+- **Tests.** T-D4-01 … T-D4-05.
 - **Acceptance.** `adage train evals/lab/skills/skills/acme-work-item/SKILL.md --repo <sandbox>`
-  writes `verified.json`; `echo '{…"skill":"acme-work-item"…}' | adage hook claude SkillPrompt`
-  prints the annotated text; S9 Q13's three entry points verified in a live session.
-- **Estimate.** 3 days. **Depends on.** D3 (for the pack's `Step::Skill`, optional), B1.
+  writes `verified.json` with `inert`; before `train accept`, `SkillPrompt` prints nothing; after
+  it, `echo '{…"skill":"acme-work-item"…}' | adage hook claude SkillPrompt` prints the annotated
+  text; S9 Q13's three entry points verified in a live session once D5 lands.
+- **Estimate.** 3 days. **Depends on.** D3 (for `Step::Skill`, optional).
 
 #### D5 · Drawing noticed, learning and skills
 
 - **Files.** `hooks/draw/rows.tsx` (the `ToolGroup`/last-`ToolUse` noticed line; the `Skill`
   tool-row markers), `hooks/draw/band.tsx` (the learner countdown from the feed's `learner`
-  records; `learning…` while running), `hooks/decide.ts` (toasts from `learn.log` lines:
-  strength changes, a candidate that formed, naming this session when its id is in the line's
-  `sessions`), `feed.ts` (passes `learn` records).
+  records; `learning…` while running), `hooks/decide.ts` (toasts from `learn.log` lines per
+  ux-design §4.6, the header rule on `sessions`; the `skill.prompt` hook), `feed.ts` (passes
+  `learn` and `learner` records).
+- **Tests.** T-D5-01 … T-D5-03; T-U-01 (the noticed questions).
 - **Acceptance.** S9 Q12's read of the recording; `claude plugin test` for each row; no line for
-  a single call (unit over fixture records with one-event candidates filtered by D1).
-- **Estimate.** 2 days. **Depends on.** D2, D4, B3.
+  a single call (unit over fixture records); Q13's three entry points.
+- **Estimate.** 2.5 days. **Depends on.** D2, D4, B3.
 
 ### Workstream E · Evaluation
 
-#### E1 · Requests as a metric in the demo runner
+#### E1 · Arms and the requests metric in the demo runner
 
-- **Files.** `demo/run.py:140-149` (add `--debug` and capture the debug log path; count
-  `[API REQUEST]` lines and distinct assistant `message.id`s as `heldout_analysis.py:233-249`
-  does; `metrics.requests`, `metrics.requests_verified`), `:105-113` (a `mod` arm:
-  `settings_file('adage')` plus `--plugin-dir plugin/claude-code`), `demo/report.py:128-142
-  METRICS` (`requests`), `demo/SANDBOX.md` (the scorer's real keys: `passed, ci_passed,
-  hidden_passed, hidden_tests_run, stale_generated, ci_tail, hidden_tail`).
-- **Acceptance.** `python3 demo/run.py one W-2041 mod` records `requests` equal to the
-  distinct-id count within the API-retry slack; `compare(runs, a="mod", b="control")` reports
-  the task-stratified permutation p and the bootstrap interval for `requests`.
-- **Estimate.** 2 days. **Depends on.** B1.
+- **Files.** `demo/run.py:36, 105-113, 140-149` (arms `a0`, `mod-observe`, `mod` per §2.7.2;
+  `--debug` and the debug log path; `metrics.requests`, `metrics.requests_verified` per
+  `heldout_analysis.requests()`; the `hidden_passed` key recorded), a recorded-payload replay
+  (`demo/replay_hooks.py`: feed a recorded stream of hook payloads to `adage hook` with and
+  without the mod's observe mode and diff the outputs and spool), `demo/report.py:128-142
+  METRICS` (`requests`), `demo/SANDBOX.md` (the arms and keys).
+- **Tests.** T-E1-01 … T-E1-04.
+- **Acceptance.** `python3 demo/run.py one W-2041 mod` records `requests` equal to the distinct
+  explicit request-id count; the `mod-observe` replay diff is empty; `compare(runs, a="mod",
+  b="a0")` reports the task-stratified permutation p and the bootstrap interval for `requests`.
+- **Estimate.** 2.5 days. **Depends on.** B1.
 
 #### E2 · Development gate for Layer 4
 
-- **Files.** `evals/reflex-proof/harness/dev_arms.py:43-50` (a `MOD` arm: hooks as `BEST`,
-  `--plugin-dir`, the `predict` grant issued as the human step), `dev_v9.py:57-65, 515` (the
-  verdict loop over D1–D4 for `MOD` against `A0`), the findings file under
-  `harness/results/<date>-mod-dev/`.
-- **Acceptance.** D1–D4 from `docs/launch-gate-protocol.md:247-252`: requests ≤ 0.85 × A0 and
-  fewer in at least 4 of 6 blocks; no more hidden failures than A0; zero necessary verification
-  skipped; covered repeats in at most 2 of 6 positives. Reported as development, "not a launch
-  statistic".
-- **Estimate.** 3 days plus model spend (≤ $0.40 per session, 36 sessions). **Depends on.** C4,
-  E1.
+- **Files.** `evals/reflex-proof/harness/dev_arms.py:43-50`, `dev_v9.py:57-74, 515-527` (a `MOD`
+  arm: hooks as `A4`, `--plugin-dir`, the `predict` grant issued as the human step; its own five
+  realized controls; the verdict loop reads the frozen manifest's `dev_thresholds_v9`), a new
+  protocol revision in `docs/launch-gate-protocol.md` registered before dispatch, the findings
+  file under `harness/results/<date>-mod-dev/`.
+- **Acceptance.** The registered v9 rule for `MOD` against `A0`: the study valid; D1 mean requests
+  at most 0.80 × A0 and fewer than A0 in at least 10 of 16 blocks; D2 no more hidden-test
+  failures than A0; D3 all five controls realized with no skipped necessary verification; D4
+  covered repeat attempts in at most 5 of 16 positives. Reported as development, "not a launch
+  statistic". Pass twice on fresh seeds before E3.
+- **Tests.** T-E2-01 … T-E2-03.
+- **Estimate.** 3 days plus model spend (`SESSION_CAP_USD` 0.50, `STUDY_CEILING_USD` 8.50 per
+  run). **Depends on.** C4, E1.
 
 #### E3 · Registered confirmation
 
-- **Scope.** Only after E2 passes twice in development: a pre-registered held-out run per
-  `docs/launch-gate-protocol.md` on new evaluation groups, three arms in paired blocks, with the
-  quality rule (`QUALITY_MARGIN = 1`, G5) and the one-sided 95% bound ≤ 0.90. Outcome recorded in
+- **Scope.** Only after E2 passes twice: a pre-registered held-out run per
+  `docs/launch-gate-protocol.md` on new evaluation groups (the current four are spent,
+  `LAUNCH-STATUS.md`), arms A0, NOEXEC (hooks, no `predict` grant) and BEST = MOD in paired
+  blocks, every applicable G criterion (G1, G2, G5–G8), the censoring rule, the sensitivity
+  analyses, `QUALITY_MARGIN = 1` and the one-sided 95% bootstrap upper bound of
+  `sum(MOD)/sum(A0)` ≤ 0.90, at most 2 excluded blocks; `heldout_cohort.py` and
+  `heldout_analysis.py` learn the `MOD` arm name. Outcome recorded in
   `evals/reflex-proof/LAUNCH-STATUS.md`.
+- **Tests.** T-E3-01, T-E3-02.
 - **Acceptance.** The protocol's `pass`; otherwise the finding is recorded and Layer 4 stays
   behind its grant as experimental.
 - **Depends on.** E2.
@@ -684,56 +807,60 @@ Needs S9 Q1, Q2 (Layer 1), Q3 and Q6 to have passed. Every chunk here ships behi
 ## 4. Sequencing
 
 ```text
-A1 ─┬─▶ C1 ─▶ C2 ─▶ C4 ─▶ E2 ─▶ E3
-    │     └──▶ C3 ─┘
-A2, A3, A4, A5 ──▶ B3
-S9 (Q1,Q2,Q3,Q6) ─▶ B1 ─▶ B2 ─▶ B3 ─▶ D5
-D1 ─▶ D2 ─────────────────────▶ D5
-D3 ─▶ D4 ─────────────────────▶ D5
-B1 ─▶ E1 ─▶ E2
-C1, B2 ─▶ C5
+A1 ──▶ C1 ──▶ C2 ──▶ C4 ──▶ E2 ──▶ E3
+ │      └───▶ C3          ▲
+ └───────────▶ C3         │
+A6 ──▶ B1 ──▶ B2 ──▶ B3 ──▶ D5
+ │      ├────▶ C3, C4, E1 ─┘
+ │      └────▶ C5 (with C1, B2)
+A3, A5 ──────▶ B3
+S9 (Q1, Q2, Q3, Q6) ──▶ B1;  Q2 (Layer 2), Q4 ──▶ C3;  Q9 ──▶ C4;  Q12 ──▶ D5;  Q13 ──▶ D4/D5
+D1 ──▶ D2 ──────────────▶ D5
+D3 ──▶ D4 ──────────────▶ D5
+A2, A4 (independent)
 ```
 
-Workstream A (7 days) and D1–D4 (15 days) need no Claude Code and can run in parallel with the
-spike. B (11 days) follows the spike's first four questions. C (17 days) follows Q9 and A1. E
-(5 days plus spend) closes each layer. About eight engineer-weeks of code before the registered
-run, which is the design's own estimate order of magnitude; the critical path is S9 → B1 → C4 →
-E2.
+Estimates: A 8.5 days, B 11.5, C 18, D 18.5, E 5.5 plus spend: about 62 engineer-days, twelve
+engineer-weeks of code before the registered run, which is the design's order of magnitude. The
+critical path is A1 → C1 → C2 → C4 → E2 (16 days of work, gated by Q9); B and D run beside it.
 
 ## 5. Testing strategy
 
-| Level | What | Where | Runs |
+The levels, environments and every case are in [test-plan.md](test-plan.md); this is the map.
+
+| Level (test plan §2) | What | Where | Runs |
 | --- | --- | --- | --- |
-| Unit, Rust | Every new type, bound and template: `Candidate`, `Step::Skill`, `Event::TurnStep`, `GrantMode`, the dedup ring, `PreNote.fresh`, `verified.json` | each crate's `#[cfg(test)]`, `adage-runtime/src/tests.rs` | `cargo test --workspace --locked`, PR CI |
-| Golden and parity | The exact bytes `adage hook claude <event>` prints for the scenario, now with `PreToolUse`, `TurnStep` and a `skill` directive; `adage-exec hook` identical with no grants | `crates/adage-cli/tests/golden/claude-code.txt`, `hooks.rs::claude_scenario`, `adage-exec/tests/parity.rs` | PR CI; re-blessed with `ADAGE_BLESS=1`, diff reviewed |
-| Fail-open | Fault injection (`ADAGE_TEST_FAULT=panic`), a missing binary, a malformed `TurnStep`, a 9 MiB payload: exit 0, nothing printed, one `fail-open.log` line | `hooks.rs` hostile-payload tests | PR CI |
-| Latency | `hook_latency` scenarios: `pretool_no_match`, `turn_step_nothing_pending`, `turn_step_predicts`, `batch_no_match` with candidates compiled | `crates/adage-cli/examples/hook_latency.rs` | Scheduled CI (release build), and before each A/C/D merge on the developer's machine, numbers in the PR |
-| Replay gate | `fast_path_changes_no_decision` over every dataset, `TurnStep` and `noticed` included; the route-fidelity gates unchanged | `crates/adage-eval/tests/gates.rs` | `evals.yml` weekly, and `cargo test -p adage-eval --test gates` before merging D1, D2, C1 |
-| Simulator | Twelve seeded Claude sessions, held-out replay in both arms with `PreToolUse`, `TurnStep`, `SkillPrompt`; control silent; `graph --json` counts `predicted` and `noticed` | `crates/adage-sim`, `crates/adage-cli/tests/harness_sim.rs` | PR CI; `cargo run -p adage-sim` when fixtures change |
-| Mod, unit | Every hook with stubbed `ask`, `$.tool.check`, `$.process.spawn`; every render site mounted on `terminal` and `desktop`; the `turn.step` generator's three chunks; nothing registered when `isInteractive` is false | `plugin/claude-code/hooks/*.test.ts(x)` | `claude plugin test` in the `plugin` CI job, pinned CLI version |
-| Mod, static | `claude plugin validate --strict` output committed as `VALIDATE.txt`; `check-plugin.mjs` rules for modules and types | `scripts/check-plugin.mjs`, CI `plugin` job | PR CI |
-| Mod, live | S9's probes: coexistence, surfaces, silence in `-p` and control, hosts, the skipped request, skills | `spikes/S9-claude-mods/` | Once per question, results committed |
-| End to end, headless | The demo runner's `mod` arm against `control` and `adage` on the six held-out items: `requests`, `cost_usd`, `passed`, `stale_generated`; identical transcripts with the mod observing only (B2) | `demo/run.py`, `demo/report.py` | Before merging B2, C3, C4; numbers in the PR |
-| Development gate | D1–D4 for the `MOD` arm against `A0` on the reflex-proof harness | `evals/reflex-proof/harness/dev_v9.py` | Before E3 |
-| Registered | The launch gate protocol on new groups | `evals/reflex-proof/` | Once |
+| L1 Unit, Rust | Every new type, bound and template: `Candidate`, `Step::Skill`, `Event::TurnStep`, `GrantMode`, the dedup ring, `PreNote.fresh`, `verified.json`, `By`, `Pending.command` | each crate's `#[cfg(test)]`, `adage-runtime/src/tests.rs` | `cargo test --workspace --exclude adage-eval --locked`, PR CI |
+| L2 Integration | The binary end to end in a `World` | `crates/adage-cli/tests/*`, `crates/adage-exec/tests/*` | PR CI |
+| L3 Golden and parity | The exact bytes `adage hook claude <event>` prints for the scenario, now with a silent `PreToolUse`, a silent `TurnStep` and a `skill` directive; `adage-exec hook` identical with no grants | `crates/adage-cli/tests/golden/claude-code.txt`, `hooks.rs::claude_scenario`, `adage-exec/tests/parity.rs` | PR CI; re-blessed with `ADAGE_BLESS=1`, diff reviewed |
+| L4 Simulator | Twelve seeded Claude sessions, held-out replay in both arms with `PreToolUse`, `TurnStep`, `Standing`, `SkillPrompt`; the sub-support sequence; control silent | `crates/adage-sim`, `crates/adage-cli/tests/harness_sim.rs` | PR CI; `cargo run -p adage-sim` when fixtures change |
+| L5 Latency | Paired `hook_latency <before>,<after> - 500` scenarios: `pretool_no_match`, `turn_step_nothing_pending`, `turn_step_predicts` (adage-exec, seeded grant), `batch_no_match` with candidates; `learn_bench` 300 × 2 | `crates/adage-cli/examples/hook_latency.rs`, `learn_bench.rs` | A developer's release build before merging A1, A2, A6, C1, D1, D2, numbers in the PR (no workflow runs them today; a scheduled job is a follow-up) |
+| L6 Replay gates | `fast_path_changes_no_decision` with `TurnStep` injected and `noticed`; every recorded index loads; the route-fidelity gates unchanged | `crates/adage-eval/tests/gates.rs` | `evals.yml` weekly, and `cargo test -p adage-eval --test gates` before merging C1, D1, D2, D3 |
+| L7 Mod, unit | Every hook with stubbed `ask`, `$.tool.check`, `$.process`; every render site mounted on `terminal` and `desktop`; `onPress` handlers called directly; the feed's reconnect as pure functions; the argv recorder | `plugin/claude-code/hooks/*.test.ts(x)` | `claude plugin test` in the `plugin` CI job, pinned CLI |
+| L8 Mod, static | `validate --strict` diffed against `VALIDATE.txt`; `check-plugin.mjs` rules for modules, types, the allow-list, the pin | `scripts/check-plugin.mjs`, CI `plugin` job | PR CI |
+| L9 Mod, live | S9's probes | `spikes/S9-claude-mods/` (`FINDINGS.md`, `rerun.sh`, `results/`) | Once per question, results committed |
+| L10 End to end, headless | The demo runner's arms on the six held-out items: `requests`, `cost_usd`, `passed`, `hidden_passed`, `stale_generated`; the recorded-payload replay for `mod-observe` | `demo/run.py`, `demo/replay_hooks.py`, `demo/report.py` | Before merging B2, C3, C4; numbers in the PR |
+| L11 Development gate | The v9 rule for `MOD` against `A0` | `evals/reflex-proof/harness/dev_v9.py` | Before E3, twice |
+| L12 Registered | The launch gate protocol on new groups | `evals/reflex-proof/` | Once |
+| L13 Usability | ux-design §14 | the recordings and a live sandbox session | Once per surface change (B2, B3, D5) |
 
 Three conventions hold throughout: every number in a findings file comes from a script in the
 same folder (the spikes' rule); a changed golden is a behaviour change and is called out in the
-PR; and `NO_COLOR`, `ADAGE_ARM`, `ADAGE_AUTO_LEARN=0` and a fresh `ADAGE_HOME` are set in every
-integration test as `first_run.rs`'s `World` does.
+PR; and a failing test is a defect or a test to make robust, never re-run to green (this plan's
+own rule; `CONTRIBUTING.md` says only that hook paths fail open).
 
 ## 6. Acceptance criteria, rolled up
 
 | Milestone | Chunks | Done when |
 | --- | --- | --- |
-| **M0 · Spike** | S9 | Findings for Q1–Q13; Q1, Q2, Q3, Q6 pass before B starts; Q9 before C4 |
-| **M1 · Foundation** | A1–A5 | One decision per `tool_use_id`; `duration_us` on every record and the doctor check; `watch --follow --json` streams; `ledger note` prices from the harness; `tokens.ts` generated and checked; all goldens unchanged except the added `PreToolUse` step |
-| **M2 · See it** | B1–B3 | `1 mod active · adage`; `-p` transcripts identical with the mod observing; every site drawn on both surfaces in `plugin test`; the pane fed by the binary with no dropped rows; `VALIDATE.txt` names no person-only command |
-| **M3 · Trust it** | C1–C3 | `TurnStep` predicts only a delivered directive with a `predict` grant, never twice in a row, never in control, nothing without adage-exec; the grant round-trips through delegate, status, revoke and lapse; a fresh receipt answers the repeated test as its result in the demo with no process run |
-| **M4 · Skip it** | C4, C5 | S9 Q9 10 of 10; the sim predicts at the registry turn in treated and nothing in control; `adage:procedures` byte-identical across a session; the demo's `mod` arm runs end to end |
-| **M5 · Notice and learn in view** | D1, D2, D5 | A candidate from the sim's history in the index; `noticed` once per session in both arms; replay gate green; the line drawn under the batch; p95 within +0.3 ms |
-| **M6 · Skills** | D3, D4, D5 | A `skill` route learned from six synthetic sessions and delivered at prime; the Skill tool predicted at `turn.step` under a `predict` grant; `verified.json` written by `adage train` and read back by `SkillPrompt`; Q13's three entry points |
-| **M7 · Evidence** | E1–E3 | `requests` in the demo report; D1–D4 pass twice in development; the registered run's outcome recorded, whatever it is |
+| **M0 · Spike** | S9 | Findings for Q1–Q13 in `FINDINGS.md` with `rerun.sh`; Q1, Q2 (Layer 1), Q3, Q6 pass before B starts; Q2 (Layer 2), Q4 before C3; Q9 before C4 |
+| **M1 · Foundation** | A1–A6 | One decision per `tool_use_id`; `duration_us` on every record and the doctor check; `watch --follow --json --session` streams and resumes from a cursor, silent about the arm; `ledger note` into `harness.jsonl` with integrity; `tokens.ts` generated and checked; `adage off`/`on` and `adage-exec version`; all goldens unchanged except the added silent `PreToolUse` step |
+| **M2 · See it** | B1–B3 | `1 mod active · adage`; exactly one copy active with both plugins; the `mod-observe` replay diff empty; every site drawn on both surfaces in `plugin test`; the pane fed by the binary with no gap across a restart; the recorded argv within the allow-list; the control-arm pane identical to a treated no-match pane; T-U-01 reading and doing parts |
+| **M3 · Trust it** | C1–C3 | `TurnStep` predicts only a delivered directive with a bound command and a `predict` grant, never at index 0, never twice in a row, never an inhibited route, never in control, nothing from `adage`; a route with both grant modes keeps both; a fresh receipt answers the repeated pytest run in the Python fixture with one record |
+| **M4 · Skip it** | C4, C5 | S9 Q9 10 of 10 with the dialog met and the id on disk; the sim predicts at the schema-edit turn under adage-exec and nothing in control; `adage:procedures` byte-identical across a session; the demo's `mod` arm runs end to end |
+| **M5 · Notice** | D1, D2, D5 (noticed) | The `make test → make lint` candidate from the sim's history in the index; the routes unchanged; `noticed` once per session in both arms; replay gate green; the line drawn under the batch; p95 within +0.3 ms |
+| **M6 · Skills** | D3, D4, D5 (skills) | A `skill` route learned from six synthetic sessions and delivered at prime; the Skill tool predicted at `turn.step` under a `predict` grant for an accepted, inert skill; `verified.json` written by `adage train` and read back by `SkillPrompt` only after `accept`; Q13's three entry points |
+| **M7 · Evidence** | E1–E3 | `requests` in the demo report with an `a0` arm; the v9 rule passes twice for `MOD`; the registered run's outcome recorded, whatever it is |
 
 ## 7. Risks, and what the plan does about them
 
@@ -741,23 +868,27 @@ integration test as `first_run.rs`'s `World` does.
   repository. CI pins the CLI version for `validate` and `test`; S9 Q8 measures churn; the
   command hooks remain the floor so a broken mod degrades to today.
 - **A fabricated assistant turn hurts quality.** Layer 4 ships only behind a `predict` grant,
-  with the two bounds, and only after E2's D1–D4 and E3's quality rule; the control arm records
-  `would_predict` so the saving is measured against a baseline from day one.
+  with the three bounds, and only after E2's v9 rule and E3's quality rule; the control arm
+  records `would_predict` so the saving is measured against a baseline from day one.
+- **A predicted call runs unsandboxed.** The grant is narrower than delegation (effect, policy,
+  exec-only and double-grant refusals), the call meets Claude Code's permissions (Q9 proves the
+  dialog), and the notice and marker name it.
 - **The learner relearns Adage's own calls.** The `adage_` id prefix and `Call.by` mark them
   (C1), the importer excludes them (§2.1.3), and S9 Q5 may add the transcript's `origin`.
-- **Candidates cost the fast path, and the learner.** Their words join `Triggers`; D1's
-  acceptance is a measured +0.3 ms p95 bound, the same bound G4 held itself to. The lower
-  alphabet floor widens mining; D1 bounds learn time at 1.3× and keeps the incremental-equals-
-  full property test. A candidate net of its own keeps a relearn from resetting the routes'
-  context state mid-session.
-- **Old indexes and recorded datasets.** Every new `Index` field is `serde(default)`; the
-  replay gate loads a recorded index from before any of this, and about twenty recorded indexes
-  under `evals/datasets/` must keep parsing. D1 and C1 run `cargo test -p adage-eval --test
-  gates` before merging.
+- **Candidates cost the fast path, and the learner.** Their words join `Triggers`; D1 reports
+  the skip rate before and after and bounds p95 at +0.3 ms. The candidate pass is separate, so
+  the routes' mining is unchanged by construction; D1 measures learn time with `learn_bench`
+  before committing to the 1.3× bound, since `condition --auto` already runs at 44–138 ms against
+  a 150 ms target.
+- **Old indexes and recorded datasets.** Every new `Index` field is `serde(default)`; a new
+  `format` field and a minimum-version rule cover binaries older than D3; the 26 recorded indexes
+  must keep parsing (a test loads them all).
 - **Noise.** `noticed` is sequences only, once per candidate per session, off with one
-  `userConfig` row; Q12 reads the recording with a person.
-- **Person-only commands from a pane.** The mod never runs `review`, `delegate`, `install` or
-  guarded `config set`; `VALIDATE.txt` is the proof in review, and `AGENT_ENV` refuses them at
-  run time regardless.
-- **Two plugins, one module.** `plugin/claude-code-exec` ships the identical module with the
-  other binary name; `check-plugin.mjs` diffs the two module trees and fails on drift.
+  `userConfig` row; Q12 and T-U-01 read the recording with people.
+- **Person-only commands from a pane.** The bridge's allow-list, its unit test and
+  `check-plugin.mjs` are the structural guard; `CLAUDECODE=1` on every child makes `AGENT_ENV`
+  refuse at run time regardless; `VALIDATE.txt` is review evidence, not proof.
+- **Two plugins, two mods.** The activation probe leaves exactly one copy active; `check-plugin.mjs`
+  diffs the two module trees and fails on drift; T-X-11 installs both.
+- **The evidence can be forged from a session.** `ledger note` accepts only a session the spool
+  knows and keeps harness lines apart from transcript-priced ones.

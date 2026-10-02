@@ -2,7 +2,8 @@
 
 Four documents, one proposal (2026-10-02, against Claude Code 2.1.287, the release that turned
 mods on by default). Nothing in them has run yet; [spike S9](../../spikes/S9-claude-mods/SPIKE.md)
-is where the first measurements come from.
+is where the first measurements come from. Each document was reviewed once against the code by
+two independent readers before this revision; the header of each says what the review changed.
 
 | Document | Answers | Read it when |
 | --- | --- | --- |

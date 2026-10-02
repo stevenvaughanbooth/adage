@@ -189,8 +189,10 @@ What this layer gives, with nothing else changed:
   (`.adage/disabled`, `ADAGE_DISABLE`; "every other key only tunes Adage or turns something
   down, and can be set from anywhere"), so the J6 kill switch fits a registered command. Status
   prints what `!adage` prints, drawn as a tree in the `CommandOutput` row.
-- **Nothing in `-p` and the SDK.** `session.start` reports `isInteractive: false` there; the mod
-  registers no UI and the evals (`demo/`, headless Haiku runs) see the same session as today.
+- **Nothing drawn, nothing asked in `-p` and the SDK.** `session.start` reports
+  `isInteractive: false` there; every `ui.render` hook returns `next(e)` and no feed starts. What
+  the grants allow still runs headless (that is where it is measured), so the evals (`demo/`)
+  run an arm without the mod and an arm with the mod observing only, beside the arm with grants.
   This must be measured, not assumed (Q3): the mod loads in `-p` too.
 
 ### Layer 2 · Decide through the mod: the binary's answer, the engine's permission check
@@ -286,12 +288,15 @@ async generator over the response's chunks: text, thinking, a tool call's start 
 own response has none [of the engine's chunks] to yield, and the engine supplies what the
 response needs around the chunks it does yield"; "what leaves the outermost hook is what is shown
 and recorded"; a chunk a hook builds "has none [no `ref`] and is taken at its word". A result with
-no request made carries `stopReason: null` and `usage: null`, so the cost ledger records zero.
-The transcript is not on `e`; `$.session.messages()` reads it in-process.
+no request made carries `usage: null`, so the cost ledger records zero. The transcript is not
+on `e`; `$.session.messages()` could read it in-process, but the design does not need it: the
+binary predicts from its own session state (a directive it already delivered whose command has
+not yet been observed, or an armed finish-line obligation), so the payload carries ids only.
 
 So a mod can do what no command hook can: at the step after an edit's tool result, when the
-binary's context matcher says a `fire` reflex with a current grant predicts `pytest tests/x.py -q`
-next, the mod yields a `tool` chunk, its `input` and a `stop` of `tool_use`, and calls no model.
+binary's state says a reflex with a current `predict` grant already told the model to run
+`make gen` and the run has not happened, the mod yields a `tool` chunk, its `input` and a `stop`
+of `tool_use`, and calls no model.
 The engine records the call as the turn's, runs it through every `tool.call` hook, the
 `PreToolUse` command hook, the person's permission rules and dialog, and then the tool; the next
 step's request carries the result, and the model picks up from there. One model request, the
@@ -300,11 +305,11 @@ largest single cost in a long session (the whole context as input tokens), is no
 ```ts
 on('turn.step', async function* ($, e, next) {
   if (e.agentId !== undefined || e.index === 0) return yield* next(e)   // main loop, not the first step
-  const predicted = await predictNext($, e)   // adage hook claude TurnStep on stdin: the recent
-                                              // messages' tool uses and results; answers a fire
-                                              // reflex's call with a current grant, or nothing
+  const predicted = await predictNext($, e)   // <bin> hook claude TurnStep on stdin: session, turn
+                                              // and step ids only; answers a delivered directive's
+                                              // call under a current predict grant, or nothing
   if (predicted === undefined) return yield* next(e)
-  const id = `adage_${e.turnId}_${e.index}`
+  const id = `adage_${predicted.route}_${e.turnId}_${e.index}`
   yield { kind: 'tool', index: 0, id, name: predicted.tool }
   yield { kind: 'input', index: 0, json: JSON.stringify(predicted.input) }
   yield { kind: 'stop', stopReason: 'tool_use', usage: null }
@@ -315,31 +320,33 @@ on('turn.step', async function* ($, e, next) {
 
 Three facts make this fit Adage rather than fight it:
 
-- **The authority model is unchanged.** The yielded call runs through the same permission path
-  the model's own call would, so a `Bash(pytest:*)` rule, `dontAsk`, the dialog and Adage's own
-  `PreToolUse` all still apply. Adage's grant decides *whether to predict*; Claude Code's
-  permissions decide *whether it runs*. Nothing executes in the hook, and the E2 sandbox is not
-  involved: this is the agent's own tool, as the rewrite path already is.
-- **Provenance is structural.** The step's `usage` is null and its `stopReason` is null on the
-  engine's side; the tool_use id can carry Adage's prefix; and the `tool.call` hook sees
-  `e.tool_use_id`, so the result can be tagged and the learner can read the step as Adage's,
-  never as the agent's own evidence (the rule in `how-it-works.md`).
-- **The control arm still measures it.** A control session's hook returns `yield* next(e)` and
-  nothing else; the spool records `would_have` as it does for a withheld directive, so the saved
-  requests are counted against a baseline, never assumed.
+- **The authority model gains one grant mode, not a new path around permissions.** The yielded
+  call runs through the same permission path the model's own call would (Q9 must show it), so a
+  `Bash(pytest:*)` rule, `dontAsk`, the dialog and Adage's own `PreToolUse` all still apply.
+  Adage's per-reflex `predict` grant, written by a person at a terminal, decides *whether to
+  predict*; Claude Code's permissions decide *whether it runs*. Nothing executes in the hook, and
+  the E2 sandbox is not involved: this is the agent's own tool, which is why the design calls it
+  a third execution path and marks it as such (the notice under the dialog, the row marker, the
+  id prefix).
+- **Provenance is structural.** The step's `usage` is null on the engine's side; the tool_use id
+  carries Adage's prefix and the route; the `tool.call` hook sees `e.tool_use_id`, so the result
+  can be tagged and the learner can read the step as Adage's, never as the agent's own evidence
+  (the rule in `how-it-works.md`).
+- **The control arm still measures it.** The mod asks in every arm (the arm is the binary's to
+  know); a control session's binary answers nothing and records `would_predict` as it records a
+  withheld directive, so the requests not sent are counted against a baseline, never assumed.
 
 What it costs: the model's next request sees an assistant turn it did not write. That is how the
-API's own prefill works and models tolerate it, but it is a quality question the demo must
-answer, not a safety one. And the matcher's inputs change: today the runtime tracks "bounded
-recent context" from hook payloads; `$.session.messages()` gives it the whole conversation,
-including the model's text between tool calls, which `PostToolBatch` never carried.
+API's own prefill works and models tolerate it, but it is a quality question the evaluation must
+answer, not a safety one. The matcher's inputs do not change: the binary predicts only what it
+already said, from the state it already keeps, and the payload carries no messages.
 
 **The lesser levers, same layer.**
 
 - **Route the step, not just skip it.** `next({ ...e, model, effort })` sends the request to
-  another model or at another effort. Where a `fire` reflex applies but confidence is below the
-  skip threshold, or the predicted call needs its arguments filled from the conversation, the
-  step can go to a small model at low effort rather than the session's. `agent.spawn` has the
+  another model or at another effort. Where a `fire` reflex is pending for the step but holds no
+  `predict` grant, and the person has named a routine model in the mod's settings, the step can
+  go to a small model at low effort rather than the session's. `agent.spawn` has the
   same `model` rewrite for subagents. Cost is stated in API dollars, which is Adage's unit; the
   quality rule (hidden tests, the 17/20 against 19/20 that kept execution mode experimental) is
   the gate.
@@ -497,8 +504,8 @@ script in the folder, per the spikes README.
 | Q6 | **Fail-open and reload.** A hook that throws, one that sleeps past 10 s, a missing binary, a syntax error in the module: the session continues and the command hooks still serve; a hot reload re-runs `register` without losing `$.state`; `claude plugin validate --strict` passes on the real plugin folder with the module added | Fault injection in the probe mod; `--debug` log lines | Every fault leaves the command hooks' output unchanged and leaves one debug line naming the mod |
 | Q7 | **Hosts.** The overview's table is documented: hooks run in the terminal, the Desktop app's Code tab (not WSL), the VS Code chat panel, `-p`, the SDK, Remote Control and cloud sessions; drawing only in the terminal and the Desktop app. Left to measure: `$.process` on the Desktop app ("CLI only" in the declaration, unrestricted on the API page); on Windows, whether the mod loads and can run `adage.exe`, where the `sh` shim is unverified | One session per host, the probe mod logging `$.session.surfaces()` and a `$.process.run(['adage','version'])` result | A table of hosts with yes/no per noun; Windows and the Desktop app measured, not inferred |
 | Q8 | **Drift.** The reference points at the public copy of the declaration file, `mods/types/claude-code.d.ts` in the Claude Code repository, so churn is its git history: count the renamed or removed events, props and nouns the sketches here use between the releases since mods shipped, and against 2.1.221 (the spikes' pinned environment) | `git log -p` on that file, grep for each name | A churn figure per release that sets how the CI gate (Q6's `validate --strict` against a pinned CLI version) must be run |
-| Q9 | **The request not sent.** A `turn.step` hook that yields a `tool`, `input` and `stop` chunk and returns without `next`: is the call recorded in the transcript, run through `tool.call`, `PreToolUse` and the permission dialog, and does the loop continue with its result? Does the result carry `usage: null`, and does the session's cost stay flat for that step? Does the model's next step read the fabricated assistant turn as its own and carry on? | The probe mod on the acme-billing sandbox (`demo/`), predicting the `make gen` after a `registry/*.csv` edit and the `make test` after a source edit from a fixed table; `claude --debug`; the transcript `.jsonl` | The call runs under the person's rules, the step costs zero, and the next model step proceeds in 10 of 10 runs; otherwise Layer 4 is out |
-| Q10 | **Does it move the gate?** The transfer pilot's measure: model requests per task and hidden-test quality, treated against control, with Layer 4 predicting only what today's E2 grants cover | `demo/run.py all` with the probe mod in the treated arm, Haiku, the four held-out tasks | Fewer model requests than the 0.67× execution mode reached, with hidden tests at the baseline's 19/20; a quality drop is a fail whatever the saving |
+| Q9 | **The request not sent.** A `turn.step` hook that yields a `tool`, `input` and `stop` chunk and returns without `next`: is the call recorded in the transcript, run through `tool.call`, `PreToolUse` and the permission dialog, and does the loop continue with its result? Does the result carry `usage: null`, and does the session's cost stay flat for that step? Does the model's next step read the fabricated assistant turn as its own and carry on? | The probe mod on the acme-billing sandbox (`demo/`), predicting the `make gen` after a `schema/*.json` edit and the `make test` after a source edit from a fixed table; `claude --debug`; the transcript `.jsonl` | The call runs under the person's rules (the permission dialog appears where it would for the model's own call), the step costs zero, the `adage_` id is preserved in the transcript on disk, and the next model step proceeds in 10 of 10 runs; otherwise Layer 4 is out |
+| Q10 | **Does it move the gate?** The transfer pilot's measure: model requests per task and hidden-test quality, with Layer 4 predicting only a delivered directive under a `predict` grant, against a no-hooks baseline | `demo/run.py all` with arms `a0`, `adage`, `mod-observe` and `mod` on the six held-out items (the demo's default model), the `requests` metric counted as the registered protocol counts it | A development reading, not a launch statistic: fewer requests than the `adage` arm and the `a0` arm with hidden tests no worse than `a0`; the pass bar that matters is the registered v9 rule in the reflex-proof harness (the plan's E2), and a quality drop is a fail whatever the saving |
 | Q11 | **Routing.** `next({ ...e, model: 'haiku', effort: 'low' })` on steps the matcher marks routine: cost per task and quality against the unrouted arm | The same runner, a second treated arm | Reported as numbers; no pass bar, since the quality rule decides |
 | Q12 | **Noticed, on the fast path.** A `candidates` table of sub-support sequences in the index: what it adds to the no-match path (the 1.76 ms p95 of §9) and to a `PostToolBatch` with a context match; how often a `noticed` line would draw per session over the demo's seeded histories, and whether a person reads it as learning or as noise | `hook_latency` with candidates compiled for the acme-billing fixture; the twelve seeded sessions replayed; one person's read of the recording | ≤ 0.3 ms added at no match; at most one line per candidate per session; nothing for a single call |
 | Q13 | **Skills.** A `turn.step` hook that yields a `Skill` tool call: does the engine run the Skill tool, does the skill's text enter the transcript as its result, and does the model's next step proceed with it loaded? Does a `skill.prompt` rewrite reach the model for a `/name`, a Skill tool call and a subagent preload alike? Is a Skill tool use recorded in the transcript `.jsonl` so the learner can count it? | The probe mod with a fixture skill in `.claude/skills/`, in `-p` and interactive; `claude --debug`; the transcript file | The skill's text appears once as the tool result and the next step cites it in 10 of 10 runs; the rewrite is what the model reads at all three entry points; Skill tool uses are on disk with their inputs |

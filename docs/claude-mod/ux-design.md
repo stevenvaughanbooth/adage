@@ -6,7 +6,9 @@
 > `docs/lexicon.md` (the words) and `docs/design/style.md` (colour, glyphs, the output grammar).
 > Built by [implementation-plan.md](implementation-plan.md) B2, B3, D5; tested by
 > [test-plan.md](test-plan.md) §6–§8. Nothing here has been drawn in a live session yet; S9 Q3,
-> Q3b and Q12 are where it first is.
+> Q3b and Q12 are where it first is. Revised once after review: the first draft broke three of
+> its own rules (strength words on default surfaces, the arm visible in the pane, counts stated as
+> savings), and this version does not.
 
 ## 1. Principles
 
@@ -16,182 +18,242 @@ Zero-config's four principles stand, and this surface adds five of its own.
    its first line at the first session start. Nothing is typed to see Adage work.
 2. **Nothing fails silently.** A problem is one plain sentence where the person is looking: the
    status line for a warning, a toast for a lapse. Never a stack trace, never a silent blank.
-3. **A concept is introduced only when a decision needs it.** The band says "3 reflexes this
-   session", not "fire" or "firm". Strength words and lifecycle words appear in the pane's
-   Reflexes tab, where a person has gone to look.
-4. **Dollars only when measured, always with an interval.** The band and `/adage` show counts
-   until the savings gate (10 control, 30 treated) is met; then the verdict with its interval,
-   never a bare figure.
+3. **A concept is introduced only when a decision needs it.** The band says "2 reflexes this
+   session", not "fire" or "firm". Strength words (`fire`, `prime`, `inhibit`) and lifecycle
+   words (`forming`, `firm`, `dormant`) appear only **inside the pane**, in both its Live and
+   Reflexes tabs, where a person has gone to look and where `adage watch` already uses them
+   (`docs/zero-config.md` §0.3).
+4. **Counts until measured, dollars only with an interval.** The band and `/adage` count what
+   happened (reflexes fired, steps taken without a model request, test runs reused). The word
+   "saved" belongs to the measured savings verdict and appears only once the savings gate (10
+   control, 30 treated sessions) is met, with its interval, never as a bare figure
+   (`docs/design/style.md`, "Numbers"; `docs/zero-config.md` §0.4).
 5. **Beside the conversation, never in it.** The model's text is untouched by anything in this
    document. Every line here is person-only: a `ui.render` tree, a toast, a status line, a pane.
 6. **Quiet by default.** No line when nothing fired. No band cell for a zero. No toast for a
-   routine learn. One line per event at most, one notice per candidate per session, one toast per
-   learn.
-7. **The arm is never inferable.** A control session draws what a treated session with no match
-   draws. Nothing on screen says "control", counts withheld directives, or differs in layout.
-8. **One accent, lamps mean strength, the terminal's colours win.** Text uses the engine's theme
-   keys; Adage's accent marks the active thing; green, amber and red appear only on fire, prime
-   and inhibit and on success, warning and failure marks (`docs/design/style.md`, "Colour").
-9. **Every glyph is one column wide and has an ASCII twin** (`style.md`, "Glyphs"): `◠`/`~`
-   reflex, `◉`/`(o)` instinct, `↪`/`=>` rewrite, `●`/`*` lamp, `○`/`o` off, `»`/`>>` notice,
-   `◈`/`<>` from a skill, `◌`/`(.)` quiet. `ADAGE_ASCII=1` picks the twin.
+   learn with no change. One line per event at most, one notice per candidate per session, one
+   toast per learn.
+7. **The arm is never stated and never counted.** Nothing on screen, in the pane or in
+   `/adage why` names the control arm, lists a withheld directive, or shows a count that only a
+   control session would have. A control session with nothing scheduled draws what a treated
+   session with nothing fired draws.
+8. **One accent, lamps carry roles, the terminal's colours win.** Text uses the engine's theme
+   keys; Adage's accent marks the active thing; the fire, prime and inhibit roles colour lamps and
+   marks only, and every lamp has a word or a distinct shape beside it (`style.md`, "Colour";
+   `theme.rs` gives health lamps distinct shapes "so a colour-blind reader loses nothing").
+9. **Every glyph is one column wide and has an ASCII twin** (`style.md`, "Glyphs";
+   `design/tokens/adage.tokens.json`). `ADAGE_ASCII=1` picks the twin, read through `$.env.get`.
+
+| Glyph | Twin | Means |
+| --- | --- | --- |
+| `◠` | `~` | a reflex, Adage's mark |
+| `◉` | `(o)` | an instinct |
+| `↪` | `=>` | a rewrite |
+| `●` | `*` | a lamp (role gives the colour; a word gives the meaning) |
+| `○` | `o` | off, nascent, or still being learned |
+| `»` | `>>` | something that needs attention |
+| `◈` | `<>` | from a skill |
+| `◌` | `(.)` | quiet |
+| `→` | `->` | leads to |
+| `✓` `✗` | `OK` `X` | success, failure |
+| `◆` | `#` | a conditioning run |
+| `·` | `-` | separator |
+
+Key names are words: `enter`, `esc`, `tab`; no `⏎` or `▁`.
 
 ## 2. Who it is for
 
 | Persona | How they meet Adage | What this surface must do for them |
 | --- | --- | --- |
-| **(a) The plugin user** who never opens a terminal | `/plugin install adage@adage`, then sessions | See reflexes fire, see what was saved, know when something waits for them, never need `adage ui` |
+| **(a) The plugin user** who never opens a terminal | `/plugin install adage@adage`, then sessions | See reflexes fire, see what Adage did instead of asking the model, know when something waits for them, and be told plainly when a step needs a terminal |
 | **(b) The CLI user** who ran `adage init` | Has the terminal programs too | Not be told twice; the pane is the same information as `adage watch`, one window instead of two |
 | **(c) The team lead** who shares packs | Reviews, delegates, signs | See which reflexes are a teammate's, copy the exact command to approve or revoke at a terminal |
-| **(d) Headless** (`claude -p`, the SDK, CI, the demo runner) | No one is looking | See nothing, change nothing: the hooks run, no site is drawn, no question is asked |
+| **(d) Headless** (`claude -p`, the SDK, CI, the demo runner) | No one is looking | See nothing, be asked nothing: the hooks run, no site is drawn |
 
 ## 3. The screen map
 
-Where Adage may draw in a terminal session, and in the Desktop app's Code tab. The permission
-prompt is not a render site and is never touched.
+Where Adage may draw in a terminal session, and in the Desktop app's Code tab (§4.12, pending
+Q7). The permission prompt is not a render site and is never touched.
 
 ```text
 ┌──────────────────────────────────────────────────────────────────┬──────────────────────┐
 │ ✻ Claude Code 2.1.287                                            │ adage  Live Refl Health│  ← Pane (dock, ≥110 cols
-│   ◠ adage · 4 instincts, 9 reflexes in acme-billing · learning … │ 04:22:53 bc0c7d …     │     fullscreen; inline above
+│   ◠ adage · 3 reflexes and 4 instincts active in this repo · …   │ 04:22:53 bc0c7d …     │     fullscreen; inline above
 │                                                                  │ 04:22:53 19b2cf …     │     the prompt otherwise)
-│ > fix W-2042                                             ← UserMessage             │
-│   ◠ lookup-work-item · fire · ./scripts/wi-lookup W-2042 --json  │                      │
+│ > fix W-2042 and add the currency field                 ← UserMessage             │
+│   ◠ lookup-work-item · scripts/wi-lookup W-2042 --json           │                      │
 │                                                                  │                      │
-│ ● Bash(./scripts/wi-lookup W-2042 --json)              ← ToolUse │                      │
+│ ● Bash(scripts/wi-lookup W-2042 --json)                ← ToolUse │                      │
 │   ⎿ {"id":"W-2042", …}                                 ← ToolResult                    │
 │ ● Bash(make gen)                                                 │                      │
-│   ◠ adage ran this step on the CPU: codegen-after-registry, no model request          │
+│   ◠ adage chose this step: codegen-after-schema · no model request                     │
 │                                                                  │                      │
-│ ✓ Worked for 1m 48s · adage: 2 requests saved          ← TurnDuration (terminal)      │
+│ ✓ Worked for 1m 48s · adage: 1 step without a model request     ← TurnDuration (terminal)│
 │                                                                  │                      │
 │ ┌──────────────────────────────────────────────────────────────┐ │                      │
-│ │ ◠ adage  3 reflexes this session · 2 requests saved · ● healthy · learning in 38 s  │  ← AbovePrompt band
+│ │ ◠ adage  2 reflexes this session · 1 step without a model request · ● healthy       │  ← AbovePrompt band
 │ └──────────────────────────────────────────────────────────────┘ │                      │
 │ >                                                                │                      │
-│ ⚠ adage: the bundled binary failed its checksum        ← $.ui.status (warnings only)  │
+│ ⚠ adage: hooks are not answering; run adage doctor      ← $.ui.status (warnings only)  │
 └──────────────────────────────────────────────────────────────────┴──────────────────────┘
-                                                      ┌──────────────────────┐
-                                                      │ adage                │ ← toast (top right,
-                                                      │ ◠ codegen-after-regi…│    4 s)
-                                                      └──────────────────────┘
+                                                      ┌──────────────────────────────┐
+                                                      │ adage learned from this session│ ← toast (top right,
+                                                      │ ◠ codegen-after-schema is now…│    2 lines, ~40 cols, 4 s)
+                                                      └──────────────────────────────┘
 ```
 
 | Site | Adage's use | Frequency cap |
 | --- | --- | --- |
-| `InfoNotice` (terminal; a toast on Desktop) | The session's opening line | Once per session |
-| `UserMessage` | One line per reflex fired at that prompt | Per prompt, at most 3 lines (the decision cap) |
-| `ToolUse` | A marker under a rewritten, predicted, or dead-end-avoided call; a skill invoked or verified | Per call it applies to |
-| `ToolResult` | The receipt card in place of pytest output | Per receipt |
+| `InfoNotice` (terminal; a toast on Desktop) | The engine's own notice for the hook's `systemMessage`, redrawn with the glyph | Whenever the binary's notice gate printed one: the first session, then at most daily (`ui.notices`); never on `/clear` or `/resume` |
+| `UserMessage` | One line per reflex fired at that prompt | Per prompt, at most 3 lines (the decision cap, `params.rs`) |
+| `ToolUse` | A marker under a rewritten, predicted, or dead-end-avoided call; a skill loaded or verified | Per call it applies to |
+| `ToolResult` | The receipt card, only when the receipt was the result | Per receipt answered |
 | `ToolGroup` / last `ToolUse` of a batch | The noticed line | Once per candidate per session |
 | `Spinner` | `· adage ◠ n…` suffix | While a reflex was delivered this turn |
 | `TurnDuration` (terminal) | `· adage: …` summary | Per turn with Adage activity |
-| `AbovePrompt` | The band, one line (two while something needs attention) | Always, unless off |
+| `AbovePrompt` | The band, one line (two while something needs attention) | When any cell has something to say; otherwise `next(e)` |
 | `Pane` | `/adage` with Live, Reflexes, Health | On demand; unasked only at ≥144 columns with `pane: auto` |
 | `CommandOutput` | `/adage`, `/adage why` drawn as a card | Per command |
-| Toast | The learner finished with a change; a reflex formed; a lapsed grant; the finish line continuing | One per learn; one per lapse per session; one per gate |
-| `$.ui.status` | Warnings only (the engine prefixes it `⚠ adage:`) | Until cleared |
-| `AskUserQuestion` | Never, except `hold_dead_ends` (§9.4), off by default | |
+| Toast | The learner finished with a change; a grant lapsed; the finish line continuing; a copy confirmation | One per learn; one per lapse per session; one per gate; one per copy |
+| `$.ui.status` | Warnings only (the engine prefixes it `⚠ adage:`, so the text carries no prefix) | Until cleared |
+| `AskUserQuestion` | Untouched (it is the model's question tool) | |
+| `$.ui.ask` | Never: no hook of the mod waits on a person | |
 
 ## 4. The session, state by state
 
 ### 4.1 First session in a repository with history (bootstrap)
 
 ```text
-   ◠ adage · learning from 23 past sessions in this repo · reflexes arrive within a minute · nothing runs without you
+   ◠ adage · learning from 23 past sessions in this repo; reflexes arrive within a minute. Nothing runs without you.
 ```
 
-The band shows `◠ adage  learning…` and nothing else until the learner lands; then the next
-event's line appears as in §4.2. The learner's toast at the end of the bootstrap:
+The text is the binary's own `first_notice` (`crates/adage-hook/src/lib.rs`), which already has
+its 0, 1 and n forms; the mod adds the glyph and nothing else. The band shows `◠ adage  learning…`
+until the learner lands; then the next event's line appears as in §4.2. The learner's toast at
+the end of the bootstrap:
 
 ```text
  adage learned from 23 sessions
  ◠ 9 reflexes and 4 instincts are now active here
 ```
 
+### 4.1b First session in a repository with no history
+
+```text
+   ◠ adage · learning from this repo as you work; its first reflexes form in a few sessions. Nothing runs without you.
+```
+
+Again the binary's text. The band shows `◠ adage  ● healthy` and nothing else.
+
 ### 4.2 A treated session with reflexes (the common case)
 
-The opening line, the prompt line, the tool markers, the turn line and the band from §3. The
-prompt line's parts, in order, each dropped from the right when `bodyColumns` is short: glyph,
-reflex id, strength word, the command or file it names (truncated with `…`).
+The opening line (the binary's `ready_notice`: `◠ adage · 3 reflexes and 4 instincts active in
+this repo; it keeps learning as you work. Nothing runs without you.`, with the singular forms the
+binary already produces), the prompt line, the tool markers, the turn line and the band from §3.
+The prompt line's parts, in order, each dropped from the right when `bodyColumns` is short: glyph,
+reflex id, the command or files it names (truncated with `…`). No strength word.
 
 ### 4.3 A control session (1 in 10)
 
 Opening line: identical to §4.2's. No prompt line (the binary printed nothing). No tool
-markers. Turn line: the engine's own. Band: `◠ adage  ● healthy · learning in 38 s`, which is
-also what a treated session shows before anything fires. Toasts for learning: identical. Nothing
-distinguishes the two until a reflex would have fired, and then the control session simply does
-not show it, exactly as a treated session with no matching reflex.
+markers. Turn line: the engine's own. Band: `◠ adage  ● healthy`, or `◠ adage  ● healthy ·
+learning in 38 s` when a learn is scheduled, which is also what a treated session shows before
+anything fires. Toasts for learning: identical. Noticed lines: identical (both arms). `/adage why`
+prints `No reflex has spoken in this session yet.`, as it does in a treated session with nothing
+fired. The pane's Live tab shows this session's rows without the records that would name the arm
+(§6.1). Over a long session the two arms differ in what fires, as they must; nothing says which
+is which.
 
-### 4.4 A session where Adage acts (E2 on, a `predict` grant)
+### 4.4 A session where Adage acts (a `predict` grant, or E2 with receipts)
 
 ```text
  ● Bash(make gen)
-   ◠ adage ran this step on the CPU: codegen-after-registry, no model request
+   ◠ adage chose this step: codegen-after-schema · no model request
 ```
+
+In a Python repository with an E2 `verify` grant:
 
 ```text
  ● Bash(.venv/bin/python -m pytest tests/test_invoice.py -q)
-   ↪ adage: pointed this test run at .venv/bin/python (the project's environment)
-   ⎿ ◠ adage receipt a1f2 · 48 passed in 1.9 s · the tests added in this session: test_total_rounds_half_up
-      pytest's own output is not shown; adage ran the same command 4 s ago on identical inputs
+   ↪ adage: pointed this test run at .venv/bin/python
+   ⎿ ✓ adage receipt a1f2 · 48 passed in 1.9 s · the tests added in this session: test_total_rounds_half_up
+      pytest's own output is not shown; adage answered from its run 4 s ago on identical inputs (python -m pytest tests -q)
 ```
 
-Under the permission dialog for the rewritten call, one line (`$.ui.notice`):
-`adage ↪ pointed this test run at .venv/bin/python`.
+Under the permission dialog for the rewritten call, when one is shown, one line (`$.ui.notice`):
+`↪ adage: pointed this test run at .venv/bin/python`. For a predicted call: `◠ adage chose this
+step: codegen-after-schema`.
 
-At finish: `✓ Worked for 1m 48s · adage: 2 requests saved, 1 dead end headed off`. The counts
-are what the session's spool holds for this session: predicted steps, receipts answered as
-results, dead ends avoided. They are not savings claims.
+At finish: `✓ Worked for 1m 48s · adage: 1 step without a model request · 1 test run reused ·
+1 dead end headed off`. The counts are what the session's spool holds for this session: predicted
+steps, receipts answered as results, dead ends avoided. They are counts, not savings claims.
+
+A receipt delivered beside a run that did happen (the receipt was not fresh, or the person's
+rules would have asked) draws one dim line under the real output, not the card:
+`◠ adage receipt a1f2 covers this run · /adage why`.
 
 ### 4.5 A lapsed grant
 
-Toast, once per session, when the grant would have run:
+Toast, once per session, when the grant would have applied:
 
 ```text
  adage
- the make gen approval lapsed (Makefile changed) · adage review delegate acme-billing/learned codegen-after-registry --level e2 --effect regenerate
+ the make gen grant lapsed (Makefile changed) · /adage health
 ```
 
-The band's second line while any grant is lapsed: `» 1 approval lapsed · /adage health`.
+The band's second line while any grant is lapsed: `» 1 grant lapsed · /adage health`. The Health
+tab lists the lapse with the exact command the binary names (`reapprove_command`, which ends in
+`--predict` for a predict grant and `--level e2 --effect …` for an execute grant) behind
+`Copy command`; the toast never carries the command (a 100-character command cannot be read or
+copied from a 4-second toast). The word is **grant**: `adage review approve` does not grant
+execution (`ui/words.rs`), and the lexicon's status is "needs review".
 
 ### 4.6 The learner finishing mid-session
 
 Band cell: `learning in 38 s` → `learning…` → gone (or `learned` for 10 s). Toast when a change
-matters (a strength change, a new reflex, a candidate that formed):
+matters (a strength change, a new reflex, a candidate that became a reflex):
 
 ```text
  adage learned from this session
- ◠ codegen-after-registry  prime → fire  (9 of 9 sessions)
+ ◠ codegen-after-schema is now said as a direct instruction (9 of 9 sessions)
 ```
 
 ```text
  adage learned from this session
- ◠ test-after-acme-edit formed · this session was its 5th
+ ◠ test-after-acme-edit is now a reflex · this session was its 5th
 ```
 
-No toast for a learn with no change.
+```text
+ adage learned from recent sessions
+ ◠ lookup-then-read now waits for your review · run adage review in a terminal
+```
+
+The header says `from this session` only when this session's id is among the learn line's
+`sessions`; otherwise `from recent sessions` (several sessions may be open on one repository and
+all see the toast). No toast for a learn with no change. A failed learn is a toast too, once:
+`adage could not learn from this session (sandbox) · run adage doctor`.
 
 ### 4.7 Noticed
 
 ```text
  ● Edit(acme/invoice.py)
  ● Bash(make test)
-   ◠ adage noticed · make test after editing acme/** · seen in 3 earlier sessions · a reflex forms at 5
+   ○ adage noticed · make test after editing acme/** · seen in 3 earlier sessions
 ```
 
 ```text
-   ◠ adage noticed · ./scripts/wi-lookup then reading the files it names · waits for your review · adage review
+   ○ adage noticed · scripts/wi-lookup then reading the files it names · waits for your review · run adage review in a terminal
 ```
 
-Sequences only, once per candidate per session, in both arms, never for a single call. Off with
-the `noticed` setting.
+Sequences only, once per candidate per session, in both arms, never for a single call, never a
+forecast of when a reflex forms. Off with the `noticed` setting. The glyph is `○`: not yet a
+reflex.
 
 ### 4.8 Skills
 
 ```text
  ● Skill(release-checklist)
-   ◈ adage invoked this skill: release-after-bump, no model request
+   ◈ adage loaded this skill: release-after-bump · no model request
 ```
 
 ```text
@@ -199,248 +261,336 @@ the `noticed` setting.
    ◈ adage verified 3 of 5 steps here · step 2 corrected · /adage why
 ```
 
-`/adage why` after a verified skill lists each step: `s1 ./scripts/wi-lookup {id} · works ·
+`/adage why` after a verified skill lists each step: `s1 scripts/wi-lookup {id} · works ·
 2026-09-30`, `s2 pytest · stale: command not found · corrected to .venv/bin/python -m pytest`.
 
-### 4.9 `/clear`, `/resume`, a reload
+### 4.9 `/clear`, `/resume`, `/branch`, a reload
 
-`$.state` resets on `/clear`, `/resume` and `/branch`; the mod reloads the band's figures from
-the spool at `classic.SessionStart` with `source` `clear`, `resume` or `fork`. The pane stays
-open if it was open (the engine keeps panes across a module reload); its rows are refetched
-through the feed's `--since`. Nothing is shown about the reload itself.
+`/clear` starts a new engine session with a new id: every per-session cap and count starts
+again, as it does for the binary. `/resume` and `/branch` keep or fork the id; `$.state` is reset
+by the engine and the mod reloads this session's figures from the feed (`--since` the cursor the
+spool gives for the session's start). The pane stays open if it was open (verify in Q3b: the
+engine keeps panes across a module reload); its rows are refetched. Nothing is shown about the
+reload itself.
 
 ### 4.10 Headless, the VS Code panel, a cloud session
 
-Hooks run; nothing draws; `$.ui.ask` is never called. `/adage` answers as plain text (the card's
-rows). The evals see the same session as without the mod.
+Hooks run; nothing draws; nothing is asked. `/adage` answers as plain text (the card's rows). What
+the grants allow still runs (architecture §7), so an eval that wants today's session runs without
+the mod or with the mod in observe mode.
 
 ### 4.11 A narrow terminal
 
 Below 110 columns in fullscreen, or on the main screen, the pane seats inline above the prompt,
-20 rows asked; the band keeps its first cells and drops from the right: `◠ adage  3 reflexes · 2
-saved · ●`. Below 60 columns the band shows `◠ adage ●` and the lamp alone.
+20 rows asked; the band keeps its first cells and drops from the right by the priority in §5:
+`◠ adage  2 reflexes · 1 step without a model request · ● healthy` → `◠ adage  2 reflexes ·
+● healthy` → `◠ adage  ● healthy`. The lamp's word is never dropped (§1.8); at the narrowest the
+band is `◠ adage ● healthy` or `◠ adage ● problem`.
 
-### 4.12 The Desktop app
+### 4.12 The Desktop app (pending Q7)
 
-The same sites draw with the Desktop's elements: native buttons in the pane, `Markdown` cards,
-no `InfoNotice` (the opening line becomes a toast), no `TurnDuration` (the turn's counts move to
-the band for 10 s). No `Raster`. Theme keys map to the app's theme.
+The declaration file marks `$.process` "CLI only". If Q7 finds it works in the Desktop app's Code
+tab, the same sites draw with the Desktop's elements: native buttons in the pane, `Markdown`
+cards, no `InfoNotice` (the opening line becomes a toast), no `TurnDuration` (the turn's counts
+move to the band for 10 s), no `Raster`; theme keys map to the app's theme. If `$.process` is
+unavailable there, the mod has no bridge and no feed: nothing draws, the command hooks serve as
+today, and the Live tab, if opened, says `live rows need the terminal · adage watch`.
+
+### 4.13 Adage is off here
+
+With `.adage/disabled` in the repository or `ADAGE_DISABLE` set, the hooks print nothing. The
+band shows `◠ adage ○ off in this repository · /adage on` (the `○` is the off glyph), nothing
+else draws, and `/adage` prints the card, whose first line says the same.
+
+### 4.14 Automatic learning is off
+
+When `learn.auto` is off, the opening line is the binary's own for that state (it does not say
+"keeps learning"), the band has no learner cell, and `/adage` shows the card's `learning: off`
+row.
+
+### 4.15 Paused
+
+`/adage pause` pauses the feed and the band; the band shows its one cell `◠ adage  paused ·
+/adage pause`, so the pause is never invisible (§1.2). `/adage pause` again resumes.
+
+### 4.16 Outside a repository
+
+The binary answers nothing; the band returns `next(e)`; `/adage` prints the card, which says
+`not in a repository`.
 
 ## 5. The band
 
 One line above the prompt; a second line only while something needs attention.
 
 ```text
-◠ adage  3 reflexes this session · 2 requests saved · ● healthy · learning in 38 s
-» 1 approval lapsed · /adage health
+◠ adage  2 reflexes this session · 1 step without a model request · ● healthy · learning in 38 s
+» 1 grant lapsed · /adage health
 ```
 
 | Cell | Source | Shown when | Narrow priority (1 kept longest) |
 | --- | --- | --- | --- |
-| `◠ adage` | fixed | always | 1 |
-| health lamp `●`/`○` | `adage doctor --json` summary (fail → `○`, warn → `●` amber) | always | 2 |
-| `n reflexes this session` | `$.state.fired.length` | n > 0 | 3 |
-| `n requests saved` | predicted steps + receipts as results, this session | n > 0 | 4 |
-| `learning in 38 s` / `learning…` | the feed's `learner` record (`spawn.json.after`, lock) | a learn is scheduled or running | 5 |
-| `1 pattern noticed` | `$.state.noticed.length` | n > 0 and the pane is closed | 6 |
-| `» …` second line | lapsed grant, binary problem, review waiting | any | shown whole or not at all |
+| `◠ adage` | fixed | always (when the band draws) | 1 |
+| `● healthy` / `● check: <check>` / `● problem: <check>` / `○ off …` | `adage doctor --json`'s worst check, worded as the status card words it (`status_card.rs`): the lamp in the fire, prime or inhibit role, the word always present | always | 2 |
+| `n reflexes this session` | distinct route ids fired this session | n > 0 | 3 |
+| `n steps without a model request` | predicted steps this session | n > 0 | 4 |
+| `n test runs reused` | receipts answered as results this session | n > 0 | 5 |
+| `learning in 38 s` / `learning…` / `learned` | the feed's `learner` record (`spawn.json.after`, the lock) | a learn is scheduled, running or just done | 6 |
+| `1 pattern noticed` | `$.state.noticed.length` | n > 0 and the pane is closed | 7 |
+| `paused · /adage pause` | `/adage pause` | paused (the only cell then) | |
+| `» …` second line | lapsed grant, binary problem, review waiting, harness newer than tested | one at a time, highest priority first: lapsed > problem > review > version | shown whole or not at all |
 
-Rules: the band returns `next(e)` when every optional cell is empty and health is green, so
-other mods' bands show; it never contains a button (a digit hotkey on the band fires from an
-empty prompt); the words follow the lexicon ("reflexes", "requests", "learning"); numbers are
-plain, no colour; the lamp is the only coloured glyph. `e.props.hasSurvey` true → `next(e)` (the
-engine's survey has the band).
+Rules: the band returns `next(e)` when every cell but the name is empty and health is green, so
+other mods' bands show and a quiet session has no band; it never contains a button (a digit
+hotkey on the band fires from an empty prompt); the words follow the lexicon's plain forms
+("reflexes", "sessions", "learning": `lexicon.md`'s rule that default surfaces use the everyday
+word); numbers are plain, no colour; the lamp is the only coloured glyph. `e.props.hasSurvey`
+true → `next(e)` (the engine's survey has the band; verify the prop in Q3).
 
 ## 6. The pane
 
 Opened by `/adage` (and `/adage watch|reflexes|health`) with `focus: true, closeOnEscape: true,
-rows: 20`; unasked only with `pane: auto` and a 144-column fullscreen terminal. Three tabs as
-`plain` Buttons with hotkeys `l`, `r`, `h`; the open tab in the accent, the others dim.
+holdToasts: true, rows: 20`; unasked only with `pane: auto` and a 144-column fullscreen
+terminal. Three tabs as `plain` Buttons with hotkeys `l` (Live), `r` (Reflexes), `t` (Health): a
+`Button` hotkey is one digit or one lowercase letter, and `h` is `adage watch`'s help key, which
+persona (b) knows. The open tab is in the accent, the others dim. Nothing in the pane is a
+decision: the pane reads, copies and opens; it never runs `review`, `delegate`, `install` or a
+guarded `config set` (F11).
 
 ### 6.1 Live
 
 ```text
- l: Live   r: Reflexes   h: Health                                          esc close
- Filter: ▁                                                                ⏎ apply
- 04:22:53 bc0c7d cc tools   ✗ ignored lookup-incident
- 04:22:53 19b2cf cc stop    ○ would ask the agent to continue (withheld)
- 04:22:53 d76f0f cc tools   → ◠ codegen-after-regist… FIRE     npm run code…
- 04:22:53 bc0c7d cc failure → ◠ dead-end-npm-test     INHIBIT  npm run check
- 04:22:53 d76f0f cc tools   ✓ finish line met codegen-after-registry
+ l: Live   r: Reflexes   t: Health                                          esc: close
+ Filter: lookup                                                            enter: apply
+ 04:22:53 bc0c7d cc tools   → ◠ codegen-after-schema   FIRE     make gen
+ 04:22:53 bc0c7d cc failure → ◠ dead-end-unittest      INHIBIT  python3 -m unittest
+ 04:22:53 bc0c7d cc tools   ✓ finish line met codegen-after-schema
+ 04:21:10 7a01e2 cc prompt  → ◠ lookup-work-item       FIRE     scripts/wi-lookup W-2041
  ─ conditioning ───────────────────────────────────────────────────────────
  ◆ 04:22 auto-condition · 27/28 traces used · 0.73 s · 2 changes
    ◠ read-linked-files   prime → fire       13/17 · lb 0.53
  ─ health ────────────────────────────────────────────────────────────────
- ● hooks claude  ● 4 reflexes  ● auto-condition  ● embedding model  ● no fail-open errors
- p pause · f scope · v quiet · G newest                                 (while focused)
+ ✓ hooks claude  ✓ 4 reflexes  ✓ auto-condition  ✓ bundled model
+ p: pause · v: quiet rows · n: newest                                  (while focused)
 ```
 
-Each row is a `plain` Button: Enter opens the inspect pane (`adage-inspect`, `focus`,
+The feed is `adage watch --follow --json --session <id>`; **for the current session it omits
+every record that would name the arm**: the `control` flag, `would_have`, `would_predict`,
+`would_continue`, withheld pre-tool records and the `Unaided`, `NotReached`, `Withheld` and
+`StopWithheld` acts (`ui/feed.rs`). Other sessions' rows appear as `adage watch` shows them. The
+strength words (`FIRE`, `INHIBIT`) and the conditioning ticker's `prime → fire` are allowed here
+by §1.3, and are spelled out so no colour is needed. The health strip quotes the real lights
+(`health.rs`: `hooks <harness>`, `n reflexes`, `auto-condition`, `model` / `bundled model` /
+`no model`, and a fail-open light only when the count is positive) with `theme.rs`'s shapes.
+
+Each row is a `plain` Button: `enter` opens the inspect pane (`adage-inspect`, `focus`,
 `closeOnEscape`, `rows: 12`) with the record's directive text and evidence as `Markdown`. Arrows
-and page keys scroll (engine-owned); `p`, `f`, `v`, `G` are hotkeys on footer buttons, live
-while the pane holds the keys. The filter is an `Input` (`onInput` filters as typed, Enter keeps
-it). Rows older than 500 drop. The lamp cells use the lamp roles; `FIRE`/`PRIME`/`INHIBIT` are
-spelled out when the theme has no colour (the engine's theme decides; `NO_COLOR` is honoured by
-Claude Code, not by the mod).
+and page keys scroll (engine-owned); `p`, `v`, `n` are hotkeys on footer buttons, live while the
+pane holds the keys. The filter is an `Input` (`onInput` filters as typed, `enter` keeps it, an
+empty submit clears it). Rows older than 500 drop. The inspect pane never opens on a row the
+filter above removed.
 
 ### 6.2 Reflexes
 
 From `adage graph --json`, read-only. A tree by track: instinct `◉`, learned `◠`, imported `◠`
 with the signer dim; each row: id, strength lamp and word, lifecycle word, trigger → step, support
-`13/17 · lb 0.53`. Enter expands to the directive text, evidence and uplift line (`Uplift::line`).
-Filters: an `Input` (fuzzy on id, trigger, command, track), `F P I` toggles, `S` cycles
-lifecycle. Each row has `Copy command` (`$.ui.copy`): the exact `adage review …` verb the
-`review.verbs` field names, since review decisions are terminal-only (F11). A toast confirms the
-copy: `copied: adage review strengthen acme-billing/learned read-linked-files`.
+`13/17 · lb 0.53`. `enter` expands to the directive text, evidence and uplift line (`Uplift::line`,
+emitted as `evidence.uplift.line`). Filters: an `Input` (fuzzy on id, trigger, command, track), a
+`Select` for strength (`all · fire · prime · inhibit`) and a `Select` for lifecycle. The graph's
+`review.verbs` is a list of the verbs that apply to the row (`strengthen`, `weaken`, `extinguish`,
+`approve`, `pin`, `dismiss`, as `ui/routes.rs` lists them); each gets a `Copy` button whose
+command is `review_command`'s exact form, `adage review <verb> <track> <id>`
+(`ui/words.rs`), since review decisions are terminal-only. A toast confirms: `copied: adage review
+strengthen acme-billing/learned read-linked-files`.
 
 ### 6.3 Health
 
-From `adage doctor --json`: every check as a lamp row with its label and detail; a check with a
-`fix` shows `Enter: condition this repository now` when the fix is allowed from a session, else
-`Copy command`. A `Link` to the map when `adage map` is serving (`http://localhost:<port>`).
+From `adage doctor --json`: every check as a lamp row with its label and detail; a check whose
+`fix` the binary marks as allowed from a session (`condition now`; the JSON gains a structured
+`action` beside the prose `fix`) shows `enter: condition this repository now`, every other shows
+`Copy command`. Lapsed grants list here with their exact reapprove command behind `Copy command`.
+A `Link` to the map when `adage map` is serving (`http://localhost:<port>`).
 
 ### 6.4 Empty states
 
-Live with no rows: `No hook has run in this repository yet. Reflexes appear here as they
-fire.` Reflexes with none: `No reflexes yet · learning from your sessions · 0 of ~5 needed`.
-Health with the binary missing: the warning from §9.1.
+Live with no rows: `Nothing yet in this repository. Reflexes appear here as Adage uses them.`
+Reflexes with no learned reflex: `No learned reflexes yet · 0 of ~5 sessions needed · 4 instincts
+active meanwhile` (the status card's wording and counts). Health with the binary missing: the
+warning from §9.1. Live on a Desktop without `$.process`: §4.12's line.
 
 ## 7. Commands
 
 | Command | Output (`CommandOutput`) | Context for the model |
 | --- | --- | --- |
-| `/adage` | The status card, drawn: header, key column, `next` (as `adage` prints it) | none (`{}` after drawing) |
+| `/adage` | The status card, drawn: header, key column, `next` (as `adage` prints it, with `adage ui …` swapped for `/adage watch` because `adage ui` refuses inside a session, and the terminal-only commands behind `Copy`) | none (`{}` after drawing) |
 | `/adage watch`, `/adage reflexes`, `/adage health` | Opens the pane on that tab; prints nothing | none |
-| `/adage why` | The last directive this session: its text as the model read it, route, track, strength, evidence line, followed/ignored; for a skill, the verified steps | none |
-| `/adage off` | `adage is off for this repository (.adage/disabled). /adage on turns it back on.` | none |
-| `/adage on` | `adage is on for this repository.` | none |
-| `/adage pause` | Pauses the feed and the band for this session; `/adage pause` again resumes | none |
+| `/adage why` | The last directive this session: its text as the model read it, route, track, evidence line, followed or not; for a skill, the verified steps; with nothing fired (either arm): `No reflex has spoken in this session yet.` | none |
+| `/adage off` | Runs `adage off` (plan A6): `adage is off for this repository (.adage/disabled). To turn it back on, run adage on in a terminal.` | none |
+| `/adage on` | Prints `adage on is a decision for a person: run it in a terminal.` and copies the command | none |
+| `/adage pause` | `adage is paused for this session · /adage pause resumes` / `adage resumed` | none |
 
-`immediate: true` on `watch`, `reflexes`, `health` and `pause` so they run mid-turn. `off` and
-`on` write `.adage/disabled` through the binary (`adage off` / `adage on`, allowed anywhere).
-Nothing else is registered: no `review`, `delegate`, `install`, `config set` of a guarded key.
+`immediate: true` on every command (they run mid-turn). Nothing else is registered: no `review`,
+`delegate`, `install`, `config set` of a guarded key.
 
 ## 8. Settings
 
 The manifest's `userConfig`, drawn by Claude Code's `/config` and `/plugin configure`, stored
 under `pluginConfigs`; a change reloads the mod.
 
-| Row | Type | Default | Description shown |
-| --- | --- | --- | --- |
-| Band above the prompt | boolean | on | One line: reflexes this session, requests saved, health, learning |
-| Watch pane | `auto` / `manual` | `manual` | Open the live pane unasked in a wide terminal |
-| Notices | `daily` / `off` | `daily` | The one-line notice at session start |
-| Show what Adage noticed | boolean | on | A line when a sequence of calls matches one Adage is still learning |
-| Invoke skills from reflexes | boolean | on | Load a skill at the step a fire reflex names, without a model request to choose it |
-| Hold known dead ends | boolean | off | Ask before a command Adage has learned fails here (never in `claude -p`) |
-| Route routine steps to | string | empty | A model alias for steps a fire reflex covers, or empty to route nothing |
+| Key | Row | Type | Default | Description shown |
+| --- | --- | --- | --- | --- |
+| `band` | Band above the prompt | boolean | on | One line: reflexes this session, steps without a model request, health, learning |
+| `pane` | Watch pane | `auto` / `manual` | `manual` | Open the live pane unasked in a wide terminal |
+| `noticed` | Show what Adage noticed | boolean | on | A line when a sequence of calls matches one Adage is still learning |
+| `skills_invoke` | Invoke skills from reflexes | boolean | off | Load a skill at the step a granted reflex names, without a model request to choose it |
+| `routine_model` | Route routine steps to | string | empty | A model alias for steps a fire reflex covers, or empty to route nothing |
 
-Execution policy, grants, trust and learning sources are not here; they stay at the terminal
-(`docs/live-learning.md`, the guarded keys).
+Not here: the notice cadence (`ui.notices` in `config.toml`, so `/config` and `adage config`
+never disagree), execution policy, grants, trust and learning sources (terminal only,
+`docs/live-learning.md`), and a hold on known dead ends (an open question, architecture §10).
 
 ## 9. Degraded and error states
 
 | State | What the person sees | Where |
 | --- | --- | --- |
-| **9.1 No binary** (the shim failed, or `$DATA/bin/adage` is `quiet`) | `⚠ adage: no binary for darwin-arm64; install with brew install … or npm i -g …` (the shim's own `systemMessage` text) | `$.ui.status`, once; the band shows `◠ adage ○` |
-| **9.2 Binary refused or timed out** on one event | Nothing for that event (fail open); after 3 in a row: `⚠ adage: hooks are not answering; adage doctor` | status, once per session |
+| **9.1 No binary** (the shim failed) | The shim's reason, read from `$DATA/status` so the engine's `⚠ adage:` prefix is not doubled: `⚠ adage: no binary for darwin-arm64; install with brew install … or npm i -g …` | `$.ui.status`, once; the band shows `◠ adage ○ off · run adage doctor` |
+| **9.2 Binary refused or timed out** on one event | Nothing for that event (fail open). The bridge's answer is tagged, so a failure is distinct from "nothing to say"; after 3 failures in a row: `⚠ adage: hooks are not answering; run adage doctor` | status, once per session |
 | **9.3 A tree the engine refused** (a prop it does not take) | The engine draws its own row; a dim transcript line only while hot-reloading or under `--plugin-dir`; the debug log always | nothing for installed users; CI's `plugin test` prevents it |
-| **9.4 `hold_dead_ends` on, a dead end matched** | The engine's question dialog: `adage: npm test fails here (ACME_ENV is not set). Run it anyway?` with `Run it` / `Use the learned command (make test)` | dialog; never in `-p` |
-| **9.5 The feed child died** | The pane's Live tab shows `feed stopped · reconnecting…`, the mod restarts it with `--since`; after 3 failures `feed stopped · adage doctor` | pane |
-| **9.6 Lapsed grant** | §4.5 | toast, band line 2 |
-| **9.7 Harness newer than validated** | `» Claude Code 2.1.3xx is newer than this plugin was tested with (2.1.287) · adage doctor` on the band's second line, once per session | band |
-| **9.8 Narrow terminal, unasked pane** | Nothing; the pane waits (`isPlaced: false`); `/adage` opens it inline | |
-| **9.9 Review waiting** | `» 2 reflexes wait for your review · adage review` | band line 2, once per session |
-| **9.10 Recovery required** (an interrupted E2 action) | `⚠ adage: an action was interrupted; inspect the worktree, then adage-exec recover --id … --acknowledge` | status until acknowledged |
+| **9.4 The feed child died** | The Live tab shows `feed stopped · reconnecting…`; the mod restarts it from the last cursor; after 3 failures `feed stopped · run adage doctor` | pane |
+| **9.5 Lapsed grant** | §4.5 | toast, band line 2 |
+| **9.6 Harness newer than validated** | `» Claude Code 2.1.3xx is newer than this plugin was tested with (2.1.287) · run adage doctor` on the band's second line, until the first prompt is submitted, once per new harness version per machine | band |
+| **9.7 Narrow terminal, unasked pane** | Nothing; the pane waits; `/adage` opens it inline | |
+| **9.8 Review waiting** | `» 2 reflexes wait for review · needs a terminal: adage review`, once per day per repository, until the first prompt is submitted | band line 2 |
+| **9.9 Recovery required** (an interrupted E2 action) | `⚠ adage: an action was interrupted; inspect the worktree, then run adage-exec recover --id … --acknowledge in a terminal` | status until acknowledged |
+| **9.10 Desktop without `$.process`** | §4.12 | pane empty state |
+| **9.11 Off, learning off, paused, outside a repository** | §4.13–4.16 | band, card |
 
-Rules: a warning uses `$.ui.status` (the engine's `⚠` fits); an attention item uses the band's
-second line with `»`; a fact uses a toast. Every degraded line names the command that fixes it,
-as the status card does.
+Rules: a warning uses `$.ui.status` (the engine's `⚠ adage:` fits, so no template starts with
+`adage:`); an attention item uses the band's second line with `»`; a fact uses a toast. Every
+degraded line names the command that fixes it and says `in a terminal` when the command is
+person-only, as `zero-config.md` words it ("run adage review in a terminal").
 
 ## 10. Copy deck
 
-Every string the mod draws, by id. `{…}` are slots; lengths are caps before truncation with `…`.
+Every string the mod draws, by id. `{…}` are slots; the binary's own notice texts are used
+verbatim with their `adage: ` prefix stripped by one helper. Caps are in display columns; a
+string over its cap drops cells from the right, or its last slot, before `…`. Toasts are two
+lines of about 40 columns.
 
-| Id | Template | Max |
+| Id | Template | Cap |
 | --- | --- | --- |
-| `open.ready` | `◠ adage · {instincts} instincts, {reflexes} reflexes in {repo} · learning after each session · nothing runs without you` | 120 |
-| `open.bootstrap` | `◠ adage · learning from {n} past sessions in this repo · reflexes arrive within a minute · nothing runs without you` | 120 |
-| `open.notice` | `◠ adage · {learner's notice text}` | 120 |
-| `prompt.fired` | `◠ {route} · {strength} · {command or files}` | bodyColumns |
-| `tool.rewrite` | `↪ adage: pointed this {test run\|Python run} at {interpreter} (the project's environment)` | bodyColumns |
-| `tool.predicted` | `◠ adage ran this step on the CPU: {route}, no model request` | bodyColumns |
-| `tool.avoided` | `◠ dead end headed off: {route}` | bodyColumns |
-| `tool.skill.invoked` | `◈ adage invoked this skill: {route}, no model request` | bodyColumns |
+| `open.notice` | `◠ adage · {the binary's notice text, prefix stripped}` (`ready_notice`, `first_notice`, or the day's notice) | bodyColumns |
+| `prompt.fired` | `◠ {route} · {command or files}`; for an avoid reflex `◠ {route} · avoid {command}` | bodyColumns |
+| `tool.rewrite` | `↪ adage: pointed this {test run\|Python run} at {interpreter}` (also the `$.ui.notice` line) | bodyColumns |
+| `tool.predicted` | `◠ adage chose this step: {route} · no model request` (also the `$.ui.notice` line, without the tail) | bodyColumns |
+| `tool.avoided` | `◠ adage: dead end headed off · {route}` | bodyColumns |
+| `tool.skill.invoked` | `◈ adage loaded this skill: {route} · no model request` | bodyColumns |
 | `tool.skill.verified` | `◈ adage verified {k} of {n} steps here{ · step {i} corrected} · /adage why` | bodyColumns |
-| `result.receipt` | `◠ adage receipt {id} · {n} passed in {t} s{ · the tests added in this session: {names}}` then `pytest's own output is not shown; adage ran the same command {ago} on identical inputs` | 2 lines |
-| `noticed.forming` | `◠ adage noticed · {sequence} · seen in {n} earlier sessions · a reflex forms at {s_min}` | bodyColumns |
-| `noticed.review` | `◠ adage noticed · {sequence} · waits for your review · adage review` | bodyColumns |
+| `result.receipt` | `✓ adage receipt {id} · {receipt summary}{ · the tests added in this session: {names}}` / `pytest's own output is not shown; adage answered from its run {ago} on identical inputs ({command that ran})` | 2 lines |
+| `result.receipt.beside` | `◠ adage receipt {id} covers this run · /adage why` | bodyColumns |
+| `noticed.forming` | `○ adage noticed · {sequence} · seen in {n} earlier sessions` | bodyColumns |
+| `noticed.review` | `○ adage noticed · {sequence} · waits for your review · run adage review in a terminal` | bodyColumns |
 | `spinner.suffix` | ` · adage ◠ {n}…` | 16 |
-| `turn.summary` | ` · adage: {n} requests saved{, {m} dead ends headed off}` | 60 |
-| `band.main` | `◠ adage  {n reflexes this session · }{n requests saved · }{lamp} {healthy\|needs attention}{ · learning in {s} s\|learning…}` | bodyColumns |
-| `band.lapsed` | `» {n} approval{s} lapsed · /adage health` | bodyColumns |
-| `band.review` | `» {n} reflex{es} wait for your review · adage review` | bodyColumns |
-| `band.version` | `» Claude Code {v} is newer than this plugin was tested with ({tested}) · adage doctor` | bodyColumns |
-| `toast.learned.strength` | `adage learned from this session` / `◠ {route}  {from} → {to}  ({support} of {opportunities} sessions)` | 2 lines |
-| `toast.learned.formed` | `adage learned from this session` / `◠ {route} formed · this session was its {nth}` | 2 lines |
-| `toast.lapsed` | `adage` / `the {command} approval lapsed ({field} changed) · {reapprove command}` | 2 lines |
-| `toast.gate` | `adage: finish line — the agent continues once` | 1 line |
-| `toast.copied` | `copied: {command}` | 1 line |
-| `status.binary` | the shim's text, verbatim | 1 line |
-| `status.unanswering` | `adage: hooks are not answering; adage doctor` | 1 line |
-| `status.recovery` | `adage: an action was interrupted; inspect the worktree, then {recover command}` | 1 line |
-| `pane.live.empty` | `No hook has run in this repository yet. Reflexes appear here as they fire.` | |
-| `pane.reflexes.empty` | `No reflexes yet · learning from your sessions · {n} of ~{s_min} needed` | |
-| `pane.feed.stopped` | `feed stopped · reconnecting…` / `feed stopped · adage doctor` | |
-| `cmd.off` | `adage is off for this repository (.adage/disabled). /adage on turns it back on.` | |
-| `cmd.on` | `adage is on for this repository.` | |
-| `hold.question` | `adage: {avoid} fails here ({signature}). Run it anyway?` with options `Run it`, `Use the learned command ({instead})` | |
+| `turn.summary` | ` · adage: {n} step{s} without a model request{ · {m} test run{s} reused}{ · {k} dead end{s} headed off}` | 72 |
+| `band.main` | `◠ adage  {n reflexes this session · }{n steps without a model request · }{n test runs reused · }{lamp} {healthy\|check: {check}\|problem: {check}}{ · learning in {s} s\|learning…\|learned}{ · 1 pattern noticed}` | bodyColumns |
+| `band.off` | `◠ adage ○ off in this repository · /adage on` | bodyColumns |
+| `band.nobinary` | `◠ adage ○ off · run adage doctor` | bodyColumns |
+| `band.paused` | `◠ adage  paused · /adage pause` | bodyColumns |
+| `band.learning` | `◠ adage  learning…` (bootstrap) | bodyColumns |
+| `band.lapsed` | `» {n} grant{s} lapsed · /adage health` | bodyColumns |
+| `band.review` | `» {n} reflex{es} wait{s} for review · needs a terminal: adage review` | bodyColumns |
+| `band.version` | `» Claude Code {v} is newer than this plugin was tested with ({tested}) · run adage doctor` | bodyColumns |
+| `toast.learned.strength` | `adage learned from {this session\|recent sessions}` / `◠ {route} is now said as a direct instruction ({support} of {opportunities} sessions)` | 2 × 40 |
+| `toast.learned.softened` | `adage learned from {this session\|recent sessions}` / `◠ {route} is now a suggestion ({support} of {opportunities} sessions)` | 2 × 40 |
+| `toast.learned.formed` | `adage learned from {this session\|recent sessions}` / `◠ {route} is now a reflex · this session was its {nth}` | 2 × 40 |
+| `toast.learned.review` | `adage learned from {this session\|recent sessions}` / `◠ {route} now waits for your review · run adage review in a terminal` | 2 × 40 |
+| `toast.learned.bootstrap` | `adage learned from {n} sessions` / `◠ {reflexes} reflexes and {instincts} instincts are now active here` | 2 × 40 |
+| `toast.learn.failed` | `adage could not learn from this session ({class}) · run adage doctor` | 2 × 40 |
+| `toast.lapsed` | `adage` / `the {command} grant lapsed ({field} changed) · /adage health` | 2 × 40 |
+| `toast.gate` | `adage: finish line · the agent continues once` | 1 × 40 |
+| `toast.copied` | `copied: {command}` | 1 × 40 |
+| `toast.copy.unavailable` | `copy is not available here · the command is in /adage health` | 1 × 40 |
+| `status.binary` | `{the shim's reason from $DATA/status}` | 1 line |
+| `status.unanswering` | `hooks are not answering; run adage doctor` | 1 line |
+| `status.recovery` | `an action was interrupted; inspect the worktree, then run {recover command} in a terminal` | 1 line |
+| `pane.tabs` | `l: Live   r: Reflexes   t: Health` / `esc: close` | |
+| `pane.footer` | `p: pause · v: quiet rows · n: newest` | |
+| `pane.filter` | `Filter:` / `enter: apply` | |
+| `pane.live.empty` | `Nothing yet in this repository. Reflexes appear here as Adage uses them.` | |
+| `pane.live.desktop` | `live rows need the terminal · adage watch` | |
+| `pane.reflexes.empty` | `No learned reflexes yet · {n} of ~{s_min} sessions needed · {k} instincts active meanwhile` | |
+| `pane.feed.stopped` | `feed stopped · reconnecting…` / `feed stopped · run adage doctor` | |
+| `pane.copy` | `Copy: adage review {verb} {track} {id}` / `Copy command` | |
+| `pane.health.action` | `enter: condition this repository now` | |
+| `cmd.off` | `adage is off for this repository (.adage/disabled). To turn it back on, run adage on in a terminal.` | |
+| `cmd.on` | `adage on is a decision for a person: run it in a terminal.` | |
+| `cmd.pause` | `adage is paused for this session · /adage pause resumes` / `adage resumed` | |
+| `cmd.why.none` | `No reflex has spoken in this session yet.` | |
+| `cmd.why.step` | `s{i} {command} · {works\|stale: {signature}}{ · corrected to {command}} · {date}` | |
 
 Ordinal words (`5th`) follow English rules in a tiny helper; plurals are explicit in the
-templates. No string carries `fire`/`prime`/`inhibit` outside the pane's Reflexes tab, and
-`forming`/`firm` never appear outside it.
+templates and zero parts are omitted as the binary's `ready_notice` omits them. Outside the pane
+no string carries `fire`, `prime`, `inhibit`, `forming`, `firm` or `dormant`; "approval" is not
+used (the word is grant); "saved" is not used.
 
 ## 11. Interaction details
 
 - **Focus.** The pane takes the keyboard only when opened by `/adage …` (the engine grants
-  `focus` with an empty prompt), by ctrl+x tab, or by a click. Esc returns it and closes the
-  pane. While focused: Tab walks controls, arrows and page keys scroll, Enter presses or
+  `focus` with an empty prompt), by ctrl+x tab, or by a click. `esc` returns it and closes the
+  pane. While focused: `tab` walks controls, arrows and page keys scroll, `enter` presses or
   submits, hotkeys press footer buttons. The band has no controls.
 - **Inspect** opens a second pane as a dialog over the first (`focus`, `closeOnEscape`,
-  `holdToasts`, `rows: 12`); Esc closes it and returns to the Live tab with the row still
-  selected.
-- **Copy** uses `$.ui.copy` on the surface the press came from; a remote surface answers
-  `isCopied: false` and the toast says `copy is not available here; the command is: …`.
+  `rows: 12`); `esc` closes it and returns to the Live tab with the row still selected.
+- **Copy** uses `$.ui.copy` on the surface the press came from; when the result says the copy
+  did not happen (a remote surface), the toast is `toast.copy.unavailable` and the command stays
+  visible in the Health tab.
 - **Scrolling** is the engine's; the mod never binds arrows.
 - **Redraw** is driven by `$.state` writes (each read site redraws) at the engine's cap (10 a
-  second, 30 for the shown pane); the pulse on a new row is 1 s of `invalidate` at 60 ms.
-- **Pointer.** Hover lightens a row (`hover` on a keyed `Box`); a click presses. No drag.
+  second, 30 for the shown pane or band); the pulse on a new row is 1 s of `invalidate` at 60 ms.
+- **Pointer.** Hover lightens a row; a click presses. No drag.
+- The props and calls this section leans on beyond the documented facts (`hasSurvey`,
+  `isExpanded`, the copy result's shape, hover, panes surviving a reload) are checked in S9 Q3
+  and Q3b before B2 and B3 start; where one is absent, the behaviour degrades to `next(e)`.
 
 ## 12. Accessibility
 
-- Nothing is said by colour alone: every lamp has a word in the pane; the band's lamp sits beside
-  `healthy`/`needs attention`.
-- Every glyph has an ASCII twin under `ADAGE_ASCII=1` (read through `$.env.get`).
-- Desktop buttons are native, with the label as the accessible name; `role="dismiss"` on close.
+- Nothing is said by colour alone: every lamp has a word or a distinct shape beside it; the band's
+  lamp sits beside `healthy`, `check` or `problem` at every width.
+- Every glyph has an ASCII twin under `ADAGE_ASCII=1` (§1.9).
+- Desktop buttons are native, with the label as the accessible name.
 - Text never exceeds the engine's bounds (10,000 characters per `Text` child); cards are cut at
   2,400 bytes as the receipts are.
-- No animation other than the 1 s pulse, and none when `prefers-reduced-motion` is reported by
-  the Desktop app (read from the theme when exposed; otherwise the pulse is 300 ms).
+- No animation other than the 1 s pulse, and none at all under `ADAGE_REDUCED_MOTION=1`
+  (`style.md`, `theme.rs`), read through `$.env.get` like `ADAGE_ASCII`.
 
 ## 13. What is deliberately not here
 
 - Review, delegation, policy, trust, install and guarded settings: terminal only (F11). The pane
-  copies the command instead.
-- Dollar figures before the savings gate; GPU or energy words anywhere.
-- Strength and lifecycle words outside the Reflexes tab.
+  copies the command instead and says "in a terminal".
+- Dollar figures before the savings gate; the word "saved" before the verdict; GPU, CPU or energy
+  words anywhere.
+- Strength and lifecycle words outside the pane.
+- The arm, anywhere.
 - Any text to the model. The `<adage-reflex>` blocks are unchanged by this document.
 - A status-line entry for normal operation (the engine's `⚠` prefix makes it a warning channel).
-- Digit hotkeys, bound arrows, a takeover of the screen, a second window.
+- Digit hotkeys, uppercase hotkeys, bound arrows, a takeover of the screen, a second window, a
+  question dialog.
 
-## 14. Usability check (part of the test plan)
+## 14. Usability check (part of the test plan, T-U-01)
 
-Three readers who have not seen Adage watch the acme-billing recording with the mod (S9 Q3,
-Q3b, Q12 produce it) and answer, unprompted, four questions: what did Adage do in this session;
-what did it save; what, if anything, waits for you; which of the two sessions shown was the
-control. Pass: 3 of 3 answer the first three correctly and 0 of 3 identify the control session
-better than chance. Their verbatim confusions become copy-deck changes.
+Two parts, run once per surface change on the acme-billing sandbox with the mod loaded.
+
+**Reading.** Eight readers who have not seen Adage, four from persona (a) and four from (b), each
+watch one recorded session (S9 Q3, Q3b, Q12 produce them) and answer, unprompted: what did Adage
+do in this session; what did Adage do that the agent did not have to ask the model for; what, if
+anything, waits for you, and where do you do it. Pass: 7 of 8 answer all three correctly; every
+confusion is recorded verbatim and becomes a copy-deck change.
+
+**The arm.** Twenty matched pairs of recordings (one control, one treated session with no
+matching reflex, same task) are shown to the readers in random order with the question "in which
+of these two did Adage hold back on purpose?". Pass when the pooled accuracy's 95% interval
+includes 0.5 (binomial; at 160 answers, between 68 and 92 correct).
+
+**Doing.** Each reader performs five tasks live in a session: find what waits for you; copy the
+command to strengthen a named reflex; turn Adage off in this repository; open the inspect view of
+the last fired reflex; find the health problem. Pass: every task completed by 7 of 8 without help,
+under 60 s each; the two slowest are redesigned.
