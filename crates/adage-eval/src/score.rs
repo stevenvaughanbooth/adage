@@ -285,7 +285,8 @@ impl Tally {
 
 /// The directed command a directive's text names (the indented line).
 fn command_in(text: &str) -> Option<String> {
-    // "A known next step here is:" carries its exit clause on the command's line.
+    // Directives recorded before 2026-10-01 carry "A known next step here is:"'s exit clause on the
+    // command's line; newer ones on a line of its own. Both read the same.
     let cmd = |l: &str| l.split(" Ignore this if ").next().unwrap_or(l).trim().to_string();
     text.lines().find_map(|l| l.strip_prefix("  ")).map(cmd)
 }

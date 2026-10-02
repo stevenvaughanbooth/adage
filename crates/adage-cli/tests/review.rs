@@ -177,9 +177,13 @@ fn reasons(q: &Value) -> BTreeMap<(String, String), Vec<String>> {
         .unwrap()
         .iter()
         .map(|i| {
-            let kinds =
-                i["reasons"].as_array().unwrap().iter().map(|r| r["kind"].as_str().unwrap().to_string()).collect();
-            ((i["track"].as_str().unwrap().to_string(), i["route"].as_str().unwrap().to_string()), kinds)
+            let kinds = i["review"]["reasons"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|r| r["kind"].as_str().unwrap().to_string())
+                .collect();
+            ((i["reference"].as_str().unwrap().to_string(), i["id"].as_str().unwrap().to_string()), kinds)
         })
         .collect()
 }
@@ -260,17 +264,17 @@ fn queue_lists_each_reason_with_evidence_and_directive() {
     assert_eq!(q["count"], 5);
 
     let item = |t: &str, r: &str| {
-        q["queue"].as_array().unwrap().iter().find(|i| i["track"] == t && i["route"] == r).unwrap().clone()
+        q["queue"].as_array().unwrap().iter().find(|i| i["reference"] == t && i["id"] == r).unwrap().clone()
     };
     let lk = item(NAME, "lookup");
     assert_eq!(lk["strength"], "fire");
     assert_eq!(lk["ceiling"], "fire");
     assert_eq!(lk["effect"], "observe");
-    assert_eq!(lk["decisions"], json!(["approve", "extinguish", "weaken", "pin"]));
+    assert_eq!(lk["review"]["verbs"], json!(["approve", "extinguish", "weaken", "pin"]));
     assert_eq!(lk["evidence"]["support"], 20);
     assert_eq!(lk["evidence"]["opportunities"], 20);
     assert!(lk["evidence"]["lower_bound"].as_f64().unwrap() > 0.8);
-    assert_eq!(lk["runtime"]["followed"], 6);
+    assert_eq!(lk["live"]["followed"], 6);
     assert_eq!(lk["example_values"]["item"], "W-1234");
     let d = lk["directive"].as_str().unwrap();
     assert!(d.starts_with("<adage-reflex track=\"acme/work-items@0.1.0\" route=\"lookup\" strength=\"fire\">"), "{d}");
@@ -278,9 +282,9 @@ fn queue_lists_each_reason_with_evidence_and_directive() {
     assert!(d.contains("not requested by the user"), "{d}");
 
     let dr = item(NAME, "ignores");
-    assert_eq!(dr["runtime"]["ignored"], 6, "control and other repositories are not counted");
-    assert!(dr["reasons"][0]["detail"].as_str().unwrap().contains("weakening"));
-    assert!(item(NAME, "approved-changed")["reasons"][0]["detail"]
+    assert_eq!(dr["live"]["ignored"], 6, "control and other repositories are not counted");
+    assert!(dr["review"]["reasons"][0]["why"].as_str().unwrap().contains("weakening"));
+    assert!(item(NAME, "approved-changed")["review"]["reasons"][0]["why"]
         .as_str()
         .unwrap()
         .starts_with("approved on 2026-09-01; since then lower bound moved"));
@@ -288,7 +292,7 @@ fn queue_lists_each_reason_with_evidence_and_directive() {
 
     let t = w.ok(&["review"]);
     for s in [
-        "5 reflexes wait for a decision",
+        "5 to look over",
         "why         new:",
         "seen in 20 of 20 traces",
         "example values: item = W-1234",
@@ -710,7 +714,7 @@ fn routine_candidate_stays_in_execution_review_after_evidence_approval() {
     assert_eq!(row["execution_only"], true);
     assert_eq!(row["evidence"]["execution"]["successful"], 5);
     assert!(row["directive"].is_null());
-    assert!(row["next"].as_str().unwrap().ends_with("routine --level e2"));
+    assert!(row["review"]["next"].as_str().unwrap().ends_with("routine --level e2"));
     // What it does, truthfully (QA first-run #6): silent without a grant, nothing at Stop; no
     // finish line is promised for a reflex never said to the agent.
     let shown = w.ok(&["review"]);

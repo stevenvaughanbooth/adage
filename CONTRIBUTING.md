@@ -2,7 +2,8 @@
 
 Read the [README](README.md) first, then the [design spec](docs/Adage%20—%20Design%20Spec.md),
 [architecture](docs/Adage%20—%20Architecture.md) and
-[implementation plan](docs/Adage%20—%20Implementation%20Plan.md). Security reports go through
+[implementation plan](docs/Adage%20—%20Implementation%20Plan.md). [Components and boundaries](docs/architecture.md) is the current map of
+what each crate owns and may depend on; `cargo test -p xtask` enforces it. Security reports go through
 [SECURITY.md](SECURITY.md), never a public issue.
 
 ## Build
@@ -25,7 +26,7 @@ Windows x64. Run it locally before sending a change:
 ```bash
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo test --workspace --locked        # includes the normaliser's golden fixtures and, with node, the OpenCode plugin test
+cargo test --workspace --locked        # includes the normaliser's table-driven cases and, with node, the OpenCode plugin test
 node npm/test/launcher.test.mjs        # the npm launcher, against target/debug/adage
 plugin/test/session-start.test.sh      # how the Claude Code plugin finds its binary
 node scripts/check-plugin.mjs          # plugin and marketplace versions and hook paths
@@ -34,6 +35,11 @@ claude plugin validate --strict plugin/claude-code && claude plugin validate --s
 cargo deny check                       # licenses, advisories, bans, sources (deny.toml)
 scripts/cross-check.sh                 # clippy for every release target, including Windows, from any host
 ```
+
+On a pull request, CI tests only the packages a change can affect: the changed ones, the ones whose
+tests read a changed fixture, and everything that depends on them. To see that set locally, run
+`cargo xtask affected` (against `origin/main`; `--files <paths>` to ask about specific paths). A
+test that reads a file outside its crate must be declared in `READS` in `xtask/src/affected.rs`.
 
 `scripts/cross-check.sh` proves that code compiles for other targets (it stubs out the C compiler
 tree-sitter's build script needs, so it never links). Only CI proves that it links and passes tests

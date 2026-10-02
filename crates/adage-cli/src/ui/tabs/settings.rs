@@ -60,7 +60,8 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
     }
     let key_w = s.settings.iter().map(|r| r.key.len()).max().unwrap_or(10);
     let val_w = s.settings.iter().map(|r| r.value.chars().count().max(2)).max().unwrap_or(8).min(40);
-    let mut sel_line = 0;
+    // The selected setting's lines: its row, its description, and any switch under it.
+    let (mut sel_line, mut sel_end) = (0, 0);
     for (i, row) in s.settings.iter().enumerate() {
         let sel = i == s.setting_sel;
         if sel {
@@ -88,6 +89,9 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
                 Span::styled(" to switch", t.dim()),
             ]));
         }
+        if sel {
+            sel_end = lines.len();
+        }
     }
     lines.push(Line::raw(""));
     lines.push(Line::from(Span::styled(
@@ -96,13 +100,19 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
     )));
     // Wrapped here, each continuation under its own text, so the scroll counts screen rows.
     let mut rows = Vec::new();
-    let mut sel_row = 0;
+    let (mut sel_row, mut sel_end_row) = (0, 0);
     for (i, l) in lines.into_iter().enumerate() {
         if i == sel_line {
             sel_row = rows.len();
         }
+        if i == sel_end {
+            sel_end_row = rows.len();
+        }
         rows.extend(view::wrap_lines(t.lines(vec![l]), area.width));
     }
-    let offset = sel_row.saturating_sub((area.height as usize).saturating_sub(3));
+    // Scrolled so the whole selected setting shows, with a line of room below it; its first line
+    // stays in view however tall it is.
+    let h = area.height as usize;
+    let offset = sel_row.saturating_sub(h.saturating_sub(3)).max((sel_end_row + 1).saturating_sub(h)).min(sel_row);
     f.render_widget(Paragraph::new(rows).scroll((offset as u16, 0)), area);
 }

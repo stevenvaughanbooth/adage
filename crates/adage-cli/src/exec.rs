@@ -60,8 +60,10 @@ const REVIEW_USAGE: &str = "usage: adage review delegate <track> <reflex> --leve
        adage review delegate <track> <reflex> --level e2 [--outputs <glob>]... [--cache <glob>]... [--effect verify|regenerate] [--timeout-ms n] [--repo <dir>] [--by <name>]
        adage review revoke <track> <reflex> [--repo <dir>]";
 
+use adage_trace::Harness;
+
 /// Harnesses whose registrations `delegate on` swaps.
-const HARNESSES: [&str; 3] = ["claude-code", "codex", "opencode"];
+const HARNESSES: [&str; 3] = [Harness::ClaudeCode.id(), Harness::Codex.id(), Harness::OpenCode.id()];
 
 /// A key and its value, in a key column wide enough for every harness name (`claude-code`) and
 /// `delegations`, with two spaces to spare; never narrower than the usual one.

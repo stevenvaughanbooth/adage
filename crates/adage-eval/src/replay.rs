@@ -8,8 +8,7 @@ use crate::transcript::{self, Transcript};
 use adage_core::keys::{self, template_key};
 use adage_core::tools::normalize_tool;
 use adage_core::{repo, CanonicalAction, CommandTable, Effect};
-use adage_runtime::{decide, fast, Arm, Ctx, Directive, Event, Judgement, RuntimeParams, SessionState};
-use adage_tracks::Index;
+use adage_runtime::{decide, fast, Arm, Ctx, Directive, Event, Judgement, SessionState};
 use serde::Serialize;
 use std::path::Path;
 
@@ -108,18 +107,11 @@ pub fn actions(t: &Transcript, root: &Path, table: &CommandTable) -> Vec<Action>
     out
 }
 
-/// `stop`: replay the session's final Stop hook (see [`transcript::events`]). `params`: the
-/// runtime's limits (the hook's are `RuntimeParams::default()`).
-pub fn replay(
-    t: &Transcript,
-    index: &Index,
-    repo_key: &str,
-    root: &Path,
-    table: &CommandTable,
-    stop: bool,
-    params: RuntimeParams,
-) -> Replayed {
-    let ctx = Ctx { index, repo: repo_key.to_string(), root, table, embed: None, params };
+/// Replay a transcript through the runtime as `ctx` decides (the hook's own: `params` and `policy`
+/// at their defaults, no embedder). `stop`: replay the session's final Stop hook (see
+/// [`transcript::events`]).
+pub fn replay(t: &Transcript, ctx: &Ctx<'_>, stop: bool) -> Replayed {
+    let (index, repo_key, root, table) = (ctx.index, ctx.repo.as_str(), ctx.root, ctx.table);
     let mut st = SessionState { arm: Some(Arm::Control), repo: Some(repo_key.to_string()), ..Default::default() };
     let mut r = Replayed {
         id: t.id.clone(),
@@ -133,7 +125,7 @@ pub fn replay(
     for (n, step) in transcript::events(t, &root_s, stop).into_iter().enumerate() {
         let before: Vec<bool> = st.obligations.iter().map(|o| o.stop_requested).collect();
         let skip = fast::skip(&triggers, &step.event, &root_s, || Some(fast_st.clone()));
-        let d = decide(&ctx, &mut st, &step.event);
+        let d = decide(ctx, &mut st, &step.event);
         let name = transcript::hook_name(&step.event);
         r.fast.events += 1;
         r.skipped.push(skip);
@@ -144,7 +136,7 @@ pub fn replay(
                 differs("skipped, but the full path decided something");
             }
         } else {
-            let fd = decide(&ctx, &mut fast_st, &step.event);
+            let fd = decide(ctx, &mut fast_st, &step.event);
             if serde_json::to_value(&fd).ok() != serde_json::to_value(&d).ok() {
                 differs("different decisions");
             }

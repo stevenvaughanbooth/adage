@@ -740,31 +740,7 @@ pub fn action_failed(
     wrap_result(&d.track, &d.version, &d.route, &d.kind, d.strength, &body, "e2")
 }
 
-/// The first words of every Stop-hook continuation Adage writes. Where a continuation re-enters
-/// as a user message (Codex turns a Stop `block` reason into the next user prompt), these words
-/// are how the hook and the learners know it as Adage's own text, never the user's prompt.
-pub const FINISH_LINE: &str = "Adage finish-line check:";
-/// The provenance sentence that ends every Stop-hook continuation Adage writes.
-pub const NOT_FROM_USER: &str = "This reminder is from Adage, not from the user.";
-
-/// `body` as a Stop-hook continuation: [`FINISH_LINE`] first and [`NOT_FROM_USER`] last, each
-/// added only when missing (so joining two continuations keeps one of each at the ends).
-pub fn finish_line(body: &str) -> String {
-    let body = body.trim();
-    let mut s = if body.starts_with(FINISH_LINE) { body.to_string() } else { format!("{FINISH_LINE} {body}") };
-    if !s.ends_with(NOT_FROM_USER) {
-        s.push(' ');
-        s.push_str(NOT_FROM_USER);
-    }
-    s
-}
-
-/// Whether `text` is a Stop-hook continuation Adage wrote: it begins with [`FINISH_LINE`], or a
-/// harness quoted it inside framing of its own and both markers are there.
-pub fn is_finish_line(text: &str) -> bool {
-    let t = text.trim_start();
-    t.starts_with(FINISH_LINE) || (t.contains(FINISH_LINE) && t.contains(NOT_FROM_USER))
-}
+pub use adage_trace::wire::{finish_line, is_finish_line, FINISH_LINE, NOT_FROM_USER};
 
 /// Two Stop-hook continuations due at the same Stop (the finish-line gate's, then a learned
 /// obligation's) as one: both bodies, one marker at each end.
@@ -779,17 +755,7 @@ pub fn join_finish_lines(first: &str, second: &str) -> String {
 
 /// The Stop-gate continuation when the approved verification failed as the agent finished.
 pub fn stop_gate_failed(command: &str, exit: Option<i32>, record: Option<&FailureRecord>) -> String {
-    let mut s = format!(
-        "Adage ran `{}` (person-approved) as you finished: it failed (exit {}).",
-        sanitise(command),
-        exit.map_or("unknown".into(), |e| e.to_string())
-    );
-    for line in record.map(failure_sentences).unwrap_or_default() {
-        s.push(' ');
-        s.push_str(&line);
-    }
-    s.push_str(" The task is not finished until it passes; Adage runs it again when you finish.");
-    finish_line(&s)
+    adage_trace::wire::stop_gate_failed(&sanitise(command), exit, &record.map(failure_sentences).unwrap_or_default())
 }
 
 /// The Stop-gate continuation when the run's completion could not be confirmed: like an action's
@@ -967,8 +933,15 @@ pub fn route_text(r: &Route, bound: &[(String, String)]) -> Option<String> {
             sanitise(&bind(command, bound)),
             exit.trim_start()
         )),
+        // The command alone on its line, as in every other template: an agent copies that line,
+        // and an exit clause beside it would be copied as arguments.
         (Step::Run { command }, _) => {
-            Some(format!("A known next step here is:\n  {}{}", sanitise(&bind(command, bound)), exit))
+            let mut text = format!("A known next step here is:\n  {}", sanitise(&bind(command, bound)));
+            if !exit.is_empty() {
+                text.push('\n');
+                text.push_str(exit.trim_start());
+            }
+            Some(text)
         }
         (Step::ReadBatch { slot, .. }, _) => {
             // Each path was validated individually; render each whole, never a truncated list.
@@ -1049,62 +1022,7 @@ pub fn route_text(r: &Route, bound: &[(String, String)]) -> Option<String> {
     }
 }
 
-/// What a rendered directive body names (Track G §3.2, steering by influence): the commands it
-/// directs or recommends, the runners it says to avoid, and the files it lists. The inverse of
-/// [`route_text`] and [`stop_reason`] for every template: a command is an indented line (`  cmd`,
-/// `  1. cmd`) or a backquoted span, avoided runners follow `running ` up to ` fails (`, and files
-/// follow `lists these files: `. Nothing named (a body cut short, a template this does not know)
-/// is an empty result, which a learner treats as naming everything.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Named {
-    pub commands: Vec<String>,
-    pub avoided: Vec<String>,
-    pub files: Vec<String>,
-}
-
-impl Named {
-    pub fn is_empty(&self) -> bool {
-        self.commands.is_empty() && self.avoided.is_empty() && self.files.is_empty()
-    }
-}
-
-/// See [`Named`].
-pub fn named(body: &str) -> Named {
-    let mut n = Named::default();
-    for line in body.lines() {
-        if let Some(rest) = line.strip_prefix("  ") {
-            // The generic template ends its command line with the exit clause.
-            let rest = rest.split(" Ignore this if ").next().unwrap_or(rest).trim();
-            let rest = match rest.split_once(". ") {
-                Some((k, cmd)) if !k.is_empty() && k.chars().all(|c| c.is_ascii_digit()) => cmd,
-                _ => rest,
-            };
-            if !rest.is_empty() {
-                n.commands.push(rest.to_string());
-            }
-        }
-        if let Some((_, after)) = line.split_once("running ") {
-            if let Some((avoid, _)) = after.split_once(" fails (") {
-                n.avoided.extend(avoid.split(" / ").map(|x| x.trim().to_string()).filter(|x| !x.is_empty()));
-            }
-        }
-        if let Some((_, after)) = line.split_once("lists these files: ") {
-            let list = after.trim_end();
-            let list = list.strip_suffix('.').unwrap_or(list);
-            n.files.extend(list.split(", ").map(|x| x.trim().to_string()).filter(|x| !x.is_empty()));
-        }
-        let mut rest = line;
-        while let Some((_, after)) = rest.split_once('`') {
-            let Some((span, tail)) = after.split_once('`') else { break };
-            if !span.trim().is_empty() {
-                n.commands.push(span.trim().to_string());
-            }
-            rest = tail;
-        }
-    }
-    n.commands.dedup();
-    n
-}
+pub use adage_trace::wire::{named, Named};
 
 pub fn stop_reason(paths: &str, command: &str) -> String {
     format!(

@@ -21,8 +21,8 @@ mod condition_out;
 mod config;
 mod detect;
 mod doctor;
-mod evidence;
 mod exec;
+use adage_app::{evidence, words};
 use adage_hook::failopen;
 mod graph;
 mod history;
@@ -31,15 +31,18 @@ mod hook;
 mod init;
 mod install;
 mod jsonedit;
+mod learning;
 mod learnlog;
 mod map;
 mod marketplace_cmd;
 mod models;
 mod packs;
 mod packs_cmd;
+mod placement;
 mod proposal;
 mod redact;
 mod reimport;
+mod repos;
 mod review;
 mod savings;
 mod sense;
@@ -50,7 +53,6 @@ mod train;
 mod tty;
 mod ui;
 mod update;
-mod words;
 
 // Commands run on the hook's stack size (`adage_hook::STACK`).
 use adage_hook::on_big_stack;
@@ -63,6 +65,20 @@ use std::path::PathBuf;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    // Adage never waits for a cloud drive to download a file it reads: one it has offloaded is
+    // skipped like any unreadable file, and `adage doctor` names it (adage_core::cloud). The
+    // policy passes to child processes, so the commands that run the person's programs keep the
+    // system's: `train` runs agent sessions, `update` an installer, and `review delegate` stages
+    // the reflex's command in the sandbox.
+    let words: Vec<&str> = args.iter().map(String::as_str).filter(|a| *a != "--plain").collect();
+    let runs_programs = match words.first() {
+        Some(&("train" | "update")) => true,
+        Some(&"review") => words.iter().skip(1).find(|a| !a.starts_with('-')) == Some(&"delegate"),
+        _ => false,
+    };
+    if !runs_programs {
+        adage_core::cloud::never_download();
+    }
     if args.first().map(String::as_str) == Some("hook") {
         let (harness, event) = (args.get(1).cloned().unwrap_or_default(), args.get(2).cloned().unwrap_or_default());
         // No harness runs `adage hook` without both words, or with a harness Adage does not know:
@@ -109,24 +125,7 @@ fn main() {
 }
 
 /// An error that knows the next step: `main` prints `help` as its `╰─ help` line.
-#[derive(Debug)]
-pub(crate) struct Hint {
-    what: String,
-    help: String,
-}
-
-impl std::fmt::Display for Hint {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.what)
-    }
-}
-
-impl std::error::Error for Hint {}
-
-/// `what` failed; `help` says what to run instead.
-pub(crate) fn hint(what: impl Into<String>, help: impl Into<String>) -> anyhow::Error {
-    anyhow::Error::new(Hint { what: what.into(), help: help.into() })
-}
+pub(crate) use adage_app::error::{hint, Hint};
 
 /// `what` failed for each of `causes` (printed as `├─ cause` lines); `help` says what to do.
 pub(crate) fn refusal(what: impl Into<String>, mut causes: Vec<String>, help: impl Into<String>) -> anyhow::Error {
@@ -271,11 +270,12 @@ fn run(args: &[String]) -> Result<()> {
 }
 
 /// `adage condition [--transcripts <file>...] [--claude-projects <dir>] [--codex-sessions <dir>] [--cwd-prefix <path>]
-///               [--repo-root <dir>] [--outcomes <json>] [--repo <key>] [--demo] [--no-cache] [--no-instincts] [--json]`
+///               [--repo-root <dir> | --all] [--outcomes <json>] [--repo <key>] [--demo] [--no-cache] [--no-instincts] [--json]`
 ///
-/// `--repo-root <dir>` conditions one repository: only traces recorded in one of its checkouts
-/// are read, its instincts bind from that root, and with no such trace its instincts alone are
-/// bound (as `--instincts-only`). Without it, every repository the sources hold is conditioned.
+/// One repository is conditioned: `--repo-root <dir>`'s, else the one this runs in. Only traces
+/// recorded in one of its checkouts are read, its instincts bind from that root, and with no such
+/// trace its instincts alone are bound (as `--instincts-only`). `--all`, a named source, a key or
+/// a working-directory prefix conditions every repository the sources hold.
 ///
 /// Thresholds: `--demo`, else `learn.thresholds` (`adage config`). Parses are cached under
 /// `$ADAGE_HOME/cache/sessions` unless `--no-cache` or `learn.parse_cache = false` (the result is
@@ -313,13 +313,42 @@ fn repo_scope(args: &[String], paths: &Paths) -> Result<Option<(PathBuf, String)
     Ok(Some((root, key)))
 }
 
+/// The repository a manual `condition` or `sense` reads by default: the one it runs in, as the
+/// learner reads one (docs/first-principles-audit.md F9). Outside one, every repository's history
+/// is read only when asked for (`--all`).
+pub(crate) fn here_or_all(command: &str) -> Result<PathBuf> {
+    let cwd = std::env::current_dir()?;
+    adage_core::repo::find_root(&cwd).ok_or_else(|| {
+        hint(
+            format!(
+                "not inside a repository: `adage {command}` reads the traces recorded in the repository it runs in"
+            ),
+            format!("run it inside one, or `adage {command} --all` for every repository's"),
+        )
+    })
+}
+
 fn condition(args: &[String], paths: &Paths) -> Result<()> {
     let started = std::time::Instant::now();
     let settings = adage_store::config::load(paths).config;
-    // One repository (`--repo-root`): only traces recorded in one of its checkouts are read.
-    let scope = repo_scope(args, paths)?;
     let explicit =
         args.iter().any(|a| matches!(a.as_str(), "--transcripts" | "--codex-sessions" | "--claude-projects"));
+    // One repository: only traces recorded in one of its checkouts are read. `--repo-root` names
+    // it; else it is the one this runs in, unless a source, a key, a working-directory prefix or
+    // every repository (`--all`) is named.
+    let scope = match repo_scope(args, paths)? {
+        Some(s) => Some(s),
+        None if !explicit
+            && !args.iter().any(|a| a == "--all")
+            && flag(args, "--cwd-prefix").is_none()
+            && flag(args, "--repo").is_none() =>
+        {
+            let root = here_or_all("condition")?;
+            let key = adage_core::repo::repo_key_cached(&root, &paths.repo_keys());
+            Some((root, key))
+        }
+        None => None,
+    };
     let (cp, cs) =
         (flag(args, "--claude-projects").map(PathBuf::from), flag(args, "--codex-sessions").map(PathBuf::from));
     check_dirs(&[("--claude-projects", cp.as_deref()), ("--codex-sessions", cs.as_deref())])?;
@@ -343,10 +372,9 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
         ));
     }
     // Explicit sources replace defaults, including when they contain no sessions.
-    if let Some(dir) = flag(args, "--codex-sessions")
-        .map(PathBuf::from)
-        .or_else(|| (!explicit).then(|| history::codex_sessions(&settings)).flatten())
-    {
+    if let Some(dir) = flag(args, "--codex-sessions").map(PathBuf::from).or_else(|| {
+        (!explicit).then(|| history::codex_sessions(&settings, scope.as_ref().map(|(r, _)| r.as_path()))).flatten()
+    }) {
         let (found, compressed) = adage_learn::codex::discover(&dir);
         if compressed > 0 {
             let n = words::count(compressed, "compressed Codex rollout");
@@ -360,7 +388,12 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
         .map(PathBuf::from)
         .or_else(|| (!explicit).then(|| history::claude_projects(&settings)).flatten())
     {
-        transcripts.extend(adage_learn::import::discover(&dir));
+        // One repository's project directories only, as the learner picks them: the others are
+        // never listed.
+        transcripts.extend(match &scope {
+            Some((root, _)) => adage_learn::scope::claude_transcripts(&dir, &adage_learn::scope::checkouts(root)),
+            None => adage_learn::import::discover(&dir),
+        });
     }
     if !explicit {
         if let Some(dir) = &settings.learn_opencode_exports {
@@ -399,7 +432,7 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
         let source = if let Some(p) = flag(args, "--cwd-prefix") {
             format!("none has a working directory under {p}")
         } else if let Some((root, _)) = &scope {
-            format!("none was recorded in {}", root.display())
+            format!("none was recorded in {} (`--all` reads every repository's)", root.display())
         } else if explicit || args.iter().any(|a| a == "--claude-projects") {
             "the sources you named hold no traces".to_string()
         } else {
@@ -418,7 +451,7 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
     let cfg = if args.iter().any(|a| a == "--demo") {
         LearnConfig::demo()
     } else {
-        autolearn::thresholds(settings.learn_thresholds)
+        adage_learn::LearnConfig::for_thresholds(settings.learn_thresholds)
     };
     let mut cfg = cfg;
     // Instincts are bound after learning, per repository, unless turned off (config, or --no-instincts).
@@ -550,9 +583,10 @@ pub(crate) fn instincts_only_then(args: &[String], paths: &Paths, next: bool) ->
     Ok(())
 }
 
-/// Reflexes that wait for a decision in `adage review` (an instinct in effect waits for none).
-pub(crate) fn waiting(paths: &Paths) -> usize {
-    review::standings(paths).map(|s| s.values().filter(|s| review::waits(&s.reasons)).count()).unwrap_or(0)
+/// What `adage review` has: `(needs you, to look over)`; an instinct in effect waits for none
+/// (`review::waiting_counts`).
+pub(crate) fn waiting(paths: &Paths) -> (usize, usize) {
+    review::standings(paths).map(|s| review::waiting_counts(s.values().map(|s| s.reasons.as_slice()))).unwrap_or((0, 0))
 }
 
 /// Append one `learn.log` line per repository this `adage condition` learned (`crate::learnlog`), or
@@ -615,29 +649,20 @@ fn status(paths: &Paths, json: bool) -> Result<()> {
     let instinct =
         |t: &adage_tracks::Track, r: &adage_tracks::Route| r.is_instinct() || adage_tracks::index::is_instinct_track(t);
     if json {
-        let tracks: Vec<serde_json::Value> = tracks
+        // Every reflex as every surface shows it (`adage_app::reflex::Reflex`), grouped by track.
+        let installed = crate::review::discover(&paths.tracks())?;
+        let tracks: Vec<serde_json::Value> = installed
             .iter()
-            .enumerate()
-            .map(|(i, t)| {
+            .map(|inst| {
+                let t = &inst.track;
+                let whys = adage_tracks::why::load(&inst.dir);
                 serde_json::json!({
                     "track": t.manifest.track.name,
+                    "reference": inst.reference,
                     "version": t.manifest.track.version,
                     "repo": t.manifest.scope.repo,
-                    "origin": origin(t),
-                    "reflexes": t.routes.iter().map(|r| serde_json::json!({
-                        "id": r.id,
-                        "kind": if instinct(t, r) { "instinct" } else { "reflex" },
-                        "strength": r.strength,
-                        "lifecycle": words::lifecycle(r.state),
-                        "support": r.evidence.support,
-                        "opportunities": r.evidence.opportunities,
-                        "rate": r.evidence.rate,
-                        "lower_bound": r.evidence.lower_bound,
-                        "effect": r.effect.as_str(),
-                        "evidence": evidence::describe(r, whys[i].get(&r.id)),
-                        "uplift": r.evidence.uplift.as_ref().map(|u| u.line()),
-                        "obligation": evidence::obligation(r),
-                    })).collect::<Vec<_>>(),
+                    "kind": origin(t),
+                    "reflexes": t.routes.iter().map(|r| adage_app::reflex::Reflex::of(inst, r, whys.get(&r.id))).collect::<Vec<_>>(),
                 })
             })
             .collect();
@@ -744,14 +769,9 @@ fn status(paths: &Paths, json: bool) -> Result<()> {
         }
     }
     // Nascent reflexes, and new or changed ones nobody has decided on yet.
-    let waiting = waiting(paths);
+    let (needs, look) = waiting(paths);
     o.blank()?;
-    if waiting > 0 {
-        let why = if waiting == 1 {
-            "1 reflex waits for a decision".to_string()
-        } else {
-            format!("{waiting} reflexes wait for a decision")
-        };
+    if let Some(why) = review::waiting_words(needs, look) {
         o.next("adage review", &why)?;
     } else {
         o.next("adage report", "what Adage told agents, and what they did")?;

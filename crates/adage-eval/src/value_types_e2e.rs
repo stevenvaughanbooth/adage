@@ -115,12 +115,14 @@ pub fn run(
     let root = home.path().join("root");
     std::fs::create_dir_all(&root)?;
     let ctx = Ctx {
+        checkout: &adage_runtime::checkout::Disk,
         index: &index,
         repo: repo.to_string(),
         root: &root,
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let check_unsafe = |prompt: &str, got: &Option<String>, out: &mut EndToEnd| {
         if let Some(v) = got {

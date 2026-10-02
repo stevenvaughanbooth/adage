@@ -94,12 +94,14 @@ fn bash(cmd: &str, out: &str) -> Call {
 fn prompt_binds_validated_ticket_and_warns_about_dead_end() {
     let (dir, index, table) = fixture();
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState::default();
     let d = decide(&ctx, &mut st, &Event::Prompt { text: "Pick up W-2042 please".into() });
@@ -112,12 +114,14 @@ fn prompt_binds_validated_ticket_and_warns_about_dead_end() {
 fn injected_values_never_bind() {
     let (dir, index, table) = fixture();
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState::default();
     let d = decide(&ctx, &mut st, &Event::Prompt { text: "Do W-20421234 and --config=/etc".into() });
@@ -128,12 +132,14 @@ fn injected_values_never_bind() {
 fn follow_judgement_and_linked_files() {
     let (dir, index, table) = fixture();
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState::default();
     decide(&ctx, &mut st, &Event::Prompt { text: "W-2042".into() });
@@ -145,16 +151,58 @@ fn follow_judgement_and_linked_files() {
     assert!(!read.text.contains("passwd") && !read.text.contains("missing.py"), "unsafe or missing paths are dropped");
 }
 
+/// A checkout known only through the port: its files exist nowhere on this machine.
+struct InMemory(&'static [&'static str]);
+
+impl crate::checkout::Checkout for InMemory {
+    fn text(&self, _: &Path, rel: &str) -> Option<String> {
+        self.0.contains(&rel).then(String::new)
+    }
+    fn is_file(&self, _: &Path, rel: &str) -> bool {
+        self.0.contains(&rel)
+    }
+}
+
+/// What a decision knows of the checkout comes only through `ctx.checkout`: a repository-path slot
+/// binds the files the port says exist, under a root that is not on this machine, and none when
+/// the checkout cannot be read.
+#[test]
+fn the_checkout_is_read_only_through_the_port() {
+    let (_dir, index, table) = fixture();
+    let out = r#"{"id":"W-2042","linked_files":["acme/billing.py","acme/remote.py"]}"#;
+    let linked = |checkout: &dyn crate::checkout::Checkout| {
+        let ctx = Ctx {
+            checkout,
+            index: &index,
+            repo: "acme".into(),
+            root: Path::new("/nowhere/acme"),
+            table: &table,
+            embed: None,
+            params: Default::default(),
+            policy: Default::default(),
+        };
+        let mut st = SessionState::default();
+        decide(&ctx, &mut st, &Event::Prompt { text: "W-2042".into() });
+        let d = decide(&ctx, &mut st, &Event::Batch { calls: vec![bash("./scripts/wi-lookup W-2042 --json", out)] });
+        d.directives.iter().find(|x| x.route == "read-linked").map(|x| x.text.clone())
+    };
+    let text = linked(&InMemory(&["acme/remote.py"])).expect("bound from the port's files");
+    assert!(text.contains("acme/remote.py") && !text.contains("billing.py"), "{text}");
+    assert_eq!(linked(&crate::checkout::Unread), None, "nothing readable: the slot never binds");
+}
+
 #[test]
 fn obligation_triggers_on_edit_and_is_enforced_once_at_stop() {
     let (dir, index, table) = fixture();
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState::default();
     let edit = Call {
@@ -175,12 +223,14 @@ fn obligation_triggers_on_edit_and_is_enforced_once_at_stop() {
 fn obligation_met_means_no_stop_request() {
     let (dir, index, table) = fixture();
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState::default();
     let edit = Call {
@@ -199,12 +249,14 @@ fn obligation_met_means_no_stop_request() {
 fn control_logs_exposure_but_emits_nothing() {
     let (dir, index, table) = fixture();
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState { arm: Some(Arm::Control), ..Default::default() };
     let d = decide(&ctx, &mut st, &Event::Prompt { text: "W-2042".into() });
@@ -216,12 +268,14 @@ fn control_logs_exposure_but_emits_nothing() {
 fn other_repos_get_nothing() {
     let (dir, index, table) = fixture();
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "other".into(),
         root: dir.path(),
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState::default();
     assert!(decide(&ctx, &mut st, &Event::Prompt { text: "W-2042".into() }).directives.is_empty());
@@ -231,12 +285,14 @@ fn other_repos_get_nothing() {
 fn caps_hold() {
     let (dir, index, table) = fixture();
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState::default();
     for _ in 0..20 {
@@ -257,12 +313,14 @@ fn arm_assignment_is_deterministic() {
 fn linked_files_from_plain_text_output() {
     let (dir, index, table) = fixture();
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState::default();
     let out = "ID: W-2042\nLinked files: acme/billing.py, ../etc/passwd\nAcceptance: ok";
@@ -277,12 +335,14 @@ fn symlinks_out_of_the_repo_are_rejected() {
     let (dir, index, table) = fixture();
     std::os::unix::fs::symlink("/etc/hosts", dir.path().join("acme/notes.md")).unwrap();
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState::default();
     let out = r#"{"linked_files":["acme/notes.md","acme/billing.py"]}"#;
@@ -295,12 +355,14 @@ fn symlinks_out_of_the_repo_are_rejected() {
 fn obligations_rearm_after_a_new_edit_and_stop_requests_are_bounded() {
     let (dir, index, table) = fixture();
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState::default();
     let edit = |f: &str| Call {
@@ -325,12 +387,14 @@ fn obligations_rearm_after_a_new_edit_and_stop_requests_are_bounded() {
 fn hostile_output_does_not_panic() {
     let (dir, index, table) = fixture();
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState::default();
     let calls = vec![
@@ -347,12 +411,14 @@ fn hostile_output_does_not_panic() {
 fn control_records_would_continue() {
     let (dir, index, table) = fixture();
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState::default();
     let edit = Call {
@@ -419,12 +485,14 @@ fn intent_fixture(model: &str, threshold: f32) -> (tempfile::TempDir, Index, Com
 fn intent_route_fires_on_a_matching_prompt_only() {
     let (dir, index, table) = intent_fixture(MODEL, 0.8);
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: Some(&fake_embed),
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState::default();
     let d = decide(&ctx, &mut st, &Event::Prompt { text: "the tests are failing again".into() });
@@ -492,12 +560,14 @@ fn a_card_is_said_once_at_a_close_prompt_or_at_the_first_edit_of_its_files_when_
     for (threshold, at_prompt) in [(0.9, true), (0.99, false)] {
         let (dir, index, table) = card_fixture(threshold);
         let ctx = Ctx {
+            checkout: &crate::checkout::Disk,
             index: &index,
             repo: "acme".into(),
             root: dir.path(),
             table: &table,
             embed: Some(&fake_embed),
             params: Default::default(),
+            policy: Default::default(),
         };
         let mut st = SessionState::default();
         let d = decide(&ctx, &mut st, &Event::Prompt { text: "add a test flag".into() });
@@ -535,16 +605,19 @@ fn a_card_names_the_test_command_of_an_execution_certified_verification_unless_t
         Some(adage_tracks::ExecutionEvidence { opportunities: 5, successful: 5, sessions: 5 });
     index.routes.push(check);
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: Some(&fake_embed),
         params: Default::default(),
+        policy: Default::default(),
     };
     let card = |on: bool| {
         let mut st = SessionState::default();
-        let d = with_card_checks(on, || decide(&ctx, &mut st, &Event::Prompt { text: "add a test flag".into() }));
+        let ctx = Ctx { policy: Policy { card_checks: on, ..Default::default() }, ..ctx.clone() };
+        let d = decide(&ctx, &mut st, &Event::Prompt { text: "add a test flag".into() });
         d.directives.into_iter().find(|x| x.route == "card-1").unwrap().text
     };
     assert!(card(true).contains("\nTests in these sessions ran with: `go test ./...`."), "{}", card(true));
@@ -553,12 +626,14 @@ fn a_card_names_the_test_command_of_an_execution_certified_verification_unless_t
     let mut index2 = index.clone();
     index2.routes.last_mut().unwrap().route.evidence.execution = None;
     let ctx2 = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index2,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: Some(&fake_embed),
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState::default();
     let d = decide(&ctx2, &mut st, &Event::Prompt { text: "add a test flag".into() });
@@ -578,16 +653,19 @@ fn a_card_says_where_its_files_stand_now_instead_of_quoting_an_exemplar_unless_t
     card.exemplars =
         vec![adage_tracks::card::Exemplar { path: "docs/flags.md".into(), lines: vec!["## --hex".into()] }];
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: Some(&fake_embed),
         params: Default::default(),
+        policy: Default::default(),
     };
     let card = |on: bool| {
         let mut st = SessionState::default();
-        let d = with_card_orientation(on, || decide(&ctx, &mut st, &Event::Prompt { text: "add a test flag".into() }));
+        let ctx = Ctx { policy: Policy { card_orientation: on, ..Default::default() }, ..ctx.clone() };
+        let d = decide(&ctx, &mut st, &Event::Prompt { text: "add a test flag".into() });
         d.directives.into_iter().find(|x| x.route == "card-1").unwrap().text
     };
     let oriented = card(true);
@@ -604,12 +682,14 @@ fn a_card_says_where_its_files_stand_now_instead_of_quoting_an_exemplar_unless_t
 fn edits_that_add_tests_are_remembered_for_the_receipt() {
     let (dir, index, table) = fixture();
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let path = |rel: &str| dir.path().join(rel).to_string_lossy().to_string();
     let call = |tool: &str, input: Value| Call { tool: tool.into(), input, output: String::new(), failed: false };
@@ -659,12 +739,14 @@ fn a_waiting_card_expires_at_the_next_prompt() {
     let said = |d: &Decision| d.directives.iter().any(|x| x.route == "card-1");
     let (dir, index, table) = card_fixture(0.99);
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: Some(&fake_embed),
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState::default();
     decide(&ctx, &mut st, &Event::Prompt { text: "add a test flag".into() });
@@ -686,12 +768,14 @@ fn intent_routes_fail_open_without_a_model() {
     let none = |_: &str| -> Option<(String, Vec<f32>)> { None };
     for embed in [None, Some(&none as Embed)] {
         let ctx = Ctx {
+            checkout: &crate::checkout::Disk,
             index: &index,
             repo: "acme".into(),
             root: dir.path(),
             table: &table,
             embed,
             params: Default::default(),
+            policy: Default::default(),
         };
         let mut st = SessionState::default();
         let d = decide(&ctx, &mut st, &Event::Prompt { text: "tests failing, W-2042".into() });
@@ -704,23 +788,27 @@ fn intent_routes_fail_open_without_a_model() {
 fn intent_routes_need_the_same_model_and_the_threshold() {
     let (dir, index, table) = intent_fixture("other-model@000000000000", 0.8);
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: Some(&fake_embed),
         params: Default::default(),
+        policy: Default::default(),
     };
     let d = decide(&ctx, &mut SessionState::default(), &Event::Prompt { text: "tests failing".into() });
     assert!(d.directives.iter().all(|x| x.route != "intent-tests"), "a vector from another model is meaningless");
     let (dir, index, table) = intent_fixture(MODEL, 0.99);
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: Some(&fake_embed),
         params: Default::default(),
+        policy: Default::default(),
     };
     let d = decide(&ctx, &mut SessionState::default(), &Event::Prompt { text: "tests failing".into() });
     assert!(d.directives.iter().all(|x| x.route != "intent-tests"), "similarity 0.97 is below a 0.99 threshold");
@@ -735,12 +823,14 @@ fn the_embedder_is_not_called_without_intent_routes() {
         None
     };
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: Some(&spy),
         params: Default::default(),
+        policy: Default::default(),
     };
     decide(&ctx, &mut SessionState::default(), &Event::Prompt { text: "tests failing".into() });
     assert!(!called.get(), "no intent routes: the model is never loaded");
@@ -796,12 +886,14 @@ fn restored(st: &SessionState) -> serde_json::Value {
 fn state_rebuilt_from_the_spool_matches_the_live_state_after_every_event() {
     let (dir, index, table) = fixture();
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let edit = |f: &str| Call {
         tool: "Edit".into(),
@@ -854,12 +946,14 @@ fn a_rebuilt_state_never_requests_a_stop_the_live_one_would_not() {
     // not paths): the rebuilt obligation stays met, so it can miss a request, never add one.
     let (dir, index, table) = fixture();
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let edit = |f: &str| Call {
         tool: "Edit".into(),
@@ -915,12 +1009,14 @@ fn edit_call(dir: &tempfile::TempDir, f: &str) -> Call {
 fn an_obligation_is_met_by_the_step_with_options_added() {
     let (dir, index, table) = fixture();
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState::default();
     decide(&ctx, &mut st, &Event::Batch { calls: vec![edit_call(&dir, "schema/a.json")] });
@@ -961,12 +1057,14 @@ fn an_after_command_trigger_fires_on_the_command_with_options_added() {
     );
     let index = Index::compile(&[track("acme/t", "desire-path", vec![linked])]);
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let out = r#"{"linked_files":["acme/billing.py"]}"#;
     for cmd in ["./scripts/wi-lookup W-2042 --json", "python3 scripts/wi-lookup W-2042", "scripts/wi-lookup W-2042"] {
@@ -996,12 +1094,14 @@ fn a_different_script_is_not_following() {
     let routes = vec![intent_route("intent-check", "intent-check", "npm run check", Strength::Fire)];
     let index = Index::compile(&[track("acme/intents", "desire-path", routes)]);
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: Some(&fake_embed),
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState::default();
     let d = decide(&ctx, &mut st, &Event::Prompt { text: "run the tests".into() });
@@ -1066,12 +1166,14 @@ fn an_imported_route_a_learned_dead_end_contradicts_is_never_emitted() {
     let unlocked = unlocked(&[&imported, &learned]);
     for index in [&index, &unlocked] {
         let ctx = Ctx {
+            checkout: &crate::checkout::Disk,
             index,
             repo: "acme".into(),
             root: dir.path(),
             table: &table,
             embed: Some(&fake_embed),
             params: Default::default(),
+            policy: Default::default(),
         };
         let mut st = SessionState::default();
         let d = decide(&ctx, &mut st, &Event::Prompt { text: "the tests are failing".into() });
@@ -1100,12 +1202,14 @@ fn approach_locking_filters_later_directives_and_their_obligations() {
     let (index, conflicts) = Index::compile_with_conflicts(&[t]);
     assert_eq!(conflicts[0].resolution, interlock::Resolution::RuntimeFilter);
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState::default();
     let d = decide(&ctx, &mut st, &Event::Prompt { text: "hello".into() });
@@ -1126,12 +1230,14 @@ fn approach_locking_filters_later_directives_and_their_obligations() {
     let fire = route("fire-after", after(), run, vec![], Effect::Verify, Strength::Fire);
     let index = Index::compile(&[track("acme/t", "desire-path", vec![inhibit, fire])]);
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let failed = Call { failed: true, ..bash("make lint -q", "boom") };
     let d = decide(&ctx, &mut SessionState::default(), &Event::Failure { call: failed });
@@ -1153,12 +1259,14 @@ fn a_generalised_glob_matches_any_depth() {
     );
     let index = Index::compile(&[track("acme/t", "desire-path", vec![gen])]);
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     for (f, hit) in [("proto/a.proto", true), ("proto/v1/deep/b.proto", true), ("other/proto/c.proto", false)] {
         let d = decide(&ctx, &mut SessionState::default(), &Event::Batch { calls: vec![edit_call(&dir, f)] });
@@ -1190,12 +1298,14 @@ fn inhibit_comes_first_under_the_caps() {
     // Without interlocking the three lookups stay fire and compete for the cap.
     let index = unlocked(&[&track("acme/t", "desire-path", routes)]);
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let d = decide(&ctx, &mut SessionState::default(), &Event::Prompt { text: "W-2042".into() });
     assert_eq!(d.directives.len(), MAX_DIRECTIVES_PER_DECISION);
@@ -1274,12 +1384,14 @@ fn finish_line_claims_ci_only_on_evidence() {
 fn directives_carry_their_shape_and_stale_routes_are_never_fire() {
     let (dir, index, table) = fixture();
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState::default();
     let d = decide(&ctx, &mut st, &Event::Prompt { text: "Pick up W-2042".into() });
@@ -1317,12 +1429,14 @@ fn directives_carry_their_shape_and_stale_routes_are_never_fire() {
         let index = Index::compile(&[t]);
         assert_eq!(index.routes.len(), 4, "{state:?} routes are compiled");
         let ctx = Ctx {
+            checkout: &crate::checkout::Disk,
             index: &index,
             repo: "acme".into(),
             root: dir.path(),
             table: &table,
             embed: None,
             params: Default::default(),
+            policy: Default::default(),
         };
         let mut st = SessionState::default();
         let d = decide(&ctx, &mut st, &Event::Prompt { text: "Pick up W-2042".into() });
@@ -1438,7 +1552,16 @@ mod typed_slots {
     }
 
     fn ctx<'a>(index: &'a Index, root: &'a Path, table: &'a CommandTable) -> Ctx<'a> {
-        Ctx { index, repo: "acme".into(), root, table, embed: None, params: Default::default() }
+        Ctx {
+            checkout: &crate::checkout::Disk,
+            index,
+            repo: "acme".into(),
+            root,
+            table,
+            embed: None,
+            params: Default::default(),
+            policy: Default::default(),
+        }
     }
 
     #[test]
@@ -1621,12 +1744,14 @@ fn a_sequence_follows_an_edit_and_a_context_fires_after_its_items() {
     let table = CommandTable::load();
     let index = context_index(2);
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let (mut st, mut fast_st) = (SessionState::default(), SessionState::default());
     let mut go = |ev: Event| decide_both(&ctx, &mut st, &mut fast_st, &ev);
@@ -1647,7 +1772,7 @@ fn a_sequence_follows_an_edit_and_a_context_fires_after_its_items() {
     assert_eq!(d.directives.iter().map(|x| x.route.as_str()).collect::<Vec<_>>(), ["run-ctx"]);
     assert_eq!(
         d.directives[0].text,
-        "A known next step here is:\n  make check Ignore this if the user is asking for something else."
+        "A known next step here is:\n  make check\nIgnore this if the user is asking for something else."
     );
     // Judged like any directive, and never a Stop request.
     let d = go(Event::Batch { calls: vec![bash("make check", "ok")] });
@@ -1697,12 +1822,14 @@ fn a_sequence_subsumes_the_finish_line_it_begins_with() {
     ];
     let index = Index::compile(&[track("acme/t", "desire-path", routes)]);
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let (mut st, mut fast_st) = (SessionState::default(), SessionState::default());
     let mut go = |ev: Event| decide_both(&ctx, &mut st, &mut fast_st, &ev);
@@ -1753,12 +1880,14 @@ fn a_finish_line_after_any_edit_rides_on_a_sequence_that_includes_it() {
     ];
     let index = Index::compile(&[track("acme/t", "desire-path", routes)]);
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let (mut st, mut fast_st) = (SessionState::default(), SessionState::default());
     let mut go = |ev: Event| decide_both(&ctx, &mut st, &mut fast_st, &ev);
@@ -1785,12 +1914,14 @@ fn a_context_needs_its_items_in_order_within_its_gap_of_alphabet_events() {
     let table = CommandTable::load();
     let index = context_index(2);
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let fired = |events: Vec<Event>| -> Vec<String> {
         let (mut st, mut fast_st) = (SessionState::default(), SessionState::default());
@@ -1825,12 +1956,14 @@ fn a_failed_command_is_a_failure_item_and_not_a_success() {
     let table = CommandTable::load();
     let index = context_index(8);
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let (mut st, mut fast_st) = (SessionState::default(), SessionState::default());
     let mut go = |ev: Event| decide_both(&ctx, &mut st, &mut fast_st, &ev);
@@ -1855,12 +1988,14 @@ fn context_state_is_bounded_rebuilt_from_the_spool_and_reset_by_a_new_alphabet()
     let table = CommandTable::load();
     let index = context_index(8);
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState { arm: Some(Arm::Treated), ..Default::default() };
     let mut records = Vec::new();
@@ -1919,12 +2054,14 @@ fn a_context_can_end_at_a_prompt() {
     adage_tracks::io::validate(&t).unwrap();
     let index = Index::compile(&[t]);
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let (mut st, mut fast_st) = (SessionState::default(), SessionState::default());
     let mut go = |ev: Event| decide_both(&ctx, &mut st, &mut fast_st, &ev);
@@ -1974,12 +2111,14 @@ fn a_directed_runner_narrowed_to_the_task_is_followed() {
     let table = CommandTable::load();
     let index = Index::compile(&[track("github-com-pallets-click/instincts", "instinct:core@1.0.0", u11_routes())]);
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let first = "python -m pytest tests/test_formatting.py::test_formatting_usage_custom_help -xvs";
     let missing = "Exit code 1\n/usr/bin/python: No module named pytest";
@@ -2035,12 +2174,14 @@ fn the_learned_judge_reads_follows_by_the_repository_s_tokens() {
     let table = CommandTable::load();
     let index = Index::compile(&[track("github-com-pallets-click/instincts", "instinct:core@1.0.0", u11_routes())]);
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let pairs: Vec<(String, String)> = (0..8)
         .flat_map(|i| {
@@ -2056,10 +2197,9 @@ fn the_learned_judge_reads_follows_by_the_repository_s_tokens() {
     let wrapped = "xvfb-run -a .venv/bin/python -m pytest tests/test_basic.py -x";
     let judge = |weights: Option<adage_core::judge::Weights>, then: &str| {
         let mut st = SessionState::default();
-        with_follow_weights(weights, || {
-            decide(&ctx, &mut st, &Event::Failure { call: failed(first, missing) });
-            kinds(&decide(&ctx, &mut st, &Event::Batch { calls: vec![bash(then, "==== 1 passed in 0.1s ====")] }))
-        })
+        let ctx = Ctx { policy: Policy { follow_weights: weights, ..Default::default() }, ..ctx.clone() };
+        decide(&ctx, &mut st, &Event::Failure { call: failed(first, missing) });
+        kinds(&decide(&ctx, &mut st, &Event::Batch { calls: vec![bash(then, "==== 1 passed in 0.1s ====")] }))
     };
     assert!(judge(None, wrapped).is_empty(), "no hand-written rule reads it");
     assert_eq!(judge(Some(w.clone()), wrapped), ["followed"]);
@@ -2102,12 +2242,14 @@ fn a_python_run_outside_the_project_environment_is_answered() {
     adage_tracks::io::validate(&t).unwrap();
     let index = Index::compile(&[t]);
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let first = |call: Call| {
         let (mut st, mut fast_st) = (SessionState::default(), SessionState::default());
@@ -2151,12 +2293,14 @@ fn a_piped_failure_fires_its_dead_end() {
     ));
     let index = Index::compile(&[track("acme/t", "instinct:core@1.0.0", routes)]);
     let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let run = |call: Call| {
         let (mut st, mut fast_st) = (SessionState::default(), SessionState::default());

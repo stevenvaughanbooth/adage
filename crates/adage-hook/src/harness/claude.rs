@@ -2,7 +2,7 @@
 //! (code.claude.com/docs/en/hooks). Directives go to `additionalContext`; the finish line uses
 //! Stop `decision: block`.
 
-use super::{Adapter, Event, Output};
+use super::{Adapter, Event, Harness, Output};
 use adage_runtime::Call;
 use serde_json::{json, Value};
 
@@ -53,8 +53,8 @@ fn call_from(v: &Value, failed: bool) -> Call {
 }
 
 impl Adapter for Claude {
-    fn name(&self) -> &'static str {
-        "claude"
+    fn harness(&self) -> Harness {
+        Harness::ClaudeCode
     }
 
     fn event_identity(&self, event: &str, p: &Value) -> Option<String> {

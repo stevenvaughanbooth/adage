@@ -19,6 +19,8 @@ expression: text
    Codex rollouts to condition on: auto (once Codex hooks are registered), a directory, or "" (none)
  learn.opencode_exports   ""       (default)
    a directory of `opencode export` files automatic conditioning reads ("" = none)
+ learn.repos              all      (default)
+   repositories to condition on, comma-separated keys as `adage init` lists them, or all
  learn.parse_cache        true     (default)
    keep parsed traces in cache/sessions so conditioning again parses only what changed
  learn.cards              true     (default)
@@ -33,7 +35,5 @@ expression: text
    instinct packs or ids never to bind, comma-separated, e.g. adage/lockfiles,U3 (see docs/instincts.md)
  ui.notices               daily    (default)
    one-line notices at session start (Claude Code): daily, only when something is new; or off
- runtime.control          0.1      (default)
-   share of sessions held out as the control arm (Adage decides but says nothing)
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
  ? keys · : palette · enter edit · space toggle                                                                                                q quit

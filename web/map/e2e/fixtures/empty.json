@@ -11,21 +11,31 @@
   {
    "id": "finish-line/regenerate",
    "summary": "edits to schema/*.json must be followed by make gen",
+   "gist": "edits to schema/*.json must be followed by make gen",
    "track": "adage/finish-line",
    "version": "0.1.0",
    "reference": "acme-billing/instincts",
    "repo": "acme-billing",
    "imported": false,
    "in_index": true,
+   "execution_only": false,
    "instinct": true,
-   "origin": "instinct U1 (from Makefile)",
+   "origin": {
+    "kind": "instinct",
+    "label": "instinct U1 (from Makefile)",
+    "pack": "adage/regenerate",
+    "instinct": "U1",
+    "declared": "Makefile",
+    "version": "0.1.0"
+   },
    "review": {
     "verbs": [
      "approve",
      "extinguish",
      "pin"
     ],
-    "reasons": []
+    "reasons": [],
+    "next": null
    },
    "strength": "prime",
    "ceiling": "prime",

@@ -30,13 +30,14 @@
 
 use crate::bridge;
 use crate::evidence::{argv, days, median, models, outcome_lift, shell_join, strength_for, LearnConfig, PATHS_FIELD};
+use crate::import::Exposure as _;
 use crate::import::Session;
+use adage_core::json::extract_json;
 use adage_core::spans::{self, SpanKind};
 use adage_core::{CanonicalAction, Effect};
 use adage_graph::compile::{self, CompileParams, Corpus, Dropped, Prior};
 use adage_graph::select::{self, Counts};
 use adage_intent::model::StaticModel;
-use adage_runtime::extract_json;
 use adage_tracks::why::Why;
 use adage_tracks::*;
 use serde::Serialize;
@@ -571,11 +572,11 @@ fn execution_evidence(r: &Route, ss: &[&Session], cfg: &LearnConfig) -> Result<E
         ss.iter().flat_map(|s| &s.steps).flat_map(ok_parts).any(|(lit, _)| {
             lit != *command && adage_core::execution_equivalence::project_pytest_equivalent(command, &lit)
         });
-    let symbols = adage_runtime::context::Symbols::new(&net);
+    let symbols = adage_tracks::matching::Symbols::new(&net);
     let (mut opportunities, mut successful) = (0, 0);
     let mut support = BTreeSet::new();
     for s in ss {
-        let mut context = adage_runtime::CtxState::default();
+        let mut context = adage_tracks::matching::CtxState::default();
         for (i, st) in s.steps.iter().enumerate() {
             let bound = match &r.trigger {
                 Trigger::AfterEdit { paths } => {

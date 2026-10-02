@@ -1,5 +1,0 @@
-Add a new validator to marshmallow: `marshmallow.validate.MultipleOf(base, *, error=None)`, which succeeds if the input number is an exact multiple of `base`. Its default error message is `Must be a multiple of {base}.`; a custom `error` message may interpolate `{input}` and `{base}`. Examples of valid input: `MultipleOf(3)`: `9`. Examples of invalid input: `10`.
-
-Follow the conventions of the existing validators, include tests and a docstring, and add a changelog entry.
-
-Repository workflow for this instruction-guided demonstration: after implementing the code, tests, and documentation, run `.venv/bin/python -m pytest tests/test_validate.py -q` from the repository root. Report its actual result; do not claim success if it fails.

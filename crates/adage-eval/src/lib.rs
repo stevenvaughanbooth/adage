@@ -22,7 +22,8 @@ pub mod fidelity;
 pub mod generate;
 pub mod graph_mine;
 pub mod replay;
-pub mod safety;
+/// The safety oracle, re-exported where the eval and its tests have always named it.
+pub use adage_safety as safety;
 pub mod savings_replay;
 pub mod score;
 pub mod transcript;
@@ -338,7 +339,20 @@ pub fn evaluate(p: &Prepared, opts: &Options) -> Result<Report> {
             skipped += 1;
             continue;
         }
-        let rep = replay::replay(&t, index, &repo_key, &sandbox.root, &table, meta.stopped(), params.runtime);
+        let rep = replay::replay(
+            &t,
+            &adage_runtime::Ctx {
+                checkout: &adage_runtime::checkout::Disk,
+                index,
+                repo: repo_key.to_string(),
+                root: &sandbox.root,
+                table: &table,
+                embed: None,
+                params: params.runtime,
+                policy: Default::default(),
+            },
+            meta.stopped(),
+        );
         fast.events += rep.fast.events;
         fast.skipped += rep.fast.skipped;
         fast.mismatches.extend(rep.fast.mismatches.iter().cloned());

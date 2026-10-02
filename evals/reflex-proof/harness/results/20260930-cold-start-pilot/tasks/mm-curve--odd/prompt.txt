@@ -1,3 +1,0 @@
-Add a new validator to marshmallow: `marshmallow.validate.Odd(*, error=None)`, which accepts integers whose remainder modulo two is one (including negative odd integers). Its default error message is `Must satisfy Odd.`; a custom `error` message may interpolate `{input}`. Examples of valid input: `3`. Examples of invalid input: `0`.
-
-Follow the conventions of the existing validators, include tests and a docstring, and add a changelog entry.

@@ -492,8 +492,16 @@ fn check(
     let root_s = root.to_string_lossy().to_string();
     let index = Index::compile(&[track]);
     let table = CommandTable::load();
-    let ctx =
-        Ctx { index: &index, repo: "acme".into(), root: &root, table: &table, embed: None, params: Default::default() };
+    let ctx = Ctx {
+        checkout: &adage_runtime::checkout::Disk,
+        index: &index,
+        repo: "acme".into(),
+        root: &root,
+        table: &table,
+        embed: None,
+        params: Default::default(),
+        policy: Default::default(),
+    };
     let mut st = SessionState { arm: Some(Arm::Treated), ..Default::default() };
     let mut decisions: Vec<Vec<String>> = Vec::new();
     for ev in events {
@@ -710,12 +718,14 @@ fn interlocking_holds_for_colliding_route_sets() {
         let root = dir.path().canonicalize().unwrap();
         let root_s = root.to_string_lossy().to_string();
         let ctx = Ctx {
+            checkout: &adage_runtime::checkout::Disk,
             index: &index,
             repo: "acme".into(),
             root: &root,
             table: &table,
             embed: Some(&fake_embed),
             params: Default::default(),
+            policy: Default::default(),
         };
         let mut st = SessionState { arm: Some(Arm::Treated), ..Default::default() };
         let mut decisions: Vec<Vec<String>> = Vec::new();

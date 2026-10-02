@@ -66,6 +66,8 @@ pub struct FeedItem {
     pub acts: Vec<Act>,
     /// Calls observed in this event (tool batches).
     pub observed: usize,
+    /// The repository has no reflexes yet: the session is seen, and nothing is decided.
+    pub unrouted: bool,
     /// Each directive delivered (or withheld), exactly as the agent saw (or would have seen) it:
     /// `(reflex, text)`.
     pub texts: Vec<(String, String)>,
@@ -125,20 +127,12 @@ impl FeedItem {
 
 /// The harness's short name for narrow panes.
 pub fn harness_short(h: &str) -> &str {
-    match h {
-        "claude" | "claude-code" => "cc",
-        "opencode" => "oc",
-        "codex" => "cx",
-        other => other,
-    }
+    adage_trace::Harness::parse(h).map_or(h, |h| h.short())
 }
 
 /// The harness's name as a row shows it.
 pub fn harness_name(h: &str) -> &str {
-    match h {
-        "claude-code" => "claude",
-        other => other,
-    }
+    adage_trace::Harness::parse(h).map_or(h, |h| h.hook_name())
 }
 
 /// The normalised event name (`adage_runtime::Event::name`) as shown.
@@ -301,7 +295,9 @@ pub fn from_record(session: &str, rec: &Value) -> FeedItem {
         repo: rec["repo"].as_str().unwrap_or("").to_string(),
         control,
         acts,
-        observed: d["observed"].as_array().map_or(0, |a| a.len()),
+        // A seen-only record (no reflexes here yet) counts its calls; a decision lists them.
+        observed: d["observed"].as_array().map_or_else(|| rec["calls"].as_u64().unwrap_or(0) as usize, |a| a.len()),
+        unrouted: rec["unrouted"] == true,
         texts,
     }
 }

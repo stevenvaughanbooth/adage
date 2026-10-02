@@ -6,7 +6,7 @@
 //! reads the bound values back from the directive, and runs it through [`crate::run::execute`]
 //! (every gate: approval key equality, including the L-ref hash read again now; policy; a live
 //! sandbox; limits; typed projection). Each block is re-checked by the safety oracle
-//! (`adage_eval::safety::check_data_block`), the directive adapts ("That lookup has been run; its
+//! (`adage_safety::check_data_block`), the directive adapts ("That lookup has been run; its
 //! result is below."), and the block is placed beside it.
 //!
 //! E1 failures retain ordinary advice. E2 failures before application can return advice with a
@@ -33,9 +33,9 @@
 //! this event's `exec` record; three refused change sets revoke the approval.
 
 use adage_core::CommandTable;
-use adage_eval::safety::{check_data_block, DataType};
 use adage_hook::{Delivery, Extension, PreCall, SessionTexts, StopCall, StopGate, Turn};
 use adage_runtime::{render, Directive};
+use adage_safety::{check_data_block, DataType};
 use adage_tracks::{Origin, Step, Trigger};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
@@ -425,7 +425,7 @@ const GATE_OVERHEAD_MS: u64 = 6_000;
 /// while another stop hook is already continuing), the agent continues with the failing tests;
 /// otherwise the turn ends with a line for the person. Never more than [`MAX_STOP_GATES`] runs.
 fn stop_gate(call: &StopCall<'_>) -> Option<StopGate> {
-    if call.harness == "opencode" {
+    if !call.harness.capabilities().actions {
         return None;
     }
     let state = adage_store::state::try_read::<adage_runtime::SessionState>(&call.paths.state(call.session)).ok()??;
@@ -963,8 +963,10 @@ fn act(turn: &Turn<'_>, directives: &[Directive], candidates: &[Candidate<'_>]) 
             out.extra.push(render::action_not_run(&dir, reason));
         }
     };
-    if turn.harness == "opencode" {
-        not_run(&mut out, "harness", "actions do not run under OpenCode, whose hook bridge waits one second");
+    if !turn.harness.capabilities().actions {
+        // Named from the harness: only a hook that can wait for a run carries actions out.
+        let reason = format!("actions do not run under {}, whose hooks cannot wait for a run", turn.harness.display());
+        not_run(&mut out, "harness", &reason);
         return out;
     }
     let table = CommandTable::load();
@@ -1398,7 +1400,7 @@ mod prediction_tests {
         }
         fn turn<'a>(&'a self, ev: &'a Event) -> Turn<'a> {
             Turn {
-                harness: "claude",
+                harness: adage_hook::harness::Harness::ClaudeCode,
                 event: "PostToolUse",
                 event_identity: Some("edit-1".into()),
                 ev,
@@ -1416,12 +1418,17 @@ mod prediction_tests {
         fn selected(&self, path: &str) -> (Event, Vec<Directive>) {
             let table = CommandTable::load();
             let ctx = Ctx {
+                checkout: &adage_runtime::checkout::Disk,
                 index: &self.index,
                 repo: "fixture".into(),
                 root: &self.root,
                 table: &table,
                 embed: None,
                 params: Default::default(),
+                policy: adage_runtime::Policy {
+                    exec_only: vec![("fixture/context".into(), "predict-check".into())],
+                    ..Default::default()
+                },
             };
             let mut state = SessionState { arm: Some(Arm::Treated), ..Default::default() };
             let batch = |tool: &str, input| Event::Batch {
@@ -1433,7 +1440,7 @@ mod prediction_tests {
                 batch("Edit", json!({"file_path": self.root.join(path)})),
             ];
             let mut dirs = vec![];
-            adage_runtime::with_exec_only(vec![("fixture/context".into(), "predict-check".into())], || {
+            {
                 for ev in &events {
                     dirs = adage_runtime::decide(&ctx, &mut state, ev).directives;
                 }
@@ -1441,7 +1448,7 @@ mod prediction_tests {
                     adage_runtime::decide(&ctx, &mut state, &events[2]).directives.is_empty(),
                     "repeat is not selected"
                 );
-            });
+            };
             assert!(state.obligations.is_empty(), "prediction creates no edit obligation");
             adage_store::state::update::<SessionState, _>(&self.paths.state("fixture-session"), |s| *s = state)
                 .unwrap();
@@ -1719,7 +1726,7 @@ mod prediction_tests {
 
     fn stop_by(f: &Fixture, active: bool, deadline: Instant) -> Option<StopGate> {
         PREFETCH.stop_gate(&StopCall {
-            harness: "claude",
+            harness: adage_hook::harness::Harness::ClaudeCode,
             repo_key: "fixture",
             root: &f.root,
             session: "fixture-session",
@@ -2004,16 +2011,21 @@ mod prediction_tests {
         f.approve(); // A test-only grant in this temporary home, never a real user's approval.
         let table = CommandTable::load();
         let ctx = Ctx {
+            checkout: &adage_runtime::checkout::Disk,
             index: &f.index,
             repo: "fixture".into(),
             root: &f.root,
             table: &table,
             embed: None,
             params: Default::default(),
+            policy: adage_runtime::Policy {
+                exec_only: vec![(ir.track.clone(), ir.route.id.clone())],
+                ..Default::default()
+            },
         };
         let mut state = SessionState { arm: Some(Arm::Treated), ..Default::default() };
         let mut last = None;
-        adage_runtime::with_exec_only(vec![(ir.track.clone(), ir.route.id.clone())], || {
+        {
             for (tool, input) in [
                 ("Edit", json!({"file_path":f.root.join("src/feature.rs")})),
                 ("Bash", json!({"command":"git diff --stat"})),
@@ -2028,7 +2040,7 @@ mod prediction_tests {
                     last = Some((event, decision.directives));
                 }
             }
-        });
+        };
         let (event, dirs) = last.expect("fresh related sequence predicts the learned command");
         assert!(state.obligations.is_empty());
         let delivery = PREFETCH.deliver(&f.turn(&event), &dirs);

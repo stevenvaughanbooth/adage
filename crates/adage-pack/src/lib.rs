@@ -22,6 +22,7 @@
 
 pub mod attest;
 pub mod bind;
+pub mod binding;
 pub mod builtin;
 pub mod closure;
 pub mod convert;

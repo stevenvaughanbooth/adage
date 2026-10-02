@@ -65,7 +65,7 @@ pub fn run(dir: &Path, round: &str) -> Result<FidelityReport> {
 }
 
 /// As [`run`]; with `exact_keys`, decide with the matching the recorded hooks used, before the
-/// command-pattern algebra (`adage_runtime::with_exact_key_matching`). The demo's round-2 hooks
+/// command-pattern algebra (`adage_runtime::Policy::exact_keys`). The demo's round-2 hooks
 /// recorded that a linked-files trigger mined from `python3 scripts/wi-lookup {id}` did not fire
 /// when an agent ran `./scripts/wi-lookup W-2042`; the current matching fires it (the same
 /// script), so four control sessions replay one more would-have directive than was recorded.
@@ -88,9 +88,21 @@ pub fn run_with(dir: &Path, round: &str, exact_keys: bool) -> Result<FidelityRep
     for s in ds.manifest.sessions.iter().filter(|s| s.phase == "eval" && s.round == Some(n)) {
         let Some(live) = recorded.get(&s.run) else { continue };
         let t = transcript::read(&ds.path(s))?;
-        let go =
-            || replay::replay(&t, &index, &ds.manifest.repo, &sandbox.root, &table, s.stopped(), Default::default());
-        let r = if exact_keys { adage_runtime::with_exact_key_matching(go) } else { go() };
+        let policy = adage_runtime::Policy { exact_keys, ..Default::default() };
+        let r = replay::replay(
+            &t,
+            &adage_runtime::Ctx {
+                checkout: &adage_runtime::checkout::Disk,
+                index: &index,
+                repo: ds.manifest.repo.clone(),
+                root: &sandbox.root,
+                table: &table,
+                embed: None,
+                params: Default::default(),
+                policy,
+            },
+            s.stopped(),
+        );
         let replayed: Sig = r.trace.iter().map(|(e, w, c)| (e.to_string(), w.clone(), *c)).collect();
         let live: Sig = live.iter().map(|x| (x.event.clone(), x.would_have.clone(), x.would_continue)).collect();
         let a = rep.by_arm.entry(s.arm.clone()).or_default();
@@ -209,9 +221,21 @@ pub fn run_learned(dir: &Path, round: &str, exact_keys: bool) -> Result<LearnedF
     for s in ds.manifest.sessions.iter().filter(|s| s.phase == "eval" && s.round == Some(n)) {
         let Some(live) = recorded.get(&s.run) else { continue };
         let t = transcript::read(&ds.path(s))?;
-        let go =
-            || replay::replay(&t, index, &ds.manifest.repo, &sandbox.root, &table, s.stopped(), Default::default());
-        let r = if exact_keys { adage_runtime::with_exact_key_matching(go) } else { go() };
+        let policy = adage_runtime::Policy { exact_keys, ..Default::default() };
+        let r = replay::replay(
+            &t,
+            &adage_runtime::Ctx {
+                checkout: &adage_runtime::checkout::Disk,
+                index,
+                repo: ds.manifest.repo.clone(),
+                root: &sandbox.root,
+                table: &table,
+                embed: None,
+                params: Default::default(),
+                policy,
+            },
+            s.stopped(),
+        );
         rep.sessions += 1;
         // Events the live hooks recorded, in order; the replay's events the fast path would record.
         let replayed: Vec<(String, Vec<String>)> = r

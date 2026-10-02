@@ -4,8 +4,6 @@ expression: text
 ---
  adage    1 Live   2 Reflexes   3 Map   4 Health   5 Settings                                                                  harbor-dispatch · LIVE
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- config  /home/me/.local/share/adage/config.toml
- the same settings as adage config; environment variables win over the file
 
  learn.auto               true     (default)
    condition automatically, in the background, when an agent session stops or ends
@@ -19,6 +17,8 @@ expression: text
    Codex rollouts to condition on: auto (once Codex hooks are registered), a directory, or "" (none)
  learn.opencode_exports   ""       (default)
    a directory of `opencode export` files automatic conditioning reads ("" = none)
+ learn.repos              all      (default)
+   repositories to condition on, comma-separated keys as `adage init` lists them, or all
  learn.parse_cache        true     (default)
    keep parsed traces in cache/sessions so conditioning again parses only what changed
  learn.cards              true     (default)

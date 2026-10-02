@@ -3,6 +3,7 @@
 //! `tests/golden/`; regenerate with `ADAGE_BLESS=1` and review the diff.
 
 use adage_core::CommandTable;
+use adage_ingest::{read_trace, AsRecorded, Decode};
 use adage_learn::opencode::{parse_export, read_export};
 use adage_learn::{learn, Inputs, LearnConfig};
 use adage_tracks::{Index, Step, Strength, Trigger};
@@ -29,8 +30,11 @@ fn golden(name: &str, got: &str) {
 
 #[test]
 fn export_fixture_golden() {
-    let v = read_export(&fixture()).expect("recognised as an export");
-    let s = parse_export(&v, &CommandTable::load(), None).expect("a usable session");
+    assert!(read_export(&fixture()).is_some(), "recognised as an export");
+    // Decoded as recorded: what is checked out on this machine must not change it.
+    let t = CommandTable::load();
+    let cx = Decode { table: &t, locator: &AsRecorded, repo_override: None, subagent: false };
+    let s = read_trace(&fixture(), &cx).expect("a usable session");
     let mut got = format!(
         "id {}\nrepo {}\nroot {}\nmodel {:?}\nday {}\nprompt {:?}\nsteered {}\ndirected {:?}\n",
         s.id,

@@ -166,6 +166,18 @@ impl Ignore {
         let comps: Vec<&str> = rel.split('/').filter(|c| !c.is_empty()).collect();
         (1..=comps.len()).any(|n| self.ignored_one(&comps[..n].join("/"), n < comps.len()))
     }
+
+    /// Whether git ignores the directory at `rel`: it, or a directory above it, is ignored
+    /// (`build/` rules apply to it). A walk asks before descending, so it never enters output git
+    /// would not track.
+    pub fn ignored_dir(&self, rel: &str) -> bool {
+        let rel = rel.trim_start_matches("./");
+        if rel.is_empty() || rel.split('/').any(|c| c == "..") {
+            return false;
+        }
+        let comps: Vec<&str> = rel.split('/').filter(|c| !c.is_empty()).collect();
+        (1..=comps.len()).any(|n| self.ignored_one(&comps[..n].join("/"), true))
+    }
 }
 
 #[cfg(test)]
@@ -202,6 +214,22 @@ mod tests {
         }
         for p in [".env.example", "src/build/x.rs", "config/prod.toml", "dist/app.js", "src/main.rs", "secretX.txt"] {
             assert!(!ig.ignored(p), "{p}");
+        }
+    }
+
+    #[test]
+    fn a_directory_is_ignored_by_its_own_directory_rules_and_by_its_parents() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(d.path().join(".git")).unwrap();
+        std::fs::write(d.path().join(".gitignore"), "demo/results/*/raw/\n/build/\n").unwrap();
+        let ig = Ignore::new(d.path());
+        for p in ["demo/results/run-1/raw", "demo/results/run-1/raw/runs", "build", "build/cache"] {
+            assert!(ig.ignored_dir(p), "{p}");
+        }
+        // As a file path, a directory-only rule does not apply to the last component.
+        assert!(!ig.ignored("demo/results/run-1/raw"));
+        for p in ["demo/results/run-1", "demo", "src/build", "crates"] {
+            assert!(!ig.ignored_dir(p), "{p}");
         }
     }
 }

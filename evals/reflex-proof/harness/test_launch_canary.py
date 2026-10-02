@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import shlex
 import tempfile
+import os
 import unittest
 from unittest.mock import patch
 
@@ -226,6 +227,7 @@ class SessionIntegrity(unittest.TestCase):
         for p in sorted(Path(tmp).rglob("*")):
             p.chmod(p.stat().st_mode | 0o200)
 
+    @unittest.skipIf(hasattr(os, "geteuid") and os.geteuid() == 0, "root bypasses the permission bits this test checks")
     def test_preparation_protects_the_runtime_and_dispatch_stops_when_it_changes(self):
         with tempfile.TemporaryDirectory() as tmp:
             study, m = self.runtime(tmp)

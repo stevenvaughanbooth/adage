@@ -2,13 +2,15 @@
 //! existing session history, per repository.
 //!
 //! ```text
-//! adage sense [--repo <key>] [--since <days>] [--json] [--demo]
+//! adage sense [--all | --repo <key>] [--since <days>] [--json] [--demo]
 //!              [--claude-projects <dir>] [--codex-sessions <dir>] [--transcripts <file>...]
 //! ```
 //!
-//! Sessions are found as `adage condition` finds them (configured Claude Code, Codex and
-//! OpenCode history, or explicit sources including `--transcripts` files). `--repo`
-//! keeps one repository key; `--since` keeps sessions from the last N days. For each repository
+//! Sessions are found as `adage condition` finds them: by default the configured history
+//! recorded in the repository this runs in (picked before anything is parsed, as the learner
+//! picks them: [`adage_learn::scope`]); `--all` reads every repository's; explicit sources,
+//! including `--transcripts` files, replace the configured ones. `--repo` keeps one repository
+//! key; `--since` keeps sessions from the last N days. For each repository
 //! the report shows sessions and prompts, the most common command templates, turns before the
 //! first edit, repeated failing commands (dead-end candidates), edits followed by regeneration
 //! (finish-line candidates), what prompts name (work items, files, commits, links), and the routes
@@ -48,6 +50,8 @@ const SAMPLES: usize = 3;
 #[derive(Debug, Default)]
 pub struct Options {
     pub repo: Option<String>,
+    /// Only traces recorded in this repository's checkouts; `None` reads every repository's.
+    pub root: Option<PathBuf>,
     pub since_days: Option<u32>,
     pub demo: bool,
     pub claude_projects: Option<PathBuf>,
@@ -76,6 +80,10 @@ impl Options {
         }
         o.claude_projects = crate::flag(args, "--claude-projects").map(PathBuf::from);
         o.codex_sessions = crate::flag(args, "--codex-sessions").map(PathBuf::from);
+        // The repository this runs in, unless a source, a key or every repository is named.
+        if !o.explicit_sources && o.repo.is_none() && !args.iter().any(|a| a == "--all") {
+            o.root = Some(crate::here_or_all("sense")?);
+        }
         let mut i = 0;
         while i < args.len() {
             if args[i] == "--transcripts" {
@@ -404,11 +412,19 @@ fn discover(o: &Options, paths: &Paths) -> (Vec<PathBuf>, String) {
         o.explicit_sources || !o.transcripts.is_empty() || o.codex_sessions.is_some() || o.claude_projects.is_some();
     let dir =
         o.claude_projects.clone().or_else(|| (!explicit).then(|| crate::history::claude_projects(&cfg)).flatten());
-    let codex =
-        o.codex_sessions.clone().or_else(|| (!explicit).then(|| crate::history::codex_sessions(&cfg)).flatten());
+    let codex = o
+        .codex_sessions
+        .clone()
+        .or_else(|| (!explicit).then(|| crate::history::codex_sessions(&cfg, o.root.as_deref())).flatten());
+    // One repository's traces, picked by where they were recorded before any is parsed.
+    let roots = o.root.as_deref().filter(|_| !explicit).map(adage_learn::scope::checkouts);
+    let mine = |found: Vec<PathBuf>| match &roots {
+        Some(r) => adage_learn::scope::recorded_inside(found, r),
+        None => found,
+    };
     let mut source: Vec<String> = Vec::new();
     if let Some(d) = &codex {
-        let (found, _) = adage_learn::codex::discover(d);
+        let found = mine(adage_learn::codex::discover(d).0);
         source.push(format!("{} Codex rollout(s) in {}", found.len(), place(d)));
         files.extend(found);
     }
@@ -417,17 +433,24 @@ fn discover(o: &Options, paths: &Paths) -> (Vec<PathBuf>, String) {
     }
     if let Some(d) = dir {
         source.push(format!("Claude Code history in {}", place(&d)));
-        files.extend(adage_learn::import::discover(&d));
+        files.extend(match &roots {
+            Some(r) => adage_learn::scope::claude_transcripts(&d, r),
+            None => adage_learn::import::discover(&d),
+        });
     }
     if !explicit {
         if let Some(d) = &cfg.learn_opencode_exports {
             source.push(format!("OpenCode exports in {}", place(d)));
-            files.extend(crate::history::opencode_exports(d));
+            files.extend(mine(crate::history::opencode_exports(d)));
         }
     }
     files.sort();
     files.dedup();
-    (files, source.join(" and "))
+    let mut source = source.join(" and ");
+    if let Some(root) = o.root.as_deref().filter(|_| !explicit && !source.is_empty()) {
+        source.push_str(&format!(", recorded in {} (--all reads every repository's)", place(root)));
+    }
+    (files, source)
 }
 
 /// Days since the Unix epoch, now.
@@ -477,7 +500,7 @@ pub fn run(o: &Options, paths: &Paths) -> Result<Sense> {
         mined.append(&mut a.mined);
     }
     let settings = adage_store::config::load(paths).config;
-    let mut cfg = if o.demo { LearnConfig::demo() } else { crate::autolearn::thresholds(settings.learn_thresholds) };
+    let mut cfg = if o.demo { LearnConfig::demo() } else { LearnConfig::for_thresholds(settings.learn_thresholds) };
     cfg.cards = crate::autolearn::card_params(&settings, paths);
     let (report, planned) = adage_learn::plan(mined, Some(&paths.models()), &paths.tracks(), &cfg)?;
     sense.thresholds = report.thresholds.clone();
@@ -574,7 +597,7 @@ fn candidates(p: &adage_learn::Planned) -> Vec<Candidate> {
         status: status.into(),
         strength: strength_str(r.strength).into(),
         effect: r.effect.as_str().into(),
-        trigger: redacted(crate::graph::trigger(&r.trigger)["label"].as_str().unwrap_or_default()),
+        trigger: redacted(adage_app::graph::trigger(&r.trigger)["label"].as_str().unwrap_or_default()),
         step: redacted(&crate::share::describe_step(&r.step)),
         support: r.evidence.support,
         opportunities: r.evidence.opportunities,

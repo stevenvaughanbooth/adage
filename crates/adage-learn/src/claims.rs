@@ -7,6 +7,7 @@
 //!   id is the evidence that the argument is data, and gives its type.
 
 use crate::evidence::{argv, days, median, models, outcome_lift, shell_join, stable, strength_with_lift, LearnConfig};
+use crate::import::Exposure as _;
 use crate::import::{Session, StepObs};
 use adage_core::spans::SpanKind;
 use adage_core::vtype::{self, Class, Run, Runs};
@@ -277,7 +278,7 @@ mod tests {
             turn: i,
             key: adage_core::keys::template_key(&action),
             norm: adage_core::Normalized { action, effect, mutating: false, confidence: 1.0, note: String::new() },
-            call: adage_runtime::Call {
+            call: adage_trace::Call {
                 tool: "Bash".into(),
                 input: serde_json::Value::Null,
                 output: String::new(),

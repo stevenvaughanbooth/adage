@@ -4,7 +4,7 @@
 
 #![cfg(unix)]
 
-use adage_eval::safety::{check_data_block, DataType};
+use adage_safety::{check_data_block, DataType};
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::{Command, Output};

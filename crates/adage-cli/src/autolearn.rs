@@ -53,7 +53,7 @@ pub use adage_hook::autolearn::{on_turn_end, read_json, write_json, Queue, Reque
 #[allow(unused_imports)]
 pub use adage_hook::autolearn::{SPAWN_RECORD, TEST_SPAWN_ENV};
 use adage_learn::{diff, Inputs, LearnConfig};
-use adage_store::config::{self, Config, Thresholds};
+use adage_store::config::{self, Config};
 use adage_store::{lock, Paths};
 use anyhow::{bail, Result};
 use std::collections::BTreeSet;
@@ -80,26 +80,15 @@ pub fn instinct_config(cfg: &Config, paths: &Paths) -> adage_learn::instincts::C
     }
 }
 
-pub fn thresholds(t: Thresholds) -> LearnConfig {
-    match t {
-        Thresholds::Default => LearnConfig::default(),
-        Thresholds::Demo => LearnConfig::demo(),
-    }
-}
-
 /// Where Codex rollouts are read from: the configured directory, or with `auto` (the default)
 /// `$CODEX_HOME/sessions` (else `~/.codex/sessions`) once Codex hooks are registered (in user
 /// scope or this repository), or a Codex hook asked for this learn.
 fn codex_sessions(cfg: &Config, req: Option<&Request>, root: &Path) -> Option<PathBuf> {
-    if let Some(d) = &cfg.learn_codex_sessions {
-        return Some(d.clone());
+    let asked = cfg.learn_codex_auto && cfg.learn_codex_sessions.is_none() && req.is_some_and(|r| r.harness == "codex");
+    if asked {
+        return crate::detect::codex_dir().map(|d| d.join("sessions"));
     }
-    if !cfg.learn_codex_auto {
-        return None;
-    }
-    let registered = req.is_some_and(|r| r.harness == "codex")
-        || crate::detect::registrations(Some(root)).iter().any(|r| r.harness == "codex");
-    registered.then(|| crate::detect::codex_dir().map(|d| d.join("sessions"))).flatten()
+    crate::history::codex_sessions(cfg, Some(root))
 }
 
 /// The transcripts automatic learning reads for a repository: the configured sources, only those
@@ -184,7 +173,7 @@ fn learn_once(paths: &Paths, cfg: &Config, root: &Path, repo: &str, transcripts:
         cache: cfg.learn_parse_cache.then(|| paths.cache().join("sessions")),
         only_repo: Some(repo.to_string()),
     };
-    let mut lc = thresholds(cfg.learn_thresholds);
+    let mut lc = LearnConfig::for_thresholds(cfg.learn_thresholds);
     // The hook named this repository's root: instincts bind from its files, even before any of
     // its sessions has steps to learn from (day 0).
     let mut ic = instinct_config(cfg, paths);
@@ -225,6 +214,12 @@ pub fn run_auto(args: &[String], paths: &Paths) -> Result<()> {
         }
     }
     let cfg = config::load(paths).config;
+    // Taken out of `learn.repos` since this learner was asked for: nothing is read, and the
+    // request is dropped rather than left waiting.
+    if !cfg.learns(&repo) {
+        let _ = std::fs::remove_file(q.request());
+        return Ok(());
+    }
     let mut state: RunState = read_json(&q.state()).unwrap_or_default();
     // At a bootstrap, instincts are bound and the index compiled before any trace is read (tens of
     // milliseconds). A bootstrap asked while this learner waited counts too (it held the lock).

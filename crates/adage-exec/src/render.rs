@@ -8,7 +8,7 @@
 //! ```
 //!
 //! Every interpolated value is checked, not cleaned: a label or argv element outside its
-//! character set refuses the render (the block is withheld). `adage_eval::safety::
+//! character set refuses the render (the block is withheld). `adage_safety::
 //! check_data_block` re-checks rendered blocks independently.
 
 use crate::request::OutputMode;

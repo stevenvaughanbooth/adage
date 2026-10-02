@@ -1,8 +1,0 @@
-{
-  "cwd": "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-v2/cwd-diagnostic-v1/repo",
-  "destination": "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-v2/cwd-diagnostic-v1/native-transcript.jsonl",
-  "session_id": "0efcdbe6-5ff2-459e-a503-1f3ed7d0cf30",
-  "sha256": "89cc46426228bea2e785ae2fcb4c3472506c1f71e76061df67d6f9d9b6b4b05d",
-  "source": "/Users/stevenbooth/.claude/projects/-private-tmp-adage-real-repo-gate-v1-cohorts-curve-v2-cwd-diagnostic-v1-repo/0efcdbe6-5ff2-459e-a503-1f3ed7d0cf30.jsonl",
-  "synthetic": false
-}

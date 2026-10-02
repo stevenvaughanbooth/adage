@@ -141,7 +141,20 @@ fn contexts_fire_in_replay_and_the_fast_path_stays_exact_on_newkinds() {
         let (mut fired_in, mut expected_in, mut skipped, mut events) = (0, 0, 0, 0);
         for p in &transcripts {
             let t = transcript::read(p).unwrap();
-            let r = replay::replay(&t, &index, &repo, &b.join("repo"), &table, true, Default::default());
+            let r = replay::replay(
+                &t,
+                &adage_runtime::Ctx {
+                    checkout: &adage_runtime::checkout::Disk,
+                    index: &index,
+                    repo: repo.to_string(),
+                    root: &b.join("repo"),
+                    table: &table,
+                    embed: None,
+                    params: Default::default(),
+                    policy: Default::default(),
+                },
+                true,
+            );
             assert!(r.fast.mismatches.is_empty(), "{name}: {:#?}", r.fast.mismatches);
             skipped += r.fast.skipped;
             events += r.fast.events;

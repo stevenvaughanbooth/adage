@@ -425,6 +425,47 @@ fn kill_switches_and_unknown_repositories_produce_nothing() {
     }
 }
 
+/// A repository with no reflexes yet: every session event is seen (one record each, so `adage
+/// watch` and the card show the session), but nothing is decided or said, and nothing marks the
+/// session as exposed (no arm, no propensity, no decision; no command or prompt). Outside a
+/// repository nothing is recorded.
+#[test]
+fn a_repository_with_no_reflexes_records_sessions_as_seen_only() {
+    let w = World::new();
+    std::fs::create_dir_all(w.p("fresh/.git")).unwrap();
+    let fresh = w.p("fresh").to_string_lossy().to_string();
+    let paths = adage_store::Paths::at(w.p("adage"));
+    let ev = |sid: &str, cwd: &str, event: &str, extra: Value| {
+        let mut p = json!({ "session_id": sid, "transcript_path": "/dev/null", "cwd": cwd, "hook_event_name": event });
+        for (k, v) in extra.as_object().unwrap() {
+            p[k] = v.clone();
+        }
+        assert_eq!(w.hook("claude", event, &p), "", "{event}: nothing is said where nothing is installed");
+    };
+    let call = |id: &str, cmd: &str| json!({ "tool_name": "Bash", "tool_use_id": id, "tool_input": { "command": cmd }, "tool_response": { "stdout": "" } });
+    ev("s-seen", &fresh, "SessionStart", json!({ "source": "startup" }));
+    ev("s-seen", &fresh, "UserPromptSubmit", json!({ "prompt": "fix the invoice total for W-2042" }));
+    ev("s-seen", &fresh, "PostToolBatch", json!({ "tool_calls": [call("t1", "ls"), call("t2", "make test")] }));
+    ev("s-seen", &fresh, "Stop", json!({ "stop_hook_active": false }));
+    let recs = adage_store::spool::read_all::<Value>(&paths.spool("s-seen")).unwrap();
+    let kinds: Vec<&str> = recs.iter().map(|r| r["kind"].as_str().unwrap()).collect();
+    assert_eq!(kinds, ["session_start", "prompt", "batch", "stop"]);
+    for r in &recs {
+        assert_eq!(r["unrouted"], true, "{r}");
+        assert!(r["repo"].as_str().unwrap().starts_with("fresh@"), "{r}");
+        for absent in ["arm", "propensity", "decision", "generation"] {
+            assert!(r.get(absent).is_none(), "{absent} in {r}");
+        }
+        let text = r.to_string();
+        assert!(!text.contains("W-2042") && !text.contains("make test"), "no prompt or command: {r}");
+    }
+    assert_eq!(recs[2]["calls"], 2);
+    // Outside a repository there is nothing to learn, so nothing is recorded.
+    let plain = w.p("plain").to_string_lossy().to_string();
+    ev("s-plain", &plain, "UserPromptSubmit", json!({ "prompt": "hello" }));
+    assert!(!paths.spool("s-plain").exists());
+}
+
 /// The fail-open log's entries, parsed.
 fn fail_open_log(w: &World) -> Vec<Value> {
     std::fs::read_to_string(w.p("adage/fail-open.log"))
@@ -724,7 +765,7 @@ fn install(w: &World, cwd: &Path, args: &[&str], env: &[(&str, &str)]) -> (Strin
         .env("XDG_CONFIG_HOME", w.p("home/.config"))
         .env("CODEX_HOME", w.p("home/.codex"))
         .env("ADAGE_ALLOW_NONINTERACTIVE", "1");
-    for v in ["CLAUDECODE", "OPENCODE", "CODEX_SANDBOX", "CODEX_SANDBOX_NETWORK_DISABLED"] {
+    for v in ["CLAUDECODE", "OPENCODE", "CODEX_SANDBOX", "CODEX_SANDBOX_NETWORK_DISABLED", "CLAUDE_CONFIG_DIR"] {
         c.env_remove(v);
     }
     for (k, v) in env {
@@ -839,6 +880,26 @@ fn install_write_user_scope_uses_documented_paths_only() {
         vec![".claude/settings.json", ".codex/hooks.json", ".config/opencode/plugins/adage.js"]
     );
     assert_eq!(files(&repo), Vec::<String>::new(), "user scope never touches the repository");
+}
+
+/// Claude Code reads its user settings from `CLAUDE_CONFIG_DIR` when set; so does the hook's own
+/// settings check. `adage install` once wrote `~/.claude/settings.json` regardless, so with the
+/// variable set its hooks were never loaded and detection could not see them.
+#[test]
+#[cfg(unix)]
+fn install_writes_claude_code_settings_where_claude_code_reads_them() {
+    if exec_parity() {
+        return; // `adage install` is adage's
+    }
+    let w = World::new();
+    let repo = git_repo(&w, "proj");
+    let dir = w.p("claude-config");
+    let env = [("CLAUDE_CONFIG_DIR", dir.to_str().unwrap())];
+    let (_, err, code) =
+        install(&w, &repo, &["claude-code", "--write", "--scope", "user", "--bin", "/opt/adage"], &env);
+    assert_eq!(code, 0, "{err}");
+    assert_eq!(files(&dir), vec!["settings.json"]);
+    assert!(!w.p("home/.claude").exists(), "nothing under ~/.claude when CLAUDE_CONFIG_DIR is set");
 }
 
 #[test]

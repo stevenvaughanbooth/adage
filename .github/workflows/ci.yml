@@ -81,6 +81,8 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
+          # Pull requests test only the packages they can affect, found from the merge base.
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '1' }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
@@ -93,12 +95,43 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: test (adage-store, the Windows-ported store, on every platform)
         run: cargo test --locked -p adage-store
+      # A pull request tests the packages its changes can affect: those it changed, those whose
+      # tests read a changed fixture, and every package that depends on one of them
+      # (`cargo xtask affected`, xtask/src/affected.rs). A change outside every package (the
+      # lockfile, this workflow, an undeclared directory) tests everything; pushes to main, the
+      # weekly run and dispatches always test everything.
+      - name: affected packages
+        id: affected
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            out=$(cargo xtask affected --base "origin/${{ github.base_ref }}")
+          else
+            out=all
+          fi
+          echo "$out"
+          if [ "$out" = "all" ]; then
+            echo "args=--workspace --exclude adage-eval" >> "$GITHUB_OUTPUT"
+          elif [ "$out" = "none" ]; then
+            echo "args=" >> "$GITHUB_OUTPUT"
+          else
+            echo "args=$(echo "$out" | { grep -vx adage-eval || true; } | sed 's/^/-p /' | tr '\n' ' ')" >> "$GITHUB_OUTPUT"
+          fi
+          case "$out" in all|*adage-cli*) echo "cli=true" >> "$GITHUB_OUTPUT";; *) echo "cli=false" >> "$GITHUB_OUTPUT";; esac
+      # Always: the layering rules, the affected-path declarations, and the no-spawn scan of every
+      # crate's sources. They guard the selection above, and take seconds.
+      - name: architecture guards
+        run: |
+          cargo test --locked -p xtask
+          cargo test --locked -p adage-exec --test no_spawn
       - name: test
+        if: steps.affected.outputs.args != ''
         env:
           ADAGE_PROP_TRACE: ${{ runner.temp }}/prop_shell_last.json
         # adage-eval's gates, bench and parity suites take hours in a debug build; they run in
         # evals.yml (weekly and on dispatch).
-        run: cargo test --workspace --exclude adage-eval --locked --no-fail-fast
+        run: cargo test ${{ steps.affected.outputs.args }} --locked --no-fail-fast
       - name: last property-test input (if the process crashed)
         if: failure()
         shell: bash
@@ -106,7 +139,7 @@ jobs:
           f="${{ runner.temp }}/prop_shell_last.json"
           if [ -f "$f" ]; then echo "bytes: $(wc -c < "$f")"; head -c 4000 "$f"; echo; fi
       - name: OpenCode plugin test ran under node (not skipped)
-        if: runner.os != 'Windows'
+        if: runner.os != 'Windows' && steps.affected.outputs.cli == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -235,6 +268,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
         working-directory: web/map
       - run: pnpm typecheck
+        working-directory: web/map
+      - name: unit tests (vitest)
+        run: pnpm test
         working-directory: web/map
       - name: embedded map matches web/map
         run: pnpm drift

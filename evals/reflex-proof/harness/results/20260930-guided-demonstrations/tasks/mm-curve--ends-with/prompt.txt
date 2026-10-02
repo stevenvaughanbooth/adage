@@ -1,5 +1,0 @@
-Add a new validator to marshmallow: `marshmallow.validate.EndsWith(suffix, *, error=None)`, which succeeds if the input string ends with `suffix`. Its default error message is `Must end with {suffix}.`; a custom `error` message may interpolate `{input}` and `{suffix}`. Examples of valid input: `EndsWith('.py')`: `'main.py'`. Examples of invalid input: `'main.pyc'`.
-
-Follow the conventions of the existing validators, include tests and a docstring, and add a changelog entry.
-
-Repository workflow for this instruction-guided demonstration: after implementing the code, tests, and documentation, run `.venv/bin/python -m pytest tests/test_validate.py -q` from the repository root. Report its actual result; do not claim success if it fails.
