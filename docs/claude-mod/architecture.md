@@ -168,9 +168,12 @@ Exactly one copy is active in a session: under adage-exec the adage copy's hook 
 without delegation the adage-exec plugin is not installed or its shim is not serving. `$.state`,
 commands and panes are per plugin, so the inert copy registers no `/adage` command and draws
 nothing. The test plan's T-X-11 covers both-installed. Every argv the bridge may run is an
-allow-list in `bridge.ts` (`hook`, `version`, `watch`, `graph`, `doctor`, `status`, `ledger note`,
-`off`), checked by a unit test and by `scripts/check-plugin.mjs`; `review`, `delegate`, `install`,
-`config` and `on` are not in it.
+allow-list in `bridge.ts`: `hook`, `version`, `watch`, `graph`, `doctor`, `status`, `ledger note`,
+`off` and `map` from any code path, and the person-only verbs (`review`, `delegate`, `trust`,
+`on`) only from a `Button`'s `onPress` and only with `--press` (§3.12); `install` and `config` are
+never in it. The list is checked by a unit test and by `scripts/check-plugin.mjs`. (With one
+plugin, A8, the two-copy rule above becomes a presence probe and this paragraph's second sentence
+falls away; it is kept here because the plan builds the one-plugin step last.)
 
 Three rules keep the binary in charge:
 
@@ -646,6 +649,87 @@ are spooled.
   everywhere; levels 2 and 3 wherever hooks run, `-p` included, which is the first place to
   measure them.
 
+### 3.12 Ask the person, in the line of work [Q14]
+
+Every decision Adage needs from a person (approve a reflex that waits for review, strengthen or
+dismiss one, grant execution or prediction, turn delegation on, accept a team's signing key, turn
+Adage back on) is a terminal command today, and persona (a) never opens a terminal. The mod can
+ask in the session and act on the answer, because a mod `Button` is something the model cannot
+press: it can only call tools. That is a stronger signal of a person's intent than the guard F11
+relies on (`CLAUDECODE` in a shell's environment, which the code itself calls "a guard against
+steering, not a sandbox"). What makes it sound is binding the press to the session in a way an
+agent with a shell cannot forge.
+
+**The press token.** At `session.start`, before the agent has run anything, the mod's `Standing`
+call (§3.6, a mod-only channel: its stdout reaches the mod and no one else) returns a `press`
+token, 32 random bytes. The binary stores only its SHA-256 in the session state and marks it
+issued; the mod keeps the token in `$.state`, which is engine memory the agent cannot read. A
+token is issued, or reissued after `/resume`, **only while the session's latest spool record is
+`session_start`**: the window between the command hooks' session start and the first prompt, in
+which no agent can run anything. A `Standing` call outside that window gets no token, so an agent
+running `adage hook claude Standing` from Bash mid-session gets nothing, and the spool it can read
+holds a hash. `/clear` is a new engine session with a new id and a new token. A person-only verb
+run by the mod carries `--press <token>`; `require_person` accepts a token whose hash matches the
+session's as a person's act, with `CLAUDECODE` set or not. Everything else about the verb is
+unchanged: the same code path, the same record, the same notice.
+
+**The ask row.** A one-line prompt, `adage asks`, seated as a small pane above the prompt and
+answerable by one press, drawn when the learner's line lands (`turn.complete`, never inside a
+hook's budget), and never a modal: `$.ui.ask` is not used for learning news. Each ask has three
+answers: do it, not this one, and show me why (the inspect pane). `esc` dismisses; a dismissed
+ask returns at most once more, a day later; "not this one" records `dismiss` so it never returns.
+Asks of different weight ask differently:
+
+| Decision | Today | In the row | Weight |
+| --- | --- | --- | --- |
+| Approve a reflex that waits for review (nascent), dismiss it, strengthen, weaken, pin | `adage review <verb> …` at a terminal | `◠ test-after-acme-edit waits for your review · enable · not this one · why` | one press |
+| Grant execution (E1 or E2) for one reflex | `adage review delegate … --level e2 --outputs …`, which stages the action once and prints the diff | `◠ codegen-after-schema can run make gen for you (sandboxed) · see what it would change · not now`; the press opens the staged diff (`Code`) with `allow` and `not now`; `allow` records the grant | two presses, the diff between them |
+| Grant prediction for one reflex | `adage review delegate … --predict` | `◠ codegen-after-schema can run its step without asking the model · allow · not now · why` | two presses (the second says what will and will not meet a dialog) |
+| Turn execution on for this machine (policy `max_level e2`, `delegate on`) | `adage delegate policy --max-level e2`, `adage delegate on`, and the second plugin | The first execution ask carries it: `this turns on sandboxed execution for this machine · allow · not now`; the row says what is sandboxed and what never runs | once per machine, two presses |
+| Accept a team's signing key | `adage trust …` at a terminal | `◠ 6 team reflexes signed by alice@acme.com are in this repository · use them · not now · why` | two presses (the second shows the key and the pack list) |
+| Turn Adage back on in this repository | `adage on` at a terminal | `◠ adage is off here · turn it on` | one press |
+
+The row's text follows ux-design §10; nothing in it is a strength or lifecycle word. The terminal
+command stays as an equal path for persona (b), and the Reflexes tab lists every pending ask so a
+dismissed one can be found again.
+
+**What the press does not change.** The binary still decides: the mod runs the verb the person
+pressed and nothing else, through the same allow-list (which gains the person-only verbs, each
+required to carry `--press`); the verb's own refusals (policy, effect, exec-only, a double grant)
+still apply; an E2 grant still stages the action before recording anything; the control arm is
+unaffected (asks are about learning and grants, not delivery). A hostile agent with a shell could
+still unset `CLAUDECODE` and run a verb, as it can today; the press changes what a *person* can
+do, not what the guard against steering can prevent. What it closes is the gap the design had
+left open: a person who installs the plugin and never opens a terminal now gets the whole
+product.
+
+- **Binary:** `Standing` issues the token under the window rule; `require_person` learns
+  `--press`; `review delegate` learns `--stage --json` (the staged diff as data, for the row) and
+  `--confirm --press`; `trust` and `on` learn `--press`; the spool records `by: press` on the
+  decision so `adage review` history shows how it was made. **Model:** nothing. **Control:**
+  unaffected. **Hosts:** the row draws where the mod draws; headless sessions issue no token and
+  ask nothing.
+
+**One plugin.** Track C's decision D2 chose a second plugin, `adage-exec`, because installing it
+was "explicit consent in the harness's own UI", and listed the alternative: one plugin whose
+hooks call `adage-exec` only when a marker that `adage delegate on` writes exists. With consent
+now a press in the session, the marker is the explicit act and the second plugin is a second
+install step with no purpose. The design therefore ships **both binaries in the one plugin**:
+the shim links `$DATA/bin/adage` and `$DATA/bin/adage-exec`, links `$DATA/bin/hook` to whichever
+serves (`adage-exec` when `$ADAGE_HOME/exec/enabled` exists, else `adage`), and the command hooks
+call `$DATA/bin/hook`. Hooks are never registered twice because there is one plugin; the promise
+Track C wanted checkable (no `Command::new` in the `adage` crates) is unchanged because the
+binaries stay separate. The two-plugin activation probe of §2 becomes a one-plugin presence
+probe, and `plugin/claude-code-exec` is retired after one release as an alias that installs
+nothing. This reverses D2 and is called out as such in the plan (A8).
+
+**The web map.** `adage map` serves a read-only page on localhost (GET and HEAD only, the host
+checked). Every tab of the pane ends with one `Explore in browser` link, which starts `adage map` if it
+is not running (a child like the feed, ended with the module) and opens a `Link` to
+`http://localhost:<port>`. The map stays read-only: a browser page cannot make a decision, since
+any page on the machine could send the same request; decisions stay in the pane, where a press is
+a person's.
+
 ## 4. Looks: every render site, and what Adage draws there
 
 `ui.render` fires for each render site; a hook can "change a detail" (`next({ ...e, props })`),
@@ -758,7 +842,9 @@ Names that the lexicon's verbs already use, under one prefix so the typeahead gr
 | `/adage reflexes`, `/adage health` | Opens the pane on that tab | UI |
 | `/adage why` | The last directive this session: its text, route, evidence, and whether it was followed; in a control session, the same text a treated session with nothing fired prints | Read-only (spool) |
 | `/adage off` | Runs `adage off`, which writes `.adage/disabled` for this repository (a new command, plan A6) | "Turns something down", allowed anywhere (live-learning.md) |
-| `/adage on` | Prints the terminal command: `adage on` removes the file and is person-only, because it turns Adage back up in a repository | F11 |
+| `/adage on` | Runs `adage on --press <token>`: a person's press (§3.12) | The press token |
+| `/adage review` | Opens the pane on the pending asks (§3.12) | UI; each answer is a press |
+| `/adage map` | `Explore in browser`: starts `adage map` if needed and opens the link | Read-only |
 | `/adage pause` | Pauses the feed and the band for this session; the band shows `paused` | UI |
 
 Settings go in the manifest's `userConfig`, which Claude Code draws as `/config` rows and stores
@@ -770,13 +856,15 @@ under `pluginConfigs`; a change reloads the mod with the new `options`:
   "pane":          { "type": "string",  "title": "Watch pane", "description": "Open the live pane unasked in a wide terminal", "options": ["auto", "manual"], "default": "manual" },
   "noticed":       { "type": "boolean", "title": "Show what Adage noticed", "description": "A line when a sequence of calls matches one Adage is still learning", "default": true },
   "skills_invoke": { "type": "boolean", "title": "Invoke skills from reflexes", "description": "Load a skill at the step a granted reflex names, without a model request to choose it", "default": false },
-  "routine_model": { "type": "string",  "title": "Route routine steps to", "description": "A model alias for steps a fire reflex covers, or empty to route nothing", "default": "" }
+  "routine_model": { "type": "string",  "title": "Route routine steps to", "description": "A model alias for steps a fire reflex covers, or empty to route nothing", "default": "" },
+  "asks":          { "type": "boolean", "title": "Ask me in the session", "description": "One line when a reflex waits for your decision; off keeps every decision at the terminal", "default": true }
 }
 ```
 
 Only keys the binary allows from a session appear here. Execution policy, grants, trust and the
-learning sources stay at the terminal, as `docs/live-learning.md` requires; the notice cadence is
-`ui.notices` in `config.toml` already and is not duplicated here. `hold_dead_ends` (a `$.ui.ask`
+learning sources are decisions, not settings: they are made by a press in the ask row (§3.12) or
+at a terminal, never by a `/config` row; the notice cadence is `ui.notices` in `config.toml`
+already and is not duplicated here. `hold_dead_ends` (a `$.ui.ask`
 before a known dead end, as the `blast-radius` sample mod does) is an open question (§10), not a
 setting: the binary has no `PreToolUse` arm that matches `avoid` reflexes, and whether a hook may
 wait on a person inside its budget is unmeasured.
@@ -792,6 +880,10 @@ wait on a person inside its budget is unmeasured.
    answers `tool.call` with a `deny`, never calls `$.prompt.submit`, never strips anything from a
    child's environment, and a receipt replaces only a run `$.tool.check` would have allowed
    unasked.
+3a. **A person's decision is a person's press or a person's terminal.** A person-only verb runs
+   from the mod only inside a `Button`'s `onPress`, with the session's press token, which is
+   issued once in the window before the first prompt and lives only in engine memory. No hook,
+   timer or model output ever runs one.
 4. **Nothing executes in a mod hook.** The mod's `$.process.run` runs the binary's decision paths,
    which read state and print JSON; E1 and E2 run where they run today, inside the command hooks
    and the sandbox; a predicted call is the agent's own tool under the engine's permissions.
@@ -843,6 +935,7 @@ One table for the three documents (the plan's §6 and the test plan's §10 use t
 | **M5 · Notice** | §3.10: the `candidates` table and net, `noticed` on the decision, the learner's state in the feed, the toasts | Q12 |
 | **M6 · Skills** | §3.11: the `skill` response kind, the learner's rule from Skill tool uses, `adage train`'s `verified.json` with inertness, the `turn.step` invoke under the grant, the `SkillPrompt` event | Q13 |
 | **M7 · Evidence** | The `requests` metric and the arms in the demo runner; the development gate with a `MOD` arm on the reflex-proof harness; the registered confirmation on new groups | Q10 |
+| **M8 · Ask it** | §3.12: the press token and the window rule; `--press` on every person-only verb; the ask row and the pending-asks list; one plugin with both binaries; the map link | Q14 |
 
 Documentation moves with each milestone, as `how-it-works.md` requires: `harnesses.md` gains a
 "Claude Code mod" section marked documented/inferred/measured; `live-learning.md` records the
@@ -890,8 +983,9 @@ time inside `next(e)` counts toward the hook budget (Q2), surfaces and silence (
 disk (Q5), fail-open, reload and the pre-2.1.287 `modules` key (Q6), hosts and `$.process` on the
 Desktop app (Q7), API drift (Q8), the skipped request and whether a yielded call meets the
 permission dialog (Q9), the gate (Q10), routing (Q11), noticed candidates on the fast path (Q12),
-skill invocation, inertness and rewrite (Q13). Three product decisions sit outside the spike:
-whether a `hold_dead_ends` ask ever exists (it needs a binary `PreToolUse` arm for `avoid`
-reflexes and a measured answer on hooks that wait on a person); whether a person-verified
-approval inside the harness is ever designed, which would be the only way review and delegation
-reach the pane; and whether `/adage on` should ever be allowed from a session.
+skill invocation, inertness and rewrite (Q13), the press token's window and secrecy (Q14: no
+agent call can land before the first prompt; `$.process.run`'s stdout reaches the mod alone;
+`/resume` reissues inside the window and nothing else does). Two product decisions sit outside
+the spike: whether a `hold_dead_ends` ask ever exists (it needs a binary `PreToolUse` arm for
+`avoid` reflexes and a measured answer on hooks that wait on a person), and the reversal of Track
+C's D2 to one plugin (§3.12), which the owner has asked for and which the plan carries as A8.

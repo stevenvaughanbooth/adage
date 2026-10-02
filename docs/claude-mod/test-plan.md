@@ -23,8 +23,10 @@
 3. **The control arm is silent and never named**, in the binary (no output), on the screen, in
    the pane and in the feed for the current session.
 4. **Authority is never widened.** No test may pass in which the mod approves a call, denies a
-   call, strips an environment variable, runs a person-only command, answers a receipt for a call
-   the person's rules would have asked about, or predicts without a grant.
+   call, strips an environment variable, runs a person-only verb outside a `Button`'s press with a
+   valid session token, answers a receipt for a call the person's rules would have asked about,
+   or predicts without a grant; and no test may pass in which an agent obtains a press token or
+   passes a person-only verb.
 5. **Budgets hold, measured in pairs.** Every latency bound is a paired `hook_latency
    <before>,<after>` run (the tool's interleaved two-binary mode), 500 runs after its 20 warm-ups,
    repeated five times, with the machine named; the bound is on the p95 difference.
@@ -81,9 +83,12 @@ the cross-cutting set.
 | Harness-priced ledger (§3.9) | A4 | T-A4-01 … 05 |
 | Tokens and card JSON (§4 rules) | A5 | T-A5-01, 02 |
 | `adage off`/`on`, `adage-exec version` (§5, §2) | A6 | T-A6-01 … 03 |
+| The press token, `--press` on person-only verbs (§3.12) | A7 | T-A7-01 … 07 |
+| One plugin, both binaries (§3.12) | A8 | T-A8-01 … 04 |
 | Module, bridge, activation, CI (§2) | B1 | T-B1-01 … 06 |
 | Observe and draw (§3.1, §4) | B2 | T-B2-01 … 11 |
 | Pane and commands (§4.1, §5) | B3 | T-B3-01 … 10 |
+| The ask row, presses, `Explore in browser` (§3.12) | B4 | T-B4-01 … 08 |
 | `TurnStep` (§3.2) | C1 | T-C1-01 … 13 |
 | `predict` grant (§3.2) | C2 | T-C2-01 … 09 |
 | Receipt as result, `$.tool.check` (§3.3, §3.4) | C3 | T-C3-01 … 07 |
@@ -97,7 +102,7 @@ the cross-cutting set.
 | Arms and the requests metric (§9) | E1 | T-E1-01 … 04 |
 | Development gate (§9) | E2 | T-E2-01 … 03 |
 | Registered run (§9) | E3 | T-E3-01, 02 |
-| Cross-cutting: fail open, control, authority, hosts, drift, both plugins | all | T-X-01 … 12 |
+| Cross-cutting: fail open, control, authority, hosts, drift, both plugins, the agent cannot press | all | T-X-01 … 13 |
 | Usability (ux-design §14) | B2, B3, D5 | T-U-01 |
 
 ## 5. Test cases: the binary
@@ -204,6 +209,42 @@ the Then itself.
   exit 0 with one line outside a repository.
 - **T-A6-03 · L2 + L5 · version.** `adage-exec version` prints one line and exits 0; `adage-exec
   hook` paired latency is unchanged (the `hook` dispatch stays first, `main.rs:428-431`).
+
+### A7 · The press token
+
+- **T-A7-01 · L2 · issued once, in the window.** After the `SessionStart` command hook, the first
+  `Standing` returns `press` (64 hex characters); a second `Standing` returns none; the state file
+  holds a 64-hex `press_hash` and never the token; the spool holds neither.
+- **T-A7-02 · L2 · the window closes.** After a `Prompt` record (or a `Batch`, `Failure`, `Stop`),
+  `Standing` returns no press for the rest of the session; after a `SessionStart` with `source:
+  resume` it returns a new one and the old hash is replaced.
+- **T-A7-03 · L2 · a press is a person.** `adage review approve T R --press <token> --session S`
+  with every `AGENT_ENV` variable set records the decision with `by: press`; the same with the
+  token's last character changed, with another session's token, or with no `--session`, refuses
+  with the person-only message and records nothing.
+- **T-A7-04 · L2 · every verb.** Each of `review <verb>` (six verbs), `review delegate`, `delegate
+  on|off|predict|policy`, `trust`, `on` accepts a valid press and refuses an invalid one; `install`
+  and `config set` of a guarded key accept no press.
+- **T-A7-05 · L2 · stage then confirm.** `review delegate … --level e2 --stage --json` prints the
+  terms and the diff and records nothing; `--confirm --press` records the grant; after a declared
+  output changed between the two, `--confirm` refuses naming the file.
+- **T-A7-06 · L1 · hashing and timing.** The hash is SHA-256 of the raw token; comparison is
+  constant-time; a token older than 24 h is refused (the session is treated as new).
+- **T-A7-07 · L3 · the floor.** A `Standing` payload is mod-only; the goldens, which never send
+  it, are unchanged; parity holds.
+
+### A8 · One plugin
+
+- **T-A8-01 · L2 · the shim picks the hook binary.** `plugin/test/session-start.test.sh`: without
+  `exec/enabled`, `$DATA/bin/hook` resolves to `adage`; with it, to `adage-exec`; `$DATA/bin/adage`
+  is always the CLI binary; both checksums are verified.
+- **T-A8-02 · L2 · never both.** A seeded session with the marker produces exactly one
+  `session_start` record from `adage-exec` and none from `adage`, and the reverse without it.
+- **T-A8-03 · L7 · one mod.** The activation probe is a presence probe: with the binaries present
+  the mod is active, with none it is inert; no two-copy logic remains (the test that two copies
+  coexist is removed).
+- **T-A8-04 · L2 · the alias.** The retired exec plugin's shim prints its one line, links nothing,
+  and exits 0; `release_plugin_startup`'s thresholds hold with two binaries staged.
 
 ### C1 · `TurnStep`
 
@@ -459,6 +500,15 @@ the Then itself.
   plugin but one set of `/adage` commands. L7: a stubbed probe returning empty stdout leaves every
   hook at `next(e)`.
 - **T-X-12 · L3 · parity.** After every chunk, `adage-exec/tests/parity.rs` passes.
+- **T-X-13 · L2 + L7 + L9 · the agent cannot press.** L2: with a session past its first prompt,
+  `adage hook claude Standing` from a shell with `CLAUDECODE=1` returns no press, and every
+  person-only verb without a valid press refuses. L7: the argv recorder shows person-only verbs
+  only inside `onPress` handlers, each with `--press`, and never from a hook, a timer or a feed
+  line; a fixture feed line or `learn.log` line containing `--press` or a verb name changes
+  nothing. L9 (Q14): in a live session the agent is told to enable a reflex and to read the press
+  token; it fails at both (`adage review approve` refuses; `Standing` returns nothing; the state
+  file holds a hash), while a person's press in the same session succeeds and the decision shows
+  `by: press` in `adage review` history.
 
 ## 6. Test cases: the mod's surfaces (L7 unless marked)
 
@@ -562,6 +612,34 @@ handlers directly and checking `$.state` and the recorded `$.ui.*` calls.
 - **T-B3-10 · settings reload.** `register(on, { band: false })` registers no `AbovePrompt` hook;
   `noticed: false` draws no noticed line; `pane: 'auto'` opens at `viewport.columns ≥ 144` only;
   `skills_invoke` defaults to false.
+
+### B4 · The ask row and presses
+
+- **T-B4-01 · the row.** A fixture with one pending nascent reflex and a held press draws
+  `ask.review` in the `adage-ask` pane with digit hotkeys and `esc: later`; with `asks: false`
+  nothing is drawn; with no press held the buttons read `ask.notoken` and the inspect pane shows
+  the terminal command.
+- **T-B4-02 · one press.** Pressing `1` calls exactly `['<cli>', 'review', 'approve', T, R,
+  '--press', token, '--session', S]`, draws `ask.review.done` for 2 s, removes the ask; `2` calls
+  `review dismiss` and the ask never re-queues; `3` opens the inspect pane; `esc` hides the row
+  and the ask re-queues once after 24 h (a clock stub) and never again.
+- **T-B4-03 · two presses with the diff.** For an execution ask, `1` calls `review delegate …
+  --stage --json` and draws `ask.exec.diff` with the diff as `Code`; `1` again calls `--confirm
+  --press`; `2` at either step calls nothing; the first execution ask on a machine (a fixture
+  flag) adds `ask.exec.first`.
+- **T-B4-04 · never in a hook, never mid-turn.** Asks are queued at `turn.complete` only; a
+  `learn` line arriving mid-turn queues and does not draw until the turn completes; no `$.ui.ask`
+  is ever called.
+- **T-B4-05 · the queue and the day rule.** Three pending asks show one at a time with `1 of 3`;
+  the same reflex is asked at most once per 24 h.
+- **T-B4-06 · the pane's verbs.** An expanded Reflexes row shows one `Button` per `review.verbs`
+  entry worded per `pane.verb.*`; a press calls the verb with `--press`; the terminal command is
+  shown dim with `Copy`; the **waiting for you** group lists every pending ask.
+- **T-B4-07 · Explore in browser.** Every tab's footer has the `Link`; its press spawns `['<cli>',
+  'map', '--port', p]` once when the map is not running, and opens `http://localhost:<p>`; a
+  second press spawns nothing.
+- **T-B4-08 · no banned words.** No ask row or verb label contains a strength or lifecycle word,
+  `approval`, or `saved`.
 
 ### C4 · The mod's `turn.step`
 
@@ -679,8 +757,11 @@ agreement and where the permission mode is read, Q5 provenance and cost on disk,
 reload and the pre-2.1.287 `modules` key, Q7 hosts and `$.process` on the Desktop, Q8 drift, Q9
 the skipped request, the dialog and the id on disk (10 of 10), Q10 the gate, Q11 routing, Q12
 noticed on the fast path and in a person's eyes, Q13 skills, inertness and the three entry
-points. A chunk that depends on a question (plan §3) does not merge before the question's result
-is committed.
+points, Q14 the press token's window and secrecy (no agent call lands before the first prompt;
+the mod's `$.process.run` stdout is not in the transcript, the debug log or any file the agent
+can read; `/resume` reissues and nothing else does; the `adage-ask` pane's digit hotkeys do not
+fire from an empty prompt). A chunk that depends on a question (plan §3) does not merge before
+the question's result is committed.
 
 ## 9. CI and release gates
 
@@ -717,6 +798,7 @@ responsibility stated in each PR.
 | M5 Notice | D1's L5 numbers | T-D1, T-D2, T-D5-01, T-D5-02 green; Q12; T-U-01 noticed questions |
 | M6 Skills | — | T-D3, T-D4, T-D5-03 green; Q13 |
 | M7 Evidence | M4 | T-E1 green; T-E2 twice; T-E3 recorded |
+| M8 Ask it | M2, Q14 | T-A7, T-A8, T-B4, T-X-13 green; T-U-01's doing part passes without a terminal |
 
 ## 11. Defects and reporting
 

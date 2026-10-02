@@ -308,8 +308,13 @@ What the design needs, against what the code has. Lines are from the tree named 
    it draws in a session (`--for-session`).
 7. **`adage off` and `adage on`** (new, A6): `off` writes `<root>/.adage/disabled` and is
    allowed anywhere (it turns something down, `docs/live-learning.md`); `on` removes it and
-   requires a person (`require_person`, `share.rs:29-49`); both exit 0 outside a repository with
-   one line.
+   requires a person (`require_person`, `share.rs:29-49`, or a press); both exit 0 outside a
+   repository with one line.
+8. **The press** (A7, design §3.12): `require_person` accepts `--press <token> --session <id>`
+   when the token's SHA-256 equals the session's; `Standing` issues the token only while the
+   session's latest spool record is `session_start`; `review delegate` gains `--stage --json` and
+   `--confirm`; every decision records `by: press | terminal`. **One plugin** (A8): both
+   binaries in `plugin/claude-code`, `$DATA/bin/hook` linked by the marker.
 
 ### 2.6 The mod (`plugin/claude-code`, `plugin/claude-code-exec`)
 
@@ -460,9 +465,60 @@ workstream are ordered.
   file; both exit 0 with one line outside a repository.
 - **Tests.** T-A6-01 … T-A6-03.
 - **Acceptance.** The hooks print nothing after `adage off` in the integration `World`; `adage
-  on` with `CLAUDECODE=1` exits non-zero and leaves the file; `adage-exec version` prints one
-  line and `adage-exec hook` latency is unchanged (paired run).
+  on` with `CLAUDECODE=1` and no press exits non-zero and leaves the file; `adage-exec version`
+  prints one line and `adage-exec hook` latency is unchanged (paired run).
 - **Estimate.** 0.5 day. **Depends on.** Nothing.
+
+#### A7 · The press token, and `--press` on every person-only verb
+
+- **Delivers.** A person's decision made from the mod, bound to the session so no agent can forge
+  it (architecture §3.12).
+- **Files.** `crates/adage-hook/src/lib.rs` (the `Standing` event, §2.2.8, issues `press`: 32
+  random bytes, hex; stored as SHA-256 on `SessionState.press_hash` with `press_issued_at`; issued
+  or reissued only while the session's latest spool record is `session_start`); `crates/adage-cli/
+  src/share.rs:29-49` and `crates/adage-exec/src/person.rs:14-33` (`require_person` gains a
+  `press: Option<&str>` path: a token whose hash equals the session's passes with any `AGENT_ENV`
+  set; `--press <token>` and `--session <id>` on `review <verb>`, `review delegate`, `delegate
+  on|off|predict|policy`, `trust`, `on`); `crates/adage-cli/src/review.rs` (the decision record
+  gains `by: "press" | "terminal"`); `exec.rs:620-871` (`review delegate --stage --json` prints
+  the staged diff and the terms as JSON without recording; `--confirm --press` records what the
+  same `--stage` showed, refusing if the staged digest changed); `docs/execution.md`,
+  `docs/live-learning.md` (the press as the second person path).
+- **Contract.** `Standing` answers `{ standing, environment, press? }`; `press` is present only in
+  the window. A verb with a valid press behaves exactly as at a terminal and records `by: press`.
+  A wrong, stale or absent press behaves exactly as today (refused under `AGENT_ENV`). The spool
+  and state hold the hash only.
+- **Tests.** T-A7-01 … T-A7-07; T-X-13.
+- **Acceptance.** In the integration `World`: the first `Standing` after `SessionStart` returns a
+  press, a second does not, a `Standing` after a `Prompt` record does not, a `Standing` after a
+  `/resume`'s `SessionStart` does; `adage review approve T R --press <token> --session S` with
+  `CLAUDECODE=1` records the decision with `by: press`; the same with a wrong token or another
+  session's token refuses; `review delegate --stage --json` followed by `--confirm --press`
+  records the grant, and `--confirm` after a file in the outputs changed refuses.
+- **Estimate.** 3 days. **Depends on.** C5's `Standing` event (or lands it).
+
+#### A8 · One plugin, both binaries (reverses Track C D2)
+
+- **Delivers.** `/plugin install adage@adage` is the only install step; execution needs no second
+  plugin.
+- **Files.** `plugin/build.sh` (stage `adage-exec` beside `adage` in `plugin/claude-code/dist/
+  <target>/`; `SHA256SUMS` lists both), `plugin/claude-code/scripts/session-start` (link
+  `$DATA/bin/adage`, `$DATA/bin/adage-exec`, and `$DATA/bin/hook` → `adage-exec` when
+  `$ADAGE_HOME/exec/enabled` exists, else `adage`; the quiet link and the exec-plugin detection
+  go), `plugin/claude-code/hooks/hooks.json` (the seven command hooks call `${CLAUDE_PLUGIN_DATA}/
+  bin/hook`), `crates/adage-cli/src/exec.rs:132-180` (`delegate on|off` writes or removes the
+  marker and no longer rewrites the Claude Code registration), `plugin/claude-code-exec/` (one
+  release as an alias whose shim prints `the adage plugin now includes execution; uninstall this
+  one` and links nothing), `.claude-plugin/marketplace.json`, `scripts/check-plugin.mjs`,
+  `plugin/test/session-start.test.sh`, `docs/execution.md` ("Two plugins" becomes "One plugin"),
+  `docs/tracks/track-c-compiled-skills.md` (D2 revisited, with the reason: consent is a press).
+- **Contract.** With the marker, every hook event reaches `adage-exec hook`; without it, `adage
+  hook`; never both; `adage` is always linked for CLI verbs.
+- **Tests.** T-A8-01 … T-A8-04.
+- **Acceptance.** `session-start.test.sh` covers both marker states and the alias; parity holds;
+  the mod's activation probe (§2 of the design) becomes a presence probe and B1's two-copy test
+  is replaced by T-A8-03; `release_plugin_startup` thresholds hold with two binaries staged.
+- **Estimate.** 2 days. **Depends on.** A7 (the press makes the marker the consent).
 
 ### Workstream B · The mod: see it (Layer 1 of the design)
 
@@ -482,8 +538,9 @@ Needs S9 Q1, Q2 (Layer 1), Q3 and Q6 to have passed. Every chunk here ships behi
   allow-list literal and the CLI pin, keep every other rule); `.github/workflows/ci.yml:195-214`
   (`npm install -g @anthropic-ai/claude-code@2.1.287`, `claude plugin test` for both plugins,
   `claude plugin validate --strict > /tmp/v && diff /tmp/v plugin/claude-code/VALIDATE.txt`);
-  the same files mirrored into `plugin/claude-code-exec`; `plugin/build.sh` stages `adage` into
-  the exec plugin's `dist/<target>/` and the exec shim links it.
+  the same files mirrored into `plugin/claude-code-exec` until A8 retires it; `plugin/build.sh`
+  stages `adage` into the exec plugin's `dist/<target>/` and the exec shim links it (A8 then
+  moves both binaries into the one plugin).
 - **Where the binaries are.** The shim links `${CLAUDE_PLUGIN_DATA}/bin/<name>`; the mod reads
   `$.env.get('CLAUDE_PLUGIN_DATA')` (Q1 verifies the engine's process carries it; else the mod
   derives it from `$.plugin.root` as the shim does). No `PATH` fallback when the link is
@@ -538,6 +595,30 @@ Needs S9 Q1, Q2 (Layer 1), Q3 and Q6 to have passed. Every chunk here ships behi
   within the allow-list; the pane in a control-arm fixture is byte-identical to a treated
   no-match fixture.
 - **Estimate.** 5 days. **Depends on.** A3, A5, A6, B2.
+
+#### B4 · The ask row, presses in the pane, and `Explore in browser`
+
+- **Files.** `hooks/decide.ts` (`turn.complete`: when the feed's `learn` line or `graph --json`
+  shows a reflex waiting for a decision and `asks` is on, queue an ask; the `Standing` call at
+  `session.start` keeps `press` in `$.state`), `hooks/draw/ask.tsx` (the `adage-ask` pane per
+  ux-design §4.17: one row, digit hotkeys, `esc`, the queue, the two-press flows with the staged
+  diff as `Code`, the thanks line, `ask.notoken` when no press is held), `hooks/draw/pane.tsx`
+  (the **waiting for you** group; the verb `Button`s in an expanded row; `Explore in browser` in
+  every tab's footer: `$.process.spawn([cli, 'map', '--port', p])` once if not running, then a
+  `Link`), `hooks/bridge.ts` (the person-only verbs in the allow-list, callable only from an
+  `onPress` and only with `--press`; `map` added), `hooks/commands.ts` (`/adage review`, `/adage
+  map`, `/adage on` as a press), `types/index.d.ts` (`press`, `asks`), `plugin.json` (`asks`).
+- **Rules enforced in code.** A person-only verb is run from an `onPress` handler and nowhere
+  else (the argv recorder proves it); no ask is drawn inside a hook's budget or during a turn; one
+  ask per reflex per day; a `dismiss` is recorded, not hidden; no strength or lifecycle word in
+  the row.
+- **Tests.** T-B4-01 … T-B4-08; T-X-13.
+- **Acceptance.** `claude plugin test` green for the row's states on both surfaces; in a live
+  session (Q14) a nascent reflex is enabled with one press and an E2 grant with two, and
+  `adage review` history shows `by: press`; the agent, asked in the same session to enable a
+  reflex, cannot (its `adage review approve` refuses, its `adage hook claude Standing` gets no
+  token); `Explore in browser` opens the map; T-U-01's doing part passes without a terminal.
+- **Estimate.** 5 days. **Depends on.** A7, B3.
 
 ### Workstream C · Act in the model's place (Layers 2 and 4)
 
@@ -818,11 +899,13 @@ S9 (Q1, Q2, Q3, Q6) ──▶ B1;  Q2 (Layer 2), Q4 ──▶ C3;  Q9 ──▶ 
 D1 ──▶ D2 ──────────────▶ D5
 D3 ──▶ D4 ──────────────▶ D5
 A2, A4 (independent)
+A7 ──▶ A8;  A7, B3 ──▶ B4;  Q14 ──▶ B4
 ```
 
-Estimates: A 8.5 days, B 11.5, C 18, D 18.5, E 5.5 plus spend: about 62 engineer-days, twelve
-engineer-weeks of code before the registered run, which is the design's order of magnitude. The
-critical path is A1 → C1 → C2 → C4 → E2 (16 days of work, gated by Q9); B and D run beside it.
+Estimates: A 13.5 days, B 16.5, C 18, D 18.5, E 5.5 plus spend: about 72 engineer-days, fourteen
+engineer-weeks of code before the registered run. The critical path is A1 → C1 → C2 → C4 → E2
+(16 days of work, gated by Q9); B and D run beside it, and A7 → B4 (8 days, gated by Q14) is the
+path to the no-terminal product.
 
 ## 5. Testing strategy
 
@@ -861,6 +944,7 @@ own rule; `CONTRIBUTING.md` says only that hook paths fail open).
 | **M5 · Notice** | D1, D2, D5 (noticed) | The `make test → make lint` candidate from the sim's history in the index; the routes unchanged; `noticed` once per session in both arms; replay gate green; the line drawn under the batch; p95 within +0.3 ms |
 | **M6 · Skills** | D3, D4, D5 (skills) | A `skill` route learned from six synthetic sessions and delivered at prime; the Skill tool predicted at `turn.step` under a `predict` grant for an accepted, inert skill; `verified.json` written by `adage train` and read back by `SkillPrompt` only after `accept`; Q13's three entry points |
 | **M7 · Evidence** | E1–E3 | `requests` in the demo report with an `a0` arm; the v9 rule passes twice for `MOD`; the registered run's outcome recorded, whatever it is |
+| **M8 · Ask it** | A7, A8, B4 | A press enables a nascent reflex and grants E2 with the diff shown, recorded `by: press`; the agent cannot obtain a token or pass a verb; one plugin installs everything and execution needs no second install; `Explore in browser` opens the map; the usability tasks pass without a terminal |
 
 ## 7. Risks, and what the plan does about them
 
@@ -885,9 +969,17 @@ own rule; `CONTRIBUTING.md` says only that hook paths fail open).
   must keep parsing (a test loads them all).
 - **Noise.** `noticed` is sequences only, once per candidate per session, off with one
   `userConfig` row; Q12 and T-U-01 read the recording with people.
-- **Person-only commands from a pane.** The bridge's allow-list, its unit test and
-  `check-plugin.mjs` are the structural guard; `CLAUDECODE=1` on every child makes `AGENT_ENV`
-  refuse at run time regardless; `VALIDATE.txt` is review evidence, not proof.
+- **Person-only commands from a pane.** They run only from an `onPress` with the session's press
+  token (A7, B4); the allow-list, its unit test and `check-plugin.mjs` are the structural guard;
+  `CLAUDECODE=1` on every child makes `AGENT_ENV` refuse any call without a valid press;
+  `VALIDATE.txt` is review evidence, not proof. The token is issued only in the window before the
+  first prompt and lives only in engine memory; Q14 measures that no agent call can land in the
+  window and that the mod's stdout is private. A hostile agent that unsets `CLAUDECODE` in its own
+  shell is no worse off than today: the press widens what a person can do, not what the steering
+  guard prevents.
+- **Reversing D2.** One plugin with both binaries removes the second install as consent; the
+  press is the consent instead. The `Command::new` promise stays checkable because the binaries
+  stay separate; hooks cannot double because there is one plugin.
 - **Two plugins, two mods.** The activation probe leaves exactly one copy active; `check-plugin.mjs`
   diffs the two module trees and fails on drift; T-X-11 installs both.
 - **The evidence can be forged from a session.** `ledger note` accepts only a session the spool
