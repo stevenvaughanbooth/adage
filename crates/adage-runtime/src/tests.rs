@@ -100,6 +100,7 @@ fn prompt_binds_validated_ticket_and_warns_about_dead_end() {
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState::default();
     let d = decide(&ctx, &mut st, &Event::Prompt { text: "Pick up W-2042 please".into() });
@@ -118,6 +119,7 @@ fn injected_values_never_bind() {
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState::default();
     let d = decide(&ctx, &mut st, &Event::Prompt { text: "Do W-20421234 and --config=/etc".into() });
@@ -134,6 +136,7 @@ fn follow_judgement_and_linked_files() {
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState::default();
     decide(&ctx, &mut st, &Event::Prompt { text: "W-2042".into() });
@@ -155,6 +158,7 @@ fn obligation_triggers_on_edit_and_is_enforced_once_at_stop() {
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState::default();
     let edit = Call {
@@ -181,6 +185,7 @@ fn obligation_met_means_no_stop_request() {
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState::default();
     let edit = Call {
@@ -205,6 +210,7 @@ fn control_logs_exposure_but_emits_nothing() {
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState { arm: Some(Arm::Control), ..Default::default() };
     let d = decide(&ctx, &mut st, &Event::Prompt { text: "W-2042".into() });
@@ -222,6 +228,7 @@ fn other_repos_get_nothing() {
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState::default();
     assert!(decide(&ctx, &mut st, &Event::Prompt { text: "W-2042".into() }).directives.is_empty());
@@ -237,6 +244,7 @@ fn caps_hold() {
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState::default();
     for _ in 0..20 {
@@ -263,6 +271,7 @@ fn linked_files_from_plain_text_output() {
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState::default();
     let out = "ID: W-2042\nLinked files: acme/billing.py, ../etc/passwd\nAcceptance: ok";
@@ -283,6 +292,7 @@ fn symlinks_out_of_the_repo_are_rejected() {
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState::default();
     let out = r#"{"linked_files":["acme/notes.md","acme/billing.py"]}"#;
@@ -301,6 +311,7 @@ fn obligations_rearm_after_a_new_edit_and_stop_requests_are_bounded() {
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState::default();
     let edit = |f: &str| Call {
@@ -331,6 +342,7 @@ fn hostile_output_does_not_panic() {
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState::default();
     let calls = vec![
@@ -353,6 +365,7 @@ fn control_records_would_continue() {
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState::default();
     let edit = Call {
@@ -425,6 +438,7 @@ fn intent_route_fires_on_a_matching_prompt_only() {
         table: &table,
         embed: Some(&fake_embed),
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState::default();
     let d = decide(&ctx, &mut st, &Event::Prompt { text: "the tests are failing again".into() });
@@ -498,6 +512,7 @@ fn a_card_is_said_once_at_a_close_prompt_or_at_the_first_edit_of_its_files_when_
             table: &table,
             embed: Some(&fake_embed),
             params: Default::default(),
+            policy: Default::default(),
         };
         let mut st = SessionState::default();
         let d = decide(&ctx, &mut st, &Event::Prompt { text: "add a test flag".into() });
@@ -541,10 +556,12 @@ fn a_card_names_the_test_command_of_an_execution_certified_verification_unless_t
         table: &table,
         embed: Some(&fake_embed),
         params: Default::default(),
+        policy: Default::default(),
     };
     let card = |on: bool| {
         let mut st = SessionState::default();
-        let d = with_card_checks(on, || decide(&ctx, &mut st, &Event::Prompt { text: "add a test flag".into() }));
+        let ctx = Ctx { policy: Policy { card_checks: on, ..Default::default() }, ..ctx.clone() };
+        let d = decide(&ctx, &mut st, &Event::Prompt { text: "add a test flag".into() });
         d.directives.into_iter().find(|x| x.route == "card-1").unwrap().text
     };
     assert!(card(true).contains("\nTests in these sessions ran with: `go test ./...`."), "{}", card(true));
@@ -559,6 +576,7 @@ fn a_card_names_the_test_command_of_an_execution_certified_verification_unless_t
         table: &table,
         embed: Some(&fake_embed),
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState::default();
     let d = decide(&ctx2, &mut st, &Event::Prompt { text: "add a test flag".into() });
@@ -584,10 +602,12 @@ fn a_card_says_where_its_files_stand_now_instead_of_quoting_an_exemplar_unless_t
         table: &table,
         embed: Some(&fake_embed),
         params: Default::default(),
+        policy: Default::default(),
     };
     let card = |on: bool| {
         let mut st = SessionState::default();
-        let d = with_card_orientation(on, || decide(&ctx, &mut st, &Event::Prompt { text: "add a test flag".into() }));
+        let ctx = Ctx { policy: Policy { card_orientation: on, ..Default::default() }, ..ctx.clone() };
+        let d = decide(&ctx, &mut st, &Event::Prompt { text: "add a test flag".into() });
         d.directives.into_iter().find(|x| x.route == "card-1").unwrap().text
     };
     let oriented = card(true);
@@ -610,6 +630,7 @@ fn edits_that_add_tests_are_remembered_for_the_receipt() {
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let path = |rel: &str| dir.path().join(rel).to_string_lossy().to_string();
     let call = |tool: &str, input: Value| Call { tool: tool.into(), input, output: String::new(), failed: false };
@@ -665,6 +686,7 @@ fn a_waiting_card_expires_at_the_next_prompt() {
         table: &table,
         embed: Some(&fake_embed),
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState::default();
     decide(&ctx, &mut st, &Event::Prompt { text: "add a test flag".into() });
@@ -692,6 +714,7 @@ fn intent_routes_fail_open_without_a_model() {
             table: &table,
             embed,
             params: Default::default(),
+            policy: Default::default(),
         };
         let mut st = SessionState::default();
         let d = decide(&ctx, &mut st, &Event::Prompt { text: "tests failing, W-2042".into() });
@@ -710,6 +733,7 @@ fn intent_routes_need_the_same_model_and_the_threshold() {
         table: &table,
         embed: Some(&fake_embed),
         params: Default::default(),
+        policy: Default::default(),
     };
     let d = decide(&ctx, &mut SessionState::default(), &Event::Prompt { text: "tests failing".into() });
     assert!(d.directives.iter().all(|x| x.route != "intent-tests"), "a vector from another model is meaningless");
@@ -721,6 +745,7 @@ fn intent_routes_need_the_same_model_and_the_threshold() {
         table: &table,
         embed: Some(&fake_embed),
         params: Default::default(),
+        policy: Default::default(),
     };
     let d = decide(&ctx, &mut SessionState::default(), &Event::Prompt { text: "tests failing".into() });
     assert!(d.directives.iter().all(|x| x.route != "intent-tests"), "similarity 0.97 is below a 0.99 threshold");
@@ -741,6 +766,7 @@ fn the_embedder_is_not_called_without_intent_routes() {
         table: &table,
         embed: Some(&spy),
         params: Default::default(),
+        policy: Default::default(),
     };
     decide(&ctx, &mut SessionState::default(), &Event::Prompt { text: "tests failing".into() });
     assert!(!called.get(), "no intent routes: the model is never loaded");
@@ -802,6 +828,7 @@ fn state_rebuilt_from_the_spool_matches_the_live_state_after_every_event() {
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let edit = |f: &str| Call {
         tool: "Edit".into(),
@@ -860,6 +887,7 @@ fn a_rebuilt_state_never_requests_a_stop_the_live_one_would_not() {
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let edit = |f: &str| Call {
         tool: "Edit".into(),
@@ -921,6 +949,7 @@ fn an_obligation_is_met_by_the_step_with_options_added() {
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState::default();
     decide(&ctx, &mut st, &Event::Batch { calls: vec![edit_call(&dir, "schema/a.json")] });
@@ -967,6 +996,7 @@ fn an_after_command_trigger_fires_on_the_command_with_options_added() {
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let out = r#"{"linked_files":["acme/billing.py"]}"#;
     for cmd in ["./scripts/wi-lookup W-2042 --json", "python3 scripts/wi-lookup W-2042", "scripts/wi-lookup W-2042"] {
@@ -1002,6 +1032,7 @@ fn a_different_script_is_not_following() {
         table: &table,
         embed: Some(&fake_embed),
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState::default();
     let d = decide(&ctx, &mut st, &Event::Prompt { text: "run the tests".into() });
@@ -1072,6 +1103,7 @@ fn an_imported_route_a_learned_dead_end_contradicts_is_never_emitted() {
             table: &table,
             embed: Some(&fake_embed),
             params: Default::default(),
+            policy: Default::default(),
         };
         let mut st = SessionState::default();
         let d = decide(&ctx, &mut st, &Event::Prompt { text: "the tests are failing".into() });
@@ -1106,6 +1138,7 @@ fn approach_locking_filters_later_directives_and_their_obligations() {
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState::default();
     let d = decide(&ctx, &mut st, &Event::Prompt { text: "hello".into() });
@@ -1132,6 +1165,7 @@ fn approach_locking_filters_later_directives_and_their_obligations() {
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let failed = Call { failed: true, ..bash("make lint -q", "boom") };
     let d = decide(&ctx, &mut SessionState::default(), &Event::Failure { call: failed });
@@ -1159,6 +1193,7 @@ fn a_generalised_glob_matches_any_depth() {
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     for (f, hit) in [("proto/a.proto", true), ("proto/v1/deep/b.proto", true), ("other/proto/c.proto", false)] {
         let d = decide(&ctx, &mut SessionState::default(), &Event::Batch { calls: vec![edit_call(&dir, f)] });
@@ -1196,6 +1231,7 @@ fn inhibit_comes_first_under_the_caps() {
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let d = decide(&ctx, &mut SessionState::default(), &Event::Prompt { text: "W-2042".into() });
     assert_eq!(d.directives.len(), MAX_DIRECTIVES_PER_DECISION);
@@ -1280,6 +1316,7 @@ fn directives_carry_their_shape_and_stale_routes_are_never_fire() {
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState::default();
     let d = decide(&ctx, &mut st, &Event::Prompt { text: "Pick up W-2042".into() });
@@ -1323,6 +1360,7 @@ fn directives_carry_their_shape_and_stale_routes_are_never_fire() {
             table: &table,
             embed: None,
             params: Default::default(),
+            policy: Default::default(),
         };
         let mut st = SessionState::default();
         let d = decide(&ctx, &mut st, &Event::Prompt { text: "Pick up W-2042".into() });
@@ -1438,7 +1476,15 @@ mod typed_slots {
     }
 
     fn ctx<'a>(index: &'a Index, root: &'a Path, table: &'a CommandTable) -> Ctx<'a> {
-        Ctx { index, repo: "acme".into(), root, table, embed: None, params: Default::default() }
+        Ctx {
+            index,
+            repo: "acme".into(),
+            root,
+            table,
+            embed: None,
+            params: Default::default(),
+            policy: Default::default(),
+        }
     }
 
     #[test]
@@ -1627,6 +1673,7 @@ fn a_sequence_follows_an_edit_and_a_context_fires_after_its_items() {
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let (mut st, mut fast_st) = (SessionState::default(), SessionState::default());
     let mut go = |ev: Event| decide_both(&ctx, &mut st, &mut fast_st, &ev);
@@ -1703,6 +1750,7 @@ fn a_sequence_subsumes_the_finish_line_it_begins_with() {
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let (mut st, mut fast_st) = (SessionState::default(), SessionState::default());
     let mut go = |ev: Event| decide_both(&ctx, &mut st, &mut fast_st, &ev);
@@ -1759,6 +1807,7 @@ fn a_finish_line_after_any_edit_rides_on_a_sequence_that_includes_it() {
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let (mut st, mut fast_st) = (SessionState::default(), SessionState::default());
     let mut go = |ev: Event| decide_both(&ctx, &mut st, &mut fast_st, &ev);
@@ -1791,6 +1840,7 @@ fn a_context_needs_its_items_in_order_within_its_gap_of_alphabet_events() {
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let fired = |events: Vec<Event>| -> Vec<String> {
         let (mut st, mut fast_st) = (SessionState::default(), SessionState::default());
@@ -1831,6 +1881,7 @@ fn a_failed_command_is_a_failure_item_and_not_a_success() {
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let (mut st, mut fast_st) = (SessionState::default(), SessionState::default());
     let mut go = |ev: Event| decide_both(&ctx, &mut st, &mut fast_st, &ev);
@@ -1861,6 +1912,7 @@ fn context_state_is_bounded_rebuilt_from_the_spool_and_reset_by_a_new_alphabet()
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let mut st = SessionState { arm: Some(Arm::Treated), ..Default::default() };
     let mut records = Vec::new();
@@ -1925,6 +1977,7 @@ fn a_context_can_end_at_a_prompt() {
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let (mut st, mut fast_st) = (SessionState::default(), SessionState::default());
     let mut go = |ev: Event| decide_both(&ctx, &mut st, &mut fast_st, &ev);
@@ -1980,6 +2033,7 @@ fn a_directed_runner_narrowed_to_the_task_is_followed() {
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let first = "python -m pytest tests/test_formatting.py::test_formatting_usage_custom_help -xvs";
     let missing = "Exit code 1\n/usr/bin/python: No module named pytest";
@@ -2041,6 +2095,7 @@ fn the_learned_judge_reads_follows_by_the_repository_s_tokens() {
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let pairs: Vec<(String, String)> = (0..8)
         .flat_map(|i| {
@@ -2056,10 +2111,9 @@ fn the_learned_judge_reads_follows_by_the_repository_s_tokens() {
     let wrapped = "xvfb-run -a .venv/bin/python -m pytest tests/test_basic.py -x";
     let judge = |weights: Option<adage_core::judge::Weights>, then: &str| {
         let mut st = SessionState::default();
-        with_follow_weights(weights, || {
-            decide(&ctx, &mut st, &Event::Failure { call: failed(first, missing) });
-            kinds(&decide(&ctx, &mut st, &Event::Batch { calls: vec![bash(then, "==== 1 passed in 0.1s ====")] }))
-        })
+        let ctx = Ctx { policy: Policy { follow_weights: weights, ..Default::default() }, ..ctx.clone() };
+        decide(&ctx, &mut st, &Event::Failure { call: failed(first, missing) });
+        kinds(&decide(&ctx, &mut st, &Event::Batch { calls: vec![bash(then, "==== 1 passed in 0.1s ====")] }))
     };
     assert!(judge(None, wrapped).is_empty(), "no hand-written rule reads it");
     assert_eq!(judge(Some(w.clone()), wrapped), ["followed"]);
@@ -2108,6 +2162,7 @@ fn a_python_run_outside_the_project_environment_is_answered() {
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let first = |call: Call| {
         let (mut st, mut fast_st) = (SessionState::default(), SessionState::default());
@@ -2157,6 +2212,7 @@ fn a_piped_failure_fires_its_dead_end() {
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let run = |call: Call| {
         let (mut st, mut fast_st) = (SessionState::default(), SessionState::default());

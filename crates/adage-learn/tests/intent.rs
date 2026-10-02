@@ -198,6 +198,7 @@ fn mines_intent_routes_and_the_runtime_matches_new_phrasings() {
         table: &table,
         embed: Some(&embed),
         params: Default::default(),
+        policy: Default::default(),
     };
     let d1 = decide(&ctx, &mut SessionState::default(), &Event::Prompt { text: "Broken tests again! Fix?".into() });
     assert!(d1.directives.iter().any(|x| x.text.contains("make test")), "{:?}", d1.directives);

@@ -15,10 +15,10 @@
 
 use adage_core::spans::SpanKind;
 use adage_core::{CommandTable, Effect};
-use adage_eval::safety::check_data_block;
 use adage_exec::approvals::{self, Approval, ApprovalKey, Store};
 use adage_exec::request::{FieldSpec, Level};
 use adage_exec::route::{self, Terms};
+use adage_safety::check_data_block;
 use adage_tracks::*;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;

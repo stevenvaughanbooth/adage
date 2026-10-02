@@ -676,7 +676,15 @@ pub fn directives(policy: &Policy, t: &Transcript, acts: &[Act], task: &str, sto
         Policy::CoChange(oracle) => cochange_directives(oracle, t, acts, task),
         Policy::Runtime { index, repo, root, table, params, embed, cases } => {
             let root_s = root.to_string_lossy().to_string();
-            let ctx = Ctx { index, repo: repo.to_string(), root, table, embed: *embed, params: *params };
+            let ctx = Ctx {
+                index,
+                repo: repo.to_string(),
+                root,
+                table,
+                embed: *embed,
+                params: *params,
+                policy: Default::default(),
+            };
             let mut cs =
                 CaseState { steps: Vec::new(), prompt: String::new(), prompts: 0, turn: 0, given: BTreeSet::new() };
             let cwd = PathBuf::from(&t.cwd);

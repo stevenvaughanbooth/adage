@@ -124,7 +124,7 @@ fn replay_reproduces_the_live_round2_decisions() {
     // a forked skill's tool calls fired hooks but live in a subagent transcript).
     //
     // The recorded hooks matched commands by exact template key; replay compares under that
-    // matching (`--exact-keys`, `adage_runtime::with_exact_key_matching`). Under the current
+    // matching (`--exact-keys`, `adage_runtime::Policy::exact_keys`). Under the current
     // matching (the command-pattern algebra), exactly four control sessions differ, each by one
     // would-have linked-files directive the live hook did not make: the trigger was mined from
     // `python3 scripts/wi-lookup {id}` and the agent ran `./scripts/wi-lookup W-…`, the same script.

@@ -175,7 +175,7 @@ mod tests {
             turn,
             key: template_key(&action),
             norm: Normalized { action, effect: Effect::Observe, mutating: false, confidence: 1.0, note: String::new() },
-            call: adage_runtime::Call {
+            call: adage_trace::Call {
                 tool: "Bash".into(),
                 input: serde_json::Value::Null,
                 output: "out".into(),

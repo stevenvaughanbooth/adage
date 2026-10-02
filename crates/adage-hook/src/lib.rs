@@ -611,7 +611,7 @@ fn pretool(
     if !cfg.runtime_rewrite || rewrite_off(paths).exists() {
         return Ok(only_receipt());
     }
-    let Some(binding) = adage_learn::instincts::binding(&paths.tracks(), &key) else { return Ok(only_receipt()) };
+    let Some(binding) = adage_pack::binding::binding(&paths.tracks(), &key) else { return Ok(only_receipt()) };
     let Some(mut env) = binding.env else { return Ok(only_receipt()) };
     let venv = root.join(env.interpreter.strip_suffix("/bin/python").unwrap_or(".venv"));
     if Path::new(&binding.root) != root {
@@ -800,11 +800,11 @@ fn session_start(
         && !damaged
         && cfg.learn_auto
         && cfg.instincts_enabled
-        && adage_learn::instincts::stale_binding(
+        && adage_pack::binding::stale_binding(
             &s.paths.tracks(),
             &key,
             s.root,
-            &adage_learn::instincts::selection(&cfg.instincts_packs, &cfg.instincts_disabled),
+            &adage_pack::binding::selection(&cfg.instincts_packs, &cfg.instincts_disabled),
         );
     if bootstrap || rebind {
         let asked = learner().and_then(|l| autolearn::on_turn_end(s.paths, s.root, s.adapter.name(), None, &l, true));
@@ -873,7 +873,7 @@ fn first_notice(root: &Path, cfg: &adage_store::config::Config) -> String {
         .clone()
         .or_else(|| adage_store::home_dir().map(|h| h.join(".claude").join("projects")));
     let n = projects
-        .map(|p| adage_learn::scope::count_claude_sessions(&p, &adage_learn::scope::checkouts(root)))
+        .map(|p| adage_ingest::scope::count_claude_sessions(&p, &adage_ingest::scope::checkouts(root)))
         .unwrap_or(0);
     match n {
         0 => "adage: learning from this repo as you work; its first reflexes form in a few sessions. Nothing runs without you.".into(),
@@ -978,8 +978,6 @@ fn respond(
         let v = m.embed(&normalize(text))?;
         Some((m.id, v))
     };
-    let ctx =
-        Ctx { index, repo: repo_key.clone(), root, table: &table, embed: Some(&embed), params: Default::default() };
     let arm_env = std::env::var("ADAGE_ARM").ok();
     // ADAGE_CONTROL, else `runtime.control` in config.toml, else 0.1.
     let share: f64 = adage_store::config::load(paths).config.runtime_control;
@@ -993,7 +991,27 @@ fn respond(
         _ => Vec::new(),
     };
     // The learned follow judge's weights for this repository (fitted at learn time), if any.
-    let weights = adage_learn::read_follow_weights(&paths.tracks(), &repo_key);
+    let weights = adage_tracks::layout::read_follow_weights(&paths.tracks(), &repo_key);
+    let policy = adage_runtime::Policy {
+        // ADAGE_CARD_CHECKS=0 (an evaluation knob, like ADAGE_ARM) leaves the card's test-command
+        // line out.
+        card_checks: std::env::var("ADAGE_CARD_CHECKS").map_or(true, |v| v != "0"),
+        // ADAGE_CARD_ORIENTATION=0 (likewise) gives the card its earlier form: the exemplar of the
+        // last edit instead of where its files stand in the checkout now.
+        card_orientation: std::env::var("ADAGE_CARD_ORIENTATION").map_or(true, |v| v != "0"),
+        follow_weights: weights,
+        exec_only,
+        exact_keys: false,
+    };
+    let ctx = Ctx {
+        index,
+        repo: repo_key.clone(),
+        root,
+        table: &table,
+        embed: Some(&embed),
+        params: Default::default(),
+        policy,
+    };
     // A state that can no longer be read is rebuilt from the session's spool, if it is small
     // enough to replay quickly (it is read under the state lock).
     let rebuild = || {
@@ -1018,19 +1036,7 @@ fn respond(
             });
             let before: Vec<(String, bool)> =
                 st.obligations.iter().map(|o| (o.route.clone(), o.stop_requested)).collect();
-            // ADAGE_CARD_CHECKS=0 (an evaluation knob, like ADAGE_ARM) leaves the card's test-command
-            // line out.
-            let card_checks = std::env::var("ADAGE_CARD_CHECKS").map_or(true, |v| v != "0");
-            // ADAGE_CARD_ORIENTATION=0 (likewise) gives the card its earlier form: the exemplar of the
-            // last edit instead of where its files stand in the checkout now.
-            let card_orientation = std::env::var("ADAGE_CARD_ORIENTATION").map_or(true, |v| v != "0");
-            let d = adage_runtime::with_follow_weights(weights.clone(), || {
-                adage_runtime::with_card_checks(card_checks, || {
-                    adage_runtime::with_card_orientation(card_orientation, || {
-                        adage_runtime::with_exec_only(exec_only.clone(), || decide(&ctx, st, &ev))
-                    })
-                })
-            });
+            let d = decide(&ctx, st, &ev);
             let stims = stimuli(&before, &st.obligations, matches!(ev, Event::Batch { .. }));
             (d, st.arm, propensity, stims)
         })

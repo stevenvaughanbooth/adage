@@ -88,23 +88,6 @@ pub struct Inputs {
     pub only_repo: Option<String>,
 }
 
-pub fn slug(repo: &str) -> String {
-    let old: String =
-        repo.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '-' }).collect();
-    // Preserve published track paths. Repository identities remain unchanged in Scope, but the
-    // directory name must fit track validation, including the longest suffix this learner emits.
-    if io::safe_name(&format!("{old}/{}", instincts::TRACK)) {
-        return old;
-    }
-    use sha2::{Digest, Sha256};
-    let digest = Sha256::digest(repo.as_bytes());
-    let hash: String = digest[..8].iter().map(|b| format!("{b:02x}")).collect();
-    let readable: String = old.to_ascii_lowercase().chars().take(64).collect();
-    let readable = readable.trim_matches(['-', '_']);
-    let readable = if readable.is_empty() { "unnamed" } else { readable };
-    format!("repo-{readable}-{hash}")
-}
-
 /// Semantic-version bump from the difference between the previous and new routes (Design §10.9).
 pub(crate) fn bump(prev: Option<&Track>, routes: &[Route]) -> (String, String) {
     let Some(p) = prev else { return ("0.1.0".into(), "created".into()) };
@@ -181,6 +164,7 @@ impl Planned {
 }
 
 pub use adage_ingest::read_session;
+pub use adage_tracks::layout::{follow_weights_path, read_follow_weights, slug};
 
 /// `adage condition`: import sessions, mine routes, write tracks, compile the index.
 pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &LearnConfig) -> Result<Report> {
@@ -285,12 +269,6 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
     Ok(report)
 }
 
-/// Where a repository's learned follow-judge weights are kept (`adage_core::judge`), beside its
-/// tracks (a hidden file: never a track). The hook hands them to the runtime.
-pub fn follow_weights_path(tracks_root: &Path, repo: &str) -> PathBuf {
-    tracks_root.join(slug(repo)).join(".follow-weights.json")
-}
-
 /// The learned follow judge's weights per repository, from its sessions' shell commands: in how
 /// many sessions each token appears (`adage_core::judge::Weights::fit`).
 fn follow_weights(sessions: &[Session]) -> BTreeMap<String, adage_core::judge::Weights> {
@@ -311,11 +289,6 @@ fn write_follow_weights(tracks_root: &Path, repo: &str, w: &adage_core::judge::W
         let _ = std::fs::create_dir_all(dir);
         let _ = adage_store::config::write_atomic(&p, &body);
     }
-}
-
-/// A repository's learned follow-judge weights, if it has any.
-pub fn read_follow_weights(tracks_root: &Path, repo: &str) -> Option<adage_core::judge::Weights> {
-    std::fs::read(follow_weights_path(tracks_root, repo)).ok().and_then(|b| serde_json::from_slice(&b).ok())
 }
 
 fn thresholds(cfg: &LearnConfig) -> String {

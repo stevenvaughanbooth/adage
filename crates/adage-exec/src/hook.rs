@@ -6,7 +6,7 @@
 //! reads the bound values back from the directive, and runs it through [`crate::run::execute`]
 //! (every gate: approval key equality, including the L-ref hash read again now; policy; a live
 //! sandbox; limits; typed projection). Each block is re-checked by the safety oracle
-//! (`adage_eval::safety::check_data_block`), the directive adapts ("That lookup has been run; its
+//! (`adage_safety::check_data_block`), the directive adapts ("That lookup has been run; its
 //! result is below."), and the block is placed beside it.
 //!
 //! E1 failures retain ordinary advice. E2 failures before application can return advice with a
@@ -33,9 +33,9 @@
 //! this event's `exec` record; three refused change sets revoke the approval.
 
 use adage_core::CommandTable;
-use adage_eval::safety::{check_data_block, DataType};
 use adage_hook::{Delivery, Extension, PreCall, SessionTexts, StopCall, StopGate, Turn};
 use adage_runtime::{render, Directive};
+use adage_safety::{check_data_block, DataType};
 use adage_tracks::{Origin, Step, Trigger};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
@@ -1422,6 +1422,10 @@ mod prediction_tests {
                 table: &table,
                 embed: None,
                 params: Default::default(),
+                policy: adage_runtime::Policy {
+                    exec_only: vec![("fixture/context".into(), "predict-check".into())],
+                    ..Default::default()
+                },
             };
             let mut state = SessionState { arm: Some(Arm::Treated), ..Default::default() };
             let batch = |tool: &str, input| Event::Batch {
@@ -1433,7 +1437,7 @@ mod prediction_tests {
                 batch("Edit", json!({"file_path": self.root.join(path)})),
             ];
             let mut dirs = vec![];
-            adage_runtime::with_exec_only(vec![("fixture/context".into(), "predict-check".into())], || {
+            {
                 for ev in &events {
                     dirs = adage_runtime::decide(&ctx, &mut state, ev).directives;
                 }
@@ -1441,7 +1445,7 @@ mod prediction_tests {
                     adage_runtime::decide(&ctx, &mut state, &events[2]).directives.is_empty(),
                     "repeat is not selected"
                 );
-            });
+            };
             assert!(state.obligations.is_empty(), "prediction creates no edit obligation");
             adage_store::state::update::<SessionState, _>(&self.paths.state("fixture-session"), |s| *s = state)
                 .unwrap();
@@ -2010,10 +2014,14 @@ mod prediction_tests {
             table: &table,
             embed: None,
             params: Default::default(),
+            policy: adage_runtime::Policy {
+                exec_only: vec![(ir.track.clone(), ir.route.id.clone())],
+                ..Default::default()
+            },
         };
         let mut state = SessionState { arm: Some(Arm::Treated), ..Default::default() };
         let mut last = None;
-        adage_runtime::with_exec_only(vec![(ir.track.clone(), ir.route.id.clone())], || {
+        {
             for (tool, input) in [
                 ("Edit", json!({"file_path":f.root.join("src/feature.rs")})),
                 ("Bash", json!({"command":"git diff --stat"})),
@@ -2028,7 +2036,7 @@ mod prediction_tests {
                     last = Some((event, decision.directives));
                 }
             }
-        });
+        };
         let (event, dirs) = last.expect("fresh related sequence predicts the learned command");
         assert!(state.obligations.is_empty());
         let delivery = PREFETCH.deliver(&f.turn(&event), &dirs);

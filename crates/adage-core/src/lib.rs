@@ -5,6 +5,7 @@ pub mod action;
 pub mod execution_equivalence;
 pub mod gitignore;
 pub mod gitobj;
+pub mod json;
 pub mod judge;
 pub mod keys;
 pub mod outcome;

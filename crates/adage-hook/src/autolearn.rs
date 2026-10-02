@@ -119,7 +119,7 @@ pub struct Queue {
 
 impl Queue {
     pub fn new(paths: &Paths, repo: &str) -> Queue {
-        Queue { dir: paths.learn_queue(), slug: adage_learn::slug(repo) }
+        Queue { dir: paths.learn_queue(), slug: adage_tracks::layout::slug(repo) }
     }
     fn file(&self, suffix: &str) -> PathBuf {
         self.dir.join(format!("{}{suffix}", self.slug))

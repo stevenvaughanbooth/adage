@@ -22,7 +22,8 @@
 //!   with exactly its route's slot values.
 //!
 //! This deliberately duplicates checks in `adage-tracks` and `adage-runtime`: it is the oracle
-//! the eval and the property tests hold them to.
+//! the eval and the property tests hold them to, and what `adage-exec` re-checks every data block
+//! with before delivering it. It depends on neither.
 
 use adage_core::repo;
 use adage_tracks::{ceiling, interlock, Contract, Route, Step, Strength, Trigger};

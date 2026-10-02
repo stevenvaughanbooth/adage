@@ -1,12 +1,12 @@
 //! Context state and symbolisation (Track G §7.1–§7.3).
 //!
 //! A session keeps its recent **alphabet symbols** ([`CtxState`]): the ids, in the repository's
-//! context alphabet ([`adage_tracks::context::CtxNet`]), of the context items its recent events
+//! context alphabet ([`crate::context::CtxNet`]), of the context items its recent events
 //! satisfied. An event is **symbolised** ([`Symbols`]) into those ids:
 //!
 //! | Event | Items it can satisfy |
 //! | --- | --- |
-//! | a successful command (a batch call) | `act`: its canonical key meets one of the item's keys ([`crate::meets`]); looked up by the key's identity (program and subcommand, `pattern::Shape`), exact keys first |
+//! | a successful command (a batch call) | `act`: its canonical key meets one of the item's keys ([`Symbols::meets`]); looked up by the key's identity (program and subcommand, `pattern::Shape`), exact keys first |
 //! | a failed command (a failure event) | `fail`: the same, and the output holds the signature |
 //! | an edit or write | `edit`: the repository-relative path matches the glob |
 //! | a prompt | `prompt_value`: a prompt token the learned value type accepts; `intent`: the family's test on the prompt's embedding |
@@ -24,10 +24,10 @@
 //! (`last_fail`), and the batch that follows does not count that call as a successful command.
 //! The record lapses as soon as another alphabet event arrives.
 
-use crate::Call;
+use crate::context::CtxNet;
+use crate::model::{CtxItem, CONTEXT_MAX_WITHIN};
 use adage_core::pattern::Shape;
-use adage_tracks::context::CtxNet;
-use adage_tracks::model::{CtxItem, CONTEXT_MAX_WITHIN};
+use adage_trace::Call;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -143,9 +143,26 @@ pub struct Symbols<'a> {
     edits: Vec<(glob::Pattern, u32)>,
     values: Vec<(&'a adage_core::vtype::Runs, u32)>,
     intents: Vec<(&'a str, &'a str, &'a [i16], f32, u32)>,
+    /// Keys meet only when equal (`adage_runtime::Policy::exact_keys`).
+    exact_keys: bool,
 }
 
 impl<'a> Symbols<'a> {
+    /// Symbolise with exact key matching (`adage_runtime::Policy::exact_keys`).
+    pub fn exact_keys(mut self, on: bool) -> Self {
+        self.exact_keys = on;
+        self
+    }
+
+    /// Whether an observed key meets an item's: by the command-pattern algebra, or exactly.
+    fn meets(&self, item: &str, observed: &str) -> bool {
+        if self.exact_keys {
+            item == observed
+        } else {
+            adage_core::pattern::meets(item, observed)
+        }
+    }
+
     pub fn new(net: &'a CtxNet) -> Symbols<'a> {
         let mut s = Symbols {
             net,
@@ -155,6 +172,7 @@ impl<'a> Symbols<'a> {
             edits: Vec::new(),
             values: Vec::new(),
             intents: Vec::new(),
+            exact_keys: false,
         };
         for (i, it) in net.alphabet.iter().enumerate() {
             let id = i as u32;
@@ -190,7 +208,7 @@ impl<'a> Symbols<'a> {
         let mut out: Vec<u32> = self.exact.get(key).cloned().unwrap_or_default();
         if let Some(cands) = self.acts.get(&bucket(key)) {
             for (k, id) in cands {
-                if !out.contains(id) && crate::meets(k, key) {
+                if !out.contains(id) && self.meets(k, key) {
                     out.push(*id);
                 }
             }
@@ -205,7 +223,7 @@ impl<'a> Symbols<'a> {
         let mut out = Vec::new();
         if let Some(cands) = self.fails.get(&bucket(key)) {
             for (k, sig, id) in cands {
-                if crate::meets(k, key) && call.output.contains(sig) {
+                if self.meets(k, key) && call.output.contains(sig) {
                     out.push(*id);
                 }
             }

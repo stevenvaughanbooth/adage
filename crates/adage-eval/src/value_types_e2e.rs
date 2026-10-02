@@ -121,6 +121,7 @@ pub fn run(
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let check_unsafe = |prompt: &str, got: &Option<String>, out: &mut EndToEnd| {
         if let Some(v) = got {

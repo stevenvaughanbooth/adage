@@ -85,6 +85,7 @@ fn assert_routine(index: Index, expected: &str) {
         table: &table,
         embed: None,
         params: Default::default(),
+        policy: Default::default(),
     };
     let edit = adage_runtime::Event::Batch {
         calls: vec![adage_runtime::Call {
@@ -97,9 +98,14 @@ fn assert_routine(index: Index, expected: &str) {
     let mut state = adage_runtime::SessionState::default();
     adage_runtime::decide(&ctx, &mut state, &edit);
     assert!(state.obligations.is_empty(), "without execution admission the candidate creates no E0 obligation");
-    adage_runtime::with_exec_only(vec![(route.track.clone(), route.route.id.clone())], || {
-        adage_runtime::decide(&ctx, &mut state, &edit);
-    });
+    let admitted = adage_runtime::Ctx {
+        policy: adage_runtime::Policy {
+            exec_only: vec![(route.track.clone(), route.route.id.clone())],
+            ..Default::default()
+        },
+        ..ctx.clone()
+    };
+    adage_runtime::decide(&admitted, &mut state, &edit);
     assert!(
         state.obligations.iter().any(|o| o.route == route.route.id && o.fresh),
         "the existing execution admission arms the learned action"

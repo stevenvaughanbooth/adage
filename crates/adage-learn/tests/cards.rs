@@ -199,6 +199,7 @@ fn a_family_with_a_passing_trace_gets_a_card_delivered_once_on_its_own_kind_of_t
         table: &table,
         embed: Some(&embed),
         params: Default::default(),
+        policy: Default::default(),
     };
     let said = |d: &adage_runtime::Decision| d.directives.iter().any(|x| x.route == r.id);
     // A new task of the family, phrased anew: the card, once.

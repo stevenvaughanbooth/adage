@@ -278,6 +278,7 @@ pub struct Decision {
 /// only at a prompt decision point, and only when the repository has intent routes.
 pub type Embed<'a> = &'a dyn Fn(&str) -> Option<(String, Vec<f32>)>;
 
+#[derive(Clone)]
 pub struct Ctx<'a> {
     pub index: &'a Index,
     pub repo: String,
@@ -287,51 +288,77 @@ pub struct Ctx<'a> {
     /// Limits: the follow window, directives per session and per decision, stop requests,
     /// history. The hook always uses [`RuntimeParams::default`]; the offline eval can tune them.
     pub params: RuntimeParams,
+    /// What this deployment of the decision allows and knows beyond the index: everything that
+    /// used to be set around `decide` instead of passed to it.
+    pub policy: Policy,
 }
 
-thread_local! {
-    static EXACT_KEYS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-    static EXEC_ONLY: std::cell::RefCell<Vec<(String, String)>> = const { std::cell::RefCell::new(Vec::new()) };
-    static FOLLOW_WEIGHTS: std::cell::RefCell<Option<adage_core::judge::Weights>> = const { std::cell::RefCell::new(None) };
-    static CARD_CHECKS: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
-    static CARD_ORIENTATION: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+/// The decision's switches and side inputs. Every field has the hook's default, so a `Ctx` built
+/// with `Policy::default()` decides exactly as the plain `adage hook` does.
+#[derive(Debug, Clone)]
+pub struct Policy {
+    /// Procedure cards are oriented: no exemplar; where the card's files stand in the checkout now
+    /// ([`orient::block`]). `false` renders cards as they were before (the exemplar of the last
+    /// edit, no orientation): an evaluation knob for the card's earlier form.
+    pub card_orientation: bool,
+    /// Procedure cards name the test command of the repository's execution-certified learned
+    /// verification ([`render::card_checks_line`]).
+    pub card_checks: bool,
+    /// The repository's learned follow-judge weights (`adage_core::judge`, fitted at learn time from
+    /// its sessions): a follow is then also judged by the learned judge, on the raw command the
+    /// agent ran. Without them only the structural and action judges apply.
+    pub follow_weights: Option<adage_core::judge::Weights>,
+    /// Exec-only routes in play, `(track, route id)`: reflexes that run a vendored script. Only
+    /// `adage-exec hook` names any, for the ones approved on this machine, because it carries them
+    /// out itself (Track C §1.7); everywhere else they are never directed.
+    pub exec_only: Vec<(String, String)>,
+    /// Compatibility: decide with the matching the hooks used before the command-pattern algebra,
+    /// where a trigger, an obligation or a follow judgement needed the observed key to equal the
+    /// directed one exactly. Only for replaying decisions that hooks of that time recorded (the
+    /// eval's fidelity check, `adage_eval::fidelity`).
+    pub exact_keys: bool,
 }
 
-/// Run `f` with procedure cards oriented (`true`, the default: no exemplar; where the card's files
-/// stand in the checkout now, [`orient::block`]) or as cards were before (`false`: the exemplar of
-/// the last edit, no orientation). The second is an evaluation knob for the card's earlier form.
-pub fn with_card_orientation<R>(on: bool, f: impl FnOnce() -> R) -> R {
-    struct Reset(bool);
-    impl Drop for Reset {
-        fn drop(&mut self) {
-            CARD_ORIENTATION.with(|c| c.set(self.0));
+impl Default for Policy {
+    fn default() -> Self {
+        Policy {
+            card_orientation: true,
+            card_checks: true,
+            follow_weights: None,
+            exec_only: Vec::new(),
+            exact_keys: false,
         }
     }
-    let _reset = Reset(CARD_ORIENTATION.with(|c| c.replace(on)));
-    f()
 }
 
-/// A card route's text: oriented ([`with_card_orientation`]) or as before; any other route's text.
+impl Policy {
+    /// Whether an observed key follows a directed one ([`pattern::follows`]): the follow judgement.
+    fn follows(&self, directed: &str, observed: &str) -> bool {
+        if self.exact_keys {
+            directed == observed
+        } else {
+            pattern::follows(directed, observed)
+        }
+    }
+
+    /// Whether an observed key meets a directed one ([`pattern::meets`]).
+    fn meets(&self, directed: &str, observed: &str) -> bool {
+        if self.exact_keys {
+            directed == observed
+        } else {
+            pattern::meets(directed, observed)
+        }
+    }
+}
+
+/// A card route's text: oriented ([`Policy::card_orientation`]) or as before; any other route's text.
 fn card_text(ctx: &Ctx<'_>, route: &adage_tracks::Route) -> Option<String> {
     match &route.step {
-        Step::Card { card } if CARD_ORIENTATION.with(|c| c.get()) => {
+        Step::Card { card } if ctx.policy.card_orientation => {
             render::oriented_card_text(route, orient::block(ctx.root, card).as_deref())
         }
         _ => render::route_text(route, &[]),
     }
-}
-
-/// Run `f` with procedure cards naming (`true`, the default) or leaving out the test command of the
-/// repository's execution-certified learned verification ([`render::card_checks_line`]).
-pub fn with_card_checks<R>(on: bool, f: impl FnOnce() -> R) -> R {
-    struct Reset(bool);
-    impl Drop for Reset {
-        fn drop(&mut self) {
-            CARD_CHECKS.with(|c| c.set(self.0));
-        }
-    }
-    let _reset = Reset(CARD_CHECKS.with(|c| c.replace(on)));
-    f()
 }
 
 /// The commands of this repository's learned verifications with execution evidence, most
@@ -350,73 +377,18 @@ fn certified_checks<'a>(routes: &[&'a IndexedRoute]) -> Vec<&'a str> {
     v.into_iter().map(|(c, _)| c).collect()
 }
 
-/// Run `f` with the repository's learned follow-judge weights (`adage_core::judge`, fitted at
-/// learn time from its sessions): a follow is then also judged by the learned judge, on the raw
-/// command the agent ran. The hook passes them; without them only the structural and action
-/// judges apply.
-pub fn with_follow_weights<T>(w: Option<adage_core::judge::Weights>, f: impl FnOnce() -> T) -> T {
-    struct Reset(Option<adage_core::judge::Weights>);
-    impl Drop for Reset {
-        fn drop(&mut self) {
-            let prev = self.0.take();
-            FOLLOW_WEIGHTS.with(|c| *c.borrow_mut() = prev);
-        }
-    }
-    let _reset = Reset(FOLLOW_WEIGHTS.with(|c| c.replace(w)));
-    f()
-}
-
-/// The learned follow judge ([`with_follow_weights`]) over a call's raw command line.
-fn follows_learned(directed_key: &str, call: &Call) -> bool {
-    if EXACT_KEYS.get() {
+/// The learned follow judge ([`Policy::follow_weights`]) over a call's raw command line.
+fn follows_learned(policy: &Policy, directed_key: &str, call: &Call) -> bool {
+    if policy.exact_keys {
         return false;
     }
     let (Some(d), Some(o)) = (directed_key.strip_prefix("exec "), call_command(call)) else { return false };
-    FOLLOW_WEIGHTS.with(|c| c.borrow().as_ref().is_some_and(|w| w.follows(d, o)))
-}
-
-/// Run `f` deciding with these exec-only routes (`(track, route id)`: reflexes that run a vendored
-/// script) in play. Only `adage-exec hook` does, for the ones approved on this machine, because it
-/// carries them out itself (Track C §1.7); everywhere else they are never directed. Scoped to
-/// this thread.
-pub fn with_exec_only<R>(allowed: Vec<(String, String)>, f: impl FnOnce() -> R) -> R {
-    struct Reset(Vec<(String, String)>);
-    impl Drop for Reset {
-        fn drop(&mut self) {
-            EXEC_ONLY.with(|e| *e.borrow_mut() = std::mem::take(&mut self.0));
-        }
-    }
-    let _reset = Reset(EXEC_ONLY.with(|e| std::mem::replace(&mut *e.borrow_mut(), allowed)));
-    f()
+    policy.follow_weights.as_ref().is_some_and(|w| w.follows(d, o))
 }
 
 /// Whether an index entry may be directed here: not exec-only, or an exec-only route in play.
-fn in_play(r: &IndexedRoute) -> bool {
-    !r.exec_only() || EXEC_ONLY.with(|e| e.borrow().iter().any(|(t, id)| t == &r.track && id == &r.route.id))
-}
-
-/// Compatibility: run `f` deciding with the matching the hooks used before the command-pattern
-/// algebra, where a trigger, an obligation or a follow judgement needed the observed key to equal
-/// the directed one exactly. Only for replaying decisions that hooks of that time recorded (the
-/// eval's fidelity check, `adage_eval::fidelity`); nothing else may use it. Scoped to this thread.
-pub fn with_exact_key_matching<R>(f: impl FnOnce() -> R) -> R {
-    struct Reset(bool);
-    impl Drop for Reset {
-        fn drop(&mut self) {
-            EXACT_KEYS.set(self.0);
-        }
-    }
-    let _reset = Reset(EXACT_KEYS.replace(true));
-    f()
-}
-
-/// Whether an observed key follows a directed one ([`pattern::follows`]): the follow judgement.
-fn follows(directed: &str, observed: &str) -> bool {
-    if EXACT_KEYS.get() {
-        directed == observed
-    } else {
-        pattern::follows(directed, observed)
-    }
+fn in_play(policy: &Policy, r: &IndexedRoute) -> bool {
+    !r.exec_only() || policy.exec_only.iter().any(|(t, id)| t == &r.track && id == &r.route.id)
 }
 
 /// The argv of each command a call ran, in order (an activation, the run, a filter), for the
@@ -434,8 +406,8 @@ fn exec_segments(keyed: &[(String, adage_core::Normalized)]) -> Vec<Vec<String>>
 /// Whether a call as a whole follows a directed test run ([`pattern::follows_action`]: the
 /// action classifier reads `source .venv/bin/activate && python -m pytest …` as one test run in
 /// the project's environment, which no single key shows).
-fn follows_call(directed: &str, segs: &[Vec<String>]) -> bool {
-    if EXACT_KEYS.get() || segs.is_empty() {
+fn follows_call(policy: &Policy, directed: &str, segs: &[Vec<String>]) -> bool {
+    if policy.exact_keys || segs.is_empty() {
         return false;
     }
     let r: Vec<&[String]> = segs.iter().map(Vec::as_slice).collect();
@@ -466,7 +438,7 @@ fn fire_after_failure(
 ) {
     let hits = |ir: &&&IndexedRoute| match &ir.route.trigger {
         Trigger::AfterFailure { command, signature } => {
-            failure_matches(&ir.route, command, key) && output.contains(signature.as_str())
+            failure_matches(&ctx.policy, &ir.route, command, key) && output.contains(signature.as_str())
         }
         _ => false,
     };
@@ -491,15 +463,6 @@ fn fire_after_failure(
             }
             out.push(directive(ir, t));
         }
-    }
-}
-
-/// Whether an observed key meets a directed one ([`pattern::meets`]).
-fn meets(directed: &str, observed: &str) -> bool {
-    if EXACT_KEYS.get() {
-        directed == observed
-    } else {
-        pattern::meets(directed, observed)
     }
 }
 
@@ -530,12 +493,12 @@ fn call_keys(call: &Call, ctx: &Ctx) -> Vec<(String, adage_core::Normalized)> {
 pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
     let mut d = Decision::default();
     // Exec-only routes (vendored scripts) are carried out by adage-exec, never directed on their
-    // own ([`with_exec_only`]).
-    let routes: Vec<&IndexedRoute> = ctx.index.for_repo(&ctx.repo).filter(|r| in_play(r)).collect();
+    // own ([`Policy::exec_only`]).
+    let routes: Vec<&IndexedRoute> = ctx.index.for_repo(&ctx.repo).filter(|r| in_play(&ctx.policy, r)).collect();
     // Context triggers (Track G §7): the repository's alphabet and net, and a symboliser for it,
     // only when it has any.
     let net = ctx.index.contexts(&ctx.repo);
-    let syms = (!net.is_empty()).then(|| context::Symbols::new(&net));
+    let syms = (!net.is_empty()).then(|| context::Symbols::new(&net).exact_keys(ctx.policy.exact_keys));
     let ctx_before = syms.as_ref().map(|_| st.ctx.clone());
     let mut out: Vec<Directive> = Vec::new();
     let emit_ok = |st: &SessionState, out: &Vec<Directive>, id: &str| {
@@ -614,7 +577,7 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                             let all: Vec<&IndexedRoute> = ctx.index.for_repo(&ctx.repo).collect();
                             let checks = certified_checks(&all);
                             if let Some(line) =
-                                CARD_CHECKS.with(|c| c.get()).then(|| render::card_checks_line(&checks)).flatten()
+                                ctx.policy.card_checks.then(|| render::card_checks_line(&checks)).flatten()
                             {
                                 t.push('\n');
                                 t.push_str(&line);
@@ -689,9 +652,9 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                     // added to narrow it ([`follows`]). Followed and failed without the runner
                     // reporting tests (or, piped, printing an environment failure) is a misfire.
                     st.pending.retain(|p| {
-                        if follows(&p.expect_key, &key)
-                            || follows_call(&p.expect_key, &segs)
-                            || follows_learned(&p.expect_key, call)
+                        if ctx.policy.follows(&p.expect_key, &key)
+                            || follows_call(&ctx.policy, &p.expect_key, &segs)
+                            || follows_learned(&ctx.policy, &p.expect_key, call)
                         {
                             let route = p.route.clone();
                             d.judgements.push(if misfire {
@@ -710,7 +673,7 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                         fire_after_failure(ctx, &routes, st, &mut out, &key, &call.output, &emit_ok);
                     }
                     // Obligations met.
-                    for o in st.obligations.iter_mut().filter(|o| !o.met && meets(&o.expect_key, &key)) {
+                    for o in st.obligations.iter_mut().filter(|o| !o.met && ctx.policy.meets(&o.expect_key, &key)) {
                         o.met = true;
                         d.judgements.push(Judgement::ObligationMet { route: o.route.clone() });
                     }
@@ -892,7 +855,7 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                     if !call.failed {
                         for ir in routes.iter() {
                             if let Trigger::AfterCommand { command } = &ir.route.trigger {
-                                if meets(command, &key) && emit_ok(st, &out, &ir.route.id) {
+                                if ctx.policy.meets(command, &key) && emit_ok(st, &out, &ir.route.id) {
                                     let text = match &ir.route.step {
                                         Step::Advise { .. } => render::route_text(&ir.route, &[]),
                                         Step::Sequence { commands } => {
@@ -975,9 +938,9 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                 // it is a test run that ran and reported failing tests (followed; the tests
                 // failing is the task, not the directive).
                 st.pending.retain(|p| {
-                    if follows(&p.expect_key, &key)
-                        || follows_call(&p.expect_key, &segs)
-                        || follows_learned(&p.expect_key, call)
+                    if ctx.policy.follows(&p.expect_key, &key)
+                        || follows_call(&ctx.policy, &p.expect_key, &segs)
+                        || follows_learned(&ctx.policy, &p.expect_key, call)
                     {
                         let route = p.route.clone();
                         d.judgements.push(if outcome::misfired(&call.output) {
@@ -1196,11 +1159,11 @@ fn push_history_capped(st: &mut SessionState, key: String, cap: usize) {
 /// binds the bare spellings agents reach for, and what fails is the runner, not the arguments. The
 /// same holds for a learned route whose trigger names a runner with no operands (the value model's
 /// `exec python -m pytest`, `adage_learn::value`).
-fn failure_matches(r: &Route, command: &str, observed: &str) -> bool {
+fn failure_matches(policy: &Policy, r: &Route, command: &str, observed: &str) -> bool {
     let bare = || pattern::Shape::of_key(command).is_some_and(|s| s.positionals.is_empty());
-    meets(command, observed)
+    policy.meets(command, observed)
         || ((r.is_instinct() || bare())
-            && !EXACT_KEYS.get()
+            && !policy.exact_keys
             && command.strip_prefix("exec ").is_some_and(|runner| pattern::runs_avoided(runner, observed)))
 }
 
@@ -1421,15 +1384,7 @@ fn bind_result_route(r: &Route, output: &str, root: &Path) -> Option<String> {
     render::route_text(r, &[(slot.clone(), files.join(", "))])
 }
 
-/// The first JSON object in a tool's text output.
-pub fn extract_json(s: &str) -> Option<Value> {
-    let start = s.find('{')?;
-    let end = s.rfind('}')?;
-    if end <= start {
-        return None;
-    }
-    serde_json::from_str(&s[start..=end]).ok()
-}
+pub use adage_core::json::extract_json;
 
 pub fn span_kind_label(k: SpanKind) -> &'static str {
     match k {

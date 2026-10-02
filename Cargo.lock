@@ -64,6 +64,7 @@ dependencies = [
  "adage-intent",
  "adage-learn",
  "adage-runtime",
+ "adage-safety",
  "adage-store",
  "adage-tracks",
  "anyhow",
@@ -83,11 +84,11 @@ name = "adage-exec"
 version = "0.1.0"
 dependencies = [
  "adage-core",
- "adage-eval",
  "adage-hook",
  "adage-learn",
  "adage-pack",
  "adage-runtime",
+ "adage-safety",
  "adage-store",
  "adage-tracks",
  "anyhow",
@@ -124,8 +125,9 @@ name = "adage-hook"
 version = "0.1.0"
 dependencies = [
  "adage-core",
+ "adage-ingest",
  "adage-intent",
- "adage-learn",
+ "adage-pack",
  "adage-runtime",
  "adage-store",
  "adage-tracks",
@@ -242,6 +244,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "adage-safety"
+version = "0.1.0"
+dependencies = [
+ "adage-core",
+ "adage-runtime",
+ "adage-tracks",
+ "once_cell",
+ "regex",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "adage-sign"
 version = "0.1.0"
 dependencies = [
@@ -295,6 +311,8 @@ name = "adage-tracks"
 version = "0.1.0"
 dependencies = [
  "adage-core",
+ "adage-intent",
+ "adage-trace",
  "anyhow",
  "glob",
  "regex",
