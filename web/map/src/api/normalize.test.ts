@@ -14,7 +14,8 @@ const route = (o: Record<string, unknown>) => ({
   authored: false,
   trigger: { kind: "prompt", label: "a prompt" },
   step: { kind: "run", label: "make test" },
-  directive: "",
+  origin: { kind: "learned", label: null },
+  directive: "run make test",
   ...o,
 });
 
@@ -43,6 +44,7 @@ describe("reading the graph JSON", () => {
     expect(g.sessions.control).toBe(1);
     expect(g.events[0]!.arm).toBe("control");
     expect(g.events[0]!.judged).toEqual([["ignored", "r"]]);
+    expect([r.origin, r.directive]).toEqual([{ kind: "learned", label: null }, "run make test"]);
   });
 
   it("reads what older binaries wrote", () => {
@@ -60,7 +62,7 @@ describe("reading the graph JSON", () => {
           live: { emitted: 2, would_have: 1, followed: 1, derailed: 2, obligation_met: 0, holdout: { unaided: 1, not_reached: 3, obligation_met: 0 }, sessions: 3 },
           arms: { treated: arm(2), holdout: arm(1) },
         }),
-        route({ id: "d", aspect: "yellow", state: "demoted", evidence: {}, live: {}, arms: {} }),
+        route({ id: "d", aspect: "yellow", state: "demoted", evidence: {}, live: {}, arms: {}, instinct: true, origin: "instinct U1 (from Makefile)", directive: undefined }),
       ],
       observed: [],
       events: [
@@ -73,6 +75,8 @@ describe("reading the graph JSON", () => {
     expect([r!.live.ignored, r!.live.control.not_reached, r!.arms.control?.followed]).toEqual([2, 3, 1]);
     // There is no weakened state: a demoted route was still delivered.
     expect([d!.strength, d!.state]).toEqual(["prime", "firm"]);
+    // The origin was a label string, and a missing directive reads as none.
+    expect([d!.origin, d!.directive]).toEqual([{ kind: "instinct", label: "instinct U1 (from Makefile)" }, null]);
     expect(g.sessions.control).toBe(1);
     expect(g.events[0]!.arm).toBe("control");
     expect(g.events[0]!.judged).toEqual([

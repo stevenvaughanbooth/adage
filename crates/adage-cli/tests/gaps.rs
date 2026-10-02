@@ -191,8 +191,10 @@ fn track(version: &str, lookup: &str, extra: bool) -> Track {
 
 fn reasons(q: &[Value], route: &str) -> Vec<String> {
     q.iter()
-        .filter(|i| i["route"] == route)
-        .flat_map(|i| i["reasons"].as_array().unwrap().iter().map(|r| r["kind"].as_str().unwrap().to_string()))
+        .filter(|i| i["id"] == route)
+        .flat_map(|i| {
+            i["review"]["reasons"].as_array().unwrap().iter().map(|r| r["kind"].as_str().unwrap().to_string())
+        })
         .collect()
 }
 
@@ -240,12 +242,12 @@ fn reimport_keeps_decisions_and_proposes_changes_to_pinned_routes() {
         reasons(&q, "check").is_empty() && reasons(&q, "dead-unittest").is_empty(),
         "decided routes stay decided: {q:?}"
     );
-    let item = q.iter().find(|i| i["route"] == "lookup").unwrap();
+    let item = q.iter().find(|i| i["id"] == "lookup").unwrap();
     let diff = item["proposal"]["diff"].as_array().unwrap();
     let step = diff.iter().find(|d| d["field"] == "step").expect("the step differs");
     assert_eq!(step["pinned"], "run `./scripts/wi-lookup {item} --json`");
     assert_eq!(step["proposed"], "run `./scripts/wi-lookup {item}`");
-    assert!(item["decisions"].as_array().unwrap().iter().any(|d| d == "dismiss"));
+    assert!(item["review"]["verbs"].as_array().unwrap().iter().any(|d| d == "dismiss"));
     let listing = w.ok("recipient", &["review"]);
     assert!(
         listing.contains("why         proposed:") && listing.contains("- step") && listing.contains("+ step"),

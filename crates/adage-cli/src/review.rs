@@ -38,6 +38,7 @@
 
 use crate::share::describe_step;
 use crate::words;
+use adage_app::reflex::{Decisions, Reflex};
 pub(crate) use adage_app::review::{
     ceiling_str, first_hand, needs_person, origin_label, preview, waiting_counts, waits, Installed, Standing,
     LISTED_ONLY,
@@ -46,7 +47,6 @@ use adage_app::review::{judgements, queue, verbs, Already, Outcome, QueueItem as
 use adage_store::Paths;
 use adage_term::out::KEY_WIDTH;
 use adage_term::{Glyph, Line, Out, Role};
-use adage_tracks::review::strength_str;
 use adage_tracks::{Index, Step, Strength, Trigger};
 use anyhow::{bail, Result};
 use serde_json::{json, Value};
@@ -67,10 +67,6 @@ pub fn review(args: &[String], paths: &Paths) -> Result<()> {
     }
 }
 
-fn lower(x: impl std::fmt::Debug) -> String {
-    format!("{x:?}").to_lowercase()
-}
-
 fn list(paths: &Paths, as_json: bool, verbose: bool) -> Result<()> {
     let all = discover(&paths.tracks())?;
     let judged = judgements(paths);
@@ -85,45 +81,26 @@ fn list(paths: &Paths, as_json: bool, verbose: bool) -> Result<()> {
     let lapsed = crate::exec::lapsed_here(paths, here.as_deref(), &store);
     let revoked = store.revoked;
     if as_json {
+        let live = adage_app::graph::live(paths);
         let rows: Vec<Value> = items
             .iter()
             .map(|it| {
-                let (t, r, e) = (&it.inst.track, it.route, &it.route.evidence);
-                let (directive, examples) = preview(t, r);
-                json!({
-                    "track": it.inst.reference,
-                    "name": t.manifest.track.name,
-                    "version": t.manifest.track.version,
-                    "repo": t.manifest.scope.repo,
-                    "imported": it.inst.imported,
-                    "origin": r.evidence.origin.clone().map(|o| serde_json::to_value(o).unwrap_or_default()).unwrap_or_else(|| json!({ "kind": if it.inst.imported { "imported" } else { "learned" } })),
-                    "route": r.id,
-                    "reasons": it.reasons.iter().map(|(k, d)| json!({ "kind": k, "detail": d })).collect::<Vec<_>>(),
-                    "waits": waits(&it.reasons),
-                    "trigger": words::trigger(&r.trigger),
-                    "strength": strength_str(r.strength),
-                    "execution_only": e.execution.is_some(),
-                    "next": if e.execution.is_some() { Some(format!("adage review delegate {} {} --level e2", it.inst.reference, r.id)) } else { None },
-                    "ceiling": ceiling_str(r),
-                    "effect": r.effect.as_str(),
-                    "state": lower(r.state),
-                    "authored": r.authored,
-                    "decisions": verbs(r, it.proposal.is_some()),
-                    "step": describe_step(&r.step),
-                    "evidence": { "support": e.support, "opportunities": e.opportunities, "days": e.days, "rate": e.rate, "lower_bound": e.lower_bound, "execution": e.execution },
-                    "runtime": { "followed": it.followed, "ignored": it.ignored },
-                    "why": adage_tracks::why::load(&it.inst.dir).remove(&r.id),
-                    "directive": if e.execution.is_some() { Value::Null } else { json!(directive) },
-                    "example_values": examples,
-                    "last_review": it.inst.reviews.routes.get(&r.id).map(|v| json!({ "decision": v.decision.as_str(), "on": v.on, "by": v.by })),
-                    "proposal": it.proposal.map(|p| {
-                        let diff: Vec<Value> = crate::proposal::diff(r, &p.route)
-                            .into_iter()
-                            .map(|(field, pinned, proposed)| json!({ "field": field, "pinned": pinned, "proposed": proposed }))
-                            .collect();
-                        json!({ "on": p.on, "reason": p.reason, "diff": diff, "directive": preview(t, &crate::proposal::applied(p)).0 })
-                    }),
-                })
+                let (t, r) = (&it.inst.track, it.route);
+                let whys = adage_tracks::why::load(&it.inst.dir);
+                let mut row = serde_json::to_value(Reflex::of(it.inst, r, whys.get(&r.id))).unwrap_or_default();
+                row["review"] = json!(Decisions::of(&it.inst.reference, r, verbs(r, it.proposal.is_some()), &it.reasons));
+                row["waits"] = json!(waits(&it.reasons));
+                row["live"] = json!(live.get(&(t.manifest.scope.repo.clone(), r.id.clone())).cloned().unwrap_or_default());
+                row["example_values"] = json!(preview(t, r).1);
+                row["last_review"] = json!(it.inst.reviews.routes.get(&r.id).map(|v| json!({ "decision": v.decision.as_str(), "on": v.on, "by": v.by })));
+                row["proposal"] = json!(it.proposal.map(|p| {
+                    let diff: Vec<Value> = crate::proposal::diff(r, &p.route)
+                        .into_iter()
+                        .map(|(field, pinned, proposed)| json!({ "field": field, "pinned": pinned, "proposed": proposed }))
+                        .collect();
+                    json!({ "on": p.on, "reason": p.reason, "diff": diff, "directive": preview(t, &crate::proposal::applied(p)).0 })
+                }));
+                row
             })
             .collect();
         let attestations: Vec<Value> = attested

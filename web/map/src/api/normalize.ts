@@ -82,6 +82,13 @@ function live(v: unknown): Live {
   };
 }
 
+/** Where a reflex came from. Older binaries sent a label string (or nothing) instead of the object. */
+function normalizeOrigin(o: unknown, imported: boolean, instinct: boolean): Route["origin"] {
+  if (o && typeof o === "object") return o as Route["origin"];
+  const kind = instinct ? "instinct" : imported ? "imported" : "learned";
+  return { kind, label: typeof o === "string" ? o : null };
+}
+
 export function normalizeRoute(raw: unknown): Route {
   const r = obj(raw) as Loose & Partial<Route>;
   const ev = obj(r.evidence);
@@ -99,6 +106,8 @@ export function normalizeRoute(raw: unknown): Route {
       : state === "nascent" && (Boolean(uplift?.gated) || Boolean(review?.reasons.some((x) => x.kind === "quiet")));
   return {
     ...(r as Route),
+    origin: normalizeOrigin(r.origin, Boolean(r.imported), Boolean(r.instinct)),
+    directive: (r.directive ?? null) as string | null,
     review,
     quiet,
     obligation: (r.obligation ?? null) as string | null,

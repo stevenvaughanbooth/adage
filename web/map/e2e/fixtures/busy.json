@@ -20,7 +20,10 @@
    "in_index": true,
    "execution_only": false,
    "instinct": false,
-   "origin": null,
+   "origin": {
+    "kind": "learned",
+    "label": null
+   },
    "review": {
     "verbs": [
      "approve",
@@ -28,7 +31,8 @@
      "weaken",
      "pin"
     ],
-    "reasons": []
+    "reasons": [],
+    "next": null
    },
    "strength": "fire",
    "ceiling": "fire",
@@ -101,7 +105,10 @@
    "in_index": true,
    "execution_only": false,
    "instinct": false,
-   "origin": null,
+   "origin": {
+    "kind": "learned",
+    "label": null
+   },
    "review": {
     "verbs": [
      "approve",
@@ -109,7 +116,8 @@
      "weaken",
      "pin"
     ],
-    "reasons": []
+    "reasons": [],
+    "next": null
    },
    "strength": "fire",
    "ceiling": "fire",
@@ -183,14 +191,18 @@
    "in_index": true,
    "execution_only": false,
    "instinct": false,
-   "origin": null,
+   "origin": {
+    "kind": "learned",
+    "label": null
+   },
    "review": {
     "verbs": [
      "approve",
      "extinguish",
      "pin"
     ],
-    "reasons": []
+    "reasons": [],
+    "next": null
    },
    "strength": "inhibit",
    "ceiling": "inhibit",
@@ -265,7 +277,10 @@
    "in_index": true,
    "execution_only": false,
    "instinct": false,
-   "origin": null,
+   "origin": {
+    "kind": "learned",
+    "label": null
+   },
    "review": {
     "verbs": [
      "approve",
@@ -273,7 +288,8 @@
      "strengthen",
      "pin"
     ],
-    "reasons": []
+    "reasons": [],
+    "next": null
    },
    "strength": "prime",
    "ceiling": "fire",
@@ -346,14 +362,22 @@
    "in_index": true,
    "execution_only": false,
    "instinct": true,
-   "origin": "instinct U1 (from Makefile)",
+   "origin": {
+    "kind": "instinct",
+    "label": "instinct U1 (from Makefile)",
+    "pack": "adage/regenerate",
+    "instinct": "U1",
+    "declared": "Makefile",
+    "version": "0.1.0"
+   },
    "review": {
     "verbs": [
      "approve",
      "extinguish",
      "pin"
     ],
-    "reasons": []
+    "reasons": [],
+    "next": null
    },
    "strength": "prime",
    "ceiling": "prime",
@@ -426,7 +450,10 @@
    "in_index": false,
    "execution_only": false,
    "instinct": false,
-   "origin": null,
+   "origin": {
+    "kind": "learned",
+    "label": null
+   },
    "review": {
     "verbs": [
      "approve",
@@ -438,7 +465,8 @@
       "kind": "nascent",
       "why": "an environment step, nascent until a person approves it"
      }
-    ]
+    ],
+    "next": null
    },
    "strength": "prime",
    "ceiling": "fire",
@@ -511,7 +539,10 @@
    "in_index": false,
    "execution_only": false,
    "instinct": false,
-   "origin": null,
+   "origin": {
+    "kind": "learned",
+    "label": null
+   },
    "review": {
     "verbs": [
      "approve",
@@ -523,7 +554,8 @@
       "kind": "new",
       "why": "learned by `adage condition` and never reviewed"
      }
-    ]
+    ],
+    "next": null
    },
    "strength": "prime",
    "ceiling": "fire",
@@ -597,14 +629,18 @@
    "in_index": true,
    "execution_only": false,
    "instinct": false,
-   "origin": null,
+   "origin": {
+    "kind": "imported",
+    "label": null
+   },
    "review": {
     "verbs": [
      "approve",
      "extinguish",
      "pin"
     ],
-    "reasons": []
+    "reasons": [],
+    "next": null
    },
    "strength": "prime",
    "ceiling": "inhibit",
@@ -679,7 +715,10 @@
    "in_index": false,
    "execution_only": false,
    "instinct": false,
-   "origin": null,
+   "origin": {
+    "kind": "learned",
+    "label": null
+   },
    "review": {
     "verbs": [
      "approve",
@@ -691,7 +730,8 @@
       "kind": "quiet",
       "why": "uplift +0.04 (lower bound -0.03): followed 0.95 when told, 0.91 unaided; 9 of 10 traces did it unaided. Quiet: agents already do this, so delivering it changes little; `approve` delivers it anyway"
      }
-    ]
+    ],
+    "next": null
    },
    "strength": "prime",
    "ceiling": "fire",
@@ -778,14 +818,18 @@
    "in_index": true,
    "execution_only": false,
    "instinct": false,
-   "origin": null,
+   "origin": {
+    "kind": "learned",
+    "label": null
+   },
    "review": {
     "verbs": [
      "approve",
      "extinguish",
      "pin"
     ],
-    "reasons": []
+    "reasons": [],
+    "next": null
    },
    "strength": "prime",
    "ceiling": "prime",

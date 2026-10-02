@@ -649,29 +649,20 @@ fn status(paths: &Paths, json: bool) -> Result<()> {
     let instinct =
         |t: &adage_tracks::Track, r: &adage_tracks::Route| r.is_instinct() || adage_tracks::index::is_instinct_track(t);
     if json {
-        let tracks: Vec<serde_json::Value> = tracks
+        // Every reflex as every surface shows it (`adage_app::reflex::Reflex`), grouped by track.
+        let installed = crate::review::discover(&paths.tracks())?;
+        let tracks: Vec<serde_json::Value> = installed
             .iter()
-            .enumerate()
-            .map(|(i, t)| {
+            .map(|inst| {
+                let t = &inst.track;
+                let whys = adage_tracks::why::load(&inst.dir);
                 serde_json::json!({
                     "track": t.manifest.track.name,
+                    "reference": inst.reference,
                     "version": t.manifest.track.version,
                     "repo": t.manifest.scope.repo,
-                    "origin": origin(t),
-                    "reflexes": t.routes.iter().map(|r| serde_json::json!({
-                        "id": r.id,
-                        "kind": if instinct(t, r) { "instinct" } else { "reflex" },
-                        "strength": r.strength,
-                        "lifecycle": words::lifecycle(r.state),
-                        "support": r.evidence.support,
-                        "opportunities": r.evidence.opportunities,
-                        "rate": r.evidence.rate,
-                        "lower_bound": r.evidence.lower_bound,
-                        "effect": r.effect.as_str(),
-                        "evidence": evidence::describe(r, whys[i].get(&r.id)),
-                        "uplift": r.evidence.uplift.as_ref().map(|u| u.line()),
-                        "obligation": evidence::obligation(r),
-                    })).collect::<Vec<_>>(),
+                    "kind": origin(t),
+                    "reflexes": t.routes.iter().map(|r| adage_app::reflex::Reflex::of(inst, r, whys.get(&r.id))).collect::<Vec<_>>(),
                 })
             })
             .collect();

@@ -18,6 +18,29 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### Fixes from the architecture work
 
+- **Breaking: one JSON shape for a reflex.** `adage status --json`, `adage review --json` and
+  `adage map` (`/api/v1/graph`) render each reflex with the same fields and types, and add only
+  their own. The fields:
+  - **Identity:** `id`, `track` (the track's name), `reference`, `version`, `repo`.
+  - **What it is:** `state`, `strength`, `instinct`.
+  - **What it does:** `trigger` and `step` as `{kind, label}` objects, and `directive`, which is
+    `null` for an execution-only reflex.
+  - **Where it came from:** `origin`, an object with `kind`, a `label`, and for an instinct its
+    pack, instinct id and declared file.
+  - **Evidence:** `evidence`, the full object, including the `describe` sentence.
+
+  The changes from before:
+  - **`review --json`:** `route` is now `id`. `track` now holds the track's name (the directory
+    is `reference`), and `name` is gone. `decisions` is now `review.verbs`, `reasons[].detail` is
+    now `review.reasons[].why`, and `next` is now `review.next`. `runtime` is now `live` (the
+    map's counts), and `why` is now `evidence.why`.
+  - **`status --json`:** `lifecycle` is now `state`, and `kind` is now `instinct`. The flat
+    evidence counts and the `evidence` sentence now sit under `evidence` (the sentence as
+    `evidence.describe`), and `uplift` is now `evidence.uplift.line`. A track's `origin` is now
+    `kind`.
+  - **The map:** `origin` is now the object above, `review.execution_command` is now
+    `review.next`, and an execution-only reflex's `directive` is now `null`.
+
 - **`adage install claude-code --scope user` honours `CLAUDE_CONFIG_DIR`.** It wrote
   `~/.claude/settings.json` regardless, so with the variable set the hooks were never loaded and
   `adage doctor` could not see them. Install and detection now share one table of where each

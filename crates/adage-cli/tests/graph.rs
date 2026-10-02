@@ -315,13 +315,46 @@ fn graph_exposes_cpu_candidate_evidence_without_an_advisory_preview() {
     let g: Value = serde_json::from_str(&w.run(&["graph", "--json"], &json!({}), "treated")).unwrap();
     let candidate = g["routes"].as_array().unwrap().iter().find(|r| r["id"] == "routine-test").unwrap();
     assert_eq!(candidate["execution_only"], true);
-    assert_eq!(candidate["directive"], "");
+    assert!(candidate["directive"].is_null(), "an execution-only reflex directs nothing");
     assert_eq!(candidate["evidence"]["execution"], json!({"opportunities":5,"successful":5,"sessions":5}));
-    assert_eq!(candidate["review"]["execution_command"], "adage review delegate acme/work routine-test --level e2");
+    assert_eq!(candidate["review"]["next"], "adage review delegate acme/work routine-test --level e2");
     assert!(candidate["review"]["reasons"].as_array().unwrap().iter().any(|r| r["kind"] == "execution"));
     let advisory = g["routes"].as_array().unwrap().iter().find(|r| r["id"] == "lookup").unwrap();
     assert_eq!(advisory["execution_only"], false);
     assert!(advisory["evidence"]["execution"].is_null());
-    assert!(advisory["review"]["execution_command"].is_null());
+    assert!(advisory["review"]["next"].is_null());
     assert!(advisory["directive"].as_str().unwrap().contains("wi-lookup"));
+}
+
+/// One reflex, one shape: `adage status --json`, `adage review --json` and the map
+/// (`adage graph --json`) render the same reflex with the same fields and values
+/// (`adage_app::reflex::Reflex`); each surface only adds what is its own.
+#[test]
+fn every_surface_renders_a_reflex_the_same_way() {
+    let w = World::new();
+    // Waiting for a person, so the review queue lists it too.
+    let mut t = track();
+    t.routes[0].state = RouteState::Nascent;
+    io::write(&w.root.join("adage/tracks/acme/work"), &t).unwrap();
+    Index::compile(&[t]).write_atomic(&w.root.join("adage/index.json")).unwrap();
+    w.session("s-treated", "treated", true);
+    let json = |args: &[&str]| -> Value { serde_json::from_str(&w.run(args, &json!({}), "treated")).unwrap() };
+    let map = json(&["graph", "--json"])["routes"][0].clone();
+    let status = json(&["status", "--json"])["tracks"][0]["reflexes"][0].clone();
+    let review = json(&["review", "--json"])["queue"][0].clone();
+    let keys = |v: &Value| -> std::collections::BTreeSet<String> { v.as_object().unwrap().keys().cloned().collect() };
+    // Every field of the reflex itself, in each surface, equal.
+    let shared = keys(&status);
+    for k in ["id", "track", "reference", "state", "strength", "origin", "trigger", "step", "evidence", "directive"] {
+        assert!(shared.contains(k), "{k} is part of every reflex");
+    }
+    for k in &shared {
+        assert_eq!(map[k], status[k], "the map and status disagree on {k}");
+        assert_eq!(review[k], status[k], "review and status disagree on {k}");
+    }
+    // What each surface adds, the same object where two of them carry it.
+    assert_eq!(keys(&map).difference(&shared).cloned().collect::<Vec<_>>(), ["arms", "in_index", "live", "review"]);
+    assert!(keys(&review).is_superset(&["review".to_string(), "live".to_string()].into()));
+    assert_eq!(review["review"]["verbs"], map["review"]["verbs"]);
+    assert_eq!(review["live"], map["live"]);
 }

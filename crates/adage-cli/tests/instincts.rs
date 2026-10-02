@@ -437,16 +437,16 @@ fn doctor_review_and_pack_approval() {
     let inst: Vec<&Value> = rows.iter().filter(|r| r["origin"]["kind"] == "instinct").collect();
     assert!(!inst.is_empty(), "{q:#}");
     assert!(inst.iter().all(|r| r["track"] == TRACK && r["strength"] == "prime"), "{q:#}");
-    assert!(inst.iter().all(|r| !r["decisions"].as_array().unwrap().iter().any(|d| d == "strengthen")));
+    assert!(inst.iter().all(|r| !r["review"]["verbs"].as_array().unwrap().iter().any(|d| d == "strengthen")));
     let nascent: Vec<&str> =
-        inst.iter().filter(|r| r["state"] == "nascent").map(|r| r["route"].as_str().unwrap()).collect();
+        inst.iter().filter(|r| r["state"] == "nascent").map(|r| r["id"].as_str().unwrap()).collect();
     // `npm ci` (no package-lock.json) and `yarn install` (missing, or refused by corepack) →
     // `pnpm install`; `npm install` refuses nothing here, so it binds nothing.
     assert_eq!(nascent.len(), 4, "npm ci and yarn install → pnpm install: {q:#}");
     // Install steps wait for a person; instincts in effect are listed but wait for nothing
     // (QA first-run #3), and are shown once per instinct and step, with what triggers each.
     assert_eq!(q["waiting"], 4, "{q:#}");
-    assert!(inst.iter().all(|r| r["trigger"].as_str().is_some_and(|t| !t.is_empty())), "{q:#}");
+    assert!(inst.iter().all(|r| r["trigger"]["label"].as_str().is_some_and(|t| !t.is_empty())), "{q:#}");
     let text = w.ok(&["review"]);
     assert!(text.contains("instinct U1 (from Makefile)"), "{text}");
     assert!(text.contains("4 need you") && text.contains("Instincts in effect"), "{text}");

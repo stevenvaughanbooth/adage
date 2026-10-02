@@ -13,11 +13,13 @@
 //! Spools written before the lexicon's rename spell the control arm `holdout` and an ignored
 //! directive `derailed` (`followed_failed` for misfired); they are read as the new words.
 
-use crate::review::{ceiling_str, discover, origin_label, preview, standings};
+pub use crate::reflex::trigger;
+use crate::reflex::{Control, Decisions, Live, Reflex};
+use crate::review::{discover, standings};
 use adage_core::{pattern, CommandTable};
-use adage_runtime::{command_key, span_kind_label, SessionState};
+use adage_runtime::{command_key, SessionState};
 use adage_store::{spool, state, Paths};
-use adage_tracks::{index, Index, Route, Step, Trigger};
+use adage_tracks::{Index, Route, Step};
 use anyhow::Result;
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
@@ -26,8 +28,9 @@ use std::path::{Path, PathBuf};
 const MAX_OBSERVED: usize = 18;
 const MAX_LEARNING: usize = 60;
 
+/// What a reflex did in sessions, while the spools are read ([`crate::reflex::Live`] once read).
 #[derive(Default)]
-struct Live {
+struct Tally {
     emitted: u64,
     would_have: u64,
     followed: u64,
@@ -58,107 +61,6 @@ fn sets<'a>(m: &'a mut ArmMap, repo: &str, id: &str, arm: &str) -> &'a mut ArmSe
     m.entry((repo.to_string(), id.to_string(), arm.to_string())).or_default()
 }
 
-fn lower(x: impl std::fmt::Debug) -> String {
-    format!("{x:?}").to_lowercase()
-}
-
-pub fn trigger(t: &Trigger) -> Value {
-    let (kind, label) = match t {
-        Trigger::Prompt { span } => ("prompt", format!("a prompt names a {}", span_kind_label(*span))),
-        Trigger::AfterCommand { command } => ("after_command", format!("`{command}` succeeds")),
-        Trigger::AfterFailure { command, signature } => ("after_failure", format!("`{command}` fails: {signature}")),
-        Trigger::AfterEdit { paths } => ("after_edit", format!("an edit touches {paths}")),
-        Trigger::SessionStart => ("session_start", "the first prompt of a session".to_string()),
-        Trigger::Intent { family, .. } => ("intent", format!("a prompt means: {family}")),
-        Trigger::Context { items, .. } => ("context", format!("a context of {} events", items.len())),
-    };
-    let mut v = json!({ "kind": kind, "label": label });
-    match t {
-        // How close a prompt must be to the family (cosine), what a card's grey zone is measured from.
-        Trigger::Intent { family, threshold, .. } => {
-            v["family"] = json!(family);
-            v["threshold"] = json!(round(f64::from(*threshold)));
-        }
-        // The events, in time order, each within `within` of the one before.
-        Trigger::Context { items, within } => {
-            v["within"] = json!(within);
-            v["items"] = items.iter().map(ctx_item).collect();
-        }
-        _ => {}
-    }
-    v
-}
-
-/// One event of a context trigger, as `{kind, label}`.
-fn ctx_item(i: &adage_tracks::CtxItem) -> Value {
-    use adage_tracks::CtxItem;
-    let first =
-        |keys: &[String]| keys.first().map(|k| k.strip_prefix("exec ").unwrap_or(k).to_string()).unwrap_or_default();
-    let (kind, label) = match i {
-        CtxItem::Act { keys } => ("act", format!("`{}` succeeds", first(keys))),
-        CtxItem::Fail { keys, signature } => ("fail", format!("`{}` fails: {signature}", first(keys))),
-        CtxItem::Edit { glob } => ("edit", format!("an edit touches {glob}")),
-        CtxItem::PromptValue { .. } => ("prompt_value", "a prompt names a known value".to_string()),
-        CtxItem::Intent { family, .. } => ("intent", format!("a prompt means: {family}")),
-    };
-    json!({ "kind": kind, "label": label })
-}
-
-/// Three decimals: thresholds and posteriors as people compare them.
-fn round(x: f64) -> f64 {
-    (x * 1000.0).round() / 1000.0
-}
-
-/// A procedure card's contents (`adage_tracks::card`): files in order, the commands that worked
-/// (with their replay verdict: `verified` true, false, or null when not replayed), the commands
-/// that mostly failed, and the finishing check. Delivered once a session at a prompt at least
-/// `threshold` close to the family, or, from `grey_from` up, at the first edit of one of its
-/// files. It never travels in a pack.
-fn card_json(card: &adage_tracks::card::Card, threshold: Option<f32>) -> Value {
-    let cmd = |c: &adage_tracks::card::CardCommand| {
-        json!({ "command": c.command, "sessions": c.sessions, "runs": c.runs, "failed": c.failed,
-                "error": (!c.error.is_empty()).then_some(&c.error), "verified": c.verified })
-    };
-    json!({
-        "sessions": card.sessions,
-        "passed": card.passed,
-        "files": card.files.iter().map(|f| json!({ "path": f.path, "sessions": f.sessions })).collect::<Vec<_>>(),
-        "exemplars": card.exemplars.iter().map(|x| json!({ "path": x.path, "lines": x.lines })).collect::<Vec<_>>(),
-        "commands": card.commands.iter().map(cmd).collect::<Vec<_>>(),
-        "avoid": card.avoid.iter().map(cmd).collect::<Vec<_>>(),
-        "finish": card.finish,
-        "threshold": threshold.map(|t| round(f64::from(t))),
-        "grey_from": threshold.map(|t| round(f64::from(t - adage_tracks::card::GREY_MARGIN))),
-        "shared": false,
-    })
-}
-
-fn step(s: &Step) -> Value {
-    match s {
-        Step::Run { command } => json!({ "kind": "run", "label": command }),
-        Step::ReadBatch { slot, max } => {
-            json!({ "kind": "read_batch", "label": format!("read ≤{max} listed files at once"), "slot": slot })
-        }
-        Step::Avoid { avoid, instead, signature } => {
-            json!({ "kind": "avoid", "label": instead, "avoid": avoid, "signature": signature })
-        }
-        Step::Advise { template, slots } => {
-            json!({ "kind": "advise", "label": adage_tracks::advice::text(template, slots).unwrap_or_default(), "template": template })
-        }
-        Step::Sequence { commands } => {
-            json!({ "kind": "sequence", "label": commands.join(" → "), "commands": commands })
-        }
-        Step::Card { card } => json!({
-            "kind": "card",
-            "label": format!(
-                "procedure card: {} · from {}",
-                crate::words::count(card.files.len(), "file"),
-                crate::words::count(card.sessions as usize, "trace")
-            ),
-        }),
-    }
-}
-
 /// The observed-command keys a route speaks for, to mark which of the agents' paths are railed.
 fn route_keys(r: &Route, table: &CommandTable) -> Vec<(String, &'static str)> {
     match &r.step {
@@ -187,7 +89,7 @@ pub fn build(paths: &Paths, here: Option<&Path>, max_events: usize, warn: &mut d
     let standings = standings(paths, here).unwrap_or_default();
 
     // Routes, keyed by (repo, route id) as the runtime identifies them.
-    let mut live: BTreeMap<(String, String), Live> = BTreeMap::new();
+    let mut live: BTreeMap<(String, String), Tally> = BTreeMap::new();
     let mut observed: BTreeMap<String, (u64, BTreeSet<String>)> = BTreeMap::new();
     let mut events: Vec<Value> = Vec::new();
     let (mut treated, mut control, mut stops) = (0u64, 0u64, 0u64);
@@ -244,16 +146,8 @@ pub fn build(paths: &Paths, here: Option<&Path>, max_events: usize, warn: &mut d
                 d[k].as_array().into_iter().flatten().filter_map(|x| x["route"].as_str().map(String::from)).collect()
             };
             let (directed, would) = (ids("directives"), ids("would_have"));
-            for id in &directed {
-                let l = live.entry((repo.clone(), id.clone())).or_default();
-                l.emitted += 1;
-                l.sessions.insert(sid.clone());
-            }
-            for id in &would {
-                live.entry((repo.clone(), id.clone())).or_default().would_have += 1;
-            }
+            tally(&mut live, &repo, &sid, r);
             let arm = r["arm"].as_str().map(arm_word).unwrap_or("unknown").to_string();
-            let control = arm == "control";
             arm_sessions.entry((repo.clone(), arm.clone())).or_default().insert(sid.clone());
             for id in directed.iter().chain(&would) {
                 sets(&mut arms, &repo, id, &arm).applied.insert(sid.clone());
@@ -275,20 +169,6 @@ pub fn build(paths: &Paths, here: Option<&Path>, max_events: usize, warn: &mut d
                     if *rrepo == repo && keys.iter().any(|runner| pattern::runs_avoided(runner, k)) {
                         sets(&mut arms, &repo, id, &arm).hit_avoided.insert(sid.clone());
                     }
-                }
-            }
-            for j in d["judgements"].as_array().into_iter().flatten() {
-                let (Some(kind), Some(id)) = (j["kind"].as_str(), j["route"].as_str()) else { continue };
-                let l = live.entry((repo.clone(), id.to_string())).or_default();
-                match (judgement_word(kind), control) {
-                    ("followed", false) => l.followed += 1,
-                    ("ignored", false) => l.ignored += 1,
-                    ("misfired", false) => l.misfired += 1,
-                    ("obligation_met", false) => l.obligation_met += 1,
-                    ("followed", true) => l.unaided += 1,
-                    ("ignored", true) => l.not_reached += 1,
-                    ("obligation_met", true) => l.obligation_met_unaided += 1,
-                    _ => {}
                 }
             }
             for k in d["observed"].as_array().into_iter().flatten().filter_map(|k| k.as_str()) {
@@ -332,103 +212,14 @@ pub fn build(paths: &Paths, here: Option<&Path>, max_events: usize, warn: &mut d
                     (a.to_string(), json)
                 })
                 .collect();
-            let l = live.get(&(repo.clone(), r.id.clone()));
-            let e = &r.evidence;
             let standing = standings.get(&(inst.reference.clone(), r.id.clone()));
-            let reasons: Vec<Value> = standing
-                .map(|s| s.reasons.iter().map(|(k, why)| json!({ "kind": k, "why": why })).collect())
-                .unwrap_or_default();
-            let why = whys.get(&r.id);
-            let described = crate::evidence::describe(r, why);
-            // What the strength was decided on: shipped facts, a value estimate, or a follow count.
-            let basis = if r.is_instinct() {
-                "instinct"
-            } else if crate::evidence::value_line(r, why).is_some() {
-                "value"
-            } else if matches!(r.step, Step::Card { .. }) {
-                "family"
-            } else {
-                "count"
-            };
-            let mut step_json = step(&r.step);
-            if let Step::Card { card } = &r.step {
-                let threshold = match &r.trigger {
-                    Trigger::Intent { threshold, .. } => Some(*threshold),
-                    _ => None,
-                };
-                step_json["card"] = card_json(card, threshold);
-            }
-            let uplift = e.uplift.as_ref().map(|u| {
-                let mut v = serde_json::to_value(u).unwrap_or(Value::Null);
-                v["line"] = json!(u.line());
-                v
-            });
-            let evidence = json!({
-                "support": e.support, "opportunities": e.opportunities, "rate": e.rate, "lower_bound": e.lower_bound,
-                "turns_saved": e.turns_saved, "days": e.days, "exposed": e.exposed, "dormant_since": e.dormant_since,
-                "provenance": e.provenance,
-                "describe": described,
-                "basis": basis,
-                "why": why.map(|w| json!({
-                    "shape": w.shape, "pattern": w.pattern, "gain": w.gain, "lift": w.lift, "conf": w.conf,
-                    "conf_lb": w.conf_lb, "support": w.support, "days": w.days, "backoff": w.backoff,
-                })),
-                "uplift": uplift,
-                "outcome_lift": e.outcome_lift,
-                "effect_evidence": e.effect_evidence,
-                "execution": e.execution,
-            });
-            // Kept quiet on its uplift: agents already take the step unaided, so it waits for a person.
-            let quiet = r.state == adage_tracks::RouteState::Nascent
-                && !r.authored
-                && e.uplift.as_ref().is_some_and(|u| u.gated);
-            routes.push(json!({
-                "id": r.id,
-                "summary": r.summary,
-                "instinct": r.is_instinct() || index::is_instinct_track(t),
-                "origin": origin_label(r),
-                "review": {
-                    "verbs": standing.map(|s| s.verbs.clone()).unwrap_or_default(),
-                    "reasons": reasons,
-                    "execution_command": e.execution.as_ref().map(|_| format!("adage review delegate {} {} --level e2", inst.reference, r.id)),
-                },
-                "track": t.manifest.track.name,
-                "version": t.manifest.track.version,
-                "reference": inst.reference,
-                "repo": repo,
-                "imported": inst.imported,
-                "in_index": indexed,
-                "strength": lower(r.strength),
-                "ceiling": ceiling_str(r),
-                "effect": lower(r.effect),
-                "state": lower(r.state),
-                "authored": r.authored,
-                "shape": adage_tracks::shape(r),
-                "quiet": quiet,
-                // What it tells the agent, in one sentence (`Route::gist`): how people name it.
-                "gist": r.gist(),
-                "trigger": trigger(&r.trigger),
-                "step": step_json,
-                "execution_only": e.execution.is_some(),
-                "directive": if e.execution.is_some() { String::new() } else { preview(t, r).0 },
-                "obligation": crate::evidence::obligation(r),
-                "evidence": evidence,
-                "live": {
-                    "emitted": l.map_or(0, |l| l.emitted),
-                    "would_have": l.map_or(0, |l| l.would_have),
-                    "followed": l.map_or(0, |l| l.followed),
-                    "ignored": l.map_or(0, |l| l.ignored),
-                    "misfired": l.map_or(0, |l| l.misfired),
-                    "obligation_met": l.map_or(0, |l| l.obligation_met),
-                    "control": {
-                        "unaided": l.map_or(0, |l| l.unaided),
-                        "not_reached": l.map_or(0, |l| l.not_reached),
-                        "obligation_met": l.map_or(0, |l| l.obligation_met_unaided),
-                    },
-                    "sessions": l.map_or(0, |l| l.sessions.len()),
-                },
-                "arms": arm_stats,
-            }));
+            let (verbs, reasons) = standing.map(|s| (s.verbs.clone(), s.reasons.as_slice())).unwrap_or_default();
+            let mut route = serde_json::to_value(Reflex::of(inst, r, whys.get(&r.id))).unwrap_or_default();
+            route["review"] = json!(Decisions::of(&inst.reference, r, verbs, reasons));
+            route["in_index"] = json!(indexed);
+            route["live"] = json!(live.get(&(repo.clone(), r.id.clone())).map(Tally::read).unwrap_or_default());
+            route["arms"] = Value::Object(arm_stats);
+            routes.push(route);
         }
     }
 
@@ -478,10 +269,79 @@ pub fn build(paths: &Paths, here: Option<&Path>, max_events: usize, warn: &mut d
             // marker `delegate off` wrote before the switch existed is there.
             "rewrite": { "on": config.runtime_rewrite && !marker, "config": config.runtime_rewrite, "marker": marker },
             "control": config.runtime_control,
-            "card_threshold": round(config.learn_card_threshold),
+            "card_threshold": crate::reflex::round(config.learn_card_threshold),
         },
     });
     Ok(out)
+}
+
+impl Tally {
+    fn read(&self) -> Live {
+        Live {
+            emitted: self.emitted,
+            would_have: self.would_have,
+            followed: self.followed,
+            ignored: self.ignored,
+            misfired: self.misfired,
+            obligation_met: self.obligation_met,
+            control: Control {
+                unaided: self.unaided,
+                not_reached: self.not_reached,
+                obligation_met: self.obligation_met_unaided,
+            },
+            sessions: self.sessions.len(),
+        }
+    }
+}
+
+/// Count one spool record of session `sid` in `repo` into the reflexes it directed, would have
+/// directed, and was judged on.
+fn tally(live: &mut BTreeMap<(String, String), Tally>, repo: &str, sid: &str, r: &Value) {
+    let d = &r["decision"];
+    let ids = |k: &str| -> Vec<String> {
+        d[k].as_array().into_iter().flatten().filter_map(|x| x["route"].as_str().map(String::from)).collect()
+    };
+    for id in ids("directives") {
+        let l = live.entry((repo.to_string(), id)).or_default();
+        l.emitted += 1;
+        l.sessions.insert(sid.to_string());
+    }
+    for id in ids("would_have") {
+        live.entry((repo.to_string(), id)).or_default().would_have += 1;
+    }
+    let control = r["arm"].as_str().map(arm_word) == Some("control");
+    for j in d["judgements"].as_array().into_iter().flatten() {
+        let (Some(kind), Some(id)) = (j["kind"].as_str(), j["route"].as_str()) else { continue };
+        let l = live.entry((repo.to_string(), id.to_string())).or_default();
+        match (judgement_word(kind), control) {
+            ("followed", false) => l.followed += 1,
+            ("ignored", false) => l.ignored += 1,
+            ("misfired", false) => l.misfired += 1,
+            ("obligation_met", false) => l.obligation_met += 1,
+            ("followed", true) => l.unaided += 1,
+            ("ignored", true) => l.not_reached += 1,
+            ("obligation_met", true) => l.obligation_met_unaided += 1,
+            _ => {}
+        }
+    }
+}
+
+/// What each reflex did in sessions, by `(repo, route id)`, counted as the map counts it.
+pub fn live(paths: &Paths) -> BTreeMap<(String, String), Live> {
+    let mut live: BTreeMap<(String, String), Tally> = BTreeMap::new();
+    let mut spools: Vec<PathBuf> = std::fs::read_dir(paths.sessions())
+        .map(|rd| rd.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "spool")).collect())
+        .unwrap_or_default();
+    spools.sort();
+    for p in &spools {
+        let st: SessionState = state::read(&p.with_extension("state")).unwrap_or_default();
+        let repo = st.repo.clone().unwrap_or_default();
+        let sid: String = p.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+        for r in spool::read_all(p).unwrap_or_default().iter() {
+            tally(&mut live, &repo, &sid, r);
+        }
+    }
+    live.into_iter().map(|(k, t)| (k, t.read())).collect()
 }
 
 #[derive(Default)]

@@ -133,6 +133,18 @@ export interface Live {
   sessions: number;
 }
 
+/** Where a reflex came from: `kind` (learned, imported, instinct), a `label` people read when it
+ * has one, and for an instinct its pack, instinct id and the file it was bound from. */
+export interface Origin {
+  kind: string;
+  label?: string | null;
+  pack?: string;
+  instinct?: string;
+  ecosystem?: string;
+  declared?: string;
+  version?: string;
+}
+
 export interface Route {
   id: string;
   summary?: string;
@@ -146,8 +158,9 @@ export interface Route {
   imported: boolean;
   in_index: boolean;
   instinct?: boolean;
-  origin?: string | null;
-  review?: { verbs: string[]; reasons: { kind: string; why: string }[]; execution_command?: string | null };
+  origin: Origin;
+  /** The same object `adage review --json` carries: the verbs that apply, why it is listed, and its next command. */
+  review?: { verbs: string[]; reasons: { kind: string; why: string }[]; next?: string | null };
   /** Silent unless an exact local execution grant is valid; never ordinary advice. */
   execution_only?: boolean;
   /** fire / prime / inhibit (older binaries: `aspect` green/yellow/red). */
@@ -164,7 +177,8 @@ export interface Route {
   obligation?: string | null;
   trigger: Trigger;
   step: Step;
-  directive: string;
+  /** The directive as the agent receives it; null for an execution-only reflex. */
+  directive: string | null;
   evidence: Evidence;
   live: Live;
   arms: { treated?: ArmStats; control?: ArmStats };

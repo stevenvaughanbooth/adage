@@ -438,10 +438,10 @@ export function Inspector({ graph }: { graph: Graph }) {
           </Pill>
           {r.imported && <Pill>pack</Pill>}
         </div>
-        {(r.summary || r.origin) && (
+        {(r.summary || r.origin.label) && (
           <p className="m-0 text-[13px] leading-snug text-ink-2">
             {r.summary}
-            {r.origin && <span className="block text-ink-3"><Prose text={r.origin} /></span>}
+            {r.origin.label && <span className="block text-ink-3"><Prose text={r.origin.label} /></span>}
           </p>
         )}
         {waits.length > 0 && (
@@ -472,7 +472,7 @@ export function Inspector({ graph }: { graph: Graph }) {
         </Section>
       ) : (
         <Section label={quiet ? "What the agent would see" : "What the agent sees"}>
-          <Directive text={r.directive} />
+          <Directive text={r.directive ?? ""} />
         </Section>
       )}
 
@@ -589,8 +589,8 @@ export function Inspector({ graph }: { graph: Graph }) {
 
       <div className="grow" />
       <div className="flex flex-col gap-2">
-        {executionOnly && r.review?.execution_command && (
-          <CommandButton command={r.review.execution_command} why="Review and approve the exact automatic action at your terminal." primary />
+        {executionOnly && r.review?.next && (
+          <CommandButton command={r.review.next} why="Review and approve the exact automatic action at your terminal." primary />
         )}
         {verbs.slice(0, 1).map((v) => (
           <CommandButton key={v} command={reviewCommand(v, r)} why={executionOnly && v === "approve" ? "Accept the evidence; this does not grant execution permission." : verbWhy(v)} primary={!executionOnly} />

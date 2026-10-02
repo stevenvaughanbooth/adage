@@ -82,7 +82,7 @@ export function repos(g: Graph): string[] {
 
 function matches(r: Route, q: string): boolean {
   if (!q) return true;
-  const hay = [r.id, r.summary ?? "", r.trigger.label, r.step.label, r.step.avoid ?? "", r.track, r.origin ?? ""]
+  const hay = [r.id, r.summary ?? "", r.trigger.label, r.step.label, r.step.avoid ?? "", r.track, r.origin.label ?? ""]
     .join("\n")
     .toLowerCase();
   return q
