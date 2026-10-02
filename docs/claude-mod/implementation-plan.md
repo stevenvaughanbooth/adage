@@ -40,9 +40,14 @@
   `ADAGE_HOME`, `ADAGE_AUTO_LEARN=0` and `ADAGE_ARM=treated`, and removes `CLAUDECODE`,
   `OPENCODE`, `CODEX_SANDBOX*` and `ADAGE_DISABLE`. A test that exercises the control arm sets
   `ADAGE_ARM=control`; a test that runs a person-only verb removes `ADAGE_ARM` too (it is in
-  adage-exec's `AGENT_ENV`) and sets `ADAGE_ALLOW_NONINTERACTIVE=1`. CI runs
-  `cargo test --workspace --exclude adage-eval --locked` (`ci.yml:101`); the eval gates run
-  weekly and before the chunks §5 names.
+  adage-exec's `AGENT_ENV`) and sets `ADAGE_ALLOW_NONINTERACTIVE=1`. CI tests the affected packages
+  (`cargo xtask affected`, `docs/testing.md`) and always runs the architecture guards
+  (`cargo test -p xtask`: layers, affected, hygiene, suites); a test that reads outside its crate
+  is declared in `READS` (`xtask/src/affected.rs`); the eval gates run weekly and before the
+  chunks §5 names. The layering rules (`xtask/src/layers.rs`) bind every chunk: the runtime never
+  links adage-exec or the store, the hook never links the learner, ingestion never links tracks;
+  this plan's `By` lives in `adage-core`, `Capabilities` in `adage-trace`, the grant lookup
+  reaches `decide()` through `Policy` on `Ctx`, and nothing here adds an exception.
 - **Order.** Workstream A (foundation in the binary) has no Claude Code dependency and starts
   now. Workstream B (the mod) needs S9's Q1, Q2 (Layer 1), Q3 and Q6 to pass first. Workstream C
   (acting in the model's place) needs Q2 (Layer 2), Q4 and Q9. Workstream D (noticed, skills) is
@@ -1028,7 +1033,7 @@ The levels, environments and every case are in [test-plan.md](test-plan.md); thi
 
 | Level (test plan §2) | What | Where | Runs |
 | --- | --- | --- | --- |
-| L1 Unit, Rust | Every new type, bound and template: `Candidate`, `Step::Skill`, `Event::TurnStep`, `GrantMode`, the dedup ring, `PreNote.fresh`, `verified.json`, `By`, `Pending.command` | each crate's `#[cfg(test)]`, `adage-runtime/src/tests.rs` | `cargo test --workspace --exclude adage-eval --locked`, PR CI |
+| L1 Unit, Rust | Every new type, bound and template: `Candidate`, `Step::Skill`, `Event::TurnStep`, `GrantMode`, the dedup ring, `PreNote.fresh`, `verified.json`, `By`, `Pending.command`, `Capabilities` | each crate's `#[cfg(test)]`, `adage-runtime/src/tests.rs` | `cargo xtask affected`, PR CI |
 | L2 Integration | The binary end to end in a `World` | `crates/adage-cli/tests/*`, `crates/adage-exec/tests/*` | PR CI |
 | L3 Golden and parity | The exact bytes `adage hook claude <event>` prints for the scenario, now with a silent `PreToolUse`, a silent `TurnStep` and a `skill` directive; `adage-exec hook` identical with no grants | `crates/adage-cli/tests/golden/claude-code.txt`, `hooks.rs::claude_scenario`, `adage-exec/tests/parity.rs` | PR CI; re-blessed with `ADAGE_BLESS=1`, diff reviewed |
 | L4 Simulator | Twelve seeded Claude sessions, held-out replay in both arms with `PreToolUse`, `TurnStep`, `Standing`, `SkillPrompt`; the sub-support sequence; control silent | `crates/adage-sim`, `crates/adage-cli/tests/harness_sim.rs` | PR CI; `cargo run -p adage-sim` when fixtures change |

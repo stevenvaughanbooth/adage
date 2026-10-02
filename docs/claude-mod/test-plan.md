@@ -42,12 +42,12 @@
 
 | Level | Tooling | Isolation | Where it runs |
 | --- | --- | --- | --- |
-| L1 Unit, Rust | `cargo test -p <crate>` | in-process, `tempfile` | every PR |
-| L2 Integration, binary | `crates/adage-cli/tests/*` and `crates/adage-exec/tests/*`; each file defines its own `World` with a fresh `ADAGE_HOME`, `ADAGE_AUTO_LEARN=0`, `ADAGE_ARM=treated` (`hooks.rs:158`, `harness_sim.rs:63`, `zero_config_plugin.rs:89`) and `CLAUDECODE`, `OPENCODE`, `CODEX_SANDBOX*`, `ADAGE_DISABLE` removed; control cases set `ADAGE_ARM=control`; person-only cases remove `ADAGE_ARM` as well (it is in adage-exec's `AGENT_ENV`, `person.rs:11-12`) and set `ADAGE_ALLOW_NONINTERACTIVE=1`, as `adage-exec/tests/cli.rs:106-113` does; `NO_COLOR=1` only where a case reads a frame | per test tempdir | every PR |
-| L3 Golden and parity | `ADAGE_BLESS=1` goldens in `tests/golden/`, `adage-exec/tests/parity.rs` (the same scenario against both binaries, `hooks.rs:7-32`) | as L2 | every PR |
+| L1 Unit, Rust | `cargo test -p <crate>` (`#[cfg(test)]`, large ones in `src/tests.rs`) | in-process, `tempfile` | every PR, for the affected packages (`cargo xtask affected`, `docs/testing.md`) |
+| L2 Integration, binary | `crates/adage-cli/tests/*` and `crates/adage-exec/tests/*`; shared helpers belong in the crate's `tests/common/mod.rs` (`docs/testing.md`); today each file defines its own `World` with a fresh `ADAGE_HOME`, `ADAGE_AUTO_LEARN=0`, `ADAGE_ARM=treated` (`hooks.rs:158`, `harness_sim.rs:63`, `zero_config_plugin.rs:89`) and `CLAUDECODE`, `OPENCODE`, `CODEX_SANDBOX*`, `ADAGE_DISABLE` removed; control cases set `ADAGE_ARM=control`; person-only cases remove `ADAGE_ARM` as well (it is in adage-exec's `AGENT_ENV`, `person.rs:11-12`) and set `ADAGE_ALLOW_NONINTERACTIVE=1`, as `adage-exec/tests/cli.rs:106-113` does; `NO_COLOR=1` only where a case reads a frame | per test tempdir | every PR |
+| L3 Golden and parity | `ADAGE_BLESS=1` goldens in `tests/golden/`, `adage-exec/tests/parity.rs` (the same scenario against both binaries, `hooks.rs:7-32`); a golden is an expected output, never an input | as L2 | every PR (affected) |
 | L4 Simulator | `crates/adage-sim` fixtures, `harness_sim.rs` (`replay_claude`, `check_graph`), `committed_fixtures_are_current` | as L2 | every PR; `cargo run -p adage-sim` on fixture change |
 | L5 Latency | `crates/adage-cli/examples/hook_latency.rs` in its paired mode (`<bin a>,<bin b>`, `:12, 124-160`), release builds of the base and the branch, 500 runs after the 20 warm-ups (the default is 300, `:181`), five repetitions; `learn_bench` (300 × 2, `learn_bench.rs:7`) | a quiet developer machine, named; numbers and the command in the PR | before merging A1, A2, A6, C1, D1, D2 (no workflow runs these today) |
-| L6 Replay gates | `cargo test -p adage-eval --test gates` | recorded datasets | weekly `evals.yml`; before merging C1, D1, D2, D3 |
+| L6 Replay gates | `cargo test -p adage-eval --test gates` (`evals.yml`: the slow gates, the property tests and every Python suite) | recorded datasets | weekly `evals.yml`; before merging C1, D1, D2, D3 |
 | L7 Mod unit | `claude plugin test plugin/claude-code` (`*.test.ts(x)`; `ui.mount` over `terminal` and `desktop` with a stubbed `$`; handlers called directly from the mounted tree) | the engine's test kit, no session | the `plugin` CI job, CLI pinned at 2.1.287 |
 | L8 Mod static | `claude plugin validate --strict` diffed against the committed `VALIDATE.txt`; `scripts/check-plugin.mjs` | | the `plugin` CI job |
 | L9 Live probes | S9's probe mod under `--plugin-dir`, an isolated `CLAUDE_CONFIG_DIR`, `claude --debug` | a developer's machine; `spikes/S9-claude-mods/FINDINGS.md`, `rerun.sh`, `results/` | once per question |
@@ -877,7 +877,8 @@ before the question's result is committed.
 
 | Gate | Runs | Blocks |
 | --- | --- | --- |
-| `cargo fmt`, `clippy -D warnings`, `cargo test --workspace --exclude adage-eval --locked` | every PR | merge |
+| `cargo fmt`, `clippy -D warnings`, `cargo xtask affected` (the changed packages, the readers of changed fixtures, and every dependent; a change outside every package tests everything; pushes to `main` test everything on every platform), the architecture guards `cargo test -p xtask` always (`layers`, `affected`, `hygiene`, `suites`) | every PR | merge |
+| Every new test that reads outside its crate (the sim's fixtures, `evals/sandboxes/acme-billing`, `plugin/claude-code/hooks/fixtures/`) is declared in `READS` in `xtask/src/affected.rs`; every new Python suite in `xtask/src/suites.rs`; no raw run output committed (the hygiene guard) | every PR | merge |
 | `node scripts/check-plugin.mjs` (modules, types, allow-list, pin), `test-stage-plugin.mjs`, `claude plugin validate --strict` ×2 diffed against `VALIDATE.txt`, `claude plugin test` ×2 (CLI pinned at 2.1.287) | every PR | merge |
 | `plugin/test/session-start.test.sh`, `npm/test/launcher.test.mjs` | every PR | merge |
 | `cargo test -p adage-eval --test gates` | weekly; required before merging C1, D1, D2, D3 | merge of those chunks |
