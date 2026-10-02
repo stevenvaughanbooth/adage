@@ -193,7 +193,7 @@ impl Tailer {
     pub(crate) fn poll(&mut self, shared: &Shared) {
         for rec in self.spools.poll() {
             let repo = repo_of(shared, &mut self.repos, &rec.session);
-            if let Some(e) = crate::graph::event(&repo, &rec.session, &rec.value) {
+            if let Some(e) = adage_app::graph::event(&repo, &rec.session, &rec.value) {
                 shared.hub.publish("decision", &e);
             }
         }

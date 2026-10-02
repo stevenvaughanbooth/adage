@@ -8,13 +8,17 @@ version = "0.1.0"
 dependencies = [
  "adage-core",
  "adage-exec",
+ "adage-hook",
  "adage-learn",
  "adage-runtime",
  "adage-store",
+ "adage-term",
  "adage-tracks",
  "anyhow",
  "regex",
+ "serde",
  "serde_json",
+ "sha2",
  "tempfile",
 ]
 

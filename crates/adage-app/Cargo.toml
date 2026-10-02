@@ -14,6 +14,10 @@ adage-tracks = { path = "../adage-tracks" }
 adage-runtime = { path = "../adage-runtime" }
 adage-learn = { path = "../adage-learn" }
 adage-exec = { path = "../adage-exec" }
+adage-hook = { path = "../adage-hook" }
+adage-term = { path = "../adage-term" }
+serde.workspace = true
+sha2.workspace = true
 anyhow.workspace = true
 regex.workspace = true
 serde_json.workspace = true

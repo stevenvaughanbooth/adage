@@ -42,7 +42,7 @@ edge knows a harness's format.
 | **Learning engine** | `adage-learn` (orchestration, `learn_sessions`), `adage-graph` (mining), `adage-instincts`, `adage-intent` | Mining, scoring, selection, compiling routes, versioning tracks | `Session`s → tracks and the index |
 | **Live interaction** | `adage-runtime` (decisions), `adage-hook` (the pipeline) | Matching the index against a live session, obligations, rendering directives | `Event` + state + `Policy` → `Decision` |
 | **Store** | `adage-tracks` (tracks, index, reviews, proposals, `layout`, and the `matching` primitives learner and runtime share), `adage-store` (state, spools, config, locks) | The materialized output and every file format under `$ADAGE_HOME` | — |
-| **Application / API** | `adage-app` (review queue and decisions), `adage-cli` (the rest, and the front ends) | Status, reflex and candidate listings, promotion, the map's HTTP API | requests → typed results |
+| **Application / API** | `adage-app` (review queue and decisions, the map's read model, the savings estimate, how evidence reads), `adage-cli` (the front ends) | Status, reflex and candidate listings, promotion, the map's HTTP API | requests → typed results |
 | **Harnesses** | `adage_trace::Harness`, `adage-hook::harness` (live adapters), `adage-ingest::{claude,codex,opencode}` (history formats), `adage-cli` install and detect, `plugin/` | Native payloads, native histories, installs | native ↔ canonical |
 | **Execution** | `adage-exec`, `adage-safety` (the independent oracle every delivered block is re-checked by) | Running approved routes in a sandbox | — |
 
@@ -133,7 +133,8 @@ Day 0 and live learning use the same path. `adage init` and `adage condition` in
 | Promotion rules lived in the CLI binary, and the TUI skipped the tracks lock | **Done**: `adage_app::review`, which takes the lock and needs a `Person` |
 | The map API's JSON could drift from what the web map is tested with | **Pinned**: a contract test against the web map's fixtures |
 | Harness names compared as strings in about 30 places | **Done**: `Harness` and `Capabilities`; behaviour by capability |
-| Status, listings and the map's read model still live in the CLI as untyped JSON, in three shapes for one reflex | Next: move the read model into `adage-app` with typed results. Unifying the shapes changes the CLI's `--json` output and the web map's types, so it needs a decision |
+| The map's read model, the savings estimate and the evidence wording lived in the CLI binary | **Done**: `adage_app::{graph, savings, evidence, words}`; the CLI keeps argument parsing and terminal rendering |
+| One reflex has three JSON shapes (`status --json`, `review --json`, the map), and the map's is untyped | Open: unifying them changes the CLI's `--json` output and the web map's types, so it needs a decision. The map's shape is pinned by the contract test meanwhile |
 | Install and detection kept separate tables of where each harness's registration lives, and had drifted (`CLAUDE_CONFIG_DIR`) | **Done**: `adage-cli/src/placement.rs`, one table per `Harness` for both |
 | The learner wrote files directly | **Done**: every write goes through `adage_learn::store::Store` |
 | Learning reads its earlier results from the tracks directory, and reprocesses all history each run (the parse cache makes re-reading cheap, not the mining) | Next: the store's read side (earlier tracks, decisions, proposals) as the same port, then incremental mining over new sessions only. Mining is pure over sessions (`adage-graph`'s determinism test), so incremental mining needs mergeable counts, not a new boundary |

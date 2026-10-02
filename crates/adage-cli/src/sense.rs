@@ -597,7 +597,7 @@ fn candidates(p: &adage_learn::Planned) -> Vec<Candidate> {
         status: status.into(),
         strength: strength_str(r.strength).into(),
         effect: r.effect.as_str().into(),
-        trigger: redacted(crate::graph::trigger(&r.trigger)["label"].as_str().unwrap_or_default()),
+        trigger: redacted(adage_app::graph::trigger(&r.trigger)["label"].as_str().unwrap_or_default()),
         step: redacted(&crate::share::describe_step(&r.step)),
         support: r.evidence.support,
         opportunities: r.evidence.opportunities,

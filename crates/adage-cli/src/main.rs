@@ -21,8 +21,8 @@ mod condition_out;
 mod config;
 mod detect;
 mod doctor;
-mod evidence;
 mod exec;
+use adage_app::{evidence, words};
 use adage_hook::failopen;
 mod graph;
 mod history;
@@ -53,7 +53,6 @@ mod train;
 mod tty;
 mod ui;
 mod update;
-mod words;
 
 // Commands run on the hook's stack size (`adage_hook::STACK`).
 use adage_hook::on_big_stack;

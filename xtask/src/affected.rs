@@ -42,7 +42,7 @@ pub const READS: &[(&str, &[&str])] = &[
     ("docs/instincts.md", &["adage-instincts"]),
     ("design/", &["xtask"]),
     ("demo/sandbox/", &["adage-eval"]),
-    ("web/map/e2e/fixtures/", &["adage-cli"]),
+    ("web/map/e2e/fixtures/", &["adage-app"]),
 ];
 
 /// Paths no package builds from or reads: changing only these tests nothing.

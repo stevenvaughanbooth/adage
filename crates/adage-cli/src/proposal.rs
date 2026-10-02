@@ -54,7 +54,7 @@ fn evidence(r: &Route) -> String {
 /// The fields a person reads, as (label, text).
 fn fields(r: &Route) -> Vec<(&'static str, String)> {
     vec![
-        ("trigger", crate::graph::trigger(&r.trigger)["label"].as_str().unwrap_or_default().to_string()),
+        ("trigger", adage_app::graph::trigger(&r.trigger)["label"].as_str().unwrap_or_default().to_string()),
         ("step", describe_step(&r.step)),
         ("slots", slots(r)),
         ("effect", r.effect.as_str().to_string()),
