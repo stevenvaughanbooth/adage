@@ -24,3 +24,4 @@ web/map/playwright-report/
 web/map/review-shots/
 # The bundled embedding model (MIT, SHA-256 pinned in adage-intent/src/model.rs) is source.
 !crates/adage-intent/bundled/*.safetensors
+*.snap.new
