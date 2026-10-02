@@ -261,8 +261,8 @@ pub fn decode(reader: impl BufRead, cx: &Decode<'_>) -> Option<Session> {
 pub struct Transcript;
 
 impl Format for Transcript {
-    fn harness(&self) -> &'static str {
-        CLAUDE_CODE
+    fn harness(&self) -> adage_trace::Harness {
+        adage_trace::Harness::ClaudeCode
     }
 
     fn sniff(&self, _head: &[u8]) -> bool {

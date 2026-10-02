@@ -243,11 +243,7 @@ fn repo_root(repo: Option<&Path>) -> Option<PathBuf> {
 
 /// `claude` is `claude-code` (the CLI's alias); other names as they are.
 fn canonical(harness: &str) -> &'static str {
-    match harness {
-        "claude" | "claude-code" => "claude-code",
-        "codex" => "codex",
-        _ => "opencode",
-    }
+    adage_trace::Harness::parse(harness).unwrap_or(adage_trace::Harness::OpenCode).id()
 }
 
 /// Is `a` the file `b` (compared as they are, then resolved)?

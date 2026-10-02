@@ -88,9 +88,9 @@ pub struct Ending {
 }
 
 /// `gauge.harness` names, per session source.
-pub const CLAUDE_CODE: &str = "claude-code";
-pub const OPENCODE: &str = "opencode";
-pub const CODEX: &str = "codex";
+pub const CLAUDE_CODE: &str = crate::Harness::ClaudeCode.id();
+pub const OPENCODE: &str = crate::Harness::OpenCode.id();
+pub const CODEX: &str = crate::Harness::Codex.id();
 
 /// A directive a session received (Track G §3.2, steering by influence): delivered before step
 /// `at_step`, it named these commands, avoided runners and files

@@ -6,7 +6,7 @@
 
 use crate::locate::{LocalCheckout, Locator};
 use adage_core::CommandTable;
-use adage_trace::Session;
+use adage_trace::{Harness, Session};
 use std::io::{BufRead, BufReader, Read};
 use std::path::Path;
 
@@ -31,8 +31,8 @@ impl<'a> Decode<'a> {
 
 /// One harness's history format.
 pub trait Format: Sync {
-    /// The harness, as [`Session::harness`] and a track's `gauge.harness` name it.
-    fn harness(&self) -> &'static str;
+    /// The harness whose history this is ([`Session::harness`] holds its id).
+    fn harness(&self) -> Harness;
     /// Whether a trace that begins with `head` is in this format. `head` is the trace's first line
     /// (at most [`HEAD_LINE`] bytes), extended to at least [`HEAD_MIN`] bytes when the trace has
     /// them.
@@ -94,7 +94,7 @@ mod tests {
     use serde_json::json;
 
     fn harness(head: &[u8]) -> Option<&'static str> {
-        detect(head).map(|f| f.harness())
+        detect(head).map(|f| f.harness().id())
     }
 
     #[test]
@@ -161,7 +161,7 @@ mod tests {
         for (path, own) in [(&r, own_r), (&e, own_e), (&t, own_t)] {
             let own = own.unwrap_or_else(|| panic!("{}: no session", path.display()));
             assert_eq!(read_session(path, &table, Some("acme")).as_ref(), Some(&own), "{}", path.display());
-            assert_eq!(detect_path(path).map(|f| f.harness()), Some(own.harness.as_str()));
+            assert_eq!(detect_path(path).map(|f| f.harness().id()), Some(own.harness.as_str()));
         }
         assert!(read_session(&d.path().join("missing.jsonl"), &table, None).is_none());
     }

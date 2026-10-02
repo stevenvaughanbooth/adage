@@ -425,7 +425,7 @@ const GATE_OVERHEAD_MS: u64 = 6_000;
 /// while another stop hook is already continuing), the agent continues with the failing tests;
 /// otherwise the turn ends with a line for the person. Never more than [`MAX_STOP_GATES`] runs.
 fn stop_gate(call: &StopCall<'_>) -> Option<StopGate> {
-    if call.harness == "opencode" {
+    if !call.harness.capabilities().actions {
         return None;
     }
     let state = adage_store::state::try_read::<adage_runtime::SessionState>(&call.paths.state(call.session)).ok()??;
@@ -963,7 +963,7 @@ fn act(turn: &Turn<'_>, directives: &[Directive], candidates: &[Candidate<'_>]) 
             out.extra.push(render::action_not_run(&dir, reason));
         }
     };
-    if turn.harness == "opencode" {
+    if !turn.harness.capabilities().actions {
         not_run(&mut out, "harness", "actions do not run under OpenCode, whose hook bridge waits one second");
         return out;
     }
@@ -1398,7 +1398,7 @@ mod prediction_tests {
         }
         fn turn<'a>(&'a self, ev: &'a Event) -> Turn<'a> {
             Turn {
-                harness: "claude",
+                harness: adage_hook::harness::Harness::ClaudeCode,
                 event: "PostToolUse",
                 event_identity: Some("edit-1".into()),
                 ev,
@@ -1723,7 +1723,7 @@ mod prediction_tests {
 
     fn stop_by(f: &Fixture, active: bool, deadline: Instant) -> Option<StopGate> {
         PREFETCH.stop_gate(&StopCall {
-            harness: "claude",
+            harness: adage_hook::harness::Harness::ClaudeCode,
             repo_key: "fixture",
             root: &f.root,
             session: "fixture-session",

@@ -235,8 +235,8 @@ pub fn parse_rollout(lines: &[Value], table: &CommandTable, repo_override: Optio
 pub struct Rollout;
 
 impl Format for Rollout {
-    fn harness(&self) -> &'static str {
-        CODEX
+    fn harness(&self) -> adage_trace::Harness {
+        adage_trace::Harness::Codex
     }
 
     fn sniff(&self, head: &[u8]) -> bool {

@@ -31,7 +31,7 @@ use adage_runtime::{assign, decide, fast, rebuild, render, Arm, Ctx, Directive, 
 use adage_store::{spool, state, Paths};
 use adage_tracks::Index;
 use failopen::Failure;
-use harness::Output;
+use harness::{Harness, Output};
 use serde_json::{json, Value};
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -41,7 +41,7 @@ const MAX_STDIN: u64 = 8 << 20;
 
 /// What one event is about, for an [`Extension`].
 pub struct Turn<'a> {
-    pub harness: &'a str,
+    pub harness: Harness,
     /// The native event name.
     pub event: &'a str,
     /// Opaque native tool-call identity. None means retries cannot be identified reliably.
@@ -210,7 +210,7 @@ pub struct SessionTexts {
 
 /// A `Stop` event, as [`Extension::stop_gate`] sees it.
 pub struct StopCall<'a> {
-    pub harness: &'a str,
+    pub harness: Harness,
     pub repo_key: &'a str,
     pub root: &'a Path,
     pub session: &'a str,
@@ -386,7 +386,7 @@ pub fn handle(
                 let keys: std::collections::BTreeSet<&str> = index.routes.iter().map(|r| r.repo.as_str()).collect();
                 repo::lookup_key(&root, Some(&paths.repo_keys()), &keys).and_then(|repo_key| {
                     let call = StopCall {
-                        harness,
+                        harness: adapter.harness(),
                         repo_key: &repo_key,
                         root: &root,
                         session: &session,
@@ -556,7 +556,8 @@ fn pretool(
     extension: Option<&'static dyn Extension>,
 ) -> Result<Option<String>, Failure> {
     use adage_runtime::pretool::{self, Pre};
-    if adapter.name() != "claude" || p.get("tool_name").and_then(Value::as_str) != Some("Bash") {
+    if !adapter.harness().capabilities().pre_tool_rewrite || p.get("tool_name").and_then(Value::as_str) != Some("Bash")
+    {
         return Ok(None);
     }
     let input = p.get("tool_input").cloned().unwrap_or(Value::Null);
@@ -813,7 +814,7 @@ fn session_start(
         }
     }
     let context = if !damaged
-        && s.adapter.name() != "opencode"
+        && s.adapter.harness().capabilities().session_contract
         && state::try_read::<SessionState>(&s.paths.state(s.session))
             .ok()
             .flatten()
@@ -934,7 +935,8 @@ fn record_start(s: &Start<'_>, repo_key: &str) -> Result<(), Failure> {
     .map_err(|e| Failure::io("state", "assigning the session's arm", &e))?;
     let ts = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
     let mut rec = json!({ "ts": ts, "event": s.event, "kind": "session_start", "arm": arm, "propensity": propensity, "repo": repo_key, "generation": s.index.generation });
-    if s.adapter.name() != "claude" {
+    // Spool records name the harness unless it is Claude Code (the records before there were others).
+    if s.adapter.harness() != Harness::ClaudeCode {
         rec["harness"] = json!(s.adapter.name());
     }
     spool::append(&s.paths.spool(s.session), &rec)
@@ -1049,7 +1051,7 @@ fn respond(
         let directives_due = decision.continue_reason.is_none() && !decision.directives.is_empty();
         if directives_due || !stims.is_empty() {
             let turn = Turn {
-                harness,
+                harness: adapter.harness(),
                 event,
                 event_identity: adapter.event_identity(event, p),
                 ev: &ev,
@@ -1095,7 +1097,7 @@ fn respond(
     // `propensity`: the probability of `arm` at assignment (control share, or one minus it; 1 when
     // `ADAGE_ARM` forced it), for inverse-propensity weighting (Design §11, §14.1).
     let mut rec = json!({ "ts": ts, "event": event, "kind": ev.name(), "arm": arm, "propensity": propensity, "repo": repo_key, "generation": index.generation, "decision": decision });
-    if adapter.name() != "claude" {
+    if adapter.harness() != Harness::ClaudeCode {
         rec["harness"] = json!(adapter.name());
     }
     if let Some(x) = delivery.spool.take() {

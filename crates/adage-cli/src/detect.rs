@@ -6,10 +6,12 @@
 //! `adage install`: `CLAUDE_CONFIG_DIR` (default `~/.claude`), `XDG_CONFIG_HOME` (default
 //! `~/.config`) for OpenCode, and `CODEX_HOME` (default `~/.codex`).
 
+use adage_trace::Harness;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
-pub const HARNESSES: [&str; 3] = ["claude-code", "opencode", "codex"];
+/// Every harness, in the order registrations are listed.
+pub const HARNESSES: [&str; 3] = [Harness::ClaudeCode.id(), Harness::OpenCode.id(), Harness::Codex.id()];
 
 fn env_path(var: &str) -> Option<PathBuf> {
     std::env::var_os(var).filter(|v| !v.is_empty()).map(PathBuf::from)

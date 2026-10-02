@@ -74,8 +74,8 @@ fn opens_export(head: &[u8]) -> bool {
 pub struct Export;
 
 impl Format for Export {
-    fn harness(&self) -> &'static str {
-        OPENCODE
+    fn harness(&self) -> adage_trace::Harness {
+        adage_trace::Harness::OpenCode
     }
 
     fn sniff(&self, head: &[u8]) -> bool {
