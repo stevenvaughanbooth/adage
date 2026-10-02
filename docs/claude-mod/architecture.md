@@ -65,7 +65,7 @@ one `systemMessage` line. To see Adage work, the person opens a second terminal 
    ◠ adage · 3 reflexes and 4 instincts active in this repo · it keeps learning as you work · nothing runs without you
 
  > fix W-2042 and add the currency field
-   ◠ lookup-work-item · scripts/wi-lookup W-2042 --json
+   ◠ look up the work item · scripts/wi-lookup W-2042 --json
 
  ● Bash(scripts/wi-lookup W-2042 --json)
    ⎿ {"id":"W-2042","title":"Rounding error in invoice totals", …}
@@ -74,7 +74,7 @@ one `systemMessage` line. To see Adage work, the person opens a second terminal 
    ⎿ Updated schema/invoice.json with 1 addition
 
  ● Bash(make gen)
-   ◠ adage chose this step: codegen-after-schema · no model request
+   ◠ adage chose this step · no model request
    ⎿ generated acme/generated/models.py
 
  ● Bash(make test)
@@ -105,6 +105,122 @@ draws (the engine's rule). What runs headless is exactly what changes the model-
 predictions under a grant, receipts as results, the engine-checked rewrite, the cached section and
 compaction (§7). The evals therefore run three arms (§9): hooks alone, the mod observing only,
 and the mod with grants.
+
+## 1b. Where the value is: inference, prediction and attachment
+
+The screen is half of it. The other half is what the mod does for the core loop, stated in the
+primitives the architecture now has (`docs/architecture.md`): a canonical `Call`, `Event` and
+`Session` (`adage-trace`), a `Harness` with `Capabilities`, `decide()` over an index and a
+session state, and an `Extension` that may carry a decision out. Today the live loop sees a
+session only through hook payloads: a prompt, a batch of tool calls, a failure, a stop. It can
+add context, rewrite one interpreter word, block a stop, and, under adage-exec, run one approved
+command inside the hook's budget. The mod sits inside the engine and sees, and can act at, every
+point of the loop. That changes what Adage can infer, what it can predict, and where it can
+attach what it knows.
+
+### 1b.1 Prediction: from "run it in the hook" to "make the call the agent would have made"
+
+Today's CPU prediction (`docs/execution.md`, "Learned sequence predictions"; `Delivery.cpu_predictions`
+in `adage-hook`) already does the hard part: a learned context route with execution evidence
+and a person's E2 grant nominates its command, adage-exec stages and runs it in the sandbox
+inside the `PostToolBatch` hook, the result goes to the model as context, the directive is
+suppressed, and pending follow judgements are retired. Its limits are the hook's: one slot-free
+verification or regeneration command, once per route per session, inside 30 s, with declared
+outputs and a sandbox profile, never a multi-command sequence, never an input slot, and the
+agent still makes its next request to read the result.
+
+The mod's `turn.step` moves the same decision to the request boundary and makes the predicted
+step **the agent's own tool call** (§3.2). The grant, the evidence rule, the control arm and the
+"predict only what Adage already directed" rule stay. What changes:
+
+| Limit today | With `turn.step` | Why it is safe |
+| --- | --- | --- |
+| One slot-free command | Any directive step whose slots are bound by the directive itself (a lookup's work-item id, a `ReadBatch`'s file list) | The input is the rendered directive, never the conversation |
+| Sandbox and declared outputs | None needed: the call runs as the agent's own tool under the person's permission rules, exactly as if the model had asked | Claude Code's permission system governs the call (Q9); the person's `predict` grant is per reflex |
+| Inside the hook's 30 s | The tool runs as a tool, with the engine's own timeouts | Nothing runs in a hook |
+| Once per route per session | Once per directive, within the session cap, never two in a row | The bounds of §3.2 |
+| The result arrives as context in the next request the model makes anyway | The result arrives as a tool result and **that request is not made** | The API's prefill shape; Q9 shows the loop continues |
+
+Three predictions the hooks cannot make at all follow from this:
+
+- **A chain, step by step.** `lookup-work-item` then `read-linked-files` is two directives and
+  two model requests today. The mod predicts the lookup; the engine runs it; at the next step
+  the binary sees the lookup's result in the batch, binds the `ReadBatch` from it (the directive
+  already says "read the files it names"), and predicts the reads as one response with several
+  `tool` chunks (a response may carry more than one tool call). Two requests not sent, each
+  step verified by its result before the next, never two predictions without a model step
+  between them per route.
+- **The finish line without the Stop request.** Today an unmet obligation at `Stop` is a
+  `block` with a reason, which costs the model at least one more request to run `make gen` and
+  one to finish. At the last `turn.step` before the model's end-of-turn, a hook that holds a
+  granted, unmet obligation can yield the obligation's call in place of the stop chunk: the step
+  runs, the next request carries its result, the model ends. One request fewer per finish line,
+  and the obligation is met by the agent's own call rather than the gate's sandbox run (Q15).
+- **The dead end that never runs.** An `avoid` reflex is advice at failure time today: the
+  failed run has already cost a tool run and a model request to recover. `tool.call` sees the
+  call before it runs. Where the binary holds a learned pair (`python3 -m pytest` fails here;
+  `make test` is the way) and `$.tool.check` gives the same verdict for both commands, the mod
+  substitutes the learned command with one line of context saying so, exactly the discipline the
+  U11 interpreter rewrite already has (§3.4). The failure and the recovery request do not happen.
+
+### 1b.2 Inference: what the binary gets to see
+
+The hooks deliver a prompt, batches, failures and stops. The engine delivers more, and each
+item is a field on the canonical model, not a new format:
+
+| Signal | Hook today | Mod | What it is for |
+| --- | --- | --- | --- |
+| Each tool call before it runs, with its `tool_use_id`, for every tool | `PreToolUse` for Bash only | `tool.call` for every tool, subagents included (`agentId`) | Substitution, receipts, dedup, subagent attribution on `Call` |
+| The permission verdict | none | `tool.check` (observed, never answered) | A rewrite that would change the verdict is advice; a denied call is not a follow |
+| The model's step boundary, model and usage | none | `turn.step`, `turn.complete` | Prediction; cost per step on the ledger line; the arm comparison priced from the harness |
+| Compaction | none | `session.compact` | Procedures survive it (§3.7); a lookup repeated after compaction is counted as relearning, not as a new need |
+| Skill expansion | none | `skill.prompt` | Verification in place; a `skill` reflex's follow judged on the Skill tool |
+| Subagent spawn | `PreToolUse` on `Agent` | `agent.spawn`, with the prompt rewritable | A subagent told the convention before its first request |
+| Adage's own acts | text markers | the `adage_` id, `Call.by`, `via: press`, `cpu_predictions` | The learner never counts Adage's act as the agent's |
+
+The learner's inputs are unchanged in kind, which is the point: a `Session` from a mod-served
+session decodes through the same `Format`, with `by`, `usage` and `agent` as optional fields on
+`StepObs`. What the learner gains is evidence it cannot get from a hook-served trace: that a
+predicted step's result was what the next step needed (prediction accuracy on live sessions,
+not replay), that a substituted dead end was followed by the work the model meant to do, and the
+tokens each directive saved, step by step, in both arms.
+
+### 1b.3 Attachment: where a reflex lives in the model's context
+
+A directive is `additionalContext` at an event today: it arrives late in the context, once per
+session, and is relearned by the model after compaction. The engine offers three cheaper and
+earlier places, each a capability the hooks lack:
+
+- **The tool's own description** (`tool.describe`, cached for the session): the Bash tool says
+  "tests here run with `make test`; `pytest` is not installed" before the model's first call. A
+  convention attached to the tool is used on the first attempt, with no event, no directive and
+  no tokens per event. This is the standing text of §3.6 in its best place.
+- **A session-scoped system-prompt section** (`prompt.compose`): the repository's procedures and
+  instincts once, in the cached prefix, instead of at the first event that needs them.
+- **The subagent's prompt** (`agent.spawn`) and its preloaded skills (`$.agent.register`): an
+  Explore agent that would repeat the lookup is told the convention before it starts.
+
+Each is a `Capabilities` field on the harness (plan: `adage_trace::Capabilities` gains
+`predict_step`, `answer_call`, `substitute_call`, `tool_description`, `cached_section`,
+`subagent_prompt`, `compaction`), so behaviour is by capability as the architecture now
+requires: Claude Code with the mod is the harness that has them all, Claude Code with the hooks
+alone has today's four, and nothing past the adapter asks which plugin is installed.
+
+### 1b.4 What each lever is worth, and how it is proven
+
+| Lever | Unit it moves | Where it is measured |
+| --- | --- | --- |
+| A predicted step (§3.2) | model requests per task | `requests` in the demo runner, then the v9 rule (E1, E2) |
+| A chain (lookup then reads) | model requests per task | the same, on the lookup items |
+| The finish line at the last step | model requests per finish line | the same, on schema-edit items; Q15 |
+| A dead end substituted | tool runs and model requests per dead end | `dead_end_hits`, `requests` |
+| A receipt as the result (§3.3) | tool runs, tokens | `receipts_as_results`, tokens per step |
+| Conventions in the tool description (§1b.3) | directives needed, tokens | directives per session, tokens, in the arm comparison |
+| Procedures through compaction (§3.7) | repeated lookups after compaction | `dead_end_hits` and repeated lookups per session |
+| A subagent told at spawn | subagent tool calls per delegation | subagent `tool_calls` in the arm comparison |
+
+None of these is claimed in dollars or GPU time (`how-it-works.md`, "What may be claimed"); each
+is a count the four arms of §9 compare, with hidden-test quality as the gate for all of them.
 
 ## 2. The shape: two plugins, one module, one active mod
 
@@ -315,7 +431,10 @@ on('turn.step', async function* ($, e, next) {
   the `PostToolBatch` hook and a prediction would run it twice (`delegate --predict` on such a
   route says so and refuses). The grant is read in the hook's outer layer and handed to the pure
   `decide()` the way exec-only routes are today (a thread-local set), so the runtime crate stays
-  free of adage-exec types.
+  free of adage-exec types. A predicted step retires the directive's pending follow judgement
+  the way `Delivery.cpu_predictions` does for today's in-hook prediction, and is marked
+  `Judgement::Predicted`, never `Followed`; a route that today's path would run in the sandbox
+  at `PostToolBatch` is not also predicted (§1b.1).
 - **Model:** its next request carries an assistant turn with a tool call it did not write, and the
   tool's result. That is the API's prefill shape; models carry on from it. The call itself ran
   through every `tool.call` hook, the plugin's `PreToolUse` command hook, the person's permission
@@ -328,16 +447,28 @@ on('turn.step', async function* ($, e, next) {
   dialog appears for the model's own calls either; the person's `predict` grant, per reflex, is
   the consent, and the notice under the dialog (where one appears) and the tool-row marker name
   the call as Adage's.
-- **Person:** the tool row carries `◠ adage chose this step: <reflex> · no model request` (§4),
+- **Person:** the tool row carries `◠ adage chose this step · no model request` (§4),
   `$.ui.notice` puts one line under the permission dialog when one is shown, and the turn's
   closing line counts it as a step without a model request.
 - **Control:** the mod always asks (the arm is the binary's to know); the binary answers `{}`,
   spools `would_predict` on the `turn_step` record, and the request goes out. Saved requests are
   measured against a baseline, as directives are.
 - **Headless:** runs (`-p` included); it is where Q9 and the evals measure it.
-- **Cost accounting:** the step's `usage` is null on the engine's side; §3.10 records the step as
+- **Cost accounting:** the step's `usage` is null on the engine's side; §3.9 records the step as
   Adage's with the model it replaced, so the ledger prices what was *not* spent at the same rate
   as what was.
+**Chains and multi-call steps.** A `Sequence` or a lookup-then-read pair is predicted one step
+at a time: the first call is yielded; the engine runs it; the batch that follows carries its
+result; the binary binds the next directive from that result (a `ReadBatch`'s files from the
+lookup's `linked_files`) and, at the next `turn.step`, yields it, as one response with several
+`tool` chunks when the step is a batch of reads. A model step is never skipped twice in a row
+for the same route, and the session cap counts every yielded response. **The finish line at the
+last step** (Q15): when the model's response ends the turn (`stop` with `end_turn`) and the
+session holds an armed, unmet obligation whose route has a `predict` grant, the hook keeps the
+model's text, replaces the stop with the obligation's call, and the next request carries the
+result; the Stop gate's `block` and its extra request do not happen. If the obligation's call
+fails, the gate behaves as today.
+
 
 ### 3.3 The receipt as the result [Q4, Q9]
 
@@ -411,6 +542,15 @@ async function rewrite($, e, next, base, plan) {
   return next({ ...e, command })
 }
 ```
+
+**The dead end that never runs.** The same discipline applies to a learned `avoid` pair. The
+binary's `dry_run` plan may answer `substitute: { command: "make test", reason }` for a call
+whose canonical key meets an `avoid` reflex at `fire` with a learned `instead`; the mod checks
+both commands with `$.tool.check` and substitutes only on the same verdict, with one line of
+context (`adage ran make test instead: pytest is not installed here`). The failure, the model's
+reading of it and the recovery request do not happen. A substitution is recorded as its own
+judgement (`Substituted`), never as a follow; in the control arm it is withheld and
+`would_substitute` is spooled.
 
 - **Binary:** with `verdict.engine` present, the engine's comparison replaces the planner's own
   settings reading for this decision; the planner's reading stays as the fallback for hosts
@@ -494,8 +634,13 @@ on('session.compact', async ($, e, next) => next({ ...e,
 
 `tool.call` "fires … including calls a subagent makes", with `e.agentId`; `turn.step` carries it
 too. An Explore agent that re-runs the lookup the main loop already did is the same waste one loop
-down. The receipt and rewrite paths above apply unchanged; predictions (§3.2) stay on the main loop
-(`e.agentId === undefined`) until a subagent study says otherwise.
+down. The receipt, rewrite and substitution paths above apply unchanged; predictions (§3.2) stay
+on the main loop (`e.agentId === undefined`) until a subagent study says otherwise. `agent.spawn`
+lets the mod ask the binary for the standing text that applies to the delegation (`Standing`
+with the subagent's description) and prepend it to the subagent's prompt as a marked
+`<adage-reflex>` block, so the subagent is told the convention before its first request; a
+subagent's calls are recorded with their `agent` on the canonical `Call`, so the learner can
+count a delegation's waste on its own.
 
 ### 3.9 Measure and attribute with the engine's own figures [Q5]
 
@@ -791,8 +936,8 @@ and states are specified in [ux-design.md](ux-design.md); this table says where 
 | Site | Adage draws | When | How |
 | --- | --- | --- | --- |
 | `InfoNotice` (terminal) | The engine's own notice for the hook's `systemMessage` (the first-session line, or the day's notice), redrawn with the glyph: `◠ adage · 3 reflexes and 4 instincts active in this repo · …` | Whenever the binary's notice gate printed one (first session, then at most daily) | `next({ ...e, props })` on the engine's notice; no second line, no new frequency |
-| `UserMessage` | One dim line under the prompt per reflex fired at it: `◠ lookup-work-item · scripts/wi-lookup W-2042 --json` | A prompt-triggered reflex | Keyed by order: the nth `UserPromptSubmit` result ↔ the nth `UserMessage` (the payload carries no message id); `Box` column: `await next(e)` first, then the lines; `e.props.isExpanded` returns `next(e)` alone |
-| `ToolUse` | A marker line under the row: `↪ adage: pointed this test run at .venv/bin/python` for a rewrite; `◠ adage chose this step: <reflex> · no model request` for a predicted call; `◠ dead end headed off: <reflex>` for a followed `avoid` | Rewrites and predictions matched by `e.requestId` (the `tool_use_id`) against `$.state`; the avoid marker from the feed's judgement record for that call | `Box` with the engine's row then one `Text dimColor` |
+| `UserMessage` | One dim line under the prompt per reflex fired at it, worded as what it tells the agent: `◠ look up the work item · scripts/wi-lookup W-2042 --json` | A prompt-triggered reflex | Keyed by order: the nth `UserPromptSubmit` result ↔ the nth `UserMessage` (the payload carries no message id); `Box` column: `await next(e)` first, then the lines; `e.props.isExpanded` returns `next(e)` alone |
+| `ToolUse` | A marker line under the row: `↪ adage: pointed this test run at .venv/bin/python` for a rewrite; `◠ adage chose this step · no model request` for a predicted call; `↪ adage ran make test instead · pytest is not installed here` for a substitution; `◠ dead end headed off` for a followed `avoid` | Rewrites and predictions matched by `e.requestId` (the `tool_use_id`) against `$.state`; the avoid marker from the feed's judgement record for that call | `Box` with the engine's row then one `Text dimColor` |
 | `ToolResult` | The receipt card in place of pytest's output: receipt id, result, duration, the tests named, the session's own tests first, and the one line saying the output is not shown | A receipt answered as the result (§3.3) only; beside a run that happened, one dim line and `next(e)` | Return a tree, no `next`; `Markdown` for the test list |
 | `ToolGroup` or the last `ToolUse` of a batch | `○ adage noticed · <sequence> · seen in 3 earlier sessions`, or `· waits for your review · /adage review` | A `noticed` record for this batch (§3.10), once per candidate per session | `Box` with the engine's row then one `Text dimColor` |
 | `ToolUse` for `Skill` | `◈ adage loaded this skill: <reflex> · no model request`; `◈ adage verified 3 of 5 steps here · step 2 corrected` | A skill reflex invoked or a trained skill expanded (§3.11) | As the other `ToolUse` markers |
@@ -902,15 +1047,15 @@ under `pluginConfigs`; a change reloads the mod with the new `options`:
 
 ```json
 "userConfig": {
-  "band":          { "type": "boolean", "title": "Band above the prompt", "description": "One line: reflexes this session, steps without a model request, health, learning", "default": true },
-  "pane":          { "type": "string",  "title": "Watch pane", "description": "Open the live pane unasked in a wide terminal", "options": ["auto", "manual"], "default": "manual" },
-  "noticed":       { "type": "boolean", "title": "Show what Adage noticed", "description": "A line when a sequence of calls matches one Adage is still learning", "default": true },
-  "skills_invoke": { "type": "boolean", "title": "Invoke skills from reflexes", "description": "Load a skill at the step a granted reflex names, without a model request to choose it", "default": false },
-  "routine_model": { "type": "string",  "title": "Route routine steps to", "description": "A model alias for steps a fire reflex covers, or empty to route nothing", "default": "" }
+  "band": { "type": "boolean", "title": "Band above the prompt", "description": "One line: reflexes this session, steps without a model request, health, learning", "default": true },
+  "pane": { "type": "string",  "title": "Watch pane", "description": "Open the live pane unasked in a wide terminal", "options": ["auto", "manual"], "default": "manual" }
 }
 ```
 
-Only keys the binary allows from a session appear here. Execution policy, grants, trust and the
+Two rows, because a person who installed a plugin should not have to understand Adage to
+configure it. Everything else the mod can be tuned with (`ui.noticed`, `skills.invoke`,
+`runtime.routine_model`, `runtime.predict_cap`, `ui.notices`) is a `config.toml` key set with
+`adage config`, for people who go digging. Execution policy, grants, trust and the
 learning sources are decisions, not settings: they are made by a press in the session (§3.12) or
 at a terminal, never by a `/config` row, and asking is never behind a setting (a dismissed ask
 waits in the pane); the notice cadence is `ui.notices` in `config.toml` already and is not
@@ -985,7 +1130,7 @@ One table for the three documents (the plan's §6 and the test plan's §10 use t
 | **M1 · Foundation** (binary only) | `PreToolUse` dedup ring; `duration_us` and the doctor p95; `adage watch --follow --json --session`; `adage ledger note` and the harness ledger file; status card `--json` and `tokens.ts`; `adage off` and `adage on` | |
 | **M2 · See it** | `hooks/register.ts` with §3.1 and the §4 sites; the pane and `/adage …`; `claude plugin test` in CI on a pinned CLI; `scripts/check-plugin.mjs` learns the module; the two-plugin activation probe | Q1, Q2 (Layer 1), Q3, Q3b, Q6 |
 | **M3 · Trust it** | §3.2 `TurnStep` in the binary and the `predict` grant mode; §3.3 receipts as results and §3.4 the engine-checked rewrite through the two-phase `PreToolUse`; the `ToolResult` card | Q2 (Layer 2), Q4 |
-| **M4 · Skip it** | The mod's `turn.step` and the simulator; §3.6 cached placement; §3.7 compaction; §3.5 routing behind its option; §3.9 the ledger line | Q5, Q9, Q10, Q11 |
+| **M4 · Skip it** | The mod's `turn.step` and the simulator; chains and multi-call steps; the finish line at the last step; dead-end substitution; §3.6 cached placement and the tool description; §3.7 compaction; the subagent prompt; §3.5 routing behind its option; §3.9 the ledger line; the mod capabilities on `adage_trace::Capabilities` | Q5, Q9, Q10, Q11, Q15 |
 | **M5 · Notice** | §3.10: the `candidates` table and net, `noticed` on the decision, the learner's state in the feed, the toasts | Q12 |
 | **M6 · Skills** | §3.11: the `skill` response kind, the learner's rule from Skill tool uses, `adage train`'s `verified.json` with inertness, the `turn.step` invoke under the grant, the `SkillPrompt` event | Q13 |
 | **M7 · Evidence** | The `requests` metric and the arms in the demo runner; the development gate with a `MOD` arm on the reflex-proof harness; the registered confirmation on new groups | Q10 |
@@ -1042,7 +1187,10 @@ runs after the command hooks' session start so the token is claimed before any a
 `$.process.run`'s stdout and stdin appear in no transcript, debug log or file; `/clear` and
 `/resume` arrive as `classic.SessionStart` with their `source`; a `$.ui.ask` from
 `turn.complete` waits on the person without a budget; a model cannot invoke a registered
-command; `$.state` survives what Q6 says it survives). Two product decisions sit outside
+command; `$.state` survives what Q6 says it survives), and the finish line at the last step (Q15: a
+`turn.step` hook that replaces an `end_turn` stop with a tool chunk keeps the model's text, runs
+the call and continues the loop; the obligation is then met by the agent's own call). Two
+product decisions sit outside
 the spike: whether a `hold_dead_ends` ask ever exists (it needs a binary `PreToolUse` arm for
 `avoid` reflexes and a measured answer on hooks that wait on a person), and the reversal of Track
 C's D2 to one plugin (§3.12), which the owner has asked for and which the plan carries as A8.

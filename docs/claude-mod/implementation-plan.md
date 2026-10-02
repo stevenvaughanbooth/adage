@@ -324,8 +324,8 @@ command hooks; `hooks/register.ts` (the activation probe, `active`), `bridge.ts`
 tagged results, `env: { CLAUDECODE: '1' }`, the argv allow-list `hook | version | watch | graph |
 doctor | status | ledger note | off`), `decide.ts`, `draw/*.tsx`, `feed.ts`, `commands.ts`,
 `tokens.ts` (generated), `*.test.ts`; `types/index.d.ts`; `plugin.json` gains `"types"` and
-`userConfig` (`band`, `pane`, `noticed`, `skills_invoke` default off, `routine_model`; no
-switch for asking). One command registration, `/adage`, with an argument hint. The person-only
+`userConfig` (`band` and `pane` only; `ui.noticed`, `ui.spinner`, `ui.turn_line`, `skills.invoke`,
+`runtime.routine_model` and `runtime.predict_cap` are `config.toml` keys; no switch for asking). One command registration, `/adage`, with an argument hint. The person-only
 verbs run only through `press()` (B4), with the token on stdin. Until A8 the same
 module ships in `plugin/claude-code-exec`, where hook events go to `adage-exec` and CLI verbs to
 `adage`, which `plugin/build.sh` stages beside it (its `SHA256SUMS` step already lists both
@@ -773,6 +773,74 @@ Needs S9 Q1, Q2 (Layer 1), Q3 and Q6 to have passed. Every chunk here ships behi
   `routine`; Q11 reported.
 - **Estimate.** 3 days. **Depends on.** B2, C1.
 
+#### C6 · The dead end that never runs
+
+- **Delivers.** A learned `avoid` pair substituted before the dead end runs (architecture §3.4).
+- **Files.** `crates/adage-hook/src/lib.rs` (`pretool()`'s `dry_run` plan gains `substitute` when
+  the call's canonical key meets an `avoid` route at `fire` whose `instead` is a fixed command;
+  the `verdict.engine` phase records `Judgement::Substituted` or `would_substitute`), the runtime's
+  judgement enum and its consumers (feed, graph, savings, evidence: a substitution is not a
+  follow), the mod's `hooks/decide.ts` (the `substitute` branch beside the rewrite branch: two
+  `$.tool.check`s, same verdict, `next({ ...e, command })` with the context line), `docs/execution.md`
+  ("Rewrites" gains the learned pair).
+- **Contract.** Only a `fire` `avoid` route with a slot-free `instead`; only on the same permission
+  verdict; one line of context; never in control; counted in `dead_end_hits` as avoided.
+- **Tests.** T-C6-01 … T-C6-05.
+- **Acceptance.** In the sim, `python3 -m pytest tests` at the dead-end turn becomes `make test`
+  with the context line, the failure never occurs, and `check_graph` counts a substitution and
+  no follow; the control arm runs the dead end as today and spools `would_substitute`; the demo's
+  `dead_end_hits` falls in the `mod` arm.
+- **Estimate.** 2 days. **Depends on.** C3.
+
+#### C7 · Chains and multi-call steps
+
+- **Delivers.** A lookup-then-read chain and a `ReadBatch` predicted as one response of several
+  calls (architecture §3.2).
+- **Files.** `crates/adage-runtime/src/lib.rs` (`Pending` binds a `ReadBatch`'s files from the
+  preceding call's result when the directive names them; `Prediction.calls: Vec<{tool, input}>`;
+  the "never two in a row per route" bound counts yielded responses), `harness/claude.rs`
+  (`render` emits `calls`), the mod's `turn.step` (one `tool`/`input` pair per call, indexes
+  0..n), `crates/adage-sim` (the held-out replay expects the lookup prediction and the reads).
+- **Tests.** T-C7-01 … T-C7-04.
+- **Acceptance.** The sim's held-out session predicts the lookup, then the reads of its
+  `linked_files`, with a model step between; `requests` on lookup items falls by two in the `mod`
+  arm of the demo.
+- **Estimate.** 3 days. **Depends on.** C4.
+
+#### C8 · The finish line at the last step
+
+- **Delivers.** An armed, unmet, granted obligation run as the agent's own call at the turn's
+  end, instead of the Stop gate's block and extra request (architecture §3.2, Q15).
+- **Files.** the mod's `turn.step` (on an `end_turn` stop with the binary answering
+  `obligation`, keep the text chunks, yield the obligation's `tool`/`input` and a `tool_use`
+  stop), `crates/adage-runtime/src/lib.rs` (`TurnStep` with `ending: true` answers an obligation
+  under the grant; the obligation is marked met when its call is observed; the Stop gate stays as
+  the fallback), `crates/adage-sim`.
+- **Tests.** T-C8-01 … T-C8-04.
+- **Acceptance.** Q15 passes (10 of 10: the text is kept, the call runs, the loop continues, the
+  obligation is met, no `block`); the sim's finish-line turn shows no Stop request in the `mod`
+  arm; `requests` per finish line falls by one.
+- **Estimate.** 3 days. **Depends on.** C4, S9 Q15.
+
+#### C9 · Attachment: the tool description, the subagent prompt, and the mod capabilities
+
+- **Delivers.** Conventions attached to the Bash tool's description and to a subagent's prompt
+  (architecture §1b.3, §3.6, §3.8); the mod's capabilities as fields on the canonical harness.
+- **Files.** `crates/adage-trace/src/harness.rs` (`Capabilities` gains `predict_step`,
+  `answer_call`, `substitute_call`, `tool_description`, `cached_section`, `subagent_prompt`,
+  `compaction`; `Harness::ClaudeCode` keeps today's four; the live adapter reports the mod's set
+  when the payload carries `via: mod`), `crates/adage-hook/src/harness/claude.rs` (`translate`
+  reads `via`), the runtime (behaviour by capability: a `Standing` answer for a delegation's
+  description; the environment note for `tool.describe`), the mod's `tool.describe { tool: 'Bash' }`
+  and `agent.spawn` hooks, `crates/adage-trace/src/lib.rs` (`Call.agent: Option<String>`,
+  `#[serde(default)]`), `docs/harnesses.md` (the capability table gains the mod's row).
+- **Tests.** T-C9-01 … T-C9-05.
+- **Acceptance.** `cargo test -p adage-trace` green with the new fields; a subagent spawned in the
+  sim receives the lookup convention in its prompt and makes no lookup of its own; the Bash
+  description in a Q2 probe carries the test-runner line once per session; directives per session
+  fall in the `mod` arm with hidden tests unchanged.
+- **Estimate.** 3 days. **Depends on.** C5.
+
 ### Workstream D · Noticed and skills (binary first, mod to draw)
 
 #### D1 · Candidates in the learner and the index
@@ -946,9 +1014,10 @@ D1 ──▶ D2 ──────────────▶ D5
 D3 ──▶ D4 ──────────────▶ D5
 A2, A4 (independent)
 A7 ──▶ A8;  A7, B3 ──▶ B4;  Q14 ──▶ B4
+C3 ──▶ C6;  C4 ──▶ C7, C8 (Q15);  C5 ──▶ C9
 ```
 
-Estimates: A 15 days, B 16.5, C 18, D 18.5, E 5.5 plus spend: about 74 engineer-days, fifteen
+Estimates: A 15 days, B 16.5, C 29, D 18.5, E 5.5 plus spend: about 85 engineer-days, seventeen
 engineer-weeks of code before the registered run. The critical path is A1 → C1 → C2 → C4 → E2
 (16 days of work, gated by Q9); B and D run beside it, and A7 → B4 (9 days, gated by Q14) is the
 path to the no-terminal product.
@@ -982,11 +1051,11 @@ own rule; `CONTRIBUTING.md` says only that hook paths fail open).
 
 | Milestone | Chunks | Done when |
 | --- | --- | --- |
-| **M0 · Spike** | S9 | Findings for Q1–Q14 in `FINDINGS.md` with `rerun.sh`; Q1, Q2 (Layer 1), Q3, Q6 pass before B starts; Q2 (Layer 2), Q4 before C3; Q9 before C4; Q14 before B4 |
+| **M0 · Spike** | S9 | Findings for Q1–Q15 in `FINDINGS.md` with `rerun.sh`; Q1, Q2 (Layer 1), Q3, Q6 pass before B starts; Q2 (Layer 2), Q4 before C3; Q9 before C4; Q14 before B4 |
 | **M1 · Foundation** | A1–A6 | One decision per `tool_use_id`; `duration_us` on every record and the doctor check; `watch --follow --json --session` streams and resumes from a cursor, silent about the arm; `ledger note` into `harness.jsonl` with integrity; `tokens.ts` generated and checked; `adage off`/`on` and `adage-exec version`; all goldens unchanged except the added silent `PreToolUse` step |
 | **M2 · See it** | B1–B3 | `1 mod active · adage`; exactly one copy active with both plugins; the `mod-observe` replay diff empty; every site drawn on both surfaces in `plugin test`; the pane fed by the binary with no gap across a restart; the recorded argv within the allow-list; the control-arm pane identical to a treated no-match pane; T-U-01 reading and doing parts |
 | **M3 · Trust it** | C1–C3 | `TurnStep` predicts only a delivered directive with a bound command and a `predict` grant, never at index 0, never twice in a row, never an inhibited route, never in control, nothing from `adage`; a route with both grant modes keeps both; a fresh receipt answers the repeated pytest run in the Python fixture with one record |
-| **M4 · Skip it** | C4, C5 | S9 Q9 10 of 10 with the dialog met and the id on disk; the sim predicts at the schema-edit turn under adage-exec and nothing in control; `adage:procedures` byte-identical across a session; the demo's `mod` arm runs end to end |
+| **M4 · Skip it** | C4–C9 | S9 Q9 10 of 10 with the dialog met and the id on disk; the sim predicts at the schema-edit turn under adage-exec and nothing in control; the dead end is substituted and the chain predicted in the sim; Q15 10 of 10 and no Stop request on the finish-line turn; a subagent told at spawn makes no lookup; `adage:procedures` byte-identical across a session; the demo's `mod` arm runs end to end with `requests`, `dead_end_hits` and directives per session all lower than the `adage` arm |
 | **M5 · Notice** | D1, D2, D5 (noticed) | The `make test → make lint` candidate from the sim's history in the index; the routes unchanged; `noticed` once per session in both arms; replay gate green; the line drawn under the batch; p95 within +0.3 ms |
 | **M6 · Skills** | D3, D4, D5 (skills) | A `skill` route learned from six synthetic sessions and delivered at prime; the Skill tool predicted at `turn.step` under a `predict` grant for an accepted, inert skill; `verified.json` written by `adage train` and read back by `SkillPrompt` only after `accept`; Q13's three entry points |
 | **M7 · Evidence** | E1–E3 | `requests` in the demo report with an `a0` arm; the v9 rule passes twice for `MOD`; the registered run's outcome recorded, whatever it is |

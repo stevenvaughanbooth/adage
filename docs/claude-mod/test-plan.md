@@ -97,6 +97,10 @@ the cross-cutting set.
 | Receipt as result, `$.tool.check` (§3.3, §3.4) | C3 | T-C3-01 … 07 |
 | The mod's `turn.step`, sim (§3.2) | C4 | T-C4-01 … 06 |
 | Standing, compaction, routing (§3.5–3.7) | C5 | T-C5-01 … 05 |
+| The dead end that never runs (§3.4, §1b.1) | C6 | T-C6-01 … 05 |
+| Chains and multi-call steps (§3.2, §1b.1) | C7 | T-C7-01 … 04 |
+| The finish line at the last step (§3.2, §1b.1) | C8 | T-C8-01 … 04 |
+| Attachment and the mod capabilities (§1b.3, §3.6, §3.8) | C9 | T-C9-01 … 05 |
 | Candidates (§3.10) | D1 | T-D1-01 … 10 |
 | `noticed` (§3.10) | D2 | T-D2-01 … 07 |
 | `skill` kind (§3.11) | D3 | T-D3-01 … 08 |
@@ -389,6 +393,61 @@ the Then itself.
   `routine_model`.
 - **T-C5-05 · L9 · byte-identical across requests.** `$.prompt.compose()` read at three points of
   a session returns the same `adage:procedures` text (Q2).
+
+### C6 · The dead end that never runs
+
+- **T-C6-01 · L1 · the plan.** A `PreToolUse` dry run for a call meeting a `fire` `avoid` route with
+  a fixed `instead` answers `substitute`; a `prime` `avoid` route, a slotted `instead`, or no
+  `instead` answers none.
+- **T-C6-02 · L2 · recorded as a substitution.** `verdict: { engine: "same" }` spools one record
+  with `Judgement::Substituted`; the feed, `graph --json` and the savings estimate count it as
+  avoided, never as a follow; the control arm spools `would_substitute` and answers nothing.
+- **T-C6-03 · L7 · the mod.** With both `$.tool.check` verdicts equal the hook calls `next` with
+  the learned command and the context line; with different verdicts, `next(e)` unchanged.
+- **T-C6-04 · L4 · the sim.** The dead-end turn runs `make test`, no failure event occurs, and
+  `check_graph` counts one substitution.
+- **T-C6-05 · L10 · the demo.** `dead_end_hits` in the `mod` arm is lower than in `adage` with
+  `hidden_passed` unchanged.
+
+### C7 · Chains and multi-call steps
+
+- **T-C7-01 · L1 · binding from a result.** After a predicted lookup's batch, a pending
+  `ReadBatch` directive binds its files from the result's `linked_files` and predicts one
+  response with one call per file.
+- **T-C7-02 · L1 · the bound.** The read step follows the lookup only after a batch; a third
+  prediction for the same route without a model step between is refused.
+- **T-C7-03 · L7 · several chunks.** The generator yields `tool`/`input` pairs with indexes
+  0..n-1 and one stop; the returned `toolUses` lists them all.
+- **T-C7-04 · L4 + L10 · the sim and the demo.** The held-out session predicts the lookup and
+  then the reads; `requests` on lookup items falls by two in the `mod` arm.
+
+### C8 · The finish line at the last step
+
+- **T-C8-01 · L1 · the answer.** `TurnStep { ending: true }` with an armed, unmet obligation under
+  a `predict` grant answers the obligation's call; without the grant, or with it met, nothing.
+- **T-C8-02 · L7 · the stop is replaced.** On an `end_turn` stop the hook keeps every text
+  chunk, yields the call and a `tool_use` stop; on `tool_use` stops it forwards unchanged.
+- **T-C8-03 · L2 · met by the call.** The obligation is marked met when its call is observed in
+  the next batch; the Stop gate then has nothing to ask; if the call failed, the gate asks as
+  today.
+- **T-C8-04 · L9 + L4 · Q15 and the sim.** Ten of ten live runs keep the text, run the call,
+  continue and end with no `block`; the sim's finish-line turn shows no Stop request in the `mod`
+  arm.
+
+### C9 · Attachment and the mod capabilities
+
+- **T-C9-01 · L1 · capabilities.** `Capabilities` round-trips the seven new fields; `Harness::
+  ClaudeCode.capabilities()` is unchanged; a payload carrying `via: mod` reports the mod's set;
+  `Call.agent` defaults to `None`.
+- **T-C9-02 · L1 · by capability.** `decide()` answers `Standing` for a delegation only when
+  `subagent_prompt` is set, and the environment note for `tool.describe` only when
+  `tool_description` is set.
+- **T-C9-03 · L7 · the hooks.** `tool.describe { tool: 'Bash' }` appends the note once; `agent.spawn`
+  prepends the marked block to the prompt when the binary answers one, else `next(e)`.
+- **T-C9-04 · L4 · a subagent told.** The sim's delegated session receives the lookup convention
+  in its prompt and makes no lookup of its own; its calls carry `agent`.
+- **T-C9-05 · L10 · fewer directives.** Directives per session fall in the `mod` arm with
+  `hidden_passed` unchanged (the convention is in the tool description).
 
 ### D1 · Candidates
 
@@ -743,7 +802,8 @@ handlers directly and checking `$.state` and the recorded `$.ui.*` calls.
 | `receipts_as_results` | `pretool` records with `answered: receipt` | the session spool |
 | `cost_usd`, tokens | `result.total_cost_usd` and the four counts per step | `stream-json` result; `ledger note` |
 | `passed`, `ci_passed`, `hidden_passed`, `hidden_tests_run`, `stale_generated` | `score.py` | the sandbox |
-| `turns`, `tool_calls`, `turns_to_first_edit`, `dead_end_hits` | as today | `demo/run.py` |
+| `turns`, `tool_calls`, `turns_to_first_edit`, `dead_end_hits` | as today; `dead_end_hits` splits into `hit` and `substituted` | `demo/run.py` |
+| `directives`, `subagent_tool_calls` | directives delivered per session; tool calls made by subagents | the spool; the transcript |
 | Hook p95 | `duration_us` | the spool |
 
 ### 7.2 Arms
@@ -840,11 +900,11 @@ responsibility stated in each PR.
 
 | Milestone | Entry | Exit |
 | --- | --- | --- |
-| M0 Spike | — | Q1–Q14 findings in `FINDINGS.md` with `rerun.sh`; Q1, Q2 (Layer 1), Q3, Q6 pass |
+| M0 Spike | — | Q1–Q15 findings in `FINDINGS.md` with `rerun.sh`; Q1, Q2 (Layer 1), Q3, Q6 pass |
 | M1 Foundation | — | T-A1 … T-A6 all green; the goldens unchanged except the silent `PreToolUse` step; paired latency numbers in the PRs |
 | M2 See it | M0's four questions, A3, A5, A6 | T-B1 … T-B3, T-X-02, T-X-03, T-X-04, T-X-06, T-X-07, T-X-10, T-X-11 green; T-E1-03's replay diff empty; T-U-01 reading and doing parts |
 | M3 Trust it | M1, Q2 (Layer 2), Q4 | T-C1 … T-C3, T-X-01, T-X-05, T-X-12 green |
-| M4 Skip it | M3, Q9 | T-C4, T-C5 green; Q9 10 of 10; the `mod` arm runs end to end (T-C4-06) |
+| M4 Skip it | M3, Q9 | T-C4 … T-C9 green; Q9 and Q15 10 of 10; the `mod` arm runs end to end (T-C4-06) with `requests`, `dead_end_hits` and directives lower than `adage` |
 | M5 Notice | D1's L5 numbers | T-D1, T-D2, T-D5-01, T-D5-02 green; Q12; T-U-01 noticed questions |
 | M6 Skills | — | T-D3, T-D4, T-D5-03 green; Q13 |
 | M7 Evidence | M4 | T-E1 green; T-E2 twice; T-E3 recorded |
