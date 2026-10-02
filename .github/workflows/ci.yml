@@ -269,6 +269,9 @@ jobs:
         working-directory: web/map
       - run: pnpm typecheck
         working-directory: web/map
+      - name: unit tests (vitest)
+        run: pnpm test
+        working-directory: web/map
       - name: embedded map matches web/map
         run: pnpm drift
         working-directory: web/map

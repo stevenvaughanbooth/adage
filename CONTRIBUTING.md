@@ -26,7 +26,7 @@ Windows x64. Run it locally before sending a change:
 ```bash
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo test --workspace --locked        # includes the normaliser's golden fixtures and, with node, the OpenCode plugin test
+cargo test --workspace --locked        # includes the normaliser's table-driven cases and, with node, the OpenCode plugin test
 node npm/test/launcher.test.mjs        # the npm launcher, against target/debug/adage
 plugin/test/session-start.test.sh      # how the Claude Code plugin finds its binary
 node scripts/check-plugin.mjs          # plugin and marketplace versions and hook paths

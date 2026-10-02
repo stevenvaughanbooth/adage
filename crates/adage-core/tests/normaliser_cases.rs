@@ -1,9 +1,9 @@
-//! Golden fixture runner. Fixtures live in `fixtures/golden.json` — synthetic commands only, per
+//! Table-driven normaliser cases. They live in `cases/normaliser.json` — synthetic commands only, per
 //! spike privacy rules — and assert the *shape* of the canonical action (op, effect, mutating,
 //! and a confidence floor), not exact confidence values, so the suite doesn't become brittle to
 //! reasonable scoring tweaks.
 //!
-//! Run: `cargo test -p adage-core --test golden`
+//! Run: `cargo test -p adage-core --test normaliser_cases`
 
 use serde::Deserialize;
 use serde_json::Value;
@@ -161,8 +161,8 @@ fn run(path: &str, table: &CommandTable) -> i32 {
             return 2;
         }
     };
-    let value: Value = serde_json::from_str(&raw).expect("golden.json must be valid JSON");
-    let fixtures: Vec<Fixture> = serde_json::from_value(value).expect("golden.json must match Fixture[] shape");
+    let value: Value = serde_json::from_str(&raw).expect("normaliser.json must be valid JSON");
+    let fixtures: Vec<Fixture> = serde_json::from_value(value).expect("normaliser.json must match Fixture[] shape");
 
     let mut passed = 0;
     let mut failed = 0;
@@ -203,7 +203,7 @@ fn run(path: &str, table: &CommandTable) -> i32 {
 }
 
 #[test]
-fn golden_fixtures_pass() {
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/golden.json");
-    assert_eq!(run(path, &CommandTable::load()), 0, "golden fixtures failed");
+fn every_normaliser_case_passes() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/cases/normaliser.json");
+    assert_eq!(run(path, &CommandTable::load()), 0, "normaliser cases failed");
 }
