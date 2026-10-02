@@ -43,9 +43,11 @@ pub const LAYERS: &[(&str, u8)] = &[
     ("adage-eval", 6),
     // 7: execution.
     ("adage-exec", 7),
-    // 8: binaries and their application logic.
-    ("adage-train", 8),
-    ("adage-cli", 8),
+    // 8: the application layer: the operations front ends call.
+    ("adage-app", 8),
+    // 9: binaries: argument parsing, rendering, the TUI and the HTTP server.
+    ("adage-train", 9),
+    ("adage-cli", 9),
 ];
 
 /// Edges forbidden whatever the layers say: `(from, to, why)`.

@@ -1,0 +1,35 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+assertion_line: 229
+expression: text
+---
+ adage    1 Live   2 Reflexes (1)  3 Map   4 Health (2)  5 Settings
+──────────────────────────────────────────────────────────────────────
+ / filter reflexes, commands, files
+ FIRE 1  PRIME 0  INHIBIT 0  all states ▾
+
+ ▾ harbor-dispatch/incidents@0.3.0
+▌  F ◠ lookup-incident         firm     24/25
+──────────────────────────────────────────────────────────────────────
+ ◠ lookup-incident
+ mode     Needs recovery · Inspect the worktree before acknowledging
+ when     a prompt names a ticket
+ do       bin/fetch-incident {item}
+ last run Unknown · completion could not be recorded
+ FIRE · firm · harbor-dispatch/incidents@0.3.0
+ ○ waits for review: new · conditioned and never reviewed
+
+ ADVISORY PREVIEW (EXAMPLE VALUES)
+ <adage-reflex track="harbor-dispatch/incidents@0.3.0"
+ reflex="lookup-incident" strength="fire">
+ Incidents here are looked up with a script. A known next step here
+ is:
+   bin/fetch-incident INC-2045. Ignore this if the user is asking for
+   something else.
+ Learned by Adage from this repository's earlier agent sessions; not
+ requested by the user.
+ </adage-reflex>
+
+ EVIDENCE
+──────────────────────────────────────────────────────────────────────
+ ? keys · : palette · / filter · j/k move · enter expand       q quit

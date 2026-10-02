@@ -1,0 +1,15 @@
+---
+source: crates/adage-term/src/out.rs
+assertion_line: 347
+expression: "render(Theme::plain(), status)"
+---
+adage status · acme-billing · gen 8dd5ec01 · hooks claude, codex
+
+instincts   1 track · 1 instinct
+reflexes    2 tracks · 4 reflexes from 57 traces
+
+  FIRE       ◠ lookup-work-item         23/33  lb 0.53 · 8 turns saved
+  PRIME      ◉ finish-line/regenerate   7/7    lb 0.65
+  INHIBIT    ◠ dead-end-d41b1e          11/43  "No module named pytest" → make test
+
+next  adage review · 1 nascent reflex waits for you

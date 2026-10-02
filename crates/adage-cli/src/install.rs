@@ -44,7 +44,7 @@ pub(crate) const BACKUP_SUFFIX: &str = ".adage-bak";
 
 /// Environment variables that mark a shell run by an agent. Only `CLAUDECODE` is documented; the
 /// others are observed conventions (docs/harnesses.md). A guard against steering, not a sandbox.
-pub(crate) const AGENT_ENV: [&str; 4] = ["CLAUDECODE", "OPENCODE", "CODEX_SANDBOX", "CODEX_SANDBOX_NETWORK_DISABLED"];
+pub(crate) use adage_app::person::AGENT_ENV;
 
 fn flag(args: &[String], name: &str) -> Option<String> {
     args.iter().position(|a| a == name).and_then(|i| args.get(i + 1).cloned())

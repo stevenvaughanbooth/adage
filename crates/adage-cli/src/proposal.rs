@@ -7,8 +7,7 @@
 //! pinned route and silences the proposal until the mined version changes materially again.
 
 use crate::share::describe_step;
-use adage_tracks::proposals::Proposal;
-use adage_tracks::review::{shape, strength_str};
+use adage_tracks::review::strength_str;
 use adage_tracks::{Contract, Route, SlotSource};
 
 fn slots(r: &Route) -> String {
@@ -75,18 +74,7 @@ pub(crate) fn diff(pinned: &Route, proposed: &Route) -> Vec<(&'static str, Strin
         .collect()
 }
 
-/// The proposal for a route, if it still applies to the route as it stands: made against this
-/// very pinned route (a hand edit since then makes it stale until the next learn run).
-pub(crate) fn current<'a>(p: Option<&'a Proposal>, r: &Route) -> Option<&'a Proposal> {
-    p.filter(|p| r.authored && p.against.shape == shape(r) && p.against.strength == r.strength)
-}
-
-/// The route that approving the proposal installs: the proposed version, still pinned.
-pub(crate) fn applied(p: &Proposal) -> Route {
-    let mut r = p.route.clone();
-    r.authored = true;
-    r
-}
+pub(crate) use adage_app::proposal::applied;
 
 #[cfg(test)]
 mod tests {

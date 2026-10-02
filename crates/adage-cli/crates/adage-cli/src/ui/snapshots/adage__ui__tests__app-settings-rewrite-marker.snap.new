@@ -1,0 +1,45 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+assertion_line: 229
+expression: text
+---
+ adage    1 Live   2 Reflexes   3 Map   4 Health   5 Settings                                                                  harbor-dispatch · LIVE
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ config  /home/me/.local/share/adage/config.toml
+ the same settings as adage config; environment variables win over the file
+
+ learn.auto               true     (default)
+   condition automatically, in the background, when an agent session stops or ends
+ learn.min_interval_secs  120      (default)
+   at most one automatic conditioning run per repository in this many seconds (0 to 86400)
+ learn.thresholds         default  (default)
+   evidence bars for `adage condition` and automatic conditioning: default, or demo (lower)
+ learn.claude_projects    ""       (default)
+   Claude Code traces to condition on ("" = ~/.claude/projects)
+ learn.codex_sessions     auto     (default)
+   Codex rollouts to condition on: auto (once Codex hooks are registered), a directory, or "" (none)
+ learn.opencode_exports   ""       (default)
+   a directory of `opencode export` files automatic conditioning reads ("" = none)
+ learn.parse_cache        true     (default)
+   keep parsed traces in cache/sessions so conditioning again parses only what changed
+ learn.cards              true     (default)
+   learn procedure cards for families of similar tasks (with the installed or bundled model)
+ learn.card_threshold     0.811    (default)
+   how similar a prompt must be to a family's prompts for its procedure card (0.5 to 0.99)
+ instincts.enabled        true     (default)
+   bind Adage's built-in defaults (instincts) from each repository's declared files
+ instincts.packs          auto     (default)
+   instinct packs to bind, comma-separated: auto (every installed instinct pack) or names, e.g. adage/python-env
+ instincts.disabled       ""       (default)
+   instinct packs or ids never to bind, comma-separated, e.g. adage/lockfiles,U3 (see docs/instincts.md)
+ ui.notices               daily    (default)
+   one-line notices at session start (Claude Code): daily, only when something is new; or off
+ runtime.control          0.1      (default)
+   share of sessions held out as the control arm (Adage decides but says nothing)
+▌runtime.rewrite          false    (exec/rewrite-off marker)
+   point Python test runs under the system Python at the project's verified environment before they run (Claude Code PreToolUse); false: leave every
+   command as the agent wrote it
+   ↪ rewrites off · same as adage delegate rewrites on to switch
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ? keys · : palette · enter edit · space toggle                                                                                                q quit

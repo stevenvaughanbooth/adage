@@ -31,6 +31,8 @@ adage-eval = { path = "../adage-eval" }
 adage-hook = { path = "../adage-hook" }
 # Approvals are written through adage-exec's API (the library only: `adage` never runs a route).
 adage-exec = { path = "../adage-exec" }
+# The operations front ends share: the review queue and decisions (`adage_app`).
+adage-app = { path = "../adage-app" }
 serde.workspace = true
 serde_json.workspace = true
 anyhow.workspace = true

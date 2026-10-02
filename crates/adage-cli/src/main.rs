@@ -109,24 +109,7 @@ fn main() {
 }
 
 /// An error that knows the next step: `main` prints `help` as its `╰─ help` line.
-#[derive(Debug)]
-pub(crate) struct Hint {
-    what: String,
-    help: String,
-}
-
-impl std::fmt::Display for Hint {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.what)
-    }
-}
-
-impl std::error::Error for Hint {}
-
-/// `what` failed; `help` says what to run instead.
-pub(crate) fn hint(what: impl Into<String>, help: impl Into<String>) -> anyhow::Error {
-    anyhow::Error::new(Hint { what: what.into(), help: help.into() })
-}
+pub(crate) use adage_app::error::{hint, Hint};
 
 /// `what` failed for each of `causes` (printed as `├─ cause` lines); `help` says what to do.
 pub(crate) fn refusal(what: impl Into<String>, mut causes: Vec<String>, help: impl Into<String>) -> anyhow::Error {

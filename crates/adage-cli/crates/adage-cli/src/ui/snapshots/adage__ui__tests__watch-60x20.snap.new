@@ -1,0 +1,25 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+assertion_line: 229
+expression: text
+---
+ adage watch  harbor-dispatch                          LIVE
+─ now ──────────────────────────────────────────────────────
+ 12:04:02 a11c cc  tools    → ◠ read-linked-files PRIME
+                            ✓ lookup-incident
+ 12:04:03 0b0b cc  tools    · 1 call, nothing to say
+ 12:04:04 0b0b cc  failure  → ◠ dead-end-npm-test INHIBIT
+ 12:04:05 0b0b cc  tools    ✗ lookup-incident
+ 12:04:06 c4a1 cc  tools    ○ found lookup-incident unaided
+ 12:04:07 0b0b cc  stop     ■ finish line: asked the agent …
+ 12:04:08 a11c cc  tools    ✓ finish line met codegen-after…
+─ conditioning ─────────────────────────────────────────────
+   ◠ lookup-incident     prime → fire       24/25 · lb 0.80
+   ◠ dead-end-npm-test   new · inhibit      6/7
+ ✗ 12:04 conditioning failed (io): tracks directory is not …
+   ○ 1 reflex waits for review · adage review
+─ health ───────────────────────────────────────────────────
+ + hooks claude    + 4 reflexes    + auto-condition
+ ! no model · adage models fetch
+────────────────────────────────────────────────────────────
+ p pause · f scope · / filter · enter inspect        q quit

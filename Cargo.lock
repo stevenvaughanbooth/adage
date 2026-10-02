@@ -3,9 +3,26 @@
 version = 4
 
 [[package]]
+name = "adage-app"
+version = "0.1.0"
+dependencies = [
+ "adage-core",
+ "adage-exec",
+ "adage-learn",
+ "adage-runtime",
+ "adage-store",
+ "adage-tracks",
+ "anyhow",
+ "regex",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "adage-cli"
 version = "0.1.0"
 dependencies = [
+ "adage-app",
  "adage-core",
  "adage-eval",
  "adage-exec",
