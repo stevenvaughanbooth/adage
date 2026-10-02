@@ -1038,6 +1038,9 @@ fn decide(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
 /// A decision from `adage ui`: the same guard and the same code path as `adage review <verb>`.
 pub(crate) fn decide_quietly(verb: &str, spec: &str, route_id: &str, paths: &Paths) -> Result<Decided> {
     require_person(&format!("review {verb}"))?;
+    // One writer of the tracks and index at a time, as for `adage review <verb>`: an automatic
+    // learner may be running.
+    let _tracks = adage_store::lock::exclusive(&paths.tracks_lock())?;
     apply(verb, spec, route_id, None, paths)
 }
 

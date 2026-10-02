@@ -192,13 +192,7 @@ pub fn decode(v: &Value, cx: &Decode<'_>) -> Option<Session> {
                 }
             }
             let call = Call { tool: tool.clone(), input: input.clone(), output: output.clone(), failed };
-            steps.extend(call_steps(
-                turn,
-                at,
-                &call,
-                normalize_tool(&tool, &input, &root_str, table),
-                &root,
-            ));
+            steps.extend(call_steps(turn, at, &call, normalize_tool(&tool, &input, &root_str, table), &root));
         }
     }
     let prompts = prompts.anchor(&steps);

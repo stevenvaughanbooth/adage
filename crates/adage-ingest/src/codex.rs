@@ -382,13 +382,7 @@ pub fn decode(lines: &[Value], cx: &Decode<'_>) -> Option<Session> {
             let call = Call { tool: tool.clone(), input: input.clone(), output: output.clone(), failed };
             let at = if tool == "Bash" { run_in.as_str() } else { root_str.as_str() };
             let prompt = if by_event { rec.prompt.0 } else { rec.prompt.1 };
-            steps.extend(call_steps(
-                rec.turn,
-                prompt,
-                &call,
-                normalize_tool(&tool, &input, at, table),
-                &root,
-            ));
+            steps.extend(call_steps(rec.turn, prompt, &call, normalize_tool(&tool, &input, at, table), &root));
         }
     }
     let prompts = if by_event { event_prompts } else { item_prompts }.anchor(&steps);

@@ -482,7 +482,9 @@ mod tests {
     /// output or as a user message: the session is steered, and the text is never a prompt.
     #[test]
     fn stop_gate_text_and_receipts_are_adages_own_in_claude_transcripts() {
-        let gate = adage_trace::wire::finish_line("Adage ran `.venv/bin/python -m pytest tests -q` (person-approved) as you finished: it failed (exit 1).");
+        let gate = adage_trace::wire::finish_line(
+            "Adage ran `.venv/bin/python -m pytest tests -q` (person-approved) as you finished: it failed (exit 1).",
+        );
         let receipt = "<adage-receipt operation=\"0123456789ab\">\nAdage's run of `make test` in this session passed on files identical to the current ones.\n</adage-receipt>";
         let rec = |v: serde_json::Value| format!("{v}\n");
         let head =

@@ -214,7 +214,8 @@ mod tests {
     fn an_explicit_repository_key_wins_over_the_recorded_directory() {
         let source = Memory(vec![("t".into(), claude("/x/y"))]);
         let table = CommandTable::load();
-        let cx = Decode { table: &table, locator: &AsRecorded, repo_override: Some("github.com/acme/app"), subagent: false };
+        let cx =
+            Decode { table: &table, locator: &AsRecorded, repo_override: Some("github.com/acme/app"), subagent: false };
         let s = ingest_one(&source, &source.list()[0], &cx).unwrap();
         assert_eq!(s.repo, "github.com/acme/app");
     }

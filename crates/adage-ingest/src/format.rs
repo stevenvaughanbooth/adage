@@ -87,3 +87,82 @@ pub fn read_session(path: &Path, table: &CommandTable, repo_override: Option<&st
     let cx = Decode { subagent: crate::claude::is_subagent(path), ..Decode::local(table, repo_override) };
     decode_trace(std::fs::File::open(path).ok()?, &cx)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn harness(head: &[u8]) -> Option<&'static str> {
+        detect(head).map(|f| f.harness())
+    }
+
+    #[test]
+    fn each_format_is_recognised_by_its_first_bytes() {
+        let rollout = format!("{}\n", json!({"timestamp": "t", "type": "session_meta", "payload": {"id": "x"}}));
+        assert_eq!(harness(rollout.as_bytes()), Some("codex"));
+        // `opencode export` pretty-prints: the first line is `{` alone, the key on the next.
+        assert_eq!(harness(b"{\n  \"info\": {\n    \"id\": \"ses_1\""), Some("opencode"));
+        assert_eq!(harness(b"{\"info\":{\"id\":\"ses_1\"},\"messages\":[]}"), Some("opencode"));
+        let transcript = format!("{}\n", json!({"type": "user", "sessionId": "s", "cwd": "/r"}));
+        assert_eq!(harness(transcript.as_bytes()), Some("claude-code"));
+        assert_eq!(harness(b""), Some("claude-code"), "the fallback decodes it to no session");
+    }
+
+    #[test]
+    fn near_misses_are_not_taken_for_another_format() {
+        // A `session_meta` line without its payload object or timestamp is not a rollout head.
+        let partial = format!("{}\n", json!({"type": "session_meta", "payload": "x"}));
+        assert_eq!(harness(partial.as_bytes()), Some("claude-code"));
+        // An `info` key that is not the first key is not an export's opening.
+        assert_eq!(harness(b"{\"messages\": [], \"info\": {}}"), Some("claude-code"));
+        // Only the first line is read for a rollout head: a later `session_meta` does not count.
+        let later = format!(
+            "{}\n{}\n",
+            json!({"type": "user"}),
+            json!({"timestamp": "t", "type": "session_meta", "payload": {}})
+        );
+        assert_eq!(harness(later.as_bytes()), Some("claude-code"));
+    }
+
+    /// The registry reads every file exactly as the per-format readers it replaced did.
+    #[test]
+    fn the_registry_matches_each_formats_own_reader() {
+        let d = tempfile::tempdir().unwrap();
+        let table = CommandTable::load();
+        let rollout = [
+            json!({"timestamp": "2026-09-01T10:00:00Z", "type": "session_meta", "payload": {"id": "x1", "cwd": "/tmp/acme", "timestamp": "2026-09-01T10:00:00Z"}}),
+            json!({"timestamp": "2026-09-01T10:00:01Z", "type": "event_msg", "payload": {"type": "user_message", "message": "run the tests"}}),
+            json!({"timestamp": "2026-09-01T10:00:02Z", "type": "response_item", "payload": {"type": "function_call", "name": "exec_command", "call_id": "k1", "arguments": "{\"cmd\":\"make test\"}"}}),
+            json!({"timestamp": "2026-09-01T10:00:03Z", "type": "response_item", "payload": {"type": "function_call_output", "call_id": "k1", "output": "Process exited with code 2\nOutput:\nboom"}}),
+        ];
+        let export = json!({
+            "info": {"id": "ses_1", "directory": "/tmp/acme", "time": {"created": 1_788_000_000_000i64}},
+            "messages": [
+                {"info": {"role": "user"}, "parts": [{"type": "text", "text": "run the tests"}]},
+                {"info": {"role": "assistant", "modelID": "m"}, "parts": [
+                    {"type": "tool", "tool": "bash", "state": {"status": "completed", "input": {"command": "make test"}, "output": "ok", "metadata": {"exit": 0}}}
+                ]}
+            ]
+        });
+        let transcript = [
+            json!({"type": "user", "sessionId": "c1", "cwd": "/tmp/acme", "message": {"role": "user", "content": "run the tests"}}),
+            json!({"type": "assistant", "sessionId": "c1", "cwd": "/tmp/acme", "message": {"id": "m1", "content": [{"type": "tool_use", "id": "t1", "name": "Bash", "input": {"command": "make test"}}]}}),
+        ];
+        let lines = |v: &[serde_json::Value]| v.iter().map(|l| format!("{l}\n")).collect::<String>();
+        let (r, e, t) = (d.path().join("r.jsonl"), d.path().join("e.json"), d.path().join("t.jsonl"));
+        std::fs::write(&r, lines(&rollout)).unwrap();
+        std::fs::write(&e, serde_json::to_string_pretty(&export).unwrap()).unwrap();
+        std::fs::write(&t, lines(&transcript)).unwrap();
+
+        let own_r = crate::codex::parse_rollout(&crate::codex::read_rollout(&r).unwrap(), &table, Some("acme"));
+        let own_e = crate::opencode::parse_export(&crate::opencode::read_export(&e).unwrap(), &table, Some("acme"));
+        let own_t = crate::claude::parse_transcript(&t, &table, Some("acme"));
+        for (path, own) in [(&r, own_r), (&e, own_e), (&t, own_t)] {
+            let own = own.unwrap_or_else(|| panic!("{}: no session", path.display()));
+            assert_eq!(read_session(path, &table, Some("acme")).as_ref(), Some(&own), "{}", path.display());
+            assert_eq!(detect_path(path).map(|f| f.harness()), Some(own.harness.as_str()));
+        }
+        assert!(read_session(&d.path().join("missing.jsonl"), &table, None).is_none());
+    }
+}

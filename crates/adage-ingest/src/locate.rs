@@ -64,3 +64,29 @@ fn worktree_root(cwd: &Path) -> Option<PathBuf> {
     let name = rest.components().next()?;
     Some(main.join(".claude/worktrees").join(name))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn as_recorded_reads_nothing_but_the_trace() {
+        let l = AsRecorded.locate(Path::new("/nowhere/acme/./src/.."), None);
+        assert_eq!(l, Located { root: PathBuf::from("/nowhere/acme"), repo: "acme".into() });
+        let l = AsRecorded.locate(Path::new("/nowhere/acme"), Some("  github.com/acme/app "));
+        assert_eq!(l.repo, "github.com/acme/app", "an explicit key wins, trimmed");
+    }
+
+    #[test]
+    fn a_local_checkout_is_found_from_a_directory_below_its_root() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path().join("app");
+        std::fs::create_dir_all(root.join(".git")).unwrap();
+        std::fs::create_dir_all(root.join("src/deep")).unwrap();
+        let l = LocalCheckout.locate(&root.join("src/deep"), Some("acme"));
+        assert_eq!(l, Located { root: root.clone(), repo: "acme".into() });
+        // No checkout above it: the directory itself.
+        let bare = d.path().join("loose");
+        assert_eq!(LocalCheckout.locate(&bare, Some("k")).root, bare);
+    }
+}

@@ -1,5 +1,8 @@
 //! Repository tasks, run as `cargo xtask <task>`.
 //!
+//! `affected [--base <ref>] [--files <path>...] [--json]`: the workspace packages a change can
+//! affect, so CI tests only those (`affected.rs`).
+//!
 //! `tokens [--check]`: reads `design/tokens/adage.tokens.json` (W3C DTCG 2025.10) and writes
 //!
 //! * `crates/adage-term/src/tokens.rs`: every colour with its night and day values, the nearest
@@ -10,6 +13,10 @@
 //!
 //! It also checks WCAG contrast (4.5:1) for every text colour on every ground in both modes.
 //! `--check` writes nothing and fails if either output is stale, for CI. Node is not needed.
+
+mod affected;
+#[cfg(test)]
+mod layers;
 
 use anyhow::{anyhow, bail, Context, Result};
 use serde_json::Value;
@@ -30,7 +37,10 @@ fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
         Some("tokens") => tokens(args.iter().any(|a| a == "--check")),
-        _ => bail!("usage: cargo xtask tokens [--check]"),
+        Some("affected") => affected::run(&root(), &args[1..]),
+        _ => bail!(
+            "usage: cargo xtask tokens [--check] | cargo xtask affected [--base <ref>] [--files <path>...] [--json]"
+        ),
     }
 }
 
