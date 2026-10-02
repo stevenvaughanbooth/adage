@@ -7,7 +7,7 @@
 //! a linked worktree's sessions count for its repository (the main checkout is shown), a
 //! subdirectory's for the repository around it, and a removed Claude Code worktree's for the
 //! repository it was in. A directory that is not in a repository, no longer exists, or is under
-//! this machine's temporary directory is left out.
+//! a temporary directory ([`temporary`]) is left out.
 
 use adage_core::repo;
 use adage_learn::scope::{self, Workdir};
@@ -45,9 +45,21 @@ impl Found {
 pub fn found(paths: &Paths) -> Vec<Found> {
     let cfg = config::load(paths).config;
     let Some(projects) = crate::history::claude_projects(&cfg) else { return vec![] };
-    let tmp = std::env::temp_dir();
-    let skip: Vec<PathBuf> = [tmp.canonicalize().ok(), Some(tmp)].into_iter().flatten().collect();
-    group(scope::claude_workdirs(&projects), &paths.repo_keys(), &skip)
+    group(scope::claude_workdirs(&projects), &paths.repo_keys(), &temporary(adage_store::home_dir().as_deref()))
+}
+
+/// The temporary directories: this process's, and the system's (`/tmp`, `/var/tmp`, macOS's
+/// per-user `/var/folders`), as written and as resolved. One that holds the home directory is
+/// not, there (a sandbox, or a test, where everything is under it).
+fn temporary(home: Option<&Path>) -> Vec<PathBuf> {
+    let mut dirs = vec![std::env::temp_dir()];
+    dirs.extend(["/tmp", "/var/tmp", "/var/folders"].map(PathBuf::from));
+    let resolved: Vec<PathBuf> = dirs.iter().filter_map(|d| d.canonicalize().ok()).collect();
+    dirs.extend(resolved);
+    dirs.retain(|d| !home.is_some_and(|h| scope::inside(h, std::slice::from_ref(d))));
+    dirs.sort();
+    dirs.dedup();
+    dirs
 }
 
 /// Working directories → repositories, by key. `skip`: directories whose repositories are left
@@ -193,6 +205,15 @@ mod tests {
         assert_eq!(got.len(), 2, "{got:?}");
         assert!(got[1].key.starts_with("notes@"), "{got:?}");
         assert_eq!(got[1].label(), crate::detect::tilde(&notes), "a key without a remote reads as its path");
+    }
+
+    #[test]
+    fn temporary_directories_are_left_out_unless_home_is_in_one() {
+        let tmp = temporary(Some(Path::new("/Users/me")));
+        assert!(tmp.contains(&PathBuf::from("/tmp")) && tmp.contains(&std::env::temp_dir()), "{tmp:?}");
+        let sandboxed = temporary(Some(Path::new("/tmp/sandbox/home")));
+        assert!(!sandboxed.contains(&PathBuf::from("/tmp")), "{sandboxed:?}");
+        assert!(sandboxed.contains(&PathBuf::from("/var/tmp")), "{sandboxed:?}");
     }
 
     #[test]

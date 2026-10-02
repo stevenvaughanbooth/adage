@@ -37,6 +37,9 @@ pub fn find_root(start: &Path) -> Option<PathBuf> {
 ///   the key remembered for it while it existed ([`remember_key`]); else the directory name alone,
 ///   the key every repository without `origin` had before. Hooks accept such a *legacy* key only
 ///   while no repository of that name has a new key ([`lookup_key`]).
+/// - A checkout whose git files are there but cannot be read (a cloud drive keeps them only in
+///   the cloud, and Adage never downloads: [`crate::cloud`]): the key remembered for it, rather
+///   than one derived from what could be read, which would be another repository's.
 pub fn repo_key(root: &Path) -> String {
     key(root, CACHE.get().map(PathBuf::as_path))
 }
@@ -99,7 +102,40 @@ fn key(root: &Path, cache: Option<&Path>) -> String {
     if !root.is_dir() {
         return cache.and_then(|c| recall(c, &root.to_string_lossy())).unwrap_or_else(|| dir_name(root));
     }
-    origin_key(root).unwrap_or_else(|| no_origin_key(root, cache))
+    match identity(root) {
+        Identity::Origin(k) => k,
+        Identity::NoOrigin => no_origin_key(root, cache),
+        Identity::Unread => {
+            cache.and_then(|c| recall(c, &root.to_string_lossy())).unwrap_or_else(|| no_origin_key(root, cache))
+        }
+    }
+}
+
+/// What a checkout's git files say about which repository it is.
+enum Identity {
+    /// The normalised `origin` URL.
+    Origin(String),
+    /// Read in full: no `origin` remote (or not a repository).
+    NoOrigin,
+    /// Not read in full: the `.git` file, the git directory's `commondir`, or the common
+    /// directory's `config` is there but could not be read.
+    Unread,
+}
+
+fn identity(root: &Path) -> Identity {
+    let Some((git, common)) = gitobj::dirs(root) else {
+        return if root.join(".git").exists() { Identity::Unread } else { Identity::NoOrigin };
+    };
+    // `dirs` takes an unreadable `commondir` for none, and so the worktree's own git directory for
+    // the common one.
+    if git == common && git.join("commondir").exists() && std::fs::read(git.join("commondir")).is_err() {
+        return Identity::Unread;
+    }
+    match std::fs::read_to_string(common.join("config")) {
+        Ok(cfg) => origin_in(&cfg).map_or(Identity::NoOrigin, Identity::Origin),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Identity::NoOrigin,
+        Err(_) => Identity::Unread,
+    }
 }
 
 /// Remember `key` as the key of the checkout at `root`, in the cache directory of [`use_cache`], so
@@ -114,7 +150,8 @@ pub fn remember_key(root: &Path, key: &str) {
 /// [`remember_key`] in `cache`. Best effort: a key that cannot be written is only not remembered.
 pub fn remember_key_cached(root: &Path, key: &str, cache: &Path) {
     let path = root.to_string_lossy();
-    if !root.is_dir() || recall(cache, &path).as_deref() == Some(key) {
+    // A key derived while the checkout's git files could not be read is never remembered.
+    if !root.is_dir() || matches!(identity(root), Identity::Unread) || recall(cache, &path).as_deref() == Some(key) {
         return;
     }
     let _ = std::fs::create_dir_all(cache);
@@ -147,8 +184,15 @@ fn recall(cache: &Path, path: &str) -> Option<String> {
 /// repository of that name, a legacy key could belong to any repository of the name, so it is
 /// ignored: that is the collision the new keys exist to prevent.
 pub fn lookup_key(root: &Path, cache: Option<&Path>, keys: &BTreeSet<&str>) -> Option<String> {
-    if let Some(o) = origin_key(root) {
-        return keys.contains(o.as_str()).then_some(o);
+    match identity(root) {
+        Identity::Origin(o) => return keys.contains(o.as_str()).then_some(o),
+        // Git files there but unread: the key remembered for this checkout, if any.
+        Identity::Unread => {
+            if let Some(k) = cache.and_then(|c| recall(c, &root.to_string_lossy())) {
+                return keys.contains(k.as_str()).then_some(k);
+            }
+        }
+        Identity::NoOrigin => {}
     }
     let name = checkout_name(root);
     let prefix = format!("{name}@");
@@ -168,7 +212,11 @@ pub fn lookup_key(root: &Path, cache: Option<&Path>, keys: &BTreeSet<&str>) -> O
 /// main checkout's.
 pub fn origin_key(root: &Path) -> Option<String> {
     let (_, common) = gitobj::dirs(root)?;
-    let cfg = std::fs::read_to_string(common.join("config")).ok()?;
+    origin_in(&std::fs::read_to_string(common.join("config")).ok()?)
+}
+
+/// The `origin` remote's normalised URL in a git `config` file's text.
+fn origin_in(cfg: &str) -> Option<String> {
     let mut in_origin = false;
     for line in cfg.lines() {
         let l = line.trim();
@@ -432,6 +480,51 @@ mod tests {
         assert_eq!(repo_key_cached(&sub, &cache), "github.com/acme/lib", "a submodule is its own repository");
         let keys = BTreeSet::from(["github.com/acme/app"]);
         assert_eq!(lookup_key(&rel, Some(&cache), &keys).as_deref(), Some("github.com/acme/app"), "hooks");
+    }
+
+    /// A checkout whose git files are there but cannot be read (kept only in the cloud, which Adage
+    /// never downloads) keeps the key remembered for it, for hooks too; a key derived from what
+    /// could be read would be another repository's, and is never remembered.
+    #[test]
+    #[cfg(unix)]
+    fn unread_git_files_keep_the_remembered_key() {
+        use std::os::unix::fs::PermissionsExt;
+        let d = tempfile::tempdir().unwrap();
+        let main = d.path().join("app");
+        write(&main.join(".git/config"), "[remote \"origin\"]\n\turl = git@github.com:Acme/App.git\n");
+        write(&main.join(".git/worktrees/wt/commondir"), "../..\n");
+        let wt = d.path().join("wt");
+        write(&wt.join(".git"), &format!("gitdir: {}\n", main.join(".git/worktrees/wt").display()));
+        let cache = d.path().join("repo-keys");
+        let keys = BTreeSet::from(["github.com/acme/app"]);
+        let mode = |p: &Path, m: u32| std::fs::set_permissions(p, std::fs::Permissions::from_mode(m)).unwrap();
+        let learn = |root: &Path| remember_key_cached(root, &repo_key_cached(root, &cache), &cache);
+        mode(&wt.join(".git"), 0o000);
+        if std::fs::read(wt.join(".git")).is_ok() {
+            return; // permissions are not enforced (running as root)
+        }
+        // Unread and never seen: derived from what could be read, and not remembered.
+        assert!(repo_key_cached(&wt, &cache).starts_with("wt@"));
+        learn(&wt);
+        assert_eq!(recall(&cache, &wt.to_string_lossy()), None);
+        assert_eq!(lookup_key(&wt, Some(&cache), &keys), None);
+        // Read once and remembered: unread again, it keeps its key.
+        mode(&wt.join(".git"), 0o644);
+        learn(&wt);
+        mode(&wt.join(".git"), 0o000);
+        assert_eq!(repo_key_cached(&wt, &cache), "github.com/acme/app");
+        assert_eq!(lookup_key(&wt, Some(&cache), &keys).as_deref(), Some("github.com/acme/app"), "hooks");
+        mode(&wt.join(".git"), 0o644);
+        // The same for the git directory's `commondir`, and the main checkout's `config`.
+        let commondir = main.join(".git/worktrees/wt/commondir");
+        mode(&commondir, 0o000);
+        assert_eq!(repo_key_cached(&wt, &cache), "github.com/acme/app");
+        mode(&commondir, 0o644);
+        learn(&main);
+        mode(&main.join(".git/config"), 0o000);
+        assert_eq!(repo_key_cached(&main, &cache), "github.com/acme/app");
+        assert_eq!(origin_key(&main), None, "the URL itself is unknown");
+        mode(&main.join(".git/config"), 0o644);
     }
 
     #[test]

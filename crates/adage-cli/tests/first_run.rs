@@ -221,7 +221,6 @@ fn init_scopes_the_sense_to_a_repository() {
 #[test]
 fn init_lists_the_repositories_claude_code_worked_in() {
     let w = World::new();
-    std::fs::create_dir_all(w.p("tmp")).unwrap();
     std::fs::create_dir_all(w.p("other/.git")).unwrap();
     std::fs::write(w.p("other/.git/config"), "[remote \"origin\"]\n\turl = git@github.com:acme/other.git\n").unwrap();
     let session = |cwd: &Path, n: usize| {
@@ -237,9 +236,9 @@ fn init_lists_the_repositories_claude_code_worked_in() {
     session(&w.p("work"), 1);
     session(&w.p("other/src"), 3);
     session(&w.p("gone"), 2); // a directory since deleted
-                              // The fixtures live under the temporary directory, which `init` leaves out: point it elsewhere.
+                              // The fixtures are under the temporary directory, as `HOME` is: there it is not left out.
     let run = |args: &[&str]| {
-        let o = w.cmd(args).env("TMPDIR", w.p("tmp")).env("TMP", w.p("tmp")).env("TEMP", w.p("tmp")).output().unwrap();
+        let o = w.cmd(args).output().unwrap();
         assert!(o.status.success(), "{}", text(&o));
         text(&o)
     };
