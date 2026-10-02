@@ -23,7 +23,9 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   `adage doctor` could not see them. Install and detection now share one table of where each
   harness keeps Adage's registration.
 - **Review decisions in `adage ui` take the tracks lock**, as `adage review <verb>` always did, so
-  a decision can no longer race an automatic learner writing the same track.
+  a decision can no longer race an automatic learner writing the same track. While a learn run
+  holds the lock, `adage ui` waits at most two seconds and then says to try again, with nothing
+  recorded, instead of freezing.
 
 ### Launch clarity and local experience
 
