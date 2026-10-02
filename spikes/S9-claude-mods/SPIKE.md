@@ -2,8 +2,9 @@
 
 **Informs:** A3 (transport), A8 (packaging), A9 (harness layer), F3 (delivery channel per decision
 point), F14 (the status line and `suggest` mode, listed as not built) · **Wave:** 3 ·
-**Budget:** two days, ≤ 20 short `claude -p` runs on Haiku, one interactive terminal session per
-question that needs a person at the prompt
+**Budget:** two days for Q1–Q8, ≤ 20 short `claude -p` runs on Haiku, one interactive terminal
+session per question that needs a person at the prompt; Q9–Q11 reuse the demo runner and its
+budget (two arms on the four held-out tasks, Haiku), one more day
 
 Research date: **2026-10-02**, against Claude Code **2.1.287**. Every claim about mods below is
 marked **documented** (stated in the `claude-code` declaration file that build writes for a mod,
@@ -107,8 +108,11 @@ hot-reloads on save. `$.state` values need a `types/index.d.ts` contract named i
 
 ## Where it fits
 
-The thesis: **the binary decides, the mod shows and measures.** Three layers, each optional, each
-leaving the one beneath untouched.
+The thesis: **the binary decides, the mod shows, measures, and, where a reflex is strong enough
+and a person has granted it, acts in the model's place.** Four layers, each optional, each
+leaving the one beneath untouched. The first three are plumbing and visibility. The fourth is the
+one that touches Adage's actual claim, fewer model requests, and it is the reason to run this
+spike rather than file it.
 
 ### Layer 0 · What stays exactly as it is
 
@@ -254,6 +258,98 @@ per event, §9); what changes is the engine's dispatch around it, which is Q2.
   field, so this is parity, not gain, except that `/clear` is a `session.end` with no
   `session.start` after it, which the mod must handle (its `register` does not run again).
 
+### Layer 4 · Act in the model's place: the request Adage does not send
+
+Everything a command hook can do happens *around* a model request: context before it, a rewrite
+of the tool call after it, a result beside it. The request itself is still made, and the model
+still spends a turn deciding to do the thing Adage already knew. That is the gap the launch
+evidence names: in the transfer pilot "every automatic session nevertheless requested the test
+command again after receiving its completion context", and the action-elimination gate "remains
+unmet" (`docs/how-it-works.md`). The command-hook API has no event between "the tool results are
+in" and "the next request goes out". Mods have one.
+
+**`turn.step` (documented).** It "fires when the engine is about to send a model request of a
+turn", carrying `turnId`, `index`, `model`, `effort` and `messageCount`; "`next(e)` resolves to
+the whole response", and **"an answer without `next` sends no request"**. A hook on it is an
+async generator over the response's chunks: text, thinking, a tool call's start (`tool`: name and
+`tool_use_id`) and its arguments (`input`: JSON pieces), and the `stop`. "A hook that yields its
+own response has none [of the engine's chunks] to yield, and the engine supplies what the
+response needs around the chunks it does yield"; "what leaves the outermost hook is what is shown
+and recorded"; a chunk a hook builds "has none [no `ref`] and is taken at its word". A result with
+no request made carries `stopReason: null` and `usage: null`, so the cost ledger records zero.
+The transcript is not on `e`; `$.session.messages()` reads it in-process.
+
+So a mod can do what no command hook can: at the step after an edit's tool result, when the
+binary's context matcher says a `fire` reflex with a current grant predicts `pytest tests/x.py -q`
+next, the mod yields a `tool` chunk, its `input` and a `stop` of `tool_use`, and calls no model.
+The engine records the call as the turn's, runs it through every `tool.call` hook, the
+`PreToolUse` command hook, the person's permission rules and dialog, and then the tool; the next
+step's request carries the result, and the model picks up from there. One model request, the
+largest single cost in a long session (the whole context as input tokens), is not made.
+
+```ts
+on('turn.step', async function* ($, e, next) {
+  if (e.agentId !== undefined || e.index === 0) return yield* next(e)   // main loop, not the first step
+  const predicted = await predictNext($, e)   // adage hook claude TurnStep on stdin: the recent
+                                              // messages' tool uses and results; answers a fire
+                                              // reflex's call with a current grant, or nothing
+  if (predicted === undefined) return yield* next(e)
+  const id = `adage_${e.turnId}_${e.index}`
+  yield { kind: 'tool', index: 0, id, name: predicted.tool }
+  yield { kind: 'input', index: 0, json: JSON.stringify(predicted.input) }
+  yield { kind: 'stop', stopReason: 'tool_use', usage: null }
+  return { turnId: e.turnId, index: e.index, answer: '', stopReason: 'tool_use', usage: null,
+           toolUses: [{ name: predicted.tool, input: predicted.input }] }
+})
+```
+
+Three facts make this fit Adage rather than fight it:
+
+- **The authority model is unchanged.** The yielded call runs through the same permission path
+  the model's own call would, so a `Bash(pytest:*)` rule, `dontAsk`, the dialog and Adage's own
+  `PreToolUse` all still apply. Adage's grant decides *whether to predict*; Claude Code's
+  permissions decide *whether it runs*. Nothing executes in the hook, and the E2 sandbox is not
+  involved: this is the agent's own tool, as the rewrite path already is.
+- **Provenance is structural.** The step's `usage` is null and its `stopReason` is null on the
+  engine's side; the tool_use id can carry Adage's prefix; and the `tool.call` hook sees
+  `e.tool_use_id`, so the result can be tagged and the learner can read the step as Adage's,
+  never as the agent's own evidence (the rule in `how-it-works.md`).
+- **The control arm still measures it.** A control session's hook returns `yield* next(e)` and
+  nothing else; the spool records `would_have` as it does for a withheld directive, so the saved
+  requests are counted against a baseline, never assumed.
+
+What it costs: the model's next request sees an assistant turn it did not write. That is how the
+API's own prefill works and models tolerate it, but it is a quality question the demo must
+answer, not a safety one. And the matcher's inputs change: today the runtime tracks "bounded
+recent context" from hook payloads; `$.session.messages()` gives it the whole conversation,
+including the model's text between tool calls, which `PostToolBatch` never carried.
+
+**The lesser levers, same layer.**
+
+- **Route the step, not just skip it.** `next({ ...e, model, effort })` sends the request to
+  another model or at another effort. Where a `fire` reflex applies but confidence is below the
+  skip threshold, or the predicted call needs its arguments filled from the conversation, the
+  step can go to a small model at low effort rather than the session's. `agent.spawn` has the
+  same `model` rewrite for subagents. Cost is stated in API dollars, which is Adage's unit; the
+  quality rule (hidden tests, the 17/20 against 19/20 that kept execution mode experimental) is
+  the gate.
+- **Answer the repeated call from the receipt.** `tool.call` may return `{ result }` without
+  `next`. When the model does ask for the test Adage just ran on byte-identical inputs, the hook
+  answers with the receipt as the tool's result: no 20 s run, a shorter result for the model to
+  read, and the "fact, never a refusal" rule kept because the model asked and got an answer. This
+  is the `updatedToolOutput` candidate fix from `docs/hook-action-reuse-research.md`, in the
+  place that owns the result.
+- **Deliver the standing procedures once, cached.** `prompt.compose` (a `session`-scoped section
+  with a stable id) and `tool.describe` (the Bash tool's description, "cached for the session")
+  carry what does not change within a session: the repository's procedure cards and instincts.
+  Today each is `additionalContext` injected again at each matching event and kept in the
+  history. A section is one copy, read from the prompt cache; the per-event channel stays for
+  what is situational.
+- **Survive compaction.** `session.compact` hands the hook the messages about to be summarised
+  and the `instructions`; the mod can drop Adage's own `<adage-reflex>` rows from the summariser's
+  input (they are re-derivable and would otherwise be relearned as the agent's), and add one
+  instruction to keep the procedures the session followed.
+
 ### What a mod should not do
 
 - **Hold or grant execution authority.** F11 ("Refuse trust changes inside an agent session") and
@@ -391,6 +487,9 @@ script in the folder, per the spikes README.
 | Q6 | **Fail-open and reload.** A hook that throws, one that sleeps past 10 s, a missing binary, a syntax error in the module: the session continues and the command hooks still serve; a hot reload re-runs `register` without losing `$.state`; `claude plugin validate --strict` passes on the real plugin folder with the module added | Fault injection in the probe mod; `--debug` log lines | Every fault leaves the command hooks' output unchanged and leaves one debug line naming the mod |
 | Q7 | **Hosts.** Where is `$.process` available ("CLI only" in the declaration): the terminal, the desktop app's Code tab, VS Code, `-p`, the SDK. On Windows, does the mod load and can it run `adage.exe`, where the `sh` shim is unverified | One session per host, the probe mod logging `$.session.surfaces()` and a `$.process.run(['adage','version'])` result | A table of hosts with yes/no per noun; Windows measured, not inferred |
 | Q8 | **Drift.** Diff `types/claude-code.d.ts` as written by 2.1.221 (the spikes' pinned environment) and 2.1.287; count the renamed or removed events and nouns the sketch above uses | `diff`, grep for each name | A churn figure per release that sets how the CI gate (Q6's `validate --strict` against a pinned CLI version) must be run |
+| Q9 | **The request not sent.** A `turn.step` hook that yields a `tool`, `input` and `stop` chunk and returns without `next`: is the call recorded in the transcript, run through `tool.call`, `PreToolUse` and the permission dialog, and does the loop continue with its result? Does the result carry `usage: null`, and does the session's cost stay flat for that step? Does the model's next step read the fabricated assistant turn as its own and carry on? | The probe mod on the acme-billing sandbox (`demo/`), predicting the `make gen` after a `registry/*.csv` edit and the `make test` after a source edit from a fixed table; `claude --debug`; the transcript `.jsonl` | The call runs under the person's rules, the step costs zero, and the next model step proceeds in 10 of 10 runs; otherwise Layer 4 is out |
+| Q10 | **Does it move the gate?** The transfer pilot's measure: model requests per task and hidden-test quality, treated against control, with Layer 4 predicting only what today's E2 grants cover | `demo/run.py all` with the probe mod in the treated arm, Haiku, the four held-out tasks | Fewer model requests than the 0.67× execution mode reached, with hidden tests at the baseline's 19/20; a quality drop is a fail whatever the saving |
+| Q11 | **Routing.** `next({ ...e, model: 'haiku', effort: 'low' })` on steps the matcher marks routine: cost per task and quality against the unrouted arm | The same runner, a second treated arm | Reported as numbers; no pass bar, since the quality rule decides |
 
 ## Pass / fail
 
@@ -398,7 +497,10 @@ The spike passes if Q1, Q2 (Layer 1), Q3 and Q6 pass: an observing mod can be sh
 `plugin/claude-code` as an additive file, costing nothing measurable, silent in headless and
 control sessions, failing open, and validated in CI. The watch pane ships only if Q3b passes.
 Layer 2 ships only if Q2 (Layer 2) and Q4 pass. Layer 3 ships only if Q5 finds the origin on
-disk. Review, delegation and setup do not ship in a pane whatever the spike finds; that needs the
+disk. Layer 4 is the spike's real bet: Q9 says whether the mechanism exists as documented, and Q10
+whether it moves the launch gate that execution mode could not. It ships only behind the same E2
+grants, policy and control arm as any action, and only with Q10's quality at the baseline.
+Review, delegation and setup do not ship in a pane whatever the spike finds; that needs the
 approval design named above, which is not this spike's question.
 
 The spike fails, and the command hooks remain the whole integration, if a mod cannot coexist
