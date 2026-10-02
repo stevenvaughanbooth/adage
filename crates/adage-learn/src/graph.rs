@@ -14,6 +14,7 @@
 //!   `lookup-work-item`; its slot is `SlotSource::PromptValue` with the learned type, and its
 //!   contract the type's regex.
 
+use crate::import::Exposure as _;
 use crate::bridge;
 use crate::evidence::{days, median, models, outcome_lift, shell_join, strength_with_lift, LearnConfig, MaxRank};
 use crate::import::Session;

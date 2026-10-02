@@ -135,6 +135,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "adage-ingest"
+version = "0.1.0"
+dependencies = [
+ "adage-core",
+ "adage-trace",
+ "once_cell",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+]
+
+[[package]]
 name = "adage-instincts"
 version = "0.1.0"
 dependencies = [
@@ -168,12 +182,14 @@ version = "0.1.0"
 dependencies = [
  "adage-core",
  "adage-graph",
+ "adage-ingest",
  "adage-instincts",
  "adage-intent",
  "adage-pack",
  "adage-runtime",
  "adage-sim",
  "adage-store",
+ "adage-trace",
  "adage-tracks",
  "anyhow",
  "glob",
@@ -215,6 +231,7 @@ version = "0.1.0"
 dependencies = [
  "adage-core",
  "adage-intent",
+ "adage-trace",
  "adage-tracks",
  "glob",
  "regex",
@@ -262,6 +279,15 @@ dependencies = [
  "insta",
  "ratatui-core",
  "unicode-width",
+]
+
+[[package]]
+name = "adage-trace"
+version = "0.1.0"
+dependencies = [
+ "adage-core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

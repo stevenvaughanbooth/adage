@@ -6,6 +6,7 @@
 //!   name too few distinct items for value flow to type the slot on its own: the claim's example
 //!   id is the evidence that the argument is data, and gives its type.
 
+use crate::import::Exposure as _;
 use crate::evidence::{argv, days, median, models, outcome_lift, shell_join, stable, strength_with_lift, LearnConfig};
 use crate::import::{Session, StepObs};
 use adage_core::spans::SpanKind;

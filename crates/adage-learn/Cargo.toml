@@ -8,6 +8,8 @@ publish.workspace = true
 
 [dependencies]
 adage-core = { path = "../adage-core" }
+adage-trace = { path = "../adage-trace" }
+adage-ingest = { path = "../adage-ingest" }
 adage-tracks = { path = "../adage-tracks" }
 adage-intent = { path = "../adage-intent" }
 adage-runtime = { path = "../adage-runtime" }

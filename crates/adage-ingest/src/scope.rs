@@ -114,7 +114,7 @@ pub fn claude_transcripts(projects: &Path, roots: &[PathBuf]) -> Vec<PathBuf> {
         if !slug_matches(&d.file_name().to_string_lossy(), &slugs) {
             continue;
         }
-        for p in crate::import::discover_project(&d.path()) {
+        for p in crate::claude::discover_project(&d.path()) {
             if recorded_cwd(&p).is_some_and(|c| inside(&c, roots)) {
                 out.push(p);
             }

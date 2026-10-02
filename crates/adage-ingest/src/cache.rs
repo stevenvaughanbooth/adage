@@ -20,7 +20,7 @@
 //! transcripts hold (prompts and tool output), so they are created readable by the owner only on
 //! Unix. Entries whose transcript no longer exists are dropped when the manifest is saved.
 
-use crate::import::Session;
+use adage_trace::Session;
 use adage_core::CommandTable;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};

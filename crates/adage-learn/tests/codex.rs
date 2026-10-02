@@ -2,6 +2,7 @@
 //! in the record shapes of openai/codex rust-v0.156.1, and the older `shell` shape) and over
 //! hand-built edge cases. Golden files in `tests/golden/`; regenerate with `ADAGE_BLESS=1`.
 
+use adage_learn::import::Exposure as _;
 use adage_core::CommandTable;
 use adage_learn::codex::{discover, parse_rollout, read_rollout};
 use adage_learn::opencode::read_export;

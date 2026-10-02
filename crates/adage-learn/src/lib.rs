@@ -2,11 +2,9 @@
 //! versioned track per repository (`<repo>/learned`), bind instincts, compile the index.
 
 pub mod bridge;
-pub mod cache;
 pub mod cards;
 pub mod cases;
 pub mod claims;
-pub mod codex;
 pub mod diff;
 pub mod dormant;
 pub mod effects;
@@ -16,11 +14,11 @@ pub mod graph;
 pub mod import;
 pub mod instincts;
 pub mod ledger;
-pub mod opencode;
 pub mod outcome;
-pub mod scope;
 pub mod testmap;
 pub mod value;
+
+pub use adage_ingest::{cache, codex, opencode, scope};
 
 use adage_core::CommandTable;
 use adage_tracks::proposals::Proposals;
@@ -182,17 +180,7 @@ impl Planned {
     }
 }
 
-/// Read one session file: a Claude Code transcript, an OpenCode `opencode export` file, or a Codex
-/// rollout (recognised by content).
-pub fn read_session(path: &Path, table: &CommandTable, repo_override: Option<&str>) -> Option<Session> {
-    if let Some(lines) = codex::read_rollout(path) {
-        return codex::parse_rollout(&lines, table, repo_override);
-    }
-    match opencode::read_export(path) {
-        Some(v) => opencode::parse_export(&v, table, repo_override),
-        None => import::parse_transcript(path, table, repo_override),
-    }
-}
+pub use adage_ingest::read_session;
 
 /// `adage condition`: import sessions, mine routes, write tracks, compile the index.
 pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &LearnConfig) -> Result<Report> {

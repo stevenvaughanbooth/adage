@@ -21,10 +21,13 @@
 //! output, message, or prompt between them. Compressed rollouts (`.jsonl.zst`, written only with
 //! the `local_thread_store_compression` feature) are not read.
 
-use crate::import::{Prompts, Session, Signals};
+use crate::format::{Decode, Format};
+use crate::locate::Located;
+use crate::signals::{call_steps, Prompts, Signals};
 use adage_core::tools::{from_codex, normalize_tool};
-use adage_core::{repo, CommandTable};
-use adage_runtime::Call;
+use adage_core::CommandTable;
+use adage_trace::session::CODEX;
+use adage_trace::{wire, Call, Session};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serde_json::{json, Value};
@@ -54,7 +57,11 @@ pub fn is_rollout_head(v: &Value) -> bool {
 
 /// Read a rollout's lines if `path` is one (recognised by its first line), else `None`.
 pub fn read_rollout(path: &Path) -> Option<Vec<Value>> {
-    let mut r = std::io::BufReader::new(std::fs::File::open(path).ok()?);
+    read_lines(std::io::BufReader::new(std::fs::File::open(path).ok()?))
+}
+
+/// A rollout's lines from any reader, if it is one (recognised by its first line), else `None`.
+pub fn read_lines(mut r: impl BufRead) -> Option<Vec<Value>> {
     let mut first = String::new();
     // The first line is small (session metadata); a huge or non-JSON first line is not a rollout.
     (&mut r).take(1 << 20).read_line(&mut first).ok()?;
@@ -126,7 +133,7 @@ fn contextual(t: &str) -> bool {
 /// Text Adage wrote (a directive, or a Stop-hook continuation: `render::is_finish_line`), never a
 /// prompt the person typed.
 fn own_text(t: &str) -> bool {
-    t.trim_start().starts_with("<adage-reflex ") || adage_runtime::render::is_finish_line(t)
+    t.trim_start().starts_with("<adage-reflex ") || wire::is_finish_line(t)
 }
 
 /// The shell command an argv runs: `["bash", "-lc", cmd]` → `cmd`; anything else is joined.
@@ -221,6 +228,34 @@ fn note(text: &str, signals: &mut Signals, calls: usize) {
 
 /// Parse one rollout. `None` for sub-agent threads and sessions without a usable prompt.
 pub fn parse_rollout(lines: &[Value], table: &CommandTable, repo_override: Option<&str>) -> Option<Session> {
+    decode(lines, &Decode::local(table, repo_override))
+}
+
+/// Codex rollouts as a [`crate::format::Format`]: recognised by a `session_meta` first line.
+pub struct Rollout;
+
+impl Format for Rollout {
+    fn harness(&self) -> &'static str {
+        CODEX
+    }
+
+    fn sniff(&self, head: &[u8]) -> bool {
+        let first = head.split(|b| *b == b'\n').next().unwrap_or_default();
+        std::str::from_utf8(first)
+            .ok()
+            .and_then(|l| serde_json::from_str::<Value>(l.trim_end()).ok())
+            .is_some_and(|v| is_rollout_head(&v))
+    }
+
+    fn decode(&self, trace: &mut dyn BufRead, cx: &Decode<'_>) -> Option<Session> {
+        decode(&read_lines(trace)?, cx)
+    }
+}
+
+/// Decode one rollout's lines. `None` for sub-agent threads and sessions without a usable prompt.
+/// The repository is found by `cx.locator`; nothing else here touches the filesystem.
+pub fn decode(lines: &[Value], cx: &Decode<'_>) -> Option<Session> {
+    let (table, repo_override) = (cx.table, cx.repo_override);
     let meta = lines.first().filter(|l| is_rollout_head(l))?.get("payload")?;
     if meta.get("parent_thread_id").is_some_and(|p| !p.is_null()) || meta.pointer("/source/subagent").is_some() {
         return None;
@@ -325,9 +360,7 @@ pub fn parse_rollout(lines: &[Value], table: &CommandTable, repo_override: Optio
 
     let cwd = cwd?;
     let prompt = event_prompt.or(item_prompt)?;
-    let cwd_path = PathBuf::from(&cwd);
-    let root = repo::find_root(&cwd_path).unwrap_or(cwd_path);
-    let repo_key = repo::key_for(&root, repo_override);
+    let Located { root, repo: repo_key } = cx.locator.locate(Path::new(&cwd), repo_override);
     let root_str = root.to_string_lossy().to_string();
     // Prompts from `user_message` events when there are any, else from user messages (the same
     // precedence as the first prompt).
@@ -349,7 +382,7 @@ pub fn parse_rollout(lines: &[Value], table: &CommandTable, repo_override: Optio
             let call = Call { tool: tool.clone(), input: input.clone(), output: output.clone(), failed };
             let at = if tool == "Bash" { run_in.as_str() } else { root_str.as_str() };
             let prompt = if by_event { rec.prompt.0 } else { rec.prompt.1 };
-            steps.extend(crate::import::call_steps(
+            steps.extend(call_steps(
                 rec.turn,
                 prompt,
                 &call,
@@ -372,7 +405,7 @@ pub fn parse_rollout(lines: &[Value], table: &CommandTable, repo_override: Optio
         directed: signals.directed,
         influence,
         outcome: None,
-        harness: "codex".into(),
+        harness: CODEX.into(),
         prompts,
         ending: Default::default(),
     })

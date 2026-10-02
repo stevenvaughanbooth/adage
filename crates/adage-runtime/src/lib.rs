@@ -69,36 +69,7 @@ pub fn assign(session: &str, control_share: f64, forced: Option<&str>) -> (Arm, 
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Call {
-    pub tool: String,
-    pub input: Value,
-    pub output: String,
-    pub failed: bool,
-}
-
-#[derive(Debug, Clone)]
-pub enum Event {
-    SessionStart,
-    Prompt { text: String },
-    Batch { calls: Vec<Call> },
-    Failure { call: Call },
-    Stop { stop_hook_active: bool },
-    SessionEnd,
-}
-
-impl Event {
-    pub fn name(&self) -> &'static str {
-        match self {
-            Event::SessionStart => "session_start",
-            Event::Prompt { .. } => "prompt",
-            Event::Batch { .. } => "batch",
-            Event::Failure { .. } => "failure",
-            Event::Stop { .. } => "stop",
-            Event::SessionEnd => "session_end",
-        }
-    }
-}
+pub use adage_trace::{Call, Event};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Pending {

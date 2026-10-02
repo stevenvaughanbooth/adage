@@ -11,12 +11,16 @@
 //! appended to tool output (after a tool); both are recorded in the export. Sub-agent sessions
 //! (`info.parentID` set) are skipped, like Claude Code sidechains.
 
-use crate::import::{Prompts, Session, Signals, OPENCODE};
+use crate::format::{Decode, Format, HEAD_MIN};
+use crate::locate::Located;
+use crate::signals::{call_steps, Prompts, Signals};
 use adage_core::tools::{from_opencode, normalize_tool};
-use adage_core::{repo, CommandTable};
-use adage_runtime::Call;
+use adage_core::CommandTable;
+use adage_trace::session::OPENCODE;
+use adage_trace::{wire, Call, Session};
 use serde_json::Value;
-use std::path::{Path, PathBuf};
+use std::io::BufRead;
+use std::path::Path;
 
 /// Is this parsed file an OpenCode export?
 pub fn is_export(v: &Value) -> bool {
@@ -27,10 +31,9 @@ pub fn is_export(v: &Value) -> bool {
 /// first key, so a Claude Code transcript is rejected from its first few bytes, unread.
 pub fn read_export(path: &Path) -> Option<Value> {
     use std::io::Read;
-    let mut head = [0u8; 64];
+    let mut head = [0u8; HEAD_MIN];
     let n = std::fs::File::open(path).ok()?.read(&mut head).ok()?;
-    let head = String::from_utf8_lossy(&head[..n]);
-    if !head.trim_start().strip_prefix('{')?.trim_start().starts_with("\"info\"") {
+    if !opens_export(&head[..n]) {
         return None;
     }
     let v: Value = serde_json::from_reader(std::io::BufReader::new(std::fs::File::open(path).ok()?)).ok()?;
@@ -58,11 +61,42 @@ fn s<'a>(v: &'a Value, path: &[&str]) -> Option<&'a str> {
 /// Text Adage wrote (a directive, or a Stop-hook continuation: `render::is_finish_line`), never a
 /// prompt the person typed.
 fn own_text(t: &str) -> bool {
-    t.trim_start().starts_with("<adage-reflex ") || adage_runtime::render::is_finish_line(t)
+    t.trim_start().starts_with("<adage-reflex ") || wire::is_finish_line(t)
+}
+
+/// Whether a file's first bytes open an export: `{` then the `"info"` key.
+fn opens_export(head: &[u8]) -> bool {
+    let head = String::from_utf8_lossy(&head[..head.len().min(HEAD_MIN)]);
+    head.trim_start().strip_prefix('{').is_some_and(|rest| rest.trim_start().starts_with("\"info\""))
+}
+
+/// OpenCode exports as a [`Format`]: recognised by their opening `"info"` key.
+pub struct Export;
+
+impl Format for Export {
+    fn harness(&self) -> &'static str {
+        OPENCODE
+    }
+
+    fn sniff(&self, head: &[u8]) -> bool {
+        opens_export(head)
+    }
+
+    fn decode(&self, trace: &mut dyn BufRead, cx: &Decode<'_>) -> Option<Session> {
+        let v: Value = serde_json::from_reader(trace).ok()?;
+        decode(is_export(&v).then_some(&v)?, cx)
+    }
 }
 
 /// Parse one export. `None` for sub-agent sessions and sessions without a usable prompt.
 pub fn parse_export(v: &Value, table: &CommandTable, repo_override: Option<&str>) -> Option<Session> {
+    decode(v, &Decode::local(table, repo_override))
+}
+
+/// Decode one parsed export. The repository is found by `cx.locator`; nothing else here touches
+/// the filesystem.
+pub fn decode(v: &Value, cx: &Decode<'_>) -> Option<Session> {
+    let (table, repo_override) = (cx.table, cx.repo_override);
     let info = v.get("info")?;
     if info.get("parentID").is_some_and(|p| !p.is_null()) {
         return None;
@@ -145,9 +179,7 @@ pub fn parse_export(v: &Value, table: &CommandTable, repo_override: Option<&str>
 
     let cwd = cwd?;
     let prompt = prompt?;
-    let cwd_path = PathBuf::from(&cwd);
-    let root = repo::find_root(&cwd_path).unwrap_or(cwd_path);
-    let repo_key = repo::key_for(&root, repo_override);
+    let Located { root, repo: repo_key } = cx.locator.locate(Path::new(&cwd), repo_override);
     let root_str = root.to_string_lossy().to_string();
     let mut steps = Vec::new();
     let mut first_step: Vec<u32> = Vec::with_capacity(uses.len());
@@ -160,7 +192,7 @@ pub fn parse_export(v: &Value, table: &CommandTable, repo_override: Option<&str>
                 }
             }
             let call = Call { tool: tool.clone(), input: input.clone(), output: output.clone(), failed };
-            steps.extend(crate::import::call_steps(
+            steps.extend(call_steps(
                 turn,
                 at,
                 &call,

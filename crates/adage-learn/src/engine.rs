@@ -28,6 +28,7 @@
 //! test only; fire reads the organic lower bound alone, so no reflex is delivered fire from
 //! prior mass, and a reflex that says otherwise always wins (interlocking puts instincts last).
 
+use crate::import::Exposure as _;
 use crate::bridge;
 use crate::evidence::{argv, days, median, models, outcome_lift, shell_join, strength_for, LearnConfig, PATHS_FIELD};
 use crate::import::Session;

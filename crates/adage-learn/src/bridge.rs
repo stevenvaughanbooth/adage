@@ -12,6 +12,7 @@
 //! - [`annotate`] also keeps each step's turn, prompt, effect class and template key
 //!   ([`input::StepMeta`]) and the session's day.
 
+use crate::import::Exposure as _;
 use crate::import::{Session, StepObs};
 use adage_core::keys::template_key;
 use adage_core::types::{CanonicalAction, Effect, Normalized};
