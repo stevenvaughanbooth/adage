@@ -281,16 +281,16 @@ pub fn extract_from(files: &RepoFiles) -> DeclaredFacts {
     // Makefile.
     for name in ["GNUmakefile", "makefile", "Makefile"] {
         if let Some(text) = files.read(name) {
-            f.entries.extend(makefile_entries(&text, files, generators, &table));
+            f.entries.extend(makefile_entries(&text, files, generators, table));
             break;
         }
     }
     if let (Some(pkg), Some(pm)) = (&pkg, &f.package_manager) {
-        f.entries.extend(package_entries(pkg, &pm.name, files, generators, &table));
+        f.entries.extend(package_entries(pkg, &pm.name, files, generators, table));
     }
     for name in ["justfile", "Justfile", ".justfile"] {
         if let Some(text) = files.read(name) {
-            f.entries.extend(justfile_entries(&text, files, generators, &table));
+            f.entries.extend(justfile_entries(&text, files, generators, table));
             break;
         }
     }
@@ -338,7 +338,7 @@ pub fn extract_from(files: &RepoFiles) -> DeclaredFacts {
     }
     f.python.test_deps = pyproject.as_ref().map(test_deps).unwrap_or_default();
     if f.python.tox {
-        f.entries.push(tox_entry(tox_ini.as_deref(), pyproject.as_ref(), files, generators, &table));
+        f.entries.push(tox_entry(tox_ini.as_deref(), pyproject.as_ref(), files, generators, table));
     }
     if f.python.nox {
         match files.read("noxfile.py").as_deref().and_then(nox_entry) {
@@ -385,7 +385,7 @@ pub fn extract_from(files: &RepoFiles) -> DeclaredFacts {
             }
         }
         let generate_refused = generate.iter().find_map(|(file, c)| {
-            safety::check_line(c, files, generators, &table).err().map(|e| format!("{file}: {e}"))
+            safety::check_line(c, files, generators, table).err().map(|e| format!("{file}: {e}"))
         });
         f.go = Some(GoFacts { module, generate, generate_refused });
     }

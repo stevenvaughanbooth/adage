@@ -190,7 +190,7 @@ mod tests {
 
     #[test]
     fn nothing_to_replay_is_no_state() {
-        assert!(rebuild(&[], &Index::default(), "r", &CommandTable::load()).is_none());
+        assert!(rebuild(&[], &Index::default(), "r", CommandTable::load()).is_none());
     }
 
     /// F8: the finish-line gate's per-session cap is restored from its spool records.
@@ -202,7 +202,7 @@ mod tests {
             json!({ "event": "Stop", "kind": "stop", "arm": "treated", "repo": "r" }),
             json!({ "event": "Stop", "kind": "stop_gate", "blocked": false }),
         ];
-        let st = rebuild(&records, &Index::default(), "r", &CommandTable::load()).unwrap();
+        let st = rebuild(&records, &Index::default(), "r", CommandTable::load()).unwrap();
         assert_eq!(st.stop_gates, 2);
     }
 }

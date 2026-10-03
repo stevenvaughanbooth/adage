@@ -104,11 +104,16 @@ fn build_spec(raw: RawCommand) -> CommandSpec {
 }
 
 impl CommandTable {
-    pub fn load() -> CommandTable {
-        const RAW: &str = include_str!("../data/commands.toml");
-        let raw: RawTable = toml::from_str(RAW).expect("data/commands.toml must parse");
-        let commands = raw.commands.into_iter().map(|c| (c.name.clone(), build_spec(c))).collect();
-        CommandTable { commands }
+    /// The table, parsed once per process: it is compiled into the binary, so every load is the
+    /// same table, and parsing it (TOML, then each pattern's regex) is not free.
+    pub fn load() -> &'static CommandTable {
+        static TABLE: std::sync::LazyLock<CommandTable> = std::sync::LazyLock::new(|| {
+            const RAW: &str = include_str!("../data/commands.toml");
+            let raw: RawTable = toml::from_str(RAW).expect("data/commands.toml must parse");
+            let commands = raw.commands.into_iter().map(|c| (c.name.clone(), build_spec(c))).collect();
+            CommandTable { commands }
+        });
+        &TABLE
     }
 
     pub fn get(&self, name: &str) -> Option<&CommandSpec> {
@@ -142,7 +147,7 @@ mod tests {
         // pinned here and any change must be a deliberate edit to this list.
         let table = CommandTable::load();
         assert_eq!(
-            inert_names(&table),
+            inert_names(table),
             [
                 "cat",
                 "git diff",

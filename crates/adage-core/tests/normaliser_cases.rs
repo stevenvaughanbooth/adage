@@ -205,5 +205,5 @@ fn run(path: &str, table: &CommandTable) -> i32 {
 #[test]
 fn every_normaliser_case_passes() {
     let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/cases/normaliser.json");
-    assert_eq!(run(path, &CommandTable::load()), 0, "normaliser cases failed");
+    assert_eq!(run(path, CommandTable::load()), 0, "normaliser cases failed");
 }

@@ -204,7 +204,7 @@ fn directives_that_name_nothing_readable_steer_everything() {
         files.push(session(&h, &format!("k{i}"), 20 + i, Some(other), true));
     }
     let p = files.last().unwrap();
-    let s = adage_learn::import::parse_transcript(p, &adage_core::CommandTable::load(), None).unwrap();
+    let s = adage_learn::import::parse_transcript(p, adage_core::CommandTable::load(), None).unwrap();
     assert!(!s.influence.is_empty() && s.influence.iter().all(|d| d.all), "{:?}", s.influence);
     w.learn(&files);
     let r = w.lookup().unwrap();

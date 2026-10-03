@@ -1325,7 +1325,7 @@ pub fn case_store(
 ) -> Result<adage_learn::cases::CaseStore> {
     let table = CommandTable::load();
     let sessions: Vec<adage_learn::import::Session> =
-        m.train.iter().filter_map(|p| adage_learn::import::parse_transcript(p, &table, Some(&m.repo_key))).collect();
+        m.train.iter().filter_map(|p| adage_learn::import::parse_transcript(p, table, Some(&m.repo_key))).collect();
     let refs: Vec<&adage_learn::import::Session> = sessions.iter().collect();
     let cfg = crate::config(thresholds)?;
     let env_kind = adage_learn::value::Statics::of(Some(&m.root)).env_kind;
@@ -1372,7 +1372,7 @@ pub fn run(m: &Manifest, o: &Options) -> Result<Report> {
             index: &index,
             repo: &m.repo_key,
             root: &m.root,
-            table: &table,
+            table,
             params: adage_tracks::params::EngineParams::preset(&o.thresholds)?.runtime,
             embed: resolved.as_ref().map(|_| &embed_fn as adage_runtime::Embed),
             cases: match (&store, &resolved) {

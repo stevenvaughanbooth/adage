@@ -246,7 +246,7 @@ mod control_tests {
             ("Skill", json!({ "skill": "review" }), "control Skill review"),
             ("mcp__browser__navigate", json!({ "url": "https://x" }), "control mcp browser__navigate"),
         ] {
-            let n = normalize_tool(tool, &input, "/repo", &t);
+            let n = normalize_tool(tool, &input, "/repo", t);
             assert!(matches!(n[0].action, CanonicalAction::Control { .. }), "{tool}: {:?}", n[0].action);
             assert_eq!(template_key(&n[0].action), key);
         }

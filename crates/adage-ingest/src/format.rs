@@ -161,14 +161,14 @@ mod tests {
         std::fs::write(&e, serde_json::to_string_pretty(&export).unwrap()).unwrap();
         std::fs::write(&t, lines(&transcript)).unwrap();
 
-        let own_r = crate::codex::parse_rollout(&crate::codex::read_rollout(&r).unwrap(), &table, Some("acme"));
-        let own_e = crate::opencode::parse_export(&crate::opencode::read_export(&e).unwrap(), &table, Some("acme"));
-        let own_t = crate::claude::parse_transcript(&t, &table, Some("acme"));
+        let own_r = crate::codex::parse_rollout(&crate::codex::read_rollout(&r).unwrap(), table, Some("acme"));
+        let own_e = crate::opencode::parse_export(&crate::opencode::read_export(&e).unwrap(), table, Some("acme"));
+        let own_t = crate::claude::parse_transcript(&t, table, Some("acme"));
         for (path, own) in [(&r, own_r), (&e, own_e), (&t, own_t)] {
             let own = own.unwrap_or_else(|| panic!("{}: no session", path.display()));
-            assert_eq!(read_session(path, &table, Some("acme")).as_ref(), Some(&own), "{}", path.display());
+            assert_eq!(read_session(path, table, Some("acme")).as_ref(), Some(&own), "{}", path.display());
             assert_eq!(detect_path(path).map(|f| f.harness().id()), Some(own.harness.as_str()));
         }
-        assert!(read_session(&d.path().join("missing.jsonl"), &table, None).is_none());
+        assert!(read_session(&d.path().join("missing.jsonl"), table, None).is_none());
     }
 }

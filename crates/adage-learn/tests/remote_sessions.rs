@@ -32,8 +32,7 @@ fn transcript(sid: &str) -> Vec<u8> {
 fn sessions_from_another_machine_are_learned_like_local_ones() {
     let source = Memory((0..4).map(|i| (format!("s{i}"), transcript(&format!("s{i}")))).collect());
     let table = adage_core::CommandTable::load();
-    let cx =
-        Decode { table: &table, locator: &AsRecorded, repo_override: Some("github.com/acme/app"), subagent: false };
+    let cx = Decode { table, locator: &AsRecorded, repo_override: Some("github.com/acme/app"), subagent: false };
     let mut batch = adage_ingest::batch::Batch::default();
     adage_ingest::ingest(&source, &cx, |_, s| {
         batch.read += 1;
@@ -160,8 +159,7 @@ impl Store for Rows {
 fn dead_ends() -> adage_ingest::batch::Batch {
     let source = Memory((0..8).map(|i| (format!("s{i}"), dead_end(&format!("s{i}")))).collect());
     let table = adage_core::CommandTable::load();
-    let cx =
-        Decode { table: &table, locator: &AsRecorded, repo_override: Some("github.com/acme/app"), subagent: false };
+    let cx = Decode { table, locator: &AsRecorded, repo_override: Some("github.com/acme/app"), subagent: false };
     let mut batch = adage_ingest::batch::Batch::default();
     adage_ingest::ingest(&source, &cx, |_, s| {
         batch.read += 1;

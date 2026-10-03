@@ -181,28 +181,28 @@ mod tests {
         let alone = Replayed {
             fired: vec![fired.clone()],
             actions: vec![
-                action(1, 0, "python3 scripts/wi-lookup W-2042 --json", &table),
-                action(2, 0, "cat acme/billing.py", &table),
+                action(1, 0, "python3 scripts/wi-lookup W-2042 --json", table),
+                action(2, 0, "cat acme/billing.py", table),
             ],
             ..Default::default()
         };
-        let m = measure(&alone, &index, "acme", &table);
+        let m = measure(&alone, &index, "acme", table);
         assert_eq!((m.triggered, m.calls_replaced, m.turns_saved), (true, 1, 1));
         let batched = Replayed {
             fired: vec![fired.clone()],
             actions: vec![
-                action(1, 0, "python3 scripts/wi-lookup W-2042 --json", &table),
-                action(1, 1, "cat acme/billing.py", &table),
+                action(1, 0, "python3 scripts/wi-lookup W-2042 --json", table),
+                action(1, 1, "cat acme/billing.py", table),
             ],
             ..Default::default()
         };
-        let m = measure(&batched, &index, "acme", &table);
+        let m = measure(&batched, &index, "acme", table);
         assert_eq!((m.calls_replaced, m.turns_saved), (1, 0), "batched: a call saved, not a turn");
         let never = Replayed { fired: vec![fired], actions: vec![], ..Default::default() };
-        let m = measure(&never, &index, "acme", &table);
+        let m = measure(&never, &index, "acme", table);
         assert_eq!((m.triggered, m.calls_replaced), (true, 0));
         let mut all = ExecE1::default();
-        all.add(&measure(&alone, &index, "acme", &table));
+        all.add(&measure(&alone, &index, "acme", table));
         all.add(&m);
         assert_eq!((all.triggered_sessions, all.turns_saved, all.turns_saved_per_triggered_session), (2, 1, 0.5));
     }

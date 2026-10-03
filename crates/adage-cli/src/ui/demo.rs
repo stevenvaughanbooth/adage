@@ -85,8 +85,8 @@ fn route(
 /// The demo track; `round` > 0 is after that many learning runs.
 pub fn track(round: usize) -> Track {
     let table = CommandTable::load();
-    let lookup_key = adage_runtime::command_key("bin/fetch-incident INC-1", &table);
-    let npm_test = adage_runtime::command_key("npm test", &table);
+    let lookup_key = adage_runtime::command_key("bin/fetch-incident INC-1", table);
+    let npm_test = adage_runtime::command_key("npm test", table);
     let mut lookup = route(
         "lookup-incident",
         "incidents resolve through bin/fetch-incident",

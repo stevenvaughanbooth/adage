@@ -274,7 +274,7 @@ pub fn applies(pack: &Pack, target: &Target) -> Applies {
             };
             let facts = adage_instincts::declared::extract(root);
             let table = CommandTable::load();
-            let ctx = adage_instincts::detect::Ctx { facts: &facts, table: &table, cat };
+            let ctx = adage_instincts::detect::Ctx { facts: &facts, table, cat };
             let fires = ids.iter().any(|id| {
                 let d = adage_instincts::detect::detect(id, &ctx);
                 !d.routes.is_empty() || !d.advisories.is_empty()
@@ -399,9 +399,9 @@ pub fn bind(pack: &Pack, target: &Target, env: &BindEnv) -> Binding {
         let mut scripts: Vec<(String, String)> = Vec::new();
         let status = match everything_inert.clone().or_else(|| os_problem.clone()) {
             Some(reason) => Err(reason),
-            None => check_route(r, target, env, &table, &mut scripts),
+            None => check_route(r, target, env, table, &mut scripts),
         };
-        let (status, route) = match status.and_then(|()| to_runtime(r, pack, &table).map_err(|e| e.to_string())) {
+        let (status, route) = match status.and_then(|()| to_runtime(r, pack, table).map_err(|e| e.to_string())) {
             Ok(route) => {
                 let mut max_level = r.exec.as_ref().map(|x| x.level).unwrap_or_default().min(m.exec.requested);
                 if env.os == Os::Windows {

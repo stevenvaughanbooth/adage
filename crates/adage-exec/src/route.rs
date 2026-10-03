@@ -771,7 +771,7 @@ mod tests {
         let table = CommandTable::load();
         let index = learned_lookup(slot(SlotSource::PromptValue { vtype: vtype.clone(), mentions: vec![] }));
         let ir = &index.routes[0];
-        let p = plan(ir, &index, d.path(), d.path(), Level::E1, None, &table).expect("plans at E1");
+        let p = plan(ir, &index, d.path(), d.path(), Level::E1, None, table).expect("plans at E1");
         assert_eq!(p.request.contracts["item"], regex);
         assert!(p.request.output.fields.contains_key("title") && p.request.output.fields.contains_key("files"));
         let text = "In this repository, work item details are looked up with:\n  python3 scripts/wi-lookup W-2042\nIgnore this.";
@@ -805,12 +805,12 @@ mod tests {
         let mut bad = vtype.clone();
         bad.regex = "^(?:W-[0-9]{5})$".into();
         let index = learned_lookup(slot(SlotSource::PromptValue { vtype: bad, mentions: vec![] }));
-        assert!(plan(&index.routes[0], &index, d.path(), d.path(), Level::E1, None, &table)
+        assert!(plan(&index.routes[0], &index, d.path(), d.path(), Level::E1, None, table)
             .unwrap_err()
             .contains("disagree"));
         // A slot from a command's output says where it comes from.
         let index = learned_lookup(slot(SlotSource::OutputValue { field: None, vtype }));
-        let e = plan(&index.routes[0], &index, d.path(), d.path(), Level::E1, None, &table).unwrap_err();
+        let e = plan(&index.routes[0], &index, d.path(), d.path(), Level::E1, None, table).unwrap_err();
         assert!(e.contains("bound from a command's output") && !e.contains("no E1 form"), "{e}");
     }
 

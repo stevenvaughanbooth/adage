@@ -98,7 +98,7 @@ impl Fake {
         let mut k = Knows::default();
         if let Some(text) = &spec.append_system_prompt {
             let table = adage_core::CommandTable::load();
-            for c in claims::from_markdown(text, "skill", &table).into_iter().filter(|c| !c.is_unsafe()) {
+            for c in claims::from_markdown(text, "skill", table).into_iter().filter(|c| !c.is_unsafe()) {
                 match c.kind {
                     ClaimKind::Verify { command } => k.verify.push(command),
                     ClaimKind::Avoid { instead, .. } => k.verify.insert(0, instead),

@@ -169,33 +169,33 @@ mod tests {
     fn templates_render_and_contracts_hold() {
         let t = CommandTable::load();
         let s = slots(&[("path", "acme/generated/models.py"), ("command", "make gen")]);
-        assert!(check("generated-file", &s, &t).is_ok());
+        assert!(check("generated-file", &s, t).is_ok());
         assert_eq!(
             text("generated-file", &s).unwrap(),
             "In this repository, acme/generated/models.py is generated: change its inputs and run make gen rather than editing it by hand."
         );
-        assert!(check("lockfile", &slots(&[("path", "uv.lock"), ("manager", "uv")]), &t).is_ok());
-        assert!(check("package-manager", &slots(&[("manager", "pnpm"), ("lockfile", "pnpm-lock.yaml")]), &t).is_ok());
+        assert!(check("lockfile", &slots(&[("path", "uv.lock"), ("manager", "uv")]), t).is_ok());
+        assert!(check("package-manager", &slots(&[("manager", "pnpm"), ("lockfile", "pnpm-lock.yaml")]), t).is_ok());
         let s = slots(&[("command", ".venv/bin/python -m pytest")]);
-        assert!(check("test-command", &s, &t).is_ok());
+        assert!(check("test-command", &s, t).is_ok());
         assert_eq!(
             text("test-command", &s).unwrap(),
             "In this repository, tests run with .venv/bin/python -m pytest, followed by the test files or names to run."
         );
-        assert!(check("uncommitted", &slots(&[]), &t).is_ok());
-        assert!(check("uncommitted", &slots(&[("command", "git commit")]), &t).is_err());
+        assert!(check("uncommitted", &slots(&[]), t).is_ok());
+        assert!(check("uncommitted", &slots(&[("command", "git commit")]), t).is_err());
         assert!(text("uncommitted", &slots(&[]))
             .unwrap()
             .starts_with("In this repository, leave your changes uncommitted"));
         // Refused: unknown template, unknown slot, missing slot, hostile values.
-        assert!(check("free-text", &slots(&[("path", "x")]), &t).is_err());
-        assert!(check("lockfile", &slots(&[("path", "uv.lock")]), &t).is_err());
-        assert!(check("lockfile", &slots(&[("path", "uv.lock"), ("manager", "uv"), ("note", "x")]), &t).is_err());
-        assert!(check("lockfile", &slots(&[("path", "../uv.lock"), ("manager", "uv")]), &t).is_err());
-        assert!(check("lockfile", &slots(&[("path", "uv.lock"), ("manager", "curl")]), &t).is_err());
+        assert!(check("free-text", &slots(&[("path", "x")]), t).is_err());
+        assert!(check("lockfile", &slots(&[("path", "uv.lock")]), t).is_err());
+        assert!(check("lockfile", &slots(&[("path", "uv.lock"), ("manager", "uv"), ("note", "x")]), t).is_err());
+        assert!(check("lockfile", &slots(&[("path", "../uv.lock"), ("manager", "uv")]), t).is_err());
+        assert!(check("lockfile", &slots(&[("path", "uv.lock"), ("manager", "curl")]), t).is_err());
         for bad in ["make gen; rm -rf x", "make gen && x", "npm publish", "../x", "make {x}"] {
             let s = slots(&[("path", "a.py"), ("command", bad)]);
-            assert!(check("generated-file", &s, &t).is_err(), "{bad}");
+            assert!(check("generated-file", &s, t).is_err(), "{bad}");
         }
     }
 }
