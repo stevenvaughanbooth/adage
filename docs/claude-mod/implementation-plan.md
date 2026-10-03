@@ -187,6 +187,29 @@ What the design needs, against what the code has. Lines are from the tree named 
    `adage-eval/src/transcript.rs:320-328 hook_name`, `crates/adage-cli/tests/g4_hook.rs:129-137`;
    `Event::TurnStep` itself is an `adage-trace` change (`adage-trace/src/lib.rs:36-56`) and the
    exhaustive `Event` matches at `runtime/src/lib.rs:514-515` and `fast.rs:41-42` gain the arm.
+2b. **Prediction kinds: the contract between the binary and the mod.** Every way Adage acts in
+   the model's place is one `kind` the binary names and the mod dispatches on; adding a kind is a
+   row here, a variant in `PredictionKind`, and one branch in the mod. The binary decides which
+   kind applies; the mod never chooses.
+
+   | Kind | Event | The binary needs | What the mod does | Bound | Judgement it leaves | POC |
+   | --- | --- | --- | --- | --- | --- | --- |
+   | `run` | `TurnStep` | a `pending` `Run` directive with its command bound, a `predict` grant | yields one `Bash` call | never at index 0, never twice in a row, the session cap, not an inhibited route | `Predicted` on the batch that observes it | P1, P3 |
+   | `obligation` | `TurnStep` with `ending: true` | an armed, unmet obligation, a `predict` grant | yields the obligation's call in place of the model's stop (Q15) | as `run`; the Stop gate stays as the fallback | `Predicted`; the obligation is met by its call | P1 (binary); mod pending Q15 |
+   | `sequence` | `TurnStep` | a `pending` `Sequence` directive | yields its first command; later steps are new `TurnStep`s with a model step between | as `run` | `Predicted` per step | P1, P3 |
+   | `chain` | `TurnStep` | a `pending` `ReadBatch` whose files are bound (from the directive, or from the preceding call's result) | yields several `Read` calls in one response | as `run`, counted as one yielded response | `Predicted` | P1, P3 (binding from a result: C7) |
+   | `skill` | `TurnStep` | a `pending` `Skill` step, a `predict` grant, the skill recorded inert and accepted | yields `Skill { skill }` | as `run`, plus `skills.invoke` | `Predicted` | P1, P3 (D3/D4 supply the step) |
+   | `substitute` | `PreToolUse` (`tool.call`, `dry_run`) | an `avoid` reflex at `fire` with a fixed `instead`; the engine's verdict equal for both commands | `next({ ...e, command })` with one context line | same permission verdict only | `Substituted`, never a follow | P5 |
+   | `receipt` | `PreToolUse` (`tool.call`, `dry_run`) | a fresh covering receipt (adage-exec); the engine would have allowed the call unasked | answers `{ result }` without `next` | `allow` verdict only | the obligation it covers is met | C3 |
+   | `routine` | `TurnStep` | a `fire` reflex pending without a grant; `runtime.routine_model` set | `next({ ...e, model, effort })` | never in control | none (a routing, not a call) | C5 |
+
+   The JSON on the wire for `TurnStep`: stdin `{ "session_id", "cwd", "hook_event_name":
+   "TurnStep", "turn_id", "index", "model"?, "agent_id"?, "ending"? }`; stdout nothing, or
+   `{ "predict": { "kind", "route", "track", "calls": [{ "tool", "input" }, …] } }` (one call for
+   `run`, `obligation`, `sequence`; `{ "tool": "Skill", "input": { "skill" } }` for `skill`;
+   several for `chain`), optionally `"routine": true`. A non-zero exit, a timeout or non-JSON is
+   "nothing". The control arm answers nothing and spools `would_predict` with the same shape.
+
 3. **The `predict` grant.** Not a new `Effect` (its order is security-relevant in `run.rs:453,
    461`, `route.rs:404`, `policy.rs:163`). A new field on `ApprovalKey`, `mode: GrantMode {
    Execute, Predict }` with `#[serde(default)] = Execute`, level `E2`, `profile_id` the literal

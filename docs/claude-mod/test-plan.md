@@ -316,6 +316,10 @@ the Then itself.
 - **T-C1-12 · L5 · latency.** Paired run: `turn_step_nothing_pending` p95 within 0.3 ms of
   `batch_no_match`; `turn_step_predicts` against `adage-exec` with the grant fixture (which
   `hook_latency` learns to seed) p95 ≤ 10 ms.
+- **T-C1-14 · L1 + L7 · every kind.** For each row of the plan's prediction-kinds table that
+  `TurnStep` serves (`run`, `obligation`, `sequence`, `chain`, `skill`), a state that qualifies
+  yields the row's calls with the row's `kind` on the wire, and the mod's generator dispatches
+  the kind to exactly the chunks the row says; an unknown kind forwards `next(e)` unchanged.
 - **T-C1-13 · L6 · replay gate.** `fast_path_changes_no_decision` passes with a `TurnStep`
   injected after each `Batch` on every dataset it covers (demo-haiku45's three splits, synthetic,
   adversarial, `gates.rs:332-338`).
