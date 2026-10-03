@@ -269,7 +269,10 @@ pub fn run_auto(args: &[String], paths: &Paths) -> Result<()> {
         let _ = learnlog::append(paths, &line);
         // The ledger and the savings estimate, from the same (scoped) traces; best effort.
         let summary = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            // The transcript pass and a harness note's merge never write the ledger at once.
+            let held = adage_app::harness_ledger::ledger_lock(paths, &repo);
             let ledger = adage_learn::ledger::Ledger::new(&paths.ledger(), &repo).update(&transcripts);
+            drop(held);
             crate::savings::refresh(paths, &repo, &ledger)
         }))
         .ok();

@@ -1,0 +1,13 @@
+---
+source: crates/adage-cli/tests/mod_surfaces.rs
+expression: redact(&card)
+---
+adage {VERSION} · {REPO} · ● healthy
+
+reflexes    none active yet
+learning    off (env ADAGE_AUTO_LEARN) → adage config set learn.auto true
+embeddings  potion-base-8m-i8 (bundled)
+
+next  adage ui · review, health and settings
+      adage map · explore reflexes in the browser
+      adage doctor · check binary, data, hooks and model

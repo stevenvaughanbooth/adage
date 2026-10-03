@@ -354,7 +354,9 @@ failed command stay silent there; learned dead ends are announced at the first p
 directives emitted, followed, and ignored. Data lives in `~/Library/Application Support/Adage`
 (macOS), `~/.local/share/adage` (Linux) or `%APPDATA%\Adage` (Windows); `ADAGE_HOME` overrides it.
 
-**Kill switches:** `ADAGE_DISABLE=1`, or a `.adage/disabled` file in a repository.
+**Kill switches:** `ADAGE_DISABLE=1`, or a `.adage/disabled` file in a repository: `adage off`
+writes it (allowed anywhere, inside an agent session too) and `adage on` removes it (a person's
+decision, at a terminal).
 
 **Live conditioning:** you do not have to run `adage condition` again. When an agent's session stops or
 ends, the hook starts a background learner for that repository (detached; the hook never waits,

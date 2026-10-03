@@ -21,7 +21,14 @@
 //! an interval across zero is "no measurable difference yet"; an upper bound below zero says,
 //! plainly, that Adage appears to add cost. Beside it always: how often each arm's agent ended by
 //! asking the person for help, so a saving never hides worse outcomes.
+//!
+//! **What a harness reported.** Where the harness recorded a session's usage itself
+//! ([`crate::harness_ledger`], `adage ledger note`), its figures replace the transcript's: the
+//! cost (`source: harness`) and the model turns, which count only the steps the model answered. A
+//! step Adage took in the model's place (`predicted`) is a model turn not spent; the spools count
+//! those steps too (`turn_step` records Adage predicted), beside the other counts.
 
+use crate::harness_ledger;
 use adage_learn::ledger::{Ledger, SessionSummary};
 use adage_store::Paths;
 use serde::{Deserialize, Serialize};
@@ -84,7 +91,34 @@ pub struct Counts {
     /// count that began inside the window says so (docs/design/everyday-ux.md, rule 3).
     #[serde(default)]
     pub since: u64,
+    /// Steps Adage took in the model's place (`turn_step` records with a prediction): model
+    /// requests not made.
+    #[serde(default)]
+    pub predicted_steps: usize,
 }
+
+/// Sessions whose usage their harness reported (`adage ledger note`).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct HarnessReported {
+    pub sessions: usize,
+    /// Of their steps, the ones Adage took in the model's place.
+    pub predicted_steps: usize,
+    /// The most recent sessions (at most [`RECENT_NOTES`]), newest first.
+    pub recent: Vec<ReportedSession>,
+}
+
+/// One session as merged from its harness's note.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ReportedSession {
+    pub session_id: String,
+    /// `harness` when the engine reported the cost; `priced@<date>` or `none` otherwise.
+    pub source: String,
+    pub model_turns: u32,
+    pub predicted_steps: u32,
+}
+
+/// How many reported sessions `Summary.harness.recent` lists.
+pub const RECENT_NOTES: usize = 20;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -120,6 +154,9 @@ pub struct Summary {
     pub asked_for_help_treated: f64,
     pub asked_for_help_control: f64,
     pub counts: Counts,
+    /// Sessions whose harness reported their usage, when there are any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub harness: Option<HarnessReported>,
 }
 
 // --- The estimator ----------------------------------------------------------------------------
@@ -299,6 +336,7 @@ pub fn summarise(repo: &str, units: &[Unit], counts: Counts, now: u64) -> Summar
         asked_for_help_treated: rate(false),
         asked_for_help_control: rate(true),
         counts,
+        harness: None,
     }
 }
 
@@ -318,6 +356,7 @@ struct SpoolSession {
     headed_off: usize,
     finish_lines: usize,
     rewritten: usize,
+    predicted: usize,
 }
 
 fn read_spool(path: &Path, repo: &str) -> Option<SpoolSession> {
@@ -348,7 +387,8 @@ fn read_spool(path: &Path, repo: &str) -> Option<SpoolSession> {
             Some("pretool") if r["withheld"] != true && r["pretool"].get("rewrite").is_some() => s.rewritten += 1,
             Some("session_end") | Some("stop") => s.ended = true,
             // A step boundary neither starts nor ends a session; a step Adage predicted is judged
-            // `predicted`, which is not a follow (below).
+            // `predicted`, which is not a follow (below), and is a model request not made.
+            Some("turn_step") if r["decision"]["predicted"].is_object() => s.predicted += 1,
             Some("turn_step") => {}
             _ => {}
         }
@@ -385,8 +425,11 @@ fn read_spool(path: &Path, repo: &str) -> Option<SpoolSession> {
     mine.then_some(s)
 }
 
-/// The population and the counts for `repo`, from the spools and this ledger.
+/// The population and the counts for `repo`, from the spools and this ledger, with what each
+/// session's harness reported laid over the ledger.
 pub fn gather(paths: &Paths, repo: &str, ledger: &BTreeMap<String, SessionSummary>, now: u64) -> (Vec<Unit>, Counts) {
+    let mut ledger = ledger.clone();
+    harness_ledger::overlay(&mut ledger, &harness_ledger::read(paths, repo));
     let by_spool: BTreeMap<String, &SessionSummary> =
         ledger.values().map(|s| (adage_store::paths::sanitise(&s.session_id), s)).collect();
     let mut units = Vec::new();
@@ -412,6 +455,7 @@ pub fn gather(paths: &Paths, repo: &str, ledger: &BTreeMap<String, SessionSummar
             counts.dead_ends_headed_off += s.headed_off;
             counts.finish_lines_met += s.finish_lines;
             counts.rewritten += s.rewritten;
+            counts.predicted_steps += s.predicted;
         }
         let stem = p.file_stem().map(|x| x.to_string_lossy().to_string()).unwrap_or_default();
         let (Some(l), true, Some(control)) = (by_spool.get(&stem), s.started, s.arm_control) else { continue };
@@ -433,13 +477,16 @@ pub fn gather(paths: &Paths, repo: &str, ledger: &BTreeMap<String, SessionSummar
     (units, counts)
 }
 
-/// Compute and write `ledger/<slug>.summary.json` for `repo` from its ledger.
+/// Compute and write `ledger/<slug>.summary.json` for `repo` from its ledger, first merging what
+/// harnesses reported into the ledger file (under its lock).
 pub fn refresh(paths: &Paths, repo: &str, ledger: &BTreeMap<String, SessionSummary>) -> Summary {
     let now = now_ms();
-    let (units, counts) = gather(paths, repo, ledger, now);
+    let ledger = harness_ledger::merge(paths, repo, ledger);
+    let (units, counts) = gather(paths, repo, &ledger, now);
     let mut s = summarise(repo, &units, counts, now);
     // Every trace on an unlisted model, not only those in the population.
     s.unpriced = ledger.values().filter(|l| l.cost.usd.is_none()).count();
+    s.harness = reported(paths, repo, &ledger);
     let l = Ledger::new(&paths.ledger(), repo);
     if let Ok(b) = serde_json::to_vec_pretty(&s) {
         let _ = adage_store::config::write_atomic(&l.summary_path(), &b);
@@ -447,13 +494,38 @@ pub fn refresh(paths: &Paths, repo: &str, ledger: &BTreeMap<String, SessionSumma
     s
 }
 
-/// The summary for `repo`: the last one written, recomputed first when the ledger is newer than it
-/// (or there is a ledger and no summary yet). `None` when the repository has no ledger.
+/// What harnesses reported for `repo`'s sessions, as merged into `ledger`.
+fn reported(paths: &Paths, repo: &str, ledger: &BTreeMap<String, SessionSummary>) -> Option<HarnessReported> {
+    let mut notes = harness_ledger::read(paths, repo);
+    if notes.is_empty() {
+        return None;
+    }
+    notes.sort_by(|a, b| (b.ended_at.max(b.noted_at), &b.session_id).cmp(&(a.ended_at.max(a.noted_at), &a.session_id)));
+    Some(HarnessReported {
+        sessions: notes.len(),
+        predicted_steps: notes.iter().map(|n| n.predicted_steps() as usize).sum(),
+        recent: notes
+            .iter()
+            .take(RECENT_NOTES)
+            .map(|n| ReportedSession {
+                session_id: n.session_id.clone(),
+                source: ledger.get(&n.session_id).map_or_else(|| n.cost().source, |s| s.cost.source.clone()),
+                model_turns: n.model_turns(),
+                predicted_steps: n.predicted_steps(),
+            })
+            .collect(),
+    })
+}
+
+/// The summary for `repo`: the last one written, recomputed first when the ledger or a harness's
+/// note is newer than it (or there is a ledger and no summary yet). `None` when the repository has
+/// no ledger.
 pub fn read(paths: &Paths, repo: &str) -> Option<Summary> {
     let l = Ledger::new(&paths.ledger(), repo);
     let mtime = |p: &Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
     let ledger_at = mtime(&l.path())?;
-    let fresh = mtime(&l.summary_path()).is_some_and(|s| s >= ledger_at);
+    let noted_at = mtime(&paths.ledger().join(harness_ledger::FILE));
+    let fresh = mtime(&l.summary_path()).is_some_and(|s| s >= ledger_at && noted_at.is_none_or(|n| s >= n));
     if !fresh {
         return Some(refresh(paths, repo, &l.read()));
     }
