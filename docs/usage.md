@@ -330,6 +330,35 @@ target/release/adage status
 claude --plugin-dir plugin/claude-code
 ```
 
+### What the plugin shows in the session
+
+The plugin carries a module that draws beside the conversation and never in it (the model reads
+nothing it draws):
+
+- the opening line, with Adage's glyph: `◠ adage · 3 reflexes and 4 instincts active in this repo; …`;
+- under a prompt a reflex fired at, one dim line per reflex, worded as what it tells the agent;
+- under a tool row, a marker when Adage pointed a test run at the project's interpreter, took the
+  step without a model request, ran a learned replacement, or the agent headed off a dead end; a
+  receipt that covered a run says so under its output;
+- one band above the prompt while there is something to say: reflexes this session, steps without
+  a model request, the health lamp and its word, learning; a second line only when something
+  needs you (a grant that lapsed, a problem, reflexes waiting for review, a newer Claude Code);
+- a toast when learning changed a reflex, and a status-line warning only when something is wrong
+  (no binary for this machine, hooks not answering).
+
+`/adage` prints the status card and opens the pane: **Live** (`l`, the feed of `adage watch`, a
+filter, `enter` to read a directive as the agent read it, `p` pause, `v` quiet rows, `n` newest),
+**Reflexes** (`r`, every reflex with its strength, stage and evidence; each review decision as the
+`adage review` command to copy) and **Health** (`t`, every doctor check; `enter` conditions the
+repository when a check asks for it, any other fix is a command to copy). Every tab ends with
+**Explore in browser**, which starts `adage map` once and links to it. `/adage why` shows the last
+directive of this session, `/adage off` turns Adage off in this repository (`/adage on` says how to
+turn it back on), `/adage pause` pauses the feed and the band, and `/adage watch`, `reflexes`,
+`review` and `health` open the pane on that tab. In `/config` the plugin has two rows: **Band above
+the prompt** (on) and **Watch pane** (`manual`; `auto` opens the pane unasked in a terminal 144
+columns wide). Nothing is drawn in `claude -p`, the SDK or the VS Code panel, where `/adage`
+answers as text. `ADAGE_ASCII=1` draws every glyph as its ASCII twin.
+
 ## OpenCode and Codex
 
 ```bash

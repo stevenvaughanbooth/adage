@@ -102,10 +102,24 @@ for (const [pluginDir, alias] of [
       const list = readFileSync(bridge, "utf8").match(/export const ALLOWED_VERBS: readonly string\[\] = \[([^\]]*)\]/)?.[1]
       expect(list !== undefined, `${pluginDir}/hooks/bridge.ts: no ALLOWED_VERBS literal`)
       const verbs = (list ?? "").split(",").map((v) => v.trim().replace(/^['"]|['"]$/g, "")).filter(Boolean)
-      // Person-only verbs, install and config never run from a hook (architecture §2, §6 3a).
+      // Person-only verbs, install and config never run from a hook (architecture §2, §6 3a). The
+      // list is architecture §2's, plus `condition` (the Health tab's one action) and `delegate`
+      // (only `delegate status --json`, read for the lapsed grants), in this order: a change to it
+      // is a change here and to bridge.test.ts together (T-B1-05, T-X-04).
+      const allowed = ["hook", "version", "watch", "graph", "doctor", "status", "ledger", "off", "map", "condition", "delegate"]
       for (const v of verbs) {
-        expect(["hook", "version", "watch", "graph", "doctor", "status", "ledger", "off", "map"].includes(v), `${pluginDir}/hooks/bridge.ts: verb ${v} may not be in the allow-list`)
+        expect(allowed.includes(v), `${pluginDir}/hooks/bridge.ts: verb ${v} may not be in the allow-list`)
       }
+      expect(verbs.join(",") === allowed.join(","), `${pluginDir}/hooks/bridge.ts: the allow-list changed (${verbs.join(", ")}); change scripts/check-plugin.mjs and the bridge test with it`)
+    }
+    // Two settings rows and no more (ux-design §8): decisions are never behind a setting.
+    const rows = Object.keys(plugin.userConfig ?? {})
+    expect(rows.join(",") === "band,pane", `${pluginDir}: plugin.json userConfig must be exactly band and pane (found ${rows.join(", ") || "none"})`)
+    if (plugin.userConfig?.pane) {
+      expect(JSON.stringify(plugin.userConfig.pane.options) === JSON.stringify(["auto", "manual"]) && plugin.userConfig.pane.default === "manual", `${pluginDir}: userConfig.pane is auto | manual, manual by default`)
+    }
+    if (plugin.userConfig?.band) {
+      expect(plugin.userConfig.band.type === "boolean" && plugin.userConfig.band.default === true, `${pluginDir}: userConfig.band is a boolean, on by default`)
     }
   }
   if (typeof plugin.types === "string") {

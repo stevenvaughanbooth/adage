@@ -17,6 +17,8 @@ const PREDICT = { predict: { kind: 'obligation', route: 'codegen-after-schema', 
  */
 function world(on: On, opts: { data?: string; version: string; turnStep: string; isLinked?: () => boolean }) {
   mock.env(on, opts.data === undefined ? {} : { CLAUDE_PLUGIN_DATA: opts.data })
+  mock.clock(on, { now: 1_791_008_381_000 })
+  on('command.register', () => ({ value: { command: 'adage' } }))
   const ran: Ran[] = []
   on('process.run', ($, e) => {
     ran.push({ argv: e.argv, init: e.init })
@@ -38,7 +40,8 @@ function world(on: On, opts: { data?: string; version: string; turnStep: string;
   })
   const sets: { key: string; value: unknown }[] = []
   on('state.set', async ($, e, next) => {
-    sets.push({ key: e.key, value: e.value })
+    // The mode the activation records is the drawings'; these tests look at what the hooks kept.
+    if (e.key !== 'mode') sets.push({ key: e.key, value: e.value })
     return next(e)
   })
   return { ran, requests, sets }

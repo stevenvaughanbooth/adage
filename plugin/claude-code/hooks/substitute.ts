@@ -38,6 +38,8 @@ export type SubstituteDeps = {
   check: (command: string) => Promise<string>
   /** One line under the call's permission dialog, if one opens (`$.ui.notice`). */
   notice: (toolUseId: string, text: string) => void
+  /** Keeps the replacement for the marker under the call's row (`tool.substituted`); a failure is ignored. */
+  made?: (toolUseId: string, command: string) => Promise<void>
 }
 
 /** Both phases run before the call does, so each has the budget a command hook would. */
@@ -101,6 +103,7 @@ export async function substituteCall<E extends BashCall>(
   const made = final.ok && isRecord(final.answer) ? substituteOf(final.answer.substitute) : undefined
   if (made === undefined || deps.isObserving) return next(e)
 
+  await deps.made?.(e.tool_use_id, made.command).catch(() => undefined)
   try {
     deps.notice(e.tool_use_id, made.context)
   } catch {
