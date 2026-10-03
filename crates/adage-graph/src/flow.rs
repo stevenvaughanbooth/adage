@@ -245,6 +245,8 @@ pub fn observe(s: &Session) -> SessionObs {
                 add_output(&mut sources, output);
             }
             Step::Read { path } | Step::Edit { path } => add_path(&mut sources, path),
+            // A skill's name is no value a command takes.
+            Step::Skill { .. } => {}
         }
     }
     SessionObs { id: s.id.clone(), occs, prompt_words }

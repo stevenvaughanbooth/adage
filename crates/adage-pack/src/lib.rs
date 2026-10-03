@@ -35,6 +35,7 @@ pub mod procedure;
 pub mod types;
 pub mod validate;
 pub mod vendor;
+pub mod verified;
 
 pub use bind::{bind, BindEnv, Binding, BoundRoute, Status, Target};
 pub use closure::Closure;

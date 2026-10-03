@@ -17,6 +17,9 @@
 //! [runtime]
 //! control = 0.1              # share of sessions held out as the control arm
 //!
+//! [skills]
+//! invoke = false             # Claude Code mod: invoke an accepted, inert skill at its step
+//!
 //! [instincts]
 //! enabled = true             # bind Adage's built-in defaults from each repository's files
 //! packs = ["auto"]           # instinct packs to bind: auto (every one installed) or their names
@@ -78,6 +81,10 @@ pub struct Config {
     pub runtime_control: f64,
     /// `runtime.rewrite`: `PreToolUse` rewrites to the project's environment (on by default).
     pub runtime_rewrite: bool,
+    /// `skills.invoke`: a `skill` reflex with a person's `predict` grant may invoke its skill at
+    /// its step (the Claude Code mod's `turn.step`), when `adage train` recorded the skill as inert
+    /// in a pack the person accepted. Off by default.
+    pub skills_invoke: bool,
     /// Bind instincts (prebuilt routes) from each repository's declared files when learning.
     /// Learn procedure cards for families of similar tasks (`learn.cards`), and how similar a
     /// prompt must be to a family for its card (`learn.card_threshold`).
@@ -281,6 +288,14 @@ pub const KEYS: &[Key] = &[
         doc: "point Python test runs under the system Python at the project's verified environment before they run (Claude Code PreToolUse); false: leave every command as the agent wrote it",
         guarded: false,
     },
+    Key {
+        name: "skills.invoke",
+        kind: Kind::Bool,
+        default: "false",
+        env: None,
+        doc: "Claude Code mod: invoke a skill at the step a skill reflex names, when it holds a predict grant and adage train recorded the skill inert in a pack you accepted",
+        guarded: true,
+    },
 ];
 
 pub fn key(name: &str) -> Option<&'static Key> {
@@ -483,6 +498,7 @@ fn load_from(file: &Path, env: &dyn Fn(&str) -> Option<String>) -> Loaded {
         learn_parse_cache: parse_bool(&text("learn.parse_cache")).unwrap_or(true),
         runtime_control: text("runtime.control").parse().unwrap_or(0.1),
         runtime_rewrite: parse_bool(&text("runtime.rewrite")).unwrap_or(true),
+        skills_invoke: parse_bool(&text("skills.invoke")).unwrap_or(false),
         learn_cards: parse_bool(&text("learn.cards")).unwrap_or(true),
         learn_card_threshold: text("learn.card_threshold").parse().unwrap_or(0.811),
         instincts_enabled: parse_bool(&text("instincts.enabled")).unwrap_or(true),

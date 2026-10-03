@@ -80,6 +80,30 @@ pub struct Review {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub by: Option<String>,
     pub basis: Basis,
+    /// How a person made it: at a terminal, or with a press in the session (architecture §3.12).
+    /// Set by the binary, never by a flag; `None` for a decision Adage made itself and for every
+    /// decision recorded before presses existed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub via: Option<Via>,
+}
+
+/// How a person's decision reached Adage.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Via {
+    /// At a terminal (or a CI run with `ADAGE_ALLOW_NONINTERACTIVE=1`), outside an agent session.
+    Terminal,
+    /// An answer in the Claude Code session, carried by a press token.
+    Press,
+}
+
+impl Via {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Via::Terminal => "terminal",
+            Via::Press => "press",
+        }
+    }
 }
 
 /// `review.yaml`: the latest decision per route id.
@@ -405,8 +429,10 @@ mod tests {
 
     fn reviewed(r: &Route, d: Decision) -> Reviews {
         let mut rs = Reviews::default();
-        rs.routes
-            .insert(r.id.clone(), Review { decision: d, on: "2026-09-22".into(), by: None, basis: basis(r, 0, 0) });
+        rs.routes.insert(
+            r.id.clone(),
+            Review { decision: d, on: "2026-09-22".into(), by: None, basis: basis(r, 0, 0), via: None },
+        );
         rs
     }
 

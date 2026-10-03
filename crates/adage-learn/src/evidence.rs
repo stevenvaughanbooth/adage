@@ -59,6 +59,10 @@ pub struct LearnConfig {
     /// Learn procedure cards for families of similar tasks ([`crate::cards`]); `None` learns none
     /// (the offline eval's default, so its numbers are those of reflexes alone).
     pub cards: Option<crate::cards::CardParams>,
+    /// Mine and keep candidates (plan D1, `adage_tracks::candidates`): sequences seen in fewer
+    /// traces than a reflex needs, in a pass of their own that never changes the reflexes. On in
+    /// both presets; off only to measure the reflexes' pass alone.
+    pub candidates: bool,
 }
 
 impl Default for LearnConfig {
@@ -125,6 +129,7 @@ impl LearnConfig {
             roots: BTreeMap::new(),
             uplift_min: p.uplift_min,
             cards: None,
+            candidates: true,
         }
     }
 }

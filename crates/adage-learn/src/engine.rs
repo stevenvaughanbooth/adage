@@ -76,6 +76,10 @@ pub struct EngineReport {
     /// The session-start line as planned ([`crate::testmap::card`]), delivered or not.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub card: Option<crate::testmap::Card>,
+    /// Candidates compiled (plan D1): sequences counted below the support a reflex needs, before
+    /// the learner leaves out those that are reflexes.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub candidates: usize,
 }
 
 /// One judged route, and why it exists.
@@ -92,6 +96,13 @@ pub struct EngineRun {
     pub report: EngineReport,
     /// Every scored candidate's counts by pattern (for dormant routes).
     pub counts: BTreeMap<String, Counts>,
+    /// The candidates (plan D1): border patterns compiled as the reflex they would be, never
+    /// judged (`compile::Compiled::candidate`), one per id. What `adage_tracks::candidates`
+    /// records, once the learner has left out those that are reflexes.
+    pub candidates: Vec<compile::Compiled>,
+    /// Each judged route's supporting session ids, as mined (what tells which traces tipped a
+    /// candidate into it).
+    pub sessions: BTreeMap<String, Vec<String>>,
 }
 
 fn threads() -> usize {
@@ -115,7 +126,9 @@ fn ok_literal(st: &crate::import::StepObs) -> Option<String> {
 }
 
 /// The commands a route directs or names: its step's commands, an avoid's runners, and the
-/// runner whose failure an after-failure route follows.
+/// runner whose failure an after-failure route follows. Reviewed for `Step::Skill` (D3): a skill
+/// step names no command (`compile::commands` gives none), so only a directive that named
+/// everything exposes a session to it.
 pub fn named_commands(r: &Route) -> Vec<String> {
     let mut v: Vec<String> = compile::commands(&r.step).into_iter().map(str::to_string).collect();
     if let Step::Avoid { avoid, .. } = &r.step {
@@ -132,7 +145,12 @@ pub fn named_commands(r: &Route) -> Vec<String> {
 pub fn exposed(s: &Session, r: &Route) -> bool {
     let cmds = named_commands(r);
     let refs: Vec<&str> = cmds.iter().map(String::as_str).collect();
-    s.exposed_to(&refs, matches!(r.step, Step::ReadBatch { .. }))
+    // A skill route: a directive that said to use that skill (and only that one) steered it.
+    let skill = match &r.step {
+        Step::Skill { skill, .. } => s.influence.iter().any(|d| d.skills.iter().any(|x| x == skill)),
+        _ => false,
+    };
+    skill || s.exposed_to(&refs, matches!(r.step, Step::ReadBatch { .. }))
 }
 
 /// The commands a step ran successfully, each with its own effect class: the step's command, or
@@ -166,18 +184,33 @@ fn runs_command(st: &crate::import::StepObs) -> bool {
     }
 }
 
-/// A directed command, read once for matching observed runs of its family.
+/// A directed command (or skill), read once for matching observed runs of its family.
 struct Want {
     command: String,
     shape: Option<adage_core::pattern::Shape>,
     effect: Effect,
+    /// A skill to use, not a command: its Skill tool use is the hit.
+    skill: Option<String>,
 }
 
 impl Want {
     fn new(command: String) -> Want {
         let shape = compile::variants::shape(&command);
         let effect = io::classify(&command, &adage_core::CommandTable::load());
-        Want { command, shape, effect }
+        Want { command, shape, effect, skill: None }
+    }
+
+    /// Using the skill `name` (a `Step::Skill`, judged like a run: plan §2.1.2).
+    fn skill(name: &str) -> Want {
+        Want { command: adage_tracks::skill_key(name), shape: None, effect: Effect::Observe, skill: Some(name.into()) }
+    }
+
+    /// What `step` directs, in order, with `{part}` bound by `bind`.
+    fn of(step: &Step, bind: impl Fn(&str) -> String) -> Vec<Want> {
+        match step {
+            Step::Skill { skill, .. } => vec![Want::skill(skill)],
+            _ => compile::commands(step).into_iter().map(|c| Want::new(bind(c))).collect(),
+        }
     }
 
     /// Whether step `st` ran this command or a variant it covers (`compile::variants`: an
@@ -185,6 +218,10 @@ impl Want {
     /// traces that ran `cargo test -p adage-cli` after an edit are evidence for
     /// `cargo test --workspace --locked`, the family's covering form.
     fn hit(&self, st: &crate::import::StepObs) -> bool {
+        if let Some(name) = &self.skill {
+            return !st.call.failed
+                && matches!(&st.norm.action, CanonicalAction::Control { tool } if tool.strip_prefix("Skill ") == Some(name.as_str()));
+        }
         ok_parts(st).iter().any(|(lit, e)| {
             *lit == self.command
                 || (st.project_pytest_root_cwd
@@ -200,7 +237,7 @@ impl Want {
 /// `{part}` bound to `part`.
 fn ran_after(steps: &[crate::import::StepObs], from: usize, step: &Step, part: Option<&str>) -> bool {
     let bind = |c: &str| part.map_or(c.to_string(), |p| c.replace("{part}", p));
-    let want: Vec<Want> = compile::commands(step).into_iter().map(|c| Want::new(bind(c))).collect();
+    let want: Vec<Want> = Want::of(step, bind);
     let mut i = 0;
     for st in steps.iter().skip(from + 1) {
         if i < want.len() && want[i].hit(st) {
@@ -260,8 +297,8 @@ fn count_after_edit(r: &Route, sessions: &[&Session]) -> Option<Count> {
         SlotSource::EditSegment { depth, .. } => Some(*depth as usize),
         _ => None,
     });
-    let first = compile::commands(&r.step).first().map(|c| c.to_string())?;
-    let want_first = Want::new(first.clone());
+    let want_first = Want::of(&r.step, str::to_string).into_iter().next()?;
+    let first = want_first.command.clone();
     // A plain check after an edit: its run is evidence only when the edit, not a failed check,
     // called for it.
     let check = r.effect == Effect::Verify && r.slots.is_empty() && matches!(r.step, Step::Run { .. });
@@ -811,8 +848,11 @@ fn judge(
         (if n >= cfg.min_support { strength_for(effect, by_edit, lb, prime_rate.max(rate), cfg, &r.id) } else { None })
             .or_else(|| outcome_gate(effect, by_edit, lift.as_ref(), cfg))
             .ok_or_else(|| format!("rate {rate:.2} below the bar and no outcome lift, or may never be directed"))?;
-    // A check after an edit is suggested, never fired at every edit (`compile::shapes`).
-    let strength = if by_edit && effect == Effect::Verify && matches!(r.step, Step::Run { .. }) {
+    // A check after an edit is suggested, never fired at every edit (`compile::shapes`); a skill
+    // is never above its ceiling (`adage_tracks::SKILL_CEILING`).
+    let strength = if (by_edit && effect == Effect::Verify && matches!(r.step, Step::Run { .. }))
+        || matches!(r.step, Step::Skill { .. })
+    {
         Strength::Prime
     } else {
         strength
@@ -923,6 +963,7 @@ pub fn run(ss: &[&Session], cfg: &LearnConfig, priors: &[Route], model: Option<&
     p.score.min_support = cfg.min_support;
     let (num, den) = cfg.dead_end_consistency;
     p.score.consistency = num as f64 / den.max(1) as f64;
+    p.candidates = cfg.candidates;
     let learned = select::learn(&events, &p);
     // G1's value slots, learned in the discovery window as the lookup is judged there.
     let prefix: Vec<adage_graph::input::Session> =
@@ -952,6 +993,15 @@ pub fn run(ss: &[&Session], cfg: &LearnConfig, priors: &[Route], model: Option<&
         priors: &priors,
         params: &params,
     });
+    // The candidates, compiled apart so nothing above changes (plan D1); their drops are not the
+    // routes' and are not reported.
+    let candidates = compile::compile_candidates(&compile::Input {
+        reflexes: &learned.candidates,
+        corpus: &corpus,
+        values: Some(&values),
+        priors: &[],
+        params: &params,
+    });
     // The lookup is a value-flow reflex (Track G §8, `[prompt] =flow=> [act …]`): G1's value slot
     // test over every trace finds it, and judges it.
     let lookup = crate::graph::lookup_routes(ss, cfg);
@@ -963,7 +1013,15 @@ pub fn run(ss: &[&Session], cfg: &LearnConfig, priors: &[Route], model: Option<&
         ..Default::default()
     };
     let mut routes = Vec::new();
-    for c in out.routes {
+    let mut sessions: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    let mut kept_candidates = Vec::new();
+    for c in out.routes.into_iter().chain(candidates.routes) {
+        // A candidate is counted, never judged into a route.
+        if c.candidate {
+            kept_candidates.push(c);
+            continue;
+        }
+        sessions.insert(c.route.id.clone(), c.sessions.clone());
         let prior = c.why.prior.is_some();
         match judge(&c, ss, cfg, &lookup, prior) {
             Ok(r) => {
@@ -1197,7 +1255,8 @@ pub fn run(ss: &[&Session], cfg: &LearnConfig, priors: &[Route], model: Option<&
     for j in &routes {
         *report.kept_by.entry(kept_kind(j).to_string()).or_default() += 1;
     }
-    EngineRun { routes, report, counts: learned.counts }
+    report.candidates = kept_candidates.len();
+    EngineRun { routes, report, counts: learned.counts, candidates: kept_candidates, sessions }
 }
 
 /// Where a kept route came from, for [`EngineReport::kept_by`].

@@ -93,6 +93,10 @@ impl adage_learn::store::Store for Rows {
     fn write_follow_weights(&self, repo: &str, _: &adage_core::judge::Weights) {
         self.push(format!("follow weights {repo}"));
     }
+    fn write_candidates(&self, c: &adage_tracks::candidates::CandidateFile) -> anyhow::Result<()> {
+        self.push(format!("candidates {} ({})", c.repo, c.candidates.len()));
+        Ok(())
+    }
     fn compile_index(&self) -> anyhow::Result<adage_learn::store::Compiled> {
         self.push("index".into());
         Ok(adage_learn::store::Compiled { generation: "g1".into(), conflicts: vec![] })
@@ -124,6 +128,8 @@ fn a_learn_run_materializes_only_through_its_store() {
     let rows = rows.0.into_inner().unwrap();
     assert!(rows.iter().any(|r| r.starts_with("track github-com-acme-app/learned")), "{rows:?}");
     assert!(rows.contains(&"follow weights github.com/acme/app".to_string()), "{rows:?}");
+    // Candidates too (plan D1): nothing writes `candidates.json` but the store.
+    assert!(rows.iter().any(|r| r.starts_with("candidates github.com/acme/app")), "{rows:?}");
     assert_eq!(rows.iter().filter(|r| *r == "index").count(), 1, "{rows:?}");
     assert_eq!(rows.last().map(String::as_str), Some("index"), "compiled after every row: {rows:?}");
     assert_eq!(std::fs::read_dir(d.path()).unwrap().count(), 0, "nothing on disk");

@@ -67,6 +67,13 @@ fn push(n: &Normalized, step: &StepObs, out: &mut Vec<(input::Step, input::StepM
                 push(a, step, out);
             }
         }
+        // A skill used (plan §2.1.2): the only control tool the learner reads. Every other
+        // control tool (a todo list, a subagent, an MCP call) stays out, as before.
+        CanonicalAction::Control { tool } => {
+            if let Some(name) = tool.strip_prefix("Skill ").filter(|n| adage_tracks::safe_skill_name(n)) {
+                out.push((input::Step::Skill { name: name.to_string() }, meta(adage_tracks::skill_key(name))));
+            }
+        }
         _ => {}
     }
 }
@@ -189,6 +196,7 @@ impl DirectiveIdentities for Directed {
             at_step: self.at_step,
             identities: self.identities(),
             paths: self.files.clone(),
+            skills: self.skills.clone(),
             all: self.all,
         }
     }
@@ -329,5 +337,46 @@ mod tests {
         assert!(!s.exposed_to(&["make gen"], false) && !s.exposed_to(&["./scripts/wi-lookup {item}"], true));
         s.influence[0].all = true;
         assert!(s.exposed_to(&["make gen"], false));
+    }
+
+    /// T-D3-04: a Skill tool use becomes a skill step, with its key; every other control tool is
+    /// left out as before; a skill directive's influence names that skill alone.
+    #[test]
+    fn a_skill_used_is_a_skill_step_and_no_other_control_tool_is() {
+        let control = |tool: &str| CanonicalAction::Control { tool: tool.into() };
+        let s = Session {
+            id: "s".into(),
+            root: "/r".into(),
+            repo: "r".into(),
+            model: None,
+            day: "2026-09-01".into(),
+            prompt: "release it".into(),
+            steps: vec![
+                step(0, 0, control("TodoWrite"), None, false),
+                step(1, 0, control("Skill release-checklist"), None, false),
+                step(2, 0, control("Task general-purpose"), None, false),
+                step(3, 0, control("Skill ../etc"), None, false),
+            ],
+            steered: false,
+            directed: BTreeSet::new(),
+            influence: vec![Directed {
+                at_step: 1,
+                route: "skill-1".into(),
+                skills: v(&["release-checklist"]),
+                ..Default::default()
+            }],
+            outcome: None,
+            harness: CLAUDE_CODE.into(),
+            prompts: vec![],
+            ending: Default::default(),
+        };
+        let a = annotate(&s);
+        assert_eq!(a.session.steps, vec![input::Step::Skill { name: "release-checklist".into() }]);
+        assert_eq!(a.meta[0].key, "control Skill release-checklist");
+        let e = events(&a, &s);
+        assert_eq!(e.events.iter().filter(|x| x.ty == crate::events::NodeType::Skill).count(), 1);
+        assert_eq!(e.exposed, vec![1], "the skill the directive named, from its delivery on");
+        let inf = &influence(&s)[0];
+        assert!(inf.names_skill("release-checklist") && !inf.names_skill("other") && !inf.names_act("make"));
     }
 }

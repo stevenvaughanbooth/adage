@@ -206,6 +206,32 @@ pub enum Step {
     /// A procedure card for a family of similar tasks ([`crate::card`]): learned from this
     /// repository's traces, triggered by an intent (the family's prompts), delivered once, prime.
     Card { card: crate::card::Card },
+    /// Use a skill the harness offers (architecture §3.11): `skill` is its name as the harness
+    /// lists it ([`SKILL_NAME_MAX`] bytes of `[A-Za-z0-9_-]`), `args` a plain argument string the
+    /// Skill tool is invoked with. Followed when the agent uses that skill (the canonical key
+    /// `control Skill <skill>`). The text a skill loads can carry commands of its own, so the step
+    /// is never delivered above prime and is never a dead end.
+    Skill {
+        skill: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        args: Option<String>,
+    },
+}
+
+/// At most this many bytes in a [`Step::Skill`] name.
+pub const SKILL_NAME_MAX: usize = 64;
+
+/// Whether `name` may be named by a [`Step::Skill`]: 1 to [`SKILL_NAME_MAX`] bytes of ASCII
+/// letters, digits, `_` and `-`. Nothing else can reach the directive, the canonical key or the
+/// Skill tool's input.
+pub fn safe_skill_name(name: &str) -> bool {
+    (1..=SKILL_NAME_MAX).contains(&name.len()) && name.bytes().all(|c| c.is_ascii_alphanumeric() || b"_-".contains(&c))
+}
+
+/// The canonical key of using the skill `name` (`adage_core::tools`: a Skill tool use is a
+/// `Control` action whose tool is `Skill <name>`): what a [`Step::Skill`] is judged followed on.
+pub fn skill_key(name: &str) -> String {
+    format!("control Skill {name}")
 }
 
 /// Typed exit predicates, rendered by Adage from fixed templates — never free text from a track.
@@ -466,6 +492,7 @@ impl Route {
             Step::Advise { template, .. } => format!("advise ({template})"),
             Step::Sequence { commands } => format!("run {}", commands.join(", then ")),
             Step::Card { .. } => "show the checklist these tasks needed before".into(),
+            Step::Skill { skill, .. } => format!("use the {skill} skill"),
         };
         format!("{when}, {what}")
     }
@@ -553,6 +580,8 @@ pub struct Track {
 /// | `read_batch` | any | `read-batch` |
 /// | `sequence` | any | `sequence` |
 /// | `advise` | any | `advise` |
+/// | `card` | any | `card` |
+/// | `skill` | any | `skill` |
 /// | `run`, a regenerate step with no slot | `after_edit` | `obligation` |
 /// | `run` | anything else | `run` |
 pub fn shape(r: &Route) -> &'static str {
@@ -562,6 +591,7 @@ pub fn shape(r: &Route) -> &'static str {
         (_, Step::Sequence { .. }) => "sequence",
         (_, Step::Advise { .. }) => "advise",
         (_, Step::Card { .. }) => "card",
+        (_, Step::Skill { .. }) => "skill",
         (Trigger::AfterEdit { .. }, Step::Run { .. }) if r.effect == Effect::Regenerate && r.slots.is_empty() => {
             "obligation"
         }
@@ -570,7 +600,7 @@ pub fn shape(r: &Route) -> &'static str {
 }
 
 /// Every delivery shape [`shape`] names.
-pub const SHAPES: [&str; 7] = ["run", "avoid", "read-batch", "obligation", "sequence", "advise", "card"];
+pub const SHAPES: [&str; 8] = ["run", "avoid", "read-batch", "obligation", "sequence", "advise", "card", "skill"];
 
 /// The strength a route is delivered at: its own, except that a route forming or dormant, or
 /// an instinct, is never delivered fire (and an instinct never inhibit).
@@ -581,6 +611,20 @@ pub fn delivered_strength(r: &Route) -> Strength {
     match (r.state, r.strength) {
         (RouteState::Forming | RouteState::Dormant, Strength::Fire) => Strength::Prime,
         (_, a) => a,
+    }
+}
+
+/// The strongest strength a [`Step::Skill`] may ever be given, whatever its effect: the text a
+/// skill loads can carry commands, so its use is suggested, never said as an instruction
+/// (architecture §3.11).
+pub const SKILL_CEILING: Strength = Strength::Prime;
+
+/// The strongest strength a route may be given: its effect's [`ceiling`], and never above
+/// [`SKILL_CEILING`] for a skill step.
+pub fn step_ceiling(step: &Step, effect: Effect, triggered_by_edit: bool) -> Option<Strength> {
+    match step {
+        Step::Skill { .. } => ceiling(effect, triggered_by_edit).map(|_| SKILL_CEILING),
+        _ => ceiling(effect, triggered_by_edit),
     }
 }
 

@@ -115,6 +115,8 @@ fn reflex(context: Vec<ItemView>, continuation: Vec<ItemView>, target: Option<&s
         examples: vec!["s0".into(), "s1".into()],
         why: String::new(),
         raw: None,
+        sessions: vec!["s0".into(), "s1".into()],
+        lag: 0,
     }
 }
 
@@ -369,4 +371,31 @@ fn an_execution_only_prefix_does_not_shadow_the_advice_of_the_same_route() {
     // Alone, the prefix still compiles for execution judgement only.
     let out = compile(&[prefix]);
     assert!(!out.routes.is_empty() && out.routes.iter().all(|c| c.execution_only && !c.advisory_eligible));
+}
+
+/// Plan §2.1.2: a skill used after an edit compiles to the `skill` shape, `after_edit` →
+/// `Step::Skill`, observe, prime at most whatever its posterior; after a selected context of two
+/// events, to a context trigger; never from a single command, and never a name a directive could
+/// not carry.
+#[test]
+fn a_skill_used_after_its_context_compiles_to_the_skill_shape() {
+    let skill = |name: &str| item(NodeType::Skill, Level::Exact, name, &[(name, 6)]);
+    let out = compile(&[reflex(vec![edit("registry/currencies.csv")], vec![skill("release-checklist")], None)]);
+    assert_eq!(out.routes.len(), 1, "{:?}", out.dropped);
+    let c = &out.routes[0];
+    assert_eq!(c.shape, "skill");
+    assert_eq!(c.route.step, Step::Skill { skill: "release-checklist".into(), args: None });
+    assert!(matches!(c.route.trigger, Trigger::AfterEdit { .. }));
+    assert_eq!((c.route.effect, c.route.strength), (adage_core::Effect::Observe, Strength::Prime));
+    assert!(c.route.id.starts_with("skill-"));
+    assert_eq!(adage_tracks::shape(&c.route), "skill");
+
+    let mut r = reflex(vec![act("exec make gen"), act("exec make check")], vec![skill("release-checklist")], None);
+    r.conf_lb = 0.99;
+    let out = compile(&[r]);
+    assert!(matches!(out.routes[0].route.trigger, Trigger::Context { .. }));
+    assert_eq!(out.routes[0].route.strength, Strength::Prime, "fire is above a skill's ceiling");
+
+    assert!(compile(&[reflex(vec![act("exec make gen")], vec![skill("release-checklist")], None)]).routes.is_empty());
+    assert!(compile(&[reflex(vec![edit("registry/currencies.csv")], vec![skill("../x")], None)]).routes.is_empty());
 }

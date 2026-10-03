@@ -453,7 +453,8 @@ impl Class {
             Step::Run { command } => command_class(command),
             Step::Sequence { commands } => commands.first().map(|c| command_class(c)).unwrap_or(Class::Unscored),
             Step::Avoid { instead, .. } => command_class(instead),
-            Step::Advise { .. } | Step::ReadBatch { .. } | Step::Card { .. } => Class::Unscored,
+            // A skill's use is a harness tool, not a command whose savings replay can score.
+            Step::Advise { .. } | Step::ReadBatch { .. } | Step::Card { .. } | Step::Skill { .. } => Class::Unscored,
         }
     }
 

@@ -34,7 +34,7 @@ pub const READS: &[(&str, &[&str])] = &[
     ("evals/sandboxes/", &["adage-cli", "adage-exec", "adage-instincts", "adage-learn", "adage-pack", "adage-train"]),
     ("evals/datasets/", &["adage-graph", "adage-eval"]),
     ("evals/gen/", &["adage-cli", "adage-instincts"]),
-    ("evals/lab/", &["adage-eval", "adage-train"]),
+    ("evals/lab/", &["adage-cli", "adage-eval", "adage-train"]),
     ("sim/", &["adage-sim"]),
     ("plugin/", &["adage-cli", "adage-hook"]),
     ("packs/", &["adage-pack"]),

@@ -12,10 +12,14 @@
 //! | `strength` | A route whose strength changed (e.g. prime → fire) | strength → strength |
 //! | `evidence` | A route whose sessions of support or opportunity changed | `null` → `null` |
 //! | `proposal` | A pinned route with a newly proposed change in `adage review` | `null` → `null` |
+//! | `candidate` | A sequence counted below the support a reflex needs, new or seen in more or fewer traces (plan D1, `adage_tracks::candidates`), with `support` and `s_min` | `null` → `null` |
 //!
-//! Summaries are fixed templates over the route kind, strength and session counts: no prompt text,
-//! command, output or path, ever.
+//! A `new` route that was a candidate at the last learn names the traces that tipped it
+//! (`sessions`: its supporting traces the candidate did not have). Summaries are fixed templates
+//! over the route kind, strength and session counts: no prompt text, command, output or path,
+//! ever.
 
+use adage_tracks::candidates::{self, CandidateFile};
 use adage_tracks::proposals::Proposals;
 use adage_tracks::{io, Route, RouteState, Strength, Track};
 use serde::Serialize;
@@ -32,6 +36,7 @@ pub enum ChangeKind {
     Strength,
     Evidence,
     Proposal,
+    Candidate,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -47,20 +52,65 @@ pub struct Change {
     /// learn.log, which holds no command, path or prompt.
     #[serde(skip)]
     pub gist: String,
+    /// For a `candidate`: the traces it was seen in, and the support a reflex needs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub support: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub s_min: Option<u32>,
+    /// For a `new` route that was a candidate: the session ids of the traces that tipped it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sessions: Option<Vec<String>>,
 }
 
-/// A repository's learned tracks at one moment, by track name.
-pub type Snapshot = BTreeMap<String, (Track, Proposals)>;
+/// A repository's learned tracks at one moment, by track name (the map it dereferences to), with
+/// its candidates (`candidates.json`, plan D1).
+#[derive(Debug, Clone, Default)]
+pub struct Snapshot {
+    pub tracks: BTreeMap<String, (Track, Proposals)>,
+    pub candidates: Option<CandidateFile>,
+}
+
+impl std::ops::Deref for Snapshot {
+    type Target = BTreeMap<String, (Track, Proposals)>;
+    fn deref(&self) -> &Self::Target {
+        &self.tracks
+    }
+}
+
+impl std::ops::DerefMut for Snapshot {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.tracks
+    }
+}
+
+impl FromIterator<(String, (Track, Proposals))> for Snapshot {
+    fn from_iter<I: IntoIterator<Item = (String, (Track, Proposals))>>(it: I) -> Snapshot {
+        Snapshot { tracks: it.into_iter().collect(), candidates: None }
+    }
+}
 
 /// The learned tracks for `repo` under `tracks_root` (its `<slug>/` directory; imports live
-/// elsewhere and are never learned), with their proposals. Unreadable tracks are left out.
+/// elsewhere and are never learned), with their proposals and its candidates. Unreadable tracks
+/// are left out.
 pub fn snapshot(tracks_root: &Path, repo: &str) -> Snapshot {
-    read(tracks_root, &tracks_root.join(crate::slug(repo))).remove(repo).unwrap_or_default()
+    let mut s = read(tracks_root, &tracks_root.join(crate::slug(repo))).remove(repo).unwrap_or_default();
+    s.candidates = candidates::load(tracks_root, repo);
+    s
 }
 
-/// [`snapshot`] for every repository with learned tracks, by repository key.
+/// [`snapshot`] for every repository with learned tracks or candidates, by repository key.
 pub fn snapshot_all(tracks_root: &Path) -> BTreeMap<String, Snapshot> {
-    read(tracks_root, tracks_root)
+    let mut out = read(tracks_root, tracks_root);
+    for e in std::fs::read_dir(tracks_root).into_iter().flatten().flatten() {
+        let p = e.path().join(candidates::LEARNED_TRACK).join(candidates::FILE);
+        if let Ok(f) = candidates::read(&p) {
+            if crate::slug(&f.repo) == e.file_name().to_string_lossy() {
+                let repo = f.repo.clone();
+                out.entry(repo).or_default().candidates = Some(f);
+            }
+        }
+    }
+    out
 }
 
 fn read(tracks_root: &Path, dir: &Path) -> BTreeMap<String, Snapshot> {
@@ -72,7 +122,7 @@ fn read(tracks_root: &Path, dir: &Path) -> BTreeMap<String, Snapshot> {
         let name = t.manifest.track.name.clone();
         // A learned track's directory is its name under the tracks directory.
         let props = adage_tracks::proposals::load(&tracks_root.join(&name)).unwrap_or_default();
-        out.entry(t.manifest.scope.repo.clone()).or_default().insert(name, (t, props));
+        out.entry(t.manifest.scope.repo.clone()).or_default().tracks.insert(name, (t, props));
     }
     out
 }
@@ -142,6 +192,9 @@ pub fn diff(before: &Snapshot, after: &Snapshot) -> Vec<Change> {
             to,
             summary,
             gist: String::new(),
+            support: None,
+            s_min: None,
+            sessions: None,
         };
         let first = out.len();
         for id in ids {
@@ -246,8 +299,54 @@ pub fn diff(before: &Snapshot, after: &Snapshot) -> Vec<Change> {
             c.gist = new.get(&c.route).or_else(|| old.get(&c.route)).map(Route::gist).unwrap_or_default();
         }
     }
+    candidate_changes(before, after, &mut out);
     out.sort_by(|a, b| (&a.track, &a.route, a.change).cmp(&(&b.track, &b.route, b.change)));
     out
+}
+
+/// The candidates' changes (plan D1): one `candidate` per candidate that is new or whose support
+/// moved, and on each `new` route that was a candidate, the traces that tipped it.
+fn candidate_changes(before: &Snapshot, after: &Snapshot, out: &mut Vec<Change>) {
+    let Some(now) = &after.candidates else { return };
+    for f in &now.formed {
+        for c in out.iter_mut().filter(|c| c.change == ChangeKind::New && c.route == f.id) {
+            c.sessions = Some(f.sessions.clone());
+        }
+    }
+    let track = format!("{}/{}", crate::slug(&now.repo), crate::TRACK);
+    let was = |id: &str| before.candidates.as_ref().and_then(|b| b.get(id)).filter(|e| !e.review);
+    for e in now.candidates.iter().filter(|e| !e.review) {
+        if was(&e.id).is_some_and(|o| o.support == e.support) {
+            continue;
+        }
+        let c = adage_tracks::candidates::Candidate {
+            id: e.id.clone(),
+            trigger: e.trigger.clone(),
+            step: e.step.clone(),
+            support: e.support,
+            s_min: now.s_min,
+            days: e.days,
+            last_seen: e.last_seen.clone(),
+            review: false,
+        };
+        out.push(Change {
+            route: e.id.clone(),
+            track: track.clone(),
+            change: ChangeKind::Candidate,
+            from: None,
+            to: None,
+            summary: format!(
+                "candidate seen in {} {}; a reflex needs at least {}",
+                e.support,
+                if e.support == 1 { "trace" } else { "traces" },
+                now.s_min
+            ),
+            gist: c.gist(),
+            support: Some(e.support),
+            s_min: Some(now.s_min),
+            sessions: None,
+        });
+    }
 }
 
 #[cfg(test)]
