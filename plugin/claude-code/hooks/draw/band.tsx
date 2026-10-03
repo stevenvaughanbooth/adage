@@ -2,7 +2,7 @@
 // attention. No Button (a digit typed alone into an empty prompt would press it); numbers plain;
 // the lamp the only coloured glyph, its word always beside it.
 import { ROLES } from '../tokens'
-import type { Band } from '../view'
+import type { Band } from '../view/band'
 import type { Els, Tree } from './els'
 
 export function bandTree(els: Els, band: Band, sep: string): Tree {

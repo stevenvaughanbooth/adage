@@ -4,13 +4,14 @@ import { describe, expect, test } from 'claude-code/testing'
 
 import { ANSWERS, ASK_EVERY_MS, KEPT_ANSWERS, MAX_DISMISSALS, ON_ANSWERS, ON_QUESTION, answerOf, askedOf, doneToast, keptOf, keptQuestion, nextAsk, question, record, whatOf } from './ask'
 import { BANNED, GRAPH, GRAPH_OFFER, GRAPH_PREDICT } from './fixtures/kit'
-import { reflexesOf, waiting } from './view'
+import { reflexesOf } from './reads'
+import { waiting } from './view/pane'
 
 const PACK = [{ name: 'alice@acme.com', command: 'adage add .adage/packs/acme --trust' }]
 const items = waiting(reflexesOf(GRAPH), PACK)
 const ENABLE = 'acme/learned/test-after-acme-edit'
 
-describe('the next ask', () => {
+describe('T-B4-01, T-B4-02 · the next ask', () => {
   test('the first item not asked today, not answered, dismissed fewer than twice', () => {
     expect(nextAsk(items, [], 0)?.key).toBe(ENABLE)
     expect(nextAsk(items, [{ key: ENABLE, at: 0, times: 1, done: false }], 1000)?.key).toBe('pack:alice@acme.com')

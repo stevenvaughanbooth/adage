@@ -31,7 +31,7 @@ function fake(answer: (argv: readonly string[]) => ProcessRunResult | Error): { 
 const BIN = '/data/bin/hook'
 const PAYLOAD = { session_id: 's', cwd: '/w', hook_event_name: 'TurnStep', turn_id: 't', index: 1, model: 'm', ending: false }
 
-describe('ask', () => {
+describe('T-B1-01 · ask', () => {
   test('exit 0 with a JSON object is the answer', async () => {
     const { run } = fake(() => exited(0, '{"predict":{"kind":"run"}}\n'))
     expect(await ask(run, BIN, 'TurnStep', PAYLOAD, 250)).toEqual({ ok: true, answer: { predict: { kind: 'run' } } })
@@ -74,7 +74,7 @@ describe('ask', () => {
   })
 })
 
-describe('guard: the allow-list and the environment', () => {
+describe('T-X-04, T-B1-05 · guard: the allow-list and the environment', () => {
   const CLI = '/data/bin/adage'
   test('every verb in its one exact shape (T-X-04); the person-only verbs, install and config never', () => {
     expect(ALLOWED_VERBS).toEqual(['hook', 'version', 'watch', 'graph', 'doctor', 'status', 'ledger', 'off', 'map', 'condition', 'delegate'])
@@ -162,7 +162,7 @@ describe('guard: the allow-list and the environment', () => {
   })
 })
 
-describe('read and say: the --json reads and the lines a verb prints', () => {
+describe('T-B1-01, T-X-02 · read and say: the --json reads and the lines a verb prints', () => {
   const CLI = '/data/bin/adage'
   test('one JSON object is the read; anything else keeps what was drawn', async () => {
     expect(await read(fake(() => exited(0, '{"checks":[]}')).run, CLI, ['doctor', '--json'], '/w')).toEqual({ ok: true, json: { checks: [] } })
@@ -186,7 +186,7 @@ describe('read and say: the --json reads and the lines a verb prints', () => {
   })
 })
 
-describe('probe', () => {
+describe('T-B1-02 · probe', () => {
   test('a binary that prints its version serves', async () => {
     const { run, seen } = fake(() => exited(0, 'adage 0.1.0\n'))
     expect(await probe(run, BIN)).toBe(BIN)
@@ -201,7 +201,7 @@ describe('probe', () => {
   })
 })
 
-describe('where the binary is', () => {
+describe('T-B1-03 · where the binary is', () => {
   test('CLAUDE_PLUGIN_DATA first, no PATH fallback', () => {
     expect(hookBinary('/d/', '/anywhere')).toBe('/d/bin/hook')
     expect(hookBinary(undefined, '/home/me/src/adage/plugin/claude-code')).toBeUndefined()
@@ -229,7 +229,7 @@ describe('where the binary is', () => {
   })
 })
 
-describe('note (`adage ledger note`)', () => {
+describe('T-A4-02 · note (`adage ledger note`)', () => {
   const CLI_BIN = '/data/bin/adage'
   test('the note on stdin, in the session directory, CLAUDECODE=1; exit 0 is recorded', async () => {
     const { run, seen } = fake(() => exited(0, ''))

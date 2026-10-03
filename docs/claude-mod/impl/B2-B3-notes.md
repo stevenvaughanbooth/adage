@@ -7,28 +7,14 @@ Code 2.1.288 (CI's pin) and its declaration file; nothing here ran in a live int
 The departures from the copy deck are listed, with the reason for each, in ux-design.md's status
 note; the departures from the plan are below.
 
-## Module map (`plugin/claude-code/`)
+## Module map
 
-| File | What it is |
-| --- | --- |
-| `hooks/register.ts` | The only file that touches `$`. Activation (the probe, `ADAGE_ASCII`, `ADAGE_REDUCED_MOTION`, the shim's `$DATA/status`), the follower's life, the `--json` reads, every observer, every `ui.render` hook, `/adage`, the pane's handlers. State refs are `atom(...)` consts here |
-| `hooks/bridge.ts` | `ALLOWED_VERBS`, `isAllowed` (each verb in one exact shape), `headOf`, `guard` (run) and `guardSpawn` (spawn), `hookBinary`/`cliBinary`/`dataDir`, `probe`, `ask` (hook events), `read` (`--json` reads), `say` (`off`, `condition`) |
-| `hooks/feed.ts` | The follower as pure logic: `stem` (the spool's sanitised session id), `followArgs`, `splitLines`, `parseLine` (with the arm scrub for this session's rows), `fold` (rows capped at 500), `lastCursor`, `afterEnd` (the reconnect rule), `follow` (the loop, with injected spawn, clock, apply, status, pause) |
-| `hooks/view.ts` | Every string and computed value drawn: the copy deck's templates, `band` (cells, narrow priority, second line), `promptLines`, `markText`, `rewriteOf`, `receiptOf`/`receiptBeside`/`receiptCard`, `learnToast`, `lapseToast`, `whyText`, `cardText`/`parseCardText`, `rowLines`/`visibleRows`/`inspectText`, `reflexLine`/`visibleReflexes`, `waiting`, `checkAction`, and the readers of the binary's JSON (`reflexesOf`, `checksOf`, `lapsedOf`, `packsOf`, `cardOf`, `mapUrl`) |
-| `hooks/commands.ts` | `/adage <verb>`: `verbOf`, `tabOf`, `runCommand(args, deps)` |
-| `hooks/ask.ts` | B4's seam (below): `nextAsk`, `question` |
-| `hooks/draw/els.ts` | `Els`: the elements terminal and desktop share |
-| `hooks/draw/rows.tsx` | `under` (the engine's row then dim lines), `receipt` (the card), `beside` (the turn line) |
-| `hooks/draw/band.tsx` | `bandTree` |
-| `hooks/draw/pane.tsx` | `paneTree` (tabs, Live, Reflexes, Health, `Explore in browser`), `inspectTree`, `PaneActions` |
-| `hooks/draw/card.tsx` | `cardTree` (the status card in its `CommandOutput` row, `Copy` beside terminal commands), `whyTree` |
-| `hooks/plugin.ts` | Constants (`BIN`, `CLI`, `PANE`, `INSPECT`, `COMMAND`, `TESTED`) and the state's initial values |
-| `types/index.d.ts` | The `$.state` contract (below) |
-| `hooks/fixtures/kit.ts` | The L7 world: a binary answering by argv, a follower printing fixture lines (copied from real `adage watch --follow --json`, `graph --json`, `doctor --json`, `--json --for-session` runs), the session's nouns, the engine's own drawing of each site, the argv recorder |
-| `hooks/{bridge,feed,view,commands,ask,draw,pane,register}.test.ts` | The tests (table below) |
-| `.claude-plugin/plugin.json` | `userConfig`: `band` (boolean, on) and `pane` (`auto` / `manual`, `manual`) |
-
-`hooks/hooks.json` is unchanged (`"modules": ["./register.ts"]`).
+The module map is [mod-structure.md](mod-structure.md#the-module-map), which also says where each
+kind of change goes and what `claude plugin validate` allows. B2 and B3 built what is now
+`session.ts`, `feed.ts` and `follower.ts`, `refresh.ts` and `reads.ts`, `observe.ts`, `commands.ts`,
+`actions.ts`, `view/*.ts`, `draw/*` and `fixtures/kit.ts`; the tests named in the table below
+moved with their module (the case ids are in each `describe`; mod-structure.md's last table
+says where each file went).
 
 ## The contracts
 

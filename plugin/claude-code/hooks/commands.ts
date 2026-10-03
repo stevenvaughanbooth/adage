@@ -1,15 +1,21 @@
 // `/adage …` (ux-design §7): one registration, the verb parsed from the arguments. Every verb
 // answers with text a headless session can read; the drawn forms are draw/card.tsx's. No verb
 // runs a person-only command: `/adage on` opens the ask, whose answer is the press (plan B4).
-//
-// No `$` crosses into this file: register.ts hands `runCommand` closures over its `$`.
-import { late } from './late'
+// `runCommand` answers over plain deps; `onCommand` binds them to the mod.
+import { copy, explore, openPane } from './actions'
+import { read, say } from './bridge'
+import { pressHandlers } from './dialog'
+import { togglePause } from './follower'
+import type { EventAt, Mod } from './mod'
+import { quietly } from './mod'
 import type { View } from './plugin'
-import { SAVINGS_ROWS, cardText } from './view'
-import type { Card } from './view'
+import { cardOf } from './reads'
+import type { Card } from './reads'
+import { refresh } from './refresh'
+import { SAVINGS_ROWS, cardText, whyText } from './view/card'
 
 /** The verbs `/adage` takes; anything else prints the card (ux-design §7). */
-export const VERBS = ['status', 'watch', 'reflexes', 'health', 'doctor', 'review', 'why', 'off', 'on', 'pause', 'map', 'savings'] as const
+const VERBS = ['status', 'watch', 'reflexes', 'health', 'doctor', 'review', 'why', 'off', 'on', 'pause', 'map', 'savings'] as const
 export type Verb = (typeof VERBS)[number] | 'card'
 
 /** The hint after the name: the two verbs a person needs (ux-design §7). */
@@ -59,6 +65,8 @@ export type CommandDeps = {
   pause: () => Promise<boolean>
   /** Starts the map if it is not serving; its address, or undefined. */
   map: () => Promise<string | undefined>
+  /** Opens `/adage on`'s ask; undefined where no one can be asked (headless, or the mod inert). */
+  askOn: (() => void) | undefined
 }
 
 const NO_CARD = 'adage is not answering here; run adage doctor in a terminal.'
@@ -93,8 +101,8 @@ export async function runCommand(args: string, deps: CommandDeps): Promise<{ tex
     }
     case 'on': {
       // The ask, never the verb: a command handler never runs a person-only verb (ux-design §7).
-      if (late.press === undefined) return { text: ON_TEXT }
-      late.press.askOn()
+      if (deps.askOn === undefined) return { text: ON_TEXT }
+      deps.askOn()
       return {}
     }
     case 'pause':
@@ -104,4 +112,25 @@ export async function runCommand(args: string, deps: CommandDeps): Promise<{ tex
       return { text: url === undefined ? 'The map did not start; run adage map in a terminal.' : `Explore in browser: ${url}` }
     }
   }
+}
+
+/** `/adage …` (ux-design §7): one registration (made at activation), the verb parsed here. */
+export async function onCommand(m: Mod, e: EventAt<'command.run', { command: 'adage' }>): Promise<{ text?: string }> {
+  return runCommand(e.args, {
+    card: async () => {
+      const r = await read(m.run, m.rt.cli, ['--json', '--for-session'], await m.session.cwd())
+      return r.ok ? cardOf(r.json) : undefined
+    },
+    open: tab => (m.rt.interactive ? openPane(m, tab) : Promise.resolve()),
+    why: async () => whyText(await m.state.rows.read(), await m.state.reflexes.read(), (await m.state.mode.read()).ascii, m.rt.skill),
+    off: async () => {
+      const said = await say(m.run, m.rt.cli, ['off'], await m.session.cwd())
+      quietly(refresh(m, true))
+      return said
+    },
+    copy: command => copy(m, command),
+    pause: () => togglePause(m),
+    map: () => explore(m),
+    askOn: m.rt.pressBound ? pressHandlers(m).askOn : undefined,
+  })
 }

@@ -2,22 +2,19 @@
 // Reflexes, `t` Health; `h` is `adage watch`'s help key), every tab ending with `Explore in
 // browser`. Strength and lifecycle words are allowed here and nowhere else (§1.3). A decision in
 // the pane is a press (§4.17): a Button's onPress reaches `press()` with the session's token, and
-// only through the handlers register.ts bound (`late.press`); until they are bound, as before a
-// press existed, a review verb is a command to copy. The one action besides is `adage condition`,
-// which the binary marks as allowed from a session.
-import type { Health, MapState, Reflex, Row, Tick, View, Check, Lapse } from '../plugin'
+// only through the handlers the actions carry (`press`, dialog.ts); until a person is at the prompt
+// they are not bound and, as before a press existed, a review verb is a command to copy. The one
+// action besides is `adage condition`, which the binary marks as allowed from a session.
+import type { Check, Health, Lapse, MapState, Reflex, Row, Tick, View } from '../plugin'
 import { TRUST_LINE } from '../grant'
-import { late } from '../late'
 import { ROLES } from '../tokens'
-import type { Waiting } from '../view'
+import type { Waiting } from '../view/pane'
 import {
   ROW_VERBS,
   VERB_HOTKEYS,
   VERB_WORDS,
   checkAction,
   checkLine,
-  cut,
-  g,
   lapseText,
   lightText,
   reflexLine,
@@ -27,10 +24,24 @@ import {
   tickText,
   visibleReflexes,
   visibleRows,
-} from '../view'
+} from '../view/pane'
+import { cut, g } from '../view/text'
 import type { Els, Tree } from './els'
+import { rule } from './rows'
 
-/** What a press, a pick or a keystroke in the pane does (register.ts binds each to `$`). */
+/** What a press in the pane or a command does (dialog.ts `pressHandlers`): each reaches the press. */
+export type PressHandlers = {
+  /** A review verb on a reflex row (`enable`, `not this one`, and the four more). */
+  verb: (verb: string, reflex: Reflex) => void
+  /** A waiting item's first answer in the pane (`enable`, `see what it would do`, `allow`, `use them`). */
+  yes: (item: Waiting) => void
+  /** A waiting item's `not this one` / `not now`. */
+  no: (item: Waiting) => void
+  /** `/adage on`: opens the ask (never presses itself). */
+  askOn: () => void
+}
+
+/** What a press, a pick or a keystroke in the pane does (actions.ts, and the presses from dialog.ts). */
 export type PaneActions = {
   tab: (tab: View['tab']) => void
   /** The Live filter: `submit` false while typing, true on enter (an empty submit clears it). */
@@ -46,6 +57,8 @@ export type PaneActions = {
   copy: (command: string, surface: string) => void
   condition: () => void
   explore: () => void
+  /** The presses, once a person is at the prompt; undefined until then (a verb is a command to copy). */
+  press: PressHandlers | undefined
 }
 
 export type PaneData = {
@@ -75,12 +88,6 @@ const DRAWN = 200
  * the view needs no second field: `key` is the row open, `key!` the row open with its details.
  */
 const DETAILS = '!'
-
-const rule = (els: Els, title: string, columns: number) => {
-  const { Text } = els
-  const head = `─ ${title} `
-  return <Text dimColor>{head + '─'.repeat(Math.max(0, Math.min(columns, 120) - head.length))}</Text>
-}
 
 function tabs(els: Els, d: PaneData, a: PaneActions): Tree {
   const { Box, Button, Text } = els
@@ -167,7 +174,7 @@ const LIFECYCLES = ['all', 'nascent', 'forming', 'firm', 'dormant', 'extinguishe
 /** A review verb's Button: a press when the handlers are bound, else the command to copy (B3). */
 function verbButton(els: Els, a: PaneActions, r: Reflex, v: string, key: string, hotkey: string | undefined): Tree {
   const { Button } = els
-  const press = late.press
+  const press = a.press
   if (press === undefined) {
     return <Button key={`copy:${v}:${key}`} plain dimColor label={`Copy: ${reviewCommand(v, r)}`} onPress={e => a.copy(reviewCommand(v, r), e.surface)} />
   }
@@ -206,7 +213,7 @@ function reflexRow(els: Els, d: PaneData, a: PaneActions, r: Reflex): Tree {
                   {more.map(v => verbButton(els, a, r, v, key, VERB_HOTKEYS[v]))}
                 </Box>
               )}
-              {late.press === undefined || command === '' ? null : (
+              {a.press === undefined || command === '' ? null : (
                 <Box flexDirection="row" gap={1}>
                   <Text dimColor wrap="truncate-end">{command}</Text>
                   <Button key={`copy:${r.verbs[0]}:${key}`} plain dimColor hotkey="c" label="Copy" onPress={e => a.copy(command, e.surface)} />
@@ -235,7 +242,7 @@ function yesWord(w: Waiting): string {
 /** One **waiting for you** row: the item, its two answers as presses, the terminal command dim with Copy. */
 function waitingRow(els: Els, d: PaneData, a: PaneActions, w: Waiting): Tree {
   const { Box, Text, Button } = els
-  const press = late.press
+  const press = a.press
   // Expanded under its own key: an enable item's key is its reflex's, whose row expands apart.
   const open = d.view.expanded === `wait:${w.key}`
   return (

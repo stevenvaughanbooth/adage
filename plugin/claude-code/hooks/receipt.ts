@@ -5,6 +5,7 @@
 // decides whether a receipt answers a call; this file only checks the shapes, so anything
 // malformed is "no receipt" and the call runs.
 import type { Mark } from './plugin'
+import { isRecord, str, strings } from './shape'
 
 /**
  * The dry run's `receipt`: `note` and `result` only when `fresh` (and `result` only where a call
@@ -19,9 +20,6 @@ export type ReceiptCard = { operation: string; ranAt: string; ago: string; summa
 /** The final answer: what the call is answered with. */
 export type ReceiptAnswer = { result: string; note: string; covering: string; card: ReceiptCard | undefined }
 
-const isRecord = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v)
-const str = (v: unknown): string => (typeof v === 'string' ? v : '')
-
 /** The plan's `receipt`, or undefined when there is none (or it is malformed). */
 export function receiptPlanOf(v: unknown): ReceiptPlan | undefined {
   if (!isRecord(v) || typeof v.fresh !== 'boolean') return undefined
@@ -30,7 +28,7 @@ export function receiptPlanOf(v: unknown): ReceiptPlan | undefined {
 
 function cardOf(v: unknown): ReceiptCard | undefined {
   if (!isRecord(v) || typeof v.operation !== 'string' || v.operation === '') return undefined
-  const tests = Array.isArray(v.tests) ? v.tests.filter((t): t is string => typeof t === 'string') : []
+  const tests = strings(v.tests)
   const more = typeof v.more === 'number' && Number.isFinite(v.more) && v.more > 0 ? Math.floor(v.more) : 0
   return { operation: v.operation, ranAt: str(v.ran_at), ago: str(v.ago), summary: str(v.summary), tests, more }
 }

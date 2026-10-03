@@ -4,15 +4,20 @@
 // the request goes out, on the person's routine model when the binary marks the step routine and
 // the person set one; its response is forwarded, and at an end_turn stop the binary is asked once
 // more with `ending: true` (the finish line): a prediction then keeps the model's text and
-// replaces the stop with the calls.
-//
-// No `$` crosses into this file (`claude plugin validate` follows `$` only within one file):
-// register.ts hands it closures over its `$`, and a test hands it stubs.
+// replaces the stop with the calls. `turnStep` is the step itself over plain deps; `onStep` binds
+// it to the mod and keeps the step's usage for the ledger note.
 import type { HookStream, TurnStepChunk, TurnStepInput, TurnStepResult } from 'claude-code'
 
+import { askBinary } from './binary'
 import type { Asked } from './bridge'
+import { keepStep } from './ledger'
+import { record } from './marks'
+import type { Mod } from './mod'
+import { quietly } from './mod'
 import type { Predicted } from './plugin'
 import { callChunks, predictedResult, predictionOf } from './predict'
+import { settings } from './refresh'
+import { isRecord } from './shape'
 
 /** The binary's `TurnStep` payload (C1), exactly. */
 export type TurnStepPayload = {
@@ -52,21 +57,9 @@ export type StepDeps = {
 }
 
 /** The per-step budget for the binary (§2 rule 1): it runs before every model request. */
-export const TURN_STEP_TIMEOUT_MS = 250
+const TURN_STEP_TIMEOUT_MS = 250
 
 const blockOf = (c: TurnStepChunk): number => ('index' in c && typeof c.index === 'number' ? c.index : -1)
-
-const isRecord = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v)
-
-/**
- * The person's routine model from the status card (`adage --json`): `runtime.routine_model`, a
- * model name; '' when the binary reports none.
- */
-export function routineModelOf(card: unknown): string {
-  const runtime = isRecord(card) ? card.runtime : undefined
-  const model = isRecord(runtime) ? runtime.routine_model : undefined
-  return typeof model === 'string' ? model.trim() : ''
-}
 
 /** The stream beneath, as the hook's `next` opens it. */
 export type StepNext = (e: TurnStepInput) => HookStream<TurnStepChunk, TurnStepResult>
@@ -159,4 +152,33 @@ export async function* turnStep(
     toolUses: [...result.toolUses, ...ended.calls.map(c => ({ name: c.tool, input: c.input }))],
     stopReason: 'tool_use',
   }
+}
+
+/**
+ * The hook body (`on('turn.step', …)`): a headless session reads its routine model when it first
+ * could use it (off the step's path; it routes from the step after the read lands), the step runs
+ * over the mod's binary and session, and a main-loop step's usage is kept for the ledger note at
+ * the turn's end.
+ */
+export async function* onStep(m: Mod, e: Readonly<TurnStepInput>, next: StepNext): AsyncGenerator<TurnStepChunk, TurnStepResult> {
+  if (m.rt.bin !== undefined && !m.rt.interactive && !m.rt.settled && e.agentId === undefined && e.index > 0) {
+    m.rt.settled = true
+    quietly(settings(m))
+  }
+  let predicted = false
+  const result = yield* turnStep(e, next, {
+    isActive: m.rt.bin !== undefined,
+    isObserving: m.rt.observing,
+    hasSkill: async skill => (await m.command.list()).some(c => c.name === skill),
+    ask: payload => askBinary(m, 'TurnStep', payload, TURN_STEP_TIMEOUT_MS),
+    context: async () => ({ sessionId: await m.session.id(), cwd: await m.session.cwd() }),
+    record: p => {
+      // A step made wholly of predicted calls sent no request; the finish line's did.
+      predicted ||= !p.isEnding
+      return record(m, p)
+    },
+    routineModel: m.rt.routineModel,
+  })
+  if (m.rt.bin !== undefined && e.agentId === undefined) keepStep(m, e.model, result.usage, predicted)
+  return result
 }

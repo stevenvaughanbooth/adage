@@ -25,6 +25,7 @@ because the build machine had no key.
 | C6 the dead end that never runs | `9f6eceb` | [../poc/P5-notes.md](../poc/P5-notes.md) |
 | D1 candidates in the learner and the index; D3 the `skill` response kind; D4 `verified.json` and `SkillPrompt` | `ecd4e03` | [D1-notes.md](D1-notes.md), [D3-D4-notes.md](D3-D4-notes.md) |
 | E1 arms and the requests metric in the demo runner | `13b2495` | [../poc/P4a-notes.md](../poc/P4a-notes.md) |
+| The mod's structure: `register.ts` as registrations only, modules over a capability object, one test file per module | (uncommitted) | [mod-structure.md](mod-structure.md) |
 
 ## What is not on this branch
 

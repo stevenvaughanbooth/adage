@@ -7,8 +7,9 @@
 // own dialog, or a Button the person pressed in a focused pane, in this session. Never a hook's
 // own logic, a timer, a feed line, a command handler, or an answer read back from a file (an
 // answer kept from an earlier session is asked again, and pressed only on that answer). The
-// gestures below are the only values `press()` accepts, and only dialog.ts and draw/pane.tsx hold
-// them. The token travels on stdin, never on argv (which `ps` shows).
+// gestures below are the only values `press()` accepts, and only dialog.ts (a dialog's answer, a
+// pane Button's press) and allow.ts (the grant pane's `allow` Button) hold them, which
+// scripts/check-plugin.mjs checks. The token travels on stdin, never on argv (which `ps` shows).
 //
 // No `$` crosses into this file: register.ts hands `guardPress` the function that calls
 // `$.process.run`.
@@ -24,7 +25,7 @@ import type { Run } from './bridge'
 export const PRESS_VERBS: readonly string[] = ['review', 'delegate', 'on', 'add']
 
 /** The review verbs a reflex row offers (`review.verbs`, `ui/routes.rs`). */
-export const REVIEW_VERBS: readonly string[] = ['approve', 'dismiss', 'strengthen', 'weaken', 'extinguish', 'pin']
+const REVIEW_VERBS: readonly string[] = ['approve', 'dismiss', 'strengthen', 'weaken', 'extinguish', 'pin']
 
 const NAME = /^[A-Za-z0-9.][A-Za-z0-9._@/+-]*$/
 
@@ -108,7 +109,7 @@ export type Pressed =
   | { ok: false; refused: boolean; next: string | undefined; error: string }
 
 /** How long a person-only verb may take: a stage runs the step in the sandbox once. */
-export const PRESS_TIMEOUT_MS = 120_000
+const PRESS_TIMEOUT_MS = 120_000
 
 /**
  * Runs one person-only verb with the press on stdin and reads the binary's answer: the first

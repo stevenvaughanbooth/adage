@@ -1,8 +1,9 @@
 // The lines Adage adds to the transcript's rows (ux-design §3, §4.2–§4.4, §10): one dim line under
 // the engine's own drawing of a prompt, a tool row or its result, or the engine's drawing with one
-// prop changed. Pure: register.ts reads the state, `view.ts` words the lines, these lay them out.
+// prop changed, and the section rule panes share. Pure: draw/sites.ts reads the state,
+// view/lines.ts words the lines, these lay them out.
 import { ROLES } from '../tokens'
-import { markText } from '../view'
+import { markText } from '../view/lines'
 import type { Els, Tree } from './els'
 
 /**
@@ -64,4 +65,11 @@ export function beside(els: Els, engine: Tree, text: string): Tree {
       </Text>
     </Box>
   )
+}
+
+/** A section rule in a pane (`─ title ───`), as wide as the pane up to 120 columns. */
+export function rule(els: Els, title: string, columns: number): Tree {
+  const { Text } = els
+  const head = `─ ${title} `
+  return <Text dimColor>{head + '─'.repeat(Math.max(0, Math.min(columns, 120) - head.length))}</Text>
 }

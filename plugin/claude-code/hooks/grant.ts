@@ -2,12 +2,9 @@
 // `ask.allow.first`, `ask.allow.details`; architecture §3.12 "Stage, then confirm"): what
 // `review delegate … --level e2 --stage --json` answered, read into the three plain lines, the
 // diff and the details, and what `--confirm` answered. Pure: nothing here runs or records.
-import type { Allow, Stage } from './kinds'
-import { g } from './view'
-
-const isRecord = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v)
-const str = (v: unknown): string => (typeof v === 'string' ? v : '')
-const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [])
+import type { Allow, Stage } from './plugin'
+import { isRecord, records, str, strings } from './shape'
+import { g } from './view/text'
 
 /** The added and removed lines of a unified diff (`+4 −0`). */
 export function diffCounts(text: string): { plus: number; minus: number } {
@@ -33,13 +30,13 @@ export function stageOf(v: unknown): Stage | undefined {
   const action = isRecord(facts.action) ? facts.action : {}
   const effect = isRecord(facts.effect) ? facts.effect : {}
   const python = isRecord(facts.python) ? facts.python : undefined
-  const scripts = (Array.isArray(facts.scripts) ? facts.scripts : []).filter(isRecord).map(s => ({ path: str(s.path), sha256: str(s.sha256), text: str(s.text) }))
-  const diff = (Array.isArray(staged.diff) ? staged.diff : []).filter(isRecord).map(d => {
+  const scripts = records(facts.scripts).map(s => ({ path: str(s.path), sha256: str(s.sha256), text: str(s.text) }))
+  const diff = records(staged.diff).map(d => {
     const text = str(d.diff)
     return { path: str(d.path), change: str(d.change), ...diffCounts(text), text }
   })
-  const refused = (Array.isArray(staged.refused) ? staged.refused : []).filter(isRecord).map(r => ({ path: str(r.path), why: str(r.why) }))
-  const inputs = (Array.isArray(facts.inputs) ? facts.inputs : []).filter(isRecord).map(i => str(i.contract) || str(i.slot)).filter(s => s !== '')
+  const refused = records(staged.refused).map(r => ({ path: str(r.path), why: str(r.why) }))
+  const inputs = records(facts.inputs).map(i => str(i.contract) || str(i.slot)).filter(s => s !== '')
   const hashes = [
     ...(str(facts.profile_id) === '' ? [] : [`profile ${str(facts.profile_id)}`]),
     ...(str(facts.route_exec_digest) === '' ? [] : [`route ${str(facts.route_exec_digest)}`]),

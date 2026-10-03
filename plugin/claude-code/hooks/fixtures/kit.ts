@@ -1,13 +1,22 @@
-// The world beneath the plugin for the L7 tests (test-plan §6): a binary that answers by argv, a
-// follower that prints fixture feed lines, the session's nouns, and the engine's own drawing of
-// each site. Every `$.process.run` and `$.process.spawn` is recorded (the argv recorder, T-X-04),
+// The shared fixtures of the mod's tests (the one place they live; docs/claude-mod/impl/
+// mod-structure.md). Two worlds: `world`, beneath the plugin for the L7 tests that load the module
+// as the engine does (test-plan §6), and `fake`, a `Mod` held in memory for the tests of one
+// module without the engine. `world` is a binary that answers by argv, a follower that prints
+// fixture feed lines, the session's nouns, the model, and the engine's own drawing of each site. Every `$.process.run` and `$.process.spawn` is recorded (the argv recorder, T-X-04),
 // and so is every ask (`$.ui.ask` is a `tool.call` of `AskUserQuestion`, answered here). The lines
 // and objects below are shaped as the binary prints them (copied from real runs of `adage watch
 // --follow --json`, `graph --json`, `doctor --json`, `--json --for-session`, `status --json`,
 // `review delegate … --stage --json` and `hook claude SkillPrompt`).
-import type { On, ProcessRunInit, RenderElement, RenderPropsOf } from 'claude-code'
+import type { On, ProcessRunInit, ProcessRunResult, ProcessSpawnChunk, RenderElement, RenderPropsOf, TurnStepChunk, TurnStepResult } from 'claude-code'
 import { mock } from 'claude-code/testing'
-import type { MockClock } from 'claude-code/testing'
+import type { Engine, MockClock } from 'claude-code/testing'
+
+import type { Run } from '../bridge'
+import { parseLine } from '../feed'
+import type { Cell, Mod } from '../mod'
+import { runtime } from '../mod'
+import type { AdageState, Row } from '../plugin'
+import { STATE0, STORE_KEYS } from '../plugin'
 
 export const T0 = 1_791_008_381_000
 export const SESSION = 'sess-1'
@@ -191,6 +200,21 @@ export const STAGE = {
 export const STAGE_MOVED = { ...STAGE, changed: 'snapshot', digest: 'e2'.repeat(32) + STAGE.digest.slice(64), facts: { ...STAGE.facts, staged: { ...STAGE.facts.staged, diff: [{ ...STAGE.facts.staged.diff[0], after_sha256: 'cc', diff: '@@ -10,3 +10,5 @@\n class Invoice:\n     id: str\n+    currency: str = "USD"\n+    locale: str = "en"\n     total: int\n' }] } } }
 export const CONFIRMED = { ...STAGE, recorded: true, wrote: ['policy', 'marker', 'grant'], takes_effect: 'in new sessions' }
 
+// ------------------------------------------------------------------------- a test run's receipt
+
+/** A test run and the same run on the project's interpreter (U11's rewrite). */
+export const PYTEST = 'python -m pytest tests/test_x.py -q'
+export const VENV = '.venv/bin/python -m pytest tests/test_x.py -q'
+/** What `hook claude PreToolUse` says of a receipt (plan C3): the note the model reads, the result, the card. */
+export const RECEIPT_NOTE = '<adage-receipt operation="3f9c1a2b7d4e">\nAdage\'s run of `' + VENV + '` in this session passed on files identical to the current ones.\n</adage-receipt>'
+export const RECEIPT_RESULT = 'Adage answered this test run from its own run of `' + VENV + '` in this session (2026-10-03T09:00:00Z, operation 3f9c1a2b7d4e): it passed on files identical to the current ones.'
+export const RECEIPT_CARD = { operation: '3f9c1a2b7d4e', ran_at: '2026-10-03T09:00:00Z', ago: '4 min ago', summary: 'passed on files identical to the current ones · 2 tests this command selects', tests: ['tests/test_x.py::test_zeta', 'tests/test_x.py::test_alpha'], more: 0 }
+/** The dry run's `receipt`: fresh (it can answer the call), or stale. */
+export const FRESH = { fresh: true, covering: VENV, operation: '3f9c1a2b7d4e', note: RECEIPT_NOTE, result: RECEIPT_RESULT }
+export const STALE = { fresh: false, covering: VENV, operation: '3f9c1a2b7d4e' }
+/** The final answer to `verdict: { answered: "receipt" }`. */
+export const ANSWERED = { receipt: { result: RECEIPT_RESULT, note: RECEIPT_NOTE, covering: VENV, card: RECEIPT_CARD } }
+
 /** What `hook claude SkillPrompt` answers for a skill `adage train` verified here (plan D4). */
 export const SKILL_TEXT = 'Look the work item up, then run the tests.'
 export const SKILL_ANNOTATED = `${SKILL_TEXT}\n\nAdage verified these steps in this repository on 2026-10-03:\n- scripts/wi-lookup {id}: works\n- pytest: stale (exit 1: command not found)\n- make test: works`
@@ -245,7 +269,39 @@ export type WorldOptions = {
   root?: () => string | null
   /** A run that fails (exit 1) for every head in the list. */
   failing?: readonly string[]
+  /**
+   * What `hook claude <Event>` answers as a function of the payload the mod sent (every event but
+   * `Press`, and before `hook`): a string printed as it is, `FAIL.exit` (exit 1), `FAIL.start` (the
+   * run cannot start), nothing (`undefined`: empty stdout), or any other value printed as JSON.
+   */
+  answer?: (event: string, payload: Record<string, unknown>) => unknown
+  /** False while the shim has made no link: every run cannot start. */
+  linked?: () => boolean
+  /** The exit of `adage ledger note` (0 otherwise). */
+  ledgerExit?: number
+  /** What the session's usage reads (`$.session.usage`): unanswered when undefined. */
+  usage?: { startedAt: number; cost: { usd: number } }
+  /** The model beneath: one text that ends the turn (`answer`, the default), or text and a Read call (`read`). */
+  model?: 'answer' | 'read'
+  /** The person's rules on a Bash command (`$.tool.check`), `allow` otherwise; `rulesFail` makes the read throw. */
+  rules?: Record<string, 'allow' | 'ask' | 'deny'>
+  rulesFail?: boolean
+  /** The Bash tool beneath prints `ran <command>` (else `ok`). */
+  echo?: boolean
 }
+
+/** The ways `answer` makes a run fail: a non-zero exit, or a run that cannot start. */
+export const FAIL = { exit: Symbol('exit 1'), start: Symbol('cannot start') } as const
+
+/** The engine's own system prompt beneath (`prompt.compose`), and the Bash tool's description (`tool.describe`). */
+export const SECTIONS = [
+  { id: 'intro', text: 'You are an assistant.', scope: 'shared' },
+  { id: 'memory', text: 'Nothing yet.', scope: 'session' },
+] as const
+export const BASH_TOOL = { tool: 'Bash', description: 'Executes a given bash command.', provider: { plugin: 'engine', tier: 'core' } } as const
+
+/** The usage the `read` model reports for each request. */
+export const USAGE = { input_tokens: 10, output_tokens: 5, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, model: 'claude-x' }
 
 export type World = {
   ran: Ran[]
@@ -265,6 +321,19 @@ export type World = {
   store: Record<string, unknown>
   /** Lets the resumed child print the `later` lines. */
   deliver: () => Promise<void>
+  /** The payloads the mod sent with `hook claude <event>`, in order. */
+  payloads: (event: string) => Record<string, unknown>[]
+  /** Every model request: the step's index, its model and effort. */
+  models: { index: number; model: string; effort: unknown }[]
+  /** Every `$.state` write but the mode's (the activation's), in order; and every write, the mode's too. */
+  sets: { key: string; value: unknown }[]
+  writes: { key: string; value: unknown }[]
+  /** The Bash commands that ran beneath (`tool.call`), the commands whose rules were read, and the notices under dialogs. */
+  bash: string[]
+  checked: string[]
+  notices: { tool_use_id: string; text: string | undefined }[]
+  /** The subagents started beneath (`agent.spawn`). */
+  agents: { prompt: string; description: string; subagentType: string }[]
 }
 
 /** The verbs only a press runs, by their head: the kit answers them as the binary does after a spend. */
@@ -273,7 +342,30 @@ const PERSON_ONLY = new Set(['review', 'on', 'add', 'delegate'])
 /** Installs the world beneath the plugin on `on`. */
 export function world(on: On, o: WorldOptions = {}): World {
   const store: Record<string, unknown> = { ...(o.store ?? {}) }
-  const w: World = { ran: [], spawned: [], opened: [], closed: [], toasts: [], statuses: [], copies: [], registered: [], asked: [], invalidated: 0, requests: 0, clock: mock.clock(on, { now: T0 }), store, deliver: async () => undefined }
+  const w: World = {
+    ran: [],
+    spawned: [],
+    opened: [],
+    closed: [],
+    toasts: [],
+    statuses: [],
+    copies: [],
+    registered: [],
+    asked: [],
+    invalidated: 0,
+    requests: 0,
+    clock: mock.clock(on, { now: T0 }),
+    store,
+    deliver: async () => undefined,
+    payloads: event => w.ran.filter(r => r.argv[1] === 'hook' && r.argv[3] === event).map(r => JSON.parse(r.init?.stdin ?? '{}') as Record<string, unknown>),
+    models: [],
+    sets: [],
+    writes: [],
+    bash: [],
+    checked: [],
+    notices: [],
+    agents: [],
+  }
   mock.env(on, { ...(o.data === undefined && 'data' in o ? {} : { CLAUDE_PLUGIN_DATA: o.data ?? DATA }), ...o.env })
   on('store.get', ($, e) => ({ value: store[e.key] }))
   on('store.set', ($, e) => {
@@ -286,10 +378,19 @@ export function world(on: On, o: WorldOptions = {}): World {
   // The chain of tokens the binary prints as each press is spent.
   const chain = [NEXT_TOKEN, THIRD_TOKEN]
   let spent = 0
+  const exited = (exitCode: number, stdout: string, stderr = '') => ({ value: { exitCode, stdout, stderr, isStdoutTruncated: false, isStderrTruncated: false } })
   on('process.run', ($, e) => {
     w.ran.push({ argv: e.argv, init: e.init })
+    if (o.linked?.() === false) return { deny: 'ENOENT' }
     const head = e.argv[1] === '--json' ? 'card' : (e.argv[1] ?? '')
     if (o.failing?.includes(head)) return { value: { exitCode: 1, stdout: '', stderr: 'x', isStdoutTruncated: false, isStderrTruncated: false } }
+    if (head === 'ledger') return exited(o.ledgerExit ?? 0, '', o.ledgerExit ? 'error  note not recorded: x\n' : '')
+    if (head === 'hook' && e.argv[3] !== 'Press' && o.answer !== undefined) {
+      const said = o.answer(e.argv[3] ?? '', JSON.parse(e.init?.stdin ?? '{}') as Record<string, unknown>)
+      if (said === FAIL.start) return { deny: 'ENOENT' }
+      if (said === FAIL.exit) return exited(1, '')
+      return exited(0, said === undefined ? '' : typeof said === 'string' ? said : json(said))
+    }
     if (head === 'hook' && e.argv[3] === 'Press') {
       const out = o.hook?.Press ?? (o.press === false ? '' : json({ press: TOKEN }) + '\n')
       return { value: { exitCode: 0, stdout: out, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
@@ -359,6 +460,29 @@ export function world(on: On, o: WorldOptions = {}): World {
     return { value: root === null ? null : { root, remote: null, internal: false, name: null } }
   })
   on('session.version', () => ({ value: { version: o.harness ?? '2.1.288' } }))
+  if (o.usage !== undefined) on('session.usage', () => ({ value: { startedAt: o.usage?.startedAt ?? 0, context: {} as never, rateLimits: [], cost: o.usage?.cost } }) as never)
+  on('state.set', async ($, e, next) => {
+    // The mode the activation records is the drawings'; `sets` is what the hooks kept.
+    w.writes.push({ key: e.key, value: e.value })
+    if (e.key !== 'mode') w.sets.push({ key: e.key, value: e.value })
+    return next(e)
+  })
+  on('tool.check', ($, e) => {
+    const command = (e.input as { command: string }).command
+    w.checked.push(command)
+    if (o.rulesFail) throw new Error('no rules')
+    return { decision: o.rules?.[command] ?? 'allow' }
+  })
+  on('ui.notice', ($, e) => {
+    w.notices.push({ tool_use_id: e.tool_use_id, text: e.text })
+    return { value: undefined }
+  })
+  on('prompt.compose', () => ({ sections: SECTIONS }) as never)
+  on('tool.describe', ($, e) => ({ description: e.description }))
+  on('agent.spawn', ($, e) => {
+    w.agents.push({ prompt: e.prompt, description: e.description, subagentType: e.subagentType })
+    return { model: 'm', agentId: 'agent-1' } as never
+  })
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('command.register', ($, e) => {
     w.registered.push(e)
@@ -408,11 +532,21 @@ export function world(on: On, o: WorldOptions = {}): World {
       if (answer === undefined) return { deny: 'dismissed' } as never
       return { result: { questions: [q], answers: { [question]: answer } } } as never
     }
-    return { result: { stdout: 'ok', stderr: '', interrupted: false } } as never
+    const command = (e as unknown as { command?: string }).command ?? ''
+    if (e.tool === 'Bash') w.bash.push(command)
+    return { result: { stdout: o.echo ? `ran ${command}` : 'ok', stderr: '', interrupted: false } } as never
   })
-  // The model: one text response that ends the turn (counted).
+  // The model: one text response that ends the turn, or text and a Read call (counted).
   on('turn.step', async function* ($, e) {
     w.requests++
+    w.models.push({ index: e.index, model: e.model, effort: e.effort })
+    if (o.model === 'read') {
+      yield { kind: 'text' as const, index: 0, text: 'Reading.' }
+      yield { kind: 'tool' as const, index: 1, id: 'toolu_1', name: 'Read' }
+      yield { kind: 'input' as const, index: 1, json: '{"file_path":"/w/x"}' }
+      yield { kind: 'stop' as const, stopReason: 'tool_use' as const, usage: USAGE }
+      return { turnId: e.turnId, index: e.index, answer: 'Reading.', toolUses: [{ name: 'Read', input: { file_path: '/w/x' } }], stopReason: 'tool_use' as const, usage: USAGE }
+    }
     const usage = { input_tokens: 1, output_tokens: 1, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, model: 'm' }
     yield { kind: 'text' as const, index: 0, text: 'Done.' }
     yield { kind: 'stop' as const, stopReason: 'tool_use' as const, usage }
@@ -475,3 +609,220 @@ export const STEP = { turnId: 'turn-1', index: 2, model: 'm', messageCount: 4 }
 
 /** The words a default surface never carries (ux-design §10, T-B2-10). */
 export const BANNED = /\b(fire|prime|inhibit|forming|firm|dormant|approval|saved)\b/i
+
+// ------------------------------------------------------------------------------------ helpers
+
+/** Reads a hook stream to its end: the chunks it yielded and the result it returned. */
+export async function drain(stream: AsyncGenerator<TurnStepChunk, TurnStepResult>): Promise<{ chunks: TurnStepChunk[]; result: TurnStepResult }> {
+  const chunks: TurnStepChunk[] = []
+  for (;;) {
+    const r = await stream.next()
+    if (r.done) return { chunks, result: r.value }
+    chunks.push(r.value)
+  }
+}
+
+/** A mounted drawing, as the tests read it. */
+export type Mounted = { findAll: (q: { type?: string; key?: string; text?: string | RegExp }) => Promise<{ type: string; key: string | undefined; text: string; props: Record<string, unknown> }[]> }
+
+/** The texts a drawing shows, in order. */
+export async function texts(ui: Mounted): Promise<string[]> {
+  return (await ui.findAll({ type: 'Text' })).map(t => t.text)
+}
+
+/** Everything a drawing shows a person, in order: its Text, Buttons and Links (and Markdown, unless `markdown` is false). */
+export async function shown(ui: Mounted, markdown = true): Promise<string[]> {
+  return (await ui.findAll({})).filter(e => e.type === 'Text' || e.type === 'Button' || e.type === 'Link' || (markdown && e.type === 'Markdown')).map(e => e.text)
+}
+
+/** The stdin a run was handed, parsed. */
+export const stdin = (r: Ran | undefined): Record<string, unknown> | null => JSON.parse(r?.init?.stdin ?? 'null') as Record<string, unknown> | null
+
+/** The runs that carried a press on stdin. */
+export const presses = (w: World): Ran[] => w.ran.filter(r => typeof r.init?.stdin === 'string' && r.init.stdin.includes('"press"'))
+
+/** A run's result, as `$.process.run` resolves it. */
+export const exited = (exitCode: number, stdout: string, extra: Partial<ProcessRunResult> = {}): ProcessRunResult => ({
+  exitCode,
+  stdout,
+  stderr: '',
+  isStdoutTruncated: false,
+  isStderrTruncated: false,
+  ...extra,
+})
+
+/** This session's feed rows, from fixture lines, numbered from 1. */
+export const rowsOf = (...lines: string[]): Row[] =>
+  lines.map((l, k) => {
+    const p = parseLine(l, SESSION)
+    if (p?.kind !== 'decision') throw new Error('not a decision')
+    return { ...p.row, seq: k + 1 }
+  })
+
+// ----------------------------------------------------------------------- through the engine
+
+/** An interactive session started on the terminal, its press issued at the command hooks' session start. */
+export async function begin($: Engine, w: World, source = 'startup'): Promise<void> {
+  await start($, w)
+  await $.classic.SessionStart({ source, session_id: SESSION, cwd: CWD } as never)
+  await w.clock.settle()
+}
+
+/** A prompt the person submitted, as the hooks see it (the payload carries no row id). */
+export async function prompt($: Engine, text: string): Promise<void> {
+  await $.classic.UserPromptSubmit({ prompt: text, source: 'user' } as never)
+}
+
+/** A turn that ends on the main loop, and what it set off. */
+export async function turnEnd($: Engine, w: World): Promise<void> {
+  await $.turn.complete(TURN_END as never)
+  await w.clock.settle()
+}
+
+/** The runs of a person-only verb (`review`, `on`, `add`). */
+export const personOnly = (w: World): Ran[] => w.ran.filter(r => ['review', 'on', 'add'].includes(r.argv[1] ?? ''))
+
+/** The pane (`adage`), the inspect pane, or the grant pane, mounted on a surface. */
+export async function mountPane($: Engine, surface: Surface = 'terminal', columns = 120, requestId: 'adage' | 'adage-inspect' | 'adage-allow' = 'adage') {
+  return $.ui.mount({ plugin: 'adage', surface, component: 'Pane', requestId, props: PANE_PROPS(columns) })
+}
+
+/** The band's text on a surface, one string ('ENGINE AbovePrompt' when the engine's own). */
+export async function bandText($: Engine, surface: Surface = 'terminal', columns = 120, requestId?: string): Promise<string> {
+  const ui = await $.ui.mount({ plugin: 'adage', surface, component: 'AbovePrompt', props: BAND(columns), ...(requestId === undefined ? {} : { requestId }) })
+  return (await texts(ui)).join('')
+}
+
+// --------------------------------------------------------------------------- the fake Mod
+
+export type FakeOptions = {
+  /** What a run answers (after the allow-list the fake does not apply), by argv. */
+  run?: (argv: readonly string[], init: ProcessRunInit | undefined) => ProcessRunResult | Error
+  /** What a spawned child prints. */
+  spawn?: (argv: readonly string[]) => readonly ProcessSpawnChunk[]
+  env?: Partial<Record<'pluginData' | 'observe' | 'ascii' | 'reducedMotion' | 'os', string>>
+  root?: string
+  files?: Record<string, string>
+  session?: string
+  cwd?: string
+  repo?: string | null
+  harness?: string
+  now?: number
+  /** The dialog's answer to each question (undefined: dismissed). */
+  ask?: (question: string, answers: readonly string[]) => string | undefined
+  rules?: Record<string, string>
+  commands?: readonly string[]
+  copies?: boolean
+  state?: Partial<AdageState>
+  store?: Record<string, unknown>
+  /** What `on`'s options hold (`band`, `pane`). */
+  options?: Record<string, unknown>
+}
+
+export type Fake = {
+  m: Mod
+  /** The state as it stands, and the store. */
+  state: AdageState
+  store: Record<string, unknown>
+  ran: Ran[]
+  spawned: (readonly string[])[]
+  toasts: string[]
+  statuses: string[]
+  notices: { id: string; text: string }[]
+  opened: unknown[]
+  closed: unknown[]
+  asked: { question: string; answers: readonly string[] }[]
+  copies: unknown[]
+  registered: unknown[]
+  invalidated: number
+  timers: { kind: 'every' | 'after'; ms: number; cancelled: boolean }[]
+  /** Moves the fake clock on. */
+  tick: (ms: number) => void
+}
+
+/**
+ * A `Mod` held in memory: every capability answers from the options and records what it was
+ * asked; the state starts as `STATE0` with `state` over it. Unlike `world` nothing is guarded:
+ * the runners are the bare functions a module is handed, so a test of the allow-lists uses
+ * bridge.ts and press.ts directly.
+ */
+export function fake(o: FakeOptions = {}): Fake {
+  const state = { ...STATE0, ...o.state } as AdageState
+  const store: Record<string, unknown> = { ...o.store }
+  let now = o.now ?? T0
+  const f: Omit<Fake, 'm'> = { state, store, ran: [], spawned: [], toasts: [], statuses: [], notices: [], opened: [], closed: [], asked: [], copies: [], registered: [], invalidated: 0, timers: [], tick: ms => void (now += ms) }
+  const cell = <K extends keyof AdageState>(k: K): Cell<AdageState[K]> => ({
+    read: async () => state[k],
+    update: async change => (state[k] = change(state[k])),
+  })
+  const run: Run = async (argv, init) => {
+    f.ran.push({ argv, init })
+    const r = o.run?.(argv, init) ?? exited(0, '')
+    if (r instanceof Error) throw r
+    return r
+  }
+  const timer = (kind: 'every' | 'after', ms: number) => {
+    const t = { kind, ms, cancelled: false }
+    f.timers.push(t)
+    return { cancel: () => void (t.cancelled = true) } as never
+  }
+  const keys = Object.keys(STATE0) as (keyof AdageState)[]
+  const m: Mod = {
+    rt: runtime(),
+    options: (o.options ?? { band: true, pane: 'manual' }) as Mod['options'],
+    state: Object.fromEntries(keys.map(k => [k, cell(k)])) as unknown as Mod['state'],
+    store: Object.fromEntries(STORE_KEYS.map(k => [k, { get: async () => store[`adage.${k}`], set: async (v: unknown) => void (store[`adage.${k}`] = v) }])) as unknown as Mod['store'],
+    run,
+    pressRun: run,
+    spawn: request => {
+      f.spawned.push(request.argv)
+      const lines = o.spawn?.(request.argv) ?? []
+      return (async function* () {
+        for (const l of lines) yield l
+        return { code: 0, signal: null }
+      })() as never
+    },
+    env: {
+      pluginData: async () => o.env?.pluginData,
+      observe: async () => o.env?.observe,
+      ascii: async () => o.env?.ascii,
+      reducedMotion: async () => o.env?.reducedMotion,
+      os: async () => o.env?.os,
+    },
+    plugin: { root: () => o.root ?? '/plugin' },
+    fs: { read: async path => (o.files?.[path] ?? Promise.reject(new Error('ENOENT'))) },
+    command: {
+      register: async c => void f.registered.push(c) as never,
+      list: async () => (o.commands ?? []).map(name => ({ name, description: '', source: 'plugin' as const })) as never,
+    },
+    session: {
+      id: async () => o.session ?? SESSION,
+      cwd: async () => o.cwd ?? CWD,
+      repo: async () => (o.repo === null ? null : { root: o.repo ?? CWD, remote: null, internal: false, name: null }) as never,
+      usage: async () => ({ startedAt: T0 - 1000, context: {}, rateLimits: [], cost: { usd: 0.5 } }) as never,
+      version: async () => ({ version: o.harness ?? '2.1.288' }) as never,
+    },
+    clock: { now: async () => now, every: ms => timer('every', ms), after: ms => timer('after', ms) },
+    checkBash: async command => o.rules?.[command] ?? 'allow',
+    ui: {
+      status: text => void f.statuses.push(text),
+      toast: text => void f.toasts.push(text),
+      notice: (id, text) => void f.notices.push({ id, text }),
+      open: async pane => (f.opened.push(pane), { isPlaced: true }) as never,
+      close: async pane => void f.closed.push(pane),
+      ask: async (question, answers) => {
+        f.asked.push({ question, answers })
+        const said = o.ask?.(question, answers)
+        if (said === undefined) throw new Error('dismissed')
+        return said
+      },
+      copy: async args => (f.copies.push(args), o.copies === false ? { isCopied: false, reason: 'no-clipboard' } : { isCopied: true }) as never,
+      scroll: async () => ({}) as never,
+      invalidate: () => void f.invalidated++,
+      resolve: () => {
+        throw new Error('the fake draws nothing: mount a site through the engine')
+      },
+    },
+  }
+  return Object.assign(f, { m }) as Fake
+}

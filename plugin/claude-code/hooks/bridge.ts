@@ -29,7 +29,7 @@ export type Run = (argv: readonly string[], init?: ProcessRunInit) => Promise<Pr
 export type Spawn = (request: ProcessSpawnRequest) => HookStream<ProcessSpawnChunk, ProcessSpawnResult>
 
 /** What a hook event's answer may carry; the binary owns the shape, the mod reads `predict`. */
-export type HookAnswer = { [key: string]: unknown }
+type HookAnswer = { [key: string]: unknown }
 
 export type Asked = { ok: true; answer: HookAnswer | undefined } | { ok: false }
 
@@ -200,7 +200,7 @@ export async function ask(
 }
 
 /** How long a read of `adage … --json` may take before the mod draws without it. */
-export const READ_TIMEOUT_MS = 10_000
+const READ_TIMEOUT_MS = 10_000
 
 /**
  * Reads one `adage … --json` object (the card, `graph`, `doctor`, `status`, `delegate status`),

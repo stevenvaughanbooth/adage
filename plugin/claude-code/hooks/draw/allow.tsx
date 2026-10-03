@@ -1,12 +1,13 @@
 // The grant pane (ux-design §4.17 `ask.allow.pane`, plan B4): what `see what it would do` opens,
 // focused. Three plain lines, the staged diff as `Code`, and the second act as a Button: `a allow`
 // confirms against the digest the stage produced, `n not now` closes it, `d details` shows what
-// the terminal shows a person today, `c copy` the terminal command. Pure: register.ts binds the
-// actions to `$`; grant.ts words the lines.
+// the terminal shows a person today, `c copy` the terminal command. Pure: allow.ts makes the
+// actions; grant.ts words the lines.
 import { allowDetails, allowLines, diffText } from '../grant'
-import type { Allow } from '../kinds'
+import type { Allow } from '../plugin'
 import { ROLES } from '../tokens'
 import type { Els, Tree } from './els'
+import { rule } from './rows'
 
 export type AllowActions = {
   /** Confirms the grant against the stage's digest (the press). */
@@ -15,12 +16,6 @@ export type AllowActions = {
   notNow: () => void
   details: () => void
   copy: (surface: string) => void
-}
-
-const rule = (els: Els, title: string, columns: number) => {
-  const { Text } = els
-  const head = `─ ${title} `
-  return <Text dimColor>{head + '─'.repeat(Math.max(0, Math.min(columns, 120) - head.length))}</Text>
 }
 
 export function allowTree(els: Els, a: Allow, columns: number, ascii: boolean, act: AllowActions): Tree {

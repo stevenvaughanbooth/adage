@@ -3,7 +3,7 @@
 import assert from "node:assert/strict"
 import { createHash } from "node:crypto"
 import { execFileSync, spawnSync } from "node:child_process"
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -38,6 +38,13 @@ try {
   for (const bin of ["adage", "adage-exec"]) assert.match(sumsFile, new RegExp(`  ${host.target}/${bin}\n`))
   assert.ok(!existsSync(path.join(staged, "claude-code-exec", "dist")), "the alias bundles no binaries")
   assert.ok(existsSync(path.join(staged, "claude-code-exec", "scripts", "session-start")), "the alias is staged")
+  // The mod is a tree of modules (docs/claude-mod/impl/mod-structure.md): register.ts imports
+  // view/ and draw/, so every module file must be staged where it was.
+  const modules = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((d) => (d.isDirectory() ? modules(path.join(dir, d.name)) : [path.join(dir, d.name)]))
+  const hooks = path.join(repo, "plugin", "claude-code", "hooks")
+  const shipped = modules(hooks).filter((f) => /\.tsx?$/.test(f) && !/\.test\.tsx?$/.test(f) && !f.includes(`${path.sep}fixtures${path.sep}`))
+  assert.ok(shipped.some((f) => f.endsWith(`${path.sep}view${path.sep}band.ts`)), "the mod's modules were found")
+  for (const f of shipped) assert.ok(existsSync(path.join(staged, "claude-code", "hooks", path.relative(hooks, f))), `the staged mod lacks hooks/${path.relative(hooks, f)}`)
   for (const [file, value] of sums) {
     rmSync(file)
     result = stage()
@@ -49,7 +56,7 @@ try {
     assert.match(result.stderr, /does not match/)
     writeFileSync(file, value)
   }
-  console.log("plugin archive integrity: verified pair accepted into one plugin; missing and incorrect checksums rejected for both binaries")
+  console.log("plugin archive integrity: verified pair accepted into one plugin, every mod module staged; missing and incorrect checksums rejected for both binaries")
 } finally {
   rmSync(root, { recursive: true, force: true })
 }
