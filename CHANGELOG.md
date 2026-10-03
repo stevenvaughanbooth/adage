@@ -23,6 +23,10 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   the same `Store` it writes through, so a store other than `$ADAGE_HOME` (a team service) can
   hold all of a repository's learned state. `adage_learn::plan` takes the store in place of the
   tracks directory.
+- **Learning is about 3× faster.** The command table built into the binary was parsed again
+  (TOML, then every pattern's regex) on each lookup, many times per learn run. It is now parsed
+  once per process. Over 497 sessions, `adage condition` drops from 8.5 s to 2.5 s, with
+  byte-identical tracks.
 - **The reflex-proof tests read their own fixtures.** They no longer read archived runs under
   `results/`, which can now be pruned without changing a test.
 

@@ -313,7 +313,7 @@ fn a_legitimate_regenerate_applies_only_its_outputs() {
         std::fs::create_dir_all(d.path().join("tools")).unwrap();
         let req = request(d.path(), "echo x > gen/out.py\n");
         let store = approved(&req);
-        let r = stage::stage(&req, &context(&policy, &store, &cap, &table)).unwrap_err();
+        let r = stage::stage(&req, &context(&policy, &store, &cap, table)).unwrap_err();
         assert!(matches!(r.stage, "stage" | "sandbox"), "{r}");
         return;
     }
@@ -328,7 +328,7 @@ fn a_legitimate_regenerate_applies_only_its_outputs() {
         }
         let req = request(&repo, "echo regenerated > gen/out.py\nrm -f gen/old.py\necho new > gen/new.py\n");
         let store = approved(&req);
-        let ctx = context(&policy, &store, &cap, &table);
+        let ctx = context(&policy, &store, &cap, table);
         let before = snapshot(&repo);
         let staged = stage::stage_with(&req, &ctx, b.clone()).unwrap_or_else(|r| panic!("{}: {r}", b.line()));
         assert_eq!(snapshot(&repo), before, "{}: staging alone changes nothing", b.line());
@@ -493,7 +493,7 @@ fn g4(backend: &StageBackend, runs: usize, seed: u64) -> G4 {
         };
         let parent_before = listing(base.path());
         let store = approved(&req);
-        let ctx = context(&policy, &store, &cap, &table);
+        let ctx = context(&policy, &store, &cap, table);
         let outcome = match stage::stage_with(&req, &ctx, backend.clone()) {
             Ok(s) => stage::finish(&s),
             Err(r) => panic!("run {n}: {r}\n{script}"),
@@ -541,7 +541,7 @@ fn gate_g4_no_write_outside_declared_outputs_in_500_staged_runs() {
         std::fs::create_dir_all(d.path().join("tools")).unwrap();
         let req = request(d.path(), "echo x > gen/out.py\n");
         let (store, policy, table) = (approved(&req), e3_policy(), CommandTable::load());
-        let r = stage::stage(&req, &context(&policy, &store, &cap, &table)).unwrap_err();
+        let r = stage::stage(&req, &context(&policy, &store, &cap, table)).unwrap_err();
         assert!(matches!(r.stage, "stage" | "sandbox"), "{r}");
         eprintln!("G4: skipped, no staging backend ({})", stage::backend(&cap).line());
         return;

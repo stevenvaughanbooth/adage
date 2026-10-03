@@ -425,7 +425,7 @@ pub(crate) fn lapsed_here(paths: &Paths, root: Option<&Path>, store: &Store) -> 
     let index = Index::load(&paths.index());
     let keys: std::collections::BTreeSet<&str> = index.routes.iter().map(|r| r.repo.as_str()).collect();
     let Some(key) = repo::lookup_key(root, Some(&paths.repo_keys()), &keys) else { return Vec::new() };
-    let planned = route::plan_grants(&key, root, &index, &paths.tracks(), store, &CommandTable::load());
+    let planned = route::plan_grants(&key, root, &index, &paths.tracks(), store, CommandTable::load());
     route::lapses(&planned, store)
 }
 
@@ -689,7 +689,7 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
     };
     let table = CommandTable::load();
     let plan =
-        route::plan(ir, &index, &root, &paths.tracks(), level, Some(&terms), &table).map_err(anyhow::Error::msg)?;
+        route::plan(ir, &index, &root, &paths.tracks(), level, Some(&terms), table).map_err(anyhow::Error::msg)?;
     let req = plan.request;
     if level != Level::E2 || !req.output.fields.is_empty() {
         req.output.validate()?;
@@ -699,7 +699,7 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
             bail!("--exit-when names {k}, which is not an output field");
         }
     }
-    let classified = adage_exec::classify::effect(&req.argv, &table);
+    let classified = adage_exec::classify::effect(&req.argv, table);
     let pol = adage_exec::policy::load(&paths.root)?;
     pol.permits(&req, classified).map_err(|e| {
         if level == Level::E2 && e.contains("caps execution") {
@@ -809,7 +809,7 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
     }
     let hazards = adage_exec::git::hazards(&root);
     let actx = adage_exec::approvals::AutoContext {
-        table: &table,
+        table,
         git_hazards: &hazards,
         sandbox_enforced: adage_exec::sandbox::detect().available(),
         policy_auto: pol.auto_approve,
@@ -853,7 +853,7 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
     )?;
     print_attestations(&mut o, paths, ir)?;
     if level == Level::E2 {
-        preview(&mut o, paths, &root, ir, &req, &label, &store, &pol, &table)?;
+        preview(&mut o, paths, &root, ir, &req, &label, &store, &pol, table)?;
     }
     store.approve(Approval {
         key,

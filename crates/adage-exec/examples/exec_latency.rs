@@ -81,7 +81,7 @@ fn setup(root: &Path) {
     .unwrap();
     let terms = Terms { fields, ..Default::default() };
     let plan =
-        route::plan(ir, &index, &repo, &home.join("tracks"), Level::E1, Some(&terms), &CommandTable::load()).unwrap();
+        route::plan(ir, &index, &repo, &home.join("tracks"), Level::E1, Some(&terms), CommandTable::load()).unwrap();
     let mut store = Store::default();
     store.approve(Approval {
         key: ApprovalKey::for_request(&plan.request, "acme"),

@@ -120,7 +120,7 @@ pub fn run(
         index: &index,
         repo: repo.to_string(),
         root: &root,
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),

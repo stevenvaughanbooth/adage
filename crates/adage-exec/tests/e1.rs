@@ -154,7 +154,7 @@ impl World {
             &self.p("adage/tracks"),
             Level::E1,
             Some(&terms),
-            &CommandTable::load(),
+            CommandTable::load(),
         )
         .unwrap();
         assert_eq!(plan.request.scripts.len(), 1, "an L-ref script: {:?}", plan.request.scripts);

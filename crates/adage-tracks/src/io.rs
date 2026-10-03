@@ -262,8 +262,8 @@ pub fn validate(t: &Track) -> Result<()> {
                 // Never trust a declared effect: classify the command ourselves. The one exception
                 // is a repository script the table does not know, which learning classified
                 // observe from the traces and says why (`evidence.effect_evidence`).
-                let actual = classify(command, &table);
-                if rank(actual) > rank(r.effect) && !inferred_observe(r, command, actual, &table) {
+                let actual = classify(command, table);
+                if rank(actual) > rank(r.effect) && !inferred_observe(r, command, actual, table) {
                     bail!("{}: command {:?} is {:?}, but the track declares {:?}", ctx(), command, actual, r.effect);
                 }
                 if r.strength == Strength::Inhibit {
@@ -292,7 +292,7 @@ pub fn validate(t: &Track) -> Result<()> {
                 if !slot_refs(avoid).is_empty() || !slot_refs(instead).is_empty() {
                     bail!("{}: an avoid step has slots nothing can bind", ctx());
                 }
-                if rank(classify(instead, &table)) > rank(Effect::Regenerate) {
+                if rank(classify(instead, table)) > rank(Effect::Regenerate) {
                     bail!("{}: the suggested command {:?} is not a verify or regenerate step", ctx(), instead);
                 }
             }
@@ -309,7 +309,7 @@ pub fn validate(t: &Track) -> Result<()> {
                     if !slot_refs(command).is_empty() {
                         bail!("{}: a sequence step has slots nothing can bind", ctx());
                     }
-                    let actual = classify(command, &table);
+                    let actual = classify(command, table);
                     if rank(actual) > rank(r.effect) {
                         bail!(
                             "{}: command {:?} is {:?}, but the track declares {:?}",
@@ -356,7 +356,7 @@ pub fn validate(t: &Track) -> Result<()> {
                 }
             }
             Step::Advise { template, slots } => {
-                crate::advice::check(template, slots, &table).map_err(|e| anyhow::anyhow!("{}: {e}", ctx()))?;
+                crate::advice::check(template, slots, table).map_err(|e| anyhow::anyhow!("{}: {e}", ctx()))?;
                 // Advice directs nothing: prime, observe, no route slots, and a reactive trigger.
                 if r.strength != Strength::Prime || r.effect != Effect::Observe || !r.slots.is_empty() {
                     bail!("{}: an advisory step is prime, observe, with no route slots", ctx());

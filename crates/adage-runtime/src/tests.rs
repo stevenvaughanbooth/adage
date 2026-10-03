@@ -19,12 +19,12 @@ fn route(id: &str, trigger: Trigger, step: Step, slots: Vec<Slot>, effect: Effec
     }
 }
 
-fn fixture() -> (tempfile::TempDir, Index, CommandTable) {
+fn fixture() -> (tempfile::TempDir, Index, &'static CommandTable) {
     let dir = tempfile::tempdir().unwrap();
     std::fs::create_dir_all(dir.path().join("acme")).unwrap();
     std::fs::write(dir.path().join("acme/billing.py"), "x").unwrap();
     let table = CommandTable::load();
-    let lookup_key = command_key("./scripts/wi-lookup W-1 --json", &table);
+    let lookup_key = command_key("./scripts/wi-lookup W-1 --json", table);
     let track = Track {
         manifest: Manifest {
             track: TrackInfo {
@@ -98,7 +98,7 @@ fn prompt_binds_validated_ticket_and_warns_about_dead_end() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -118,7 +118,7 @@ fn injected_values_never_bind() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -136,7 +136,7 @@ fn follow_judgement_and_linked_files() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -176,7 +176,7 @@ fn the_checkout_is_read_only_through_the_port() {
             index: &index,
             repo: "acme".into(),
             root: Path::new("/nowhere/acme"),
-            table: &table,
+            table,
             embed: None,
             params: Default::default(),
             policy: Default::default(),
@@ -199,7 +199,7 @@ fn obligation_triggers_on_edit_and_is_enforced_once_at_stop() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -227,7 +227,7 @@ fn obligation_met_means_no_stop_request() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -253,7 +253,7 @@ fn control_logs_exposure_but_emits_nothing() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -272,7 +272,7 @@ fn other_repos_get_nothing() {
         index: &index,
         repo: "other".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -289,7 +289,7 @@ fn caps_hold() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -317,7 +317,7 @@ fn linked_files_from_plain_text_output() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -339,7 +339,7 @@ fn symlinks_out_of_the_repo_are_rejected() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -359,7 +359,7 @@ fn obligations_rearm_after_a_new_edit_and_stop_requests_are_bounded() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -391,7 +391,7 @@ fn hostile_output_does_not_panic() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -415,7 +415,7 @@ fn control_records_would_continue() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -452,7 +452,7 @@ fn fake_embed(text: &str) -> Option<(String, Vec<f32>)> {
     Some((MODEL.to_string(), adage_intent::unit(v)))
 }
 
-fn intent_fixture(model: &str, threshold: f32) -> (tempfile::TempDir, Index, CommandTable) {
+fn intent_fixture(model: &str, threshold: f32) -> (tempfile::TempDir, Index, &'static CommandTable) {
     let (dir, index, table) = fixture();
     let mut routes: Vec<Route> = index.routes.iter().map(|r| r.route.clone()).collect();
     let centroid = adage_intent::quantize(&adage_intent::unit(vec![1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]));
@@ -489,7 +489,7 @@ fn intent_route_fires_on_a_matching_prompt_only() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: Some(&fake_embed),
         params: Default::default(),
         policy: Default::default(),
@@ -510,7 +510,7 @@ fn intent_route_fires_on_a_matching_prompt_only() {
 }
 
 /// A card whose family's one prompt points along the first axis, at `threshold`.
-fn card_fixture(threshold: f32) -> (tempfile::TempDir, Index, CommandTable) {
+fn card_fixture(threshold: f32) -> (tempfile::TempDir, Index, &'static CommandTable) {
     use adage_tracks::card::{Card, CardFile};
     let (dir, index, table) = fixture();
     let mut routes: Vec<Route> = index.routes.iter().map(|r| r.route.clone()).collect();
@@ -564,7 +564,7 @@ fn a_card_is_said_once_at_a_close_prompt_or_at_the_first_edit_of_its_files_when_
             index: &index,
             repo: "acme".into(),
             root: dir.path(),
-            table: &table,
+            table,
             embed: Some(&fake_embed),
             params: Default::default(),
             policy: Default::default(),
@@ -609,7 +609,7 @@ fn a_card_names_the_test_command_of_an_execution_certified_verification_unless_t
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: Some(&fake_embed),
         params: Default::default(),
         policy: Default::default(),
@@ -630,7 +630,7 @@ fn a_card_names_the_test_command_of_an_execution_certified_verification_unless_t
         index: &index2,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: Some(&fake_embed),
         params: Default::default(),
         policy: Default::default(),
@@ -657,7 +657,7 @@ fn a_card_says_where_its_files_stand_now_instead_of_quoting_an_exemplar_unless_t
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: Some(&fake_embed),
         params: Default::default(),
         policy: Default::default(),
@@ -686,7 +686,7 @@ fn edits_that_add_tests_are_remembered_for_the_receipt() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -743,7 +743,7 @@ fn a_waiting_card_expires_at_the_next_prompt() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: Some(&fake_embed),
         params: Default::default(),
         policy: Default::default(),
@@ -772,7 +772,7 @@ fn intent_routes_fail_open_without_a_model() {
             index: &index,
             repo: "acme".into(),
             root: dir.path(),
-            table: &table,
+            table,
             embed,
             params: Default::default(),
             policy: Default::default(),
@@ -792,7 +792,7 @@ fn intent_routes_need_the_same_model_and_the_threshold() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: Some(&fake_embed),
         params: Default::default(),
         policy: Default::default(),
@@ -805,7 +805,7 @@ fn intent_routes_need_the_same_model_and_the_threshold() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: Some(&fake_embed),
         params: Default::default(),
         policy: Default::default(),
@@ -827,7 +827,7 @@ fn the_embedder_is_not_called_without_intent_routes() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: Some(&spy),
         params: Default::default(),
         policy: Default::default(),
@@ -890,7 +890,7 @@ fn state_rebuilt_from_the_spool_matches_the_live_state_after_every_event() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -932,7 +932,7 @@ fn state_rebuilt_from_the_spool_matches_the_live_state_after_every_event() {
                 rec["repo"] = json!("acme");
             }
             records.push(rec);
-            let rebuilt = rebuild::rebuild(&records, &index, "acme", &table).unwrap();
+            let rebuilt = rebuild::rebuild(&records, &index, "acme", table).unwrap();
             assert_eq!(restored(&rebuilt), restored(&st), "after event {i} ({name}), control {control}");
         }
         assert_eq!(st.emitted.len(), 4, "lookup, dead end, linked files, finish line");
@@ -950,7 +950,7 @@ fn a_rebuilt_state_never_requests_a_stop_the_live_one_would_not() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -971,7 +971,7 @@ fn a_rebuilt_state_never_requests_a_stop_the_live_one_would_not() {
         let d = decide(&ctx, &mut st, &ev);
         records.push(json!({ "kind": ev.name(), "arm": st.arm, "decision": d }));
     }
-    let mut rebuilt = rebuild::rebuild(&records, &index, "acme", &table).unwrap();
+    let mut rebuilt = rebuild::rebuild(&records, &index, "acme", table).unwrap();
     assert!(!st.obligations[0].met && rebuilt.obligations[0].met);
     let live = decide(&ctx, &mut st, &Event::Stop { stop_hook_active: false });
     let quiet = decide(&ctx, &mut rebuilt, &Event::Stop { stop_hook_active: false });
@@ -1013,7 +1013,7 @@ fn an_obligation_is_met_by_the_step_with_options_added() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -1041,7 +1041,7 @@ fn an_after_command_trigger_fires_on_the_command_with_options_added() {
     std::fs::write(dir.path().join("acme/billing.py"), "x").unwrap();
     let table = CommandTable::load();
     // Mined from runs without `--json`.
-    let key = command_key("./scripts/wi-lookup W-1", &table);
+    let key = command_key("./scripts/wi-lookup W-1", table);
     let files = Slot {
         name: "files".into(),
         source: SlotSource::ResultField { field: "linked_files".into() },
@@ -1061,7 +1061,7 @@ fn an_after_command_trigger_fires_on_the_command_with_options_added() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -1098,7 +1098,7 @@ fn a_different_script_is_not_following() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: Some(&fake_embed),
         params: Default::default(),
         policy: Default::default(),
@@ -1170,7 +1170,7 @@ fn an_imported_route_a_learned_dead_end_contradicts_is_never_emitted() {
             index,
             repo: "acme".into(),
             root: dir.path(),
-            table: &table,
+            table,
             embed: Some(&fake_embed),
             params: Default::default(),
             policy: Default::default(),
@@ -1206,7 +1206,7 @@ fn approach_locking_filters_later_directives_and_their_obligations() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -1234,7 +1234,7 @@ fn approach_locking_filters_later_directives_and_their_obligations() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -1263,7 +1263,7 @@ fn a_generalised_glob_matches_any_depth() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -1302,7 +1302,7 @@ fn inhibit_comes_first_under_the_caps() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -1339,11 +1339,11 @@ fn propensity_is_the_probability_of_the_arm_given() {
     assert_eq!(assign("s1", 0.0, None), (Arm::Treated, 1.0));
     // A state rebuilt from the spool keeps it.
     let recs = vec![json!({ "kind": "prompt", "arm": "control", "propensity": 0.1, "decision": Decision::default() })];
-    let st = rebuild::rebuild(&recs, &Index::default(), "acme", &CommandTable::load()).unwrap();
+    let st = rebuild::rebuild(&recs, &Index::default(), "acme", CommandTable::load()).unwrap();
     assert_eq!((st.arm, st.propensity), (Some(Arm::Control), Some(0.1)));
     // Old spools and states, without it, still read.
     let old = vec![json!({ "kind": "prompt", "arm": "treated", "decision": Decision::default() })];
-    assert_eq!(rebuild::rebuild(&old, &Index::default(), "acme", &CommandTable::load()).unwrap().propensity, None);
+    assert_eq!(rebuild::rebuild(&old, &Index::default(), "acme", CommandTable::load()).unwrap().propensity, None);
     let st: SessionState =
         serde_json::from_value(json!({ "arm": "treated", "repo": "acme", "prompts": 1, "batches": 0,
         "emitted": [], "pending": [], "obligations": [], "history": [], "first_edit_at_batch": null }))
@@ -1388,7 +1388,7 @@ fn directives_carry_their_shape_and_stale_routes_are_never_fire() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -1433,7 +1433,7 @@ fn directives_carry_their_shape_and_stale_routes_are_never_fire() {
             index: &index,
             repo: "acme".into(),
             root: dir.path(),
-            table: &table,
+            table,
             embed: None,
             params: Default::default(),
             policy: Default::default(),
@@ -1569,7 +1569,7 @@ mod typed_slots {
         let dir = tempfile::tempdir().unwrap();
         let table = CommandTable::load();
         let index = Index::compile(&[track(routes())]);
-        let c = ctx(&index, dir.path(), &table);
+        let c = ctx(&index, dir.path(), table);
         let mut st = SessionState::default();
         let d = decide(&c, &mut st, &Event::Prompt { text: "Please close out 12 things, starting with #482.".into() });
         assert_eq!(d.directives.len(), 1, "{d:?}");
@@ -1593,7 +1593,7 @@ mod typed_slots {
         }
         adage_tracks::io::validate(&track(rs.clone())).unwrap();
         let index = Index::compile(&[track(rs)]);
-        let c = ctx(&index, dir.path(), &table);
+        let c = ctx(&index, dir.path(), table);
         let mut st = SessionState::default();
         let d = decide(&c, &mut st, &Event::Prompt { text: "must return 120, see #482".into() });
         assert!(d.directives[0].text.contains("wi-lookup 482\n"), "{d:?}");
@@ -1606,7 +1606,7 @@ mod typed_slots {
         let dir = tempfile::tempdir().unwrap();
         let table = CommandTable::load();
         let index = Index::compile(&[track(routes())]);
-        let c = ctx(&index, dir.path(), &table);
+        let c = ctx(&index, dir.path(), table);
         let mut st = SessionState::default();
         let out = r#"{"id": "482", "owner": {"id": 731, "name": "x"}}"#;
         let d = decide(&c, &mut st, &Event::Batch { calls: vec![bash("./scripts/wi-lookup 482", out)] });
@@ -1644,7 +1644,7 @@ mod typed_slots {
         let t = index.triggers("acme");
         assert_eq!(t.prompt_types.len(), 1);
         assert!(t.prompt_spans.is_empty(), "a typed slot does not need the span kind");
-        let c = ctx(&index, dir.path(), &table);
+        let c = ctx(&index, dir.path(), table);
         let prompted = || Some(SessionState { prompts: 1, ..Default::default() });
         for (text, skip) in
             [("look at #482", false), ("look at ops/482", false), ("look at W-2042", true), ("hi", true)]
@@ -1748,7 +1748,7 @@ fn a_sequence_follows_an_edit_and_a_context_fires_after_its_items() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -1826,7 +1826,7 @@ fn a_sequence_subsumes_the_finish_line_it_begins_with() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -1884,7 +1884,7 @@ fn a_finish_line_after_any_edit_rides_on_a_sequence_that_includes_it() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -1918,7 +1918,7 @@ fn a_context_needs_its_items_in_order_within_its_gap_of_alphabet_events() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -1960,7 +1960,7 @@ fn a_failed_command_is_a_failure_item_and_not_a_success() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -1992,7 +1992,7 @@ fn context_state_is_bounded_rebuilt_from_the_spool_and_reset_by_a_new_alphabet()
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -2008,7 +2008,7 @@ fn context_state_is_bounded_rebuilt_from_the_spool_and_reset_by_a_new_alphabet()
     for (i, ev) in events.iter().enumerate() {
         let d = decide(&ctx, &mut st, ev);
         records.push(json!({ "kind": ev.name(), "arm": st.arm, "decision": d }));
-        let rebuilt = rebuild::rebuild(&records, &index, "acme", &table).unwrap();
+        let rebuilt = rebuild::rebuild(&records, &index, "acme", table).unwrap();
         assert_eq!(rebuilt.ctx, st.ctx, "after event {i}");
         assert!(st.ctx.ring.len() <= crate::context::RING && st.ctx.since.iter().all(|s| *s <= crate::context::SPAN));
     }
@@ -2019,7 +2019,7 @@ fn context_state_is_bounded_rebuilt_from_the_spool_and_reset_by_a_new_alphabet()
     t.routes.retain(|r| r.id != "retry-ctx");
     let relearned = Index::compile(&[t]);
     assert_ne!(relearned.contexts("acme").digest, index.contexts("acme").digest);
-    assert!(rebuild::rebuild(&records, &relearned, "acme", &table).unwrap().ctx.is_empty());
+    assert!(rebuild::rebuild(&records, &relearned, "acme", table).unwrap().ctx.is_empty());
     // And a live state from the old alphabet starts over at its next alphabet event.
     let ctx2 = Ctx { index: &relearned, ..ctx };
     decide(&ctx2, &mut st, &Event::Batch { calls: vec![bash("make lint", "ok")] });
@@ -2058,7 +2058,7 @@ fn a_context_can_end_at_a_prompt() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -2079,7 +2079,7 @@ fn u11_routes() -> Vec<Route> {
     let mut r = route(
         "dead-end-0cdcfb",
         Trigger::AfterFailure {
-            command: command_key("python -m pytest", &table),
+            command: command_key("python -m pytest", table),
             signature: "No module named pytest".into(),
         },
         Step::Run { command: ".venv/bin/python -m pytest".into() },
@@ -2115,7 +2115,7 @@ fn a_directed_runner_narrowed_to_the_task_is_followed() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -2178,7 +2178,7 @@ fn the_learned_judge_reads_follows_by_the_repository_s_tokens() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -2217,14 +2217,14 @@ fn a_python_run_outside_the_project_environment_is_answered() {
     let mut click = u11_routes().remove(0);
     click.id = "dead-end-click".into();
     click.trigger = Trigger::AfterFailure {
-        command: command_key("python -m pytest", &table),
+        command: command_key("python -m pytest", table),
         signature: "No module named 'click'".into(),
     };
     routes.push(click);
     for probe in ["python", "python3"] {
         let mut a = route(
             &format!("instinct-u11-{probe}-click"),
-            Trigger::AfterFailure { command: command_key(probe, &table), signature: "No module named 'click'".into() },
+            Trigger::AfterFailure { command: command_key(probe, table), signature: "No module named 'click'".into() },
             Step::Advise {
                 template: "project-python".into(),
                 slots: [("interpreter".to_string(), ".venv/bin/python".to_string())].into(),
@@ -2246,7 +2246,7 @@ fn a_python_run_outside_the_project_environment_is_answered() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -2297,7 +2297,7 @@ fn a_piped_failure_fires_its_dead_end() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),

@@ -453,8 +453,8 @@ pub fn failure_routes(valued: &[Valued], ss: &[&Session], provenance: &str) -> V
     let mut out = Vec::new();
     for ((failed, signature), v) in best {
         let (Some(rkey), Some(wkey)) = (
-            adage_instincts::safety::command_key(&failed, &table),
-            adage_instincts::safety::command_key(&v.command, &table),
+            adage_instincts::safety::command_key(&failed, table),
+            adage_instincts::safety::command_key(&v.command, table),
         ) else {
             continue;
         };

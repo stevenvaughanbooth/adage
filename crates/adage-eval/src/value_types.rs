@@ -317,7 +317,7 @@ fn evaluate(
 
 fn read_sessions(files: &[PathBuf], repo: &str) -> Vec<adage_learn::import::Session> {
     let table = CommandTable::load();
-    let mut out: Vec<_> = files.iter().filter_map(|f| adage_learn::read_session(f, &table, Some(repo))).collect();
+    let mut out: Vec<_> = files.iter().filter_map(|f| adage_learn::read_session(f, table, Some(repo))).collect();
     out.sort_by(|a, b| a.id.cmp(&b.id));
     out
 }

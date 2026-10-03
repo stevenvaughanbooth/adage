@@ -197,7 +197,7 @@ fn a_family_with_a_passing_trace_gets_a_card_delivered_once_on_its_own_kind_of_t
         index: &index,
         repo: "acme-lib".into(),
         root: root.path(),
-        table: &table,
+        table,
         embed: Some(&embed),
         params: Default::default(),
         policy: Default::default(),

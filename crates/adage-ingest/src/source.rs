@@ -188,7 +188,7 @@ mod tests {
             ("d-junk".into(), b"not a trace".to_vec()),
         ]);
         let table = CommandTable::load();
-        let cx = Decode { table: &table, locator: &AsRecorded, repo_override: None, subagent: false };
+        let cx = Decode { table, locator: &AsRecorded, repo_override: None, subagent: false };
         let mut got = Vec::new();
         ingest(&source, &cx, |t, s| got.push((t.id.clone(), s)));
         let harnesses: Vec<(&str, Option<&str>)> =
@@ -214,8 +214,7 @@ mod tests {
     fn an_explicit_repository_key_wins_over_the_recorded_directory() {
         let source = Memory(vec![("t".into(), claude("/x/y"))]);
         let table = CommandTable::load();
-        let cx =
-            Decode { table: &table, locator: &AsRecorded, repo_override: Some("github.com/acme/app"), subagent: false };
+        let cx = Decode { table, locator: &AsRecorded, repo_override: Some("github.com/acme/app"), subagent: false };
         let s = ingest_one(&source, &source.list()[0], &cx).unwrap();
         assert_eq!(s.repo, "github.com/acme/app");
     }

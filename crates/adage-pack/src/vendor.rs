@@ -49,7 +49,7 @@ pub fn vendor(pack: &Pack, root: &Path) -> Result<Vendored> {
             if sc.closure != ClosureLevel::Ref {
                 continue;
             }
-            let interpreter = match program(&run.argv, &table)? {
+            let interpreter = match program(&run.argv, table)? {
                 Program::Script { interpreter, .. } => interpreter,
                 Program::Tool(_) | Program::Env { .. } => None,
             };

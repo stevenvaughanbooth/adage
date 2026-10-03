@@ -189,7 +189,7 @@ pub fn compile(
         .filter_map(|(i, a)| {
             let text = normalize(first_prompt(a));
             let vec = model.embed(&text)?;
-            let cands = candidates(a, influence.get(i).unwrap_or(&none), &table);
+            let cands = candidates(a, influence.get(i).unwrap_or(&none), table);
             Some(Item { text, a, vec, cands })
         })
         .collect();
@@ -278,7 +278,7 @@ pub fn compile(
             .unwrap_or_default();
         let observed = group.rsplit('|').next().and_then(Effect::parse).unwrap_or(Effect::Environment);
         // Re-derive the effect from the command that will be directed; never inherit it.
-        let effect = super::max_effect(observed, io::classify(&command, &table));
+        let effect = super::max_effect(observed, io::classify(&command, table));
         let base = format!("intent-{}", stable(&[&group]));
         let id = (1..).map(|k| if k == 1 { base.clone() } else { format!("{base}-{k}") }).find(|x| !ids.contains(x));
         let id = id.expect("an unused id");
@@ -382,12 +382,12 @@ mod tests {
         // lookup takes it bare (`4280`). That command is the value-flow lookup's.
         let table = CommandTable::load();
         for prompt in ["Please work on #4280.", "Please work on 4280.", "Pick up ops/4280 and get it done."] {
-            let c = candidates(&trace(prompt, &["scripts/wi-lookup 4280", "scripts/check tests"]), &[], &table);
+            let c = candidates(&trace(prompt, &["scripts/wi-lookup 4280", "scripts/check tests"]), &[], table);
             let lits: Vec<&str> = c.iter().map(|x| x.literal.as_str()).collect();
             assert_eq!(lits, ["scripts/check tests"], "{prompt}");
         }
         // A word the prompt shares with a command is not a value.
-        let c = candidates(&trace("Fix the failing tests", &["scripts/check tests"]), &[], &table);
+        let c = candidates(&trace("Fix the failing tests", &["scripts/check tests"]), &[], table);
         assert_eq!(c.len(), 1);
     }
 
@@ -397,7 +397,7 @@ mod tests {
     #[test]
     fn a_trivial_command_is_never_how_a_task_starts() {
         let table = CommandTable::load();
-        let c = candidates(&trace("Fix the failing tests", &["echo ---", "pwd", "scripts/check tests"]), &[], &table);
+        let c = candidates(&trace("Fix the failing tests", &["echo ---", "pwd", "scripts/check tests"]), &[], table);
         let lits: Vec<&str> = c.iter().map(|x| x.literal.as_str()).collect();
         assert_eq!(lits, ["scripts/check tests"]);
     }

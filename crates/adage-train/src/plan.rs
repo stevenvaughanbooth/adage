@@ -105,7 +105,7 @@ pub fn build(o: &PlanOptions) -> Result<Plan> {
     }
     let from = std::fs::canonicalize(&o.from).unwrap_or_else(|_| o.from.clone());
     let table = CommandTable::load();
-    let claims = claims::extract(&from, &text, &root, &table);
+    let claims = claims::extract(&from, &text, &root, table);
     let files = adage_instincts::files::RepoFiles::open(&root).map(|f| f.walk()).unwrap_or_default();
     let name = claims::skill_name(&text, &from);
     let not_exercised: Vec<(String, String)> =

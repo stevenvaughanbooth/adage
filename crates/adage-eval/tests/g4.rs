@@ -148,7 +148,7 @@ fn contexts_fire_in_replay_and_the_fast_path_stays_exact_on_newkinds() {
                     index: &index,
                     repo: repo.to_string(),
                     root: &b.join("repo"),
-                    table: &table,
+                    table,
                     embed: None,
                     params: Default::default(),
                     policy: Default::default(),

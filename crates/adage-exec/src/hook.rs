@@ -88,7 +88,7 @@ impl Extension for Prefetch {
         let (Ok(pol), Ok(store)) = (policy::load(&paths.root), Store::load(&approvals::path(&paths.root))) else {
             return SessionTexts::default();
         };
-        let planned = route::plan_grants(repo_key, root, index, &paths.tracks(), &store, &CommandTable::load());
+        let planned = route::plan_grants(repo_key, root, index, &paths.tracks(), &store, CommandTable::load());
         // A grant that could run under this policy but no longer matches: said, never silent.
         let lapsed: Vec<route::Lapse> =
             route::lapses(&planned, &store).into_iter().filter(|l| l.level <= pol.max_level).collect();
@@ -383,7 +383,7 @@ fn verifications<'a>(
     store: &'a Store,
 ) -> Vec<(&'a adage_tracks::index::IndexedRoute, String, &'a Approval)> {
     current_verifications(
-        &route::plan_grants(repo_key, root, index, &paths.tracks(), store, &CommandTable::load()),
+        &route::plan_grants(repo_key, root, index, &paths.tracks(), store, CommandTable::load()),
         store,
     )
 }
@@ -453,7 +453,7 @@ fn stop_gate(call: &StopCall<'_>) -> Option<StopGate> {
     let label = format!("{}/{}", ir.track, ir.route.id);
     let table = CommandTable::load();
     let mut req =
-        route::plan(ir, call.index, call.root, &call.paths.tracks(), Level::E2, a.terms.as_ref(), &table).ok()?.request;
+        route::plan(ir, call.index, call.root, &call.paths.tracks(), Level::E2, a.terms.as_ref(), table).ok()?.request;
     req.inputs = route::bound_from_command(&req.argv, &command)?;
     let action = req.action.clone()?;
     let now =
@@ -478,7 +478,7 @@ fn stop_gate(call: &StopCall<'_>) -> Option<StopGate> {
         policy: &pol,
         store: &store,
         capability: &cap,
-        table: &table,
+        table,
         repo_key: call.repo_key.to_string(),
         cas: Some(home.join("cas")).filter(|p| p.is_dir()),
         home: adage_store::home_dir(),
@@ -772,16 +772,9 @@ fn covering_receipt(call: &PreCall<'_>) -> Option<String> {
         .approvals
         .iter()
         .find(|a| a.key.repo == call.repo_key && a.route == r.route && a.key.level == Level::E2)?;
-    let plan = route::plan(
-        ir,
-        call.index,
-        call.root,
-        &call.paths.tracks(),
-        Level::E2,
-        a.terms.as_ref(),
-        &CommandTable::load(),
-    )
-    .ok()?;
+    let plan =
+        route::plan(ir, call.index, call.root, &call.paths.tracks(), Level::E2, a.terms.as_ref(), CommandTable::load())
+            .ok()?;
     let action = plan.request.action.as_ref()?;
     let repo = plan.request.repo_root.canonicalize().ok()?;
     let now = crate::stage::input_snapshot_until(&repo, action, Some(deadline)).ok()?;
@@ -970,7 +963,7 @@ fn act(turn: &Turn<'_>, directives: &[Directive], candidates: &[Candidate<'_>]) 
         return out;
     }
     let table = CommandTable::load();
-    let plan = match route::plan(ir, turn.index, turn.root, &turn.paths.tracks(), Level::E2, a.terms.as_ref(), &table) {
+    let plan = match route::plan(ir, turn.index, turn.root, &turn.paths.tracks(), Level::E2, a.terms.as_ref(), table) {
         Ok(p) => p,
         Err(e) => {
             out.notice = Some(lapse_notice(a, vec![format!("it cannot be planned now: {}", crate::reason_text(&e))]));
@@ -1002,7 +995,7 @@ fn act(turn: &Turn<'_>, directives: &[Directive], candidates: &[Candidate<'_>]) 
         policy: &pol,
         store: &store,
         capability: &cap,
-        table: &table,
+        table,
         repo_key: turn.repo_key.to_string(),
         cas: Some(home.join("cas")).filter(|p| p.is_dir()),
         home: adage_store::home_dir(),
@@ -1244,7 +1237,7 @@ fn prefetch(
         policy: &pol,
         store: &store,
         capability: &cap,
-        table: &table,
+        table,
         repo_key: turn.repo_key.to_string(),
         cas,
         home: adage_store::home_dir(),
@@ -1265,7 +1258,7 @@ fn prefetch(
         let Some(ir) = route::find(turn.index, turn.repo_key, &d.track, &d.route) else {
             return Err(fail(records, "route", "the index holds no such route for this repository"));
         };
-        let plan = match route::plan(ir, turn.index, turn.root, &tracks, Level::E1, a.terms.as_ref(), &table) {
+        let plan = match route::plan(ir, turn.index, turn.root, &tracks, Level::E1, a.terms.as_ref(), table) {
             Ok(p) => p,
             Err(e) => {
                 *notice = Some(lapse_notice(a, vec![format!("it cannot be planned now: {}", crate::reason_text(&e))]));
@@ -1422,7 +1415,7 @@ mod prediction_tests {
                 index: &self.index,
                 repo: "fixture".into(),
                 root: &self.root,
-                table: &table,
+                table,
                 embed: None,
                 params: Default::default(),
                 policy: adage_runtime::Policy {
@@ -1466,7 +1459,7 @@ mod prediction_tests {
                 &self.paths.tracks(),
                 Level::E2,
                 Some(&terms),
-                &CommandTable::load(),
+                CommandTable::load(),
             )
             .unwrap()
             .request;
@@ -1545,7 +1538,7 @@ mod prediction_tests {
             &f.paths.tracks(),
             Level::E2,
             store.approvals[0].terms.as_ref(),
-            &CommandTable::load(),
+            CommandTable::load(),
         )
         .unwrap();
         let now = crate::stage::input_snapshot(&f.root.canonicalize().unwrap(), plan.request.action.as_ref().unwrap())
@@ -1630,7 +1623,7 @@ mod prediction_tests {
             &f.paths.tracks(),
             Level::E2,
             Store::load(&approvals::path(&f.paths.root)).unwrap().approvals[0].terms.as_ref(),
-            &CommandTable::load(),
+            CommandTable::load(),
         )
         .unwrap()
         .request;
@@ -1880,7 +1873,7 @@ mod prediction_tests {
             &f.paths.tracks(),
             Level::E2,
             store.approvals[0].terms.as_ref(),
-            &CommandTable::load(),
+            CommandTable::load(),
         )
         .unwrap()
         .request;
@@ -2015,7 +2008,7 @@ mod prediction_tests {
             index: &f.index,
             repo: "fixture".into(),
             root: &f.root,
-            table: &table,
+            table,
             embed: None,
             params: Default::default(),
             policy: adage_runtime::Policy {
@@ -2244,7 +2237,7 @@ mod prediction_tests {
             &f.paths.tracks(),
             Level::E2,
             Store::load(&approvals::path(&f.paths.root)).unwrap().approvals[0].terms.as_ref(),
-            &CommandTable::load(),
+            CommandTable::load(),
         )
         .unwrap()
         .request;
@@ -2588,7 +2581,7 @@ def test_latlong_invalid(invalid_latlong):
             &f.paths.tracks(),
             Level::E2,
             Store::load(&approvals::path(&f.paths.root)).unwrap().approvals[0].terms.as_ref(),
-            &CommandTable::load(),
+            CommandTable::load(),
         )
         .unwrap()
         .request;

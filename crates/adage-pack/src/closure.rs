@@ -126,7 +126,7 @@ pub fn compute(p: &Parsed) -> Result<Closure> {
             if r.is_template() {
                 continue;
             }
-            match program(&run.argv, &table)? {
+            match program(&run.argv, table)? {
                 Program::Tool(t) => edge(&mut c, "tool", &me, format!("tool:{t}")),
                 // The project's environment: found in the checkout at bind, never in `requires`.
                 Program::Env { path, .. } => edge(&mut c, "env", &me, format!("env:{path}")),

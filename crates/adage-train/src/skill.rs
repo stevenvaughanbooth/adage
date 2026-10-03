@@ -280,11 +280,11 @@ pub fn run(o: &Options) -> Result<Outcome> {
             }
         })
         .unwrap_or_else(|| "skill".into());
-    let graph: Graph = procedure::parse(&bytes, &file, &fallback, &table);
-    let mut compiled = crate::compile::compile(graph, &root, &table);
+    let graph: Graph = procedure::parse(&bytes, &file, &fallback, table);
+    let mut compiled = crate::compile::compile(graph, &root, table);
     let report = verify::verify(&mut compiled, &root, &o.replay);
     let repo_key = adage_core::repo::repo_key(&root);
-    let pack = pack(&compiled, &root, &table)?;
+    let pack = pack(&compiled, &root, table)?;
     let dir = skills_dir(&o.home).join(&compiled.prefix);
     let pack_name = pack.as_ref().map(|p| p.manifest.pack.name.clone()).unwrap_or_default();
     let mut out =

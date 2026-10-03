@@ -320,7 +320,7 @@ pub fn queue<'a>(
                     &paths.tracks(),
                     adage_exec::Level::E2,
                     a.terms.as_ref(),
-                    &table,
+                    table,
                 )
                 .is_ok_and(|p| {
                     store.find(&adage_exec::approvals::ApprovalKey::for_request(&p.request, &ir.repo)).is_some()

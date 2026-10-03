@@ -34,7 +34,7 @@ fn main() {
     let table = CommandTable::load();
     let mut sessions: Vec<adage_learn::import::Session> = files
         .iter()
-        .filter_map(|p| adage_learn::read_session(p, &table, repo.as_deref()))
+        .filter_map(|p| adage_learn::read_session(p, table, repo.as_deref()))
         .filter(|s| !s.steps.is_empty())
         .collect();
     sessions.sort_by(|a, b| a.id.cmp(&b.id));

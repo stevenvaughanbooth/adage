@@ -1054,7 +1054,7 @@ fn respond(
         index,
         repo: repo_key.clone(),
         root,
-        table: &table,
+        table,
         embed: Some(&embed),
         params: Default::default(),
         policy,
@@ -1064,7 +1064,7 @@ fn respond(
     let rebuild = || {
         let small = std::fs::metadata(&spool_path).is_ok_and(|m| m.len() <= rebuild::MAX_SPOOL_BYTES);
         let records: Vec<Value> = if small { spool::read_all(&spool_path).ok()? } else { return None };
-        rebuild::rebuild(&records, index, &repo_key, &table)
+        rebuild::rebuild(&records, index, &repo_key, table)
     };
     let (mut decision, arm, propensity, stims) =
         state::update_or_rebuild::<SessionState, _>(&state_path, rebuild, |st| {

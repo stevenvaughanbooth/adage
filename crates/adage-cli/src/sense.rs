@@ -479,7 +479,7 @@ pub fn run(o: &Options, paths: &Paths) -> Result<Sense> {
         if cutoff.is_some_and(|c| modified_before(p, c)) {
             continue;
         }
-        let Some(s) = adage_learn::read_session(p, &table, None) else { continue };
+        let Some(s) = adage_learn::read_session(p, table, None) else { continue };
         if s.steps.is_empty() && s.prompts.is_empty() {
             continue;
         }
