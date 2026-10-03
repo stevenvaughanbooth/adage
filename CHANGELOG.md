@@ -380,6 +380,9 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   nothing. `adage-exec status` lists prediction grants apart, and `adage-exec revoke` revokes
   execution grants unless `--mode predict` is given (before, both). A session resumed a second
   time no longer warns that something else claimed its press.
+- **Press records carry `duration_us`, as every other spool record does.** `press_issued` and
+  `tripwire` record the hook's own time and `press_spent` the spend's; before, they were the only
+  spool records without it.
 
 ### The CLI verbs
 

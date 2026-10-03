@@ -98,28 +98,39 @@ pub struct Delivery {
     pub notice: Option<String>,
 }
 
+/// Where an [`Extension`] is asked about something: the repository, as the index routes this
+/// checkout (`repo_key`), the checkout itself (`root`: a grant's scripts are hashed there), the
+/// index, and Adage's data directory.
+#[derive(Clone, Copy)]
+pub struct Site<'a> {
+    pub repo_key: &'a str,
+    pub root: &'a Path,
+    pub index: &'a Index,
+    pub paths: &'a Paths,
+}
+
 /// A step after `decide()` that may change what directives are delivered as (Track C §3.2).
 pub trait Extension: Sync {
     fn deliver(&self, turn: &Turn<'_>, directives: &[Directive]) -> Delivery;
     /// Optional responsibility contract. No action runs here; the caller gates treatment.
-    fn session_context(&self, _repo_key: &str, _root: &Path, _index: &Index, _paths: &Paths) -> Option<String> {
+    fn session_context(&self, _site: &Site<'_>) -> Option<String> {
         None
     }
     /// The session start's texts: the contract ([`Extension::session_context`]) and one line for
     /// the person (a grant that no longer matches what would run). An extension that can find
     /// both in one pass overrides this.
-    fn session_texts(&self, repo_key: &str, root: &Path, index: &Index, paths: &Paths) -> SessionTexts {
-        SessionTexts { context: self.session_context(repo_key, root, index, paths), notice: None }
+    fn session_texts(&self, site: &Site<'_>) -> SessionTexts {
+        SessionTexts { context: self.session_context(site), notice: None }
     }
     /// The exec-only reflexes (`(track, route id)`, vendored scripts) this extension would carry
     /// out in this repository, so `decide()` may direct them. Asked only when the index holds one.
-    fn exec_only(&self, _repo_key: &str, _index: &Index, _paths: &Paths) -> Vec<(String, String)> {
+    fn exec_only(&self, _site: &Site<'_>) -> Vec<(String, String)> {
         Vec::new()
     }
     /// The reflexes (`(track, route id)`) a person granted `predict` on this machine in this
     /// repository: what a `TurnStep` may make in the agent's place. Asked only at a `TurnStep`,
-    /// with the checkout the step was asked in (`root`: a grant's scripts are hashed there).
-    fn predict_grants(&self, _repo_key: &str, _root: &Path, _index: &Index, _paths: &Paths) -> Vec<(String, String)> {
+    /// in the checkout the step was asked in.
+    fn predict_grants(&self, _site: &Site<'_>) -> Vec<(String, String)> {
         Vec::new()
     }
     /// A fact for a tool call about to run (`PreToolUse`): completed work it would repeat, checked
@@ -169,7 +180,7 @@ pub struct PreNote {
 
 /// The receipt card's data for a call answered by a receipt (the Claude Code mod's `answered`
 /// mark: the run that answered it, when, and the tests it ran that the call selects).
-#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ReceiptCard {
     /// The run's operation id, as the receipt block names it (its first 12 characters).
     pub operation: String,

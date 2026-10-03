@@ -2,14 +2,14 @@
 //! deadline within the Stop hook's timeout, its `stop_gate` record, and how its result joins the
 //! decision's output for the same Stop. Entry: [`gated`], from `handle`.
 
+use crate::ctx::HookCtx;
 use crate::extension::guarded;
 use crate::failopen::{self, Failure};
 use crate::harness::{self, Output};
-use crate::respond::{Here, Responded};
-use crate::{record, site, Extension, StopCall, StopGate};
+use crate::record::{Record, RecordKind};
+use crate::respond::Responded;
+use crate::{site, Extension, StopCall, StopGate};
 use adage_runtime::render;
-use adage_tracks::Index;
-use serde_json::json;
 use std::time::{Duration, Instant};
 
 /// Kept back from the Stop hook's registered timeout for what follows the gate (the spool
@@ -51,18 +51,14 @@ fn with_gate(g: StopGate, decided: Option<Output>) -> Output {
 /// Stop's obligation; its run is spooled as a `stop_gate` record, and its result joins the
 /// decision's output ([`with_gate`]). Decide first, always: the session's bookkeeping must not
 /// depend on what the gate finds (review F1).
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn gated(
-    adapter: &dyn harness::Adapter,
-    harness: &str,
-    event: &str,
+    ctx: &HookCtx<'_>,
     x: &dyn Extension,
     stop_hook_active: bool,
-    at: &Here<'_>,
-    index: &Index,
     responded: Result<Responded, Failure>,
 ) -> Result<Option<String>, Failure> {
-    let Here { session, root, paths, started, .. } = *at;
+    let HookCtx { adapter, harness, event, session, root, paths, started, .. } = *ctx;
+    let index = ctx.index();
     // One hook never stages two actions: when an approved action already ran for this
     // Stop's obligation, the gate waits for the next Stop (review F4).
     let acted = responded.as_ref().is_ok_and(|r| r.at_stop_action);
@@ -84,8 +80,10 @@ pub(crate) fn gated(
         })
     };
     if let Some(g) = &gate {
-        let rec = json!({ "ts": record::now_ms(), "event": event, "kind": "stop_gate", "blocked": matches!(g, StopGate::Block(_)), "duration_us": record::duration_us(started) });
-        record::append_or_log(paths, session, harness, event, &rec);
+        Record::new(RecordKind::StopGate, event)
+            .with("blocked", matches!(g, StopGate::Block(_)))
+            .timed(started)
+            .append_or_log(paths, session, harness, event);
     }
     match (gate, responded) {
         (None, r) => r.map(|r| r.out),

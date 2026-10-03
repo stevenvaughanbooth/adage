@@ -8,7 +8,7 @@
 //! carries no failure signal, so failure-triggered routes cannot fire on Codex today.
 
 use super::claude::response_text;
-use super::{calls, is_own_text, Adapter, Event, Harness, Output};
+use super::{calls, is_own_text, Adapter, Event, EventKind, Harness, Output};
 use adage_core::tools::from_codex;
 use serde_json::{json, Value};
 
@@ -25,7 +25,7 @@ impl Adapter for Codex {
     }
 
     fn event_identity(&self, event: &str, p: &Value) -> Option<String> {
-        if event != "PostToolUse" {
+        if self.harness().event_kind(event) != Some(EventKind::ToolUse) {
             return None;
         }
         super::tool_event_identity(self.name(), event, vec![p.get("tool_use_id")?.as_str()?])
@@ -48,24 +48,30 @@ impl Adapter for Codex {
                 Event::Batch { calls: cs }
             })
         };
-        Some(match event {
-            "SessionStart" => Event::SessionStart,
-            "UserPromptSubmit" => {
+        Some(match self.harness().event_kind(event)? {
+            EventKind::SessionStart => Event::SessionStart,
+            EventKind::Prompt => {
                 let text = p.get("prompt")?.as_str()?;
                 if is_own_text(text) {
                     return None;
                 }
                 Event::Prompt { text: text.to_string() }
             }
-            "PostToolUse" => tool_call(false)?,
+            EventKind::ToolUse => tool_call(false)?,
             // Named in Codex's hook vocabulary but not documented, and reported never to fire
             // (openai/codex#34289). Accepted so that it works if it ever does.
-            "PostToolUseFailure" => tool_call(true)?,
-            "Stop" => {
+            EventKind::Failure => tool_call(true)?,
+            EventKind::Stop => {
                 Event::Stop { stop_hook_active: p.get("stop_hook_active").and_then(|x| x.as_bool()).unwrap_or(false) }
             }
-            "SessionEnd" => Event::SessionEnd,
-            _ => return None,
+            EventKind::SessionEnd => Event::SessionEnd,
+            // Not in Codex's table: it has no batches and no mod.
+            EventKind::ToolBatch
+            | EventKind::TurnStep
+            | EventKind::PreToolUse
+            | EventKind::Press
+            | EventKind::Standing
+            | EventKind::SkillPrompt => return None,
         })
     }
 

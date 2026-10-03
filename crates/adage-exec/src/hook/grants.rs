@@ -208,12 +208,17 @@ mod tests {
     use adage_runtime::Arm;
     use serde_json::{json, Value};
 
+    /// Where the extension is asked: the fixture's checkout, index and home, under `repo_key`.
+    fn site<'a>(f: &'a Fixture, repo_key: &'a str) -> adage_hook::Site<'a> {
+        adage_hook::Site { repo_key, root: &f.root, index: &f.index, paths: &f.paths }
+    }
+
     #[test]
     fn session_contract_requires_scoped_e2_verification_and_policy() {
         let f = Fixture::new();
-        assert!(PREFETCH.session_context("fixture", &f.root, &f.index, &f.paths).is_none());
+        assert!(PREFETCH.session_context(&site(&f, "fixture")).is_none());
         f.approve();
-        let text = PREFETCH.session_context("fixture", &f.root, &f.index, &f.paths).unwrap();
+        let text = PREFETCH.session_context(&site(&f, "fixture")).unwrap();
         assert!(text.contains("<adage-reflex") && text.contains("session-contract"));
         assert!(
             text.contains("Adage runs `sh tools/check.sh` (approved by a person, sandboxed) after edits to src/*.rs"),
@@ -221,16 +226,16 @@ mod tests {
         );
         assert!(text.contains("again when you finish") && text.contains("a failure comes back to you"), "{text}");
         assert!(!text.contains("Use a current receipt") && text.len() < 500, "factual and short: {text}");
-        assert!(PREFETCH.session_context("other-repository", &f.root, &f.index, &f.paths).is_none());
+        assert!(PREFETCH.session_context(&site(&f, "other-repository")).is_none());
         std::fs::write(f.paths.root.join("policy.toml"), "[exec]\nmax_level = \"E1\"\n").unwrap();
-        assert!(PREFETCH.session_context("fixture", &f.root, &f.index, &f.paths).is_none());
+        assert!(PREFETCH.session_context(&site(&f, "fixture")).is_none());
     }
 
     #[test]
     fn session_contract_ignores_lapsed_and_revoked_verification() {
         let f = Fixture::new();
         f.approve();
-        assert!(PREFETCH.session_context("fixture", &f.root, &f.index, &f.paths).is_some());
+        assert!(PREFETCH.session_context(&site(&f, "fixture")).is_some());
         let store_path = approvals::path(&f.paths.root);
         let script = f.root.join("tools/check.sh");
         let original = std::fs::read(&script).unwrap();
@@ -240,18 +245,18 @@ mod tests {
         let key = approvals::ApprovalKey::for_request(&req, "fixture");
         assert!(store.find(&key).is_none());
         assert_eq!(store.lapsed(&key, &store.approvals[0].route)[0].1[0].field, "route_exec_digest");
-        assert!(PREFETCH.session_context("fixture", &f.root, &f.index, &f.paths).is_none(), "lapsed grant");
+        assert!(PREFETCH.session_context(&site(&f, "fixture")).is_none(), "lapsed grant");
         std::fs::write(&script, original).unwrap();
-        assert!(PREFETCH.session_context("fixture", &f.root, &f.index, &f.paths).is_some(), "matches again");
+        assert!(PREFETCH.session_context(&site(&f, "fixture")).is_some(), "matches again");
         let mut store = Store::load(&store_path).unwrap();
         assert_eq!(store.revoke("fixture", Some(CHECK), None), 1);
         store.save(&store_path).unwrap();
-        assert!(PREFETCH.session_context("fixture", &f.root, &f.index, &f.paths).is_none(), "revoked grant");
+        assert!(PREFETCH.session_context(&site(&f, "fixture")).is_none(), "revoked grant");
         f.approve();
         let mut store = Store::load(&store_path).unwrap();
         assert!(store.revoke_automatically("fixture", CHECK, Level::E2, approvals::GrantMode::Execute, "refused"));
         store.save(&store_path).unwrap();
-        assert!(PREFETCH.session_context("fixture", &f.root, &f.index, &f.paths).is_none(), "auto-revoked grant");
+        assert!(PREFETCH.session_context(&site(&f, "fixture")).is_none(), "auto-revoked grant");
     }
 
     /// dev-v8b, end to end: bytecode an ordinary Python run writes into the runtime's
@@ -267,7 +272,7 @@ mod tests {
             Store::load(&approvals::path(&f.paths.root)).unwrap().approvals[0].terms.is_some(),
             "approved with its terms"
         );
-        let texts = || PREFETCH.session_texts("fixture", &f.root, &f.index, &f.paths);
+        let texts = || PREFETCH.session_texts(&site(&f, "fixture"));
         let before = texts();
         assert!(before.context.is_some() && before.notice.is_none(), "{before:?}");
         for cache in [
@@ -303,15 +308,15 @@ mod tests {
         grant_predict(&f, 1);
         let want = vec![("fixture/finish".to_string(), "regenerate-registry".to_string())];
         assert_eq!(predict_grants("fixture", &f.root, &f.index, &f.paths), want);
-        assert_eq!(PREFETCH.predict_grants("fixture", &f.root, &f.index, &f.paths), want, "through the extension");
-        assert!(PREFETCH.predict_grants("other", &f.root, &f.index, &f.paths).is_empty(), "another repository's key");
+        assert_eq!(PREFETCH.predict_grants(&site(&f, "fixture")), want, "through the extension");
+        assert!(PREFETCH.predict_grants(&site(&f, "other")).is_empty(), "another repository's key");
         // The machine switch.
         std::fs::create_dir_all(f.paths.root.join("exec")).unwrap();
         std::fs::write(predict_off(&f.paths), "x").unwrap();
-        assert!(PREFETCH.predict_grants("fixture", &f.root, &f.index, &f.paths).is_empty());
+        assert!(PREFETCH.predict_grants(&site(&f, "fixture")).is_empty());
         assert!(predict_grants("fixture", &f.root, &f.index, &f.paths).is_empty());
         std::fs::remove_file(predict_off(&f.paths)).unwrap();
-        assert_eq!(PREFETCH.predict_grants("fixture", &f.root, &f.index, &f.paths), want);
+        assert_eq!(PREFETCH.predict_grants(&site(&f, "fixture")), want);
         // Policy.
         let policy = f.paths.root.join("policy.toml");
         std::fs::write(&policy, "[exec]\nmax_level = \"E1\"\n").unwrap();
@@ -323,7 +328,12 @@ mod tests {
         let mut changed = f.index.clone();
         changed.routes[1].route.step = Step::Run { command: "make generate".into() };
         assert!(predict_grants("fixture", &f.root, &changed, &f.paths).is_empty(), "lapsed");
-        let texts = PREFETCH.session_texts("fixture", &f.root, &changed, &f.paths);
+        let texts = PREFETCH.session_texts(&adage_hook::Site {
+            repo_key: "fixture",
+            root: &f.root,
+            index: &changed,
+            paths: &f.paths,
+        });
         let notice = texts.notice.expect("a lapsed predict grant is told to the person");
         assert!(notice.contains("the predict approval for fixture/finish/regenerate-registry"), "{notice}");
         assert!(notice.contains("`adage review delegate fixture/finish regenerate-registry --predict`"), "{notice}");
@@ -379,8 +389,8 @@ mod tests {
         let d = PREFETCH.deliver(&f.turn(&event), &dirs);
         assert!(d.spool.is_none() && d.met.is_empty(), "nothing attempted");
         assert!(d.texts.unwrap().iter().all(String::is_empty), "as with no grant at all");
-        assert!(PREFETCH.exec_only("fixture", &f.index, &f.paths).is_empty());
-        assert!(PREFETCH.session_context("fixture", &f.root, &f.index, &f.paths).is_none());
+        assert!(PREFETCH.exec_only(&site(&f, "fixture")).is_empty());
+        assert!(PREFETCH.session_context(&site(&f, "fixture")).is_none());
         treated(&f, Arm::Treated);
         record_receipt(&f, "fixture-session", "stale");
         assert!(stop(&f, false).is_none());
@@ -406,7 +416,7 @@ mod tests {
         let store = Store::load(&approvals::path(&f.paths.root)).unwrap();
         assert_eq!(store.approvals.len(), 2);
         assert_eq!(store.approvals[0].key.mode, approvals::GrantMode::Predict);
-        let texts = PREFETCH.session_texts("fixture", &f.root, &f.index, &f.paths);
+        let texts = PREFETCH.session_texts(&site(&f, "fixture"));
         assert!(texts.notice.is_none(), "neither grant lapsed: {:?}", texts.notice);
         if staging() {
             treated(&f, Arm::Treated);
@@ -419,7 +429,7 @@ mod tests {
         // The receipt and the session contract, on the learned check with both grants.
         let g = pytest_fixture();
         seed(&g, CHECK, predict_key_by_hand(&g), None);
-        assert!(PREFETCH.session_context("fixture", &g.root, &g.index, &g.paths).is_some(), "the contract");
+        assert!(PREFETCH.session_context(&site(&g, "fixture")).is_some(), "the contract");
         let digest = current_digest(&g);
         record_receipt(&g, "fixture-session", &digest);
         let covered = g.receipt(".venv/bin/python -m pytest tests/test_x.py -q");

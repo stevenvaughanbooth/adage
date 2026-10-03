@@ -18,9 +18,11 @@
 //! to its record (edited since it was compiled and accepted) is neither annotated nor invoked,
 //! and its inertness is read from the file, never taken from the record alone.
 
+use crate::answer::{answer, ModAnswer};
 use crate::failopen::Failure;
-use crate::harness::{Adapter, Harness};
-use crate::{record, site};
+use crate::harness::{Adapter, EventKind, Harness};
+use crate::record::{Record, RecordKind};
+use crate::site;
 use adage_core::repo;
 use adage_pack::verified::{self, Outcome, Verified};
 use adage_runtime::{render, Arm, SessionState};
@@ -36,10 +38,11 @@ pub const MAX_ADDED: usize = 2_400;
 /// The heading's fixed words, before the date.
 pub const HEADING: &str = "Adage verified these steps in this repository on";
 
-/// Whether a harness hands Adage a skill's text as the model is about to read it: only Claude
-/// Code, through the mod's `skill.prompt`. Every other harness's skills are read as written.
+/// Whether a harness hands Adage a skill's text as the model is about to read it: one that sends
+/// `SkillPrompt` at all (its event table, [`Harness::events`]; Claude Code, through the mod's
+/// `skill.prompt`). Every other harness's skills are read as written.
 pub fn rewrites_skill_text(h: Harness) -> bool {
-    matches!(h, Harness::ClaudeCode)
+    h.event_kind(EVENT) == Some(EventKind::SkillPrompt)
 }
 
 /// Where `adage train` stages compiled skills (`$ADAGE_HOME/train/skills`).
@@ -86,7 +89,12 @@ pub fn annotation(v: &Verified) -> Option<(String, usize, usize)> {
 /// a person accepted here and which runs nothing when it expands (`inert`). The predict grant on
 /// the route is still required (`Policy::predict_grants`).
 pub fn invocable(paths: &Paths, root: &Path) -> Vec<String> {
-    if !adage_store::config::load(paths).config.skills_invoke {
+    invocable_with(&adage_store::config::load(paths).config, paths, root)
+}
+
+/// [`invocable`], with the configuration the event read already.
+pub(crate) fn invocable_with(cfg: &adage_store::config::Config, paths: &Paths, root: &Path) -> Vec<String> {
+    if !cfg.skills_invoke {
         return Vec::new();
     }
     let key = repo::repo_key(root);
@@ -132,20 +140,22 @@ pub fn prompt(
     let observe = p.get("observe").and_then(Value::as_bool).unwrap_or(false);
     let act = arm != Some(Arm::Control) && !observe;
     let what = json!({ "skill": record.skill.name, "verified": works, "stale": stale, "bytes": added.len() + 2 });
-    let mut rec = json!({ "ts": record::now_ms(), "event": EVENT, "kind": "skill_prompt", "arm": arm, "propensity": propensity,
-                          "repo": key, "would_annotate": what });
+    let mut rec = Record::new(RecordKind::SkillPrompt, EVENT)
+        .with("arm", arm)
+        .with("propensity", propensity)
+        .with("repo", &key)
+        .with("would_annotate", &what);
     if act {
-        rec["annotated"] = what;
+        rec.set("annotated", what);
     }
     if observe {
-        rec["observe"] = json!(true);
+        rec.set("observe", true);
     }
-    rec["duration_us"] = json!(record::duration_us(started));
-    record::append_or_log(paths, session, adapter.name(), EVENT, &rec);
+    rec.timed(started).append_or_log(paths, session, adapter.name(), EVENT);
     if !act {
         return Ok(None);
     }
-    Ok(Some(json!({ "text": format!("{text}\n\n{added}") }).to_string()))
+    Ok(Some(answer(&ModAnswer::Text { text: format!("{text}\n\n{added}") })))
 }
 
 #[cfg(test)]

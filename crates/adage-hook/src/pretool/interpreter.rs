@@ -99,7 +99,7 @@ pub(super) fn interpreter_plan(
         return None;
     }
     // Off with `runtime.rewrite = false` (`adage delegate rewrites off`), or the older marker.
-    let cfg = adage_store::config::load(call.paths).config;
+    let cfg = call.config();
     if !cfg.runtime_rewrite || rewrite_off(call.paths).exists() {
         return None;
     }
@@ -126,8 +126,7 @@ pub(super) fn interpreter_plan(
         env.modules.clear();
     }
     // U11 in service here (not extinguished, rejected or turned off).
-    let index = Index::try_load(&call.paths.index()).unwrap_or_default();
-    if !u11_in_service(&index, key) {
+    if !u11_in_service(call.index(), key) {
         return None;
     }
     let abs = root.join(&env.interpreter);

@@ -4,20 +4,19 @@
 //! under the session's state lock (a repository with only candidates still notices them), the
 //! extension's delivery, the record, and the rendering's text. Entry: [`respond`], from `handle`.
 
+use crate::ctx::HookCtx;
 use crate::extension::guarded;
 use crate::failopen::{self, Failure};
-use crate::harness::{self, Output};
+use crate::harness::Output;
+use crate::record::{Record, RecordKind};
 use crate::session_start::record_seen;
-use crate::{record, site, skill, stimuli, Delivery, Options, Turn};
-use adage_core::{repo, CommandTable};
+use crate::{site, skill, stimuli, Delivery, Site, Turn};
+use adage_core::CommandTable;
 use adage_intent::model;
 use adage_intent::normalize::normalize;
 use adage_runtime::{decide, fast, rebuild, render, Arm, Ctx, Event, SessionState};
 use adage_store::{spool, state, Paths};
-use adage_tracks::Index;
-use serde_json::{json, Value};
-use std::path::Path;
-use std::time::Instant;
+use serde_json::Value;
 
 /// Whether this session has not yet had a lapsed-grant notice; marks it as having had one.
 pub(crate) fn first_lapse_notice(paths: &Paths, session: &str) -> bool {
@@ -61,15 +60,6 @@ fn fitted_context(all: String, e0: impl FnOnce() -> String, applied: bool, max: 
     }
 }
 
-/// Where an event happens: its session, directories, data directory, and when the hook began.
-pub(crate) struct Here<'a> {
-    pub(crate) session: &'a str,
-    pub(crate) cwd: &'a Path,
-    pub(crate) root: &'a Path,
-    pub(crate) paths: &'a Paths,
-    pub(crate) started: Instant,
-}
-
 /// Whether the mod's step payload says the person set a routine model (`routine_model`: a
 /// non-empty model name, or `true`): only then may a step be routed ([`adage_runtime::Policy::routine`]).
 fn routine_asked(p: &Value) -> bool {
@@ -80,34 +70,22 @@ fn routine_asked(p: &Value) -> bool {
     }
 }
 
-/// Decide: everything after the kill switches, up to rendering.
-pub(crate) fn respond(
-    adapter: &dyn harness::Adapter,
-    event: &str,
-    p: &Value,
-    at: &Here<'_>,
-    opts: Options,
-    index: &Index,
-) -> Result<Responded, Failure> {
-    let Here { session, cwd, root, paths, started } = *at;
+/// Decide: everything after the kill switches, up to rendering. `ev` is the event as the adapter
+/// translated it.
+pub(crate) fn respond(ctx: &HookCtx<'_>, ev: Event) -> Result<Responded, Failure> {
+    let HookCtx { adapter, event, p, session, cwd, root, paths, started, opts, .. } = *ctx;
+    let index = ctx.index();
     // A repository with candidates and no reflexes yet still notices (plan D2): it is not the
     // no-routes path.
     let Some(repo_key) = site::routed_key(index, root, paths, true) else {
         // Nothing installed or counted for this repository: the common, cheapest path. In a
         // repository the session is still seen (outside one there is nothing to learn).
-        if root.join(".git").exists() {
-            // A step boundary is not a session event the person sees: it is never recorded here.
-            let ev =
-                adapter.translate(event, p, &cwd.to_string_lossy()).filter(|e| !matches!(e, Event::TurnStep { .. }));
-            if let Some(ev) = ev {
-                let key = repo::repo_key_cached(root, &paths.repo_keys());
-                record_seen(paths, session, adapter, event, &ev, &key, started);
-            }
+        // A step boundary is not a session event the person sees: it is never recorded here.
+        if root.join(".git").exists() && !matches!(ev, Event::TurnStep { .. }) {
+            record_seen(ctx, &ev, ctx.repo_key());
         }
         return Ok(Responded::default());
     };
-    // An event this adapter does not act on.
-    let Some(ev) = adapter.translate(event, p, &cwd.to_string_lossy()) else { return Ok(Responded::default()) };
     // An event that cannot change any decision stops here, before the command table, the state
     // lock and the spool (Design §13.2; `adage_runtime::fast`).
     let state_path = paths.state(session);
@@ -124,8 +102,9 @@ pub(crate) fn respond(
         return Ok(Responded::default());
     }
     let routine = step && routine_asked(p);
+    let site = Site { repo_key: &repo_key, root, index, paths };
     let predict_grants: Vec<(String, String)> = match opts.extension {
-        Some(x) if step => guarded(|| x.predict_grants(&repo_key, root, index, paths)),
+        Some(x) if step => guarded(|| x.predict_grants(&site)),
         _ => Vec::new(),
     };
     if step && predict_grants.is_empty() && !routine {
@@ -142,12 +121,12 @@ pub(crate) fn respond(
         Some((m.id, v))
     };
     // ADAGE_CONTROL, else `runtime.control` in config.toml, else 0.1; `runtime.predict_cap`, else 6.
-    let cfg = adage_store::config::load(paths).config;
-    let arms = site::ArmInputs::with_share(cfg.runtime_control);
+    let cfg = ctx.config();
+    let arms = ctx.arms();
     let spool_path = paths.spool(session);
     // Exec-only reflexes come into play only under an extension that carries them out.
     let exec_only: Vec<(String, String)> = match opts.extension {
-        Some(x) if index.for_repo(&repo_key).any(|r| r.exec_only()) => guarded(|| x.exec_only(&repo_key, index, paths)),
+        Some(x) if index.for_repo(&repo_key).any(|r| r.exec_only()) => guarded(|| x.exec_only(&site)),
         _ => Vec::new(),
     };
     // The learned follow judge's weights for this repository (fitted at learn time), if any.
@@ -162,7 +141,7 @@ pub(crate) fn respond(
         follow_weights: weights,
         exec_only,
         exact_keys: false,
-        invoke_skills: if predict_grants.is_empty() { Vec::new() } else { skill::invocable(paths, root) },
+        invoke_skills: if predict_grants.is_empty() { Vec::new() } else { skill::invocable_with(cfg, paths, root) },
         predict_grants,
         predict_cap: cfg.runtime_predict_cap,
         observe: site::observed(p),
@@ -263,30 +242,24 @@ pub(crate) fn respond(
         _ => {}
     }
 
-    let ts = record::now_ms();
     // `propensity`: the probability of `arm` at assignment (control share, or one minus it; 1 when
     // `ADAGE_ARM` forced it), for inverse-propensity weighting (Design §11, §14.1).
-    let mut rec = json!({ "ts": ts, "event": event, "kind": ev.name(), "arm": arm, "propensity": propensity, "repo": repo_key, "generation": index.generation, "decision": decision });
-    record::name_harness(&mut rec, adapter);
-    // The harness's ids for the calls judged here (in order), where its payload carries them: a
-    // judgement is then drawn under its call, not merely near it.
-    let ids: Vec<&str> = match &ev {
-        Event::Batch { calls } => calls.iter().filter_map(|c| c.tool_use_id.as_deref()).collect(),
-        Event::Failure { call } => call.tool_use_id.as_deref().into_iter().collect(),
-        _ => Vec::new(),
-    };
-    if !ids.is_empty() {
-        rec["tool_use_ids"] = json!(ids);
-    }
+    let mut rec = Record::new(RecordKind::of(&ev), event)
+        .with("arm", arm)
+        .with("propensity", propensity)
+        .with("repo", &repo_key)
+        .with("generation", &index.generation)
+        .with("decision", &decision)
+        .harness(adapter)
+        .calls(&ev);
     if let Some(x) = delivery.spool.take() {
-        rec["exec"] = x;
+        rec.set("exec", x);
     }
     if delivery.recovery.is_some() {
-        rec["recovery_required"] = json!(true);
+        rec.set("recovery_required", true);
     }
-    rec["duration_us"] = json!(record::duration_us(started));
     // Measurement may be lost, but the decision stands: a failure is recorded and the event goes on.
-    record::append_or_log(paths, session, adapter.name(), event, &rec);
+    rec.timed(started).append_or_log(paths, session, adapter.name(), event);
 
     let at_stop_action = delivery.at_stop_action;
     let done = |out: Option<Output>| Ok(Responded { out, at_stop_action });
@@ -314,11 +287,10 @@ pub(crate) fn respond(
     }
     // A grant that stopped matching: one line for the person, once per session, beside whatever
     // the agent receives (never at a Stop, which has no such channel).
-    let lapse = delivery.notice.take().filter(|_| {
-        !matches!(ev, Event::Stop { .. })
-            && adage_store::config::load(paths).config.ui_notices
-            && first_lapse_notice(paths, session)
-    });
+    let lapse = delivery
+        .notice
+        .take()
+        .filter(|_| !matches!(ev, Event::Stop { .. }) && cfg.ui_notices && first_lapse_notice(paths, session));
     let with_lapse = |text: String| match &lapse {
         Some(n) if !text.is_empty() => Output::SessionContext { context: text, notice: Some(n.clone()) },
         Some(n) => Output::Notice(n.clone()),
@@ -352,8 +324,11 @@ pub(crate) fn respond(
 mod tests {
     use super::*;
     use crate::testkit::*;
-    use crate::{handle, Extension, SessionTexts};
+    use crate::{handle, harness, Extension, Options, SessionTexts};
     use adage_runtime::Directive;
+    use adage_tracks::Index;
+    use serde_json::json;
+    use std::time::Instant;
 
     #[test]
     fn execution_fallback_never_reintroduces_an_action_after_an_uncertain_result() {
@@ -380,7 +355,7 @@ mod tests {
             fn deliver(&self, _: &Turn<'_>, _: &[Directive]) -> Delivery {
                 Delivery { notice: Some(LINE.into()), ..Delivery::default() }
             }
-            fn session_texts(&self, _: &str, _: &Path, _: &Index, _: &Paths) -> SessionTexts {
+            fn session_texts(&self, _: &Site<'_>) -> SessionTexts {
                 SessionTexts { context: Some("contract".into()), notice: Some(LINE.into()) }
             }
         }
@@ -426,9 +401,9 @@ mod tests {
         fn deliver(&self, _: &Turn<'_>, _: &[Directive]) -> Delivery {
             Delivery::default()
         }
-        fn predict_grants(&self, repo_key: &str, root: &Path, _: &Index, _: &Paths) -> Vec<(String, String)> {
-            assert_eq!(repo_key, "acme");
-            assert!(root.ends_with("acme"), "the checkout the step was asked in: {}", root.display());
+        fn predict_grants(&self, site: &Site<'_>) -> Vec<(String, String)> {
+            assert_eq!(site.repo_key, "acme");
+            assert!(site.root.ends_with("acme"), "the checkout the step was asked in: {}", site.root.display());
             self.0.clone()
         }
     }

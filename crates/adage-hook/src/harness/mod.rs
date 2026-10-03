@@ -1,7 +1,9 @@
-//! Harness adapters (Architecture §4.11). The decision core in `hook.rs` knows only the normalised
+//! Harness adapters (Architecture §4.11). The decision core (`respond`) knows only the normalised
 //! [`Event`] (prompt submitted, tool batch completed, tool failed, stop requested, session start and
-//! end) and the normalised [`Output`]. Each harness contributes two pure functions — translate a
-//! native payload into an event, and render an output as the native response — plus its limits.
+//! end, a step boundary) and the normalised [`Output`]. Each harness contributes two pure functions
+//! — translate a native payload into an event, and render an output as the native response — plus
+//! its limits. What each native event name is comes from one table, adage-trace's
+//! [`Harness::events`]; [`Adapter::classify`] turns it into the path `handle` takes ([`HookEvent`]).
 //!
 //! What each harness documents, and what is inferred, is recorded in `docs/harnesses.md`.
 
@@ -10,7 +12,7 @@ pub mod codex;
 pub mod opencode;
 
 use adage_runtime::{By, Call, Prediction};
-pub use adage_trace::{Capabilities, Harness};
+pub use adage_trace::{Capabilities, EventKind, Harness};
 
 /// The hook timeout, in seconds, of the events an E2 action runs at (the edit and Stop events)
 /// when the registration runs `adage-exec`: an action's wall limit (20 s) stays well under it.
@@ -59,6 +61,28 @@ pub enum Output {
     Routine,
 }
 
+/// What `handle` does with one invocation: one path each, matched exhaustively there. The native
+/// name's [`EventKind`] comes from the event table ([`Harness::events`]); an event the runtime
+/// decides is translated by the adapter ([`Adapter::translate`]) and carried as that [`Event`].
+#[derive(Debug, Clone)]
+pub enum HookEvent {
+    /// The mod asks for a press token: answered by the press before anything else
+    /// (`press::gate`), so it never reaches the dispatch.
+    Press,
+    /// The mod asks about a skill's text (`skill::prompt`).
+    SkillPrompt,
+    /// A shell call is about to run: the command hook, or the mod's dry run or verdict.
+    PreToolUse,
+    /// The mod asks for the standing text.
+    Standing,
+    /// A session starts.
+    SessionStart,
+    /// An event the runtime decides (`decide`), as the adapter translated it.
+    Decide(Event),
+    /// A name this harness does not send, or a payload its translation refuses: nothing to do.
+    Ignored,
+}
+
 /// Who is calling: the session and working directory every native payload must carry.
 pub struct Envelope {
     pub session: String,
@@ -71,6 +95,11 @@ pub trait Adapter: Sync {
     /// The name in hook registrations and spools ([`Harness::hook_name`]).
     fn name(&self) -> &'static str {
         self.harness().hook_name()
+    }
+    /// The `harness` a spool record names, or `None` for a record that names none (read as Claude
+    /// Code's, as every record was before there were other harnesses).
+    fn recorded_name(&self) -> Option<&'static str> {
+        Some(self.name())
     }
     /// Session and cwd from the native payload. `None` → do nothing.
     fn envelope(&self, p: &Value) -> Option<Envelope> {
@@ -87,6 +116,31 @@ pub trait Adapter: Sync {
     }
     /// Native event name and payload → normalised event. `None` → do nothing.
     fn translate(&self, event: &str, p: &Value, cwd: &str) -> Option<Event>;
+    /// What `handle` does with this native event and payload ([`HookEvent`]): the event table
+    /// names it, and an event the runtime decides is translated.
+    fn classify(&self, event: &str, p: &Value, cwd: &str) -> HookEvent {
+        match self.harness().event_kind(event) {
+            None => HookEvent::Ignored,
+            Some(EventKind::Press) => HookEvent::Press,
+            Some(EventKind::SkillPrompt) => HookEvent::SkillPrompt,
+            Some(EventKind::PreToolUse) => HookEvent::PreToolUse,
+            Some(EventKind::Standing) => HookEvent::Standing,
+            Some(
+                EventKind::SessionStart
+                | EventKind::Prompt
+                | EventKind::ToolBatch
+                | EventKind::ToolUse
+                | EventKind::Failure
+                | EventKind::Stop
+                | EventKind::SessionEnd
+                | EventKind::TurnStep,
+            ) => match self.translate(event, p, cwd) {
+                Some(Event::SessionStart) => HookEvent::SessionStart,
+                Some(ev) => HookEvent::Decide(ev),
+                None => HookEvent::Ignored,
+            },
+        }
+    }
     /// Stable native occurrence identity, when the harness supplies one. Never derive this
     /// from tool input/output contents: a later legitimate call can have identical contents.
     fn event_identity(&self, _event: &str, _p: &Value) -> Option<String> {
@@ -101,7 +155,7 @@ pub trait Adapter: Sync {
     /// Does this native event end an agent turn or a session? Live learning is triggered there
     /// (`crate::autolearn`), whatever the decision.
     fn is_learn_point(&self, event: &str) -> bool {
-        matches!(event, "Stop" | "SessionEnd")
+        matches!(self.harness().event_kind(event), Some(EventKind::Stop | EventKind::SessionEnd))
     }
 }
 
@@ -156,6 +210,9 @@ pub fn calls(pairs: Vec<(String, Value)>, cwd: &str, output: &str, failed: bool)
         })
         .collect()
 }
+
+#[cfg(test)]
+mod dispatch_tests;
 
 #[cfg(test)]
 mod own_text_tests {

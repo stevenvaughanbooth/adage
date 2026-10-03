@@ -14,8 +14,10 @@ Each module names the entry point `handle` (or another module) calls.
 
 | Module | What it owns | Entry point |
 | --- | --- | --- |
-| `lib.rs` | Reading stdin, the kill switches, panics and fail-open (`main`, `run`), and the dispatch of one event to its module (`handle`); the re-exports | `main`, `run`, `handle` |
-| `extension.rs` | The extension contract adage-exec implements: `Extension`, `Turn`, `Stimulus` and `stimuli`, `Delivery`, `PreCall`, `PreNote`, `ReceiptCard`, `SessionTexts`, `StopCall`, `StopGate`; all re-exported at the root | `Extension`, `guarded` |
+| `lib.rs` | Reading stdin, the kill switches, panics and fail-open (`main`, `run`), and the dispatch of one event to its module (`handle`: one exhaustive `match` over `harness::HookEvent`); the re-exports | `main`, `run`, `handle` |
+| `ctx.rs` | `HookCtx`: one event (adapter, harness and event names, payload, session, `cwd`, `root`, `paths`, `started`, `Options`) and its shared reads, each made once on first use: the configuration, the index (and whether it was damaged), the repository key, the arm inputs | `HookCtx` |
+| `answer.rs` (public) | Every answer the binary sends the mod: `ModAnswer` and the one function that prints it, `answer` | `answer::answer` |
+| `extension.rs` | The extension contract adage-exec implements: `Extension`, `Site` (where it is asked: repository key, checkout, index, data directory), `Turn`, `Stimulus` and `stimuli`, `Delivery`, `PreCall`, `PreNote`, `ReceiptCard`, `SessionTexts`, `StopCall`, `StopGate`; all re-exported at the root | `Extension`, `guarded` |
 | `pretool/mod.rs` | `PreToolUse` from a command hook: the word scan, one decision per call, the receipt note, the arm claim, the `pretool` record | `pretool::pretool` |
 | `pretool/interpreter.rs` | The U11 interpreter plan: the bound environment, a worktree's own environment, the person's Bash allow rules, the `exec/rewrite-off` marker | `interpreter_plan`; `rewrite_off` (public) |
 | `pretool/phases.rs` | The mod's two phases of a Bash call: the dry run's plan, the verdict (rewrite, advice, substitution, a call answered by a receipt) | `pretool_mod` |
@@ -25,11 +27,11 @@ Each module names the entry point `handle` (or another module) calls.
 | `session_start.rs` | A session start (its record, the bootstrap or rebind learner, the session texts, the person's line) and the `seen` record of a session in a repository with no reflexes | `session_start`, `record_seen` |
 | `respond.rs` | Decide and deliver every other event: the no-routes path, the fast path, `decide()` under the state lock, a candidates-only repository's noticing, `TurnStep` prediction and routing, the extension's delivery, the record | `respond` |
 | `stop.rs` | The finish-line gate at a `Stop`: its deadline, its `stop_gate` record, joining its result to the decision's | `gated` |
-| `record.rs` | The spool writer's shared steps: `ts`, `duration_us`, the harness's name, and the append (failure returned or logged) | `append`, `append_or_log` |
+| `record.rs` | The spool record seam: `RecordKind` (every kind a hook writes) and the `Record` builder, which stamps `ts`, `event`, `kind`, `harness`, `tool_use_id(s)` and `duration_us` and appends (failure returned or logged); `record/snapshot_tests.rs` pins every kind's bytes | `Record`, `RecordKind` |
 | `site.rs` | What every path asks before deciding: the repository key the index routes this checkout by, the session's arm, observe mode | `routed_key`, `ArmInputs`, `observed` |
-| `press.rs` | The press token (unchanged apart from the shared append) | `press::gate`, `press::before_kill_switch` |
+| `press.rs` | The press token; what it does at each invocation is decided from the event table (`act_of`) | `press::gate`, `press::before_kill_switch` |
 | `skill.rs` | `SkillPrompt`, and the skills a `TurnStep` may invoke | `skill::prompt`, `skill::invocable` |
-| `harness/` | The adapters: payload in, normalised event out, rendering back | `harness::adapter` |
+| `harness/` | The adapters: payload in, `HookEvent` out (`Adapter::classify`, from the event table and `translate`), rendering back; `dispatch_tests.rs` is the dispatch's characterization | `harness::adapter` |
 | `autolearn.rs`, `failopen.rs` | Live learning at a turn's end; the fail-open log | unchanged |
 | `testkit.rs` | Test-only: `ObligationWorld` and the other worlds, the stand-in extensions, `bash_call`, `spooled` | `#[cfg(test)]` |
 
@@ -38,22 +40,23 @@ The TurnStep, candidates and noticed logic is in `adage-runtime` (`decide`, `pre
 
 ## Helpers
 
-- `record::now_ms()`: every record's `ts` (`adage_core::time::now_ms`). The value and its JSON are
-  the same as the old `SystemTime` expression.
-- `record::duration_us(started)`: every record's `duration_us`.
-- `record::name_harness(&mut rec, adapter)`: `harness` on records from harnesses other than
-  Claude Code.
-- `record::append(paths, session, &rec)`: returns the `spool` failure, for a decision's record
-  (`pretool`, `session_start`).
-- `record::append_or_log(paths, session, harness, event, &rec)`: logs the failure to
-  `fail-open.log` and carries on. Every other writer uses it, the press and `SkillPrompt`
-  included. The harness name logged is what each site logged before (the adapter's name, the CLI
-  argument at the Stop gate, `claude` for the press).
+- `HookCtx` (`ctx.rs`): every path but `SkillPrompt` (whose entry, `skill::prompt`, is public)
+  takes the event's context. `ctx.config()`, `ctx.index()` / `ctx.index_damaged()`,
+  `ctx.repo_key()` (`repo::repo_key_cached`) and `ctx.arms()` (`site::ArmInputs` from the
+  configuration) each read once, on first use; nothing is read before `pretool`'s word scan or
+  `respond`'s fast path that was not read there before. `pretool::BashCall` derefs to it.
+- `record::Record::new(kind, event)` (or `Record::at(kind, event, ts)`), `.with(key, value)` for
+  the kind's own fields, `.harness(adapter)`, `.tool_use_id(p)` or `.calls(&ev)`, then
+  `.timed(started)` and `.append(paths, session)` (a decision's record: the failure is returned)
+  or `.append_or_log(paths, session, harness, event)` (logged to `fail-open.log`). The harness
+  name logged is what each site logged before (the adapter's name, the CLI argument at the Stop
+  gate, `claude` for the press).
+- `answer::answer(&ModAnswer::…)`: every answer to the mod.
 - `site::routed_key(index, root, paths, with_candidates)`: the key the index names this checkout
   by, or `None`. `respond` passes `with_candidates: true`.
-- `site::ArmInputs::load(paths)` (one config read) or `ArmInputs::with_share(share)` (config
-  already read), then `.ensure(st, session, key)` inside the state update: assigns an arm,
-  propensity and repository once.
+- `site::ArmInputs` (through `ctx.arms()`; `ArmInputs::load(paths)` where there is no context),
+  then `.ensure(st, session, key)` inside the state update: assigns an arm, propensity and
+  repository once.
 - `site::observed(p)`: the mod's observe mode.
 - `extension::guarded(|| x.method(..))`: an extension call other than a delivery. A panic loses
   only that answer (`Default`). A delivery uses `respond::extension_delivery`, which turns a panic
@@ -70,58 +73,100 @@ because the `PostToolBatch` reader in `adage_runtime::decide` holds only that id
 left as they are, because running sessions' state files hold them.
 `identity::tests::the_two_identity_lists_hold_a_call_by_different_keys` pins both.
 
-The field doc on `SessionState::answered` in adage-runtime says "by the same hash", which is wrong.
-The doc line "Whether the `PreToolUse` call with this identity hash was decided this session." sits
-on `see_answered` but belongs to `has_seen_pretool`. adage-runtime is owned by the agent splitting
-it, so both corrections are listed for them in this pass's report, not made here.
+The runtime's own docs of both fields said "by the same hash"; the runtime's split corrected them
+(structure-runtime.md, "Documentation drift fixed").
 
 ## How to add a hook event
 
-As things stand after the split:
+The native event names live in one place, the event table in adage-trace
+(`adage_trace::Harness::events`, with `EventKind`). Everything that asks what an event name means
+reads it: each adapter's `translate`, `Adapter::classify` (what `handle` matches on),
+`Adapter::is_learn_point`, the press (`press::act_of`, `CLOSERS`), `claude::MOD_EVENTS` and
+`is_mods`, and `adage_runtime::rebuild::kind_of`.
 
-1. **The adapter.** Teach `harness/<harness>.rs` the native name. For a decided event, that is
-   `translate` (and `adage_trace::Event` with `Event::name`, if the event is new to the runtime).
-   For a mod-only event, add it to `MOD_EVENTS` and `is_mods` in `harness/claude.rs`, and to
-   `capabilities` and `Capabilities` in adage-trace if it brings a new capability. A command hook
-   also needs `settings()` in the adapter. If the answer has a new shape, add an `Output` variant
-   and handle it in every adapter's `render`.
-2. **The dispatch.** In `lib.rs::handle`, either let the event fall through to `respond`, the
-   default for anything `translate` returns, or add one `if event == "<Name>"` branch that calls
-   your module's entry point. Put the branch after the press gate and the `.adage/disabled`
-   switch. Put it before the index load if the event needs no index, as `PreToolUse` and
-   `SkillPrompt` do.
+1. **The table.** Add the native name to the harness's row in `crates/adage-trace/src/harness.rs`
+   (`CLAUDE_CODE_EVENTS`, `CODEX_EVENTS`, `OPENCODE_EVENTS`). A new kind is a new `EventKind`
+   variant: say whether the runtime decides it (`EventKind::decided`, its record's `kind`) and
+   whether only a mod sends it (`mod_only`). The compiler then lists every `match` that must
+   decide it: `Adapter::classify` (which `HookEvent` it is), each adapter's `translate`, the
+   press's `closes`, Claude Code's `event_identity`.
+2. **The dispatch.** A decided event needs nothing more here: `classify` translates it and
+   `handle` gives it to `respond`. An ask the hook answers itself is a new `HookEvent` variant,
+   and `handle`'s `match` (exhaustive) names the module that answers it, taking `&HookCtx`.
 3. **The module.** Put the handling in `src/<event>.rs`, with a `//!` header naming its entry
-   point. Use `site::routed_key` for the repository key, `site::ArmInputs` if the event assigns
-   an arm, `record::*` for its spool record (`ts`, `duration_us`, `name_harness`), and
-   `extension::guarded` for any extension call. Fail open: return `Err(Failure)` or `Ok(None)`,
-   and never print.
-4. **The runtime.** For a decided event, add it to `fast::skip` (exhaustive on `Event`), the
-   `decide` match, and `rebuild::kind_of` if its records are replayed.
-5. **The press.** If the agent's act closes the press window, add the event to `press::CLOSERS`
-   and to `press::before_kill_switch` if needed.
-6. **Readers.** Add the feed's `event_label` (adage-cli `ui/feed.rs`) and any adage-app reader of
-   the new record kind.
-7. **Tests.** Put unit tests in the module's `mod tests`, using `crate::testkit` worlds, and add a
-   golden step in `adage-cli/tests/hooks.rs` for a command-hook event (re-blessed with
-   `ADAGE_BLESS=1`; only added lines may change).
+   point. Read through `HookCtx` (`ctx.index()`, `ctx.config()`, `ctx.arms()`, `ctx.repo_key()`),
+   write its record through `record::Record` (and add the kind to `RecordKind`, below), answer the
+   mod through `answer::ModAnswer` (below), and call the extension through `extension::guarded`.
+   Fail open: return `Err(Failure)` or `Ok(None)`, and never print.
+4. **The runtime.** For a decided event, add it to `adage_trace::Event`, `fast::skip`
+   (exhaustive on `Event`) and the `decide` match. `rebuild::kind_of` reads the table already.
+5. **Readers.** The feed's `event_label` (adage-cli `ui/feed.rs`) and any adage-app reader of
+   its records (docs/spool.md lists them).
+6. **Tests.** Add the event's rows to `harness/dispatch_tests.rs` (every harness that sends it,
+   and one that does not), unit tests in the module using `crate::testkit` worlds, and a golden
+   step in `adage-cli/tests/hooks.rs` for a command-hook event (re-blessed with `ADAGE_BLESS=1`;
+   only added lines may change).
 
-MAINT-RUST W1 (typed event dispatch) would turn steps 1 and 2 into one `enum HookEvent`. It waits
-on a characterization of the press-before-kill-switch ordering.
+## How to add a spool record kind
 
-## Not done in this pass, and why
+One place: `RecordKind` in `src/record.rs`. Add the variant and its `kind` (`as_str`; a kind is
+never renamed), build the record with `Record::new`, add a case to `record/snapshot_tests.rs`
+and accept the new lines (`INSTA_UPDATE=always`, or `cargo insta review`), and describe it in
+`docs/spool.md` with the readers that use it.
 
-- **A per-event context loading the index and config once (MAINT-RUST W6).** The plan marks it
-  "should wait": it changes read timing (a `PreToolUse` dry run still loads the index up to three
-  times and the config up to three times) and needs the paired `hook_latency` measurement first.
-  Only the helpers were extracted. Every load happens where it did before.
-- **`duration_us` on press records.** The plan files this under W3 as a visible change to the
-  spool that needs a decision. Press records are unchanged.
-- **Moving `phase.rs` under `pretool/`.** `adage_hook::phase` is a public module path, so it stays
-  at the root. The mod's phases are handled in `pretool/phases.rs`.
+## How to add a mod answer
+
+One place: `ModAnswer` in `src/answer.rs`. Add the variant (its keys are the wire shape), print
+it with `answer::answer`, add a case to `tests/wire.rs` (its `key` match is exhaustive) and
+write its file with `ADAGE_BLESS=1 cargo test -p adage-hook --test wire`. The mod's tests read
+the same files; docs/claude-mod/impl/wire.md is their contract.
+
+## The typed seams (MAINT-RUST W1, W2, W3, W4, W6, W7)
+
+A second pass made the hook's extension points typed; the steps above describe the result.
+
+- **W1, the event table.** `adage_trace::Harness::events` (with `EventKind`) is the one table of
+  native event names. `handle` matches `Adapter::classify`'s `HookEvent` exhaustively; the
+  adapters' `translate`, `is_learn_point`, the press's `act_of` and `CLOSERS`,
+  `claude::MOD_EVENTS` and `is_mods`, and `rebuild::kind_of` read the table. The press still
+  runs first, before the `.adage/disabled` switch and before `classify` (and before
+  `ADAGE_DISABLE`, in `run`). `harness/dispatch_tests.rs` was written first, against the string
+  dispatch, and keeps a frozen copy of it (`legacy`) as the oracle: every (harness, native event,
+  payload class) row gives the same path, record kind, legacy `kind_of`, press action and
+  live-learning request, from the old dispatch and the new; a second test runs every row
+  through `handle` itself.
+- **W2, capabilities.** Outside `harness/`, nothing compares a `Harness` value. `pretool` gates on
+  `adapter.capabilities(..).pre_tool_rewrite`, `standing` on `cached_section`; `SkillPrompt`
+  and the press on the harness sending that event at all (its table); the record's `harness`
+  field on `Adapter::recorded_name`. One site keeps the command hooks' set on purpose, with a
+  comment: the session start's contract (`session_start.rs`), since a session start is always a
+  command hook's.
+- **W3, the spool record seam.** Above. `record/snapshot_tests.rs` was written first; every
+  record's bytes are unchanged but the press's, which gain `duration_us` (a fix: the CHANGELOG
+  already said every record carries it). docs/spool.md documents every kind.
+- **W4, mod answers.** `answer::ModAnswer` and `answer::answer`; the wire files in
+  `tests/wire/`. Every answer's bytes are unchanged (they go through a sorted `Value`, as
+  `json!(…).to_string()` did).
+- **W6, `HookCtx`.** Above. The two `#[allow(clippy::too_many_arguments)]` left (on `pretool`
+  and `stop::gated`) are gone, and so are the `Start` and `Here` structs it replaces.
+- **W7, `Site`.** `Extension::session_context`, `session_texts`, `exec_only` and
+  `predict_grants` take `&Site` instead of loose `(repo_key, root, index, paths)` arguments.
+  adage-exec's `Prefetch` impl unpacks it into its unchanged `grants` functions.
+
+Still open:
+
 - **`Ctx::for_hook` and an `ensure_arm` in adage-runtime.** Those belong to adage-runtime's owner.
   The arm helper lives in the hook (`site::ArmInputs`) and needs no runtime change.
+- **The feed's own name table.** adage-cli's `ui/feed.rs::event_label` maps native names for
+  records without a `kind` by itself (and maps `PreToolUse` to `pretool`, which `kind_of` does
+  not). It could read `adage_trace::Harness::events`; it is adage-cli's.
+- **`skill::prompt` and `skill::invocable` are public** and keep their signatures, so the
+  `SkillPrompt` path reads the configuration through `ArmInputs::load` rather than `HookCtx`
+  (one read either way).
 
 ## Proof of no behaviour change
+
+### The split (S1, S2)
 
 Run in `/home/user/adage-poc` on top of `83b36bc`:
 
@@ -138,3 +183,47 @@ Run in `/home/user/adage-poc` on top of `83b36bc`:
   was re-blessed, and `crates/adage-cli/tests/golden/` is unchanged.
 - `cargo test -p xtask`: 18 passed (the layering test included).
 - `cargo fmt -p adage-hook -- --check`: clean.
+
+### The typed seams (W1–W4, W6, W7)
+
+Run in `/home/user/adage-poc` on top of `e4609ad`, after each item and at the end (other agents'
+work in adage-cli and adage-tracks was in the tree at the same time):
+
+- `cargo fmt --all -- --check`: clean.
+- `cargo clippy -p adage-hook -p adage-trace -p adage-runtime -p adage-exec --all-targets -- -D
+  warnings`: clean.
+- `cargo test -p adage-hook -p adage-trace -p adage-runtime -p adage-exec`: adage-hook 57 unit + 2
+  wire (53 before), adage-trace 6 (5), adage-runtime 113 + 1, adage-exec 111 unit and every
+  integration binary (parity 23) pass. `journal::tests::durable_completion_deduplicates_…` in
+  adage-exec failed once under load and passed 5 of 5 alone; it is in a file this pass did not
+  touch.
+- `cargo test -p adage-cli --test hooks --test press`: 23 and 12 pass. No golden was re-blessed:
+  `git diff --stat -- crates/adage-cli/tests/golden` is empty.
+- `cargo test -p xtask`: 18 pass.
+- `cargo test -- --list` per crate, sorted, against the list at `e4609ad`: nothing removed; added
+  are only the new tests (`harness::dispatch_tests::{the_legacy_dispatch_gives_every_row,
+  handle_takes_each_rows_path}`, `record::snapshot_tests::every_record_kind_as_the_spool_holds_it`,
+  `record::tests::a_decided_records_kind_is_its_events_name`, the wire tests
+  `every_answer_to_the_mod_matches_its_wire_file` and `an_answer_prints_as_its_json_did`, and
+  adage-trace's `harness::tests::a_native_event_name_means_one_thing`).
+- `target/doc/<crate>/all.html`: nothing removed; added are `adage_trace::harness::EventKind`,
+  `adage_hook::harness::{EventKind, HookEvent}`, `adage_hook::Site` and `adage_hook::answer::*`.
+- The spool snapshot is byte-identical before and after W3 but for the three press lines, which
+  gain `duration_us`.
+
+`hook_latency` (debug build, 100 runs, each pair of binaries alternating in one run, `-` for the
+model directory), ms. Before W6: `e4609ad` against the tree with W1 to W4. Across W6: the tree
+before W6 against the tree after it.
+
+| Scenario | `e4609ad` p50 / p95 | W1–W4 p50 / p95 | before W6 p50 / p95 | after W6 p50 / p95 |
+| --- | --- | --- | --- | --- |
+| `pretool_no_match` | 4.42 / 5.04 | 4.42 / 5.28 | 4.34 / 5.25 | 4.43 / 5.37 |
+| `batch_no_match` | 5.29 / 6.36 | 5.35 / 6.20 | 5.45 / 7.41 | 5.52 / 7.20 |
+| `turn_step_nothing_pending` | 5.48 / 7.17 | 5.47 / 6.68 | 5.17 / 6.84 | 5.31 / 6.71 |
+| `no_routes_for_repo` | 5.45 / 6.39 | 5.38 / 6.50 | 5.32 / 7.17 | 5.30 / 6.59 |
+| `batch_no_match_with_candidates` | 5.12 / 6.58 | 5.17 / 6.38 | 4.96 / 5.60 | 5.03 / 5.59 |
+
+Within 0.15 ms at p50 on every fast-path scenario, in either direction: noise. Nothing reads
+before `names_python` or `fast::skip` that did not before; the reads W6 saves (a second and
+third index and configuration read on a `PreToolUse` that names Python, a second configuration
+read in `respond`) are off these paths.

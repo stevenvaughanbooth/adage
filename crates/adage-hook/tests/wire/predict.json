@@ -1,0 +1,15 @@
+{
+  "predict": {
+    "calls": [
+      {
+        "input": {
+          "command": "make gen"
+        },
+        "tool": "Bash"
+      }
+    ],
+    "kind": "obligation",
+    "route": "regenerate-registry",
+    "track": "acme/finish-lines"
+  }
+}

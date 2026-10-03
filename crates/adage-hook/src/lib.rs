@@ -24,9 +24,12 @@
 //! each kind of event is handled in its own module: `pretool` (`PreToolUse`: the interpreter
 //! planner and the mod's two phases), `standing` (the mod's `Standing`), `session_start`,
 //! `respond` (decide and deliver every other event, a `TurnStep` included), `stop` (the
-//! finish-line gate at a `Stop`), [`press`] and [`skill`]. The extension contract is
-//! `extension`, re-exported here. docs/claude-mod/impl/structure-hook.md has the module map.
+//! finish-line gate at a `Stop`), [`press`] and [`skill`]. Each takes the event's context
+//! (`ctx::HookCtx`), writes its spool records through `record` and answers the mod through
+//! [`answer`]. The extension contract is `extension`, re-exported here.
+//! docs/claude-mod/impl/structure-hook.md has the module map.
 
+pub mod answer;
 pub mod autolearn;
 pub mod failopen;
 pub mod harness;
@@ -34,6 +37,7 @@ pub mod phase;
 pub mod press;
 pub mod skill;
 
+mod ctx;
 mod extension;
 mod identity;
 mod pretool;
@@ -47,17 +51,18 @@ mod stop;
 mod testkit;
 
 pub use extension::{
-    stimuli, Delivery, Extension, PreCall, PreNote, ReceiptCard, SessionTexts, Stimulus, StopCall, StopGate, Turn,
+    stimuli, Delivery, Extension, PreCall, PreNote, ReceiptCard, SessionTexts, Site, Stimulus, StopCall, StopGate, Turn,
 };
 pub use pretool::rewrite_off;
 
 use adage_core::repo;
 use adage_runtime::Event;
 use adage_store::Paths;
-use adage_tracks::Index;
+use ctx::{HookCtx, Reads};
 use failopen::Failure;
-use respond::{respond, Here};
-use session_start::{session_start, Start};
+use harness::HookEvent;
+use respond::respond;
+use session_start::session_start;
 use std::io::Read;
 use std::path::PathBuf;
 use std::time::Instant;
@@ -136,7 +141,8 @@ pub fn run(harness: &str, event: &str, opts: Options) -> Result<Option<String>, 
     if std::env::var("ADAGE_DISABLE").is_ok_and(|v| v == "1") {
         // The press runs before the kill switches, so a person can still be asked to turn Adage
         // back on, and the agent's first act still closes its window (architecture §3.12).
-        return Ok(payload.ok().and_then(|buf| press::before_kill_switch(harness, event, &buf, &Paths::from_env())));
+        let paths = Paths::from_env();
+        return Ok(payload.ok().and_then(|buf| press::before_kill_switch(harness, event, &buf, &paths, started)));
     }
     let buf = payload?;
     #[cfg(debug_assertions)]
@@ -163,9 +169,10 @@ pub fn handle(
     let Some(adapter) = harness::adapter(harness) else { return Err(Failure::new("config", "unknown harness")) };
     let p: serde_json::Value = serde_json::from_str(buf)
         .map_err(|e| Failure::new("payload", format!("stdin is not a JSON payload ({:?})", e.classify())))?;
-    let Some(harness::Envelope { session, cwd }) = adapter.envelope(&p) else {
+    let Some(envelope) = adapter.envelope(&p) else {
         return Err(Failure::new("payload", "no session id or working directory"));
     };
+    let (session, cwd) = (envelope.session.clone(), envelope.cwd.clone());
     // Outside a repository (a session opened in `~`, `/`, or a directory since deleted) there is
     // nothing to learn: no notice, no learner (docs/zero-config.md §3.2). Reflexes a person keyed
     // to such a directory by hand are still delivered.
@@ -175,55 +182,67 @@ pub fn handle(
     let off = root.join(".adage/disabled").exists();
     // Before the kill switch and the fast path: the press answers a `Press`, and the agent's first
     // act closes its window whatever else happens to the event (architecture §3.12).
-    if let press::Gate::Answer(out) = press::gate(harness, event, &p, &session, &cwd, paths, off) {
+    if let press::Gate::Answer(out) = press::gate(harness, event, &p, &envelope, paths, off, started) {
         return Ok(out);
     }
     if off {
         return Ok(None);
     }
-    if event == skill::EVENT {
-        return skill::prompt(adapter, &p, &session, &root, paths, started);
-    }
-    if event == "PreToolUse" {
-        return pretool::pretool(adapter, &p, &session, &cwd, &root, paths, opts.extension, started);
-    }
-    // A damaged index (a truncated write, a disk error) is served as empty and rebuilt: the
-    // session start asks the learner to recompile it (docs/zero-config.md §5).
-    let loaded = Index::try_load(&paths.index());
-    let damaged = matches!(loaded, Err(adage_tracks::index::Unloaded::Damaged));
-    let index = loaded.unwrap_or_default();
-    let learner = || match opts.learner {
-        Some(find) => find().ok_or_else(|| Failure::new("condition", "finding the adage binary: not found")),
-        None => std::env::current_exe().map_err(|e| Failure::io("condition", "finding the adage binary", &e)),
+    let cwd_text = cwd.to_string_lossy();
+    let ctx = HookCtx {
+        adapter,
+        harness,
+        event,
+        p: &p,
+        session: &session,
+        cwd: &cwd,
+        root: &root,
+        in_repo,
+        paths,
+        started,
+        opts,
+        reads: Reads::default(),
     };
-    if event == "Standing" {
-        return standing::standing(adapter, &p, &session, &root, paths, &index);
-    }
-    let translated = adapter.translate(event, &p, &cwd.to_string_lossy());
-    if matches!(translated, Some(Event::SessionStart)) {
-        let start =
-            Start { adapter, harness, event, session: &session, root: &root, in_repo, paths, index: &index, started };
-        return session_start(&start, damaged, &learner, opts.extension);
-    }
+    // One path per kind of event (the event table, `adage_trace::Harness::events`). Each reads the
+    // index and the configuration through `ctx`, on first use: `SkillPrompt` and `PreToolUse`
+    // never read the index before they know they need it.
+    let ev = match adapter.classify(event, &p, &cwd_text) {
+        // Answered by the press gate above.
+        HookEvent::Press | HookEvent::Ignored => return Ok(None),
+        HookEvent::SkillPrompt => return skill::prompt(adapter, &p, &session, &root, paths, started),
+        HookEvent::PreToolUse => return pretool::pretool(&ctx),
+        HookEvent::Standing => return standing::standing(&ctx),
+        HookEvent::SessionStart => return session_start(&ctx, ctx.index_damaged(), &learner(opts)),
+        HookEvent::Decide(ev) => ev,
+    };
+    let stop = match ev {
+        Event::Stop { stop_hook_active } => Some(stop_hook_active),
+        _ => None,
+    };
     // Decide first, always: the session's bookkeeping (a learned obligation's Stop request, an
     // at-Stop action) must not depend on what the finish-line gate finds (review F1).
-    let at = Here { session: &session, cwd: &cwd, root: &root, paths, started };
-    let responded = respond(adapter, event, &p, &at, opts, &index);
-    let out = match (translated, opts.extension) {
-        (Some(Event::Stop { stop_hook_active }), Some(x)) if in_repo => {
-            stop::gated(adapter, harness, event, x, stop_hook_active, &at, &index, responded)
-        }
+    let responded = respond(&ctx, ev);
+    let out = match (stop, opts.extension) {
+        (Some(stop_hook_active), Some(x)) if in_repo => stop::gated(&ctx, x, stop_hook_active, responded),
         _ => responded.map(|r| r.out.and_then(|o| adapter.render(event, o))),
     };
     if in_repo && adapter.is_learn_point(event) {
         let transcript = p.get("transcript_path").and_then(|v| v.as_str());
-        let learned = learner()
+        let learned = learner(opts)()
             .and_then(|l| autolearn::on_turn_end(paths, &root, adapter.name(), transcript, &l, false).map(drop));
         if let Err(f) = learned {
             failopen::record(&paths.root, harness, event, &f);
         }
     }
     out
+}
+
+/// How to find the adage binary live learning starts: the binary's own finder, else this binary.
+fn learner(opts: Options) -> impl Fn() -> Result<PathBuf, Failure> {
+    move || match opts.learner {
+        Some(find) => find().ok_or_else(|| Failure::new("condition", "finding the adage binary: not found")),
+        None => std::env::current_exe().map_err(|e| Failure::io("condition", "finding the adage binary", &e)),
+    }
 }
 
 #[cfg(test)]

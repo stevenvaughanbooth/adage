@@ -25,4 +25,5 @@ sha2.workspace = true
 getrandom = "0.2"
 
 [dev-dependencies]
+insta = "1"
 tempfile = "3"

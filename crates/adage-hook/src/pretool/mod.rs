@@ -9,35 +9,33 @@ mod phases;
 pub use interpreter::rewrite_off;
 pub(crate) use interpreter::u11_in_service;
 
+use crate::ctx::HookCtx;
 use crate::extension::guarded;
 use crate::failopen::Failure;
-use crate::harness::{self, Output};
-use crate::{identity, phase, record, site, Extension, PreCall, PreNote};
-use adage_core::repo;
+use crate::harness::Output;
+use crate::record::{Record, RecordKind};
+use crate::{identity, phase, site, PreCall, PreNote};
 use adage_runtime::{Arm, SessionState};
 use adage_store::{state, Paths};
-use adage_tracks::Index;
 use interpreter::{claude_allow_rules, interpreter_plan};
 use serde_json::{json, Value};
-use std::path::Path;
-use std::time::Instant;
 
-/// A Bash call about to run, as `pretool` and its helpers see it.
+/// A Bash call about to run, as `pretool` and its helpers see it: the event ([`HookCtx`], whose
+/// fields and shared reads it derefs to) and the call.
 struct BashCall<'a> {
-    adapter: &'a dyn harness::Adapter,
-    p: &'a Value,
+    ctx: &'a HookCtx<'a>,
     input: &'a Value,
     command: &'a str,
-    session: &'a str,
-    cwd: &'a Path,
-    root: &'a Path,
-    paths: &'a Paths,
-    extension: Option<&'static dyn Extension>,
-    /// When the hook began: every record carries the time it took (`duration_us`).
-    started: Instant,
     /// The key the decided list holds the call by ([`identity::decided_key`]), when the payload
     /// carries a usable `tool_use_id`: one decision per id.
     identity: Option<u64>,
+}
+
+impl<'a> std::ops::Deref for BashCall<'a> {
+    type Target = HookCtx<'a>;
+    fn deref(&self) -> &HookCtx<'a> {
+        self.ctx
+    }
 }
 
 /// The cheap no-match test: does the command name a Python program at all (words, not substrings:
@@ -67,18 +65,18 @@ fn already_decided(call: &BashCall<'_>) -> bool {
 /// decides: fresh or not ([`PreNote::fresh`]). Only treated sessions hold receipts; like every
 /// other extension call, a panic loses only this note.
 fn receipt(call: &BashCall<'_>, key: &str) -> Option<PreNote> {
-    let x = call.extension.filter(|_| !in_control(call.paths, call.session))?;
-    let index = Index::try_load(&call.paths.index()).unwrap_or_default();
+    let x = call.opts.extension.filter(|_| !in_control(call.paths, call.session))?;
+    let index = call.index();
     // The key the index (and adage-exec's journal) names this repository by: a checkout without
     // a remote is keyed by its path until an alias resolves it to the learned key.
-    let key = site::routed_key(&index, call.root, call.paths, false).unwrap_or_else(|| key.to_string());
+    let key = site::routed_key(index, call.root, call.paths, false).unwrap_or_else(|| key.to_string());
     let c = PreCall {
         repo_key: &key,
         root: call.root,
         cwd: call.cwd,
         session: call.session,
         paths: call.paths,
-        index: &index,
+        index,
         command: call.command,
     };
     guarded(|| x.pretool_context(&c))
@@ -90,23 +88,27 @@ fn fresh_note(note: Option<PreNote>) -> Option<String> {
     note.filter(|n| n.fresh && !n.text.is_empty()).map(|n| n.text)
 }
 
-/// Append one `pretool` record, naming the call's harness id (`tool_use_id`) when the payload
-/// carries one: the feed line can then be drawn under that very call. The failure is returned:
-/// a decision's record is part of the decision.
-fn append_pretool(call: &BashCall<'_>, mut rec: Value) -> Result<(), Failure> {
-    if let Some(id) = call.p["tool_use_id"].as_str().filter(|id| !id.is_empty()) {
-        rec["tool_use_id"] = json!(id);
-    }
-    record::append(call.paths, call.session, &rec)
+/// A `pretool` record of a call decided in this session's arm, in this repository; each path adds
+/// its own fields.
+fn pretool_record(arm: Option<Arm>, propensity: Option<f64>, key: &str) -> Record {
+    Record::new(RecordKind::Pretool, "PreToolUse").with("arm", arm).with("propensity", propensity).with("repo", key)
 }
 
-/// Append one `pretool` record with the hook's time: a lost record loses measurement, never the
-/// delivery.
-fn spool_pretool(call: &BashCall<'_>, mut rec: Value) {
-    rec["duration_us"] = json!(record::duration_us(call.started));
-    if let Err(f) = append_pretool(call, rec) {
-        crate::failopen::record(&call.paths.root, call.adapter.name(), "PreToolUse", &f);
-    }
+/// Append one `pretool` record with the hook's time, naming the call's harness id (`tool_use_id`)
+/// when the payload carries one: the feed line can then be drawn under that very call. The
+/// failure is returned: a decision's record is part of the decision.
+fn append_pretool(call: &BashCall<'_>, rec: Record) -> Result<(), Failure> {
+    rec.timed(call.started).tool_use_id(call.p).append(call.paths, call.session)
+}
+
+/// [`append_pretool`], where a lost record loses measurement, never the delivery.
+fn spool_pretool(call: &BashCall<'_>, rec: Record) {
+    rec.timed(call.started).tool_use_id(call.p).append_or_log(
+        call.paths,
+        call.session,
+        call.adapter.name(),
+        "PreToolUse",
+    );
 }
 
 /// A session's arm and its propensity, as a decision records them.
@@ -126,7 +128,7 @@ fn claim_if(
     key: &str,
     decides: impl Fn(Option<Arm>) -> bool,
 ) -> Result<Option<Assigned>, Failure> {
-    let arms = site::ArmInputs::load(call.paths);
+    let arms = call.arms();
     state::update::<SessionState, _>(&call.paths.state(call.session), |st| {
         if call.identity.is_some_and(|id| st.has_seen_pretool(id)) {
             return None;
@@ -153,11 +155,8 @@ fn only_receipt(call: &BashCall<'_>, key: &str, receipt: Option<String>) -> Resu
         }
     }
     let st = state::try_read::<SessionState>(&call.paths.state(call.session)).ok().flatten();
-    spool_pretool(
-        call,
-        json!({ "ts": record::now_ms(), "event": "PreToolUse", "kind": "pretool", "arm": st.as_ref().and_then(|s| s.arm),
-                "propensity": st.as_ref().and_then(|s| s.propensity), "repo": key, "receipt": true }),
-    );
+    let (arm, propensity) = (st.as_ref().and_then(|s| s.arm), st.as_ref().and_then(|s| s.propensity));
+    spool_pretool(call, pretool_record(arm, propensity, key).with("receipt", true));
     Ok(call.adapter.render("PreToolUse", Output::Context(text)))
 }
 
@@ -202,11 +201,13 @@ fn decide_pretool(
             (json!({ "advise": kind, "interpreter": env.shown }), Output::Context(lead(reason.clone())))
         }
     };
-    let mut rec = json!({ "ts": record::now_ms(), "event": "PreToolUse", "kind": "pretool", "arm": arm, "propensity": propensity, "repo": key, "pretool": what, "receipt": receipt.is_some(), "checked_by": checked_by });
+    let mut rec = pretool_record(arm, propensity, key)
+        .with("pretool", what)
+        .with("receipt", receipt.is_some())
+        .with("checked_by", checked_by);
     if control {
-        rec["withheld"] = json!(true);
+        rec.set("withheld", true);
     }
-    rec["duration_us"] = json!(record::duration_us(call.started));
     append_pretool(call, rec)?;
     if control {
         return Ok(None);
@@ -246,18 +247,10 @@ fn planner_checked(
 /// decided is answered with nothing and no record; every path that decides marks it decided. A
 /// payload without an id is decided as it always was. The mod's own payloads ([`phase::Phase`])
 /// take [`phases::pretool_mod`].
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn pretool(
-    adapter: &dyn harness::Adapter,
-    p: &Value,
-    session: &str,
-    cwd: &Path,
-    root: &Path,
-    paths: &Paths,
-    extension: Option<&'static dyn Extension>,
-    started: Instant,
-) -> Result<Option<String>, Failure> {
-    if !adapter.harness().capabilities().pre_tool_rewrite || p.get("tool_name").and_then(Value::as_str) != Some("Bash")
+pub(crate) fn pretool(ctx: &HookCtx<'_>) -> Result<Option<String>, Failure> {
+    let (adapter, p) = (ctx.adapter, ctx.p);
+    if !adapter.capabilities("PreToolUse", p).pre_tool_rewrite
+        || p.get("tool_name").and_then(Value::as_str) != Some("Bash")
     {
         return Ok(None);
     }
@@ -270,25 +263,53 @@ pub(crate) fn pretool(
         return Ok(None);
     }
     let identity = identity::decided_key(adapter, p);
-    let call = BashCall { adapter, p, input: &input, command, session, cwd, root, paths, extension, started, identity };
+    let call = BashCall { ctx, input: &input, command, identity };
     if let Some(phase) = phase {
         return phases::pretool_mod(&call, &phase);
     }
     if already_decided(&call) {
         return Ok(None);
     }
-    let key = repo::repo_key_cached(root, &paths.repo_keys());
-    let receipt = fresh_note(receipt(&call, &key));
-    let Some((pre, env)) = interpreter_plan(&call, &key) else { return only_receipt(&call, &key, receipt) };
+    let key = ctx.repo_key();
+    let receipt = fresh_note(receipt(&call, key));
+    let Some((pre, env)) = interpreter_plan(&call, key) else { return only_receipt(&call, key, receipt) };
     let pre = planner_checked(&call, pre, &env);
-    decide_pretool(&call, &key, receipt, pre, &env, "planner")
+    decide_pretool(&call, key, receipt, pre, &env, "planner")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ctx::Reads;
     use crate::testkit::*;
-    use crate::{handle, Delivery, Options, Turn};
+    use crate::{handle, harness, Delivery, Extension, Options, Turn};
+    use adage_store::Paths;
+    use std::path::Path;
+    use std::time::Instant;
+
+    /// `pretool` for a command hook's payload `p` in session `s-1`, at `root`.
+    fn pretool_at(
+        p: &Value,
+        root: &Path,
+        paths: &Paths,
+        extension: Option<&'static dyn Extension>,
+    ) -> Result<Option<String>, Failure> {
+        let ctx = HookCtx {
+            adapter: &harness::claude::Claude,
+            harness: "claude",
+            event: "PreToolUse",
+            p,
+            session: "s-1",
+            cwd: root,
+            root,
+            in_repo: root.join(".git").exists(),
+            paths,
+            started: Instant::now(),
+            opts: Options { learner: None, extension },
+            reads: Reads::default(),
+        };
+        pretool(&ctx)
+    }
     use adage_runtime::Directive;
     use adage_store::spool;
 
@@ -317,7 +338,7 @@ mod tests {
         std::fs::create_dir_all(&root).unwrap();
         let call = |command: &str| {
             let p = json!({ "tool_name": "Bash", "tool_input": { "command": command } });
-            pretool(&harness::claude::Claude, &p, "s-1", &root, &root, &paths, Some(&RECEIPTS), Instant::now()).unwrap()
+            pretool_at(&p, &root, &paths, Some(&RECEIPTS)).unwrap()
         };
         let out: Value =
             serde_json::from_str(&call(".venv/bin/python -m pytest tests/test_x.py::t -q").unwrap()).unwrap();
@@ -336,9 +357,7 @@ mod tests {
         state::update::<SessionState, _>(&paths.state("s-1"), |st| st.arm = Some(Arm::Control)).unwrap();
         assert!(call(".venv/bin/python -m pytest tests/test_x.py -q").is_none(), "never in the control arm");
         let p = json!({ "tool_name": "Bash", "tool_input": { "command": "python -m pytest" } });
-        assert!(pretool(&harness::claude::Claude, &p, "s-1", &root, &root, &paths, None, Instant::now())
-            .unwrap()
-            .is_none());
+        assert!(pretool_at(&p, &root, &paths, None).unwrap().is_none());
     }
 
     /// F8: `pretool_context` is wrapped like every other extension call: a panic there loses only
@@ -360,7 +379,7 @@ mod tests {
         let root = temp.path().join("repo");
         std::fs::create_dir_all(&root).unwrap();
         let p = json!({ "tool_name": "Bash", "tool_input": { "command": ".venv/bin/python -m pytest tests -q" } });
-        let out = pretool(&harness::claude::Claude, &p, "s-1", &root, &root, &paths, Some(&PANICS), Instant::now());
+        let out = pretool_at(&p, &root, &paths, Some(&PANICS));
         assert!(matches!(out, Ok(None)), "{out:?}");
     }
 
