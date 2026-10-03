@@ -81,6 +81,10 @@ pub struct Config {
     pub runtime_control: f64,
     /// `runtime.rewrite`: `PreToolUse` rewrites to the project's environment (on by default).
     pub runtime_rewrite: bool,
+    /// `runtime.routine_model`: the model the Claude Code mod sends a routine step to (a step the
+    /// model takes only to do what a delivered directive says), at low effort. `""` routes
+    /// nothing. The binary never sees it: the mod reads it from `adage --json`.
+    pub runtime_routine_model: String,
     /// `skills.invoke`: a `skill` reflex with a person's `predict` grant may invoke its skill at
     /// its step (the Claude Code mod's `turn.step`), when `adage train` recorded the skill as inert
     /// in a pack the person accepted. Off by default.
@@ -148,6 +152,9 @@ enum Kind {
     /// `all`, or a list of repository keys (`github.com/acme/billing`, `notes@1a2b3c4d5e6f`),
     /// given on the command line comma-separated; `""` for none.
     Repos,
+    /// A model name or alias as the harness takes it (`haiku`, `claude-haiku-4-5`, a provider's
+    /// `us.anthropic.…:0`): one word of `[A-Za-z0-9._:/@-]`, at most 128 characters; `""` for none.
+    Model,
 }
 
 /// One documented key.
@@ -319,6 +326,14 @@ pub const KEYS: &[Key] = &[
         guarded: false,
     },
     Key {
+        name: "runtime.routine_model",
+        kind: Kind::Model,
+        default: "",
+        env: None,
+        doc: "Claude Code mod: the model a step goes to, at low effort, when it only does what a delivered directive says; \"\" sends every step to the session's model",
+        guarded: false,
+    },
+    Key {
         name: "skills.invoke",
         kind: Kind::Bool,
         default: "false",
@@ -387,6 +402,14 @@ fn from_text(kind: Kind, s: &str) -> Result<toml::Value, String> {
             Ok(x) if (0.0..=1.0).contains(&x) => Ok(toml::Value::Float(x)),
             _ => Err(format!("{s:?} is not a share between 0 and 1")),
         },
+        Kind::Model => {
+            let ok = s.len() <= 128 && s.bytes().all(|c| c.is_ascii_alphanumeric() || b"._:/@-".contains(&c));
+            if ok {
+                Ok(toml::Value::String(s.into()))
+            } else {
+                Err(format!("{s:?} is not a model name (letters, digits, . _ : / @ -)"))
+            }
+        }
         Kind::Ids => {
             let ids = split_ids(s);
             // An id (`U3`, `auto`) or a pack name (`adage/python-env`).
@@ -429,7 +452,9 @@ fn from_toml(kind: Kind, v: &toml::Value) -> Result<String, String> {
         (Kind::Secs, toml::Value::Integer(n)) => n.to_string(),
         (Kind::Share, toml::Value::Float(x)) => x.to_string(),
         (Kind::Share, toml::Value::Integer(n)) => n.to_string(),
-        (Kind::Thresholds | Kind::Dir | Kind::DirOrAuto | Kind::Notices, toml::Value::String(s)) => s.clone(),
+        (Kind::Thresholds | Kind::Dir | Kind::DirOrAuto | Kind::Notices | Kind::Model, toml::Value::String(s)) => {
+            s.clone()
+        }
         (Kind::Ids | Kind::Repos, toml::Value::String(s)) => s.clone(),
         (Kind::Ids | Kind::Repos, toml::Value::Array(a)) => {
             let ids: Option<Vec<&str>> = a.iter().map(|v| v.as_str()).collect();
@@ -528,6 +553,7 @@ fn load_from(file: &Path, env: &dyn Fn(&str) -> Option<String>) -> Loaded {
         learn_parse_cache: parse_bool(&text("learn.parse_cache")).unwrap_or(true),
         runtime_control: text("runtime.control").parse().unwrap_or(0.1),
         runtime_rewrite: parse_bool(&text("runtime.rewrite")).unwrap_or(true),
+        runtime_routine_model: text("runtime.routine_model"),
         skills_invoke: parse_bool(&text("skills.invoke")).unwrap_or(false),
         ui_spinner: parse_bool(&text("ui.spinner")).unwrap_or(false),
         ui_turn_line: parse_bool(&text("ui.turn_line")).unwrap_or(false),

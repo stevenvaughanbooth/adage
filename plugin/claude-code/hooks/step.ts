@@ -1,8 +1,10 @@
-// The `turn.step` hook (docs/claude-mod/architecture.md §3.2; plan C4, C7, C8): before a request of
-// the main loop, ask the binary whether it predicts the step; if it does, yield the predicted calls
-// as the response and send no request. If not, forward the model's response, and at its end_turn
-// stop ask once more with `ending: true` (the finish line): a prediction then keeps the model's
-// text and replaces the stop with the calls.
+// The `turn.step` hook (docs/claude-mod/architecture.md §3.2, §3.5; plan C4, C5, C7, C8): before a
+// request of the main loop, ask the binary whether it predicts the step; if it does, yield the
+// predicted calls as the response (one call, or a chain's several) and send no request. If not,
+// the request goes out, on the person's routine model when the binary marks the step routine and
+// the person set one; its response is forwarded, and at an end_turn stop the binary is asked once
+// more with `ending: true` (the finish line): a prediction then keeps the model's text and
+// replaces the stop with the calls.
 //
 // No `$` crosses into this file (`claude plugin validate` follows `$` only within one file):
 // register.ts hands it closures over its `$`, and a test hands it stubs.
@@ -22,6 +24,13 @@ export type TurnStepPayload = {
   model: string
   agent_id?: string
   ending: boolean
+  /** Every payload the mod sends says so: the binary then reads the mod's capabilities (C9). */
+  via: 'mod'
+  /**
+   * The person set `runtime.routine_model`: the binary may mark the step routine (C5). The binary
+   * never sees which model; absent, nothing is routed.
+   */
+  routine_model?: true
   /** Observe mode: the binary records what it would predict, as the control arm does. */
   observe?: true
 }
@@ -38,12 +47,26 @@ export type StepDeps = {
   context: () => Promise<{ sessionId: string; cwd: string }>
   /** Records a predicted step for drawing; a failure is ignored. */
   record: (p: Predicted) => Promise<void>
+  /** The person's routine model (`runtime.routine_model`, as the binary reports it); '' when none. */
+  routineModel?: string
 }
 
 /** The per-step budget for the binary (§2 rule 1): it runs before every model request. */
 export const TURN_STEP_TIMEOUT_MS = 250
 
 const blockOf = (c: TurnStepChunk): number => ('index' in c && typeof c.index === 'number' ? c.index : -1)
+
+const isRecord = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v)
+
+/**
+ * The person's routine model from the status card (`adage --json`): `runtime.routine_model`, a
+ * model name; '' when the binary reports none.
+ */
+export function routineModelOf(card: unknown): string {
+  const runtime = isRecord(card) ? card.runtime : undefined
+  const model = isRecord(runtime) ? runtime.routine_model : undefined
+  return typeof model === 'string' ? model.trim() : ''
+}
 
 /** The stream beneath, as the hook's `next` opens it. */
 export type StepNext = (e: TurnStepInput) => HookStream<TurnStepChunk, TurnStepResult>
@@ -62,6 +85,7 @@ export async function* turnStep(
   } catch {
     return yield* next(e)
   }
+  const routine = deps.routineModel ?? ''
   const payload = (ending: boolean): TurnStepPayload => ({
     session_id: ctx.sessionId,
     cwd: ctx.cwd,
@@ -70,10 +94,15 @@ export async function* turnStep(
     index: e.index,
     model: e.model,
     ending,
+    via: 'mod',
+    ...(routine !== '' ? { routine_model: true as const } : {}),
     ...(deps.isObserving ? { observe: true as const } : {}),
   })
+  let routed = false
   const predicted = async (ending: boolean) => {
     const asked = await deps.ask(payload(ending)).catch((): Asked => ({ ok: false }))
+    // A step is predicted or routed, never both; routing only changes a request that goes out.
+    routed = !ending && asked.ok && isRecord(asked.answer) && asked.answer.routine === true
     const p = asked.ok && !deps.isObserving ? predictionOf(asked.answer) : undefined
     if (p?.kind !== 'skill') return p
     const skill = String(p.calls[0]?.input.skill)
@@ -95,9 +124,11 @@ export async function* turnStep(
     return predictedResult(before, e.turnId, e.index)
   }
 
-  // The request goes out. Its chunks pass as they come; the stop is held until it is known
-  // whether the response ends the turn (end_turn with no tool call of its own).
-  const stream = next(e)
+  // The request goes out, on the routine model at low effort when the binary marked the step
+  // routine and the person chose one (§3.5: the setting is the consent). Its chunks pass as they
+  // come; the stop is held until it is known whether the response ends the turn (end_turn with no
+  // tool call of its own).
+  const stream = next(routed && routine !== '' && !deps.isObserving ? { ...e, model: routine, effort: 'low' } : e)
   let lastBlock = -1
   let hasToolCall = false
   let ended: Awaited<ReturnType<typeof predicted>>

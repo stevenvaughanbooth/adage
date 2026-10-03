@@ -847,7 +847,15 @@ fn covering_receipt(call: &PreCall<'_>) -> Option<PreNote> {
     {
         return None;
     }
-    let stale = PreNote { text: String::new(), fresh: false, result: None, covering: template.clone(), card: None };
+    let operation: String = render::sanitise(&r.id).chars().take(12).collect();
+    let stale = PreNote {
+        text: String::new(),
+        fresh: false,
+        result: None,
+        covering: template.clone(),
+        card: None,
+        operation: operation.clone(),
+    };
     if canon(call.cwd) != canon(call.root) {
         return Some(stale);
     }
@@ -870,7 +878,6 @@ fn covering_receipt(call: &PreCall<'_>) -> Option<PreNote> {
     if unchanged() != Some(true) {
         return Some(stale);
     }
-    let operation: String = render::sanitise(&r.id).chars().take(12).collect();
     let text = format!(
         "<adage-receipt operation=\"{}\">\nAdage's run of `{}` in this session passed on files identical to the current ones, and it included every test this command selects{}.\n</adage-receipt>",
         operation,
@@ -892,9 +899,9 @@ fn covering_receipt(call: &PreCall<'_>) -> Option<PreNote> {
         ),
         more: total - tests.len(),
         tests,
-        operation,
+        operation: operation.clone(),
     };
-    Some(PreNote { text, fresh: true, result: Some(result), covering: template.clone(), card: Some(card) })
+    Some(PreNote { text, fresh: true, result: Some(result), covering: template.clone(), card: Some(card), operation })
 }
 
 /// The most a receipt's result names of the tests it ran.
@@ -3127,6 +3134,10 @@ def test_latlong_invalid(invalid_latlong):
         );
         assert_eq!(r["note"].as_str(), Some(context));
         assert!(r["result"].as_str().unwrap().starts_with("Adage answered this test run"), "{plan}");
+        // The plan names the run, fresh or not, for the line the mod draws beside a run that
+        // happens anyway: the same id the note carries (absent when the journal row has none).
+        let operation = r["operation"].as_str().unwrap_or("").to_string();
+        assert!(context.contains(&format!("operation=\"{operation}\"")), "{plan}");
         let before = adage_store::spool::read_all::<Value>(&f.paths.spool("fixture-session")).unwrap().len();
         let out = pre("toolu_b", json!({ "verdict": { "answered": "receipt" } })).expect("answered");
         assert_eq!(out["receipt"]["result"], r["result"]);
@@ -3142,10 +3153,11 @@ def test_latlong_invalid(invalid_latlong):
         // A later edit makes the receipt stale: the plan says so, and the call is not answered.
         std::fs::write(f.root.join("tests/test_x.py"), "def test_one():\n    assert True\n").unwrap();
         let plan = pre("toolu_c", json!({ "dry_run": true })).expect("a plan");
-        assert_eq!(
-            plan["plan"]["receipt"],
-            json!({ "fresh": false, "covering": ".venv/bin/python -m pytest tests/test_x.py -q" })
-        );
+        let mut stale = json!({ "fresh": false, "covering": ".venv/bin/python -m pytest tests/test_x.py -q" });
+        if !operation.is_empty() {
+            stale["operation"] = json!(operation);
+        }
+        assert_eq!(plan["plan"]["receipt"], stale);
         assert!(pre("toolu_c", json!({ "verdict": { "answered": "receipt" } })).is_none());
         assert!(pre("toolu_d", json!({})).is_none(), "and the command hook says nothing of a stale receipt");
     }

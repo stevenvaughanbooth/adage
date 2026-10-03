@@ -15,7 +15,7 @@ const PREDICT = { predict: { kind: 'obligation', route: 'codegen-after-schema', 
  * `version` prints `version` and whose `hook claude TurnStep` prints `turnStep`, the session's id
  * and cwd, and a model that streams one text-and-tool response (counted).
  */
-function world(on: On, opts: { data?: string; version: string; turnStep: string; isLinked?: () => boolean }) {
+function world(on: On, opts: { data?: string; version: string; turnStep: string; isLinked?: () => boolean; card?: unknown }) {
   mock.env(on, opts.data === undefined ? {} : { CLAUDE_PLUGIN_DATA: opts.data })
   mock.clock(on, { now: 1_791_008_381_000 })
   on('command.register', () => ({ value: { command: 'adage' } }))
@@ -23,15 +23,17 @@ function world(on: On, opts: { data?: string; version: string; turnStep: string;
   on('process.run', ($, e) => {
     ran.push({ argv: e.argv, init: e.init })
     if (opts.isLinked?.() === false) return { deny: 'ENOENT' }
-    const stdout = e.argv[1] === 'version' ? opts.version : opts.turnStep
+    const stdout = e.argv[1] === 'version' ? opts.version : e.argv[1] === '--json' ? JSON.stringify(opts.card ?? {}) : opts.turnStep
     return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
   })
   on('session.id', () => ({ value: 'sess-1' }))
   on('session.cwd', () => ({ value: '/w' }))
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   const requests: number[] = []
+  const models: { model: string; effort: unknown }[] = []
   on('turn.step', async function* ($, e) {
     requests.push(e.index)
+    models.push({ model: e.model, effort: e.effort })
     yield { kind: 'text', index: 0, text: 'Reading.' }
     yield { kind: 'tool', index: 1, id: 'toolu_1', name: 'Read' }
     yield { kind: 'input', index: 1, json: '{"file_path":"/w/x"}' }
@@ -44,7 +46,7 @@ function world(on: On, opts: { data?: string; version: string; turnStep: string;
     if (e.key !== 'mode') sets.push({ key: e.key, value: e.value })
     return next(e)
   })
-  return { ran, requests, sets }
+  return { ran, requests, models, sets }
 }
 
 async function drain(stream: AsyncGenerator<TurnStepChunk, TurnStepResult>) {
@@ -91,7 +93,7 @@ test('active: a TurnStep prediction is yielded in place of the request', async (
   ])
   expect(result).toMatchObject({ stopReason: 'tool_use', toolUses: [{ name: 'Bash', input: { command: 'make gen' } }], usage: null })
   expect(w.requests).toEqual([])
-  const asked = w.ran.find(r => r.argv[1] === 'hook')
+  const asked = w.ran.find(r => r.argv[3] === 'TurnStep')
   expect(asked?.argv).toEqual(['/data/bin/hook', 'hook', 'claude', 'TurnStep'])
   expect(asked?.init?.env).toEqual({ CLAUDECODE: '1' })
   expect(asked?.init?.timeoutMs).toBe(250)
@@ -104,6 +106,7 @@ test('active: a TurnStep prediction is yielded in place of the request', async (
     index: 2,
     model: 'claude-x',
     ending: false,
+    via: 'mod',
   })
   expect(w.sets.map(s => s.key)).toEqual(['predicted'])
 })
@@ -123,7 +126,10 @@ test('active whichever binary the shim linked: adage-exec answers the same prese
   const { chunks } = await drain($.turn.step(STEP))
   expect(chunks.map(c => c.kind)).toEqual(['tool', 'input', 'stop'])
   expect(w.requests).toEqual([])
-  expect(w.ran.map(r => r.argv[0])).toEqual(['/data/bin/hook', '/data/bin/hook'])
+  // The probe, the session's Standing and the step ask the hook binary; the routine model is read
+  // from `adage` itself.
+  expect(w.ran.filter(r => r.argv[1] !== '--json').map(r => r.argv[0])).toEqual(['/data/bin/hook', '/data/bin/hook', '/data/bin/hook'])
+  expect(w.ran.filter(r => r.argv[1] === '--json').map(r => r.argv)).toEqual([['/data/bin/adage', '--json', '--for-session']])
 })
 
 test('inert with no binary (the link is scripts/quiet: version prints nothing): every hook forwards, no TurnStep asked', async ($, on) => {
@@ -166,7 +172,31 @@ test('step 0 and a subagent step are forwarded without asking', async ($, on) =>
   await drain($.turn.step({ ...STEP, index: 0 }))
   await drain($.turn.step({ ...STEP, agentId: 'agent-7' }))
   expect(w.requests).toEqual([0, 2])
-  expect(w.ran.map(r => r.argv[1])).toEqual(['version'])
+  expect(w.ran.map(r => r.argv.slice(1).join(' '))).toEqual(['version', 'hook claude Standing'])
+})
+
+test('T-C5-04 · a headless session reads its routine model from the card at its first step, and routes from the next', async ($, on) => {
+  const w = world(on, { data: '/data', version: 'adage 0.1.0\n', turnStep: JSON.stringify({ routine: true }), card: { runtime: { routine_model: 'haiku' }, ui: {} } })
+  await $.session.start(START)
+  await drain($.turn.step(STEP))
+  await drain($.turn.step({ ...STEP, index: 3 }))
+  expect(w.requests).toEqual([2, 3])
+  expect(w.models).toEqual([
+    { model: 'claude-x', effort: undefined },
+    { model: 'haiku', effort: 'low' },
+  ])
+  expect(w.ran.filter(r => r.argv[1] === '--json').map(r => r.argv)).toEqual([['/data/bin/adage', '--json', '--for-session']])
+  const steps = w.ran.filter(r => r.argv[3] === 'TurnStep').map(r => (JSON.parse(r.init?.stdin ?? '{}') as { routine_model?: true; model: string }))
+  expect(steps.map(s => s.routine_model)).toEqual([undefined, true])
+  expect(JSON.stringify(steps)).not.toContain('haiku')
+})
+
+test('no routine model on the card: a routine answer changes nothing', async ($, on) => {
+  const w = world(on, { data: '/data', version: 'adage 0.1.0\n', turnStep: JSON.stringify({ routine: true }), card: { runtime: { routine_model: '' } } })
+  await $.session.start(START)
+  await drain($.turn.step(STEP))
+  await drain($.turn.step({ ...STEP, index: 3 }))
+  expect(w.models.map(m => m.model)).toEqual(['claude-x', 'claude-x'])
 })
 
 test('a Skill prediction is yielded only for a skill `$.command.list()` lists', async ($, on) => {

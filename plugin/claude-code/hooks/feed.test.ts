@@ -11,8 +11,8 @@ const EMPTY: Folded = { rows: [], ticks: [], health: null, learner: null }
 
 describe('the follower argv and the line buffer', () => {
   test('nextArgs: the --since form only once a cursor exists', () => {
-    expect(followArgs('/d/bin/adage', '/w', 's1', '')).toEqual(['/d/bin/adage', 'watch', '--follow', '--json', '--repo', '/w', '--session', 's1'])
-    expect(followArgs('/d/bin/adage', '/w', 's1', '1~5~0~s1:0:2')).toEqual(['/d/bin/adage', 'watch', '--follow', '--json', '--repo', '/w', '--session', 's1', '--since', '1~5~0~s1:0:2'])
+    expect(followArgs('/d/bin/adage', '/w', 's1', '')).toEqual(['/d/bin/adage', 'watch', '--follow', '--json', '--stdin', 'ignore', '--repo', '/w', '--session', 's1'])
+    expect(followArgs('/d/bin/adage', '/w', 's1', '1~5~0~s1:0:2')).toEqual(['/d/bin/adage', 'watch', '--follow', '--json', '--stdin', 'ignore', '--repo', '/w', '--session', 's1', '--since', '1~5~0~s1:0:2'])
   })
 
   test('a chunk ending mid-line is buffered and parsed with the next chunk', () => {
@@ -127,7 +127,7 @@ describe('reconnecting', () => {
     const l = loop([[LINE.start, LINE.firedGen], [LINE.followedGen], []])
     const end = await follow(l.deps, '', 0)
     expect(end.end).toBe('stopped')
-    expect(l.argvs.map(a => a.slice(8))).toEqual([[], ['--since', JSON.parse(LINE.firedGen).cursor], ['--since', JSON.parse(LINE.followedGen).cursor]])
+    expect(l.argvs.map(a => a.slice(10))).toEqual([[], ['--since', JSON.parse(LINE.firedGen).cursor], ['--since', JSON.parse(LINE.followedGen).cursor]])
     expect(l.applied).toEqual(['start', 'tools', `@${JSON.parse(LINE.firedGen).cursor}`, 'tools', `@${JSON.parse(LINE.followedGen).cursor}`])
     expect(l.statuses).toEqual(['following:0', 'reconnecting:1', 'reconnecting:2', 'stopped:3'])
   })

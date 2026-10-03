@@ -7,7 +7,7 @@ expression: text
  4 passed · 2 warnings · 0 failures   same checks as adage doctor
 
 ▌ + binary               adage 0.╭─ palette ────────────────────────────────────────────────────────────────────────╮
-  + index                generati│ : str▌                                                                17 matches │
+  + index                generati│ : str▌                                                                18 matches │
   ! embedding model    ⏎ no embed├──────────────────────────────────────────────────────────────────────────────────┤
   + hooks: claude-co…    ~/work/h│ ACTIONS                                                                          │
   ! hooks: codex       ⏎ codex is│ › Strengthen reflex…                   adage review strengthen                 s │
@@ -19,11 +19,11 @@ expression: text
                                  │ GO TO                                                                            │
                                  │   Settings · runtime.control           adage config set runtime.control          │
                                  │   Settings · runtime.rewrite           adage config set runtime.rewrite          │
+                                 │   Settings · runtime.routine_model     adage config set runtime.routine_model    │
                                  │   Settings · learn.repos               adage config set learn.repos              │
                                  │   Settings · learn.auto                adage config set learn.auto               │
                                  │   Settings · learn.min_interval_secs   adage config set learn.min_interval_secs  │
                                  │   Settings · learn.thresholds          adage config set learn.thresholds         │
-                                 │   Settings · learn.claude_projects     adage config set learn.claude_projects    │
                                  ├──────────────────────────────────────────────────────────────────────────────────┤
                                  │ ↑↓ move · enter run · tab complete · esc close                                   │
                                  │ every action also shows the adage command that does the same thing               │

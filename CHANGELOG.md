@@ -432,6 +432,21 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   `Standing` with `agent` answers what a spawned subagent is told: the lookup its own prompt binds
   and the standing reflexes. A subagent's tool calls carry its `agent`. Command hooks' output is
   unchanged.
+- **The Claude Code mod acts on what the binary answers.** Before a Bash call runs, the mod asks
+  the binary's plan and Claude Code's own permission check: a fresh receipt answers a test run
+  the rules would have let run unasked (the model reads the receipt as the result, the row draws
+  the receipt card, and a covering receipt that could not answer draws one dim line beside the
+  run), a learned replacement or the interpreter rewrite runs only when the rules treat both
+  commands alike (the engine's verdict, with the binary's advice carried to the model when they
+  do not), and anything the binary cannot plan runs as the model wrote it. Once per session the
+  repository's standing reflexes become a `session` section of the cached system prompt, the
+  project's environment note joins the Bash tool's description, compaction is told to keep the
+  procedures followed, and a subagent is told the conventions its own task binds before its first
+  request. A step the binary marks routine goes to the model named by the new
+  `runtime.routine_model` setting at low effort (`adage --json` reports it as `runtime`; the hook
+  is told only that one is set); a chain of reads is yielded as one response of several calls,
+  and an armed finish line as the agent's own call at the turn's end. Every path fails open to
+  the call, the step and the prompt as they were.
 - **Noticed: learning the person can watch.** The hook walks the candidates' own context net
   beside the reflexes' and records `noticed` (the candidate, its support, the support a reflex
   needs, whether it waits for review) once per candidate per session, at most 64, in both arms,

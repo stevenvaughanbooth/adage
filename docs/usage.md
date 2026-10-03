@@ -332,8 +332,16 @@ claude --plugin-dir plugin/claude-code
 
 ### What the plugin shows in the session
 
-The plugin carries a module that draws beside the conversation and never in it (the model reads
-nothing it draws):
+The plugin carries a module that acts where the command hooks cannot, and draws beside the
+conversation, never in it (the model reads nothing it draws). What it does: a test run a fresh
+receipt already covers is answered with the receipt instead of running, only when Claude Code's
+own permission rules would have let the call run unasked (the receipt card then stands in for
+pytest's output); a rewrite to the project's interpreter, or a learned replacement for a dead end,
+runs only when the rules treat both commands alike, and the binary's advice reaches the model
+otherwise; the repository's standing reflexes sit once in the cached system prompt, the project's
+environment note on the Bash tool's description, and a subagent is told the conventions its task
+binds before its first request; a step the binary marks routine goes to the model
+`runtime.routine_model` names, at low effort, when you set one. What it draws:
 
 - the opening line, with Adage's glyph: `◠ adage · 3 reflexes and 4 instincts active in this repo; …`;
 - under a prompt a reflex fired at, one dim line per reflex, worded as what it tells the agent;

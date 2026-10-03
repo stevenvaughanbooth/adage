@@ -49,8 +49,8 @@ export function headOf(argv: readonly string[]): string {
 
 /**
  * Whether `argv` (binary first) is one the mod may run, each verb in its one exact shape:
- * `version`; `hook claude <Event>` (an event name of letters only); `watch --follow --json --repo
- * <dir> --session <id> [--since <cursor>]`; `graph --json`; `doctor --json`; `status --json`;
+ * `version`; `hook claude <Event>` (an event name of letters only); `watch --follow --json --stdin
+ * ignore --repo <dir> --session <id> [--since <cursor>]`; `graph --json`; `doctor --json`; `status --json`;
  * `--json --for-session` (the status card); `ledger note`; `off`; `map --port 0`; `condition`;
  * `delegate status --json`.
  */
@@ -77,13 +77,13 @@ export function isAllowed(argv: readonly string[]): boolean {
     case 'delegate':
       return isExact(argv, ['delegate', 'status', '--json'])
     case 'watch': {
-      const fixed = ['watch', '--follow', '--json', '--repo']
+      const fixed = ['watch', '--follow', '--json', '--stdin', 'ignore', '--repo']
       if (!fixed.every((t, i) => argv[i + 1] === t)) return false
-      const repo = argv[5] ?? ''
-      const session = argv[7] ?? ''
-      if (repo === '' || argv[6] !== '--session' || session === '' || session.startsWith('-')) return false
-      if (argv.length === 8) return true
-      return argv.length === 10 && argv[8] === '--since' && (argv[9] ?? '') !== ''
+      const repo = argv[7] ?? ''
+      const session = argv[9] ?? ''
+      if (repo === '' || argv[8] !== '--session' || session === '' || session.startsWith('-')) return false
+      if (argv.length === 10) return true
+      return argv.length === 12 && argv[10] === '--since' && (argv[11] ?? '') !== ''
     }
     default:
       return false

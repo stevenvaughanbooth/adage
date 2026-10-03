@@ -682,6 +682,16 @@ fn the_card_as_json() {
     w.ok(&["config", "set", "ui.turn_line", "true"], &w.repo());
     let on: Value = serde_json::from_str(&w.ok(&["--json"], &w.repo())).unwrap();
     assert_eq!(on["ui"], json!({ "spinner": true, "turn_line": true, "noticed": false }));
+    // The mod's routing setting (`runtime.routine_model`): which model is the mod's to read from
+    // the card, never the hook's; a name that is not a model is refused.
+    assert_eq!(v["runtime"], json!({ "routine_model": "" }));
+    w.ok(&["config", "set", "runtime.routine_model", "haiku"], &w.repo());
+    let routed: Value = serde_json::from_str(&w.ok(&["--json"], &w.repo())).unwrap();
+    assert_eq!(routed["runtime"], json!({ "routine_model": "haiku" }));
+    assert!(!w
+        .run(&["config", "set", "runtime.routine_model", "not a model"], &w.repo(), "", &[], &[])
+        .status
+        .success());
     // An interrupted action here (ux-design §9.9): the card names it and what to run once the
     // worktree is inspected.
     assert_eq!(on["recovery"], Value::Null);

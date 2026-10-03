@@ -228,6 +228,9 @@ pub struct PreNote {
     pub covering: String,
     /// What the mod's receipt card shows for a call this receipt answers. Only when `fresh`.
     pub card: Option<ReceiptCard>,
+    /// The run's operation id (sanitised, at most 12 characters), fresh or not: the mod names the
+    /// receipt by it beside a run that happened anyway. Empty when the run has none.
+    pub operation: String,
 }
 
 /// The receipt card's data for a call answered by a receipt (the Claude Code mod's `answered`
@@ -1072,6 +1075,9 @@ fn pretool_mod(call: &BashCall<'_>, phase: &phase::Phase) -> Result<Option<Strin
 /// a call can be answered).
 fn receipt_plan(note: &PreNote, answer: bool) -> Value {
     let mut v = json!({ "fresh": note.fresh, "covering": note.covering });
+    if !note.operation.is_empty() {
+        v["operation"] = json!(note.operation);
+    }
     if note.fresh {
         v["note"] = json!(note.text);
         if let Some(r) = note.result.as_ref().filter(|_| answer) {
@@ -1879,6 +1885,7 @@ mod tests {
                     result: Some("passed".into()),
                     covering: "pytest".into(),
                     card: None,
+                    operation: String::new(),
                 })
             }
         }
@@ -2751,6 +2758,7 @@ mod tests {
                     result: Some("it passed".into()),
                     covering: PYTEST.into(),
                     card: None,
+                    operation: String::new(),
                 })
             }
         }
@@ -2998,6 +3006,7 @@ mod tests {
                     tests: vec!["tests/test_x.py::t".into()],
                     more: 0,
                 }),
+                operation: "op".into(),
             })
         }
     }
@@ -3020,7 +3029,7 @@ mod tests {
         let plan = bash_call(&w, &FRESH_RECEIPTS, "toolu_1", PYTEST, json!({ "dry_run": true })).expect("a plan");
         assert_eq!(
             plan["plan"]["receipt"],
-            json!({ "fresh": true, "covering": PYTEST, "note": "<adage-receipt operation=\"op\">\nAdage's run passed.\n</adage-receipt>", "result": "Adage answered this test run." })
+            json!({ "fresh": true, "covering": PYTEST, "operation": "op", "note": "<adage-receipt operation=\"op\">\nAdage's run passed.\n</adage-receipt>", "result": "Adage answered this test run." })
         );
         assert!(pretool_records(&w).is_empty(), "the dry run records nothing");
         let answered = json!({ "verdict": { "answered": "receipt" } });
@@ -3055,7 +3064,7 @@ mod tests {
         // Not fresh: the plan says so without a note or a result, and the verdict decides nothing.
         let stale = "python -m pytest tests/stale_test.py -q";
         let plan = bash_call(&w, &FRESH_RECEIPTS, "toolu_2", stale, json!({ "dry_run": true })).expect("a plan");
-        assert_eq!(plan["plan"]["receipt"], json!({ "fresh": false, "covering": PYTEST }));
+        assert_eq!(plan["plan"]["receipt"], json!({ "fresh": false, "covering": PYTEST, "operation": "op" }));
         assert!(bash_call(&w, &FRESH_RECEIPTS, "toolu_2", stale, answered).is_none());
         assert_eq!(pretool_records(&w).len(), 1, "nothing decided");
         assert!(!w.state().has_seen_pretool(phase::identity_hash(

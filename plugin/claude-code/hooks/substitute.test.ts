@@ -29,7 +29,8 @@ function world(on: On, o: Opts) {
     const out = (stdout: string) => ({ value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } })
     if (e.argv[1] === 'version') return out(o.version ?? 'adage 0.1.0\n')
     const p = JSON.parse(e.init?.stdin ?? '{}') as Record<string, unknown>
-    asked.push(p)
+    // The session's Standing is asked at the start; these tests count the call's asks.
+    if (p.hook_event_name === 'PreToolUse') asked.push(p)
     const answer = p.dry_run === true ? o.plan : p.verdict !== undefined ? o.final : undefined
     return out(answer === undefined ? '' : JSON.stringify(answer))
   })

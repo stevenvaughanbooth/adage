@@ -64,6 +64,11 @@ export type AdageAct = {
   rewrite?: boolean
   /** For `noticed` (plan D2): the sequence noticed, as the binary words it. */
   candidate?: string
+  /** For `noticed`: the earlier sessions that showed the sequence, and how many make a reflex. */
+  support?: number
+  s_min?: number
+  /** For `noticed`: the candidate waits for the person's review before it can become a reflex. */
+  review?: boolean
 }
 
 /** One decision row of the feed. */
@@ -83,6 +88,8 @@ export type AdageRow = {
   texts: { route: string; text: string }[]
   /** This session's own row. */
   mine: boolean
+  /** The calls the record named (`tool_use_ids`), when it did: a batch's calls in order. */
+  ids?: string[]
 }
 
 /** One line of the conditioning ticker (`learn` feed lines). */
@@ -157,9 +164,10 @@ export type AdageMode = {
   nobinary: string
   ascii: boolean
   reducedMotion: boolean
-  /** The opt-in lines (`ui.spinner`, `ui.turn_line`), as the binary reports them. */
+  /** The opt-in lines (`ui.spinner`, `ui.turn_line`, `ui.noticed`), as the binary reports them. */
   spinner: boolean
   turnLine: boolean
+  noticed: boolean
   /** `» Claude Code … is newer …`, until the first prompt; empty otherwise. */
   versionLine: string
   /** Status warnings and once-per-session toasts already shown, by id. */
@@ -190,6 +198,88 @@ export type AdageTurn = { submits: number; fired: number; predicted: number; mar
 /** The map (`Explore in browser`): its address once it serves. */
 export type AdageMap = { url: string; starting: boolean }
 
+// --------------------------------------------- B4 · D5: the press, the asks, noticed and skills
+
+/**
+ * The press (plan B4, architecture §3.12): the single-use token the binary issued at this
+ * session's start, held in engine memory only, never on argv, never in a file of the mod's.
+ */
+export type AdagePress = {
+  /** The session id it was issued for ('' before the first start). */
+  session: string
+  /** The token the next press spends (64 hex); '' while none is held. */
+  token: string
+  /**
+   * `held`; `none` (the window was missed, the binary refused one, or the mod reloaded before a
+   * start); `off` (an issue the mod did not ask for: presses stop for the session).
+   */
+  state: 'held' | 'none' | 'off'
+  /** Tokens the binary issued to the mod for this session (`press_issued` records are held to it). */
+  issued: number
+  /** Presses spent this session. */
+  chain: number
+}
+
+/** One thing the mod asked about at a turn's end, by its waiting key (ux-design §4.17). */
+export type AdageAsked = {
+  key: string
+  /** When it was last asked. */
+  at: number
+  /** How often the dialog was dismissed (`later`): twice, and it is not asked again. */
+  times: number
+  /** Answered (any answer but `why` and `later`): never asked again. */
+  done: boolean
+}
+
+/** What `review delegate … --stage --json` answered, as the grant pane draws it. */
+export type AdageStage = {
+  ok: boolean
+  why: string
+  digest: string
+  /** The first action on this machine (the policy and the marker come with the grant). */
+  first: boolean
+  argv: string[]
+  diff: { path: string; change: string; plus: number; minus: number; text: string }[]
+  refused: { path: string; why: string }[]
+  scripts: { path: string; sha256: string; text: string }[]
+  sandbox: string
+  profile: string
+  hashes: string[]
+  effect: string
+  cache: string[]
+  outputs: string[]
+  /** What the step reads (the input contracts), for a step that changes nothing. */
+  inputs: string[]
+}
+
+/** The grant pane (`see what it would do`): the offer, the stage, where the person is in it. */
+export type AdageAllow = {
+  key: string
+  say: string
+  kind: 'execute' | 'predict'
+  track: string
+  route: string
+  /** The terminal command for persona (b), behind Copy. */
+  command: string
+  stage: AdageStage | null
+  details: boolean
+  /** '' or what the pane says above the facts: the repository moved, or the binary's refusal. */
+  note: string
+  busy: boolean
+}
+
+/** A skill expanded with the steps Adage verified here (`skill.prompt`, plan D4). */
+export type AdageSkill = {
+  skill: string
+  at: number
+  /** The date in the heading the binary wrote. */
+  date: string
+  steps: { command: string; result: 'works' | 'stale'; signature: string }[]
+}
+
+/** A candidate as `status --json` words it (plan D1): what it would tell the agent, never its id. */
+export type AdageCandidate = { id: string; say: string; sequence: boolean }
+
 declare module 'claude-code' {
   interface PluginState {
     adage: {
@@ -210,6 +300,11 @@ declare module 'claude-code' {
       view: AdageView
       map: AdageMap
       turn: AdageTurn
+      press: AdagePress
+      asked: AdageAsked[]
+      allow: AdageAllow | null
+      skills: AdageSkill[]
+      candidates: AdageCandidate[]
     }
   }
 }

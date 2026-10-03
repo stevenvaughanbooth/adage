@@ -104,7 +104,7 @@ describe('a prediction before the request', () => {
       })
       expect(requests).toHaveLength(0)
       expect(asked).toEqual([
-        { session_id: 'sess-1', cwd: '/w', hook_event_name: 'TurnStep', turn_id: 'turn-1', index: 2, model: 'claude-x', ending: false },
+        { session_id: 'sess-1', cwd: '/w', hook_event_name: 'TurnStep', turn_id: 'turn-1', index: 2, model: 'claude-x', ending: false, via: 'mod' },
       ])
       expect(recorded).toEqual([
         { turnId: 'turn-1', index: 2, route: 'codegen-after-schema', kind, ids: typed.map((_, k) => ID(k)), isEnding: false },
@@ -214,6 +214,60 @@ describe('the finish line (ending)', () => {
       { kind: 'stop', stopReason: 'end_turn', usage: USAGE },
     ])
     expect(result).toMatchObject({ stopReason: 'end_turn', toolUses: [] })
+  })
+})
+
+describe('routing a step (C5, T-C5-04)', () => {
+  const ROUTINE: Asked = { ok: true, answer: { routine: true } }
+  const ENDS = () => model([{ kind: 'text', index: 0, text: 'Done.' }, { kind: 'stop', stopReason: 'end_turn', usage: USAGE }], { turnId: 'turn-1', index: 2, answer: 'Done.', toolUses: [], stopReason: 'end_turn', usage: USAGE })
+
+  test('routine, with a model set: the request goes out on it at low effort; the binary is told only that one is set', async () => {
+    const m = ENDS()
+    const { deps, asked } = stub(p => (p.ending ? { ok: true, answer: undefined } : ROUTINE), { routineModel: 'haiku' })
+    const { chunks } = await drain(turnStep(STEP, m.next, deps))
+    expect(m.requests).toEqual([{ ...STEP, model: 'haiku', effort: 'low' }])
+    expect(chunks.map(c => c.kind)).toEqual(['text', 'stop'])
+    expect(asked.map(p => p.routine_model)).toEqual([true, true])
+    expect(JSON.stringify(asked)).not.toContain('haiku')
+  })
+
+  test('no model set: a routine answer changes nothing, and the payload carries no routine_model', async () => {
+    const m = ENDS()
+    const { deps, asked } = stub(() => ROUTINE, {})
+    await drain(turnStep(STEP, m.next, deps))
+    expect(m.requests).toEqual([STEP])
+    expect(asked[0]?.routine_model).toBeUndefined()
+  })
+
+  test('a step the binary does not mark routine goes to the session\'s model, whatever is set', async () => {
+    const m = ENDS()
+    const { deps } = stub(() => ({ ok: true, answer: undefined }), { routineModel: 'haiku' })
+    await drain(turnStep(STEP, m.next, deps))
+    expect(m.requests).toEqual([STEP])
+  })
+
+  test('observing: never routed, though the binary is told a model is set', async () => {
+    const m = ENDS()
+    const { deps, asked } = stub(() => ROUTINE, { routineModel: 'haiku', isObserving: true })
+    await drain(turnStep(STEP, m.next, deps))
+    expect(m.requests).toEqual([STEP])
+    expect(asked[0]).toMatchObject({ routine_model: true, observe: true })
+  })
+
+  test('predicted or routed, never both: a prediction beside routine is the response, and no request goes out', async () => {
+    const m = ENDS()
+    const { deps } = stub(() => ({ ok: true, answer: { predict: { kind: 'run', route: 'codegen-after-schema', track: 'acme/billing@1', calls: [MAKE_GEN] }, routine: true } }), { routineModel: 'haiku' })
+    const { chunks } = await drain(turnStep(STEP, m.next, deps))
+    expect(m.requests).toHaveLength(0)
+    expect(chunks.map(c => c.kind)).toEqual(['tool', 'input', 'stop'])
+  })
+
+  test("routine on the ending ask changes nothing: the request already went out on the session's model", async () => {
+    const m = ENDS()
+    const { deps } = stub(p => (p.ending ? ROUTINE : { ok: true, answer: undefined }), { routineModel: 'haiku' })
+    const { chunks } = await drain(turnStep(STEP, m.next, deps))
+    expect(m.requests).toEqual([STEP])
+    expect(chunks.map(c => c.kind)).toEqual(['text', 'stop'])
   })
 })
 

@@ -111,6 +111,25 @@ for (const [pluginDir, alias] of [
         expect(allowed.includes(v), `${pluginDir}/hooks/bridge.ts: verb ${v} may not be in the allow-list`)
       }
       expect(verbs.join(",") === allowed.join(","), `${pluginDir}/hooks/bridge.ts: the allow-list changed (${verbs.join(", ")}); change scripts/check-plugin.mjs and the bridge test with it`)
+      // The follower never reads stdin: the engine closes a spawned child's, which a follower
+      // reading it as its parent's pipe would take for the parent's end (B2-B3 notes, issue 1).
+      const watch = readFileSync(bridge, "utf8").match(/const fixed = \[([^\]]*)\]/)?.[1] ?? ""
+      const shape = watch.split(",").map((v) => v.trim().replace(/^['"]|['"]$/g, "")).filter(Boolean).join(" ")
+      expect(shape === "watch --follow --json --stdin ignore --repo", `${pluginDir}/hooks/bridge.ts: the watch shape must be exactly \`watch --follow --json --stdin ignore --repo …\` (found \`${shape}\`)`)
+    }
+    // The person-only verbs the mod runs only through a press (architecture §3.12, plan B4): a
+    // second literal in hooks/press.ts, exactly these, never one the allow-list above may run and
+    // never install, config, share, train, packs or init.
+    const press = path.join(repo, pluginDir, "hooks/press.ts")
+    expect(existsSync(press), `${pluginDir}: the module has no hooks/press.ts`)
+    if (existsSync(press)) {
+      const list = readFileSync(press, "utf8").match(/export const PRESS_VERBS: readonly string\[\] = \[([^\]]*)\]/)?.[1]
+      expect(list !== undefined, `${pluginDir}/hooks/press.ts: no PRESS_VERBS literal`)
+      const verbs = (list ?? "").split(",").map((v) => v.trim().replace(/^['"]|['"]$/g, "")).filter(Boolean)
+      expect(verbs.join(",") === "review,delegate,on,add", `${pluginDir}/hooks/press.ts: the press list changed (${verbs.join(", ")}); change scripts/check-plugin.mjs with it`)
+      for (const v of ["install", "config", "share", "train", "packs", "init"]) {
+        expect(!verbs.includes(v), `${pluginDir}/hooks/press.ts: ${v} is never a press`)
+      }
     }
     // Two settings rows and no more (ux-design §8): decisions are never behind a setting.
     const rows = Object.keys(plugin.userConfig ?? {})

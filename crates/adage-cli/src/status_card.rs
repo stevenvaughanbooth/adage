@@ -484,7 +484,11 @@ pub fn run(args: &[String], paths: &Paths) -> Result<()> {
     let c = card(paths, std::env::current_dir().ok().as_deref(), for_session);
     if json {
         let mut v = c.json();
-        v["ui"] = ui_json(&adage_store::config::load(paths).config);
+        let cfg = adage_store::config::load(paths).config;
+        v["ui"] = ui_json(&cfg);
+        // The mod's routing setting (`runtime.routine_model`): the mod reads which model here and
+        // tells the binary only that one is set.
+        v["runtime"] = serde_json::json!({ "routine_model": cfg.runtime_routine_model });
         v["recovery"] = recovery_json(paths, std::env::current_dir().ok().as_deref());
         println!("{}", serde_json::to_string_pretty(&v)?);
         return Ok(());

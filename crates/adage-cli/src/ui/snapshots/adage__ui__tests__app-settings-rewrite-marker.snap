@@ -39,6 +39,6 @@ expression: text
    point Python test runs under the system Python at the project's verified environment before they run (Claude Code PreToolUse); false: leave every
    command as the agent wrote it
    ↪ rewrites off · same as adage delegate rewrites on to switch
- skills.invoke            false    (default)
+ runtime.routine_model    ""       (default)
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
  ? keys · : palette · enter edit · space toggle                                                                                                q quit

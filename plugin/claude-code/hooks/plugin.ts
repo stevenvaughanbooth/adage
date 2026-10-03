@@ -71,6 +71,7 @@ export const MODE0: Mode = {
   reducedMotion: false,
   spinner: false,
   turnLine: false,
+  noticed: false,
   versionLine: '',
   warned: [],
 }

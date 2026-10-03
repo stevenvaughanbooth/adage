@@ -701,6 +701,45 @@ fn a_panic_in_the_hook_is_recorded_without_the_payload_and_doctor_warns() {
     assert!(fo["detail"].as_str().unwrap().contains("panic at adage-hook/src/lib.rs"), "{fo}");
 }
 
+/// T-X-01 for the events only the mod sends and the mod's two `PreToolUse` phases: a panic, an
+/// oversized payload and a payload without a session id each exit 0 with nothing printed.
+#[test]
+fn the_mods_events_fail_open() {
+    let w = World::new();
+    let events: [(&str, Value); 5] = [
+        ("TurnStep", json!({ "turn_id": "t1", "index": 2, "ending": false, "via": "mod" })),
+        ("Standing", json!({ "via": "mod" })),
+        ("SkillPrompt", json!({ "skill": "release-notes", "text": "x", "via": "mod" })),
+        (
+            "PreToolUse",
+            json!({ "tool_name": "Bash", "tool_input": { "command": "python -m pytest" }, "tool_use_id": "toolu_1", "dry_run": true, "via": "mod" }),
+        ),
+        (
+            "PreToolUse",
+            json!({ "tool_name": "Bash", "tool_input": { "command": "python -m pytest" }, "tool_use_id": "toolu_2", "verdict": { "engine": "same" }, "via": "mod" }),
+        ),
+    ];
+    for (ev, fields) in &events {
+        let mut whole = fields.clone();
+        whole["session_id"] = json!("s-mod-fault");
+        whole["cwd"] = json!(w.repo());
+        whole["hook_event_name"] = json!(ev);
+        if cfg!(debug_assertions) {
+            let (out, err, code) =
+                w.run(&["hook", "claude", ev], whole.to_string().as_bytes(), &[("ADAGE_TEST_FAULT", "panic")]);
+            assert_eq!((out.as_str(), err.as_str(), code), ("", "", 0), "{ev}: a panic stays silent and exits 0");
+        }
+        let mut big = whole.clone();
+        big["padding"] = json!("x".repeat(9 << 20));
+        let (out, err, code) = w.run(&["hook", "claude", ev], big.to_string().as_bytes(), &[]);
+        assert_eq!((out.as_str(), err.as_str(), code), ("", "", 0), "{ev}: a 9 MiB payload");
+        let mut unnamed = whole.clone();
+        unnamed.as_object_mut().unwrap().remove("session_id");
+        let (out, err, code) = w.run(&["hook", "claude", ev], unnamed.to_string().as_bytes(), &[]);
+        assert_eq!((out.as_str(), err.as_str(), code), ("", "", 0), "{ev}: no session id");
+    }
+}
+
 #[test]
 fn internal_errors_are_recorded_and_nothing_to_do_is_not() {
     let w = World::new();

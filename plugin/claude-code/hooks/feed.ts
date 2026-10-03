@@ -38,9 +38,13 @@ export function stem(id: string): string {
   return `${clean}-${h.toString(16).padStart(16, '0')}`
 }
 
-/** The follower's argv: the `--since` form only once a cursor exists (T-B3-08). */
+/**
+ * The follower's argv: the `--since` form only once a cursor exists (T-B3-08). `--stdin ignore`:
+ * the engine closes a spawned child's stdin at the start, which a follower reading it as its
+ * parent's pipe would take for the parent's end.
+ */
 export function followArgs(cli: string, repo: string, session: string, since: string): string[] {
-  const argv = [cli, 'watch', '--follow', '--json', '--repo', repo, '--session', session]
+  const argv = [cli, 'watch', '--follow', '--json', '--stdin', 'ignore', '--repo', repo, '--session', session]
   return since === '' ? argv : [...argv, '--since', since]
 }
 
@@ -75,6 +79,9 @@ function actOf(v: unknown): Act | undefined {
   const a: Act = { act: v.act }
   for (const k of ['route', 'strength', 'detail', 'what', 'interpreter', 'candidate'] as const) if (typeof v[k] === 'string') a[k] = v[k] as string
   if (typeof v.rewrite === 'boolean') a.rewrite = v.rewrite
+  // A noticed sequence (plan D2): how far it is from a reflex, for the line D5 draws.
+  for (const k of ['support', 's_min'] as const) if (typeof v[k] === 'number' && Number.isFinite(v[k])) a[k] = v[k] as number
+  if (typeof v.review === 'boolean') a.review = v.review
   if (v.act === 'pretool' && v.withheld === true) return { act: 'withheld' } // a withheld pre-tool record names the arm
   return a
 }
@@ -94,6 +101,8 @@ export function rowOf(v: Record<string, unknown>, mine: string): Omit<Row, 'seq'
     .filter(isRecord)
     .map(t => ({ route: str(t.route), text: str(t.text) }))
     .filter(t => !isMine || acts.some(a => a.act === 'directed' && a.route === t.route))
+  // The calls the record names (`tool_use_ids`): a line drawn under a batch finds its group by them.
+  const ids = (Array.isArray(v.tool_use_ids) ? v.tool_use_ids : []).filter((x): x is string => typeof x === 'string' && x !== '')
   return {
     ts: num(v.ts),
     session,
@@ -104,6 +113,7 @@ export function rowOf(v: Record<string, unknown>, mine: string): Omit<Row, 'seq'
     observed: num(v.observed),
     texts,
     mine: isMine,
+    ...(ids.length > 0 ? { ids } : {}),
   }
 }
 

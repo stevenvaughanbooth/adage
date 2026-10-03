@@ -145,10 +145,16 @@ for it, and Adage records it as its own (`adage_` tool-use ids, `by: adage` in t
 never counted as the agent following a reflex, never strengthens one, and is read by the learner
 as Adage's step, not the agent's. Without the mod, or without a grant, nothing is predicted and
 the hooks behave exactly as before. With the mod, each Bash call is decided once whoever asks (the
-mod's plan and verdict, then the command hook), the repository's standing reflexes can sit once in
-the session's cached system prompt instead of arriving at the first prompt, and a step the model
-takes only to do what a delivered directive says can go to a smaller model the person chose. Every
-hook record carries the hook's own time, and `adage doctor` reports the p95.
+mod's plan and verdict, then the command hook): the mod asks Claude Code's own permission check
+before it acts, so a receipt answers only a call the rules would have let run unasked, and a
+rewrite or a learned replacement runs only when the rules treat both commands alike (otherwise
+the binary's advice reaches the model beside the call as written). The repository's standing
+reflexes sit once in the session's cached system prompt instead of arriving at the first prompt,
+the project's environment note rides on the Bash tool's description, compaction is told to keep
+the procedures the session followed, a subagent is told the conventions its task binds before its
+first request, and a step the model takes only to do what a delivered directive says can go to a
+smaller model the person chose (`runtime.routine_model`). Every hook record carries the hook's own
+time, and `adage doctor` reports the p95.
 
 A `skill` reflex says "In this repository the `release-checklist` skill is used at this point"
 after the prompt, edit or learned sequence where sessions here used it, and is followed when the
