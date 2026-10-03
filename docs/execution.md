@@ -391,7 +391,11 @@ adage-exec status  --repo <dir>
 adage-exec journal [--repo <dir>]
 adage-exec recover --id <operation-id> --acknowledge
 adage-exec doctor  [--json]
+adage-exec version
 ```
+
+`version` prints `adage-exec <version>` on one line and exits 0, reading nothing: it is the Claude
+Code mod's activation probe.
 
 Request flags: `--input k=v` and `--contract k=<anchored regex>` (one per `{slot}` in the argv
 template), `--effect observe`, `--level e1|e2`, `--output typed|raw`, `--fields '<json>'`,
@@ -542,6 +546,51 @@ program-running flags (`rg --pre`, `rg -z`, `git --ext-diff`, `--textconv`, `--o
 git, a repository whose config sets none of the hazardous keys; no scripts; strict contracts for
 every slot; typed output; an enforced sandbox; a local reflex, or a pack from a trusted signer past
 forming; and policy `auto_approve = "inert-observe"`. It is **off by default** until gate G3.
+
+## Predicted calls
+
+Where the Claude Code mod is installed, Adage can make a reflex's call in the agent's place: at a
+step boundary (`adage-exec hook claude TurnStep`) it answers the call the reflex directs, and the
+mod hands it to Claude Code as if the model had made it. The call then runs in the agent's
+harness, under the harness's own permissions; adage-exec runs nothing. Only `adage-exec`
+predicts: `adage hook` has no grants to read.
+
+```sh
+adage review delegate acme-billing/work-items lookup-work-item --predict
+```
+
+- **A separate grant.** A predict grant sits beside a reflex's E1 or E2 grant, never in place of
+  one: the approval key gains `mode` (`execute`, the default and absent from older files, or
+  `predict`), and approving, revoking, an automatic revocation and a lapse each act on one mode.
+  `adage review revoke <track> <reflex>` withdraws the E1 and E2 grants; `--predict` withdraws the
+  predict grant.
+- **What it is keyed on.** What the call would run: the command template, the slot contracts,
+  the scripts it names (hashed at every step), the effect and, for a pack, its exec digest and
+  signer. Its `level` is `e2` and its `profile_id` the literal `harness`: no sandbox profile, output
+  contract or timeout applies, so none can lapse it. A change to any of the rest lapses it, and the
+  person is told as for any grant, with `adage review delegate <track> <reflex> --predict` to
+  approve it again.
+- **Refused** (nothing is written) inside an agent session or without a terminal; below
+  `max_level = "E2"` (making a call from a hook is acting from a hook); for a step above
+  regenerate or an effect `[effects] deny` names; for a command the table classifies as changing
+  the environment (no script) without the managed `allow_environment_actions`; for a reflex only
+  adage-exec can carry out (a vendored script, a learned action); and for a reflex that already
+  holds an E1 or E2 grant, because adage-exec already runs it and a predicted call would run it a
+  second time. `--predict` takes no `--level`, `--effect` or other execution terms. There is no
+  preview: nothing is staged.
+- **When it predicts.** At each step, `predict_grants` lists the granted reflexes whose key still
+  equals the one planned now in the session's checkout, that the current policy permits, and
+  that hold no execute grant; the runtime then predicts only what it has already directed
+  (plan §2.2 items 2 and 2b). The step is asked from the session's working directory; when that
+  does not resolve to the same repository, nothing is predicted.
+- **Off for the machine.** `adage delegate predict off` (from anywhere, like `delegate rewrites
+  off`) writes `$ADAGE_HOME/exec/predict-off`, read at every step: nothing is predicted, grants are
+  kept. `adage delegate predict on` (a person) removes it.
+- **Shown.** `adage delegate status --json` gives each grant's `mode` and the switch as
+  `predict: "on" | "off"`; a lapsed predict grant carries `mode: "predict"`.
+- **Never run here.** Every path in `adage-exec hook` that runs something (E1 prefetch, the E2
+  action, the receipt, the finish-line gate, exec-only reflexes) reads execute grants only, and
+  `run` refuses a predict request outright.
 
 ## Policy
 

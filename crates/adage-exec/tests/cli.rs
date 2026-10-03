@@ -237,6 +237,18 @@ fn raw_mode_needs_policy_and_its_own_approval() {
     args.clear();
 }
 
+/// The Claude Code mod's activation probe: one line naming the binary and its version, exit 0,
+/// and nothing read, so even a data directory that cannot be read leaves it answering.
+#[test]
+fn version_is_one_line_and_reads_nothing() {
+    let e = setup("{}");
+    std::fs::write(e.home.path().join("policy.toml"), "not toml").unwrap();
+    let o = exec(&e, &["version"], &[]);
+    assert_eq!(o.status.code(), Some(0));
+    assert_eq!(String::from_utf8_lossy(&o.stdout), format!("adage-exec {}\n", env!("CARGO_PKG_VERSION")));
+    assert!(o.stderr.is_empty());
+}
+
 #[test]
 fn doctor_reports_the_sandbox() {
     let e = setup("{}");

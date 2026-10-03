@@ -254,8 +254,15 @@ pub struct DelegateRoute {
     /// The reflex id.
     pub reflex: String,
     /// Execution level: `e1` (prefetch) or `e2` (an action).
-    #[arg(long, value_name = "LEVEL")]
-    pub level: String,
+    #[arg(long, value_name = "LEVEL", required_unless_present = "predict")]
+    pub level: Option<String>,
+    /// Let Adage make the reflex's call in the agent's place (the agent's permissions still apply;
+    /// adage-exec runs nothing). A separate grant from --level.
+    #[arg(
+        long,
+        conflicts_with_all = ["level", "effect", "outputs", "cache", "raw", "fields", "exit_when", "timeout_ms"]
+    )]
+    pub predict: bool,
     /// E2: files the action may write, as globs (repeatable).
     #[arg(long, value_name = "GLOB", action = clap::ArgAction::Append)]
     pub outputs: Vec<String>,
@@ -291,6 +298,9 @@ pub struct RevokeRoute {
     pub track: String,
     /// The reflex id.
     pub reflex: String,
+    /// Withdraw the predict grant (without it, the E1 and E2 grants).
+    #[arg(long)]
+    pub predict: bool,
     /// The repository (default: the current one).
     #[arg(long, value_name = "DIR")]
     pub repo: Option<PathBuf>,
@@ -531,6 +541,12 @@ pub enum DelegateAction {
     },
     /// Rewrites to the project's environment (PreToolUse), on their own switch.
     Rewrites {
+        /// `on` or `off`.
+        #[arg(value_parser = ["on", "off"])]
+        state: String,
+    },
+    /// Calls made in the agent's place, on this machine: off stops every predict grant at once.
+    Predict {
         /// `on` or `off`.
         #[arg(value_parser = ["on", "off"])]
         state: String,
@@ -1094,6 +1110,7 @@ mod tests {
             &["delegate", "status", "--json"],
             &["delegate", "--json"],
             &["delegate", "rewrites", "off"],
+            &["delegate", "predict", "off"],
             &["delegate", "policy"],
             &["delegate", "policy", "--max-level", "e2"],
         ] {
@@ -1101,6 +1118,7 @@ mod tests {
             assert!(m.is_ok(), "{args:?}: {m:?}");
         }
         assert!(command(&Theme::plain()).try_get_matches_from(["adage", "delegate", "rewrites", "maybe"]).is_err());
+        assert!(command(&Theme::plain()).try_get_matches_from(["adage", "delegate", "predict", "maybe"]).is_err());
         assert!(command(&Theme::plain())
             .try_get_matches_from(["adage", "delegate", "policy", "--max-level", "e3"])
             .is_err());

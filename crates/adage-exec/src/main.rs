@@ -7,7 +7,12 @@
 //! adage-exec revoke  --repo <dir> [--track <t> --route <r>]
 //! adage-exec status  --repo <dir>
 //! adage-exec doctor  [--json]
+//! adage-exec version
 //! ```
+//!
+//! `version` prints `adage-exec <version>` on one line and exits 0: the Claude Code mod's
+//! activation probe, so it reads nothing (no data directory, no policy) and cannot fail on a
+//! machine whose setup is incomplete.
 //!
 //! Request flags: `--input k=v`, `--contract k=<regex>`, `--effect observe`, `--level e1|e2`,
 //! `--output typed|raw`, `--fields '<json>'`, `--script <path>=<sha256>` (or `cas:<sha256>=<sha256>`
@@ -42,7 +47,8 @@ const USAGE: &str = "usage:
   adage-exec status  --repo <dir>
   adage-exec journal [--repo <dir>]
   adage-exec recover --id <operation-id> --acknowledge
-  adage-exec doctor  [--json]";
+  adage-exec doctor  [--json]
+  adage-exec version";
 
 struct Args {
     list: Vec<String>,
@@ -162,6 +168,7 @@ fn request(a: &Args) -> Result<ExecRequest> {
             outputs: a.all("--outputs"),
             cache: a.all("--cache"),
         }),
+        mode: Default::default(),
     })
 }
 
@@ -317,7 +324,7 @@ fn cmd_revoke(a: &Args) -> Result<i32> {
     };
     let path = approvals::path(&adage_home());
     let mut store = Store::load(&path)?;
-    let n = store.revoke(&key, route.as_deref());
+    let n = store.revoke(&key, route.as_deref(), None);
     store.save(&path)?;
     println!("Revoked {n} approval(s) for {key}.");
     Ok(0)
@@ -428,6 +435,10 @@ fn main() {
     if args.first().map(String::as_str) == Some("hook") {
         // Before anything else: the no-match path must cost what `adage hook`'s does.
         adage_exec::hook::main(args.get(1).cloned().unwrap_or_default(), args.get(2).cloned().unwrap_or_default());
+    }
+    if args.first().map(String::as_str) == Some("version") {
+        println!("adage-exec {}", env!("CARGO_PKG_VERSION"));
+        std::process::exit(0);
     }
     if args.is_empty() || args.iter().any(|a| a == "--help" || a == "-h") {
         println!("{USAGE}");

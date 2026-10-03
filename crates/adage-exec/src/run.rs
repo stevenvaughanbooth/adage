@@ -415,6 +415,10 @@ pub struct Checked {
 pub fn check(req: &ExecRequest, ctx: &Context) -> Result<Checked, (Refusal, Option<Box<Checked>>)> {
     let plain = |r: Refusal| (r, None);
     let request = |reason: String| plain(Refusal { stage: "request", reason });
+    // A predict grant authorises a call the agent's harness makes; nothing here may run it.
+    if req.mode == crate::request::GrantMode::Predict {
+        return Err(request("a predict grant runs nothing in adage-exec".into()));
+    }
     let bound = req.bind().map_err(|e| request(e.to_string()))?;
     crate::project_python::validate(req).map_err(request)?;
     // An action's summary needs no typed fields (it reports its outcome and changed paths).

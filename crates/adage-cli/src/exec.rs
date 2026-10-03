@@ -8,6 +8,9 @@
 //! adage delegate off [--repo <dir>]                        hooks call `adage hook` again
 //! adage delegate rewrites <on|off>                         rewrites to the project's environment
 //!                                                          alone (no adage-exec needed)
+//! adage delegate predict <on|off>                          calls made in the agent's place, on
+//!                                                          this machine (off: none, whatever is
+//!                                                          granted)
 //! adage delegate [status] [--repo <dir>] [--json]          registrations, and grants per repository
 //! adage delegate policy [--max-level e1|e2]                this machine's execution policy, and
 //!                                                          its file; e2 opts in to actions
@@ -15,8 +18,19 @@
 //!                         [--exit-when field=value]... [--timeout-ms n] [--repo <dir>] [--by <name>]
 //! adage review delegate <track> <reflex> --level e2 [--outputs <glob>]... [--cache <glob>]...
 //!                         [--effect verify|regenerate] [--timeout-ms n] [--repo <dir>] [--by <name>]
-//! adage review revoke <track> <reflex> [--repo <dir>]
+//! adage review delegate <track> <reflex> --predict [--repo <dir>] [--by <name>]
+//! adage review revoke <track> <reflex> [--predict] [--repo <dir>]
 //! ```
+//!
+//! **Predict** (plan §2.2 item 3): a separate grant, beside E1 and E2, that lets the `TurnStep`
+//! hook make the reflex's call in the agent's place. The agent's harness runs that call under its
+//! own permissions; adage-exec runs nothing, so nothing is staged or previewed. It is keyed on what
+//! the call would run (command template, contracts, scripts, effect) and lapses when that changes.
+//! It is refused for a step above regenerate, a denied or (without the team's opt-in) environment
+//! effect, a reflex only adage-exec can carry out, and a reflex that already holds an E1 or E2
+//! grant (two paths would make the same call). Policy must allow E2: making a call is acting
+//! from a hook. `adage delegate predict off` stops every predict grant at once, from anywhere;
+//! `on` is a person's decision.
 //!
 //! **E2** (Track C §3.6, §4): an action a hook runs when the reflex's stimulus fires. It is
 //! approved explicitly, for one reflex in one repository, never automatically. Before recording
@@ -55,10 +69,11 @@ use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-const USAGE: &str = "usage: adage delegate <on [--bin <adage-exec>] | off | rewrites <on|off> | status [--json] | policy [--max-level e1|e2]> [--repo <dir>]";
+const USAGE: &str = "usage: adage delegate <on [--bin <adage-exec>] | off | rewrites <on|off> | predict <on|off> | status [--json] | policy [--max-level e1|e2]> [--repo <dir>]";
 const REVIEW_USAGE: &str = "usage: adage review delegate <track> <reflex> --level e1 [--raw] [--fields '<json>'] [--exit-when field=value]... [--timeout-ms n] [--repo <dir>] [--by <name>]
        adage review delegate <track> <reflex> --level e2 [--outputs <glob>]... [--cache <glob>]... [--effect verify|regenerate] [--timeout-ms n] [--repo <dir>] [--by <name>]
-       adage review revoke <track> <reflex> [--repo <dir>]";
+       adage review delegate <track> <reflex> --predict [--repo <dir>] [--by <name>]
+       adage review revoke <track> <reflex> [--predict] [--repo <dir>]";
 
 use adage_trace::Harness;
 
@@ -141,6 +156,12 @@ pub fn delegate(args: &[String], paths: &Paths) -> Result<()> {
             Some(v @ ("on" | "off")) => rewrites(v == "on", paths),
             _ => bail!("{USAGE}"),
         },
+        // Off only turns something down, so it runs from a script, and from `!` inside an agent
+        // session; on is a person's decision.
+        Some("predict") => match args.get(1).map(String::as_str) {
+            Some(v @ ("on" | "off")) => predict(v == "on", paths),
+            _ => bail!("{USAGE}"),
+        },
         Some("status") => status(&args[1..], paths),
         Some("policy") => policy(&args[1..], paths),
         None => status(args, paths),
@@ -183,6 +204,37 @@ fn rewrites(on: bool, paths: &Paths) -> Result<()> {
         o.next("adage delegate rewrites off", "turn them off again")?;
     } else {
         o.next("adage delegate rewrites on", "turn them back on")?;
+    }
+    Ok(())
+}
+
+/// `adage delegate predict on|off`: the machine's switch for calls made in the agent's place. Off
+/// writes `exec/predict-off`, which adage-exec reads at every `TurnStep`; grants are kept.
+fn predict(on: bool, paths: &Paths) -> Result<()> {
+    let marker = adage_exec::hook::predict_off(paths);
+    if on {
+        require_person("delegate predict on")?;
+        match std::fs::remove_file(&marker) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.into()),
+            _ => {}
+        }
+    } else {
+        std::fs::create_dir_all(marker.parent().context("no directory")?)?;
+        std::fs::write(&marker, format!("{}\n", adage_exec::time::now()))?;
+    }
+    let mut o = Out::stdout();
+    o.header("delegate predict", &[if on { "on" } else { "off" }, "calls made in the agent's place"])?;
+    o.blank()?;
+    if on {
+        o.kv("predict", Line::new().text("on, from the next step").sep().quiet("only reflexes granted --predict"))?;
+    } else {
+        o.kv("predict", Line::new().text("off, from the next step").sep().quiet("grants are kept"))?;
+    }
+    o.blank()?;
+    if on {
+        o.next("adage delegate predict off", "stop every call made in the agent's place")?;
+    } else {
+        o.next("adage delegate predict on", "turn them back on (your decision)")?;
     }
     Ok(())
 }
@@ -339,6 +391,7 @@ fn status(args: &[String], paths: &Paths) -> Result<()> {
     for a in &store.approvals {
         grants.entry(a.key.repo.clone()).or_default().push(json!({
             "route": a.route,
+            "mode": a.key.mode.as_str(),
             "level": a.key.level.as_str(),
             "output": a.key.output_mode.as_str(),
             "argv": a.key.argv_templates.first().map(|v| v.join(" ")),
@@ -354,7 +407,8 @@ fn status(args: &[String], paths: &Paths) -> Result<()> {
     if args.iter().any(|a| a == "--json") {
         let duplicates: Vec<Value> =
             dups.iter().map(|d| json!({ "harness": d.harness, "places": d.places, "fix": d.fix })).collect();
-        let v = json!({ "enabled": enabled, "registrations": regs, "grants": grants, "lapsed": lapsed, "duplicates": duplicates });
+        let predict = if adage_exec::hook::predict_off(paths).exists() { "off" } else { "on" };
+        let v = json!({ "enabled": enabled, "predict": predict, "registrations": regs, "grants": grants, "lapsed": lapsed, "duplicates": duplicates });
         println!("{}", serde_json::to_string_pretty(&v)?);
         return Ok(());
     }
@@ -389,15 +443,16 @@ fn status(args: &[String], paths: &Paths) -> Result<()> {
         o.blank()?;
         o.line(&Line::new().bold(Role::Ink, repo.clone()))?;
         for g in gs {
-            let mut l = Line::new()
-                .text("  ")
-                .text(g["route"].as_str().unwrap_or(""))
-                .sep()
-                .text(g["level"].as_str().unwrap_or("").to_uppercase())
-                .sep()
-                .quiet(g["output"].as_str().unwrap_or(""))
-                .sep()
-                .cmd(g["argv"].as_str().unwrap_or(""));
+            let l = Line::new().text("  ").text(g["route"].as_str().unwrap_or("")).sep();
+            let mut l = match g["mode"].as_str() {
+                Some("predict") => l.text("predict").sep().quiet("in the agent's place"),
+                _ => l
+                    .text(g["level"].as_str().unwrap_or("").to_uppercase())
+                    .sep()
+                    .quiet(g["output"].as_str().unwrap_or("")),
+            }
+            .sep()
+            .cmd(g["argv"].as_str().unwrap_or(""));
             if g["auto"] == true {
                 l = l.sep().faint("automatic");
             }
@@ -443,7 +498,7 @@ pub(crate) fn print_lapsed<W: std::io::Write>(o: &mut Out<W>, lapsed: &[route::L
     ))?;
     for l in lapsed {
         o.blank()?;
-        o.line(&Line::new().bold(Role::Ink, l.route.clone()).sep().text(l.level.as_str().to_uppercase()))?;
+        o.line(&Line::new().bold(Role::Ink, l.route.clone()).sep().text(l.grant()))?;
         kv(o, "changed", Line::new().text(l.what()))?;
         kv(o, "approve", Line::new().cmd(l.reapprove.clone()).faint(" (after checking the change)"))?;
     }
@@ -642,8 +697,11 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
     let store_path = approvals::path(&paths.root);
     let mut store = Store::load(&store_path)?;
     let label = format!("{track}/{route_id}");
+    let predict = args.iter().any(|a| a == "--predict");
     if verb == "revoke" {
-        let n = store.revoke(&ir.repo, Some(&label));
+        // Each grant is withdrawn on its own: revoking one never takes the other with it.
+        let mode = if predict { approvals::GrantMode::Predict } else { approvals::GrantMode::Execute };
+        let n = store.revoke(&ir.repo, Some(&label), Some(mode));
         store.save(&store_path)?;
         let mut o = Out::stdout();
         o.header("review revoke", &[&label, &ir.repo])?;
@@ -651,6 +709,9 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
         o.kv("withdrawn", Line::new().text(crate::words::count(n, "delegation")))?;
         o.blank()?;
         return Ok(o.next("adage delegate status", "what stays delegated")?);
+    }
+    if predict {
+        return delegate_predict(args, paths, &root, ir, &label, store, &store_path);
     }
     let level = match flag(args, "--level").as_deref().map(str::to_ascii_lowercase).as_deref() {
         Some("e1") => Level::E1,
@@ -883,6 +944,122 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
     o.blank()?;
     if !marker(paths).is_file() {
         o.next("adage delegate on", "execution is off; this makes hooks run delegated reflexes")?;
+    } else {
+        o.next("adage delegate status", "every delegated reflex")?;
+    }
+    Ok(())
+}
+
+/// `adage review delegate <track> <reflex> --predict`: the person's grant that lets the `TurnStep`
+/// hook make this reflex's call in the agent's place (plan §2.2 item 3). Nothing runs here, so
+/// there is no preview; what is shown is what the call would run and the evidence for it.
+fn delegate_predict(
+    args: &[String],
+    paths: &Paths,
+    root: &Path,
+    ir: &adage_tracks::index::IndexedRoute,
+    label: &str,
+    mut store: Store,
+    store_path: &Path,
+) -> Result<()> {
+    if ["--level", "--effect", "--outputs", "--cache", "--fields", "--exit-when", "--timeout-ms", "--raw"]
+        .iter()
+        .any(|f| args.iter().any(|a| a == f))
+    {
+        bail!("--predict grants a call in the agent's place; it takes no level or execution terms\n{REVIEW_USAGE}");
+    }
+    // Two paths would make the same call: adage-exec's run (or prefetch) and the agent's.
+    if let Some(a) =
+        store.approvals.iter().find(|a| a.key.repo == ir.repo && a.route == label && a.key.mode.is_execute())
+    {
+        return Err(crate::hint(
+            format!(
+                "{label} already holds an {} grant here, so adage-exec runs it; predicting the same call too would run it twice",
+                a.key.level.as_str().to_uppercase()
+            ),
+            format!("withdraw that grant first (`adage review revoke {} {}`), or keep it and leave this reflex unpredicted", ir.track, ir.route.id),
+        ));
+    }
+    let plan = route::plan_predict(ir, root, &paths.tracks()).map_err(anyhow::Error::msg)?;
+    let req = plan.request;
+    let table = CommandTable::load();
+    let classified = adage_exec::classify::effect(&req.argv, &table);
+    let pol = adage_exec::policy::load(&paths.root)?;
+    pol.permits(&req, classified).map_err(|e| {
+        if e.contains("caps execution") {
+            crate::hint(
+                e,
+                format!(
+                    "a call made in the agent's place is acting from a hook: run `adage delegate policy --max-level e2` yourself (it sets max_level = \"E2\" under [exec] in {})",
+                    adage_exec::policy::personal_path(&paths.root).display()
+                ),
+            )
+        } else {
+            anyhow::anyhow!(e)
+        }
+    })?;
+    let key = ApprovalKey::for_request(&req, &ir.repo);
+    let e = &ir.route.evidence;
+    let mut o = Out::stdout();
+    o.header("review delegate", &[label, &format!("predict, for {} on this machine", key.repo)])?;
+    o.blank()?;
+    o.kv("reflex", Line::new().text(label.to_string()).sep().quiet(format!("track version {}", ir.version)))?;
+    o.kv(
+        "grant",
+        Line::new().text("predict").sep().quiet("Adage makes this call in the agent's place, when the reflex is due"),
+    )?;
+    o.kv("argv", Line::new().cmd(req.argv.join(" ")))?;
+    for (k, v) in &req.contracts {
+        o.kv("input", Line::new().text(format!("{{{k}}} bound by Adage before the call, must match {v}")))?;
+    }
+    o.kv("effect", Line::new().text(format!("{} (the classifier says {})", req.effect.as_str(), classified.as_str())))?;
+    o.kv("runs", Line::new().text("in the agent's harness, under its own permissions; adage-exec runs nothing"))?;
+    if req.scripts.is_empty() {
+        o.kv("scripts", Line::new().quiet("none (L-none)"))?;
+    }
+    for s in &req.scripts {
+        o.kv(
+            "script",
+            Line::new().text(format!("{} sha256 {}", s.path, s.sha256)).quiet("; a change lapses the grant"),
+        )?;
+    }
+    o.kv(
+        "evidence",
+        Line::new().text(format!(
+            "{} of {} traces over {} days{}",
+            e.support,
+            e.opportunities,
+            e.days,
+            if e.by_origin.is_empty() { String::new() } else { format!(", by origin {:?}", e.by_origin) }
+        )),
+    )?;
+    print_attestations(&mut o, paths, ir)?;
+    store.approve(Approval {
+        key,
+        route: label.to_string(),
+        approved_on: adage_exec::time::now(),
+        by: flag(args, "--by"),
+        basis: json!({
+            "support": e.support,
+            "opportunities": e.opportunities,
+            "days": e.days,
+            "by_origin": e.by_origin,
+            "effect_evidence": e.effect_evidence,
+        }),
+        auto: false,
+        terms: None,
+    });
+    store.save(store_path)?;
+    o.blank()?;
+    o.kv("recorded", Line::new().text(store_path.display().to_string()))?;
+    o.blank()?;
+    o.note("The grant lapses if the reflex's command, its contracts or a script it runs changes.")?;
+    if adage_exec::hook::predict_off(paths).exists() {
+        o.note("Predictions are off on this machine (`adage delegate predict off`); nothing is predicted until they are on.")?;
+    }
+    o.blank()?;
+    if !marker(paths).is_file() {
+        o.next("adage delegate on", "only adage-exec predicts; this makes hooks call it")?;
     } else {
         o.next("adage delegate status", "every delegated reflex")?;
     }

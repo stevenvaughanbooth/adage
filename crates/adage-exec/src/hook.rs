@@ -192,11 +192,99 @@ impl Extension for Prefetch {
             .filter(|r| r.exec_only())
             .filter(|r| {
                 let label = format!("{}/{}", r.track, r.route.id);
-                store.approvals.iter().any(|a| a.key.repo == repo_key && a.route == label)
+                store.approvals.iter().any(|a| a.key.repo == repo_key && a.route == label && a.key.mode.is_execute())
             })
             .map(|r| (r.track.clone(), r.route.id.clone()))
             .collect()
     }
+
+    /// The reflexes whose `predict` grant still holds here ([`predict_grants`]), in the checkout
+    /// this step was asked from ([`predict_root`]).
+    fn predict_grants(
+        &self,
+        repo_key: &str,
+        index: &adage_tracks::Index,
+        paths: &adage_store::Paths,
+    ) -> Vec<(String, String)> {
+        // The cheapest refusals first: a `TurnStep` is asked before every request the agent makes.
+        if predict_off(paths).exists() {
+            return Vec::new();
+        }
+        match predict_root(repo_key, index, paths) {
+            Some(root) => predict_grants(repo_key, &root, index, paths),
+            None => Vec::new(),
+        }
+    }
+}
+
+/// The marker `adage delegate predict off` writes: nothing is predicted on this machine, whatever
+/// is granted. Read at every `TurnStep`, so it takes effect at the next step of a running session.
+pub fn predict_off(paths: &adage_store::Paths) -> std::path::PathBuf {
+    paths.root.join("exec").join("predict-off")
+}
+
+#[cfg(test)]
+thread_local! {
+    /// The working directory a test's in-process `TurnStep` is asked from: the process's own is
+    /// shared by every test thread.
+    static TEST_CWD: std::cell::RefCell<Option<std::path::PathBuf>> = const { std::cell::RefCell::new(None) };
+}
+
+/// The checkout a `TurnStep` was asked from. The pipeline does not pass its root to this question,
+/// so it is the repository of the working directory, which is the session's: the mod runs the
+/// binary there, as Claude Code runs its command hooks. A grant is checked against this checkout's
+/// scripts only when it resolves to `repo_key`; otherwise nothing is predicted.
+fn predict_root(repo_key: &str, index: &adage_tracks::Index, paths: &adage_store::Paths) -> Option<std::path::PathBuf> {
+    #[cfg(test)]
+    let cwd = TEST_CWD.with(|c| c.borrow().clone()).or_else(|| std::env::current_dir().ok())?;
+    #[cfg(not(test))]
+    let cwd = std::env::current_dir().ok()?;
+    let root = adage_core::repo::find_root(&cwd)?;
+    let keys: std::collections::BTreeSet<&str> = index.routes.iter().map(|r| r.repo.as_str()).collect();
+    (adage_core::repo::lookup_key(&root, Some(&paths.repo_keys()), &keys)? == repo_key).then_some(root)
+}
+
+/// The `(track, route)` pairs a `TurnStep` may predict in the checkout at `root` (plan §2.2 item
+/// 3): each `predict` grant for `repo_key` whose route is in the index, whose key equals the one
+/// planned now ([`route::plan_predict`]: a changed command, contract or script lapses it), that
+/// policy permits, and whose route holds no execute grant (adage-exec already acts on that route;
+/// two paths would make the same call). Nothing while `exec/predict-off` exists.
+pub fn predict_grants(
+    repo_key: &str,
+    root: &std::path::Path,
+    index: &adage_tracks::Index,
+    paths: &adage_store::Paths,
+) -> Vec<(String, String)> {
+    if predict_off(paths).exists() {
+        return Vec::new();
+    }
+    let Ok(store) = Store::load(&approvals::path(&paths.root)) else { return Vec::new() };
+    let mine = |a: &&Approval| a.key.repo == repo_key && a.key.mode == approvals::GrantMode::Predict;
+    if !store.approvals.iter().any(|a| mine(&a)) {
+        return Vec::new();
+    }
+    let Ok(pol) = policy::load(&paths.root) else { return Vec::new() };
+    let table = CommandTable::load();
+    let mut out: Vec<(String, String)> = Vec::new();
+    for a in store.approvals.iter().filter(mine) {
+        let executed =
+            store.approvals.iter().any(|x| x.key.repo == repo_key && x.route == a.route && x.key.mode.is_execute());
+        let Some((track, id)) = a.route.rsplit_once('/') else { continue };
+        let Some(ir) = route::find(index, repo_key, track, id) else { continue };
+        if executed || out.iter().any(|(t, r)| t == &ir.track && r == &ir.route.id) {
+            continue;
+        }
+        let Ok(plan) = route::plan_predict(ir, root, &paths.tracks()) else { continue };
+        let req = plan.request;
+        if store.find(&approvals::ApprovalKey::for_request(&req, repo_key)).is_none() {
+            continue;
+        }
+        if pol.permits(&req, crate::classify::effect(&req.argv, &table)).is_err() {
+            continue;
+        }
+        out.push((ir.track.clone(), ir.route.id.clone()));
+    }
+    out
 }
 
 /// pytest's own record of collected node ids, a cache file the approval declares.
@@ -399,6 +487,7 @@ fn current_verifications<'a>(
         let Step::Run { command } = &r.route.step else { continue };
         if r.route.effect != adage_core::Effect::Verify
             || command.contains('{')
+            || !a.key.mode.is_execute()
             || a.key.level != Level::E2
             || a.key.effect != adage_core::Effect::Verify
             || !p.current(store)
@@ -768,10 +857,9 @@ fn covering_receipt(call: &PreCall<'_>) -> Option<String> {
         return None;
     }
     let store = Store::load(&approvals::path(&call.paths.root)).ok()?;
-    let a = store
-        .approvals
-        .iter()
-        .find(|a| a.key.repo == call.repo_key && a.route == r.route && a.key.level == Level::E2)?;
+    let a = store.approvals.iter().find(|a| {
+        a.key.repo == call.repo_key && a.route == r.route && a.key.level == Level::E2 && a.key.mode.is_execute()
+    })?;
     let plan = route::plan(
         ir,
         call.index,
@@ -928,7 +1016,8 @@ fn act(turn: &Turn<'_>, directives: &[Directive], candidates: &[Candidate<'_>]) 
     }
     let Ok(store) = Store::load(&approvals::path(home)) else { return out };
     let approved = |s: &Candidate<'_>| -> Option<(&Approval, &adage_tracks::index::IndexedRoute)> {
-        store.approvals.iter().filter(|a| a.key.repo == turn.repo_key && a.key.level == Level::E2).find_map(|a| {
+        let e2 = |a: &&Approval| a.key.repo == turn.repo_key && a.key.level == Level::E2 && a.key.mode.is_execute();
+        store.approvals.iter().filter(e2).find_map(|a| {
             let ir = turn.index.routes.iter().find(|r| {
                 r.repo == turn.repo_key
                     && r.route.id == s.route
@@ -1182,8 +1271,14 @@ fn act(turn: &Turn<'_>, directives: &[Directive], candidates: &[Candidate<'_>]) 
 
 /// The person's line for a grant `a` whose key no longer matches (`changed`: its fields, or why).
 fn lapse_notice(a: &Approval, changed: Vec<String>) -> String {
-    route::Lapse { route: a.route.clone(), level: a.key.level, changed, reapprove: route::reapprove_command(a) }
-        .notice()
+    route::Lapse {
+        route: a.route.clone(),
+        level: a.key.level,
+        mode: a.key.mode,
+        changed,
+        reapprove: route::reapprove_command(a),
+    }
+    .notice()
 }
 
 /// A withheld attempt's spool record: the stage that refused it and why (never output text), so
@@ -1227,7 +1322,9 @@ fn prefetch(
     };
     let label = |d: &Directive| format!("{}/{}", d.track, d.route);
     let grant = |d: &Directive| -> Option<&Approval> {
-        store.approvals.iter().find(|a| a.route == label(d) && a.key.repo == turn.repo_key && a.key.level == Level::E1)
+        store.approvals.iter().find(|a| {
+            a.route == label(d) && a.key.repo == turn.repo_key && a.key.level == Level::E1 && a.key.mode.is_execute()
+        })
     };
     if !directives.iter().any(|d| grant(d).is_some()) {
         return Ok(None);
@@ -1898,12 +1995,18 @@ mod prediction_tests {
         std::fs::write(&script, original).unwrap();
         assert!(PREFETCH.session_context("fixture", &f.root, &f.index, &f.paths).is_some(), "matches again");
         let mut store = Store::load(&store_path).unwrap();
-        assert_eq!(store.revoke("fixture", Some("fixture/context/predict-check")), 1);
+        assert_eq!(store.revoke("fixture", Some("fixture/context/predict-check"), None), 1);
         store.save(&store_path).unwrap();
         assert!(PREFETCH.session_context("fixture", &f.root, &f.index, &f.paths).is_none(), "revoked grant");
         f.approve();
         let mut store = Store::load(&store_path).unwrap();
-        assert!(store.revoke_automatically("fixture", "fixture/context/predict-check", Level::E2, "refused"));
+        assert!(store.revoke_automatically(
+            "fixture",
+            "fixture/context/predict-check",
+            Level::E2,
+            approvals::GrantMode::Execute,
+            "refused"
+        ));
         store.save(&store_path).unwrap();
         assert!(PREFETCH.session_context("fixture", &f.root, &f.index, &f.paths).is_none(), "auto-revoked grant");
     }
@@ -2614,5 +2717,220 @@ def test_latlong_invalid(invalid_latlong):
             crate::stage::input_snapshot_until(&f.root, action, Some(later)).unwrap(),
             crate::stage::input_snapshot(&f.root, action).unwrap()
         );
+    }
+
+    /// The fixture's grants as a person writes them: `review delegate --predict` on the route at
+    /// `at`, keyed on its own path, added to whatever the store holds, with policy at E2.
+    fn grant_predict(f: &Fixture, at: usize) {
+        let ir = &f.index.routes[at];
+        let req = route::plan_predict(ir, &f.root, &f.paths.tracks()).unwrap().request;
+        seed(f, &format!("{}/{}", ir.track, ir.route.id), approvals::ApprovalKey::for_request(&req, "fixture"), None);
+    }
+
+    /// A predict key for the learned context check, written by hand: the CLI refuses this grant
+    /// (only adage-exec can carry the route out), so it stands for a grant that should never act.
+    fn predict_key_by_hand(f: &Fixture) -> approvals::ApprovalKey {
+        let terms = route::Terms { effect: Some(Effect::Verify), ..Default::default() };
+        let ir = &f.index.routes[0];
+        let mut req =
+            route::plan(ir, &f.index, &f.root, &f.paths.tracks(), Level::E2, Some(&terms), &CommandTable::load())
+                .unwrap()
+                .request;
+        req.mode = approvals::GrantMode::Predict;
+        req.action = None;
+        approvals::ApprovalKey::for_request(&req, "fixture")
+    }
+
+    /// Put `key` first in the store (so a lookup that ignored the mode would find it first).
+    fn seed(f: &Fixture, label: &str, key: approvals::ApprovalKey, terms: Option<route::Terms>) {
+        let path = approvals::path(&f.paths.root);
+        let mut store = Store::load(&path).unwrap();
+        let a = Approval {
+            key,
+            route: label.into(),
+            approved_on: "fixture-only".into(),
+            by: None,
+            basis: Value::Null,
+            auto: false,
+            terms,
+        };
+        store.approvals.retain(|x| !(x.route == a.route && x.key.mode == a.key.mode && x.key.level == a.key.level));
+        store.approvals.insert(0, a);
+        store.save(&path).unwrap();
+        std::fs::write(f.paths.root.join("policy.toml"), "[exec]\nmax_level = \"E2\"\n").unwrap();
+    }
+
+    fn asked_from(dir: Option<&std::path::Path>) {
+        TEST_CWD.with(|c| *c.borrow_mut() = dir.map(std::path::Path::to_path_buf));
+    }
+
+    /// T-C2-03 (the hook half): `predict_grants` names a granted reflex only while its key matches
+    /// what the call would run now, policy permits it, the machine switch is on, the step is asked
+    /// from this repository, and no execute grant already acts on the route.
+    #[test]
+    fn predict_grants_name_only_current_permitted_switched_on_grants() {
+        let mut f = Fixture::new();
+        with_obligation(&mut f);
+        assert!(predict_grants("fixture", &f.root, &f.index, &f.paths).is_empty(), "nothing granted");
+        grant_predict(&f, 1);
+        let want = vec![("fixture/finish".to_string(), "regenerate-registry".to_string())];
+        assert_eq!(predict_grants("fixture", &f.root, &f.index, &f.paths), want);
+        asked_from(Some(&f.root.join("src")));
+        assert_eq!(PREFETCH.predict_grants("fixture", &f.index, &f.paths), want, "asked from inside the checkout");
+        asked_from(Some(&f.paths.root));
+        assert!(PREFETCH.predict_grants("fixture", &f.index, &f.paths).is_empty(), "asked from elsewhere");
+        asked_from(Some(&f.root));
+        assert!(PREFETCH.predict_grants("other", &f.index, &f.paths).is_empty(), "another repository's key");
+        // The machine switch.
+        std::fs::create_dir_all(f.paths.root.join("exec")).unwrap();
+        std::fs::write(predict_off(&f.paths), "x").unwrap();
+        assert!(PREFETCH.predict_grants("fixture", &f.index, &f.paths).is_empty());
+        assert!(predict_grants("fixture", &f.root, &f.index, &f.paths).is_empty());
+        std::fs::remove_file(predict_off(&f.paths)).unwrap();
+        assert_eq!(PREFETCH.predict_grants("fixture", &f.index, &f.paths), want);
+        // Policy.
+        let policy = f.paths.root.join("policy.toml");
+        std::fs::write(&policy, "[exec]\nmax_level = \"E1\"\n").unwrap();
+        assert!(predict_grants("fixture", &f.root, &f.index, &f.paths).is_empty(), "E1 caps it");
+        std::fs::write(&policy, "[exec]\nmax_level = \"E2\"\n[effects]\ndeny = [\"regenerate\"]\n").unwrap();
+        assert!(predict_grants("fixture", &f.root, &f.index, &f.paths).is_empty(), "a denied effect");
+        std::fs::write(&policy, "[exec]\nmax_level = \"E2\"\n").unwrap();
+        // A changed command lapses the grant.
+        let mut changed = f.index.clone();
+        changed.routes[1].route.step = Step::Run { command: "make generate".into() };
+        assert!(predict_grants("fixture", &f.root, &changed, &f.paths).is_empty(), "lapsed");
+        let texts = PREFETCH.session_texts("fixture", &f.root, &changed, &f.paths);
+        let notice = texts.notice.expect("a lapsed predict grant is told to the person");
+        assert!(notice.contains("the predict approval for fixture/finish/regenerate-registry"), "{notice}");
+        assert!(notice.contains("`adage review delegate fixture/finish regenerate-registry --predict`"), "{notice}");
+        // A route adage-exec already acts on is never predicted too.
+        let terms = route::Terms { outputs: vec!["gen/**".into()], ..Default::default() };
+        let ir = &f.index.routes[1];
+        let req = route::plan(ir, &f.index, &f.root, &f.paths.tracks(), Level::E2, Some(&terms), &CommandTable::load())
+            .unwrap()
+            .request;
+        seed(
+            &f,
+            "fixture/finish/regenerate-registry",
+            approvals::ApprovalKey::for_request(&req, "fixture"),
+            Some(terms),
+        );
+        assert!(predict_grants("fixture", &f.root, &f.index, &f.paths).is_empty(), "two paths would make the call");
+        asked_from(None);
+    }
+
+    /// T-C1-10 under adage-exec: the hook pipeline with this extension and a person's predict
+    /// grant on the finish line prints the `{"predict": …}` line at the step that ends the turn,
+    /// and runs nothing itself; with the machine switch off it prints nothing.
+    #[test]
+    fn turn_step_under_adage_exec_predicts_the_granted_finish_line() {
+        let mut f = Fixture::new();
+        with_obligation(&mut f);
+        treated(&f, Arm::Treated);
+        grant_predict(&f, 1);
+        asked_from(Some(&f.root));
+        let step = |index: u32, ending: bool| {
+            hook(
+                &f,
+                "TurnStep",
+                json!({ "hook_event_name": "TurnStep", "turn_id": "t1", "index": index, "ending": ending }),
+            )
+        };
+        assert!(step(1, true).is_none(), "nothing directed yet");
+        let edit = json!({ "tool_name": "Edit", "tool_use_id": "e1", "tool_response": "ok",
+                           "tool_input": { "file_path": f.root.join("registry/currencies.csv") } });
+        let armed = hook(&f, "PostToolBatch", json!({ "tool_calls": [edit] })).expect("the obligation's directive");
+        assert!(armed.to_string().contains("make gen"), "{armed}");
+        std::fs::create_dir_all(f.paths.root.join("exec")).unwrap();
+        std::fs::write(predict_off(&f.paths), "x").unwrap();
+        assert!(step(2, true).is_none(), "predictions are off on this machine");
+        std::fs::remove_file(predict_off(&f.paths)).unwrap();
+        let out = step(2, true).expect("the finish line, in the agent's place");
+        assert_eq!(
+            out,
+            json!({ "predict": { "kind": "obligation", "route": "regenerate-registry", "track": "fixture/finish",
+                                  "calls": [{ "tool": "Bash", "input": { "command": "make gen" } }] } })
+        );
+        assert!(crate::journal::list(&f.paths.root).unwrap().is_empty(), "adage-exec ran nothing");
+        let spooled = adage_store::spool::read_all::<Value>(&f.paths.spool("fixture-session")).unwrap();
+        assert!(spooled.iter().all(|r| r.get("exec").is_none()), "no execution was attempted: {spooled:?}");
+        asked_from(None);
+    }
+
+    /// A predict grant alone never runs anything in the hook: not the learned action, not a
+    /// prefetch, not the finish-line gate, and it does not bring an exec-only reflex into play.
+    #[test]
+    fn a_predict_grant_alone_runs_nothing() {
+        let f = Fixture::new();
+        let key = predict_key_by_hand(&f);
+        seed(&f, "fixture/context/predict-check", key, None);
+        let (event, dirs) = f.selected("src/feature.rs");
+        let d = PREFETCH.deliver(&f.turn(&event), &dirs);
+        assert!(d.spool.is_none() && d.met.is_empty(), "nothing attempted");
+        assert!(d.texts.unwrap().iter().all(String::is_empty), "as with no grant at all");
+        assert!(PREFETCH.exec_only("fixture", &f.index, &f.paths).is_empty());
+        assert!(PREFETCH.session_context("fixture", &f.root, &f.index, &f.paths).is_none());
+        treated(&f, Arm::Treated);
+        record_receipt(&f, "fixture-session", "stale");
+        assert!(stop(&f, false).is_none());
+        assert_eq!(crate::journal::list(&f.paths.root).unwrap().len(), 1, "only the seeded receipt");
+        assert!(predict_grants("fixture", &f.root, &f.index, &f.paths).is_empty(), "an exec-only reflex");
+    }
+
+    /// T-C2-07: a route holding both grants keeps every execute path: the E2 action at the batch
+    /// runs under the execute key, the session contract and the receipt still find it, and
+    /// neither grant reads as lapsed. The predict grant is listed first, so a lookup that ignored
+    /// the mode would pick it.
+    #[test]
+    fn both_grants_on_one_route_keep_the_execute_paths() {
+        let mut f = Fixture::new();
+        with_obligation(&mut f);
+        std::fs::write(
+            f.root.join("Makefile"),
+            "gen:\n\tmkdir -p gen && cp registry/currencies.csv gen/currencies.txt\n",
+        )
+        .unwrap();
+        let terms = route::Terms { outputs: vec!["gen/**".into()], ..Default::default() };
+        let ir = &f.index.routes[1];
+        let req = route::plan(ir, &f.index, &f.root, &f.paths.tracks(), Level::E2, Some(&terms), &CommandTable::load())
+            .unwrap()
+            .request;
+        seed(
+            &f,
+            "fixture/finish/regenerate-registry",
+            approvals::ApprovalKey::for_request(&req, "fixture"),
+            Some(terms),
+        );
+        grant_predict(&f, 1);
+        let store = Store::load(&approvals::path(&f.paths.root)).unwrap();
+        assert_eq!(store.approvals.len(), 2);
+        assert_eq!(store.approvals[0].key.mode, approvals::GrantMode::Predict);
+        let texts = PREFETCH.session_texts("fixture", &f.root, &f.index, &f.paths);
+        assert!(texts.notice.is_none(), "neither grant lapsed: {:?}", texts.notice);
+        if staging() {
+            treated(&f, Arm::Treated);
+            let edit = json!({ "tool_name": "Edit", "tool_use_id": "e1", "tool_response": "ok",
+                               "tool_input": { "file_path": f.root.join("registry/currencies.csv") } });
+            let out = hook(&f, "PostToolBatch", json!({ "tool_calls": [edit] })).expect("the action's result");
+            assert!(out.to_string().contains("Adage ran `make gen`"), "{out}");
+            assert_eq!(std::fs::read_to_string(f.root.join("gen/currencies.txt")).unwrap(), "EUR\n");
+            assert_eq!(crate::journal::list(&f.paths.root).unwrap().len(), 1);
+        }
+        // The receipt and the session contract, on the learned check with both grants.
+        let g = pytest_fixture();
+        seed(&g, "fixture/context/predict-check", predict_key_by_hand(&g), None);
+        assert!(PREFETCH.session_context("fixture", &g.root, &g.index, &g.paths).is_some(), "the contract");
+        let digest = current_digest(&g);
+        record_receipt(&g, "fixture-session", &digest);
+        let covered = PREFETCH.pretool_context(&PreCall {
+            repo_key: "fixture",
+            root: &g.root,
+            cwd: &g.root,
+            session: "fixture-session",
+            paths: &g.paths,
+            index: &g.index,
+            command: ".venv/bin/python -m pytest tests/test_x.py -q",
+        });
+        assert!(covered.is_some(), "covering_receipt finds the execute grant");
     }
 }

@@ -386,7 +386,9 @@ pub fn load(paths: &Paths, root: Option<&Path>) -> Result<Routes> {
         let grants: Vec<_> = store
             .approvals
             .iter()
-            .filter(|a| a.key.repo == row.repo && (a.route == label || a.route == track_label))
+            .filter(|a| {
+                a.key.repo == row.repo && (a.route == label || a.route == track_label) && a.key.mode.is_execute()
+            })
             .collect();
         if grants.is_empty() {
             if let Some(r) =
@@ -504,6 +506,7 @@ pub fn load(paths: &Paths, root: Option<&Path>) -> Result<Routes> {
             s.approvals.iter().any(|a| {
                 a.key.repo == row.repo
                     && a.key.level == adage_exec::Level::E2
+                    && a.key.mode.is_execute()
                     && (a.route == format!("{}/{}", row.reference, row.id)
                         || a.route == format!("{}/{}", row.track, row.id))
             })

@@ -210,6 +210,7 @@ fn request(repo: &Path, script: &str) -> ExecRequest {
         origin: Origin::Local,
         route_exec_digest: None,
         action: Some(ActionSpec { kind: ActionKind::Regenerate, outputs: vec![OUTPUTS.into()], cache: vec![] }),
+        mode: Default::default(),
     }
 }
 

@@ -311,7 +311,12 @@ pub fn queue<'a>(
         store
             .approvals
             .iter()
-            .filter(|a| a.route == label && a.key.repo == ir.repo && a.key.level == adage_exec::Level::E2)
+            .filter(|a| {
+                a.route == label
+                    && a.key.repo == ir.repo
+                    && a.key.level == adage_exec::Level::E2
+                    && a.key.mode.is_execute()
+            })
             .any(|a| {
                 adage_exec::route::plan(
                     ir,

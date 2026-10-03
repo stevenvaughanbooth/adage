@@ -338,6 +338,7 @@ mod tests {
                     outputs: vec!["gen/**".into()],
                     cache: vec![],
                 }),
+                mode: Default::default(),
             };
             let mut store = Store::default();
             store.approve(Approval {

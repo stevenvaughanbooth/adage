@@ -1185,7 +1185,7 @@ pub(crate) fn revoke_if_needed(home: &Path, repo: &str, route: &str, approved_on
     let path = approvals::path(home);
     let Ok(mut store) = Store::load(&path) else { return false };
     let cause = format!("its E2 action was refused {REVOKE_AFTER} times: it changed paths its approval does not cover");
-    let revoked = store.revoke_automatically(repo, route, Level::E2, &cause);
+    let revoked = store.revoke_automatically(repo, route, Level::E2, approvals::GrantMode::Execute, &cause);
     revoked && store.save(&path).is_ok()
 }
 

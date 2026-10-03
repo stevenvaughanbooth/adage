@@ -8,6 +8,10 @@
 //! The store, `$ADAGE_HOME/approvals.json`, is plain JSON, mode 0600, written atomically, and only
 //! by commands that pass `require_person` (§4.3). It is not signed: whoever can write
 //! `$ADAGE_HOME` can already rewrite `trusted-signers` and `trust.json`.
+//!
+//! A key's [`GrantMode`] joins every selector here (approve, revoke, lapse, find): a route may hold
+//! an `Execute` grant and a `Predict` grant at once, and neither may replace, revoke or lapse the
+//! other, because they authorise different things (a sandboxed run, a call in the agent's place).
 
 use adage_core::{CommandTable, Effect};
 use anyhow::{bail, Context, Result};
@@ -15,7 +19,8 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 use crate::classify;
-use crate::request::{ExecRequest, Level, Origin, OutputMode};
+pub use crate::request::GrantMode;
+use crate::request::{ExecRequest, Level, Origin, OutputMode, HARNESS_PROFILE};
 
 /// §4.1.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -35,6 +40,9 @@ pub struct ApprovalKey {
     pub profile_id: String,
     /// Signer fingerprint, for imported packs.
     pub signer: Option<String>,
+    /// Absent in every approval written before predict grants existed, which are all `Execute`.
+    #[serde(default, skip_serializing_if = "GrantMode::is_execute")]
+    pub mode: GrantMode,
 }
 
 impl ApprovalKey {
@@ -50,11 +58,17 @@ impl ApprovalKey {
             effect: req.effect,
             level: req.level,
             output_mode: req.output.mode,
-            profile_id: req.profile.id(),
+            // A predicted call never runs in a sandbox: a profile's hash would lapse the grant on a
+            // change to something it does not use.
+            profile_id: match req.mode {
+                GrantMode::Execute => req.profile.id(),
+                GrantMode::Predict => HARNESS_PROFILE.to_string(),
+            },
             signer: match &req.origin {
                 Origin::Pack { signer, .. } => signer.clone(),
                 Origin::Local => None,
             },
+            mode: req.mode,
         }
     }
 
@@ -77,6 +91,7 @@ impl ApprovalKey {
         cmp("output_mode", self.output_mode.as_str().into(), newer.output_mode.as_str().into());
         cmp("profile_id", self.profile_id.clone(), newer.profile_id.clone());
         cmp("signer", self.signer.clone().unwrap_or_default(), newer.signer.clone().unwrap_or_default());
+        cmp("mode", self.mode.as_str().into(), newer.mode.as_str().into());
         out
     }
 }
@@ -127,6 +142,8 @@ pub struct Revocation {
     pub route: String,
     pub repo: String,
     pub level: Level,
+    #[serde(default, skip_serializing_if = "GrantMode::is_execute")]
+    pub mode: GrantMode,
     pub on: String,
     pub cause: String,
 }
@@ -195,21 +212,35 @@ impl Store {
         self.approvals.iter().find(|a| &a.key == key)
     }
 
-    /// Approvals for the same repository, route and level whose key no longer matches, each with
-    /// what changed.
+    /// Approvals for the same repository, route, level and mode whose key no longer matches, each
+    /// with what changed.
     pub fn lapsed(&self, key: &ApprovalKey, route: &str) -> Vec<(&Approval, Vec<Change>)> {
         self.approvals
             .iter()
-            .filter(|a| a.route == route && a.key.repo == key.repo && a.key.level == key.level && &a.key != key)
+            .filter(|a| {
+                a.route == route
+                    && a.key.repo == key.repo
+                    && a.key.level == key.level
+                    && a.key.mode == key.mode
+                    && &a.key != key
+            })
             .map(|a| (a, a.key.diff(key)))
             .collect()
     }
 
-    /// Withdraw the approval for a repository, route and level, recording why. Returns whether
-    /// there was one.
-    pub fn revoke_automatically(&mut self, repo: &str, route: &str, level: Level, cause: &str) -> bool {
+    /// Withdraw the approval for a repository, route, level and mode, recording why. Returns
+    /// whether there was one.
+    pub fn revoke_automatically(
+        &mut self,
+        repo: &str,
+        route: &str,
+        level: Level,
+        mode: GrantMode,
+        cause: &str,
+    ) -> bool {
         let before = self.approvals.len();
-        self.approvals.retain(|a| !(a.key.repo == repo && a.route == route && a.key.level == level));
+        self.approvals
+            .retain(|a| !(a.key.repo == repo && a.route == route && a.key.level == level && a.key.mode == mode));
         if self.approvals.len() == before {
             return false;
         }
@@ -217,6 +248,7 @@ impl Store {
             route: route.to_string(),
             repo: repo.to_string(),
             level,
+            mode,
             on: crate::time::now(),
             cause: cause.to_string(),
         });
@@ -228,19 +260,24 @@ impl Store {
         true
     }
 
-    /// Record an approval, replacing any older one for the same repository, route and level. A
-    /// person's approval clears an automatic revocation of the same route and level.
+    /// Record an approval, replacing any older one for the same repository, route, level and mode.
+    /// A person's approval clears an automatic revocation of the same route, level and mode.
     pub fn approve(&mut self, a: Approval) {
-        self.revoked.retain(|r| !(r.route == a.route && r.repo == a.key.repo && r.level == a.key.level));
-        self.approvals.retain(|x| !(x.route == a.route && x.key.repo == a.key.repo && x.key.level == a.key.level));
+        let k = &a.key;
+        self.revoked.retain(|r| !(r.route == a.route && r.repo == k.repo && r.level == k.level && r.mode == k.mode));
+        self.approvals.retain(|x| {
+            !(x.route == a.route && x.key.repo == k.repo && x.key.level == k.level && x.key.mode == k.mode)
+        });
         self.approvals.push(a);
         self.approvals.sort_by(|x, y| (&x.key.repo, &x.route).cmp(&(&y.key.repo, &y.route)));
     }
 
-    /// Remove approvals for a repository (and route, when given). Returns how many.
-    pub fn revoke(&mut self, repo: &str, route: Option<&str>) -> usize {
+    /// Remove approvals for a repository (and route, and mode, when given). Returns how many.
+    pub fn revoke(&mut self, repo: &str, route: Option<&str>, mode: Option<GrantMode>) -> usize {
         let before = self.approvals.len();
-        self.approvals.retain(|a| !(a.key.repo == repo && route.is_none_or(|r| a.route == r)));
+        self.approvals.retain(|a| {
+            !(a.key.repo == repo && route.is_none_or(|r| a.route == r) && mode.is_none_or(|m| a.key.mode == m))
+        });
         before - self.approvals.len()
     }
 }
@@ -256,6 +293,9 @@ pub struct AutoContext<'a> {
 /// Whether `req` is in the inert-observe class (§4.2); every reason it is not, otherwise.
 pub fn auto_eligible(req: &ExecRequest, ctx: &AutoContext) -> Result<(), Vec<String>> {
     let mut why = Vec::new();
+    if req.mode == GrantMode::Predict {
+        why.push("a predict grant is a person's decision, never automatic".into());
+    }
     if req.level != Level::E1 {
         why.push(format!("level {} is never approved automatically", req.level.as_str()));
     }
@@ -322,6 +362,7 @@ mod tests {
             origin: Origin::Local,
             route_exec_digest: None,
             action: None,
+            mode: Default::default(),
         }
     }
 
@@ -408,10 +449,93 @@ mod tests {
             assert_eq!(std::fs::metadata(&p).unwrap().permissions().mode() & 0o777, 0o600);
         }
         let mut back = back;
-        assert_eq!(back.revoke("r", Some("t/other")), 0);
-        assert_eq!(back.revoke("r", None), 1);
+        assert_eq!(back.revoke("r", Some("t/other"), None), 0);
+        assert_eq!(back.revoke("r", None, None), 1);
         std::fs::write(&p, "{not json").unwrap();
         assert!(Store::load(&p).is_err());
+    }
+
+    fn grant(req: &ExecRequest) -> Approval {
+        Approval {
+            key: ApprovalKey::for_request(req, "r"),
+            route: "t/r".into(),
+            approved_on: "x".into(),
+            by: None,
+            basis: serde_json::Value::Null,
+            auto: false,
+            terms: None,
+        }
+    }
+
+    /// T-C2-01: the same route's execute and predict grants are distinct keys, and each is
+    /// approved, revoked and lapses without touching the other.
+    #[test]
+    fn execute_and_predict_grants_are_kept_apart() {
+        let mut execute = req();
+        execute.level = Level::E2;
+        let predict = ExecRequest { mode: GrantMode::Predict, ..execute.clone() };
+        let (ke, kp) = (ApprovalKey::for_request(&execute, "r"), ApprovalKey::for_request(&predict, "r"));
+        assert_ne!(ke, kp);
+        assert_eq!(kp.profile_id, HARNESS_PROFILE, "a predicted call has no sandbox profile");
+        let fields: Vec<&str> = ke.diff(&kp).iter().map(|c| c.field).collect();
+        assert!(fields.contains(&"mode"), "{fields:?}");
+        let mut s = Store::default();
+        s.approve(grant(&execute));
+        s.approve(grant(&predict));
+        assert_eq!(s.approvals.len(), 2, "approving one does not replace the other");
+        assert!(s.find(&ke).is_some() && s.find(&kp).is_some());
+        s.approve(grant(&predict));
+        assert_eq!(s.approvals.len(), 2, "approving again replaces only its own mode");
+        // A changed command lapses only the grant of its own mode.
+        let mut changed = predict.clone();
+        changed.argv[1] = ".x".into();
+        let lapsed = s.lapsed(&ApprovalKey::for_request(&changed, "r"), "t/r");
+        assert_eq!(lapsed.len(), 1);
+        assert_eq!(lapsed[0].0.key.mode, GrantMode::Predict);
+        assert!(s.revoke_automatically("r", "t/r", Level::E2, GrantMode::Predict, "test"));
+        assert!(s.find(&ke).is_some() && s.find(&kp).is_none(), "an automatic revocation keeps the other mode");
+        assert_eq!(s.revoked[0].mode, GrantMode::Predict);
+        s.approve(grant(&execute));
+        assert_eq!(s.revoked.len(), 1, "an execute approval does not clear a predict revocation");
+        s.approve(grant(&predict));
+        assert!(s.revoked.is_empty());
+        assert_eq!(s.revoke("r", Some("t/r"), Some(GrantMode::Execute)), 1);
+        assert!(s.find(&kp).is_some(), "revoking execute keeps predict");
+        assert_eq!(s.revoke("r", Some("t/r"), None), 1);
+        assert!(s.approvals.is_empty());
+        let actx =
+            AutoContext { table: &CommandTable::load(), git_hazards: &[], sandbox_enforced: true, policy_auto: true };
+        let auto_predict = ExecRequest { mode: GrantMode::Predict, ..req() };
+        assert!(auto_eligible(&auto_predict, &actx).is_err(), "never automatic");
+    }
+
+    /// T-C2-02: a store written before grant modes loads as execute grants, and writes back
+    /// without a `mode`; a predict grant writes `"mode": "predict"` on its key.
+    #[test]
+    fn stores_written_before_modes_load_as_execute() {
+        let d = tempfile::tempdir().unwrap();
+        let p = path(d.path());
+        let old = r#"{"version":1,"approvals":[{"key":{"repo":"r","route_exec_digest":"d","argv_templates":[["make","gen"]],
+            "scripts":[],"effect":"regenerate","level":"e2","output_mode":"typed","profile_id":"p","signer":null},
+            "route":"t/r","approved_on":"x"}],"revoked":[{"route":"t/r","repo":"r","level":"e2","on":"x","cause":"c"}]}"#;
+        std::fs::write(&p, old).unwrap();
+        let s = Store::load(&p).unwrap();
+        assert_eq!(s.approvals[0].key.mode, GrantMode::Execute);
+        assert_eq!(s.revoked[0].mode, GrantMode::Execute);
+        s.save(&p).unwrap();
+        let text = std::fs::read_to_string(&p).unwrap();
+        assert!(!text.contains("\"mode\""), "{text}");
+        assert_eq!(Store::load(&p).unwrap(), s);
+        let mut s = s;
+        let predict = ExecRequest { mode: GrantMode::Predict, level: Level::E2, ..req() };
+        s.approve(grant(&predict));
+        s.save(&p).unwrap();
+        let back = Store::load(&p).unwrap();
+        assert_eq!(back, s);
+        let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&p).unwrap()).unwrap();
+        let modes: Vec<&serde_json::Value> =
+            v["approvals"].as_array().unwrap().iter().map(|a| &a["key"]["mode"]).collect();
+        assert!(modes.contains(&&serde_json::json!("predict")) && modes.contains(&&serde_json::Value::Null), "{v}");
     }
 
     #[test]
