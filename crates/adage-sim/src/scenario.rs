@@ -413,6 +413,9 @@ pub fn history(seed: u64) -> Vec<Session> {
 /// | the schema edit | `finish-line-…` |
 /// | the first stop | a request to continue: `make gen` has not run |
 /// | the second stop, after `make gen` | nothing |
+///
+/// Under adage-exec with a `predict` grant on the finish line, the first stop never comes: at the
+/// work turn's end Adage runs `make gen` in the agent's place ([`Replay::predict`]).
 #[derive(Debug, Clone)]
 pub struct Replay {
     pub item: Item,
@@ -423,6 +426,63 @@ pub struct Replay {
     /// Turns after the continuation; the second stop draws nothing.
     pub finish: Vec<Turn>,
     pub answer: String,
+    /// The steps Adage makes in the agent's place ([`Predict`]), in order.
+    pub predict: Vec<Predict>,
+    /// What the mod's `PreToolUse` answers for each Bash call, in call order ([`Pretool`]).
+    pub pretool: Vec<Pretool>,
+}
+
+/// A step Adage makes in the agent's place at a `TurnStep`, when the route holds a `predict` grant
+/// under `adage-exec hook`. The treated arm prints it; the control arm prints nothing and spools it
+/// as `would_predict`; without the grant, or under `adage hook` (no extension, so no grant), there
+/// is nothing in either arm.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Predict {
+    /// The step boundary: before request `index` of the work turn, or after the model's response
+    /// to it ended the turn (`ending`).
+    pub index: u32,
+    pub ending: bool,
+    /// `run`, `sequence`, `skill`, `chain` or `obligation` (the binary's `PredictionKind`).
+    pub kind: &'static str,
+    /// The route's id prefix, the one the grant names.
+    pub route: &'static str,
+    /// The Bash call Adage makes; the agent's own call of it is then not replayed.
+    pub act: Act,
+}
+
+/// One Bash call as the mod's two-phase `PreToolUse` sees it. Without a verdict the final ask
+/// answers what the dry run plans, except for a dead end the mod replaces ([`substitutions`],
+/// whose plan names the learned command): nothing in this scenario is rewritten, since no
+/// environment is bound to rewrite into.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Pretool {
+    pub command: String,
+    /// `None`: the hook prints nothing, in both phases and both arms.
+    pub answer: Option<&'static str>,
+}
+
+/// The finish line under a `predict` grant: the model ends the work turn without `make gen`
+/// (request `work.len()` is its last), and Adage makes the obligation's call in its place, so no
+/// Stop request follows.
+fn predict_expectations(work: &[Turn]) -> Vec<Predict> {
+    vec![Predict {
+        index: work.len() as u32,
+        ending: true,
+        kind: "obligation",
+        route: "finish-line-",
+        act: Act::shell("make gen", MAKE_GEN_OK, 0),
+    }]
+}
+
+fn pretool_expectations(turns: &[&Turn]) -> Vec<Pretool> {
+    turns
+        .iter()
+        .flat_map(|t| &t.calls)
+        .filter_map(|c| match &c.act {
+            Act::Shell { cmd, .. } => Some(Pretool { command: cmd.clone(), answer: None }),
+            _ => None,
+        })
+        .collect()
 }
 
 pub fn replay() -> Replay {
@@ -431,10 +491,12 @@ pub fn replay() -> Replay {
     let turn = |calls: Vec<Call>| Turn { say: None, calls };
     let (f, old, new) = it.fix;
     let (cmd, out, exit) = DEAD_ENDS[0];
-    Replay {
+    let mut r = Replay {
         item: it,
         prompt: format!("Pick up {} and get it done.", it.id),
         prompt_expect: vec!["lookup-work-item", "dead-end-"],
+        predict: vec![],
+        pretool: vec![],
         work: vec![
             turn(vec![with(
                 Act::shell(&format!("python3 scripts/wi-lookup {}", it.id), &lookup_output(&it), 0),
@@ -451,7 +513,45 @@ pub fn replay() -> Replay {
             turn(vec![with(Act::shell("make test", MAKE_TEST_OK, 0), vec![])]),
         ],
         answer: format!("{} is done: payment_terms added, models regenerated, tests pass.", it.id),
-    }
+    };
+    r.predict = predict_expectations(&r.work);
+    r.pretool = pretool_expectations(&r.work.iter().chain(&r.finish).collect::<Vec<_>>());
+    r
+}
+
+/// A dead end the mod replaces before it runs (plan C6): the held-out session's call meets the
+/// learned `avoid` route, so its `PreToolUse` dry run plans `instead`, and on the same permission
+/// verdict the treated arm runs `instead` in its place with one line of context: the failure, and
+/// the model's reading of it, never happen. The control arm runs the dead end and spools
+/// `would_substitute`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Substitute {
+    /// The call as the agent made it.
+    pub command: String,
+    /// What runs in its place, and what it prints.
+    pub instead: Act,
+    /// The learned route's id prefix.
+    pub route: &'static str,
+    /// How the context line begins; the rest quotes the failure signature learning found.
+    pub context: String,
+}
+
+/// The substitutions of [`replay`]: the dead-end turn, `python3 -m unittest discover -s tests`,
+/// becomes `make test`.
+pub fn substitutions(r: &Replay) -> Vec<Substitute> {
+    let (dead, ..) = DEAD_ENDS[0];
+    r.work
+        .iter()
+        .chain(&r.finish)
+        .flat_map(|t| &t.calls)
+        .filter(|c| matches!(&c.act, Act::Shell { cmd, .. } if cmd == dead))
+        .map(|_| Substitute {
+            command: dead.to_string(),
+            instead: Act::shell("make test", MAKE_TEST_OK, 0),
+            route: "dead-end-",
+            context: format!("adage ran make test in place of {dead}: in this repository it fails (\""),
+        })
+        .collect()
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -493,6 +593,15 @@ pub fn uuid7(rng: &mut Rng, ms: i64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_dead_end_turn_is_the_one_substitution() {
+        let r = replay();
+        let s = substitutions(&r);
+        assert_eq!(s.len(), 1);
+        assert_eq!((s[0].command.as_str(), s[0].route), (DEAD_ENDS[0].0, "dead-end-"));
+        assert!(matches!(&s[0].instead, Act::Shell { cmd, exit: 0, .. } if cmd == "make test"));
+    }
 
     #[test]
     fn deterministic_and_varied() {

@@ -153,6 +153,56 @@ pub fn hook(sid: &str, cwd: &str, event: &str, extra: Value) -> Value {
     b
 }
 
+/// What the mod's `turn.step` asks the binary (`adage hook claude TurnStep`) at a step boundary of
+/// turn `turn_id`: before request `index` (0 is the prompt's own request, `k` follows the k-th tool
+/// batch), or, with `ending`, after the model's response to request `index` ended the turn. The mod
+/// builds it from `$.session`, not from a command hook's payload, so it carries no transcript path
+/// or permission mode.
+pub fn turn_step_hook(sid: &str, cwd: &str, turn_id: &str, index: u32, ending: bool) -> Value {
+    json!({ "session_id": sid, "cwd": cwd, "hook_event_name": "TurnStep", "turn_id": turn_id, "index": index, "model": MODEL, "ending": ending })
+}
+
+/// The `PreToolUse` the mod sends for a Bash call before it runs: first with `dry_run` (the plan,
+/// spooled nowhere), then without (the decision). A command hook sends only the second.
+pub fn pretool_hook(sid: &str, cwd: &str, command: &str, tool_use_id: &str, dry_run: bool) -> Value {
+    let mut p = hook(
+        sid,
+        cwd,
+        "PreToolUse",
+        json!({ "tool_name": "Bash", "tool_input": { "command": command, "description": describe(command) }, "tool_use_id": tool_use_id }),
+    );
+    if dry_run {
+        p["dry_run"] = json!(true);
+    }
+    p
+}
+
+/// The id the mod gives the `k`-th call of a step it yields in the model's place
+/// (`plugin/claude-code/hooks/predict.ts`): `_` inside a part is written `-`, so the binary can
+/// tell an `adage_` call from the model's by its prefix alone.
+pub fn predicted_tool_use_id(route: &str, turn_id: &str, index: u32, k: usize) -> String {
+    let part = |s: &str| s.replace('_', "-");
+    format!("adage_{}_{}_{index}_{k}", part(route), part(turn_id))
+}
+
+/// The `PostToolBatch` that brings back the calls of a predicted step, with the mod's ids.
+pub fn predicted_batch(sid: &str, cwd: &str, ids_and_acts: &[(String, Act)]) -> Value {
+    let calls: Vec<Value> = ids_and_acts
+        .iter()
+        .map(|(id, act)| {
+            let (name, input, _, _) = native(act, cwd);
+            json!({ "tool_name": name, "tool_input": input, "tool_use_id": id, "tool_response": tool_use_result(act) })
+        })
+        .collect();
+    hook(sid, cwd, "PostToolBatch", json!({ "tool_calls": calls }))
+}
+
+/// The id Claude Code gives a tool call. [`turn_hooks`] draws one per call, in call order, so a
+/// clone of its `rng` gives the ids its payloads will carry (a `PreToolUse` sent before them).
+pub fn tool_use_id(rng: &mut Rng) -> String {
+    format!("toolu_01{}", rng.base62(22))
+}
+
 /// The hook calls one turn produces: a `PostToolUseFailure` per failed call, then one
 /// `PostToolBatch` with the rest. Each comes with the route prefixes it should draw.
 pub fn turn_hooks(turn: &Turn, sid: &str, cwd: &str, rng: &mut Rng) -> Vec<(&'static str, Value, Vec<&'static str>)> {
@@ -161,7 +211,7 @@ pub fn turn_hooks(turn: &Turn, sid: &str, cwd: &str, rng: &mut Rng) -> Vec<(&'st
     let mut expect = Vec::new();
     for c in &turn.calls {
         let (name, input, content, is_error) = native(&c.act, cwd);
-        let id = format!("toolu_01{}", rng.base62(22));
+        let id = tool_use_id(rng);
         if is_error {
             out.push(("PostToolUseFailure", hook(sid, cwd, "PostToolUseFailure", json!({ "tool_name": name, "tool_input": input, "tool_use_id": id, "error": content, "is_interrupt": false })), c.expect.clone()));
         } else {
