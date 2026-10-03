@@ -919,7 +919,7 @@ fn short_hash(v: &serde_json::Value) -> String {
 
 /// What `review delegate --stage` answers and `--confirm` checks: `<snapshot>.<field>…`, the
 /// SHA-256 of the staged input snapshot and the staged change set (`snapshot`), then 16 hex of
-/// each field of the key and the terms ([`DIGEST_FIELDS`]), so a confirm can say which term
+/// each field of the key and the terms (`DIGEST_FIELDS`), so a confirm can say which term
 /// changed between the two acts, and tell that from the repository merely moving on. Nothing is
 /// kept between the acts: the digest is all a confirm compares.
 pub fn grant_digest(key: &crate::approvals::ApprovalKey, terms: &Terms, snapshot: &serde_json::Value) -> String {

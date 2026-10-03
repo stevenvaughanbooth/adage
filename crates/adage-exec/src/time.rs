@@ -55,7 +55,12 @@ pub fn ago(now: u64, then: u64) -> String {
 }
 
 pub fn now() -> String {
-    rfc3339(SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0))
+    rfc3339(now_secs())
+}
+
+/// Seconds since the epoch now (0 on a clock before it).
+pub(crate) fn now_secs() -> u64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
 
 #[cfg(test)]

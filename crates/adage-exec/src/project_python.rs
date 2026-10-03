@@ -36,7 +36,7 @@ pub(crate) fn checkpoint() -> Result<(), String> {
 const MAX_FILES: usize = 40_000;
 const MAX_BYTES: u64 = 1 << 30;
 /// v1: private staged venv, plain editable paths rebased, -B and a fresh -X pycache_prefix.
-/// v2: `__pycache__` directories are left out of the digests ([`bytecode_cache`]) and removed
+/// v2: `__pycache__` directories are left out of the digests (`bytecode_cache`) and removed
 /// from both private copies, and child interpreters get the private prefix too.
 pub const ADAPTER_VERSION: u32 = 2;
 
