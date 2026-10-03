@@ -842,7 +842,7 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
             bail!("--exit-when names {k}, which is not an output field");
         }
     }
-    let classified = adage_exec::classify::effect(&req.argv, &table);
+    let classified = route::predict_classified(&req, &table);
     let pol = adage_exec::policy::load(&paths.root)?;
     pol.permits(&req, classified).map_err(|e| {
         if level == Level::E2 && e.contains("caps execution") {
@@ -1068,7 +1068,7 @@ fn delegate_predict(
     let plan = route::plan_predict(ir, root, &paths.tracks()).map_err(anyhow::Error::msg)?;
     let req = plan.request;
     let table = CommandTable::load();
-    let classified = adage_exec::classify::effect(&req.argv, &table);
+    let classified = route::predict_classified(&req, &table);
     let pol = adage_exec::policy::load(&paths.root)?;
     pol.permits(&req, classified).map_err(|e| {
         if e.contains("caps execution") {

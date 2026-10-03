@@ -90,10 +90,13 @@ GO_CRITERIA = {
 }
 
 
-def select_best(dev_report, candidates=CANDIDATES):
+def select_best(dev_report, candidates=None):
     """The development arm passing D1-D4 with the lowest mean requests (ties: lower mean cost, then
     the name). None means the held-out comparison is not run. `candidates`: the design's arms that
-    can be BEST (dev-arms-1: A2, A3; dev-arms-2: A4, the arm with controls)."""
+    can be BEST (dev-arms-1: A2, A3; dev-arms-2: A4, the arm with controls; dev-arms-3: MOD); by
+    default the report's own `candidates`, else dev-arms-1's."""
+    if candidates is None:
+        candidates = tuple(dev_report.get("candidates") or CANDIDATES)
     verdict, arms = dev_report.get("verdict", {}), dev_report.get("arms", {})
     passing = [a for a in candidates if verdict.get(a, {}).get("passed") is True
                and isinstance(arms.get(a, {}).get("requests"), (int, float))]
@@ -392,7 +395,9 @@ def go_criteria(rows, blocks, included, eff, route=None):
 
 def analyze(rows, best_arm=None, seed=SEED, draws=BOOTSTRAP, route="github-com-marshmallow-code-marshmallow/learned/run-175d85"):
     """The registered verdict. Every assigned row counts; nothing is rerun. Returns `outcome`: pass,
-    fail, unverified, protocol-failure or incomplete."""
+    fail, unverified, protocol-failure or incomplete. A row may name BEST by its development arm
+    (`best_arm`, e.g. MOD): it is BEST."""
+    rows = [dict(r, arm="BEST") if best_arm and best_arm not in ARMS and r.get("arm") == best_arm else r for r in rows]
     problems = []
     controls = control_rows([r for r in rows if r["condition"] != "positive"])
     for c in controls:

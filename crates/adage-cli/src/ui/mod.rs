@@ -95,7 +95,7 @@ fn size(args: &[String]) -> Result<Option<(u16, u16)>> {
     }
 }
 
-const WATCH_USAGE: &str = "usage: adage watch [--repo <path>] [--demo] [--once [--size WxH]] | adage watch --follow --json [--repo <path>] [--session <id>] [--since <cursor>]";
+const WATCH_USAGE: &str = "usage: adage watch [--repo <path>] [--demo] [--once [--size WxH]] | adage watch --follow --json [--repo <path>] [--session <id>] [--since <cursor>] [--stdin eof|ignore]";
 
 /// `adage watch [--repo <path>] [--demo] [--once [--size WxH]]` (and `adage doctor --watch`), and
 /// `adage watch --follow --json [--repo <path>] [--session <id>] [--since <cursor>]`, the same feed
@@ -105,7 +105,7 @@ pub fn watch(args: &[String], paths: &Paths) -> Result<()> {
         a.starts_with("--")
             && !matches!(
                 a.as_str(),
-                "--repo" | "--demo" | "--once" | "--size" | "--follow" | "--json" | "--session" | "--since"
+                "--repo" | "--demo" | "--once" | "--size" | "--follow" | "--json" | "--session" | "--since" | "--stdin"
             )
     }) {
         bail!("unknown option {bad}\n{WATCH_USAGE}");
@@ -115,8 +115,21 @@ pub fn watch(args: &[String], paths: &Paths) -> Result<()> {
         if !(follow && args.iter().any(|a| a == "--json")) {
             bail!("`--follow` and `--json` go together: the stream is JSON lines\n{WATCH_USAGE}");
         }
+        // `--stdin ignore`: a parent that closes the child's stdin at once (the Claude Code mod's
+        // spawn with no input) must not end the stream; SIGTERM and the parent's death still do.
+        let watch_stdin = match flag(args, "--stdin").as_deref() {
+            None | Some("eof") => true,
+            Some("ignore") => false,
+            Some(other) => bail!("--stdin takes eof or ignore, not {other:?}\n{WATCH_USAGE}"),
+        };
         let ctx = view::Ctx::new(paths.clone(), flag(args, "--repo").map(PathBuf::from))?;
-        return follow::run(paths, ctx.root, flag(args, "--session").as_deref(), flag(args, "--since").as_deref());
+        return follow::run(
+            paths,
+            ctx.root,
+            flag(args, "--session").as_deref(),
+            flag(args, "--since").as_deref(),
+            watch_stdin,
+        );
     }
     let once = args.iter().any(|a| a == "--once");
     let size = size(args)?;

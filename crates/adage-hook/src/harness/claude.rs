@@ -2,7 +2,7 @@
 //! (code.claude.com/docs/en/hooks). Directives go to `additionalContext`; the finish line uses
 //! Stop `decision: block`.
 
-use super::{Adapter, Event, Harness, Output};
+use super::{Adapter, Capabilities, Event, Harness, Output};
 use adage_runtime::{By, Call};
 use serde_json::{json, Value};
 
@@ -41,8 +41,9 @@ pub fn response_text(v: &Value) -> String {
 
 /// One call from a payload (a `PostToolBatch` entry, or a `PostToolUse(Failure)` payload): its
 /// `tool_use_id` is kept, and a call whose id Adage minted (`adage_…`, a predicted step the mod
-/// made in the agent's place) is Adage's ([`By`]).
-fn call_from(v: &Value, failed: bool) -> Call {
+/// made in the agent's place) is Adage's ([`By`]). `agent` is the payload's `agent_id`: set when a
+/// subagent made the calls.
+fn call_from(v: &Value, failed: bool, agent: Option<&str>) -> Call {
     let mut output = response_text(v.get("tool_response").unwrap_or(&Value::Null));
     if let Some(e) = v.get("error").and_then(|e| e.as_str()) {
         output.push_str(e);
@@ -55,7 +56,18 @@ fn call_from(v: &Value, failed: bool) -> Call {
         failed,
         by: tool_use_id.as_deref().map_or(By::Agent, By::of_tool_use_id),
         tool_use_id,
+        agent: v.get("agent_id").and_then(Value::as_str).or(agent).filter(|a| !a.is_empty()).map(str::to_string),
     }
+}
+
+/// The events only the Claude Code mod sends: a command hook is never registered for them.
+pub const MOD_EVENTS: [&str; 3] = ["TurnStep", "Standing", crate::skill::EVENT];
+
+/// Whether the Claude Code mod sent this payload ([`Claude::capabilities`]).
+pub fn is_mods(event: &str, p: &Value) -> bool {
+    p.get("via").and_then(Value::as_str) == Some("mod")
+        || MOD_EVENTS.contains(&event)
+        || (event == "PreToolUse" && crate::phase::Phase::of(p).is_some())
 }
 
 /// A `TurnStep` payload (the mod's `turn.step`): `turn_id` and `index` are required.
@@ -75,6 +87,18 @@ impl Adapter for Claude {
         Harness::ClaudeCode
     }
 
+    /// The mod's set ([`Harness::capabilities_with_mod`]) for a payload the mod sent: one that says
+    /// so (`via: "mod"`), one of the events only the mod sends (`TurnStep`, `Standing`,
+    /// `SkillPrompt`), or a `PreToolUse` carrying a phase only the mod asks for (`dry_run`,
+    /// `verdict`). A command hook's payload has none of these: the command hooks' set.
+    fn capabilities(&self, event: &str, p: &Value) -> Capabilities {
+        if is_mods(event, p) {
+            Harness::ClaudeCode.capabilities_with_mod()
+        } else {
+            Harness::ClaudeCode.capabilities()
+        }
+    }
+
     fn event_identity(&self, event: &str, p: &Value) -> Option<String> {
         let ids = match event {
             "PostToolBatch" => p
@@ -92,6 +116,7 @@ impl Adapter for Claude {
     }
 
     fn translate(&self, event: &str, p: &Value, _cwd: &str) -> Option<Event> {
+        let agent = p.get("agent_id").and_then(Value::as_str);
         Some(match event {
             "SessionStart" => Event::SessionStart,
             "UserPromptSubmit" => {
@@ -103,11 +128,11 @@ impl Adapter for Claude {
                 }
                 Event::Prompt { text: text.to_string() }
             }
-            "PostToolBatch" => {
-                Event::Batch { calls: p.get("tool_calls")?.as_array()?.iter().map(|c| call_from(c, false)).collect() }
-            }
-            "PostToolUse" => Event::Batch { calls: vec![call_from(p, false)] },
-            "PostToolUseFailure" => Event::Failure { call: call_from(p, true) },
+            "PostToolBatch" => Event::Batch {
+                calls: p.get("tool_calls")?.as_array()?.iter().map(|c| call_from(c, false, agent)).collect(),
+            },
+            "PostToolUse" => Event::Batch { calls: vec![call_from(p, false, None)] },
+            "PostToolUseFailure" => Event::Failure { call: call_from(p, true, None) },
             "Stop" => {
                 Event::Stop { stop_hook_active: p.get("stop_hook_active").and_then(|x| x.as_bool()).unwrap_or(false) }
             }

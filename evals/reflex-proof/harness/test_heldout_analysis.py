@@ -86,6 +86,24 @@ class Selection(unittest.TestCase):
         self.assertNotEqual(analysis.select_best(dev_report()), "A1")
 
 
+class Mod(unittest.TestCase):
+    """T-E3-01's script half: the analysis takes MOD as BEST by name."""
+
+    def test_a_reports_own_candidates_select_mod(self):
+        report = dict(candidates=["MOD"], arms=dict(A4=dict(requests=12.0), MOD=dict(requests=13.0)),
+                      verdict=dict(A4=dict(passed=True), MOD=dict(passed=True)))
+        self.assertEqual(analysis.select_best(report), "MOD", "A4 has no controls in the MOD design")
+        self.assertIsNone(analysis.select_best(dict(report, verdict=dict(MOD=dict(passed=False)))))
+        self.assertEqual(analysis.select_best(dev_report()), "A3", "dev-arms-1 reports keep their candidates")
+
+    def test_rows_naming_best_by_its_development_arm_are_best(self):
+        named = [dict(r, arm="MOD") if r["arm"] == "BEST" else r for r in rows()]
+        mod = analysis.analyze(named, "MOD", draws=DRAWS, route=ROUTE)
+        best = analysis.analyze(rows(), "MOD", draws=DRAWS, route=ROUTE)
+        self.assertEqual(mod["outcome"], "pass", mod["problems"])
+        self.assertEqual((mod["primary"], mod["best_arm"]), (best["primary"], "MOD"))
+
+
 class Matrix(unittest.TestCase):
     def test_controls_first_then_paired_blocks_in_a_recorded_random_order(self):
         m = analysis.matrix(TASKS)

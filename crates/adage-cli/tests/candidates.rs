@@ -1,10 +1,11 @@
 //! T-D1-07: the simulator's history, with the plan's deliberately sub-support sequence (in 2 of
-//! the 12 Claude Code sessions the agent runs `make lint` right after `make test`), learned with
+//! the 12 Claude Code sessions the agent runs `make lint` right after `make test`,
+//! `adage_sim::scenario::LINT_SESSIONS`), learned with
 //! `adage condition --demo`: `candidates.json` holds the `make test → make lint` candidate (support
 //! 2, `s_min` 3), the index carries it apart from the routes, and `adage status --json` lists it
 //! under `candidates`. Every run uses an isolated `ADAGE_HOME` and `HOME`.
 
-use adage_sim::scenario::{self, Act, Call, Turn};
+use adage_sim::scenario::{self, Act};
 use adage_sim::{claude, CLAUDE_SEED};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -33,21 +34,15 @@ fn adage(root: &Path, args: &[&str]) -> (String, String, i32) {
     )
 }
 
-/// The Claude Code history of the simulator's scenario, with `make lint` right after the last
-/// `make test` in the first two work-item sessions.
+/// The Claude Code history of the simulator's scenario, whose first two work-item sessions run
+/// `make lint` right after the last `make test`.
 fn history(dir: &Path) -> Vec<PathBuf> {
-    let mut sessions = scenario::history(CLAUDE_SEED);
-    for s in sessions.iter_mut().take(2) {
-        let at = s
-            .turns
-            .iter()
-            .rposition(|t| {
-                t.calls.iter().any(|c| matches!(&c.act, Act::Shell { cmd, exit: 0, .. } if cmd == "make test"))
-            })
-            .expect("a work-item session runs the tests");
-        let lint = Call { act: Act::shell("make lint", "ruff check acme\nAll checks passed!\n", 0), expect: vec![] };
-        s.turns.insert(at + 1, Turn { say: None, calls: vec![lint] });
-    }
+    let sessions = scenario::history(CLAUDE_SEED);
+    let lints = |s: &scenario::Session| {
+        s.turns.iter().flat_map(|t| &t.calls).any(|c| matches!(&c.act, Act::Shell { cmd, .. } if cmd == "make lint"))
+    };
+    assert_eq!(sessions.iter().filter(|s| lints(s)).count(), scenario::LINT_SESSIONS, "2 of the 12");
+    assert!(sessions.iter().take(scenario::LINT_SESSIONS).all(lints));
     sessions
         .iter()
         .map(|s| {

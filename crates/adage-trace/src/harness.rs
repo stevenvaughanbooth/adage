@@ -130,6 +130,27 @@ impl Harness {
         }
     }
 
+    /// What the harness can do when the Claude Code mod is the one asking (its architecture §1b.3):
+    /// the command hooks' set plus the seven the mod adds, for Claude Code; every other harness has
+    /// no mod and keeps its own set. A harness adapter reports this only for a payload the mod
+    /// sent (`via: "mod"`, or an event only the mod sends), so nothing past the adapter asks which
+    /// plugin is installed.
+    pub const fn capabilities_with_mod(self) -> Capabilities {
+        match self {
+            Harness::ClaudeCode => Capabilities {
+                predict_step: true,
+                answer_call: true,
+                substitute_call: true,
+                tool_description: true,
+                cached_section: true,
+                subagent_prompt: true,
+                compaction: true,
+                ..self.capabilities()
+            },
+            Harness::Codex | Harness::OpenCode => self.capabilities(),
+        }
+    }
+
     /// A harness by its identifier or its hook name (`claude-code` or `claude`, `codex`,
     /// `opencode`).
     pub fn parse(s: &str) -> Option<Harness> {
@@ -190,6 +211,32 @@ mod tests {
         assert_eq!(back, all);
         let before = r#"{"pre_tool_rewrite":true,"session_contract":true,"actions":true,"person_notices":true}"#;
         assert_eq!(serde_json::from_str::<Capabilities>(before).unwrap(), cc);
+    }
+
+    /// T-C9-01 (per harness): Claude Code with the mod has every capability, its command hooks'
+    /// four included; the other harnesses have no mod, so asking for it changes nothing.
+    #[test]
+    fn only_claude_code_has_a_mod_and_it_adds_the_seven() {
+        let m = Harness::ClaudeCode.capabilities_with_mod();
+        assert_eq!(
+            m,
+            Capabilities {
+                pre_tool_rewrite: true,
+                session_contract: true,
+                actions: true,
+                person_notices: true,
+                predict_step: true,
+                answer_call: true,
+                substitute_call: true,
+                tool_description: true,
+                cached_section: true,
+                subagent_prompt: true,
+                compaction: true,
+            }
+        );
+        for h in [Harness::Codex, Harness::OpenCode] {
+            assert_eq!(h.capabilities_with_mod(), h.capabilities(), "{h}");
+        }
     }
 
     #[test]

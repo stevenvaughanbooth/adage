@@ -32,3 +32,4 @@ turn 2 read {path} failed=false path=Some("acme/billing.py")
 turn 3 edit {path} failed=false path=Some("acme/billing.py")
 turn 4 exec python3 -m unittest discover -s tests failed=true path=None
 turn 5 exec make test failed=false path=None
+turn 6 exec make lint failed=false path=None

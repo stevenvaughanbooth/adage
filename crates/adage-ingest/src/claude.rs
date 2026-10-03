@@ -218,7 +218,8 @@ pub fn decode(reader: impl BufRead, cx: &Decode<'_>) -> Option<Session> {
         // evidence of what the agent does. The id itself is not kept, so an agent's calls read
         // and cache exactly as before.
         let by = By::of_tool_use_id(&tid);
-        let call = Call { tool: name.clone(), input: input.clone(), output, failed, by, tool_use_id: None };
+        let call =
+            Call { tool: name.clone(), input: input.clone(), output, failed, by, tool_use_id: None, agent: None };
         let direct = input
             .get("command")
             .and_then(Value::as_str)
@@ -325,6 +326,7 @@ mod tests {
             failed,
             by: By::Agent,
             tool_use_id: None,
+            agent: None,
         };
         call_steps(0, 0, &call, normalize_tool("Bash", &input, "/r", &table), Path::new("/r"))
             .into_iter()

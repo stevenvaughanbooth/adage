@@ -202,6 +202,10 @@ pub struct WatchArgs {
     /// With --follow: resume just after the line that carried this cursor.
     #[arg(long, value_name = "CURSOR", requires = "follow")]
     pub since: Option<String>,
+    /// With --follow: `eof` (default) ends when a piped stdin closes; `ignore` never reads it,
+    /// for a parent that closes it at spawn (it still ends with its parent, or on SIGTERM).
+    #[arg(long, value_name = "eof|ignore", requires = "follow", value_parser = ["eof", "ignore"])]
+    pub stdin: Option<String>,
 }
 
 #[derive(Args, Debug)]

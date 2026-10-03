@@ -85,6 +85,12 @@ pub struct Config {
     /// its step (the Claude Code mod's `turn.step`), when `adage train` recorded the skill as inert
     /// in a pack the person accepted. Off by default.
     pub skills_invoke: bool,
+    /// `ui.spinner`, `ui.turn_line`, `ui.noticed`: what the Claude Code mod draws beside Claude
+    /// Code's own lines (a spinner suffix while a reflex was delivered this turn, a turn summary,
+    /// the noticed line under a batch). Off by default; read by the mod from `adage --json`.
+    pub ui_spinner: bool,
+    pub ui_turn_line: bool,
+    pub ui_noticed: bool,
     /// Bind instincts (prebuilt routes) from each repository's declared files when learning.
     /// Learn procedure cards for families of similar tasks (`learn.cards`), and how similar a
     /// prompt must be to a family for its card (`learn.card_threshold`).
@@ -270,6 +276,30 @@ pub const KEYS: &[Key] = &[
         default: "daily",
         env: None,
         doc: "one-line notices at session start (Claude Code): daily, only when something is new; or off",
+        guarded: false,
+    },
+    Key {
+        name: "ui.spinner",
+        kind: Kind::Bool,
+        default: "false",
+        env: None,
+        doc: "Claude Code mod: add an adage suffix to the spinner while a reflex was delivered this turn",
+        guarded: false,
+    },
+    Key {
+        name: "ui.turn_line",
+        kind: Kind::Bool,
+        default: "false",
+        env: None,
+        doc: "Claude Code mod: a one-line adage summary beside the turn's duration, for turns with Adage activity",
+        guarded: false,
+    },
+    Key {
+        name: "ui.noticed",
+        kind: Kind::Bool,
+        default: "false",
+        env: None,
+        doc: "Claude Code mod: a line under a tool batch when Adage notices a habit it is still counting",
         guarded: false,
     },
     Key {
@@ -499,6 +529,9 @@ fn load_from(file: &Path, env: &dyn Fn(&str) -> Option<String>) -> Loaded {
         runtime_control: text("runtime.control").parse().unwrap_or(0.1),
         runtime_rewrite: parse_bool(&text("runtime.rewrite")).unwrap_or(true),
         skills_invoke: parse_bool(&text("skills.invoke")).unwrap_or(false),
+        ui_spinner: parse_bool(&text("ui.spinner")).unwrap_or(false),
+        ui_turn_line: parse_bool(&text("ui.turn_line")).unwrap_or(false),
+        ui_noticed: parse_bool(&text("ui.noticed")).unwrap_or(false),
         learn_cards: parse_bool(&text("learn.cards")).unwrap_or(true),
         learn_card_threshold: text("learn.card_threshold").parse().unwrap_or(0.811),
         instincts_enabled: parse_bool(&text("instincts.enabled")).unwrap_or(true),

@@ -10,7 +10,7 @@ pub mod codex;
 pub mod opencode;
 
 use adage_runtime::{By, Call, Prediction};
-pub use adage_trace::Harness;
+pub use adage_trace::{Capabilities, Harness};
 
 /// The hook timeout, in seconds, of the events an E2 action runs at (the edit and Stop events)
 /// when the registration runs `adage-exec`: an action's wall limit (20 s) stays well under it.
@@ -79,6 +79,12 @@ pub trait Adapter: Sync {
             cwd: PathBuf::from(p.get("cwd")?.as_str()?),
         })
     }
+    /// What the harness can do for this payload ([`Capabilities`]): its command hooks' set
+    /// ([`Harness::capabilities`]), unless its adapter knows a richer caller sent it (Claude Code's
+    /// mod, [`claude::Claude`]). Behaviour past the adapter reads this, never which plugin asked.
+    fn capabilities(&self, _event: &str, _p: &Value) -> Capabilities {
+        self.harness().capabilities()
+    }
     /// Native event name and payload → normalised event. `None` → do nothing.
     fn translate(&self, event: &str, p: &Value, cwd: &str) -> Option<Event>;
     /// Stable native occurrence identity, when the harness supplies one. Never derive this
@@ -146,7 +152,7 @@ pub fn calls(pairs: Vec<(String, Value)>, cwd: &str, output: &str, failed: bool)
                     input["file_path"] = Value::String(adage_core::shell::resolve_path(cwd, p));
                 }
             }
-            Call { tool, input, output: output.to_string(), failed, by: By::Agent, tool_use_id: None }
+            Call { tool, input, output: output.to_string(), failed, by: By::Agent, tool_use_id: None, agent: None }
         })
         .collect()
 }

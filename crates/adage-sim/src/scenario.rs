@@ -246,6 +246,9 @@ pub fn lookup_output(it: &Item) -> String {
 pub const LS: &str = "Makefile\nREADME.md\nacme\nschema\nscripts\ntests\ntools\n";
 pub const MAKE_TEST_OK: &str = "ACME_ENV=test python3 -m unittest discover -s tests\n..............\n----------------------------------------------------------------------\nRan 14 tests in 0.006s\n\nOK\n";
 pub const MAKE_GEN_OK: &str = "python3 tools/gen.py\nwrote acme/generated/models.py (2 records)\n";
+pub const MAKE_LINT_OK: &str = "ruff check acme\nAll checks passed!\n";
+/// The work-item sessions of a history (its first ones) that run `make lint` after `make test`.
+pub const LINT_SESSIONS: usize = 2;
 pub const ACME_ENV: &str = "Traceback (most recent call last):\n  File \"/usr/lib/python3.9/runpy.py\", line 197, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/fixture/acme-billing/tests/__init__.py\", line 7, in <module>\n    raise RuntimeError(\"ACME_ENV is not set — run tests with 'make test'\")\nRuntimeError: ACME_ENV is not set — run tests with 'make test'\n";
 
 /// The ways agents try to run the tests before finding `make test`: (command, output, exit).
@@ -335,6 +338,14 @@ fn ticket_session(rng: &mut Rng, it: &Item, k: usize, start_ms: i64) -> Session 
     } else {
         turns.push(Turn::of(Some("Running the tests.".into()), vec![Act::shell("make test", MAKE_TEST_OK, 0)]));
     }
+    // The deliberately sub-support habit (plan §2.7.1): in the first two work-item sessions the
+    // agent runs `make lint` right after `make test`. Two traces are below the demo preset's
+    // support of three, inside the candidates' border: learning counts it as a candidate, and a
+    // later session's `make test` notices it. Drawn from no generator, so every other session is
+    // unchanged.
+    if k < LINT_SESSIONS {
+        turns.push(Turn::of(None, vec![Act::shell("make lint", MAKE_LINT_OK, 0)]));
+    }
     let answer = rng.pick(ANSWERS).replace("{id}", it.id);
     Session { name: format!("{k:02}-{}", it.id), prompt, turns, answer, start_ms, seed: rng.next_u64() }
 }
@@ -409,13 +420,16 @@ pub fn history(seed: u64) -> Vec<Session> {
 /// | Moment | Route drawn |
 /// | --- | --- |
 /// | the prompt | `lookup-work-item`, and the known dead end (`dead-end-…`, announced at the first prompt) |
+/// | a look around (`ls`) | nothing |
 /// | the lookup's result | `read-linked-files` |
 /// | the schema edit | `finish-line-…` |
+/// | the first `make test` after the code edit | nothing said; the `make lint` candidate is noticed ([`Replay::noticed`]) |
 /// | the first stop | a request to continue: `make gen` has not run |
 /// | the second stop, after `make gen` | nothing |
 ///
-/// Under adage-exec with a `predict` grant on the finish line, the first stop never comes: at the
-/// work turn's end Adage runs `make gen` in the agent's place ([`Replay::predict`]).
+/// Under adage-exec with `predict` grants ([`Replay::predict`]), Adage makes steps in the agent's
+/// place: the lookup at the step after the look around, the reads it names at the very next step
+/// (a chain), and `make gen` at the work turn's end, so the first stop never comes.
 #[derive(Debug, Clone)]
 pub struct Replay {
     pub item: Item,
@@ -426,8 +440,11 @@ pub struct Replay {
     /// Turns after the continuation; the second stop draws nothing.
     pub finish: Vec<Turn>,
     pub answer: String,
-    /// The steps Adage makes in the agent's place ([`Predict`]), in order.
+    /// The steps Adage makes in the agent's place ([`Predict`]), in order, each when its route
+    /// holds a `predict` grant.
     pub predict: Vec<Predict>,
+    /// The candidates the session notices ([`Notice`]).
+    pub noticed: Vec<Notice>,
     /// What the mod's `PreToolUse` answers for each Bash call, in call order ([`Pretool`]).
     pub pretool: Vec<Pretool>,
 }
@@ -446,8 +463,22 @@ pub struct Predict {
     pub kind: &'static str,
     /// The route's id prefix, the one the grant names.
     pub route: &'static str,
-    /// The Bash call Adage makes; the agent's own call of it is then not replayed.
-    pub act: Act,
+    /// The calls Adage makes, in one response (several for a chain of reads); the agent's own
+    /// turn of them is then not replayed.
+    pub acts: Vec<Act>,
+}
+
+/// A candidate the held-out session notices (plan D2): learning counted the habit below a
+/// reflex's support, and the call whose batch completes its context notices it, once, in both
+/// arms, with nothing said to the agent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Notice {
+    /// The command the candidate would direct.
+    pub step: &'static str,
+    /// The command whose batch notices it: the first such call after the edit its context starts
+    /// with (which turn that is depends on the arm: the treated arm's substituted dead end runs it
+    /// a turn earlier).
+    pub at: &'static str,
 }
 
 /// One Bash call as the mod's two-phase `PreToolUse` sees it. Without a verdict the final ask
@@ -461,17 +492,25 @@ pub struct Pretool {
     pub answer: Option<&'static str>,
 }
 
-/// The finish line under a `predict` grant: the model ends the work turn without `make gen`
-/// (request `work.len()` is its last), and Adage makes the obligation's call in its place, so no
-/// Stop request follows.
+/// The steps under `predict` grants. After the look around (request 1), the lookup the prompt
+/// directed; at the very next step, the reads its result binds, as one response of several calls
+/// (the chain's second step, the only one that may follow a prediction at once); and at the work
+/// turn's end, which the model reaches without `make gen` (request `work.len()` is its last),
+/// the finish line's call, so no Stop request follows. Each is made only for a granted route; the
+/// reads come at the same step whether Adage or the agent looked the item up.
 fn predict_expectations(work: &[Turn]) -> Vec<Predict> {
-    vec![Predict {
-        index: work.len() as u32,
-        ending: true,
-        kind: "obligation",
-        route: "finish-line-",
-        act: Act::shell("make gen", MAKE_GEN_OK, 0),
-    }]
+    let acts = |t: &Turn| t.calls.iter().map(|c| c.act.clone()).collect::<Vec<_>>();
+    vec![
+        Predict { index: 1, ending: false, kind: "run", route: "lookup-work-item", acts: acts(&work[1]) },
+        Predict { index: 2, ending: false, kind: "chain", route: "read-linked-files", acts: acts(&work[2]) },
+        Predict {
+            index: work.len() as u32,
+            ending: true,
+            kind: "obligation",
+            route: "finish-line-",
+            acts: vec![Act::shell("make gen", MAKE_GEN_OK, 0)],
+        },
+    ]
 }
 
 fn pretool_expectations(turns: &[&Turn]) -> Vec<Pretool> {
@@ -497,7 +536,9 @@ pub fn replay() -> Replay {
         prompt_expect: vec!["lookup-work-item", "dead-end-"],
         predict: vec![],
         pretool: vec![],
+        noticed: vec![Notice { step: "make lint", at: "make test" }],
         work: vec![
+            turn(vec![with(Act::shell("ls", LS, 0), vec![])]),
             turn(vec![with(
                 Act::shell(&format!("python3 scripts/wi-lookup {}", it.id), &lookup_output(&it), 0),
                 vec!["read-linked-files"],
@@ -601,6 +642,48 @@ mod tests {
         assert_eq!(s.len(), 1);
         assert_eq!((s[0].command.as_str(), s[0].route), (DEAD_ENDS[0].0, "dead-end-"));
         assert!(matches!(&s[0].instead, Act::Shell { cmd, exit: 0, .. } if cmd == "make test"));
+    }
+
+    /// The plan's sub-support habit: in 2 of the 12 sessions (the first two work items) `make lint`
+    /// comes right after the last `make test`, and nowhere else.
+    #[test]
+    fn two_of_twelve_sessions_run_make_lint_right_after_make_test() {
+        for seed in [crate::CLAUDE_SEED, crate::OPENCODE_SEED, crate::CODEX_SEED] {
+            let h = history(seed);
+            let cmd = |t: &Turn| match &t.calls[0].act {
+                Act::Shell { cmd, .. } => cmd.clone(),
+                _ => String::new(),
+            };
+            let lints: Vec<usize> = h
+                .iter()
+                .enumerate()
+                .filter(|(_, s)| s.turns.iter().any(|t| cmd(t) == "make lint"))
+                .map(|(i, _)| i)
+                .collect();
+            assert_eq!(lints, vec![0, 1], "seed {seed}");
+            for s in &h[..LINT_SESSIONS] {
+                let n = s.turns.len();
+                assert_eq!((cmd(&s.turns[n - 2]), cmd(&s.turns[n - 1])), ("make test".into(), "make lint".into()));
+            }
+        }
+    }
+
+    /// The held-out session's predicted steps stand for the agent's own turns: the lookup after the
+    /// look around, the reads it names at the very next step, and `make gen` at the turn's end.
+    #[test]
+    fn the_replays_predictions_stand_for_the_agents_turns() {
+        let r = replay();
+        let p = &r.predict;
+        assert_eq!(
+            p.iter().map(|x| (x.index, x.ending, x.kind)).collect::<Vec<_>>(),
+            vec![(1, false, "run"), (2, false, "chain"), (r.work.len() as u32, true, "obligation")]
+        );
+        for x in &p[..2] {
+            let t = &r.work[x.index as usize];
+            assert!(t.calls.iter().map(|c| &c.act).eq(x.acts.iter()), "{x:?}");
+        }
+        assert!(matches!(&p[1].acts[..], [Act::Read { .. }, Act::Read { .. }]), "one response of two reads");
+        assert_eq!(r.noticed, vec![Notice { step: "make lint", at: "make test" }]);
     }
 
     #[test]

@@ -26,10 +26,12 @@
 //! | `turn_step_nothing_pending` | the same | a `TurnStep` (the Claude Code mod's step boundary) in a fresh session: nothing directed, so the fast path; compare with `batch_no_match` |
 //! | `pretool_no_match` | the same | a `PreToolUse` for `ls -la` with a `tool_use_id`: no Python program named, so nothing is read (the identity ring is never consulted) |
 //! | `turn_step_predicts` | the same, `make gen` granted `predict` (`approvals.json`, `policy.toml` at E2) | a `TurnStep` in a session whose state holds the pending `make gen` directive: it predicts the call. Only when every binary given is `adage-exec` (`adage hook` holds no grants, so it never predicts) |
+//! | `batch_no_match_with_candidates` | the same, plus three candidates (plan D1, D2) with their own net and words | a batch of `ls` (the fast path, with the candidates' words in the triggers) |
+//! | `batch_notices` | the same | a batch editing `acme/a.py`, then one running `make test`: the second notices the `make lint` candidate (decided and spooled, nothing printed) |
 //!
 //! The paired comparisons the plan's budgets are stated in: `turn_step_nothing_pending` against
 //! `batch_no_match`, and `pretool_no_match` of two builds; `turn_step_predicts` against its 10 ms
-//! bound.
+//! bound; `batch_no_match_with_candidates` of two builds (and against `batch_no_match`).
 
 use adage_core::spans::SpanKind;
 use adage_core::Effect;
@@ -111,6 +113,45 @@ fn index(home: &Path, repo: &str, routes: Vec<Route>) {
     };
     io::validate(&t).unwrap();
     Index::compile(&[t]).write_atomic(&home.join("index.json")).unwrap();
+}
+
+/// Three candidates for `acme-bench` (sequences seen below a reflex's support), attached to the
+/// index on disk as `Index::compile_root` attaches `candidates.json`.
+fn with_candidates(home: &Path) {
+    let act = |k: &str| CtxItem::Act { keys: vec![k.into()] };
+    let candidate = |id: &str, items: Vec<CtxItem>, cmd: &str| adage_tracks::candidates::Candidate {
+        id: id.into(),
+        trigger: Trigger::Context { items, within: 8 },
+        step: Step::Run { command: cmd.into() },
+        support: 2,
+        s_min: 3,
+        days: 2,
+        last_seen: None,
+        review: false,
+    };
+    let path = home.join("index.json");
+    let mut index = Index::try_load(&path).expect("the bench index");
+    index.attach_candidates(
+        [(
+            "acme-bench".to_string(),
+            vec![
+                candidate(
+                    "run-lint",
+                    vec![CtxItem::Edit { glob: "acme/*.py".into() }, act("exec make test")],
+                    "make lint",
+                ),
+                candidate("run-docs", vec![act("exec make docs"), act("exec make serve")], "make check"),
+                candidate(
+                    "run-types",
+                    vec![CtxItem::Edit { glob: "acme/*.pyi".into() }, act("exec make types")],
+                    "make test",
+                ),
+            ],
+        )]
+        .into_iter()
+        .collect(),
+    );
+    index.write_atomic(&path).unwrap();
 }
 
 fn intent(centroid: Vec<i16>, model_id: &str) -> Route {
@@ -339,6 +380,55 @@ fn main() {
     // A binary from before G4 decides the batch in full, but has no context trigger to fire.
     out.insert("batch_context_fires".into(), r);
     out.insert("batch_context_fired".into(), last.contains("context-check").into());
+
+    // Candidates beside the routes (plan D2): the no-match path, and a batch that notices one.
+    with_candidates(&home);
+    let ls = serde_json::json!({ "tool_calls": [call("Bash", serde_json::json!({ "command": "ls -la" }))] });
+    let (r, last) = time(bin, &home, &repo, "PostToolBatch", ls, runs);
+    assert!(last.trim().is_empty(), "{last}");
+    out.insert("batch_no_match_with_candidates".into(), r);
+    let paths = adage_store::Paths::at(&home);
+    let edited = |session: &str| {
+        let edit = serde_json::json!({ "session_id": session, "cwd": repo, "tool_calls": [
+            call("Edit", serde_json::json!({ "file_path": repo.join("acme/a.py"), "old_string": "a", "new_string": "b" })),
+        ] });
+        let mut c = Command::new(bin[0])
+            .args(["hook", "claude", "PostToolBatch"])
+            .env("ADAGE_HOME", &home)
+            .env("ADAGE_ARM", "treated")
+            .env("ADAGE_AUTO_LEARN", "0")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        c.stdin.take().unwrap().write_all(edit.to_string().as_bytes()).unwrap();
+        c.wait().unwrap();
+    };
+    let test = serde_json::json!({ "tool_calls": [call("Bash", serde_json::json!({ "command": "make test" }))] });
+    // Once, untimed: the batch notices the candidate (spooled, nothing printed).
+    edited("probe");
+    let mut c = Command::new(bin[0])
+        .args(["hook", "claude", "PostToolBatch"])
+        .env("ADAGE_HOME", &home)
+        .env("ADAGE_ARM", "treated")
+        .env("ADAGE_AUTO_LEARN", "0")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    let mut probe = serde_json::json!({ "session_id": "probe", "cwd": repo });
+    probe.as_object_mut().unwrap().extend(test.as_object().unwrap().clone());
+    c.stdin.take().unwrap().write_all(probe.to_string().as_bytes()).unwrap();
+    assert!(c.wait_with_output().unwrap().stdout.is_empty(), "noticed, never said");
+    let recs: Vec<serde_json::Value> = adage_store::spool::read_all(&paths.spool("probe")).unwrap_or_default();
+    let noticed = recs.iter().any(|x| x["decision"]["noticed"][0]["candidate"] == "run-lint");
+    let _ = std::fs::remove_dir_all(home.join("sessions"));
+    let (r, last) = time_with(bin, &home, &repo, "PostToolBatch", test, runs, &|session| edited(session));
+    assert!(last.trim().is_empty(), "noticed, never said: {last}");
+    out.insert("batch_notices".into(), r);
+    out.insert("batch_noticed".into(), noticed.into());
 
     println!("{}", serde_json::to_string_pretty(&serde_json::Value::Object(out)).unwrap());
 }

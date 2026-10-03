@@ -301,6 +301,7 @@ mod tests {
             failed: true,
             by: adage_trace::By::Agent,
             tool_use_id: None,
+            agent: None,
         };
         assert_eq!(s.fail("exec make gen", &call("error: tables out of date")), [2]);
         assert!(s.fail("exec make gen", &call("boom")).is_empty());

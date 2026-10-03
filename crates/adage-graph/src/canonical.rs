@@ -254,6 +254,7 @@ mod tests {
                 failed,
                 by: adage_trace::By::Agent,
                 tool_use_id: None,
+                agent: None,
             },
             rel_path: rel.map(str::to_string),
             prompt,

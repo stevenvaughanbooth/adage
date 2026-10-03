@@ -7,7 +7,7 @@ expression: text
  4 passed · 2 warnings · 0 failures   same checks as adage doctor
 
 ▌ + binary               adage 0.╭─ palette ────────────────────────────────────────────────────────────────────────╮
-  + index                generati│ : str▌                                                                15 matches │
+  + index                generati│ : str▌                                                                17 matches │
   ! embedding model    ⏎ no embed├──────────────────────────────────────────────────────────────────────────────────┤
   + hooks: claude-co…    ~/work/h│ ACTIONS                                                                          │
   ! hooks: codex       ⏎ codex is│ › Strengthen reflex…                   adage review strengthen                 s │

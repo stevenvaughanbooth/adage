@@ -63,7 +63,15 @@ fn ctx<'a>(dir: &'a tempfile::TempDir, index: &'a Index, table: &'a CommandTable
 }
 
 fn call(tool: &str, input: serde_json::Value) -> Call {
-    Call { tool: tool.into(), input, output: String::new(), failed: false, by: By::Agent, tool_use_id: None }
+    Call {
+        tool: tool.into(),
+        input,
+        output: String::new(),
+        failed: false,
+        by: By::Agent,
+        tool_use_id: None,
+        agent: None,
+    }
 }
 
 fn use_skill(name: &str) -> Call {

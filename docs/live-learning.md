@@ -321,7 +321,7 @@ the no-match fast path skips leave no record.
 ### The live feed: `adage watch --follow --json`
 
 ```text
-adage watch --follow --json [--repo <path>] [--session <id>] [--since <cursor>]
+adage watch --follow --json [--repo <path>] [--session <id>] [--since <cursor>] [--stdin eof|ignore]
 ```
 
 The live pane's sources (the spools above, `learn.log`, the health lamps, the learner's queue
@@ -345,15 +345,24 @@ current directory's; outside a repository, every one). A new follower first send
 `event` is the feed's word (`prompt`, `tools`, `failure`, `stop`, `start`, `end`, `pretool`,
 `step`). `act` is `directed`, `withheld`, `followed`, `ignored`, `misfired`, `met`, `unaided`,
 `not_reached`, `stop_request`, `stop_withheld`, `pretool` (`rewrite`, `what`, `interpreter`,
-`withheld`), `predicted` (a step Adage took in the model's place), `would_predict`, or `judged`
-(`what`: another judgement, such as `substituted`). `control: true` appears on another session's
+`withheld`), `predicted` (a step Adage took in the model's place), `would_predict`, `noticed`
+(`candidate`, `support`, `s_min`, `review`: a candidate this event's context completed, once per
+session, in both arms alike), `answered` (a call answered by a receipt, so the command did not
+run: `receipt` the operation, `command` the run that answered it, `summary`, `tests` it ran that
+the call selects, `more`, `ran_at`, `ago`), `recovery` (an action was interrupted and actions in
+the worktree wait for a person: `operation` and `command`, the `adage-exec recover … --acknowledge`
+to run once the worktree is inspected, both null when the journal itself could not be read; kept
+in either arm), or `judged` (`what`: another judgement, such as `substituted`). `tool_use_ids`
+names the calls a row is about, where the harness gave ids: a `pretool` row's one call, a tool
+batch's calls in order. `control: true` appears on another session's
 row when that session is in the control arm. A `health` line comes when the lamps change (checked
 every 3 s), a `learner` line when the learner's state does: `waiting` while `<slug>.spawn.json`'s
 `after` is in the future (`next_at`), `running` while its lock is held, else `idle`.
 
 **`--session <id>`**, the session the reader runs in: its rows never carry `control`, a withheld
 act (`withheld`, `unaided`, `not_reached`, `stop_withheld`, `would_predict`, a withheld
-`pretool`), nor, in the control arm, any judgement; a row left with nothing after that is not
+`pretool`), nor, in the control arm, any judgement (a `noticed` act stays: both arms record it);
+a row left with nothing after that is not
 sent, so a control session's stream is what a treated session with nothing fired would send.
 
 **Cursors.** `cursor` is opaque: the position just after its line in every file read. A new
@@ -363,4 +372,5 @@ refused (exit 2 with a usage line).
 
 The follower ends with exit 0 when its stdin, a pipe, reaches end of file (a follower started with
 no stdin follows until stopped), on SIGTERM, when its parent process dies, or when stdout is
-closed.
+closed. With `--stdin ignore` it never reads stdin, for a parent that closes it at spawn (the
+Claude Code mod); the other exits stay.

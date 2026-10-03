@@ -440,6 +440,11 @@ pub fn event(repo: &str, sid: &str, r: &Value) -> Option<Value> {
     // A `pretool` record of the mod's verdict: the dead end replaced, or that would have been.
     let substituted = d["substituted"]["route"].as_str();
     let would_substitute = d["would_substitute"]["route"].as_str().filter(|_| substituted.is_none());
+    // Candidates a batch noticed (both arms): learning's count, never a directive.
+    let noticed: Vec<&str> =
+        d["noticed"].as_array().into_iter().flatten().filter_map(|n| n["candidate"].as_str()).collect();
+    // A Bash call the mod answered with a fresh receipt instead of running it.
+    let answered = r["answered"].as_str().filter(|_| r["kind"] == "pretool");
     if directed.is_empty()
         && would.is_empty()
         && judged.is_empty()
@@ -448,6 +453,8 @@ pub fn event(repo: &str, sid: &str, r: &Value) -> Option<Value> {
         && predicted.is_none()
         && would_predict.is_none()
         && would_substitute.is_none()
+        && noticed.is_empty()
+        && answered.is_none()
     {
         return None;
     }
@@ -466,6 +473,12 @@ pub fn event(repo: &str, sid: &str, r: &Value) -> Option<Value> {
     }
     if let Some(p) = would_substitute {
         e["would_substitute"] = json!(p);
+    }
+    if !noticed.is_empty() {
+        e["noticed"] = json!(noticed);
+    }
+    if let Some(a) = answered {
+        e["answered"] = json!(a);
     }
     Some(e)
 }

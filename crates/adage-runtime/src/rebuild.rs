@@ -19,6 +19,7 @@
 //! | `intent` | the family of the last intent route emitted |
 //! | `predictions`, `last_step_predicted`, `predicted_routes` | each `turn_step` decision whose prediction counted (`predicted_at`) |
 //! | `ctx` | the last context state recorded (a decision records it when its event changed it), if it belongs to the index's alphabet for the repository |
+//! | `cand_ctx`, `noticed` | the same for the candidates' own alphabet (`Index::candidate_contexts`); every candidate any decision noticed, in order |
 //!
 //! Every event that changes the context state reaches the runtime and is recorded (the no-match
 //! fast path skips only events outside the alphabet), so the last recorded state is the state. A
@@ -90,6 +91,14 @@ pub fn rebuild(records: &[Value], index: &Index, repo: &str, table: &CommandTabl
         };
         if let Some(c) = d.ctx {
             st.ctx = c;
+        }
+        if let Some(c) = d.cand_ctx {
+            st.cand_ctx = c;
+        }
+        for n in &d.noticed {
+            if st.noticed.len() < crate::MAX_NOTICED && !st.noticed.contains(&n.candidate) {
+                st.noticed.push(n.candidate.clone());
+            }
         }
         // A step whose prediction counted against the bounds (both arms record it).
         if let Some(at) = d.predicted_at {
@@ -175,6 +184,9 @@ pub fn rebuild(records: &[Value], index: &Index, repo: &str, table: &CommandTabl
     }
     if st.ctx.alphabet != index.contexts(repo).digest {
         st.ctx = Default::default();
+    }
+    if st.cand_ctx.alphabet != index.candidate_contexts(repo).digest {
+        st.cand_ctx = Default::default();
     }
     st.repo.get_or_insert_with(|| repo.to_string());
     Some(st)

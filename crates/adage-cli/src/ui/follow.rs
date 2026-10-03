@@ -28,7 +28,10 @@
 //! not have written it. Other sessions' rows are sent as `adage watch` shows them.
 //!
 //! It never draws: no escape sequence is written. It ends, exit 0, when stdin (a pipe) reaches
-//! end of file, on SIGTERM, when the parent process dies, or when the reader goes away.
+//! end of file, on SIGTERM, when the parent process dies, or when the reader goes away. With
+//! `--stdin ignore` stdin is never read: a parent that closes the child's stdin from the start
+//! (the Claude Code mod's `$.process.spawn` with no input) keeps the stream until SIGTERM or its
+//! own death.
 
 use super::feed::{self, Act, FeedItem};
 use super::health::{self, Health};
@@ -328,6 +331,17 @@ fn act_json(a: &Act) -> Value {
         Act::Pretool { rewrite, kind, interpreter, withheld } => json!({
             "act": "pretool", "rewrite": rewrite, "what": kind, "interpreter": interpreter, "withheld": withheld
         }),
+        Act::Noticed { candidate, support, s_min, review } => {
+            json!({ "act": "noticed", "candidate": candidate, "support": support, "s_min": s_min, "review": review })
+        }
+        Act::Answered { operation, command, summary, tests, more, ran_at, ago } => json!({
+            "act": "answered", "receipt": operation, "command": command, "summary": summary, "tests": tests,
+            "more": more, "ran_at": ran_at, "ago": ago
+        }),
+        Act::Recovery { operation } => json!({
+            "act": "recovery", "operation": operation,
+            "command": operation.as_ref().map(|id| format!("adage-exec recover --id {id} --acknowledge")),
+        }),
         Act::Other(k, r) if k == "chose" => json!({ "act": "predicted", "route": r }),
         Act::Other(k, r) if k == "would choose" => json!({ "act": "would_predict", "route": r }),
         Act::Other(k, r) => json!({ "act": "judged", "what": k, "route": r }),
@@ -351,7 +365,9 @@ pub fn scrub(mut item: FeedItem) -> Option<FeedItem> {
     if item.control {
         // No directive reached the agent, so every judgement is of a withheld one.
         item.acts.retain(|a| match a {
-            Act::Directed { .. } | Act::StopRequest => true,
+            // A note about learning is recorded alike in both arms.
+            // An interrupted action needs a person whichever arm the session is in.
+            Act::Directed { .. } | Act::StopRequest | Act::Noticed { .. } | Act::Recovery { .. } => true,
             Act::Other(k, _) => k == "chose",
             _ => false,
         });
@@ -387,6 +403,9 @@ pub fn decision_json(item: &FeedItem) -> Value {
         m.insert("control".into(), json!(true));
     }
     m.insert("acts".into(), Value::Array(item.acts.iter().map(act_json).collect()));
+    if !item.tool_use_ids.is_empty() {
+        m.insert("tool_use_ids".into(), json!(item.tool_use_ids));
+    }
     m.insert("observed".into(), json!(item.observed));
     m.insert("unrouted".into(), json!(item.unrouted));
     m.insert("texts".into(), Value::Array(item.texts.iter().map(|(r, t)| json!({ "route": r, "text": t })).collect()));
@@ -453,8 +472,8 @@ pub fn learner_json(paths: &Paths, repo: &str, now: u64) -> Value {
     }
 }
 
-/// Ends the stream: stdin closed (only when it is a pipe: a stream started with no stdin at all
-/// follows until it is stopped), the parent gone, or SIGTERM.
+/// Ends the stream: stdin closed (only when it is a pipe and `watch_stdin`: a stream started with no
+/// stdin at all, or told to ignore it, follows until it is stopped), the parent gone, or SIGTERM.
 mod lifeline {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
@@ -472,7 +491,7 @@ mod lifeline {
     }
 
     impl Lifeline {
-        pub fn start() -> Lifeline {
+        pub fn start(watch_stdin: bool) -> Lifeline {
             let stdin_closed = Arc::new(AtomicBool::new(false));
             #[cfg(unix)]
             let parent = unsafe {
@@ -481,7 +500,7 @@ mod lifeline {
                 libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM, 0, 0, 0);
                 libc::getppid()
             };
-            if stdin_is_pipe() {
+            if watch_stdin && stdin_is_pipe() {
                 let flag = stdin_closed.clone();
                 std::thread::spawn(move || {
                     use std::io::Read;
@@ -530,8 +549,14 @@ mod lifeline {
 }
 
 /// Follow until the stream ends. `session` is the current session's id (its records are
-/// scrubbed); `since` resumes from a cursor.
-pub fn run(paths: &Paths, root: Option<PathBuf>, session: Option<&str>, since: Option<&str>) -> Result<()> {
+/// scrubbed); `since` resumes from a cursor; `watch_stdin` ends it when a piped stdin closes.
+pub fn run(
+    paths: &Paths,
+    root: Option<PathBuf>,
+    session: Option<&str>,
+    since: Option<&str>,
+    watch_stdin: bool,
+) -> Result<()> {
     let since = match since {
         Some(s) => match Cursor::decode(s) {
             Some(c) => Some(c),
@@ -539,7 +564,7 @@ pub fn run(paths: &Paths, root: Option<PathBuf>, session: Option<&str>, since: O
         },
         None => None,
     };
-    let life = lifeline::Lifeline::start();
+    let life = lifeline::Lifeline::start(watch_stdin);
     let index = adage_tracks::Index::load(&paths.index());
     let repo = root.as_deref().map(|r| health::repo_key(paths, r, &index));
     let current = session.map(adage_store::paths::sanitise);
@@ -671,6 +696,30 @@ mod tests {
         json!({ "ts": 1, "event": "PostToolBatch", "kind": "batch", "arm": arm, "repo": "r", "decision": decision })
     }
 
+    /// T-D2-05's feed half: a noticed candidate is a row of its own in both arms, the same for the
+    /// current session whatever its arm (a note about learning names no arm).
+    #[test]
+    fn a_noticed_candidate_is_shown_alike_in_both_arms() {
+        let noticed = json!({ "observed": ["exec make test"],
+                              "noticed": [{ "candidate": "run-a54d7c", "support": 2, "s_min": 3, "review": false }] });
+        let rows: Vec<Value> = ["treated", "control"]
+            .iter()
+            .map(|arm| {
+                let item = feed::from_record("s", &rec(arm, noticed.clone()));
+                assert_eq!(
+                    item.acts,
+                    vec![Act::Noticed { candidate: "run-a54d7c".into(), support: 2, s_min: 3, review: false }]
+                );
+                decision_json(&scrub(item).expect("kept in either arm"))
+            })
+            .collect();
+        assert_eq!(rows[0], rows[1]);
+        assert_eq!(
+            rows[0]["acts"],
+            json!([{ "act": "noticed", "candidate": "run-a54d7c", "support": 2, "s_min": 3, "review": false }])
+        );
+    }
+
     #[test]
     fn the_current_sessions_rows_never_name_the_arm() {
         let withheld = rec(
@@ -715,5 +764,63 @@ mod tests {
             v["acts"][0],
             json!({ "act": "pretool", "rewrite": true, "what": "test", "interpreter": ".venv/bin/python", "withheld": false })
         );
+    }
+
+    /// The mod's receipt card and its `tool.avoided` mark read the feed: a call answered by a
+    /// receipt carries the card's data and the call's id; the same answer withheld in control is
+    /// no row; a tool batch's record names its calls' ids in order.
+    #[test]
+    fn a_receipt_answer_carries_the_card_and_judgements_name_their_calls() {
+        let answered = json!({ "ts": 1, "event": "PreToolUse", "kind": "pretool", "arm": "treated", "repo": "r",
+            "answered": "receipt", "receipt": true, "command": "python -m pytest tests -q", "tool_use_id": "toolu_1",
+            "card": { "operation": "op", "ran_at": "2026-10-03T09:00:00Z", "ago": "4 min ago",
+                      "summary": "passed on files identical to the current ones · 1 test this command selects",
+                      "tests": ["tests/test_a.py::t"], "more": 0 },
+            "decision": { "judgements": [{ "route": "tests-after-edit", "kind": "obligation_met" }] } });
+        let v = decision_json(&scrub(feed::from_record("s", &answered)).unwrap());
+        assert_eq!(v["tool_use_ids"], json!(["toolu_1"]));
+        assert_eq!(
+            v["acts"],
+            json!([
+                { "act": "answered", "receipt": "op", "command": "python -m pytest tests -q",
+                  "summary": "passed on files identical to the current ones · 1 test this command selects",
+                  "tests": ["tests/test_a.py::t"], "more": 0, "ran_at": "2026-10-03T09:00:00Z", "ago": "4 min ago" },
+                { "act": "met", "route": "tests-after-edit" }
+            ])
+        );
+        let mut withheld = answered.clone();
+        withheld["arm"] = json!("control");
+        withheld["withheld"] = json!(true);
+        withheld.as_object_mut().unwrap().remove("decision");
+        assert!(feed::from_record("s", &withheld).acts.is_empty(), "the call ran: nothing was answered");
+
+        let mut batch = rec("treated", json!({ "judgements": [{ "route": "lookup", "kind": "followed" }] }));
+        batch["tool_use_ids"] = json!(["toolu_2", "toolu_3"]);
+        assert_eq!(decision_json(&feed::from_record("s", &batch))["tool_use_ids"], json!(["toolu_2", "toolu_3"]));
+        let plain = decision_json(&feed::from_record("s", &rec("treated", json!({}))));
+        assert!(plain.get("tool_use_ids").is_none(), "{plain}");
+    }
+
+    /// ux-design §9.9: an interrupted action is a row in either arm, naming what to run once the
+    /// worktree is inspected.
+    #[test]
+    fn an_interrupted_action_is_reported_in_either_arm() {
+        for arm in ["treated", "control"] {
+            let mut r = rec(arm, json!({}));
+            r["recovery_required"] = json!(true);
+            r["exec"] =
+                json!([{ "route": "learned/run-tests", "level": "e2", "outcome": "unknown", "operation_id": "op-7" }]);
+            let v = decision_json(&scrub(feed::from_record("s", &r)).expect("kept"));
+            assert_eq!(
+                v["acts"],
+                json!([{ "act": "recovery", "operation": "op-7", "command": "adage-exec recover --id op-7 --acknowledge" }]),
+                "{arm}"
+            );
+        }
+        let mut unreadable = rec("treated", json!({}));
+        unreadable["recovery_required"] = json!(true);
+        unreadable["exec"] = json!([{ "route": "*", "level": "e2", "outcome": "unknown", "withheld": "journal" }]);
+        let v = decision_json(&feed::from_record("s", &unreadable));
+        assert_eq!(v["acts"], json!([{ "act": "recovery", "operation": null, "command": null }]));
     }
 }

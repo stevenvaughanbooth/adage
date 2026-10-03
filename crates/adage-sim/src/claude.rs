@@ -157,13 +157,13 @@ pub fn hook(sid: &str, cwd: &str, event: &str, extra: Value) -> Value {
 /// turn `turn_id`: before request `index` (0 is the prompt's own request, `k` follows the k-th tool
 /// batch), or, with `ending`, after the model's response to request `index` ended the turn. The mod
 /// builds it from `$.session`, not from a command hook's payload, so it carries no transcript path
-/// or permission mode.
+/// or permission mode; like every payload the mod sends, it says `via: "mod"`.
 pub fn turn_step_hook(sid: &str, cwd: &str, turn_id: &str, index: u32, ending: bool) -> Value {
-    json!({ "session_id": sid, "cwd": cwd, "hook_event_name": "TurnStep", "turn_id": turn_id, "index": index, "model": MODEL, "ending": ending })
+    json!({ "session_id": sid, "cwd": cwd, "hook_event_name": "TurnStep", "turn_id": turn_id, "index": index, "model": MODEL, "ending": ending, "via": "mod" })
 }
 
-/// The `PreToolUse` the mod sends for a Bash call before it runs: first with `dry_run` (the plan,
-/// spooled nowhere), then without (the decision). A command hook sends only the second.
+/// The `PreToolUse` for a Bash call before it runs: the mod's dry run (`dry_run`: the plan,
+/// spooled nowhere, `via: "mod"`), or the command hook's own payload (the decision).
 pub fn pretool_hook(sid: &str, cwd: &str, command: &str, tool_use_id: &str, dry_run: bool) -> Value {
     let mut p = hook(
         sid,
@@ -173,7 +173,48 @@ pub fn pretool_hook(sid: &str, cwd: &str, command: &str, tool_use_id: &str, dry_
     );
     if dry_run {
         p["dry_run"] = json!(true);
+        p["via"] = json!("mod");
     }
+    p
+}
+
+/// The mod's final ask for a Bash call (`verdict`: what the engine's permission check found, the
+/// learned substitution it makes, or that it answered the call with a fresh receipt).
+pub fn verdict_hook(sid: &str, cwd: &str, command: &str, tool_use_id: &str, verdict: Value) -> Value {
+    let mut p = pretool_hook(sid, cwd, command, tool_use_id, false);
+    p["verdict"] = verdict;
+    p["via"] = json!("mod");
+    p
+}
+
+/// What the mod asks once after a session starts (`adage hook claude Standing`): the standing text
+/// for its cached system-prompt section, the environment sentence for the Bash tool's description
+/// and the compaction instruction. With `agent` (the mod's `agent.spawn`: the subagent's `type`,
+/// `description` and `prompt`), also what the subagent is told before it starts.
+pub fn standing_hook(sid: &str, cwd: &str, agent: Option<Value>) -> Value {
+    let mut p = json!({ "session_id": sid, "cwd": cwd, "hook_event_name": "Standing", "via": "mod" });
+    if let Some(a) = agent {
+        p["agent"] = a;
+    }
+    p
+}
+
+/// What the mod asks right after the command hooks' `SessionStart` (`adage hook claude Press`):
+/// the session's first press token, if its window is still open.
+pub fn press_hook(sid: &str, cwd: &str, source: &str) -> Value {
+    json!({ "session_id": sid, "cwd": cwd, "hook_event_name": "Press", "source": source, "via": "mod" })
+}
+
+/// What the mod's `skill.prompt` asks as a skill's text is expanded for the model (`adage hook
+/// claude SkillPrompt`).
+pub fn skill_prompt_hook(sid: &str, cwd: &str, skill: &str, text: &str) -> Value {
+    json!({ "session_id": sid, "cwd": cwd, "hook_event_name": "SkillPrompt", "skill": skill, "text": text, "via": "mod" })
+}
+
+/// A subagent's tool batch: Claude Code's payload for a subagent carries its `agent_id`.
+pub fn subagent_batch(sid: &str, cwd: &str, agent_id: &str, acts: &[(String, Act)]) -> Value {
+    let mut p = predicted_batch(sid, cwd, acts);
+    p["agent_id"] = json!(agent_id);
     p
 }
 

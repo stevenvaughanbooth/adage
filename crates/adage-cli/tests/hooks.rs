@@ -288,6 +288,24 @@ fn claude_scenario(w: &World) -> Vec<(&'static str, Value)> {
             "UserPromptSubmit",
             with("UserPromptSubmit", json!({ "prompt": "Now review commit 3f2a9c1 before the release." })),
         ),
+        // The mod's dry run of a Bash call (`via: mod`): the plan, recorded nowhere. No receipt and
+        // no environment here, so only what a learned dead end plans.
+        (
+            "PreToolUse",
+            with(
+                "PreToolUse",
+                json!({ "tool_name": "Bash", "tool_use_id": "toolu_pytest_2", "tool_input": { "command": "python3 -m pytest tests" }, "dry_run": true, "via": "mod" }),
+            ),
+        ),
+        // The mod's `agent.spawn` asks what a subagent is told before it starts: the lookup its
+        // prompt binds, and the standing dead end.
+        (
+            "Standing",
+            with(
+                "Standing",
+                json!({ "via": "mod", "agent": { "type": "Explore", "description": "Look up the item", "prompt": format!("Find what W-2042 asks for. {INJECTION}") } }),
+            ),
+        ),
         ("SessionEnd", with("SessionEnd", json!({ "reason": "other" }))),
     ]
 }

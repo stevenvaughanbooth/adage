@@ -96,6 +96,7 @@ fn assert_routine(index: Index, expected: &str) {
             failed: false,
             by: adage_runtime::By::Agent,
             tool_use_id: None,
+            agent: None,
         }],
     };
     let mut state = adage_runtime::SessionState::default();

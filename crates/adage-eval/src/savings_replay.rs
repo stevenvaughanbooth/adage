@@ -666,6 +666,7 @@ fn call_of(c: &ToolCall, cwd: &str, root: &str) -> Call {
         failed: true,
         by: By::Agent,
         tool_use_id: None,
+        agent: None,
     }
 }
 
@@ -765,6 +766,7 @@ pub fn directives(policy: &Policy, t: &Transcript, acts: &[Act], task: &str, sto
                                     failed: c.failed,
                                     by: By::Agent,
                                     tool_use_id: None,
+                                    agent: None,
                                 };
                                 let prompt = cs.prompts.saturating_sub(1);
                                 cs.steps.extend(adage_learn::cases::steps_of_call(cs.turn, prompt, &call, &cwd, table));

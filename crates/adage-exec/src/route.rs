@@ -478,9 +478,17 @@ fn sources(
 /// on a profile, an output contract or a timeout it does not use. Refused for a route only
 /// adage-exec can carry out (a vendored script, a learned context action): the agent has nothing
 /// it could run, and the CPU path already acts for it.
+///
+/// A read batch (the files a lookup's result names, read in one response: a chain's second step,
+/// plan C7) is keyed as the harness's read tool over its slot, [`READ_TOOL`] `{files}`: no
+/// program runs, the slot's repository-path contract is what the person approves, and its effect
+/// is observe ([`predict_classified`]).
 pub fn plan_predict(ir: &IndexedRoute, root: &Path, tracks: &Path) -> Result<Plan, String> {
+    if let Step::ReadBatch { slot, .. } = &ir.route.step {
+        return plan_predict_reads(ir, slot, root);
+    }
     let Step::Run { command } = &ir.route.step else {
-        return Err("only a route that runs a command can be predicted".into());
+        return Err("only a route that runs a command or reads the files a result names can be predicted".into());
     };
     if ir.exec_only() {
         return Err("this reflex runs only in adage-exec's sandbox (a vendored script or a learned action), so it is never predicted".into());
@@ -529,6 +537,53 @@ pub fn plan_predict(ir: &IndexedRoute, root: &Path, tracks: &Path) -> Result<Pla
         exit_when: BTreeMap::new(),
         repo_paths,
     })
+}
+
+/// The program word a read batch's predict request is keyed with: the harness's read tool, never
+/// a command that runs.
+pub const READ_TOOL: &str = "Read";
+
+/// [`plan_predict`] for a read batch: `Read {slot}`, the slot under the repository-path contract.
+fn plan_predict_reads(ir: &IndexedRoute, slot: &str, root: &Path) -> Result<Plan, String> {
+    if ir.exec_only() {
+        return Err("this reflex runs only in adage-exec's sandbox, so it is never predicted".into());
+    }
+    let s = ir.route.slots.iter().find(|s| s.name == slot).ok_or(format!("slot {{{slot}}} is not declared"))?;
+    if s.contract != Contract::RepoPath {
+        return Err("a read batch's files must be repository paths".into());
+    }
+    let argv = vec![READ_TOOL.to_string(), format!("{{{slot}}}")];
+    Ok(Plan {
+        request: ExecRequest {
+            repo_root: root.to_path_buf(),
+            project_python: None,
+            argv,
+            inputs: BTreeMap::new(),
+            contracts: [(slot.to_string(), REPO_PATH_CONTRACT.to_string())].into_iter().collect(),
+            effect: ir.route.effect,
+            level: Level::E2,
+            output: OutputSpec { mode: OutputMode::Typed, fields: BTreeMap::new() },
+            scripts: Vec::new(),
+            profile: Profile::for_level(Level::E2),
+            labels: labels(ir),
+            origin: Origin::Local,
+            route_exec_digest: None,
+            action: None,
+            mode: GrantMode::Predict,
+        },
+        exit_when: BTreeMap::new(),
+        repo_paths: [slot.to_string()].into_iter().collect(),
+    })
+}
+
+/// The effect a predict request's call is classified with, for policy: a read batch
+/// ([`READ_TOOL`]) only reads files in the repository, so it observes; any other is the command's
+/// own classification ([`crate::classify::effect`]).
+pub fn predict_classified(req: &ExecRequest, table: &CommandTable) -> Effect {
+    match req.argv.first() {
+        Some(p) if p == READ_TOOL && req.scripts.is_empty() => Effect::Observe,
+        _ => crate::classify::effect(&req.argv, table),
+    }
 }
 
 /// The values a directive bound, read back from its text: the indented command line, aligned

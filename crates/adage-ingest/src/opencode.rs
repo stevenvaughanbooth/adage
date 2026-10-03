@@ -198,6 +198,7 @@ pub fn decode(v: &Value, cx: &Decode<'_>) -> Option<Session> {
                 failed,
                 by: By::Agent,
                 tool_use_id: None,
+                agent: None,
             };
             steps.extend(call_steps(turn, at, &call, normalize_tool(&tool, &input, &root_str, table), &root));
         }

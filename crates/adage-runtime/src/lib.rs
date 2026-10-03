@@ -99,6 +99,12 @@ pub struct PendingReads {
     /// Repository-relative paths, validated by the route's slot contract, in the directive's order.
     pub files: Vec<String>,
     pub batches_left: u32,
+    /// Bound from the result of a step Adage made in the agent's place (a predicted lookup), or,
+    /// where a step is only recorded (the control arm), of the agent's call of a step Adage would
+    /// have made: only such a batch may be read at the very next step, as the second step of a
+    /// chain ([`PredictionKind::Chain`]), so both arms count the same steps.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub after_adage: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -188,6 +194,39 @@ pub struct SessionState {
     /// the session, and the first prompt does not announce its routes again.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub standing: Option<Standing>,
+    /// The latest predicted step was the second of a chain (the reads bound from Adage's own
+    /// lookup, at the step right after it): no third step follows without a model step between.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub chained: bool,
+    /// The session's recent symbols in the candidates' own alphabet
+    /// (`Index::candidate_contexts`): what a candidate's context is noticed on. Apart from
+    /// [`SessionState::ctx`], so a learn that changes only candidates never resets a route's
+    /// context.
+    #[serde(default, skip_serializing_if = "CtxState::is_empty")]
+    pub cand_ctx: CtxState,
+    /// The candidates noticed this session, by id, in order: each is noticed once per session, at
+    /// most [`MAX_NOTICED`].
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub noticed: Vec<String>,
+}
+
+/// At most this many candidates are noticed per session ([`SessionState::noticed`]).
+pub const MAX_NOTICED: usize = 64;
+
+/// A candidate whose context this session's events just completed (architecture §3.10 of the
+/// Claude Code mod, "Noticed"): a sequence learning counted below the support a reflex needs, or a
+/// nascent reflex waiting for review. A note about learning, never a directive: it reaches neither
+/// the model nor `would_have`, and both arms record it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Noticed {
+    /// The candidate's id: the id the same pattern gets as a reflex.
+    pub candidate: String,
+    /// Distinct earlier traces it was seen in.
+    pub support: u32,
+    /// The support a reflex needs in this repository.
+    pub s_min: u32,
+    /// A nascent reflex waiting for a person's review.
+    pub review: bool,
 }
 
 /// At most this many `PreToolUse` identities are kept per session ([`SessionState::seen_pretool`]).
@@ -451,6 +490,14 @@ pub struct Decision {
     /// The routing it would make, recorded in both arms.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub would_route: Option<Routing>,
+    /// Candidates this event's context completed, each once per session ([`Noticed`]), in both
+    /// arms; never delivered.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub noticed: Vec<Noticed>,
+    /// The session's candidate context state after this event, when the event changed it: what a
+    /// state rebuilt from the spool takes it from, as [`Decision::ctx`] is for routes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cand_ctx: Option<CtxState>,
 }
 
 /// Embeds a raw prompt: `(model id, unit vector)`, or `None` when no model is available. Called
@@ -707,6 +754,11 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
     let net = ctx.index.contexts(&ctx.repo);
     let syms = (!net.is_empty()).then(|| context::Symbols::new(&net).exact_keys(ctx.policy.exact_keys));
     let ctx_before = syms.as_ref().map(|_| st.ctx.clone());
+    // Candidates (plan D2): their own alphabet and net, symbolised from the same events, walked
+    // into `noticed` and never into a directive; only when the repository has any.
+    let cnet = ctx.index.candidate_contexts(&ctx.repo);
+    let csyms = (!cnet.is_empty()).then(|| context::Symbols::new(&cnet).exact_keys(ctx.policy.exact_keys));
+    let cand_before = csyms.as_ref().map(|_| st.cand_ctx.clone());
     let mut out: Vec<Directive> = Vec::new();
     let emit_ok = |st: &SessionState, out: &Vec<Directive>, id: &str| {
         !st.emitted.iter().any(|e| e == id)
@@ -848,6 +900,7 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
             }
             // A failed call the failure hook just reported, listed again in this batch.
             let mut open_failure = syms.as_ref().and_then(|_| st.ctx.open_failure(&net));
+            let mut cand_open_failure = csyms.as_ref().and_then(|_| st.cand_ctx.open_failure(&cnet));
             for call in calls {
                 for name in added_tests(call, ctx.root) {
                     if st.new_tests.len() < MAX_NEW_TESTS && !st.new_tests.contains(&name) {
@@ -862,6 +915,9 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                 retire_reads(ctx, st, call, &mut d);
                 let keyed = call_keys(call, ctx);
                 let segs = exec_segments(&keyed);
+                // The call is the step Adage made in the agent's place, or (in the arms that only
+                // record) one it would have made: what a chain's second step may follow at once.
+                let mut stood_in = call.by == By::Adage;
                 for (key, n) in keyed {
                     let key = cap(key);
                     d.observed.push(key.clone());
@@ -875,6 +931,7 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                             || follows_learned(&ctx.policy, &p.expect_key, call)
                         {
                             let route = p.route.clone();
+                            stood_in |= st.predicted_routes.contains(&route);
                             d.judgements.push(if call.by == By::Adage {
                                 Judgement::Predicted { route }
                             } else if misfire {
@@ -1048,12 +1105,20 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                                     }
                                     if let Some(o) = st.obligations.iter_mut().find(|o| o.route == ir.route.id) {
                                         // A new matching edit after the step ran re-arms the obligation.
+                                        let rearmed = o.met;
                                         if o.met {
                                             o.met = false;
                                             o.stop_requested = false;
                                         }
                                         o.edited = rel.clone();
                                         o.fresh = true;
+                                        // A finish line is predicted once per arming (plan C8): met,
+                                        // and armed again by a new edit, it may be predicted again.
+                                        // One that is still unmet (its predicted call failed) is
+                                        // not: the Stop gate asks for it, as without the mod.
+                                        if rearmed {
+                                            st.predicted_routes.retain(|r| r != &ir.route.id);
+                                        }
                                         continue;
                                     }
                                     // Carried by the sequence that subsumes it (armed there).
@@ -1123,6 +1188,7 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                                                 route: ir.route.id.clone(),
                                                 files,
                                                 batches_left: ctx.params.follow_window,
+                                                after_adage: stood_in,
                                             });
                                             t
                                         }),
@@ -1161,6 +1227,31 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                             fire_contexts(ctx, &routes, &net, st, &mut out, |st, out, ir| {
                                 emit_ok(st, out, &ir.route.id)
                             });
+                        }
+                    }
+                    // The same for the candidates' alphabet: noticed, never directed.
+                    if let Some(cs) = &csyms {
+                        let mut got = Vec::new();
+                        if keys::is_author(&n.action) {
+                            if let Some(p) = keys::action_path(&n.action) {
+                                got.extend(cs.edit(&repo::relativize(ctx.root, p)));
+                            }
+                        }
+                        if call.failed {
+                            got.extend(cs.fail(&key, call));
+                        } else {
+                            let acts = cs.act(&key);
+                            if !acts.is_empty() && cand_open_failure == Some(context::key_hash(&key)) {
+                                cand_open_failure = None;
+                                st.cand_ctx.last_fail = None;
+                            } else {
+                                got.extend(acts);
+                            }
+                        }
+                        got.sort_unstable();
+                        got.dedup();
+                        if st.cand_ctx.push(&cnet, &got) {
+                            notice(ctx, &cnet, st, &mut d);
                         }
                     }
                 }
@@ -1216,6 +1307,15 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                         fire_contexts(ctx, &routes, &net, st, &mut out, |st, out, ir| emit_ok(st, out, &ir.route.id));
                     }
                 }
+                if let Some(cs) = &csyms {
+                    let pushed = st.cand_ctx.push(&cnet, &cs.fail(&key, call));
+                    if !cs.act(&key).is_empty() {
+                        st.cand_ctx.failed(&cnet, &key);
+                    }
+                    if pushed {
+                        notice(ctx, &cnet, st, &mut d);
+                    }
+                }
             }
         }
         Event::Stop { stop_hook_active } => {
@@ -1250,6 +1350,9 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
     if ctx_before.is_some_and(|b| b != st.ctx) {
         d.ctx = Some(st.ctx.clone());
     }
+    if cand_before.is_some_and(|b| b != st.cand_ctx) {
+        d.cand_ctx = Some(st.cand_ctx.clone());
+    }
     d.would_have = out.clone();
     if st.arm != Some(Arm::Control) {
         d.directives = out;
@@ -1271,8 +1374,11 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
 /// Never at the turn's first step (`index` 0, the prompt's own request, nor its end), never right
 /// after a predicted step (a model step always separates two: before request `index`, a
 /// prediction at `index - 1`; at a turn's end, which the mod asks with the index of the request
-/// the model just answered, a prediction at that index), and at most [`Policy::predict_cap`] per
-/// session: past the cap the step is recorded as `would_predict` only. The bounds count in both
+/// the model just answered, a prediction at that index) but for one case, a chain's second step:
+/// the reads bound from the result of the lookup Adage made at the step just before
+/// ([`PendingReads::after_adage`]), never followed by a third ([`SessionState::chained`]); and at
+/// most [`Policy::predict_cap`] per session (each yielded response counts once, whatever its
+/// calls): past the cap the step is recorded as `would_predict` only. The bounds count in both
 /// arms; in the control arm nothing is predicted and `would_predict` says what would have been.
 fn predict_step(
     ctx: &Ctx,
@@ -1290,7 +1396,11 @@ fn predict_step(
     // a turn (`ending`) the model has just answered request `index` itself, so only a prediction
     // at this very index would be "in a row".
     let previous = if ending { index } else { index - 1 };
-    if st.last_step_predicted.as_ref().is_some_and(|(t, i)| t == turn_id && *i == previous) {
+    // In a row, only the second step of a chain may follow (plan C7): the reads bound from the
+    // result of the lookup Adage made at the step just before, never at a turn's end and never as
+    // a third step. Every other step needs a model step between it and the last prediction.
+    let in_a_row = st.last_step_predicted.as_ref().is_some_and(|(t, i)| t == turn_id && *i == previous);
+    if in_a_row && (ending || st.chained) {
         return;
     }
     let inhibits = told_inhibits(routes, st);
@@ -1305,7 +1415,7 @@ fn predict_step(
     };
     let bash = |command: &str| PredictedCall { tool: "Bash".into(), input: serde_json::json!({ "command": command }) };
     let mut found: Option<Prediction> = None;
-    for p in st.pending.iter().filter(|p| !p.command.is_empty()) {
+    for p in st.pending.iter().filter(|p| !p.command.is_empty() && !in_a_row) {
         let skill = p.expect_key.strip_prefix("control Skill ");
         let Some(ir) = eligible(&p.route, skill.is_none().then_some(p.command.as_str())) else { continue };
         let (kind, call) = match (skill, &ir.route.step) {
@@ -1322,7 +1432,7 @@ fn predict_step(
         break;
     }
     if found.is_none() {
-        for r in st.reads.iter().filter(|r| !r.files.is_empty()) {
+        for r in st.reads.iter().filter(|r| !r.files.is_empty() && (r.after_adage || !in_a_row)) {
             let Some(ir) = eligible(&r.route, None) else { continue };
             let calls = r
                 .files
@@ -1360,6 +1470,7 @@ fn predict_step(
     }
     st.predictions += 1;
     st.last_step_predicted = Some((turn_id.to_string(), index));
+    st.chained = in_a_row;
     st.predicted_routes.push(p.route.clone());
     d.predicted_at = Some((turn_id.to_string(), index));
     if st.arm != Some(Arm::Control) && !ctx.policy.observe {
@@ -1441,6 +1552,24 @@ fn route_step(ctx: &Ctx, routes: &[&IndexedRoute], st: &SessionState, d: &mut De
 /// project's environment ([`render::environment_note`]), when one is bound. Deterministic for an
 /// index: the hook keeps the first answer for the session ([`SessionState::standing`]).
 pub fn standing(index: &Index, repo: &str, policy: &Policy, environment: String) -> Standing {
+    let (mut text, mut routes) = (String::new(), Vec::new());
+    for (item, route) in standing_items(index, repo, policy) {
+        let sep = if text.is_empty() { 0 } else { 2 };
+        if text.len() + sep + item.len() > render::MAX_STANDING {
+            continue;
+        }
+        if sep > 0 {
+            text.push_str("\n\n");
+        }
+        text.push_str(&item);
+        routes.extend(route);
+    }
+    Standing { standing: text, environment, routes }
+}
+
+/// The standing text's items, in order, each with the route a directive carries (none for a
+/// card's line): [`standing`] and [`delegation`] bound them.
+fn standing_items(index: &Index, repo: &str, policy: &Policy) -> Vec<(String, Option<String>)> {
     let mut items: Vec<(String, Option<String>)> = Vec::new();
     for ir in index.for_repo(repo).filter(|r| in_play(policy, r)) {
         if let (Trigger::SessionStart, Some(t)) = (&ir.route.trigger, render::route_text(&ir.route, &[])) {
@@ -1454,19 +1583,107 @@ pub fn standing(index: &Index, repo: &str, policy: &Policy, environment: String)
             }
         }
     }
-    let (mut text, mut routes) = (String::new(), Vec::new());
-    for (item, route) in items {
+    items
+}
+
+/// What of a session's standing text a harness can attach (the Claude Code mod's architecture
+/// §1b.3), by capability: the standing reflexes go to a cached system-prompt section only where
+/// there is one (`cached_section`), and the environment sentence to the shell tool's description
+/// only where the description can carry it (`tool_description`). Anything else is left empty.
+pub fn standing_for(caps: &adage_trace::Capabilities, s: Standing) -> Standing {
+    Standing {
+        standing: if caps.cached_section { s.standing } else { String::new() },
+        environment: if caps.tool_description { s.environment } else { String::new() },
+        routes: if caps.cached_section { s.routes } else { Vec::new() },
+    }
+}
+
+/// What a subagent is told before its first request (the Claude Code mod's `agent.spawn`, its
+/// architecture §3.8): the prompt reflexes its own prompt binds (a work-item lookup for the item
+/// the delegation names), then the repository's standing reflexes ([`standing`]), each in its
+/// directive wrapper and fixed template, whole items only, at most [`render::MAX_STANDING`] bytes
+/// together. Nothing a dead end the session was told says not to run. Empty unless the harness
+/// can attach text to a subagent's prompt (`subagent_prompt`), in the control arm, and when
+/// nothing applies. Read-only: what a subagent is told is not what the session was told, so no
+/// state changes.
+pub fn delegation(ctx: &Ctx, st: &SessionState, prompt: &str, caps: &adage_trace::Capabilities) -> String {
+    if !caps.subagent_prompt || st.arm == Some(Arm::Control) || ctx.policy.observe {
+        return String::new();
+    }
+    let routes: Vec<&IndexedRoute> = ctx.index.for_repo(&ctx.repo).filter(|r| in_play(&ctx.policy, r)).collect();
+    let inhibits = told_inhibits(&routes, st);
+    let spans = spans::extract(prompt);
+    let mut items: Vec<String> = Vec::new();
+    for ir in routes.iter().filter(|r| matches!(r.route.trigger, Trigger::Prompt { .. })) {
+        if inhibits.iter().any(|inhibit| interlock::avoids(inhibit, &ir.route)) {
+            continue;
+        }
+        if let Some((text, ..)) = bind_prompt_route(&ir.route, &spans, prompt, ctx) {
+            items.push(render::wrap_directive(&directive(ir, text)));
+        }
+    }
+    items.extend(standing_items(ctx.index, &ctx.repo, &ctx.policy).into_iter().map(|(item, _)| item));
+    let mut text = String::new();
+    for item in items {
         let sep = if text.is_empty() { 0 } else { 2 };
-        if text.len() + sep + item.len() > render::MAX_STANDING {
+        if text.len() + sep + item.len() > render::MAX_STANDING || text.contains(&item) {
             continue;
         }
         if sep > 0 {
             text.push_str("\n\n");
         }
         text.push_str(&item);
-        routes.extend(route);
     }
-    Standing { standing: text, environment, routes }
+    text
+}
+
+/// A Bash call the mod answered with a fresh receipt instead of running it (the Claude Code mod's
+/// architecture §3.3; `PreToolUse` with `verdict: {answered: "receipt"}`): the run the receipt
+/// records passed on files identical to the current ones and covered every test the call
+/// selects, so the call is observed as made and passed. A pending directive it follows is judged
+/// followed (the agent asked for the run), and a finish-line obligation that either the call or
+/// the covering run (`covering`, the command that ran) meets is met: the Stop gate does not ask
+/// for a run whose result is already in hand.
+pub fn answered_by_receipt(ctx: &Ctx, st: &mut SessionState, command: &str, covering: &str) -> Decision {
+    let mut d = Decision::default();
+    let bash = |command: &str| Call {
+        tool: "Bash".into(),
+        input: serde_json::json!({ "command": command }),
+        output: String::new(),
+        failed: false,
+        by: By::Agent,
+        tool_use_id: None,
+        agent: None,
+    };
+    let call = bash(command);
+    let keyed = call_keys(&call, ctx);
+    let segs = exec_segments(&keyed);
+    let mut meeting: Vec<String> = Vec::new();
+    for (key, _) in keyed {
+        let key = cap(key);
+        d.observed.push(key.clone());
+        push_history_capped(st, key.clone(), ctx.params.history);
+        st.pending.retain(|p| {
+            let follows = ctx.policy.follows(&p.expect_key, &key)
+                || follows_call(&ctx.policy, &p.expect_key, &segs)
+                || follows_learned(&ctx.policy, &p.expect_key, &call);
+            if follows {
+                d.judgements.push(Judgement::Followed { route: p.route.clone() });
+            }
+            !follows
+        });
+        meeting.push(key);
+    }
+    if !covering.is_empty() {
+        meeting.extend(call_keys(&bash(covering), ctx).into_iter().map(|(k, _)| cap(k)));
+    }
+    for o in st.obligations.iter_mut().filter(|o| !o.met) {
+        if meeting.iter().any(|k| ctx.policy.meets(&o.expect_key, k)) {
+            o.met = true;
+            d.judgements.push(Judgement::ObligationMet { route: o.route.clone() });
+        }
+    }
+    d
 }
 
 /// The learned replacement for a Bash call about to run, if it is a known dead end here: the
@@ -1702,6 +1919,24 @@ fn fire_contexts(
         let Some(t) = render::route_text(&ir.route, &[]) else { continue };
         st.pending.push(pending);
         out.push(directive(ir, t));
+    }
+}
+
+/// The candidates the newest alphabet event completes in the candidates' own net (plan D2), each
+/// noticed once per session and at most [`MAX_NOTICED`]: recorded on the decision, in both arms,
+/// and never emitted. A candidate is never a route's id ([`Index::attach_candidates`]), so a
+/// pattern already in service is directed, never noticed.
+fn notice(ctx: &Ctx, net: &CtxNet, st: &mut SessionState, d: &mut Decision) {
+    for id in net.walk(&st.cand_ctx.recent()) {
+        if st.noticed.len() >= MAX_NOTICED {
+            return;
+        }
+        if st.noticed.iter().any(|n| n == id) {
+            continue;
+        }
+        let Some(c) = ctx.index.candidate(&ctx.repo, id) else { continue };
+        st.noticed.push(c.id.clone());
+        d.noticed.push(Noticed { candidate: c.id.clone(), support: c.support, s_min: c.s_min, review: c.review });
     }
 }
 

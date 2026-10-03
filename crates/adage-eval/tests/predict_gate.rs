@@ -14,7 +14,8 @@
 //!   `make gen` meets the finish line's obligation). In the control arm nothing is predicted.
 //! - **Accuracy.** Each step predicted before a request against what the recorded agent did next:
 //!   a Bash call is right when it is the agent's next Bash command, a chain of reads when the
-//!   agent's next batch of reads covers its files. Also printed: the share the agent made at some
+//!   agent's next reads cover its files (its next batch with a Read and the all-Read batches right
+//!   after it: a chain is one request where the agent made one per file, plan C7). Also printed: the share the agent made at some
 //!   later point of the session. A finish-line call at a turn's end has no "next" in a recording
 //!   that stopped there, so it is counted, not scored.
 //!
@@ -128,6 +129,30 @@ fn find(queue: &VecDeque<Event>, call: &adage_runtime::PredictedCall) -> Option<
     None
 }
 
+/// Whether the agent's next reads cover `files`: its first batch with a Read, and the batches right
+/// after it whose calls are all Reads (an agent reads a chain's files one request at a time, where
+/// Adage reads them in one).
+fn next_reads_cover(queue: &VecDeque<Event>, files: &[&serde_json::Value]) -> bool {
+    let mut read: Vec<&serde_json::Value> = Vec::new();
+    for e in queue {
+        let Event::Batch { calls } = e else {
+            if read.is_empty() && !matches!(e, Event::Prompt { .. } | Event::Stop { .. } | Event::SessionEnd) {
+                continue;
+            }
+            break;
+        };
+        let agent: Vec<&Call> = calls.iter().filter(|c| c.by == By::Agent).collect();
+        if read.is_empty() {
+            read.extend(agent.iter().filter(|c| c.tool == "Read").map(|c| &c.input["file_path"]));
+        } else if !agent.is_empty() && agent.iter().all(|c| c.tool == "Read") {
+            read.extend(agent.iter().map(|c| &c.input["file_path"]));
+        } else {
+            break;
+        }
+    }
+    files.iter().all(|f| read.contains(f))
+}
+
 /// Replay one session in one arm, `TurnStep`s injected at every step boundary.
 #[allow(clippy::too_many_arguments)]
 fn replay(
@@ -228,7 +253,12 @@ fn adage_calls(queue: &mut VecDeque<Event>, p: &Prediction, ending: bool, tally:
     if ending {
         tally.at_end += 1;
     } else {
-        let next = found.iter().all(|f| f.is_some_and(|(_, next)| next));
+        let next = if p.calls.len() > 1 && p.calls.iter().all(|c| c.tool == "Read") {
+            let files: Vec<&serde_json::Value> = p.calls.iter().map(|c| &c.input["file_path"]).collect();
+            next_reads_cover(queue, &files)
+        } else {
+            found.iter().all(|f| f.is_some_and(|(_, next)| next))
+        };
         let later = found.iter().all(Option::is_some);
         tally.scored += 1;
         tally.correct += u32::from(next);
@@ -265,6 +295,7 @@ fn adage_calls(queue: &mut VecDeque<Event>, p: &Prediction, ending: bool, tally:
                 failed: false,
                 by: By::Agent,
                 tool_use_id: None,
+                agent: None,
             },
         };
         out.push(call);
@@ -379,7 +410,9 @@ fn check(name: &str, split: Option<&str>, min_accuracy: f64) {
 fn predicted_steps_save_requests_and_match_the_agent() {
     // Measured when the gate was set: demo round 2, 34 steps for 34 opportunities (35 as
     // recorded), accuracy 6/34 = 0.1765 (Bash 3/22), 23/34 made later in the session; synthetic,
-    // 25 for 25, accuracy 12/24 = 0.5, 20/24 later.
+    // 25 for 25, accuracy 12/24 = 0.5, 20/24 later. With chains (plan C7), measured: demo 34 for
+    // 26, 7/34; synthetic 30 for 19, 22/29 (a chain right after Adage's lookup, scored against
+    // the agent's next reads, one file per request); the floors are unchanged.
     check("demo-haiku45", Some("round2"), 0.1765 - EPS);
     check("synthetic", None, 0.5 - EPS);
 }

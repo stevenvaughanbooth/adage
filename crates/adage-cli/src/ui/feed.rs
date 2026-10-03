@@ -48,6 +48,32 @@ pub enum Act {
         interpreter: String,
         withheld: bool,
     },
+    /// A candidate this event's context completed (plan D2): a sequence learning counted in
+    /// `support` earlier sessions where a reflex needs `s_min`, or a nascent reflex waiting for
+    /// `review`. Recorded and shown alike in both arms; never said to the agent.
+    Noticed {
+        candidate: String,
+        support: u32,
+        s_min: u32,
+        review: bool,
+    },
+    /// A call answered by a receipt (the Claude Code mod, plan C3): the command did not run, and
+    /// Adage's own earlier run of `command` was its result. The receipt card's data.
+    Answered {
+        operation: String,
+        command: String,
+        summary: String,
+        tests: Vec<String>,
+        more: u64,
+        ran_at: String,
+        ago: String,
+    },
+    /// An approved action was interrupted, and Adage pauses actions in this worktree until a
+    /// person inspects it and acknowledges `operation` (ux-design §9.9). `None` when the journal
+    /// itself could not be read.
+    Recovery {
+        operation: Option<String>,
+    },
     /// A judgement of a kind this version does not know: `(kind, reflex)`, shown as it is.
     Other(String, String),
 }
@@ -71,6 +97,9 @@ pub struct FeedItem {
     /// Each directive delivered (or withheld), exactly as the agent saw (or would have seen) it:
     /// `(reflex, text)`.
     pub texts: Vec<(String, String)>,
+    /// The harness's ids for the calls this record is about, where its payload carried them: the
+    /// one call of a `pretool` record, or a tool batch's calls in order.
+    pub tool_use_ids: Vec<String>,
 }
 
 impl FeedItem {
@@ -95,7 +124,12 @@ impl FeedItem {
             | Act::Unaided(r)
             | Act::NotReached(r)
             | Act::Other(_, r) => Some(r.as_str()),
-            Act::StopRequest | Act::StopWithheld | Act::Pretool { .. } => None,
+            Act::Noticed { candidate, .. } => Some(candidate.as_str()),
+            Act::StopRequest
+            | Act::StopWithheld
+            | Act::Pretool { .. }
+            | Act::Answered { .. }
+            | Act::Recovery { .. } => None,
         })
     }
 
@@ -115,6 +149,10 @@ impl FeedItem {
                 Act::Pretool { kind, interpreter, .. } => {
                     s.push_str(&format!(" {kind} {interpreter}"));
                 }
+                Act::Answered { command, .. } => {
+                    s.push_str(&format!(" receipt {command}"));
+                }
+                Act::Recovery { .. } => s.push_str(" recovery"),
                 _ => {}
             }
         }
@@ -250,6 +288,32 @@ pub fn from_record(session: &str, rec: &Value) -> FeedItem {
             withheld: control || rec["withheld"] == true,
         });
     }
+    // A call answered by a receipt (treated only: in control the answer is withheld, and the call
+    // ran).
+    if rec["answered"] == "receipt" && rec["decision"].is_object() {
+        let c = &rec["card"];
+        let text = |v: &Value| v.as_str().unwrap_or("").to_string();
+        acts.push(Act::Answered {
+            operation: text(&c["operation"]),
+            command: text(&rec["command"]),
+            summary: text(&c["summary"]),
+            tests: c["tests"].as_array().into_iter().flatten().filter_map(|t| t.as_str().map(String::from)).collect(),
+            more: c["more"].as_u64().unwrap_or(0),
+            ran_at: text(&c["ran_at"]),
+            ago: text(&c["ago"]),
+        });
+    }
+    if rec["recovery_required"] == true {
+        // The interrupted operation, when the journal named one (`exec` lists the event's actions).
+        let operation = rec["exec"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|x| x["outcome"] == "unknown")
+            .and_then(|x| x["operation_id"].as_str())
+            .map(String::from);
+        acts.push(Act::Recovery { operation });
+    }
     let event = event_label(rec["kind"].as_str(), rec["event"].as_str().unwrap_or("?"));
     for s in directives(d, "directives") {
         let detail = match (s.card, event.as_str()) {
@@ -290,6 +354,17 @@ pub fn from_record(session: &str, rec: &Value) -> FeedItem {
     } else if let Some(route) = d["would_predict"]["route"].as_str() {
         acts.push(Act::Other("would choose".into(), route.to_string()));
     }
+    // Candidates noticed (both arms alike).
+    for n in d["noticed"].as_array().into_iter().flatten() {
+        let Some(candidate) = n["candidate"].as_str() else { continue };
+        let count = |k: &str| n[k].as_u64().and_then(|x| u32::try_from(x).ok()).unwrap_or(0);
+        acts.push(Act::Noticed {
+            candidate: candidate.to_string(),
+            support: count("support"),
+            s_min: count("s_min"),
+            review: n["review"] == true,
+        });
+    }
     if d["continue_reason"].is_string() {
         acts.push(Act::StopRequest);
     } else if control && d["would_continue"].is_string() {
@@ -308,6 +383,15 @@ pub fn from_record(session: &str, rec: &Value) -> FeedItem {
         observed: d["observed"].as_array().map_or_else(|| rec["calls"].as_u64().unwrap_or(0) as usize, |a| a.len()),
         unrouted: rec["unrouted"] == true,
         texts,
+        tool_use_ids: match rec["tool_use_id"].as_str() {
+            Some(id) => vec![id.to_string()],
+            None => rec["tool_use_ids"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|x| x.as_str().map(String::from))
+                .collect(),
+        },
     }
 }
 

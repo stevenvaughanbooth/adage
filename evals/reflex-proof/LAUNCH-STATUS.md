@@ -290,6 +290,40 @@ current executable evidence. No extra paid calls or held-out pairs were used for
 This is neither a mature-history evaluation nor a successful action-elimination result. Preserve
 these negative records and the original thresholds. See the [behavior reference](../../docs/how-it-works.md#accumulated-prediction-and-current-execution-limits).
 
+## Layer 4: the Claude Code mod (MOD)
+
+**Status (2026-10-03): no MOD run has happened.** Nothing below is a result; it is the scaffold
+the development gate (plan E2) and the registered confirmation (plan E3) fill in when they run.
+No model was called for any of it.
+
+- **What MOD is.** The A4 hooks (verification ownership, the orientation card) plus the Claude
+  Code mod loaded with `--plugin-dir` (its module only, so no command hook runs twice), with a
+  person's `predict` grant on the frozen predict routes: Adage makes the directed step itself (a
+  lookup and the reads it names, a finish line's command) instead of a model request.
+- **Development gate (E2), not run.** `harness/dev_v9.py --design dev-v9-mod` (protocol
+  dev-arms-3): arms A0, A4 and MOD in 16 paired blocks, MOD's own five controls first, 53
+  sessions within the dev-v9 budget. The person's step (the E2 grant and the `predict` grants in
+  `approve-dev-v9.sh`) comes before any positive block; `dry-run` prints that order and spends
+  nothing. MOD is judged by the registered `dev_thresholds_v9` rule (D1 requests at most 0.80 x
+  A0 and fewer in at least 10 of 16 blocks; D2 no more hidden-test failures than A0; D3 all five
+  controls realized with no necessary verification skipped; D4 repeat attempts in at most 5 of
+  16 positives), read from the frozen manifest. A protocol revision naming `dev-v9-mod` must be
+  registered before the freeze (the harness refuses otherwise); it has not been. It must pass
+  twice on fresh seeds before E3.
+  - Run 1: not run.
+  - Run 2: not run.
+- **Registered confirmation (E3), not run.** After E2 passes twice: new evaluation groups (the
+  four held-out tasks are spent), arms A0, NOEXEC and BEST = MOD (`heldout_cohort.py` selects MOD
+  from a valid dev-arms-3 report and gives its homes the `predict` grants and the mod; NOEXEC gets
+  neither), every applicable G criterion, the censoring rule, `QUALITY_MARGIN = 1` and the
+  one-sided 95% bootstrap upper bound of `sum(MOD)/sum(A0)` at most 0.90.
+  - Outcome: not run.
+- **What stands in until then** (offline, no model): the simulator predicts the lookup, the reads
+  it names and the finish line under `adage-exec` with the grants, and nothing in control
+  (`crates/adage-cli/tests/harness_sim.rs`); the offline prediction gate over the recorded
+  datasets (`crates/adage-eval/tests/predict_gate.rs`). Neither is a launch statistic, and model
+  requests are never GPU savings.
+
 ## Claims for launch
 
 The measured claim today is narrow: **a learned, approved CPU lookup replaced one agent lookup

@@ -225,6 +225,39 @@ fn the_feed_streams() {
     assert!(!all.contains("\u{1b}["), "never an escape sequence:\n{all}");
 }
 
+/// The Claude Code mod spawns the follower with its stdin closed from the start (`$.process.spawn`
+/// with no input): with `--stdin ignore` the closed pipe does not end it, it streams a record
+/// written after the close, and SIGTERM still ends it with exit 0. Without the flag it ends at
+/// once, as A3 built.
+#[test]
+fn a_follower_told_to_ignore_stdin_keeps_streaming_with_its_pipe_closed() {
+    let w = World::new();
+    let key = w.key();
+    let base = 1_790_000_100_000u64;
+    w.spool("S", record(base, "session_start", "treated", &key, json!({})));
+    let mut feed = Feed::start(&w, &["--session", "S", "--stdin", "ignore"]);
+    drop(feed.stdin.take());
+    feed.decision(base);
+    std::thread::sleep(Duration::from_millis(500));
+    assert!(feed.child.try_wait().unwrap().is_none(), "a closed stdin does not end it");
+    w.spool("S", record(base + 1, "batch", "treated", &key, json!({ "observed": ["exec ls"] })));
+    feed.decision(base + 1);
+    #[cfg(unix)]
+    {
+        let pid = feed.child.id() as i32;
+        assert_eq!(unsafe { libc::kill(pid, libc::SIGTERM) }, 0);
+        let status = feed.child.wait().unwrap();
+        assert!(status.success(), "SIGTERM ends it with exit 0: {status:?}");
+    }
+    #[cfg(not(unix))]
+    feed.kill();
+    // Without the flag a closed pipe ends it at once.
+    let ended = Feed::start(&w, &["--session", "S"]);
+    ended.close();
+    let bad = w.run(&["watch", "--follow", "--json", "--stdin", "never"], &w.repo(), "", &[], &[]);
+    assert!(!bad.status.success() && text(&bad).contains("possible values: eof, ignore"), "{}", text(&bad));
+}
+
 /// T-A3-02: a new process started from row 3's cursor sends rows 4 and 5 first, then follows.
 #[test]
 fn the_feed_resumes_across_processes() {
@@ -643,6 +676,36 @@ fn the_card_as_json() {
     let s: Value = serde_json::from_str(&w.ok(&["--json", "--for-session"], &w.repo())).unwrap();
     let cmds: Vec<&str> = s["next"].as_array().unwrap().iter().filter_map(|n| n["command"].as_str()).collect();
     assert!(cmds.contains(&"/adage watch") && !cmds.contains(&"adage ui"), "{cmds:?}");
+    // The mod's own lines, off by default, as the person sets them.
+    assert_eq!(v["ui"], json!({ "spinner": false, "turn_line": false, "noticed": false }));
+    w.ok(&["config", "set", "ui.spinner", "true"], &w.repo());
+    w.ok(&["config", "set", "ui.turn_line", "true"], &w.repo());
+    let on: Value = serde_json::from_str(&w.ok(&["--json"], &w.repo())).unwrap();
+    assert_eq!(on["ui"], json!({ "spinner": true, "turn_line": true, "noticed": false }));
+    // An interrupted action here (ux-design §9.9): the card names it and what to run once the
+    // worktree is inspected.
+    assert_eq!(on["recovery"], Value::Null);
+    let receipt = adage_exec::journal::Receipt {
+        id: "op-7".into(),
+        ts: "2026-10-03T09:00:00Z".into(),
+        session: "S".into(),
+        repo: key.clone(),
+        worktree: w.repo().to_string_lossy().into_owned(),
+        route: "learned/run-tests".into(),
+        approved_on: "fixture".into(),
+        level: "e2".into(),
+        phase: adage_exec::journal::Phase::Prepared,
+        outcome: adage_exec::stage::Outcome::Unknown { reason: "interrupted".into() },
+        input_digest: String::new(),
+        outputs: Default::default(),
+        origin: None,
+    };
+    adage_store::spool::append(&adage_exec::stage::spool_path(&w.paths().root), &receipt).unwrap();
+    let paused: Value = serde_json::from_str(&w.ok(&["--json"], &w.repo())).unwrap();
+    assert_eq!(
+        paused["recovery"],
+        json!({ "operation": "op-7", "route": "learned/run-tests", "command": "adage-exec recover --id op-7 --acknowledge" })
+    );
 }
 
 // ---------------------------------------------------------------------------------------------

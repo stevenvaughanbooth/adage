@@ -25,6 +25,7 @@ expression: "redact(&serde_json::to_string_pretty(&v).unwrap())"
     }
   ],
   "off": false,
+  "recovery": null,
   "repo": "{REPO}",
   "rows": [
     {
@@ -40,5 +41,10 @@ expression: "redact(&serde_json::to_string_pretty(&v).unwrap())"
       "text": "potion-base-8m-i8 (bundled)"
     }
   ],
+  "ui": {
+    "noticed": false,
+    "spinner": false,
+    "turn_line": false
+  },
   "version": "{VERSION}"
 }

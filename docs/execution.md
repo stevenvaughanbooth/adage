@@ -607,6 +607,12 @@ adage review delegate acme-billing/work-items lookup-work-item --predict
 - **Never run here.** Every path in `adage-exec hook` that runs something (E1 prefetch, the E2
   action, the receipt, the finish-line gate, exec-only reflexes) reads execute grants only, and
   `run` refuses a predict request outright.
+- **A read batch.** A reflex that reads the files a result names (`read-linked-files`) can be
+  granted too. Its key is the harness's read tool over its slot, `Read {files}`, under the
+  repository-path contract: no program runs, and its effect is observe. Granted with the lookup
+  that binds it, it is a chain: Adage makes the lookup at one step and reads the files it names
+  at the very next, one response of several reads. That is the only step that may follow a
+  predicted step at once; a third never does.
 
 ## Deciding from the session: the press
 
@@ -932,6 +938,17 @@ anything but passive output commands (`tail`, `grep`, `echo`, …) beside pytest
 freshness check cannot finish within 1.5 s of the hook's 5 s. A note delivered alone is recorded
 in the session spool (`kind: "pretool"`, `receipt: true`), and learning reads it as Adage's own
 text.
+
+**The receipt as the result (the Claude Code mod).** The mod's dry run of a Bash call
+(`PreToolUse` with `dry_run: true`) is answered with the receipt's state: `fresh` with the note
+and the result the call would be answered with, or not fresh (a snapshotted file changed since,
+or the call is made from elsewhere) with only the command that ran. When it is fresh and Claude
+Code's own permission check would let the call run unasked, the mod answers the call with that
+result instead of running it, and its final ask (`verdict: {answered: "receipt"}`) records the
+call once (`answered: "receipt"`) as made and passed: a finish line it covers is met, so the
+Stop gate asks for no run whose result is already known. A receipt that is no longer fresh by
+then decides nothing, and the call runs. Command hooks are unchanged: they deliver the note
+beside the call, and only when the receipt is fresh.
 
 ## The finish-line check (Stop gate)
 

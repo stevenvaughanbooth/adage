@@ -483,7 +483,10 @@ pub fn run(args: &[String], paths: &Paths) -> Result<()> {
     let for_session = args.iter().any(|a| a == "--for-session");
     let c = card(paths, std::env::current_dir().ok().as_deref(), for_session);
     if json {
-        println!("{}", serde_json::to_string_pretty(&c.json())?);
+        let mut v = c.json();
+        v["ui"] = ui_json(&adage_store::config::load(paths).config);
+        v["recovery"] = recovery_json(paths, std::env::current_dir().ok().as_deref());
+        println!("{}", serde_json::to_string_pretty(&v)?);
         return Ok(());
     }
     let mut o = Out::stdout();
@@ -492,6 +495,29 @@ pub fn run(args: &[String], paths: &Paths) -> Result<()> {
     }
     o.flush()?;
     Ok(())
+}
+
+/// What the Claude Code mod may draw beside Claude Code's own lines (`ui.spinner`, `ui.turn_line`,
+/// `ui.noticed`, each off by default): it draws a line only when its key is on here.
+pub fn ui_json(cfg: &adage_store::config::Config) -> serde_json::Value {
+    serde_json::json!({ "spinner": cfg.ui_spinner, "turn_line": cfg.ui_turn_line, "noticed": cfg.ui_noticed })
+}
+
+/// An interrupted action that pauses actions in this worktree (ux-design §9.9): `{operation,
+/// route, command}`, the command a person runs once they have inspected the worktree; `{operation:
+/// null, …}` when the execution journal cannot be read; `null` when nothing waits (or outside a
+/// repository).
+fn recovery_json(paths: &Paths, cwd: Option<&Path>) -> serde_json::Value {
+    let Some(root) = cwd.and_then(adage_core::repo::find_root) else { return serde_json::Value::Null };
+    match adage_exec::journal::pending(&paths.root, &root) {
+        Ok(Some(r)) => serde_json::json!({
+            "operation": r.id, "route": r.route,
+            "command": format!("adage-exec recover --id {} --acknowledge", r.id),
+        }),
+        Ok(None) => serde_json::Value::Null,
+        Err(_) if !adage_exec::stage::spool_path(&paths.root).exists() => serde_json::Value::Null,
+        Err(_) => serde_json::json!({ "operation": null, "route": null, "command": null }),
+    }
 }
 
 /// A row in the key column (`kv`), or its continuation when `key` is empty.

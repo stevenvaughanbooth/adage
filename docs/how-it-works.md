@@ -127,8 +127,18 @@ specific to reviewed actions; the pattern that nominates an action need not be a
 | Pre-call instinct | Rewrite a supported command to the repository's declared environment before its tool call executes | No additional model request for the rewrite | Narrow supported rewrite rules and runtime setting |
 | Read-only prefetch (E1) | Run an approved invocation in the execution sandbox and deliver its projected result | No model request to select or run that invocation; the next request can consume its result | Exact local execution grant or explicitly configured inert-observe policy |
 | Staged action (E2) | Run an approved verification/generation action in a disposable stage, inspect changes, then apply permitted outputs | No model request to perform the action; exceptional outcomes return to the agent | Exact local grant, execution policy, declared outputs and enforced sandbox |
-| Predicted call (the Claude Code mod) | At the boundary before a model request, make the call a directive Adage already delivered names (a command, a sequence's first step, the reads a lookup listed, an armed finish line at the turn's end) as the agent's own tool call, under Claude Code's own permission checks | No model request for that step; the model reads the call's result | A person's `predict` grant on that reflex (`adage-exec`); never in the control arm, never at a turn's first request or twice in a row, at most six per session |
+| Predicted call (the Claude Code mod) | At the boundary before a model request, make the call a directive Adage already delivered names (a command, a sequence's first step, the reads a lookup listed, an armed finish line at the turn's end) as the agent's own tool call, under Claude Code's own permission checks | No model request for that step; the model reads the call's result | A person's `predict` grant on that reflex (`adage-exec`); never in the control arm, never at a turn's first request, never twice in a row but for a chain's second step (the reads Adage's own lookup named), at most six per session |
 | Skill at its step (`skill` reflex) | Say that the repository uses a skill at this point (everywhere); with the Claude Code mod, invoke an inert skill as the agent's own Skill tool call, and add to a trained skill's text, as the model reads it, what the replay in this repository verified or found stale | The model still decides whether to follow the skill; invoking it costs no request, and the added lines are plain facts | The reflex's evidence (prime at most); invoking needs a person's `predict` grant, `skills.invoke` on, and a skill `adage train` recorded as inert in a pack the person accepted |
+
+A **chain** is two steps without a model request between them: Adage makes the lookup the prompt
+directed, the lookup's result binds the reads its directive names, and at the very next step
+Adage reads them, one response of several Read calls. That is the only time a predicted step
+follows another at once; a model step always comes before the third. The **finish line** at the
+turn's end is predicted once per arming: met by Adage's call, a later edit that arms it again may
+have it predicted again; if Adage's call failed, it is not predicted again and the Stop request
+asks for it as without the mod. With the mod, a Bash call whose test run a fresh receipt already
+covers can be **answered by the receipt** instead of running ([execution](execution.md#receipts-before-a-repeated-test-run)),
+and the finish line it covers is met.
 
 A predicted call is not a CPU execution: the harness runs it exactly as if the model had asked
 for it, and Adage records it as its own (`adage_` tool-use ids, `by: adage` in the trace), so it is
@@ -201,6 +211,14 @@ beside the learned track (`candidates.json`), carry the id the same pattern gets
 are compiled into the index apart from the routes, with their own context net, so the hook can
 notice one without directing anything. The day a candidate reaches support it becomes a reflex
 under the same name, and the learn records which traces tipped it.
+
+**Noticed at hook time.** The hook keeps a second context ring per session over the candidates'
+own alphabet, fed by the same events as the reflexes' ring. When an event completes a candidate's
+context, the decision records `noticed` (the candidate, its support so far, the support a reflex
+needs, whether it waits for review), once per candidate per session and at most 64. Nothing
+reaches the model; both arms record it alike; `adage watch` and the mod draw it as a line under
+the batch. A repository with candidates and no reflexes yet takes the hook's match path, and an
+event outside both alphabets is still skipped by the fast path.
 
 `adage condition` is the existing learning command; setup and background learning use that
 pipeline. `adage sense` previews available evidence without publishing learned routes.
@@ -316,10 +334,21 @@ Programs that draw Adage beside a session (the Claude Code mod's pane and band) 
 state as the terminal screens, as JSON: `adage watch --follow --json --session <id>` is the live
 feed, one line per hook decision, `learn.log` line, health change and learner state, each with a
 cursor a restarted reader resumes from, and it never names the arm of the session it runs in;
-bare `adage --json` is the status card's rows one to one. A harness that knows a session's usage
+bare `adage --json` is the status card's rows one to one, plus which of the mod's own lines the
+person turned on (`ui`) and an interrupted action waiting for them (`recovery`). A harness that knows a session's usage
 records it with `adage ledger note`, accepted only for a session the spool shows started in that
 repository; its figures replace the transcript's in the savings estimate, where a step Adage took
 in the model's place counts as a model turn not spent ([live learning](live-learning.md)).
+
+In Claude Code the plugin's module draws from those reads and from the command hooks' own
+answers, which it observes and returns unchanged: a dim line under a prompt a reflex fired at,
+worded as what the reflex tells the agent; a marker under a tool row Adage rewrote, predicted,
+replaced or headed off; one band line above the prompt that counts what happened and names the
+health; a toast when learning changed something; and `/adage`, a pane with the live feed, the
+reflexes and the health checks. It decides nothing: the only command it runs from a pane is
+`adage condition`, the review verbs are commands to copy until a press asks for them, and the
+session's own rows reach it with every record that would name the arm removed, by the binary and
+again by the module ([usage](usage.md#claude-code)).
 
 ## Packages and future distribution
 
@@ -367,6 +396,7 @@ the launch work's new measurements and outstanding gates are in the
 | Routes, evidence and compiled index | `crates/adage-tracks` |
 | Shared hook adaptation and decisions | `crates/adage-hook`, `crates/adage-runtime` |
 | The Claude Code mod's decisions: predicted steps, a Bash call's two phases, standing text, routing | `crates/adage-runtime` (`predict_step`, `route_step`, `standing`), `crates/adage-hook/src/phase.rs`, [the mod's notes](claude-mod/impl/A1-A2-C5-notes.md) |
+| The mod's chains, finish line, receipt as the result, noticed candidates and attachment by capability | `crates/adage-runtime` (`predict_step`, `answered_by_receipt`, `notice`, `standing_for`, `delegation`), `crates/adage-hook/src/harness/claude.rs` (`capabilities`), [the notes](claude-mod/impl/C3-C7-C8-D2-C9-E-notes.md) |
 | Hook latency on this machine | `duration_us` on every spool record, `crates/adage-cli/src/doctor_latency.rs` |
 | Grants, sandbox, projected results and staged actions | `crates/adage-exec`, [execution](execution.md) |
 | Signed reusable programs | `crates/adage-pack`, `crates/adage-sign`, [packs](packs.md) |

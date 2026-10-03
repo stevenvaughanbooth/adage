@@ -294,6 +294,7 @@ pub fn events(t: &Transcript, root: &str, stop: bool) -> Vec<Step> {
                             failed: true,
                             by: By::Agent,
                             tool_use_id: None,
+                            agent: None,
                         };
                         out.push(Step { turn, event: Event::Failure { call } });
                     }
@@ -307,6 +308,7 @@ pub fn events(t: &Transcript, root: &str, stop: bool) -> Vec<Step> {
                         failed: false,
                         by: By::Agent,
                         tool_use_id: None,
+                        agent: None,
                     })
                     .collect();
                 out.push(Step { turn, event: Event::Batch { calls } });

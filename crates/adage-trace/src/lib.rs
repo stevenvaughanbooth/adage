@@ -63,6 +63,10 @@ pub struct Call {
     /// `tool_use_id`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_use_id: Option<String>,
+    /// The subagent that made it (Claude Code's `agent_id` on a subagent's tool events), `None`
+    /// for the main loop: a delegation's calls can then be counted on their own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent: Option<String>,
 }
 
 /// One live event, as every harness adapter translates its native hook payload.
@@ -106,5 +110,24 @@ impl Event {
             Event::SessionEnd => "session_end",
             Event::TurnStep { .. } => "turn_step",
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// T-C9-01 (the call): a call written before `agent` existed reads as the main loop's, and a
+    /// main-loop call writes the same bytes as before; a subagent's call keeps its agent.
+    #[test]
+    fn a_calls_agent_defaults_to_the_main_loop_and_is_omitted_there() {
+        let before = r#"{"tool":"Bash","input":{"command":"ls"},"output":"","failed":false}"#;
+        let c: Call = serde_json::from_str(before).unwrap();
+        assert_eq!((c.agent.as_deref(), c.by), (None, By::Agent));
+        assert_eq!(serde_json::to_string(&c).unwrap(), before);
+        let sub = Call { agent: Some("explore-1".into()), ..c };
+        let text = serde_json::to_string(&sub).unwrap();
+        assert!(text.ends_with(r#","agent":"explore-1"}"#), "{text}");
+        assert_eq!(serde_json::from_str::<Call>(&text).unwrap(), sub);
     }
 }

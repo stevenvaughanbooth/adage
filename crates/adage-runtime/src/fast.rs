@@ -5,7 +5,8 @@
 //! [`skip`] says an event can be skipped only when running [`crate::decide`] on it would give no
 //! directive, no judgement and no stop request, and would change nothing in the session state that
 //! a later decision reads (`emitted`, `pending`, `obligations`, `stop_requests`, `prompts`
-//! while it is 0, the context state `ctx`, and `new_tests`, which a later receipt reads). What a skipped event leaves out is measurement
+//! while it is 0, the context state `ctx` and the candidates' `cand_ctx` and `noticed`, and
+//! `new_tests`, which a later receipt reads). What a skipped event leaves out is measurement
 //! only: the `batches` and `history` counters, and its spool record, so `adage graph` lists
 //! commands only from recorded
 //! events. Runs of a dead end's avoided commands are always recorded (they are words in the
@@ -26,6 +27,9 @@
 //! that satisfies no context item pushes nothing and changes no match. Every item's words, globs,
 //! value types and intents are in the triggers ([`Triggers::of`]), so an event that might be an
 //! alphabet event is never skipped, and skipping the rest is exactly equivalent.
+//! Candidates (a repository's sequences below a reflex's support) are noticed the same way, over
+//! their own alphabet: their items' words and globs are in the triggers too
+//! (`Triggers::with_candidates`), so an event that could notice one is never skipped either.
 //!
 //! The eval replay checks this on every event of every dataset: a skipped event's full decision
 //! must be empty, and deciding with the fast path must give the same decisions as without it
@@ -105,6 +109,7 @@ mod tests {
                 failed: false,
                 by: By::Agent,
                 tool_use_id: None,
+                agent: None,
             }],
         }
     }
@@ -159,6 +164,7 @@ mod tests {
                 failed: true,
                 by: By::Agent,
                 tool_use_id: None,
+                agent: None,
             },
         };
         assert!(!skip(&t, &failed("python -m pytest -q"), "/r", never));
@@ -174,6 +180,7 @@ mod tests {
                 failed: false,
                 by: By::Agent,
                 tool_use_id: None,
+                agent: None,
             }],
         };
         assert!(!skip(&t, &calls_that_might, "/r", never));

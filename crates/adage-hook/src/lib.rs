@@ -197,8 +197,9 @@ pub trait Extension: Sync {
         Vec::new()
     }
     /// A fact for a tool call about to run (`PreToolUse`): completed work it would repeat, checked
-    /// now. Context only, never a refusal; it goes beside any interpreter advice.
-    fn pretool_context(&self, _call: &PreCall<'_>) -> Option<String> {
+    /// now ([`PreNote`]). Context only, never a refusal: a command hook delivers its text beside
+    /// any interpreter advice only when it is fresh; the mod may answer the call with its result.
+    fn pretool_context(&self, _call: &PreCall<'_>) -> Option<PreNote> {
         None
     }
     /// The finish-line verification (Claude Code `Stop`): run an approved learned check whose
@@ -206,6 +207,45 @@ pub trait Extension: Sync {
     fn stop_gate(&self, _call: &StopCall<'_>) -> Option<StopGate> {
         None
     }
+}
+
+/// What [`Extension::pretool_context`] found for a Bash call about to run: a receipt of a run this
+/// session made that covers it (plan §2.2 item 5; the Claude Code mod's architecture §3.3).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PreNote {
+    /// The receipt block for the model (`<adage-receipt …>`): delivered beside the call, and only
+    /// when the receipt is `fresh`.
+    pub text: String,
+    /// A completed, applied run on inputs byte-identical to the current ones, which ran every test
+    /// the call selects, checked for a call made at the repository root: the call's result is
+    /// already known. A receipt that covers the call but is not fresh (a file changed since, or
+    /// the call is made from elsewhere) is still reported, for the mod to say so beside the run.
+    pub fresh: bool,
+    /// The receipt as the tool's output would read (which run, when, and the tests it ran that the
+    /// call selects): what the mod answers the call with. Only when `fresh`.
+    pub result: Option<String>,
+    /// The command that ran: a covering run can be broader than the call.
+    pub covering: String,
+    /// What the mod's receipt card shows for a call this receipt answers. Only when `fresh`.
+    pub card: Option<ReceiptCard>,
+}
+
+/// The receipt card's data for a call answered by a receipt (the Claude Code mod's `answered`
+/// mark: the run that answered it, when, and the tests it ran that the call selects).
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize)]
+pub struct ReceiptCard {
+    /// The run's operation id, as the receipt block names it (its first 12 characters).
+    pub operation: String,
+    /// When the covering run was recorded (RFC 3339, UTC).
+    pub ran_at: String,
+    /// How long before the answer that was (`4 min ago`).
+    pub ago: String,
+    /// One line: what the run found.
+    pub summary: String,
+    /// The tests it ran that the call selects, the session's own first (at most 12).
+    pub tests: Vec<String>,
+    /// How many more it ran than `tests` lists.
+    pub more: usize,
 }
 
 /// What [`Extension::session_texts`] says at a session start.
@@ -686,14 +726,18 @@ fn already_decided(call: &BashCall<'_>) -> bool {
     })
 }
 
-/// A current receipt covering this call, from the extension (adage-exec), whatever the
-/// interpreter advice decides. Only treated sessions hold receipts; like every other extension
-/// call, a panic loses only this note.
-fn receipt(call: &BashCall<'_>, key: &str) -> Option<String> {
+/// A receipt covering this call, from the extension (adage-exec), whatever the interpreter advice
+/// decides: fresh or not ([`PreNote::fresh`]). Only treated sessions hold receipts; like every
+/// other extension call, a panic loses only this note.
+fn receipt(call: &BashCall<'_>, key: &str) -> Option<PreNote> {
     let x = call.extension.filter(|_| !in_control(call.paths, call.session))?;
     let index = Index::try_load(&call.paths.index()).unwrap_or_default();
+    // The key the index (and adage-exec's journal) names this repository by: a checkout without
+    // a remote is keyed by its path until an alias resolves it to the learned key.
+    let keys: std::collections::BTreeSet<&str> = index.routes.iter().map(|r| r.repo.as_str()).collect();
+    let key = repo::lookup_key(call.root, Some(&call.paths.repo_keys()), &keys).unwrap_or_else(|| key.to_string());
     let c = PreCall {
-        repo_key: key,
+        repo_key: &key,
         root: call.root,
         cwd: call.cwd,
         session: call.session,
@@ -704,10 +748,25 @@ fn receipt(call: &BashCall<'_>, key: &str) -> Option<String> {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| x.pretool_context(&c))).ok().flatten()
 }
 
+/// The note a command hook delivers beside a call: a fresh receipt's block, and nothing else (a
+/// receipt that is not fresh says nothing to the model, as before the mod).
+fn fresh_note(note: Option<PreNote>) -> Option<String> {
+    note.filter(|n| n.fresh && !n.text.is_empty()).map(|n| n.text)
+}
+
 /// Append one `pretool` record: a lost record loses measurement, never the decision.
+/// Append one `pretool` record, naming the call's harness id (`tool_use_id`) when the payload
+/// carries one: the feed line can then be drawn under that very call.
+fn append_pretool(call: &BashCall<'_>, mut rec: Value) -> std::io::Result<()> {
+    if let Some(id) = call.p["tool_use_id"].as_str().filter(|id| !id.is_empty()) {
+        rec["tool_use_id"] = json!(id);
+    }
+    spool::append(&call.paths.spool(call.session), &rec)
+}
+
 fn spool_pretool(call: &BashCall<'_>, mut rec: Value) {
     rec["duration_us"] = json!(duration_us(call.started));
-    if let Err(e) = spool::append(&call.paths.spool(call.session), &rec) {
+    if let Err(e) = append_pretool(call, rec) {
         failopen::record(
             &call.paths.root,
             call.adapter.name(),
@@ -807,8 +866,7 @@ fn decide_pretool(
         rec["withheld"] = json!(true);
     }
     rec["duration_us"] = json!(duration_us(call.started));
-    spool::append(&call.paths.spool(call.session), &rec)
-        .map_err(|e| Failure::io("spool", "appending to the session spool", &e))?;
+    append_pretool(call, rec).map_err(|e| Failure::io("spool", "appending to the session spool", &e))?;
     if control {
         return Ok(None);
     }
@@ -879,7 +937,7 @@ fn pretool(
         return Ok(None);
     }
     let key = repo::repo_key_cached(root, &paths.repo_keys());
-    let receipt = receipt(&call, &key);
+    let receipt = fresh_note(receipt(&call, &key));
     let Some((pre, env)) = interpreter_plan(&call, &key) else { return only_receipt(&call, &key, receipt) };
     let pre = planner_checked(&call, pre, &env);
     decide_pretool(&call, &key, receipt, pre, &env, "planner")
@@ -899,9 +957,14 @@ fn observed(p: &Value) -> bool {
 ///   whichever apply: `substitute: {command, route, track, context}` (a learned dead end,
 ///   [`adage_runtime::substitution`]), `rewrite: {command, kind}` (the interpreter rewrite, not
 ///   yet checked against the person's permission rules: the mod asks the engine),
-///   `advice: {kind, text}` (advice instead of a rewrite), and `receipt: {note}` (a covering
-///   receipt's note, treated sessions only).
+///   `advice: {kind, text}` (advice instead of a rewrite), and `receipt: {fresh, covering, note?,
+///   result?}` (a covering receipt, treated sessions only; `note` and `result` only when fresh).
 /// - **Verdict** decides once and marks the call decided; a call decided already gets nothing.
+///   With `answered: receipt` (the mod answered the call with a fresh receipt's `result`, the
+///   engine having allowed the call unasked) the call is observed as made and passed
+///   ([`adage_runtime::answered_by_receipt`]: the obligation it covers is met), recorded with
+///   `answered: "receipt"`, and answered `{"receipt": {result, note, covering}}`; a receipt no
+///   longer fresh decides nothing (the mod then runs the call).
 ///   With `substitute` (and `engine: same`) the dead end is replaced: `{"substitute": {…}}`
 ///   judged `substituted`, or `would_substitute` and nothing printed in the control arm or in
 ///   observe mode; any other engine answer decides nothing. Otherwise the interpreter plan is
@@ -915,6 +978,8 @@ fn pretool_mod(call: &BashCall<'_>, phase: &phase::Phase) -> Result<Option<Strin
         return Ok(None);
     }
     let (p, paths, root) = (call.p, call.paths, call.root);
+    // What the mod can do here: always its full set in practice; read, never assumed.
+    let caps = call.adapter.capabilities("PreToolUse", p);
     let index = Index::try_load(&paths.index()).unwrap_or_default();
     let keys: std::collections::BTreeSet<&str> = index.routes.iter().map(|r| r.repo.as_str()).collect();
     let routed = repo::lookup_key(root, Some(&paths.repo_keys()), &keys);
@@ -926,13 +991,13 @@ fn pretool_mod(call: &BashCall<'_>, phase: &phase::Phase) -> Result<Option<Strin
     match phase {
         phase::Phase::DryRun => {
             let mut plan = serde_json::Map::new();
-            if let Some(s) = routed.as_deref().filter(|_| rewrites_on).and_then(found) {
+            if let Some(s) = routed.as_deref().filter(|_| rewrites_on && caps.substitute_call).and_then(found) {
                 plan.insert("substitute".into(), json!(s));
             }
             if names_python(call.command) {
                 let key = repo::repo_key_cached(root, &paths.repo_keys());
                 if let Some(note) = receipt(call, &key) {
-                    plan.insert("receipt".into(), json!({ "note": note }));
+                    plan.insert("receipt".into(), receipt_plan(&note, caps.answer_call));
                 }
                 match interpreter_plan(call, &key) {
                     Some((adage_runtime::pretool::Pre::Rewrite { command, kind, .. }, _)) => {
@@ -945,6 +1010,16 @@ fn pretool_mod(call: &BashCall<'_>, phase: &phase::Phase) -> Result<Option<Strin
                 }
             }
             Ok((!plan.is_empty()).then(|| json!({ "plan": plan }).to_string()))
+        }
+        phase::Phase::Verdict(v) if v.answered == Some(phase::Answered::Receipt) => {
+            if !names_python(call.command) || !caps.answer_call {
+                return Ok(None);
+            }
+            let key = routed.clone().unwrap_or_else(|| repo::repo_key_cached(root, &paths.repo_keys()));
+            match receipt(call, &key).filter(|n| n.fresh && n.result.is_some()) {
+                Some(note) => answer_with_receipt(call, &key, &index, note),
+                None => Ok(None),
+            }
         }
         phase::Phase::Verdict(v) if v.substitute.is_some() => {
             if v.engine != Some(phase::Engine::Same) || !rewrites_on {
@@ -966,8 +1041,7 @@ fn pretool_mod(call: &BashCall<'_>, phase: &phase::Phase) -> Result<Option<Strin
                 }
             }
             rec["duration_us"] = json!(duration_us(call.started));
-            spool::append(&paths.spool(call.session), &rec)
-                .map_err(|e| Failure::io("spool", "appending to the session spool", &e))?;
+            append_pretool(call, rec).map_err(|e| Failure::io("spool", "appending to the session spool", &e))?;
             Ok(decision.substituted.map(|s| json!({ "substitute": s }).to_string()))
         }
         phase::Phase::Verdict(v) => {
@@ -975,7 +1049,7 @@ fn pretool_mod(call: &BashCall<'_>, phase: &phase::Phase) -> Result<Option<Strin
                 return Ok(None);
             }
             let key = repo::repo_key_cached(root, &paths.repo_keys());
-            let receipt = receipt(call, &key);
+            let receipt = fresh_note(receipt(call, &key));
             let Some((pre, env)) = interpreter_plan(call, &key) else { return only_receipt(call, &key, receipt) };
             let pre = match (v.engine, pre) {
                 (None, pre) => planner_checked(call, pre, &env),
@@ -993,6 +1067,78 @@ fn pretool_mod(call: &BashCall<'_>, phase: &phase::Phase) -> Result<Option<Strin
     }
 }
 
+/// A covering receipt in the mod's dry-run plan: `fresh` and the command that ran, always; the
+/// note and the result the call would be answered with only when fresh (and the result only where
+/// a call can be answered).
+fn receipt_plan(note: &PreNote, answer: bool) -> Value {
+    let mut v = json!({ "fresh": note.fresh, "covering": note.covering });
+    if note.fresh {
+        v["note"] = json!(note.text);
+        if let Some(r) = note.result.as_ref().filter(|_| answer) {
+            v["result"] = json!(r);
+        }
+    }
+    v
+}
+
+/// The mod answered a Bash call with a fresh receipt's result instead of running it: in one state
+/// update the call is marked decided, the session's arm assigned if it has none, and the call
+/// observed as made and passed ([`adage_runtime::answered_by_receipt`]); one `pretool` record with
+/// `answered: "receipt"` and the decision (its `obligation_met` judgements are what a rebuilt
+/// state reads). Treated sessions only: a session found in the control arm records the answer
+/// withheld and gets nothing (the call then runs).
+fn answer_with_receipt(
+    call: &BashCall<'_>,
+    key: &str,
+    index: &Index,
+    note: PreNote,
+) -> Result<Option<String>, Failure> {
+    let table = CommandTable::load();
+    let ctx = Ctx {
+        checkout: &adage_runtime::checkout::Disk,
+        index,
+        repo: key.to_string(),
+        root: call.root,
+        table: &table,
+        embed: None,
+        params: Default::default(),
+        policy: adage_runtime::Policy::default(),
+    };
+    let arm_env = std::env::var("ADAGE_ARM").ok();
+    let share: f64 = adage_store::config::load(call.paths).config.runtime_control;
+    let decided = state::update::<SessionState, _>(&call.paths.state(call.session), |st| {
+        if call.identity.is_some_and(|id| !st.see_pretool(id)) {
+            return None;
+        }
+        if st.arm.is_none() {
+            let (arm, pr) = assign(call.session, share, arm_env.as_deref());
+            st.arm = Some(arm);
+            st.propensity = Some(pr);
+            st.repo = Some(key.to_string());
+        }
+        let d = (st.arm != Some(Arm::Control))
+            .then(|| adage_runtime::answered_by_receipt(&ctx, st, call.command, &note.covering));
+        Some((st.arm, st.propensity, d))
+    })
+    .map_err(|e| Failure::io("state", "recording a call answered by a receipt", &e))?;
+    let Some((arm, propensity, decision)) = decided else { return Ok(None) };
+    let ts = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+    let mut rec = json!({ "ts": ts, "event": "PreToolUse", "kind": "pretool", "arm": arm, "propensity": propensity, "repo": key, "answered": "receipt", "receipt": true, "checked_by": "engine", "command": note.covering });
+    if let Some(card) = &note.card {
+        rec["card"] = json!(card);
+    }
+    match &decision {
+        Some(d) => rec["decision"] = json!(d),
+        None => rec["withheld"] = json!(true),
+    }
+    rec["duration_us"] = json!(duration_us(call.started));
+    append_pretool(call, rec).map_err(|e| Failure::io("spool", "appending to the session spool", &e))?;
+    Ok(decision.map(|_| {
+        json!({ "receipt": { "result": note.result, "note": note.text, "covering": note.covering, "card": note.card } })
+            .to_string()
+    }))
+}
+
 /// Claude Code's `Standing` (the mod's cached system-prompt section; its architecture §3.6, §3.7;
 /// plan §2.2 item 8): `{"standing", "environment", "compact"}`, asked once by the mod after the
 /// session starts. Read-only for the spool, the learner and the notices (the command hooks'
@@ -1002,6 +1148,13 @@ fn pretool_mod(call: &BashCall<'_>, phase: &phase::Phase) -> Result<Option<Strin
 /// reflexes again. In the control arm, and in observe mode, `standing` and `environment` are empty
 /// and nothing is kept. `compact` (what compaction is asked to keep) is said in both arms. Nothing
 /// at all outside a repository with reflexes.
+///
+/// **A subagent** (the mod's `agent.spawn`, architecture §3.8): a payload carrying `agent:
+/// {type?, description?, prompt?}` is also answered `subagent`, the text the subagent is told
+/// before it starts ([`adage_runtime::delegation`]: the prompt reflexes its own prompt binds, then
+/// the standing reflexes), empty in the control arm. Read-only like the rest: what a subagent is
+/// told is not what the session was told. Each field is answered by the harness's capability
+/// ([`harness::Adapter::capabilities`], [`adage_runtime::standing_for`]).
 fn standing(
     adapter: &dyn harness::Adapter,
     p: &Value,
@@ -1042,11 +1195,51 @@ fn standing(
             .map_err(|e| Failure::io("state", "keeping the session's standing text", &e))?
         }
     };
-    let s = answer.unwrap_or_default();
-    Ok(Some(
-        json!({ "standing": s.standing, "environment": s.environment, "compact": render::COMPACT_INSTRUCTION })
-            .to_string(),
-    ))
+    let caps = adapter.capabilities("Standing", p);
+    let s = adage_runtime::standing_for(&caps, answer.unwrap_or_default());
+    let compact = if caps.compaction { render::COMPACT_INSTRUCTION } else { "" };
+    let mut out = json!({ "standing": s.standing, "environment": s.environment, "compact": compact });
+    if let Some(agent) = p.get("agent").filter(|a| a.is_object()) {
+        // The state as the answer above left it: the arm is assigned by now (unless observing).
+        let st = state::try_read::<SessionState>(&paths.state(session)).ok().flatten();
+        out["subagent"] = json!(subagent_text(agent, &key, root, index, st.as_ref(), &caps, observed(p)));
+    }
+    Ok(Some(out.to_string()))
+}
+
+/// What a subagent is told at its spawn ([`adage_runtime::delegation`]), from its description
+/// and prompt (each bounded), read-only: the session's state is read, never written.
+fn subagent_text(
+    agent: &Value,
+    key: &str,
+    root: &Path,
+    index: &Index,
+    st: Option<&SessionState>,
+    caps: &harness::Capabilities,
+    observe: bool,
+) -> String {
+    let field = |k: &str| agent.get(k).and_then(Value::as_str).unwrap_or("");
+    let mut text = format!("{}\n{}", field("description"), field("prompt"));
+    if text.len() > 16 << 10 {
+        let mut end = 16 << 10;
+        while !text.is_char_boundary(end) {
+            end -= 1;
+        }
+        text.truncate(end);
+    }
+    let table = CommandTable::load();
+    let ctx = Ctx {
+        checkout: &adage_runtime::checkout::Disk,
+        index,
+        repo: key.to_string(),
+        root,
+        table: &table,
+        embed: None,
+        params: Default::default(),
+        policy: adage_runtime::Policy { observe, ..Default::default() },
+    };
+    let fresh = SessionState::default();
+    adage_runtime::delegation(&ctx, st.unwrap_or(&fresh), &text, caps)
 }
 
 /// The environment sentence for the standing text ([`render::environment_note`]): when U11 is in
@@ -1376,10 +1569,13 @@ fn respond(
     index: &Index,
 ) -> Result<Responded, Failure> {
     let Here { session, cwd, root, paths, started } = *at;
-    let keys: std::collections::BTreeSet<&str> = index.routes.iter().map(|r| r.repo.as_str()).collect();
+    // A repository with candidates and no reflexes yet still notices (plan D2): it is not the
+    // no-routes path.
+    let keys: std::collections::BTreeSet<&str> =
+        index.routes.iter().map(|r| r.repo.as_str()).chain(index.candidates.keys().map(String::as_str)).collect();
     let Some(repo_key) = repo::lookup_key(root, Some(&paths.repo_keys()), &keys) else {
-        // Nothing installed for this repository: the common, cheapest path. In a repository the
-        // session is still seen (outside one there is nothing to learn).
+        // Nothing installed or counted for this repository: the common, cheapest path. In a
+        // repository the session is still seen (outside one there is nothing to learn).
         if root.join(".git").exists() {
             // A step boundary is not a session event the person sees: it is never recorded here.
             let ev =
@@ -1404,6 +1600,10 @@ fn respond(
     // unless the person set a routine model (a step may then be routed), nothing to record in
     // either arm: the step stops here, before the state lock.
     let step = matches!(ev, Event::TurnStep { .. });
+    // A step boundary is acted on only where the harness has one (the mod's `turn.step`).
+    if step && !adapter.capabilities(event, p).predict_step {
+        return Ok(Responded::default());
+    }
     let routine = step && routine_asked(p);
     let predict_grants: Vec<(String, String)> = match opts.extension {
         Some(x) if step => {
@@ -1560,6 +1760,16 @@ fn respond(
     // `ADAGE_ARM` forced it), for inverse-propensity weighting (Design §11, §14.1).
     let mut rec = json!({ "ts": ts, "event": event, "kind": ev.name(), "arm": arm, "propensity": propensity, "repo": repo_key, "generation": index.generation, "decision": decision });
     name_harness(&mut rec, adapter);
+    // The harness's ids for the calls judged here (in order), where its payload carries them: a
+    // judgement is then drawn under its call, not merely near it.
+    let ids: Vec<&str> = match &ev {
+        Event::Batch { calls } => calls.iter().filter_map(|c| c.tool_use_id.as_deref()).collect(),
+        Event::Failure { call } => call.tool_use_id.as_deref().into_iter().collect(),
+        _ => Vec::new(),
+    };
+    if !ids.is_empty() {
+        rec["tool_use_ids"] = json!(ids);
+    }
     if let Some(x) = delivery.spool.take() {
         rec["exec"] = x;
     }
@@ -1662,8 +1872,14 @@ mod tests {
             fn deliver(&self, _: &Turn<'_>, _: &[Directive]) -> Delivery {
                 Delivery::default()
             }
-            fn pretool_context(&self, call: &PreCall<'_>) -> Option<String> {
-                call.command.contains("pytest").then(|| format!("receipt for {}", call.session))
+            fn pretool_context(&self, call: &PreCall<'_>) -> Option<PreNote> {
+                call.command.contains("pytest").then(|| PreNote {
+                    text: format!("receipt for {}", call.session),
+                    fresh: !call.command.contains("stale"),
+                    result: Some("passed".into()),
+                    covering: "pytest".into(),
+                    card: None,
+                })
             }
         }
         static RECEIPTS: Receipts = Receipts;
@@ -1682,6 +1898,8 @@ mod tests {
         assert!(out["hookSpecificOutput"].get("permissionDecision").is_none());
         assert!(call(".venv/bin/python -c 'print(1)'").is_none());
         assert!(call("git status").is_none());
+        // T-C3-02's floor: a receipt that is not fresh says nothing to the model, as before the mod.
+        assert!(call(".venv/bin/python -m pytest tests/stale_test.py -q").is_none());
         // F8: a receipt delivered alone is recorded, with no rewrite or advice in the record.
         let recs: Vec<Value> = spool::read_all(&paths.spool("s-1")).unwrap();
         assert_eq!(recs.len(), 1, "{recs:?}");
@@ -1704,7 +1922,7 @@ mod tests {
             fn deliver(&self, _: &Turn<'_>, _: &[Directive]) -> Delivery {
                 Delivery::default()
             }
-            fn pretool_context(&self, _: &PreCall<'_>) -> Option<String> {
+            fn pretool_context(&self, _: &PreCall<'_>) -> Option<PreNote> {
                 panic!("a receipt check that panics")
             }
         }
@@ -2118,6 +2336,34 @@ mod tests {
         assert!(w.stop(none, false).is_none(), "no Stop request follows");
     }
 
+    /// T-C8-03 in process: the finish line Adage's call failed stays unmet; the next turn's end
+    /// does not predict it again for that arming, and the Stop request asks for it as without the
+    /// mod. Met by the agent then, a later edit arms it again, and it is predicted again.
+    #[test]
+    fn a_finish_line_whose_predicted_call_failed_falls_back_to_the_stop_request() {
+        let w = ObligationWorld::new();
+        let granted: &'static Predicts =
+            Box::leak(Box::new(Predicts(vec![("acme/finish-lines".into(), "regenerate-registry".into())])));
+        w.edit(granted).expect("the edit arms the obligation");
+        assert!(turn_step(&w, granted, 2, true).is_some(), "the finish line, in the model's place");
+        let failed = json!({ "tool_name": "Bash", "tool_use_id": "adage_regenerate-registry_t1_2_0",
+                             "tool_input": { "command": "make gen" }, "error": "make: *** [gen] Error 2" });
+        w.event(granted, "PostToolUseFailure", failed);
+        assert!(!w.state().obligations[0].met);
+        assert!(turn_step(&w, granted, 4, true).is_none(), "once per arming");
+        let stop = w.stop(granted, false).expect("the Stop request, as without the mod");
+        assert_eq!(stop["decision"], "block");
+        assert!(stop["reason"].as_str().unwrap().contains("make gen"), "{stop}");
+        let mine = json!({ "tool_name": "Bash", "tool_use_id": "toolu_gen", "tool_input": { "command": "make gen" },
+                           "tool_response": "ok" });
+        w.event(granted, "PostToolBatch", json!({ "tool_calls": [mine] }));
+        assert!(w.state().obligations[0].met, "the agent's own run met it");
+        w.edit(granted);
+        let again =
+            json!({ "hook_event_name": "TurnStep", "turn_id": "t2", "index": 3, "model": "claude-x", "ending": true });
+        assert!(w.event(granted, "TurnStep", again).is_some(), "armed again: predicted again");
+    }
+
     /// The control arm: nothing printed, `would_predict` spooled.
     #[test]
     fn turn_step_in_the_control_arm_prints_nothing() {
@@ -2498,8 +2744,14 @@ mod tests {
             fn deliver(&self, _: &Turn<'_>, _: &[Directive]) -> Delivery {
                 Delivery::default()
             }
-            fn pretool_context(&self, call: &PreCall<'_>) -> Option<String> {
-                call.command.contains("pytest").then(|| "a receipt".to_string())
+            fn pretool_context(&self, call: &PreCall<'_>) -> Option<PreNote> {
+                call.command.contains("pytest").then(|| PreNote {
+                    text: "a receipt".into(),
+                    fresh: true,
+                    result: Some("it passed".into()),
+                    covering: PYTEST.into(),
+                    card: None,
+                })
             }
         }
         static RECEIPTS: Receipts = Receipts;
@@ -2511,7 +2763,10 @@ mod tests {
         assert_eq!((recs.len(), recs[0]["receipt"].as_bool()), (1, Some(true)));
         assert!(recs[0]["duration_us"].is_u64());
         let plan = bash_call(&w, &RECEIPTS, "toolu_2", PYTEST, json!({ "dry_run": true })).expect("a plan");
-        assert_eq!(plan, json!({ "plan": { "receipt": { "note": "a receipt" } } }));
+        assert_eq!(
+            plan,
+            json!({ "plan": { "receipt": { "fresh": true, "covering": PYTEST, "note": "a receipt", "result": "it passed" } } })
+        );
         state::update::<SessionState, _>(&w.paths.state("s"), |st| st.arm = Some(Arm::Control)).unwrap();
         assert!(bash_call(&w, &RECEIPTS, "toolu_3", PYTEST, json!({ "dry_run": true })).is_none());
     }
@@ -2685,5 +2940,324 @@ mod tests {
         let seen = spool::read_all::<Value>(&w.paths.spool("u")).unwrap();
         assert_eq!((seen.len(), seen[0]["unrouted"].as_bool()), (1, Some(true)));
         assert!(seen[0]["duration_us"].is_u64());
+    }
+
+    // ------------------------------------------------------------ a receipt as the result (C3)
+
+    /// A world whose finish line is a test run: after an edit of `tests/*.py`, `python -m pytest
+    /// tests -q`.
+    fn receipt_world(arm: Arm) -> ObligationWorld {
+        use adage_tracks::{index::IndexedRoute, Evidence, Route, RouteState, Step, Strength, Trigger};
+        let w = ObligationWorld::new();
+        std::fs::create_dir_all(w.root.join("tests")).unwrap();
+        let route = Route {
+            id: "tests-after-edit".into(),
+            summary: String::new(),
+            trigger: Trigger::AfterEdit { paths: "tests/*.py".into() },
+            step: Step::Run { command: PYTEST.into() },
+            slots: vec![],
+            effect: adage_core::Effect::Verify,
+            strength: Strength::Fire,
+            state: RouteState::Firm,
+            exit: vec![],
+            evidence: Evidence { support: 5, opportunities: 5, days: 3, ..Default::default() },
+            authored: false,
+        };
+        let index = Index {
+            generation: "receipt-world".into(),
+            routes: vec![IndexedRoute {
+                repo: "acme".into(),
+                track: "acme/finish-lines".into(),
+                version: "0.1.0".into(),
+                exec: None,
+                route,
+            }],
+            ..Default::default()
+        };
+        index.write_atomic(&w.paths.index()).unwrap();
+        state::update::<SessionState, _>(&w.paths.state("s"), |st| st.arm = Some(arm)).unwrap();
+        w
+    }
+
+    struct FreshReceipts;
+    impl Extension for FreshReceipts {
+        fn deliver(&self, _: &Turn<'_>, _: &[Directive]) -> Delivery {
+            Delivery::default()
+        }
+        fn pretool_context(&self, call: &PreCall<'_>) -> Option<PreNote> {
+            call.command.contains("pytest").then(|| PreNote {
+                text: "<adage-receipt operation=\"op\">\nAdage's run passed.\n</adage-receipt>".into(),
+                fresh: !call.command.contains("stale"),
+                result: (!call.command.contains("stale")).then(|| "Adage answered this test run.".into()),
+                covering: PYTEST.into(),
+                card: (!call.command.contains("stale")).then(|| ReceiptCard {
+                    operation: "op".into(),
+                    ran_at: "2026-10-03T10:00:00Z".into(),
+                    ago: "4 min ago".into(),
+                    summary: "passed on files identical to the current ones".into(),
+                    tests: vec!["tests/test_x.py::t".into()],
+                    more: 0,
+                }),
+            })
+        }
+    }
+    static FRESH_RECEIPTS: FreshReceipts = FreshReceipts;
+
+    /// T-C3-02, T-C3-03 in process: the dry run carries the fresh receipt (`fresh`, `covering`,
+    /// `note`, `result`); the verdict `answered: receipt` answers it, spools one `pretool` record
+    /// with `answered: receipt` that meets the finish line (so the Stop gate asks nothing), and
+    /// the command hook's repeat of the id prints nothing. A receipt no longer fresh decides
+    /// nothing, so the call is still the command hook's; without a verdict the command hook's
+    /// output is as before.
+    #[test]
+    fn a_call_answered_by_a_fresh_receipt_is_one_record_and_meets_its_finish_line() {
+        let w = receipt_world(Arm::Treated);
+        let edit = json!({ "tool_name": "Edit", "tool_use_id": "e1", "tool_response": "ok",
+                           "tool_input": { "file_path": w.root.join("tests/test_a.py") } });
+        let armed =
+            w.event(&FRESH_RECEIPTS, "PostToolBatch", json!({ "tool_calls": [edit] })).expect("the finish line");
+        assert!(armed.to_string().contains("python -m pytest tests -q"), "{armed}");
+        let plan = bash_call(&w, &FRESH_RECEIPTS, "toolu_1", PYTEST, json!({ "dry_run": true })).expect("a plan");
+        assert_eq!(
+            plan["plan"]["receipt"],
+            json!({ "fresh": true, "covering": PYTEST, "note": "<adage-receipt operation=\"op\">\nAdage's run passed.\n</adage-receipt>", "result": "Adage answered this test run." })
+        );
+        assert!(pretool_records(&w).is_empty(), "the dry run records nothing");
+        let answered = json!({ "verdict": { "answered": "receipt" } });
+        let out = bash_call(&w, &FRESH_RECEIPTS, "toolu_1", PYTEST, answered.clone()).expect("the answer");
+        assert_eq!(out["receipt"]["result"], "Adage answered this test run.");
+        assert_eq!(out["receipt"]["covering"], PYTEST);
+        assert!(out["receipt"]["note"].as_str().unwrap().starts_with("<adage-receipt"));
+        let recs = pretool_records(&w);
+        assert_eq!(recs.len(), 1, "{recs:?}");
+        assert_eq!((recs[0]["answered"].as_str(), recs[0]["checked_by"].as_str()), (Some("receipt"), Some("engine")));
+        assert_eq!(
+            recs[0]["decision"]["judgements"],
+            json!([{ "kind": "obligation_met", "route": "tests-after-edit" }]),
+            "{}",
+            recs[0]
+        );
+        assert!(recs[0]["duration_us"].is_u64());
+        // What the receipt card needs, on the answer and on the record the feed reads.
+        assert_eq!(out["receipt"]["card"]["operation"], "op");
+        assert_eq!(recs[0]["card"], out["receipt"]["card"]);
+        assert_eq!(recs[0]["card"]["tests"], json!(["tests/test_x.py::t"]));
+        assert_eq!((recs[0]["command"].as_str(), recs[0]["tool_use_id"].as_str()), (Some(PYTEST), Some("toolu_1")));
+        assert!(w.state().obligations[0].met);
+        assert!(bash_call(&w, &FRESH_RECEIPTS, "toolu_1", PYTEST, json!({})).is_none(), "the command hook's repeat");
+        assert!(bash_call(&w, &FRESH_RECEIPTS, "toolu_1", PYTEST, answered.clone()).is_none(), "the mod's retry");
+        assert_eq!(pretool_records(&w).len(), 1);
+        assert!(w.stop(&FRESH_RECEIPTS, false).is_none(), "met: the Stop gate asks nothing");
+        // A rebuilt state reads the met obligation off that record.
+        let index = Index::try_load(&w.paths.index()).unwrap();
+        let st = rebuild::rebuild(&spooled(&w), &index, "acme", &CommandTable::load()).unwrap();
+        assert!(st.obligations.iter().all(|o| o.met), "{:?}", st.obligations);
+        // Not fresh: the plan says so without a note or a result, and the verdict decides nothing.
+        let stale = "python -m pytest tests/stale_test.py -q";
+        let plan = bash_call(&w, &FRESH_RECEIPTS, "toolu_2", stale, json!({ "dry_run": true })).expect("a plan");
+        assert_eq!(plan["plan"]["receipt"], json!({ "fresh": false, "covering": PYTEST }));
+        assert!(bash_call(&w, &FRESH_RECEIPTS, "toolu_2", stale, answered).is_none());
+        assert_eq!(pretool_records(&w).len(), 1, "nothing decided");
+        assert!(!w.state().has_seen_pretool(phase::identity_hash(
+            &harness::Adapter::event_identity(
+                &harness::claude::Claude,
+                "PreToolUse",
+                &json!({ "tool_use_id": "toolu_2" })
+            )
+            .unwrap()
+        )));
+        // The command hook's own payload: a stale receipt says nothing to the model.
+        assert!(bash_call(&w, &FRESH_RECEIPTS, "toolu_3", stale, json!({})).is_none());
+    }
+
+    /// Control: a receipt is never the result. The plan has none (only treated sessions hold
+    /// receipts), and a verdict asking for one prints nothing and records the answer withheld.
+    #[test]
+    fn a_receipt_is_never_the_result_in_control() {
+        let w = receipt_world(Arm::Control);
+        assert!(bash_call(&w, &FRESH_RECEIPTS, "toolu_1", PYTEST, json!({ "dry_run": true })).is_none());
+        let answered = json!({ "verdict": { "answered": "receipt" } });
+        assert!(bash_call(&w, &FRESH_RECEIPTS, "toolu_1", PYTEST, answered).is_none());
+        assert!(pretool_records(&w).is_empty(), "no receipt here: nothing decided");
+    }
+
+    // ------------------------------------------------------------ the mod's capabilities (C9)
+
+    /// T-C9-01 at the adapter: a payload the mod sent reports the mod's capabilities (it says
+    /// `via: mod`, is an event only the mod sends, or carries a phase only the mod asks for); a
+    /// command hook's payload reports the command hooks' four; Codex and OpenCode have no mod. A
+    /// subagent's tool events carry its `agent_id` onto the canonical call.
+    #[test]
+    fn the_mods_payloads_report_the_mods_capabilities() {
+        use harness::Adapter;
+        let claude = &harness::claude::Claude;
+        let hooks = Harness::ClaudeCode.capabilities();
+        let with_mod = Harness::ClaudeCode.capabilities_with_mod();
+        assert_eq!(claude.capabilities("PostToolBatch", &json!({ "tool_calls": [] })), hooks);
+        assert_eq!(claude.capabilities("PreToolUse", &json!({ "tool_name": "Bash" })), hooks);
+        assert_eq!(claude.capabilities("PostToolBatch", &json!({ "via": "mod" })), with_mod);
+        assert_eq!(claude.capabilities("PreToolUse", &json!({ "dry_run": true })), with_mod);
+        assert_eq!(claude.capabilities("PreToolUse", &json!({ "verdict": {} })), with_mod);
+        for event in ["TurnStep", "Standing", "SkillPrompt"] {
+            assert_eq!(claude.capabilities(event, &json!({})), with_mod, "{event}");
+        }
+        assert_eq!(claude.capabilities("Stop", &json!({ "via": "the mod" })), hooks, "only `mod`");
+        for h in [Harness::Codex, Harness::OpenCode] {
+            let a = harness::adapter_for(h);
+            assert_eq!(a.capabilities("PostToolUse", &json!({ "via": "mod" })), h.capabilities(), "{h}");
+        }
+        let batch = json!({ "agent_id": "explore-1", "tool_calls": [{ "tool_name": "Read", "tool_use_id": "t1",
+                            "tool_input": { "file_path": "/r/a.py" }, "tool_response": "x" }] });
+        let Some(Event::Batch { calls }) = claude.translate("PostToolBatch", &batch, "/r") else { panic!("a batch") };
+        assert_eq!(calls[0].agent.as_deref(), Some("explore-1"));
+        let main = json!({ "tool_calls": [{ "tool_name": "Read", "tool_use_id": "t1", "tool_input": {}, "tool_response": "x" }] });
+        let Some(Event::Batch { calls }) = claude.translate("PostToolBatch", &main, "/r") else { panic!("a batch") };
+        assert_eq!(calls[0].agent, None);
+        let failed =
+            json!({ "agent_id": "explore-1", "tool_name": "Bash", "tool_input": { "command": "x" }, "error": "e" });
+        let Some(Event::Failure { call }) = claude.translate("PostToolUseFailure", &failed, "/r") else { panic!() };
+        assert_eq!(call.agent.as_deref(), Some("explore-1"));
+    }
+
+    /// A world with a work-item lookup bound from the prompt beside the dead end.
+    fn delegation_world(arm: Arm) -> ObligationWorld {
+        use adage_tracks::{
+            index::IndexedRoute, Contract, Evidence, Route, RouteState, Slot, SlotSource, Step, Strength, Trigger,
+        };
+        let w = dead_end_world(arm);
+        let mut index = Index::try_load(&w.paths.index()).unwrap();
+        index.routes.push(IndexedRoute {
+            repo: "acme".into(),
+            track: "acme/lookups".into(),
+            version: "0.1.0".into(),
+            exec: None,
+            route: Route {
+                id: "lookup-work-item".into(),
+                summary: String::new(),
+                trigger: Trigger::Prompt { span: adage_core::spans::SpanKind::Ticket },
+                step: Step::Run { command: "python3 scripts/wi-lookup {item}".into() },
+                slots: vec![Slot {
+                    name: "item".into(),
+                    source: SlotSource::Prompt { span: adage_core::spans::SpanKind::Ticket },
+                    contract: Contract::Pattern { regex: r"^W-\d{4}$".into() },
+                }],
+                effect: adage_core::Effect::Observe,
+                strength: Strength::Fire,
+                state: RouteState::Firm,
+                exit: vec![],
+                evidence: Evidence { support: 9, opportunities: 10, days: 5, ..Default::default() },
+                authored: false,
+            },
+        });
+        index.write_atomic(&w.paths.index()).unwrap();
+        w
+    }
+
+    /// T-C9-03's binary half, T-C9-04's: the mod's `agent.spawn` asks `Standing` with the
+    /// subagent's description and prompt, and the subagent is told the lookup its prompt binds and
+    /// the standing dead end, before its first request; the session's own answer is unchanged,
+    /// nothing is spooled, and a control session's subagent is told nothing. Without `agent` the
+    /// answer has no `subagent` field (wave one's shape).
+    #[test]
+    fn a_subagent_is_told_what_its_prompt_binds_in_the_treated_arm_only() {
+        let w = delegation_world(Arm::Treated);
+        let plain = standing_event(&w, "s", json!({})).unwrap();
+        assert!(plain.get("subagent").is_none(), "{plain}");
+        let agent = json!({ "agent": { "type": "Explore", "description": "Look up the work item",
+                                       "prompt": "Find what W-2045 asks for and which files it names." } });
+        let out = standing_event(&w, "s", agent.clone()).unwrap();
+        let told = out["subagent"].as_str().unwrap();
+        assert!(told.contains("python3 scripts/wi-lookup W-2045"), "{told}");
+        assert!(told.contains("route=\"dead-end-pytest\""), "{told}");
+        assert!(told.starts_with("<adage-reflex") && told.len() <= render::MAX_STANDING, "{told}");
+        assert_eq!(
+            (out["standing"].clone(), out["environment"].clone()),
+            (plain["standing"].clone(), plain["environment"].clone())
+        );
+        assert!(!w.paths.spool("s").exists(), "read-only");
+        let unbound = standing_event(&w, "s", json!({ "agent": { "prompt": "Summarise acme/billing.py" } })).unwrap();
+        assert!(!unbound["subagent"].as_str().unwrap().contains("wi-lookup"), "{unbound}");
+        let c = delegation_world(Arm::Control);
+        assert_eq!(standing_event(&c, "s", agent.clone()).unwrap()["subagent"], "", "control: nothing");
+        assert_eq!(
+            standing_event(&w, "s", json!({ "agent": { "prompt": "W-2045" }, "observe": true })).unwrap()["subagent"],
+            ""
+        );
+    }
+
+    // ------------------------------------------------------------ noticed (D2)
+
+    /// T-D2-04 at the hook: a repository with candidates and no reflexes yet takes the match path,
+    /// not the no-routes one: the batch that completes a candidate's context is decided and
+    /// spooled with `noticed` (in both arms), and nothing is printed; a session's other events
+    /// stay on the fast path.
+    #[test]
+    fn a_repository_with_candidates_and_no_routes_notices_them() {
+        use adage_tracks::{CtxItem, Step, Trigger};
+        let w = ObligationWorld::new();
+        let mut index = Index { generation: "candidates-only".into(), ..Default::default() };
+        index.attach_candidates(
+            [(
+                "acme".to_string(),
+                vec![adage_tracks::candidates::Candidate {
+                    id: "run-lint".into(),
+                    trigger: Trigger::Context {
+                        items: vec![
+                            CtxItem::Edit { glob: "acme/*.py".into() },
+                            CtxItem::Act { keys: vec!["exec make test".into()] },
+                        ],
+                        within: 3,
+                    },
+                    step: Step::Run { command: "make lint".into() },
+                    support: 2,
+                    s_min: 3,
+                    days: 2,
+                    last_seen: None,
+                    review: false,
+                }],
+            )]
+            .into_iter()
+            .collect(),
+        );
+        index.write_atomic(&w.paths.index()).unwrap();
+        std::fs::create_dir_all(w.root.join("acme")).unwrap();
+        for (session, arm) in [("s", "treated"), ("c", "control")] {
+            state::update::<SessionState, _>(&w.paths.state(session), |st| {
+                st.arm = Some(if arm == "control" { Arm::Control } else { Arm::Treated })
+            })
+            .unwrap();
+            let batch = |call: Value| {
+                let p = json!({ "session_id": session, "cwd": w.root, "tool_calls": [call] });
+                let opts = Options { learner: None, extension: Some(&NO_EXTENSION) };
+                handle("claude", "PostToolBatch", &p.to_string(), opts, &w.paths, Instant::now()).unwrap()
+            };
+            assert_eq!(
+                batch(
+                    json!({ "tool_name": "Bash", "tool_use_id": "a", "tool_input": { "command": "ls" }, "tool_response": "" })
+                ),
+                None
+            );
+            assert_eq!(
+                batch(
+                    json!({ "tool_name": "Edit", "tool_use_id": "b", "tool_input": { "file_path": w.root.join("acme/a.py") }, "tool_response": "ok" })
+                ),
+                None
+            );
+            assert_eq!(
+                batch(
+                    json!({ "tool_name": "Bash", "tool_use_id": "c", "tool_input": { "command": "make test" }, "tool_response": "OK" })
+                ),
+                None
+            );
+            let recs = spool::read_all::<Value>(&w.paths.spool(session)).unwrap();
+            assert!(recs.iter().all(|r| r.get("unrouted").is_none()), "{arm}: not the no-routes path: {recs:?}");
+            assert_eq!(recs.len(), 2, "{arm}: `ls` is skipped by the fast path: {recs:?}");
+            assert_eq!(
+                recs[1]["decision"]["noticed"],
+                json!([{ "candidate": "run-lint", "support": 2, "s_min": 3, "review": false }]),
+                "{arm}"
+            );
+            assert!(recs[1]["decision"]["would_have"].as_array().unwrap().is_empty());
+        }
     }
 }

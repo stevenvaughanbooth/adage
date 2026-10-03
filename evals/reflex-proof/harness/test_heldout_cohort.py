@@ -189,6 +189,56 @@ class Freeze(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "invalid"):
                 runner.design(path)
 
+    def test_a_dev_v9_mod_report_selects_mod_with_its_predict_routes(self):
+        """T-E3-01's script half: BEST = MOD, carrying the mod and the routes its grants name."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "report.json"
+            report = dict(protocol="dev-arms-3", valid=True, candidates=["MOD"], predict_routes=["t/learned/run-finish"],
+                          arms=dict(A4=dict(requests=12.0), MOD=dict(requests=13.0, cost_usd=0.1)),
+                          verdict=dict(A4=dict(passed=True), MOD=dict(passed=True)))
+            path.write_text(json.dumps(report))
+            d = runner.design(path)
+            self.assertEqual((d["arm"], d["mod"], d["predict_routes"], d["card_orientation"], d["dev_protocol"]),
+                             ("MOD", True, ["t/learned/run-finish"], True, "dev-arms-3"), "A4 has no controls here")
+            path.write_text(json.dumps(dict(report, predict_routes=[])))
+            with self.assertRaisesRegex(ValueError, "predict"):
+                runner.design(path)
+
+    def test_a_mod_best_gets_the_mod_and_its_predict_grants_and_noexec_neither(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            m = frozen(root)
+            m["best"].update(arm="MOD", mod=True, predict_routes=["t/learned/run-finish"])
+            m["plugin"] = str(root / "plugin")
+            runner.pairs.write(root / "manifest.json", m)
+            (root / "manifest.sha256").write_text(runner.pairs.sha(root / "manifest.json") + "\n")
+            text = Path(runner.approval_script(root)["path"]).read_text()
+            self.assertEqual(text.count(" --predict "), 25, "every BEST home")
+            self.assertEqual(text.count("--level e2 --effect verify"), 25)
+            for r in m["matrix"]:
+                if r["arm"] != "BEST":
+                    self.assertNotIn(str(runner.session_dir(root, r)), text)
+            grant_best(root, m)
+            self.assertFalse(runner.verify_grants(root)["passed"], "the predict grants are missing")
+            for r in m["matrix"]:
+                if r["arm"] == "BEST":
+                    store = grant()
+                    store["approvals"].append(dict(route="t/learned/run-finish", by="launch-evaluation-human",
+                                                   auto=False, key=dict(level="e2", mode="predict")))
+                    runner.pairs.write(runner.session_dir(root, r) / "adage-home/approvals.json", store)
+            self.assertTrue(runner.verify_grants(root)["passed"], runner.verify_grants(root))
+            best = next(r for r in m["matrix"] if r["arm"] == "BEST")
+            noexec = next(r for r in m["matrix"] if r["arm"] == "NOEXEC")
+            for r, loaded in ((best, True), (noexec, False)):
+                with patch.object(runner.pairs, "sha", return_value="0" * 64):
+                    _, value = runner.assignment(m, r, runner.session_dir(root, r), root / "c", root / "l", {},
+                                                 root / "h", root / "r")
+                argv = value["argv"]
+                self.assertEqual("--plugin-dir" in argv, loaded, r["arm"])
+                if loaded:
+                    self.assertEqual(argv[argv.index("--plugin-dir") + 1], str(root / "plugin"))
+                    self.assertEqual(argv[-1], r["prompt"])
+
     def test_the_archived_dev_v9b_report_selects_a4_with_the_orientation_card(self):
         """The selection input held-out freezes (a development result on one task, not evidence)."""
         path = Path(__file__).parent / "results/20261001-dev-v9b/report.json"

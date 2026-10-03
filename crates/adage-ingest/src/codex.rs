@@ -386,6 +386,7 @@ pub fn decode(lines: &[Value], cx: &Decode<'_>) -> Option<Session> {
                 failed,
                 by: By::Agent,
                 tool_use_id: None,
+                agent: None,
             };
             let at = if tool == "Bash" { run_in.as_str() } else { root_str.as_str() };
             let prompt = if by_event { rec.prompt.0 } else { rec.prompt.1 };
