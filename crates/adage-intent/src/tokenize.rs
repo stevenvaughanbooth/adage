@@ -7,10 +7,39 @@
 //! the two sides always agree; only similarity to the reference model's vectors differs on such
 //! text.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
+use std::hash::{BuildHasherDefault, Hasher};
+
+/// The vocabulary: token → id. Keys borrow the text when it lives for the process (the model
+/// bundled in the binary), so building it allocates nothing on the hook path.
+pub type Vocab = HashMap<Cow<'static, str>, u32, BuildHasherDefault<Fnv>>;
+
+/// FNV-1a. The vocabulary is built once per process and looked up a few dozen times per prompt;
+/// its keys come from a table compiled into the binary or pinned by digest, so SipHash's
+/// resistance to chosen keys buys nothing here.
+pub struct Fnv(u64);
+
+impl Default for Fnv {
+    fn default() -> Self {
+        Fnv(0xcbf2_9ce4_8422_2325)
+    }
+}
+
+impl Hasher for Fnv {
+    fn finish(&self) -> u64 {
+        self.0
+    }
+    fn write(&mut self, bytes: &[u8]) {
+        for &b in bytes {
+            self.0 ^= u64::from(b);
+            self.0 = self.0.wrapping_mul(0x100_0000_01b3);
+        }
+    }
+}
 
 pub struct WordPiece {
-    pub vocab: HashMap<String, u32>,
+    pub vocab: Vocab,
     pub unk: u32,
     pub max_chars: usize,
 }
@@ -106,7 +135,7 @@ impl WordPiece {
                 if start > 0 {
                     s.insert_str(0, "##");
                 }
-                if let Some(&id) = self.vocab.get(&s) {
+                if let Some(&id) = self.vocab.get(s.as_str()) {
                     found = Some(id);
                     break;
                 }
@@ -137,10 +166,10 @@ mod tests {
 
     #[test]
     fn greedy_longest_match() {
-        let vocab: HashMap<String, u32> =
+        let vocab: Vocab =
             [("[UNK]", 0), ("test", 1), ("##ing", 2), ("tests", 3), ("un", 4), ("##believ", 5), ("##able", 6)]
                 .into_iter()
-                .map(|(k, v)| (k.to_string(), v))
+                .map(|(k, v)| (Cow::Borrowed(k), v))
                 .collect();
         let wp = WordPiece { vocab, unk: 0, max_chars: 100 };
         assert_eq!(wp.encode("testing tests unbelievable xyz", 512), vec![1, 2, 3, 4, 5, 6, 0]);
