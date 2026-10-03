@@ -10,6 +10,7 @@ dependencies = [
  "adage-exec",
  "adage-hook",
  "adage-learn",
+ "adage-pack",
  "adage-runtime",
  "adage-store",
  "adage-term",
@@ -20,6 +21,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "tempfile",
+ "toml",
 ]
 
 [[package]]
@@ -156,8 +158,10 @@ dependencies = [
  "adage-store",
  "adage-trace",
  "adage-tracks",
+ "getrandom 0.2.17",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
 ]
 

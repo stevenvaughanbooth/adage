@@ -228,7 +228,7 @@ fn session_in_fit(id: &str) -> bool {
 fn collect(sessions: &[&EventSession]) -> BTreeMap<String, Vec<Node>> {
     let mut acc: BTreeMap<(String, String), (Node, BTreeSet<usize>)> = BTreeMap::new();
     for (si, s) in sessions.iter().enumerate() {
-        for e in &s.events {
+        for e in s.events.iter().filter(|e| e.ty != NodeType::Skill) {
             let fam = e.ty.family().to_string();
             let ent = acc.entry((fam, e.key.clone())).or_insert_with(|| {
                 (
@@ -584,6 +584,10 @@ impl Epoch {
         let ty = e.ty;
         let mut out: [Option<String>; LEVELS] = Default::default();
         out[0] = Some(events::label_name(ty, Level::Exact, &e.key));
+        // Two skills are never one item: a skill directive names one skill, by name.
+        if ty == NodeType::Skill {
+            return out;
+        }
         let proto = self.proto_of(e);
         if let Some(p) = &proto {
             out[1] = Some(events::label_name(ty, Level::Proto, p));
@@ -606,6 +610,8 @@ impl Epoch {
             }
             NodeType::Prompt => out[4] = Some(events::label_name(ty, Level::Kind, ty.name())),
             NodeType::Obs | NodeType::Fail => out[4] = Some(events::label_name(ty, Level::Kind, ty.name())),
+            // A skill is its name: no prototype, coarse, head or kind level (see `names`).
+            NodeType::Skill => {}
         }
         out
     }

@@ -15,7 +15,7 @@ the machine it runs on.
 | Snapshots | `crates/<crate>/src/**/snapshots/*.snap` (insta) | with the unit test | `cargo insta review`, or `INSTA_UPDATE=always` | `ci.yml` |
 | Table-driven cases | `crates/<crate>/tests/cases/*.json` (input and expected together) | with the integration test | edit the case | `ci.yml` |
 | Property tests | `adage-eval/tests/prop_*.rs`, `adage-graph/tests/{agreement,border}.rs`, `adage-pack/tests/digests.rs` | `cargo test -p <crate> --features slow` where gated | — | `evals.yml` |
-| Eval gates | `adage-eval/tests/{gates,bench,parity,g4}.rs` over `evals/datasets/` | `cargo test -p adage-eval` | `ADAGE_BLESS=1` (generated datasets); `adage eval bench … --out evals/baselines/…` | `evals.yml` |
+| Eval gates | `adage-eval/tests/{gates,bench,parity,g4,predict_gate}.rs` over `evals/datasets/` | `cargo test -p adage-eval` (`--test predict_gate` alone: the prediction gate, about 80 s) | `ADAGE_BLESS=1` (generated datasets); `adage eval bench … --out evals/baselines/…` | `evals.yml` |
 | Architecture guards | `xtask/src/{layers,affected,hygiene,suites}.rs` | `cargo test -p xtask` | edit the declared tables | `ci.yml`, always |
 | Python suites | `evals/**/test_*.py` (`unittest`) | `cargo xtask test python [<suite>]` | — | `evals.yml` |
 | Web unit | `web/map/src/**/*.test.ts` (vitest) | `pnpm test` in `web/map` | — | `ci.yml` |

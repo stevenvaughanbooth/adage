@@ -236,6 +236,8 @@ impl Corpus {
                             passed.insert(stable::runner(argv));
                         }
                     }
+                    // A skill is no command and no file: nothing the compiler's literals read.
+                    input::Step::Skill { .. } => {}
                     input::Step::Read { path } | input::Step::Edit { path } => {
                         if !path.is_empty() && !path.starts_with('/') {
                             c.tree.insert(path.clone());
@@ -321,6 +323,11 @@ pub struct Compiled {
     /// Compiled from a reflex retained for execution judgement only: it never shadows a route of
     /// the same id that an advisory reflex compiled.
     pub execution_only: bool,
+    /// A candidate ([`compile_candidates`], plan D1): never judged, never a route; the learner
+    /// writes it to the repository's `candidates.json` instead.
+    pub candidate: bool,
+    /// The reflex's supporting session ids (`select::Reflex::sessions`).
+    pub sessions: Vec<String>,
 }
 
 /// A reflex that compiled to nothing, and why.
@@ -342,6 +349,16 @@ pub const MAX_ROUTES: usize = 256;
 /// Compile selected reflexes into routes (see the module documentation).
 pub fn compile(input: &Input) -> Output {
     shapes::compile(input)
+}
+
+/// Compile candidates (`select::Learned::candidates`, plan D1) the way a selected reflex with the
+/// same pattern compiles to a context route, so each gets the id it would have as a reflex
+/// ([`ids`]), but with no strength bar: a candidate is counted, never delivered. Only context
+/// triggers of two or three events come out (a sequence, never a single call; a context ending in
+/// a failure or an edit compiles to another shape as a reflex), each flagged
+/// [`Compiled::candidate`], one per id (the most support).
+pub fn compile_candidates(input: &Input) -> Output {
+    shapes::compile_candidates(input)
 }
 
 /// The compiler's second gate (Track G §6, outcome lift): a reflex that fails the rate gate,

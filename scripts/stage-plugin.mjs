@@ -2,7 +2,9 @@
 // Stage the Claude Code plugins with their binaries bundled, for the `marketplace` branch that
 // `/plugin install adage@adage` installs from (docs/zero-config.md P0-1). The marketplace plugin
 // then needs no `adage` on PATH and never downloads anything: its session-start shim picks
-// dist/<target>/adage for the machine and verifies it against dist/SHA256SUMS.
+// dist/<target>/adage and dist/<target>/adage-exec for the machine and verifies them against
+// dist/SHA256SUMS (one plugin, both binaries: plan A8). The retired adage-exec alias is staged
+// as it is, with no binaries.
 //
 //   node scripts/stage-plugin.mjs --out <dir> (--bins <dir> | --artifacts <dir>) [--allow-missing]
 //
@@ -10,9 +12,10 @@
 //   --artifacts <dir>  dist's release archives (adage-cli-<target>.tar.xz / .zip, adage-exec-…)
 //   --allow-missing    stage only the targets that have binaries (local tests); a release needs all
 //
-// Writes <out>/plugin/claude-code/ and <out>/plugin/claude-code-exec/ (each the plugin as in this
-// repository, plus dist/<target>/… and dist/SHA256SUMS), and <out>/README.md. Every binary staged
-// is checksummed; the one for this machine, if staged, is run (`adage version`) as a smoke test.
+// Writes <out>/plugin/claude-code/ (the plugin as in this repository, plus dist/<target>/… and
+// dist/SHA256SUMS), <out>/plugin/claude-code-exec/ (the alias, as it is) and <out>/README.md.
+// Every binary staged is checksummed; the one for this machine, if staged, is run (`adage
+// version`) as a smoke test.
 
 import { execFileSync } from "node:child_process"
 import { createHash } from "node:crypto"
@@ -80,17 +83,17 @@ rmSync(out, { recursive: true, force: true })
 mkdirSync(out, { recursive: true })
 const scratch = o.artifacts ? mkdtempSync(path.join(tmpdir(), "adage-plugin-")) : null
 
-// Each plugin and the binaries it bundles. adage-exec's plugin carries adage too: adage-exec finds
-// the learner beside itself, and serves with adage when execution is unavailable.
+// Each plugin and the binaries it bundles. adage-exec sits beside adage (it finds the learner
+// beside itself); execution needs an OS sandbox, which Windows lacks, so it is not required there.
 const PLUGINS = [
-  { dir: "plugin/claude-code", bins: [{ name: "adage", app: "adage-cli", required: () => true }] },
   {
-    dir: "plugin/claude-code-exec",
+    dir: "plugin/claude-code",
     bins: [
+      { name: "adage", app: "adage-cli", required: () => true },
       { name: "adage-exec", app: "adage-exec", required: (p) => p.os !== "win32" },
-      { name: "adage", app: "adage-cli", required: (p) => p.os !== "win32" },
     ],
   },
+  { dir: "plugin/claude-code-exec", bins: [] },
 ]
 
 const host = PLATFORMS.find((p) => p.os === process.platform && p.cpu === process.arch)
@@ -115,6 +118,10 @@ try {
         chmodSync(to, 0o755)
         sums.push(`${sha256(to)}  ${p.target}/${exe}`)
       }
+    }
+    if (plugin.bins.length === 0) {
+      console.log(`staged ${plugin.dir} (the retired alias: no binaries)`)
+      continue
     }
     if (sums.length === 0) fail(`${plugin.dir}: no binaries staged`)
     writeFileSync(path.join(dest, "dist", "SHA256SUMS"), sums.join("\n") + "\n")

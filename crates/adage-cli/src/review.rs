@@ -32,7 +32,10 @@
 //! `<track>` is a track name (a learned track wins over an import of the same name) or its
 //! directory under the tracks directory, e.g. `@imported/acme/work-items`.
 //!
-//! Decisions change trust, so they refuse to run inside an agent session (review finding F11).
+//! Decisions change trust, so they refuse to run inside an agent session (review finding F11),
+//! unless a person made them in the session with a press (architecture §3.12): a verb run by the
+//! Claude Code mod reads `{ "press", "session" }` on stdin, and on success prints `{ "next":
+//! <token> }` as its first line, before anything else ([`person_or_press`]).
 //! They are recorded in the track's `review.yaml` (see [`adage_tracks::review`]); every decision
 //! re-validates the track and recompiles the index atomically, as `adage condition` and `adage add` do.
 
@@ -533,8 +536,34 @@ pub(crate) fn waiting_words(needs: usize, look: usize) -> Option<String> {
     (!parts.is_empty()).then(|| parts.join(" · "))
 }
 
+/// The person check at the sites that take a press (architecture §3.12: the review verbs, `review
+/// delegate` and `revoke`, `delegate on`, `delegate policy --max-level e2`, `delegate predict on`,
+/// `on`, `add <committed pack> --trust`): stdin is read once, a valid press stands in for the
+/// terminal, and the next token of the chain is printed at once, as the first line on stdout,
+/// since the one just spent is refused from now on, whatever the verb goes on to do. Every other
+/// person-only command keeps [`crate::share::require_person`], which never reads a press.
+pub(crate) fn person_or_press(cmd: &str, paths: &Paths) -> Result<(adage_app::Person, adage_app::person::Stdin)> {
+    person_from(cmd, paths, adage_app::person::read_press())
+}
+
+/// [`person_or_press`] over a stdin already read.
+pub(crate) fn person_from(
+    cmd: &str,
+    paths: &Paths,
+    stdin: adage_app::person::Stdin,
+) -> Result<(adage_app::Person, adage_app::person::Stdin)> {
+    let person = adage_app::person::require_or_press(cmd, stdin.press.as_ref(), paths)?;
+    if let Some(next) = person.next() {
+        use std::io::Write;
+        let mut out = std::io::stdout().lock();
+        writeln!(out, "{}", json!({ "next": next }))?;
+        out.flush()?;
+    }
+    Ok((person, stdin))
+}
+
 fn decide(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
-    let person = adage_app::person::require(&format!("review {verb}"))?;
+    let (person, _) = person_or_press(&format!("review {verb}"), paths)?;
     let pos: Vec<&String> = {
         let mut v = Vec::new();
         let mut i = 0;
@@ -578,7 +607,8 @@ fn decide(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
 
 /// A decision from `adage ui`: the same guard and the same code path as `adage review <verb>`.
 pub(crate) fn decide_quietly(verb: &str, spec: &str, route_id: &str, paths: &Paths) -> Result<Decided> {
-    let person = adage_app::person::require(&format!("review {verb}"))?;
+    // `adage ui` owns the terminal, so no press can reach it on stdin: the check is the terminal's.
+    let person = adage_app::person::require_or_press(&format!("review {verb}"), None, paths)?;
     let Some(verb) = Verb::parse(verb) else { bail!("{USAGE}") };
     // `adage ui` decides on its event loop: it waits a moment for a running learner, never longer.
     let wait = std::time::Duration::from_secs(2);

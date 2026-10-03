@@ -135,6 +135,10 @@ fn hook(home: &Path, cwd: &Path, session: &str, ev: &Event) -> Option<Heard> {
         }
         Event::Stop { .. } => ("Stop", json!({ "stop_hook_active": false })),
         Event::SessionEnd => ("SessionEnd", json!({})),
+        Event::TurnStep { turn_id, index, model, agent, ending } => (
+            "TurnStep",
+            json!({ "turn_id": turn_id, "index": index, "model": model, "agent_id": agent, "ending": ending }),
+        ),
     };
     let mut payload = json!({ "session_id": session, "cwd": cwd });
     payload.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());

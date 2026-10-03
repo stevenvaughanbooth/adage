@@ -374,6 +374,28 @@ Context matching is defined as **subsequence within a gap over alphabet events o
 - Correctness gate: incremental output equals a full re-mine on the same (sessions, epoch). This is property-tested across random arrival orders.
 - Target: `condition --auto` with one transcript changed stays ≤ 150 ms (today 44–138 ms).
 
+**Skills** (plan §2.1.2). A Skill tool use is an `input::Step::Skill` and a `NodeType::Skill`
+event labelled by its name alone (no prototype or coarser level: two skills are never one item).
+It is a target and a continuation item, never a context item; a continuation of one skill is the
+`skill` shape (`after_edit`, or a selected context, `→ Step::Skill`, prime at most), and a skill
+used before a family's first edit is that family's intent continuation. A directive that named the
+skill exposes that skill's events only (`Influence::skills`).
+
+**Candidates** (`mine::mine_candidates`, plan D1). The negative border is also what a person can
+watch form, so the learner keeps it, in a pass of its own: lowering the reflexes' floor would add
+alphabet events between the items of today's patterns (`gap` counts alphabet events) and change
+reflexes in service. A second `Db` over the same sessions has its floor at
+`max(s_min − border, 2)`; `seq::mine` runs on it with the same parameters, and only the patterns
+with support in `[floor, s_min)` and two or more context items are kept, marked closed among
+themselves. Each becomes a `select::Reflex` with its counts (support, days, opportunities, the
+median turns from its context to its step), never scored against the gates or selected; the
+compiler reads them apart (`compile::compile_candidates`) through the same context shape, so each
+has the id it would have as a reflex, with no strength bar, and keeps one per habit (the same
+supporting sessions and step: the context nearest the step, then the shortest). The engine
+branches on `Compiled::candidate` before judging, and the learner writes the rest through
+`Store::write_candidates`. `select::Params::candidates` is off by default (only the learner's engine turns it on, from
+`LearnConfig::candidates`), so other callers of `select::learn` pay nothing for it.
+
 ---
 
 ## 10. Migration plan and milestones

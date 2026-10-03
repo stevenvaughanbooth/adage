@@ -3,7 +3,8 @@
 Adage learns while agents work. When a session stops or ends, the hook asks for the repository to
 be learned, and a background learner does it, usually within seconds. There is no `adage condition`
 to remember, and no daemon. This page is the contract for everything that watches it happen
-(`adage ui`, `adage watch`, scripts): the settings, the files, and the two streams to follow.
+(`adage ui`, `adage watch`, the Claude Code mod, scripts): the settings, the files, and the
+streams to follow.
 The design is in [Architecture §4.7.2](Adage%20—%20Architecture.md#472-live-learning).
 For current product behavior and execution boundaries, see [How Adage works](how-it-works.md).
 
@@ -75,6 +76,9 @@ control = 0.1             # share of sessions held out as the control arm (0–1
 | `ui.notices` | `daily` | — |
 | `runtime.control` | `0.1` | `ADAGE_CONTROL` (any number; 1 or more is shadow mode, as before) |
 | `runtime.rewrite` | `true` | — (`adage delegate rewrites on\|off`; see docs/execution.md) |
+| `runtime.routine_model` | `""` | — (the Claude Code mod sends a step that only does what a delivered directive says to this model, at low effort; the hook is told only that one is set) |
+| `runtime.predict_cap` | `6` | — (a person's setting: at most this many steps per session Adage takes in the model's place under a `predict` grant, 0 to 50; 0 predicts none) |
+| `skills.invoke` | `false` | — (a person's setting: the Claude Code mod may invoke an inert, accepted skill at a `skill` reflex's step, under its `predict` grant; see docs/training.md) |
 
 Environment variables win over the file, and the file over the defaults. An unparseable file, an
 unknown key, or an invalid value is reported by `adage config` and `adage doctor`, and that key
@@ -88,11 +92,31 @@ adage config set <key> <value>   validated, written atomically
 
 Keys that change what Adage learns from or how much evidence it needs (`learn.repos`,
 `learn.thresholds`, `learn.claude_projects`, `learn.codex_sessions`, `learn.opencode_exports`,
-`instincts.packs`) need
-a person: a terminal (or `ADAGE_ALLOW_NONINTERACTIVE=1`), never inside an agent session. Every
+`instincts.packs`), and the two that let Adage act in the model's place (`runtime.predict_cap`,
+`skills.invoke`), need
+a person: a terminal (or `ADAGE_ALLOW_NONINTERACTIVE=1`), never inside an agent session, and
+never a press from the Claude Code session (a guarded key is set at a terminal only). Every
 other key only tunes Adage or turns something down, and can be set from anywhere.
 
 `config set` keeps every other key but not comments. Paths are absolute or start with `~/`.
+
+### Turning it off in a repository
+
+```text
+adage off    write <root>/.adage/disabled: every hook in this repository prints and records nothing
+adage on     remove it (a person's decision: at a terminal, or with a press from the session)
+```
+
+`adage off` turns something down, so it runs anywhere, an agent session included (the Claude Code
+mod's `/adage off` runs it); it is idempotent. `adage on` refuses inside an agent session with the
+person-only message and leaves the file, unless a person answered the mod's ask: then the verb
+reads a **press** on stdin, a single-use token the binary issued to the mod before the agent's
+first act, and behaves as at a terminal (docs/execution.md, "Deciding from the session"). The
+press is asked for (`adage hook claude Press`) before the kill switches, so a repository that is
+off can still be asked to turn back on. Outside a repository each prints one line and exits 0.
+`ADAGE_DISABLE=1` turns every hook off wherever it is set, whatever the file says. While a
+repository is off, the status card's first line says so and its `next` leads with `adage on`;
+`adage doctor` reports the switch.
 
 ## How it runs
 
@@ -160,6 +184,33 @@ cost `{usd?, source: harness|priced@<date>|none}`, `asked_for_help`; no prompt, 
 `<slug>.seen.json` (which transcripts were summarised, by a hash of their path) and
 `<slug>.summary.json` (the savings estimate every surface reads; `adage savings --json`).
 
+`$ADAGE_HOME/ledger/.harness.jsonl` holds what a harness reported about its own sessions, one line
+per session (a later note replaces an earlier one), written only by `adage ledger note`:
+
+```json
+{"session_id":"…","repo":"github.com/acme/billing","harness":"claude-code","harness_version":"2.1.288",
+ "started_at":1790000000000,"ended_at":1790000600000,
+ "steps":[{"index":0,"model":"claude-sonnet-4-6","input":12,"output":340,"cache_read":51000,"cache_write":900,"predicted":false},
+          {"index":1,"model":"claude-sonnet-4-6","input":0,"output":0,"cache_read":0,"cache_write":0,"predicted":true}],
+ "cost_usd":0.0412,"hook_ms":[3,2,4],"noted_at":1790000600100}
+```
+
+`adage ledger note` reads that object on stdin (without `noted_at`; `repo` may be the session's
+working directory, resolved to its key; times may be RFC 3339 strings; `cost_usd`, `hook_ms`,
+token counts and `predicted` may be left out). It is accepted only for `harness: "claude-code"`,
+a version string, and a session whose spool holds a `session_start` in that repository: exit 0,
+nothing printed; otherwise exit 2 with the reason on stderr and nothing written. It is allowed
+inside an agent session (it tunes nothing). Whenever the savings estimate is refreshed (the
+learner after a learn, `adage savings`, the note itself) the repository's notes are merged into
+its `<slug>.jsonl` under `<slug>.lock`: the note's tokens, models, times and `model_turns` (only
+the steps the model answered) replace the transcript's, its cost too (`source: harness` when the
+engine reported `cost_usd`, else the steps priced from the table), and the transcript's tool
+calls, first edit and `asked_for_help` are kept. A later transcript pass never keeps the session
+for good: the next merge lays the note over it again. A step with `predicted: true` is one Adage
+took in the model's place; the estimate reads it as a model turn not spent, `adage savings
+--json` lists the reported sessions under `harness` and counts the spools' predicted steps under
+`counts.predicted_steps`. Notes of sessions that ended over 180 days ago are dropped.
+
 A request is **pending** while `requested_at > processed`. A learner is **running** while its lock
 is held (test with a shared lock, released at once: `adage_store::lock::is_held`), and **waiting**
 while `after` is in the future. `adage doctor` reports a learner holding its lock for over 15
@@ -169,6 +220,41 @@ Other files: `$ADAGE_HOME/tracks.lock` (one writer of tracks and index at a time
 `adage condition`, review decisions, `adage add`), and `$ADAGE_HOME/cache/sessions/` (the parse cache:
 `manifest.json` maps each transcript to its size, modification time and repository root, and
 `<hash>.json` holds its parsed session; owner-only, rebuilt on a new build, safe to delete).
+
+**Candidates.** `$ADAGE_HOME/tracks/<slug>/learned/candidates.json`, replaced atomically by every
+learn of the repository (owner-only), written only through the learner's store
+(`adage_learn::store::Store::write_candidates`): the sequences counted below the support a reflex
+needs, and the nascent reflexes with a context trigger, which wait for review. Counted, never
+delivered.
+
+```json
+{"schema":"adage-candidates/1","repo":"github.com/acme/billing","s_min":3,
+ "candidates":[{"id":"run-69ef44","trigger":{"on":"context","items":[…],"within":8},
+                "step":{"do":"run","command":"make lint"},"support":2,"days":2,
+                "last_seen":"2026-09-09","review":false,"sessions":["…","…"]}],
+ "formed":[{"id":"run-1a5b55","sessions":["…"]}]}
+```
+
+`s_min` is the support a reflex needs in this repository (`learn.min_support`, or 1% of its
+traces when that is more); a candidate has at least `s_min − 2` and never fewer than two
+(`review: true` ones have formed). `id` is the id the same pattern gets as a reflex. `sessions`
+are its supporting traces; `formed` lists last learn's candidates that this learn made reflexes,
+with the traces that tipped each. At most 128 per repository. The index compiles each repository's
+valid candidates (`candidates`, a list per repository key, without `sessions`; never a route's id)
+with their own context net (`candidate_contexts`) and their words in the fast path's triggers;
+neither is part of the index's `generation`. `adage status --json` lists them under
+`candidates`, each in the reflex shape with `state: "candidate"` (or the nascent reflex's own),
+`directive: null`, `candidate: {support, s_min, days, last_seen, review}`, and `next` (the review
+command, for one that waits for review).
+
+**The index's format, and two binaries on one machine.** `index.json` carries `format`, the
+newest thing it may hold: absent or `0` before skill reflexes, `1` once a reflex may be a `skill`
+step (`adage_tracks::index::INDEX_FORMAT`). A binary that cannot parse an index whose `format` is
+newer than its own reads it as no reflexes and never rebuilds it (that would undo the newer
+binary's work), and `adage doctor` says the index was written by a newer Adage. The rule: every
+`adage` that hooks call on a machine (an npm install on `PATH`, the Claude Code plugin's) must be
+at least as new as the newest that learned there; update the older one rather than letting the
+two take turns. A damaged index (truncated, edited) is still rebuilt at the next session start.
 
 ## Streams to follow
 
@@ -198,7 +284,9 @@ A learn, one line per repository learned:
 | `repo` | Repository key; `null` only for a manual run that found no usable session |
 | `sessions_read` | Transcripts read (an automatic run counts only its repository's) |
 | `sessions_used` | This repository's sessions with steps |
-| `changes[].change` | `new` (in service, was not), `nascent` (waits for approval in `adage review`), `extinguished`, `dormant` (kept on its last evidence because it steered its own evidence away; prime at most), `strength`, `evidence` (sessions of support or opportunity changed), `proposal` (a pinned route has a proposed change) |
+| `changes[].change` | `new` (in service, was not), `nascent` (waits for approval in `adage review`), `extinguished`, `dormant` (kept on its last evidence because it steered its own evidence away; prime at most), `strength`, `evidence` (sessions of support or opportunity changed), `proposal` (a pinned route has a proposed change), `candidate` (a sequence counted below a reflex's support, new or seen in more or fewer traces; see Candidates above) |
+| `changes[].support`, `s_min` | On a `candidate`: the traces it was seen in, and the support a reflex needs |
+| `changes[].sessions` | On a `new` reflex that was a candidate at the last learn: the session ids of the traces that tipped it |
 | `changes[].from`, `to` | Strengths (`fire`, `prime`, `inhibit`) or `null`: `new`/`nascent` have only `to`, `extinguished` only `from`, `strength` both |
 | `changes[].summary` | Fixed template text |
 | `version` … `repos` | The fields every line had before live learning, unchanged |
@@ -232,3 +320,60 @@ it for `treated`, and 1 when `ADAGE_ARM` forced the arm (absent in records writt
 directive carries its route's delivery shape as `kind` (`run`, `avoid`, `read-batch`, `obligation`,
 `sequence` or `advise`; records written before Track G G5 hold the removed track kinds). `observed` holds canonical template keys, not raw commands, and no prompt text is recorded. Events
 the no-match fast path skips leave no record.
+
+### The live feed: `adage watch --follow --json`
+
+```text
+adage watch --follow --json [--repo <path>] [--session <id>] [--since <cursor>] [--stdin eof|ignore]
+```
+
+The live pane's sources (the spools above, `learn.log`, the health lamps, the learner's queue
+files) as one JSON object per line on stdout, for a program; nothing is drawn and no escape
+sequence is written. Records and log lines are those of the repository (`--repo`, else the
+current directory's; outside a repository, every one). A new follower first sends recent history
+(the same backfill as `adage watch`), then follows. Every line has `kind` and `cursor`:
+
+```json
+{"kind":"decision","cursor":"1~…","ts":1790000000000,"session":"8f3c…","harness":"claude","event":"tools",
+ "repo":"github.com/acme/billing","acts":[{"act":"directed","route":"codegen-after-schema","strength":"fire",
+ "detail":"make gen","instinct":false},{"act":"followed","route":"lookup-work-item"}],"observed":2,
+ "unrouted":false,"texts":[{"route":"codegen-after-schema","text":"<adage-reflex …>…"}]}
+{"kind":"learn","cursor":"1~…","ts":…,"repo":"…","line":{…the learn.log object…},
+ "ticks":[{"text":"…","short":"…","tone":"run|change|error","strength":"fire"|null,"repo":"…"}]}
+{"kind":"health","cursor":"1~…","lights":[{"label":"hooks claude","lamp":"ok","hint":null}],
+ "state":{"word":"healthy|check|problem","lamp":"fire|prime|inhibit","check"?:"…"},"off":false}
+{"kind":"learner","cursor":"1~…","repo":"…","state":"waiting|running|idle","next_at":1790000038000|null}
+```
+
+`event` is the feed's word (`prompt`, `tools`, `failure`, `stop`, `start`, `end`, `pretool`,
+`step`). `act` is `directed`, `withheld`, `followed`, `ignored`, `misfired`, `met`, `unaided`,
+`not_reached`, `stop_request`, `stop_withheld`, `pretool` (`rewrite`, `what`, `interpreter`,
+`withheld`), `predicted` (a step Adage took in the model's place), `would_predict`, `noticed`
+(`candidate`, `support`, `s_min`, `review`: a candidate this event's context completed, once per
+session, in both arms alike), `answered` (a call answered by a receipt, so the command did not
+run: `receipt` the operation, `command` the run that answered it, `summary`, `tests` it ran that
+the call selects, `more`, `ran_at`, `ago`), `recovery` (an action was interrupted and actions in
+the worktree wait for a person: `operation` and `command`, the `adage-exec recover … --acknowledge`
+to run once the worktree is inspected, both null when the journal itself could not be read; kept
+in either arm), or `judged` (`what`: another judgement, such as `substituted`). `tool_use_ids`
+names the calls a row is about, where the harness gave ids: a `pretool` row's one call, a tool
+batch's calls in order. `control: true` appears on another session's
+row when that session is in the control arm. A `health` line comes when the lamps change (checked
+every 3 s), a `learner` line when the learner's state does: `waiting` while `<slug>.spawn.json`'s
+`after` is in the future (`next_at`), `running` while its lock is held, else `idle`.
+
+**`--session <id>`**, the session the reader runs in: its rows never carry `control`, a withheld
+act (`withheld`, `unaided`, `not_reached`, `stop_withheld`, `would_predict`, a withheld
+`pretool`), nor, in the control arm, any judgement (a `noticed` act stays: both arms record it);
+a row left with nothing after that is not
+sent, so a control session's stream is what a treated session with nothing fired would send.
+
+**Cursors.** `cursor` is opaque: the position just after its line in every file read. A new
+process started with `--since <cursor>` sends exactly the lines after that one (then follows), so
+a reader that restarts its follower loses and repeats nothing. A cursor from another format is
+refused (exit 2 with a usage line).
+
+The follower ends with exit 0 when its stdin, a pipe, reaches end of file (a follower started with
+no stdin follows until stopped), on SIGTERM, when its parent process dies, or when stdout is
+closed. With `--stdin ignore` it never reads stdin, for a parent that closes it at spawn (the
+Claude Code mod); the other exits stay.

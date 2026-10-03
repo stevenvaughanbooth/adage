@@ -572,6 +572,8 @@ pub fn facts(a: &Annotated, embedder: &Embedder) -> SessionFacts {
                 access.push((ev, path.clone(), kind == ActKind::Edit));
                 sources.path(path, ev);
             }
+            // Session facts are commands, files and values; a skill used is none of them.
+            Step::Skill { .. } => {}
         }
     }
     // Prompts typed after the last step.

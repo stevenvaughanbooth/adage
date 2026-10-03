@@ -24,7 +24,7 @@ use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-use crate::request::{ExecRequest, Level, Origin};
+use crate::request::{ExecRequest, GrantMode, Level, Origin};
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -245,9 +245,31 @@ pub fn load(adage_home: &Path) -> Result<Policy> {
     Ok(p)
 }
 
+/// The policy as it would be with the personal file raised to E2 the way `set_max_level` raises
+/// it (automatic approval off, the sandbox required), for staging a first E2 grant on a machine
+/// still at E1 (architecture §3.12: the trial store only, nothing written). `None` when the
+/// managed file caps execution at E1, so no person here can raise it.
+pub fn trial_e2(adage_home: &Path) -> Result<Option<Policy>> {
+    let personal_path = personal_path(adage_home);
+    let mut personal = read(&personal_path)?.unwrap_or_default();
+    personal.exec.max_level = Some("E2".into());
+    personal.exec.auto_approve = Some("off".into());
+    personal.exec.require_sandbox = Some(true);
+    let managed_path = managed_path();
+    let managed = read(&managed_path)?;
+    let mut p = merge(Some(&personal), managed.as_ref())?;
+    if managed.is_some() {
+        p.sources.push(format!("{} (managed)", managed_path.display()));
+    }
+    Ok((p.max_level == Level::E2).then_some(p))
+}
+
 impl Policy {
     /// Why policy refuses this request (with its locally classified effect), or `Ok`.
     pub fn permits(&self, req: &ExecRequest, classified: Effect) -> Result<(), String> {
+        if req.mode == GrantMode::Predict {
+            self.permits_prediction(req, classified)?;
+        }
         if req.level > self.max_level {
             return Err(format!("policy caps execution at {}", self.max_level.as_str().to_uppercase()));
         }
@@ -269,6 +291,35 @@ impl Policy {
             if !self.publishers_allow.is_empty() && !self.publishers_allow.contains(s) {
                 return Err(format!("publisher {s} is not in policy's allow list"));
             }
+        }
+        Ok(())
+    }
+
+    /// What a predicted call needs beyond every other gate (plan §2.2 item 3). Making a call in
+    /// the agent's place is acting from a hook, which is what `max_level = "E2"` opts in to; and
+    /// only the effects an E2 action may have: at most regenerate, never a denied one, and a
+    /// command the table classifies as changing the environment only under the team's opt-in. A
+    /// script's classification is always environment (any path as the program is), so for a
+    /// scripted route the effect the route learned stands, as it does for an E2 action.
+    fn permits_prediction(&self, req: &ExecRequest, classified: Effect) -> Result<(), String> {
+        if self.max_level < Level::E2 {
+            return Err(format!(
+                "policy caps execution at {}; a call made in the agent's place needs E2",
+                self.max_level.as_str().to_uppercase()
+            ));
+        }
+        if req.effect > Effect::Regenerate {
+            return Err(format!("a {} step is never predicted (at most regenerate)", req.effect.as_str()));
+        }
+        let scripted = !req.scripts.is_empty();
+        if !scripted && classified > Effect::Environment {
+            return Err(format!("its command is classified {}, which is never predicted", classified.as_str()));
+        }
+        if !scripted && classified == Effect::Environment && !self.allow_environment_actions {
+            return Err(
+                "its command changes the environment, which needs the managed policy's opt-in (exec.allow_environment_actions)"
+                    .into(),
+            );
         }
         Ok(())
     }
@@ -307,11 +358,60 @@ mod tests {
             origin: Origin::Local,
             route_exec_digest: None,
             action: None,
+            mode: Default::default(),
         };
         req.output.fields = serde_json::from_str(r#"{"result":{"type":"text","stdout":true}}"#).unwrap();
         assert!(Policy::default().permits(&req, Effect::Observe).unwrap_err().contains("allow_raw_output"));
         let allowed = merge(Some(&raw("[exec]\nallow_raw_output = true\n")), None).unwrap();
         assert!(allowed.permits(&req, Effect::Observe).is_ok());
+    }
+
+    /// T-C2-03: a predict request needs E2, an effect of at most regenerate that policy does not
+    /// deny, and, for a command the table says changes the environment, the team's opt-in.
+    #[test]
+    fn a_prediction_needs_e2_and_an_allowed_effect() {
+        let req = |argv: &[&str], effect: Effect, scripted: bool| ExecRequest {
+            repo_root: "/repo".into(),
+            project_python: None,
+            argv: argv.iter().map(|s| s.to_string()).collect(),
+            inputs: Default::default(),
+            contracts: Default::default(),
+            effect,
+            level: Level::E2,
+            output: Default::default(),
+            scripts: if scripted {
+                vec![crate::request::ScriptRef { path: "scripts/x".into(), sha256: "00".into() }]
+            } else {
+                vec![]
+            },
+            profile: crate::sandbox::Profile::for_level(Level::E2),
+            labels: Default::default(),
+            origin: Origin::Local,
+            route_exec_digest: None,
+            action: None,
+            mode: GrantMode::Predict,
+        };
+        let e2 = merge(Some(&raw("[exec]\nmax_level = \"E2\"\n")), None).unwrap();
+        let gen = req(&["make", "gen"], Effect::Regenerate, false);
+        assert!(Policy::default().permits(&gen, Effect::Regenerate).unwrap_err().contains("caps execution at E1"));
+        assert!(e2.permits(&gen, Effect::Regenerate).is_ok());
+        assert!(e2.permits(&req(&["make", "test"], Effect::Verify, false), Effect::Verify).is_ok());
+        for effect in [Effect::Environment, Effect::Author, Effect::Publish] {
+            assert!(e2.permits(&req(&["make", "gen"], effect, false), Effect::Regenerate).is_err(), "{effect:?}");
+        }
+        let denied =
+            merge(Some(&raw("[exec]\nmax_level = \"E2\"\n[effects]\ndeny = [\"regenerate\"]\n")), None).unwrap();
+        assert!(denied.permits(&gen, Effect::Regenerate).unwrap_err().contains("denies the regenerate effect"));
+        let install = req(&["npm", "install"], Effect::Regenerate, false);
+        assert!(e2.permits(&install, Effect::Environment).unwrap_err().contains("allow_environment_actions"));
+        let team =
+            merge(Some(&raw("[exec]\nmax_level = \"E2\"\n")), Some(&raw("[exec]\nallow_environment_actions = true\n")))
+                .unwrap();
+        assert!(team.permits(&install, Effect::Environment).is_ok());
+        assert!(e2.permits(&install, Effect::Publish).is_err(), "never above environment");
+        // A script's program is always classified environment; its route's effect stands.
+        let lookup = req(&["./scripts/x", "{id}"], Effect::Observe, true);
+        assert!(e2.permits(&lookup, Effect::Environment).is_ok());
     }
 
     #[test]

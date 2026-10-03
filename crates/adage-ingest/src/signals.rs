@@ -150,6 +150,7 @@ impl Signals {
             commands: named.commands,
             avoided: named.avoided,
             files: named.files,
+            skills: named.skills,
             all,
         });
     }

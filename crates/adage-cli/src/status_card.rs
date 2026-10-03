@@ -90,18 +90,37 @@ fn plural(n: usize, one: &str, many: &str) -> String {
     format!("{n} {}", if n == 1 { one } else { many })
 }
 
+/// The health lamp as data: its word, its role, and the check it names.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Lamp {
+    /// `healthy`, `check` or `problem`.
+    pub word: &'static str,
+    /// The lamp's role: `fire`, `prime` or `inhibit`.
+    pub role: &'static str,
+    /// The worst check's label, unless healthy.
+    pub check: Option<String>,
+}
+
 /// The health lamp: the worst doctor status, and the single fix line for it.
-fn health(paths: &Paths, root: Option<&Path>) -> (Line, Option<Line>) {
+fn health(paths: &Paths, root: Option<&Path>) -> (Lamp, Line, Option<Line>) {
     let checks = doctor::checks(paths, root);
     let worst =
         checks.iter().find(|c| c.status == Status::Fail).or_else(|| checks.iter().find(|c| c.status == Status::Warn));
     match worst {
-        None => (Line::new().glyph(Role::Fire, Glyph::Lamp).text(" healthy"), None),
+        None => (
+            Lamp { word: "healthy", role: "fire", check: None },
+            Line::new().glyph(Role::Fire, Glyph::Lamp).text(" healthy"),
+            None,
+        ),
         Some(c) => {
-            let (role, word) =
-                if c.status == Status::Fail { (Role::Inhibit, "problem") } else { (Role::Prime, "check") };
+            let (role, word, name) = if c.status == Status::Fail {
+                (Role::Inhibit, "problem", "inhibit")
+            } else {
+                (Role::Prime, "check", "prime")
+            };
             let (line, command) = brief(c);
             (
+                Lamp { word, role: name, check: Some(c.label.clone()) },
                 Line::new().glyph(role, Glyph::Lamp).text(format!(" {word}: {}", c.label)),
                 Some(arrow(Line::new().text(line), &command)),
             )
@@ -457,14 +476,52 @@ pub fn embeddings(paths: &Paths) -> (String, bool) {
     }
 }
 
-/// Bare `adage`.
-pub fn run(paths: &Paths) -> Result<()> {
+/// Bare `adage` (`--json`: the same card as data; `--for-session`: drawn inside an agent
+/// session, where `adage ui` refuses, so `/adage watch` stands in for it).
+pub fn run(args: &[String], paths: &Paths) -> Result<()> {
+    let json = args.iter().any(|a| a == "--json");
+    let for_session = args.iter().any(|a| a == "--for-session");
+    let c = card(paths, std::env::current_dir().ok().as_deref(), for_session);
+    if json {
+        let mut v = c.json();
+        let cfg = adage_store::config::load(paths).config;
+        v["ui"] = ui_json(&cfg);
+        // The mod's routing setting (`runtime.routine_model`): the mod reads which model here and
+        // tells the binary only that one is set.
+        v["runtime"] = serde_json::json!({ "routine_model": cfg.runtime_routine_model });
+        v["recovery"] = recovery_json(paths, std::env::current_dir().ok().as_deref());
+        println!("{}", serde_json::to_string_pretty(&v)?);
+        return Ok(());
+    }
     let mut o = Out::stdout();
-    for l in card(paths, std::env::current_dir().ok().as_deref()) {
+    for l in c.lines() {
         o.line(&l)?;
     }
     o.flush()?;
     Ok(())
+}
+
+/// What the Claude Code mod may draw beside Claude Code's own lines (`ui.spinner`, `ui.turn_line`,
+/// `ui.noticed`, each off by default): it draws a line only when its key is on here.
+pub fn ui_json(cfg: &adage_store::config::Config) -> serde_json::Value {
+    serde_json::json!({ "spinner": cfg.ui_spinner, "turn_line": cfg.ui_turn_line, "noticed": cfg.ui_noticed })
+}
+
+/// An interrupted action that pauses actions in this worktree (ux-design §9.9): `{operation,
+/// route, command}`, the command a person runs once they have inspected the worktree; `{operation:
+/// null, …}` when the execution journal cannot be read; `null` when nothing waits (or outside a
+/// repository).
+fn recovery_json(paths: &Paths, cwd: Option<&Path>) -> serde_json::Value {
+    let Some(root) = cwd.and_then(adage_core::repo::find_root) else { return serde_json::Value::Null };
+    match adage_exec::journal::pending(&paths.root, &root) {
+        Ok(Some(r)) => serde_json::json!({
+            "operation": r.id, "route": r.route,
+            "command": format!("adage-exec recover --id {} --acknowledge", r.id),
+        }),
+        Ok(None) => serde_json::Value::Null,
+        Err(_) if !adage_exec::stage::spool_path(&paths.root).exists() => serde_json::Value::Null,
+        Err(_) => serde_json::json!({ "operation": null, "route": null, "command": null }),
+    }
 }
 
 /// A row in the key column (`kv`), or its continuation when `key` is empty.
@@ -473,12 +530,12 @@ fn kv(key: &str, value: Line) -> Line {
 }
 
 /// `next  command · why`, then further commands aligned under it.
-fn next(rows: &[(&str, &str)]) -> Vec<Line> {
+fn next(rows: &[(String, String)]) -> Vec<Line> {
     rows.iter()
         .enumerate()
         .map(|(i, (cmd, why))| {
             let l = if i == 0 { Line::new().bold(Role::Accent, "next") } else { Line::new() };
-            l.pad_to(6).cmd(*cmd).sep().quiet(*why)
+            l.pad_to(6).cmd(cmd).sep().quiet(why)
         })
         .collect()
 }
@@ -487,48 +544,118 @@ fn header(version: &str) -> Line {
     Line::new().bold(Role::Accent, "adage").text(" ").quiet(version)
 }
 
-/// The card, as lines to print through [`Out`].
-pub fn card(paths: &Paths, cwd: Option<&Path>) -> Vec<Line> {
+/// One row of the card's body.
+#[derive(Debug, Clone)]
+pub enum Row {
+    /// A key in the key column (empty: it continues the row above) and its value.
+    Kv(String, Line),
+    /// A line of its own (the repositories listed outside one, a sentence).
+    Plain(Line),
+}
+
+/// The status card: a header, rows, and what to run next. Printed as lines, or as JSON with the
+/// same rows one to one (`adage --json`, for the Claude Code mod's `/adage`).
+#[derive(Debug, Clone)]
+pub struct Card {
+    pub header: Line,
+    /// The repository key, inside one.
+    pub repo: Option<String>,
+    pub connected: bool,
+    /// Adage is off here (`.adage/disabled`, or `ADAGE_DISABLE=1`).
+    pub off: bool,
+    /// The health lamp (none until an agent is connected).
+    pub health: Option<Lamp>,
+    pub rows: Vec<Row>,
+    /// `(command, why)`.
+    pub next: Vec<(String, String)>,
+}
+
+impl Card {
+    /// The card as lines to print through [`Out`].
+    pub fn lines(&self) -> Vec<Line> {
+        let mut s = vec![self.header.clone(), Line::new()];
+        for r in &self.rows {
+            s.push(match r {
+                Row::Kv(k, v) => kv(k, v.clone()),
+                Row::Plain(l) => l.clone(),
+            });
+        }
+        s.push(Line::new());
+        s.extend(next(&self.next));
+        s
+    }
+
+    /// The card as data: every text as `adage` prints it without colour.
+    pub fn json(&self) -> serde_json::Value {
+        use serde_json::json;
+        let rows: Vec<serde_json::Value> = self
+            .rows
+            .iter()
+            .map(|r| match r {
+                Row::Kv(k, v) => json!({ "key": k, "text": v.plain().trim_end() }),
+                Row::Plain(l) => json!({ "text": l.plain().trim_end() }),
+            })
+            .collect();
+        json!({
+            "version": env!("CARGO_PKG_VERSION"),
+            "header": self.header.plain().trim_end(),
+            "repo": self.repo,
+            "connected": self.connected,
+            "off": self.off,
+            "health": self.health.as_ref().map(|h| json!({ "word": h.word, "lamp": h.role, "check": h.check })),
+            "rows": rows,
+            "next": self.next.iter().map(|(c, w)| json!({ "command": c, "why": w })).collect::<Vec<_>>(),
+        })
+    }
+}
+
+/// The card for the repository at `cwd` (or every repository, outside one).
+pub fn card(paths: &Paths, cwd: Option<&Path>, for_session: bool) -> Card {
     let now = crate::learnlog::now_ms();
     let version = env!("CARGO_PKG_VERSION");
     let root = cwd.and_then(adage_core::repo::find_root);
     let index = Index::load(&paths.index());
-    let mut s = Vec::new();
+    let off = crate::switch::is_off(root.as_deref());
+    let mut rows: Vec<Row> = Vec::new();
     if !connected(paths, root.as_deref()) {
-        s.push(header(version).sep().push(Role::Prime, "not connected to any agent yet"));
-        s.push(Line::new());
+        let header = header(version).sep().push(Role::Prime, "not connected to any agent yet");
         let found: Vec<&str> =
             crate::detect::harnesses().into_iter().filter(|h| h.found()).map(|h| h.harness).collect();
         let mut steps: Vec<(String, String)> = Vec::new();
         if found.contains(&"claude-code") {
-            s.push(kv(
-                "claude-code",
+            rows.push(Row::Kv(
+                "claude-code".into(),
                 Line::new()
                     .quiet("in Claude Code: ")
                     .cmd("/plugin marketplace add stevenvaughanbooth/adage")
                     .quiet(", then ")
                     .cmd("/plugin install adage@adage"),
             ));
-            s.push(kv("", Line::new().quiet("or, from here: ").cmd("adage install claude-code --write --scope user")));
+            rows.push(Row::Kv(
+                String::new(),
+                Line::new().quiet("or, from here: ").cmd("adage install claude-code --write --scope user"),
+            ));
         }
         for h in found.iter().filter(|h| **h != "claude-code") {
             steps.push((format!("adage install {h} --write --scope user"), format!("connect {h}")));
-            s.push(kv(h, Line::new().quiet("found")));
+            rows.push(Row::Kv(h.to_string(), Line::new().quiet("found")));
         }
         if found.is_empty() {
-            s.push(Line::new().quiet("No agent found: install Claude Code, Codex or OpenCode, then run adage again."));
+            rows.push(Row::Plain(
+                Line::new().quiet("No agent found: install Claude Code, Codex or OpenCode, then run adage again."),
+            ));
         }
-        s.push(Line::new());
         steps.push(("adage init".into(), "guided setup: hooks, model, first conditioning".into()));
         steps.push(("adage doctor".into(), "check binary, data, hooks and model".into()));
-        let rows: Vec<(&str, &str)> = steps.iter().map(|(a, b)| (a.as_str(), b.as_str())).collect();
-        s.extend(next(&rows));
-        return s;
+        return Card { header, repo: None, connected: false, off, health: None, rows, next: steps };
     }
-    let (dot, fix) = health(paths, root.as_deref());
+    let (lamp, dot, fix) = health(paths, root.as_deref());
+    // Off here: the first line says so in place of the lamp (docs/claude-mod/ux-design.md §4.13).
+    let dot = if off { Line::new().glyph(Role::Ink3, Glyph::Off).text(" off in this repository") } else { dot };
     let (embed, fallback) = embeddings(paths);
     let mut review = None;
-    match &root {
+    let mut repo_key = None;
+    let header = match &root {
         Some(root) => {
             let repo = crate::ui::health::repo_key(paths, root, &index);
             let mut h = header(version).sep().text(&repo);
@@ -536,8 +663,6 @@ pub fn card(paths: &Paths, cwd: Option<&Path>) -> Vec<Line> {
             if root.join(".git").is_file() {
                 h = h.quiet(format!(" (worktree {})", adage_core::repo::dir_name(root)));
             }
-            s.push(h.sep().extend(dot));
-            s.push(Line::new());
             let (steps, _) = waiting(paths, &repo);
             if steps > 0 {
                 review = Some(if steps == 1 {
@@ -547,18 +672,18 @@ pub fn card(paths: &Paths, cwd: Option<&Path>) -> Vec<Line> {
                 });
             }
             for (k, v) in repo_rows(paths, &repo, root, &index, now) {
-                s.push(kv(k, v));
+                rows.push(Row::Kv(k.to_string(), v));
             }
+            repo_key = Some(repo);
+            h.sep().extend(dot)
         }
         None => {
-            s.push(header(version).sep().extend(dot));
-            s.push(Line::new());
             let mut repos: BTreeMap<&str, ()> = BTreeMap::new();
             for r in &index.routes {
                 repos.insert(r.repo.as_str(), ());
             }
             if repos.is_empty() {
-                s.push(Line::new().quiet("no reflexes yet: start an agent session in a repository"));
+                rows.push(Row::Plain(Line::new().quiet("no reflexes yet: start an agent session in a repository")));
             }
             let width = repos.keys().map(|r| r.len()).max().unwrap_or(0) + 2;
             for repo in repos.keys() {
@@ -571,30 +696,38 @@ pub fn card(paths: &Paths, cwd: Option<&Path>) -> Vec<Line> {
                 if let Some(x) = savings::read(paths, repo) {
                     l = l.pad_to(width + 14).extend(savings_brief(&x));
                 }
-                s.push(l);
+                rows.push(Row::Plain(l));
             }
+            header(version).sep().extend(dot)
         }
-    }
+    };
     if let Some(f) = fix {
-        s.push(kv("fix", f));
+        rows.push(Row::Kv("fix".into(), f));
     }
     let mut e = Line::new().text(embed);
     if fallback {
         e = e.faint("  (no embedding model: hashed fallback)");
     }
-    s.push(kv("embeddings", e));
-    s.push(Line::new());
-    let mut rows: Vec<(&str, &str)> = Vec::new();
-    if let Some(why) = &review {
-        rows.push(("adage review", why));
+    rows.push(Row::Kv("embeddings".into(), e));
+    let mut next_rows: Vec<(String, String)> = Vec::new();
+    if off && root.is_some() {
+        let on = if for_session { "/adage on" } else { "adage on" };
+        next_rows.push((on.into(), format!("Adage is off in this repository ({})", crate::switch::MARKER)));
     }
-    rows.extend([
-        ("adage ui", "review, health and settings"),
-        ("adage map", "explore reflexes in the browser"),
-        ("adage doctor", "check binary, data, hooks and model"),
+    if let Some(why) = review {
+        next_rows.push(("adage review".into(), why));
+    }
+    // `adage ui` refuses inside an agent session; the mod's pane is the same information.
+    next_rows.push(if for_session {
+        ("/adage watch".into(), "live rows, reflexes and health".into())
+    } else {
+        ("adage ui".into(), "review, health and settings".into())
+    });
+    next_rows.extend([
+        ("adage map".into(), "explore reflexes in the browser".into()),
+        ("adage doctor".into(), "check binary, data, hooks and model".into()),
     ]);
-    s.extend(next(&rows));
-    s
+    Card { header, repo: repo_key, connected: true, off, health: Some(lamp), rows, next: next_rows }
 }
 
 #[cfg(test)]

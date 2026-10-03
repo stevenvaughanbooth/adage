@@ -346,6 +346,12 @@ pub fn load(paths: &Paths, root: Option<&Path>) -> Result<Routes> {
             .any(|r| r.binary.as_ref().and_then(|p| p.file_stem()).is_some_and(|name| name == "adage-exec"));
     let observe_only = adage_store::config::load(paths).config.runtime_control >= 1.0;
     let current_repo = root.map(adage_core::repo::repo_key);
+    // The predict grants that hold in this checkout now (current key, policy, the switch on).
+    let predicted = root
+        .zip(current_repo.as_deref())
+        .map(|(r, key)| adage_exec::hook::predict_grants(key, r, &index, paths))
+        .unwrap_or_default();
+    let predict_off = adage_exec::hook::predict_off(paths).exists();
     for row in &mut rows.rows {
         let label = format!("{}/{}", row.reference, row.id);
         let track_label = format!("{}/{}", row.track, row.id);
@@ -386,8 +392,28 @@ pub fn load(paths: &Paths, root: Option<&Path>) -> Result<Routes> {
         let grants: Vec<_> = store
             .approvals
             .iter()
-            .filter(|a| a.key.repo == row.repo && (a.route == label || a.route == track_label))
+            .filter(|a| {
+                a.key.repo == row.repo && (a.route == label || a.route == track_label) && a.key.mode.is_execute()
+            })
             .collect();
+        // A predict grant alone: Adage makes the call in the agent's place, adage-exec runs nothing.
+        let predict = store.approvals.iter().any(|a| {
+            a.key.repo == row.repo && (a.route == label || a.route == track_label) && !a.key.mode.is_execute()
+        });
+        if grants.is_empty() && predict {
+            let here = root.is_some() && current_repo.as_deref() == Some(row.repo.as_str());
+            let holds = predicted.iter().any(|(t, r)| *t == row.track && *r == row.id);
+            (view.mode, view.reason) = if predict_off {
+                ("Paused".into(), "Predict grant · calls in the agent's place are off on this machine".into())
+            } else if holds {
+                ("Predicted".into(), "Predict grant · Adage makes this call in the agent's place".into())
+            } else if here {
+                ("Needs review".into(), "Predict grant no longer matches the command, its contracts or scripts".into())
+            } else {
+                ("Grant saved".into(), "Open this repository to validate its scripts and scope".into())
+            };
+            continue;
+        }
         if grants.is_empty() {
             if let Some(r) =
                 store.revoked.iter().rev().find(|r| r.repo == row.repo && (r.route == label || r.route == track_label))
@@ -504,6 +530,7 @@ pub fn load(paths: &Paths, root: Option<&Path>) -> Result<Routes> {
             s.approvals.iter().any(|a| {
                 a.key.repo == row.repo
                     && a.key.level == adage_exec::Level::E2
+                    && a.key.mode.is_execute()
                     && (a.route == format!("{}/{}", row.reference, row.id)
                         || a.route == format!("{}/{}", row.track, row.id))
             })
@@ -656,6 +683,7 @@ mod tests {
             basis: Value::Null,
             auto: false,
             terms: None,
+            via: None,
         });
         store.save(&approvals::path(&paths.root)).unwrap();
         assert_eq!(view().mode, "Suggest", "grant does not turn the executing hook on");
@@ -694,5 +722,70 @@ mod tests {
         assert_eq!(row.more.execution.unwrap().successful, 5);
         let counts = crate::status_card::reflexes(&Index::load(&paths.index()), &repo);
         assert_eq!((counts.total(), counts.execution_only), (1, 1));
+    }
+
+    /// P2's open issue 3: a predict grant alone shows in the execution column, by whether it holds
+    /// in this checkout now.
+    #[test]
+    fn execution_view_shows_a_predict_grant() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("project");
+        std::fs::create_dir_all(root.join("scripts")).unwrap();
+        let script = root.join("scripts/lookup");
+        std::fs::write(&script, "exit 0\n").unwrap();
+        let repo = adage_core::repo::repo_key(&root);
+        let paths = Paths::at(temp.path().join("home"));
+        let track = Track {
+            manifest: Manifest {
+                track: TrackInfo {
+                    name: "project/workflow".into(),
+                    version: "0.1.0".into(),
+                    description: String::new(),
+                    provenance: "desire-path".into(),
+                },
+                scope: Scope { repo: repo.clone() },
+                gauge: Gauge::default(),
+            },
+            routes: vec![Route {
+                id: "lookup".into(),
+                summary: String::new(),
+                trigger: Trigger::Prompt { span: adage_core::spans::SpanKind::Ticket },
+                step: Step::Run { command: "sh scripts/lookup".into() },
+                slots: vec![],
+                effect: adage_core::Effect::Observe,
+                strength: Strength::Fire,
+                state: RouteState::Firm,
+                exit: vec![],
+                evidence: Evidence { support: 9, opportunities: 10, days: 3, ..Default::default() },
+                authored: false,
+            }],
+        };
+        adage_tracks::io::write(&paths.tracks().join("project/workflow"), &track).unwrap();
+        let index = Index::compile(&[track]);
+        index.write_atomic(&paths.index()).unwrap();
+        std::fs::create_dir_all(&paths.root).unwrap();
+        std::fs::write(paths.root.join("policy.toml"), "[exec]\nmax_level = \"E2\"\n").unwrap();
+        let plan = adage_exec::route::plan_predict(&index.routes[0], &root, &paths.tracks()).unwrap();
+        let mut store = Store::default();
+        store.approve(Approval {
+            key: ApprovalKey::for_request(&plan.request, &repo),
+            route: "project/workflow/lookup".into(),
+            approved_on: "2026-10-03T00:00:00Z".into(),
+            by: None,
+            basis: Value::Null,
+            auto: false,
+            terms: None,
+            via: None,
+        });
+        store.save(&approvals::path(&paths.root)).unwrap();
+        let view = || load(&paths, Some(&root)).unwrap().rows.remove(0).execution;
+        assert_eq!(view().mode, "Predicted", "{:?}", view());
+        assert_eq!(load(&paths, None).unwrap().rows[0].execution.mode, "Grant saved");
+        std::fs::create_dir_all(paths.root.join("exec")).unwrap();
+        std::fs::write(adage_exec::hook::predict_off(&paths), "").unwrap();
+        assert_eq!(view().mode, "Paused");
+        std::fs::remove_file(adage_exec::hook::predict_off(&paths)).unwrap();
+        std::fs::write(&script, "exit 1\n").unwrap();
+        assert_eq!(view().mode, "Needs review", "a changed script lapses the predict grant");
     }
 }

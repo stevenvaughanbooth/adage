@@ -3,6 +3,7 @@
 //! compiled index the runtime reads.
 
 pub mod advice;
+pub mod candidates;
 pub mod card;
 pub mod context;
 pub mod index;

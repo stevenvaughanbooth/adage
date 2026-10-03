@@ -49,11 +49,22 @@ pub struct CtxNet {
 impl CtxNet {
     /// The alphabet and net of these routes' context triggers (other triggers are ignored).
     pub fn of<'a>(routes: impl IntoIterator<Item = &'a Route>) -> CtxNet {
-        let contexts: Vec<(&str, &[CtxItem], u8)> = routes
-            .into_iter()
-            .filter_map(|r| match &r.trigger {
+        CtxNet::build(routes.into_iter().map(|r| (r.id.as_str(), &r.trigger)), b"")
+    }
+
+    /// The alphabet and net of a repository's candidates (`crate::candidates`), which the runtime
+    /// walks apart from the routes' net: candidates change at nearly every learn, and a changed
+    /// digest resets a session's context state, so they must never share the routes' alphabet.
+    /// Its digest is salted, so it differs from a routes' net over the same items.
+    pub fn of_candidates<'a>(candidates: impl IntoIterator<Item = &'a crate::candidates::Candidate>) -> CtxNet {
+        CtxNet::build(candidates.into_iter().map(|c| (c.id.as_str(), &c.trigger)), b"candidates\0")
+    }
+
+    fn build<'a>(triggers: impl Iterator<Item = (&'a str, &'a Trigger)>, salt: &[u8]) -> CtxNet {
+        let contexts: Vec<(&str, &[CtxItem], u8)> = triggers
+            .filter_map(|(id, t)| match t {
                 Trigger::Context { items, within } if !items.is_empty() => {
-                    Some((r.id.as_str(), items.as_slice(), (*within).min(CONTEXT_MAX_WITHIN)))
+                    Some((id, items.as_slice(), (*within).min(CONTEXT_MAX_WITHIN)))
                 }
                 _ => None,
             })
@@ -67,6 +78,7 @@ impl CtxNet {
         let ids: BTreeMap<&str, u32> = forms.keys().enumerate().map(|(i, k)| (k.as_str(), i as u32)).collect();
         let alphabet: Vec<CtxItem> = forms.values().map(|it| (*it).clone()).collect();
         let mut h = Sha256::new();
+        h.update(salt);
         for k in forms.keys() {
             h.update(k.as_bytes());
             h.update([0u8]);

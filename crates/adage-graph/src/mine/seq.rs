@@ -205,10 +205,13 @@ fn keys_at(
         return;
     }
     if fwd {
-        // Continuation: acts that succeeded, and reads, never exposed.
-        if s.exposed[q] || !(e.ty == NodeType::Read || (e.ty == NodeType::Act && e.ok)) {
+        // Continuation: acts that succeeded, reads and skills used, never exposed.
+        if s.exposed[q] || !(matches!(e.ty, NodeType::Read | NodeType::Skill) || (e.ty == NodeType::Act && e.ok)) {
             return;
         }
+    } else if e.ty == NodeType::Skill {
+        // A skill used is something to direct, never the context of a reflex (plan §2.1.2).
+        return;
     }
     let flow = s.has_flow(a, b);
     let same_art = s.has_same_art(a, b);

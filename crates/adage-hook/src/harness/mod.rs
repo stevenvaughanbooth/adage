@@ -9,8 +9,8 @@ pub mod claude;
 pub mod codex;
 pub mod opencode;
 
-use adage_runtime::Call;
-pub use adage_trace::Harness;
+use adage_runtime::{By, Call, Prediction};
+pub use adage_trace::{Capabilities, Harness};
 
 /// The hook timeout, in seconds, of the events an E2 action runs at (the edit and Stop events)
 /// when the registration runs `adage-exec`: an action's wall limit (20 s) stays well under it.
@@ -50,6 +50,13 @@ pub enum Output {
     /// (`notice`). Harnesses that cannot rewrite a call render nothing (the post-hoc directive
     /// still follows the failure).
     Rewrite { input: Value, context: String, notice: String },
+    /// At a step boundary (`TurnStep`): the calls Adage makes in the model's place (the Claude
+    /// Code mod's `turn.step`). Harnesses without the event render nothing.
+    Predict(Prediction),
+    /// At a step boundary: the model is about to be asked to do what a delivered directive already
+    /// says, so the step may go to the person's routine model (the mod's `routine_model`).
+    /// Harnesses without the event render nothing.
+    Routine,
 }
 
 /// Who is calling: the session and working directory every native payload must carry.
@@ -71,6 +78,12 @@ pub trait Adapter: Sync {
             session: p.get("session_id")?.as_str()?.to_string(),
             cwd: PathBuf::from(p.get("cwd")?.as_str()?),
         })
+    }
+    /// What the harness can do for this payload ([`Capabilities`]): its command hooks' set
+    /// ([`Harness::capabilities`]), unless its adapter knows a richer caller sent it (Claude Code's
+    /// mod, [`claude::Claude`]). Behaviour past the adapter reads this, never which plugin asked.
+    fn capabilities(&self, _event: &str, _p: &Value) -> Capabilities {
+        self.harness().capabilities()
     }
     /// Native event name and payload → normalised event. `None` → do nothing.
     fn translate(&self, event: &str, p: &Value, cwd: &str) -> Option<Event>;
@@ -139,7 +152,7 @@ pub fn calls(pairs: Vec<(String, Value)>, cwd: &str, output: &str, failed: bool)
                     input["file_path"] = Value::String(adage_core::shell::resolve_path(cwd, p));
                 }
             }
-            Call { tool, input, output: output.to_string(), failed }
+            Call { tool, input, output: output.to_string(), failed, by: By::Agent, tool_use_id: None, agent: None }
         })
         .collect()
 }
@@ -200,5 +213,21 @@ mod identity_tests {
         assert!(a.event_identity("PostToolBatch", &batch(&[])).is_none());
         assert!(adapter("codex").unwrap().event_identity("PostToolUse", &json!({"tool_use_id": "one"})).is_some());
         assert!(adapter("codex").unwrap().event_identity("PostToolUse", &json!({"id": "invented"})).is_none());
+    }
+
+    /// T-A1-01: a Bash call about to run has an identity of its own (one decision per call, the
+    /// mod's and the command hook's alike); without a usable `tool_use_id` it has none.
+    #[test]
+    fn a_pretool_call_is_identified_by_its_tool_use_id() {
+        let a = adapter("claude").unwrap();
+        let one = a.event_identity("PreToolUse", &json!({"tool_use_id": "t1"}));
+        assert!(one.is_some());
+        assert_eq!(one, a.event_identity("PreToolUse", &json!({"tool_use_id": "t1", "dry_run": true})));
+        assert_ne!(one, a.event_identity("PostToolUse", &json!({"tool_use_id": "t1"})), "another event");
+        assert_ne!(one, a.event_identity("PreToolUse", &json!({"tool_use_id": "t2"})));
+        assert!(a.event_identity("PreToolUse", &json!({})).is_none());
+        assert!(a.event_identity("PreToolUse", &json!({"tool_use_id": ""})).is_none());
+        assert!(a.event_identity("PreToolUse", &json!({"tool_use_id": "x".repeat(257)})).is_none());
+        assert!(a.event_identity("PreToolUse", &json!({"tool_use_id": "x".repeat(256)})).is_some());
     }
 }

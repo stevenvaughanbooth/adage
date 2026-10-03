@@ -103,6 +103,18 @@ pub fn candidates(a: &Annotated, influence: &[Influence], table: &CommandTable) 
     let mut seen = BTreeSet::new();
     let mut out = Vec::new();
     for i in 0..disc.len() {
+        // A skill used before the first edit (plan §2.1.2), unless a directive said to use it.
+        if let InStep::Skill { name } = &disc[i] {
+            if influence.iter().any(|d| d.at_step as usize <= i && d.names_skill(name)) {
+                continue;
+            }
+            let group = format!("{}|{}", skill_key(name), Effect::Observe.as_str());
+            if seen.insert(group.clone()) {
+                let turn = a.meta.get(i).map_or(i as u32, |m| m.turn);
+                out.push(Cand { group, literal: name.clone(), position: i, turn });
+            }
+            continue;
+        }
         let Some((av, failed, effect, key)) = exec(i) else { continue };
         if !matches!(effect, Effect::Observe | Effect::Verify) || takes_value(av) {
             continue;
@@ -277,17 +289,32 @@ pub fn compile(
             .map(|(k, _)| k.clone())
             .unwrap_or_default();
         let observed = group.rsplit('|').next().and_then(Effect::parse).unwrap_or(Effect::Environment);
+        // A skill's family is its Skill tool use: the step names the skill, observe, prime at most.
+        let skill = group.starts_with(&skill_key(""));
         // Re-derive the effect from the command that will be directed; never inherit it.
-        let effect = super::max_effect(observed, io::classify(&command, &table));
+        let effect = if skill { Effect::Observe } else { super::max_effect(observed, io::classify(&command, &table)) };
         let base = format!("intent-{}", stable(&[&group]));
         let id = (1..).map(|k| if k == 1 { base.clone() } else { format!("{base}-{k}") }).find(|x| !ids.contains(x));
         let id = id.expect("an unused id");
         let Some(asp) = strength(effect, lb, rate, &id) else { continue };
+        let (asp, step, summary) = if skill {
+            (
+                asp.max(SKILL_CEILING),
+                Step::Skill { skill: command.clone(), args: None },
+                "Start requests like these with the skill this repository's sessions used first",
+            )
+        } else {
+            (
+                asp,
+                Step::Run { command: command.clone() },
+                "Start requests like these with the command this repository's sessions ran first",
+            )
+        };
         let route = Route {
             id: id.clone(),
-            summary: "Start requests like these with the command this repository's sessions ran first".into(),
+            summary: summary.into(),
             trigger: Trigger::Intent { family: id.clone(), model: model.id.clone(), centroid, threshold },
-            step: Step::Run { command: command.clone() },
+            step,
             slots: vec![],
             effect,
             strength: asp,
@@ -324,8 +351,12 @@ pub fn compile(
             continue;
         }
         let why = Why {
-            shape: "run".into(),
-            pattern: format!("[prompt ~ {id} (τ {threshold:.4})] → [act {command}]"),
+            shape: if skill { "skill" } else { "run" }.into(),
+            pattern: if skill {
+                format!("[prompt ~ {id} (τ {threshold:.4})] → [skill {command}]")
+            } else {
+                format!("[prompt ~ {id} (τ {threshold:.4})] → [act {command}]")
+            },
             backoff: 1,
             gain: 0.0,
             lift: if rate_out > 0.0 { (rate / rate_out * 1e4).round() / 1e4 } else { 0.0 },
@@ -334,7 +365,7 @@ pub fn compile(
             support,
             days: days.len() as u32,
             members: vec![adage_tracks::why::Members {
-                item: format!("act {group}"),
+                item: format!("{} {group}", if skill { "skill" } else { "act" }),
                 members: variants.iter().map(|(k, v)| (k.clone(), *v)).collect(),
             }],
             examples: who.iter().take(3).cloned().collect(),

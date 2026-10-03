@@ -53,6 +53,8 @@ struct ArmSets {
     followed: BTreeSet<String>,
     met: BTreeSet<String>,
     hit_avoided: BTreeSet<String>,
+    /// Sessions where the dead end was replaced before it ran (control: would have been).
+    substituted: BTreeSet<String>,
 }
 
 type ArmMap = BTreeMap<(String, String, String), ArmSets>;
@@ -73,6 +75,8 @@ fn route_keys(r: &Route, table: &CommandTable) -> Vec<(String, &'static str)> {
         }
         Step::Sequence { commands } => commands.iter().map(|c| (command_key(c, table), "directs")).collect(),
         Step::Card { card } => card.commands.iter().map(|c| (command_key(&c.command, table), "directs")).collect(),
+        // A skill's use is keyed as the trace keys it (`control Skill <name>`).
+        Step::Skill { skill, .. } => vec![(adage_tracks::skill_key(skill), "directs")],
         Step::ReadBatch { .. } | Step::Advise { .. } => vec![],
     }
 }
@@ -160,8 +164,14 @@ pub fn build(paths: &Paths, here: Option<&Path>, max_events: usize, warn: &mut d
                     (Some("obligation_met"), Some(id)) => {
                         sets(&mut arms, &repo, id, &arm).met.insert(sid.clone());
                     }
+                    (Some("substituted"), Some(id)) => {
+                        sets(&mut arms, &repo, id, &arm).substituted.insert(sid.clone());
+                    }
                     _ => {}
                 }
+            }
+            if let (Some(id), None) = (d["would_substitute"]["route"].as_str(), d["substituted"].as_object()) {
+                sets(&mut arms, &repo, id, &arm).substituted.insert(sid.clone());
             }
             for k in d["observed"].as_array().into_iter().flatten().filter_map(|k| k.as_str()) {
                 let k = k.trim_end_matches(" !failed");
@@ -183,6 +193,10 @@ pub fn build(paths: &Paths, here: Option<&Path>, max_events: usize, warn: &mut d
     events.sort_by_key(|e| e["ts"].as_u64().unwrap_or(0));
     let events: Vec<Value> = events.split_off(events.len().saturating_sub(max_events));
 
+    // What a person could be asked to grant (`offers`): every reflex's grants, and the policy a
+    // first grant would run under (a machine at E1 is raised with its first action).
+    let grants = adage_exec::approvals::Store::load(&adage_exec::approvals::path(&paths.root)).unwrap_or_default();
+    let trial = adage_exec::policy::trial_e2(&paths.root).ok().flatten();
     let mut railed: BTreeMap<String, (String, &'static str)> = BTreeMap::new();
     let mut routes = Vec::new();
     for inst in &installed {
@@ -201,7 +215,7 @@ pub fn build(paths: &Paths, here: Option<&Path>, max_events: usize, warn: &mut d
                 .map(|a| {
                     let s = arms.get(&(repo.clone(), r.id.clone(), a.to_string()));
                     let n = |f: fn(&ArmSets) -> &BTreeSet<String>| s.map_or(0, |s| f(s).len());
-                    let json = json!({
+                    let mut json = json!({
                         "sessions": arm_sessions.get(&(repo.clone(), a.to_string())).map_or(0, |s| s.len()),
                         "applied": n(|s| &s.applied),
                         "followed": n(|s| &s.followed),
@@ -209,13 +223,23 @@ pub fn build(paths: &Paths, here: Option<&Path>, max_events: usize, warn: &mut d
                         // Only sessions the route applied to: before it was learned, it could not help.
                         "hit_avoided": s.map_or(0, |s| s.hit_avoided.intersection(&s.applied).count()),
                     });
+                    // A dead end replaced before it ran is avoided, not hit, and not a follow. Said
+                    // only where it happened, so a map without the mod reads as before.
+                    if n(|s| &s.substituted) > 0 {
+                        json["substituted"] = json!(n(|s| &s.substituted));
+                    }
                     (a.to_string(), json)
                 })
                 .collect();
             let standing = standings.get(&(inst.reference.clone(), r.id.clone()));
             let (verbs, reasons) = standing.map(|s| (s.verbs.clone(), s.reasons.as_slice())).unwrap_or_default();
             let mut route = serde_json::to_value(Reflex::of(inst, r, whys.get(&r.id))).unwrap_or_default();
-            route["review"] = json!(Decisions::of(&inst.reference, r, verbs, reasons));
+            let mut decisions = Decisions::of(&inst.reference, r, verbs, reasons);
+            let label = format!("{}/{}", t.manifest.track.name, r.id);
+            let granted = grants.approvals.iter().any(|a| a.route == label && (repo.is_empty() || a.key.repo == *repo));
+            let permitted = trial.as_ref().is_some_and(|p| !p.effects_deny.contains(&r.effect));
+            decisions.offers.extend(crate::reflex::Offer::of(&inst.reference, r, granted, permitted));
+            route["review"] = json!(decisions);
             route["in_index"] = json!(indexed);
             route["live"] = json!(live.get(&(repo.clone(), r.id.clone())).map(Tally::read).unwrap_or_default());
             route["arms"] = Value::Object(arm_stats);
@@ -387,7 +411,8 @@ fn savings_json(paths: &Paths, repo: &str) -> Value {
 pub fn event(repo: &str, sid: &str, r: &Value) -> Option<Value> {
     // A PreToolUse record (`kind: "pretool"`) has no decision: it says what the hook rewrote or
     // advised before a command ran (`pretool`), or would have in a control session (`withheld`).
-    if r["kind"] == "pretool" {
+    // A substitution's record (the mod's verdict) carries a decision instead, read below.
+    if r["kind"] == "pretool" && r.get("decision").is_none() {
         let pretool = r.get("pretool").filter(|p| p.is_object())?;
         return Some(json!({
             "ts": r["ts"], "session": sid, "arm": r["arm"].as_str().map(arm_word), "event": r["event"],
@@ -409,13 +434,53 @@ pub fn event(repo: &str, sid: &str, r: &Value) -> Option<Value> {
     let keys: Vec<String> =
         d["observed"].as_array().into_iter().flatten().filter_map(|k| k.as_str().map(String::from)).collect();
     let cont = d["continue_reason"].is_string();
-    if directed.is_empty() && would.is_empty() && judged.is_empty() && keys.is_empty() && !cont {
+    // A `turn_step` record: the step Adage made in the agent's place, or would have.
+    let predicted = d["predicted"]["route"].as_str();
+    let would_predict = d["would_predict"]["route"].as_str();
+    // A `pretool` record of the mod's verdict: the dead end replaced, or that would have been.
+    let substituted = d["substituted"]["route"].as_str();
+    let would_substitute = d["would_substitute"]["route"].as_str().filter(|_| substituted.is_none());
+    // Candidates a batch noticed (both arms): learning's count, never a directive.
+    let noticed: Vec<&str> =
+        d["noticed"].as_array().into_iter().flatten().filter_map(|n| n["candidate"].as_str()).collect();
+    // A Bash call the mod answered with a fresh receipt instead of running it.
+    let answered = r["answered"].as_str().filter(|_| r["kind"] == "pretool");
+    if directed.is_empty()
+        && would.is_empty()
+        && judged.is_empty()
+        && keys.is_empty()
+        && !cont
+        && predicted.is_none()
+        && would_predict.is_none()
+        && would_substitute.is_none()
+        && noticed.is_empty()
+        && answered.is_none()
+    {
         return None;
     }
-    Some(json!({
+    let mut e = json!({
         "ts": r["ts"], "session": sid, "arm": r["arm"].as_str().map(arm_word), "event": r["event"], "repo": repo,
         "directed": directed, "would": would, "judged": judged, "observed": keys, "continue": cont,
-    }))
+    });
+    if let Some(p) = predicted {
+        e["predicted"] = json!(p);
+    }
+    if let Some(p) = would_predict {
+        e["would_predict"] = json!(p);
+    }
+    if let Some(p) = substituted {
+        e["substituted"] = json!(p);
+    }
+    if let Some(p) = would_substitute {
+        e["would_substitute"] = json!(p);
+    }
+    if !noticed.is_empty() {
+        e["noticed"] = json!(noticed);
+    }
+    if let Some(a) = answered {
+        e["answered"] = json!(a);
+    }
+    Some(e)
 }
 
 /// The most recent live-learning runs from `learn.log` (JSON lines), oldest first: when each ran,
@@ -486,6 +551,19 @@ mod tests {
         assert_eq!(e["withheld"], true);
         assert_eq!(e["pretool"]["rewrite"], "test");
         assert!(super::event("acme", "s1", &serde_json::json!({ "kind": "pretool" })).is_none());
+        // The mod's verdict: a substitution is a judgement of its own, never a follow.
+        let sub = serde_json::json!({ "route": "dead-end", "track": "t", "command": "make test", "context": "c" });
+        let r = serde_json::json!({ "ts": 6, "event": "PreToolUse", "kind": "pretool", "arm": "treated", "substituted": true,
+            "decision": { "judgements": [{ "kind": "substituted", "route": "dead-end" }], "substituted": sub, "would_substitute": sub } });
+        let e = super::event("acme", "s1", &r).unwrap();
+        assert_eq!(
+            (e["judged"].clone(), e["substituted"].clone()),
+            (serde_json::json!([["substituted", "dead-end"]]), serde_json::json!("dead-end"))
+        );
+        assert!(e.get("would_substitute").is_none());
+        let r = serde_json::json!({ "ts": 7, "event": "PreToolUse", "kind": "pretool", "arm": "control", "withheld": true,
+            "would_substitute": true, "decision": { "judgements": [], "would_substitute": sub } });
+        assert_eq!(super::event("acme", "s2", &r).unwrap()["would_substitute"], "dead-end");
     }
 
     #[test]

@@ -311,7 +311,12 @@ pub fn queue<'a>(
         store
             .approvals
             .iter()
-            .filter(|a| a.route == label && a.key.repo == ir.repo && a.key.level == adage_exec::Level::E2)
+            .filter(|a| {
+                a.route == label
+                    && a.key.repo == ir.repo
+                    && a.key.level == adage_exec::Level::E2
+                    && a.key.mode.is_execute()
+            })
             .any(|a| {
                 adage_exec::route::plan(
                     ir,
@@ -594,7 +599,7 @@ pub struct IndexSummary {
 /// the index. One writer of the tracks and index at a time: this takes the tracks lock, since an
 /// automatic learner may be running.
 pub fn decide(
-    _person: &Person,
+    person: &Person,
     verb: Verb,
     spec: &str,
     route_id: &str,
@@ -602,14 +607,14 @@ pub fn decide(
     paths: &Paths,
 ) -> Result<Outcome> {
     let _tracks = adage_store::lock::exclusive(&paths.tracks_lock())?;
-    apply(verb, spec, route_id, by, paths)
+    apply(verb, spec, route_id, by, person.via(), paths)
 }
 
 /// [`decide`], waiting at most `patience` for the tracks lock: for a front end that must not
 /// freeze while a learn run holds it (`adage ui`). A decision that cannot get the lock in time is
 /// refused, with nothing written, and can be made again in a moment.
 pub fn decide_within(
-    _person: &Person,
+    person: &Person,
     verb: Verb,
     spec: &str,
     route_id: &str,
@@ -620,10 +625,17 @@ pub fn decide_within(
     let Some(_tracks) = adage_store::lock::exclusive_within(&paths.tracks_lock(), patience)? else {
         anyhow::bail!("a learn run is writing the reflexes now; nothing was recorded, so try again in a moment");
     };
-    apply(verb, spec, route_id, by, paths)
+    apply(verb, spec, route_id, by, person.via(), paths)
 }
 
-fn apply(verb: Verb, spec: &str, route_id: &str, by: Option<String>, paths: &Paths) -> Result<Outcome> {
+fn apply(
+    verb: Verb,
+    spec: &str,
+    route_id: &str,
+    by: Option<String>,
+    via: crate::person::Via,
+    paths: &Paths,
+) -> Result<Outcome> {
     if let Some(b) = &by {
         review::check_by(b)?;
     }
@@ -775,7 +787,7 @@ fn apply(verb: Verb, spec: &str, route_id: &str, by: Option<String>, paths: &Pat
             }
         }
     }
-    reviews.routes.insert(route_id.to_string(), Review { decision, on: review::today(), by, basis });
+    reviews.routes.insert(route_id.to_string(), Review { decision, on: review::today(), by, basis, via: Some(via) });
     // An import keeps its author's version: it names the release that was shared.
     if after != before && !inst.imported {
         track.manifest.track.version = bumped(&track.manifest.track.version, bump);

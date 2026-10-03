@@ -4,12 +4,6 @@ expression: text
 ---
  adage    1 Live   2 Reflexes   3 Map   4 Health   5 Settings                                                                  harbor-dispatch · LIVE
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-
- learn.auto               true     (default)
-   condition automatically, in the background, when an agent session stops or ends
- learn.min_interval_secs  120      (default)
-   at most one automatic conditioning run per repository in this many seconds (0 to 86400)
- learn.thresholds         default  (default)
    evidence bars for `adage condition` and automatic conditioning: default, or demo (lower)
  learn.claude_projects    ""       (default)
    Claude Code traces to condition on ("" = ~/.claude/projects)
@@ -33,12 +27,18 @@ expression: text
    instinct packs or ids never to bind, comma-separated, e.g. adage/lockfiles,U3 (see docs/instincts.md)
  ui.notices               daily    (default)
    one-line notices at session start (Claude Code): daily, only when something is new; or off
+ ui.spinner               false    (default)
+   Claude Code mod: add an adage suffix to the spinner while a reflex was delivered this turn
+ ui.turn_line             false    (default)
+   Claude Code mod: a one-line adage summary beside the turn's duration, for turns with Adage activity
+ ui.noticed               false    (default)
+   Claude Code mod: a line under a tool batch when Adage notices a habit it is still counting
  runtime.control          0.1      (default)
    share of sessions held out as the control arm (Adage decides but says nothing)
 ▌runtime.rewrite          false    (exec/rewrite-off marker)
    point Python test runs under the system Python at the project's verified environment before they run (Claude Code PreToolUse); false: leave every
    command as the agent wrote it
    ↪ rewrites off · same as adage delegate rewrites on to switch
-
+ runtime.routine_model    ""       (default)
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
  ? keys · : palette · enter edit · space toggle                                                                                                q quit

@@ -87,7 +87,15 @@ fn fixture() -> (tempfile::TempDir, Index, CommandTable) {
 }
 
 fn bash(cmd: &str, out: &str) -> Call {
-    Call { tool: "Bash".into(), input: json!({ "command": cmd }), output: out.into(), failed: false }
+    Call {
+        tool: "Bash".into(),
+        input: json!({ "command": cmd }),
+        output: out.into(),
+        failed: false,
+        by: By::Agent,
+        tool_use_id: None,
+        agent: None,
+    }
 }
 
 #[test]
@@ -210,6 +218,9 @@ fn obligation_triggers_on_edit_and_is_enforced_once_at_stop() {
         input: json!({ "file_path": dir.path().join("schema/invoice.json").to_string_lossy() }),
         output: String::new(),
         failed: false,
+        by: By::Agent,
+        tool_use_id: None,
+        agent: None,
     };
     let d = decide(&ctx, &mut st, &Event::Batch { calls: vec![edit] });
     assert!(d.directives.iter().any(|x| x.route == "gen" && x.text.contains("make gen")));
@@ -238,6 +249,9 @@ fn obligation_met_means_no_stop_request() {
         input: json!({ "file_path": dir.path().join("schema/a.json").to_string_lossy() }),
         output: String::new(),
         failed: false,
+        by: By::Agent,
+        tool_use_id: None,
+        agent: None,
     };
     decide(&ctx, &mut st, &Event::Batch { calls: vec![edit] });
     let d = decide(&ctx, &mut st, &Event::Batch { calls: vec![bash("make gen", "ok")] });
@@ -370,6 +384,9 @@ fn obligations_rearm_after_a_new_edit_and_stop_requests_are_bounded() {
         input: json!({ "file_path": dir.path().join(f).to_string_lossy() }),
         output: String::new(),
         failed: false,
+        by: By::Agent,
+        tool_use_id: None,
+        agent: None,
     };
     decide(&ctx, &mut st, &Event::Batch { calls: vec![edit("schema/a.json")] });
     decide(&ctx, &mut st, &Event::Batch { calls: vec![bash("make gen", "ok")] });
@@ -426,6 +443,9 @@ fn control_records_would_continue() {
         input: json!({ "file_path": dir.path().join("schema/a.json").to_string_lossy() }),
         output: String::new(),
         failed: false,
+        by: By::Agent,
+        tool_use_id: None,
+        agent: None,
     };
     decide(&ctx, &mut st, &Event::Batch { calls: vec![edit] });
     st.arm = Some(Arm::Control);
@@ -692,7 +712,15 @@ fn edits_that_add_tests_are_remembered_for_the_receipt() {
         policy: Default::default(),
     };
     let path = |rel: &str| dir.path().join(rel).to_string_lossy().to_string();
-    let call = |tool: &str, input: Value| Call { tool: tool.into(), input, output: String::new(), failed: false };
+    let call = |tool: &str, input: Value| Call {
+        tool: tool.into(),
+        input,
+        output: String::new(),
+        failed: false,
+        by: By::Agent,
+        tool_use_id: None,
+        agent: None,
+    };
     let mut st = SessionState::default();
     let batch = Event::Batch {
         calls: vec![
@@ -900,6 +928,9 @@ fn state_rebuilt_from_the_spool_matches_the_live_state_after_every_event() {
         input: json!({ "file_path": dir.path().join(f).to_string_lossy() }),
         output: String::new(),
         failed: false,
+        by: By::Agent,
+        tool_use_id: None,
+        agent: None,
     };
     let lookup_out = r#"{"id":"W-2042","linked_files":["acme/billing.py"]}"#;
     let failed = Call { failed: true, ..bash("python3 -m unittest", "RuntimeError: ACME_ENV is not set") };
@@ -960,6 +991,9 @@ fn a_rebuilt_state_never_requests_a_stop_the_live_one_would_not() {
         input: json!({ "file_path": dir.path().join(f).to_string_lossy() }),
         output: String::new(),
         failed: false,
+        by: By::Agent,
+        tool_use_id: None,
+        agent: None,
     };
     let mut st = SessionState { arm: Some(Arm::Treated), ..Default::default() };
     let mut records = Vec::new();
@@ -1002,6 +1036,9 @@ fn edit_call(dir: &tempfile::TempDir, f: &str) -> Call {
         input: json!({ "file_path": dir.path().join(f).to_string_lossy() }),
         output: String::new(),
         failed: false,
+        by: By::Agent,
+        tool_use_id: None,
+        agent: None,
     }
 }
 
@@ -1623,6 +1660,9 @@ mod typed_slots {
             input: json!({ "file_path": dir.path().join(p).to_string_lossy(), "old_string": "a", "new_string": "b" }),
             output: String::new(),
             failed: false,
+            by: By::Agent,
+            tool_use_id: None,
+            agent: None,
         };
         let mut st = SessionState::default();
         let d = decide(&c, &mut st, &Event::Batch { calls: vec![edit("crates/pkg7/src/lib.rs")] });
@@ -1725,12 +1765,16 @@ fn decide_both(ctx: &Ctx, full: &mut SessionState, fast_st: &mut SessionState, e
     let skip = fast::skip(&t, ev, &root, || Some(fast_st.clone()));
     let d = decide(ctx, full, ev);
     if skip {
-        assert!(d.would_have.is_empty() && d.judgements.is_empty(), "skipped {ev:?}, decided {d:?}");
+        assert!(
+            d.would_have.is_empty() && d.judgements.is_empty() && d.noticed.is_empty(),
+            "skipped {ev:?}, decided {d:?}"
+        );
     } else {
         let f = decide(ctx, fast_st, ev);
         assert_eq!(serde_json::to_value(&f).unwrap(), serde_json::to_value(&d).unwrap(), "{ev:?}");
     }
-    let state = |s: &SessionState| json!([s.emitted, s.pending, s.obligations, s.stop_requests, s.ctx]);
+    let state =
+        |s: &SessionState| json!([s.emitted, s.pending, s.obligations, s.stop_requests, s.ctx, s.cand_ctx, s.noticed]);
     assert_eq!(state(fast_st), state(full), "after {ev:?}");
     d
 }
@@ -2316,4 +2360,1010 @@ fn a_piped_failure_fires_its_dead_end() {
     assert!(run(bash("python -m pytest tests -x 2>&1 | tail -5", "==== 12 passed in 0.4s ====")).is_empty());
     assert!(run(bash("python -m pytest tests -x", "No module named pytest")).is_empty());
     assert!(run(bash("cat notes.txt | head", "No module named pytest")).is_empty());
+}
+
+// ---------------------------------------------------------------- TurnStep: predicted steps
+
+/// The lookup, its linked files and the finish line of [`fixture`], plus `extra`, in one track
+/// `acme/t`.
+fn predict_fixture(extra: Vec<Route>) -> (tempfile::TempDir, Index, CommandTable) {
+    let (dir, base, table) = fixture();
+    let mut routes: Vec<Route> =
+        base.routes.iter().filter(|r| r.route.id != "dead-unittest").map(|r| r.route.clone()).collect();
+    routes.extend(extra);
+    (dir, Index::compile(&[track("acme/t", "desire-path", routes)]), table)
+}
+
+fn predict_ctx<'a>(dir: &'a tempfile::TempDir, index: &'a Index, table: &'a CommandTable, grants: &[&str]) -> Ctx<'a> {
+    Ctx {
+        checkout: &crate::checkout::Disk,
+        index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table,
+        embed: None,
+        params: Default::default(),
+        policy: Policy {
+            predict_grants: grants.iter().map(|r| ("acme/t".to_string(), r.to_string())).collect(),
+            ..Default::default()
+        },
+    }
+}
+
+fn step(turn: &str, index: u32, ending: bool) -> Event {
+    Event::TurnStep { turn_id: turn.into(), index, model: Some("claude-x".into()), agent: None, ending }
+}
+
+fn by_adage(call: Call, id: &str) -> Call {
+    Call { by: By::Adage, tool_use_id: Some(id.into()), ..call }
+}
+
+fn pending(route: &str, command: &str, table: &CommandTable) -> Pending {
+    Pending {
+        route: route.into(),
+        expect_key: command_key(command, table),
+        expect_head: String::new(),
+        batches_left: 3,
+        command: command.into(),
+    }
+}
+
+fn armed(route: &str, command: &str, table: &CommandTable) -> Obligation {
+    Obligation {
+        route: route.into(),
+        expect_key: command_key(command, table),
+        command: command.into(),
+        paths: "schema/*.json".into(),
+        ..Default::default()
+    }
+}
+
+/// T-C1-01: a delivered directive is predicted with its rendered command, under a grant; the
+/// call Adage then makes is judged `predicted`, never `followed`, and retires the follow
+/// judgement. An armed obligation is predicted at the step that ends the turn.
+#[test]
+fn turn_step_predicts_a_delivered_directive() {
+    let (dir, index, table) = predict_fixture(vec![]);
+    let ctx = predict_ctx(&dir, &index, &table, &["lookup", "gen"]);
+    let mut st = SessionState { arm: Some(Arm::Treated), ..Default::default() };
+    decide(&ctx, &mut st, &Event::Prompt { text: "Pick up W-2042 please".into() });
+    assert_eq!(st.pending[0].command, "./scripts/wi-lookup W-2042 --json", "the rendered command is kept");
+    let d = decide(&ctx, &mut st, &step("t", 1, false));
+    let p = d.predicted.clone().expect("the lookup is predicted");
+    assert_eq!((p.kind, p.route.as_str(), p.track.as_str()), (PredictionKind::Run, "lookup", "acme/t"));
+    assert_eq!(
+        p.calls,
+        vec![PredictedCall { tool: "Bash".into(), input: json!({ "command": "./scripts/wi-lookup W-2042 --json" }) }]
+    );
+    assert_eq!(d.would_predict, d.predicted);
+    assert_eq!((st.last_step_predicted.clone(), st.predictions), (Some(("t".into(), 1)), 1));
+    assert!(d.directives.is_empty() && d.judgements.is_empty());
+    // The engine runs the call Adage yielded; the batch carries it with Adage's id.
+    let out = r#"{"id":"W-2042","linked_files":["acme/billing.py"]}"#;
+    let call = by_adage(bash("./scripts/wi-lookup W-2042 --json", out), "adage_lookup_t_1");
+    let d = decide(&ctx, &mut st, &Event::Batch { calls: vec![call] });
+    assert!(
+        d.judgements.iter().any(|j| matches!(j, Judgement::Predicted { route } if route == "lookup")),
+        "{:?}",
+        d.judgements
+    );
+    assert!(!d.judgements.iter().any(|j| matches!(j, Judgement::Followed { .. })));
+    assert!(st.pending.is_empty(), "the follow judgement is retired");
+    // An armed obligation: only at the step that ends the turn.
+    let mut st = SessionState {
+        arm: Some(Arm::Treated),
+        obligations: vec![armed("gen", "make gen", &table)],
+        ..Default::default()
+    };
+    assert!(decide(&ctx, &mut st, &step("u", 1, false)).predicted.is_none());
+    let p = decide(&ctx, &mut st, &step("u", 2, true)).predicted.expect("the finish line");
+    assert_eq!((p.kind, p.calls[0].input["command"].as_str()), (PredictionKind::Obligation, Some("make gen")));
+    let d = decide(&ctx, &mut st, &Event::Batch { calls: vec![by_adage(bash("make gen", "ok"), "adage_gen_u_2_0")] });
+    assert!(st.obligations[0].met);
+    assert!(d.judgements.iter().any(|j| matches!(j, Judgement::ObligationMet { route } if route == "gen")));
+    assert!(d.judgements.iter().any(|j| matches!(j, Judgement::Predicted { route } if route == "gen")));
+}
+
+/// T-C1-02: never at the turn's first step, never right after a predicted step.
+#[test]
+fn turn_step_never_at_index_zero_nor_twice_in_a_row() {
+    let (dir, index, table) = predict_fixture(vec![]);
+    let ctx = predict_ctx(&dir, &index, &table, &["lookup", "gen"]);
+    let mut st = SessionState {
+        arm: Some(Arm::Treated),
+        pending: vec![pending("lookup", "./scripts/wi-lookup W-2042 --json", &table)],
+        obligations: vec![armed("gen", "make gen", &table)],
+        ..Default::default()
+    };
+    let d = decide(&ctx, &mut st, &step("t", 0, true));
+    assert!(d.predicted.is_none() && d.would_predict.is_none(), "index 0 is the prompt's request");
+    assert_eq!(decide(&ctx, &mut st, &step("t", 1, true)).predicted.unwrap().route, "lookup");
+    let d = decide(&ctx, &mut st, &step("t", 2, false));
+    assert!(d.predicted.is_none() && d.would_predict.is_none(), "a model step separates two predictions");
+    // A model step later, the next thing due (the lookup is never predicted twice).
+    assert_eq!(decide(&ctx, &mut st, &step("t", 3, true)).predicted.unwrap().route, "gen");
+    assert_eq!(st.predictions, 2);
+    // At a turn's end the mod asks with the index of the request the model just answered: a
+    // prediction before that request (index - 1) is not "in a row" with it, one at it would be.
+    let mut st = SessionState { obligations: vec![armed("gen", "make gen", &table)], ..Default::default() };
+    st.last_step_predicted = Some(("t".into(), 4));
+    assert!(decide(&ctx, &mut st, &step("t", 5, true)).predicted.is_some(), "model step 5 came between");
+    st.obligations[0].met = false;
+    st.predicted_routes.clear();
+    assert!(decide(&ctx, &mut st, &step("t", 5, true)).predicted.is_none(), "predicted at 5 already");
+    // A new turn's step 1 after the last step of another turn is not "in a row".
+    let mut st = SessionState { obligations: vec![armed("gen", "make gen", &table)], ..Default::default() };
+    st.last_step_predicted = Some(("t".into(), 0));
+    assert!(decide(&ctx, &mut st, &step("u", 1, true)).predicted.is_some());
+}
+
+/// T-C1-03: at most `predict_cap` per session; past it, recorded as `would_predict` only.
+#[test]
+fn turn_step_holds_the_session_cap() {
+    let (dir, index, table) = predict_fixture(vec![]);
+    let mut ctx = predict_ctx(&dir, &index, &table, &["lookup", "gen"]);
+    ctx.policy.predict_cap = 1;
+    let mut st = SessionState {
+        pending: vec![pending("lookup", "./scripts/wi-lookup W-2042 --json", &table)],
+        obligations: vec![armed("gen", "make gen", &table)],
+        ..Default::default()
+    };
+    assert!(decide(&ctx, &mut st, &step("t", 1, true)).predicted.is_some());
+    let d = decide(&ctx, &mut st, &step("t", 3, true));
+    assert!(d.predicted.is_none() && d.predicted_at.is_none(), "the cap holds");
+    assert_eq!(d.would_predict.map(|p| p.route), Some("gen".into()));
+    assert_eq!(st.predictions, 1);
+    assert_eq!(Policy::default().predict_cap, 6);
+}
+
+/// T-C1-04: the control arm predicts nothing and records what it would have; the bounds count
+/// in both arms.
+#[test]
+fn turn_step_in_the_control_arm_records_would_predict() {
+    let (dir, index, table) = predict_fixture(vec![]);
+    let ctx = predict_ctx(&dir, &index, &table, &["lookup"]);
+    let mut st = SessionState {
+        arm: Some(Arm::Control),
+        pending: vec![pending("lookup", "./scripts/wi-lookup W-2042 --json", &table)],
+        ..Default::default()
+    };
+    let d = decide(&ctx, &mut st, &step("t", 1, false));
+    assert!(d.predicted.is_none());
+    assert_eq!(d.would_predict.map(|p| p.route), Some("lookup".into()));
+    assert_eq!((d.predicted_at, st.predictions), (Some(("t".into(), 1)), 1));
+}
+
+/// T-C1-05: no grant, no command, an inhibited route, a route already carried out by CPU
+/// prediction, a subagent's step: nothing.
+#[test]
+fn turn_step_predicts_nothing_without_a_grant_a_command_or_past_the_interlock() {
+    let dead_gen = route(
+        "dead-gen",
+        Trigger::SessionStart,
+        Step::Avoid { avoid: "make gen".into(), instead: "make generate".into(), signature: "boom".into() },
+        vec![],
+        Effect::Regenerate,
+        Strength::Inhibit,
+    );
+    let (dir, index, table) = predict_fixture(vec![dead_gen]);
+    let state = || SessionState {
+        pending: vec![pending("lookup", "./scripts/wi-lookup W-2042 --json", &table)],
+        obligations: vec![armed("gen", "make gen", &table)],
+        ..Default::default()
+    };
+    let nothing = |ctx: &Ctx, st: &mut SessionState, ev: &Event| {
+        let d = decide(ctx, st, ev);
+        d.predicted.is_none() && d.would_predict.is_none() && st.predictions == 0
+    };
+    // No grant (the plain `adage hook`).
+    assert!(nothing(&predict_ctx(&dir, &index, &table, &[]), &mut state(), &step("t", 1, true)));
+    // A grant on another route only.
+    assert!(nothing(&predict_ctx(&dir, &index, &table, &["read-linked"]), &mut state(), &step("t", 1, true)));
+    let ctx = predict_ctx(&dir, &index, &table, &["lookup", "gen"]);
+    // A pending entry from an older state: no command kept.
+    let mut st = SessionState {
+        pending: vec![Pending { command: String::new(), ..pending("lookup", "x", &table) }],
+        ..Default::default()
+    };
+    assert!(nothing(&ctx, &mut st, &step("t", 1, true)));
+    // The dead end announced this session says not to run `make gen` (without it, it would be).
+    let mut st = SessionState { obligations: vec![armed("gen", "make gen", &table)], ..Default::default() };
+    assert!(!nothing(&ctx, &mut st, &step("t", 1, true)));
+    let mut st = SessionState {
+        obligations: vec![armed("gen", "make gen", &table)],
+        emitted: vec!["dead-gen".into()],
+        ..Default::default()
+    };
+    assert!(nothing(&ctx, &mut st, &step("t", 1, true)));
+    // Carried out by adage-exec's CPU prediction at the batch before.
+    let mut st = SessionState { predicted_routes: vec!["lookup".into(), "gen".into()], ..state() };
+    assert!(nothing(&ctx, &mut st, &step("t", 1, true)));
+    // A subagent's step.
+    let sub = Event::TurnStep { turn_id: "t".into(), index: 1, model: None, agent: Some("a1".into()), ending: false };
+    assert!(nothing(&ctx, &mut state(), &sub));
+}
+
+/// T-C1-06 and the sequence: a skill step yields the Skill tool; a sequence its first command.
+#[test]
+fn turn_step_predicts_a_skill_and_a_sequence_first_command() {
+    // A skill step (D3), delivered after an edit; invoked only as the policy allows.
+    let release = route(
+        "release",
+        Trigger::AfterEdit { paths: "CHANGELOG.md".into() },
+        Step::Skill { skill: "release-checklist".into(), args: None },
+        vec![],
+        Effect::Observe,
+        Strength::Prime,
+    );
+    let seq = route(
+        "lint-then-test",
+        Trigger::AfterEdit { paths: "docs/*.md".into() },
+        Step::Sequence { commands: vec!["make lint".into(), "make test".into()] },
+        vec![],
+        Effect::Verify,
+        Strength::Prime,
+    );
+    let (dir, index, table) = predict_fixture(vec![release, seq]);
+    let mut ctx = predict_ctx(&dir, &index, &table, &["release", "lint-then-test"]);
+    ctx.policy.invoke_skills = vec!["release-checklist".into()];
+    let mut st = SessionState::default();
+    decide(&ctx, &mut st, &Event::Batch { calls: vec![edit_call(&dir, "CHANGELOG.md")] });
+    assert_eq!(st.pending[0].expect_key, "control Skill release-checklist");
+    let p = decide(&ctx, &mut st, &step("t", 1, false)).predicted.unwrap();
+    assert_eq!(p.kind, PredictionKind::Skill);
+    assert_eq!(p.calls, vec![PredictedCall { tool: "Skill".into(), input: json!({ "skill": "release-checklist" }) }]);
+    // A sequence after an edit: its first command, as delivered.
+    let mut st = SessionState::default();
+    let edit = Call {
+        tool: "Edit".into(),
+        input: json!({ "file_path": dir.path().join("docs/a.md").to_string_lossy() }),
+        output: String::new(),
+        failed: false,
+        by: By::Agent,
+        tool_use_id: None,
+        agent: None,
+    };
+    decide(&ctx, &mut st, &Event::Batch { calls: vec![edit] });
+    assert_eq!(st.pending[0].command, "make lint");
+    let p = decide(&ctx, &mut st, &step("t", 1, false)).predicted.unwrap();
+    assert_eq!((p.kind, p.calls[0].input["command"].as_str()), (PredictionKind::Sequence, Some("make lint")));
+}
+
+/// A chain: the lookup's result binds the read batch's files; the next step reads them, one call
+/// per file; Adage's reads retire it, judged `predicted`.
+#[test]
+fn turn_step_predicts_a_chain_of_reads_bound_from_the_lookup() {
+    let (dir, index, table) = predict_fixture(vec![]);
+    std::fs::write(dir.path().join("acme/rates.py"), "x").unwrap();
+    let ctx = predict_ctx(&dir, &index, &table, &["read-linked"]);
+    let mut st = SessionState::default();
+    decide(&ctx, &mut st, &Event::Prompt { text: "Pick up W-2042 please".into() });
+    let out = r#"{"id":"W-2042","linked_files":["acme/billing.py","../etc/passwd","acme/rates.py"]}"#;
+    decide(&ctx, &mut st, &Event::Batch { calls: vec![bash("./scripts/wi-lookup W-2042 --json", out)] });
+    assert_eq!(st.reads[0].files, vec!["acme/billing.py".to_string(), "acme/rates.py".into()]);
+    let p = decide(&ctx, &mut st, &step("t", 1, false)).predicted.expect("the reads");
+    assert_eq!((p.kind, p.route.as_str()), (PredictionKind::Chain, "read-linked"));
+    let files: Vec<&str> = p.calls.iter().map(|c| c.input["file_path"].as_str().unwrap()).collect();
+    let abs = |f: &str| dir.path().join(f).to_string_lossy().to_string();
+    assert_eq!(files, vec![abs("acme/billing.py"), abs("acme/rates.py")]);
+    assert!(p.calls.iter().all(|c| c.tool == "Read"));
+    let read = |f: &str| {
+        by_adage(
+            Call { tool: "Read".into(), input: json!({ "file_path": abs(f) }), ..bash("", "") },
+            "adage_read-linked_t_1",
+        )
+    };
+    let d = decide(&ctx, &mut st, &Event::Batch { calls: vec![read("acme/billing.py"), read("acme/rates.py")] });
+    assert_eq!(
+        d.judgements.iter().filter(|j| matches!(j, Judgement::Predicted { route } if route == "read-linked")).count(),
+        1
+    );
+    assert!(st.reads.is_empty());
+    // The agent's own read retires it too, with no judgement; so does the follow window.
+    let mut st = SessionState::default();
+    decide(&ctx, &mut st, &Event::Prompt { text: "Pick up W-2042 please".into() });
+    decide(&ctx, &mut st, &Event::Batch { calls: vec![bash("./scripts/wi-lookup W-2042 --json", out)] });
+    let mine = Call { tool: "Read".into(), input: json!({ "file_path": abs("acme/rates.py") }), ..bash("", "") };
+    let d = decide(&ctx, &mut st, &Event::Batch { calls: vec![mine] });
+    assert!(st.reads.is_empty() && !d.judgements.iter().any(|j| matches!(j, Judgement::Predicted { .. })));
+}
+
+/// T-C1-07: the bounds survive a rebuild from the spool.
+#[test]
+fn turn_step_bounds_survive_a_rebuild() {
+    let (dir, index, table) = predict_fixture(vec![]);
+    let ctx = predict_ctx(&dir, &index, &table, &["lookup"]);
+    let mut st = SessionState { arm: Some(Arm::Treated), repo: Some("acme".into()), ..Default::default() };
+    let mut records = Vec::new();
+    for ev in [Event::Prompt { text: "Pick up W-2042 please".into() }, step("t", 1, false)] {
+        let d = decide(&ctx, &mut st, &ev);
+        records.push(json!({ "event": "x", "kind": ev.name(), "arm": st.arm, "repo": "acme", "decision": d }));
+    }
+    assert_eq!(records[1]["kind"], "turn_step");
+    let rebuilt = rebuild::rebuild(&records, &index, "acme", &table).unwrap();
+    assert_eq!(rebuilt.predictions, 1);
+    assert_eq!(rebuilt.last_step_predicted, Some(("t".into(), 1)));
+    assert_eq!(rebuilt.predicted_routes, vec!["lookup".to_string()]);
+    assert_eq!(rebuild::kind_of(&json!({ "event": "TurnStep" })), "turn_step");
+}
+
+/// T-C1-08: the fast path skips a step with nothing directed, never one with something due.
+#[test]
+fn turn_step_fast_path() {
+    let (_dir, _index, table) = predict_fixture(vec![]);
+    let t = adage_tracks::triggers::Triggers::default();
+    let ev = step("t", 1, true);
+    assert!(fast::skip(&t, &ev, "/r", || Some(SessionState::default())));
+    let met = Obligation { met: true, ..armed("gen", "make gen", &table) };
+    assert!(fast::skip(&t, &ev, "/r", || Some(SessionState { obligations: vec![met.clone()], ..Default::default() })));
+    let due = [
+        SessionState { pending: vec![pending("lookup", "x", &table)], ..Default::default() },
+        SessionState { obligations: vec![armed("gen", "make gen", &table)], ..Default::default() },
+        SessionState {
+            reads: vec![PendingReads {
+                route: "r".into(),
+                files: vec!["a".into()],
+                batches_left: 1,
+                after_adage: false,
+            }],
+            ..Default::default()
+        },
+    ];
+    for st in due {
+        assert!(!fast::skip(&t, &ev, "/r", || Some(st.clone())), "{st:?}");
+    }
+    assert!(!fast::skip(&t, &ev, "/r", || None), "an unreadable state is rebuilt, never skipped past");
+}
+
+// ---------------------------------------------------------------- the dead end that never runs
+
+/// The mod's observe mode records a step as the control arm does, in a treated session.
+#[test]
+fn turn_step_in_observe_mode_records_would_predict_only() {
+    let (dir, index, table) = predict_fixture(vec![]);
+    let mut ctx = predict_ctx(&dir, &index, &table, &["lookup"]);
+    ctx.policy.observe = true;
+    let mut st = SessionState {
+        arm: Some(Arm::Treated),
+        pending: vec![pending("lookup", "./scripts/wi-lookup W-2042 --json", &table)],
+        ..Default::default()
+    };
+    let d = decide(&ctx, &mut st, &step("t", 1, false));
+    assert!(d.predicted.is_none());
+    assert_eq!(d.would_predict.map(|p| p.route), Some("lookup".into()));
+    assert_eq!((st.arm, st.predictions), (Some(Arm::Treated), 1));
+}
+
+fn after_failure_pair(strength: Strength) -> Route {
+    route(
+        "after-pytest",
+        Trigger::AfterFailure { command: "exec python3 -m pytest".into(), signature: "No module named pytest".into() },
+        Step::Run { command: "make test".into() },
+        vec![],
+        Effect::Verify,
+        strength,
+    )
+}
+
+/// T-C6-01: a firm learned `avoid` route with a fixed `instead`, or a run after a failure at fire,
+/// answers a substitution; a prime pair, an instinct, a slotted or missing `instead`, a list, or
+/// the `instead` itself answer none.
+#[test]
+fn a_learned_dead_end_is_substituted_only_from_a_firm_fixed_pair() {
+    let (_dir, index, table) = fixture();
+    let policy = Policy::default();
+    let sub = |index: &Index, cmd: &str| substitution(index, "acme", &policy, &table, cmd);
+    let s = sub(&index, "python3 -m unittest tests.test_billing -v").expect("the dead end");
+    assert_eq!((s.route.as_str(), s.track.as_str(), s.command.as_str()), ("dead-unittest", "acme/t", "make test"));
+    assert_eq!(
+        s.context,
+        "adage ran make test in place of python3 -m unittest tests.test_billing -v: in this repository it fails (ACME_ENV is not set)."
+            .replace("(ACME", "(\"ACME")
+            .replace("set)", "set\")")
+    );
+    assert!(sub(&index, "make test").is_none(), "the working command");
+    assert!(sub(&index, "cd sub && python3 -m unittest").is_none(), "a list keeps what else it runs");
+    assert!(sub(&index, "python3 -m unittest | tail").is_none(), "a pipeline too");
+    assert!(sub(&index, "ls").is_none());
+
+    let one = |r: Route| unlocked(&[&track("acme/x", "desire-path", vec![r])]);
+    let fire = one(after_failure_pair(Strength::Fire));
+    assert_eq!(sub(&fire, "python3 -m pytest tests").map(|s| s.command), Some("make test".into()));
+    assert!(sub(&one(after_failure_pair(Strength::Prime)), "python3 -m pytest tests").is_none(), "prime");
+    let mut forming = after_failure_pair(Strength::Fire);
+    forming.state = RouteState::Forming;
+    assert!(sub(&one(forming), "python3 -m pytest tests").is_none(), "forming is delivered prime");
+    let mut dormant = npm_test_dead_end();
+    dormant.state = RouteState::Dormant;
+    assert!(sub(&one(dormant), "npm test").is_none(), "dormant");
+    assert_eq!(sub(&one(npm_test_dead_end()), "npm test").map(|s| s.route), Some("dead-end-npm".into()));
+    let slotted = route(
+        "slotted",
+        Trigger::SessionStart,
+        Step::Avoid { avoid: "npm test".into(), instead: "make test-{suite}".into(), signature: "x".into() },
+        vec![],
+        Effect::Verify,
+        Strength::Inhibit,
+    );
+    assert!(sub(&one(slotted), "npm test").is_none(), "slotted instead");
+    let empty = route(
+        "empty",
+        Trigger::SessionStart,
+        Step::Avoid { avoid: "npm test".into(), instead: " ".into(), signature: "x".into() },
+        vec![],
+        Effect::Verify,
+        Strength::Inhibit,
+    );
+    assert!(sub(&one(empty), "npm test").is_none(), "no instead");
+    let mut instinct = npm_test_dead_end();
+    instinct.evidence.provenance = "instinct:core@0.1.0".into();
+    assert!(sub(&one(instinct), "npm test").is_none(), "an instinct is advice only");
+}
+
+/// T-C6-02, the runtime half: treated substitutes and judges it `substituted`, never a follow;
+/// control and observe mode record `would_substitute` only.
+#[test]
+fn a_substitution_is_its_own_judgement_and_never_in_control() {
+    let (_dir, index, table) = fixture();
+    let s = substitution(&index, "acme", &Policy::default(), &table, "python3 -m unittest").unwrap();
+    let d = substitute(Some(Arm::Treated), false, s.clone());
+    assert_eq!(d.substituted.as_ref(), Some(&s));
+    assert!(matches!(d.judgements.as_slice(), [Judgement::Substituted { route }] if route == "dead-unittest"));
+    let v = serde_json::to_value(&d).unwrap();
+    assert_eq!(v["judgements"], json!([{ "kind": "substituted", "route": "dead-unittest" }]));
+    for (arm, observe) in [(Some(Arm::Control), false), (Some(Arm::Treated), true)] {
+        let d = substitute(arm, observe, s.clone());
+        assert!(d.substituted.is_none() && d.judgements.is_empty());
+        assert_eq!(d.would_substitute.as_ref(), Some(&s));
+    }
+    // A decision without either keeps its old bytes.
+    assert!(serde_json::to_string(&Decision::default()).unwrap().find("substitut").is_none());
+}
+
+/// T-A1-03 (the ring itself): one decision per `PreToolUse` identity, at most 64 kept, the oldest
+/// dropped first; a state written before the ring existed reads with it empty.
+#[test]
+fn the_pretool_ring_is_bounded_and_exact() {
+    let mut st = SessionState::default();
+    for id in 0..SEEN_PRETOOL as u64 {
+        assert!(st.see_pretool(id), "{id} is new");
+    }
+    assert!(!st.see_pretool(0), "decided already");
+    assert_eq!(st.seen_pretool.len(), SEEN_PRETOOL);
+    assert!(st.see_pretool(64), "a 65th identity is decided");
+    assert_eq!(st.seen_pretool.len(), SEEN_PRETOOL);
+    assert!(!st.has_seen_pretool(0), "the oldest made room");
+    assert!(st.see_pretool(0), "so it decides again");
+    assert!(st.has_seen_pretool(64) && !st.has_seen_pretool(1));
+    let old: SessionState = serde_json::from_str(r#"{"arm":null,"repo":null,"prompts":0,"batches":0,"emitted":[],"pending":[],"obligations":[],"history":[],"first_edit_at_batch":null}"#).unwrap();
+    assert!(old.seen_pretool.is_empty() && old.standing.is_none());
+    let json = serde_json::to_string(&SessionState::default()).unwrap();
+    assert!(!json.contains("seen_pretool") && !json.contains("standing"), "{json}");
+}
+
+fn card_route(id: &str, files: &[&str]) -> Route {
+    let card = card::Card {
+        sessions: 4,
+        passed: 3,
+        files: files.iter().map(|f| card::CardFile { path: f.to_string(), sessions: 4 }).collect(),
+        exemplars: vec![],
+        commands: vec![],
+        avoid: vec![],
+        finish: None,
+        prompts: vec![],
+    };
+    let trigger = Trigger::Intent { family: id.into(), model: "m".into(), centroid: vec![1], threshold: 0.9 };
+    route(id, trigger, Step::Card { card }, vec![], Effect::Observe, Strength::Prime)
+}
+
+/// T-C5-01 (the text): the standing text is the repository's session-start reflexes in their
+/// wrappers, then one line per procedure card; deterministic, whole items only, at most 2,000
+/// bytes; the routes it carries are named.
+#[test]
+fn standing_text_carries_the_session_start_reflexes_and_the_cards_within_its_bound() {
+    let (_dir, base, _table) = fixture();
+    let mut routes: Vec<Route> = base.routes.iter().map(|r| r.route.clone()).collect();
+    routes.push(card_route("card-currency", &["src/currency.py", "tests/test_<x>.py", "docs/a.md", "docs/b.md"]));
+    let index = Index::compile(&[track("acme/t", "desire-path", routes.clone())]);
+    let s = standing(&index, "acme", &Policy::default(), "env".into());
+    assert_eq!(s.routes, ["dead-unittest"], "only what a session start announces is suppressed later");
+    assert!(s.standing.starts_with("<adage-reflex track=\"acme/t@"), "{}", s.standing);
+    assert!(s.standing.contains("route=\"dead-unittest\" strength=\"inhibit\" kind=\"avoid\">"), "{}", s.standing);
+    assert!(s.standing.contains("running python3 -m unittest fails"), "{}", s.standing);
+    assert!(
+        s.standing.contains("changes that touch src/currency.py, tests/test_*.py, docs/a.md follow a known procedure, learned from 4 earlier sessions."),
+        "{}",
+        s.standing
+    );
+    assert_eq!(s.environment, "env");
+    assert_eq!(standing(&index, "acme", &Policy::default(), "env".into()), s, "deterministic");
+    assert!(standing(&index, "other", &Policy::default(), String::new()).standing.is_empty());
+    // Many session-start reflexes: whole items only, within the bound.
+    for i in 0..12 {
+        routes.push(route(
+            &format!("dead-{i}"),
+            Trigger::SessionStart,
+            Step::Avoid {
+                avoid: format!("tool-{i} run"),
+                instead: "make test".into(),
+                signature: "no such tool".into(),
+            },
+            vec![],
+            Effect::Verify,
+            Strength::Inhibit,
+        ));
+    }
+    let index = Index::compile(&[track("acme/t", "desire-path", routes)]);
+    let s = standing(&index, "acme", &Policy::default(), String::new());
+    assert!(s.standing.len() <= render::MAX_STANDING, "{}", s.standing.len());
+    assert_eq!(s.standing.matches("<adage-reflex ").count(), s.standing.matches("</adage-reflex>").count());
+    assert_eq!(
+        s.standing.matches("<adage-reflex ").count(),
+        s.routes.len() + usize::from(s.standing.contains("known procedure"))
+    );
+    assert!(s.routes.len() < 13, "not every reflex fits: {:?}", s.routes);
+}
+
+/// T-C5-01 (the suppression): once the standing text carries a reflex, the first prompt does not
+/// announce it again, and the dead end it states still holds back what it avoids.
+#[test]
+fn a_reflex_in_the_standing_text_is_not_announced_again() {
+    let (dir, index, table) = fixture();
+    let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: None,
+        params: Default::default(),
+        policy: Default::default(),
+    };
+    let prompt = Event::Prompt { text: "Pick up W-2042 please".into() };
+    let mut plain = SessionState::default();
+    let d = decide(&ctx, &mut plain, &prompt);
+    assert!(d.directives.iter().any(|x| x.route == "dead-unittest"));
+    let mut st = SessionState {
+        standing: Some(standing(&index, "acme", &Policy::default(), String::new())),
+        ..Default::default()
+    };
+    let d = decide(&ctx, &mut st, &prompt);
+    assert!(!d.directives.iter().any(|x| x.route == "dead-unittest"), "{:?}", d.directives);
+    assert!(d.directives.iter().any(|x| x.route == "lookup"), "the situational directive stays");
+    assert!(!st.emitted.contains(&"dead-unittest".to_string()));
+    assert_eq!(st.told().filter(|r| *r == "dead-unittest").count(), 1, "told through the standing text");
+}
+
+/// T-C5-04 (the binary): a step is routine only when the mod says a routine model is set, a
+/// delivered `fire` directive is pending without a `predict` grant, and the arm is treated; the
+/// control arm and observe mode record `would_route` only; a predicted step is never routed.
+#[test]
+fn routing_is_consented_and_never_in_control() {
+    let prime = route(
+        "prime-run",
+        Trigger::SessionStart,
+        Step::Run { command: "make check".into() },
+        vec![],
+        Effect::Verify,
+        Strength::Prime,
+    );
+    let (dir, index, table) = predict_fixture(vec![prime]);
+    let at = |grants: &[&str], routine: bool, observe: bool| {
+        let mut c = predict_ctx(&dir, &index, &table, grants);
+        c.policy.routine = routine;
+        c.policy.observe = observe;
+        c
+    };
+    let with = |arm: Arm, pending_routes: &[(&str, &str)]| SessionState {
+        arm: Some(arm),
+        pending: pending_routes.iter().map(|(r, c)| pending(r, c, &table)).collect(),
+        ..Default::default()
+    };
+    let lookup = [("lookup", "./scripts/wi-lookup W-2042 --json")];
+    let mut st = with(Arm::Treated, &lookup);
+    let d = decide(&at(&[], true, false), &mut st, &step("t", 1, false));
+    let want = Routing { route: "lookup".into(), track: "acme/t".into() };
+    assert_eq!((d.routine.clone(), d.would_route.clone()), (Some(want.clone()), Some(want.clone())));
+    assert!(d.predicted.is_none() && d.would_predict.is_none());
+    // Not without the person's setting, not at the turn's first request, not for a subagent.
+    assert!(decide(&at(&[], false, false), &mut with(Arm::Treated, &lookup), &step("t", 1, false))
+        .would_route
+        .is_none());
+    assert!(decide(&at(&[], true, false), &mut with(Arm::Treated, &lookup), &step("t", 0, false))
+        .would_route
+        .is_none());
+    let sub = Event::TurnStep { turn_id: "t".into(), index: 1, model: None, agent: Some("a".into()), ending: false };
+    assert!(decide(&at(&[], true, false), &mut with(Arm::Treated, &lookup), &sub).would_route.is_none());
+    // Control and observe mode: recorded, never routed.
+    for (arm, observe) in [(Arm::Control, false), (Arm::Treated, true)] {
+        let d = decide(&at(&[], true, observe), &mut with(arm, &lookup), &step("t", 1, false));
+        assert_eq!((d.routine.clone(), d.would_route.clone()), (None, Some(want.clone())), "{arm:?} {observe}");
+    }
+    // A granted directive is predicted, not routed.
+    let d = decide(&at(&["lookup"], true, false), &mut with(Arm::Treated, &lookup), &step("t", 1, false));
+    assert!(d.predicted.is_some() && d.would_route.is_none());
+    // A directive below full strength, or nothing pending: no routing.
+    let d =
+        decide(&at(&[], true, false), &mut with(Arm::Treated, &[("prime-run", "make check")]), &step("t", 1, false));
+    assert!(d.would_route.is_none());
+    assert!(decide(&at(&[], true, false), &mut with(Arm::Treated, &[]), &step("t", 1, false)).would_route.is_none());
+}
+
+// ---------------------------------------------------------------- chains and multi-call steps (C7)
+
+/// T-C7-01, T-C7-02: Adage's lookup comes back with its result; the read batch it binds is
+/// predicted at the very next step as one response with one Read per file (the only step that may
+/// follow a prediction in a row); before the batch nothing is bound, so nothing is predicted; and
+/// no third step follows without a model step between, whatever is due.
+#[test]
+fn a_chain_reads_what_adages_lookup_bound_at_the_next_step_and_never_a_third() {
+    let (dir, index, table) = predict_fixture(vec![]);
+    std::fs::write(dir.path().join("acme/rates.py"), "x").unwrap();
+    let ctx = predict_ctx(&dir, &index, &table, &["lookup", "read-linked", "gen"]);
+    let mut st = SessionState { arm: Some(Arm::Treated), ..Default::default() };
+    decide(&ctx, &mut st, &Event::Prompt { text: "Pick up W-2042 please".into() });
+    assert_eq!(decide(&ctx, &mut st, &step("t", 1, false)).predicted.unwrap().route, "lookup");
+    let d = decide(&ctx, &mut st, &step("t", 2, false));
+    assert!(d.would_predict.is_none() && !st.chained, "no batch yet: the reads are not bound");
+    let out = r#"{"id":"W-2042","linked_files":["acme/billing.py","acme/rates.py"]}"#;
+    let lookup = by_adage(bash("./scripts/wi-lookup W-2042 --json", out), "adage_lookup_t_1_0");
+    let d = decide(&ctx, &mut st, &Event::Batch { calls: vec![lookup] });
+    assert!(d.would_have.iter().any(|w| w.route == "read-linked"), "the read directive is delivered");
+    assert!(st.reads[0].after_adage, "bound from Adage's own call");
+    let d = decide(&ctx, &mut st, &step("t", 2, false));
+    let p = d.predicted.expect("the reads, as the chain's second step");
+    assert_eq!((p.kind, p.calls.len()), (PredictionKind::Chain, 2));
+    assert!(p.calls.iter().all(|c| c.tool == "Read" && c.input["file_path"].as_str().unwrap().starts_with('/')));
+    assert_eq!((st.predictions, st.chained, d.predicted_at), (2, true, Some(("t".into(), 2))));
+    let reads: Vec<Call> = ["acme/billing.py", "acme/rates.py"]
+        .iter()
+        .enumerate()
+        .map(|(k, f)| {
+            let input = json!({ "file_path": dir.path().join(f).to_string_lossy() });
+            by_adage(Call { tool: "Read".into(), input, ..bash("", "") }, &format!("adage_read-linked_t_2_{k}"))
+        })
+        .collect();
+    let d = decide(&ctx, &mut st, &Event::Batch { calls: reads });
+    let predicted: Vec<&Judgement> =
+        d.judgements.iter().filter(|j| matches!(j, Judgement::Predicted { route } if route == "read-linked")).collect();
+    assert_eq!(predicted.len(), 1, "one judgement for the response, whatever its calls: {:?}", d.judgements);
+    // Something else is due, but a third step in a row is never predicted.
+    st.pending.push(pending("gen", "make gen", &table));
+    let d = decide(&ctx, &mut st, &step("t", 3, false));
+    assert!(d.would_predict.is_none(), "a model step first");
+    let d = decide(&ctx, &mut st, &step("t", 4, false));
+    assert_eq!(d.predicted.map(|p| p.route), Some("gen".into()), "after a model step");
+    assert!(!st.chained);
+}
+
+/// A read batch the agent's own lookup bound waits for a model step after a prediction: only
+/// Adage's own lookup chains into its reads.
+#[test]
+fn only_adages_own_lookup_chains_into_its_reads() {
+    let (dir, index, table) = predict_fixture(vec![]);
+    let ctx = predict_ctx(&dir, &index, &table, &["read-linked"]);
+    let reads = |after_adage| PendingReads {
+        route: "read-linked".into(),
+        files: vec!["acme/billing.py".into()],
+        batches_left: 3,
+        after_adage,
+    };
+    let mut st = SessionState { reads: vec![reads(false)], ..Default::default() };
+    st.last_step_predicted = Some(("t".into(), 1));
+    assert!(decide(&ctx, &mut st, &step("t", 2, false)).would_predict.is_none());
+    assert!(decide(&ctx, &mut st, &step("t", 3, false)).would_predict.is_some(), "after a model step");
+    let mut st = SessionState { reads: vec![reads(true)], ..Default::default() };
+    st.last_step_predicted = Some(("t".into(), 1));
+    assert!(decide(&ctx, &mut st, &step("t", 1, true)).would_predict.is_none(), "never as the same request's end");
+    assert!(decide(&ctx, &mut st, &step("t", 2, false)).would_predict.is_some());
+    // A rebuilt state never chains: its read batches are not rebuilt.
+    let records = [json!({ "event": "x", "kind": "turn_step", "arm": "treated", "repo": "acme",
+                           "decision": { "directives": [], "would_have": [], "judgements": [], "observed": [],
+                                         "continue_reason": null, "predicted_at": ["t", 2],
+                                         "would_predict": { "kind": "chain", "route": "read-linked", "track": "acme/t", "calls": [] } } })];
+    let rebuilt = rebuild::rebuild(&records, &index, "acme", &table).unwrap();
+    assert!(rebuilt.reads.is_empty() && !rebuilt.chained && rebuilt.predictions == 1);
+}
+
+// ---------------------------------------------------------------- the finish line (C8)
+
+/// T-C8-01, T-C8-03: an armed, unmet finish line is answered at the step that ends the turn, under
+/// a grant only; Adage's call meets it, so the Stop gate has nothing to ask. If the call fails,
+/// it is not predicted again for that arming and the Stop gate asks as it always has; met, and
+/// armed again by a new edit, it may be predicted again.
+#[test]
+fn the_finish_line_is_predicted_once_per_arming_and_the_stop_gate_stays_the_fallback() {
+    let (dir, index, table) = predict_fixture(vec![]);
+    std::fs::create_dir_all(dir.path().join("schema")).unwrap();
+    let edit = || Event::Batch { calls: vec![edit_call(&dir, "schema/invoice.json")] };
+    let stop = Event::Stop { stop_hook_active: false };
+    // Without the grant: nothing at the turn's end, and the Stop gate asks.
+    let ctx = predict_ctx(&dir, &index, &table, &["lookup"]);
+    let mut st = SessionState { arm: Some(Arm::Treated), ..Default::default() };
+    decide(&ctx, &mut st, &edit());
+    assert!(decide(&ctx, &mut st, &step("t", 1, true)).would_predict.is_none());
+    assert!(decide(&ctx, &mut st, &stop).continue_reason.is_some());
+    // With it: Adage's call meets the obligation and the Stop gate asks nothing.
+    let ctx = predict_ctx(&dir, &index, &table, &["gen"]);
+    let mut st = SessionState { arm: Some(Arm::Treated), ..Default::default() };
+    decide(&ctx, &mut st, &edit());
+    let p = decide(&ctx, &mut st, &step("t", 1, true)).predicted.expect("the finish line");
+    assert_eq!((p.kind, p.route.as_str()), (PredictionKind::Obligation, "gen"));
+    decide(&ctx, &mut st, &Event::Batch { calls: vec![by_adage(bash("make gen", "ok"), "adage_gen_t_1_0")] });
+    assert!(st.obligations[0].met);
+    let d = decide(&ctx, &mut st, &stop);
+    assert!(d.continue_reason.is_none() && d.would_continue.is_none(), "met by Adage's call: nothing to ask");
+    // Met: nothing more at the next turn's end.
+    assert!(decide(&ctx, &mut st, &step("u", 1, true)).would_predict.is_none());
+    // A new edit arms it again: predicted again, once.
+    decide(&ctx, &mut st, &edit());
+    assert!(!st.obligations[0].met);
+    assert_eq!(decide(&ctx, &mut st, &step("v", 1, true)).predicted.map(|p| p.route), Some("gen".into()));
+    // The predicted call fails: the obligation stays unmet, is not predicted again, and the
+    // Stop gate asks for it as without the mod.
+    let failed = by_adage(failed_bash("make gen", "make: *** [gen] Error 1"), "adage_gen_v_1_0");
+    let d = decide(&ctx, &mut st, &Event::Failure { call: failed });
+    assert!(d.judgements.iter().all(|j| !matches!(j, Judgement::ObligationMet { .. })));
+    assert!(!st.obligations[0].met);
+    assert!(decide(&ctx, &mut st, &step("v", 2, true)).would_predict.is_none(), "once per arming");
+    let d = decide(&ctx, &mut st, &stop);
+    assert!(d.continue_reason.as_deref().is_some_and(|r| r.contains("make gen")), "{d:?}");
+}
+
+// ---------------------------------------------------------------- a receipt as the result (C3)
+
+/// The call the mod answered with a fresh receipt is observed as made and passed: a finish line
+/// the call meets, or the covering run meets, is met (so the Stop gate does not ask for a run
+/// whose result is in hand), and a directive the call follows is followed.
+#[test]
+fn a_call_answered_by_a_receipt_meets_what_it_covers() {
+    let (dir, index, table) = predict_fixture(vec![]);
+    let ctx = predict_ctx(&dir, &index, &table, &[]);
+    let test = ".venv/bin/python -m pytest tests/test_x.py -q";
+    let mut st = SessionState {
+        arm: Some(Arm::Treated),
+        pending: vec![pending("tests", ".venv/bin/python -m pytest tests/test_x.py", &table)],
+        obligations: vec![armed("check", test, &table), armed("gen", "make gen", &table)],
+        ..Default::default()
+    };
+    let d = answered_by_receipt(&ctx, &mut st, ".venv/bin/python -m pytest tests/test_x.py::test_one -xvs", test);
+    assert_eq!(d.observed.len(), 1, "{d:?}");
+    assert!(d.judgements.iter().any(|j| matches!(j, Judgement::ObligationMet { route } if route == "check")));
+    assert!(d.judgements.iter().any(|j| matches!(j, Judgement::Followed { route } if route == "tests")));
+    assert!(st.obligations[0].met && !st.obligations[1].met, "only what it covers");
+    assert!(st.pending.is_empty());
+    let d = decide(&ctx, &mut st, &Event::Stop { stop_hook_active: false });
+    assert!(d.would_continue.as_deref().is_some_and(|r| r.contains("make gen")), "the other one is still due");
+}
+
+// ---------------------------------------------------------------- attachment by capability (C9)
+
+/// T-C9-02: the standing reflexes go to a cached section only where there is one, the environment
+/// sentence to the tool's description only where it can carry one, and a subagent is told the
+/// conventions its prompt binds only where its prompt can be written; never in control.
+#[test]
+fn what_is_attached_follows_the_harness_capabilities() {
+    let (dir, index, table) = fixture();
+    let ctx = predict_ctx(&dir, &index, &table, &[]);
+    let s = Standing { standing: "reflexes".into(), environment: "env".into(), routes: vec!["dead-unittest".into()] };
+    let hooks = adage_trace::Harness::ClaudeCode.capabilities();
+    let with_mod = adage_trace::Harness::ClaudeCode.capabilities_with_mod();
+    assert_eq!(standing_for(&hooks, s.clone()), Standing::default());
+    assert_eq!(standing_for(&with_mod, s.clone()), s);
+    let describe_only = adage_trace::Capabilities { tool_description: true, ..hooks };
+    assert_eq!(standing_for(&describe_only, s.clone()), Standing { environment: "env".into(), ..Default::default() });
+    let st = SessionState { arm: Some(Arm::Treated), ..Default::default() };
+    let prompt = "Find out what W-2042 asks for and which files it names.";
+    let told = delegation(&ctx, &st, prompt, &with_mod);
+    assert!(told.contains("./scripts/wi-lookup W-2042 --json"), "the lookup bound to the delegation's item: {told}");
+    assert!(told.contains("<adage-reflex") && told.contains("make test"), "and the standing dead end: {told}");
+    assert!(told.len() <= render::MAX_STANDING);
+    assert_eq!(delegation(&ctx, &st, prompt, &hooks), "", "no subagent prompt to write");
+    let control = SessionState { arm: Some(Arm::Control), ..Default::default() };
+    assert_eq!(delegation(&ctx, &control, prompt, &with_mod), "", "never in control");
+    let unbound = delegation(&ctx, &st, "Summarise the billing module.", &with_mod);
+    assert!(!unbound.contains("wi-lookup") && unbound.contains("make test"), "{unbound}");
+}
+
+// ---------------------------------------------------------------- noticed (D2)
+
+/// A repository with one context route (`make check` after `git status` then an edit of
+/// acme/*.py) and one candidate (`make lint` after an edit of acme/*.py then `make test`, seen in
+/// 2 traces where a reflex needs 3), or the given candidates.
+fn noticing_index(candidates: Vec<adage_tracks::candidates::Candidate>) -> Index {
+    let routes = vec![ctx_route(
+        "check-ctx",
+        vec![act_item("exec git status"), CtxItem::Edit { glob: "acme/*.py".into() }],
+        3,
+        Step::Run { command: "make check".into() },
+        Effect::Verify,
+    )];
+    let t = track("acme/graph", "desire-path", routes);
+    adage_tracks::io::validate(&t).unwrap();
+    let mut index = Index::compile(&[t]);
+    index.attach_candidates([("acme".to_string(), candidates)].into_iter().collect());
+    index
+}
+
+fn lint_candidate(id: &str, last: &str, support: u32) -> adage_tracks::candidates::Candidate {
+    adage_tracks::candidates::Candidate {
+        id: id.into(),
+        trigger: Trigger::Context {
+            items: vec![CtxItem::Edit { glob: "acme/*.py".into() }, act_item(last)],
+            within: 3,
+        },
+        step: Step::Run { command: "make lint".into() },
+        support,
+        s_min: 3,
+        days: support,
+        last_seen: Some("2026-09-09".into()),
+        review: false,
+    }
+}
+
+fn noticing_ctx<'a>(dir: &'a tempfile::TempDir, index: &'a Index, table: &'a CommandTable) -> Ctx<'a> {
+    Ctx {
+        checkout: &crate::checkout::Disk,
+        index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table,
+        embed: None,
+        params: Default::default(),
+        policy: Default::default(),
+    }
+}
+
+/// T-D2-01, T-D2-02: a candidate's context notices it once per session, in both arms alike, and
+/// never as a directive; a live route with the same events fires its directive and notices
+/// nothing.
+#[test]
+fn a_candidate_is_noticed_once_never_directed_and_alike_in_both_arms() {
+    let (dir, _, table) = fixture();
+    let index = noticing_index(vec![lint_candidate("run-lint", "exec make test", 2)]);
+    let ctx = noticing_ctx(&dir, &index, &table);
+    let events = [
+        Event::Batch { calls: vec![edit_call(&dir, "acme/billing.py")] },
+        Event::Batch { calls: vec![bash("make test", "OK")] },
+    ];
+    let mut seen = Vec::new();
+    for arm in [Arm::Treated, Arm::Control] {
+        let (mut st, mut fast_st) = (SessionState { arm: Some(arm), ..Default::default() }, SessionState::default());
+        fast_st.arm = Some(arm);
+        let mut noticed = Vec::new();
+        for _ in 0..2 {
+            for ev in &events {
+                let d = decide_both(&ctx, &mut st, &mut fast_st, ev);
+                assert!(d.directives.is_empty() && d.would_have.is_empty(), "{d:?}");
+                noticed.extend(d.noticed);
+            }
+        }
+        assert_eq!(
+            noticed,
+            vec![Noticed { candidate: "run-lint".into(), support: 2, s_min: 3, review: false }],
+            "once per session"
+        );
+        assert_eq!(st.noticed, vec!["run-lint".to_string()]);
+        seen.push(noticed);
+    }
+    assert_eq!(seen[0], seen[1], "both arms record it");
+    // The same pattern as a live reflex: its directive, and nothing noticed (a candidate is never
+    // a route's id).
+    let routes = vec![ctx_route(
+        "run-lint",
+        vec![CtxItem::Edit { glob: "acme/*.py".into() }, act_item("exec make test")],
+        3,
+        Step::Run { command: "make lint".into() },
+        Effect::Verify,
+    )];
+    let mut live = Index::compile(&[track("acme/graph", "desire-path", routes)]);
+    live.attach_candidates(
+        [("acme".to_string(), vec![lint_candidate("run-lint", "exec make test", 2)])].into_iter().collect(),
+    );
+    assert!(live.candidates("acme").is_empty());
+    let ctx = noticing_ctx(&dir, &live, &table);
+    let mut st = SessionState { arm: Some(Arm::Treated), ..Default::default() };
+    let mut directed = Vec::new();
+    for ev in &events {
+        let d = decide(&ctx, &mut st, ev);
+        assert!(d.noticed.is_empty());
+        directed.extend(d.directives.into_iter().map(|x| x.route));
+    }
+    assert_eq!(directed, vec!["run-lint".to_string()]);
+}
+
+/// T-D2-03: candidates keep a context ring of their own. A relearn that changes only candidates
+/// changes their net's digest and starts their ring over, and the routes' ring is untouched (a
+/// route's context still fires on the next event); at most 64 candidates are noticed per session.
+#[test]
+fn candidates_have_their_own_bounded_ring() {
+    let (dir, _, table) = fixture();
+    let before = noticing_index(vec![lint_candidate("run-lint", "exec make test", 2)]);
+    let after = noticing_index(vec![lint_candidate("run-lint-2", "exec make build", 2)]);
+    assert_eq!(before.contexts("acme").digest, after.contexts("acme").digest, "the routes did not change");
+    assert_ne!(before.candidate_contexts("acme").digest, after.candidate_contexts("acme").digest);
+    assert_ne!(before.candidate_contexts("acme").digest, before.contexts("acme").digest);
+    let mut st = SessionState { arm: Some(Arm::Treated), ..Default::default() };
+    decide(&noticing_ctx(&dir, &before, &table), &mut st, &Event::Batch { calls: vec![bash("git status", "")] });
+    let d = decide(
+        &noticing_ctx(&dir, &before, &table),
+        &mut st,
+        &Event::Batch { calls: vec![edit_call(&dir, "acme/a.py")] },
+    );
+    assert_eq!(d.directives.iter().map(|x| x.route.as_str()).collect::<Vec<_>>(), vec!["check-ctx"]);
+    assert_eq!(st.cand_ctx.alphabet, before.candidate_contexts("acme").digest);
+    assert!(d.cand_ctx.is_some(), "the decision records the candidate ring it changed");
+    let ctx_before = st.ctx.clone();
+    // Relearned: the next edit pushes onto a fresh candidate ring, the routes' ring goes on.
+    let ctx = noticing_ctx(&dir, &after, &table);
+    decide(&ctx, &mut st, &Event::Batch { calls: vec![bash("git status", "")] });
+    assert_eq!(st.ctx.alphabet, ctx_before.alphabet);
+    let d = decide(&ctx, &mut st, &Event::Batch { calls: vec![edit_call(&dir, "acme/b.py")] });
+    assert_eq!(st.cand_ctx.alphabet, after.candidate_contexts("acme").digest, "started over");
+    assert_eq!(st.cand_ctx.ring.len(), 1);
+    assert!(st.emitted.contains(&"check-ctx".to_string()) && d.directives.is_empty(), "said once already");
+    let d = decide(&ctx, &mut st, &Event::Batch { calls: vec![bash("make build", "")] });
+    assert_eq!(d.noticed.iter().map(|n| n.candidate.as_str()).collect::<Vec<_>>(), vec!["run-lint-2"]);
+    // Bounded.
+    let mut full = SessionState { noticed: (0..MAX_NOTICED).map(|i| format!("c{i}")).collect(), ..Default::default() };
+    for ev in [
+        Event::Batch { calls: vec![edit_call(&dir, "acme/c.py")] },
+        Event::Batch { calls: vec![bash("make build", "")] },
+    ] {
+        assert!(decide(&ctx, &mut full, &ev).noticed.is_empty());
+    }
+    assert_eq!(full.noticed.len(), MAX_NOTICED);
+}
+
+/// T-D2-04 (the runtime's half): the candidate ring and what was noticed are restored from the
+/// spool, and a ring recorded under another candidate alphabet is dropped.
+#[test]
+fn noticed_and_the_candidate_ring_are_rebuilt_from_the_spool() {
+    let (dir, _, table) = fixture();
+    let index = noticing_index(vec![lint_candidate("run-lint", "exec make test", 2)]);
+    let ctx = noticing_ctx(&dir, &index, &table);
+    let mut st = SessionState { arm: Some(Arm::Treated), repo: Some("acme".into()), ..Default::default() };
+    let mut records = Vec::new();
+    for ev in [
+        Event::Batch { calls: vec![edit_call(&dir, "acme/billing.py")] },
+        Event::Batch { calls: vec![bash("make test", "OK")] },
+    ] {
+        let d = decide(&ctx, &mut st, &ev);
+        records.push(
+            json!({ "event": "PostToolBatch", "kind": "batch", "arm": "treated", "repo": "acme", "decision": d }),
+        );
+    }
+    assert_eq!(records[1]["decision"]["noticed"][0]["candidate"], "run-lint");
+    let rebuilt = rebuild::rebuild(&records, &index, "acme", &table).unwrap();
+    assert_eq!((rebuilt.cand_ctx.clone(), rebuilt.noticed.clone()), (st.cand_ctx.clone(), st.noticed.clone()));
+    // The rebuilt session does not notice it again.
+    let mut again = rebuilt;
+    for ev in [
+        Event::Batch { calls: vec![edit_call(&dir, "acme/billing.py")] },
+        Event::Batch { calls: vec![bash("make test", "OK")] },
+    ] {
+        assert!(decide(&ctx, &mut again, &ev).noticed.is_empty());
+    }
+    let relearned = noticing_index(vec![lint_candidate("run-lint-2", "exec make build", 2)]);
+    let rebuilt = rebuild::rebuild(&records, &relearned, "acme", &table).unwrap();
+    assert!(rebuilt.cand_ctx.is_empty() && rebuilt.noticed == vec!["run-lint".to_string()]);
+}
+
+/// The control arm records the same chain: the agent's own lookup, where Adage would have made
+/// it, binds the reads Adage would read at once, so `would_predict` counts the steps the treated
+/// arm makes.
+#[test]
+fn the_control_arm_records_the_chain_the_treated_arm_makes() {
+    let (dir, index, table) = predict_fixture(vec![]);
+    let ctx = predict_ctx(&dir, &index, &table, &["lookup", "read-linked"]);
+    let mut st = SessionState { arm: Some(Arm::Control), ..Default::default() };
+    decide(&ctx, &mut st, &Event::Prompt { text: "Pick up W-2042 please".into() });
+    let d = decide(&ctx, &mut st, &step("t", 1, false));
+    assert_eq!((d.predicted.is_none(), d.would_predict.map(|p| p.route)), (true, Some("lookup".into())));
+    let out = r#"{"id":"W-2042","linked_files":["acme/billing.py"]}"#;
+    decide(&ctx, &mut st, &Event::Batch { calls: vec![bash("./scripts/wi-lookup W-2042 --json", out)] });
+    assert!(st.reads[0].after_adage, "the agent's call stood where Adage's would have");
+    let d = decide(&ctx, &mut st, &step("t", 2, false));
+    assert_eq!(d.would_predict.map(|p| p.kind), Some(PredictionKind::Chain));
+    assert!(d.predicted.is_none() && st.chained && st.predictions == 2);
 }

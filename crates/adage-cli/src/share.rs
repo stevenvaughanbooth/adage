@@ -143,6 +143,8 @@ pub fn describe_step(step: &Step) -> String {
             card.sessions,
             card.passed
         ),
+        Step::Skill { skill, args: Some(a) } => format!("use the `{skill}` skill with `{a}`"),
+        Step::Skill { skill, args: None } => format!("use the `{skill}` skill"),
     }
 }
 

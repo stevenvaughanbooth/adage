@@ -30,6 +30,7 @@ pub const PYTHON: &[Suite] = &[
     Suite { name: "datasets-tools", root: "evals/datasets/tools", tests: "evals/datasets/tools" },
     Suite { name: "lab-research", root: "evals/lab/research", tests: "evals/lab/research/harness/tests" },
     Suite { name: "lab-skills", root: "evals/lab/skills", tests: "evals/lab/skills" },
+    Suite { name: "demo", root: "demo", tests: "demo" },
 ];
 
 /// Directories whose `test_*.py` files are fixtures (the tests of sandbox repositories agents work

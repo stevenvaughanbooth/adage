@@ -31,6 +31,8 @@ pub enum NodeType {
     Edit,
     Obs,
     Fail,
+    /// A skill used ([`crate::input::Step::Skill`]): labelled by its name alone.
+    Skill,
 }
 
 impl NodeType {
@@ -42,6 +44,7 @@ impl NodeType {
             NodeType::Edit => "edit",
             NodeType::Obs => "obs",
             NodeType::Fail => "fail",
+            NodeType::Skill => "skill",
         }
     }
 
@@ -53,6 +56,7 @@ impl NodeType {
             "edit" => NodeType::Edit,
             "obs" => NodeType::Obs,
             "fail" => NodeType::Fail,
+            "skill" => NodeType::Skill,
             _ => return None,
         })
     }
@@ -163,6 +167,9 @@ pub struct Influence {
     pub identities: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub paths: Vec<String>,
+    /// Skills it said to use (a `skill` directive).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub skills: Vec<String>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub all: bool,
 }
@@ -175,6 +182,10 @@ impl Influence {
     /// Whether this directive names a read of `path`.
     pub fn names_read(&self, path: &str) -> bool {
         self.all || self.paths.iter().any(|p| p == path)
+    }
+    /// Whether this directive names the skill `name`.
+    pub fn names_skill(&self, name: &str) -> bool {
+        self.all || self.skills.iter().any(|s| s == name)
     }
 }
 
@@ -438,6 +449,19 @@ pub fn from_input(s: &input::Session, meta: &Meta, table: &CommandTable) -> Even
                     sources.entry(seg.to_string()).or_insert(at);
                 }
             }
+            // A skill used: no value flows from or into it.
+            Step::Skill { name } => events.push(Event {
+                ty: NodeType::Skill,
+                key: name.clone(),
+                head: name.clone(),
+                block: "skill".into(),
+                embedding: None,
+                batch,
+                ok: true,
+                segment,
+                effect: Some(Effect::Observe),
+                signature: None,
+            }),
         }
     }
     let mut exposed: BTreeSet<u32> = BTreeSet::new();
@@ -447,6 +471,7 @@ pub fn from_input(s: &input::Session, meta: &Meta, table: &CommandTable) -> Even
             let hit = match e.ty {
                 NodeType::Act => inf.names_act(&e.head),
                 NodeType::Read => inf.names_read(&e.key),
+                NodeType::Skill => inf.names_skill(&e.key),
                 _ => false,
             };
             if hit {

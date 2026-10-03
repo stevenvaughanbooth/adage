@@ -4,10 +4,15 @@
 //! adage-exec hook    <claude|opencode|codex> <Event>   (a superset of `adage hook`: E1 prefetch, E2 actions)
 //! adage-exec run     --repo <dir> --argv '<json array>' [request flags] [--dry-run] [--record]
 //! adage-exec approve --repo <dir> --argv '<json array>' [request flags] [--by <name>]
-//! adage-exec revoke  --repo <dir> [--track <t> --route <r>]
+//! adage-exec revoke  --repo <dir> [--track <t> --route <r>] [--mode execute|predict]
 //! adage-exec status  --repo <dir>
 //! adage-exec doctor  [--json]
+//! adage-exec version
 //! ```
+//!
+//! `version` prints `adage-exec <version>` on one line and exits 0: the Claude Code mod's
+//! activation probe, so it reads nothing (no data directory, no policy) and cannot fail on a
+//! machine whose setup is incomplete.
 //!
 //! Request flags: `--input k=v`, `--contract k=<regex>`, `--effect observe`, `--level e1|e2`,
 //! `--output typed|raw`, `--fields '<json>'`, `--script <path>=<sha256>` (or `cas:<sha256>=<sha256>`
@@ -21,7 +26,7 @@
 use adage_core::{CommandTable, Effect};
 use adage_exec::approvals::{self, Approval, ApprovalKey, Store};
 use adage_exec::request::{
-    ActionKind, ActionSpec, ExecRequest, FieldSpec, Labels, Level, Origin, OutputMode, OutputSpec, ScriptRef,
+    ActionKind, ActionSpec, ExecRequest, FieldSpec, GrantMode, Labels, Level, Origin, OutputMode, OutputSpec, ScriptRef,
 };
 use adage_exec::run::{self, Context};
 use adage_exec::sandbox::{self, Profile};
@@ -38,11 +43,12 @@ const USAGE: &str = "usage:
                      [--script <path>=<sha256>]... [--track t --route r --step s]
                      [--timeout-ms n] [--cwd <subdir>] [--canary <text>]... [--dry-run] [--record]
   adage-exec approve <the same request flags> [--by <name>]
-  adage-exec revoke  --repo <dir> [--track <t> --route <r>]
+  adage-exec revoke  --repo <dir> [--track <t> --route <r>] [--mode execute|predict]
   adage-exec status  --repo <dir>
   adage-exec journal [--repo <dir>]
   adage-exec recover --id <operation-id> --acknowledge
-  adage-exec doctor  [--json]";
+  adage-exec doctor  [--json]
+  adage-exec version";
 
 struct Args {
     list: Vec<String>,
@@ -162,6 +168,7 @@ fn request(a: &Args) -> Result<ExecRequest> {
             outputs: a.all("--outputs"),
             cache: a.all("--cache"),
         }),
+        mode: Default::default(),
     })
 }
 
@@ -299,6 +306,8 @@ fn cmd_approve(a: &Args) -> Result<i32> {
         basis: serde_json::Value::Null,
         auto: false,
         terms: None,
+        // Only a person at a terminal gets here: adage-exec's verbs never take a press.
+        via: Some(adage_tracks::review::Via::Terminal),
     });
     store.save(&path)?;
     println!("Recorded in {}.", path.display());
@@ -306,7 +315,14 @@ fn cmd_approve(a: &Args) -> Result<i32> {
 }
 
 fn cmd_revoke(a: &Args) -> Result<i32> {
-    a.only(&["--repo", "--track", "--route"], &[])?;
+    a.only(&["--repo", "--track", "--route", "--mode"], &[])?;
+    // One mode at a time (execution by default): a prediction grant is its own decision, revoked
+    // only when named, as `adage review revoke --predict` does.
+    let mode = match a.one("--mode").as_deref() {
+        None | Some("execute") => GrantMode::Execute,
+        Some("predict") => GrantMode::Predict,
+        Some(m) => bail!("--mode is execute or predict, not {m:?}"),
+    };
     person::require_person("revoke")?;
     let repo = PathBuf::from(a.one("--repo").context("--repo is required")?);
     let key = adage_core::repo::repo_key(&repo.canonicalize()?);
@@ -317,9 +333,12 @@ fn cmd_revoke(a: &Args) -> Result<i32> {
     };
     let path = approvals::path(&adage_home());
     let mut store = Store::load(&path)?;
-    let n = store.revoke(&key, route.as_deref());
+    let n = store.revoke(&key, route.as_deref(), Some(mode));
     store.save(&path)?;
-    println!("Revoked {n} approval(s) for {key}.");
+    match mode {
+        GrantMode::Execute => println!("Revoked {n} approval(s) for {key}."),
+        GrantMode::Predict => println!("Revoked {n} prediction grant(s) for {key}."),
+    }
     Ok(0)
 }
 
@@ -328,9 +347,7 @@ fn cmd_status(a: &Args) -> Result<i32> {
     let repo = PathBuf::from(a.one("--repo").context("--repo is required")?);
     let key = adage_core::repo::repo_key(&repo.canonicalize()?);
     let store = Store::load(&approvals::path(&adage_home()))?;
-    let mine: Vec<&Approval> = store.approvals.iter().filter(|x| x.key.repo == key).collect();
-    println!("Execution grants for {key}: {}", mine.len());
-    for x in mine {
+    let line = |x: &Approval| {
         println!(
             "  {}  {} {}  {}  (approved {}{})",
             x.route,
@@ -339,7 +356,17 @@ fn cmd_status(a: &Args) -> Result<i32> {
             x.key.argv_templates.iter().map(|v| v.join(" ")).collect::<Vec<_>>().join(" ; "),
             x.approved_on,
             if x.auto { ", automatic" } else { "" }
-        );
+        )
+    };
+    let key = key.as_str();
+    let of = |m: GrantMode| store.approvals.iter().filter(move |x| x.key.repo == key && x.key.mode == m);
+    println!("Execution grants for {key}: {}", of(GrantMode::Execute).count());
+    of(GrantMode::Execute).for_each(line);
+    // A prediction grant runs nothing itself: it lets the step be taken in the model's place.
+    let predict = of(GrantMode::Predict).count();
+    if predict > 0 {
+        println!("Prediction grants for {key}: {predict}");
+        of(GrantMode::Predict).for_each(line);
     }
     Ok(0)
 }
@@ -428,6 +455,10 @@ fn main() {
     if args.first().map(String::as_str) == Some("hook") {
         // Before anything else: the no-match path must cost what `adage hook`'s does.
         adage_exec::hook::main(args.get(1).cloned().unwrap_or_default(), args.get(2).cloned().unwrap_or_default());
+    }
+    if args.first().map(String::as_str) == Some("version") {
+        println!("adage-exec {}", env!("CARGO_PKG_VERSION"));
+        std::process::exit(0);
     }
     if args.is_empty() || args.iter().any(|a| a == "--help" || a == "-h") {
         println!("{USAGE}");

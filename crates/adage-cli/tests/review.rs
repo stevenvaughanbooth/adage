@@ -163,7 +163,7 @@ fn install(w: &World, reference: &str, t: &Track, reviews: &[(&Route, Decision)]
     for (r, d) in reviews {
         rs.routes.insert(
             r.id.clone(),
-            Review { decision: *d, on: "2026-09-01".into(), by: None, basis: review::basis(r, 0, 0) },
+            Review { decision: *d, on: "2026-09-01".into(), by: None, basis: review::basis(r, 0, 0), via: None },
         );
     }
     review::save(&dir, &rs).unwrap();
@@ -766,6 +766,7 @@ fn routine_candidate_stays_in_execution_review_after_evidence_approval() {
         basis: json!({}),
         auto: false,
         terms: Some(terms),
+        via: None,
     });
     store.save(&adage_exec::approvals::path(&w.paths().root)).unwrap();
     assert!(!reasons(&w.queue()).contains_key(&key(NAME, "routine")));

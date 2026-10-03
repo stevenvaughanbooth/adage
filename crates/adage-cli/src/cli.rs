@@ -30,6 +30,14 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub plain: bool,
 
+    /// The status card as JSON (bare `adage` only).
+    #[arg(long)]
+    pub json: bool,
+
+    /// The status card for a pane inside an agent session (`/adage watch` instead of `adage ui`).
+    #[arg(long, hide = true)]
+    pub for_session: bool,
+
     #[command(subcommand)]
     pub command: Option<Command>,
 }
@@ -59,6 +67,10 @@ pub enum Command {
     Review(ReviewArgs),
     /// What Adage saves in this repository, measured against control sessions.
     Savings(SavingsArgs),
+    /// Turn Adage off in this repository: hooks then do nothing here.
+    Off,
+    /// Turn Adage back on in this repository (a person's decision).
+    On,
 
     // ------------------------------------------------------------------ learning
     /// What your agents actually do, read from past traces (read-only).
@@ -106,6 +118,8 @@ pub enum Command {
     HooksConfig(HooksConfigArgs),
     /// Print a shell completion script.
     Completions(CompletionsArgs),
+    /// The ledger of what sessions cost: `adage ledger note` records a harness's own figures.
+    Ledger(LedgerArgs),
     /// Update Adage to the latest version, the same way it was installed.
     #[command(
         after_help = "Until the first release is published, this builds the main branch from source with cargo."
@@ -176,6 +190,34 @@ pub struct WatchArgs {
     /// Frame size for --once, as WIDTHxHEIGHT.
     #[arg(long, value_name = "WxH")]
     pub size: Option<String>,
+    /// Follow without a terminal: one JSON object per line, for programs (with --json).
+    #[arg(long, requires = "json", conflicts_with_all = ["once", "demo", "size"])]
+    pub follow: bool,
+    /// With --follow: JSON lines.
+    #[arg(long, requires = "follow")]
+    pub json: bool,
+    /// With --follow: the session the reader runs in (its rows never name its arm).
+    #[arg(long, value_name = "ID", requires = "follow")]
+    pub session: Option<String>,
+    /// With --follow: resume just after the line that carried this cursor.
+    #[arg(long, value_name = "CURSOR", requires = "follow")]
+    pub since: Option<String>,
+    /// With --follow: `eof` (default) ends when a piped stdin closes; `ignore` never reads it,
+    /// for a parent that closes it at spawn (it still ends with its parent, or on SIGTERM).
+    #[arg(long, value_name = "eof|ignore", requires = "follow", value_parser = ["eof", "ignore"])]
+    pub stdin: Option<String>,
+}
+
+#[derive(Args, Debug)]
+pub struct LedgerArgs {
+    #[command(subcommand)]
+    pub command: LedgerCommand,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum LedgerCommand {
+    /// Record a session's usage as the harness reported it: one JSON object on stdin.
+    Note,
 }
 
 #[derive(Args, Debug)]
@@ -254,8 +296,15 @@ pub struct DelegateRoute {
     /// The reflex id.
     pub reflex: String,
     /// Execution level: `e1` (prefetch) or `e2` (an action).
-    #[arg(long, value_name = "LEVEL")]
-    pub level: String,
+    #[arg(long, value_name = "LEVEL", required_unless_present = "predict")]
+    pub level: Option<String>,
+    /// Let Adage make the reflex's call in the agent's place (the agent's permissions still apply;
+    /// adage-exec runs nothing). A separate grant from --level.
+    #[arg(
+        long,
+        conflicts_with_all = ["level", "effect", "outputs", "cache", "raw", "fields", "exit_when", "timeout_ms"]
+    )]
+    pub predict: bool,
     /// E2: files the action may write, as globs (repeatable).
     #[arg(long, value_name = "GLOB", action = clap::ArgAction::Append)]
     pub outputs: Vec<String>,
@@ -283,6 +332,17 @@ pub struct DelegateRoute {
     /// Who decided (recorded with the delegation).
     #[arg(long, value_name = "NAME")]
     pub by: Option<String>,
+    /// Answer, as JSON, what the grant would be and do (an action is staged once), and record
+    /// nothing: the first of the two acts a grant takes from the Claude Code session.
+    #[arg(long, requires = "json", conflicts_with_all = ["confirm", "predict"])]
+    pub stage: bool,
+    /// Record the grant a --stage answered: reads `{ "expect": <digest> }` on stdin, stages again,
+    /// and records only if nothing but the repository changed (answers JSON).
+    #[arg(long, conflicts_with = "predict")]
+    pub confirm: bool,
+    /// With --stage: answer as JSON.
+    #[arg(long)]
+    pub json: bool,
 }
 
 #[derive(Args, Debug)]
@@ -291,6 +351,9 @@ pub struct RevokeRoute {
     pub track: String,
     /// The reflex id.
     pub reflex: String,
+    /// Withdraw the predict grant (without it, the E1 and E2 grants).
+    #[arg(long)]
+    pub predict: bool,
     /// The repository (default: the current one).
     #[arg(long, value_name = "DIR")]
     pub repo: Option<PathBuf>,
@@ -531,6 +594,12 @@ pub enum DelegateAction {
     },
     /// Rewrites to the project's environment (PreToolUse), on their own switch.
     Rewrites {
+        /// `on` or `off`.
+        #[arg(value_parser = ["on", "off"])]
+        state: String,
+    },
+    /// Calls made in the agent's place, on this machine: off stops every predict grant at once.
+    Predict {
         /// `on` or `off`.
         #[arg(value_parser = ["on", "off"])]
         state: String,
@@ -803,7 +872,13 @@ fn overview(t: &Theme) -> StyledStr {
                 ("map", "explore reflexes and their evidence in your browser"),
             ],
         ),
-        ("When something is off", &[("doctor", "what is wrong, and the fix for each problem")]),
+        (
+            "When something is off",
+            &[
+                ("doctor", "what is wrong, and the fix for each problem"),
+                ("off", "turn Adage off in this repository (`adage on` turns it back on)"),
+            ],
+        ),
         (
             "Set up",
             &[
@@ -838,6 +913,7 @@ fn overview(t: &Theme) -> StyledStr {
                 ("ui", "the full-screen app: live, reflexes, map, health, settings"),
                 ("status", "reflexes and instincts in effect, with evidence"),
                 ("savings", "what Adage saves here"),
+                ("ledger", "record what a session cost, as its harness reported it"),
                 ("delegate", "let hooks run delegated reflexes, and rewrites"),
                 ("models", "the optional embedding model"),
                 ("completions", "shell completions"),
@@ -912,6 +988,11 @@ mod tests {
             }
         }
         for n in names {
+            // `""`: bare `adage`'s own flags (the status card's).
+            if n.is_empty() {
+                out.extend(root.get_arguments().filter_map(|a| a.get_long()).map(|l| format!("--{l}")));
+                continue;
+            }
             walk(root.find_subcommand(n).unwrap_or_else(|| panic!("no subcommand {n}")), &mut out);
         }
         out
@@ -981,6 +1062,9 @@ mod tests {
             ("update.rs", &["update"]),
             ("main.rs", &["condition", "status", "report", "delegate"]),
             ("ui/mod.rs", &["watch", "ui"]),
+            ("status_card.rs", &[""]),
+            ("ledger.rs", &["ledger"]),
+            ("switch.rs", &["off", "on"]),
         ];
         let mut missing = Vec::new();
         for (file, cmds) in table {
@@ -1094,6 +1178,7 @@ mod tests {
             &["delegate", "status", "--json"],
             &["delegate", "--json"],
             &["delegate", "rewrites", "off"],
+            &["delegate", "predict", "off"],
             &["delegate", "policy"],
             &["delegate", "policy", "--max-level", "e2"],
         ] {
@@ -1101,6 +1186,7 @@ mod tests {
             assert!(m.is_ok(), "{args:?}: {m:?}");
         }
         assert!(command(&Theme::plain()).try_get_matches_from(["adage", "delegate", "rewrites", "maybe"]).is_err());
+        assert!(command(&Theme::plain()).try_get_matches_from(["adage", "delegate", "predict", "maybe"]).is_err());
         assert!(command(&Theme::plain())
             .try_get_matches_from(["adage", "delegate", "policy", "--max-level", "e3"])
             .is_err());

@@ -170,8 +170,9 @@ Session counts are not the check. Skill-steered sessions stay optional evidence 
 ## 3. Review, then accept
 
 `adage train <skill>` stages everything under `$ADAGE_HOME/train/skills/<name>/`: `pack/` (the pack,
-unsigned), `review.json` (the review, the pack's digest, the checkout it was compiled against) and
-`procedure.graph.json` (the parsed graph). Running it again replaces them.
+unsigned), `review.json` (the review, the pack's digest, the checkout it was compiled against),
+`procedure.graph.json` (the parsed graph) and `verified.json` (what the replay found, dated; see
+[Verified in place](#verified-in-place)). Running it again replaces them.
 
 `adage train accept <name>` (a person, at a terminal: it refuses inside an agent session):
 
@@ -181,10 +182,59 @@ unsigned), `review.json` (the review, the pack's digest, the checkout it was com
    it installs unsigned and says so (`adage share` signs a pack when it travels);
 3. installs it under `$ADAGE_HOME/tracks/@imported/<owner>/<name>/`, records the acceptance
    (`$ADAGE_HOME/train/accepted.json`: name → digest), binds it to the checkout it was compiled
-   against, and recompiles the index.
+   against, and recompiles the index;
+4. marks `verified.json` accepted (`accepted_at`) when it goes with the pack just accepted (the
+   same digest).
 
 Accepted reflexes are ordinary reflexes from then on: `adage review` shows them, `weaken`,
 `extinguish` and `pin` apply, and the runtime judges them followed, ignored or misfired.
+
+### Verified in place
+
+`verified.json` sits beside the staged pack, outside it: it carries a date, which would break the
+pack's deterministic digest, and nothing in it sets a strength or a grant.
+
+```json
+{ "schema": "adage-train-verified/1",
+  "skill": { "name": "acme-work-item", "sha256": "<hex>", "inert": true,
+             "path": "/home/dev/acme/.claude/skills/acme-work-item/SKILL.md" },
+  "repo": "github.com/acme/billing", "pack": "billing/skill-acme-work-item", "digest": "<hex>",
+  "steps": [
+    { "id": "s4", "route": "acme-work-item-s4-verify", "command": "make test", "result": "works",
+      "date": "2026-10-03", "sandbox": "Linux, Landlock ABI 7 + seccomp + user/net namespaces: E1-E2 available" },
+    { "id": "s1", "command": "scripts/wi-lookup {id}", "result": "stale",
+      "signature": "exit 1: FileNotFoundError: …", "date": "2026-10-03", "sandbox": "…" } ],
+  "accepted_at": "2026-10-03" }
+```
+
+One step per compiled reflex that runs a command (a read of what a lookup lists, fixed advice
+and a prohibition have nothing of their own to replay), kept or dropped as stale: `works`,
+`stale` with what failed, or `not-replayed`. `inert` is true when the SKILL.md has no
+dynamic-context block (`` !`command` ``, which Claude Code runs when the skill expands) and its
+front matter does not say `context: fork` (the skill runs as a subagent).
+
+With the Claude Code mod, once the pack is accepted, every expansion of the skill in that
+repository (`/acme-work-item`, the Skill tool, a subagent's preload) reaches the model with these
+lines after its text, through `adage hook claude SkillPrompt`:
+
+```text
+Adage verified these steps in this repository on 2026-10-03:
+- make test: works
+- scripts/wi-lookup {id}: stale (exit 1: FileNotFoundError: …)
+```
+
+Only verified and stale steps are listed, every value sanitised, at most 2,400 bytes. The skill
+file is untouched. A changed skill (a new `sha256`) is staged unaccepted until it is accepted
+again; training the same skill again into the same pack keeps the acceptance. In the control arm
+the text is unchanged and `would_annotate` is recorded. The skill file is read again at every
+use: when the file at `path` no longer hashes to `sha256` (edited since it was trained and
+accepted, or gone), nothing is added to its text, and it is never invoked; `inert` is read from
+the file again, not taken from the record. A record without a `path` (written by an earlier
+build) is not used until the skill is trained again.
+
+`inert` also decides whether a `skill` reflex may invoke the skill in the model's place
+(the mod's `turn.step`): only an inert skill, accepted here, with `adage config set skills.invoke
+true` and a `predict` grant on the reflex ([how it works](how-it-works.md#six-distinct-behaviors)).
 
 ## Strength: the rule for compiled skills
 

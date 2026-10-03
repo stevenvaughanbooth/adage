@@ -158,6 +158,11 @@ fn accept(args: &[String], paths: &Paths) -> Result<()> {
     let record = adage_pack::install::Record { version, digest: digest.clone(), via };
     adage_pack::install::record(&paths.tracks(), &pack.manifest.pack.name, record)?;
     packs::record_accepted(paths, &pack.manifest.pack.name, &digest)?;
+    // The replay record beside the pack (`verified.json`) goes with it: accepting the pack is what
+    // lets a session read it (the Claude Code mod's `skill.prompt`, a skill's invocation).
+    if let Err(e) = adage_pack::verified::accept(&dir, &digest, &adage_tracks::review::today()) {
+        eprintln!("adage: the replay record of {name} could not be marked accepted ({e:#}); compile the skill again");
+    }
     let root = PathBuf::from(&review.root);
     let cwd_root = std::env::current_dir().ok().and_then(|d| adage_core::repo::find_root(&d));
     let bind_root = if root.is_dir() { Some(root) } else { cwd_root };

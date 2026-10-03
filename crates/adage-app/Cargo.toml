@@ -15,12 +15,14 @@ adage-runtime = { path = "../adage-runtime" }
 adage-learn = { path = "../adage-learn" }
 adage-exec = { path = "../adage-exec" }
 adage-hook = { path = "../adage-hook" }
+adage-pack = { path = "../adage-pack" }
 adage-term = { path = "../adage-term" }
 serde.workspace = true
 sha2.workspace = true
 anyhow.workspace = true
 regex.workspace = true
 serde_json.workspace = true
+toml.workspace = true
 
 [dev-dependencies]
 tempfile = "3"

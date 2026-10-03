@@ -30,6 +30,10 @@ pub enum Step {
     Read { path: String },
     /// A repository-relative path edited or written.
     Edit { path: String },
+    /// A skill the harness offers, used (a Claude Code `Skill` tool use): its name, as
+    /// `adage_tracks::safe_skill_name` admits it. A step the learner may direct (`Step::Skill`),
+    /// never a context item on its own.
+    Skill { name: String },
 }
 
 /// What an importer knows about one step beyond its [`Step`] (Track G §1.1, G0): the model turn

@@ -14,7 +14,7 @@ use crate::signals::{asks_for_help, call_steps, Prompts, Signals};
 use adage_core::tools::normalize_tool;
 use adage_core::{tokens, CommandTable};
 use adage_trace::session::{Ending, CLAUDE_CODE};
-use adage_trace::{wire, Call, Session};
+use adage_trace::{wire, By, Call, Session};
 use serde_json::Value;
 use std::collections::{BTreeSet, HashMap};
 use std::io::BufRead;
@@ -214,7 +214,12 @@ pub fn decode(reader: impl BufRead, cx: &Decode<'_>) -> Option<Session> {
         }
         first_step.push(steps.len() as u32);
         let (output, failed) = results.get(&tid).cloned().unwrap_or_default();
-        let call = Call { tool: name.clone(), input: input.clone(), output, failed };
+        // A call the mod made in the agent's place carries Adage's id (`adage_…`): never organic
+        // evidence of what the agent does. The id itself is not kept, so an agent's calls read
+        // and cache exactly as before.
+        let by = By::of_tool_use_id(&tid);
+        let call =
+            Call { tool: name.clone(), input: input.clone(), output, failed, by, tool_use_id: None, agent: None };
         let direct = input
             .get("command")
             .and_then(Value::as_str)
@@ -314,7 +319,15 @@ mod tests {
     fn steps(command: &str, failed: bool) -> Vec<(String, bool)> {
         let table = CommandTable::load();
         let input = serde_json::json!({ "command": command });
-        let call = Call { tool: "Bash".into(), input: input.clone(), output: String::new(), failed };
+        let call = Call {
+            tool: "Bash".into(),
+            input: input.clone(),
+            output: String::new(),
+            failed,
+            by: By::Agent,
+            tool_use_id: None,
+            agent: None,
+        };
         call_steps(0, 0, &call, normalize_tool("Bash", &input, "/r", &table), Path::new("/r"))
             .into_iter()
             .map(|s| (s.key, s.call.failed))
@@ -357,6 +370,49 @@ mod tests {
         assert_eq!(got, [("Fix BIL-1041", 0), ("now run the checks", 2), ("thanks", 3)]);
         assert_eq!(s.steps.iter().map(|x| x.prompt).collect::<Vec<_>>(), [0, 0, 1]);
         assert_eq!(s.prompt_count(), 3);
+    }
+
+    /// Plan §2.1 item 3: a call whose tool-use id Adage minted (`adage_…`, a step the Claude Code
+    /// mod made in the agent's place) is Adage's in the trace; every other call stays the agent's,
+    /// and no call keeps its id.
+    #[test]
+    fn calls_with_adages_ids_are_adages() {
+        let rec = |v: serde_json::Value| format!("{v}\n");
+        let tool = |mid: &str, id: &str, cmd: &str| {
+            rec(serde_json::json!({"type":"assistant","sessionId":"s","message":{"id":mid,"role":"assistant",
+                "content":[{"type":"tool_use","id":id,"name":"Bash","input":{"command":cmd}}]}}))
+        };
+        let result = |id: &str| {
+            rec(serde_json::json!({"type":"user","sessionId":"s","message":{"role":"user",
+                "content":[{"type":"tool_result","tool_use_id":id,"content":"ok"}]}}))
+        };
+        let body = [
+            rec(serde_json::json!({"type":"user","sessionId":"s","cwd":"/tmp/x","timestamp":"2026-09-01T00:00:00Z",
+                "message":{"role":"user","content":"Change the schema"}})),
+            tool("m1", "toolu_01", "ls"),
+            result("toolu_01"),
+            tool("m2", "adage_gen_turn-1_2_0", "make gen"),
+            result("adage_gen_turn-1_2_0"),
+            tool("m3", "toolu_adage_x", "make check"),
+            result("toolu_adage_x"),
+        ]
+        .concat();
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("s.jsonl");
+        std::fs::write(&p, body).unwrap();
+        let s = parse_transcript(&p, &CommandTable::load(), Some("r")).unwrap();
+        let by: Vec<(String, By)> = s.steps.iter().map(|x| (x.key.clone(), x.call.by)).collect();
+        assert_eq!(
+            by,
+            [
+                ("list {path}".to_string(), By::Agent),
+                ("exec make gen".into(), By::Adage),
+                ("exec make check".into(), By::Agent)
+            ]
+        );
+        assert!(s.steps.iter().all(|x| x.call.tool_use_id.is_none()));
+        let json = serde_json::to_string(&s.steps[0]).unwrap();
+        assert!(!json.contains("\"by\""), "an agent's step reads as before: {json}");
     }
 
     /// Only hook output steers: an edited file's snippet that quotes the wrapper (an edit to

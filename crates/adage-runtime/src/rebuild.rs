@@ -17,7 +17,9 @@
 //! | `stop_requests`, `stop_requested` | each recorded stop request, applied as the runtime does |
 //! | `stop_gates` | each `stop_gate` record (`adage-exec`'s finish-line gate ran), so the cap survives |
 //! | `intent` | the family of the last intent route emitted |
+//! | `predictions`, `last_step_predicted`, `predicted_routes` | each `turn_step` decision whose prediction counted (`predicted_at`) |
 //! | `ctx` | the last context state recorded (a decision records it when its event changed it), if it belongs to the index's alphabet for the repository |
+//! | `cand_ctx`, `noticed` | the same for the candidates' own alphabet (`Index::candidate_contexts`); every candidate any decision noticed, in order |
 //!
 //! Every event that changes the context state reaches the runtime and is recorded (the no-match
 //! fast path skips only events outside the alphabet), so the last recorded state is the state. A
@@ -25,7 +27,8 @@
 //! ids mean other items now.
 //!
 //! What a record does not show is left out, on the quiet side: an in-flight follow judgement
-//! (`pending`, at most three batches long) is dropped, and an obligation re-armed by a later edit
+//! (`pending`, at most three batches long) and a bound read batch (`reads`) are dropped (so nothing
+//! is predicted from them), and an obligation re-armed by a later edit
 //! after it was met stays met (the spool keeps call keys, not the edited paths), so a rebuilt
 //! session may miss a stop request but never makes an extra one.
 
@@ -53,6 +56,7 @@ pub fn kind_of(record: &Value) -> &str {
         "Stop" | "session.idle" => "stop",
         "SessionStart" | "session.created" => "session_start",
         "SessionEnd" | "session.deleted" => "session_end",
+        "TurnStep" => "turn_step",
         _ => "",
     }
 }
@@ -87,6 +91,24 @@ pub fn rebuild(records: &[Value], index: &Index, repo: &str, table: &CommandTabl
         };
         if let Some(c) = d.ctx {
             st.ctx = c;
+        }
+        if let Some(c) = d.cand_ctx {
+            st.cand_ctx = c;
+        }
+        for n in &d.noticed {
+            if st.noticed.len() < crate::MAX_NOTICED && !st.noticed.contains(&n.candidate) {
+                st.noticed.push(n.candidate.clone());
+            }
+        }
+        // A step whose prediction counted against the bounds (both arms record it).
+        if let Some(at) = d.predicted_at {
+            st.predictions = st.predictions.saturating_add(1);
+            st.last_step_predicted = Some(at);
+            if let Some(p) = &d.would_predict {
+                if !st.predicted_routes.contains(&p.route) {
+                    st.predicted_routes.push(p.route.clone());
+                }
+            }
         }
         for key in d.observed {
             if kind == "batch" && (key.starts_with("edit ") || key.starts_with("write ")) {
@@ -163,6 +185,9 @@ pub fn rebuild(records: &[Value], index: &Index, repo: &str, table: &CommandTabl
     if st.ctx.alphabet != index.contexts(repo).digest {
         st.ctx = Default::default();
     }
+    if st.cand_ctx.alphabet != index.candidate_contexts(repo).digest {
+        st.cand_ctx = Default::default();
+    }
     st.repo.get_or_insert_with(|| repo.to_string());
     Some(st)
 }
@@ -181,6 +206,7 @@ mod tests {
             ("tool.execute.after", "batch"),
             ("PostToolUseFailure", "failure"),
             ("session.idle", "stop"),
+            ("TurnStep", "turn_step"),
             ("Mystery", ""),
         ] {
             assert_eq!(kind_of(&json!({ "event": event })), kind, "{event}");

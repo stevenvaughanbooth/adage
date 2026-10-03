@@ -334,3 +334,46 @@ fn matches_git_rev_list() {
     git(&w, &["worktree", "add", "-q", "-b", "side", wt.to_str().unwrap()]).unwrap();
     assert_eq!(repo_key(&wt), want, "a linked worktree has its main checkout's key");
 }
+
+/// `Repo::committed` against real git: a committed file's bytes, loose and then packed; nothing
+/// for a file only in the work tree, a directory, or a path through a file. Skipped when git is
+/// not installed.
+#[test]
+fn committed_files_match_git() {
+    let git = |dir: &Path, args: &[&str]| {
+        std::process::Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_AUTHOR_NAME", "a")
+            .env("GIT_AUTHOR_EMAIL", "a@b")
+            .env("GIT_COMMITTER_NAME", "a")
+            .env("GIT_COMMITTER_EMAIL", "a@b")
+            .output()
+    };
+    let d = tempfile::tempdir().unwrap();
+    let w = d.path().join("repo");
+    std::fs::create_dir_all(w.join("packs/team")).unwrap();
+    if !git(&w, &["init", "-q", "-b", "main"]).is_ok_and(|o| o.status.success()) {
+        eprintln!("git not available: skipping");
+        return;
+    }
+    std::fs::write(w.join("packs/team/adage-pack.toml"), "[pack]\nname = \"team\"\n").unwrap();
+    git(&w, &["add", "."]).unwrap();
+    git(&w, &["commit", "-q", "-m", "team pack"]).unwrap();
+    std::fs::write(w.join("packs/team/extra.toml"), "uncommitted").unwrap();
+    for pass in ["loose", "packed"] {
+        let mut repo = adage_core::gitobj::Repo::open(&w).unwrap();
+        assert_eq!(
+            repo.committed("packs/team/adage-pack.toml", 1 << 20).as_deref(),
+            Some(&b"[pack]\nname = \"team\"\n"[..]),
+            "{pass}"
+        );
+        assert_eq!(repo.committed("packs/team/extra.toml", 1 << 20), None, "{pass}: only in the work tree");
+        assert_eq!(repo.committed("packs/team", 1 << 20), None, "{pass}: a directory");
+        assert_eq!(repo.committed("packs/team/adage-pack.toml/x", 1 << 20), None, "{pass}: through a file");
+        assert_eq!(repo.committed("packs/team/adage-pack.toml", 4), None, "{pass}: larger than asked");
+        git(&w, &["gc", "-q", "--aggressive"]).unwrap();
+    }
+}

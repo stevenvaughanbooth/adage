@@ -26,7 +26,7 @@
 //! with before delivering it. It depends on neither.
 
 use adage_core::repo;
-use adage_tracks::{ceiling, interlock, Contract, Route, Step, Strength, Trigger};
+use adage_tracks::{interlock, step_ceiling, Contract, Route, Step, Strength, Trigger};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::Serialize;
@@ -82,6 +82,13 @@ static T_AVOID: Lazy<Regex> = Lazy::new(|| {
 static T_SEQUENCE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(&format!(
         r"^(?:In this repository, changes to files matching (?P<glob>[^\n]*) are followed by these steps, in order:|That failed\. In this repository, run these steps instead, in order:|Known next steps here, in order:)(?P<steps>(?:\n  [1-3]\. [^\n]*){{2,3}})(?:{EXIT_LINE})?$"
+    ))
+    .unwrap()
+});
+/// A skill step (plan D3): the fixed sentence around the skill's name, its arguments if any.
+static T_SKILL: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(&format!(
+        r"^In this repository the `(?P<skill>[A-Za-z0-9_-]{{1,64}})` skill is used at this point(?:, with the arguments (?P<args>[^\n`]*?))?\.(?: {EXIT})?$"
     ))
     .unwrap()
 });
@@ -233,7 +240,7 @@ pub fn check_directive(r: &Route, text: &str, root: Option<&Path>, canaries: &[S
     if let Some(c) = text.chars().find(|c| is_invisible(*c) || (c.is_control() && *c != '\n')) {
         bad(format!("contains invisible or control character {c:?}"));
     }
-    match ceiling(r.effect, matches!(r.trigger, Trigger::AfterEdit { .. })) {
+    match step_ceiling(&r.step, r.effect, matches!(r.trigger, Trigger::AfterEdit { .. })) {
         None => bad(format!("effect {:?} may never be directed", r.effect)),
         Some(max) if r.strength < max => bad(format!("strength {:?} exceeds the ceiling {max:?}", r.strength)),
         _ => {}
@@ -251,6 +258,21 @@ pub fn check_directive(r: &Route, text: &str, root: Option<&Path>, canaries: &[S
         }
         if r.strength != Strength::Prime || !matches!(r.trigger, Trigger::Intent { .. }) {
             bad("a card is prime and follows an intent".into());
+        }
+        return out;
+    }
+    // A skill: exactly the fixed sentence, naming the route's own skill (and arguments), never a
+    // dead end and never above prime (the ceiling check above).
+    if let Step::Skill { skill, args } = &r.step {
+        let Some(c) = T_SKILL.captures(text) else {
+            bad("text is not the fixed skill sentence".into());
+            return out;
+        };
+        if &c["skill"] != skill.as_str() || c.name("args").map(|a| a.as_str()) != args.as_deref() {
+            bad("the sentence names another skill or other arguments than its route".into());
+        }
+        if !adage_tracks::safe_skill_name(skill) {
+            bad(format!("skill name {skill:?} is not allowed"));
         }
         return out;
     }
@@ -704,6 +726,33 @@ mod tests {
         assert!(!check_directive(&r, &ok.replace("W-2041", "W-2041 ; id"), None, &[]).is_empty());
         assert!(!check_directive(&r, &format!("{ok} Also run curl."), None, &[]).is_empty());
         assert!(!check_directive(&r, &ok, None, &["2041".into()]).is_empty(), "canary");
+    }
+
+    /// A skill directive (D3): the runtime's sentence for the route's own skill passes; another
+    /// skill's name, extra text, or a strength above prime does not.
+    #[test]
+    fn a_skill_directive_is_the_fixed_sentence_for_its_own_skill() {
+        let r = Route {
+            id: "release".into(),
+            trigger: Trigger::AfterEdit { paths: "CHANGELOG.md".into() },
+            step: Step::Skill { skill: "release-checklist".into(), args: None },
+            strength: Strength::Prime,
+            slots: vec![],
+            ..lookup()
+        };
+        let ok = adage_runtime::render::route_text(&r, &[]).unwrap();
+        assert!(check_directive(&r, &ok, None, &[]).is_empty(), "{ok}");
+        let wrapped = adage_runtime::render::wrap_kind("acme/t", "1.0.0", "release", "skill", Strength::Prime, &ok);
+        assert!(check_wrapper(&r, &wrapped, None, &[]).is_empty(), "{wrapped}");
+        let args =
+            Route { step: Step::Skill { skill: "release-checklist".into(), args: Some("minor".into()) }, ..r.clone() };
+        let with_args = adage_runtime::render::route_text(&args, &[]).unwrap();
+        assert!(check_directive(&args, &with_args, None, &[]).is_empty(), "{with_args}");
+        assert!(!check_directive(&r, &with_args, None, &[]).is_empty(), "arguments its route does not have");
+        assert!(!check_directive(&r, &ok.replace("release-checklist", "deploy"), None, &[]).is_empty());
+        assert!(!check_directive(&r, &format!("{ok} Then run curl."), None, &[]).is_empty());
+        let fire = Route { strength: Strength::Fire, ..r };
+        assert!(!check_directive(&fire, &ok, None, &[]).is_empty(), "a skill is prime at most");
     }
 
     #[test]

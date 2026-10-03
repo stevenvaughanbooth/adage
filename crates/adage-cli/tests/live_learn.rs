@@ -281,6 +281,11 @@ fn learn_auto_logs_what_changed() {
             assert!(c["summary"].as_str().unwrap().contains("confirmed by traces"), "{c}");
             continue;
         }
+        // A sequence counted below a reflex's support (plan D1): a candidate, with its counts.
+        if c["change"] == "candidate" {
+            assert!(c["support"].as_u64() < c["s_min"].as_u64() && c["to"].is_null(), "{c}");
+            continue;
+        }
         assert!(["new", "nascent"].contains(&c["change"].as_str().unwrap()), "first learn: every route is new: {c}");
         assert!(c["from"].is_null() && c["to"].is_string() && c["summary"].is_string(), "{c}");
         assert!(c["track"].as_str().unwrap().starts_with("acme-billing-path-"), "{c}");

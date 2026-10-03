@@ -338,6 +338,7 @@ mod tests {
                     outputs: vec!["gen/**".into()],
                     cache: vec![],
                 }),
+                mode: Default::default(),
             };
             let mut store = Store::default();
             store.approve(Approval {
@@ -348,6 +349,7 @@ mod tests {
                 basis: serde_json::Value::Null,
                 auto: false,
                 terms: None,
+                via: None,
             });
             store.save(&approvals::path(&home)).unwrap();
             Self { _dir: dir, home, req }

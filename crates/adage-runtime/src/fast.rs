@@ -5,7 +5,8 @@
 //! [`skip`] says an event can be skipped only when running [`crate::decide`] on it would give no
 //! directive, no judgement and no stop request, and would change nothing in the session state that
 //! a later decision reads (`emitted`, `pending`, `obligations`, `stop_requests`, `prompts`
-//! while it is 0, the context state `ctx`, and `new_tests`, which a later receipt reads). What a skipped event leaves out is measurement
+//! while it is 0, the context state `ctx` and the candidates' `cand_ctx` and `noticed`, and
+//! `new_tests`, which a later receipt reads). What a skipped event leaves out is measurement
 //! only: the `batches` and `history` counters, and its spool record, so `adage graph` lists
 //! commands only from recorded
 //! events. Runs of a dead end's avoided commands are always recorded (they are words in the
@@ -17,14 +18,18 @@
 //! | --- | --- |
 //! | session start, session end | always: nothing decides on them |
 //! | prompt | no intent routes; no prompt route's span kind in the text; no prompt token a prompt route's learned value type accepts; not the session's first prompt (`prompts` > 0) |
-//! | batch | no pending judgement, no obligation and no procedure card waiting for an edit (`card_waiting`) in the state; no call might match ([`Triggers::call_might_match`]); no edit adds a test function to a test file (`new_tests`, which a receipt names) |
+//! | batch | no pending judgement, no bound read batch (`reads`), no obligation and no procedure card waiting for an edit (`card_waiting`) in the state; no call might match ([`Triggers::call_might_match`]); no edit adds a test function to a test file (`new_tests`, which a receipt names) |
 //! | failure | no call might match, and no pending judgement (a failure of a directed command judges it `misfired`) |
 //! | stop | no obligation both unmet and not yet requested |
+//! | turn step | no pending judgement, no bound read batch (`reads`) and no unmet obligation |
 //!
 //! **Context triggers** (Track G §7.3) match a subsequence over *alphabet* events only: an event
 //! that satisfies no context item pushes nothing and changes no match. Every item's words, globs,
 //! value types and intents are in the triggers ([`Triggers::of`]), so an event that might be an
 //! alphabet event is never skipped, and skipping the rest is exactly equivalent.
+//! Candidates (a repository's sequences below a reflex's support) are noticed the same way, over
+//! their own alphabet: their items' words and globs are in the triggers too
+//! (`Triggers::with_candidates`), so an event that could notice one is never skipped either.
 //!
 //! The eval replay checks this on every event of every dataset: a skipped event's full decision
 //! must be empty, and deciding with the fast path must give the same decisions as without it
@@ -65,7 +70,9 @@ pub fn skip(t: &Triggers, ev: &Event, cwd: &str, state: impl FnOnce() -> Option<
             }
             // A procedure card waiting for the session's first edit of one of its files (a prompt
             // just below its threshold) is said at an edit no trigger word names.
-            state().is_some_and(|st| st.pending.is_empty() && st.obligations.is_empty() && st.card_waiting.is_none())
+            state().is_some_and(|st| {
+                st.pending.is_empty() && st.obligations.is_empty() && st.card_waiting.is_none() && st.reads.is_empty()
+            })
         }
         // A failure can also judge a pending directive (followed, and it failed).
         Event::Failure { call } => {
@@ -73,6 +80,10 @@ pub fn skip(t: &Triggers, ev: &Event, cwd: &str, state: impl FnOnce() -> Option<
                 && state().is_some_and(|st| st.pending.is_empty())
         }
         Event::Stop { .. } => state().is_some_and(|st| !st.obligations.iter().any(|o| !o.met && !o.stop_requested)),
+        // Only what Adage already directed is ever predicted: with nothing pending, no read batch
+        // bound and no armed finish line, there is nothing to predict and nothing to record.
+        Event::TurnStep { .. } => state()
+            .is_some_and(|st| st.pending.is_empty() && st.reads.is_empty() && !st.obligations.iter().any(|o| !o.met)),
     }
 }
 
@@ -85,7 +96,7 @@ fn haystack(cwd: &str, tool: &str, input: &serde_json::Value) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Call, Obligation, Pending};
+    use crate::{By, Call, Obligation, Pending};
     use adage_core::spans::SpanKind;
     use serde_json::json;
 
@@ -96,6 +107,9 @@ mod tests {
                 input: json!({"command": "ls"}),
                 output: String::new(),
                 failed: false,
+                by: By::Agent,
+                tool_use_id: None,
+                agent: None,
             }],
         }
     }
@@ -143,7 +157,15 @@ mod tests {
         assert!(!skip(&t, &Event::Prompt { text: "anything".into() }, "/r", never));
         let t = Triggers { words: vec!["pytest".into()], ..Default::default() };
         let failed = |cmd: &str| Event::Failure {
-            call: Call { tool: "Bash".into(), input: json!({ "command": cmd }), output: String::new(), failed: true },
+            call: Call {
+                tool: "Bash".into(),
+                input: json!({ "command": cmd }),
+                output: String::new(),
+                failed: true,
+                by: By::Agent,
+                tool_use_id: None,
+                agent: None,
+            },
         };
         assert!(!skip(&t, &failed("python -m pytest -q"), "/r", never));
         let fresh = || Some(SessionState::default());
@@ -156,6 +178,9 @@ mod tests {
                 input: json!({"command": "pytest"}),
                 output: String::new(),
                 failed: false,
+                by: By::Agent,
+                tool_use_id: None,
+                agent: None,
             }],
         };
         assert!(!skip(&t, &calls_that_might, "/r", never));

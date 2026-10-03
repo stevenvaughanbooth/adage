@@ -129,23 +129,7 @@ impl Triggers {
                 // an event of *any* item of the context, not only its last: each one moves the
                 // session's context state. The words of every command, the literal pieces of every
                 // glob, every learned value type, and any intent.
-                Trigger::Context { items, .. } => {
-                    for it in items {
-                        match it {
-                            CtxItem::Act { keys } | CtxItem::Fail { keys, .. } => {
-                                for k in keys {
-                                    match key_word(k) {
-                                        Some(w) => t.words.push(w),
-                                        None => t.any_call = true,
-                                    }
-                                }
-                            }
-                            CtxItem::Edit { glob } => t.edit_globs.push(glob.clone()),
-                            CtxItem::PromptValue { vtype } => t.prompt_types.push(vtype.runs.clone()),
-                            CtxItem::Intent { .. } => t.intent = true,
-                        }
-                    }
-                }
+                Trigger::Context { items, .. } => t.add_items(items),
             }
             // A dead end's avoided runners: their runs are recorded (`adage graph` counts them).
             if let Step::Avoid { avoid, .. } = &r.step {
@@ -157,15 +141,55 @@ impl Triggers {
                 }
             }
         }
-        t.prompt_spans.sort();
-        t.prompt_spans.dedup();
-        t.prompt_types.sort();
-        t.prompt_types.dedup();
-        t.words.sort();
-        t.words.dedup();
-        t.edit_globs.sort();
-        t.edit_globs.dedup();
+        t.normalize();
         t
+    }
+
+    /// These triggers with a repository's candidates folded in (`crate::candidates`, plan D1):
+    /// a candidate is walked like a route's context, so every event of any of its items must
+    /// reach the full path, or the fast path would skip an event that notices one.
+    pub fn with_candidates<'a>(
+        mut self,
+        candidates: impl IntoIterator<Item = &'a crate::candidates::Candidate>,
+    ) -> Triggers {
+        for c in candidates {
+            if let Trigger::Context { items, .. } = &c.trigger {
+                self.add_items(items);
+            }
+        }
+        self.normalize();
+        self
+    }
+
+    /// The words of every command, the literal pieces of every glob, every learned value type,
+    /// and any intent, of these context items.
+    fn add_items(&mut self, items: &[CtxItem]) {
+        for it in items {
+            match it {
+                CtxItem::Act { keys } | CtxItem::Fail { keys, .. } => {
+                    for k in keys {
+                        match key_word(k) {
+                            Some(w) => self.words.push(w),
+                            None => self.any_call = true,
+                        }
+                    }
+                }
+                CtxItem::Edit { glob } => self.edit_globs.push(glob.clone()),
+                CtxItem::PromptValue { vtype } => self.prompt_types.push(vtype.runs.clone()),
+                CtxItem::Intent { .. } => self.intent = true,
+            }
+        }
+    }
+
+    fn normalize(&mut self) {
+        self.prompt_spans.sort();
+        self.prompt_spans.dedup();
+        self.prompt_types.sort();
+        self.prompt_types.dedup();
+        self.words.sort();
+        self.words.dedup();
+        self.edit_globs.sort();
+        self.edit_globs.dedup();
     }
 
     /// Whether a tool call with this input (the tool's name, its input as JSON, and the working

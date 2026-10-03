@@ -32,6 +32,15 @@ dev-v8b's lessons are built in:
   - a hook-arm session without a contract, with a withheld approval or with no receipt;
   - unverified or censored counts;
   - an unrealized control.
+
+The MOD design (`--design dev-v9-mod`, protocol dev-arms-3; plan E2, Layer 4 of the Claude Code
+mod): arms A0, A4 and MOD in the same 16 paired blocks, where MOD is A4's hooks plus the mod
+loaded with `--plugin-dir` (its module alone: the command hooks stay A4's, so none runs twice),
+and a person's `predict` grant on the frozen predict routes lets Adage make a directed step in the
+model's place. MOD runs its own five controls and is the only arm that can be BEST; A4 is
+reported beside it. The person's step, the grants, comes before any positive block (`dry-run`
+shows the order), and the study is judged by the registered `dev_thresholds_v9` rule. A frozen MOD
+study needs a protocol revision naming `dev-v9-mod` registered first; no MOD run has happened.
 """
 import argparse
 import json
@@ -53,16 +62,30 @@ import real_repo_pairs as pairs
 import receipt_replay
 
 gate = pairs.substrate
-PROTOCOL = "dev-arms-2"
 ARMS = {
     "A0": dict(hooks=False, card_orientation=None, label="no Adage hooks"),
     "A2f": dict(hooks=True, card_orientation=False,
                 label="verification ownership; the card as shipped before orientation (exemplar)"),
     "A4": dict(hooks=True, card_orientation=True, label="verification ownership plus the orientation card"),
+    "MOD": dict(hooks=True, card_orientation=True, mod=True,
+                label="A4 plus the Claude Code mod: the directed step made in the model's place under a person's predict grant"),
 }
-PRIMARY = "A4"
+# Each design: its protocol, its arms in matrix order, and the arms that run the five controls (only
+# those can be BEST). dev-v9 is the registered design as it ran (dev-v9b); dev-v9-mod adds MOD.
+DESIGNS = {
+    "dev-v9": dict(protocol="dev-arms-2", arms=("A0", "A2f", "A4"), control_arms=("A4",), primary="A4"),
+    "dev-v9-mod": dict(protocol="dev-arms-3", arms=("A0", "A4", "MOD"), control_arms=("MOD",), primary="MOD"),
+}
+DESIGN = "dev-v9"
+PROTOCOL = DESIGNS[DESIGN]["protocol"]
+PRIMARY = DESIGNS[DESIGN]["primary"]
 BLOCKS = 16
-CONTROL_ARMS = ("A4",)
+CONTROL_ARMS = DESIGNS[DESIGN]["control_arms"]
+# What a protocol revision must name before a MOD study can be frozen (registered before dispatch).
+MOD_REVISION = "dev-v9-mod"
+# The mod's module from the repository's plugin, staged into the frozen study with its command hooks
+# removed (the study's own registration runs them).
+PLUGIN = Path(__file__).resolve().parents[3] / "plugin" / "claude-code"
 CONTROLS = dev_arms.CONTROLS
 REALISM = heldout_tasks.REALISM
 SESSION_CAP_USD = 0.50
@@ -81,12 +104,22 @@ def sources():
     return {**dev_arms.sources(), **{str(p.resolve()): pairs.sha(p) for p in files}}
 
 
-def matrix():
-    """The five A4 controls first (a lapse or an unrealized control is found before the blocks),
-    then sixteen paired positive blocks whose arm order rotates."""
+def design_of(m):
+    """The design a frozen manifest (or a report) was made with; dev-v9 before designs existed."""
+    return m.get("design") or DESIGN
+
+
+def arms_of(design):
+    return {a: ARMS[a] for a in DESIGNS[design]["arms"]}
+
+
+def matrix(design=DESIGN):
+    """The five controls of the design's control arm first (a lapse or an unrealized control is
+    found before the blocks), then sixteen paired positive blocks whose arm order rotates."""
+    control_arms = DESIGNS[design]["control_arms"]
     rows = [dict(order=i, arm=arm, condition=c, block=None, task=canary.TASKS[0])
-            for i, (arm, c) in enumerate((a, c) for c in CONTROLS for a in CONTROL_ARMS)]
-    arms = list(ARMS)
+            for i, (arm, c) in enumerate((a, c) for c in CONTROLS for a in control_arms)]
+    arms = list(DESIGNS[design]["arms"])
     for block in range(BLOCKS):
         for arm in arms[block % len(arms):] + arms[:block % len(arms)]:
             rows.append(dict(order=len(rows), arm=arm, condition="positive", block=block + 1, task=canary.TASKS[0]))
@@ -105,7 +138,8 @@ def session_dir(root, row):
 
 def verify(root):
     m = pairs.read(root / "manifest.json")
-    if (m.get("protocol") != PROTOCOL or m["source_sha256"] != sources()
+    if (design_of(m) not in DESIGNS or m.get("protocol") != DESIGNS[design_of(m)]["protocol"]
+            or m["source_sha256"] != sources()
             or pairs.sha(root / "manifest.json") != (root / "manifest.sha256").read_text().strip()):
         raise ValueError("dev-v9 source or manifest changed after freeze; preserve it and freeze a new root")
     for path, digest in m["frozen_inputs"].items():
@@ -114,8 +148,31 @@ def verify(root):
     return m
 
 
-def freeze(root, cohort, cumulative, controls, binaries, authorities):
-    """Freeze the matrix, prompts, learned home, binaries and sources. Spends nothing."""
+def registered_mod_revision(protocol):
+    """Whether a protocol revision names the MOD design: it must be registered before its freeze."""
+    return any(MOD_REVISION in r for r in protocol.get("revisions", []))
+
+
+def stage_mod_plugin(source, target):
+    """The mod alone: the plugin copied with its command hooks removed from `hooks/hooks.json`, so
+    the study's own hook registration (A4's) is the only one and no hook runs twice."""
+    shutil.copytree(source, target, ignore=shutil.ignore_patterns("*.test.ts", "fixtures", "dist", "node_modules"))
+    hooks = json.loads((target / "hooks/hooks.json").read_text())
+    if not hooks.get("modules"):
+        raise ValueError("the plugin declares no module")
+    (target / "hooks/hooks.json").write_text(json.dumps(dict(modules=hooks["modules"]), indent=2) + "\n")
+    return {str(p.relative_to(target)): pairs.sha(p) for p in sorted(target.rglob("*")) if p.is_file()}
+
+
+def freeze(root, cohort, cumulative, controls, binaries, authorities, design=DESIGN, predict_routes=(), plugin=PLUGIN):
+    """Freeze the matrix, prompts, learned home, binaries and sources. Spends nothing. A MOD design
+    also freezes the mod (staged from `plugin`) and the routes its person-issued `predict` grants
+    name, and needs its protocol revision registered first."""
+    if design not in DESIGNS:
+        raise ValueError("unknown design %r" % design)
+    mod = any(ARMS[a].get("mod") for a in DESIGNS[design]["arms"])
+    if mod and (not predict_routes or canary.ROUTE in predict_routes):
+        raise ValueError("a MOD study names its predict routes, none of them the E2 route (two paths would run it)")
     root, cohort = root.resolve(), cohort.resolve(strict=True)
     cumulative, controls = cumulative.resolve(strict=True), controls.resolve(strict=True)
     parent = pairs.read(cohort / "manifest.json")
@@ -127,6 +184,8 @@ def freeze(root, cohort, cumulative, controls, binaries, authorities):
     protocol = json.loads(canary.GATE.read_text())
     if THRESHOLDS not in protocol:
         raise ValueError("the dev-v9 thresholds must be registered in the protocol before freezing")
+    if mod and not registered_mod_revision(protocol):
+        raise ValueError("register the MOD revision (naming %s) in the protocol before freezing" % MOD_REVISION)
     authority = Path(parent["budget_authority"])
     record = pairs.read(cumulative / "attempt.json")
     home = cumulative / "adage-home"
@@ -154,7 +213,7 @@ def freeze(root, cohort, cumulative, controls, binaries, authorities):
     if any(pairs.sha(root / "private/tasks" / task / n) != d for n, d in old["task_sha256"][task].items()):
         raise ValueError("validated task material changed")
     base_prompt = (root / "private/tasks" / task / "prompt.txt").read_text()
-    rows = matrix()
+    rows = matrix(design)
     for row in rows:
         row["prompt"] = prompt(base_prompt, row["condition"])
     (root / "bin").mkdir()
@@ -164,13 +223,18 @@ def freeze(root, cohort, cumulative, controls, binaries, authorities):
         bins[name] = str(root / "bin" / name)
     inputs = [root / "isolation-audit.json", cumulative / "attempt.json", cohort / "manifest.json", controls / "manifest.json",
               controls / "validation.json", *(home / n for n in record["artifact_sha256"]), *map(Path, bins.values())]
+    staged = stage_mod_plugin(Path(plugin), root / "plugin") if mod else {}
+    inputs += [root / "plugin" / n for n in staged]
     plan = dict(guided["families"][0], heldout=[], train=[task])
-    m = dict(protocol=PROTOCOL, root=str(root), cohort_root=str(cohort), budget_authority=str(authority),
+    m = dict(protocol=DESIGNS[design]["protocol"], design=design, root=str(root), cohort_root=str(cohort),
+             budget_authority=str(authority), predict_routes=list(predict_routes),
+             plugin=str(root / "plugin") if mod else None, plugin_sha256=staged,
              cumulative_root=str(cumulative), audit_authorities=authorities,
              gate_protocol_sha256=pairs.sha(canary.GATE), thresholds=protocol[THRESHOLDS],
              budget_allocation_sha256=parent.get("budget_allocation_sha256") or pairs.sha(authority / "evaluation-allocation.json"),
              preparation_python=guided["preparation_python"], python_requested=guided["python_requested"],
-             model=guided["model"], families=[plan], matrix=rows, arms=ARMS, primary=PRIMARY, route=canary.ROUTE,
+             model=guided["model"], families=[plan], matrix=rows, arms=arms_of(design),
+             primary=DESIGNS[design]["primary"], route=canary.ROUTE,
              command=canary.COMMAND, caches=list(canary.CACHES), learned_home=str(home),
              learned_files=record["artifact_sha256"],
              learned_provenance="explicitly guided demonstrations (cumulative-launch-10); fixed route, not new learning",
@@ -221,12 +285,7 @@ def prepare(root):
                                               **({"matcher": matcher} if matcher else {}))] for event, matcher in EVENTS}
         pairs.write(session / "settings.json", settings)
         (session / ".reflex-fixture").write_text("development arms assignment\n")
-        argv = ["claude", "--print", "--restricted", "--model", m["model"], "--max-budget-usd", str(SESSION_CAP_USD),
-            "--max-turns", str(MAX_TURNS), "--output-format", "stream-json", "--verbose", "--include-hook-events",
-            "--include-partial-messages", "--debug-file", str(session / "claude-debug.log"), "--no-chrome",
-            "--disable-slash-commands", "--setting-sources", "", "--settings", str(session / "settings.json"),
-            "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}', "--tools", "Read,Edit,Write,Glob,Grep,Bash",
-            "--permission-mode", "dontAsk", "--permission-prompts", "none", row["prompt"]]
+        argv = session_argv(m, row, session)
         hidden = root / "private/hidden-identities" / (row["task"] + ".json")
         frozen = {str(local / n): d for n, d in learned.items()}
         frozen.update({str(p): pairs.sha(p) for p in (root / "manifest.json", review, session / "settings.json", hidden,
@@ -235,6 +294,7 @@ def prepare(root):
             experiment_root=str(authority), execution_root=str(checkout), home=str(local),
             # real_repo_pairs.hook runs adage-exec for "automatic"; A0 never runs a hook.
             arm="automatic" if arm["hooks"] else "agent", dev_arm=row["arm"], card_orientation=arm["card_orientation"],
+            mod=bool(arm.get("mod")), plugin_data=str(session / "plugin-data") if arm.get("mod") else None,
             condition=row["condition"], block=row["block"], task=row["task"], order=row["order"],
             route=m["route"], model=m["model"], argv=cohort_v5.startup_argv(argv), binaries=binaries,
             learned_files=learned, sources=m["source_sha256"], frozen=frozen,
@@ -250,8 +310,32 @@ def prepare(root):
     return dict(assignments=out, paid_calls=0, grants_written=False, runtime=canary.protect_runtime(root, m))
 
 
+def session_argv(m, row, session):
+    """One session's `claude` invocation: the production registration in `settings.json`, and for a
+    MOD session the frozen mod (`--plugin-dir`, its module only)."""
+    argv = ["claude", "--print", "--restricted", "--model", m["model"], "--max-budget-usd", str(SESSION_CAP_USD),
+            "--max-turns", str(MAX_TURNS), "--output-format", "stream-json", "--verbose", "--include-hook-events",
+            "--include-partial-messages", "--debug-file", str(session / "claude-debug.log"), "--no-chrome",
+            "--disable-slash-commands", "--setting-sources", "", "--settings", str(session / "settings.json"),
+            "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}', "--tools", "Read,Edit,Write,Glob,Grep,Bash",
+            "--permission-mode", "dontAsk", "--permission-prompts", "none"]
+    if ARMS[row["arm"]].get("mod"):
+        argv += ["--plugin-dir", m["plugin"]]
+    return argv + [row["prompt"]]
+
+
 def granted(m):
     return [row for row in m["matrix"] if ARMS[row["arm"]]["hooks"]]
+
+
+def predict_lines(m, home, checkout):
+    """The person's `predict` grants for one MOD home: one per frozen predict route."""
+    out = []
+    for route in m.get("predict_routes") or []:
+        track, reflex = route.rsplit("/", 1)
+        out.append("ADAGE_HOME=%s %s review delegate %s %s --predict --repo %s --by launch-evaluation-human" % (
+            shlex.quote(str(home)), shlex.quote(m["binaries"]["adage"]), track, reflex, shlex.quote(str(checkout))))
+    return out
 
 
 def approval_script(root):
@@ -276,6 +360,8 @@ def approval_script(root):
                   "ADAGE_HOME=%s %s review delegate %s %s --level e2 --effect verify %s --timeout-ms %d --repo %s --by launch-evaluation-human" % (
                       shlex.quote(str(home)), shlex.quote(m["binaries"]["adage"]), track, reflex, caches, TIMEOUT_MS,
                       shlex.quote(str(checkout)))]
+        if ARMS[row["arm"]].get("mod"):
+            lines += predict_lines(m, home, checkout)
     text = "\n".join(lines) + "\n"
     path = root / "approve-dev-v9.sh"
     if path.exists() and path.read_text() != text:
@@ -300,7 +386,14 @@ def verify_grants(root):
         except OSError as error:
             problems.append(dict(order=row["order"], problem=str(error)))
             continue
-        grants = store.get("approvals", [])
+        everything = store.get("approvals", [])
+        grants = [g for g in everything if (g.get("key") or {}).get("mode") != "predict"]
+        predicted = sorted(g.get("route") for g in everything if (g.get("key") or {}).get("mode") == "predict"
+                           and g.get("by") == "launch-evaluation-human" and g.get("auto") is False)
+        want = sorted(m.get("predict_routes") or []) if ARMS[row["arm"]].get("mod") else []
+        if predicted != want or len(everything) != len(grants) + len(want):
+            problems.append(dict(order=row["order"], problem="predict grants differ from the reviewed script"))
+            continue
         g = grants[0] if len(grants) == 1 else {}
         if (len(grants) != 1 or g.get("route") != m["route"] or g.get("by") != "launch-evaluation-human"
                 or g.get("auto") is not False or g["key"].get("level") != "e2" or g["key"].get("effect") != "verify"
@@ -309,6 +402,32 @@ def verify_grants(root):
                 or policy != POLICY):
             problems.append(dict(order=row["order"], problem="grant or policy differs from the reviewed script"))
     return dict(passed=not problems, problems=problems, checked=len(m["matrix"]))
+
+
+def dry_run(root):
+    """What the study will do, in order, spending nothing and writing nothing: the person's step
+    first (the reviewed approval script: E2 grants, and for MOD homes the `predict` grants), then
+    each dispatch, controls before positives, with the arm, whether the mod is loaded, and the
+    grants its home must hold."""
+    m = verify(root)
+    steps = [dict(step="person", what="run the reviewed approval script (approve-dev-v9.sh)",
+                  homes=len(granted(m)),
+                  predict_grants=[dict(order=row["order"], arm=row["arm"], routes=list(m.get("predict_routes") or []))
+                                  for row in granted(m) if ARMS[row["arm"]].get("mod")])]
+    steps.append(dict(step="check", what="verify-grants passes before any dispatch"))
+    for row in m["matrix"]:
+        arm = ARMS[row["arm"]]
+        argv = session_argv(m, row, session_dir(root, row))
+        steps.append(dict(step="dispatch", order=row["order"], arm=row["arm"], condition=row["condition"],
+                          block=row["block"], hooks=arm["hooks"], mod=bool(arm.get("mod")),
+                          plugin_dir=argv[argv.index("--plugin-dir") + 1] if "--plugin-dir" in argv else None,
+                          grants=(["e2 " + m["route"]] + ["predict " + r for r in m.get("predict_routes") or []
+                                                         if arm.get("mod")]) if arm["hooks"] else []))
+    first_positive = next(i for i, s in enumerate(steps) if s.get("condition") == "positive")
+    person = next(i for i, s in enumerate(steps) if s["step"] == "person")
+    return dict(design=design_of(m), protocol=m["protocol"], steps=steps, paid_calls=0,
+                person_before_positives=person < first_positive,
+                thresholds=m["thresholds"], primary=m["primary"])
 
 
 def hook(manifest, payload):
@@ -466,12 +585,15 @@ def live(root, wall_seconds=600):
     return results
 
 
-def summarize(rows, thresholds):
-    """Per-arm positive metrics, paired block deltas against A0, the A4 controls, validity and the
-    registered dev-v9 rule (`dev_thresholds_v9`). A2f has no controls, so it is reported, never BEST."""
+def summarize(rows, thresholds, design=DESIGN):
+    """Per-arm positive metrics, paired block deltas against A0, the controls, validity and the
+    registered dev-v9 rule (`dev_thresholds_v9`: D1's ratio and block count and D4's repeat bound
+    are read from it, never written here). Only the design's arm with controls (A4 in dev-v9, MOD in
+    dev-v9-mod) can be BEST; the other hook arm is reported."""
     t = thresholds
+    design_arms, control_arms = DESIGNS[design]["arms"], DESIGNS[design]["control_arms"]
     positives = [r for r in rows if r["condition"] == "positive" and r.get("status") != "uncollected"]
-    by_arm = {arm: [r for r in positives if r["dev_arm"] == arm] for arm in ARMS}
+    by_arm = {arm: [r for r in positives if r["dev_arm"] == arm] for arm in design_arms}
     arms = {}
     for arm, rs in by_arm.items():
         arms[arm] = dict(n=len(rs), requests=dev_arms.mean([r["requests"] for r in rs]),
@@ -488,9 +610,10 @@ def summarize(rows, thresholds):
                            passed=sum(g.get("outcome") == "applied" for r in rs for g in r.get("gate_runs") or []),
                            covered_final=sum(bool(g.get("covers_final")) for r in rs for g in r.get("gate_runs") or [])),
             card_oriented=sum(bool(r.get("card_oriented")) for r in rs),
-            card_exemplar=sum(bool(r.get("card_exemplar")) for r in rs))
+            card_exemplar=sum(bool(r.get("card_exemplar")) for r in rs),
+            predicted_steps=sum(r.get("predicted_steps") or 0 for r in rs))
     blocks = {}
-    for arm in ARMS:
+    for arm in design_arms:
         if arm == "A0":
             continue
         deltas = []
@@ -513,11 +636,13 @@ def summarize(rows, thresholds):
             problems.append(dict(order=r.get("order"), arm=r["dev_arm"], condition=r["condition"],
                                  problem="the card did not arrive in this arm's form"))
     a0, verdict = arms["A0"], {}
-    for arm in ("A2f", "A4"):
+    for arm in design_arms:
+        if arm == "A0":
+            continue
         a = arms[arm]
         ratio = (a["requests"] / a0["requests"]) if a["requests"] and a0["requests"] else None
         mine = [r for r in controls if r["dev_arm"] == arm]
-        tested = arm in CONTROL_ARMS and sorted(r["condition"] for r in mine if canary.realized(r)) == sorted(CONTROLS)
+        tested = arm in control_arms and sorted(r["condition"] for r in mine if canary.realized(r)) == sorted(CONTROLS)
         v = dict(requests_ratio_to_A0=round(ratio, 4) if ratio else None,
                  D1_requests=bool(ratio is not None and ratio <= t["D1_requests_max_ratio_to_A0"]
                                   and blocks[arm]["blocks_fewer"] >= t["D1_blocks_fewer_min"]),
@@ -525,7 +650,7 @@ def summarize(rows, thresholds):
                  D3_tested=tested,
                  D3_safety=tested and not [r for r in mine if (r.get("replay") or {}).get("necessary_work_skipped")],
                  D4_repeat_sessions=a["sessions_with_repeat_attempts"] <= t["D4_sessions_with_repeat_attempts_max"],
-                 eligible=arm in CONTROL_ARMS)
+                 eligible=arm in control_arms)
         v["passed"] = bool(not problems and v["eligible"] and all(x for k, x in v.items() if k.startswith("D")))
         verdict[arm] = v
     report = dict(valid=not problems, problems=problems, arms=arms, paired_blocks=blocks,
@@ -533,8 +658,10 @@ def summarize(rows, thresholds):
                             dict(realized=canary.realized(r), necessary_work_skipped=(r.get("replay") or {}).get("necessary_work_skipped"),
                                  verification_necessary=(r.get("replay") or {}).get("verification_necessary"),
                                  gate_runs=r.get("gate_runs"), stop_gate_outputs=r.get("stop_gate_outputs")) for r in controls],
-                  necessary_work_skipped=skipped, verdict=verdict, candidates=list(CONTROL_ARMS))
-    report["best"] = heldout_analysis.select_best(report, candidates=CONTROL_ARMS)
+                  necessary_work_skipped=skipped, verdict=verdict, candidates=list(control_arms), design=design,
+                  rule=dict({k: t.get(k) for k in ("D1_requests_max_ratio_to_A0", "D1_blocks_fewer_min",
+                                                    "D4_sessions_with_repeat_attempts_max")}, registered=THRESHOLDS))
+    report["best"] = heldout_analysis.select_best(report, candidates=control_arms)
     return report
 
 
@@ -546,9 +673,10 @@ def report(root):
         path = session_dir(root, row) / "collection.json"
         rows.append(pairs.read(path) if path.exists() else dict(row, dev_arm=row["arm"], status="uncollected"))
     costs = [pairs.known_cost(r.get("cost_usd")) for r in rows]
-    result = dict(protocol=PROTOCOL, assignments=len(rows), collected=sum(r.get("status") != "uncollected" for r in rows),
+    result = dict(protocol=m["protocol"], assignments=len(rows), collected=sum(r.get("status") != "uncollected" for r in rows),
         known_cost_usd=sum(c for c in costs if c is not None), unknown_costs=sum(c is None for c in costs),
-        **summarize(rows, m["thresholds"]),
+        predict_routes=m.get("predict_routes") or [],
+        **summarize(rows, m["thresholds"], design_of(m)),
         limitations=["Development task and a guided learned route; not held-out evidence.",
                      "Model requests are distinct assistant message ids, checked against the debug log's dispatches; "
                      "tokens and cost are Claude Code's own accounting.",
@@ -559,25 +687,30 @@ def report(root):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("freeze", "prepare", "approval-script", "verify-grants", "hook", "live",
-                                            "collect", "report"))
+    parser.add_argument("command", choices=("freeze", "prepare", "approval-script", "verify-grants", "dry-run", "hook",
+                                            "live", "collect", "report"))
     parser.add_argument("path", type=Path)
     parser.add_argument("--cohort", type=Path)
     parser.add_argument("--cumulative", type=Path)
     parser.add_argument("--controls", type=Path)
     parser.add_argument("--binaries", type=Path)
     parser.add_argument("--audit-authority", type=Path, action="append", default=[])
+    parser.add_argument("--design", choices=sorted(DESIGNS), default=DESIGN)
+    parser.add_argument("--predict-route", action="append", default=[],
+                        help="a route (track/reflex) the MOD homes' person-issued predict grants name")
+    parser.add_argument("--plugin", type=Path, default=PLUGIN)
     args = parser.parse_args()
     if args.command == "hook":
         print(hook(args.path, json.load(sys.stdin)), end="")
         sys.exit(0)
     if args.command == "freeze":
-        value = freeze(args.path, args.cohort, args.cumulative, args.controls, args.binaries, args.audit_authority)
+        value = freeze(args.path, args.cohort, args.cumulative, args.controls, args.binaries, args.audit_authority,
+                       args.design, tuple(args.predict_route), args.plugin)
     elif args.command == "collect":
         value = collect(args.path)
     else:
         value = {"prepare": prepare, "approval-script": approval_script, "verify-grants": verify_grants,
-                 "live": live, "report": report}[args.command](args.path.resolve(strict=True))
+                 "dry-run": dry_run, "live": live, "report": report}[args.command](args.path.resolve(strict=True))
     print(json.dumps(value, indent=2, default=str))
     if args.command == "report" and not value["valid"]:
         sys.exit("INVALID: %d session problem(s); no arm can pass and nothing here is evidence for an arm "

@@ -14,7 +14,12 @@ pub enum Harness {
 }
 
 /// What a harness's hooks let Adage do.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// The first four are what a harness's command hooks (or bridge) offer. The rest are what the
+/// Claude Code mod adds (its architecture §1b.3): a harness reports them only when its adapter
+/// knows the mod is asking, and every `Harness` reports them unset ([`Harness::capabilities`]).
+/// A field added here is `#[serde(default)]`, so a recorded set from before reads as unset.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub struct Capabilities {
     /// A `PreToolUse` hook that may rewrite a tool call's input (Claude Code).
     pub pre_tool_rewrite: bool,
@@ -27,6 +32,48 @@ pub struct Capabilities {
     /// A channel for one line to the person that the model never sees (Claude Code's
     /// `systemMessage`).
     pub person_notices: bool,
+    /// A step boundary before each model request, where Adage may make the call the agent would
+    /// have made (the mod's `turn.step`, the `TurnStep` event).
+    #[serde(default)]
+    pub predict_step: bool,
+    /// A tool call may be answered without running it (the mod's `tool.call` returning a
+    /// `result`: a receipt as the result).
+    #[serde(default)]
+    pub answer_call: bool,
+    /// A tool call may run another command in its place before it runs (a learned dead end
+    /// substituted, on the engine's own permission verdict).
+    #[serde(default)]
+    pub substitute_call: bool,
+    /// A tool's description, sent once per session, may carry a convention (`tool.describe`).
+    #[serde(default)]
+    pub tool_description: bool,
+    /// A session-scoped section of the system prompt that the prompt cache keeps
+    /// (`prompt.compose`): the standing text, once.
+    #[serde(default)]
+    pub cached_section: bool,
+    /// A subagent's prompt may be told the conventions before it starts (`agent.spawn`).
+    #[serde(default)]
+    pub subagent_prompt: bool,
+    /// Compaction may be told what to keep (`session.compact`).
+    #[serde(default)]
+    pub compaction: bool,
+}
+
+impl Capabilities {
+    /// Nothing at all: the base every harness's set is spelled from.
+    pub const NONE: Capabilities = Capabilities {
+        pre_tool_rewrite: false,
+        session_contract: false,
+        actions: false,
+        person_notices: false,
+        predict_step: false,
+        answer_call: false,
+        substitute_call: false,
+        tool_description: false,
+        cached_section: false,
+        subagent_prompt: false,
+        compaction: false,
+    };
 }
 
 impl Harness {
@@ -71,15 +118,36 @@ impl Harness {
 
     pub const fn capabilities(self) -> Capabilities {
         match self {
-            Harness::ClaudeCode => {
-                Capabilities { pre_tool_rewrite: true, session_contract: true, actions: true, person_notices: true }
-            }
-            Harness::Codex => {
-                Capabilities { pre_tool_rewrite: false, session_contract: true, actions: true, person_notices: false }
-            }
-            Harness::OpenCode => {
-                Capabilities { pre_tool_rewrite: false, session_contract: false, actions: false, person_notices: false }
-            }
+            Harness::ClaudeCode => Capabilities {
+                pre_tool_rewrite: true,
+                session_contract: true,
+                actions: true,
+                person_notices: true,
+                ..Capabilities::NONE
+            },
+            Harness::Codex => Capabilities { session_contract: true, actions: true, ..Capabilities::NONE },
+            Harness::OpenCode => Capabilities::NONE,
+        }
+    }
+
+    /// What the harness can do when the Claude Code mod is the one asking (its architecture §1b.3):
+    /// the command hooks' set plus the seven the mod adds, for Claude Code; every other harness has
+    /// no mod and keeps its own set. A harness adapter reports this only for a payload the mod
+    /// sent (`via: "mod"`, or an event only the mod sends), so nothing past the adapter asks which
+    /// plugin is installed.
+    pub const fn capabilities_with_mod(self) -> Capabilities {
+        match self {
+            Harness::ClaudeCode => Capabilities {
+                predict_step: true,
+                answer_call: true,
+                substitute_call: true,
+                tool_description: true,
+                cached_section: true,
+                subagent_prompt: true,
+                compaction: true,
+                ..self.capabilities()
+            },
+            Harness::Codex | Harness::OpenCode => self.capabilities(),
         }
     }
 
@@ -108,6 +176,67 @@ mod tests {
         }
         assert_eq!(Harness::parse("cursor"), None);
         assert_eq!(Harness::parse(""), None);
+    }
+
+    /// T-C9-01 (the type): the mod's capabilities are fields of their own, unset for every harness
+    /// (its command hooks have today's four), and a set recorded before they existed reads as unset.
+    #[test]
+    fn the_mods_capabilities_are_unset_for_every_harness_and_round_trip() {
+        let cc = Harness::ClaudeCode.capabilities();
+        assert!(cc.pre_tool_rewrite && cc.session_contract && cc.actions && cc.person_notices);
+        for h in Harness::ALL {
+            let c = h.capabilities();
+            let extra = [
+                c.predict_step,
+                c.answer_call,
+                c.substitute_call,
+                c.tool_description,
+                c.cached_section,
+                c.subagent_prompt,
+                c.compaction,
+            ];
+            assert!(extra.iter().all(|x| !x), "{h}: {c:?}");
+        }
+        let all = Capabilities {
+            predict_step: true,
+            answer_call: true,
+            substitute_call: true,
+            tool_description: true,
+            cached_section: true,
+            subagent_prompt: true,
+            compaction: true,
+            ..cc
+        };
+        let back: Capabilities = serde_json::from_str(&serde_json::to_string(&all).unwrap()).unwrap();
+        assert_eq!(back, all);
+        let before = r#"{"pre_tool_rewrite":true,"session_contract":true,"actions":true,"person_notices":true}"#;
+        assert_eq!(serde_json::from_str::<Capabilities>(before).unwrap(), cc);
+    }
+
+    /// T-C9-01 (per harness): Claude Code with the mod has every capability, its command hooks'
+    /// four included; the other harnesses have no mod, so asking for it changes nothing.
+    #[test]
+    fn only_claude_code_has_a_mod_and_it_adds_the_seven() {
+        let m = Harness::ClaudeCode.capabilities_with_mod();
+        assert_eq!(
+            m,
+            Capabilities {
+                pre_tool_rewrite: true,
+                session_contract: true,
+                actions: true,
+                person_notices: true,
+                predict_step: true,
+                answer_call: true,
+                substitute_call: true,
+                tool_description: true,
+                cached_section: true,
+                subagent_prompt: true,
+                compaction: true,
+            }
+        );
+        for h in [Harness::Codex, Harness::OpenCode] {
+            assert_eq!(h.capabilities_with_mod(), h.capabilities(), "{h}");
+        }
     }
 
     #[test]
