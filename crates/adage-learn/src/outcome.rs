@@ -55,12 +55,15 @@ fn re(cell: &'static OnceLock<Regex>, pattern: &str) -> &'static Regex {
 /// `N passed`/`N failed`, unittest's `Ran N tests`, vitest's `Test Files`, jest's `Tests:`, Go's
 /// `ok  <pkg>`/`--- PASS`, cargo's `test result:`. Never `no tests ran`, a missing module or a
 /// missing command. The exit code is not read.
+/// Its word boundaries are ASCII (`(?-u:\b)`): a Unicode `\b` stops the regex engine's lazy DFA
+/// at the first non-ASCII byte (a reporter's `✓` or `━`), and the slow fallback made this most of
+/// a learn run's matching time.
 pub fn executed_tests(output: &str) -> bool {
     static YES: OnceLock<Regex> = OnceLock::new();
     static NO: OnceLock<Regex> = OnceLock::new();
     let yes = re(
         &YES,
-        r"(?m)collected [1-9]\d* items?|\b\d+ (passed|failed|errors?)\b|\bRan [1-9]\d* tests?\b|Test Files\s+\d|^\s*Tests:\s+\d|^(ok|FAIL)\s+\S+\s+[\d.]+s|^--- (PASS|FAIL)|test result: (ok|FAILED)",
+        r"(?m)collected [1-9]\d* items?|(?-u:\b)\d+ (passed|failed|errors?)(?-u:\b)|(?-u:\b)Ran [1-9]\d* tests?(?-u:\b)|Test Files\s+\d|^\s*Tests:\s+\d|^(ok|FAIL)\s+\S+\s+[\d.]+s|^--- (PASS|FAIL)|test result: (ok|FAILED)",
     );
     let no = re(&NO, r"no tests ran|No module named|ModuleNotFoundError|command not found|Cannot find module");
     let out = adage_core::tokens::bounded(output, 64 * 1024);
@@ -71,7 +74,7 @@ pub fn executed_tests(output: &str) -> bool {
 /// module inside a test's own failure still ran tests).
 fn re_count_passed(out: &str) -> bool {
     static P: OnceLock<Regex> = OnceLock::new();
-    re(&P, r"\b\d+ (passed|failed)\b|Test Files\s+\d|test result: ").is_match(out)
+    re(&P, r"(?-u:\b)\d+ (passed|failed)(?-u:\b)|Test Files\s+\d|test result: ").is_match(out)
 }
 
 /// The environment family of a failure, read from its output: `no-module:<name>` (Python's
@@ -423,6 +426,10 @@ mod tests {
         assert!(!executed_tests("bash: pytest: command not found"));
         // A test that fails on a missing module still ran.
         assert!(executed_tests("E   ModuleNotFoundError: No module named 'yaml'\n1 failed, 3 passed in 0.2s"));
+        // Reporters that print non-ASCII (vitest's ✓, pytest's ━) read the same.
+        assert!(executed_tests(" ✓ src/a.test.ts (3)\n\n Test Files  1 passed (1)"));
+        assert!(executed_tests("━━━━━━━━━━ 12 passed in 0.40s ━━━━━━━━━━"));
+        assert!(!executed_tests("━━━━━━━━━━ no tests ran in 0.01s ━━━━━━━━━━"));
     }
 
     #[test]

@@ -23,9 +23,11 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   the same `Store` it writes through, so a store other than `$ADAGE_HOME` (a team service) can
   hold all of a repository's learned state. `adage_learn::plan` takes the store in place of the
   tracks directory.
-- **Learning is about 3× faster.** The command table built into the binary was parsed again
+- **Learning is about 4× faster.** The command table built into the binary was parsed again
   (TOML, then every pattern's regex) on each lookup, many times per learn run. It is now parsed
-  once per process. Over 497 sessions, `adage condition` drops from 8.5 s to 2.5 s, with
+  once per process. A command's effect is remembered once classified, and reading whether a
+  command's output reports a test run no longer drops to the regex engine's slowest path on
+  non-ASCII output. Over 497 sessions, `adage condition` drops from 8.5 s to 1.9 s, with
   byte-identical tracks.
 
 - **Breaking: one JSON shape for a reflex.** `adage status --json`, `adage review --json` and
