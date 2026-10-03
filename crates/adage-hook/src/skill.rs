@@ -18,15 +18,16 @@
 //! to its record (edited since it was compiled and accepted) is neither annotated nor invoked,
 //! and its inertness is read from the file, never taken from the record alone.
 
-use crate::failopen::{self, Failure};
+use crate::failopen::Failure;
 use crate::harness::{Adapter, Harness};
+use crate::{record, site};
 use adage_core::repo;
 use adage_pack::verified::{self, Outcome, Verified};
-use adage_runtime::{assign, render, Arm, SessionState};
-use adage_store::{spool, state, Paths};
+use adage_runtime::{render, Arm, SessionState};
+use adage_store::{state, Paths};
 use serde_json::{json, Value};
 use std::path::Path;
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::Instant;
 
 /// The native event name.
 pub const EVENT: &str = "SkillPrompt";
@@ -122,23 +123,16 @@ pub fn prompt(
     }
     let Some((added, works, stale)) = annotation(&record) else { return Ok(None) };
     // The arm, assigned here if this is the session's first decision (as `PreToolUse` does).
-    let arm_env = std::env::var("ADAGE_ARM").ok();
-    let share: f64 = adage_store::config::load(paths).config.runtime_control;
+    let arms = site::ArmInputs::load(paths);
     let (arm, propensity) = state::update::<SessionState, _>(&paths.state(session), |st| {
-        if st.arm.is_none() {
-            let (arm, pr) = assign(session, share, arm_env.as_deref());
-            st.arm = Some(arm);
-            st.propensity = Some(pr);
-            st.repo = Some(key.clone());
-        }
+        arms.ensure(st, session, &key);
         (st.arm, st.propensity)
     })
     .map_err(|e| Failure::io("state", "assigning the session's arm", &e))?;
     let observe = p.get("observe").and_then(Value::as_bool).unwrap_or(false);
     let act = arm != Some(Arm::Control) && !observe;
     let what = json!({ "skill": record.skill.name, "verified": works, "stale": stale, "bytes": added.len() + 2 });
-    let ts = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
-    let mut rec = json!({ "ts": ts, "event": EVENT, "kind": "skill_prompt", "arm": arm, "propensity": propensity,
+    let mut rec = json!({ "ts": record::now_ms(), "event": EVENT, "kind": "skill_prompt", "arm": arm, "propensity": propensity,
                           "repo": key, "would_annotate": what });
     if act {
         rec["annotated"] = what;
@@ -146,15 +140,8 @@ pub fn prompt(
     if observe {
         rec["observe"] = json!(true);
     }
-    rec["duration_us"] = json!(u64::try_from(started.elapsed().as_micros()).unwrap_or(u64::MAX));
-    if let Err(e) = spool::append(&paths.spool(session), &rec) {
-        failopen::record(
-            &paths.root,
-            adapter.name(),
-            EVENT,
-            &Failure::io("spool", "appending to the session spool", &e),
-        );
-    }
+    rec["duration_us"] = json!(record::duration_us(started));
+    record::append_or_log(paths, session, adapter.name(), EVENT, &rec);
     if !act {
         return Ok(None);
     }

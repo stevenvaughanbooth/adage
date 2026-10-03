@@ -42,11 +42,10 @@
 //!
 //! Every spool record here is a fact, never the token: `press_issued`, `press_spent`, `tripwire`.
 
-use crate::failopen::{self, Failure};
 use crate::harness;
 use adage_core::repo;
 use adage_store::paths::sanitise;
-use adage_store::{spool, state, Paths};
+use adage_store::{state, Paths};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
@@ -153,9 +152,7 @@ fn now() -> u64 {
 
 /// Append one press record to the session's spool; a failure loses the record, never the event.
 fn note(paths: &Paths, session: &str, rec: &Value) {
-    if let Err(e) = spool::append(&paths.spool(session), rec) {
-        failopen::record(&paths.root, "claude", EVENT, &Failure::io("spool", "appending to the session spool", &e));
-    }
+    crate::record::append_or_log(paths, session, "claude", EVENT, rec);
 }
 
 /// What [`gate`] decided for one invocation.
@@ -449,6 +446,7 @@ pub fn spend(paths: &Paths, token: &str, session: &str, root: &str, cmd: &str) -
 #[cfg(test)]
 mod tests {
     use super::*;
+    use adage_store::spool;
 
     fn world() -> (tempfile::TempDir, Paths, PathBuf) {
         let dir = tempfile::tempdir().unwrap();
