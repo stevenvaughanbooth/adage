@@ -71,7 +71,7 @@ pub fn on() -> Result<()> {
     if m.exists() {
         // A person's decision: at a terminal, or with a press from the session (architecture
         // §3.12, `/adage on`).
-        crate::review::person_or_press("on", &adage_store::Paths::from_env())?;
+        crate::review::person_or_press(adage_app::person::PersonVerb::On, &adage_store::Paths::from_env())?;
         std::fs::remove_file(&m).with_context(|| format!("removing {}", m.display()))?;
         // The directory is Adage's own; leave it if anything else lives there.
         if let Some(dir) = m.parent() {

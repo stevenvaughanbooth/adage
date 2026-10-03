@@ -232,7 +232,7 @@ pub fn add(args: &[String], paths: &Paths) -> Result<()> {
         let stdin = adage_app::person::read_press();
         let since = stdin.press.as_ref().map(|p| adage_app::person::press_opened(paths, &p.session).unwrap_or(0));
         if since.is_none_or(|t| adage_app::trust::committed_before(&src, root, t)) {
-            crate::review::person_from("add --trust", paths, stdin)?;
+            crate::review::person_from(adage_app::person::PersonVerb::AddTrust, paths, stdin)?;
         } else {
             require_person("add")?;
         }

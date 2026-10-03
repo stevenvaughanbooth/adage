@@ -6,6 +6,10 @@ configuration default, one rule for a fix's command, and a test kit for the CLI'
 suites. Behaviour is unchanged apart from the one disagreement this closes (the status card,
 below); no golden or snapshot was re-blessed.
 
+Pass 2 (MAINT-RUST's W5, W8, W9's remainder and the CLI's part of W11) made the doctor's fixes
+typed, listed the press sites as an enum, gave the follower a test-only poll knob and made
+`doctor` a directory module: see [Typed doctor fixes](#typed-doctor-fixes-w5) onwards.
+
 ## Shared helpers (`crates/adage-cli/src/helpers.rs`)
 
 | Helper | Was | Used by |
@@ -13,7 +17,7 @@ below); no golden or snapshot was re-blessed.
 | `flag(args, name)` | 5 copies: `main.rs`, `exec.rs`, `ui/mod.rs` (a wrapper of `main.rs`'s), `update.rs`, `install.rs` | `main.rs` (`use helpers::flag`), `exec`, `ui`, `update`, `install`; `crate::helpers::flag` in `init`, `sense`, `graph`, `share`, `savings`, `review`, `share_pack` |
 | `flags(args, name)` | `exec.rs` | `exec` |
 | `ago(now_ms, ts_ms)`: `just now`, `4 min ago`, `2 h ago`, `3 days ago` | `status_card.rs` | the card |
-| `ago_short(now_ms, ts_ms)`: `12s ago`, `4m ago`, `2h ago`, `3d ago` | `doctor.rs` | doctor (imported `as ago`) |
+| `ago_short(now_ms, ts_ms)`: `12s ago`, `4m ago`, `2h ago`, `3d ago` | `doctor.rs` (now `doctor/mod.rs`) | doctor (imported `as ago`) |
 | `plural(n, one, many)` | `status_card.rs`, `autolearn.rs` (`notice`) | both |
 
 The two `ago` forms differ by design (a card sentence, a terse check line) and are kept. The third
@@ -48,7 +52,8 @@ key's validation and that `Config::default()` is what a missing file gives. Not 
 `adage_runtime::PREDICT_CAP = 6` (adage-runtime may not link adage-store, `FORBIDDEN` in
 `xtask/src/layers.rs`; its owner can pass the configured value in).
 
-**A fix's command** (`crates/adage-cli/src/doctor.rs`): `doctor::fix_command(fix)` is the one
+**A fix's command** (`crates/adage-cli/src/doctor.rs`; pass 2 replaced this rule with a typed
+fix, [below](#typed-doctor-fixes-w5)): `doctor::fix_command(fix)` was the one
 rule (the whole fix when it is one bare `adage` command; else a backticked `adage` command it
 begins with, after an optional `run `; never when it sends the person to a terminal).
 `Check::action` (`adage doctor --json`) and the card's `brief` both call it. The card used to read
@@ -123,7 +128,7 @@ builder for routes and indexes). Every test keeps its name.
     suite's wall time is set by `the_card_as_json` (about 6 s of status-card runs, each running
     doctor's checks) and `the_feed_says_where…` (health refreshes every `HEALTH_EVERY` = 3 s); the
     plan's follow-poll knob would be a new test-only variable in `follow.rs` and was left out
-    (behaviour stays exactly as it was).
+    (behaviour stays exactly as it was). Pass 2 added it ([below](#the-followers-poll-knob-w9)).
 - `skill_prompt.rs`: `adage train` on the acme skill (with its sandbox replay capped at 60 s) ran
   once per test. It now runs once for every test alive at the time (`Compiled::shared`, a
   `Weak` behind a `Mutex`, so the directory goes when the last test ends), and each test works on
@@ -133,6 +138,105 @@ builder for routes and indexes). Every test keeps its name.
 - `press.rs::a_committed_pack_can_be_trusted_with_a_press` slept 1.1 s so the session opened after
   the commit's whole second. The commit is now dated a minute earlier (`GIT_AUTHOR_DATE`,
   `GIT_COMMITTER_DATE`); the on-disk check, which the date does not affect, is unchanged.
+
+## Typed doctor fixes (W5)
+
+`crates/adage-cli/src/doctor/mod.rs` (was `doctor.rs`; `doctor_latency.rs` is now
+`doctor/latency.rs`, a plain submodule with no `#[path]`):
+
+```rust
+pub enum Fix {
+    Run { command: String, how: String }, // Fix::run(cmd), Fix::run_in("run {} to recompile it", cmd)
+    Manual(String),                       // Fix::manual(text)
+}
+pub struct Check { …, pub fix: Option<Fix> }
+```
+
+- Every `warn`/`fail` takes a `Fix`, chosen where the check is made (a comment says why at each
+  site where the choice is not obvious). `Fix::run` is a whole, runnable `adage` command (a
+  placeholder such as `<key>` makes it `Manual`); `how` is doctor's sentence with `{}` where the
+  command goes, in backticks. A debug assertion holds both rules.
+- Everything else derives from it: `Fix::prose()` (doctor's `fix` line, the TUI's fix lines,
+  `--json`'s `fix`), `Fix::command()` / `Check::command()` (the status card's command, `adage ui`'s
+  one-key model fetch), `Fix::action()` (`--json`'s `action`: `{"kind":"run","command":…}` or
+  `{"kind":"manual"}`, the shape `plugin/claude-code/hooks/reads.ts` reads), `Fix::next()`
+  (doctor's `next`: the command, else the prose). `fix_command`, the prose parser, is gone, and so
+  is the third rule `render` had (the first backticked `adage …` of any fix).
+- The lexicon pass (`crate::words::prose`) runs over `how` and the manual text, never the command.
+- `--json` is unchanged in shape; every fix's prose is byte-identical to before.
+
+Edge outputs that change, each because the old rules read a command out of a sentence:
+
+| Check | Before | Now | Why it is more correct |
+| --- | --- | --- | --- |
+| `hooks: <h>` whose registration runs a binary that is gone (`re-run `adage install <h> --write` with this binary (or --bin <path>)`) | `--json` `action: manual`; card `→ adage doctor` | `action: run, adage install <h> --write`; card `→ adage install <h> --write` | run from this binary, the command rewrites the registration to it: it is the fix (the old rule missed it only because the sentence starts `re-run`) |
+| doctor's `next` for a manual fix with a backticked command in it | the first backticked `adage …` (`adage config set <key> <value>`, `adage review` for inert pack reflexes, `adage doctor --json` for slow hooks, `adage condition` for invalid tracks or a failed automatic run, `adage on` while a variable also keeps Adage off, one copy's `adage install … --remove …` for hooks registered twice, `adage models fetch` for a damaged binary) | the fix as written | none of those commands is the whole fix (a placeholder, a listing, the report itself, a step after the person's own, a choice of which copy to keep); `--json` and the card already called them manual |
+
+No golden or snapshot changed: none pins those lines. The tests: `doctor::tests::a_fix_that_is_one_adage_command_is_an_action` (T-A2-03, now over typed fixes: prose, action, `next` and the JSON from one value, and the lexicon pass leaving the command alone), `every_fix_names_its_command_once` (a broken home's fixes: each command whole, named once in its prose), `status_card::tests::a_problem_is_one_line_and_its_command` (the card names `--json`'s action), `ui::tests` (the health fixture, typed).
+
+### How to add a doctor check
+
+1. Write `fn my_check(…) -> Check` in `doctor/mod.rs` (or a submodule like `latency.rs`) returning
+   `pass(id, detail)`, or `warn`/`fail(id, detail, fix)` with the fix typed:
+   `Fix::run("adage x")`, `Fix::run_in("run {} to …", "adage x")`, or `Fix::manual("…")`. Choose
+   `Run` only when running that exact command, from this binary, fixes the check.
+2. Push it in `checks()` in display order. If its id is not what people read, add it to `label`.
+3. The card: add the id's one plain line to `status_card::brief` (else it says `<label> needs a
+   look`); its command comes from the fix. A one-key fix in `adage ui`: `ui/health.rs::fix_for`,
+   matching on `c.command()`, never on the prose.
+4. Test it beside the check, asserting the `Fix` value (not a substring of prose).
+
+## Press sites: `PersonVerb` (W8)
+
+`crates/adage-app/src/person.rs`:
+
+```rust
+pub enum PersonVerb { Review(Verb), ReviewDelegate, ReviewRevoke, DelegateOn, DelegatePolicyE2, DelegatePredictOn, On, AddTrust }
+impl PersonVerb { pub const ALL: [PersonVerb; 13]; pub fn cmd(self) -> String; pub fn what_it_changes(self) -> &'static str }
+pub fn require_or_press(verb: PersonVerb, press: Option<&Press>, paths: &Paths) -> Result<Person>
+```
+
+`crate::review::person_or_press(verb, paths)` and `person_from(verb, paths, stdin)` in adage-cli
+take the same enum: `review.rs` (`decide`, `decide_quietly`: `Review(verb)`, the verb now parsed
+before the person check), `exec.rs` (`review delegate|revoke`, `delegate on`, `policy --max-level
+e2`, `predict on`), `switch.rs` (`on`), `add.rs` (`add --trust`). A press can reach no other
+command: there is no string to pass. `cmd()` gives the exact strings the free `cmd: &str` used to
+be, so the refusals and the `press_spent` record's `verb` are byte-identical. `require(cmd: &str)`
+stays for every other person-only command, which never reads a press.
+
+The list is exactly the plan's (A7; `A7-A8-notes.md`, "Every press site"):
+`person::tests::the_press_sites_are_the_listed_commands` pins `ALL`'s commands in order, checks
+every review `Verb` is in it, and each site's refusal reason. The press suite
+(`tests/press.rs`: `a_press_is_a_person_at_the_listed_sites`, `a_press_is_refused_everywhere_else`)
+and `refusals_say_what_each_command_changes` are unchanged and green.
+
+### How to add a press site
+
+1. A variant of `PersonVerb`, with its doc line, and its entry in `ALL`.
+2. Its arm in `PersonVerb::cmd` (the command as typed after `adage`). If its reason is new, an arm
+   in `what_it_changes(cmd)`, which `require` shares.
+3. At the verb, `crate::review::person_or_press(PersonVerb::X, paths)?` (or `person_from` when the
+   verb has read stdin itself).
+4. The design first: architecture §3.12's list, `A7-A8-notes.md`'s table, the expected list in
+   `the_press_sites_are_the_listed_commands`, the TS `press.ts` allow-list, and the press suite's
+   listed sites all change together.
+
+## The follower's poll knob (W9)
+
+`ui/follow.rs` polls every `POLL` = 250 ms and probes the learner every `LEARNER_POLLS` = 2 polls.
+In a debug build, `ADAGE_TEST_FOLLOW_POLL_MS=<1..=250>` replaces the interval (`poll_every`); a
+release build never reads it, and a value outside the range is ignored. `tests/mod_surfaces.rs`'s
+`Feed::start` sets it to 20 (a one-line edit in the kit agent's file). Health still refreshes every
+`HEALTH_EVERY` (the TUI's loader, shared). No test sleeps above 50 ms outside the `#[ignore]`d L5
+run. `mod_surfaces` ran in 4.4 s here (the earlier note's harness time was 7.5 s).
+
+## Where a new switch goes
+
+Per-machine settings are configuration keys (`adage_store::config::KEYS`, `adage config set`):
+`runtime.rewrite`, `runtime.predict_cap`, `ui.*`. Per-repository switches are marker files under
+the repository (`Paths::repo_disabled`). Machine-wide switches an older verb wrote stay markers
+on `Paths` (`delegate_marker`, `predict_off`, the legacy `rewrite_off` the hook still reads); a new
+one is a configuration key.
 
 ## Carried from main
 

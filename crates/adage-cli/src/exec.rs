@@ -67,6 +67,7 @@
 
 use crate::helpers::{flag, flags};
 use crate::install;
+use adage_app::person::PersonVerb;
 use adage_core::{repo, CommandTable};
 use adage_exec::approvals::{self, Approval, ApprovalKey, Store};
 use adage_exec::request::{FieldSpec, Level};
@@ -211,7 +212,7 @@ fn rewrites(on: bool, paths: &Paths) -> Result<()> {
 fn predict(on: bool, paths: &Paths) -> Result<()> {
     let marker = paths.predict_off();
     if on {
-        crate::review::person_or_press("delegate predict on", paths)?;
+        crate::review::person_or_press(PersonVerb::DelegatePredictOn, paths)?;
         match std::fs::remove_file(&marker) {
             Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.into()),
             _ => {}
@@ -241,7 +242,7 @@ fn switch(on: bool, args: &[String], paths: &Paths) -> Result<()> {
     // Turning execution on is a person's decision; turning it off only turns something down, so
     // it also runs from a script or from `!` in an agent session (fresh-install B6).
     let pressed = if on {
-        crate::review::person_or_press("delegate on", paths)?.0.via() == adage_tracks::review::Via::Press
+        crate::review::person_or_press(PersonVerb::DelegateOn, paths)?.0.via() == adage_tracks::review::Via::Press
     } else {
         false
     };
@@ -373,7 +374,7 @@ fn policy(args: &[String], paths: &Paths) -> Result<()> {
         None => None,
     };
     if set == Some(Level::E2) {
-        crate::review::person_or_press("delegate policy --max-level e2", paths)?;
+        crate::review::person_or_press(PersonVerb::DelegatePolicyE2, paths)?;
     }
     if let Some(level) = set {
         adage_exec::policy::set_max_level(&paths.root, level)?;
@@ -734,7 +735,8 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
     } else {
         adage_app::person::read_press()
     };
-    let (person, stdin) = crate::review::person_from(&format!("review {verb}"), paths, stdin)?;
+    let site = if verb == "revoke" { PersonVerb::ReviewRevoke } else { PersonVerb::ReviewDelegate };
+    let (person, stdin) = crate::review::person_from(site, paths, stdin)?;
     // Positional arguments, wherever the flags are (`--level e1 <track> <reflex>` works too).
     let mut pos: Vec<&String> = Vec::new();
     let mut i = 0;

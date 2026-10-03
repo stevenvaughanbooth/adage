@@ -112,7 +112,9 @@ pub fn check(m: &Measured) -> super::Check {
         _ => return super::pass(NAME, "too few hooks to measure"),
     };
     let detail = format!("p95 {} over the last {} tool batches with nothing to say", ms(p95), m.hooks);
-    let fix = "hooks wait on the disk that holds ADAGE_HOME: keep it on a local disk, and if hooks stay slow, report it with the output of `adage doctor --json`";
+    // Keeping the data on a local disk is the person's to do; `adage doctor --json` is what to
+    // report with, not the fix.
+    let fix = super::Fix::manual("hooks wait on the disk that holds ADAGE_HOME: keep it on a local disk, and if hooks stay slow, report it with the output of `adage doctor --json`");
     if p95 > FAIL_US {
         super::fail(NAME, format!("{detail} (above {})", ms(FAIL_US)), fix)
     } else if p95 > WARN_US {

@@ -52,8 +52,21 @@ use std::time::{Duration, Instant, UNIX_EPOCH};
 
 /// How often the files are polled.
 const POLL: Duration = Duration::from_millis(250);
-/// How often the learner's queue files and lock are probed.
-const LEARNER_EVERY: Duration = Duration::from_millis(500);
+/// How often the learner's queue files and lock are probed: every other poll.
+const LEARNER_POLLS: u32 = 2;
+/// A test-only knob: in a debug build, `ADAGE_TEST_FOLLOW_POLL_MS=<1..=250>` polls that often
+/// instead, so the integration tests that wait on the follower's lines are not paced by
+/// [`POLL`]. A release build never reads it, and a value outside the range is ignored.
+const TEST_POLL_ENV: &str = "ADAGE_TEST_FOLLOW_POLL_MS";
+
+/// The poll interval: [`POLL`], or in a debug build [`TEST_POLL_ENV`]'s.
+fn poll_every() -> Duration {
+    let knob = cfg!(debug_assertions)
+        .then(|| std::env::var(TEST_POLL_ENV).ok()?.parse::<u64>().ok())
+        .flatten()
+        .filter(|ms| (1..=POLL.as_millis() as u64).contains(ms));
+    knob.map_or(POLL, Duration::from_millis)
+}
 /// A spool the cursor does not name, changed this close to (or after) the cursor's time, is read
 /// from its start on resume: reading one with no record for this repository costs nothing.
 const UNNAMED_SLACK_MS: u64 = 5_000;
@@ -571,6 +584,7 @@ pub fn run(
     let mut last_health: Option<Value> = None;
     let mut last_learner: Option<Value> = None;
     let mut learner_at: Option<Instant> = None;
+    let poll = poll_every();
     loop {
         if life.ended() {
             return Ok(());
@@ -587,7 +601,7 @@ pub fn run(
             }
         }
         if let Some(r) = &repo {
-            if learner_at.is_none_or(|t| t.elapsed() >= LEARNER_EVERY) {
+            if learner_at.is_none_or(|t| t.elapsed() >= poll * LEARNER_POLLS) {
                 learner_at = Some(Instant::now());
                 let v = learner_json(paths, r, now_ms());
                 if last_learner.as_ref() != Some(&v) {
@@ -649,7 +663,7 @@ pub fn run(
                 return Ok(());
             }
         }
-        std::thread::sleep(POLL);
+        std::thread::sleep(poll);
     }
 }
 

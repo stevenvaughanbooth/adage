@@ -1048,7 +1048,7 @@ mod tests {
             ("marketplace_cmd.rs", &["marketplace"]),
             ("autolearn.rs", &["condition"]),
             ("config.rs", &["config"]),
-            ("doctor.rs", &["doctor"]),
+            ("doctor/mod.rs", &["doctor"]),
             ("exec.rs", &["delegate", "review"]),
             ("graph.rs", &["graph"]),
             ("init.rs", &["init"]),

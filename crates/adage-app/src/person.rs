@@ -10,6 +10,7 @@
 //! (`via: press`) and a guard against the model being steered into deciding.
 
 use crate::error::hint;
+use crate::review::Verb;
 use adage_store::Paths;
 pub use adage_tracks::review::Via;
 use anyhow::Result;
@@ -144,15 +145,78 @@ pub fn parse_stdin(bytes: &[u8]) -> Stdin {
     Stdin { press, expect: nonempty(raw.expect) }
 }
 
-/// [`require`], or a valid press: called only at the sites architecture §3.12 lists (the review
-/// verbs, `review revoke`, `review delegate`, `delegate on`, `delegate policy --max-level e2`,
-/// `delegate predict on`, `on`, and `add <pack> --trust` for a pack committed in the
-/// repository). Without a press it is exactly [`require`]. With one, the agent-session and
+/// Every command a press can authorise: the sites architecture §3.12 lists, and nothing else
+/// (docs/claude-mod/impl/A7-A8-notes.md, "Every press site"). [`require_or_press`] takes one, so a
+/// press cannot reach a command this list does not name; adding a press site is one variant here
+/// and its arm in [`PersonVerb::cmd`]. Every other person-only command calls [`require`], which
+/// never reads a press.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PersonVerb {
+    /// `review approve|extinguish|weaken|strengthen|pin|dismiss`.
+    Review(Verb),
+    /// `review delegate` (E1, E2, `--predict`, `--stage --json`, `--confirm`).
+    ReviewDelegate,
+    /// `review revoke`.
+    ReviewRevoke,
+    /// `delegate on`.
+    DelegateOn,
+    /// `delegate policy --max-level e2` (turning it down to e1 needs no one).
+    DelegatePolicyE2,
+    /// `delegate predict on`.
+    DelegatePredictOn,
+    /// `on`: Adage back on in this repository.
+    On,
+    /// `add <pack> --trust`, for a pack committed in the repository before the press's session.
+    AddTrust,
+}
+
+impl PersonVerb {
+    /// Every press site.
+    pub const ALL: [PersonVerb; 13] = [
+        PersonVerb::Review(Verb::Approve),
+        PersonVerb::Review(Verb::Extinguish),
+        PersonVerb::Review(Verb::Weaken),
+        PersonVerb::Review(Verb::Strengthen),
+        PersonVerb::Review(Verb::Pin),
+        PersonVerb::Review(Verb::Dismiss),
+        PersonVerb::ReviewDelegate,
+        PersonVerb::ReviewRevoke,
+        PersonVerb::DelegateOn,
+        PersonVerb::DelegatePolicyE2,
+        PersonVerb::DelegatePredictOn,
+        PersonVerb::On,
+        PersonVerb::AddTrust,
+    ];
+
+    /// The command as people type it after `adage`: what a refusal names and what the spent
+    /// press records (`press_spent`'s `verb`).
+    pub fn cmd(self) -> String {
+        match self {
+            PersonVerb::Review(v) => format!("review {}", v.as_str()),
+            PersonVerb::ReviewDelegate => "review delegate".into(),
+            PersonVerb::ReviewRevoke => "review revoke".into(),
+            PersonVerb::DelegateOn => "delegate on".into(),
+            PersonVerb::DelegatePolicyE2 => "delegate policy --max-level e2".into(),
+            PersonVerb::DelegatePredictOn => "delegate predict on".into(),
+            PersonVerb::On => "on".into(),
+            PersonVerb::AddTrust => "add --trust".into(),
+        }
+    }
+
+    /// Why it is a person's decision, as its refusal says it.
+    pub fn what_it_changes(self) -> &'static str {
+        what_it_changes(&self.cmd())
+    }
+}
+
+/// [`require`], or a valid press, for one of the [`PersonVerb`]s (architecture §3.12's sites).
+/// Without a press it is exactly [`require`]. With one, the agent-session and
 /// terminal checks are lifted when the press is valid for this repository's live session
 /// (`adage_hook::press::spend`), the chain moves on, and the [`Person`] carries the next token.
 /// A press beside `ADAGE_ALLOW_NONINTERACTIVE=1` is refused: the two never travel together. A
 /// press that is not valid behaves exactly as no press, and records nothing.
-pub fn require_or_press(cmd: &str, press: Option<&Press>, paths: &Paths) -> Result<Person> {
+pub fn require_or_press(verb: PersonVerb, press: Option<&Press>, paths: &Paths) -> Result<Person> {
+    let cmd = &verb.cmd();
     let Some(p) = press else { return require(cmd) };
     if allow_noninteractive() {
         return match require(cmd) {
@@ -221,6 +285,50 @@ mod tests {
         assert_eq!(what_it_changes("share"), "it publishes a signed pack of your reflexes");
         assert_eq!(what_it_changes("config set learn.auto"), "it changes Adage's settings");
         assert_eq!(what_it_changes("on"), "it turns Adage back on in this repository");
+    }
+
+    /// The press sites are exactly the plan's list (A7; impl/A7-A8-notes.md, "Every press site"),
+    /// spelled as the commands people type, and each refusal says what that command changes.
+    #[test]
+    fn the_press_sites_are_the_listed_commands() {
+        let cmds: Vec<String> = PersonVerb::ALL.iter().map(|v| v.cmd()).collect();
+        assert_eq!(
+            cmds,
+            [
+                "review approve",
+                "review extinguish",
+                "review weaken",
+                "review strengthen",
+                "review pin",
+                "review dismiss",
+                "review delegate",
+                "review revoke",
+                "delegate on",
+                "delegate policy --max-level e2",
+                "delegate predict on",
+                "on",
+                "add --trust",
+            ]
+        );
+        // Every review verb is a site, so `ALL` cannot fall behind `Verb`.
+        for v in Verb::ALL {
+            assert!(PersonVerb::ALL.contains(&PersonVerb::Review(v)), "{v:?}");
+        }
+        let runs = "it changes what Adage may run on this machine";
+        let reflexes = "it changes which reflexes your agents receive, and how strongly";
+        for v in PersonVerb::ALL {
+            let want = match v {
+                PersonVerb::Review(_) => reflexes,
+                PersonVerb::ReviewDelegate
+                | PersonVerb::ReviewRevoke
+                | PersonVerb::DelegateOn
+                | PersonVerb::DelegatePolicyE2
+                | PersonVerb::DelegatePredictOn => runs,
+                PersonVerb::On => "it turns Adage back on in this repository",
+                PersonVerb::AddTrust => "it installs a pack and trusts its signer",
+            };
+            assert_eq!(v.what_it_changes(), want, "{v:?}");
+        }
     }
 
     #[test]

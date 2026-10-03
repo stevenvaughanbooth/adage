@@ -7,6 +7,10 @@ and why, what could only be checked live, and the commands run. `../evaluation-p
 brief for the live evaluation; nothing on this branch has run in a live Claude Code session,
 because the build machine had no key.
 
+Line references in the implementation plan and the notes are at commit fff4fa7 (the plan) and the
+chunk's own commit (the notes); the module splits since then are mapped in structure-*.md and
+mod-structure.md.
+
 ## Chunks
 
 | Chunk | Commit | Notes |
