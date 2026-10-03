@@ -6,7 +6,8 @@
   summary.json   per-arm statistics for the held-out runs, and what Adage learned
   state.json     the full run state (timelines, directives, metrics)
 
-  python3 demo/report.py [ROOT] [--out DIR]
+  python3 demo/report.py [ROOT] [--out DIR] [--a ARM --b ARM]   (default adage vs control;
+                                                                  e.g. --a mod --b a0)
 
 ROOT is a demo root (default /tmp/adage-demo) or a live-runner root (evals/live/runner.py). The
 default output is demo/results/<stamp>-<model>/. The live runner calls build() itself and writes
@@ -125,6 +126,15 @@ def _follow_rate(m, st, mt):
     return (f["followed"] / f["exposed"] if f.get("exposed") else None), False
 
 
+def _requests(m, st, mt):
+    """Model requests (demo/adage_metrics.requests). A run whose count failed the cross-check
+    (`requests_verified` false) has no value: the protocol's validity rule is that requests equal
+    the debug log's dispatches (launch-gate-protocol.md, "The study is valid only if")."""
+    if m.get("requests_verified") is False:
+        return None, False
+    return m.get("requests"), False
+
+
 METRICS = {
     "turns_to_first_edit": (_first_edit_turns, med),
     "time_to_first_edit_s": (_first_edit_time, med),
@@ -139,7 +149,18 @@ METRICS = {
     "follow_rate": (_follow_rate, avg),
     "stale_generated_rate": (flag("stale_generated"), avg),
     "cost_usd": (_plain("cost_usd"), avg),
+    # Chunk E1 (docs/claude-mod/test-plan.md §7.1); runs recorded before it report None.
+    "requests": (_requests, avg),
+    "predicted_steps": (_plain("predicted_steps"), avg),
+    "receipts_as_results": (_plain("receipts_as_results"), avg),
+    "dead_end_substituted": (_plain("dead_end_substituted"), avg),
+    "directives": (_plain("directives"), avg),
+    "subagent_tool_calls": (_plain("subagent_tool_calls"), avg),
 }
+
+# Mechanism counts: reported with their unadjusted p, but kept out of the Holm family so adding
+# them does not change the adjustment of the outcome metrics (their p_holm is None).
+DESCRIPTIVE = {"predicted_steps", "receipts_as_results", "dead_end_substituted", "directives", "subagent_tool_calls"}
 
 
 # ------------------------------------------------------------------------------------ statistics
@@ -275,8 +296,11 @@ def compare(runs, max_turns=None, a="adage", b="control", n_perm=10000, n_boot=2
             row["p_value"] = cluster_perm_p(pts, a, b, n_perm)
             row["p_tasks"] = task_signflip_p(pts, a, b)
         rows[name] = row
-    for name, p in holm({k: r["p_value"] for k, r in rows.items() if "p_value" in r}).items():
+    for name, p in holm({k: r["p_value"] for k, r in rows.items() if "p_value" in r and k not in DESCRIPTIVE}).items():
         rows[name]["p_holm"] = p
+    for name in DESCRIPTIVE & set(rows):
+        if "p_value" in rows[name]:
+            rows[name]["p_holm"] = None
     return {
         "status_counts": counts,
         "excluded": {arm: sum(counts[arm][s] for s in EXCLUDED) for arm in arms},
@@ -400,10 +424,15 @@ def build(state, out):
 def main(argv):
     args = list(argv)
     out = None
-    if "--out" in args:
-        i = args.index("--out")
-        out = Path(args[i + 1])
-        del args[i:i + 2]
+    arms = {"--a": "adage", "--b": "control"}
+    for flag_ in ("--out", "--a", "--b"):
+        if flag_ in args:
+            i = args.index(flag_)
+            if flag_ == "--out":
+                out = Path(args[i + 1])
+            else:
+                arms[flag_] = args[i + 1]
+            del args[i:i + 2]
     root = Path(args[0] if args else "/tmp/adage-demo")
     state = json.loads((root / "state.json").read_text())
     if out is None:
@@ -412,7 +441,8 @@ def main(argv):
     build(state, out)
     ev = [r for r in state["runs"].values() if r.get("metrics") and r["phase"] == "eval"]
     latest = max((r.get("round", 1) for r in ev), default=1)
-    print(table(compare([r for r in ev if r.get("round", 1) == latest], state.get("max_turns"))))
+    a, b = arms["--a"], arms["--b"]
+    print(table(compare([r for r in ev if r.get("round", 1) == latest], state.get("max_turns"), a=a, b=b), a=a, b=b))
     if state.get("leaky", latest > 1):
         print("\nWARNING: later rounds learned from earlier sessions of the same held-out tasks (leaky: true); "
               "their comparison is biased toward Adage.")

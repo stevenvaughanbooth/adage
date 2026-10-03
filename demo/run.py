@@ -3,20 +3,43 @@
 
   python3 demo/run.py train   # baseline agents on training work items; Adage off
   python3 demo/run.py learn   # adage condition over the training transcripts -> tracks
-  python3 demo/run.py eval    # held-out work items, two arms: control vs adage
+  python3 demo/run.py eval    # held-out work items; arms from --arms / DEMO_ARMS (default control,adage)
   python3 demo/run.py all
+  python3 demo/run.py one W-2041 mod [--debug]   # smoke test: one held-out run in one arm
 
 Every run gets a fresh copy of the sandbox repository, a real `claude -p` session, and a hidden
 check afterwards. Live state is written to $DEMO_ROOT/state.json for the dashboard
-(demo/dashboard/serve.py). Both eval arms run Adage's hooks: the control arm computes what it
-would have said and logs it, but says nothing — so hook overhead is identical between arms.
+(demo/dashboard/serve.py).
+
+Arms (ARMS below; docs/claude-mod/architecture.md §9, test-plan §7.2):
+
+  a0           no Adage hooks at all: no --settings, no plugin, no ADAGE_* in the environment
+  control      hooks from `adage hooks-config` via --settings, ADAGE_ARM=control (computes, says nothing)
+  adage        the same hooks, treated
+  mod-observe  the plugin only (--plugin-dir, never --settings from hooks-config), treated,
+               ADAGE_MOD_OBSERVE=1
+  mod          the plugin only, treated
+
+The plugin arms load a copy of the plugin (default plugin/claude-code, --plugin-dir) staged under
+$DEMO_ROOT/plugins/ with the binary to serve it (default ADAGE_BIN, --plugin-bin) at
+dist/<target>/adage and its dist/SHA256SUMS, exactly as plugin/build.sh stages it, so the plugin's
+session-start shim links its own verified copy; nothing is downloaded and plugin/ is never written.
+--no-stage loads --plugin-dir as it is (after plugin/build.sh).
+
+Every session runs under --debug with its debug log at runs/<id>/claude-debug.log; `requests` is
+counted from it as evals/reflex-proof/harness/heldout_analysis.requests() counts it
+(demo/adage_metrics.py).
 
 Environment: DEMO_ROOT (default /tmp/adage-demo), DEMO_MODEL, DEMO_CONCURRENCY, DEMO_REPEATS,
-DEMO_TRAIN_REPEATS, DEMO_MAX_TURNS.
+DEMO_TRAIN_REPEATS, DEMO_MAX_TURNS, DEMO_ARMS, ADAGE_BIN (default target/release/adage),
+DEMO_PLUGIN_DIR, DEMO_PLUGIN_BIN.
 """
 
+import argparse
+import hashlib
 import json
 import os
+import platform
 import shutil
 import subprocess
 import sys
@@ -29,10 +52,15 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parent
 sys.path.insert(0, str(HERE))
 from report import redact_home  # noqa: E402 - demo/report.py
+import adage_metrics  # noqa: E402 - demo/adage_metrics.py
 SANDBOX = HERE / "sandbox"
 ROOT = Path(os.environ.get("DEMO_ROOT", "/tmp/adage-demo"))
 ADAGE_HOME = ROOT / "adage-home"
-ADAGE_BIN = REPO / "target" / "release" / "adage"
+ADAGE_BIN = Path(os.environ.get("ADAGE_BIN") or REPO / "target" / "release" / "adage")
+PLUGIN_DIR = Path(os.environ.get("DEMO_PLUGIN_DIR") or REPO / "plugin" / "claude-code")
+PLUGIN_BIN = Path(os.environ["DEMO_PLUGIN_BIN"]) if os.environ.get("DEMO_PLUGIN_BIN") else None
+PLUGIN_STAGE = True
+EVAL_ARMS = [a for a in os.environ.get("DEMO_ARMS", "control,adage").split(",") if a]
 MODEL = os.environ.get("DEMO_MODEL", "claude-sonnet-5")
 CONCURRENCY = int(os.environ.get("DEMO_CONCURRENCY", "3"))
 REPEATS = int(os.environ.get("DEMO_REPEATS", "3"))
@@ -103,14 +131,105 @@ def classify(name, inp, failed=False):
 
 
 def settings_file(arm):
-    """Claude Code settings for a run: Adage hooks (exec form) for eval arms, nothing for training."""
+    """Claude Code settings for a run: Adage hooks (exec form) for the hook arms, nothing for training."""
     p = ROOT / f"settings-{arm}.json"
-    if arm == "train":
+    if ARMS[arm]["hooks"] == "empty":
         p.write_text(json.dumps({}))
         return p
     out = subprocess.run([str(ADAGE_BIN), "hooks-config", str(ADAGE_BIN)], capture_output=True, text=True, check=True)
     p.write_text(out.stdout)
     return p
+
+
+# ------------------------------------------------------------------------------------------- arms
+#
+# hooks: "none"     no hooks at all (no --settings, no plugin)
+#        "empty"    --settings {} (training: the agent alone, recorded like the hook arms)
+#        "settings" --settings from `adage hooks-config` (exec-form hooks)
+#        "plugin"   --plugin-dir only: the plugin's own hooks, never --settings as well, so no
+#                   hook runs twice (implementation-plan §2.7.2)
+# adage_arm: ADAGE_ARM for the session (None: no ADAGE_* variable at all).
+# observe:   ADAGE_MOD_OBSERVE=1 (only the mod's observers register; architecture §9).
+
+ARMS = {
+    "train": {"hooks": "empty", "adage_arm": "treated", "observe": False},
+    "a0": {"hooks": "none", "adage_arm": None, "observe": False},
+    "control": {"hooks": "settings", "adage_arm": "control", "observe": False},
+    "adage": {"hooks": "settings", "adage_arm": "treated", "observe": False},
+    "mod-observe": {"hooks": "plugin", "adage_arm": "treated", "observe": True},
+    "mod": {"hooks": "plugin", "adage_arm": "treated", "observe": False},
+}
+
+
+def arm_invocation(arm, base_env, *, settings_for=None, plugin_dir=None, adage_home=None, debug_file=None):
+    """(claude flags, environment) that wire `arm`: the part of the command that differs by arm,
+    plus the debug flags every arm gets. `settings_for(arm)` returns the --settings path (called
+    only for the arms that pass one); `plugin_dir` is the staged plugin for the plugin arms."""
+    spec = ARMS[arm]
+    env = {k: v for k, v in base_env.items() if not k.startswith("ADAGE_")}
+    flags = []
+    if spec["adage_arm"] is not None:
+        env["ADAGE_HOME"] = str(adage_home or ADAGE_HOME)
+        env["ADAGE_ARM"] = spec["adage_arm"]
+        # Learning happens between rounds, never during one: no automatic learning.
+        env["ADAGE_AUTO_LEARN"] = "0"
+        if spec["observe"]:
+            env["ADAGE_MOD_OBSERVE"] = "1"
+    if spec["hooks"] in ("settings", "empty"):
+        flags += ["--settings", str(settings_for(arm))]
+    elif spec["hooks"] == "plugin":
+        if plugin_dir is None:
+            raise ValueError(f"arm {arm} needs a plugin directory")
+        flags += ["--plugin-dir", str(plugin_dir)]
+    if debug_file is not None:
+        flags += ["--debug", "--debug-file", str(debug_file)]
+    return flags, env
+
+
+def plugin_target():
+    """The target triple plugin/build.sh stages for this host (rustc's host triple), from uname:
+    the session-start shim resolves the same directory (on Linux it tries -musl first and falls
+    back to -gnu when no musl binary is staged; staging never copies a dist/ from the source)."""
+    s, m = platform.system(), platform.machine().lower()
+    m = {"arm64": "aarch64", "amd64": "x86_64"}.get(m, m)
+    if s == "Darwin":
+        return f"{m}-apple-darwin"
+    if s == "Linux":
+        return f"{m}-unknown-linux-gnu"
+    return f"{m}-pc-windows-msvc"
+
+
+def stage_plugin(src, binary, dest, target=None):
+    """A copy of the plugin at `src` in `dest`, serving `binary`: dist/<target>/adage and the
+    dist/SHA256SUMS line the shim verifies it against (`<sha256>  <target>/adage`, as sha256sum
+    prints it). The source's own dist/ is left behind, so a stale build.sh stage never wins."""
+    src, dest, binary = Path(src), Path(dest), Path(binary)
+    target = target or plugin_target()
+    if dest.exists():
+        shutil.rmtree(dest)
+    shutil.copytree(src, dest, ignore=shutil.ignore_patterns("dist"), symlinks=True)
+    bin_dir = dest / "dist" / target
+    bin_dir.mkdir(parents=True)
+    shutil.copy2(binary, bin_dir / "adage")
+    (bin_dir / "adage").chmod(0o755)
+    digest = hashlib.sha256((bin_dir / "adage").read_bytes()).hexdigest()
+    (dest / "dist" / "SHA256SUMS").write_text(f"{digest}  {target}/adage\n")
+    return dest
+
+
+_PLUGIN_LOCK = threading.Lock()
+_STAGED = {}
+
+
+def plugin_for_runs():
+    """The plugin directory the plugin arms load: staged once per process under $DEMO_ROOT/plugins/
+    (or --plugin-dir as it is, with --no-stage)."""
+    if not PLUGIN_STAGE:
+        return PLUGIN_DIR
+    with _PLUGIN_LOCK:
+        if "dir" not in _STAGED:
+            _STAGED["dir"] = stage_plugin(PLUGIN_DIR, PLUGIN_BIN or ADAGE_BIN, ROOT / "plugins" / PLUGIN_DIR.name)
+        return _STAGED["dir"]
 
 
 def transcript_for(session_id):
@@ -132,28 +251,32 @@ def run_one(run_id, phase, arm, task, prompt_template):
     update_run(run_id, id=run_id, phase=phase, arm=arm, task=task, prompt=prompt, status="running",
                t0=time.time(), events=[], directives=[], round=ROUND)
 
-    env = dict(os.environ)
-    env["ADAGE_HOME"] = str(ADAGE_HOME)
-    env["ADAGE_ARM"] = "control" if arm == "control" else "treated"
-    # Learning happens between rounds, never during one: no automatic learning.
-    env["ADAGE_AUTO_LEARN"] = "0"
+    debug_log = run_dir / "claude-debug.log"
+    arm_flags, env = arm_invocation(arm, os.environ, settings_for=settings_file,
+                                    plugin_dir=plugin_for_runs() if ARMS[arm]["hooks"] == "plugin" else None,
+                                    debug_file=debug_log)
     cmd = [
         "claude", "-p", prompt,
         "--model", MODEL,
         "--max-turns", str(MAX_TURNS),
-        "--output-format", "stream-json", "--verbose", "--include-hook-events",
+        # Partial messages carry the explicit request ids the `requests` cross-check reads.
+        "--output-format", "stream-json", "--verbose", "--include-hook-events", "--include-partial-messages",
         "--setting-sources", "project,local",
         "--strict-mcp-config",
-        "--settings", str(settings_file(arm)),
+        *arm_flags,
         "--allowedTools", "Bash", "Read", "Edit", "Write", "Glob", "Grep", "LS", "MultiEdit",
         "--disallowedTools", "WebFetch", "WebSearch", "Agent", "Task",
     ]
+    update_run(run_id, argv=[c if c != prompt else "<prompt>" for c in cmd], debug_log=str(debug_log))
     t0 = time.time()
     events, directives = [], []
+    observations, parsed = [], []
     tools_by_id = {}
     session_id, result = None, {}
     raw = open(run_dir / "stream.jsonl", "w")
-    proc = subprocess.Popen(cmd, cwd=sandbox, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+    # stderr to a file, never an unread pipe: under --debug it can outgrow a pipe's buffer.
+    err = open(run_dir / "stderr.log", "w")
+    proc = subprocess.Popen(cmd, cwd=sandbox, stdout=subprocess.PIPE, stderr=err, text=True, env=env)
     assistant_turns = 0
     for line in proc.stdout:
         t = round(time.time() - t0, 2)
@@ -162,6 +285,8 @@ def run_one(run_id, phase, arm, task, prompt_template):
             m = json.loads(line)
         except ValueError:
             continue
+        observations.append({"value": m})
+        parsed.append(m)
         typ = m.get("type")
         if typ == "system" and m.get("subtype") == "init":
             session_id = m.get("session_id")
@@ -195,13 +320,22 @@ def run_one(run_id, phase, arm, task, prompt_template):
             result = m
     proc.wait()
     raw.close()
+    err.close()
     elapsed = round(time.time() - t0, 2)
 
     first_edit = next((e for e in events if e["cat"] == "edit"), None)
     score = json.loads(subprocess.run([sys.executable, str(SANDBOX / "score.py"), str(sandbox), task],
                                       capture_output=True, text=True).stdout or "{}")
-    spool = spool_directives(session_id) if session_id and arm != "train" else []
-    metrics = {
+    spool = spool_directives(session_id) if session_id and arm not in ("train", "a0") else []
+    try:
+        debug_text = debug_log.read_text(errors="replace")
+    except OSError:
+        debug_text = ""
+    spool_path = ADAGE_HOME / "sessions" / f"{session_id}.spool" if session_id else None
+    metrics = derived_metrics(arm, events, parsed, observations, debug_text,
+                              adage_metrics.read_spool(spool_path) if spool_path else [],
+                              spool_exists=bool(spool_path and spool_path.exists()))
+    metrics.update({
         "session_id": session_id,
         "elapsed": elapsed,
         "turns": result.get("num_turns") or assistant_turns,
@@ -210,16 +344,65 @@ def run_one(run_id, phase, arm, task, prompt_template):
         "turns_to_first_edit": first_edit["turn"] - 1 if first_edit else None,
         "time_to_first_edit": first_edit["t"] if first_edit else None,
         "explore_calls_before_edit": sum(1 for e in events if e["cat"] == "explore" and (not first_edit or e["t"] < first_edit["t"])),
-        "dead_end_hits": sum(1 for e in events if e["cat"] == "verify-fail"),
         "ran_regen": any(e["cat"] == "regen" for e in events),
         "cost_usd": result.get("total_cost_usd"),
         "passed": bool(score.get("passed")),
+        # score.py's real keys, all recorded (implementation-plan §2.7.2).
+        "ci_passed": score.get("ci_passed"),
+        "hidden_passed": score.get("hidden_passed"),
+        "hidden_tests_run": score.get("hidden_tests_run"),
         "stale_generated": bool(score.get("stale_generated")),
+        "ci_tail": score.get("ci_tail"),
+        "hidden_tail": score.get("hidden_tail"),
         "result_subtype": result.get("subtype"),
         "adage": spool,
-    }
+    })
     update_run(run_id, status="passed" if metrics["passed"] else "failed", metrics=metrics, t_end=time.time())
     return run_id, metrics
+
+
+def derived_metrics(arm, events, stream, observations, debug_text, spool_records, spool_exists):
+    """The E1 metrics of one finished run, from its timeline events, parsed stream lines, stream
+    observations ([{"value": line}]), debug log text and spool records. Pure: unit-tested.
+
+    requests, requests_verified   heldout_analysis.requests(): debug-log dispatches, cross-checked
+                                  against the stream's distinct explicit request ids (unique)
+    dead_end_hits                 dead ends hit: a verification that failed (as before)
+    dead_end                      {"hit", "substituted"}: substituted = dead ends the spool says
+                                  were replaced before they ran
+    predicted_steps               spool turn_step records with predicted/predict set
+    receipts_as_results           spool pretool records answered from a receipt
+    directives                    directives delivered, from the spool (or, with no spool, the
+                                  <adage-reflex blocks in the stream's hook responses)
+    subagent_tool_calls           tool calls made inside subagents (stream)
+    hooks_wired_once              a0: no spool at all; hook arms: exactly one session_start record
+                                  (one hook invocation per event, T-E1-02); None for training"""
+    rq = adage_metrics.requests(debug_text, observations)
+    sp = adage_metrics.spool_metrics(spool_records)
+    st = adage_metrics.stream_metrics(stream)
+    hit = sum(1 for e in events if e.get("cat") == "verify-fail")
+    if arm == "a0":
+        wired = not spool_exists
+    elif ARMS.get(arm, {}).get("hooks") in ("settings", "plugin"):
+        wired = sp["session_starts"] == 1
+    else:
+        wired = None
+    return {
+        "requests": rq["requests"],
+        "requests_verified": rq["verified"],
+        "requests_check": {k: rq[k] for k in ("stream_request_ids", "api_error_entries", "cross_check")},
+        "dead_end_hits": hit,
+        "dead_end": {"hit": hit, "substituted": sp["dead_end_substituted"]},
+        "dead_end_substituted": sp["dead_end_substituted"],
+        "predicted_steps": sp["predicted_steps"],
+        "receipts_as_results": sp["receipts_as_results"],
+        "directives": sp["directives"] if spool_exists else st["directives_in_stream"],
+        "directives_in_stream": st["directives_in_stream"],
+        "subagent_tool_calls": st["subagent_tool_calls"],
+        "session_starts": sp["session_starts"],
+        "spool_exists": spool_exists,
+        "hooks_wired_once": wired,
+    }
 
 
 def spool_directives(session_id):
@@ -270,6 +453,7 @@ def phase_runs(phase, plan):
             try:
                 rid, m = f.result()
                 print(f"  {rid}: passed={m['passed']} turns={m['turns']} first_edit_turn={m['turns_to_first_edit']} "
+                      f"requests={m.get('requests')} verified={m.get('requests_verified')} "
                       f"t={m['elapsed']}s cost={m['cost_usd']}", flush=True)
             except Exception as e:  # noqa: BLE001 — one run's failure must not stop the demo
                 print(f"  run failed: {e}", flush=True)
@@ -324,24 +508,57 @@ def evaluate():
     for r in range(REPEATS):
         for i, task in enumerate(HELD_OUT):
             prompt = PROMPTS[(i + r) % len(PROMPTS)]
-            # Interleave arms so both see the same conditions over time.
+            # Interleave arms so all see the same conditions over time.
             tag = "eval" if ROUND == 1 else f"eval{ROUND}"
-            plan.append((f"{tag}-{task}-r{r + 1}-control", "eval", "control", task, prompt))
-            plan.append((f"{tag}-{task}-r{r + 1}-adage", "eval", "adage", task, prompt))
+            for arm in EVAL_ARMS:
+                plan.append((f"{tag}-{task}-r{r + 1}-{arm}", "eval", arm, task, prompt))
     phase_runs("eval", plan)
     STATE["phase"] = "done"
     save_state()
 
 
-def main():
-    global STATE
+def parse_args(argv):
+    p = argparse.ArgumentParser(description="Adage demo runner (see the module docstring).")
+    p.add_argument("what", nargs="?", default="all", choices=["train", "learn", "eval", "all", "one"])
+    p.add_argument("task", nargs="?", help="one: the work item (e.g. W-2041)")
+    p.add_argument("arm", nargs="?", default="adage", help="one: the arm (default adage)")
+    p.add_argument("--arms", help="eval: comma-separated arms (default DEMO_ARMS or control,adage)")
+    p.add_argument("--debug", action="store_true",
+                   help="accepted for the documented command line; every run is under --debug already")
+    p.add_argument("--plugin-dir", help="the plugin the plugin arms load (default plugin/claude-code)")
+    p.add_argument("--plugin-bin", help="the binary staged into the plugin (default ADAGE_BIN)")
+    p.add_argument("--no-stage", action="store_true",
+                   help="load --plugin-dir as it is (its dist/ staged by plugin/build.sh)")
+    a = p.parse_args(argv)
+    if a.what == "one" and not a.task:
+        p.error("one needs a work item: run.py one W-2041 [arm]")
+    arms = [x for x in (a.arms.split(",") if a.arms else EVAL_ARMS) if x]
+    for arm in arms + ([a.arm] if a.what == "one" else []):
+        if arm not in ARMS or arm == "train":
+            p.error(f"unknown arm {arm!r} (arms: {', '.join(k for k in ARMS if k != 'train')})")
+    a.arms = arms
+    return a
+
+
+def main(argv=None):
+    global STATE, PLUGIN_DIR, PLUGIN_BIN, PLUGIN_STAGE, EVAL_ARMS
+    args = parse_args(sys.argv[1:] if argv is None else argv)
+    EVAL_ARMS = args.arms
+    if args.plugin_dir:
+        PLUGIN_DIR = Path(args.plugin_dir).resolve()
+    if args.plugin_bin:
+        PLUGIN_BIN = Path(args.plugin_bin).resolve()
+    PLUGIN_STAGE = not args.no_stage
     ROOT.mkdir(parents=True, exist_ok=True)
-    if not ADAGE_BIN.exists():
-        sys.exit(f"build first: cargo build --release  (missing {ADAGE_BIN})")
+    used = set(EVAL_ARMS if args.what != "one" else [args.arm])
+    if not ADAGE_BIN.exists() and (args.what != "one" or used != {"a0"}):
+        sys.exit(f"build first: cargo build --release  (missing {ADAGE_BIN}; or set ADAGE_BIN)")
+    if any(ARMS[a]["hooks"] == "plugin" for a in used) and PLUGIN_STAGE and not (PLUGIN_BIN or ADAGE_BIN).exists():
+        sys.exit(f"missing the plugin's binary {PLUGIN_BIN or ADAGE_BIN} (--plugin-bin)")
     STATE = load_state()
     STATE["model"] = MODEL
     STATE["round"] = ROUND
-    what = sys.argv[1] if len(sys.argv) > 1 else "all"
+    what = args.what
     if what in ("train", "all"):
         train()
     if what in ("learn", "all"):
@@ -349,10 +566,9 @@ def main():
     if what in ("eval", "all"):
         evaluate()
     if what == "one":
-        # Smoke test: one held-out run with Adage.
+        # Smoke test: one held-out run in one arm.
         STATE["tracks"] = read_tracks()
-        phase_runs("smoke", [("smoke-" + sys.argv[2], "eval", sys.argv[3] if len(sys.argv) > 3 else "adage",
-                              sys.argv[2], PROMPTS[0])])
+        phase_runs("smoke", [(f"smoke-{args.task}-{args.arm}", "eval", args.arm, args.task, PROMPTS[0])])
 
 
 if __name__ == "__main__":
