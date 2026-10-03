@@ -33,86 +33,38 @@
 //! `batch_no_match`, and `pretool_no_match` of two builds; `turn_step_predicts` against its 10 ms
 //! bound; `batch_no_match_with_candidates` of two builds (and against `batch_no_match`).
 
-use adage_core::spans::SpanKind;
-use adage_core::Effect;
 use adage_intent::model;
+use adage_tracks::testkit::kinds::{self, act};
+use adage_tracks::testkit::{self, LearnedHome, RouteBuilder};
 use adage_tracks::*;
 use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::Instant;
 
-fn route(id: &str, trigger: Trigger, step: Step, slots: Vec<Slot>, effect: Effect) -> Route {
-    Route {
-        id: id.into(),
-        summary: String::new(),
-        trigger,
-        step,
-        slots,
-        effect,
-        strength: Strength::Prime,
-        state: RouteState::Firm,
-        exit: vec![Exit::IntentChanges],
-        evidence: Evidence { support: 5, ..Default::default() },
-        authored: false,
-    }
+/// As every bench route is learned: primed, lapsing when the intent changes, seen five times.
+fn bench(r: RouteBuilder) -> Route {
+    r.strength(Strength::Prime).until_intent_changes().support(5, 0).build()
 }
 
 fn lookup() -> Route {
-    route(
-        "lookup-work-item",
-        Trigger::Prompt { span: SpanKind::Ticket },
-        Step::Run { command: "python3 scripts/wi-lookup {item}".into() },
-        vec![Slot {
-            name: "item".into(),
-            source: SlotSource::Prompt { span: SpanKind::Ticket },
-            contract: Contract::Pattern { regex: r"^W-\d{4}$".into() },
-        }],
-        Effect::Observe,
-    )
+    bench(kinds::lookup("lookup-work-item", "python3 scripts/wi-lookup {item}"))
 }
 
 /// A finish line and three context routes (Track G G4).
 fn with_contexts() -> Vec<Route> {
-    let act = |k: &str| CtxItem::Act { keys: vec![k.into()] };
-    let ctx = |id: &str, items: Vec<CtxItem>, cmd: &str| {
-        route(id, Trigger::Context { items, within: 8 }, Step::Run { command: cmd.into() }, vec![], Effect::Verify)
-    };
+    let ctx = |id: &str, items: Vec<CtxItem>| bench(kinds::context(id, items, 8, "make check"));
     vec![
         lookup(),
-        route(
-            "finish-line-gen",
-            Trigger::AfterEdit { paths: "schema/*.json".into() },
-            Step::Run { command: "make gen".into() },
-            vec![],
-            Effect::Regenerate,
-        ),
-        ctx("context-check", vec![CtxItem::Edit { glob: "registry/*.csv".into() }, act("exec make gen")], "make check"),
-        ctx("context-lint", vec![act("exec make fmt"), act("exec make lint")], "make check"),
-        ctx(
-            "context-three",
-            vec![act("exec make deps"), CtxItem::Edit { glob: "requirements.txt".into() }, act("exec make lock")],
-            "make check",
-        ),
+        bench(kinds::finish_line("finish-line-gen", "schema/*.json", "make gen")),
+        ctx("context-check", vec![kinds::edit("registry/*.csv"), act("exec make gen")]),
+        ctx("context-lint", vec![act("exec make fmt"), act("exec make lint")]),
+        ctx("context-three", vec![act("exec make deps"), kinds::edit("requirements.txt"), act("exec make lock")]),
     ]
 }
 
 fn index(home: &Path, repo: &str, routes: Vec<Route>) {
-    let t = Track {
-        manifest: Manifest {
-            track: TrackInfo {
-                name: format!("{repo}/bench"),
-                version: "0.1.0".into(),
-                description: String::new(),
-                provenance: "desire-path".into(),
-            },
-            scope: Scope { repo: repo.into() },
-            gauge: Gauge::default(),
-        },
-        routes,
-    };
-    io::validate(&t).unwrap();
-    Index::compile(&[t]).write_atomic(&home.join("index.json")).unwrap();
+    LearnedHome::at(home).compile(&[testkit::track(&format!("{repo}/bench"), repo).routes(routes).validated()]);
 }
 
 /// Three candidates for `acme-bench` (sequences seen below a reflex's support), attached to the
@@ -155,13 +107,7 @@ fn with_candidates(home: &Path) {
 }
 
 fn intent(centroid: Vec<i16>, model_id: &str) -> Route {
-    route(
-        "intent-tests",
-        Trigger::Intent { family: "intent-tests".into(), model: model_id.into(), centroid, threshold: 0.7 },
-        Step::Run { command: "make test".into() },
-        vec![],
-        Effect::Verify,
-    )
+    bench(kinds::intent("intent-tests", model_id, centroid, 0.7, "make test"))
 }
 
 fn pct(v: &mut [f64], p: f64) -> f64 {
@@ -248,7 +194,8 @@ fn turn_step_predicts(
     runs: usize,
 ) -> (serde_json::Value, String) {
     use adage_exec::approvals::{self, Approval, Store};
-    let paths = adage_store::Paths::at(home);
+    let learned = LearnedHome::at(home);
+    let paths = &learned.paths;
     let index = Index::try_load(&paths.index()).expect("the bench index");
     let ir = index.routes.iter().find(|r| r.route.id == "finish-line-gen").expect("the finish line");
     let req = adage_exec::route::plan_predict(ir, repo, &paths.tracks()).expect("a predict plan").request;
@@ -271,11 +218,10 @@ fn turn_step_predicts(
         command: "make gen".into(),
     };
     let seed = |session: &str| {
-        adage_store::state::update::<adage_runtime::SessionState, _>(&paths.state(session), |st| {
+        learned.seed::<adage_runtime::SessionState>(session, |st| {
             st.arm = Some(adage_runtime::Arm::Treated);
             st.pending = vec![pending.clone()];
-        })
-        .unwrap();
+        });
     };
     time_with(bins, home, repo, "TurnStep", step, runs, &seed)
 }
@@ -286,12 +232,8 @@ fn main() {
     let bins: Vec<&str> = args[1].split(',').collect();
     let (bin, src) = (bins.as_slice(), args[2].as_str());
     let runs: usize = args.get(3).and_then(|x| x.parse().ok()).unwrap_or(300);
-    let tmp = tempfile::tempdir().unwrap();
-    let root = tmp.path().canonicalize().unwrap();
-    let (home, bare, repo) = (root.join("home"), root.join("home-no-model"), root.join("acme-bench"));
-    std::fs::create_dir_all(repo.join(".git")).unwrap();
-    std::fs::create_dir_all(&home).unwrap();
-    std::fs::create_dir_all(&bare).unwrap();
+    let world = testkit::TempWorld::new(&["home", "home-no-model"]);
+    let (home, bare, repo) = (world.p("home"), world.p("home-no-model"), world.repo("acme-bench"));
     let prompt = serde_json::json!({ "prompt": "fix the failing tests please" });
     let ticket = serde_json::json!({ "prompt": "W-2042 please" });
     let mut out = serde_json::Map::new();
@@ -387,7 +329,7 @@ fn main() {
     let (r, last) = time(bin, &home, &repo, "PostToolBatch", ls, runs);
     assert!(last.trim().is_empty(), "{last}");
     out.insert("batch_no_match_with_candidates".into(), r);
-    let paths = adage_store::Paths::at(&home);
+    let learned = LearnedHome::at(&home);
     let edited = |session: &str| {
         let edit = serde_json::json!({ "session_id": session, "cwd": repo, "tool_calls": [
             call("Edit", serde_json::json!({ "file_path": repo.join("acme/a.py"), "old_string": "a", "new_string": "b" })),
@@ -422,7 +364,7 @@ fn main() {
     probe.as_object_mut().unwrap().extend(test.as_object().unwrap().clone());
     c.stdin.take().unwrap().write_all(probe.to_string().as_bytes()).unwrap();
     assert!(c.wait_with_output().unwrap().stdout.is_empty(), "noticed, never said");
-    let recs: Vec<serde_json::Value> = adage_store::spool::read_all(&paths.spool("probe")).unwrap_or_default();
+    let recs = learned.spooled("probe");
     let noticed = recs.iter().any(|x| x["decision"]["noticed"][0]["candidate"] == "run-lint");
     let _ = std::fs::remove_dir_all(home.join("sessions"));
     let (r, last) = time_with(bin, &home, &repo, "PostToolBatch", test, runs, &|session| edited(session));

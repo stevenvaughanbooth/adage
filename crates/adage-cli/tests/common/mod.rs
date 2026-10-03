@@ -1,12 +1,13 @@
 //! What adage-cli's integration suites share (docs/testing.md, "Shared test helpers"): one
 //! scrub of the environment a developer's shell or an agent session would otherwise leak into the
-//! binary, a hermetic `Command`, and a temporary world of directories. A suite takes it with
-//! `mod common;` and uses what it needs.
+//! binary, a hermetic `Command`, and, from the workspace test kit, a temporary world of
+//! directories and a learned home. A suite takes it with `mod common;` and uses what it needs;
+//! routes, tracks and indexes come from `adage_tracks::testkit` directly.
 
 #![allow(dead_code)] // each suite uses part of the kit
 
 use std::ffi::OsStr;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, Output};
 
 /// Variables outside Adage's own that change what the binary does: Claude Code's and Codex's
@@ -45,27 +46,12 @@ pub fn adage(adage_home: &Path, cwd: &Path) -> Command {
     hermetic(env!("CARGO_BIN_EXE_adage"), adage_home, cwd)
 }
 
-/// A temporary directory, canonicalised (so paths compare equal to what the binary prints), with
-/// the given subdirectories created. Removed when dropped.
-pub struct TempWorld {
-    _dir: tempfile::TempDir,
-    pub root: PathBuf,
-}
-
-impl TempWorld {
-    pub fn new(dirs: &[&str]) -> TempWorld {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().canonicalize().unwrap();
-        for d in dirs {
-            std::fs::create_dir_all(root.join(d)).unwrap();
-        }
-        TempWorld { _dir: dir, root }
-    }
-
-    pub fn p(&self, rel: &str) -> PathBuf {
-        self.root.join(rel)
-    }
-}
+/// A temporary directory with subdirectories, repositories, files and fake tools; and, with
+/// [`LearnedHome`], an `ADAGE_HOME` with its index, tracks, session state and spools. Both come
+/// from the workspace test kit (`adage_tracks::testkit`, docs/claude-mod/impl/testkit.md), which
+/// also builds routes, tracks and indexes.
+#[allow(unused_imports)] // each suite uses part of the kit
+pub use adage_tracks::testkit::{LearnedHome, TempWorld};
 
 /// A run's stdout then stderr, for assertion messages and searches.
 pub fn text(o: &Output) -> String {

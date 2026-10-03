@@ -18,7 +18,7 @@ use std::time::{Duration, Instant};
 mod common;
 
 struct World {
-    _dir: tempfile::TempDir,
+    _w: common::TempWorld,
     root: PathBuf,
 }
 
@@ -54,12 +54,8 @@ fn target() -> Option<&'static str> {
 
 impl World {
     fn new() -> World {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().canonicalize().unwrap();
-        for d in ["home/.claude/projects", "data", "xdg", "codex", "bin"] {
-            std::fs::create_dir_all(root.join(d)).unwrap();
-        }
-        World { _dir: dir, root }
+        let w = common::TempWorld::new(&["home/.claude/projects", "data", "xdg", "codex", "bin"]);
+        World { root: w.root.clone(), _w: w }
     }
     fn p(&self, rel: &str) -> PathBuf {
         self.root.join(rel)

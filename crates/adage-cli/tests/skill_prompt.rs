@@ -191,7 +191,7 @@ impl World {
     }
 
     fn spooled(&self, session: &str) -> Vec<Value> {
-        adage_store::spool::read_all::<Value>(&self.paths().spool(session)).unwrap_or_default()
+        common::LearnedHome::at(&self.paths().root).spooled(session)
     }
 }
 

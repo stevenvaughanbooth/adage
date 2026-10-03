@@ -23,7 +23,7 @@ use std::process::{Command, Stdio};
 mod common;
 
 struct Sandbox {
-    _dir: tempfile::TempDir,
+    _w: common::TempWorld,
     root: PathBuf,
 }
 
@@ -32,21 +32,10 @@ impl Sandbox {
     /// files the linked-files route may name.
     fn new() -> Sandbox {
         adage_sim::assume_no_checkout_at_cwd();
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().canonicalize().unwrap();
-        for d in [
-            "home",
-            "adage",
-            "acme-billing/.git",
-            "acme-billing/acme",
-            "acme-billing/schema",
-            "acme-billing/tests",
-            "acme-billing/scripts",
-        ] {
-            std::fs::create_dir_all(root.join(d)).unwrap();
-        }
+        let w = common::TempWorld::new(&["home", "adage", "acme-billing/tests"]);
+        w.repo("acme-billing");
         // The tracker's lookup script: a `predict` grant on the lookup hashes it.
-        std::fs::write(root.join("acme-billing/scripts/wi-lookup"), "#!/usr/bin/env python3\n").unwrap();
+        w.write("acme-billing/scripts/wi-lookup", "#!/usr/bin/env python3\n");
         for f in [
             "acme/billing.py",
             "acme/customers.py",
@@ -55,9 +44,9 @@ impl Sandbox {
             "README.md",
             "Makefile",
         ] {
-            std::fs::write(root.join("acme-billing").join(f), scenario::body(f)).unwrap();
+            w.write(&format!("acme-billing/{f}"), scenario::body(f));
         }
-        Sandbox { _dir: dir, root }
+        Sandbox { root: w.root.clone(), _w: w }
     }
     fn repo(&self) -> String {
         self.root.join("acme-billing").to_string_lossy().to_string()
