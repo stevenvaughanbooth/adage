@@ -15,6 +15,7 @@ pub mod model;
 pub mod params;
 pub mod proposals;
 pub mod review;
+mod tagged;
 pub mod triggers;
 pub mod why;
 

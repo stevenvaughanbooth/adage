@@ -1,5 +1,6 @@
 //! The route and track model (Design §8, §10).
 
+use crate::tagged::tagged_enum;
 use adage_core::spans::SpanKind;
 use adage_core::Effect;
 use serde::{Deserialize, Serialize};
@@ -124,9 +125,9 @@ pub struct Slot {
     pub contract: Contract,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "on", rename_all = "snake_case")]
-pub enum Trigger {
+tagged_enum! {
+#[derive(Debug, Clone, PartialEq)]
+pub enum Trigger (tag = "on", mirror = TriggerRepr) {
     /// A prompt containing a span of this kind.
     Prompt { span: SpanKind },
     /// The agent just ran a command matching this template, successfully.
@@ -149,6 +150,7 @@ pub enum Trigger {
     /// the runtime keeps the session's recent symbols and walks the index's discrimination net
     /// (Track G §7, `adage_runtime::context`).
     Context { items: Vec<CtxItem>, within: u8 },
+}
 }
 
 /// At most this many items in a context trigger, and at most this gap between them.
@@ -183,9 +185,9 @@ pub const INTENT_MAX_THRESHOLD: f32 = 0.99;
 /// At most this many intent routes per track: matching is one dot product each, on the hot path.
 pub const MAX_INTENT_ROUTES: usize = 64;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "do", rename_all = "snake_case")]
-pub enum Step {
+tagged_enum! {
+#[derive(Debug, Clone, PartialEq)]
+pub enum Step (tag = "do", mirror = StepRepr) {
     /// Run a command. Tokens of the form `{slot}` are bound from the route's slots.
     Run { command: String },
     /// Read a batch of files, bound from a list-valued slot, in one turn.
@@ -206,6 +208,7 @@ pub enum Step {
     /// A procedure card for a family of similar tasks ([`crate::card`]): learned from this
     /// repository's traces, triggered by an intent (the family's prompts), delivered once, prime.
     Card { card: crate::card::Card },
+}
 }
 
 /// Typed exit predicates, rendered by Adage from fixed templates — never free text from a track.
