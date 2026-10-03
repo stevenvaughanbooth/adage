@@ -216,6 +216,23 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### Conditioning (learning from traces)
 
+- **Skill reflexes are learned from traces.** A Claude Code Skill tool use is now a step the
+  learner reads (every other control tool stays out): a skill used after a family of similar
+  requests, after an edit, or after a learned sequence becomes a `skill` reflex with the same
+  support, rate and uplift bars as a command, observe and prime at most. A skill is never the
+  context of another reflex, and a trace that a skill directive steered is no evidence for that
+  skill alone. Skill uses are alphabet events now, so the miner sees them between other events.
+- **Candidates: sequences counted before they are reflexes.** A sequence (a context of two or three
+  events before a command) seen in fewer traces than a reflex needs, but in at least
+  `min_support − 2` and never fewer than two, is now kept as a candidate, mined in a pass of its
+  own that never changes the reflexes. Of the variants of one habit (the same traces, the same
+  step) one is kept: the context nearest the step. A nascent reflex with a context is a candidate
+  that waits for review. Candidates carry the id the same pattern gets as a reflex, are written
+  through the learner's store to `<tracks>/<repo>/learned/candidates.json` (owner-only), compiled
+  into the index apart from the routes (`candidates`, `candidate_contexts`, their words in the
+  fast path's triggers) and listed under `candidates` in `adage status --json`. They are counted,
+  never delivered. `learn.log` gains `change: "candidate"` with `support` and `s_min`, and a
+  `new` reflex that was a candidate names the traces that tipped it (`sessions`).
 - **Card families whose files are named per task.** When each task creates files named whole
   after itself (chi's `middleware/no_sniff.go`, `middleware/hsts.go`), the files share no name
   shape, and no card formed. Files a task created now also count by their role: directory, test
@@ -383,6 +400,40 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 - The follow judge scores the simple command that runs the directed program, with its setup
   (`cd`, `source …/activate`): `ls .venv/bin && python -m pytest` no longer counts as following
   `.venv/bin/python -m pytest`, so it cannot misfire a correct instinct into extinction.
+- **Steps Adage takes in the agent's place, for the Claude Code mod.** `adage hook claude
+  TurnStep` answers, before a model request, the call a directive Adage already delivered names
+  (`{"predict": {kind, route, track, calls}}`: a command, a sequence's first step, the reads a
+  lookup listed, an armed finish line at the turn's end), only under a person's `predict` grant
+  in `adage-exec`, never in the control arm, never at a turn's first request or twice in a row, at
+  most six per session; `adage hook` alone never predicts. With the person's `routine_model` set,
+  a step the model takes only to do what a delivered `fire` directive says answers
+  `{"routine": true}` (`would_route` in the control arm). A call made with an `adage_` tool-use id
+  is Adage's, live and in the trace (`by: adage`; cached parses are rebuilt), and is judged
+  `predicted`, never `followed`. The command hooks' output is unchanged.
+- **One decision per Bash call, and the mod's two phases.** A `PreToolUse` whose `tool_use_id`
+  was decided this session is answered with nothing and no record (a ring of 64 per session,
+  consulted only after the no-Python word scan, so the no-match path still reads nothing). The
+  mod's `dry_run` answers the plan (a learned substitution, the interpreter rewrite, advice, a
+  receipt's note) and records nothing; its `verdict` decides once, with Claude Code's own
+  permission check replacing the planner's reading of the settings files (`checked_by: engine`).
+  `adage hook claude Standing` answers the repository's standing reflexes once per session for the
+  mod's cached system-prompt section, with the project's environment and what compaction should
+  keep; the first prompt then leaves them out; a control session's text is empty.
+
+- **A `skill` reflex: the skill this repository uses at this point.** A route's step may be
+  `do: skill` with a skill name (and optional arguments), after a prompt, an intent family, an
+  edit or a learned context. It is delivered as one fixed sentence (`kind="skill"`, never above
+  prime, never a dead end) and judged followed when the agent uses that skill. With the Claude
+  Code mod, `TurnStep` may invoke it as the agent's own Skill call (`kind: "skill"`), only under a
+  `predict` grant, with `skills.invoke` on, and for a skill `adage train` recorded as inert in a
+  pack the person accepted. The index carries a `format`; a binary that cannot read an index a
+  newer one wrote serves nothing and leaves it alone, and `adage doctor` says so.
+- **Verified in place.** `adage train` writes `verified.json` beside the staged pack: each
+  compiled command, what its replay found (`works`, `stale` with what failed, `not-replayed`), the
+  date, and whether the skill is inert. Once the pack is accepted, `adage hook claude SkillPrompt`
+  (the mod's `skill.prompt`) answers the skill's text as the model reads it with those lines added
+  under a fixed, dated heading (sanitised, at most 2,400 bytes); the control arm changes nothing
+  and records `would_annotate`.
 
 ### Review, packs and sharing
 
@@ -405,6 +456,20 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   and applies only the declared outputs. `adage delegate on|off|status` swaps the hook
   registrations. Policy files, approvals keyed to what runs, automatic revocation; nothing is
   approved automatically unless policy allows the inert-observe class (docs/execution.md).
+- **A person can decide from the Claude Code session, with a press.** `adage hook claude Press`
+  issues the mod a single-use token in the window before the agent's first act (once per start;
+  once more on `resume`; never on `compact`), and the person-only verbs the design lists (the
+  review verbs, `review delegate` and `revoke`, `delegate on`, `delegate policy --max-level e2`,
+  `delegate predict on`, `adage on`, and `adage add --trust` for a pack committed in the
+  repository) accept it on stdin in place of a terminal, print the next token, and record `via:
+  press` on the decision or approval (`via: terminal` otherwise). A wrong, spent, stale or foreign
+  token behaves exactly as none; `install`, guarded settings, `share`, `train accept`, `packs on`,
+  `init` and every `adage-exec` verb never take one. `review delegate … --stage --json` answers what
+  a grant would be and do, recording nothing, and `--confirm` records it only if nothing but the
+  repository moved; the first confirmed action on a machine at E1 writes the policy and the marker
+  with it. `graph --json` gives each reflex's `offers`, `status --json` the packs awaiting trust,
+  and the terminal UI's routes view shows predict grants (docs/execution.md, "Deciding from the
+  session").
 
 ### Seeing it
 
@@ -425,6 +490,26 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   --help` shows its options and never runs it. A mistyped command gets a suggestion,
   `adage completions <shell>` prints shell completions, `--plain` works everywhere, and usage
   errors exit with status 2. `adage status` uses the shared output grammar and has `--json`.
+- **The live feed and the card as JSON, for a pane beside the session.** `adage watch --follow
+  --json [--session <id>] [--since <cursor>]` sends the live pane's rows, `learn.log` lines,
+  health changes and the learner's state as JSON lines with no terminal; every line carries a
+  cursor a restarted follower resumes from with nothing lost or repeated, the reader's own session
+  never names its arm, and it exits with its parent, its stdin or SIGTERM. Bare `adage --json` is
+  the status card's rows one to one (`--for-session` names `/adage watch` in place of `adage ui`)
+  (docs/live-learning.md).
+- **`adage off` and `adage on`.** `off` writes the repository's `.adage/disabled` from anywhere,
+  an agent session included; `on` removes it and is a person's decision. The status card's first
+  line says when Adage is off here.
+- **What a session cost, as its harness reported it.** `adage ledger note` takes one session's
+  per-step usage (and the engine's own cost) on stdin, accepted only for a session the spool shows
+  started in that repository, into `ledger/.harness.jsonl`; the savings estimate merges it over the
+  transcript's figures under the ledger's lock, and a step Adage took in the model's place counts
+  as a model turn not spent (`counts.predicted_steps`, `harness` in `adage savings --json`).
+- **How long the hooks take, on this machine.** Every spool record carries `duration_us`, the
+  hook's own time, and `adage doctor` reports the p95 over tool batches that had nothing to say
+  (a warning above 10 ms, a failure above 25 ms, "too few hooks to measure" under 20), measured at
+  most every five seconds. `adage doctor --json` gives each fix a structured `action` beside the
+  prose: one `adage` command a pane may offer to run, or `manual`.
 
 ### Design system
 
@@ -436,6 +521,9 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   `adage-term` crate detects what the terminal can do (colour depth, UTF-8, light or dark ground;
   `ADAGE_COLOR`, `ADAGE_THEME` and `ADAGE_ASCII` override it) and provides the output grammar
   every command prints through. Terminal frames and printed output are pinned by insta snapshots.
+- **The tokens for the Claude Code mod.** `cargo xtask tokens` also writes
+  `plugin/claude-code/hooks/tokens.ts`: every glyph with its ASCII twin, and Adage's roles as the
+  engine's theme keys, so the mod draws with the person's Claude Code theme and no colour literal.
 
 ### Evals
 
@@ -457,8 +545,12 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   CycloneDX SBOM. The npm package's launcher runs the binaries from a per-platform package chosen
   by `os`/`cpu` (all three binaries in it); nothing is downloaded at install time. None of this
   is published yet: the workflow has not run on a tag, and the tap and npm package do not exist.
-- A Claude Code plugin marketplace with two plugins (`adage`, and `adage-exec` for execution);
-  each uses a bundled, checksummed binary, else the one on `PATH`, and never downloads. Not
+- **One Claude Code plugin ships both binaries.** `/plugin install adage@adage` is the only
+  install step: the plugin bundles `adage` and `adage-exec` (each checksummed, else the one on
+  `PATH`; it never downloads), and its hooks run `adage-exec` while `adage delegate on`'s marker
+  exists, else `adage`, so they are registered once and never fire twice; the edit and Stop hooks
+  have 30 s. This reverses Track C's second plugin (its D2): the retired `adage-exec` plugin stays
+  one release as an alias that quiets what it left behind and asks to be uninstalled. Not
   published yet.
 - The website (`web/site`).
 - Apache-2.0, with a generated NOTICE of third-party licenses; `SECURITY.md`, `CONTRIBUTING.md`.

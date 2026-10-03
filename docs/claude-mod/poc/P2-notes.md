@@ -208,7 +208,10 @@ part of why the disk filled; not repeated.
    it. Not measured against the 250 ms budget; `hook_latency`'s `turn_step_predicts` scenario
    (P1 open issue 1) can now be written against `adage-exec`.
 3. **The TUI routes view and the review queue do not show predict grants** (they read execute
-   grants only); `delegate status` does.
+   grants only); `delegate status` does. *Closed in A7/A8 (`docs/claude-mod/impl/A7-A8-notes.md`):
+   the routes view's execution column shows `Predicted`, `Paused` or `Needs review` for a predict
+   grant; the review queue lists a predict grant where it needs a person (lapsed), and `graph
+   --json`'s `offers` names the predict grant a reflex could be given.*
 4. **Two grants, one route:** approving E1/E2 after `--predict` silently stops the predict grant
    (difference 2). `delegate status` could say so.
 5. **`effects_deny = ["environment"]` refuses every scripted predict grant**, as it refuses
