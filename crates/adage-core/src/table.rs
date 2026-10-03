@@ -52,7 +52,7 @@ pub struct CommandSpec {
     /// Flags whose presence makes a rewriting tool only check (`cargo fmt --check`): verify.
     pub check_flags: Vec<String>,
     pub publish_flags: Vec<String>,
-    pub pattern_effects: Vec<(Regex, Effect)>,
+    pub pattern_effects: Vec<(Pattern, Effect)>,
     /// True only when repository files cannot make this program run code (Track C §4.2).
     /// Gates automatic approval in `adage-exec`; never inherited by subcommands or parents.
     pub inert: bool,
@@ -71,6 +71,28 @@ pub struct CommandSpec {
     pub subcommands: HashMap<String, CommandSpec>,
 }
 
+/// A `pattern_effects` regex, compiled the first time it is matched: a hook reads a few commands,
+/// and compiling every pattern of the table up front was most of loading it. A pattern that does
+/// not compile never matches (the table's test checks that every one compiles).
+pub struct Pattern {
+    source: String,
+    re: std::sync::OnceLock<Option<Regex>>,
+}
+
+impl Pattern {
+    fn new(source: String) -> Pattern {
+        Pattern { source, re: std::sync::OnceLock::new() }
+    }
+
+    pub fn is_match(&self, text: &str) -> bool {
+        self.compiled().is_some_and(|re| re.is_match(text))
+    }
+
+    fn compiled(&self) -> Option<&Regex> {
+        self.re.get_or_init(|| Regex::new(&self.source).ok()).as_ref()
+    }
+}
+
 pub struct CommandTable {
     pub commands: HashMap<String, CommandSpec>,
 }
@@ -80,11 +102,7 @@ fn build_spec(raw: RawCommand) -> CommandSpec {
     let pattern_effects = raw
         .pattern_effects
         .into_iter()
-        .filter_map(|(pat, eff)| {
-            let re = Regex::new(&pat).ok()?;
-            let e = Effect::parse(&eff)?;
-            Some((re, e))
-        })
+        .filter_map(|(pat, eff)| Some((Pattern::new(pat), Effect::parse(&eff)?)))
         .collect();
     let subcommands = raw.subcommands.into_iter().map(|sc| (sc.name.clone(), build_spec(sc))).collect();
     CommandSpec {
@@ -124,6 +142,21 @@ impl CommandTable {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_pattern_compiles() {
+        fn check(name: &str, spec: &CommandSpec) {
+            for (p, _) in &spec.pattern_effects {
+                assert!(p.compiled().is_some(), "{name}: pattern {:?} does not compile", p.source);
+            }
+            for (sub, s) in &spec.subcommands {
+                check(&format!("{name} {sub}"), s);
+            }
+        }
+        for (name, spec) in &CommandTable::load().commands {
+            check(name, spec);
+        }
+    }
 
     fn inert_names(table: &CommandTable) -> Vec<String> {
         let mut out = Vec::new();
