@@ -177,12 +177,34 @@ fn rank(e: Effect) -> u8 {
 /// The effect Adage itself assigns to a command template (slots filled with an inert value). The
 /// strongest effect of any action in the command wins.
 pub fn classify(command: &str, table: &CommandTable) -> Effect {
-    let filled = regex::Regex::new(r"\{[a-z_][a-z0-9_]*\}").unwrap().replace_all(command, "X-1");
-    normalize_shell(&filled, "/repo", table)
+    // A command's effect depends only on its text and the table, and learning asks for the same
+    // commands many times (each one is parsed as shell). With the built-in table, answers are
+    // remembered for the process, a bounded number of them.
+    static SLOT: std::sync::LazyLock<regex::Regex> =
+        std::sync::LazyLock::new(|| regex::Regex::new(r"\{[a-z_][a-z0-9_]*\}").unwrap());
+    static SEEN: std::sync::LazyLock<std::sync::Mutex<std::collections::HashMap<String, Effect>>> =
+        std::sync::LazyLock::new(Default::default);
+    let builtin = std::ptr::eq(table, CommandTable::load());
+    if builtin {
+        if let Some(e) = SEEN.lock().ok().and_then(|m| m.get(command).copied()) {
+            return e;
+        }
+    }
+    let filled = SLOT.replace_all(command, "X-1");
+    let effect = normalize_shell(&filled, "/repo", table)
         .iter()
         .map(|n| n.effect)
         .max_by_key(|e| rank(*e))
-        .unwrap_or(Effect::Environment)
+        .unwrap_or(Effect::Environment);
+    if builtin {
+        if let Ok(mut m) = SEEN.lock() {
+            if m.len() >= 16_384 {
+                m.clear();
+            }
+            m.insert(command.to_string(), effect);
+        }
+    }
+    effect
 }
 
 /// Whether a run step declared observe over the table's `environment` is a repository script
