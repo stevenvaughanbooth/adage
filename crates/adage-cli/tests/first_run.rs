@@ -8,23 +8,18 @@ use std::process::{Command, Output, Stdio};
 mod common;
 
 struct World {
-    _dir: tempfile::TempDir,
-    root: PathBuf,
+    w: common::TempWorld,
 }
 
 impl World {
     fn new() -> World {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().canonicalize().unwrap();
-        for d in ["home", "bin", "xdg", "work"] {
-            std::fs::create_dir_all(root.join(d)).unwrap();
-        }
+        let w = common::TempWorld::new(&["home", "bin", "xdg"]);
         // A git repository to run in.
-        std::fs::create_dir_all(root.join("work/.git")).unwrap();
-        World { _dir: dir, root }
+        w.repo("work");
+        World { w }
     }
     fn p(&self, rel: &str) -> PathBuf {
-        self.root.join(rel)
+        self.w.p(rel)
     }
     fn cmd(&self, args: &[&str]) -> Command {
         let mut c = Command::new(env!("CARGO_BIN_EXE_adage"));
@@ -45,13 +40,7 @@ impl World {
     }
     #[cfg(unix)]
     fn fake_bin(&self, name: &str, script: &str) {
-        let p = self.p("bin").join(name);
-        std::fs::write(&p, format!("#!/bin/sh\n{script}\n")).unwrap();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
-        }
+        self.w.executable(&format!("bin/{name}"), format!("#!/bin/sh\n{script}\n"));
     }
     /// Everything under the isolated configuration and data directories, to prove nothing changed.
     fn snapshot(&self) -> Vec<(String, Vec<u8>)> {

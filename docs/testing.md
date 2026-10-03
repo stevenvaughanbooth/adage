@@ -41,6 +41,15 @@ the machine it runs on.
 - **One variable re-blesses goldens**: `ADAGE_BLESS=1`. Insta snapshots use insta's own
   review flow. Pending snapshots (`*.snap.new`) are never committed.
 - **Shared test helpers** live in `tests/common/mod.rs` of the crate that needs them.
+- **Fixtures of the reflex model** come from one kit: `adage_tracks::testkit`, behind
+  `adage-tracks`' `testkit` feature, which a crate turns on from its `[dev-dependencies]`
+  (`adage-tracks = { path = "../adage-tracks", features = ["testkit"] }`). It builds routes
+  (`route(…)`, and `kinds::lookup`, `finish_line`, `dead_end`, `context`, `sequence`, `intent`),
+  tracks (`track(…)`, `.validated()`), hand-written indexes (`IndexBuilder`), temporary worlds
+  (`TempWorld`) and learned homes (`LearnedHome`: the index, the tracks, a session's state file
+  and its spool). Write a fixture with it rather than a `Route { … }` literal or another `World`
+  that creates directories by hand; see
+  [claude-mod/impl/testkit.md](claude-mod/impl/testkit.md).
 - **Python suites** keep `test_*.py` beside the modules they test and use `unittest`. Each suite
   is declared once in `xtask/src/suites.rs` with its import root, so it runs the same from
   anywhere; a test file in no suite fails `cargo test -p xtask`.
@@ -68,9 +77,16 @@ Each component is tested through its own crate, without the others:
 | Live interaction | `adage-runtime`, `adage-hook` | `decide()` as a function of index, state, event, policy and checkout (`adage-runtime/src/tests/`) |
 | Application | `adage-app` | decisions against a temporary `ADAGE_HOME` (`review.rs` tests), without the binary |
 | Harnesses | `adage-hook::harness`, `adage-sim` | each adapter's translation; one scenario rendered in every harness's formats |
-| Front ends | `adage-cli` | the binary end to end (`tests/`, through `tests/common/mod.rs`: one environment scrub, a hermetic `Command`, a temporary world), frames as snapshots (`ui/tests.rs`) |
+| Front ends | `adage-cli` | the binary end to end (`tests/`, through `tests/common/mod.rs`: one environment scrub, a hermetic `Command`, and the test kit's temporary world and learned home), frames as snapshots (`ui/tests.rs`) |
 
 ## Known gaps
+
+- The test kit is not used everywhere yet. adage-hook's `src/testkit.rs` (`ObligationWorld`) and
+  adage-exec's `src/hook/testkit.rs` (`Fixture`) still write their routes and indexes by hand
+  (the plan's wave B moves them), and so does `adage-cli/tests/hooks.rs`: adage-exec's `parity`
+  test compiles that file by path, so it can use the kit only once adage-exec's
+  dev-dependencies turn the feature on. `adage-runtime`'s `src/tests/` and adage-hook's unit tests
+  keep their `Route { … }` literals too.
 
 - `adage-pack/tests/fixtures/tracks` holds tracks learned from `sim/fixtures` output, committed
   rather than learned in the test (the pack crate does not link the learner).

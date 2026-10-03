@@ -3,10 +3,9 @@
 //! listed sites only. End to end through the `adage` binary (and `adage-exec` where built), with
 //! an isolated `ADAGE_HOME`. Test-plan cases T-A7-01 … T-A7-09 and T-X-13's L2 part.
 
-use adage_core::spans::SpanKind;
-use adage_core::Effect;
 use adage_hook::press;
-use adage_store::{spool, state, Paths};
+use adage_store::{state, Paths};
+use adage_tracks::testkit::{self, kinds};
 use adage_tracks::*;
 use serde_json::{json, Value};
 use std::io::Write;
@@ -29,54 +28,26 @@ struct World {
 }
 
 fn track(repo: &str) -> Track {
-    Track {
-        manifest: Manifest {
-            track: TrackInfo {
-                name: TRACK.into(),
-                version: "0.4.0".into(),
-                description: String::new(),
-                provenance: "desire-path".into(),
-            },
-            scope: Scope { repo: repo.into() },
-            gauge: Gauge::default(),
-        },
-        routes: vec![Route {
-            id: ROUTE.into(),
-            summary: String::new(),
-            trigger: Trigger::Prompt { span: SpanKind::Ticket },
-            step: Step::Run { command: "python3 scripts/wi-lookup {id} --json".into() },
-            slots: vec![Slot {
-                name: "id".into(),
-                source: SlotSource::Prompt { span: SpanKind::Ticket },
-                contract: Contract::Pattern { regex: r"^W-\d{4}$".into() },
-            }],
-            effect: Effect::Observe,
-            strength: Strength::Fire,
-            state: RouteState::Firm,
-            exit: vec![Exit::IntentChanges],
-            evidence: Evidence {
-                support: 9,
-                opportunities: 10,
-                days: 3,
-                rate: 0.9,
-                lower_bound: 0.6,
-                provenance: "desire-path".into(),
-                ..Default::default()
-            },
-            authored: false,
-        }],
-    }
+    let lookup = kinds::lookup(ROUTE, "python3 scripts/wi-lookup {id} --json")
+        .until_intent_changes()
+        .measured(9, 10)
+        .days(3)
+        .provenance("desire-path")
+        // This suite's fixed bound, not the Wilson bound of the counts.
+        .with(|r| r.evidence.lower_bound = 0.6);
+    testkit::track(TRACK, repo).version("0.4.0").route(lookup).build()
 }
 
 impl World {
     /// A checkout `acme-billing` (a `.git` directory, no history) with one installed learned
     /// track and its index.
     fn new() -> World {
-        let w = World { w: common::TempWorld::new(&["home", "adage", "acme-billing/.git", "acme-billing/scripts"]) };
-        std::fs::write(w.p("acme-billing/scripts/wi-lookup"), "#!/usr/bin/env python3\nprint('{}')\n").unwrap();
+        let w = World { w: common::TempWorld::new(&["home", "adage", "acme-billing/.git"]) };
+        w.w.write("acme-billing/scripts/wi-lookup", "#!/usr/bin/env python3\nprint('{}')\n");
         let t = track("acme-billing");
-        io::write(&w.paths().tracks().join(TRACK), &t).unwrap();
-        Index::compile_root(&w.paths().tracks(), &[t]).0.write_atomic(&w.paths().index()).unwrap();
+        let home = w.home();
+        home.install(TRACK, &t);
+        home.compile_root(&[t]);
         w
     }
     /// A checkout with no reflexes at all (an empty `ADAGE_HOME`).
@@ -90,7 +61,10 @@ impl World {
         self.p("acme-billing")
     }
     fn paths(&self) -> Paths {
-        Paths::at(self.p("adage"))
+        self.home().paths
+    }
+    fn home(&self) -> common::LearnedHome {
+        common::LearnedHome::at(self.p("adage"))
     }
     fn base(&self, bin: &str, args: &[&str]) -> Command {
         let mut c = common::hermetic(bin, &self.p("adage"), &self.repo());
@@ -156,7 +130,7 @@ impl World {
         c.output().unwrap()
     }
     fn spool(&self, session: &str) -> Vec<Value> {
-        spool::read_all(&self.paths().spool(session)).unwrap_or_default()
+        self.home().spooled(session)
     }
     fn record(&self, session: &str) -> press::Record {
         state::read(&press::record_path(&self.paths(), session)).unwrap()
@@ -512,23 +486,16 @@ fn an_action_is_staged_then_confirmed() {
     git(&["-c", "user.name=F", "-c", "user.email=f@example.com", "commit", "-qm", "fixture"]);
     open_up(&w.w.root);
     let key = adage_core::repo::repo_key(&repo);
-    let route = |id: &str| Route {
-        id: id.into(),
-        summary: String::new(),
-        trigger: Trigger::AfterEdit { paths: "registry/*.csv".into() },
-        step: Step::Run { command: "sh scripts/gen".into() },
-        slots: vec![],
-        effect: Effect::Regenerate,
-        strength: Strength::Fire,
-        state: RouteState::Firm,
-        exit: vec![Exit::ExploratoryChange],
-        evidence: Evidence { support: 7, opportunities: 8, days: 3, ..Default::default() },
-        authored: false,
+    let route = |id: &str| {
+        kinds::finish_line(id, "registry/*.csv", "sh scripts/gen")
+            .exit(vec![Exit::ExploratoryChange])
+            .support(7, 8)
+            .days(3)
     };
     let mut t = track(&key);
     t.manifest.track.name = "acme/finish".into();
-    t.routes = vec![route("regenerate-items"), route("regenerate-items-again")];
-    Index::compile(&[t]).write_atomic(&w.paths().index()).unwrap();
+    t.routes = vec![route("regenerate-items").build(), route("regenerate-items-again").build()];
+    w.home().compile(&[t]);
 
     // Staging changes the action's output in the sandbox only.
     std::fs::write(repo.join("registry/items.csv"), "one\ntwo\n").unwrap();

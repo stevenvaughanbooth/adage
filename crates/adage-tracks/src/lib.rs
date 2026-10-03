@@ -17,6 +17,8 @@ pub mod params;
 pub mod proposals;
 pub mod review;
 mod tagged;
+#[cfg(any(test, feature = "testkit"))]
+pub mod testkit;
 pub mod triggers;
 pub mod why;
 

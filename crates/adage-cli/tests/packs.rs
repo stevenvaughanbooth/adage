@@ -20,33 +20,20 @@ const LOOKUP: &str = "#!/bin/sh\necho '{\"files\": [], \"state\": \"Active\"}'\n
 const VENDORED: &str = "import json\nprint(json.dumps({'count': 3}))\n";
 
 struct World {
-    _dir: tempfile::TempDir,
+    _w: common::TempWorld,
     root: PathBuf,
 }
 
 impl World {
     fn new() -> World {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().canonicalize().unwrap();
-        for d in ["sender", "recipient", "home", "keys", "elsewhere", "bin", "checkout/.git", "checkout/scripts"] {
-            std::fs::create_dir_all(root.join(d)).unwrap();
-        }
-        std::fs::write(
-            root.join("checkout/.git/config"),
-            "[remote \"origin\"]\n\turl = git@github.com:acme/billing.git\n",
-        )
-        .unwrap();
-        std::fs::write(root.join("checkout/scripts/wi-lookup"), LOOKUP).unwrap();
+        let w = common::TempWorld::new(&["sender", "recipient", "home", "keys", "elsewhere", "bin"]);
+        w.repo("checkout");
+        w.write("checkout/.git/config", "[remote \"origin\"]\n\turl = git@github.com:acme/billing.git\n");
+        w.write("checkout/scripts/wi-lookup", LOOKUP);
         for tool in ["make", "python3"] {
-            let p = root.join("bin").join(tool);
-            std::fs::write(&p, "#!/bin/sh\nexit 1\n").unwrap();
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
-            }
+            w.executable(&format!("bin/{tool}"), "#!/bin/sh\nexit 1\n");
         }
-        World { _dir: dir, root }
+        World { root: w.root.clone(), _w: w }
     }
     fn p(&self, rel: &str) -> PathBuf {
         self.root.join(rel)

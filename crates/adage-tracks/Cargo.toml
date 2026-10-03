@@ -18,6 +18,17 @@ regex.workspace = true
 sha2.workspace = true
 anyhow.workspace = true
 glob.workspace = true
+# The test kit (`testkit` feature) only: a home's state files and spools, and temporary worlds.
+adage-store = { path = "../adage-store", optional = true }
+tempfile = { version = "3", optional = true }
+
+[features]
+# Builders for routes, tracks and indexes, and a learned home with its session state and spools
+# (`src/testkit/`), for any crate's tests: enabled from a `[dev-dependencies]` entry, never by a
+# normal dependency (docs/claude-mod/impl/testkit.md).
+testkit = ["dep:adage-store", "dep:tempfile"]
 
 [dev-dependencies]
 tempfile = "3"
+# The kit's own unit tests compile it without the feature (`cfg(test)`).
+adage-store = { path = "../adage-store" }

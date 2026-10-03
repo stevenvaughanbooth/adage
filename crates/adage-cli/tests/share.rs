@@ -1,8 +1,7 @@
 //! `adage share` and `adage add`, end to end through the binary. Every test uses throwaway keys in
 //! a tempdir, an isolated `ADAGE_HOME` and `HOME`, and no ssh-agent (`SSH_AUTH_SOCK` removed).
 
-use adage_core::spans::SpanKind;
-use adage_core::Effect;
+use adage_tracks::testkit::{self, kinds};
 use adage_tracks::*;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
@@ -13,26 +12,19 @@ const NAME: &str = "github.com-acme-billing/work-items";
 const REPO: &str = "github.com/acme/billing";
 
 struct World {
-    _dir: tempfile::TempDir,
+    _w: common::TempWorld,
     root: PathBuf,
 }
 
 impl World {
     fn new() -> World {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().canonicalize().unwrap();
-        for d in ["sender", "recipient", "home", "keys", "elsewhere", "checkout/.git", "checkout/scripts", "bin"] {
-            std::fs::create_dir_all(root.join(d)).unwrap();
-        }
+        let w = common::TempWorld::new(&["sender", "recipient", "home", "keys", "elsewhere", "bin"]);
         // A checkout of the repository the track is for: the lookup's script is pinned against it
         // when the track is converted to a pack.
-        std::fs::write(
-            root.join("checkout/.git/config"),
-            "[remote \"origin\"]\n\turl = git@github.com:acme/billing.git\n",
-        )
-        .unwrap();
-        std::fs::write(root.join("checkout/scripts/wi-lookup"), "#!/bin/sh\necho '{}'\n").unwrap();
-        World { _dir: dir, root }
+        w.repo("checkout");
+        w.write("checkout/.git/config", "[remote \"origin\"]\n\turl = git@github.com:acme/billing.git\n");
+        w.write("checkout/scripts/wi-lookup", "#!/bin/sh\necho '{}'\n");
+        World { root: w.root.clone(), _w: w }
     }
     fn p(&self, rel: &str) -> PathBuf {
         self.root.join(rel)
@@ -87,61 +79,17 @@ fn keygen(w: &World, name: &str) -> ssh_key::PublicKey {
     k.public_key().clone()
 }
 
-fn route(id: &str, trigger: Trigger, step: Step, slots: Vec<Slot>, effect: Effect, strength: Strength) -> Route {
-    Route {
-        id: id.into(),
-        summary: format!("route {id}"),
-        trigger,
-        step,
-        slots,
-        effect,
-        strength,
-        state: RouteState::Firm,
-        exit: vec![Exit::IntentChanges],
-        evidence: Evidence { support: 7, opportunities: 8, provenance: "desire-path".into(), ..Default::default() },
-        authored: false,
-    }
-}
-
 fn track() -> Track {
-    Track {
-        manifest: Manifest {
-            track: TrackInfo {
-                name: NAME.into(),
-                version: "1.2.0".into(),
-                description: "work items".into(),
-                provenance: "desire-path".into(),
-            },
-            scope: Scope { repo: REPO.into() },
-            gauge: Gauge::default(),
-        },
-        routes: vec![
-            route(
-                "lookup",
-                Trigger::Prompt { span: SpanKind::Ticket },
-                Step::Run { command: "./scripts/wi-lookup {item} --json".into() },
-                vec![Slot {
-                    name: "item".into(),
-                    source: SlotSource::Prompt { span: SpanKind::Ticket },
-                    contract: Contract::Pattern { regex: r"^W-\d{4}$".into() },
-                }],
-                Effect::Observe,
-                Strength::Fire,
-            ),
-            route(
-                "dead-unittest",
-                Trigger::SessionStart,
-                Step::Avoid {
-                    avoid: "python3 -m unittest".into(),
-                    instead: "make test".into(),
-                    signature: "ACME_ENV is not set".into(),
-                },
-                vec![],
-                Effect::Verify,
-                Strength::Inhibit,
-            ),
-        ],
-    }
+    let learned = |r: testkit::RouteBuilder| r.until_intent_changes().support(7, 8).provenance("desire-path");
+    testkit::track(NAME, REPO)
+        .version("1.2.0")
+        .description("work items")
+        .route(learned(kinds::lookup("lookup", "./scripts/wi-lookup {item} --json").summary("route lookup")))
+        .route(learned(
+            kinds::dead_end("dead-unittest", "python3 -m unittest", "make test", "ACME_ENV is not set")
+                .summary("route dead-unittest"),
+        ))
+        .build()
 }
 
 /// A world with the sender's track installed and a signing key.

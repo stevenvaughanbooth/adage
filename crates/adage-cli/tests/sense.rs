@@ -45,17 +45,15 @@ impl Tx {
 }
 
 struct World {
-    _dir: tempfile::TempDir,
+    _w: common::TempWorld,
     root: PathBuf,
 }
 
 impl World {
     fn new() -> World {
         adage_sim::assume_no_checkout_at_cwd();
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().canonicalize().unwrap();
-        std::fs::create_dir_all(root.join("home")).unwrap();
-        World { _dir: dir, root }
+        let w = common::TempWorld::new(&["home"]);
+        World { root: w.root.clone(), _w: w }
     }
     fn home(&self) -> PathBuf {
         self.root.join("home")

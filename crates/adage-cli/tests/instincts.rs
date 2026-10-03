@@ -15,7 +15,7 @@ use std::process::{Command, Stdio};
 mod common;
 
 struct World {
-    _dir: tempfile::TempDir,
+    _w: common::TempWorld,
     root: PathBuf,
 }
 
@@ -35,21 +35,13 @@ impl World {
     /// The demo repository (`evals/sandboxes/acme-billing`), with a pnpm lockfile added so that
     /// every advisory template and an environment step bind.
     fn new() -> World {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().canonicalize().unwrap();
-        for d in ["home", "adage", "plain"] {
-            std::fs::create_dir_all(root.join(d)).unwrap();
-        }
+        let w = common::TempWorld::new(&["home", "adage", "plain"]);
         let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../evals/sandboxes/acme-billing");
-        copy_dir(&src, &root.join("acme"));
-        std::fs::create_dir_all(root.join("acme/.git")).unwrap();
+        copy_dir(&src, &w.p("acme"));
+        w.repo("acme");
         // An origin gives the repository a key that does not depend on where the test runs.
-        std::fs::write(
-            root.join("acme/.git/config"),
-            "[remote \"origin\"]\n\turl = https://github.com/acme/billing.git\n",
-        )
-        .unwrap();
-        World { _dir: dir, root }
+        w.write("acme/.git/config", "[remote \"origin\"]\n\turl = https://github.com/acme/billing.git\n");
+        World { root: w.root.clone(), _w: w }
     }
     fn with_pnpm(self) -> World {
         std::fs::write(

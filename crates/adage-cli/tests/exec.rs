@@ -2,8 +2,8 @@
 //! §3.2, §4.4): a person's decisions, refused inside agent sessions; approvals written through
 //! adage-exec's API; hook registrations swapped between `adage hook` and `adage-exec hook`.
 
-use adage_core::spans::SpanKind;
 use adage_core::Effect;
+use adage_tracks::testkit::{kinds, track};
 use adage_tracks::*;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -12,7 +12,7 @@ use std::process::Command;
 mod common;
 
 struct World {
-    _dir: tempfile::TempDir,
+    _w: common::TempWorld,
     root: PathBuf,
 }
 
@@ -22,47 +22,18 @@ impl World {
     }
     /// A world whose one route is changed by `f` before the index is compiled.
     fn with(f: impl Fn(&mut Route)) -> World {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().canonicalize().unwrap();
-        for d in ["home", "adage", "acme-billing/.git", "acme-billing/scripts", "bin"] {
-            std::fs::create_dir_all(root.join(d)).unwrap();
-        }
-        std::fs::write(root.join("acme-billing/scripts/wi-lookup"), "#!/usr/bin/env python3\nprint('{}')\n").unwrap();
-        std::fs::create_dir_all(root.join("acme-billing/tools")).unwrap();
-        std::fs::write(root.join("acme-billing/tools/case"), "#!/usr/bin/env python3\nprint('{}')\n").unwrap();
-        std::fs::write(root.join("bin/adage-exec"), "#!/bin/sh\n").unwrap();
-        let mut t = Track {
-            manifest: Manifest {
-                track: TrackInfo {
-                    name: "acme-billing/work-items".into(),
-                    version: "0.4.0".into(),
-                    description: String::new(),
-                    provenance: "desire-path".into(),
-                },
-                scope: Scope { repo: "acme-billing".into() },
-                gauge: Gauge::default(),
-            },
-            routes: vec![Route {
-                id: "lookup-work-item".into(),
-                summary: String::new(),
-                trigger: Trigger::Prompt { span: SpanKind::Ticket },
-                step: Step::Run { command: "python3 scripts/wi-lookup {id} --json".into() },
-                slots: vec![Slot {
-                    name: "id".into(),
-                    source: SlotSource::Prompt { span: SpanKind::Ticket },
-                    contract: Contract::Pattern { regex: r"^W-\d{4}$".into() },
-                }],
-                effect: Effect::Observe,
-                strength: Strength::Fire,
-                state: RouteState::Firm,
-                exit: vec![Exit::IntentChanges],
-                evidence: Evidence { support: 9, opportunities: 10, days: 3, ..Default::default() },
-                authored: false,
-            }],
-        };
+        let w = common::TempWorld::new(&["home", "adage", "acme-billing/.git", "acme-billing/scripts", "bin"]);
+        w.write("acme-billing/scripts/wi-lookup", "#!/usr/bin/env python3\nprint('{}')\n");
+        w.write("acme-billing/tools/case", "#!/usr/bin/env python3\nprint('{}')\n");
+        w.write("bin/adage-exec", "#!/bin/sh\n");
+        let lookup = kinds::lookup("lookup-work-item", "python3 scripts/wi-lookup {id} --json")
+            .until_intent_changes()
+            .support(9, 10)
+            .days(3);
+        let mut t = track("acme-billing/work-items", "acme-billing").version("0.4.0").route(lookup).build();
         f(&mut t.routes[0]);
-        Index::compile(&[t]).write_atomic(&root.join("adage/index.json")).unwrap();
-        World { _dir: dir, root }
+        w.home("adage").compile(&[t]);
+        World { root: w.root.clone(), _w: w }
     }
     fn p(&self, rel: &str) -> PathBuf {
         self.root.join(rel)

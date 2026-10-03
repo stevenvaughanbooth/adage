@@ -69,7 +69,7 @@ impl World {
         v["repo"].as_str().unwrap().to_string()
     }
     fn spool(&self, session: &str, rec: Value) {
-        adage_store::spool::append(&self.paths().spool(session), &rec).unwrap();
+        common::LearnedHome::at(self.p("data")).spool(session, &rec);
     }
     fn learn_line(&self, v: Value) {
         let mut f = std::fs::OpenOptions::new().create(true).append(true).open(self.paths().learn_log()).unwrap();
@@ -104,7 +104,8 @@ impl Feed {
     fn start(w: &World, extra: &[&str]) -> Feed {
         let mut args = vec!["watch", "--follow", "--json"];
         args.extend_from_slice(extra);
-        let mut child = w.cmd(&args, &w.repo()).spawn().unwrap();
+        // Polled every 20 ms, not every 250 (`ui/follow.rs`, a debug-build test knob).
+        let mut child = w.cmd(&args, &w.repo()).env("ADAGE_TEST_FOLLOW_POLL_MS", "20").spawn().unwrap();
         let stdin = child.stdin.take();
         let out = child.stdout.take().unwrap();
         let (tx, rx) = mpsc::channel();

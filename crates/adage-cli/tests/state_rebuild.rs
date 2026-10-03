@@ -3,8 +3,7 @@
 //! finish-line obligation made before the corruption is still enforced at Stop. Without a spool,
 //! the state starts over. Events that cannot match stop before the state and the spool.
 
-use adage_core::Effect;
-use adage_tracks::*;
+use adage_tracks::testkit::{self, kinds};
 use serde_json::json;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -12,69 +11,22 @@ use std::process::{Command, Stdio};
 
 mod common;
 
-fn route(id: &str, trigger: Trigger, step: Step, effect: Effect, strength: Strength) -> Route {
-    Route {
-        id: id.into(),
-        summary: String::new(),
-        trigger,
-        step,
-        slots: vec![],
-        effect,
-        strength,
-        state: RouteState::Firm,
-        exit: vec![Exit::IntentChanges],
-        evidence: Evidence { support: 5, ..Default::default() },
-        authored: false,
-    }
-}
-
 struct World {
-    _d: tempfile::TempDir,
+    _w: common::TempWorld,
     home: PathBuf,
     repo: PathBuf,
 }
 
 fn world() -> World {
-    let d = tempfile::tempdir().unwrap();
-    let root = d.path().canonicalize().unwrap();
-    let (home, repo) = (root.join("home"), root.join("acme-state"));
-    std::fs::create_dir_all(repo.join(".git")).unwrap();
-    std::fs::create_dir_all(repo.join("schema")).unwrap();
-    let track = Track {
-        manifest: Manifest {
-            track: TrackInfo {
-                name: "acme-state/t".into(),
-                version: "0.1.0".into(),
-                description: String::new(),
-                provenance: "desire-path".into(),
-            },
-            scope: Scope { repo: "acme-state".into() },
-            gauge: Gauge::default(),
-        },
-        routes: vec![
-            route(
-                "dead-end-x",
-                Trigger::SessionStart,
-                Step::Avoid {
-                    avoid: "pytest".into(),
-                    instead: "make test".into(),
-                    signature: "No module named pytest".into(),
-                },
-                Effect::Verify,
-                Strength::Inhibit,
-            ),
-            route(
-                "finish-line-x",
-                Trigger::AfterEdit { paths: "schema/*.json".into() },
-                Step::Run { command: "make gen".into() },
-                Effect::Regenerate,
-                Strength::Fire,
-            ),
-        ],
-    };
-    io::validate(&track).unwrap();
-    Index::compile(&[track]).write_atomic(&home.join("index.json")).unwrap();
-    World { _d: d, home, repo }
+    let w = common::TempWorld::new(&["acme-state/schema"]);
+    let (home, repo) = (w.home("home"), w.repo("acme-state"));
+    let learned = |r: testkit::RouteBuilder| r.until_intent_changes().support(5, 0);
+    let track = testkit::track("acme-state/t", "acme-state")
+        .route(learned(kinds::dead_end("dead-end-x", "pytest", "make test", "No module named pytest")))
+        .route(learned(kinds::finish_line("finish-line-x", "schema/*.json", "make gen")))
+        .validated();
+    home.compile(&[track]);
+    World { home: home.paths.root.clone(), repo, _w: w }
 }
 
 fn hook(w: &World, event: &str, extra: serde_json::Value) -> String {

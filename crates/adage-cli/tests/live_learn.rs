@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 mod common;
 
 struct World {
-    _dir: tempfile::TempDir,
+    _w: common::TempWorld,
     root: PathBuf,
 }
 
@@ -22,15 +22,12 @@ impl World {
     /// A checkout named `acme-billing` with the files the scenario's routes name, and a Claude Code
     /// history of the scenario's twelve sessions in it, in `$HOME/.claude/projects`.
     fn new() -> World {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().canonicalize().unwrap();
-        for d in ["home", "adage", "acme-billing/.git", "acme-billing/acme", "acme-billing/schema"] {
-            std::fs::create_dir_all(root.join(d)).unwrap();
-        }
+        let w = common::TempWorld::new(&["home", "adage"]);
+        w.repo("acme-billing");
         for f in ["acme/billing.py", "acme/customers.py", "schema/invoice.json", "schema/customer.json", "Makefile"] {
-            std::fs::write(root.join("acme-billing").join(f), scenario::body(f)).unwrap();
+            w.write(&format!("acme-billing/{f}"), scenario::body(f));
         }
-        World { _dir: dir, root }
+        World { root: w.root.clone(), _w: w }
     }
     fn repo(&self) -> String {
         self.root.join("acme-billing").to_string_lossy().into_owned()

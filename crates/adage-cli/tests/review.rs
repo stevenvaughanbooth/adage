@@ -4,8 +4,9 @@
 use adage_core::spans::SpanKind;
 use adage_core::Effect;
 use adage_runtime::SessionState;
-use adage_store::{spool, state, Paths};
+use adage_store::Paths;
 use adage_tracks::review::{self, Decision, Review, Reviews};
+use adage_tracks::testkit::{self, kinds};
 use adage_tracks::*;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
@@ -20,24 +21,23 @@ const NAME: &str = "acme/work-items";
 const IMPORT_VERSION: &str = "9.0.0";
 
 struct World {
-    _dir: tempfile::TempDir,
+    _w: common::TempWorld,
     root: PathBuf,
 }
 
 impl World {
     fn new() -> World {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().canonicalize().unwrap();
-        for d in ["data", "home", "work"] {
-            std::fs::create_dir_all(root.join(d)).unwrap();
-        }
-        World { _dir: dir, root }
+        let w = common::TempWorld::new(&["data", "home", "work"]);
+        World { root: w.root.clone(), _w: w }
     }
     fn p(&self, rel: &str) -> PathBuf {
         self.root.join(rel)
     }
     fn paths(&self) -> Paths {
-        Paths::at(self.p("data"))
+        self.home().paths
+    }
+    fn home(&self) -> common::LearnedHome {
+        common::LearnedHome::at(self.p("data"))
     }
     fn cmd(&self, args: &[&str]) -> Command {
         let mut c = Command::new(env!("CARGO_BIN_EXE_adage"));
@@ -76,14 +76,14 @@ impl World {
         io::read(&self.track_dir(reference)).unwrap()
     }
     fn index(&self) -> Index {
-        Index::load(&self.paths().index())
+        self.home().loaded()
     }
     /// A session spool with judgements, attributed to `repo` through its state file.
     fn session(&self, sid: &str, repo: &str, arm: &str, judgements: &[(&str, &str)]) {
-        let paths = self.paths();
-        state::update::<SessionState, _>(&paths.state(sid), |s| s.repo = Some(repo.into())).unwrap();
         let js: Vec<Value> = judgements.iter().map(|(k, r)| json!({ "kind": k, "route": r })).collect();
-        spool::append(&paths.spool(sid), &json!({ "ts": 1, "event": "PostToolBatch", "arm": arm, "generation": "g", "decision": { "judgements": js } })).unwrap();
+        self.home()
+            .seed::<SessionState>(sid, |s| s.repo = Some(repo.into()))
+            .spool(sid, &json!({ "ts": 1, "event": "PostToolBatch", "arm": arm, "generation": "g", "decision": { "judgements": js } }));
     }
 }
 
@@ -93,34 +93,19 @@ fn text(o: &Output) -> String {
 
 fn route(id: &str, trigger: Trigger, step: Step, effect: Effect, strength: Strength, support: u32, opp: u32) -> Route {
     let slots = match &step {
-        Step::Run { command } if command.contains("{item}") => vec![Slot {
-            name: "item".into(),
-            source: SlotSource::Prompt { span: SpanKind::Ticket },
-            contract: Contract::Pattern { regex: r"^W-\d{4}$".into() },
-        }],
+        Step::Run { command } if command.contains("{item}") => vec![kinds::ticket_slot("item")],
         _ => vec![],
     };
-    Route {
-        id: id.into(),
-        summary: format!("route {id}"),
-        trigger,
-        step,
-        slots,
-        effect,
-        strength,
-        state: RouteState::Firm,
-        exit: vec![Exit::IntentChanges],
-        evidence: Evidence {
-            support,
-            opportunities: opp,
-            days: 2,
-            rate: support as f64 / opp as f64,
-            lower_bound: wilson_lower(support, opp),
-            provenance: "desire-path".into(),
-            ..Default::default()
-        },
-        authored: false,
-    }
+    testkit::route(id, trigger, step)
+        .summary(&format!("route {id}"))
+        .slots(slots)
+        .effect(effect)
+        .strength(strength)
+        .until_intent_changes()
+        .measured(support, opp)
+        .days(2)
+        .provenance("desire-path")
+        .build()
 }
 
 fn lookup(strength: Strength) -> Route {
@@ -140,24 +125,12 @@ fn verify(id: &str, strength: Strength, support: u32) -> Route {
 }
 
 fn make_track(name: &str, provenance: &str, routes: Vec<Route>) -> Track {
-    Track {
-        manifest: Manifest {
-            track: TrackInfo {
-                name: name.into(),
-                version: "0.1.0".into(),
-                description: "test".into(),
-                provenance: provenance.into(),
-            },
-            scope: Scope { repo: REPO.into() },
-            gauge: Gauge::default(),
-        },
-        routes,
-    }
+    testkit::track(name, REPO).description("test").provenance(provenance).routes(routes).build()
 }
 
 fn install(w: &World, reference: &str, t: &Track, reviews: &[(&Route, Decision)]) {
-    let dir = w.track_dir(reference);
-    io::write(&dir, t).unwrap();
+    let home = w.home();
+    let dir = home.install(reference, t);
     let mut rs = Reviews::default();
     for (r, d) in reviews {
         rs.routes.insert(
@@ -166,8 +139,7 @@ fn install(w: &World, reference: &str, t: &Track, reviews: &[(&Route, Decision)]
         );
     }
     review::save(&dir, &rs).unwrap();
-    let all = io::read_all(&w.paths().tracks()).unwrap();
-    Index::compile(&all).write_atomic(&w.paths().index()).unwrap();
+    home.recompile();
 }
 
 fn reasons(q: &Value) -> BTreeMap<(String, String), Vec<String>> {

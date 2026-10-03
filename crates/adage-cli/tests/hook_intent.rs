@@ -3,6 +3,7 @@
 
 use adage_core::Effect;
 use adage_intent::model;
+use adage_tracks::testkit::{self, kinds};
 use adage_tracks::*;
 use std::io::Write;
 use std::path::Path;
@@ -35,63 +36,40 @@ fn install_fixture_model(models: &Path) {
 }
 
 fn route(id: &str, trigger: Trigger, command: &str, effect: Effect) -> Route {
-    Route {
-        id: id.into(),
-        summary: String::new(),
-        trigger,
-        step: Step::Run { command: command.into() },
-        slots: vec![],
-        effect,
-        strength: Strength::Prime,
-        state: RouteState::Firm,
-        exit: vec![Exit::IntentChanges],
-        evidence: Evidence { support: 5, ..Default::default() },
-        authored: false,
-    }
+    testkit::route(id, trigger, Step::Run { command: command.into() })
+        .effect(effect)
+        .strength(Strength::Prime)
+        .until_intent_changes()
+        .support(5, 0)
+        .build()
 }
 
 struct World {
-    _d: tempfile::TempDir,
+    _w: common::TempWorld,
     home: std::path::PathBuf,
     repo: std::path::PathBuf,
 }
 
 fn world() -> World {
-    let d = tempfile::tempdir().unwrap();
-    let root = d.path().canonicalize().unwrap();
-    let (home, repo) = (root.join("home"), root.join("acme-intent"));
-    std::fs::create_dir_all(repo.join(".git")).unwrap();
-    install_fixture_model(&home.join("models"));
-    let m = model::StaticModel::open(&model::dir_in(&home.join("models"))).unwrap();
+    let w = common::TempWorld::new(&[]);
+    let (home, repo) = (w.home("home"), w.repo("acme-intent"));
+    install_fixture_model(&home.paths.models());
+    let m = model::StaticModel::open(&model::dir_in(&home.paths.models())).unwrap();
     let centroid = adage_intent::quantize(&m.embed("fix the failing tests").unwrap());
-    let track = Track {
-        manifest: Manifest {
-            track: TrackInfo {
-                name: "acme-intent/intents".into(),
-                version: "0.1.0".into(),
-                description: String::new(),
-                provenance: "desire-path".into(),
-            },
-            scope: Scope { repo: "acme-intent".into() },
-            gauge: Gauge::default(),
-        },
-        routes: vec![
-            route(
-                "intent-tests",
-                Trigger::Intent { family: "intent-tests".into(), model: MODEL_ID.into(), centroid, threshold: 0.8 },
-                "make test",
-                Effect::Verify,
-            ),
-            route("dead-end-x", Trigger::SessionStart, "make test", Effect::Verify),
-        ],
-    };
-    let mut track = track;
-    track.routes[1].step =
-        Step::Avoid { avoid: "pytest".into(), instead: "make test".into(), signature: "ACME_ENV is not set".into() };
-    track.routes[1].strength = Strength::Inhibit;
-    io::validate(&track).unwrap();
-    Index::compile(&[track]).write_atomic(&home.join("index.json")).unwrap();
-    World { _d: d, home, repo }
+    let dead_end = kinds::dead_end("dead-end-x", "pytest", "make test", "ACME_ENV is not set")
+        .until_intent_changes()
+        .support(5, 0);
+    let track = testkit::track("acme-intent/intents", "acme-intent")
+        .route(route(
+            "intent-tests",
+            Trigger::Intent { family: "intent-tests".into(), model: MODEL_ID.into(), centroid, threshold: 0.8 },
+            "make test",
+            Effect::Verify,
+        ))
+        .route(dead_end)
+        .validated();
+    home.compile(&[track]);
+    World { home: home.paths.root.clone(), repo, _w: w }
 }
 
 fn hook(w: &World, prompt: &str) -> (String, i32) {
@@ -194,21 +172,8 @@ fn a_card_waiting_for_an_edit_is_said_at_that_edit_through_the_hook() {
         Effect::Observe,
     );
     r.step = Step::Card { card };
-    let track = Track {
-        manifest: Manifest {
-            track: TrackInfo {
-                name: "acme-intent/learned".into(),
-                version: "0.1.0".into(),
-                description: String::new(),
-                provenance: "desire-path".into(),
-            },
-            scope: Scope { repo: "acme-intent".into() },
-            gauge: Gauge::default(),
-        },
-        routes: vec![r],
-    };
-    io::validate(&track).unwrap();
-    Index::compile(&[track]).write_atomic(&w.home.join("index.json")).unwrap();
+    let track = testkit::track("acme-intent/learned", "acme-intent").route(r).validated();
+    common::LearnedHome::at(&w.home).compile(&[track]);
 
     let sid = "s-card-grey";
     let edit = |file: &str| {
