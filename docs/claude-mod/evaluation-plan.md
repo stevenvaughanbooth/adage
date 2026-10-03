@@ -132,6 +132,8 @@ Live-only items the drawing agent listed (`impl/B2-B3-notes.md`), each a yes/no:
 5. `$.ui.copy` on a remote surface, `$.ui.scroll` on the pane, the pane surviving a reload.
 6. The map opens the browser from a child of the engine, and the `Link` opens it after.
 7. On the Desktop app: the opening line stays the engine's own notice; every site above renders.
+8. `ToolGroup` rows carry `calls[].tool_use_id` on the terminal and the Desktop app, and the
+   feed's `tool_use_ids` match them (the noticed line and the markers hang on them).
 
 Record Q3 (drawing cost: the TUI stays responsive; `adage doctor` p95 unchanged with the mod
 on), Q3b (no process left behind), Q12 (noticed rows draw when a candidate exists; make one with
@@ -167,7 +169,21 @@ In a session with the plugin, with a learned reflex that can be delegated:
   refused until something acts in this one (Q14: whether `UserPromptSubmit` fires for the mod's
   own commands; if it does not, record it and the fallback the UX names).
 - Enable of a learned reflex from the `Adage learned: … Tell the agent?` dialog, and `not this
-  one` leaving it disabled.
+  one` leaving it disabled; the spool holds one `press_issued` and one `press_spent`, and the
+  review decision carries `via: press`.
+- The press window: `classic.SessionStart` reaches the mod after the plugin's own command hook
+  (so the press finds its window open) and before the first `UserPromptSubmit`.
+- The dialog from a detached `turn.complete` continuation draws the engine's dialog; the
+  answer's verb runs with the session idle; a dismissed dialog leaves nothing behind. Answer once
+  with the dialog's digits and once with its dismiss key.
+- `see what it would do` against a real `--stage --json`: the three lines, the diff as a
+  `Code format="diff"` block in the terminal and in the Desktop app, `allow`'s `--confirm`, the
+  policy and marker written on the first grant, and the granted command running from the next
+  session.
+- The grant pane and the inspect pane open together (two panes with focus); Escape returns the
+  keys; the band's `n patterns noticed` cell hides while the pane is open (the engine dispatches
+  `ui.open`/`ui.close` to the plugin that opened it).
+- A kept answer survives a restart (`$.store`): the toast shows at the next start.
 
 ### 2.5 Skills (T-D4-04, T-D4-05, Q13)
 
@@ -175,7 +191,8 @@ With a pack accepted by `adage train accept` whose `verified.json` says the skil
 
 - `/acme-work-item` (the sandbox's skill) shows the dated verification heading and the step lines
   at the top of the skill's text; the Skill tool and a subagent preload each read the annotated
-  text (three invocations, three annotated texts).
+  text (three invocations, three annotated texts); the `◈` row draws under the Skill tool's own
+  row (T-D4-05, Q13).
 - Control arm (`ADAGE_ARM=control`): the text is unchanged and the spool has `would_annotate`.
 
 ## 3. Latency and startup (L5), paired, release builds

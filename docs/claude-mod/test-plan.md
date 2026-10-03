@@ -854,11 +854,12 @@ handlers directly and checking `$.state` and the recorded `$.ui.*` calls.
   `evals/reflex-proof/LAUNCH-STATUS.md` with the scripts that produced every number. Model
   requests are never presented as GPU savings.
 
-### 7.4 What the proof of concept measured offline
+### 7.4 What was measured offline
 
-No model ran for the proof of concept (the environment had no key), so none of L10–L12 ran. What
-stands in for them until they do, all on the branch `claude/mods-poc-m98u3o`
-([poc/README.md](poc/README.md) has the full table):
+No model ran on the build machine (it had no key), so none of L9–L13 has run; the brief for
+running them is [evaluation-plan.md](evaluation-plan.md). What stands in for them until they
+do, all on the branch `claude/mods-poc-m98u3o` ([impl/README.md](impl/README.md) maps the
+chunks to their commits):
 
 - **The sim in both arms** (L4, `harness_sim.rs`): under `adage-exec` with a `predict` grant the
   `make gen` obligation is predicted at the work turn's end, judged `predicted` and
@@ -872,8 +873,9 @@ stands in for them until they do, all on the branch `claude/mods-poc-m98u3o`
   `synthetic`: 25, 25, 0, 12 of 24, 20 of 24. The strict figure understates a steered agent (the
   recorded agents never got a directive and found the script themselves, later); the live `mod`
   arm is where the figure that matters comes from. The measured values are pinned as floors.
-- **The mod's own tests** (L7, L8): 53 per plugin with the engine stubbed, `validate --strict`
-  diffed against `VALIDATE.txt`.
+- **The mod's own tests** (L7, L8): 252 with the engine stubbed (`claude plugin test
+  plugin/claude-code`), `validate --strict` diffed against `VALIDATE.txt`,
+  `scripts/check-plugin.mjs` and `test-stage-plugin.mjs`.
 - **Latency** (L5): one unpaired run of `turn_step_nothing_pending` (p95 3.11 ms) against
   `batch_no_match` (p95 3.49 ms); the paired comparison and `turn_step_predicts` stand open.
 
@@ -935,9 +937,10 @@ responsibility stated in each PR.
 | M3 Trust it | M1, Q2 (Layer 2), Q4 | T-C1 … T-C3, T-X-01, T-X-05, T-X-12 green |
 | M4 Skip it | M3, Q9 | T-C4 … T-C9 green; Q9 and Q15 10 of 10; the `mod` arm runs end to end (T-C4-06) with `requests`, `dead_end_hits` and directives lower than `adage` |
 
-The proof of concept (§7.4) met, offline, the unit and sim halves of M3's T-C1, T-C2 and M4's
-T-C4, T-C6, T-C7 (the chain) and T-C8 (`ending`), and M2's T-B1 without drawing. Every live
-criterion (Q9, Q15, T-C4-06, the `mod` arm's numbers) is still open.
+Every offline case of every milestone is green on the branch (§7.4 and §9). Every live
+criterion (M0's questions, M2's T-E1-03 live half and T-U-01, M3's L9 cases, M4's Q9, Q15 and
+T-C4-06, M5's Q12, M6's Q13, M7, M8's Q14) is open until [evaluation-plan.md](evaluation-plan.md)
+is run.
 | M5 Notice | D1's L5 numbers | T-D1, T-D2, T-D5-01, T-D5-02 green; Q12; T-U-01 noticed questions |
 | M6 Skills | — | T-D3, T-D4, T-D5-03 green; Q13 |
 | M7 Evidence | M4 | T-E1 green; T-E2 twice; T-E3 recorded |
