@@ -18,7 +18,7 @@ claim. Cheaper-model predictability requires a separate model-transfer compariso
 | M2 Corpus ingestion | Versioned, repository-scoped canonical corpus with bounded streaming and auditable rejection/deduplication | Input order does not change evidence; conflicting duplicates fail visibly; malformed and oversized records cannot silently become evidence | Complete |
 | M3 Scalable learning | Reusable repository mining checkpoints with explicit invalidation | Repeated runs avoid unchanged mining; changed/deleted evidence and mining parameters invalidate correctly; full/warm artifacts agree | Complete |
 | M4 Outcomes and value | Conservative completion evidence and reproducible paired token/quality evaluation | Stale checks do not label final work successful; quality regressions reject savings claims; unknown usage and contaminated comparisons are visible | Complete |
-| M5 Verification and delivery | Required Rust checks, deterministic corpus/scale measurements, signed commits, remote branch and review | Results and limitations recorded against a commit; no unsupported savings or enterprise-capacity claim | Pending |
+| M5 Verification and delivery | Required Rust checks, deterministic corpus/scale measurements, signed commits, remote branch and review | Results and limitations recorded against a commit; no unsupported savings or enterprise-capacity claim | Complete locally; hosted CI blocked by account billing |
 
 ## Implementation boundaries
 
@@ -35,8 +35,8 @@ claim. Cheaper-model predictability requires a separate model-transfer compariso
 ## Progress log
 
 - 2026-10-03: Inspected the current source and research, cloned the complete repository, created
-  the working branch, and installed a workspace-local Rust toolchain. Baseline verification is
-  running. Confirmed the production bridge drops task identity before calibration and the route
+  the working branch, and installed a workspace-local Rust toolchain. Confirmed the production
+  bridge dropped task identity before calibration and the route
   judge uses a separate truncated-prompt heuristic.
 - 2026-10-03: Baseline required a new stable-Rust lint fix. The managed sandbox requires network
   permission for tests that bind a local socket, a UTF-8 terminal setting and a temporary root
@@ -47,8 +47,18 @@ claim. Cheaper-model predictability requires a separate model-transfer compariso
   repository/session ids reject the run before evidence writes. Scoped canonical learning filters
   other repositories itself. Existing repository attribution is retained for removed subdirectories
   and worktrees, covered by regression assertions.
+- 2026-10-03: M2 implemented: bounded canonical JSONL, repository snapshots, private content
+  objects, transactional imports and export/import/inspect/learn CLI commands. Corpus fixtures
+  verify interruption, corruption, idempotence, conflicts, repository boundaries, exact candidate
+  support and retirement after evidence removal.
+- 2026-10-03: M3 implemented: checksummed, content/parameter/build-keyed mining checkpoints;
+  full/warm artifact equivalence fixtures and current human decisions checked on cache hits.
+- 2026-10-03: M4 implemented: conservative outcome proxies, independent outcome import, corpus
+  evidence audits and paired quality/token/cost qualification. Fast evaluation contracts now run
+  in PR CI. Published signed milestone commits and opened
+  [draft PR #31](https://github.com/stevenvaughanbooth/adage/pull/31).
 
-## Deterministic fixture strategy
+## Implemented interfaces
 
 ### Reusable mining
 
@@ -187,6 +197,12 @@ synthetic fixture tests arithmetic; it provides no external validity.
    controls for qualified candidates. Start narrow, measure live exposure and quality, and retain
    rollback and extinguish behavior. Test cheaper-model transfer in a separate experiment.
 
+For cheaper-model claims, collect four arms: the stronger and cheaper model, each with and
+without Adage. A same-model comparison on the cheaper model isolates Adage's contribution;
+stronger-model baseline versus cheaper-model-plus-Adage tests substitution quality and cost.
+Improved repeatability also needs repeated runs within tasks and a clustered variance analysis.
+The current paired evaluator does not estimate that variance or count retries as independent tasks.
+
 The next highest-value component is an experiment runner that freezes this protocol, collects
 provider billing/usage and complete outcomes, and binds each arm to an artifact digest. This
 evaluator checks submitted evidence; it cannot independently attest its completeness or grades.
@@ -196,6 +212,8 @@ The defensible product asset is the accumulated, permissioned evidence linking a
 and its applicability to verified savings and quality across environments. Streaming storage,
 cross-validation, checkpointing and paired experiments are established techniques; this change
 does not establish patent novelty or freedom to operate.
+
+## Deterministic fixture strategy
 
 Outcome evals establish whether an intervention helps a real agent; they are not the only test
 of learning. Each milestone includes these lower-level contracts where relevant:
@@ -215,18 +233,14 @@ derive an expected answer by calling the same implementation under test. Every f
 bug gets a fixture at the lowest boundary that reproduces it. Scale benchmarks report resource
 cost separately from correctness and live outcome claims.
 
-- 2026-10-03: M2 implemented: bounded canonical JSONL, repository snapshots, private content
-  objects, transactional imports and export/import/inspect/learn CLI commands. Reviewed the one-line
-  help snapshot addition. Corpus tests verify interruption, corruption, idempotence, conflicts,
-  repository boundaries, exact learned candidate support and retirement after evidence removal.
-
 ## Verification record
 
 Foundation: workspace formatting and all-target Clippy pass on Rust 1.99; all 18 architecture,
 affected-path and hygiene guards pass. The network-enabled baseline passed the CLI's 108 unit
-tests before reaching three execution integration failures: this container cannot create the
-user namespace Bubblewrap needs (`setting up uid map: Read-only file system`). Those tests
-remain unchanged. This is an environment limitation, not a passing full-suite result.
+tests before reaching execution integration failures under the tool sandbox's read-only process
+filesystem. A direct namespace probe outside that sandbox succeeded. The final run uses system
+Python, a UTF-8 terminal and `/var/tmp` outside any ancestor Git repository; the temporary root
+also needs to remain visible inside Bubblewrap. Test assertions remain unchanged.
 
 M1: all trace, ingestion, graph and learner suites pass, including the existing property tests
 for input-order/thread determinism and incremental/full mining equality. The 28 evaluation unit
@@ -243,9 +257,71 @@ all 11 CLI grammar/help tests and both no-spawn guards. All-target workspace Cli
 M3: all learner tests, architecture guards, CLI corpus lifecycle and no-spawn checks pass.
 Checkpoint fixtures compare complete tracks/why/reviews and index bytes to full computation
 after each update, verify corrupt-cache recovery and confirm current human decisions still apply.
-All-target workspace Clippy passes. Scale timings remain pending.
+All-target workspace Clippy passes. The scale runner is `scripts/bench-corpus.py`; it uses a
+literal canonical fixture, verifies duplicate-import idempotence and checks byte-identical cold,
+warm and forced-full artifacts while recording wall time and per-process peak RSS. It disables
+embeddings to isolate corpus and graph learning, and makes no production savings claim.
 
 M4: all 28 evaluation unit tests and eight paired-outcome integration tests pass, alongside the
 canonical outcome fixtures, learner tests and two CLI corpus/evaluation flows. All-target
-workspace Clippy passes. Full-workspace verification and scale measurements are recorded below
-when complete; no live outcome study has been run.
+workspace Clippy passes. No live outcome study has been run.
+
+M5, code at `5186d81`: `cargo test --workspace --exclude adage-eval --locked --no-fail-fast`
+finished with 1,117 passed, one failed and three existing ignored tests. The one failure was the
+escape suite's ripgrep positive control: this environment's `/usr/local/bin/rg` is a symlink to
+an executable outside the sandbox's toolchain roots. Adding its actual directory
+(`/opt/codex/codex-path`) to `PATH` made the complete escape suite pass, 13/13. Across that full
+run and the corrected rerun, all 1,118 exercised workspace tests passed; the initial full command
+itself exited unsuccessfully. No test was disabled or weakened. Both Bubblewrap execution and
+the attack fixtures actually ran. Reproduction here requires `TERM=xterm`, system Python first
+on `PATH`, a temp root under `/var/tmp` rather than `/tmp` or `/dev/shm`, and working user
+namespaces outside the tool sandbox's read-only process filesystem.
+
+The separate evaluation unit/paired suite passes 36/36. Formatting, all-target workspace Clippy
+with warnings denied, 18 architecture/hygiene guards, two no-spawn guards, plugin metadata,
+npm launcher (including both companion binaries), session-start script and DCO sign-offs pass.
+The release CLI builds with the normal optimized profile. Long evaluation gates are the existing
+weekly/manual workflow; they were not run as part of these checks.
+
+Remote CI at `5186d81` did not start: GitHub's job annotation reports failed account payments or
+a spending limit that needs increasing. This blocks hosted verification, not local checks.
+[CI run](https://github.com/stevenvaughanbooth/adage/actions/runs/37155984759).
+
+### Release scale smoke measurements
+
+Measured on 2026-10-03 against code `5186d81`, normal release profile, Rust 1.99.0,
+Linux 6.18.44 x86_64, five logical CPUs. Release binary SHA-256:
+`e9e1945edc017232fcaac46e566364f512640e35642d32047765759202e8a9f3`.
+Tests and compilation had finished before measurement. Each row is one sequential observation,
+not a repeated statistical benchmark; the filesystem and binary pages can be warm.
+
+| Sessions | Steps | JSONL bytes | Import s | Duplicate import s | Cold learn s | Warm learn s | Forced full s |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1,000 | 3,000 | 1,546,000 | 0.0303 | 0.0255 | 0.1270 | 0.0842 | 0.0895 |
+| 10,000 | 30,000 | 15,460,000 | 0.2595 | 0.2083 | 0.8127 | 0.6037 | 0.7031 |
+| 100,000 | 300,000 | 154,600,000 | 2.6495 | 2.1526 | 8.2684 | 5.6685 | 7.4976 |
+
+At 100,000 sessions, per-process peak RSS was 55.11 MiB for import, 78.12 MiB for duplicate
+import, 1,039.60 MiB for cold learning, 881.03 MiB for warm learning and 1,040.82 MiB for forced
+full learning. This demonstrates the current repository-sized mining memory cost; it is not
+constant-memory learning. The small manifest still grows with the number of session ids.
+
+All three sizes retained the same generation on duplicate import, produced the one expected
+routine candidate, reported a mining cache hit only on the warm run, and produced byte-identical
+track, explanation, follow-weight and compiled-index artifacts across cold, warm and forced-full
+runs. The 100,000-session corpus generation was
+`47c31b713434d57f2458b612df4e6a8cd47c3fe243da2dfc91fa4cc8b5c0fd1e`.
+
+```sh
+cargo build --release --locked -p adage-cli
+python3 scripts/bench-corpus.py --adage target/release/adage \
+  --work-dir /tmp/adage-corpus-bench-100000 --sessions 100000
+```
+
+The work directory must be empty. The script retains raw outputs and a machine-readable summary
+there; only this curated summary is committed. The workload copies a three-step hand-authored
+routine with distinct synthetic task ids in one repository and disables embeddings. It exercises
+storage, graph learning, qualification and compilation; it does not represent long, diverse
+enterprise traces, measure embedding/procedure-card scale, establish real task independence,
+or demonstrate saved model tokens. Real corpus diversity, long sessions and live value remain
+the next evaluation workload.
