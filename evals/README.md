@@ -38,11 +38,9 @@ Three kinds of file, and a home for each:
    committing raw output takes a deliberate `git add -f`, and the repository hygiene test
    (`xtask/src/hygiene.rs`) refuses large files and logs except the few listed there.
 
-Archived runs are evidence, and no test reads one. The reflex-proof harness tests read frozen
-copies of the files they need from `reflex-proof/harness/fixtures/<run>/`, checked by
-`test_fixtures.py`. Tools that take an archived run as input still read it in place:
-`heldout_cohort.py` reads its frozen task material from `results/20261001-heldout-tasks/`, and the
-`showcase/live/<family>/` archives seed the real-repository gate. Those stay whole.
+Some archived runs are themselves test fixtures: the reflex-proof harness tests replay
+`reflex-proof/harness/results/<run>/` for the runs they name, and `showcase/live/<family>/`
+archives seed the real-repository gate. Those stay in place, whole.
 
 ### Where the removed raw output went
 

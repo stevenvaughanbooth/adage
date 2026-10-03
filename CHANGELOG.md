@@ -27,8 +27,6 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   (TOML, then every pattern's regex) on each lookup, many times per learn run. It is now parsed
   once per process. Over 497 sessions, `adage condition` drops from 8.5 s to 2.5 s, with
   byte-identical tracks.
-- **The reflex-proof tests read their own fixtures.** They no longer read archived runs under
-  `results/`, which can now be pruned without changing a test.
 
 - **Breaking: one JSON shape for a reflex.** `adage status --json`, `adage review --json` and
   `adage map` (`/api/v1/graph`) render each reflex with the same fields and types, and add only

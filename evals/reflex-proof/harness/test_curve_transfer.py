@@ -80,7 +80,7 @@ class TransferContracts(unittest.TestCase):
         # file's hash, so a root verifies only with its own revision. This note is here because
         # any edit there, even a comment, would make transfer-v3 fail verify().
         expected = dict(re.findall(r'"(adage(?:-exec)?)": "([0-9a-f]{64})"', inspect.getsource(transfer.freeze)))
-        results = Path(transfer.__file__).parent / "fixtures"
+        results = Path(transfer.__file__).parent / "results"
         replay = transfer.pairs.read(results / "20260930-launch-experience/replay/attempt.json")
         self.assertEqual(replay["binary_sha256"], expected["adage"])
         for study in ("20260930-live-cpu-transfer", "20260930-launch-experience/transfer"):

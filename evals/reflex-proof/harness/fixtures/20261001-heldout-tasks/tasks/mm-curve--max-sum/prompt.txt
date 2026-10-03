@@ -1,5 +1,0 @@
-Add a new validator to marshmallow: `marshmallow.validate.MaxSum(max, *, error=None)`, which succeeds if the input is a sequence of numbers whose sum is at most `max` (an empty sequence sums to 0). Its default error message is `Sum must be at most {max}.`; a custom `error` message may interpolate `{input}` and `{max}`. Examples of valid input: `MaxSum(10)`: `[1, 2, 3]`. Examples of invalid input: `[5, 6]`.
-
-Follow the conventions of the existing validators, include tests and a docstring, and add a changelog entry.
-
-Do not create git commits.
