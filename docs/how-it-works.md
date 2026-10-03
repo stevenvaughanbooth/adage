@@ -342,8 +342,8 @@ feed, one line per hook decision, `learn.log` line, health change and learner st
 cursor a restarted reader resumes from, and it never names the arm of the session it runs in;
 bare `adage --json` is the status card's rows one to one, plus which of the mod's own lines the
 person turned on (`ui`) and an interrupted action waiting for them (`recovery`). A harness that knows a session's usage
-records it with `adage ledger note`, accepted only for a session the spool shows started in that
-repository; its figures replace the transcript's in the savings estimate, where a step Adage took
+records it with `adage ledger note` (the Claude Code mod does at every turn's end), accepted only
+for a session the spool shows started in that repository; its figures replace the transcript's in the savings estimate, where a step Adage took
 in the model's place counts as a model turn not spent ([live learning](live-learning.md)).
 
 In Claude Code the plugin's module draws from those reads and from the command hooks' own

@@ -266,3 +266,30 @@ plugin/claude-code/hooks/dialog.test.ts, grant.test.ts, notice.test.ts (new), as
 docs/how-it-works.md, docs/usage.md, CHANGELOG.md ("Seeing it")
 docs/claude-mod/impl/B4-D5-notes.md             (this file)
 ```
+
+## Review fixes
+
+The mod's (TypeScript) findings of the branch review, each with its test. Nothing under
+`crates/` was touched.
+
+| Finding | What changed | Test |
+| --- | --- | --- |
+| **H1** A kept answer was pressed with no person present, from `$.store` (a file the agent's tools can write) | `applyKept` is gone, and so is the `KEPT` gesture (`press.ts` `GESTURES` is `[ANSWER, BUTTON]`, and `scripts/check-plugin.mjs` now pins that literal). At the next start that holds a press, `askKept` puts each kept answer to the person in the engine's dialog: `ask.kept`, `Kept from your last session: {summary} ({command}). Run it now?` with `run it` / `drop it` (new in ux-design §10; §4.17 and §9.12 reworded). The question names the exact command, since the entry may not be the person's. `run it` presses with `ANSWER`, which spends the token then. `drop it` forgets the answer. A dismissed dialog keeps it for the next start. An entry no press could run (`pressArgv` refuses it) is dropped without being asked | `dialog.test.ts`: `no press held …` (asked again, lands on `run it`); `H1: a kept answer is never pressed unasked …`; `H1: an entry written into the store by something else …`; `ask.test.ts` `H1: … the exact command` |
+| **H2** Kept answers were not tied to a repository | `Kept` gains `root` (`$.session.repo()?.root`, else the working directory), and `keptOf` drops an entry without one. `askKept` offers an answer only at a start in its own root and leaves the others untouched. `keep` deduplicates by command and root. The band's `kept` count covers this root only | `dialog.test.ts` `H2: an answer kept in one repository is not offered in another …`; `ask.test.ts` `H2: …` |
+| **M1** A refused press threw away an unspent token | `pressCommand` leaves the press state alone (token, `held`, chain) when the binary refused before the spend (`!ok && refused`: no next line, as `adage on` prints where Adage is already on). A kept answer refused that way stays kept, which is what the old comment promised and the code did not do. `askOn` still opens its ask unconditionally (the review's third suggestion; with the token now kept, a refused `on` costs nothing) | `dialog.test.ts` `M1: a press the binary refuses … presses with the same token`; `M1: a kept answer the binary refuses before the spend stays kept …` |
+| **L4** The bridge's binary paths had no `.exe` on Windows | `bridge.ts` `exeSuffix(OS)` (`.exe` when `OS=Windows_NT`). `hookBinary` and `cliBinary` take the suffix, so the mod probes `bin/hook.exe` and reads `bin/adage.exe`, the entries the shim copies there (`place` with `X=.exe`). The mod never runs `adage-exec` by name: `hook.exe` is whichever binary the shim chose. `activate` and `issuePress` read `OS` | `bridge.test.ts` `on Windows …`; `register.test.ts` `L4 · …` |
+| **L8** `$.store.set('adage.harness', …)` had no `.catch` | `.catch(() => undefined)`, as every other store write has | `draw.test.ts` `L8: …` (the kit's `storeFails` denies the write; without the fix the version line is never cleared) |
+
+`VALIDATE.txt` was regenerated the way CI diffs it. It changed only in the hooks line (`turn.complete` added, and the line is now long enough that the validator truncates it), the calls line (`$.session.repo (via repoRoot)`, `$.session.usage (via noteLedger)`, `askKept` in place of `applyKept`) and the env reads (`OS`). M6, the review's M2 (named M4 in the brief) and the ledger note are written up in C3-C9-mod-notes.md.
+
+### Commands run (in /home/user/adage-poc)
+
+| Command | Result |
+| --- | --- |
+| `claude plugin validate --strict plugin/claude-code`, `… plugin/claude-code-exec`, `… .` | `√ Validation passed`, all three |
+| `claude plugin validate --strict plugin/claude-code 2>&1 \| sed "s#$PWD/##g"` vs `VALIDATE.txt` | regenerated; a fresh run diffs clean |
+| `claude plugin test plugin/claude-code` | 272 pass, 0 fail across 18 files (252 before; 20 added) |
+| `/opt/node22/bin/tsc -p <scratch tsconfig>` (strict, `noUncheckedIndexedAccess`, 2.1.288 declarations) | no errors |
+| `node scripts/check-plugin.mjs` | `plugins adage, adage-exec 0.1.0: ok`. With a third gesture put back in `GESTURES`, it fails with the new message |
+
+No cargo command was run (a Rust test run was in progress in the tree).

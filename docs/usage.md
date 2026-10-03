@@ -377,8 +377,10 @@ session's start (`adage hook claude Press`, before the agent's first act) and th
 memory; the verb reads `{ press, session }` on stdin, records the decision as a person's (`via:
 press`), and prints the next token. The model cannot press (it can only call tools) and a Bash
 command it is talked into running gets no token. With no token held (the window was missed, the
-mod reloaded mid-session), the dialog still asks and the answer is kept for the next session start;
-the band says `» kept for your next session · /adage review`.
+mod reloaded mid-session), the dialog still asks and the answer is kept for the next session start
+in the same repository; the band says `» kept for your next session · /adage review`. That start
+asks again, naming the exact command (`Kept from your last session: … Run it now?`, `run it` /
+`drop it`), and only that answer runs it.
 
 `/adage` prints the status card and opens the pane: **Live** (`l`, the feed of `adage watch`, a
 filter, `enter` to read a directive as the agent read it, `p` pause, `v` quiet rows, `n` newest),

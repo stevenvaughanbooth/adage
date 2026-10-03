@@ -219,6 +219,22 @@ describe('B2 · the band', () => {
     expect(await band($, 'terminal')).toBe('ENGINE AbovePrompt')
   })
 
+  test('L8: a harness version the store cannot keep still clears the line, and the prompt hook answers as beneath', async ($, on) => {
+    const w = world(on, { feed: [LINE.learnerIdle, LINE.healthy], harness: '2.1.300', graph: { routes: [] }, storeFails: ['adage.harness'], classic: { UserPromptSubmit: { additionalContext: ['beneath'] } } })
+    const lines: unknown[] = []
+    on('state.set', async ($, e, next) => {
+      if (e.key === 'mode') lines.push((e.value as { versionLine?: string }).versionLine)
+      return next(e)
+    })
+    await start($, w)
+    expect(await $.classic.UserPromptSubmit({ prompt: 'go', source: 'user' } as never)).toEqual({ additionalContext: ['beneath'] })
+    await w.clock.settle()
+    expect(w.store['adage.harness']).toBeUndefined()
+    // The hook went on past the failed write: the line is cleared for the session.
+    expect(lines.at(-1)).toBe('')
+    expect(await band($, 'terminal')).toBe('ENGINE AbovePrompt')
+  })
+
   test('T-B2-09: the lamp in the fire, prime and inhibit roles, its word beside it', async ($, on) => {
     const w = world(on, { feed: [LINE.learnerIdle, LINE.check], later: [LINE.problem], graph: { routes: [] } })
     await start($, w)

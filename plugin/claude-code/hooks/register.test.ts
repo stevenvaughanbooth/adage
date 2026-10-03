@@ -2,7 +2,7 @@
 // turn.step hook end to end, with `$.process.run` answered beneath the plugin by the test's own
 // `process.run` hook (the binary is never run).
 import type { On, ProcessRunInit, TurnStepChunk, TurnStepResult } from 'claude-code'
-import { expect, mock, test } from 'claude-code/testing'
+import { describe, expect, mock, test } from 'claude-code/testing'
 
 type Ran = { argv: readonly string[]; init?: ProcessRunInit }
 
@@ -15,14 +15,15 @@ const PREDICT = { predict: { kind: 'obligation', route: 'codegen-after-schema', 
  * `version` prints `version` and whose `hook claude TurnStep` prints `turnStep`, the session's id
  * and cwd, and a model that streams one text-and-tool response (counted).
  */
-function world(on: On, opts: { data?: string; version: string; turnStep: string; isLinked?: () => boolean; card?: unknown }) {
-  mock.env(on, opts.data === undefined ? {} : { CLAUDE_PLUGIN_DATA: opts.data })
-  mock.clock(on, { now: 1_791_008_381_000 })
+function world(on: On, opts: { data?: string; version: string; turnStep: string; isLinked?: () => boolean; card?: unknown; env?: Record<string, string>; ledgerExit?: number }) {
+  mock.env(on, { ...(opts.data === undefined ? {} : { CLAUDE_PLUGIN_DATA: opts.data }), ...opts.env })
+  const clock = mock.clock(on, { now: 1_791_008_381_000 })
   on('command.register', () => ({ value: { command: 'adage' } }))
   const ran: Ran[] = []
   on('process.run', ($, e) => {
     ran.push({ argv: e.argv, init: e.init })
     if (opts.isLinked?.() === false) return { deny: 'ENOENT' }
+    if (e.argv[1] === 'ledger') return { value: { exitCode: opts.ledgerExit ?? 0, stdout: '', stderr: opts.ledgerExit ? 'error  note not recorded: x\n' : '', isStdoutTruncated: false, isStderrTruncated: false } }
     const stdout = e.argv[1] === 'version' ? opts.version : e.argv[1] === '--json' ? JSON.stringify(opts.card ?? {}) : opts.turnStep
     return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
   })
@@ -46,7 +47,7 @@ function world(on: On, opts: { data?: string; version: string; turnStep: string;
     if (e.key !== 'mode') sets.push({ key: e.key, value: e.value })
     return next(e)
   })
-  return { ran, requests, models, sets }
+  return { ran, requests, models, sets, clock }
 }
 
 async function drain(stream: AsyncGenerator<TurnStepChunk, TurnStepResult>) {
@@ -212,4 +213,89 @@ test('a Skill prediction is yielded only for a skill `$.command.list()` lists', 
   const { chunks } = await drain($.turn.step(STEP))
   expect(chunks[0]).toEqual({ kind: 'tool', index: 0, id: 'adage_notes_turn-1_2_0', name: 'Skill' })
   expect(w.requests).toEqual([2])
+})
+
+// M6 · the harness ledger (architecture §3.9, plan A4): every main-loop turn's end hands the
+// session's steps, as the engine counted them, to `adage ledger note`.
+describe('M6 · adage ledger note at the turn end', () => {
+  const END = { turnId: 'turn-1', answer: 'Done.', durationMs: 1000, isAborted: false, reason: 'answer' } as const
+  const notes = (w: { ran: Ran[] }) => w.ran.filter(r => r.argv[1] === 'ledger').map(r => ({ argv: r.argv, cwd: r.init?.cwd, env: r.init?.env, note: JSON.parse(r.init?.stdin ?? 'null') as Record<string, unknown> }))
+  function ends(on: On) {
+    on('turn.complete', ($, e) => ({ text: e.answer }))
+    on('session.version', () => ({ value: { version: '2.1.288', base: '2.1.288', builtAt: '' } as never }))
+    on('session.usage', () => ({ value: { startedAt: 1_791_008_000_000, context: {} as never, rateLimits: [], cost: { usd: 0.25 } } }))
+  }
+
+  test("the session's steps, a model's and a predicted one, numbered across turns; one line per turn end", async ($, on) => {
+    const w = world(on, { data: '/data', version: 'adage 0.1.0\n', turnStep: JSON.stringify(PREDICT) })
+    ends(on)
+    await $.session.start(START)
+    await drain($.turn.step({ ...STEP, index: 0 }))
+    await drain($.turn.step(STEP))
+    expect(await $.turn.complete(END as never)).toMatchObject({ text: 'Done.' })
+    await w.clock.settle()
+    const first = notes(w)
+    expect(first).toHaveLength(1)
+    expect(first[0]?.argv).toEqual(['/data/bin/adage', 'ledger', 'note'])
+    expect(first[0]?.cwd).toBe('/w')
+    expect(first[0]?.env).toEqual({ CLAUDECODE: '1' })
+    expect(first[0]?.note).toEqual({
+      session_id: 'sess-1',
+      repo: '/w',
+      harness: 'claude-code',
+      harness_version: '2.1.288',
+      started_at: 1_791_008_000_000,
+      ended_at: 1_791_008_381_000,
+      steps: [
+        { index: 0, model: 'claude-x', input: 10, output: 5, cache_read: 0, cache_write: 0, predicted: false },
+        { index: 1, model: 'claude-x', input: 0, output: 0, cache_read: 0, cache_write: 0, predicted: true },
+      ],
+      cost_usd: 0.25,
+    })
+    await drain($.turn.step({ ...STEP, index: 0, turnId: 'turn-2' }))
+    await $.turn.complete({ ...END, turnId: 'turn-2' } as never)
+    await w.clock.settle()
+    expect(notes(w).map(n => (n.note.steps as { index: number; predicted: boolean }[]).map(x => `${x.index}${x.predicted ? 'p' : ''}`))).toEqual([['0', '1p'], ['0', '1p', '2']])
+  })
+
+  test("a subagent's turn and steps are not the session's; nothing noted before a step; inert notes nothing", async ($, on) => {
+    const w = world(on, { data: '/data', version: 'adage 0.1.0\n', turnStep: '' })
+    ends(on)
+    await $.session.start(START)
+    await $.turn.complete(END as never)
+    await drain($.turn.step({ ...STEP, agentId: 'agent-7' }))
+    await $.turn.complete({ ...END, agentId: 'agent-7' } as never)
+    await w.clock.settle()
+    expect(notes(w)).toEqual([])
+  })
+
+  test('a refused note (exit 2) changes nothing: the turn ends as beneath (fail open)', async ($, on) => {
+    const w = world(on, { data: '/data', version: 'adage 0.1.0\n', turnStep: '', ledgerExit: 2 })
+    ends(on)
+    await $.session.start(START)
+    await drain($.turn.step({ ...STEP, index: 0 }))
+    expect(await $.turn.complete(END as never)).toMatchObject({ text: 'Done.' })
+    await w.clock.settle()
+    expect(notes(w)).toHaveLength(1)
+  })
+
+  test('inert: no step is kept and no note is sent', async ($, on) => {
+    const w = world(on, { data: '/data', version: '', turnStep: '' })
+    ends(on)
+    await $.session.start(START)
+    await drain($.turn.step({ ...STEP, index: 0 }))
+    await $.turn.complete(END as never)
+    await w.clock.settle()
+    expect(notes(w)).toEqual([])
+  })
+})
+
+test('L4 · on Windows the probe and the verbs use the .exe entries the shim copies', async ($, on) => {
+  const w = world(on, { data: 'C:/Users/me/.claude/plugins/data/adage-adage', version: 'adage 0.1.0\n', turnStep: JSON.stringify(PREDICT), env: { OS: 'Windows_NT' }, card: {} })
+  await $.session.start(START)
+  await drain($.turn.step(STEP))
+  expect(w.ran[0]?.argv).toEqual(['C:/Users/me/.claude/plugins/data/adage-adage/bin/hook.exe', 'version'])
+  expect(w.ran.find(r => r.argv[3] === 'TurnStep')?.argv[0]).toBe('C:/Users/me/.claude/plugins/data/adage-adage/bin/hook.exe')
+  await w.clock.settle()
+  expect(w.ran.find(r => r.argv[1] === '--json')?.argv[0]).toBe('C:/Users/me/.claude/plugins/data/adage-adage/bin/adage.exe')
 })

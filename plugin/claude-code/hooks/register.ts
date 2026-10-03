@@ -14,7 +14,7 @@ import type { EngineInterface, ProcessSpawnRequest, Register, RenderSurface, Tim
 
 import { NO_STANDING, STANDING_TIMEOUT_MS, standingOf, subagentOf, withInstruction, withNote, withPreamble, withSection, withoutAttachments } from './attach'
 import type { Standing, StandingPayload } from './attach'
-import { ask, cliBinary, dataDir, guard, guardSpawn, hookBinary, probe, read as readJson, say } from './bridge'
+import { ask, cliBinary, dataDir, exeSuffix, guard, guardSpawn, hookBinary, note, probe, read as readJson, say } from './bridge'
 import type { Asked, Run, Spawn } from './bridge'
 import { PRE_TOOL_TIMEOUT_MS, bashCall } from './call'
 import { ARGUMENT_HINT, DESCRIPTION, runCommand, verbOf } from './commands'
@@ -26,6 +26,8 @@ import type { PaneActions } from './draw/pane'
 import { beside, receipt, under } from './draw/rows'
 import { fold, follow, followArgs, parseLine, stem } from './feed'
 import type { Line } from './feed'
+import { NOTED0, accrue, noteOf, stepOf } from './ledger'
+import type { Noted, StepUsage } from './ledger'
 import { COMMAND, FEED0, INSPECT, MAP0, MODE0, PANE, TESTED, TURN0, VIEW0 } from './plugin'
 import type { Fired, Learner, Mark, Predicted, Row, View } from './plugin'
 import { answeredMark, shortId } from './receipt'
@@ -96,6 +98,8 @@ const REFRESH_MS = 5000
 let bin: string | undefined
 /** `adage` itself, beside it (`<data>/bin/adage`): the verbs the mod reads and draws from. */
 let cli: string | undefined
+/** The suffix of the shim's entries: `.exe` on Windows, where it copies `hook.exe` and `adage.exe`. */
+let exe = ''
 /** Whether a person is at the prompt (`session.start`'s `isInteractive`): nothing draws headless. */
 let interactive = false
 /** The surface the session drew on at start. */
@@ -184,9 +188,10 @@ async function activate($: EngineInterface): Promise<void> {
   observing = ((await $.env.get('ADAGE_MOD_OBSERVE')) ?? '') !== ''
   const ascii = (await $.env.get('ADAGE_ASCII')) === '1'
   const reducedMotion = (await $.env.get('ADAGE_REDUCED_MOTION')) === '1'
+  exe = exeSuffix(await $.env.get('OS'))
   const data = dataDir(pluginData, $.plugin.root)
-  bin = await probe(runner($), hookBinary(pluginData, $.plugin.root))
-  cli = bin === undefined ? undefined : cliBinary(pluginData, $.plugin.root)
+  bin = await probe(runner($), hookBinary(pluginData, $.plugin.root, exe))
+  cli = bin === undefined ? undefined : cliBinary(pluginData, $.plugin.root, exe)
   let nobinary = ''
   if (bin === undefined && data !== undefined) {
     const said = await $.fs.read(`${data}/status`).catch(() => '')
@@ -488,6 +493,22 @@ async function mark($: EngineInterface, m: Mark): Promise<void> {
   await update($, MARKS, cur => [...cur.filter(x => !(x.id === m.id && x.kind === m.kind)), m].slice(-MAX_MARKS))
 }
 
+/** The main-loop steps of the turn under way, and the session's steps noted so far. */
+let turnSteps: Omit<StepUsage, 'index'>[] = []
+let noted: Noted = NOTED0
+
+/** `adage ledger note` with the session's steps so far (one line per session, replaced each turn). */
+async function noteLedger($: EngineInterface): Promise<void> {
+  const session = await $.session.id()
+  noted = accrue(noted, session, turnSteps.splice(0))
+  if (cli === undefined || noted.steps.length === 0) return
+  const usage = await $.session.usage().catch(() => undefined)
+  const { version } = await $.session.version()
+  const cwd = await $.session.cwd()
+  const payload = noteOf({ noted, cwd, version, startedAt: usage?.startedAt ?? 0, endedAt: await $.clock.now(), costUsd: usage?.cost?.usd })
+  await note(runner($), cli, payload, cwd)
+}
+
 /**
  * What a session that draws nothing still needs from the status card: the routine model. A session
  * that draws reads the card with the rest (`refresh`).
@@ -589,7 +610,7 @@ export const register: Register = (on, options) => {
     const turn = await update($, TURN, t => ({ submits: t.submits + 1, fired: fired.length, predicted: predicted.length, marks: marks.length }))
     if ((await read($, MODE)).versionLine !== '') {
       const { version } = await $.session.version()
-      await $.store.set('adage.harness', version)
+      await $.store.set('adage.harness', version).catch(() => undefined)
       await update($, MODE, m => ({ ...m, versionLine: '' }))
     }
     return observe($, answered, 'UserPromptSubmit', { prompt: turn.submits, promptText: e.prompt })
@@ -631,15 +652,34 @@ export const register: Register = (on, options) => {
       settled = true
       quietly(settings($))
     }
-    return yield* turnStep(e, next, {
+    let predicted = false
+    const result = yield* turnStep(e, next, {
       isActive: bin !== undefined,
       isObserving: observing,
       hasSkill: skill => hasSkill($, skill),
       ask: payload => askBinary($, 'TurnStep', payload, TURN_STEP_TIMEOUT_MS),
       context: async () => ({ sessionId: await $.session.id(), cwd: await $.session.cwd() }),
-      record: p => record($, p),
+      record: p => {
+        // A step made wholly of predicted calls sent no request; the finish line's did.
+        predicted ||= !p.isEnding
+        return record($, p)
+      },
       routineModel,
     })
+    // The step's usage, for the ledger note at the turn's end (main loop only, as the note counts).
+    if (bin !== undefined && e.agentId === undefined) {
+      const step = stepOf(e.model, result.usage, predicted)
+      if (step !== undefined) turnSteps.push(step)
+    }
+    return result
+  })
+
+  // The harness ledger (§3.9, plan A4): at each main-loop turn's end, the session's steps as the
+  // engine counted them go to `adage ledger note`, off the hook's path; a refusal changes nothing.
+  on('turn.complete', async ($, e, next) => {
+    const done = await next(e)
+    if (bin !== undefined && e.agentId === undefined) quietly(noteLedger($))
+    return done
   })
 
   // A Bash call (§3.3, §3.4; C3, C6): a fresh receipt answers it when the rules would have let it
@@ -975,7 +1015,7 @@ export const register: Register = (on, options) => {
 
 // ================================================================================= B4 · D5 helpers
 // Imports are hoisted; these sit with the block they serve so the file above is untouched.
-import { ON_ANSWERS, ON_QUESTION, answerOf, askedOf, doneToast, keptOf, nextAsk, record as recordAsk, whatOf } from './ask'
+import { KEPT_ANSWERS, ON_ANSWERS, ON_QUESTION, answerOf, askedOf, doneToast, keptOf, keptQuestion, nextAsk, record as recordAsk, whatOf } from './ask'
 import type { AskItem } from './ask'
 import { allowTree } from './draw/allow'
 import type { AllowActions } from './draw/allow'
@@ -986,7 +1026,7 @@ import type { Allow, Kept, Press } from './kinds'
 import { late } from './late'
 import type { PressHandlers } from './late'
 import { candidatesOf, invokedMark, noticedIds, noticedLines, skillOf, verifiedMark, withSkill } from './notice'
-import { ANSWER, BUTTON, KEPT, guardPress, isToken, objectOf, press, pressArgv, tampered } from './press'
+import { ANSWER, BUTTON, guardPress, isToken, objectOf, press, pressArgv, tampered } from './press'
 import type { Gesture, Pressed } from './press'
 import { VERB_WORDS, reviewCommand } from './view'
 import type { Waiting } from './view'
@@ -1029,7 +1069,18 @@ function bindLate($: EngineInterface, isInteractive: boolean): void {
 async function loadStore($: EngineInterface): Promise<void> {
   const asked = askedOf(await $.store.get('adage.asked').catch(() => undefined))
   if (asked.length > 0) await update($, ASKED, cur => (cur.length === 0 ? asked : cur))
-  late.kept = keptOf(await $.store.get('adage.kept').catch(() => undefined)).length
+  const root = await repoRoot($)
+  late.kept = keptOf(await $.store.get('adage.kept').catch(() => undefined)).filter(k => k.root === root).length
+}
+
+/**
+ * The repository the session works in (its root; the working directory outside one): a kept
+ * answer is offered only where it was given, since `adage on` and `add <dir> --trust` act on the
+ * working directory's repository.
+ */
+async function repoRoot($: EngineInterface): Promise<string> {
+  const repo = await $.session.repo().catch(() => null)
+  return repo?.root ?? (await $.session.cwd())
 }
 
 /**
@@ -1045,7 +1096,7 @@ async function issuePress($: EngineInterface, e: { session_id?: string; source?:
   const session = typeof e.session_id === 'string' && e.session_id !== '' ? e.session_id : await $.session.id()
   const was = await read($, PRESS)
   const same = was.session === session
-  const hook = bin ?? hookBinary(await $.env.get('CLAUDE_PLUGIN_DATA'), $.plugin.root)
+  const hook = bin ?? hookBinary(await $.env.get('CLAUDE_PLUGIN_DATA'), $.plugin.root, exeSuffix(await $.env.get('OS')))
   const cwd = typeof e.cwd === 'string' && e.cwd !== '' ? e.cwd : await $.session.cwd()
   const asked = await ask(runner($), hook, 'Press', { session_id: session, cwd, hook_event_name: 'Press', source, via: 'mod' }, PRESS_TIMEOUT_MS)
   const token = asked.ok && isObject(asked.answer) && isToken(asked.answer.press) ? asked.answer.press : ''
@@ -1056,7 +1107,7 @@ async function issuePress($: EngineInterface, e: { session_id?: string; source?:
       ? { session, token, state: same && was.state === 'off' ? 'off' : 'held', issued, chain: same ? was.chain : 0 }
       : { session, token: same ? was.token : '', state: same ? was.state : 'none', issued, chain: same ? was.chain : 0 }
   await update($, PRESS, () => next)
-  if (next.state === 'held') await applyKept($)
+  if (next.state === 'held') await askKept($)
 }
 
 /**
@@ -1072,29 +1123,59 @@ async function checkTamper($: EngineInterface): Promise<void> {
   await warnOnce($, 'press-tampered', "something else claimed this session's press; presses are off for this session · run adage doctor")
 }
 
-/** Keeps an answer for the next session start (ux-design §9.12); the band says so. */
+/** Keeps an answer for the next session start in this repository (ux-design §9.12); the band says so. */
 async function keep($: EngineInterface, k: Kept): Promise<void> {
-  const kept = keptOf(await $.store.get('adage.kept').catch(() => undefined)).filter(x => x.command !== k.command)
+  const kept = keptOf(await $.store.get('adage.kept').catch(() => undefined)).filter(x => !(x.command === k.command && x.root === k.root))
   await $.store.set('adage.kept', [...kept, k].slice(-50)).catch(() => undefined)
-  late.kept = kept.length + 1
+  late.kept = kept.filter(x => x.root === k.root).length + 1
 }
 
-/** Runs the answers kept while no press was held, now that one is; a refused one stays kept. */
-async function applyKept($: EngineInterface): Promise<void> {
+const sameKept = (a: Kept, b: Kept) => a.command === b.command && a.root === b.root && a.at === b.at
+
+/**
+ * Puts the answers kept while no press was held to the person again, now that one is (ux-design
+ * §9.12, `ask.kept`): never pressed as they stand, since `$.store` is a file the agent's tools can
+ * write. Only those given in this repository are asked, one dialog each, and the press is that
+ * answer's. `drop it` forgets one; a dismissed dialog, a press the binary refused before the spend
+ * or no press held keeps it for the next start; one from another repository waits for a start
+ * there; one older than a week is dropped unasked.
+ */
+async function askKept($: EngineInterface): Promise<void> {
   const kept = keptOf(await $.store.get('adage.kept').catch(() => undefined))
-  if (kept.length === 0) {
-    late.kept = 0
+  const root = await repoRoot($)
+  if (kept.length === 0 || asking) {
+    late.kept = kept.filter(k => k.root === root).length
     return
   }
+  asking = true
   const now = await $.clock.now()
   const left: Kept[] = []
-  for (const k of kept) {
-    if (now - k.at > KEPT_MAX_AGE_MS) continue
-    const pressed = await pressCommand($, KEPT, k.command, k.say, k.key, whatOf(k.command), undefined, false)
-    if (pressed === undefined) left.push(k)
+  try {
+    for (const k of kept) {
+      if (now - k.at > KEPT_MAX_AGE_MS) continue
+      if (k.root !== root || cli === undefined) {
+        left.push(k)
+        continue
+      }
+      // An answer no press could run (the store holds anything a file can) is never asked.
+      if (pressArgv(cli, k.command) === undefined) continue
+      const said = await $.ui.ask(keptQuestion(k), KEPT_ANSWERS).catch(() => undefined)
+      if (said === KEPT_ANSWERS[1]) continue
+      if (said !== KEPT_ANSWERS[0]) {
+        left.push(k)
+        continue
+      }
+      const pressed = await pressCommand($, ANSWER, k.command, k.say, k.key, whatOf(k.command), undefined, false)
+      if (pressed === undefined || (!pressed.ok && pressed.refused)) left.push(k)
+    }
+  } finally {
+    asking = false
   }
-  await $.store.set('adage.kept', left).catch(() => undefined)
-  late.kept = left.length
+  // An answer kept while the dialogs waited (a pane press with no press held) stays kept.
+  const added = keptOf(await $.store.get('adage.kept').catch(() => undefined)).filter(x => !kept.some(k => sameKept(k, x)))
+  const after = [...left, ...added]
+  await $.store.set('adage.kept', after).catch(() => undefined)
+  late.kept = after.filter(k => k.root === root).length
   quietly(refresh($, true))
 }
 
@@ -1107,7 +1188,7 @@ async function noteAnswer($: EngineInterface, key: string, answer: string | unde
 
 /**
  * Runs one person-only command through the press (press.ts): the one path that reaches a verb a
- * person alone may run, from a dialog answer, a pane Button or an answer kept from one. With no
+ * person alone may run, from a dialog answer or a pane Button in this session. With no
  * press held the answer is kept for the next session start when it can be (one act), and nothing
  * runs. Resolves to what the press came to, or undefined when nothing ran.
  */
@@ -1128,22 +1209,25 @@ async function pressCommand(
   const p = await read($, PRESS)
   const session = await $.session.id()
   if (p.state !== 'held' || p.token === '' || p.session !== session) {
-    if (keepable && gesture !== KEPT) {
-      await keep($, { command, say, key, session, at: await $.clock.now() })
+    if (keepable) {
+      await keep($, { command, say, key, session, root: await repoRoot($), at: await $.clock.now() })
       await noteAnswer($, key, what)
     }
     return undefined
   }
   const pressed = await press(gesture, pressRunner($), argv, p.token, p.session, await $.session.cwd(), extra)
-  // Refused before the spend (a wrong, spent or stale token): nothing was spent; otherwise the
-  // token went with the verb, and the next one (if the binary printed it) is the one held.
-  const refused = !pressed.ok && pressed.refused
-  await update($, PRESS, cur => ({
-    ...cur,
-    token: pressed.next ?? '',
-    state: pressed.next !== undefined ? ('held' as const) : ('none' as const),
-    chain: refused ? cur.chain : cur.chain + 1,
-  }))
+  // Refused before the spend (no next line: a wrong, spent or stale token, or a verb that had
+  // nothing to do, `adage on` where it is on): nothing was spent, and the token stays held for the
+  // person's next answer. Otherwise the token went with the verb, and the next one (if the binary
+  // printed it) is the one held.
+  if (pressed.ok || !pressed.refused) {
+    await update($, PRESS, cur => ({
+      ...cur,
+      token: pressed.next ?? '',
+      state: pressed.next !== undefined ? ('held' as const) : ('none' as const),
+      chain: cur.chain + 1,
+    }))
+  }
   if (pressed.ok) {
     if (key !== '') await noteAnswer($, key, what)
     const toast = doneToast(what, say, VERB_WORDS[what])

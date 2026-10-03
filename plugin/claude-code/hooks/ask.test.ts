@@ -2,7 +2,7 @@
 // §10; T-B4-01's choice, T-B4-02's `not this one`/`later` rules, T-B4-09's words). Nothing here asks.
 import { describe, expect, test } from 'claude-code/testing'
 
-import { ANSWERS, ASK_EVERY_MS, MAX_DISMISSALS, ON_ANSWERS, ON_QUESTION, answerOf, askedOf, doneToast, keptOf, nextAsk, question, record, whatOf } from './ask'
+import { ANSWERS, ASK_EVERY_MS, KEPT_ANSWERS, MAX_DISMISSALS, ON_ANSWERS, ON_QUESTION, answerOf, askedOf, doneToast, keptOf, keptQuestion, nextAsk, question, record, whatOf } from './ask'
 import { BANNED, GRAPH, GRAPH_OFFER, GRAPH_PREDICT } from './fixtures/kit'
 import { reflexesOf, waiting } from './view'
 
@@ -72,6 +72,18 @@ describe('the next ask', () => {
     expect(doneToast('pin', 'x', 'pin it')).toBe('done: pin it · x')
     expect(doneToast('stage', 'x')).toBeUndefined()
     expect(doneToast('confirm', 'x')).toBeUndefined()
-    expect(keptOf([{ command: 'adage on', say: 'adage', key: 'on', session: 's', at: 1 }, { nope: 1 }, 'x'])).toEqual([{ command: 'adage on', say: 'adage', key: 'on', session: 's', at: 1 }])
+  })
+
+  test('H2: a kept answer names the repository it was given in; one without a root is offered nowhere', () => {
+    const on = { command: 'adage on', say: 'adage', key: 'on', session: 's', root: '/w', at: 1 }
+    expect(keptOf([on, { ...on, root: '' }, { command: 'adage on', at: 1 }, { nope: 1 }, 'x'])).toEqual([on])
+  })
+
+  test('H1: a kept answer is asked again in words that name the exact command it runs', () => {
+    expect(KEPT_ANSWERS).toEqual(['run it', 'drop it'])
+    expect(keptQuestion({ command: 'adage on', say: 'adage' })).toBe('Kept from your last session: adage on. Run it now?')
+    expect(keptQuestion({ command: 'adage review approve acme/learned r', say: 'run make test after editing acme/**' })).toBe(
+      'Kept from your last session: run make test after editing acme/** (adage review approve acme/learned r). Run it now?',
+    )
   })
 })

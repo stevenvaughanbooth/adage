@@ -177,6 +177,9 @@ export async function bashCall<E extends BashCall>(e: E, next: (e: E) => Promise
       }
       return withContext(await next({ ...e, command: made.command }), [made.context])
     }
+    // Withheld (the control arm, or observe mode): the binary records `would_substitute` and leaves
+    // the call undecided, so the interpreter rewrite below still decides it: the verdict here in
+    // the control arm (recorded withheld there), the command hook in observe mode.
   }
 
   // §3.4 Rewrites checked by the engine: the engine's comparison replaces the planner's own reading

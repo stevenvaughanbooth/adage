@@ -2,7 +2,7 @@
 import type { ProcessRunInit, ProcessRunResult, ProcessSpawnRequest } from 'claude-code'
 import { describe, expect, test } from 'claude-code/testing'
 
-import { ALLOWED_VERBS, ask, cliBinary, dataDirFromRoot, guard, guardSpawn, headOf, hookBinary, isAllowed, probe, read, say } from './bridge'
+import { ALLOWED_VERBS, NOTE_TIMEOUT_MS, ask, cliBinary, dataDirFromRoot, exeSuffix, guard, guardSpawn, headOf, hookBinary, isAllowed, note, probe, read, say } from './bridge'
 import type { Run } from './bridge'
 
 type Seen = { argv: readonly string[]; init: ProcessRunInit | undefined }
@@ -217,5 +217,29 @@ describe('where the binary is', () => {
   test('the CLI verbs come from `adage` beside the hook binary, never from PATH', () => {
     expect(cliBinary('/d', '/x')).toBe('/d/bin/adage')
     expect(cliBinary(undefined, '/home/me/src/adage/plugin/claude-code')).toBeUndefined()
+  })
+
+  test('on Windows the entries the shim copies are hook.exe and adage.exe', () => {
+    expect(exeSuffix('Windows_NT')).toBe('.exe')
+    expect(exeSuffix(undefined)).toBe('')
+    expect(exeSuffix('Linux')).toBe('')
+    expect(hookBinary('C:/Users/me/.claude/plugins/data/adage-adage', '/x', exeSuffix('Windows_NT'))).toBe('C:/Users/me/.claude/plugins/data/adage-adage/bin/hook.exe')
+    expect(cliBinary('C:/Users/me/.claude/plugins/data/adage-adage', '/x', exeSuffix('Windows_NT'))).toBe('C:/Users/me/.claude/plugins/data/adage-adage/bin/adage.exe')
+    expect(hookBinary('/d', '/x', exeSuffix(undefined))).toBe('/d/bin/hook')
+  })
+})
+
+describe('note (`adage ledger note`)', () => {
+  const CLI_BIN = '/data/bin/adage'
+  test('the note on stdin, in the session directory, CLAUDECODE=1; exit 0 is recorded', async () => {
+    const { run, seen } = fake(() => exited(0, ''))
+    expect(await note(run, CLI_BIN, { session_id: 's', steps: [] }, '/w')).toBe(true)
+    expect(seen).toEqual([{ argv: [CLI_BIN, 'ledger', 'note'], init: { stdin: '{"session_id":"s","steps":[]}', timeoutMs: NOTE_TIMEOUT_MS, cwd: '/w', env: { CLAUDECODE: '1' } } }])
+  })
+
+  test('a refusal (exit 2), a run that cannot start and no binary are not recorded, and never throw', async () => {
+    expect(await note(fake(() => exited(2, '')).run, CLI_BIN, {}, '/w')).toBe(false)
+    expect(await note(fake(() => new Error('ENOENT')).run, CLI_BIN, {}, '/w')).toBe(false)
+    expect(await note(fake(() => exited(0, '')).run, undefined, {}, '/w')).toBe(false)
   })
 })

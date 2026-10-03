@@ -6,13 +6,14 @@ import type { Engine } from 'claude-code/testing'
 
 import { ASK_EVERY_MS, ON_QUESTION } from './ask'
 import { ALLOWED_VERBS, headOf } from './bridge'
-import { BAND, BANNED, CLI, CONFIRMED, GRAPH, GRAPH_OFFER, GRAPH_PREDICT, HOOK, LINE, NEXT_TOKEN, PACKS, PANE_PROPS, SESSION, STAGE, STAGE_MOVED, SURFACES, THIRD_TOKEN, TOKEN, TURN_END, start, world } from './fixtures/kit'
+import { BAND, BANNED, CLI, CONFIRMED, GRAPH, GRAPH_OFFER, GRAPH_PREDICT, HOOK, LINE, NEXT_TOKEN, PACKS, PANE_PROPS, SESSION, STAGE, STAGE_MOVED, SURFACES, T0, THIRD_TOKEN, TOKEN, TURN_END, start, world } from './fixtures/kit'
 import type { Ran, Surface, World, WorldOptions } from './fixtures/kit'
 import { FIRST_LINE } from './grant'
 
 const FEED = [LINE.learnerIdle, LINE.healthy, LINE.start, LINE.pressIssued]
 const ENABLE = 'acme/learned/test-after-acme-edit'
 const ENABLE_Q = 'Adage learned: run make test after editing acme/**. Tell the agent?'
+const KEPT_Q = 'Kept from your last session: run make test after editing acme/** (adage review approve acme/learned test-after-acme-edit). Run it now?'
 const ALLOW_Q = 'Adage can run make gen after a schema edit, instead of asking the agent to. Allow it?'
 const APPROVE = [CLI, 'review', 'approve', 'acme/learned', 'test-after-acme-edit']
 const STAGE_ARGV = [CLI, 'review', 'delegate', 'acme/learned', 'codegen-after-schema', '--level', 'e2', '--stage', '--json']
@@ -305,14 +306,14 @@ describe('T-B4-05 · the token\'s life', () => {
     await turnEnd($, w)
     expect(w.statuses).toEqual(["something else claimed this session's press; presses are off for this session · run adage doctor"])
     expect(personOnly(w)).toEqual([])
-    expect(w.store['adage.kept']).toEqual([{ command: 'adage review approve acme/learned test-after-acme-edit', say: 'run make test after editing acme/**', key: ENABLE, session: SESSION, at: expect.any(Number) }])
+    expect(w.store['adage.kept']).toEqual([{ command: 'adage review approve acme/learned test-after-acme-edit', say: 'run make test after editing acme/**', key: ENABLE, session: SESSION, root: '/w', at: expect.any(Number) }])
     expect(await band($)).toBe('◠ adage  ● healthy» kept for your next session · /adage review')
   })
 
-  test('no press held (the window was missed): the dialog still asks, the answer is kept for the next session start, and lands there', async ($, on) => {
+  test('no press held (the window was missed): the dialog still asks, the answer is kept, asked again at the next session start, and lands on that answer', async ($, on) => {
     const hook: Record<string, string> = { Press: '' }
     // The binary issued nothing, so the spool holds no `press_issued` record either.
-    const w = world(on, { feed: [LINE.learnerIdle, LINE.healthy, LINE.start], hook, ask: () => 'enable' })
+    const w = world(on, { feed: [LINE.learnerIdle, LINE.healthy, LINE.start], hook, ask: (q, options) => (options.includes('run it') ? 'run it' : 'enable') })
     await session($, w)
     await turnEnd($, w)
     expect(w.asked).toHaveLength(1)
@@ -325,10 +326,12 @@ describe('T-B4-05 · the token\'s life', () => {
     await ui.press({ key: `wait:${ENABLE}` })
     expect(await shown(ui)).toContain('adage review approve acme/learned test-after-acme-edit')
     await ui.unmount()
-    // The next start issues a press: the kept answer runs through it.
+    // The next start issues a press: the kept answer is put to the person again, and the press is
+    // that answer's (H1: never pressed from the store as it stands).
     hook.Press = JSON.stringify({ press: TOKEN })
     await $.classic.SessionStart({ source: 'resume', session_id: SESSION, cwd: '/w' } as never)
     await w.clock.settle()
+    expect(w.asked.at(-1)).toEqual({ question: KEPT_Q, options: ['run it', 'drop it'] })
     expect(personOnly(w).map(r => r.argv)).toEqual([APPROVE])
     expect(stdin(personOnly(w)[0])).toEqual({ press: TOKEN, session: SESSION })
     expect(w.toasts).toContain('on: run make test after editing acme/**')
@@ -337,19 +340,85 @@ describe('T-B4-05 · the token\'s life', () => {
     expect(await band($)).not.toContain('kept')
   })
 
-  test('a press the binary refuses records nothing and says so; a later answer is kept', async ($, on) => {
-    const w = world(on, { feed: FEED, ask: () => 'enable', refuse: true })
+  test('M1: a press the binary refuses records nothing and says so, and spends nothing: the next answer presses with the same token', async ($, on) => {
+    let refusing = true
+    const w = world(on, { feed: FEED, ask: () => 'enable', refuse: () => refusing })
     await session($, w)
     await turnEnd($, w)
     expect(personOnly(w).map(r => r.argv)).toEqual([APPROVE])
     expect(w.toasts).toEqual(['not recorded: adage review is a decision for a person: run it at a terminal'])
+    refusing = false
     const ui = await pane($)
     await ui.press({ key: 'tab-reflexes' })
     await ui.press({ key: `reflex:${ENABLE}` })
     await ui.press({ key: `verb:dismiss:${ENABLE}` })
     await w.clock.settle()
-    expect(personOnly(w)).toHaveLength(1)
+    expect(personOnly(w).map(r => r.argv[2])).toEqual(['approve', 'dismiss'])
+    expect(personOnly(w).map(r => stdin(r)?.press)).toEqual([TOKEN, TOKEN])
+    expect(w.store['adage.kept']).toBeUndefined()
+    expect(await band($)).not.toContain('kept')
+  })
+
+  test('H1: a kept answer is never pressed unasked: a dismissed dialog runs nothing and keeps it; `drop it` forgets it', async ($, on) => {
+    const kept = { command: 'adage review approve acme/learned test-after-acme-edit', say: 'run make test after editing acme/**', key: ENABLE, session: 'earlier', root: '/w', at: T0 }
+    let answer: string | undefined
+    const w = world(on, { feed: FEED, store: { 'adage.kept': [kept] }, ask: () => answer })
+    await session($, w)
+    expect(w.asked).toEqual([{ question: KEPT_Q, options: ['run it', 'drop it'] }])
+    expect(personOnly(w)).toEqual([])
+    expect(w.store['adage.kept']).toEqual([kept])
+    expect(await band($)).toBe('◠ adage  ● healthy» kept for your next session · /adage review')
+    answer = 'drop it'
+    await $.classic.SessionStart({ source: 'resume', session_id: SESSION, cwd: '/w' } as never)
+    await w.clock.settle()
+    expect(w.asked).toHaveLength(2)
+    expect(personOnly(w)).toEqual([])
+    expect(w.store['adage.kept']).toEqual([])
+  })
+
+  test('H1: an entry written into the store by something else is shown as the command it runs, and runs nothing unanswered; one no press could run is never asked', async ($, on) => {
+    const forged = { command: 'adage review delegate acme/learned codegen-after-schema --predict', at: T0, root: '/w' }
+    const off = { command: 'adage install claude-code --write', at: T0, root: '/w' }
+    const w = world(on, { feed: FEED, store: { 'adage.kept': [forged, off] }, ask: () => undefined })
+    await session($, w)
+    expect(w.asked.map(a => a.question)).toEqual(['Kept from your last session: adage review delegate acme/learned codegen-after-schema --predict. Run it now?'])
+    expect(personOnly(w)).toEqual([])
+    expect(presses(w)).toEqual([])
+    expect(w.store['adage.kept']).toEqual([{ ...forged, say: '', key: '', session: '' }])
+  })
+
+  test('H2: an answer kept in one repository is not offered in another; at the next start in its own it is asked', async ($, on) => {
+    let root = '/a'
+    const hook: Record<string, string> = { Press: '' }
+    const w = world(on, { feed: [LINE.learnerIdle, LINE.healthy, LINE.start], hook, root: () => root, ask: (q, options) => (options.includes('run it') ? 'run it' : 'enable') })
+    await session($, w)
+    await turnEnd($, w)
+    expect(w.store['adage.kept']).toEqual([expect.objectContaining({ command: 'adage review approve acme/learned test-after-acme-edit', root: '/a' })])
+    // The next session starts in another repository, with a press: nothing is asked or run there.
+    root = '/b'
+    hook.Press = JSON.stringify({ press: TOKEN })
+    await $.classic.SessionStart({ source: 'startup', session_id: SESSION, cwd: '/b' } as never)
+    await w.clock.settle()
+    expect(w.asked.map(a => a.question)).toEqual([ENABLE_Q])
+    expect(personOnly(w)).toEqual([])
     expect((w.store['adage.kept'] as unknown[]).length).toBe(1)
+    expect(await band($)).not.toContain('kept')
+    // Back in its own repository: asked, and pressed on the answer.
+    root = '/a'
+    await $.classic.SessionStart({ source: 'startup', session_id: SESSION, cwd: '/a' } as never)
+    await w.clock.settle()
+    expect(w.asked.at(-1)?.question).toBe(KEPT_Q)
+    expect(personOnly(w).map(r => r.argv)).toEqual([APPROVE])
+    expect(w.store['adage.kept']).toEqual([])
+  })
+
+  test('M1: a kept answer the binary refuses before the spend stays kept for the next start', async ($, on) => {
+    const kept = { command: 'adage on', say: 'adage', key: 'on', session: 'earlier', root: '/w', at: T0 }
+    const w = world(on, { feed: FEED, store: { 'adage.kept': [kept] }, ask: () => 'run it', refuse: true })
+    await session($, w)
+    expect(w.asked.map(a => a.question)).toEqual(['Kept from your last session: adage on. Run it now?'])
+    expect(personOnly(w).map(r => r.argv)).toEqual([[CLI, 'on']])
+    expect(w.store['adage.kept']).toEqual([kept])
   })
 })
 

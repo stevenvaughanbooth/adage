@@ -130,6 +130,12 @@ for (const [pluginDir, alias] of [
       for (const v of ["install", "config", "share", "train", "packs", "init"]) {
         expect(!verbs.includes(v), `${pluginDir}/hooks/press.ts: ${v} is never a press`)
       }
+      // A press comes from a person in this session: a dialog answer or a pane Button, never an
+      // answer read back from `$.store` (review H1: a file the agent's tools can write).
+      const gestures = readFileSync(press, "utf8").match(/const GESTURES: readonly Gesture\[\] = \[([^\]]*)\]/)?.[1]
+      expect(gestures !== undefined, `${pluginDir}/hooks/press.ts: no GESTURES literal`)
+      const g = (gestures ?? "").split(",").map((v) => v.trim()).filter(Boolean)
+      expect(g.join(",") === "ANSWER,BUTTON", `${pluginDir}/hooks/press.ts: the gestures changed (${g.join(", ")}); a press is a dialog answer or a pane Button in this session, nothing else`)
     }
     // Two settings rows and no more (ux-design §8): decisions are never behind a setting.
     const rows = Object.keys(plugin.userConfig ?? {})

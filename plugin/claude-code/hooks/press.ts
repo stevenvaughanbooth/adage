@@ -4,8 +4,9 @@
 // (`via: press`) and prints the next token as its first line, so every token is spent once.
 //
 // What makes it a person's decision is where `press()` is reached from: an answer in the engine's
-// own dialog, a Button the person pressed in a focused pane, or an answer kept from such a dialog
-// for the next session. Never a hook's own logic, a timer, a feed line or a command handler. The
+// own dialog, or a Button the person pressed in a focused pane, in this session. Never a hook's
+// own logic, a timer, a feed line, a command handler, or an answer read back from a file (an
+// answer kept from an earlier session is asked again, and pressed only on that answer). The
 // gestures below are the only values `press()` accepts, and only dialog.ts and draw/pane.tsx hold
 // them. The token travels on stdin, never on argv (which `ps` shows).
 //
@@ -69,15 +70,15 @@ export function pressArgv(cli: string, command: string): string[] | undefined {
 }
 
 /**
- * Where a press comes from. Only these three values are accepted, so a press is always traceable
- * to the person: a dialog answer, a Button in a focused pane, or a dialog answer kept for the next
- * session start (ux-design §9.12).
+ * Where a press comes from. Only these two values are accepted, so a press is always traceable to
+ * a person in this session: a dialog answer, or a Button in a focused pane. There is no gesture
+ * for an answer kept from an earlier session: `$.store` is a file the agent's tools can write, so
+ * a kept answer is put to the person again (ux-design §9.12) and the press is that answer's.
  */
-export type Gesture = { readonly from: 'answer' | 'button' | 'kept' }
+export type Gesture = { readonly from: 'answer' | 'button' }
 export const ANSWER: Gesture = Object.freeze({ from: 'answer' as const })
 export const BUTTON: Gesture = Object.freeze({ from: 'button' as const })
-export const KEPT: Gesture = Object.freeze({ from: 'kept' as const })
-const GESTURES: readonly Gesture[] = [ANSWER, BUTTON, KEPT]
+const GESTURES: readonly Gesture[] = [ANSWER, BUTTON]
 
 /**
  * The guarded runner for presses: an argv off the press list is refused before any process

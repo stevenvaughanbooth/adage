@@ -129,20 +129,27 @@ export function dataDir(pluginData: string | undefined, pluginRoot: string): str
 }
 
 /**
+ * The suffix the session-start shim gives the entries it makes: on Windows it copies `hook.exe`
+ * and `adage.exe` (a link would not run), elsewhere it links `hook` and `adage`. Windows is read
+ * from the engine's environment (`OS=Windows_NT`, which Windows sets for every process).
+ */
+export const exeSuffix = (os: string | undefined): string => (os === 'Windows_NT' ? '.exe' : '')
+
+/**
  * `<data>/bin/<BIN>`, the link the session-start shim made, from CLAUDE_PLUGIN_DATA when the
  * engine's process carries it, else derived from the plugin root. There is no PATH fallback: when
  * the shim linked `scripts/quiet` (no binary could serve) the probe reads nothing and the mod stays
  * inert, as the command hooks do.
  */
-export function hookBinary(pluginData: string | undefined, pluginRoot: string): string | undefined {
+export function hookBinary(pluginData: string | undefined, pluginRoot: string, exe = ''): string | undefined {
   const data = dataDir(pluginData, pluginRoot)
-  return data ? `${data}/bin/${BIN}` : undefined
+  return data ? `${data}/bin/${BIN}${exe}` : undefined
 }
 
 /** `<data>/bin/adage`, which the shim links beside `bin/hook`: the verbs the mod draws from. */
-export function cliBinary(pluginData: string | undefined, pluginRoot: string): string | undefined {
+export function cliBinary(pluginData: string | undefined, pluginRoot: string, exe = ''): string | undefined {
   const data = dataDir(pluginData, pluginRoot)
-  return data ? `${data}/bin/${CLI}` : undefined
+  return data ? `${data}/bin/${CLI}${exe}` : undefined
 }
 
 /**
@@ -224,5 +231,25 @@ export async function say(run: Run, cli: string | undefined, argv: readonly stri
     return ran.exitCode === 0 ? ran.stdout.trim() : undefined
   } catch {
     return undefined
+  }
+}
+
+/** How long `adage ledger note` may take: it merges under the ledger's lock, off every hook's path. */
+export const NOTE_TIMEOUT_MS = 10_000
+
+/**
+ * Hands the session's usage to `adage ledger note` (plan A4, architecture §3.9) on stdin, in the
+ * session's directory. True when the binary recorded it; a refusal (exit 2: a malformed note, or a
+ * session the spool does not know) or any failure is false, and nothing else happens (fail open).
+ */
+export async function note(run: Run, cli: string | undefined, payload: unknown, cwd: string): Promise<boolean> {
+  if (cli === undefined) return false
+  try {
+    const init: ProcessRunInit = { stdin: JSON.stringify(payload), timeoutMs: NOTE_TIMEOUT_MS }
+    if (cwd !== '') init.cwd = cwd
+    const ran = await run([cli, 'ledger', 'note'], init)
+    return ran.exitCode === 0
+  } catch {
+    return false
   }
 }

@@ -738,8 +738,10 @@ handlers directly and checking `$.state` and the recorded `$.ui.*` calls.
 - **T-B4-05 · the token's life in the mod.** The press is asked in `classic.SessionStart` after
   `next(e)` with that payload's `session_id`; a `press_issued` record the mod did not cause sets
   `presses: 'off'` and one status warning; with no press held, the dialog still asks and the
-  answer is kept in `$.store` keyed by session for the next `classic.SessionStart`, with the band
-  line `» kept for your next session · /adage review`.
+  answer is kept in `$.store` with its repository root for the next `classic.SessionStart`, with
+  the band line `» kept for your next session · /adage review`; that start (in the same root only)
+  asks again (`ask.kept`) and presses only on `run it`, never from the store as it stands; a verb
+  that refuses the press before the spend leaves the token held.
 - **T-B4-06 · the pane's verbs.** An expanded Reflexes row shows one `Button` per `review.verbs`
   entry worded per `pane.verb.*`, lowercase hotkeys, each pressing through `press()`; the terminal
   command is shown dim with `Copy`; the **waiting for you** group lists every pending ask,

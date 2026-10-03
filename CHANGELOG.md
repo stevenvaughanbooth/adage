@@ -536,7 +536,9 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   per-step usage (and the engine's own cost) on stdin, accepted only for a session the spool shows
   started in that repository, into `ledger/.harness.jsonl`; the savings estimate merges it over the
   transcript's figures under the ledger's lock, and a step Adage took in the model's place counts
-  as a model turn not spent (`counts.predicted_steps`, `harness` in `adage savings --json`).
+  as a model turn not spent (`counts.predicted_steps`, `harness` in `adage savings --json`). The
+  Claude Code mod sends the note at every turn's end, with each main-loop step's usage as the
+  engine counted it.
 - **How long the hooks take, on this machine.** Every spool record carries `duration_us`, the
   hook's own time, and `adage doctor` reports the p95 over tool batches that had nothing to say
   (a warning above 10 ms, a failure above 25 ms, "too few hooks to measure" under 20), measured at
@@ -571,8 +573,10 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   through the press: the single-use token `adage hook claude Press` issued at the session's start,
   held in engine memory, sent on stdin with the session id, its successor kept from the verb's
   first line; a `press_issued` record the mod did not cause switches presses off for the session
-  with a warning, and an answer given with no token held is kept and applied at the next start
-  (`» kept for your next session`). The model cannot press. Learning shows as it happens: `○ adage
+  with a warning; a verb that refuses the press before spending it leaves the token held; an
+  answer given with no token held is kept for the next start in the same repository
+  (`» kept for your next session`), where it is asked again (`Kept from your last session: … Run
+  it now?`) and runs only on that answer, never from the store. The model cannot press. Learning shows as it happens: `○ adage
   noticed` under the tool batch that completed a counted sequence (`ui.noticed`), the band's `1
   pattern noticed`, and under a Skill tool row what Adage did with the skill (`◈ adage loaded …`,
   `◈ adage verified 3 of 5 steps here`), with the skill's text reaching the model annotated by

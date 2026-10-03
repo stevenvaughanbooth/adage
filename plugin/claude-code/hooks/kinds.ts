@@ -19,7 +19,11 @@ export const ALLOW_PANE = 'adage-allow'
 export const MAX_ASKED = 200
 export const MAX_SKILLS = 20
 
-/** An answer kept for the next session start (ux-design §9.12): no press was held when it was given. */
+/**
+ * An answer kept for the next session start (ux-design §9.12): no press was held when it was
+ * given. It is never pressed as it stands: the next start in the same repository asks the person
+ * again (`ask.kept`), and only that answer runs it.
+ */
 export type Kept = {
   /** The terminal command the answer runs (`adage review approve T R`, `adage on`, …). */
   command: string
@@ -29,6 +33,11 @@ export type Kept = {
   key: string
   /** The session the answer was given in. */
   session: string
+  /**
+   * The repository root it was given in: `adage on` and `add <dir> --trust` act on the working
+   * directory's repository, so it is offered only at a start in that same root.
+   */
+  root: string
   at: number
 }
 

@@ -14,7 +14,8 @@ const START = { cwd: '/w', surface: null, isInteractive: false } as const
 type Opts = {
   version?: string
   plan?: unknown
-  final?: unknown
+  /** The final word, or a function of the verdict the mod sent. */
+  final?: unknown | ((verdict: Record<string, unknown>) => unknown)
   rules?: Record<string, 'allow' | 'ask' | 'deny'>
   observe?: string
 }
@@ -31,7 +32,8 @@ function world(on: On, o: Opts) {
     const p = JSON.parse(e.init?.stdin ?? '{}') as Record<string, unknown>
     // The session's Standing is asked at the start; these tests count the call's asks.
     if (p.hook_event_name === 'PreToolUse') asked.push(p)
-    const answer = p.dry_run === true ? o.plan : p.verdict !== undefined ? o.final : undefined
+    const final = () => (typeof o.final === 'function' ? (o.final as (v: Record<string, unknown>) => unknown)(p.verdict as Record<string, unknown>) : o.final)
+    const answer = p.dry_run === true ? o.plan : p.verdict !== undefined ? final() : undefined
     return out(answer === undefined ? '' : JSON.stringify(answer))
   })
   on('session.id', () => ({ value: 'sess-1' }))
@@ -111,6 +113,31 @@ test('observe mode: both phases are asked with observe, and the command is never
   expect(w.ran).toEqual([DEAD_END])
   expect(w.asked.map(p => p.observe)).toEqual([true, true])
   expect(w.notices).toEqual([])
+})
+
+// Review M2 (the mod's half): a substitution the binary withholds leaves the call undecided, so
+// the interpreter rewrite planned for the same call still happens; the binary's half (no claim on
+// a withheld substitution) is crates/adage-hook's.
+const VENV = '.venv/bin/python -m pytest tests'
+const BOTH = { plan: { substitute: SUB, rewrite: { command: VENV, kind: 'test' } } }
+const REWRITTEN = { hookSpecificOutput: { hookEventName: 'PreToolUse', updatedInput: { command: VENV }, additionalContext: 'Adage pointed this test run at the project\'s environment (.venv/bin/python).' } }
+
+test('the control arm: a withheld substitution goes on to the rewrite verdict, and its answer rewrites the call', async ($, on) => {
+  const w = world(on, { plan: BOTH, final: (v: Record<string, unknown>) => (v.substitute === undefined && v.engine === 'same' ? REWRITTEN : undefined) })
+  await $.session.start(START)
+  await $.tool.call({ tool: 'Bash', command: DEAD_END })
+  expect(w.asked.map(p => p.dry_run === true ? 'dry_run' : JSON.stringify(p.verdict))).toEqual(['dry_run', '{"engine":"same","substitute":"dead-end-pytest"}', '{"engine":"same"}'])
+  expect(w.ran).toEqual([VENV])
+  // The rewrite's line under the dialog, never the substitution's.
+  expect(w.notices.map(n => n.text)).not.toContain(CONTEXT)
+})
+
+test('observe mode: after the withheld substitution the call goes on as written with no further verdict, for the command hook to rewrite', async ($, on) => {
+  const w = world(on, { plan: BOTH, final: (v: Record<string, unknown>) => (v.substitute === undefined ? REWRITTEN : undefined), observe: '1' })
+  await $.session.start(START)
+  await $.tool.call({ tool: 'Bash', command: DEAD_END })
+  expect(w.asked.map(p => [p.dry_run === true ? 'dry_run' : JSON.stringify(p.verdict), p.observe])).toEqual([['dry_run', true], ['{"engine":"same","substitute":"dead-end-pytest"}', true]])
+  expect(w.ran).toEqual([DEAD_END])
 })
 
 test('ADAGE_MOD_OBSERVE set but empty is not observe mode', async ($, on) => {

@@ -218,8 +218,8 @@ export type WorldOptions = {
   hook?: Record<string, string>
   /** Whether `hook claude Press` issues a token (the window is open) at each start; true by default. */
   press?: boolean
-  /** A person-only verb refused by the binary (no `next` line, exit 1): a wrong or spent press. */
-  refuse?: boolean
+  /** A person-only verb refused by the binary (no `next` line, exit 1): a wrong or spent press; a function sees each press. */
+  refuse?: boolean | (() => boolean)
   /** What `--stage --json` answers (a function sees each call), and what `--confirm` answers. */
   stage?: unknown | (() => unknown)
   confirm?: unknown | (() => unknown)
@@ -234,9 +234,13 @@ export type WorldOptions = {
   copies?: boolean
   env?: Record<string, string>
   store?: Record<string, unknown>
+  /** Store keys whose write fails (the store's size cap, a disk error). */
+  storeFails?: readonly string[]
   harness?: string
   /** The session's id now (a /clear changes it); `sess-1` otherwise. */
   session?: () => string
+  /** The repository root the session works in now (`$.session.repo()`); CWD otherwise, null outside one. */
+  root?: () => string | null
   /** A run that fails (exit 1) for every head in the list. */
   failing?: readonly string[]
 }
@@ -271,6 +275,7 @@ export function world(on: On, o: WorldOptions = {}): World {
   mock.env(on, { ...(o.data === undefined && 'data' in o ? {} : { CLAUDE_PLUGIN_DATA: o.data ?? DATA }), ...o.env })
   on('store.get', ($, e) => ({ value: store[e.key] }))
   on('store.set', ($, e) => {
+    if (o.storeFails?.includes(e.key)) return { deny: 'the store is full' } as never
     store[e.key] = e.value
     return { value: undefined }
   })
@@ -289,7 +294,7 @@ export function world(on: On, o: WorldOptions = {}): World {
     }
     if (PERSON_ONLY.has(head) && !(head === 'delegate' && e.argv[2] === 'status')) {
       // A person-only verb: the binary spends the press on stdin and prints the next token first.
-      if (o.refuse === true) return { value: { exitCode: 1, stdout: '', stderr: 'error: adage review is a decision for a person: run it at a terminal\n', isStdoutTruncated: false, isStderrTruncated: false } }
+      if (call(o.refuse) === true) return { value: { exitCode: 1, stdout: '', stderr: 'error: adage review is a decision for a person: run it at a terminal\n', isStdoutTruncated: false, isStderrTruncated: false } }
       const next = chain[Math.min(spent++, chain.length - 1)] ?? THIRD_TOKEN
       const tail = e.argv.join(' ')
       const body =
@@ -347,6 +352,10 @@ export function world(on: On, o: WorldOptions = {}): World {
   on('fs.read', ($, e) => (o.status === undefined ? { deny: 'ENOENT' } : { value: `${o.status}\n` }))
   on('session.id', () => ({ value: o.session?.() ?? SESSION }))
   on('session.cwd', () => ({ value: CWD }))
+  on('session.repo', () => {
+    const root = o.root === undefined ? CWD : o.root()
+    return { value: root === null ? null : { root, remote: null, internal: false, name: null } }
+  })
   on('session.version', () => ({ value: { version: o.harness ?? '2.1.288' } }))
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('command.register', ($, e) => {

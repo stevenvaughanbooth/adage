@@ -125,17 +125,32 @@ export function doneToast(what: string, say: string, word?: string): string | un
   }
 }
 
-/** The answers kept for the next session start, as `$.store` holds them (`adage.kept`). */
+/**
+ * The answers kept for the next session start, as `$.store` holds them (`adage.kept`). One with
+ * no repository root (kept before answers named one) can be offered nowhere, and is dropped.
+ */
 export function keptOf(v: unknown): Kept[] {
   if (!Array.isArray(v)) return []
   return v
     .filter((k): k is Record<string, unknown> => k !== null && typeof k === 'object')
-    .filter(k => typeof k.command === 'string' && typeof k.at === 'number')
+    .filter(k => typeof k.command === 'string' && typeof k.at === 'number' && typeof k.root === 'string' && k.root !== '')
     .map(k => ({
       command: k.command as string,
       say: typeof k.say === 'string' ? k.say : '',
       key: typeof k.key === 'string' ? k.key : '',
       session: typeof k.session === 'string' ? k.session : '',
+      root: k.root as string,
       at: k.at as number,
     }))
+}
+
+/**
+ * `ask.kept` (ux-design §9.12, §10): a kept answer put to the person again at the next start in
+ * its repository. The question names the exact command that runs, since the store it was read
+ * from is a file the agent's tools can write: what the person agrees to is what they read.
+ */
+export const KEPT_ANSWERS = ['run it', 'drop it'] as const
+export function keptQuestion(k: Pick<Kept, 'command' | 'say'>): string {
+  const say = k.say.trim()
+  return say === '' || say === 'adage' ? `Kept from your last session: ${k.command}. Run it now?` : `Kept from your last session: ${say} (${k.command}). Run it now?`
 }

@@ -418,8 +418,9 @@ Rules: one ask per reflex per day at most; never during a turn; never inside a h
 budget; two verbs and plain words; the dialog's keys are the engine's, and Adage's own hotkeys
 are lowercase letters in a focused pane only; a dismissed ask is a recorded `dismiss`, not a
 hidden one; if no press is held (the window was missed, or the mod reloaded mid-session), the
-dialog still asks and its answer is kept for the next session start, with the band saying
-`» kept for your next session · /adage review`.
+dialog still asks and its answer is kept for the next session start in the same repository, with
+the band saying `» kept for your next session · /adage review`; that start asks again (`ask.kept`)
+and only that answer runs it, since what is kept sits in a file the agent's tools can reach.
 
 ### 4.18 The first ten minutes with no terminal
 
@@ -586,7 +587,7 @@ question, architecture §10).
 | **9.7 Narrow terminal, unasked pane** | Nothing; the pane waits; `/adage` opens it inline | |
 | **9.8 Review waiting** | `» 2 need review · /adage review`, while any ask is pending and not shown | band line 2 |
 | **9.9 Recovery required** (an interrupted E2 action) | `⚠ adage: an action was interrupted; inspect the worktree, then run adage-exec recover --id … --acknowledge in a terminal` (recovery is the one act that stays at a terminal: it needs a person looking at the worktree) | status until acknowledged |
-| **9.12 No press token** (the window was missed, or the mod reloaded mid-session) | The dialog still asks; the answer is kept and applied at the next session start, and the band says `» kept for your next session · /adage review`; the pane shows the terminal command for anyone who wants it now | dialog, band |
+| **9.12 No press token** (the window was missed, or the mod reloaded mid-session) | The dialog still asks; the answer is kept for the next session start in the same repository, and the band says `» kept for your next session · /adage review`; that start asks again (`ask.kept`), naming the exact command, and runs it only on `run it` (a dismissed dialog keeps it for the next start, `drop it` forgets it); the pane shows the terminal command for anyone who wants it now | dialog, band |
 | **9.10 Desktop without `$.process`** | §4.12 | pane empty state |
 | **9.11 Off, learning off, paused, outside a repository** | §4.13–4.16 | band, card |
 
@@ -626,6 +627,7 @@ lines of about 40 columns.
 | `band.lapsed` | `» {n} grant{s} lapsed · /adage health` | bodyColumns |
 | `band.review` | `» {n} need review · /adage review` | bodyColumns |
 | `band.kept` | `» kept for your next session · /adage review` | bodyColumns |
+| `ask.kept` | question `Kept from your last session: {summary} ({command}). Run it now?` (`{summary} (` and `)` left out for `adage on`) · answers `run it` / `drop it` | the dialog's |
 | `ask.enable` | question `Adage learned: {summary}. Tell the agent?` · answers `enable` / `not this one` / `why` | the dialog's |
 | `ask.enable.done` | toast `on: {summary}` | 1 × 40 |
 | `ask.allow` | question `Adage can {summary}, instead of asking the agent to. Allow it?` · answers `see what it would do` / `not now` | the dialog's |
