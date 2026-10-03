@@ -99,7 +99,7 @@ fn subagent_text(
         index,
         repo: key.to_string(),
         root,
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: adage_runtime::Policy { observe, ..Default::default() },

@@ -291,7 +291,7 @@ fn local_effects(pack: &Pack) -> BTreeMap<String, adage_core::Effect> {
                 .map(|s| match (&s.run, &s.script) {
                     (Some(_), Some(_)) => adage_core::Effect::Environment,
                     (Some(run), None) => {
-                        let c = io::classify(&run.argv.join(" "), &table);
+                        let c = io::classify(&run.argv.join(" "), table);
                         if rank(c) > rank(s.effect) {
                             c
                         } else {

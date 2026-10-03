@@ -9,7 +9,7 @@ the machine it runs on.
 
 | Suite | Where | Run | Update expected output | CI |
 | --- | --- | --- | --- | --- |
-| Rust unit | `#[cfg(test)]` in the module (large ones in `src/tests.rs`) | `cargo test -p <crate>` | — | `ci.yml` (affected packages) |
+| Rust unit | `#[cfg(test)]` in the module (large ones in `src/tests/`) | `cargo test -p <crate>` | — | `ci.yml` (affected packages) |
 | Rust integration | `crates/<crate>/tests/*.rs` | `cargo test -p <crate> --test <name>` | — | `ci.yml` (affected packages) |
 | Golden files | `crates/<crate>/tests/golden/*.txt` | with the integration test | `ADAGE_BLESS=1` | `ci.yml` |
 | Snapshots | `crates/<crate>/src/**/snapshots/*.snap` (insta) | with the unit test | `cargo insta review`, or `INSTA_UPDATE=always` | `ci.yml` |
@@ -22,6 +22,7 @@ the machine it runs on.
 | Web end to end | `web/{map,site}/e2e/*.spec.ts` (Playwright, axe) | `pnpm test:e2e` | fixtures: `e2e/fixtures/make.mjs`, `e2e/fixtures/heldout/make.py` | `ci.yml` |
 | Node scripts | `web/site/scripts/*.test.mjs`, `npm/test/*.test.mjs`, `plugin/opencode/test/*.test.mjs` (run from `adage-cli`'s tests) | `pnpm test:api`, `pnpm test:evidence`, `node …` | — | `ci.yml` |
 | Shell | `plugin/test/session-start.test.sh` | run it | — | `ci.yml` |
+| Claude Code mod | `plugin/claude-code/hooks/**/*.test.ts`, one beside each module, over `hooks/fixtures/kit.ts` | `claude plugin test plugin/claude-code` (339 tests) | — | `ci.yml`; `node scripts/check-plugin.mjs` fails a module with no test file or a test that names no test-plan id |
 | Live evals (paid) | `demo/`, `evals/live/`, `evals/reflex-proof/harness/` runners | see each README | — | never: run by hand, results reported in the pull request |
 
 ## Layout conventions
@@ -64,7 +65,7 @@ Each component is tested through its own crate, without the others:
 | Canonical model | `adage-trace` | unit tests |
 | Ingestion | `adage-ingest` | decoders fed bytes from memory (`source.rs`), the format registry against each format's reader (`format.rs`) |
 | Learning engine | `adage-graph`, `adage-learn` | sessions built in memory (`adage-graph/tests/common`), end to end over transcripts (`adage-learn/tests/end_to_end.rs`) |
-| Live interaction | `adage-runtime`, `adage-hook` | `decide()` as a function of index, state, event, policy and checkout (`adage-runtime/src/tests.rs`) |
+| Live interaction | `adage-runtime`, `adage-hook` | `decide()` as a function of index, state, event, policy and checkout (`adage-runtime/src/tests/`) |
 | Application | `adage-app` | decisions against a temporary `ADAGE_HOME` (`review.rs` tests), without the binary |
 | Harnesses | `adage-hook::harness`, `adage-sim` | each adapter's translation; one scenario rendered in every harness's formats |
 | Front ends | `adage-cli` | the binary end to end (`tests/`, through `tests/common/mod.rs`: one environment scrub, a hermetic `Command`, a temporary world), frames as snapshots (`ui/tests.rs`) |
@@ -77,4 +78,5 @@ Each component is tested through its own crate, without the others:
   `tests/support/` (traces and datasets, read through `adage-ingest` and
   `adage_graph::canonical` as the learner reads them).
 - Several archived eval runs double as Python test fixtures in place
-  (`evals/reflex-proof/harness/results/<run>/`); they belong under a `fixtures/` directory.
+  (`evals/reflex-proof/harness/results/<run>/`). They stay committed where they are, rather
+  than copied into a `fixtures/` directory, and pruning one breaks its tests.

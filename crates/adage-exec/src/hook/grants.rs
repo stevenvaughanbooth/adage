@@ -23,7 +23,7 @@ pub(super) fn session_texts(
     let (Ok(pol), Ok(store)) = (policy::load(&paths.root), Store::load(&approvals::path(&paths.root))) else {
         return SessionTexts::default();
     };
-    let planned = route::plan_grants(repo_key, root, index, &paths.tracks(), &store, &CommandTable::load());
+    let planned = route::plan_grants(repo_key, root, index, &paths.tracks(), &store, CommandTable::load());
     // A grant that could run under this policy but no longer matches: said, never silent.
     let lapsed: Vec<route::Lapse> =
         route::lapses(&planned, &store).into_iter().filter(|l| l.level <= pol.max_level).collect();
@@ -115,7 +115,7 @@ pub fn predict_grants(
         if store.find(&approvals::ApprovalKey::for_request(&req, repo_key)).is_none() {
             continue;
         }
-        if pol.permits(&req, route::predict_classified(&req, &table)).is_err() {
+        if pol.permits(&req, route::predict_classified(&req, table)).is_err() {
             continue;
         }
         out.push((ir.track.clone(), ir.route.id.clone()));
@@ -146,7 +146,7 @@ pub(super) fn verifications<'a>(
     store: &'a Store,
 ) -> Vec<(&'a IndexedRoute, String, &'a Approval)> {
     current_verifications(
-        &route::plan_grants(repo_key, root, index, &paths.tracks(), store, &CommandTable::load()),
+        &route::plan_grants(repo_key, root, index, &paths.tracks(), store, CommandTable::load()),
         store,
     )
 }

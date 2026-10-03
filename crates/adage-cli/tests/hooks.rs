@@ -54,8 +54,8 @@ fn route(id: &str, trigger: Trigger, step: Step, slots: Vec<Slot>, effect: Effec
 
 fn track() -> Track {
     let table = CommandTable::load();
-    let lookup_key = adage_runtime::command_key("./scripts/wi-lookup W-1 --json", &table);
-    let pytest_key = adage_runtime::command_key("python3 -m pytest tests", &table);
+    let lookup_key = adage_runtime::command_key("./scripts/wi-lookup W-1 --json", table);
+    let pytest_key = adage_runtime::command_key("python3 -m pytest tests", table);
     Track {
         manifest: Manifest {
             track: TrackInfo {

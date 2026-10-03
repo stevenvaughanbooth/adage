@@ -784,8 +784,8 @@ mod tests {
     fn the_acme_skill_compiles_to_the_lab_s_routes() {
         let table = CommandTable::load();
         let root = acme_root();
-        let g = procedure::parse(ACME.as_bytes(), "SKILL.md", "x", &table);
-        let c = compile(g, root.path(), &table);
+        let g = procedure::parse(ACME.as_bytes(), "SKILL.md", "x", table);
+        let c = compile(g, root.path(), table);
         let ids: Vec<&str> = c.candidates.iter().map(|c| c.route.id.as_str()).collect();
         assert_eq!(
             ids,
@@ -823,8 +823,8 @@ mod tests {
     fn a_missing_script_is_a_gap_not_a_route() {
         let table = CommandTable::load();
         let root = tempfile::tempdir().unwrap();
-        let g = procedure::parse(ACME.as_bytes(), "SKILL.md", "x", &table);
-        let c = compile(g, root.path(), &table);
+        let g = procedure::parse(ACME.as_bytes(), "SKILL.md", "x", table);
+        let c = compile(g, root.path(), table);
         assert!(c.routes_of("s1").is_empty());
         assert!(c.text["s1"][0].contains("which is not in the repository"), "{:?}", c.text["s1"]);
     }

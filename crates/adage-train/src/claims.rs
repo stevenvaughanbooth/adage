@@ -603,7 +603,7 @@ mod tests {
     use super::*;
 
     fn kinds(md: &str) -> Vec<(String, Option<String>)> {
-        from_markdown(md, "SKILL.md", &CommandTable::load())
+        from_markdown(md, "SKILL.md", CommandTable::load())
             .into_iter()
             .map(|c| (c.kind.describe(), c.r#unsafe.map(|_| "unsafe".to_string())))
             .collect()

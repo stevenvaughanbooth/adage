@@ -121,7 +121,7 @@ fn prompt_values_bind_the_first_accepted_token() {
     let dir = tempfile::tempdir().unwrap();
     let table = CommandTable::load();
     let index = Index::compile(&[track(routes())]);
-    let c = ctx(&index, dir.path(), &table);
+    let c = ctx(&index, dir.path(), table);
     let mut st = SessionState::default();
     let d = decide(&c, &mut st, &Event::Prompt { text: "Please close out 12 things, starting with #482.".into() });
     assert_eq!(d.directives.len(), 1, "{d:?}");
@@ -145,7 +145,7 @@ fn prompt_values_bind_the_first_accepted_token() {
     }
     adage_tracks::io::validate(&track(rs.clone())).unwrap();
     let index = Index::compile(&[track(rs)]);
-    let c = ctx(&index, dir.path(), &table);
+    let c = ctx(&index, dir.path(), table);
     let mut st = SessionState::default();
     let d = decide(&c, &mut st, &Event::Prompt { text: "must return 120, see #482".into() });
     assert!(d.directives[0].text.contains("wi-lookup 482\n"), "{d:?}");
@@ -158,7 +158,7 @@ fn output_values_and_edit_segments_bind() {
     let dir = tempfile::tempdir().unwrap();
     let table = CommandTable::load();
     let index = Index::compile(&[track(routes())]);
-    let c = ctx(&index, dir.path(), &table);
+    let c = ctx(&index, dir.path(), table);
     let mut st = SessionState::default();
     let out = r#"{"id": "482", "owner": {"id": 731, "name": "x"}}"#;
     let d = decide(&c, &mut st, &Event::Batch { calls: vec![bash("./scripts/wi-lookup 482", out)] });
@@ -199,7 +199,7 @@ fn the_fast_path_skips_only_prompts_no_type_accepts() {
     let t = index.triggers("acme");
     assert_eq!(t.prompt_types.len(), 1);
     assert!(t.prompt_spans.is_empty(), "a typed slot does not need the span kind");
-    let c = ctx(&index, dir.path(), &table);
+    let c = ctx(&index, dir.path(), table);
     let prompted = || Some(SessionState { prompts: 1, ..Default::default() });
     for (text, skip) in [("look at #482", false), ("look at ops/482", false), ("look at W-2042", true), ("hi", true)] {
         assert_eq!(fast::skip(&t, &Event::Prompt { text: text.into() }, "/r", prompted), skip, "{text}");

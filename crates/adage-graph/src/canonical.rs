@@ -33,8 +33,7 @@ pub fn effect_of(n: &Normalized) -> Effect {
 }
 
 fn table() -> &'static CommandTable {
-    static T: std::sync::OnceLock<CommandTable> = std::sync::OnceLock::new();
-    T.get_or_init(CommandTable::load)
+    CommandTable::load()
 }
 
 fn push(n: &Normalized, step: &StepObs, out: &mut Vec<(input::Step, input::StepMeta)>) {
@@ -166,7 +165,7 @@ pub fn events(a: &input::Annotated, s: &Session) -> crate::events::EventSession 
         effects: Some(a.meta.iter().map(|m| effect(&m.effect)).collect()),
         influence: influence(s),
     };
-    crate::events::from_input(&a.session, &meta, &adage_core::CommandTable::load())
+    crate::events::from_input(&a.session, &meta, adage_core::CommandTable::load())
 }
 
 /// The HeadSub identities a directive named, and the directive as the graph engine reads it.

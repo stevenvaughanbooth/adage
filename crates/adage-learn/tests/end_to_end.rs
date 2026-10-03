@@ -156,7 +156,7 @@ fn steered_traces_are_exposed_only_to_what_their_directives_named() {
         files.push(t.write(d.path()));
     }
     let p = files.last().unwrap();
-    let s = adage_learn::import::parse_transcript(p, &adage_core::CommandTable::load(), None).unwrap();
+    let s = adage_learn::import::parse_transcript(p, adage_core::CommandTable::load(), None).unwrap();
     assert!(s.steered && s.directed.contains("lookup-work-item"));
     assert!(!s.steps.is_empty(), "steps are kept; exposure is per command named");
     assert_eq!(s.influence[0].commands, ["python3 scripts/wi-lookup W-2099"]);
@@ -372,16 +372,17 @@ fn the_dry_run_plans_exactly_what_learn_writes_and_writes_nothing() {
     let home = d.path().join("home");
     let table = adage_core::CommandTable::load();
     let sessions: Vec<_> =
-        files.iter().filter_map(|p| adage_learn::read_session(p, &table, Some("acme-billing"))).collect();
+        files.iter().filter_map(|p| adage_learn::read_session(p, table, Some("acme-billing"))).collect();
     assert_eq!(sessions[0].harness, "claude-code");
     assert_eq!(sessions[0].prompt_count(), 1);
-    let (rep, planned) = adage_learn::plan(sessions, None, &home.join("tracks"), &LearnConfig::demo()).unwrap();
+    let store = adage_learn::store::Files::new(&home.join("tracks"), &home.join("index.json"));
+    let (rep, planned) = adage_learn::plan(sessions, None, &store, &LearnConfig::demo()).unwrap();
     assert_eq!(rep.sessions_used, 6);
     assert!(!home.exists(), "a plan writes nothing");
     assert_eq!(planned.len(), 1, "one track per repository: <repo>/learned");
     run(d.path(), &files, &home);
     for p in &planned {
-        assert_eq!(io::read(&p.dir).unwrap(), p.track, "learn wrote what the plan said");
+        assert_eq!(io::read(&home.join("tracks").join(&p.name)).unwrap(), p.track, "learn wrote what the plan said");
         assert_eq!(p.track.manifest.gauge.harness, vec!["claude-code".to_string()]);
     }
 }

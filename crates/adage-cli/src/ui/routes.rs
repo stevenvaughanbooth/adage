@@ -425,18 +425,18 @@ pub fn load(paths: &Paths, root: Option<&Path>) -> Result<Routes> {
             ) {
                 if policy.auto_approve {
                     if let Ok(plan) =
-                        adage_exec::route::plan(ir, &index, root, &paths.tracks(), adage_exec::Level::E1, None, &table)
+                        adage_exec::route::plan(ir, &index, root, &paths.tracks(), adage_exec::Level::E1, None, table)
                     {
                         let hazards = adage_exec::git::hazards(root);
                         let context = adage_exec::approvals::AutoContext {
-                            table: &table,
+                            table,
                             git_hazards: &hazards,
                             sandbox_enforced: adage_exec::sandbox::detect().available(),
                             policy_auto: true,
                         };
                         if adage_exec::approvals::auto_eligible(&plan.request, &context).is_ok()
                             && policy
-                                .permits(&plan.request, adage_exec::classify::effect(&plan.request.argv, &table))
+                                .permits(&plan.request, adage_exec::classify::effect(&plan.request.argv, table))
                                 .is_ok()
                         {
                             view.mode = if enabled { "Automatic" } else { "Suggest" }.into();
@@ -472,14 +472,14 @@ pub fn load(paths: &Paths, root: Option<&Path>) -> Result<Routes> {
                 &paths.tracks(),
                 grant.key.level,
                 grant.terms.as_ref(),
-                &table,
+                table,
             ) {
                 Ok(plan) => {
                     let key = adage_exec::approvals::ApprovalKey::for_request(&plan.request, &ir.repo);
                     if key != grant.key {
                         continue;
                     }
-                    let classified = adage_exec::classify::effect(&plan.request.argv, &table);
+                    let classified = adage_exec::classify::effect(&plan.request.argv, table);
                     match &policy {
                         Ok(p) => match p.permits(&plan.request, classified) {
                             Ok(()) => {
@@ -670,7 +670,7 @@ mod tests {
             &paths.tracks(),
             adage_exec::request::Level::E1,
             None,
-            &adage_core::CommandTable::load(),
+            adage_core::CommandTable::load(),
         )
         .unwrap();
         let mut store = Store::default();

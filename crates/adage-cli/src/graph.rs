@@ -50,7 +50,7 @@ fn dump_learned(args: &[String], paths: &Paths) -> Result<()> {
     let table = CommandTable::load();
     let mut sessions: Vec<adage_learn::import::Session> = files
         .iter()
-        .filter_map(|p| adage_learn::read_session(p, &table, None))
+        .filter_map(|p| adage_learn::read_session(p, table, None))
         .filter(|s| s.repo == repo && !s.steps.is_empty())
         .collect();
     sessions.sort_by(|a, b| a.id.cmp(&b.id));

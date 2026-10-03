@@ -13,13 +13,13 @@ fn the_finish_line_is_predicted_once_per_arming_and_the_stop_gate_stays_the_fall
     let edit = || Event::Batch { calls: vec![edit_call(&dir, "schema/invoice.json")] };
     let stop = Event::Stop { stop_hook_active: false };
     // Without the grant: nothing at the turn's end, and the Stop gate asks.
-    let ctx = predict_ctx(&dir, &index, &table, &["lookup"]);
+    let ctx = predict_ctx(&dir, &index, table, &["lookup"]);
     let mut st = SessionState { arm: Some(Arm::Treated), ..Default::default() };
     decide(&ctx, &mut st, &edit());
     assert!(decide(&ctx, &mut st, &step("t", 1, true)).would_predict.is_none());
     assert!(decide(&ctx, &mut st, &stop).continue_reason.is_some());
     // With it: Adage's call meets the obligation and the Stop gate asks nothing.
-    let ctx = predict_ctx(&dir, &index, &table, &["gen"]);
+    let ctx = predict_ctx(&dir, &index, table, &["gen"]);
     let mut st = SessionState { arm: Some(Arm::Treated), ..Default::default() };
     decide(&ctx, &mut st, &edit());
     let p = decide(&ctx, &mut st, &step("t", 1, true)).predicted.expect("the finish line");

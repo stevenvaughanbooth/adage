@@ -52,7 +52,7 @@ fn main() {
         let mut p = Priors::default();
         let mut sessions = Vec::new();
         for f in files {
-            let Some(s) = adage_learn::read_session(f, &table, Some(repo)) else { continue };
+            let Some(s) = adage_learn::read_session(f, table, Some(repo)) else { continue };
             if s.steered {
                 continue;
             }

@@ -93,13 +93,13 @@ mod tests {
     #[test]
     fn scripts_and_unknowns_are_environment() {
         let t = CommandTable::load();
-        assert_eq!(effect(&v("cat README.md"), &t), Effect::Observe);
-        assert_eq!(effect(&v("git log -1"), &t), Effect::Observe);
-        assert_eq!(effect(&v("git push"), &t), Effect::Publish);
-        assert_eq!(effect(&v("./scripts/wi-lookup W-1 --json"), &t), Effect::Environment);
-        assert_eq!(effect(&v("python3 scripts/show-config.py"), &t), Effect::Environment);
-        assert_eq!(effect(&v("wi-lookup W-1"), &t), Effect::Environment);
-        assert_eq!(effect(&["sed".into(), "-i".into(), "s/a/b/".into(), "f".into()], &t), Effect::Author);
+        assert_eq!(effect(&v("cat README.md"), t), Effect::Observe);
+        assert_eq!(effect(&v("git log -1"), t), Effect::Observe);
+        assert_eq!(effect(&v("git push"), t), Effect::Publish);
+        assert_eq!(effect(&v("./scripts/wi-lookup W-1 --json"), t), Effect::Environment);
+        assert_eq!(effect(&v("python3 scripts/show-config.py"), t), Effect::Environment);
+        assert_eq!(effect(&v("wi-lookup W-1"), t), Effect::Environment);
+        assert_eq!(effect(&["sed".into(), "-i".into(), "s/a/b/".into(), "f".into()], t), Effect::Author);
     }
 
     #[test]
@@ -113,7 +113,7 @@ mod tests {
             "jq .x data.json",
             "wc -l {f}",
         ] {
-            assert!(inert(&v(ok), &t, &[]).is_ok(), "{ok}");
+            assert!(inert(&v(ok), t, &[]).is_ok(), "{ok}");
         }
         for bad in [
             "make test",
@@ -132,9 +132,9 @@ mod tests {
             "git log --output=x",
             "find . -name x",
         ] {
-            assert!(inert(&v(bad), &t, &[]).is_err(), "{bad}");
+            assert!(inert(&v(bad), t, &[]).is_err(), "{bad}");
         }
-        assert!(inert(&v("git status"), &t, &["core.fsmonitor".into()]).is_err());
-        assert!(inert(&v("cat x"), &t, &["core.fsmonitor".into()]).is_ok(), "hazards only affect git");
+        assert!(inert(&v("git status"), t, &["core.fsmonitor".into()]).is_err());
+        assert!(inert(&v("cat x"), t, &["core.fsmonitor".into()]).is_ok(), "hazards only affect git");
     }
 }

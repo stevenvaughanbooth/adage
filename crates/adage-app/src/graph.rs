@@ -207,7 +207,7 @@ pub fn build(paths: &Paths, here: Option<&Path>, max_events: usize, warn: &mut d
         for r in &t.routes {
             let indexed =
                 index.routes.iter().any(|x| &x.repo == repo && x.route.id == r.id && x.track == t.manifest.track.name);
-            for (k, how) in route_keys(r, &table) {
+            for (k, how) in route_keys(r, table) {
                 railed.entry(k).or_insert((r.id.clone(), how));
             }
             let arm_stats: serde_json::Map<String, Value> = ["treated", "control"]

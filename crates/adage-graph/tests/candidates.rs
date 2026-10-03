@@ -101,7 +101,7 @@ fn trace(id: &str, day: &str, cmds: &[&str]) -> (Annotated, EventSession) {
         turns: Some(a.meta.iter().map(|m| m.turn).collect()),
         ..Default::default()
     };
-    let e = events::from_input(&a.session, &m, &CommandTable::load());
+    let e = events::from_input(&a.session, &m, CommandTable::load());
     (a, e)
 }
 

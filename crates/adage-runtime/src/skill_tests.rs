@@ -134,7 +134,7 @@ fn the_skill_template_names_the_skill_and_no_command() {
 fn a_skill_directive_is_followed_by_using_that_skill() {
     let dir = tempfile::tempdir().unwrap();
     let (index, table) = (index(vec![after_edit()]), CommandTable::load());
-    let ctx = ctx(&dir, &index, &table);
+    let ctx = ctx(&dir, &index, table);
     let mut st = SessionState { arm: Some(Arm::Treated), ..Default::default() };
     let d = decide(&ctx, &mut st, &Event::Batch { calls: vec![edit(&dir, "CHANGELOG.md")] });
     assert_eq!(d.directives.len(), 1, "{d:?}");
@@ -180,7 +180,7 @@ fn a_skill_follows_a_prompt_span_and_a_context() {
         skill(SKILL),
     );
     let index = index(vec![on_ticket, ctx_skill]);
-    let ctx = ctx(&dir, &index, &table);
+    let ctx = ctx(&dir, &index, table);
     let mut st = SessionState::default();
     let d = decide(&ctx, &mut st, &Event::Prompt { text: "tidy the readme".into() });
     assert!(d.would_have.is_empty(), "no ticket, no skill: {d:?}");
@@ -210,7 +210,7 @@ fn a_skill_step_is_invoked_only_as_the_policy_allows() {
     );
     let index = index(vec![with_args]);
     let granted = |invoke: &[&str]| {
-        let mut c = ctx(&dir, &index, &table);
+        let mut c = ctx(&dir, &index, table);
         c.policy.predict_grants = vec![("acme/t".into(), "release".into())];
         c.policy.invoke_skills = invoke.iter().map(|s| s.to_string()).collect();
         c

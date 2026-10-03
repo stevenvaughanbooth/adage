@@ -753,7 +753,7 @@ fn routine_candidate_stays_in_execution_review_after_evidence_approval() {
         &w.paths().tracks(),
         adage_exec::Level::E2,
         Some(&terms),
-        &adage_core::CommandTable::load(),
+        adage_core::CommandTable::load(),
     )
     .unwrap();
     let mut store = adage_exec::approvals::Store::default();

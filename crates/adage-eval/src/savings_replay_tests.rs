@@ -194,7 +194,7 @@ fn u11_post_hoc_saves_the_friction_between_the_dead_end_and_the_working_run() {
     let f = fixture();
     let (ix, table) = (u11_index(), CommandTable::load());
     let m = meta(&f, "s1", "t1", &dead_end_session(false), true);
-    let r = session(&runtime(&ix, &f.root, &table), &m, Mode::PostHoc, SatRule::Goal).unwrap();
+    let r = session(&runtime(&ix, &f.root, table), &m, Mode::PostHoc, SatRule::Goal).unwrap();
     assert_eq!(r.scored.len(), 1, "{:#?}", r.scored);
     let s = &r.scored[0];
     assert_eq!((s.given.t, s.given.pre, s.t_star), (1, false, Some(5)));
@@ -206,7 +206,7 @@ fn u11_post_hoc_saves_the_friction_between_the_dead_end_and_the_working_run() {
     assert!(r.dead_end);
 
     // The strict Sat (interpreter must be d's): the trace never used `.venv`, so nothing counts.
-    let r = session(&runtime(&ix, &f.root, &table), &m, Mode::PostHoc, SatRule::Strict).unwrap();
+    let r = session(&runtime(&ix, &f.root, table), &m, Mode::PostHoc, SatRule::Strict).unwrap();
     assert!(!r.scored[0].useful && !r.scored[0].harmful);
     assert_eq!(r.net, 0.0);
 }
@@ -216,7 +216,7 @@ fn pre_emptive_also_saves_the_intercepted_call_and_sees_piped_dead_ends() {
     let f = fixture();
     let (ix, table) = (u11_index(), CommandTable::load());
     let m = meta(&f, "s1", "t1", &dead_end_session(false), true);
-    let r = session(&runtime(&ix, &f.root, &table), &m, Mode::PreEmptive, SatRule::Goal).unwrap();
+    let r = session(&runtime(&ix, &f.root, table), &m, Mode::PreEmptive, SatRule::Goal).unwrap();
     assert_eq!(r.scored.len(), 1, "the post-hoc failure does not fire the route again");
     assert_eq!((r.scored[0].given.t, r.scored[0].given.pre), (1, true));
     assert_eq!(r.net, 3.0, "2 friction calls + the intercepted dead end");
@@ -224,9 +224,9 @@ fn pre_emptive_also_saves_the_intercepted_call_and_sees_piped_dead_ends() {
     // Piped: exit 0. The runtime now reads a piped run's output for the dead end's signature
     // (launch bug 2), so post-hoc delivery sees it too; PreToolUse still saves the intercepted call.
     let m = meta(&f, "s2", "t1", &dead_end_session(true), true);
-    let post = session(&runtime(&ix, &f.root, &table), &m, Mode::PostHoc, SatRule::Goal).unwrap();
+    let post = session(&runtime(&ix, &f.root, table), &m, Mode::PostHoc, SatRule::Goal).unwrap();
     assert_eq!((post.scored.len(), post.net), (1, 2.0), "{:#?}", post.scored);
-    let pre = session(&runtime(&ix, &f.root, &table), &m, Mode::PreEmptive, SatRule::Goal).unwrap();
+    let pre = session(&runtime(&ix, &f.root, table), &m, Mode::PreEmptive, SatRule::Goal).unwrap();
     assert_eq!(pre.net, 3.0);
 }
 
@@ -239,12 +239,12 @@ fn a_different_runner_that_ran_the_tests_makes_the_directive_harmful() {
         bash("tox -e py", "py: commands[0]> pytest\n3 passed in 0.2s\n  py: OK", false),
     ];
     let m = meta(&f, "h", "t1", &calls, true);
-    let r = session(&runtime(&ix, &f.root, &table), &m, Mode::PostHoc, SatRule::Goal).unwrap();
+    let r = session(&runtime(&ix, &f.root, table), &m, Mode::PostHoc, SatRule::Goal).unwrap();
     assert!(!r.scored[0].useful && r.scored[0].harmful);
     assert_eq!(r.net, 0.0);
     // The same trace, failed: not harmful (nothing shows the other runner was right).
     let m = meta(&f, "h2", "t1", &calls, false);
-    let r = session(&runtime(&ix, &f.root, &table), &m, Mode::PostHoc, SatRule::Goal).unwrap();
+    let r = session(&runtime(&ix, &f.root, table), &m, Mode::PostHoc, SatRule::Goal).unwrap();
     assert!(!r.scored[0].harmful);
 }
 
@@ -340,7 +340,7 @@ fn an_area_directive_is_satisfied_by_a_run_of_that_package_only() {
 fn the_summary_is_a_task_clustered_mean_with_rates_and_gates() {
     let f = fixture();
     let (ix, table) = (u11_index(), CommandTable::load());
-    let p = runtime(&ix, &f.root, &table);
+    let p = runtime(&ix, &f.root, table);
     let quiet = vec![bash(".venv/bin/python -m pytest tests", RAN, false)];
     let rows = vec![
         session(&p, &meta(&f, "a", "t1", &dead_end_session(false), true), Mode::PostHoc, SatRule::Goal).unwrap(),

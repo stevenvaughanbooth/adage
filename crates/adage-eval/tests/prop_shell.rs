@@ -39,7 +39,7 @@ fn check(cmd: String) -> Result<(), TestCaseError> {
         .stack_size(STACK)
         .spawn(move || {
             let t = Instant::now();
-            let out = normalize_shell(&cmd, "/repo", &CommandTable::load());
+            let out = normalize_shell(&cmd, "/repo", CommandTable::load());
             (t.elapsed(), out.len(), cmd.len())
         })
         .unwrap();

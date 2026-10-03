@@ -310,7 +310,7 @@ fn the_project_environment_answers_a_runner_that_ran_outside_it() {
     }
     assert!(r.advisories().iter().all(|a| a.text().is_some()));
     // The key keeps the interpreter's path, so the learner's id for this working command matches.
-    let key = adage_instincts::safety::command_key(".venv/bin/python -m pytest", &adage_core::CommandTable::load());
+    let key = adage_instincts::safety::command_key(".venv/bin/python -m pytest", adage_core::CommandTable::load());
     assert_eq!(key.as_deref(), Some("exec .venv/bin/python -m pytest"));
 
     // The uv group that has pytest is named when the default groups lack it.
@@ -358,7 +358,7 @@ fn a_failure_route_without_a_signature_is_refused() {
     let r = bound("acme");
     let mut x = route(&r, "dead-end-d41b1e").clone();
     x.trigger = Trigger::AfterFailure { command: "exec python3 -m unittest".into(), signature: String::new() };
-    let err = adage_instincts::bind::check_route(&x, adage_instincts::catalogue(), &adage_core::CommandTable::load())
+    let err = adage_instincts::bind::check_route(&x, adage_instincts::catalogue(), adage_core::CommandTable::load())
         .unwrap_err();
     assert!(err.contains("without a signature"), "{err}");
 }
@@ -729,7 +729,7 @@ fn disabled_instincts_detect_nothing() {
     let facts = adage_instincts::extract(&fixture("acme"));
     let table = adage_core::CommandTable::load();
     let cat = adage_instincts::catalogue();
-    let ctx = adage_instincts::detect::Ctx { facts: &facts, table: &table, cat };
+    let ctx = adage_instincts::detect::Ctx { facts: &facts, table, cat };
     for i in cat.instincts.iter().filter(|i| !i.enabled) {
         let d = adage_instincts::detect::detect(&i.id, &ctx);
         assert!(d.routes.is_empty() && d.advisories.is_empty() && d.skipped.is_empty(), "{}", i.id);

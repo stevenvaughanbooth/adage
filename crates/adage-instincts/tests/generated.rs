@@ -78,7 +78,7 @@ fn generated_smoke_suite_binds_no_decoy_and_no_violation() {
                 "dead_end" => {
                     dead_ends += 1;
                     let avoided = c["avoided"][0].as_str().unwrap();
-                    let key = adage_instincts::safety::command_key(avoided, &table);
+                    let key = adage_instincts::safety::command_key(avoided, table);
                     let sigs: Vec<&str> = r
                         .routes
                         .iter()

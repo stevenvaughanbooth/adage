@@ -350,7 +350,7 @@ pub fn evaluate(p: &Prepared, opts: &Options) -> Result<Report> {
                 index,
                 repo: repo_key.to_string(),
                 root: &sandbox.root,
-                table: &table,
+                table,
                 embed: None,
                 params: params.runtime,
                 policy: Default::default(),
@@ -361,7 +361,7 @@ pub fn evaluate(p: &Prepared, opts: &Options) -> Result<Report> {
         fast.skipped += rep.fast.skipped;
         fast.mismatches.extend(rep.fast.mismatches.iter().cloned());
         if let Some(e) = e1.as_mut() {
-            e.add(&exec_e1::measure(&rep, index, &repo_key, &table));
+            e.add(&exec_e1::measure(&rep, index, &repo_key, table));
         }
         score::score_session(
             &mut tally,
@@ -370,7 +370,7 @@ pub fn evaluate(p: &Prepared, opts: &Options) -> Result<Report> {
             index,
             &repo_key,
             &sandbox.root,
-            &table,
+            table,
             opts.window,
             &ds.manifest.canaries,
         );

@@ -8,7 +8,7 @@ use super::*;
 #[test]
 fn what_is_attached_follows_the_harness_capabilities() {
     let (dir, index, table) = fixture();
-    let ctx = predict_ctx(&dir, &index, &table, &[]);
+    let ctx = predict_ctx(&dir, &index, table, &[]);
     let s = Standing { standing: "reflexes".into(), environment: "env".into(), routes: vec!["dead-unittest".into()] };
     let hooks = adage_trace::Harness::ClaudeCode.capabilities();
     let with_mod = adage_trace::Harness::ClaudeCode.capabilities_with_mod();

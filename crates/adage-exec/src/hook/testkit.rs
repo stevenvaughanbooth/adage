@@ -111,7 +111,7 @@ impl Fixture {
 
     pub(super) fn selected(&self, path: &str) -> (Event, Vec<Directive>) {
         let table = CommandTable::load();
-        let ctx = self.ctx(&table, ("fixture/context".into(), "predict-check".into()));
+        let ctx = self.ctx(table, ("fixture/context".into(), "predict-check".into()));
         let mut state = SessionState { arm: Some(Arm::Treated), ..Default::default() };
         let events = [
             batch("Bash", json!({"command":"git status --short"}), ""),
@@ -146,7 +146,7 @@ impl Fixture {
             &self.paths.tracks(),
             Level::E2,
             Some(&terms),
-            &CommandTable::load(),
+            CommandTable::load(),
         )
         .unwrap()
         .request;
@@ -174,7 +174,7 @@ impl Fixture {
             &self.paths.tracks(),
             Level::E2,
             Store::load(&approvals::path(&self.paths.root)).unwrap().approvals[0].terms.as_ref(),
-            &CommandTable::load(),
+            CommandTable::load(),
         )
         .unwrap()
         .request
@@ -379,7 +379,7 @@ pub(super) fn grant_predict(f: &Fixture, at: usize) {
 pub(super) fn grant_finish_line(f: &Fixture) {
     let terms = route::Terms { outputs: vec!["gen/**".into()], ..Default::default() };
     let ir = &f.index.routes[1];
-    let req = route::plan(ir, &f.index, &f.root, &f.paths.tracks(), Level::E2, Some(&terms), &CommandTable::load())
+    let req = route::plan(ir, &f.index, &f.root, &f.paths.tracks(), Level::E2, Some(&terms), CommandTable::load())
         .unwrap()
         .request;
     seed(f, "fixture/finish/regenerate-registry", approvals::ApprovalKey::for_request(&req, "fixture"), Some(terms));
@@ -390,7 +390,7 @@ pub(super) fn grant_finish_line(f: &Fixture) {
 pub(super) fn predict_key_by_hand(f: &Fixture) -> approvals::ApprovalKey {
     let terms = route::Terms { effect: Some(Effect::Verify), ..Default::default() };
     let ir = &f.index.routes[0];
-    let mut req = route::plan(ir, &f.index, &f.root, &f.paths.tracks(), Level::E2, Some(&terms), &CommandTable::load())
+    let mut req = route::plan(ir, &f.index, &f.root, &f.paths.tracks(), Level::E2, Some(&terms), CommandTable::load())
         .unwrap()
         .request;
     req.mode = approvals::GrantMode::Predict;

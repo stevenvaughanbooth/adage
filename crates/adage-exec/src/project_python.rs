@@ -568,7 +568,7 @@ mod tests {
             };
             let index = adage_tracks::Index { routes: vec![ir.clone()], ..Default::default() };
             let mut req =
-                crate::route::plan(&ir, &index, &repo, &repo, Level::E2, None, &adage_core::CommandTable::load())
+                crate::route::plan(&ir, &index, &repo, &repo, Level::E2, None, adage_core::CommandTable::load())
                     .unwrap()
                     .request;
             assert_eq!(req.scripts.len(), 1);

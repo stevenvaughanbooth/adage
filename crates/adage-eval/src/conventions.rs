@@ -776,8 +776,8 @@ pub fn run_bundle(dir: &Path) -> Result<RoutesReport> {
     let (live, inert_routes) = live_and_inert(&refs);
     let live: Vec<&Route> = live.iter().collect();
     let files = repo_files(&dir.join("repo"));
-    let (rms, cms) = score_routes(&live, &conv, &files, &CommandTable::load());
-    let decoy_hits = decoy_hits(&live, &conv, &CommandTable::load());
+    let (rms, cms) = score_routes(&live, &conv, &files, CommandTable::load());
+    let decoy_hits = decoy_hits(&live, &conv, CommandTable::load());
     let true_routes = rms.iter().filter(|r| r.is_true()).count();
     let false_routes: Vec<String> = rms.iter().filter(|r| !r.is_true()).map(|r| r.id.clone()).collect();
     let narrow_routes: Vec<String> =
@@ -851,8 +851,8 @@ pub fn score_prepared(p: &Prepared) -> Result<RoutesReport> {
     let routes: Vec<&Route> = index.for_repo(&ds.manifest.repo).map(|ir| &ir.route).collect();
     let (routes, inert_routes) = live_and_inert(&routes);
     let routes: Vec<&Route> = routes.iter().collect();
-    let (rms, cms) = score_routes(&routes, &conv, &files, &table);
-    let decoy_hits = decoy_hits(&routes, &conv, &table);
+    let (rms, cms) = score_routes(&routes, &conv, &files, table);
+    let decoy_hits = decoy_hits(&routes, &conv, table);
     let true_routes = rms.iter().filter(|r| r.is_true()).count();
     let false_routes: Vec<String> = rms.iter().filter(|r| !r.is_true()).map(|r| r.id.clone()).collect();
     let narrow_routes: Vec<String> =
@@ -1031,7 +1031,7 @@ mod tests {
     fn verdicts(routes: &[Route]) -> Vec<(String, Vec<String>)> {
         let files: Vec<String> = crate::generate::ACME_FILES.iter().map(|s| s.to_string()).collect();
         let refs: Vec<&Route> = routes.iter().collect();
-        let (rms, _) = score_routes(&refs, &acme(), &files, &CommandTable::load());
+        let (rms, _) = score_routes(&refs, &acme(), &files, CommandTable::load());
         rms.into_iter().map(|r| (r.id, r.matches)).collect()
     }
 
@@ -1118,7 +1118,7 @@ mod tests {
         ];
         let files: Vec<String> = crate::generate::ACME_FILES.iter().map(|s| s.to_string()).collect();
         let refs: Vec<&Route> = routes.iter().collect();
-        let (rms, cms) = score_routes(&refs, &acme(), &files, &CommandTable::load());
+        let (rms, cms) = score_routes(&refs, &acme(), &files, CommandTable::load());
         let narrow: Vec<&str> = rms.iter().filter(|r| !r.narrow.is_empty()).map(|r| r.id.as_str()).collect();
         assert_eq!(narrow, ["narrow-contract", "narrow-glob"], "{rms:?}");
         let false_ids: Vec<&str> = rms.iter().filter(|r| !r.is_true()).map(|r| r.id.as_str()).collect();
@@ -1130,8 +1130,8 @@ mod tests {
     #[test]
     fn a_shared_npm_run_head_is_not_the_same_command() {
         let t = CommandTable::load();
-        assert!(!Expect::of("npm run check", &t).same(&Expect::of("npm run codegen", &t)));
-        assert!(Expect::of("python3 scripts/wi-lookup W-1", &t).same(&Expect::of("./scripts/wi-lookup W-2", &t)));
+        assert!(!Expect::of("npm run check", t).same(&Expect::of("npm run codegen", t)));
+        assert!(Expect::of("python3 scripts/wi-lookup W-1", t).same(&Expect::of("./scripts/wi-lookup W-2", t)));
     }
 
     #[test]

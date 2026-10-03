@@ -181,7 +181,7 @@ fn a_trace_steered_to_the_skill_is_no_evidence_for_it() {
     let models = d.path().join("models");
     install_fixture_model(&models);
     let files = corpus(d.path(), 6, 2);
-    let s = adage_learn::import::parse_transcript(&files[0], &adage_core::CommandTable::load(), None).unwrap();
+    let s = adage_learn::import::parse_transcript(&files[0], adage_core::CommandTable::load(), None).unwrap();
     assert!(s.steered);
     assert_eq!(s.influence[0].skills, ["release-checklist"]);
     assert!(s.influence[0].commands.is_empty() && !s.influence[0].all, "{:?}", s.influence[0]);

@@ -335,7 +335,7 @@ fn run(name: &str, split: Option<&str>) -> (Tally, Tally) {
         index: &p.index,
         repo: repo.clone(),
         root: &sandbox.root,
-        table: &table,
+        table,
         embed: None,
         params: p.params.runtime,
         policy: Policy { predict_grants: grants.clone(), ..Default::default() },

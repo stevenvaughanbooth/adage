@@ -259,7 +259,7 @@ pub fn probe(r: &Route, unsteered: &[&Session], cfg: &LearnConfig, emb: &mut Emb
                 }
                 p.opportunities += 1;
                 let a = crate::bridge::annotate(s);
-                let took = adage_graph::compile::intent::candidates(&a, &crate::bridge::influence(s), &table)
+                let took = adage_graph::compile::intent::candidates(&a, &crate::bridge::influence(s), table)
                     .iter()
                     .any(|c| c.group.split('|').next() == Some(head.as_str()));
                 p.support += u32::from(took);

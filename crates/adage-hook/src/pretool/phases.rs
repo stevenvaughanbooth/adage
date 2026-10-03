@@ -50,7 +50,7 @@ pub(super) fn pretool_mod(call: &BashCall<'_>, phase: &phase::Phase) -> Result<O
     let rewrites_on = adage_store::config::load(paths).config.runtime_rewrite && !super::rewrite_off(paths).exists();
     let table = || CommandTable::load();
     let found =
-        |key: &str| adage_runtime::substitution(&index, key, &adage_runtime::Policy::default(), &table(), call.command);
+        |key: &str| adage_runtime::substitution(&index, key, &adage_runtime::Policy::default(), table(), call.command);
     match phase {
         phase::Phase::DryRun => {
             let mut plan = serde_json::Map::new();
@@ -169,7 +169,7 @@ fn answer_with_receipt(
         index,
         repo: key.to_string(),
         root: call.root,
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: adage_runtime::Policy::default(),
@@ -516,7 +516,7 @@ mod tests {
         assert!(w.state().history.len() > history, "another call is observed as ever");
         // A rebuilt state reads the met obligation off that record.
         let index = Index::try_load(&w.paths.index()).unwrap();
-        let st = rebuild::rebuild(&spooled(&w), &index, "acme", &CommandTable::load()).unwrap();
+        let st = rebuild::rebuild(&spooled(&w), &index, "acme", CommandTable::load()).unwrap();
         assert!(st.obligations.iter().all(|o| o.met), "{:?}", st.obligations);
         // Not fresh: the plan says so without a note or a result, and the verdict decides nothing.
         let stale = "python -m pytest tests/stale_test.py -q";

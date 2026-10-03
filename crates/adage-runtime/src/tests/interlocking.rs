@@ -28,7 +28,7 @@ fn an_imported_route_a_learned_dead_end_contradicts_is_never_emitted() {
             index,
             repo: "acme".into(),
             root: dir.path(),
-            table: &table,
+            table,
             embed: Some(&fake_embed),
             params: Default::default(),
             policy: Default::default(),
@@ -64,7 +64,7 @@ fn approach_locking_filters_later_directives_and_their_obligations() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -92,7 +92,7 @@ fn approach_locking_filters_later_directives_and_their_obligations() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -121,7 +121,7 @@ fn a_generalised_glob_matches_any_depth() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -160,7 +160,7 @@ fn inhibit_comes_first_under_the_caps() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -198,11 +198,11 @@ fn propensity_is_the_probability_of_the_arm_given() {
     assert_eq!(assign("s1", 0.0, None), (Arm::Treated, 1.0));
     // A state rebuilt from the spool keeps it.
     let recs = vec![json!({ "kind": "prompt", "arm": "control", "propensity": 0.1, "decision": Decision::default() })];
-    let st = rebuild::rebuild(&recs, &Index::default(), "acme", &CommandTable::load()).unwrap();
+    let st = rebuild::rebuild(&recs, &Index::default(), "acme", CommandTable::load()).unwrap();
     assert_eq!((st.arm, st.propensity), (Some(Arm::Control), Some(0.1)));
     // Old spools and states, without it, still read.
     let old = vec![json!({ "kind": "prompt", "arm": "treated", "decision": Decision::default() })];
-    assert_eq!(rebuild::rebuild(&old, &Index::default(), "acme", &CommandTable::load()).unwrap().propensity, None);
+    assert_eq!(rebuild::rebuild(&old, &Index::default(), "acme", CommandTable::load()).unwrap().propensity, None);
     let st: SessionState =
         serde_json::from_value(json!({ "arm": "treated", "repo": "acme", "prompts": 1, "batches": 0,
         "emitted": [], "pending": [], "obligations": [], "history": [], "first_edit_at_batch": null }))
@@ -247,7 +247,7 @@ fn directives_carry_their_shape_and_stale_routes_are_never_fire() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -292,7 +292,7 @@ fn directives_carry_their_shape_and_stale_routes_are_never_fire() {
             index: &index,
             repo: "acme".into(),
             root: dir.path(),
-            table: &table,
+            table,
             embed: None,
             params: Default::default(),
             policy: Default::default(),

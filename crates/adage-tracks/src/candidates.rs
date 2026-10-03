@@ -187,7 +187,7 @@ impl Candidate {
 
 fn probe(id: &str, trigger: &Trigger, step: &Step, support: u32, opportunities: u32) -> Route {
     let table = adage_core::CommandTable::load();
-    let effect = commands(step).iter().map(|c| io::classify(c, &table)).max().unwrap_or(Effect::Observe);
+    let effect = commands(step).iter().map(|c| io::classify(c, table)).max().unwrap_or(Effect::Observe);
     Route {
         id: id.to_string(),
         summary: "A pattern counted in this repository's traces, not yet a reflex".into(),

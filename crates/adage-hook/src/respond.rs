@@ -173,7 +173,7 @@ pub(crate) fn respond(
         index,
         repo: repo_key.clone(),
         root,
-        table: &table,
+        table,
         embed: Some(&embed),
         params: Default::default(),
         policy,
@@ -183,7 +183,7 @@ pub(crate) fn respond(
     let rebuild = || {
         let small = std::fs::metadata(&spool_path).is_ok_and(|m| m.len() <= rebuild::MAX_SPOOL_BYTES);
         let records: Vec<Value> = if small { spool::read_all(&spool_path).ok()? } else { return None };
-        rebuild::rebuild(&records, index, &repo_key, &table)
+        rebuild::rebuild(&records, index, &repo_key, table)
     };
     let (mut decision, arm, propensity, stims) =
         state::update_or_rebuild::<SessionState, _>(&state_path, rebuild, |st| {
@@ -616,7 +616,7 @@ mod tests {
                 st.arm = Some(arm);
                 st.pending = vec![adage_runtime::Pending {
                     route: "regenerate-registry".into(),
-                    expect_key: adage_runtime::command_key("make gen", &table),
+                    expect_key: adage_runtime::command_key("make gen", table),
                     expect_head: String::new(),
                     batches_left: 3,
                     command: "make gen".into(),

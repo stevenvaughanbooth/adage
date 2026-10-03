@@ -328,7 +328,7 @@ mod tests {
             tool_use_id: None,
             agent: None,
         };
-        call_steps(0, 0, &call, normalize_tool("Bash", &input, "/r", &table), Path::new("/r"))
+        call_steps(0, 0, &call, normalize_tool("Bash", &input, "/r", table), Path::new("/r"))
             .into_iter()
             .map(|s| (s.key, s.call.failed))
             .collect()
@@ -363,7 +363,7 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         let p = d.path().join("s.jsonl");
         std::fs::write(&p, body).unwrap();
-        let s = parse_transcript(&p, &CommandTable::load(), Some("r")).unwrap();
+        let s = parse_transcript(&p, CommandTable::load(), Some("r")).unwrap();
         assert_eq!(s.prompt, "Fix BIL-1041");
         let got: Vec<(&str, u32)> = s.prompts.iter().map(|p| (p.text.as_str(), p.at_step)).collect();
         // `a && ls` is two steps, both serving the first prompt.
@@ -400,7 +400,7 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         let p = d.path().join("s.jsonl");
         std::fs::write(&p, body).unwrap();
-        let s = parse_transcript(&p, &CommandTable::load(), Some("r")).unwrap();
+        let s = parse_transcript(&p, CommandTable::load(), Some("r")).unwrap();
         let by: Vec<(String, By)> = s.steps.iter().map(|x| (x.key.clone(), x.call.by)).collect();
         assert_eq!(
             by,
@@ -437,7 +437,7 @@ mod tests {
             let body =
                 head.clone() + &rec(serde_json::json!({"type":"attachment","sessionId":"s","attachment":attachment}));
             std::fs::write(&p, body).unwrap();
-            let s = parse_transcript(&p, &CommandTable::load(), Some("r")).unwrap();
+            let s = parse_transcript(&p, CommandTable::load(), Some("r")).unwrap();
             assert_eq!(s.steered, steered, "{attachment}");
         }
     }
@@ -470,13 +470,13 @@ mod tests {
         std::fs::write(sub.join("agent-a1.meta.json"), "{}").unwrap();
         let found = discover(&projects);
         assert_eq!(found, [sub.join("agent-a1.jsonl"), projects.join("-repo/s.jsonl")]);
-        let s = parse_transcript(&sub.join("agent-a1.jsonl"), &CommandTable::load(), None).unwrap();
+        let s = parse_transcript(&sub.join("agent-a1.jsonl"), CommandTable::load(), None).unwrap();
         assert_eq!((s.id.as_str(), s.repo.as_str()), ("s/a1", "github.com/acme/billing"));
         assert_eq!(s.root, gone);
         assert_eq!(s.steps[0].rel_path.as_deref(), Some("schema/a.json"), "relative to the worktree");
         // In a top-level transcript, sidechain records are another agent's turns: skipped.
         std::fs::write(projects.join("-repo/s.jsonl"), &body).unwrap();
-        assert!(parse_transcript(&projects.join("-repo/s.jsonl"), &CommandTable::load(), None).is_none());
+        assert!(parse_transcript(&projects.join("-repo/s.jsonl"), CommandTable::load(), None).is_none());
     }
 
     #[test]
@@ -566,7 +566,7 @@ mod tests {
             ),
         ] {
             std::fs::write(&p, head.clone() + &rec(shape.clone())).unwrap();
-            let s = parse_transcript(&p, &CommandTable::load(), Some("r")).unwrap();
+            let s = parse_transcript(&p, CommandTable::load(), Some("r")).unwrap();
             assert!(s.steered, "{shape}");
             assert_eq!((s.prompt.as_str(), s.prompt_count()), ("Fix the schema", 1), "{shape}");
             assert_eq!(s.directed.contains(FINISH_LINE_STOP), finish_line, "{shape}");
@@ -582,7 +582,7 @@ mod tests {
         let p = d.path().join("t.jsonl");
         let text: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
         std::fs::write(&p, text.join("\n")).unwrap();
-        parse_transcript(&p, &CommandTable::load(), Some("acme")).unwrap()
+        parse_transcript(&p, CommandTable::load(), Some("acme")).unwrap()
     }
 
     fn user(text: &str) -> serde_json::Value {

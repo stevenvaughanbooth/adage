@@ -171,7 +171,7 @@ struct Cx {
     types: BTreeMap<String, TypeDef>,
     repo_files: BTreeMap<String, RepoFile>,
     tools: BTreeSet<String>,
-    table: CommandTable,
+    table: &'static CommandTable,
 }
 
 fn argv(command: &str) -> Vec<String> {
@@ -369,7 +369,7 @@ impl Cx {
 
     /// The tool an argv needs, and the L-ref pin of the script it runs, if any.
     fn pin(&mut self, argv: &[String], root: Option<&Path>) -> std::result::Result<Option<ScriptRef>, String> {
-        match program(argv, &self.table).map_err(|e| e.to_string())? {
+        match program(argv, self.table).map_err(|e| e.to_string())? {
             Program::Tool(t) => {
                 self.tools.insert(t);
                 Ok(None)

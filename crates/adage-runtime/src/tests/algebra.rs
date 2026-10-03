@@ -10,7 +10,7 @@ fn an_obligation_is_met_by_the_step_with_options_added() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -38,7 +38,7 @@ fn an_after_command_trigger_fires_on_the_command_with_options_added() {
     std::fs::write(dir.path().join("acme/billing.py"), "x").unwrap();
     let table = CommandTable::load();
     // Mined from runs without `--json`.
-    let key = command_key("./scripts/wi-lookup W-1", &table);
+    let key = command_key("./scripts/wi-lookup W-1", table);
     let files = Slot {
         name: "files".into(),
         source: SlotSource::ResultField { field: "linked_files".into() },
@@ -58,7 +58,7 @@ fn an_after_command_trigger_fires_on_the_command_with_options_added() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -83,7 +83,7 @@ fn a_different_script_is_not_following() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: Some(&fake_embed),
         params: Default::default(),
         policy: Default::default(),

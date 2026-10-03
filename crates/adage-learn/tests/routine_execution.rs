@@ -83,7 +83,7 @@ fn assert_routine(index: Index, expected: &str) {
         index: &index,
         repo: "routine".into(),
         root: Path::new("/fixture/routine"),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),

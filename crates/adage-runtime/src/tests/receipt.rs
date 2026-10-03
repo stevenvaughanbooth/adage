@@ -8,12 +8,12 @@ use super::*;
 #[test]
 fn a_call_answered_by_a_receipt_meets_what_it_covers() {
     let (dir, index, table) = predict_fixture(vec![]);
-    let ctx = predict_ctx(&dir, &index, &table, &[]);
+    let ctx = predict_ctx(&dir, &index, table, &[]);
     let test = ".venv/bin/python -m pytest tests/test_x.py -q";
     let mut st = SessionState {
         arm: Some(Arm::Treated),
-        pending: vec![pending("tests", ".venv/bin/python -m pytest tests/test_x.py", &table)],
-        obligations: vec![armed("check", test, &table), armed("gen", "make gen", &table)],
+        pending: vec![pending("tests", ".venv/bin/python -m pytest tests/test_x.py", table)],
+        obligations: vec![armed("check", test, table), armed("gen", "make gen", table)],
         ..Default::default()
     };
     let d = answered_by_receipt(&ctx, &mut st, ".venv/bin/python -m pytest tests/test_x.py::test_one -xvs", test);
@@ -33,7 +33,7 @@ fn a_call_answered_by_a_receipt_meets_what_it_covers() {
 #[test]
 fn the_answered_ring_is_keyed_by_the_bare_tool_use_id() {
     let (dir, index, table) = predict_fixture(vec![]);
-    let ctx = predict_ctx(&dir, &index, &table, &[]);
+    let ctx = predict_ctx(&dir, &index, table, &[]);
     let call = |id: &str| Call { tool_use_id: Some(id.into()), ..bash("make gen", "ok") };
     let alone = decide(&ctx, &mut SessionState::default(), &Event::Batch { calls: vec![call("toolu_2")] });
     assert!(!alone.observed.is_empty());

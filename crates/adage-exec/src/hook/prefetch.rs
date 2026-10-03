@@ -71,7 +71,7 @@ pub(super) fn prefetch(
         .map_err(|e| vec![withheld("*", "policy", &format!("the execution policy is unreadable: {e:#}"))])?;
     let cap = sandbox::detect();
     let table = CommandTable::load();
-    let ctx = run_context(&pol, &store, &cap, &table, turn.repo_key, home);
+    let ctx = run_context(&pol, &store, &cap, table, turn.repo_key, home);
     let tracks = turn.paths.tracks();
     let mut texts = Vec::new();
     for d in directives {
@@ -87,7 +87,7 @@ pub(super) fn prefetch(
         let Some(ir) = route::find(turn.index, turn.repo_key, &d.track, &d.route) else {
             return Err(fail(records, "route", "the index holds no such route for this repository"));
         };
-        let plan = match route::plan(ir, turn.index, turn.root, &tracks, Level::E1, a.terms.as_ref(), &table) {
+        let plan = match route::plan(ir, turn.index, turn.root, &tracks, Level::E1, a.terms.as_ref(), table) {
             Ok(p) => p,
             Err(e) => {
                 *notice = Some(unplanned_notice(a, &e));
