@@ -47,8 +47,8 @@
 | L3 Golden and parity | `ADAGE_BLESS=1` goldens in `tests/golden/`, `adage-exec/tests/parity.rs` (the same scenario against both binaries, `hooks.rs:7-32`); a golden is an expected output, never an input | as L2 | every PR (affected) |
 | L4 Simulator | `crates/adage-sim` fixtures, `harness_sim.rs` (`replay_claude`, `check_graph`), `committed_fixtures_are_current` | as L2 | every PR; `cargo run -p adage-sim` on fixture change |
 | L5 Latency | `crates/adage-cli/examples/hook_latency.rs` in its paired mode (`<bin a>,<bin b>`, `:12, 124-160`), release builds of the base and the branch, 500 runs after the 20 warm-ups (the default is 300, `:181`), five repetitions; `learn_bench` (300 × 2, `learn_bench.rs:7`) | a quiet developer machine, named; numbers and the command in the PR | before merging A1, A2, A6, C1, D1, D2 (no workflow runs these today) |
-| L6 Replay gates | `cargo test -p adage-eval --test gates` (`evals.yml`: the slow gates, the property tests and every Python suite) | recorded datasets | weekly `evals.yml`; before merging C1, D1, D2, D3 |
-| L7 Mod unit | `claude plugin test plugin/claude-code` (`*.test.ts(x)`; `ui.mount` over `terminal` and `desktop` with a stubbed `$`; handlers called directly from the mounted tree) | the engine's test kit, no session | the `plugin` CI job, CLI pinned at 2.1.287 |
+| L6 Replay gates | `cargo test -p adage-eval --test gates` and `--test predict_gate` (`evals.yml`: the slow gates, the property tests and every Python suite) | recorded datasets | weekly `evals.yml`; before merging C1, D1, D2, D3 |
+| L7 Mod unit | `claude plugin test plugin/claude-code` (`*.test.ts(x)`; `ui.mount` over `terminal` and `desktop` with a stubbed `$`; handlers called directly from the mounted tree) | the engine's test kit, no session | the `plugin` CI job, CLI pinned at 2.1.288 |
 | L8 Mod static | `claude plugin validate --strict` diffed against the committed `VALIDATE.txt`; `scripts/check-plugin.mjs` | | the `plugin` CI job |
 | L9 Live probes | S9's probe mod under `--plugin-dir`, an isolated `CLAUDE_CONFIG_DIR`, `claude --debug` | a developer's machine; `spikes/S9-claude-mods/FINDINGS.md`, `rerun.sh`, `results/` | once per question |
 | L10 Headless end to end | `demo/run.py` arms `a0`, `control`, `adage`, `mod-observe`, `mod` on the acme-billing sandbox (`DEMO_MODEL` default `claude-sonnet-5`, `run.py:36`); `demo/replay_hooks.py` for the recorded-payload replay | fresh sandbox per run (`generate.py`), `ADAGE_HOME` under `DEMO_ROOT` | before merging B2, C3, C4; model spend |
@@ -316,6 +316,10 @@ the Then itself.
 - **T-C1-12 · L5 · latency.** Paired run: `turn_step_nothing_pending` p95 within 0.3 ms of
   `batch_no_match`; `turn_step_predicts` against `adage-exec` with the grant fixture (which
   `hook_latency` learns to seed) p95 ≤ 10 ms.
+- **T-C1-14 · L1 + L7 · every kind.** For each row of the plan's prediction-kinds table that
+  `TurnStep` serves (`run`, `obligation`, `sequence`, `chain`, `skill`), a state that qualifies
+  yields the row's calls with the row's `kind` on the wire, and the mod's generator dispatches
+  the kind to exactly the chunks the row says; an unknown kind forwards `next(e)` unchanged.
 - **T-C1-13 · L6 · replay gate.** `fast_path_changes_no_decision` passes with a `TurnStep`
   injected after each `Batch` on every dataset it covers (demo-haiku45's three splits, synthetic,
   adversarial, `gates.rs:332-338`).
@@ -850,7 +854,30 @@ handlers directly and checking `$.state` and the recorded `$.ui.*` calls.
   `evals/reflex-proof/LAUNCH-STATUS.md` with the scripts that produced every number. Model
   requests are never presented as GPU savings.
 
-### 7.4 Savings in the product
+### 7.4 What the proof of concept measured offline
+
+No model ran for the proof of concept (the environment had no key), so none of L10–L12 ran. What
+stands in for them until they do, all on the branch `claude/mods-poc-m98u3o`
+([poc/README.md](poc/README.md) has the full table):
+
+- **The sim in both arms** (L4, `harness_sim.rs`): under `adage-exec` with a `predict` grant the
+  `make gen` obligation is predicted at the work turn's end, judged `predicted` and
+  `obligation_met`, and no Stop request follows; the control arm spools `would_predict` and
+  prints nothing; without the grant, and under `adage hook`, every step is silent; the learned
+  dead end becomes `make test` in the treated arm only.
+- **The offline prediction gate** (L6, `predict_gate.rs`): every recorded dataset replayed with a
+  `TurnStep` at every boundary, in both arms, every learned route granted but the exec-only ones.
+  `demo-haiku45` round 2: 34 opportunities, 34 requests saved, 0 in control, the agent's next
+  action predicted in 6 of 34 and a call the agent made later in the session in 23 of 34.
+  `synthetic`: 25, 25, 0, 12 of 24, 20 of 24. The strict figure understates a steered agent (the
+  recorded agents never got a directive and found the script themselves, later); the live `mod`
+  arm is where the figure that matters comes from. The measured values are pinned as floors.
+- **The mod's own tests** (L7, L8): 53 per plugin with the engine stubbed, `validate --strict`
+  diffed against `VALIDATE.txt`.
+- **Latency** (L5): one unpaired run of `turn_step_nothing_pending` (p95 3.11 ms) against
+  `batch_no_match` (p95 3.49 ms); the paired comparison and `turn_step_predicts` stand open.
+
+### 7.5 Savings in the product
 
 The in-product estimate (`savings.rs`: Hajek IPW, winsorised, stratified bootstrap, the 10/30
 gate, `savings.rs:19, 33-34`) is unchanged in method; harness-priced lines enter it through A4's
@@ -879,9 +906,10 @@ before the question's result is committed.
 | --- | --- | --- |
 | `cargo fmt`, `clippy -D warnings`, `cargo xtask affected` (the changed packages, the readers of changed fixtures, and every dependent; a change outside every package tests everything; pushes to `main` test everything on every platform), the architecture guards `cargo test -p xtask` always (`layers`, `affected`, `hygiene`, `suites`) | every PR | merge |
 | Every new test that reads outside its crate (the sim's fixtures, `evals/sandboxes/acme-billing`, `plugin/claude-code/hooks/fixtures/`) is declared in `READS` in `xtask/src/affected.rs`; every new Python suite in `xtask/src/suites.rs`; no raw run output committed (the hygiene guard) | every PR | merge |
-| `node scripts/check-plugin.mjs` (modules, types, allow-list, pin), `test-stage-plugin.mjs`, `claude plugin validate --strict` ×2 diffed against `VALIDATE.txt`, `claude plugin test` ×2 (CLI pinned at 2.1.287) | every PR | merge |
+| `node scripts/check-plugin.mjs` (modules, types, allow-list, pin), `test-stage-plugin.mjs`, `claude plugin validate --strict` ×2 diffed against `VALIDATE.txt`, `claude plugin test` ×2 (CLI pinned at 2.1.288) | every PR | merge |
 | `plugin/test/session-start.test.sh`, `npm/test/launcher.test.mjs` | every PR | merge |
-| `cargo test -p adage-eval --test gates` | weekly; required before merging C1, D1, D2, D3 | merge of those chunks |
+| `cargo test -p adage-eval --test gates` and `--test predict_gate` | weekly; required before merging C1, D1, D2, D3 | merge of those chunks |
+| `cargo build -p adage-exec` before `cargo test -p adage-cli` (`harness_sim.rs` tests the built `adage-exec` and skips when it is missing, so a stale binary would test old code) | every PR | merge |
 | Paired `hook_latency` and `learn_bench` on release builds, numbers and the machine in the PR | before merging A1, A2, A6, C1, D1, D2 | merge of those chunks |
 | `release_plugin_startup` (first start < 1,500 ms, ten warm starts < 200 ms; `zero_config_plugin.rs:246, 275`) | scheduled; before a release | release |
 | `cargo run -p adage-sim` fixtures current (`committed_fixtures_are_current`) | every PR | merge |
@@ -906,6 +934,10 @@ responsibility stated in each PR.
 | M2 See it | M0's four questions, A3, A5, A6 | T-B1 … T-B3, T-X-02, T-X-03, T-X-04, T-X-06, T-X-07, T-X-10, T-X-11 green; T-E1-03's replay diff empty; T-U-01 reading and doing parts |
 | M3 Trust it | M1, Q2 (Layer 2), Q4 | T-C1 … T-C3, T-X-01, T-X-05, T-X-12 green |
 | M4 Skip it | M3, Q9 | T-C4 … T-C9 green; Q9 and Q15 10 of 10; the `mod` arm runs end to end (T-C4-06) with `requests`, `dead_end_hits` and directives lower than `adage` |
+
+The proof of concept (§7.4) met, offline, the unit and sim halves of M3's T-C1, T-C2 and M4's
+T-C4, T-C6, T-C7 (the chain) and T-C8 (`ending`), and M2's T-B1 without drawing. Every live
+criterion (Q9, Q15, T-C4-06, the `mod` arm's numbers) is still open.
 | M5 Notice | D1's L5 numbers | T-D1, T-D2, T-D5-01, T-D5-02 green; Q12; T-U-01 noticed questions |
 | M6 Skills | — | T-D3, T-D4, T-D5-03 green; Q13 |
 | M7 Evidence | M4 | T-E1 green; T-E2 twice; T-E3 recorded |
