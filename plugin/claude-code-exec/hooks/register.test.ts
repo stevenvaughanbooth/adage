@@ -156,3 +156,18 @@ test('step 0 and a subagent step are forwarded without asking', async ($, on) =>
   expect(w.requests).toEqual([0, 2])
   expect(w.ran.map(r => r.argv[1])).toEqual(['version'])
 })
+
+test('a Skill prediction is yielded only for a skill `$.command.list()` lists', async ($, on) => {
+  const skill = { predict: { kind: 'skill', route: 'notes', track: 'acme/billing@1', calls: [{ tool: 'Skill', input: { skill: 'release-notes' } }] } }
+  const w = world(on, { data: '/data', version: 'adage 0.1.0\n', turnStep: JSON.stringify(skill) })
+  let listed = [{ name: 'review', description: '', source: 'plugin' as const }]
+  on('command.list', () => ({ value: listed }))
+  await $.session.start(START)
+  expect((await drain($.turn.step(STEP))).chunks.map(c => c.kind)).toEqual(['text', 'tool', 'input', 'stop'])
+  expect(w.requests).toEqual([2])
+  expect(w.sets).toEqual([])
+  listed = [...listed, { name: 'release-notes', description: '', source: 'plugin' as const }]
+  const { chunks } = await drain($.turn.step(STEP))
+  expect(chunks[0]).toEqual({ kind: 'tool', index: 0, id: 'adage_notes_turn-1_2_0', name: 'Skill' })
+  expect(w.requests).toEqual([2])
+})

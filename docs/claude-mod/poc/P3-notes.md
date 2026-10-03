@@ -107,9 +107,10 @@ restructuring, not by suppressing anything.
 5. **One extra binary call per turn end** (`ending: true` after every tool-free `end_turn` at
    index > 0), plus one per step before the request: both within the 250 ms budget, which the
    binary's nothing-pending path must meet (C1).
-6. **Not in this POC:** the `$.command.list()` check before yielding a `Skill` call (C4),
-   `routine` model routing, `ADAGE_MOD_OBSERVE`, drawing, the feed, `cliBinary`, the
-   person-only `press()` path, `userConfig`. The allow-list is `hook`, `version` only.
+6. **Not in this POC:** `routine` model routing, drawing, the feed, `cliBinary`, the
+   person-only `press()` path, `userConfig`. The allow-list is `hook`, `version` only. Closed in
+   P5 (`P5-notes.md`): the `$.command.list()` check before yielding a `Skill` call, and
+   `ADAGE_MOD_OBSERVE` (observe mode).
 7. **Step 0 is never predicted, including its finish line.** A turn whose first response ends it
    with an armed obligation falls back to the Stop gate, as today.
 8. The `adage_` id writes `_` inside a route or turn id as `-` so the four `_` separators stay

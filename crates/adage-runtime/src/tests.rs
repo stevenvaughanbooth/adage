@@ -2697,3 +2697,108 @@ fn turn_step_fast_path() {
     }
     assert!(!fast::skip(&t, &ev, "/r", || None), "an unreadable state is rebuilt, never skipped past");
 }
+
+// ---------------------------------------------------------------- the dead end that never runs
+
+/// The mod's observe mode records a step as the control arm does, in a treated session.
+#[test]
+fn turn_step_in_observe_mode_records_would_predict_only() {
+    let (dir, index, table) = predict_fixture(vec![]);
+    let mut ctx = predict_ctx(&dir, &index, &table, &["lookup"]);
+    ctx.policy.observe = true;
+    let mut st = SessionState {
+        arm: Some(Arm::Treated),
+        pending: vec![pending("lookup", "./scripts/wi-lookup W-2042 --json", &table)],
+        ..Default::default()
+    };
+    let d = decide(&ctx, &mut st, &step("t", 1, false));
+    assert!(d.predicted.is_none());
+    assert_eq!(d.would_predict.map(|p| p.route), Some("lookup".into()));
+    assert_eq!((st.arm, st.predictions), (Some(Arm::Treated), 1));
+}
+
+fn after_failure_pair(strength: Strength) -> Route {
+    route(
+        "after-pytest",
+        Trigger::AfterFailure { command: "exec python3 -m pytest".into(), signature: "No module named pytest".into() },
+        Step::Run { command: "make test".into() },
+        vec![],
+        Effect::Verify,
+        strength,
+    )
+}
+
+/// T-C6-01: a firm learned `avoid` route with a fixed `instead`, or a run after a failure at fire,
+/// answers a substitution; a prime pair, an instinct, a slotted or missing `instead`, a list, or
+/// the `instead` itself answer none.
+#[test]
+fn a_learned_dead_end_is_substituted_only_from_a_firm_fixed_pair() {
+    let (_dir, index, table) = fixture();
+    let policy = Policy::default();
+    let sub = |index: &Index, cmd: &str| substitution(index, "acme", &policy, &table, cmd);
+    let s = sub(&index, "python3 -m unittest tests.test_billing -v").expect("the dead end");
+    assert_eq!((s.route.as_str(), s.track.as_str(), s.command.as_str()), ("dead-unittest", "acme/t", "make test"));
+    assert_eq!(
+        s.context,
+        "adage ran make test in place of python3 -m unittest tests.test_billing -v: in this repository it fails (ACME_ENV is not set)."
+            .replace("(ACME", "(\"ACME")
+            .replace("set)", "set\")")
+    );
+    assert!(sub(&index, "make test").is_none(), "the working command");
+    assert!(sub(&index, "cd sub && python3 -m unittest").is_none(), "a list keeps what else it runs");
+    assert!(sub(&index, "python3 -m unittest | tail").is_none(), "a pipeline too");
+    assert!(sub(&index, "ls").is_none());
+
+    let one = |r: Route| unlocked(&[&track("acme/x", "desire-path", vec![r])]);
+    let fire = one(after_failure_pair(Strength::Fire));
+    assert_eq!(sub(&fire, "python3 -m pytest tests").map(|s| s.command), Some("make test".into()));
+    assert!(sub(&one(after_failure_pair(Strength::Prime)), "python3 -m pytest tests").is_none(), "prime");
+    let mut forming = after_failure_pair(Strength::Fire);
+    forming.state = RouteState::Forming;
+    assert!(sub(&one(forming), "python3 -m pytest tests").is_none(), "forming is delivered prime");
+    let mut dormant = npm_test_dead_end();
+    dormant.state = RouteState::Dormant;
+    assert!(sub(&one(dormant), "npm test").is_none(), "dormant");
+    assert_eq!(sub(&one(npm_test_dead_end()), "npm test").map(|s| s.route), Some("dead-end-npm".into()));
+    let slotted = route(
+        "slotted",
+        Trigger::SessionStart,
+        Step::Avoid { avoid: "npm test".into(), instead: "make test-{suite}".into(), signature: "x".into() },
+        vec![],
+        Effect::Verify,
+        Strength::Inhibit,
+    );
+    assert!(sub(&one(slotted), "npm test").is_none(), "slotted instead");
+    let empty = route(
+        "empty",
+        Trigger::SessionStart,
+        Step::Avoid { avoid: "npm test".into(), instead: " ".into(), signature: "x".into() },
+        vec![],
+        Effect::Verify,
+        Strength::Inhibit,
+    );
+    assert!(sub(&one(empty), "npm test").is_none(), "no instead");
+    let mut instinct = npm_test_dead_end();
+    instinct.evidence.provenance = "instinct:core@0.1.0".into();
+    assert!(sub(&one(instinct), "npm test").is_none(), "an instinct is advice only");
+}
+
+/// T-C6-02, the runtime half: treated substitutes and judges it `substituted`, never a follow;
+/// control and observe mode record `would_substitute` only.
+#[test]
+fn a_substitution_is_its_own_judgement_and_never_in_control() {
+    let (_dir, index, table) = fixture();
+    let s = substitution(&index, "acme", &Policy::default(), &table, "python3 -m unittest").unwrap();
+    let d = substitute(Some(Arm::Treated), false, s.clone());
+    assert_eq!(d.substituted.as_ref(), Some(&s));
+    assert!(matches!(d.judgements.as_slice(), [Judgement::Substituted { route }] if route == "dead-unittest"));
+    let v = serde_json::to_value(&d).unwrap();
+    assert_eq!(v["judgements"], json!([{ "kind": "substituted", "route": "dead-unittest" }]));
+    for (arm, observe) in [(Some(Arm::Control), false), (Some(Arm::Treated), true)] {
+        let d = substitute(arm, observe, s.clone());
+        assert!(d.substituted.is_none() && d.judgements.is_empty());
+        assert_eq!(d.would_substitute.as_ref(), Some(&s));
+    }
+    // A decision without either keeps its old bytes.
+    assert!(serde_json::to_string(&Decision::default()).unwrap().find("substitut").is_none());
+}

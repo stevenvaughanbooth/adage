@@ -225,6 +225,35 @@ traces the planner rewrote a command in 63 of 66 Haiku control sessions and refu
 counts are from the planner before the launch review; the narrower planner (shell-aware, advice
 instead of refusal) has not been re-counted.
 
+### The learned pair: a dead end replaced before it runs (the Claude Code mod)
+
+A second rewrite exists only where the Claude Code mod is installed, because only the mod can ask
+Claude Code's own permission engine about both commands. When a Bash call is a dead end this
+repository's sessions learned (`python3 -m pytest tests` fails here; `make test` works), the mod
+runs the learned command in its place, and the failure, the model's reading of it and the
+recovery request never happen.
+
+```text
+python3 -m pytest tests
+→ make test     (adage ran make test in place of python3 -m pytest tests: in this repository it fails ("No module named pytest").)
+```
+
+- **What is replaced**: one plain command (no list, pipe, redirection or substitution) whose
+  canonical key meets a learned, firm `avoid` route with a fixed `instead` (no slot), or a learned
+  run-after-failure route delivered at fire. An instinct, a forming or dormant route, a prime
+  pair and a slotted `instead` replace nothing (`adage_runtime::substitution`).
+- **How**: two phases of `adage hook claude PreToolUse` that a command hook never sends. A
+  `dry_run` answers the plan (`{"plan":{"substitute":{command, route, track, context}}}`) and
+  records nothing. The mod asks `$.tool.check` about the original and the replacement; only when
+  both get the same verdict does it send `verdict: {engine: "same", substitute: <route>}`, and only
+  when that answers `{"substitute":{…}}` does it run the call with the new command. The model reads
+  the one `context` line after the result; the person sees it under the permission dialog, if one
+  opens.
+- **Recorded**: one `pretool` record at the verdict, `substituted: true` with the judgement
+  `substituted` (never a follow; the dead end counts as headed off), or, in the control arm and in
+  the mod's observe mode, `would_substitute: true`, withheld, and nothing printed. `adage delegate
+  rewrites off` turns it off with the interpreter rewrites.
+
 ## E2 actions from hooks
 
 Track C milestone C5. A finish-line reflex (after editing files matching `registry/*.csv`, run

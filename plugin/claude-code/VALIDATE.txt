@@ -5,10 +5,10 @@ Validating plugin manifest: plugin/claude-code/.claude-plugin/plugin.json
 
 Validating hooks: plugin/claude-code/hooks/hooks.json
 
-  > ./register.ts hooks: session.start, classic.SessionStart, classic.UserPromptSubmit, classic.PostToolBatch, classic.PostToolUseFailure, classic.Stop, turn.step
-  > ./register.ts calls: $.env.get (via activate), $.process.run (via runner), $.session.cwd, $.session.id, $.state.get, $.state.set
+  > ./register.ts hooks: session.start, classic.SessionStart, classic.UserPromptSubmit, classic.PostToolBatch, classic.PostToolUseFailure, classic.Stop, turn.step, tool.call{tool=Bash}
+  > ./register.ts calls: $.command.list (via hasSkill), $.env.get (via activate), $.process.run (via runner), $.session.cwd, $.session.id, $.state.get, $.state.set, $.tool.check (via checkBash), $.ui.notice
   > ./register.ts env writes: nothing
-  > ./register.ts env reads: CLAUDE_PLUGIN_DATA
+  > ./register.ts env reads: ADAGE_MOD_OBSERVE, CLAUDE_PLUGIN_DATA
   > ./register.ts state writes: adage.fired, adage.predicted
   > ./register.ts state reads: adage.fired, adage.predicted
 

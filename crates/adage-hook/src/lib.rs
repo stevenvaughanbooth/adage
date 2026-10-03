@@ -567,6 +567,9 @@ fn pretool(
     }
     let input = p.get("tool_input").cloned().unwrap_or(Value::Null);
     let Some(command) = input.get("command").and_then(Value::as_str) else { return Ok(None) };
+    if p.get("dry_run").is_some() || p.get("verdict").is_some() {
+        return pretool_mod(p, session, root, paths, command);
+    }
     // The cheap no-match path: no Python program named at all (words, not substrings: `pipeline`
     // is not `pip`).
     let python_word = |w: &str| matches!(w, "pip" | "pip3" | "pytest" | "py.test") || w.starts_with("python");
@@ -725,6 +728,68 @@ fn pretool(
         return Ok(None);
     }
     Ok(adapter.render("PreToolUse", out))
+}
+
+/// Whether the mod asked in observe mode (`ADAGE_MOD_OBSERVE`): decide, and record what would have
+/// been done as the control arm records it, whatever the session's arm.
+fn observed(p: &Value) -> bool {
+    p.get("observe").and_then(Value::as_bool) == Some(true)
+}
+
+/// The mod's two phases of a Bash call (`PreToolUse` with the fields a command hook never sends;
+/// architecture §3.4 of the Claude Code mod), for a learned dead end
+/// ([`adage_runtime::substitution`]):
+///
+/// - `dry_run: true` answers the plan, `{"plan":{"substitute":{command, route, track, context}}}`,
+///   or nothing, in either arm; it changes no state and spools nothing.
+/// - `verdict: {"engine": "same", "substitute": <route>}` says the person's rules decide both
+///   commands alike (`$.tool.check`). The substitution is found again (the index may have moved
+///   since the plan) and spooled once: judged `substituted` and answered
+///   `{"substitute":{…}}` in the treated arm; `would_substitute`, withheld, and nothing printed in
+///   the control arm or in observe mode. Any other verdict decides nothing and records nothing.
+fn pretool_mod(p: &Value, session: &str, root: &Path, paths: &Paths, command: &str) -> Result<Option<String>, Failure> {
+    let index = Index::try_load(&paths.index()).unwrap_or_default();
+    let keys: std::collections::BTreeSet<&str> = index.routes.iter().map(|r| r.repo.as_str()).collect();
+    let Some(key) = repo::lookup_key(root, Some(&paths.repo_keys()), &keys) else { return Ok(None) };
+    // A replaced command is a rewrite: off with `adage delegate rewrites off` like the others.
+    if !adage_store::config::load(paths).config.runtime_rewrite || rewrite_off(paths).exists() {
+        return Ok(None);
+    }
+    let table = CommandTable::load();
+    let found = || adage_runtime::substitution(&index, &key, &adage_runtime::Policy::default(), &table, command);
+    if p.get("dry_run").and_then(Value::as_bool) == Some(true) {
+        return Ok(found().map(|s| json!({ "plan": { "substitute": s } }).to_string()));
+    }
+    let v = &p["verdict"];
+    if v["engine"] != "same" {
+        return Ok(None);
+    }
+    let Some(sub) = found().filter(|s| v["substitute"].as_str() == Some(s.route.as_str())) else { return Ok(None) };
+    let arm_env = std::env::var("ADAGE_ARM").ok();
+    let share: f64 = adage_store::config::load(paths).config.runtime_control;
+    let (arm, propensity) = state::update::<SessionState, _>(&paths.state(session), |st| {
+        if st.arm.is_none() {
+            let (arm, pr) = assign(session, share, arm_env.as_deref());
+            st.arm = Some(arm);
+            st.propensity = Some(pr);
+            st.repo = Some(key.clone());
+        }
+        (st.arm, st.propensity)
+    })
+    .map_err(|e| Failure::io("state", "assigning the session's arm", &e))?;
+    let decision = adage_runtime::substitute(arm, observed(p), sub);
+    let ts = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+    let mut rec = json!({ "ts": ts, "event": "PreToolUse", "kind": "pretool", "arm": arm, "propensity": propensity, "repo": key, "checked_by": "engine", "decision": decision });
+    match &decision.substituted {
+        Some(_) => rec["substituted"] = json!(true),
+        None => {
+            rec["would_substitute"] = json!(true);
+            rec["withheld"] = json!(true);
+        }
+    }
+    spool::append(&paths.spool(session), &rec)
+        .map_err(|e| Failure::io("spool", "appending to the session spool", &e))?;
+    Ok(decision.substituted.map(|s| json!({ "substitute": s }).to_string()))
 }
 
 /// What a session start is about.
@@ -1070,6 +1135,7 @@ fn respond(
         exact_keys: false,
         predict_grants,
         predict_cap: adage_runtime::PREDICT_CAP,
+        observe: observed(p),
     };
     let ctx = Ctx {
         checkout: &adage_runtime::checkout::Disk,
@@ -1792,6 +1858,128 @@ mod tests {
             let a = harness::adapter(name).unwrap();
             assert!(a.translate("TurnStep", &p, "/r").is_none(), "{name}");
             assert!(a.render("TurnStep", Output::Predict(pred.clone())).is_none(), "{name}");
+        }
+    }
+
+    /// Observe mode (`"observe": true`, the mod's `ADAGE_MOD_OBSERVE`): a treated session's step
+    /// prints nothing and spools `would_predict`, as the control arm does; the arm is unchanged.
+    #[test]
+    fn turn_step_in_observe_mode_prints_nothing() {
+        let w = ObligationWorld::new();
+        let granted: &'static Predicts =
+            Box::leak(Box::new(Predicts(vec![("acme/finish-lines".into(), "regenerate-registry".into())])));
+        w.edit(granted);
+        let step = json!({ "hook_event_name": "TurnStep", "turn_id": "t1", "index": 2, "model": "m", "ending": true,
+                           "observe": true });
+        assert!(w.event(granted, "TurnStep", step).is_none());
+        let rec = spooled(&w).pop().unwrap();
+        assert!(rec["decision"].get("predicted").is_none());
+        assert_eq!(rec["decision"]["would_predict"]["route"], "regenerate-registry");
+        assert_eq!((rec["arm"].as_str(), w.state().arm), (Some("treated"), Some(Arm::Treated)));
+    }
+
+    /// A repository whose sessions learned that `python3 -m pytest` fails and `make test` works.
+    fn dead_end_world(arm: Arm) -> ObligationWorld {
+        use adage_tracks::{index::IndexedRoute, Evidence, Route, RouteState, Step, Strength, Trigger};
+        let w = ObligationWorld::new();
+        let route = Route {
+            id: "dead-end-pytest".into(),
+            summary: String::new(),
+            trigger: Trigger::SessionStart,
+            step: Step::Avoid {
+                avoid: "python3 -m pytest / python -m pytest".into(),
+                instead: "make test".into(),
+                signature: "No module named pytest".into(),
+            },
+            slots: vec![],
+            effect: adage_core::Effect::Verify,
+            strength: Strength::Inhibit,
+            state: RouteState::Firm,
+            exit: vec![],
+            evidence: Evidence { support: 5, opportunities: 5, days: 3, ..Default::default() },
+            authored: false,
+        };
+        let index = Index {
+            generation: "dead-end-world".into(),
+            routes: vec![IndexedRoute {
+                repo: "acme".into(),
+                track: "acme/dead-ends".into(),
+                version: "0.1.0".into(),
+                exec: None,
+                route,
+            }],
+            ..Default::default()
+        };
+        index.write_atomic(&w.paths.index()).unwrap();
+        state::update::<SessionState, _>(&w.paths.state("s"), |st| st.arm = Some(arm)).unwrap();
+        w
+    }
+
+    fn pre(w: &ObligationWorld, command: &str, extra: Value) -> Option<Value> {
+        let mut p = json!({ "hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_use_id": "toolu_9",
+                            "tool_input": { "command": command } });
+        for (k, v) in extra.as_object().unwrap() {
+            p[k] = v.clone();
+        }
+        w.event(&NO_EXTENSION, "PreToolUse", p)
+    }
+
+    struct Plain;
+    impl Extension for Plain {
+        fn deliver(&self, _: &Turn<'_>, _: &[Directive]) -> Delivery {
+            Delivery::default()
+        }
+    }
+    static NO_EXTENSION: Plain = Plain;
+
+    /// T-C6-01 / T-C6-02, in process: the dry run answers the plan and records nothing; the
+    /// verdict substitutes once, judged `substituted`; a command hook's payload is untouched.
+    #[test]
+    fn a_dead_end_is_planned_then_substituted_on_the_same_verdict() {
+        let w = dead_end_world(Arm::Treated);
+        let sub = json!({ "command": "make test", "route": "dead-end-pytest", "track": "acme/dead-ends",
+            "context": "adage ran make test in place of python3 -m pytest tests: in this repository it fails (\"No module named pytest\")." });
+        assert_eq!(
+            pre(&w, "python3 -m pytest tests", json!({ "dry_run": true })),
+            Some(json!({ "plan": { "substitute": sub } }))
+        );
+        assert!(pre(&w, "make test", json!({ "dry_run": true })).is_none(), "no dead end: no plan");
+        assert!(spooled(&w).is_empty(), "a dry run records nothing");
+        assert!(pre(&w, "python3 -m pytest tests", json!({})).is_none(), "the command hook: as before");
+        assert!(spooled(&w).is_empty());
+        let differs = json!({ "verdict": { "engine": "differs", "substitute": "dead-end-pytest" } });
+        assert!(pre(&w, "python3 -m pytest tests", differs).is_none(), "another permission verdict");
+        let other = json!({ "verdict": { "engine": "same", "substitute": "another-route" } });
+        assert!(pre(&w, "python3 -m pytest tests", other).is_none(), "the plan moved");
+        assert!(spooled(&w).is_empty());
+        let same = json!({ "verdict": { "engine": "same", "substitute": "dead-end-pytest" } });
+        assert_eq!(pre(&w, "python3 -m pytest tests", same), Some(json!({ "substitute": sub })));
+        let recs = spooled(&w);
+        assert_eq!(recs.len(), 1);
+        let rec = &recs[0];
+        assert_eq!((rec["kind"].as_str(), rec["substituted"].as_bool()), (Some("pretool"), Some(true)));
+        assert_eq!(rec["checked_by"], "engine");
+        assert_eq!(rec["decision"]["judgements"], json!([{ "kind": "substituted", "route": "dead-end-pytest" }]));
+        assert!(rec.get("withheld").is_none() && rec.get("would_substitute").is_none());
+    }
+
+    /// T-C6-02's control half, and observe mode: `would_substitute` spooled, nothing printed.
+    #[test]
+    fn a_dead_end_is_never_substituted_in_control_or_observe_mode() {
+        let same = json!({ "verdict": { "engine": "same", "substitute": "dead-end-pytest" } });
+        let observe = json!({ "verdict": { "engine": "same", "substitute": "dead-end-pytest" }, "observe": true });
+        for (arm, payload) in [(Arm::Control, same), (Arm::Treated, observe)] {
+            let w = dead_end_world(arm);
+            assert!(
+                pre(&w, "python3 -m pytest tests", json!({ "dry_run": true })).is_some(),
+                "the plan, in either arm"
+            );
+            assert!(pre(&w, "python3 -m pytest tests", payload).is_none());
+            let rec = spooled(&w).pop().unwrap();
+            assert_eq!((rec["would_substitute"].as_bool(), rec["withheld"].as_bool()), (Some(true), Some(true)));
+            assert!(rec.get("substituted").is_none());
+            assert_eq!(rec["decision"]["judgements"], json!([]));
+            assert_eq!(rec["decision"]["would_substitute"]["command"], "make test");
         }
     }
 }

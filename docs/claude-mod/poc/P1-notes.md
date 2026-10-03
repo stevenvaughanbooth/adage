@@ -182,7 +182,27 @@ and `crates/adage-exec/tests/parity.rs` (the same scenario through `adage-exec h
 for the model): `batch_no_match` p50 2.64 ms / p95 3.49 ms; `turn_step_nothing_pending` p50
 2.56 ms / p95 3.11 ms. Not the paired two-build comparison the acceptance asks for.
 
-RESULTS_PLACEHOLDER
+### Results (as run; `cargo test … --locked`)
+
+- `cargo test -p adage-trace -p adage-runtime -p adage-hook -p adage-cli -p adage-exec --locked`,
+  before the last two edits (the `ending` "in a row" rule and the obligation's `Predicted`):
+  42 suites, **518 passed, 0 failed** (hooks golden and `adage-exec/tests/parity.rs` included).
+- The same command on the committed tree (45bc903): 36 suites reported, **514 passed, 1 failed**:
+  `adage-runtime` `tests::turn_step_never_at_index_zero_nor_twice_in_a_row`
+  (`tests.rs:2468`). The test is wrong, not the code: under the `ending` rule, a step
+  `(t, 2, ending: true)` after a prediction at `(t, 1)` is *not* in a row (the model answered
+  request 2). Fix: make that step `step("t", 2, false)`. Cargo stops at the first failing
+  binary, so the suites after `adage-runtime`'s lib tests in that run were not re-run on 45bc903.
+- `cargo test -p adage-eval --locked`: lib `28 passed`; `tests/bench.rs` `4 passed` (1921 s);
+  `tests/g4.rs` **1 failed**: `contexts_fire_in_replay_and_the_fast_path_stays_exact_on_newkinds`
+  (`g4.rs:182`) expects `"\n  make check "` (trailing space) where `render.rs:939` renders
+  `"…is:\n  make check\nIgnore…"`. Neither file is in this change; not confirmed against a base
+  build (the disk filled). The run stopped there, so the remaining adage-eval test binaries did
+  not run.
+- `cargo test -p adage-eval --locked --test gates`: **15 passed, 0 failed** (545 s).
+- `cargo fmt --all --check`: clean (at the time of the last edit). `cargo test -p xtask` and
+  `cargo clippy --workspace --all-targets -- -D warnings` were run by the coordinator on 45bc903
+  (reported clean), not by this agent.
 
 ## Deferred, and open issues
 

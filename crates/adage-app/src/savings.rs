@@ -370,6 +370,13 @@ fn read_spool(path: &Path, repo: &str) -> Option<SpoolSession> {
                     ignored.push(j["route"].as_str().unwrap_or("").to_string());
                 }
                 Some("ignored") => ignored.push(j["route"].as_str().unwrap_or("").to_string()),
+                // A dead end replaced before it ran: headed off whether or not it was announced.
+                Some("substituted") => {
+                    let route = j["route"].as_str().unwrap_or("").to_string();
+                    if !inhibits.contains(&route) {
+                        inhibits.push(route);
+                    }
+                }
                 _ => {}
             }
         }

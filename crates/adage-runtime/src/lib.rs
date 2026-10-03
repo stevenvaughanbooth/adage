@@ -291,6 +291,11 @@ pub enum Judgement {
     Predicted {
         route: String,
     },
+    /// The call was a learned dead end, and Adage ran the route's `instead` in its place before it
+    /// ran ([`Substitution`]): never a follow, and the dead end was avoided, not hit.
+    Substituted {
+        route: String,
+    },
 }
 
 /// What a predicted step is ([`Prediction::kind`]).
@@ -326,6 +331,19 @@ pub struct Prediction {
     pub calls: Vec<PredictedCall>,
 }
 
+/// A learned dead end replaced before it runs (architecture §3.4 of the Claude Code mod): the
+/// call meets an `avoid` route in service at full strength whose `instead` is a fixed command,
+/// and the mod runs `command` in the call's place ([`substitution`]).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Substitution {
+    pub route: String,
+    pub track: String,
+    /// What runs instead: the route's `instead`.
+    pub command: String,
+    /// The one line the model reads after the result, and the person under the dialog.
+    pub context: String,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Decision {
     /// What the agent receives (empty in the control arm).
@@ -354,6 +372,13 @@ pub struct Decision {
     /// what a state rebuilt from the spool takes `last_step_predicted` and `predictions` from.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub predicted_at: Option<(String, u32)>,
+    /// The dead end Adage replaced before it ran (`PreToolUse` with the mod's verdict; empty in
+    /// the control arm and in observe mode).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub substituted: Option<Substitution>,
+    /// The replacement it would make, recorded in both arms.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub would_substitute: Option<Substitution>,
 }
 
 /// Embeds a raw prompt: `(model id, unit vector)`, or `None` when no model is available. Called
@@ -407,6 +432,10 @@ pub struct Policy {
     pub predict_grants: Vec<(String, String)>,
     /// At most this many predicted steps per session.
     pub predict_cap: u32,
+    /// The mod's observe mode (`ADAGE_MOD_OBSERVE`): this decision is recorded as the control arm
+    /// records it (what would have been predicted or substituted, and nothing done), while the
+    /// session keeps its arm for every other event.
+    pub observe: bool,
 }
 
 /// The default of [`Policy::predict_cap`].
@@ -422,6 +451,7 @@ impl Default for Policy {
             exact_keys: false,
             predict_grants: Vec::new(),
             predict_cap: PREDICT_CAP,
+            observe: false,
         }
     }
 }
@@ -1229,9 +1259,78 @@ fn predict_step(
     st.last_step_predicted = Some((turn_id.to_string(), index));
     st.predicted_routes.push(p.route.clone());
     d.predicted_at = Some((turn_id.to_string(), index));
-    if st.arm != Some(Arm::Control) {
+    if st.arm != Some(Arm::Control) && !ctx.policy.observe {
         d.predicted = Some(p);
     }
+}
+
+/// The learned replacement for a Bash call about to run, if it is a known dead end here: the
+/// first route in index order, in play, learned (an instinct is advice, never a replacement),
+/// firm, with no slots, that is
+///
+/// - an `avoid` step whose runners `command` runs ([`pattern::directs_avoided`]), or
+/// - a run step after a failure of `command`'s key ([`failure_matches`]) delivered at fire,
+///
+/// and whose `instead` is a fixed command that is not itself avoided and not the call. Only one
+/// plain command is replaced: a list or a pipeline also runs what the replacement would drop.
+pub fn substitution(
+    index: &Index,
+    repo: &str,
+    policy: &Policy,
+    table: &CommandTable,
+    command: &str,
+) -> Option<Substitution> {
+    let plain = !command.contains(|c: char| "|;&<>$`()\n".contains(c));
+    if !plain || keys::flatten(&adage_core::shell::normalize_shell(command, "/", table)).len() != 1 {
+        return None;
+    }
+    let key = command_key(command, table);
+    if key.is_empty() {
+        return None;
+    }
+    index.for_repo(repo).filter(|r| in_play(policy, r)).find_map(|ir| {
+        let r = &ir.route;
+        if r.is_instinct() || r.state != adage_tracks::RouteState::Firm || !r.slots.is_empty() {
+            return None;
+        }
+        let (instead, signature) = match (&r.trigger, &r.step) {
+            (_, Step::Avoid { avoid, instead, signature })
+                if pattern::directs_avoided(avoid, command) && !pattern::directs_avoided(avoid, instead) =>
+            {
+                (instead, signature)
+            }
+            (Trigger::AfterFailure { command: failing, signature }, Step::Run { command: instead })
+                if adage_tracks::delivered_strength(r) == Strength::Fire
+                    && failure_matches(policy, r, failing, &key) =>
+            {
+                (instead, signature)
+            }
+            _ => return None,
+        };
+        let instead = instead.trim();
+        if instead.is_empty() || instead.contains('{') || pattern::same_command(instead, command) {
+            return None;
+        }
+        let context = format!(
+            "adage ran {} in place of {}: in this repository it fails (\"{}\").",
+            render::sanitise(instead),
+            render::sanitise(command),
+            render::sanitise(signature)
+        );
+        Some(Substitution { route: r.id.clone(), track: ir.track.clone(), command: instead.to_string(), context })
+    })
+}
+
+/// The decision a substitution records once the mod found the person's rules treat both commands
+/// alike: in the treated arm it is made and judged [`Judgement::Substituted`]; in the control arm,
+/// and in observe mode ([`Policy::observe`]), it is only `would_substitute`.
+pub fn substitute(arm: Option<Arm>, observe: bool, sub: Substitution) -> Decision {
+    let mut d = Decision { would_substitute: Some(sub.clone()), ..Decision::default() };
+    if arm != Some(Arm::Control) && !observe {
+        d.judgements.push(Judgement::Substituted { route: sub.route.clone() });
+        d.substituted = Some(sub);
+    }
+    d
 }
 
 /// A read of one of a pending read batch's files retires it ([`PendingReads`]); when Adage made

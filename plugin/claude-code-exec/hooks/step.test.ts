@@ -34,6 +34,8 @@ function stub(answer: (p: TurnStepPayload) => Asked | Error, over: Partial<StepD
   const recorded: Predicted[] = []
   const deps: StepDeps = {
     isActive: true,
+    isObserving: false,
+    hasSkill: async () => true,
     ask: async p => {
       asked.push(p)
       const a = answer(p)
@@ -212,5 +214,49 @@ describe('the finish line (ending)', () => {
       { kind: 'stop', stopReason: 'end_turn', usage: USAGE },
     ])
     expect(result).toMatchObject({ stopReason: 'end_turn', toolUses: [] })
+  })
+})
+
+describe('observe mode and the skill check', () => {
+  const SKILL = { tool: 'Skill', input: { skill: 'release-notes' } }
+  const RESULT: TurnStepResult = { turnId: 'turn-1', index: 2, answer: 'Done.', toolUses: [], stopReason: 'end_turn', usage: USAGE }
+  const ENDS = () => model([{ kind: 'text', index: 0, text: 'Done.' }, { kind: 'stop', stopReason: 'end_turn', usage: USAGE }], RESULT)
+
+  test('observing: both asks carry observe and nothing is yielded, even when the binary answers', async () => {
+    const m = ENDS()
+    const { deps, asked, recorded } = stub(() => predict('obligation', [MAKE_GEN]), { isObserving: true })
+    const { chunks, result } = await drain(turnStep(STEP, m.next, deps))
+    expect(m.requests).toHaveLength(1)
+    expect(chunks.map(c => c.kind)).toEqual(['text', 'stop'])
+    expect(result).toEqual(RESULT)
+    expect(asked.map(p => [p.ending, p.observe])).toEqual([
+      [false, true],
+      [true, true],
+    ])
+    expect(recorded).toEqual([])
+  })
+
+  test('a skill the session does not list is not yielded: the request goes out, nothing recorded', async () => {
+    const m = ENDS()
+    const listed: string[] = []
+    const { deps, recorded } = stub(() => predict('skill', [SKILL]), {
+      hasSkill: async s => {
+        listed.push(s)
+        return false
+      },
+    })
+    const { chunks } = await drain(turnStep(STEP, m.next, deps))
+    expect(m.requests).toHaveLength(1)
+    expect(chunks.map(c => c.kind)).toEqual(['text', 'stop'])
+    expect(listed).toEqual(['release-notes', 'release-notes'])
+    expect(recorded).toEqual([])
+  })
+
+  test('a listed skill is yielded', async () => {
+    const m = ENDS()
+    const { deps } = stub(() => predict('skill', [SKILL]), { hasSkill: async s => s === 'release-notes' })
+    const { chunks } = await drain(turnStep(STEP, m.next, deps))
+    expect(m.requests).toHaveLength(0)
+    expect(chunks[0]).toEqual({ kind: 'tool', index: 0, id: ID(0), name: 'Skill' })
   })
 })
