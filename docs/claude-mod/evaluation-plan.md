@@ -246,16 +246,23 @@ second terminal. The grant: `adage review delegate acme-billing/<track> <reflex>
 
 ### 4.4 Receipt as the result, rewrites checked by the engine (C3; Q2, Q4)
 
-- A command a receipt covers (run `make gen` twice without an edit between): the second call is
-  answered with the receipt as its result (`fresh: true`, the card drawn), with the model's own
-  `tool_use_id`; whether `PostToolBatch`/`PostToolUse` fire for that call (record it either way:
-  `impl/C3-C7-C8-D2-C9-E-notes.md` says nothing double-counts in both cases).
+- A command a receipt covers (the zero-config Python fixture with a journaled passing run, or
+  `make gen` twice without an edit between): the second `ToolResult` row is the card and the
+  transcript on disk holds the receipt text as the tool result, with the model's own
+  `tool_use_id`; `adage watch --follow --json` shows one `pretool` record with `answered:
+  receipt`. Record whether a `PostToolBatch` for the same `tool_use_id` follows
+  (`impl/C3-C7-C8-D2-C9-E-notes.md` says nothing double-counts either way).
+- A covering receipt that did not answer (stale, or the rule is `ask`/`deny`): the dim beside
+  line `◠ adage receipt <id> covers this run · /adage why` under the row, never the card
+  (T-C3-07).
 - A rewrite (`python3 -m pytest tests` in the sandbox): `$.tool.check` is consulted for both
   commands; for each settings case the unit tests of `keeps_permissions` in
   `crates/adage-runtime/src/pretool.rs` enumerate (allow, deny, ask, a mode, none), write that
   `settings.json` into the sandbox's `.claude/` and confirm the engine's verdict agrees with the
   planner's, then the `--allowedTools` case the planner cannot see (T-C3-06); the rewrite
-  happens only when both verdicts agree.
+  happens only when both verdicts agree: the notice `↪ adage: pointed this test run at …`
+  appears exactly where the planner's own reading rewrote, the advice where it did not, and
+  the spool record carries `checked_by: engine`.
 - After `verdict {engine: differs}` the advice's `additionalContext` reaches the model (ask the
   model what it was told).
 
@@ -268,21 +275,30 @@ second terminal. The grant: `adage review delegate acme-billing/<track> <reflex>
 
 ### 4.6 Standing text, compaction, routing (C5)
 
-- The cached system-prompt section carries the standing text once per session (inspect the
-  debug log's request body: the section is present and byte-identical across requests, so it is
-  cached); the first prompt leaves out the reflexes the standing text carries.
-- At compaction (`/compact`), the compaction instruction from the `Standing` answer is used and
-  the reflexes survive compaction (the next directive still fires).
-- Routing: where the engine exposes a model choice at `turn.step`, a `routine` answer routes the
-  pending `fire` directive's step to the routine model; record whether 2.1.288 exposes it.
+- The cached system-prompt section (`adage:procedures` from `$.prompt.compose()`) carries the
+  standing text once per session and is byte-identical at three points of the session (the
+  debug log's request bodies); the Bash tool's description carries the environment note once;
+  the first prompt leaves out the reflexes the standing text carries (T-C5-05). A failed
+  `Standing` leaves the section empty for the whole session by design (it is never retried
+  mid-session, so the cache is not spent).
+- At compaction (`/compact keep the todo list`), the summarizer's instructions carry the
+  binary's `compact` line after the person's, no transcript row is dropped, and the reflexes
+  survive compaction (the next directive still fires). On 2.1.288 the mod removes no rows
+  (messages carry no origin), so only the instruction is added.
+- Routing (Q11): `adage config set runtime.routine_model <alias>`; at a step where a `fire`
+  directive without a grant is pending, the request names that model (the debug log shows the
+  request's model) and the `turn_step` record has `decision.routine`; `ADAGE_ARM=control` never
+  routes and records `would_route`. The first main-loop step of a headless session is never
+  routed (the card is read there). A subagent's model is not routed.
 
 ### 4.7 Attachment (C9)
 
 - The Bash tool's description carries the convention line; a fresh session uses the
   `scripts/wi-lookup` convention on its first attempt with no event and no directive
   (T-C9-04: "makes no lookup of its own": no directive is delivered and the agent still uses it).
-- A subagent's prompt carries the convention; `agent_id` reaches the command hooks for a
-  subagent's tool events (T-C9-03).
+- An Explore subagent spawned for a work item: its transcript opens with the `<adage-reflex>`
+  block and it makes no lookup of its own; its Bash calls reach the mod's `tool.call` with
+  `agentId`, and the spool's calls carry `agent` (T-C9-03, T-C9-04).
 - Directives per session fall in the `mod` arm against `adage` (T-C9-05; §5 measures it).
 
 ### 4.8 Noticed (D2, D5; Q12)
