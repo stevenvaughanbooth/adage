@@ -78,6 +78,8 @@ mod identity_tests {
 /// presets (`adage_tracks::params`).
 #[derive(Debug, Clone)]
 pub struct LearnConfig {
+    /// Reuse pure mining checkpoints when the store supports them. Never skips current judgment.
+    pub computation_cache: bool,
     /// Minimum distinct supporting sessions for any route.
     pub min_support: u32,
     /// Wilson lower bound required for fire.
@@ -168,6 +170,7 @@ impl LearnConfig {
     /// The configuration for a set of learn parameters.
     pub fn from_params(p: &LearnParams) -> Self {
         LearnConfig {
+            computation_cache: true,
             min_support: p.min_support,
             fire_lower_bound: p.fire_lower_bound,
             prime_rate: p.prime_rate,

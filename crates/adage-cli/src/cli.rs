@@ -351,7 +351,7 @@ pub struct ConditionArgs {
     /// Low thresholds, for the sample scenario.
     #[arg(long)]
     pub demo: bool,
-    /// Re-parse every trace instead of using the parse cache.
+    /// Re-parse traces and recompute mining instead of using caches.
     #[arg(long)]
     pub no_cache: bool,
     /// Do not bind instincts.
@@ -421,6 +421,9 @@ pub enum CorpusAction {
         /// Low thresholds for synthetic fixtures.
         #[arg(long)]
         demo: bool,
+        /// Recompute mining, ignoring reusable checkpoints.
+        #[arg(long)]
+        no_cache: bool,
     },
 }
 

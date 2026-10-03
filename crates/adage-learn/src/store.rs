@@ -28,6 +28,15 @@ pub struct Compiled {
 
 /// What a learn run reads of earlier runs, and writes, and nothing else.
 pub trait Store {
+    /// Identity of the mining implementation. `None` disables persistent computation reuse.
+    fn computation_stamp(&self) -> Option<String> {
+        None
+    }
+    /// At most one pure-mining checkpoint per repository. Cache failures are misses.
+    fn mining_checkpoint(&self, _repo: &str) -> Option<Vec<u8>> {
+        None
+    }
+    fn write_mining_checkpoint(&self, _repo: &str, _body: &[u8]) {}
     /// Repository-scoped canonical evidence. A result-only store may leave these unsupported.
     fn corpus_manifest(&self, _repo: &str) -> Result<Option<crate::corpus::Manifest>> {
         Ok(None)
@@ -158,9 +167,53 @@ impl Files {
         anyhow::ensure!(crate::corpus::valid_digest(digest), "invalid corpus object digest");
         Ok(self.paths().corpus().join("objects").join(&digest[..2]).join(format!("{digest}.json")))
     }
+
+    fn mining_checkpoint_path(&self, repo: &str) -> PathBuf {
+        self.paths().cache().join("mining").join(format!("{}.json", crate::corpus::digest(repo.as_bytes())))
+    }
 }
 
 impl Store for Files {
+    fn computation_stamp(&self) -> Option<String> {
+        // Hash once per process. A new implementation cannot reuse old calculations merely
+        // because its package version or executable size/timestamp happened to stay the same.
+        static STAMP: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+        STAMP
+            .get_or_init(|| {
+                use sha2::{Digest, Sha256};
+                use std::io::Read;
+                let mut file = std::fs::File::open(std::env::current_exe().ok()?).ok()?;
+                let mut hash = Sha256::new();
+                let mut buffer = [0; 64 * 1024];
+                loop {
+                    let n = file.read(&mut buffer).ok()?;
+                    if n == 0 {
+                        break;
+                    }
+                    hash.update(&buffer[..n]);
+                }
+                Some(format!("{:x}", hash.finalize()))
+            })
+            .clone()
+    }
+
+    fn mining_checkpoint(&self, repo: &str) -> Option<Vec<u8>> {
+        use std::io::Read;
+        let file = std::fs::File::open(self.mining_checkpoint_path(repo)).ok()?;
+        if file.metadata().ok()?.len() > crate::checkpoint::MAX_BYTES as u64 {
+            return None;
+        }
+        let mut bytes = Vec::new();
+        file.take(crate::checkpoint::MAX_BYTES as u64 + 1).read_to_end(&mut bytes).ok()?;
+        (bytes.len() <= crate::checkpoint::MAX_BYTES).then_some(bytes)
+    }
+
+    fn write_mining_checkpoint(&self, repo: &str, body: &[u8]) {
+        if body.len() <= crate::checkpoint::MAX_BYTES {
+            let _ = write_private(&self.mining_checkpoint_path(repo), body);
+        }
+    }
+
     fn corpus_manifest(&self, repo: &str) -> Result<Option<crate::corpus::Manifest>> {
         let body = match std::fs::read(self.corpus_manifest_path(repo)) {
             Ok(body) => body,

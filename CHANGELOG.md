@@ -18,6 +18,11 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### Fixes from the architecture work
 
+- **Reusable mining checkpoints.** Repeated learning reuses unchanged repository mining while
+  rerunning qualification, current review decisions and compilation. Content, parameter and build
+  fingerprints invalidate stale calculations; corrupt caches trigger recomputation. `--no-cache`
+  forces a full run, and reports identify mining cache hits.
+
 - **Canonical trace corpora.** `adage corpus export`, `import`, `inspect` and `learn` normalize
   portable traces, publish repository-scoped evidence snapshots and feed them into the existing
   learner. Imports bound record size, report malformed evidence, deduplicate delivery and reject

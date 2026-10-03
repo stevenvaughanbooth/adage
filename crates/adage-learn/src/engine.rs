@@ -48,6 +48,8 @@ use std::collections::{BTreeMap, BTreeSet};
 pub struct EngineReport {
     /// Traces mined.
     pub sessions: usize,
+    /// Pure mining was reused; compilation and qualification still read current evidence/state.
+    pub mining_cache_hit: bool,
     /// Distinct known evidence groups; prompt fingerprints are inferred, not declared task ids.
     pub evidence_groups: usize,
     pub sessions_with_declared_identity: usize,
@@ -932,6 +934,26 @@ fn explain_away(routes: &mut Vec<Judged>, ss: &[&Session], cfg: &LearnConfig, re
 /// Learn, compile and judge the routes for one repository's traces. `model` is the pinned
 /// embedding model (prompt-intent prototypes need it; without one there are none).
 pub fn run(ss: &[&Session], cfg: &LearnConfig, priors: &[Route], model: Option<&StaticModel>) -> EngineRun {
+    run_inner(ss, cfg, priors, model, None)
+}
+
+pub(crate) fn run_cached(
+    ss: &[&Session],
+    cfg: &LearnConfig,
+    priors: &[Route],
+    model: Option<&StaticModel>,
+    store: &dyn crate::store::Store,
+) -> EngineRun {
+    run_inner(ss, cfg, priors, model, Some(store))
+}
+
+fn run_inner(
+    ss: &[&Session],
+    cfg: &LearnConfig,
+    priors: &[Route],
+    model: Option<&StaticModel>,
+    store: Option<&dyn crate::store::Store>,
+) -> EngineRun {
     // Every trace is mined; what its directives named is exposed, not evidence. Evidence for
     // what is delivered is counted again below on the traces not exposed to the route.
     let annotated: Vec<adage_graph::input::Annotated> = ss.iter().map(|s| bridge::annotate(s)).collect();
@@ -942,11 +964,14 @@ pub fn run(ss: &[&Session], cfg: &LearnConfig, priors: &[Route], model: Option<&
     p.score.min_support = cfg.min_support;
     let (num, den) = cfg.dead_end_consistency;
     p.score.consistency = num as f64 / den.max(1) as f64;
-    let learned = select::learn(&events, &p);
-    // G1's value slots, learned in the discovery window as the lookup is judged there.
-    let prefix: Vec<adage_graph::input::Session> =
-        ss.iter().map(|s| bridge::annotate_prefix(s, s.discovery().len()).session).collect();
-    let values = adage_graph::learn(&prefix, &adage_graph::Params { threads: threads(), ..Default::default() });
+    let (learned, values, mining_cache_hit) = crate::checkpoint::mining(ss, &p, store, || {
+        let learned = select::learn(&events, &p);
+        // G1's value slots, learned in the discovery window as the lookup is judged there.
+        let prefix: Vec<adage_graph::input::Session> =
+            ss.iter().map(|s| bridge::annotate_prefix(s, s.discovery().len()).session).collect();
+        let values = adage_graph::learn(&prefix, &adage_graph::Params { threads: threads(), ..Default::default() });
+        (learned, values)
+    });
     // The glob lattice's tree is what the traces touched: a pure function of the traces, whatever
     // is on this machine (see `adage_graph::compile::glob`).
     let corpus = Corpus::of(&annotated, &[]);
@@ -976,6 +1001,7 @@ pub fn run(ss: &[&Session], cfg: &LearnConfig, priors: &[Route], model: Option<&
     let lookup = crate::graph::lookup_routes(ss, cfg);
     let mut report = EngineReport {
         sessions: ss.len(),
+        mining_cache_hit,
         evidence_groups: ss.iter().filter_map(|s| s.evidence_group().map(|g| g.key)).collect::<BTreeSet<_>>().len(),
         sessions_with_declared_identity: ss
             .iter()

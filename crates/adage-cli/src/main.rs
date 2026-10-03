@@ -481,6 +481,7 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
     cfg.cards = autolearn::card_params(&settings, paths);
     let cache =
         (settings.learn_parse_cache && !args.iter().any(|a| a == "--no-cache")).then(|| paths.cache().join("sessions"));
+    cfg.computation_cache = !args.iter().any(|a| a == "--no-cache");
     transcripts.sort();
     transcripts.dedup();
     let inputs = Inputs {

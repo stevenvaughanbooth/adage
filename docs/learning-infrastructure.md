@@ -16,7 +16,7 @@ claim. Cheaper-model predictability requires a separate model-transfer compariso
 | --- | --- | --- | --- |
 | M1 Evidence independence | Canonical task/group identity, preserved in graph calibration and route qualification | Retries stay in one fold; explicit groups survive import; unknown identity cannot establish task diversity; old traces remain readable | Complete |
 | M2 Corpus ingestion | Versioned, repository-scoped canonical corpus with bounded streaming and auditable rejection/deduplication | Input order does not change evidence; conflicting duplicates fail visibly; malformed and oversized records cannot silently become evidence | Complete |
-| M3 Scalable learning | Reusable repository learning checkpoints and incremental computation with explicit invalidation | Repeated runs avoid unchanged work; changed/deleted evidence and parameter changes invalidate correctly; full/incremental outputs agree | Pending |
+| M3 Scalable learning | Reusable repository mining checkpoints with explicit invalidation | Repeated runs avoid unchanged mining; changed/deleted evidence and mining parameters invalidate correctly; full/warm artifacts agree | Complete |
 | M4 Outcomes and value | Conservative completion evidence and reproducible paired token/quality evaluation | Stale checks do not label final work successful; quality regressions reject savings claims; unknown usage and contaminated comparisons are visible | Pending |
 | M5 Verification and delivery | Required Rust checks, deterministic corpus/scale measurements, signed commits, remote branch and review | Results and limitations recorded against a commit; no unsupported savings or enterprise-capacity claim | Pending |
 
@@ -48,6 +48,26 @@ claim. Cheaper-model predictability requires a separate model-transfer compariso
   other repositories itself. Fixed deleted-directory attribution at ingestion as well.
 
 ## Deterministic fixture strategy
+
+### Reusable mining
+
+Learning persists one G1/G2 mining checkpoint per repository under `$ADAGE_HOME/cache/mining`.
+Keys cover sorted canonical sessions, mining parameters and the SHA-256 of the running executable;
+worker count does not affect the key. The binary digest is computed once per process. Checkpoints
+include the compiler-only patterns, unselected candidates and dormant-route counts omitted from
+public mining reports. JSON float round trips preserve confidence values exactly. Entries are
+private on Unix, checksum-verified, atomically replaced and capped at 64 MiB; incompatible,
+missing, oversized or corrupt entries cause full recomputation.
+
+Only pure mining is reused. Checkout facts, priors, compilation, qualification, current reviews,
+effect ceilings and final index publication run each time. Dry `plan`/`sense` calls do not write
+checkpoints. `condition --no-cache` and `corpus learn --no-cache` force recomputation; reports
+show `engine.mining_cache_hit` per repository. The cache is optional for other `Store` adapters.
+
+New or changed evidence still causes a full repository mine. The existing frozen-epoch negative
+border algorithm remains tested but is not used across changing prototype epochs: that would
+need a separate epoch/invalidation contract. This milestone provides exact computation reuse
+and incremental corpus updates, not approximate online learning or distributed mining.
 
 ### Canonical corpora
 
@@ -138,3 +158,8 @@ checks and offline measurements do not establish production savings.
 
 M2: all ingestion, learner, store and architecture suites pass, as do the CLI corpus lifecycle,
 all 11 CLI grammar/help tests and both no-spawn guards. All-target workspace Clippy passes.
+
+M3: all learner tests, architecture guards, CLI corpus lifecycle and no-spawn checks pass.
+Checkpoint fixtures compare complete tracks/why/reviews and index bytes to full computation
+after each update, verify corrupt-cache recovery and confirm current human decisions still apply.
+All-target workspace Clippy passes. Scale timings remain pending.

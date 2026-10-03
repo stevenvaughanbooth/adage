@@ -35,10 +35,11 @@ pub fn run(matches: &clap::ArgMatches, paths: &Paths) -> Result<()> {
             let manifest = store.corpus_manifest(&repo)?.context("no canonical corpus for this repository")?;
             println!("{}", serde_json::to_string_pretty(&manifest)?);
         }
-        CorpusAction::Learn { repo, demo } => {
+        CorpusAction::Learn { repo, demo, no_cache } => {
             crate::writable_data_dir(paths)?;
             let _lock = adage_store::lock::exclusive(&paths.tracks_lock())?;
-            let cfg = if demo { LearnConfig::demo() } else { LearnConfig::default() };
+            let mut cfg = if demo { LearnConfig::demo() } else { LearnConfig::default() };
+            cfg.computation_cache = !no_cache;
             let report = corpus::learn(&repo, Some(&paths.models()), &store, &cfg)?;
             println!("{}", serde_json::to_string_pretty(&report)?);
         }

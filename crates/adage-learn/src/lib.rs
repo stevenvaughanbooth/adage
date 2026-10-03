@@ -4,6 +4,7 @@
 pub mod bridge;
 pub mod cards;
 pub mod cases;
+mod checkpoint;
 pub mod claims;
 pub mod corpus;
 pub mod diff;
@@ -252,7 +253,7 @@ pub fn learn_sessions_into(
         store.install_base_packs();
     }
     let weights = follow_weights(&sessions);
-    let (mut report, planned) = plan(sessions, models, store, cfg)?;
+    let (mut report, planned) = plan_repository(sessions, None, models, store, cfg, true)?;
     report.sessions_read = read;
     report.sessions_duplicates = duplicates;
     report.sessions_steered = steered;
@@ -303,7 +304,7 @@ pub fn plan(
     store: &dyn store::Store,
     cfg: &LearnConfig,
 ) -> Result<(Report, Vec<Planned>)> {
-    plan_repository(sessions, None, models, store, cfg)
+    plan_repository(sessions, None, models, store, cfg, false)
 }
 
 /// A committed corpus may explicitly remove every session of a repository. Include that empty
@@ -314,6 +315,7 @@ pub(crate) fn plan_repository(
     models: Option<&Path>,
     store: &dyn store::Store,
     cfg: &LearnConfig,
+    cache: bool,
 ) -> Result<(Report, Vec<Planned>)> {
     let mut report = Report { thresholds: thresholds(cfg), ..Default::default() };
     let (sessions, duplicates) = evidence::unique_sessions(sessions)?;
@@ -358,7 +360,11 @@ pub(crate) fn plan_repository(
         cfg.existing.extend(prev.iter().flat_map(|t| t.routes.iter().map(|r| r.id.clone())));
         let cfg = &cfg;
         let priors: Vec<Route> = store.track(&instincts::track_name(repo)).map(|t| t.routes).unwrap_or_default();
-        let run = engine::run(ss, cfg, &priors, model.as_ref());
+        let run = if cache && cfg.computation_cache {
+            engine::run_cached(ss, cfg, &priors, model.as_ref(), store)
+        } else {
+            engine::run(ss, cfg, &priors, model.as_ref())
+        };
         rr.intent_families = run.report.intent_families;
         rr.engine = run.report.clone();
         let mut routes: Vec<Route> = run.routes.iter().map(|j| j.route.clone()).collect();

@@ -185,7 +185,7 @@ pub fn learn(repo: &str, models: Option<&Path>, store: &dyn Store, cfg: &crate::
     if !batch.sessions.is_empty() {
         return crate::learn_sessions_into(batch, Some(repo), models, store, cfg);
     }
-    let (mut report, planned) = crate::plan_repository(Vec::new(), Some(repo), models, store, cfg)?;
+    let (mut report, planned) = crate::plan_repository(Vec::new(), Some(repo), models, store, cfg, false)?;
     for p in &planned {
         store.write_track(p)?;
     }
