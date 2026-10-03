@@ -187,6 +187,11 @@ pub trait Extension: Sync {
     fn exec_only(&self, _repo_key: &str, _index: &Index, _paths: &Paths) -> Vec<(String, String)> {
         Vec::new()
     }
+    /// The reflexes (`(track, route id)`) a person granted `predict` on this machine in this
+    /// repository: what a `TurnStep` may make in the agent's place. Asked only at a `TurnStep`.
+    fn predict_grants(&self, _repo_key: &str, _index: &Index, _paths: &Paths) -> Vec<(String, String)> {
+        Vec::new()
+    }
     /// A fact for a tool call about to run (`PreToolUse`): completed work it would repeat, checked
     /// now. Context only, never a refusal; it goes beside any interpreter advice.
     fn pretool_context(&self, _call: &PreCall<'_>) -> Option<String> {
@@ -998,7 +1003,10 @@ fn respond(
         // Nothing installed for this repository: the common, cheapest path. In a repository the
         // session is still seen (outside one there is nothing to learn).
         if root.join(".git").exists() {
-            if let Some(ev) = adapter.translate(event, p, &cwd.to_string_lossy()) {
+            // A step boundary is not a session event the person sees: it is never recorded here.
+            let ev =
+                adapter.translate(event, p, &cwd.to_string_lossy()).filter(|e| !matches!(e, Event::TurnStep { .. }));
+            if let Some(ev) = ev {
                 let key = repo::repo_key_cached(root, &paths.repo_keys());
                 record_seen(paths, session, adapter, event, &ev, &key);
             }
@@ -1012,6 +1020,18 @@ fn respond(
     let state_path = paths.state(session);
     let read_state = || state::try_read::<SessionState>(&state_path).ok().flatten();
     if fast::skip(&index.triggers(&repo_key), &ev, &cwd.to_string_lossy(), read_state) {
+        return Ok(Responded::default());
+    }
+    // Predict grants matter only at a step boundary. Without one there is nothing to predict and,
+    // in either arm, nothing to record: the step stops here, before the state lock.
+    let predict_grants: Vec<(String, String)> = match (opts.extension, &ev) {
+        (Some(x), Event::TurnStep { .. }) => {
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| x.predict_grants(&repo_key, index, paths)))
+                .unwrap_or_default()
+        }
+        _ => Vec::new(),
+    };
+    if matches!(ev, Event::TurnStep { .. }) && predict_grants.is_empty() {
         return Ok(Responded::default());
     }
     let table = CommandTable::load();
@@ -1048,6 +1068,8 @@ fn respond(
         follow_weights: weights,
         exec_only,
         exact_keys: false,
+        predict_grants,
+        predict_cap: adage_runtime::PREDICT_CAP,
     };
     let ctx = Ctx {
         checkout: &adage_runtime::checkout::Disk,
@@ -1089,6 +1111,11 @@ fn respond(
         })
         .map_err(|e| Failure::io("state", "updating the session state", &e))?;
 
+    // A step boundary where nothing would be predicted leaves no record: only a step that counted
+    // against the bounds, or would have, is replayed or shown.
+    if matches!(ev, Event::TurnStep { .. }) && decision.would_predict.is_none() {
+        return Ok(Responded::default());
+    }
     // An extension (adage-exec: E1 prefetch, E2 actions) sees the directives about to be
     // delivered and the obligations armed or enforced now. A panic cannot prove no action ran.
     let mut delivery = Delivery::default();
@@ -1120,6 +1147,12 @@ fn respond(
         let withdrawn = matches!(delivery.stop, Some(None));
         let marked = state::update::<SessionState, _>(&state_path, |st| {
             st.pending.retain(|p| !delivery.cpu_predictions.contains(&p.route));
+            // Carried out (or abstained from) in the sandbox already: never also predicted.
+            for r in &delivery.cpu_predictions {
+                if !st.predicted_routes.contains(r) {
+                    st.predicted_routes.push(r.clone());
+                }
+            }
             for o in st.obligations.iter_mut().filter(|o| met.contains(&o.route)) {
                 o.met = true;
                 if withdrawn && o.stop_requested {
@@ -1173,6 +1206,10 @@ fn respond(
     }
     if let Some(reason) = decision.continue_reason {
         return done(Some(Output::Continue(reason)));
+    }
+    // A step boundary carries no context: a predicted step, or nothing.
+    if matches!(ev, Event::TurnStep { .. }) {
+        return done(decision.predicted.take().map(Output::Predict));
     }
     // A grant that stopped matching: one line for the person, once per session, beside whatever
     // the agent receives (never at a Stop, which has no such channel).
@@ -1627,5 +1664,134 @@ mod tests {
         let s = stimuli(&before, &after, false);
         assert_eq!(s.len(), 1);
         assert!(s[0].at_stop && s[0].route == "now" && s[0].edited.is_empty());
+    }
+
+    /// A stand-in for adage-exec with a person's `predict` grant on the finish line.
+    struct Predicts(Vec<(String, String)>);
+
+    impl Extension for Predicts {
+        fn deliver(&self, _: &Turn<'_>, _: &[Directive]) -> Delivery {
+            Delivery::default()
+        }
+        fn predict_grants(&self, repo_key: &str, _: &Index, _: &Paths) -> Vec<(String, String)> {
+            assert_eq!(repo_key, "acme");
+            self.0.clone()
+        }
+    }
+
+    fn turn_step(w: &ObligationWorld, ext: &'static dyn Extension, index: u32, ending: bool) -> Option<Value> {
+        w.event(
+            ext,
+            "TurnStep",
+            json!({ "hook_event_name": "TurnStep", "turn_id": "t1", "index": index, "model": "claude-x", "ending": ending }),
+        )
+    }
+
+    fn spooled(w: &ObligationWorld) -> Vec<Value> {
+        spool::read_all(&w.paths.spool("s")).unwrap()
+    }
+
+    /// T-C1-10, in process: with a grant, the step that ends the turn yields the armed finish
+    /// line's call, spooled as `turn_step`; Adage's call then meets it and no Stop request follows.
+    /// Without a grant nothing is printed and nothing is recorded.
+    #[test]
+    fn turn_step_predicts_the_granted_finish_line() {
+        let w = ObligationWorld::new();
+        let granted: &'static Predicts =
+            Box::leak(Box::new(Predicts(vec![("acme/finish-lines".into(), "regenerate-registry".into())])));
+        let none: &'static Predicts = Box::leak(Box::new(Predicts(vec![])));
+        assert!(turn_step(&w, granted, 1, true).is_none(), "nothing directed yet: the fast path");
+        w.edit(granted).expect("the edit arms the obligation");
+        let records = spooled(&w).len();
+        assert!(turn_step(&w, none, 1, true).is_none(), "no grant, no prediction");
+        assert_eq!(spooled(&w).len(), records, "and no record");
+        assert!(turn_step(&w, granted, 1, false).is_none(), "not the turn's last step");
+        let out = turn_step(&w, granted, 2, true).expect("the finish line, in the model's place");
+        assert_eq!(
+            out,
+            json!({ "predict": { "kind": "obligation", "route": "regenerate-registry", "track": "acme/finish-lines",
+                                  "calls": [{ "tool": "Bash", "input": { "command": "make gen" } }] } })
+        );
+        let rec = spooled(&w).pop().unwrap();
+        assert_eq!((rec["kind"].as_str(), rec["event"].as_str()), (Some("turn_step"), Some("TurnStep")));
+        assert_eq!(rec["decision"]["predicted"]["route"], "regenerate-registry");
+        assert_eq!(rec["decision"]["predicted_at"], json!(["t1", 2]));
+        assert!(turn_step(&w, granted, 3, true).is_none(), "a route is predicted once per session");
+        let call = json!({ "tool_name": "Bash", "tool_use_id": "adage_regenerate-registry_t1_2",
+                           "tool_input": { "command": "make gen" }, "tool_response": "ok" });
+        w.event(granted, "PostToolBatch", json!({ "tool_calls": [call] }));
+        assert!(w.state().obligations[0].met, "Adage's call met the finish line");
+        assert!(w.stop(none, false).is_none(), "no Stop request follows");
+    }
+
+    /// The control arm: nothing printed, `would_predict` spooled.
+    #[test]
+    fn turn_step_in_the_control_arm_prints_nothing() {
+        let w = ObligationWorld::new();
+        let granted: &'static Predicts =
+            Box::leak(Box::new(Predicts(vec![("acme/finish-lines".into(), "regenerate-registry".into())])));
+        state::update::<SessionState, _>(&w.paths.state("s"), |st| st.arm = Some(Arm::Control)).unwrap();
+        w.edit(granted);
+        assert!(turn_step(&w, granted, 1, true).is_none());
+        let rec = spooled(&w).pop().unwrap();
+        assert_eq!(rec["kind"], "turn_step");
+        assert!(rec["decision"].get("predicted").is_none());
+        assert_eq!(rec["decision"]["would_predict"]["kind"], "obligation");
+    }
+
+    /// The adapters: Claude Code translates the mod's payload and renders a prediction; a call
+    /// whose id Adage minted is Adage's; Codex and OpenCode have no such event and render nothing.
+    #[test]
+    fn turn_step_on_each_adapter() {
+        use crate::harness::Adapter;
+        let claude = harness::claude::Claude;
+        let p = json!({ "session_id": "s", "cwd": "/r", "hook_event_name": "TurnStep", "turn_id": "t", "index": 3,
+                         "model": "m", "agent_id": "a", "ending": true });
+        match claude.translate("TurnStep", &p, "/r") {
+            Some(Event::TurnStep { turn_id, index, model, agent, ending }) => {
+                assert_eq!(
+                    (turn_id.as_str(), index, model.as_deref(), agent.as_deref(), ending),
+                    ("t", 3, Some("m"), Some("a"), true)
+                );
+            }
+            other => panic!("{other:?}"),
+        }
+        let bare = json!({ "turn_id": "t", "index": 1 });
+        assert!(matches!(
+            claude.translate("TurnStep", &bare, "/r"),
+            Some(Event::TurnStep { ending: false, model: None, .. })
+        ));
+        assert!(claude.translate("TurnStep", &json!({ "turn_id": "t" }), "/r").is_none(), "no index");
+        assert!(claude.translate("TurnStep", &json!({ "turn_id": "t", "index": -1 }), "/r").is_none());
+        let batch = json!({ "tool_calls": [
+            { "tool_name": "Bash", "tool_use_id": "adage_gen_t_1", "tool_input": { "command": "make gen" } },
+            { "tool_name": "Bash", "tool_use_id": "toolu_1", "tool_input": { "command": "ls" } },
+            { "tool_name": "Bash", "tool_input": { "command": "ls" } } ] });
+        let Some(Event::Batch { calls }) = claude.translate("PostToolBatch", &batch, "/r") else { panic!() };
+        let by: Vec<(adage_runtime::By, Option<&str>)> =
+            calls.iter().map(|c| (c.by, c.tool_use_id.as_deref())).collect();
+        use adage_runtime::By;
+        assert_eq!(by, vec![(By::Adage, Some("adage_gen_t_1")), (By::Agent, Some("toolu_1")), (By::Agent, None)]);
+        let failure = json!({ "tool_name": "Bash", "tool_use_id": "adage_gen_t_1", "tool_input": {}, "error": "x" });
+        assert!(
+            matches!(claude.translate("PostToolUseFailure", &failure, "/r"), Some(Event::Failure { call }) if call.by == By::Adage)
+        );
+        let pred = adage_runtime::Prediction {
+            kind: adage_runtime::PredictionKind::Skill,
+            route: "r".into(),
+            track: "acme/t".into(),
+            calls: vec![adage_runtime::PredictedCall { tool: "Skill".into(), input: json!({ "skill": "release" }) }],
+        };
+        let out: Value =
+            serde_json::from_str(&claude.render("TurnStep", Output::Predict(pred.clone())).unwrap()).unwrap();
+        assert_eq!(
+            out,
+            json!({ "predict": { "kind": "skill", "route": "r", "track": "acme/t", "calls": [{ "tool": "Skill", "input": { "skill": "release" } }] } })
+        );
+        for name in ["codex", "opencode"] {
+            let a = harness::adapter(name).unwrap();
+            assert!(a.translate("TurnStep", &p, "/r").is_none(), "{name}");
+            assert!(a.render("TurnStep", Output::Predict(pred.clone())).is_none(), "{name}");
+        }
     }
 }

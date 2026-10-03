@@ -70,7 +70,7 @@ pub fn assign(session: &str, control_share: f64, forced: Option<&str>) -> (Arm, 
     }
 }
 
-pub use adage_trace::{Call, Event};
+pub use adage_trace::{By, Call, Event};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Pending {
@@ -80,6 +80,24 @@ pub struct Pending {
     /// on `expect_key` with [`pattern::follows`] (added options and operands count).
     #[serde(default)]
     pub expect_head: String,
+    pub batches_left: u32,
+    /// The command the directive named, as rendered for the agent (slots bound): what a predicted
+    /// step runs (`Event::TurnStep`). For a skill step, the skill's name. Empty where the
+    /// directive has no fixed command (and in a state written before it was kept): such a
+    /// directive is never predicted.
+    #[serde(default)]
+    pub command: String,
+}
+
+/// A read-batch directive delivered with its files bound from the preceding call's result (the
+/// lookup's `linked_files`): what a predicted chain step reads (`Event::TurnStep`, kind
+/// [`PredictionKind::Chain`]). It carries no follow judgement; it is retired when any of its
+/// files is read, or after the follow window.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PendingReads {
+    pub route: String,
+    /// Repository-relative paths, validated by the route's slot contract, in the directive's order.
+    pub files: Vec<String>,
     pub batches_left: u32,
 }
 
@@ -144,6 +162,21 @@ pub struct SessionState {
     /// once per session.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub lapse_noticed: bool,
+    /// The latest step Adage predicted (or would have, in the control arm): `(turn id, index)`.
+    /// No step right after it is predicted, so a model step always separates two predictions.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_step_predicted: Option<(String, u32)>,
+    /// Steps predicted this session (both arms), against [`Policy::predict_cap`].
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub predictions: u32,
+    /// Routes never predicted again this session: predicted once already, or carried out by
+    /// adage-exec's own CPU prediction (`Delivery.cpu_predictions` in adage-hook), which a
+    /// prediction would run a second time.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub predicted_routes: Vec<String>,
+    /// Read-batch directives whose files are bound ([`PendingReads`]).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub reads: Vec<PendingReads>,
 }
 
 /// At most this many test names are kept per session ([`SessionState::new_tests`]).
@@ -253,6 +286,44 @@ pub enum Judgement {
     Misfired {
         route: String,
     },
+    /// The directed step was taken by Adage in the agent's place (a predicted call, `By::Adage`),
+    /// not by the agent: never a follow, never evidence of what the agent does.
+    Predicted {
+        route: String,
+    },
+}
+
+/// What a predicted step is ([`Prediction::kind`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PredictionKind {
+    /// An armed, unmet finish-line obligation, at the step that ends the turn.
+    Obligation,
+    /// A pending run directive's command.
+    Run,
+    /// A pending sequence directive's first command.
+    Sequence,
+    /// A pending skill step: the Skill tool with the skill's name.
+    Skill,
+    /// A read-batch directive's files, bound from the preceding call's result: one Read each.
+    Chain,
+}
+
+/// One tool call Adage makes in the agent's place: the harness tool and its input.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PredictedCall {
+    pub tool: String,
+    pub input: Value,
+}
+
+/// The step Adage makes in the agent's place at a `TurnStep`: only what it already directed
+/// (architecture §3.2 of the Claude Code mod).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Prediction {
+    pub kind: PredictionKind,
+    pub route: String,
+    pub track: String,
+    pub calls: Vec<PredictedCall>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -273,6 +344,16 @@ pub struct Decision {
     /// rebuilt from the spool takes it from ([`rebuild`]).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ctx: Option<CtxState>,
+    /// The step Adage makes in the agent's place (`TurnStep`; empty in the control arm).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub predicted: Option<Prediction>,
+    /// The step it would make, recorded in both arms, also when the session's cap holds it back.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub would_predict: Option<Prediction>,
+    /// `(turn id, index)` of the step whose prediction counted against the bounds (both arms):
+    /// what a state rebuilt from the spool takes `last_step_predicted` and `predictions` from.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub predicted_at: Option<(String, u32)>,
 }
 
 /// Embeds a raw prompt: `(model id, unit vector)`, or `None` when no model is available. Called
@@ -320,7 +401,16 @@ pub struct Policy {
     /// directed one exactly. Only for replaying decisions that hooks of that time recorded (the
     /// eval's fidelity check, `adage_eval::fidelity`).
     pub exact_keys: bool,
+    /// Routes Adage may predict at a `TurnStep`, `(track, route id)`: those holding a person's
+    /// `predict` grant on this machine. Only an extension that reads grants (adage-exec) names
+    /// any, so the plain `adage hook` never predicts.
+    pub predict_grants: Vec<(String, String)>,
+    /// At most this many predicted steps per session.
+    pub predict_cap: u32,
 }
+
+/// The default of [`Policy::predict_cap`].
+pub const PREDICT_CAP: u32 = 6;
 
 impl Default for Policy {
     fn default() -> Self {
@@ -330,6 +420,8 @@ impl Default for Policy {
             follow_weights: None,
             exec_only: Vec::new(),
             exact_keys: false,
+            predict_grants: Vec::new(),
+            predict_cap: PREDICT_CAP,
         }
     }
 }
@@ -553,12 +645,13 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                 if !ok(st, &out, ir, inhibits_left) {
                     continue;
                 }
-                if let Some((text, key, head)) = bind_prompt_route(&ir.route, &spans, text, ctx) {
+                if let Some((text, key, head, command)) = bind_prompt_route(&ir.route, &spans, text, ctx) {
                     st.pending.push(Pending {
                         route: ir.route.id.clone(),
                         expect_key: key,
                         expect_head: head,
                         batches_left: ctx.params.follow_window,
+                        command,
                     });
                     out.push(directive(ir, text));
                 }
@@ -595,12 +688,13 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
             if let Some((family, ir)) = match_intent(ctx, &runs, text, &mut emb) {
                 st.intent = Some(family);
                 if ok(st, &out, ir, inhibits_left) {
-                    if let Some((text, key, head)) = bind_prompt_route(&ir.route, &spans, text, ctx) {
+                    if let Some((text, key, head, command)) = bind_prompt_route(&ir.route, &spans, text, ctx) {
                         st.pending.push(Pending {
                             route: ir.route.id.clone(),
                             expect_key: key,
                             expect_head: head,
                             batches_left: ctx.params.follow_window,
+                            command,
                         });
                         out.push(directive(ir, text));
                     }
@@ -645,6 +739,7 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                 let piped = !call.failed && call_command(call).is_some_and(outcome::piped);
                 let piped_failed = piped && outcome::piped_failure(&call.output);
                 let misfire = (call.failed || piped) && outcome::misfired(&call.output);
+                retire_reads(ctx, st, call, &mut d);
                 let keyed = call_keys(call, ctx);
                 let segs = exec_segments(&keyed);
                 for (key, n) in keyed {
@@ -660,7 +755,9 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                             || follows_learned(&ctx.policy, &p.expect_key, call)
                         {
                             let route = p.route.clone();
-                            d.judgements.push(if misfire {
+                            d.judgements.push(if call.by == By::Adage {
+                                Judgement::Predicted { route }
+                            } else if misfire {
                                 Judgement::Misfired { route }
                             } else {
                                 Judgement::Followed { route }
@@ -679,6 +776,10 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                     for o in st.obligations.iter_mut().filter(|o| !o.met && ctx.policy.meets(&o.expect_key, &key)) {
                         o.met = true;
                         d.judgements.push(Judgement::ObligationMet { route: o.route.clone() });
+                        // Met by the call Adage made in the agent's place: its step, not the agent's.
+                        if call.by == By::Adage {
+                            d.judgements.push(Judgement::Predicted { route: o.route.clone() });
+                        }
                     }
                     // Edits trigger finish-line obligations.
                     if keys::is_author(&n.action) {
@@ -871,19 +972,27 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                                         // A command with a slot bound from this command's output.
                                         Step::Run { .. } if binds_output(&ir.route) => {
                                             match bind_output_route(&ir.route, &call.output, ctx) {
-                                                Some((t, key, head)) => {
+                                                Some((t, key, head, command)) => {
                                                     st.pending.push(Pending {
                                                         route: ir.route.id.clone(),
                                                         expect_key: key,
                                                         expect_head: head,
                                                         batches_left: ctx.params.follow_window,
+                                                        command,
                                                     });
                                                     Some(t)
                                                 }
                                                 None => None,
                                             }
                                         }
-                                        _ => bind_result_route(&ir.route, &call.output, ctx),
+                                        _ => bind_result_route(&ir.route, &call.output, ctx).map(|(t, files)| {
+                                            st.reads.push(PendingReads {
+                                                route: ir.route.id.clone(),
+                                                files,
+                                                batches_left: ctx.params.follow_window,
+                                            });
+                                            t
+                                        }),
                                     };
                                     if let Some(t) = text {
                                         out.push(directive(ir, t));
@@ -930,6 +1039,10 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                 }
             }
             st.pending.retain(|p| p.batches_left > 0);
+            for r in st.reads.iter_mut() {
+                r.batches_left = r.batches_left.saturating_sub(1);
+            }
+            st.reads.retain(|r| r.batches_left > 0);
         }
         Event::Failure { call } => {
             let keyed = call_keys(call, ctx);
@@ -946,7 +1059,9 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                         || follows_learned(&ctx.policy, &p.expect_key, call)
                     {
                         let route = p.route.clone();
-                        d.judgements.push(if outcome::misfired(&call.output) {
+                        d.judgements.push(if call.by == By::Adage {
+                            Judgement::Predicted { route }
+                        } else if outcome::misfired(&call.output) {
                             Judgement::Misfired { route }
                         } else {
                             Judgement::Followed { route }
@@ -983,6 +1098,12 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                 }
             }
         }
+        Event::TurnStep { turn_id, index, agent, ending, .. } => {
+            // The main loop's steps only: a subagent's step is its own turn, not the session's.
+            if agent.is_none() {
+                predict_step(ctx, &routes, st, &mut d, turn_id, *index, *ending);
+            }
+        }
     }
 
     let out = approach_lock(&routes, st, out);
@@ -997,6 +1118,141 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
         d.directives = out;
     }
     d
+}
+
+/// A `TurnStep`: the step Adage makes in the agent's place, if any (the Claude Code mod's
+/// `turn.step`; its architecture §3.2). Only what Adage already directed: a pending directive whose
+/// command is bound (a run, a sequence's first command, a skill step), a read batch whose files are
+/// bound (a chain), or, at the step that ends the turn, an armed and unmet finish-line obligation,
+/// the first in that order whose route
+///
+/// - holds a `predict` grant ([`Policy::predict_grants`]) and is in play, never an exec-only one;
+/// - was not predicted before this session, nor carried out by adage-exec's CPU prediction
+///   ([`SessionState::predicted_routes`]);
+/// - is not one a dead end announced this session says not to run ([`interlock::avoids`]).
+///
+/// Never at the turn's first step (`index` 0, the prompt's own request, nor its end), never right
+/// after a predicted step (a model step always separates two: before request `index`, a
+/// prediction at `index - 1`; at a turn's end, which the mod asks with the index of the request
+/// the model just answered, a prediction at that index), and at most [`Policy::predict_cap`] per
+/// session: past the cap the step is recorded as `would_predict` only. The bounds count in both
+/// arms; in the control arm nothing is predicted and `would_predict` says what would have been.
+fn predict_step(
+    ctx: &Ctx,
+    routes: &[&IndexedRoute],
+    st: &mut SessionState,
+    d: &mut Decision,
+    turn_id: &str,
+    index: u32,
+    ending: bool,
+) {
+    if index == 0 || ctx.policy.predict_grants.is_empty() {
+        return;
+    }
+    // The step just before this request was predicted: no model step between them. At the end of
+    // a turn (`ending`) the model has just answered request `index` itself, so only a prediction
+    // at this very index would be "in a row".
+    let previous = if ending { index } else { index - 1 };
+    if st.last_step_predicted.as_ref().is_some_and(|(t, i)| t == turn_id && *i == previous) {
+        return;
+    }
+    let inhibits: Vec<&Route> = st
+        .emitted
+        .iter()
+        .filter_map(|id| routes.iter().find(|r| &r.route.id == id))
+        .map(|r| &r.route)
+        .filter(|r| matches!(r.step, Step::Avoid { .. }))
+        .collect();
+    let eligible = |id: &str, command: Option<&str>| -> Option<&IndexedRoute> {
+        let ir = routes.iter().copied().find(|r| r.route.id == id)?;
+        let granted = ctx.policy.predict_grants.iter().any(|(t, r)| t == &ir.track && r == id);
+        let inhibited = inhibits.iter().any(|inhibit| {
+            interlock::avoids(inhibit, &ir.route)
+                || matches!((&inhibit.step, command), (Step::Avoid { avoid, .. }, Some(c)) if pattern::directs_avoided(avoid, c))
+        });
+        (granted && !ir.exec_only() && !inhibited && !st.predicted_routes.iter().any(|r| r == id)).then_some(ir)
+    };
+    let bash = |command: &str| PredictedCall { tool: "Bash".into(), input: serde_json::json!({ "command": command }) };
+    let mut found: Option<Prediction> = None;
+    for p in st.pending.iter().filter(|p| !p.command.is_empty()) {
+        let skill = p.expect_key.strip_prefix("control Skill ");
+        let Some(ir) = eligible(&p.route, skill.is_none().then_some(p.command.as_str())) else { continue };
+        let (kind, call) = match (skill, &ir.route.step) {
+            (Some(_), _) => (
+                PredictionKind::Skill,
+                PredictedCall { tool: "Skill".into(), input: serde_json::json!({ "skill": p.command }) },
+            ),
+            (None, Step::Sequence { .. }) => (PredictionKind::Sequence, bash(&p.command)),
+            (None, _) => (PredictionKind::Run, bash(&p.command)),
+        };
+        found = Some(Prediction { kind, route: ir.route.id.clone(), track: ir.track.clone(), calls: vec![call] });
+        break;
+    }
+    if found.is_none() {
+        for r in st.reads.iter().filter(|r| !r.files.is_empty()) {
+            let Some(ir) = eligible(&r.route, None) else { continue };
+            let calls = r
+                .files
+                .iter()
+                .map(|f| PredictedCall {
+                    tool: "Read".into(),
+                    input: serde_json::json!({ "file_path": ctx.root.join(f).to_string_lossy() }),
+                })
+                .collect();
+            found = Some(Prediction {
+                kind: PredictionKind::Chain,
+                route: ir.route.id.clone(),
+                track: ir.track.clone(),
+                calls,
+            });
+            break;
+        }
+    }
+    if found.is_none() && ending {
+        for o in st.obligations.iter().filter(|o| !o.met && !o.command.is_empty()) {
+            let Some(ir) = eligible(&o.route, Some(&o.command)) else { continue };
+            found = Some(Prediction {
+                kind: PredictionKind::Obligation,
+                route: ir.route.id.clone(),
+                track: ir.track.clone(),
+                calls: vec![bash(&o.command)],
+            });
+            break;
+        }
+    }
+    let Some(p) = found else { return };
+    d.would_predict = Some(p.clone());
+    if st.predictions >= ctx.policy.predict_cap {
+        return;
+    }
+    st.predictions += 1;
+    st.last_step_predicted = Some((turn_id.to_string(), index));
+    st.predicted_routes.push(p.route.clone());
+    d.predicted_at = Some((turn_id.to_string(), index));
+    if st.arm != Some(Arm::Control) {
+        d.predicted = Some(p);
+    }
+}
+
+/// A read of one of a pending read batch's files retires it ([`PendingReads`]); when Adage made
+/// the read (a predicted chain step), it is judged [`Judgement::Predicted`].
+fn retire_reads(ctx: &Ctx, st: &mut SessionState, call: &Call, d: &mut Decision) {
+    if st.reads.is_empty() || call.failed || call.tool != "Read" {
+        return;
+    }
+    let Some(path) = call.input.get("file_path").and_then(Value::as_str) else { return };
+    let rel = repo::relativize(ctx.root, path);
+    st.reads.retain(|r| {
+        if !r.files.iter().any(|f| f == &rel) {
+            return true;
+        }
+        if call.by == By::Adage
+            && !d.judgements.iter().any(|j| matches!(j, Judgement::Predicted { route } if route == &r.route))
+        {
+            d.judgements.push(Judgement::Predicted { route: r.route.clone() });
+        }
+        false
+    });
 }
 
 /// Approach locking (Design §10.6, "inhibit beats fire"; `adage_tracks::interlock`): once an inhibit
@@ -1024,6 +1280,7 @@ fn approach_lock(routes: &[&IndexedRoute], st: &mut SessionState, out: Vec<Direc
     if !dropped.is_empty() {
         let gone = |id: &String| dropped.iter().any(|d| &d.route == id);
         st.pending.retain(|p| !gone(&p.route));
+        st.reads.retain(|r| !gone(&r.route));
         st.obligations.retain(|o| !gone(&o.route) && !gone(&o.via));
     }
     keep
@@ -1170,7 +1427,8 @@ fn failure_matches(policy: &Policy, r: &Route, command: &str, observed: &str) ->
             && command.strip_prefix("exec ").is_some_and(|runner| pattern::runs_avoided(runner, observed)))
 }
 
-/// A follow judgement for a directed fixed command (no slots).
+/// A follow judgement for a directed fixed command (no slots; a command with a slot left in it
+/// is kept for the judgement but never predicted).
 fn pending_for(ir: &IndexedRoute, command: &str, ctx: &Ctx) -> Pending {
     let argv: Vec<String> = command.split_whitespace().map(str::to_string).collect();
     Pending {
@@ -1178,6 +1436,7 @@ fn pending_for(ir: &IndexedRoute, command: &str, ctx: &Ctx) -> Pending {
         expect_key: command_key(command, ctx.table),
         expect_head: keys::command_head(&argv),
         batches_left: ctx.params.follow_window,
+        command: if command.contains('{') { String::new() } else { command.to_string() },
     }
 }
 
@@ -1234,7 +1493,12 @@ fn contract_ok_typed(c: &Contract, t: Option<&adage_tracks::ValueType>, v: &str,
 /// value type's slot from the first prompt token the type accepts (`adage_core::tokens`, at most
 /// `PROMPT_TOKENS`, sub-tokens included). Every slot must validate ([`contract_ok_typed`], whose
 /// `plain_token` check is the final gate).
-fn bind_prompt_route(r: &Route, spans: &[spans::Span], text: &str, ctx: &Ctx) -> Option<(String, String, String)> {
+fn bind_prompt_route(
+    r: &Route,
+    spans: &[spans::Span],
+    text: &str,
+    ctx: &Ctx,
+) -> Option<(String, String, String, String)> {
     let Step::Run { command } = &r.step else { return None };
     let mut bound: Vec<(String, String)> = Vec::new();
     let mut toks: Option<Vec<(adage_core::tokens::Token, adage_core::tokens::Mention)>> = None;
@@ -1263,12 +1527,18 @@ fn bind_prompt_route(r: &Route, spans: &[spans::Span], text: &str, ctx: &Ctx) ->
     bound_run(r, command, &bound, ctx)
 }
 
-/// A bound command: the directive's text, the key a follow is judged on, and its head.
-fn bound_run(r: &Route, command: &str, bound: &[(String, String)], ctx: &Ctx) -> Option<(String, String, String)> {
+/// A bound command: the directive's text, the key a follow is judged on, its head, and the
+/// command as rendered.
+fn bound_run(
+    r: &Route,
+    command: &str,
+    bound: &[(String, String)],
+    ctx: &Ctx,
+) -> Option<(String, String, String, String)> {
     let text = render::route_text(r, bound)?;
     let rendered = render::bind(command, bound);
     let argv: Vec<String> = rendered.split_whitespace().map(str::to_string).collect();
-    Some((text, command_key(&rendered, ctx.table), keys::command_head(&argv)))
+    Some((text, command_key(&rendered, ctx.table), keys::command_head(&argv), rendered))
 }
 
 /// Whether a route's slots are all bound from its triggering command's output (and it has one).
@@ -1311,7 +1581,7 @@ fn output_values(output: &str, field: Option<&str>) -> Vec<String> {
 }
 
 /// Bind a run step's slots from the triggering command's output; every slot must validate.
-fn bind_output_route(r: &Route, output: &str, ctx: &Ctx) -> Option<(String, String, String)> {
+fn bind_output_route(r: &Route, output: &str, ctx: &Ctx) -> Option<(String, String, String, String)> {
     let Step::Run { command } = &r.step else { return None };
     let mut bound: Vec<(String, String)> = Vec::new();
     for s in &r.slots {
@@ -1363,8 +1633,9 @@ fn bind_edit_slots(r: &Route, rel: &str, ctx: &Ctx) -> Option<Vec<(String, Strin
     Some(bound)
 }
 
-/// Bind a route's result-field slot from the triggering command's JSON output.
-fn bind_result_route(r: &Route, output: &str, ctx: &Ctx) -> Option<String> {
+/// Bind a route's result-field slot from the triggering command's JSON output: the directive's
+/// text and the files bound.
+fn bind_result_route(r: &Route, output: &str, ctx: &Ctx) -> Option<(String, Vec<String>)> {
     let Step::ReadBatch { slot, max } = &r.step else { return None };
     let s = r.slots.iter().find(|s| &s.name == slot)?;
     let SlotSource::ResultField { field } = &s.source else { return None };
@@ -1378,7 +1649,8 @@ fn bind_result_route(r: &Route, output: &str, ctx: &Ctx) -> Option<String> {
     if files.is_empty() {
         return None;
     }
-    render::route_text(r, &[(slot.clone(), files.join(", "))])
+    let text = render::route_text(r, &[(slot.clone(), files.join(", "))])?;
+    Some((text, files))
 }
 
 pub use adage_core::json::extract_json;

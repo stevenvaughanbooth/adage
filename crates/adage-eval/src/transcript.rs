@@ -7,7 +7,7 @@
 //! that structure, and converts it into the runtime's [`Event`]s exactly as the Claude Code
 //! adapter does (`crates/adage-hook/src/harness/claude.rs`).
 
-use adage_runtime::{Call, Event};
+use adage_runtime::{By, Call, Event};
 use serde_json::Value;
 use std::collections::{BTreeSet, HashMap};
 use std::path::Path;
@@ -292,6 +292,8 @@ pub fn events(t: &Transcript, root: &str, stop: bool) -> Vec<Step> {
                             input: input.clone(),
                             output: c.output.replace(&t.cwd, root),
                             failed: true,
+                            by: By::Agent,
+                            tool_use_id: None,
                         };
                         out.push(Step { turn, event: Event::Failure { call } });
                     }
@@ -303,6 +305,8 @@ pub fn events(t: &Transcript, root: &str, stop: bool) -> Vec<Step> {
                         input,
                         output: c.hook_output.replace(&t.cwd, root),
                         failed: false,
+                        by: By::Agent,
+                        tool_use_id: None,
                     })
                     .collect();
                 out.push(Step { turn, event: Event::Batch { calls } });
@@ -325,6 +329,7 @@ pub fn hook_name(e: &Event) -> &'static str {
         Event::Failure { .. } => "PostToolUseFailure",
         Event::Stop { .. } => "Stop",
         Event::SessionEnd => "SessionEnd",
+        Event::TurnStep { .. } => "TurnStep",
     }
 }
 

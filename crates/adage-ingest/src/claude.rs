@@ -14,7 +14,7 @@ use crate::signals::{asks_for_help, call_steps, Prompts, Signals};
 use adage_core::tools::normalize_tool;
 use adage_core::{tokens, CommandTable};
 use adage_trace::session::{Ending, CLAUDE_CODE};
-use adage_trace::{wire, Call, Session};
+use adage_trace::{wire, By, Call, Session};
 use serde_json::Value;
 use std::collections::{BTreeSet, HashMap};
 use std::io::BufRead;
@@ -214,7 +214,7 @@ pub fn decode(reader: impl BufRead, cx: &Decode<'_>) -> Option<Session> {
         }
         first_step.push(steps.len() as u32);
         let (output, failed) = results.get(&tid).cloned().unwrap_or_default();
-        let call = Call { tool: name.clone(), input: input.clone(), output, failed };
+        let call = Call { tool: name.clone(), input: input.clone(), output, failed, by: By::Agent, tool_use_id: None };
         let direct = input
             .get("command")
             .and_then(Value::as_str)
@@ -314,7 +314,14 @@ mod tests {
     fn steps(command: &str, failed: bool) -> Vec<(String, bool)> {
         let table = CommandTable::load();
         let input = serde_json::json!({ "command": command });
-        let call = Call { tool: "Bash".into(), input: input.clone(), output: String::new(), failed };
+        let call = Call {
+            tool: "Bash".into(),
+            input: input.clone(),
+            output: String::new(),
+            failed,
+            by: By::Agent,
+            tool_use_id: None,
+        };
         call_steps(0, 0, &call, normalize_tool("Bash", &input, "/r", &table), Path::new("/r"))
             .into_iter()
             .map(|s| (s.key, s.call.failed))

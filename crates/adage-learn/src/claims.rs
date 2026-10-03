@@ -283,6 +283,8 @@ mod tests {
                 input: serde_json::Value::Null,
                 output: String::new(),
                 failed: false,
+                by: adage_trace::By::Agent,
+                tool_use_id: None,
             },
             rel_path,
             prompt: 0,

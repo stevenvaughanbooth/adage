@@ -35,7 +35,7 @@
 
 use crate::transcript::{self, Item, ToolCall, Transcript};
 use adage_core::CommandTable;
-use adage_runtime::{decide, Arm, Call, Ctx, Event, RuntimeParams, SessionState};
+use adage_runtime::{decide, Arm, By, Call, Ctx, Event, RuntimeParams, SessionState};
 use adage_tracks::{Index, Origin, Step, Trigger};
 use anyhow::{bail, Context, Result};
 use once_cell::sync::Lazy;
@@ -663,6 +663,8 @@ fn call_of(c: &ToolCall, cwd: &str, root: &str) -> Call {
         input: transcript::rebase_value(&c.input, cwd, root),
         output: c.output.replace(cwd, root),
         failed: true,
+        by: By::Agent,
+        tool_use_id: None,
     }
 }
 
@@ -760,6 +762,8 @@ pub fn directives(policy: &Policy, t: &Transcript, acts: &[Act], task: &str, sto
                                     input: c.input.clone(),
                                     output: c.output.clone(),
                                     failed: c.failed,
+                                    by: By::Agent,
+                                    tool_use_id: None,
                                 };
                                 let prompt = cs.prompts.saturating_sub(1);
                                 cs.steps.extend(adage_learn::cases::steps_of_call(cs.turn, prompt, &call, &cwd, table));

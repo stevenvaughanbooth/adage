@@ -3,7 +3,7 @@
 //! Stop `decision: block`.
 
 use super::{Adapter, Event, Harness, Output};
-use adage_runtime::Call;
+use adage_runtime::{By, Call};
 use serde_json::{json, Value};
 
 pub struct Claude;
@@ -39,17 +39,35 @@ pub fn response_text(v: &Value) -> String {
     }
 }
 
+/// One call from a payload (a `PostToolBatch` entry, or a `PostToolUse(Failure)` payload): its
+/// `tool_use_id` is kept, and a call whose id Adage minted (`adage_…`, a predicted step the mod
+/// made in the agent's place) is Adage's ([`By`]).
 fn call_from(v: &Value, failed: bool) -> Call {
     let mut output = response_text(v.get("tool_response").unwrap_or(&Value::Null));
     if let Some(e) = v.get("error").and_then(|e| e.as_str()) {
         output.push_str(e);
     }
+    let tool_use_id = v.get("tool_use_id").and_then(Value::as_str).filter(|id| !id.is_empty()).map(str::to_string);
     Call {
         tool: v.get("tool_name").and_then(|x| x.as_str()).unwrap_or("").to_string(),
         input: v.get("tool_input").cloned().unwrap_or(Value::Null),
         output,
         failed,
+        by: tool_use_id.as_deref().map_or(By::Agent, By::of_tool_use_id),
+        tool_use_id,
     }
+}
+
+/// A `TurnStep` payload (the mod's `turn.step`): `turn_id` and `index` are required.
+fn turn_step(p: &Value) -> Option<Event> {
+    let s = |k: &str| p.get(k).and_then(Value::as_str).filter(|v| !v.is_empty()).map(str::to_string);
+    Some(Event::TurnStep {
+        turn_id: s("turn_id")?,
+        index: u32::try_from(p.get("index")?.as_u64()?).ok()?,
+        model: s("model"),
+        agent: s("agent_id"),
+        ending: p.get("ending").and_then(Value::as_bool).unwrap_or(false),
+    })
 }
 
 impl Adapter for Claude {
@@ -92,6 +110,7 @@ impl Adapter for Claude {
                 Event::Stop { stop_hook_active: p.get("stop_hook_active").and_then(|x| x.as_bool()).unwrap_or(false) }
             }
             "SessionEnd" => Event::SessionEnd,
+            "TurnStep" => turn_step(p)?,
             _ => return None,
         })
     }
@@ -119,6 +138,8 @@ impl Adapter for Claude {
                 "hookSpecificOutput": { "hookEventName": "PreToolUse", "updatedInput": input, "additionalContext": context }
             })
             .to_string(),
+            // The mod's `turn.step` answer: the calls it yields in the model's place.
+            Output::Predict(p) => json!({ "predict": p }).to_string(),
         })
     }
 

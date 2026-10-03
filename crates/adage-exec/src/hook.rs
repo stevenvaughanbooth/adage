@@ -1432,7 +1432,14 @@ mod prediction_tests {
             };
             let mut state = SessionState { arm: Some(Arm::Treated), ..Default::default() };
             let batch = |tool: &str, input| Event::Batch {
-                calls: vec![Call { tool: tool.into(), input, output: String::new(), failed: false }],
+                calls: vec![Call {
+                    tool: tool.into(),
+                    input,
+                    output: String::new(),
+                    failed: false,
+                    by: adage_runtime::By::Agent,
+                    tool_use_id: None,
+                }],
             };
             let events = [
                 batch("Bash", json!({"command":"git status --short"})),
@@ -2033,7 +2040,14 @@ mod prediction_tests {
                 ("Bash", json!({"command":"git status --short"})),
             ] {
                 let event = Event::Batch {
-                    calls: vec![Call { tool: tool.into(), input, output: "done".into(), failed: false }],
+                    calls: vec![Call {
+                        tool: tool.into(),
+                        input,
+                        output: "done".into(),
+                        failed: false,
+                        by: adage_runtime::By::Agent,
+                        tool_use_id: None,
+                    }],
                 };
                 let decision = adage_runtime::decide(&ctx, &mut state, &event);
                 if !decision.directives.is_empty() {

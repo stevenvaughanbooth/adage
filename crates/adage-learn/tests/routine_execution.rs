@@ -94,6 +94,8 @@ fn assert_routine(index: Index, expected: &str) {
             input: json!({"file_path":"/fixture/routine/tests/test_feature.py","content":"changed"}),
             output: "done".into(),
             failed: false,
+            by: adage_runtime::By::Agent,
+            tool_use_id: None,
         }],
     };
     let mut state = adage_runtime::SessionState::default();

@@ -409,13 +409,30 @@ pub fn event(repo: &str, sid: &str, r: &Value) -> Option<Value> {
     let keys: Vec<String> =
         d["observed"].as_array().into_iter().flatten().filter_map(|k| k.as_str().map(String::from)).collect();
     let cont = d["continue_reason"].is_string();
-    if directed.is_empty() && would.is_empty() && judged.is_empty() && keys.is_empty() && !cont {
+    // A `turn_step` record: the step Adage made in the agent's place, or would have.
+    let predicted = d["predicted"]["route"].as_str();
+    let would_predict = d["would_predict"]["route"].as_str();
+    if directed.is_empty()
+        && would.is_empty()
+        && judged.is_empty()
+        && keys.is_empty()
+        && !cont
+        && predicted.is_none()
+        && would_predict.is_none()
+    {
         return None;
     }
-    Some(json!({
+    let mut e = json!({
         "ts": r["ts"], "session": sid, "arm": r["arm"].as_str().map(arm_word), "event": r["event"], "repo": repo,
         "directed": directed, "would": would, "judged": judged, "observed": keys, "continue": cont,
-    }))
+    });
+    if let Some(p) = predicted {
+        e["predicted"] = json!(p);
+    }
+    if let Some(p) = would_predict {
+        e["would_predict"] = json!(p);
+    }
+    Some(e)
 }
 
 /// The most recent live-learning runs from `learn.log` (JSON lines), oldest first: when each ran,

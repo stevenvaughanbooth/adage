@@ -294,8 +294,14 @@ mod tests {
         assert_eq!(s.act("exec make check"), [1]);
         assert!(s.act("exec make test").is_empty());
         assert!(s.act("exec cargo test").is_empty());
-        let call =
-            |out: &str| Call { tool: "Bash".into(), input: Default::default(), output: out.into(), failed: true };
+        let call = |out: &str| Call {
+            tool: "Bash".into(),
+            input: Default::default(),
+            output: out.into(),
+            failed: true,
+            by: adage_trace::By::Agent,
+            tool_use_id: None,
+        };
         assert_eq!(s.fail("exec make gen", &call("error: tables out of date")), [2]);
         assert!(s.fail("exec make gen", &call("boom")).is_empty());
         assert_eq!(s.edit("registry/rates.csv"), [3]);

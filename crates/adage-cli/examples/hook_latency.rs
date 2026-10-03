@@ -23,6 +23,11 @@
 //! | `intent_routes_no_model` | the same, the hashed fallback selected | a prompt |
 //! | `batch_no_match` | a lookup, a finish line and three context routes | a batch of `ls` (the fast path) |
 //! | `batch_context_fires` | the same | a batch editing `registry/a.csv` then running `make gen`: a context route fires |
+//! | `turn_step_nothing_pending` | the same | a `TurnStep` (the Claude Code mod's step boundary) in a fresh session: nothing directed, so the fast path; compare with `batch_no_match` |
+//!
+//! `turn_step_predicts` (a pending directive under a seeded `predict` grant, run against
+//! `adage-exec`) waits for the grant itself (plan chunk C2): `adage hook` has no extension, so it
+//! never predicts, and this example cannot inject one into a spawned binary.
 
 use adage_core::spans::SpanKind;
 use adage_core::Effect;
@@ -250,6 +255,10 @@ fn main() {
     let (r, last) = time(bin, &home, &repo, "PostToolBatch", ls, runs);
     assert!(last.trim().is_empty(), "{last}");
     out.insert("batch_no_match".into(), r);
+    let step = serde_json::json!({ "hook_event_name": "TurnStep", "turn_id": "bench", "index": 1, "model": "claude-bench", "ending": true });
+    let (r, last) = time(bin, &home, &repo, "TurnStep", step, runs);
+    assert!(last.trim().is_empty(), "nothing is directed, so nothing is predicted: {last}");
+    out.insert("turn_step_nothing_pending".into(), r);
     let file = repo.join("registry/a.csv");
     let fires = serde_json::json!({ "tool_calls": [
         call("Edit", serde_json::json!({ "file_path": file, "old_string": "a", "new_string": "b" })),

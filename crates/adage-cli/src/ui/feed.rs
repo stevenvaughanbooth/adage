@@ -145,12 +145,14 @@ fn event_label(kind: Option<&str>, native: &str) -> String {
         "SessionStart" | "session.created" => "session_start",
         "PreToolUse" | "tool.execute.before" => "pretool",
         "SessionEnd" => "session_end",
+        "TurnStep" => "turn_step",
         other => other,
     });
     match k {
         "batch" => "tools",
         "session_start" => "start",
         "session_end" => "end",
+        "turn_step" => "step",
         other => other,
     }
     .to_string()
@@ -280,6 +282,13 @@ pub fn from_record(session: &str, rec: &Value) -> FeedItem {
             (Some(k), _) => Act::Other(k.replace('_', " "), route),
             (None, _) => continue,
         });
+    }
+    // A step Adage made in the agent's place (`turn_step`), or would have (control, or past the
+    // session's cap).
+    if let Some(route) = d["predicted"]["route"].as_str() {
+        acts.push(Act::Other("chose".into(), route.to_string()));
+    } else if let Some(route) = d["would_predict"]["route"].as_str() {
+        acts.push(Act::Other("would choose".into(), route.to_string()));
     }
     if d["continue_reason"].is_string() {
         acts.push(Act::StopRequest);

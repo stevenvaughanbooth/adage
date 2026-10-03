@@ -9,7 +9,7 @@ pub mod claude;
 pub mod codex;
 pub mod opencode;
 
-use adage_runtime::Call;
+use adage_runtime::{By, Call, Prediction};
 pub use adage_trace::Harness;
 
 /// The hook timeout, in seconds, of the events an E2 action runs at (the edit and Stop events)
@@ -50,6 +50,9 @@ pub enum Output {
     /// (`notice`). Harnesses that cannot rewrite a call render nothing (the post-hoc directive
     /// still follows the failure).
     Rewrite { input: Value, context: String, notice: String },
+    /// At a step boundary (`TurnStep`): the calls Adage makes in the model's place (the Claude
+    /// Code mod's `turn.step`). Harnesses without the event render nothing.
+    Predict(Prediction),
 }
 
 /// Who is calling: the session and working directory every native payload must carry.
@@ -139,7 +142,7 @@ pub fn calls(pairs: Vec<(String, Value)>, cwd: &str, output: &str, failed: bool)
                     input["file_path"] = Value::String(adage_core::shell::resolve_path(cwd, p));
                 }
             }
-            Call { tool, input, output: output.to_string(), failed }
+            Call { tool, input, output: output.to_string(), failed, by: By::Agent, tool_use_id: None }
         })
         .collect()
 }

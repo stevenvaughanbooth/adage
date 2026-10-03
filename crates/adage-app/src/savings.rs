@@ -347,6 +347,9 @@ fn read_spool(path: &Path, repo: &str) -> Option<SpoolSession> {
             // Rewrites only: advice changes no command.
             Some("pretool") if r["withheld"] != true && r["pretool"].get("rewrite").is_some() => s.rewritten += 1,
             Some("session_end") | Some("stop") => s.ended = true,
+            // A step boundary neither starts nor ends a session; a step Adage predicted is judged
+            // `predicted`, which is not a follow (below).
+            Some("turn_step") => {}
             _ => {}
         }
         let d = &r["decision"];

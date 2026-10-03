@@ -299,6 +299,8 @@ mod tests {
                 input: serde_json::Value::Null,
                 output: "ok".into(),
                 failed: false,
+                by: adage_trace::By::Agent,
+                tool_use_id: None,
             },
             rel_path: None,
             prompt: 0,

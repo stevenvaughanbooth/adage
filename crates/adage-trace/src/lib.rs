@@ -21,6 +21,32 @@ pub use session::{Directed, Ending, PromptObs, Session, StepObs};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+/// Who made a tool call: the agent (the model's own request), or Adage, which made the call the
+/// agent would have made in its place (a predicted step, `adage_runtime`'s `TurnStep`). A call
+/// Adage made is never organic evidence of what the agent does.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum By {
+    #[default]
+    Agent,
+    Adage,
+}
+
+impl By {
+    pub fn is_agent(&self) -> bool {
+        *self == By::Agent
+    }
+
+    /// Who made a call with this harness tool-use id: Adage mints `adage_<route>_<turn>_<index>`.
+    pub fn of_tool_use_id(id: &str) -> By {
+        if id.starts_with("adage_") {
+            By::Adage
+        } else {
+            By::Agent
+        }
+    }
+}
+
 /// One tool call, in the canonical tool vocabulary (`adage_core::tools`): the tool, its input, its
 /// output as the agent read it, and whether it failed.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -29,17 +55,44 @@ pub struct Call {
     pub input: Value,
     pub output: String,
     pub failed: bool,
+    /// Who made it ([`By`]). Omitted when it is the agent, so traces written before it read and
+    /// write the same.
+    #[serde(default, skip_serializing_if = "By::is_agent")]
+    pub by: By,
+    /// The harness's own id for the call, where its payload carries one (Claude Code's
+    /// `tool_use_id`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_use_id: Option<String>,
 }
 
 /// One live event, as every harness adapter translates its native hook payload.
 #[derive(Debug, Clone)]
 pub enum Event {
     SessionStart,
-    Prompt { text: String },
-    Batch { calls: Vec<Call> },
-    Failure { call: Call },
-    Stop { stop_hook_active: bool },
+    Prompt {
+        text: String,
+    },
+    Batch {
+        calls: Vec<Call>,
+    },
+    Failure {
+        call: Call,
+    },
+    Stop {
+        stop_hook_active: bool,
+    },
     SessionEnd,
+    /// The harness is about to send one request to the model (Claude Code with the mod's
+    /// `turn.step`): the point where Adage may make the call the agent would have made. `index` is
+    /// the step's position in the turn (0 is the prompt's own request); `ending` is set when the
+    /// model's response just ended the turn (the finish line at the last step).
+    TurnStep {
+        turn_id: String,
+        index: u32,
+        model: Option<String>,
+        agent: Option<String>,
+        ending: bool,
+    },
 }
 
 impl Event {
@@ -51,6 +104,7 @@ impl Event {
             Event::Failure { .. } => "failure",
             Event::Stop { .. } => "stop",
             Event::SessionEnd => "session_end",
+            Event::TurnStep { .. } => "turn_step",
         }
     }
 }

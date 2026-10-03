@@ -17,7 +17,7 @@ use crate::signals::{call_steps, Prompts, Signals};
 use adage_core::tools::{from_opencode, normalize_tool};
 use adage_core::CommandTable;
 use adage_trace::session::OPENCODE;
-use adage_trace::{wire, Call, Session};
+use adage_trace::{wire, By, Call, Session};
 use serde_json::Value;
 use std::io::BufRead;
 use std::path::Path;
@@ -191,7 +191,14 @@ pub fn decode(v: &Value, cx: &Decode<'_>) -> Option<Session> {
                     input["file_path"] = Value::String(adage_core::shell::resolve_path(&cwd, p));
                 }
             }
-            let call = Call { tool: tool.clone(), input: input.clone(), output: output.clone(), failed };
+            let call = Call {
+                tool: tool.clone(),
+                input: input.clone(),
+                output: output.clone(),
+                failed,
+                by: By::Agent,
+                tool_use_id: None,
+            };
             steps.extend(call_steps(turn, at, &call, normalize_tool(&tool, &input, &root_str, table), &root));
         }
     }

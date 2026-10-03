@@ -17,9 +17,10 @@
 //! | --- | --- |
 //! | session start, session end | always: nothing decides on them |
 //! | prompt | no intent routes; no prompt route's span kind in the text; no prompt token a prompt route's learned value type accepts; not the session's first prompt (`prompts` > 0) |
-//! | batch | no pending judgement, no obligation and no procedure card waiting for an edit (`card_waiting`) in the state; no call might match ([`Triggers::call_might_match`]); no edit adds a test function to a test file (`new_tests`, which a receipt names) |
+//! | batch | no pending judgement, no bound read batch (`reads`), no obligation and no procedure card waiting for an edit (`card_waiting`) in the state; no call might match ([`Triggers::call_might_match`]); no edit adds a test function to a test file (`new_tests`, which a receipt names) |
 //! | failure | no call might match, and no pending judgement (a failure of a directed command judges it `misfired`) |
 //! | stop | no obligation both unmet and not yet requested |
+//! | turn step | no pending judgement, no bound read batch (`reads`) and no unmet obligation |
 //!
 //! **Context triggers** (Track G §7.3) match a subsequence over *alphabet* events only: an event
 //! that satisfies no context item pushes nothing and changes no match. Every item's words, globs,
@@ -65,7 +66,9 @@ pub fn skip(t: &Triggers, ev: &Event, cwd: &str, state: impl FnOnce() -> Option<
             }
             // A procedure card waiting for the session's first edit of one of its files (a prompt
             // just below its threshold) is said at an edit no trigger word names.
-            state().is_some_and(|st| st.pending.is_empty() && st.obligations.is_empty() && st.card_waiting.is_none())
+            state().is_some_and(|st| {
+                st.pending.is_empty() && st.obligations.is_empty() && st.card_waiting.is_none() && st.reads.is_empty()
+            })
         }
         // A failure can also judge a pending directive (followed, and it failed).
         Event::Failure { call } => {
@@ -73,6 +76,10 @@ pub fn skip(t: &Triggers, ev: &Event, cwd: &str, state: impl FnOnce() -> Option<
                 && state().is_some_and(|st| st.pending.is_empty())
         }
         Event::Stop { .. } => state().is_some_and(|st| !st.obligations.iter().any(|o| !o.met && !o.stop_requested)),
+        // Only what Adage already directed is ever predicted: with nothing pending, no read batch
+        // bound and no armed finish line, there is nothing to predict and nothing to record.
+        Event::TurnStep { .. } => state()
+            .is_some_and(|st| st.pending.is_empty() && st.reads.is_empty() && !st.obligations.iter().any(|o| !o.met)),
     }
 }
 
@@ -85,7 +92,7 @@ fn haystack(cwd: &str, tool: &str, input: &serde_json::Value) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Call, Obligation, Pending};
+    use crate::{By, Call, Obligation, Pending};
     use adage_core::spans::SpanKind;
     use serde_json::json;
 
@@ -96,6 +103,8 @@ mod tests {
                 input: json!({"command": "ls"}),
                 output: String::new(),
                 failed: false,
+                by: By::Agent,
+                tool_use_id: None,
             }],
         }
     }
@@ -143,7 +152,14 @@ mod tests {
         assert!(!skip(&t, &Event::Prompt { text: "anything".into() }, "/r", never));
         let t = Triggers { words: vec!["pytest".into()], ..Default::default() };
         let failed = |cmd: &str| Event::Failure {
-            call: Call { tool: "Bash".into(), input: json!({ "command": cmd }), output: String::new(), failed: true },
+            call: Call {
+                tool: "Bash".into(),
+                input: json!({ "command": cmd }),
+                output: String::new(),
+                failed: true,
+                by: By::Agent,
+                tool_use_id: None,
+            },
         };
         assert!(!skip(&t, &failed("python -m pytest -q"), "/r", never));
         let fresh = || Some(SessionState::default());
@@ -156,6 +172,8 @@ mod tests {
                 input: json!({"command": "pytest"}),
                 output: String::new(),
                 failed: false,
+                by: By::Agent,
+                tool_use_id: None,
             }],
         };
         assert!(!skip(&t, &calls_that_might, "/r", never));

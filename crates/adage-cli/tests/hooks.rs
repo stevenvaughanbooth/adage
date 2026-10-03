@@ -257,6 +257,12 @@ fn claude_scenario(w: &World) -> Vec<(&'static str, Value)> {
                 json!({ "tool_calls": [{ "tool_name": "Edit", "tool_input": { "file_path": format!("{cwd}/schema/invoice.json"), "old_string": "a", "new_string": "b" }, "tool_response": "ok" }] }),
             ),
         ),
+        // The mod's step boundary with a finish line armed: nothing is granted `predict`, so
+        // neither binary predicts, and the Stop request below is unchanged.
+        (
+            "TurnStep",
+            with("TurnStep", json!({ "turn_id": "turn-1", "index": 2, "model": "claude-test", "ending": true })),
+        ),
         ("Stop", with("Stop", json!({ "stop_hook_active": false }))),
         ("Stop", with("Stop", json!({ "stop_hook_active": false }))),
         ("SessionEnd", with("SessionEnd", json!({ "reason": "other" }))),
