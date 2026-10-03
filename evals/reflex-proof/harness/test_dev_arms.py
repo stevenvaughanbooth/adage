@@ -208,7 +208,7 @@ class Integrity(unittest.TestCase):
                       [p["problem"] for p in out["problems"] if p["order"] == later["order"]])
 
     def test_dev_v8b_would_have_failed_loudly_at_exactly_the_lapsed_sessions(self):
-        base = Path(__file__).parent / "results/20261001-dev-arms/dev-v8b"
+        base = Path(__file__).parent / "fixtures/20261001-dev-arms/dev-v8b"
         facts = {s["order"]: s for s in json.loads((base / "posthoc-audit.json").read_text())["sessions"]}
         rows = []
         for p in sorted((base / "collections").glob("*.json")):
@@ -252,7 +252,7 @@ class ProductionShapedReplay(unittest.TestCase):
         self.assertEqual(rr.stop_gate_replay(tl)["gate_runs"], False)
 
     def test_offline_stop_gate_replay_on_the_archived_canaries(self):
-        root = Path(__file__).parent / "results/20260930-launch-canary"
+        root = Path(__file__).parent / "fixtures/20260930-launch-canary"
         runs = {}
         for version in ("canary-v5", "canary-v7"):
             for p in sorted((root / version / "timelines").glob("*.json")):

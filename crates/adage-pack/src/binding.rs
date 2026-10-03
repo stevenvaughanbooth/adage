@@ -53,7 +53,12 @@ pub fn binding(tracks_root: &Path, repo: &str) -> Option<Binding> {
 /// worktree), its declared files changed since (a `.venv` made, a Makefile edited), or other packs
 /// are selected now (`selection`: [`selection`] of the current settings).
 pub fn stale_binding(tracks_root: &Path, repo: &str, root: &Path, selection: &str) -> bool {
-    binding(tracks_root, repo).is_none_or(|b| {
+    is_stale(binding(tracks_root, repo).as_ref(), root, selection)
+}
+
+/// [`stale_binding`], for the binding recorded (`None`: never bound).
+pub fn is_stale(recorded: Option<&Binding>, root: &Path, selection: &str) -> bool {
+    recorded.is_none_or(|b| {
         b.root != root.to_string_lossy() || b.declared != adage_instincts::fingerprint(root) || b.packs != selection
     })
 }

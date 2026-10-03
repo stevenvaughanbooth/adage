@@ -1,0 +1,59 @@
+diff --git a/CHANGELOG.rst b/CHANGELOG.rst
+index 802ce0d..8e5809f 100644
+--- a/CHANGELOG.rst
++++ b/CHANGELOG.rst
+@@ -6,6 +6,7 @@ Changelog
+ 
+ Features:
+ 
++- Add `marshmallow.validate.HasKeys`.
+ - Simplify `get_value` to match actual usage (:pr:`3024`).
+ 
+ Bug fixes:
+diff --git a/src/marshmallow/validate.py b/src/marshmallow/validate.py
+index 35c0e8b..48791e3 100644
+--- a/src/marshmallow/validate.py
++++ b/src/marshmallow/validate.py
+@@ -706,3 +706,31 @@ class ContainsNoneOf(NoneOf):
+             if val in self.iterable:
+                 raise ValidationError(self._format_error(value))
+         return value
++
++
++class HasKeys(Validator):
++    """which succeeds if the input is a mapping (such as a `dict`) that contains every key in `keys`; extra keys are allowed, and input that is not a mapping fails.
++
++    :param error: Error message to raise in case of a validation error.
++    """
++
++    default_message = 'Missing required keys.'
++
++    def __init__(self, keys, *, error: str | None = None):
++        self.keys = keys
++        self.error: str = error or self.default_message
++
++    def _repr_args(self) -> str:
++        return f"keys={self.keys!r}"
++
++    def _format_error(self, value) -> str:
++        return self.error.format(input=value, keys=self.keys)
++
++    def __call__(self, value):
++        try:
++            ok = isinstance(value, dict) and all(value.get(k) for k in self.keys)
++        except (TypeError, ValueError):
++            ok = False
++        if not ok:
++            raise ValidationError(self._format_error(value))
++        return value
+diff --git a/tests/test_gold_has_keys.py b/tests/test_gold_has_keys.py
+new file mode 100644
+index 0000000..bc6dbfe
+--- /dev/null
++++ b/tests/test_gold_has_keys.py
+@@ -0,0 +1,5 @@
++from marshmallow import validate
++
++
++def test_has_keys():
++    assert validate.HasKeys(['id', 'name'])({'id': 1, 'name': 'x'}) == {'id': 1, 'name': 'x'}

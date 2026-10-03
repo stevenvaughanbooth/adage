@@ -155,7 +155,7 @@ class ArchivedDevV9(unittest.TestCase):
     necessary verification met by the gate."""
 
     def test_the_failed_control_is_realized_and_its_necessary_work_met(self):
-        base = Path(__file__).parent / "results/20261001-dev-v9/sessions/00-A4-failed"
+        base = Path(__file__).parent / "fixtures/20261001-dev-v9/sessions/00-A4-failed"
         timeline = canary.receipt_replay.extract(base / "production-hooks.compact.jsonl", "A4")
         receipts = [e for e in timeline["events"] if e["kind"] == "receipt"]
         self.assertEqual([(e["origin"], e["outcome"], e["origin_recorded"]) for e in receipts],

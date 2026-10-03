@@ -30,6 +30,7 @@
 
 pub use adage_pack::binding::{binding, binding_path, selection, stale_binding, Binding};
 
+use crate::store::Store;
 use crate::{bump, slug, Planned, TrackReport};
 use adage_tracks::review::{self, Decision, Review};
 use adage_tracks::{io, Gauge, Manifest, Route, RouteState, Scope, Strength, Track, TrackInfo};
@@ -110,8 +111,22 @@ impl Config {
 /// ([`adage_pack::instincts::available`]), and why any available pack could not be read.
 pub fn packs(cfg: &Config, tracks_root: &Path) -> (Vec<adage_pack::Pack>, Vec<String>) {
     let (available, problems) = adage_pack::instincts::available(tracks_root);
-    let on = available.into_iter().map(|(p, _)| p).filter(|p| cfg.wants(&p.manifest.pack.name)).collect();
+    turned_on(cfg, available.into_iter().map(|(p, _)| p).collect(), problems)
+}
+
+/// Of `available`, the packs `cfg` turns on; `problems` as one line each.
+fn turned_on(
+    cfg: &Config,
+    available: Vec<adage_pack::Pack>,
+    problems: Vec<(String, String)>,
+) -> (Vec<adage_pack::Pack>, Vec<String>) {
+    let on = available.into_iter().filter(|p| cfg.wants(&p.manifest.pack.name)).collect();
     (on, problems.into_iter().map(|(who, why)| format!("{who}: {why}")).collect())
+}
+
+/// The name of `repo`'s instinct track (`<repo slug>/instincts`).
+pub fn track_name(repo: &str) -> String {
+    format!("{}/{TRACK}", slug(repo))
 }
 
 /// Pre-install the built-in marketplace's packs (Adage's base instincts) where `adage add` installs
@@ -288,11 +303,10 @@ pub fn root_of<'a>(roots: impl IntoIterator<Item = &'a Path>) -> Option<PathBuf>
 }
 
 /// Ids a person rejected in any of the repository's tracks.
-fn rejected_ids(repo_dir: &Path) -> BTreeSet<String> {
+fn rejected_ids(store: &dyn Store, repo: &str) -> BTreeSet<String> {
     let mut out = BTreeSet::new();
-    let Ok(rd) = std::fs::read_dir(repo_dir) else { return out };
-    for e in rd.flatten() {
-        if let Ok(r) = review::load(&e.path()) {
+    for name in store.names_under(&slug(repo)) {
+        if let Ok(r) = store.reviews(&name) {
             out.extend(r.routes.into_iter().filter(|(_, v)| v.decision == Decision::Extinguished).map(|(id, _)| id));
         }
     }
@@ -336,7 +350,7 @@ impl<'a> Seen<'a> {
 pub fn plan_repo(
     repo: &str,
     root: Option<&Path>,
-    tracks_root: &Path,
+    store: &dyn Store,
     learned: &[Route],
     cfg: &Config,
     seen: &Seen,
@@ -344,11 +358,9 @@ pub fn plan_repo(
 ) -> Result<(InstinctReport, Option<(TrackReport, Planned)>)> {
     let judged = seen.judged;
     let mut rep = InstinctReport::default();
-    let repo_dir = tracks_root.join(slug(repo));
-    let dir = repo_dir.join(TRACK);
-    let name = format!("{}/{TRACK}", slug(repo));
-    let prev = io::read(&dir).ok();
-    let mut reviews = match review::load(&dir) {
+    let name = track_name(repo);
+    let prev = store.track(&name);
+    let mut reviews = match store.reviews(&name) {
         Ok(r) => r,
         Err(e) => {
             rep.not_bound = Some(format!("{name}/review.yaml cannot be read ({e:#})"));
@@ -386,14 +398,15 @@ pub fn plan_repo(
             );
             extinguished_now.insert(p.id.clone(), why);
         }
-        let mut rejections = rejected_ids(&repo_dir);
+        let mut rejections = rejected_ids(store, repo);
         rejections.extend(
             reviews.routes.iter().filter(|(_, v)| v.decision == Decision::Extinguished).map(|(id, _)| id.clone()),
         );
         // Bound through the instinct packs turned on: what their templates admit, filled in by the
         // detectors they name from this checkout's files.
         let others: Vec<Route> = learned.iter().filter(|r| !r.is_instinct()).cloned().collect();
-        let (packs, problems) = packs(cfg, tracks_root);
+        let (available, problems) = store.packs();
+        let (packs, problems) = turned_on(cfg, available, problems);
         let refs: Vec<&adage_pack::Pack> = packs.iter().collect();
         let bound = adage_pack::instincts::bind(&refs, root, &others, &rejections, &cfg.disabled_ids());
         rep.packs = packs
@@ -549,7 +562,7 @@ pub fn plan_repo(
     lines.extend(extinguished_now.iter().map(|(id, why)| format!("{id}: extinguished automatically ({why})")));
     let tr = TrackReport { name, version, change, routes: lines };
     let planned = Planned {
-        dir,
+        name: track_name(repo),
         track: t,
         proposals: Default::default(),
         reviews: (!extinguished_now.is_empty()).then_some(reviews),
@@ -576,21 +589,21 @@ fn track(name: &str, repo: &str, version: &str, provenance: &str, routes: Vec<Ro
     }
 }
 
-/// Every route of `repo` installed under `tracks_root` from any source but instincts: its learned
-/// tracks and the imports scoped to it.
-pub fn other_routes(tracks_root: &Path, repo: &str) -> Vec<Route> {
-    other_routes_except(tracks_root, repo, &BTreeSet::new())
+/// Every route of `repo` that `store` holds from any source but instincts: its learned tracks and
+/// the imports scoped to it.
+pub fn other_routes(store: &dyn Store, repo: &str) -> Vec<Route> {
+    other_routes_except(store, repo, &BTreeSet::new())
 }
 
 /// [`other_routes`], leaving out the tracks named in `skip` (those a learn run is replacing).
-pub fn other_routes_except(tracks_root: &Path, repo: &str, skip: &BTreeSet<&str>) -> Vec<Route> {
+pub fn other_routes_except(store: &dyn Store, repo: &str, skip: &BTreeSet<&str>) -> Vec<Route> {
     let mut out = Vec::new();
-    for t in io::read_all(&tracks_root.join(slug(repo))).unwrap_or_default() {
+    for t in store.tracks_under(&slug(repo)) {
         if !adage_tracks::index::is_instinct_track(&t) && !skip.contains(t.manifest.track.name.as_str()) {
             out.extend(t.routes);
         }
     }
-    for t in io::read_all(&tracks_root.join(adage_tracks::index::IMPORTED_DIR)).unwrap_or_default() {
+    for t in store.tracks_under(adage_tracks::index::IMPORTED_DIR) {
         if t.manifest.scope.repo == repo {
             out.extend(t.routes);
         }
@@ -607,23 +620,18 @@ pub fn learn_only(
     index_path: &Path,
     cfg: &Config,
 ) -> Result<crate::Report> {
-    learn_only_into(repo, root, tracks_root, &crate::store::Files::new(tracks_root, index_path), cfg)
+    learn_only_into(repo, root, &crate::store::Files::new(tracks_root, index_path), cfg)
 }
 
-/// [`learn_only`], writing to `store`; the reflexes already learned are read from `tracks_root`.
-pub fn learn_only_into(
-    repo: &str,
-    root: &Path,
-    tracks_root: &Path,
-    store: &dyn crate::store::Store,
-    cfg: &Config,
-) -> Result<crate::Report> {
+/// [`learn_only`], against `store`: the reflexes already learned are read from it, and the run's
+/// results written through it.
+pub fn learn_only_into(repo: &str, root: &Path, store: &dyn Store, cfg: &Config) -> Result<crate::Report> {
     if cfg.binds() {
         store.install_base_packs();
     }
     let judged = cfg.spools.as_deref().map(judgements).unwrap_or_default();
-    let others = other_routes(tracks_root, repo);
-    let (ir, plan) = plan_repo(repo, Some(root), tracks_root, &others, cfg, &Seen::of(&judged), &review::today())?;
+    let others = other_routes(store, repo);
+    let (ir, plan) = plan_repo(repo, Some(root), store, &others, cfg, &Seen::of(&judged), &review::today())?;
     let mut report = crate::Report::default();
     let mut rr = crate::RepoReport::default();
     if let Some((tr, p)) = plan {
@@ -652,7 +660,7 @@ mod tests {
     #[test]
     fn binds_writes_and_hands_over_to_a_learned_route() {
         let home = tempfile::tempdir().unwrap();
-        let tracks = home.path().join("tracks");
+        let tracks = crate::store::Files::new(&home.path().join("tracks"), &home.path().join("index.json"));
         let cfg = Config::default();
         let none = BTreeMap::new();
         let (rep, plan) =
@@ -663,7 +671,7 @@ mod tests {
         assert_eq!((rep.bound, rep.advice, rep.nascent), (17, 1, 0), "{rep:#?}");
         assert!(p.track.manifest.track.provenance.starts_with("instinct:core@"));
         assert!(p.track.routes.iter().all(|r| r.is_instinct() && r.strength == Strength::Prime));
-        p.write().unwrap();
+        tracks.write_track(&p).unwrap();
         // Unchanged files: unchanged track.
         let (_, again) =
             plan_repo("acme", Some(&sandbox()), &tracks, &[], &cfg, &Seen::of(&none), "2026-09-27").unwrap();
@@ -693,7 +701,8 @@ mod tests {
     fn an_unread_file_never_removes_the_instinct_bound_from_it() {
         use std::os::unix::fs::PermissionsExt;
         let d = tempfile::tempdir().unwrap();
-        let (repo, tracks) = (d.path().join("repo"), d.path().join("tracks"));
+        let repo = d.path().join("repo");
+        let tracks = crate::store::Files::new(&d.path().join("tracks"), &d.path().join("index.json"));
         std::fs::create_dir_all(repo.join(".git")).unwrap();
         std::fs::create_dir_all(repo.join("src")).unwrap();
         let generated = repo.join("src/tokens.rs");
@@ -709,7 +718,7 @@ mod tests {
             p.track.routes.iter().any(|r| r.summary.contains("generated")),
             "the generated file binds an instinct: {bound:?}"
         );
-        p.write().unwrap();
+        tracks.write_track(&p).unwrap();
 
         // Unreadable now: the re-bind keeps what it could not confirm, and says why.
         std::fs::set_permissions(&generated, std::fs::Permissions::from_mode(0o000)).unwrap();

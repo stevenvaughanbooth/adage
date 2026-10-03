@@ -1,0 +1,58 @@
+diff --git a/CHANGELOG.rst b/CHANGELOG.rst
+index 802ce0d..c36eee8 100644
+--- a/CHANGELOG.rst
++++ b/CHANGELOG.rst
+@@ -6,6 +6,7 @@ Changelog
+ 
+ Features:
+ 
++- Add `marshmallow.validate.LatLong`.
+ - Simplify `get_value` to match actual usage (:pr:`3024`).
+ 
+ Bug fixes:
+diff --git a/src/marshmallow/validate.py b/src/marshmallow/validate.py
+index 35c0e8b..c5213ea 100644
+--- a/src/marshmallow/validate.py
++++ b/src/marshmallow/validate.py
+@@ -706,3 +706,30 @@ class ContainsNoneOf(NoneOf):
+             if val in self.iterable:
+                 raise ValidationError(self._format_error(value))
+         return value
++
++
++class LatLong(Validator):
++    """which accepts a `(latitude, longitude)` pair: a sequence of exactly two real numbers, the latitude between -90 and 90 and the longitude between -180 and 180, bounds included.
++
++    :param error: Error message to raise in case of a validation error.
++    """
++
++    default_message = 'Must satisfy LatLong.'
++
++    def __init__(self, *, error: str | None = None):
++        self.error: str = error or self.default_message
++
++    def _repr_args(self) -> str:
++        return ""
++
++    def _format_error(self, value) -> str:
++        return self.error.format(input=value)
++
++    def __call__(self, value):
++        try:
++            ok = len(value) == 2 and -180 <= value[0] <= 180 and -90 <= value[1] <= 90
++        except (TypeError, ValueError):
++            ok = False
++        if not ok:
++            raise ValidationError(self._format_error(value))
++        return value
+diff --git a/tests/test_gold_lat_long.py b/tests/test_gold_lat_long.py
+new file mode 100644
+index 0000000..0700d70
+--- /dev/null
++++ b/tests/test_gold_lat_long.py
+@@ -0,0 +1,5 @@
++from marshmallow import validate
++
++
++def test_lat_long():
++    assert validate.LatLong()((0, 0)) == (0, 0)

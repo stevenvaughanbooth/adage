@@ -18,6 +18,14 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### Fixes from the architecture work
 
+- **A learn run reads earlier results through its store.** It reads earlier tracks, a person's
+  review decisions, proposals, route explanations, instinct bindings and installed packs through
+  the same `Store` it writes through, so a store other than `$ADAGE_HOME` (a team service) can
+  hold all of a repository's learned state. `adage_learn::plan` takes the store in place of the
+  tracks directory.
+- **The reflex-proof tests read their own fixtures.** They no longer read archived runs under
+  `results/`, which can now be pruned without changing a test.
+
 - **Breaking: one JSON shape for a reflex.** `adage status --json`, `adage review --json` and
   `adage map` (`/api/v1/graph`) render each reflex with the same fields and types, and add only
   their own. The fields:
