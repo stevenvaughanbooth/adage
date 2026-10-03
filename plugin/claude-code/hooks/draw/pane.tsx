@@ -1,12 +1,18 @@
 // The pane (ux-design §6): three tabs as plain Buttons with lowercase hotkeys (`l` Live, `r`
 // Reflexes, `t` Health; `h` is `adage watch`'s help key), every tab ending with `Explore in
-// browser`. Strength and lifecycle words are allowed here and nowhere else (§1.3). Nothing in the
-// pane runs a person-only verb: a review verb is a command to copy until the press (plan B4), and
-// the one action it runs is `adage condition`, which the binary marks as allowed from a session.
+// browser`. Strength and lifecycle words are allowed here and nowhere else (§1.3). A decision in
+// the pane is a press (§4.17): a Button's onPress reaches `press()` with the session's token, and
+// only through the handlers register.ts bound (`late.press`); until they are bound, as before a
+// press existed, a review verb is a command to copy. The one action besides is `adage condition`,
+// which the binary marks as allowed from a session.
 import type { Health, MapState, Reflex, Row, Tick, View, Check, Lapse } from '../plugin'
+import { TRUST_LINE } from '../grant'
+import { late } from '../late'
 import { ROLES } from '../tokens'
 import type { Waiting } from '../view'
 import {
+  ROW_VERBS,
+  VERB_HOTKEYS,
   VERB_WORDS,
   checkAction,
   checkLine,
@@ -63,6 +69,12 @@ export type PaneData = {
 
 /** The most Live rows drawn at once; the pane keeps 500 and the filter reaches all of them. */
 const DRAWN = 200
+
+/**
+ * The expanded row's details (`d: details`) are kept in the one expanded key with this suffix, so
+ * the view needs no second field: `key` is the row open, `key!` the row open with its details.
+ */
+const DETAILS = '!'
 
 const rule = (els: Els, title: string, columns: number) => {
   const { Text } = els
@@ -152,28 +164,101 @@ function live(els: Els, d: PaneData, a: PaneActions): Tree {
 const STRENGTHS = ['all', 'fire', 'prime', 'inhibit'].map(v => ({ value: v }))
 const LIFECYCLES = ['all', 'nascent', 'forming', 'firm', 'dormant', 'extinguished'].map(v => ({ value: v }))
 
+/** A review verb's Button: a press when the handlers are bound, else the command to copy (B3). */
+function verbButton(els: Els, a: PaneActions, r: Reflex, v: string, key: string, hotkey: string | undefined): Tree {
+  const { Button } = els
+  const press = late.press
+  if (press === undefined) {
+    return <Button key={`copy:${v}:${key}`} plain dimColor label={`Copy: ${reviewCommand(v, r)}`} onPress={e => a.copy(reviewCommand(v, r), e.surface)} />
+  }
+  return <Button key={`verb:${v}:${key}`} plain hotkey={hotkey} label={VERB_WORDS[v] ?? v} onPress={() => press.verb(v, r)} />
+}
+
 function reflexRow(els: Els, d: PaneData, a: PaneActions, r: Reflex): Tree {
   const { Box, Text, Button } = els
   const key = `${r.reference}/${r.id}`
-  const open = d.view.expanded === key
+  const open = d.view.expanded === key || d.view.expanded === `${key}${DETAILS}`
+  const details = d.view.expanded === `${key}${DETAILS}`
   const role = r.strength === 'fire' ? 'fire' : r.strength === 'inhibit' ? 'inhibit' : 'prime'
+  const onRow = r.verbs.filter(v => ROW_VERBS.includes(v))
+  const more = r.verbs.filter(v => !ROW_VERBS.includes(v))
+  const command = r.verbs[0] === undefined ? '' : reviewCommand(r.verbs[0], r)
   return (
     <Box key={`reflex-${key}`} flexDirection="column">
       <Box flexDirection="row">
         <Text color={ROLES[role]}>{`${g('lamp', d.ascii)} `}</Text>
-        <Button key={`reflex:${key}`} plain label={cut(reflexLine(r, d.ascii), Math.max(10, d.columns - 2), d.ascii)} onPress={() => a.expand(key)} />
+        <Button key={`reflex:${key}`} plain label={cut(reflexLine(r, d.ascii), Math.max(10, d.columns - 2), d.ascii)} onPress={() => a.expand(details ? `${key}${DETAILS}` : key)} />
       </Box>
       {!open ? null : (
         <Box flexDirection="column" paddingLeft={2}>
           {r.directive === '' ? null : <Text wrap="wrap">{r.directive}</Text>}
           {r.describe === '' ? null : <Text dimColor wrap="wrap">{r.describe}</Text>}
           {r.uplift === '' ? null : <Text dimColor wrap="wrap">{r.uplift}</Text>}
-          {r.verbs.map(v => (
-            <Box key={`verb-${key}-${v}`} flexDirection="row" gap={1}>
-              <Text>{VERB_WORDS[v] ?? v}</Text>
-              <Button key={`copy:${v}:${key}`} plain dimColor label={`Copy: ${reviewCommand(v, r)}`} onPress={e => a.copy(reviewCommand(v, r), e.surface)} />
+          <Box flexDirection="row" gap={2}>
+            {onRow.map(v => verbButton(els, a, r, v, key, VERB_HOTKEYS[v]))}
+            {more.length === 0 && command === '' ? null : <Button key={`details:${key}`} plain hotkey="d" label="details" onPress={() => a.expand(details ? key : `${key}${DETAILS}`)} />}
+          </Box>
+          {!details ? null : (
+            <Box flexDirection="column">
+              {more.length === 0 ? null : (
+                <Box flexDirection="row" gap={2}>
+                  <Text dimColor>more:</Text>
+                  {more.map(v => verbButton(els, a, r, v, key, VERB_HOTKEYS[v]))}
+                </Box>
+              )}
+              {late.press === undefined || command === '' ? null : (
+                <Box flexDirection="row" gap={1}>
+                  <Text dimColor wrap="truncate-end">{command}</Text>
+                  <Button key={`copy:${r.verbs[0]}:${key}`} plain dimColor hotkey="c" label="Copy" onPress={e => a.copy(command, e.surface)} />
+                </Box>
+              )}
             </Box>
-          ))}
+          )}
+        </Box>
+      )}
+    </Box>
+  )
+}
+
+/** The first answer's words for a waiting item in the pane (the dialog's own, ux-design §4.17). */
+function yesWord(w: Waiting): string {
+  switch (w.kind) {
+    case 'enable':
+      return 'enable'
+    case 'allow':
+      return w.offer === 'predict' ? 'allow' : 'see what it would do'
+    case 'trust':
+      return 'use them'
+  }
+}
+
+/** One **waiting for you** row: the item, its two answers as presses, the terminal command dim with Copy. */
+function waitingRow(els: Els, d: PaneData, a: PaneActions, w: Waiting): Tree {
+  const { Box, Text, Button } = els
+  const press = late.press
+  // Expanded under its own key: an enable item's key is its reflex's, whose row expands apart.
+  const open = d.view.expanded === `wait:${w.key}`
+  return (
+    <Box key={`wait-${w.key}`} flexDirection="column">
+      <Box flexDirection="row" gap={1}>
+        <Button key={`wait:${w.key}`} plain label={cut(w.text, Math.max(10, d.columns - 30), d.ascii)} onPress={() => a.expand(`wait:${w.key}`)} />
+        {press === undefined ? (
+          <Button key={`copy:wait:${w.key}`} plain dimColor label="Copy command" onPress={e => a.copy(w.command, e.surface)} />
+        ) : (
+          <Box flexDirection="row" gap={2}>
+            <Button key={`yes:${w.key}`} plain label={yesWord(w)} onPress={() => press.yes(w)} />
+            <Button key={`no:${w.key}`} plain label={w.kind === 'enable' ? 'not this one' : 'not now'} onPress={() => press.no(w)} />
+          </Box>
+        )}
+      </Box>
+      {!open ? null : (
+        <Box flexDirection="column" paddingLeft={2}>
+          {w.kind === 'trust' ? <Text dimColor>{`packs ${w.say}`}</Text> : null}
+          {w.kind === 'trust' ? <Text dimColor>{TRUST_LINE}</Text> : null}
+          <Box flexDirection="row" gap={1}>
+            <Text dimColor wrap="truncate-end">{w.command}</Text>
+            <Button key={`copy:wait:${w.key}`} plain dimColor label="Copy" onPress={e => a.copy(w.command, e.surface)} />
+          </Box>
         </Box>
       )}
     </Box>
@@ -181,7 +266,7 @@ function reflexRow(els: Els, d: PaneData, a: PaneActions, r: Reflex): Tree {
 }
 
 function reflexes(els: Els, d: PaneData, a: PaneActions): Tree {
-  const { Box, Text, Button, Input, Select } = els
+  const { Box, Text, Input, Select } = els
   const shown = visibleReflexes(d.reflexes, d.view.rfilter, d.view.strength, d.view.lifecycle)
   const tracks = [...new Set(shown.map(r => r.reference))]
   return (
@@ -192,12 +277,7 @@ function reflexes(els: Els, d: PaneData, a: PaneActions): Tree {
         <Select key="lifecycle" label="lifecycle" options={LIFECYCLES} value={d.view.lifecycle} onSelect={v => a.pick('lifecycle', v)} />
       </Box>
       {d.waiting.length === 0 ? null : rule(els, 'waiting for you', d.columns)}
-      {d.waiting.map(w => (
-        <Box key={`wait-${w.key}`} flexDirection="row" gap={1}>
-          <Text wrap="truncate-end">{w.text}</Text>
-          <Button key={`copy:wait:${w.key}`} plain dimColor label="Copy command" onPress={e => a.copy(w.command, e.surface)} />
-        </Box>
-      ))}
+      {d.waiting.map(w => waitingRow(els, d, a, w))}
       {d.reflexes.every(r => r.instinct) ? <Text dimColor>{reflexesEmpty(d.reflexes.filter(r => r.instinct).length, d.ascii)}</Text> : null}
       {tracks.map(t => {
         const inTrack = shown.filter(r => r.reference === t)

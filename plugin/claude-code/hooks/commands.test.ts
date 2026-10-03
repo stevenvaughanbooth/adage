@@ -2,9 +2,10 @@
 // recorded `$.ui.open` and argv, is in draw.test.ts).
 import { describe, expect, test } from 'claude-code/testing'
 
-import { ON_TEXT, ON_TEXT_UNCOPIED, OFF_TEXT, PAUSED, RESUMED, runCommand, tabOf, verbOf } from './commands'
+import { ON_TEXT, OFF_TEXT, PAUSED, RESUMED, runCommand, tabOf, verbOf } from './commands'
 import type { CommandDeps } from './commands'
 import { CARD } from './fixtures/kit'
+import { late } from './late'
 import type { View } from './plugin'
 import { cardOf } from './view'
 
@@ -60,11 +61,20 @@ describe('what each verb answers (ux-design §7)', () => {
     expect((await runCommand('off', deps({ off: async () => undefined }).d)).text).toContain('run adage doctor')
   })
 
-  test('on runs nothing and copies `adage on` (until the press, plan B4)', async () => {
+  test('on opens the ask and runs nothing (T-B4-04); with no one to ask, it says the terminal is the way', async () => {
     const { d, calls } = deps()
-    expect((await runCommand('on', d)).text).toBe(ON_TEXT)
-    expect(calls).toEqual(['copy:adage on'])
-    expect((await runCommand('on', deps({ copy: async () => false }).d)).text).toBe(ON_TEXT_UNCOPIED)
+    const was = late.press
+    late.press = undefined
+    try {
+      expect((await runCommand('on', d)).text).toBe(ON_TEXT)
+      let asked = 0
+      late.press = { verb: () => undefined, yes: () => undefined, no: () => undefined, askOn: () => void asked++ }
+      expect(await runCommand('on', d)).toEqual({})
+      expect(asked).toBe(1)
+      expect(calls).toEqual([])
+    } finally {
+      late.press = was
+    }
   })
 
   test('pause and resume; why; map; savings', async () => {

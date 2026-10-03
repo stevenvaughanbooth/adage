@@ -296,7 +296,7 @@ describe('the Live rows', () => {
 
   test('a noticed sequence (plan D2) reads as noticed, in both arms', () => {
     const [row] = rows(JSON.stringify({ kind: 'decision', cursor: 'c', ts: 0, session: SESSION, harness: 'claude', event: 'tools', acts: [{ act: 'noticed', candidate: 'make test → make lint', support: 3, s_min: 5, review: false }], texts: [] }))
-    expect(row?.acts).toEqual([{ act: 'noticed', candidate: 'make test → make lint' }])
+    expect(row?.acts).toEqual([{ act: 'noticed', candidate: 'make test → make lint', support: 3, s_min: 5, review: false }])
   })
 
   test('the inspect pane: the directive as the agent read it, and its evidence', () => {

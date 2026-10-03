@@ -1,8 +1,9 @@
 // `/adage …` (ux-design §7): one registration, the verb parsed from the arguments. Every verb
 // answers with text a headless session can read; the drawn forms are draw/card.tsx's. No verb
-// runs a person-only command: `/adage on` says how until the press (plan B4) opens the ask.
+// runs a person-only command: `/adage on` opens the ask, whose answer is the press (plan B4).
 //
 // No `$` crosses into this file: register.ts hands `runCommand` closures over its `$`.
+import { late } from './late'
 import type { View } from './plugin'
 import { SAVINGS_ROWS, cardText } from './view'
 import type { Card } from './view'
@@ -40,8 +41,8 @@ export function tabOf(verb: Verb): View['tab'] | undefined {
 }
 
 export const OFF_TEXT = 'adage is off for this repository (.adage/disabled). /adage on turns it back on.'
-export const ON_TEXT = 'Turning Adage back on here is a decision for a person: run adage on in a terminal (copied).'
-export const ON_TEXT_UNCOPIED = 'Turning Adage back on here is a decision for a person: run adage on in a terminal.'
+/** `/adage on` where no one can be asked (headless, or the mod inert): the terminal is the way. */
+export const ON_TEXT = 'Turning Adage back on here is a decision for a person: run adage on in a terminal.'
 export const PAUSED = 'adage is paused for this session · /adage pause resumes'
 export const RESUMED = 'adage resumed'
 
@@ -62,7 +63,7 @@ export type CommandDeps = {
 
 const NO_CARD = 'adage is not answering here; run adage doctor in a terminal.'
 
-/** The answer to `/adage <args>`: the text for the transcript (empty for a verb that only opens the pane). */
+/** The answer to `/adage <args>`: the text for the transcript (empty for a verb that only opens the pane or an ask). */
 export async function runCommand(args: string, deps: CommandDeps): Promise<{ text?: string }> {
   const verb = verbOf(args)
   switch (verb) {
@@ -91,7 +92,10 @@ export async function runCommand(args: string, deps: CommandDeps): Promise<{ tex
       return { text: said.startsWith('adage is off') ? OFF_TEXT : said }
     }
     case 'on': {
-      return { text: (await deps.copy('adage on')) ? ON_TEXT : ON_TEXT_UNCOPIED }
+      // The ask, never the verb: a command handler never runs a person-only verb (ux-design §7).
+      if (late.press === undefined) return { text: ON_TEXT }
+      late.press.askOn()
+      return {}
     }
     case 'pause':
       return { text: (await deps.pause()) ? PAUSED : RESUMED }

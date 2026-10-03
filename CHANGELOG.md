@@ -560,6 +560,23 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   and an unasked pane. Nothing is drawn headless; a control session draws what a treated one with
   nothing fired draws; every child gets `CLAUDECODE=1` from a fixed argv allow-list, and nothing in
   the pane runs a person-only verb (docs/usage.md, "What the plugin shows in the session").
+- **Adage asks in the session, and a press is a person's.** At a turn's end the mod asks, in the
+  dialog Claude Code uses to ask a question, about one reflex that waits for a decision (`Adage
+  learned: …. Tell the agent?` with `enable` / `not this one` / `why`; `Adage can … Allow it?`
+  with `see what it would do` / `not now`, which opens a pane with three plain lines and the staged
+  diff, then `allow` confirms against the stage's digest; a team pack with `use them`), at most one
+  per turn end and one per reflex per day; `/adage on` opens its own ask. Every answer, and every
+  decision pressed in the pane's **waiting for you** group or an expanded reflex row (`e enable`,
+  `n not this one`, the four more verbs behind `d details` with the command to copy), runs the verb
+  through the press: the single-use token `adage hook claude Press` issued at the session's start,
+  held in engine memory, sent on stdin with the session id, its successor kept from the verb's
+  first line; a `press_issued` record the mod did not cause switches presses off for the session
+  with a warning, and an answer given with no token held is kept and applied at the next start
+  (`» kept for your next session`). The model cannot press. Learning shows as it happens: `○ adage
+  noticed` under the tool batch that completed a counted sequence (`ui.noticed`), the band's `1
+  pattern noticed`, and under a Skill tool row what Adage did with the skill (`◈ adage loaded …`,
+  `◈ adage verified 3 of 5 steps here`), with the skill's text reaching the model annotated by
+  `SkillPrompt` and `/adage why` listing the steps.
 
 ### Design system
 

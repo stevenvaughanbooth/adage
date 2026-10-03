@@ -1,8 +1,10 @@
 // The world beneath the plugin for the L7 tests (test-plan §6): a binary that answers by argv, a
 // follower that prints fixture feed lines, the session's nouns, and the engine's own drawing of
-// each site. Every `$.process.run` and `$.process.spawn` is recorded (the argv recorder, T-X-04).
-// The lines and objects below are shaped as the binary prints them (copied from real runs of
-// `adage watch --follow --json`, `graph --json`, `doctor --json` and `--json --for-session`).
+// each site. Every `$.process.run` and `$.process.spawn` is recorded (the argv recorder, T-X-04),
+// and so is every ask (`$.ui.ask` is a `tool.call` of `AskUserQuestion`, answered here). The lines
+// and objects below are shaped as the binary prints them (copied from real runs of `adage watch
+// --follow --json`, `graph --json`, `doctor --json`, `--json --for-session`, `status --json`,
+// `review delegate … --stage --json` and `hook claude SkillPrompt`).
 import type { On, ProcessRunInit, RenderElement, RenderPropsOf } from 'claude-code'
 import { mock } from 'claude-code/testing'
 import type { MockClock } from 'claude-code/testing'
@@ -15,6 +17,11 @@ export const CLI = `${DATA}/bin/adage`
 export const HOOK = `${DATA}/bin/hook`
 
 const REPO = 'acme@315465905b6b'
+
+/** The press tokens the binary issues and chains (64 lowercase hex each). */
+export const TOKEN = 'a'.repeat(64)
+export const NEXT_TOKEN = 'b'.repeat(64)
+export const THIRD_TOKEN = 'c'.repeat(64)
 
 // ------------------------------------------------------------------------------- feed lines
 
@@ -49,8 +56,15 @@ export const LINE = {
   quietStep: decision(3, SESSION, 'step', []),
   quietTools: decision(4, SESSION, 'tools', []),
   quietPretool: decision(5, SESSION, 'pretool', []),
+  /** The press the binary issued at this session's start, as the spool's `press_issued` record reads in the feed. */
+  pressIssued: decision(0, SESSION, 'press_issued', []),
+  /** A second issue for the same start: something else claimed the window (the tamper signal). */
+  pressIssuedAgain: decision(8, SESSION, 'press_issued', []),
+  /** A tool batch that completed a candidate's context (plan D2): noticed once, in both arms. */
+  noticed: (n: number, candidate: string, ids: string[], over: Record<string, unknown> = {}) =>
+    decision(n, SESSION, 'tools', [{ act: 'noticed', candidate, support: 2, s_min: 3, review: false, ...over }], [], { tool_use_ids: ids }),
   learnNew: (ts: number, sessions?: string[]) => JSON.stringify({ kind: 'learn', cursor: '1~0~9~', ts, repo: REPO, line: { ts, kind: 'condition', trigger: 'auto', repo: REPO, sessions_used: 3, changes: [{ change: 'new', route: 'test-after-acme-edit', track: 'acme/learned', summary: 'new prime reflex', from: null, to: 'prime', ...(sessions === undefined ? {} : { sessions }) }] }, ticks: [{ text: 'acme/learned: test-after-acme-edit new · prime', short: 'x', tone: 'change', strength: 'prime', repo: REPO }] }),
-  learnStrength: (ts: number) => JSON.stringify({ kind: 'learn', cursor: '1~0~9~', ts, repo: REPO, line: { ts, kind: 'condition', trigger: 'auto', repo: REPO, changes: [{ change: 'strength', route: 'codegen-after-schema', track: 'acme/learned', summary: 'prime → fire', from: 'prime', to: 'fire' }] }, ticks: [] }),
+  learnStrength: (ts: number, sessions?: string[]) => JSON.stringify({ kind: 'learn', cursor: '1~0~9~', ts, repo: REPO, line: { ts, kind: 'condition', trigger: 'auto', repo: REPO, changes: [{ change: 'strength', route: 'codegen-after-schema', track: 'acme/learned', summary: 'prime → fire', from: 'prime', to: 'fire', ...(sessions === undefined ? {} : { sessions }) }] }, ticks: [] }),
   learnEvidence: (ts: number) => JSON.stringify({ kind: 'learn', cursor: '1~0~9~', ts, repo: REPO, line: { ts, kind: 'condition', trigger: 'auto', repo: REPO, changes: [{ change: 'evidence', route: 'codegen-after-schema', track: 'acme/learned', summary: 'support 9/9', from: 'fire', to: 'fire' }] }, ticks: [] }),
   learnFailed: (ts: number) => JSON.stringify({ kind: 'learn', cursor: '1~0~9~', ts, repo: REPO, line: { ts, kind: 'condition_error', trigger: 'auto', repo: REPO, class: 'sandbox', error: 'x' }, ticks: [{ text: 'condition failed (sandbox)', short: 'x', tone: 'error', strength: null, repo: REPO }] }),
 } as const
@@ -90,6 +104,12 @@ export const GRAPH = {
   events: [{ ts: T0, session: SESSION, arm: 'control' }],
 }
 
+/** The graph with an execution offer on the codegen reflex (`review.offers`, plan A7): the two-act ask. */
+export const OFFER = { kind: 'execute', command: 'adage review delegate acme/learned codegen-after-schema --level e2 --stage --json', confirm: 'adage review delegate acme/learned codegen-after-schema --level e2 --confirm' }
+export const GRAPH_OFFER = { ...GRAPH, routes: [route('codegen-after-schema', { gist: 'run make gen after a schema edit', review: { verbs: ['strengthen', 'pin'], reasons: [], offers: [OFFER] } }), ...GRAPH.routes.slice(1, 3)] }
+/** The graph with a prediction offer: one act. */
+export const GRAPH_PREDICT = { ...GRAPH, routes: [route('codegen-after-schema', { gist: 'run make gen after a schema edit', review: { verbs: ['strengthen', 'pin'], reasons: [], offers: [{ kind: 'predict', command: 'adage review delegate acme/learned codegen-after-schema --predict' }] } }), ...GRAPH.routes.slice(1, 3)] }
+
 export const DOCTOR = {
   checks: [
     { check: 'binary', label: 'binary', status: 'pass', detail: 'adage 0.1.0' },
@@ -122,7 +142,56 @@ export const CARD = {
 
 export const DELEGATE = { enabled: true, predict: 'on', grants: {}, registrations: [], duplicates: [], lapsed: [] as unknown[] }
 export const LAPSED = [{ route: 'acme/learned/codegen-after-schema', level: 'e2', mode: 'predict', changed: ['argv_templates'], reapprove: 'adage review delegate acme/learned codegen-after-schema --predict' }]
+
+/** A candidate as `adage status --json` lists it (plan D1): a sequence (a context of two events) not yet a reflex. */
+export const CANDIDATE = { id: 'run-a54d7c', repo: 'acme', track: 'acme/learned', gist: 'after make test, run make lint', summary: 'run make lint after make test', state: 'candidate', directive: null, trigger: { kind: 'context', label: 'a context of 2 events' }, step: { kind: 'run', label: 'make lint' }, candidate: { support: 2, s_min: 3, days: 2, last_seen: '2026-09-09', review: false }, next: null }
+/** A candidate waiting for review: the learned track's own nascent route with a context trigger. */
+export const CANDIDATE_REVIEW = { ...CANDIDATE, id: 'lookup-then-read', gist: 'scripts/wi-lookup then reading the files it names', state: 'nascent', candidate: { support: 4, s_min: 5, days: 3, last_seen: '2026-09-30', review: true }, next: 'adage review approve acme/learned lookup-then-read' }
+/** A one-event record (should not exist): never drawn. */
+export const CANDIDATE_SINGLE = { ...CANDIDATE, id: 'run-single', gist: 'run make lint', trigger: { kind: 'after_edit', label: 'an edit touches acme/**' } }
 export const STATUS = { tracks: [], candidates: [] as unknown[] }
+export const PACKS = [{ name: 'alice@acme.com', path: '.adage/packs/acme', command: 'adage add .adage/packs/acme --trust' }]
+
+/** What `review delegate … --level e2 --stage --json` prints after the `next` line (plan A7). */
+export const STAGE = {
+  route: 'acme/learned/codegen-after-schema',
+  repo: REPO,
+  level: 'e2',
+  terms: { outputs: ['acme/generated/**'], cache: ['__pycache__/**'] },
+  proposed: true,
+  first: true,
+  ok: true,
+  digest: 'd1'.repeat(32) + '.' + Array.from({ length: 11 }, (_, k) => String(k).repeat(16)).join('.'),
+  recorded: false,
+  facts: {
+    argv: ['make', 'gen'],
+    inputs: [{ slot: 'path', contract: 'schema/*.json', from: 'the edited path, a repository path' }],
+    effect: { approved: 'regenerate', classified: 'regenerate' },
+    output: { mode: 'files', fields: [] },
+    exit_when: {},
+    scripts: [{ path: 'scripts/gen.sh', sha256: 'e3b0c442', text: '#!/bin/sh\npython -m acme.gen\n' }],
+    sandbox: 'Linux, Landlock ABI 7 + seccomp; network off',
+    profile_id: 'p9f8e7d6',
+    route_exec_digest: 'r1a2b3c4',
+    evidence: { support: 13, opportunities: 17, days: 9 },
+    attestations: [],
+    action: { kind: 'regenerate', outputs: ['acme/generated/**'], cache: ['__pycache__/**'] },
+    staged: {
+      backend: 'landlock',
+      exit: 0,
+      diff: [{ path: 'acme/generated/models.py', change: 'modify', before_sha256: 'aa', after_sha256: 'bb', diff: '@@ -10,3 +10,4 @@\n class Invoice:\n     id: str\n+    currency: str = "USD"\n     total: int\n' }],
+      refused: [],
+      discarded: 0,
+    },
+  },
+}
+/** The same stage after the agent kept working: the diff moved, nothing recorded. */
+export const STAGE_MOVED = { ...STAGE, changed: 'snapshot', digest: 'e2'.repeat(32) + STAGE.digest.slice(64), facts: { ...STAGE.facts, staged: { ...STAGE.facts.staged, diff: [{ ...STAGE.facts.staged.diff[0], after_sha256: 'cc', diff: '@@ -10,3 +10,5 @@\n class Invoice:\n     id: str\n+    currency: str = "USD"\n+    locale: str = "en"\n     total: int\n' }] } } }
+export const CONFIRMED = { ...STAGE, recorded: true, wrote: ['policy', 'marker', 'grant'], takes_effect: 'in new sessions' }
+
+/** What `hook claude SkillPrompt` answers for a skill `adage train` verified here (plan D4). */
+export const SKILL_TEXT = 'Look the work item up, then run the tests.'
+export const SKILL_ANNOTATED = `${SKILL_TEXT}\n\nAdage verified these steps in this repository on 2026-10-03:\n- scripts/wi-lookup {id}: works\n- pytest: stale (exit 1: command not found)\n- make test: works`
 
 // ----------------------------------------------------------------------------------- the world
 
@@ -145,13 +214,22 @@ export type WorldOptions = {
   classic?: Record<string, unknown>
   /** What the PreToolUse command hook answers for a Bash call. */
   pretool?: unknown
-  /** What `hook claude <Event>` prints, by event. */
+  /** What `hook claude <Event>` prints, by event (`Press` answers a token unless `press` is false). */
   hook?: Record<string, string>
+  /** Whether `hook claude Press` issues a token (the window is open) at each start; true by default. */
+  press?: boolean
+  /** A person-only verb refused by the binary (no `next` line, exit 1): a wrong or spent press. */
+  refuse?: boolean
+  /** What `--stage --json` answers (a function sees each call), and what `--confirm` answers. */
+  stage?: unknown | (() => unknown)
+  confirm?: unknown | (() => unknown)
   graph?: unknown
   doctor?: unknown
   card?: unknown
   delegate?: unknown
   status_json?: unknown
+  /** The answer to each `$.ui.ask` (the label, or undefined for a dismissed dialog). */
+  ask?: (question: string, options: readonly string[]) => string | undefined
   /** Whether `$.ui.copy` takes. */
   copies?: boolean
   env?: Record<string, string>
@@ -167,27 +245,61 @@ export type World = {
   ran: Ran[]
   spawned: (readonly string[])[]
   opened: unknown[]
+  closed: string[]
   toasts: string[]
   statuses: (string | undefined)[]
   copies: string[]
   registered: unknown[]
+  /** Every `$.ui.ask`: the question and its labels, in order. */
+  asked: { question: string; options: string[] }[]
   invalidated: number
   requests: number
   clock: MockClock
+  /** What the store holds now (`$.store`). */
+  store: Record<string, unknown>
   /** Lets the resumed child print the `later` lines. */
   deliver: () => Promise<void>
 }
 
+/** The verbs only a press runs, by their head: the kit answers them as the binary does after a spend. */
+const PERSON_ONLY = new Set(['review', 'on', 'add', 'delegate'])
+
 /** Installs the world beneath the plugin on `on`. */
 export function world(on: On, o: WorldOptions = {}): World {
-  const w: World = { ran: [], spawned: [], opened: [], toasts: [], statuses: [], copies: [], registered: [], invalidated: 0, requests: 0, clock: mock.clock(on, { now: T0 }), deliver: async () => undefined }
+  const store: Record<string, unknown> = { ...(o.store ?? {}) }
+  const w: World = { ran: [], spawned: [], opened: [], closed: [], toasts: [], statuses: [], copies: [], registered: [], asked: [], invalidated: 0, requests: 0, clock: mock.clock(on, { now: T0 }), store, deliver: async () => undefined }
   mock.env(on, { ...(o.data === undefined && 'data' in o ? {} : { CLAUDE_PLUGIN_DATA: o.data ?? DATA }), ...o.env })
-  mock.store(on, o.store ?? {})
+  on('store.get', ($, e) => ({ value: store[e.key] }))
+  on('store.set', ($, e) => {
+    store[e.key] = e.value
+    return { value: undefined }
+  })
   const json = (v: unknown) => JSON.stringify(v)
+  const call = (v: unknown) => (typeof v === 'function' ? (v as () => unknown)() : v)
+  // The chain of tokens the binary prints as each press is spent.
+  const chain = [NEXT_TOKEN, THIRD_TOKEN]
+  let spent = 0
   on('process.run', ($, e) => {
     w.ran.push({ argv: e.argv, init: e.init })
     const head = e.argv[1] === '--json' ? 'card' : (e.argv[1] ?? '')
     if (o.failing?.includes(head)) return { value: { exitCode: 1, stdout: '', stderr: 'x', isStdoutTruncated: false, isStderrTruncated: false } }
+    if (head === 'hook' && e.argv[3] === 'Press') {
+      const out = o.hook?.Press ?? (o.press === false ? '' : json({ press: TOKEN }) + '\n')
+      return { value: { exitCode: 0, stdout: out, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+    }
+    if (PERSON_ONLY.has(head) && !(head === 'delegate' && e.argv[2] === 'status')) {
+      // A person-only verb: the binary spends the press on stdin and prints the next token first.
+      if (o.refuse === true) return { value: { exitCode: 1, stdout: '', stderr: 'error: adage review is a decision for a person: run it at a terminal\n', isStdoutTruncated: false, isStderrTruncated: false } }
+      const next = chain[Math.min(spent++, chain.length - 1)] ?? THIRD_TOKEN
+      const tail = e.argv.join(' ')
+      const body =
+        tail.endsWith('--stage --json') ? json(call(o.stage ?? STAGE))
+        : tail.endsWith('--confirm') ? json(call(o.confirm ?? CONFIRMED))
+        : head === 'on' ? 'adage is on for this repository.'
+        : head === 'add' ? 'added 6 reflexes from alice@acme.com'
+        : `recorded ${e.argv[2] ?? ''} for ${e.argv[4] ?? ''}`
+      return { value: { exitCode: 0, stdout: `${json({ next })}\n${body}\n`, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+    }
     const out =
       head === 'version' ? (o.version ?? 'adage 0.1.0\n')
       : head === 'hook' ? (o.hook?.[e.argv[3] ?? ''] ?? '')
@@ -245,6 +357,10 @@ export function world(on: On, o: WorldOptions = {}): World {
     w.opened.push(e)
     return { value: { isPlaced: true } }
   })
+  on('ui.close', ($, e) => {
+    w.closed.push(e.id)
+    return { value: undefined }
+  })
   on('ui.toast', ($, e) => {
     w.toasts.push(e.text)
     return { value: undefined }
@@ -269,7 +385,20 @@ export function world(on: On, o: WorldOptions = {}): World {
     })
   }
   on('classic.PreToolUse', () => (o.pretool ?? {}) as never)
-  on('tool.call', () => ({ result: { stdout: 'ok', stderr: '', interrupted: false } }) as never)
+  // `$.ui.ask` is a `tool.call` of AskUserQuestion: answered with the label the test chose, or
+  // refused (a dismissed dialog); every other tool runs as `ok`.
+  on('tool.call', ($, e) => {
+    if (e.tool === 'AskUserQuestion') {
+      const q = (e as unknown as { questions?: { question: string; options: { label: string }[] }[] }).questions?.[0]
+      const question = q?.question ?? ''
+      const options = (q?.options ?? []).map(x => x.label)
+      w.asked.push({ question, options })
+      const answer = o.ask?.(question, options)
+      if (answer === undefined) return { deny: 'dismissed' } as never
+      return { result: { questions: [q], answers: { [question]: answer } } } as never
+    }
+    return { result: { stdout: 'ok', stderr: '', interrupted: false } } as never
+  })
   // The model: one text response that ends the turn (counted).
   on('turn.step', async function* ($, e) {
     w.requests++
@@ -278,6 +407,8 @@ export function world(on: On, o: WorldOptions = {}): World {
     yield { kind: 'stop' as const, stopReason: 'tool_use' as const, usage }
     return { turnId: e.turnId, index: e.index, answer: 'Done.', toolUses: [], stopReason: 'tool_use' as const, usage }
   })
+  on('turn.complete', ($, e) => ({ text: e.answer }))
+  on('skill.prompt', ($, e) => ({ text: e.text }))
   // The engine's own drawing of every site: one Text naming it (and its text, where it has one).
   on('ui.render', ($, e) => {
     const { Text } = $.ui.resolve(e)
@@ -294,6 +425,9 @@ export async function start($: { session: { start: (e: { cwd: string; surface: '
   await w.clock.settle()
 }
 
+/** The end of a turn the model answered (`turn.complete`), as the engine raises it on the main loop. */
+export const TURN_END = { turnId: 'turn-1', answer: 'Done.', durationMs: 1000, isAborted: false, reason: 'answer' } as const
+
 // --------------------------------------------------------------------------------- site props
 
 export const SURFACES = ['terminal', 'desktop'] as const
@@ -307,6 +441,12 @@ export const USER = (text: string, isExpanded = false): RenderPropsOf['UserMessa
   ({ text, origin: { kind: 'composer' }, isExpanded }) as unknown as RenderPropsOf['UserMessage']
 export const TOOL = (id: string, command = 'make gen'): RenderPropsOf['ToolUse'] =>
   ({ tool_use_id: id, tool: 'Bash', input: { command }, isRunning: false, isErrored: false, isInterrupted: false }) as RenderPropsOf['ToolUse']
+/** A Skill tool row (`Skill(acme-work-item)`). */
+export const SKILL_TOOL = (id: string, skill = 'acme-work-item'): RenderPropsOf['ToolUse'] =>
+  ({ tool_use_id: id, tool: 'Skill', input: { skill }, isRunning: false, isErrored: false, isInterrupted: false }) as RenderPropsOf['ToolUse']
+/** A folded run of tool calls (`ToolGroup`), by their ids. */
+export const GROUP = (ids: readonly string[]): RenderPropsOf['ToolGroup'] =>
+  ({ calls: ids.map(id => ({ tool_use_id: id, tool: 'Bash', input: { command: 'make test' }, isRunning: false, isErrored: false })), isActive: false, isExpanded: false }) as unknown as RenderPropsOf['ToolGroup']
 export const RESULT = (id: string): RenderPropsOf['ToolResult'] => ({ tool_use_id: id, tool: 'Bash', output: { stdout: '48 passed' }, isErrored: false }) as RenderPropsOf['ToolResult']
 export const OUTPUT = (args: string, text: string): RenderPropsOf['CommandOutput'] => ({ command: 'adage', args, text, isErrored: false }) as RenderPropsOf['CommandOutput']
 
@@ -317,6 +457,9 @@ export const block = (route: string, strength = 'fire') =>
 /** A predicted step, as `hook claude TurnStep` answers it. */
 export const PREDICT = JSON.stringify({ predict: { kind: 'obligation', route: 'codegen-after-schema', track: 'acme/learned@1', calls: [{ tool: 'Bash', input: { command: 'make gen' } }] } })
 export const PREDICTED_ID = 'adage_codegen-after-schema_turn-1_2_0'
+/** A predicted skill (plan D3): the Skill tool in the model's place. */
+export const PREDICT_SKILL = JSON.stringify({ predict: { kind: 'skill', route: 'release-after-bump', track: 'acme/learned@1', calls: [{ tool: 'Skill', input: { skill: 'acme-work-item' } }] } })
+export const PREDICTED_SKILL_ID = 'adage_release-after-bump_turn-1_2_0'
 export const STEP = { turnId: 'turn-1', index: 2, model: 'm', messageCount: 4 }
 
 /** The words a default surface never carries (ux-design §10, T-B2-10). */

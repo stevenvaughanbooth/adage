@@ -5,6 +5,8 @@
 //
 // Words follow docs/lexicon.md: no strength or lifecycle word outside the pane, no "saved", no
 // "approval", a reflex named by what it tells the agent (its gist), never by its id.
+import type { Skill } from './kinds'
+import { late } from './late'
 import { glyph } from './tokens'
 import type { GlyphName, Role } from './tokens'
 import type { Act, Check, Fired, Health, Lapse, Learner, Mark, Pack, Reflex, Row, Tick } from './plugin'
@@ -187,6 +189,12 @@ export type BandInput = {
   versionLine: string
   columns: number
   ascii: boolean
+  /** Answers kept for the next session start (`band.kept`); the hooks' own count when absent. */
+  kept?: number
+  /** Distinct sequences noticed this session (`1 pattern noticed`); the hooks' own count when absent. */
+  noticed?: number
+  /** Whether the pane is open: the noticed cell shows only while it is closed. */
+  paneOpen?: boolean
 }
 
 export type Band = { cells: Cell[]; second: string }
@@ -229,14 +237,18 @@ export function band(i: BandInput): Band | undefined {
   if (i.reused > 0) counts.push({ cell: `${plural(i.reused, 'test run', 'test runs')} reused`, rank: 5 })
   const learning = learnerCell(i.learner, i.now, i.ascii)
   const lamp = lampCell(i.health, i.ascii)
-  if (counts.length === 0 && learning === '' && lamp.lamp === 'fire' && second === '') return undefined
+  // `1 pattern noticed` (ux-design §5, rank 7): while the pane, which lists them, is closed.
+  const noticed = i.noticed ?? late.noticed
+  const noticedCell = noticed > 0 && !(i.paneOpen ?? late.paneOpen) ? `${plural(noticed, 'pattern', 'patterns')} noticed` : ''
+  if (counts.length === 0 && learning === '' && noticedCell === '' && lamp.lamp === 'fire' && second === '') return undefined
 
-  // Laid out in reading order, dropped by rank: learning, then the counts from the right.
+  // Laid out in reading order, dropped by rank: noticed, then learning, then the counts from the right.
   type Ranked = Cell & { rank: number }
   let cells: Ranked[] = [
     ...counts.map(c => ({ text: c.cell, rank: c.rank })),
     { ...lamp, rank: 2 },
     ...(learning === '' ? [] : [{ text: learning, rank: 6 }]),
+    ...(noticedCell === '' ? [] : [{ text: noticedCell, rank: 7 }]),
   ]
   const width = (cs: readonly Ranked[]) => cols(`${name}  `) + cs.reduce((n, c, k) => n + (k > 0 ? 3 : 0) + cols(c.glyph ? `${c.glyph} ${c.text}` : c.text), 0)
   while (width(cells) > i.columns && cells.length > 1) {
@@ -256,6 +268,10 @@ function secondLine(i: BandInput): string {
   const sep = g('sep', i.ascii)
   if (i.lapsed > 0) return `${n} ${plural(i.lapsed, 'grant', 'grants')} lapsed ${sep} /adage health`
   if (i.health?.word === 'problem' && i.health.check !== null) return `${n} problem: ${i.health.check} ${sep} /adage health`
+  // `band.kept` (ux-design §9.12): an answer given with no press held waits for the next start;
+  // it is said before `need review`, since the review it answers still waits in the graph until
+  // the answer runs.
+  if ((i.kept ?? late.kept) > 0) return `${n} kept for your next session ${sep} /adage review`
   if (i.review > 0) return `${n} ${i.review} need review ${sep} /adage review`
   return i.versionLine
 }
@@ -425,27 +441,50 @@ export function visibleReflexes(reflexes: readonly Reflex[], filter: string, str
   })
 }
 
-/** The review verbs worded as the lexicon words them (ux-design §6.2). */
+/**
+ * The review verbs worded as the person's two verbs and the lexicon's four (ux-design §6.2, §10
+ * `pane.verb.*`): `enable` and `not this one` on the row, the rest behind `details`.
+ */
 export const VERB_WORDS: Readonly<Record<string, string>> = {
+  approve: 'enable',
+  dismiss: 'not this one',
   strengthen: 'make it a direct instruction',
   weaken: 'make it a suggestion',
   extinguish: 'retire it',
-  approve: 'enable it',
   pin: 'pin it',
-  dismiss: 'dismiss it',
 }
+
+/** The two verbs a row shows; the others wait behind `d: details` (`pane.verb.more`). */
+export const ROW_VERBS: readonly string[] = ['approve', 'dismiss']
+
+/** The lowercase hotkey of each verb in a focused pane (never `l`, `r`, `t`, `p`, `v`, `n`'s other uses clash: one row is expanded at a time). */
+export const VERB_HOTKEYS: Readonly<Record<string, string>> = { approve: 'e', dismiss: 'n', strengthen: 's', weaken: 'w', extinguish: 'x', pin: 'i' }
 
 /** The terminal command for a review verb, as `review_command` forms it. */
 export const reviewCommand = (verb: string, r: Reflex): string => `adage review ${verb} ${r.reference} ${r.id}`
 
 /** One thing that waits for the person: a reflex to enable, a step Adage could take, a pack to trust. */
-export type Waiting = { key: string; kind: 'enable' | 'allow' | 'trust'; say: string; text: string; command: string }
+export type Waiting = {
+  key: string
+  kind: 'enable' | 'allow' | 'trust'
+  /** What the reflex tells the agent (the pack's signer for a trust). */
+  say: string
+  text: string
+  /** The terminal command the first answer runs. */
+  command: string
+  /** For an enable: the command `not this one` records (`review dismiss`). */
+  no?: string
+  /** For an allow: an action Adage would run (two acts, the facts between) or a step it would predict (one). */
+  offer?: 'execute' | 'predict'
+  /** The reflex the item is about (`reference/id`), which `why` expands in the pane. */
+  reflex?: string
+}
 
 /**
  * What waits for the person (ux-design §4.17, the band's `» n need review`): reflexes held back
  * until a person enables them (`approval`, `quiet`), the grants the binary would offer, and team
- * packs awaiting trust. Asking about them is plan B4's (`hooks/ask.ts`); until then the pane lists
- * them with the command to copy.
+ * packs awaiting trust. `ask.ts` words the question about each; the pane lists them under
+ * **waiting for you** with a press for each answer.
  */
 export function waiting(reflexes: readonly Reflex[], packs: readonly Pack[], ascii = false): Waiting[] {
   const out: Waiting[] = []
@@ -453,12 +492,19 @@ export function waiting(reflexes: readonly Reflex[], packs: readonly Pack[], asc
   for (const r of reflexes) {
     const key = `${r.reference}/${r.id}`
     const say = r.gist || r.summary
-    if (r.reasons.includes('approval') || r.reasons.includes('quiet')) out.push({ key, kind: 'enable', say, text: `${say} ${sep} enable it to tell the agent`, command: reviewCommand('approve', r) })
-    for (const o of r.offers) out.push({ key: `${key}#${o.kind}`, kind: 'allow', say, text: `${say} ${sep} Adage can do this for you`, command: o.command })
+    if (r.reasons.includes('approval') || r.reasons.includes('quiet')) {
+      out.push({ key, kind: 'enable', say, text: `${say} ${sep} enable it to tell the agent`, command: reviewCommand('approve', r), no: reviewCommand('dismiss', r), reflex: key })
+    }
+    for (const o of r.offers) {
+      out.push({ key: `${key}#${o.kind}`, kind: 'allow', say, text: `${say} ${sep} Adage can do this for you`, command: o.command, offer: o.kind === 'predict' ? 'predict' : 'execute', reflex: key })
+    }
   }
   for (const p of packs) out.push({ key: `pack:${p.name}`, kind: 'trust', say: p.name, text: `reflexes from ${p.name} are in this repository`, command: p.command })
   return out
 }
+
+/** The item of a waiting list by its key. */
+export const waitingOf = (items: readonly Waiting[], key: string): Waiting | undefined => items.find(w => w.key === key)
 
 /** A Health check's row: the lamp, the label, the detail. */
 export function checkLine(c: Check, ascii: boolean): { glyph: string; role: Role; text: string } {
@@ -485,15 +531,32 @@ export const lapseText = (l: Lapse): string => `${l.route}: ${l.changed.join(', 
 // ------------------------------------------------------------------------------------ /adage why
 
 /**
- * `/adage why`: the last directive this session, as the model read it, with its route, track,
- * evidence and whether it was followed; with nothing fired, in either arm, `cmd.why.none`.
+ * `/adage why` after a verified skill (ux-design §4.8, `cmd.why.step`): each step the replay
+ * verified here, `s{i} {command} · works | stale: {signature} · {date}`.
  */
-export function whyText(rows: readonly Row[], reflexes: readonly Reflex[], ascii: boolean): string {
+export function whySkill(skill: Skill, ascii: boolean): string {
+  const sep = ` ${g('sep', ascii)} `
+  const works = skill.steps.filter(s => s.result === 'works').length
+  const lines = [`${g('skill', ascii)} adage verified ${works} of ${skill.steps.length} steps of the ${skill.skill} skill here`, '']
+  skill.steps.forEach((s, k) => {
+    const state = s.result === 'works' ? 'works' : `stale${s.signature === '' ? '' : `: ${s.signature}`}`
+    lines.push([`s${k + 1} ${s.command}`, state, skill.date].filter(p => p !== '').join(sep))
+  })
+  return lines.join('\n')
+}
+
+/**
+ * `/adage why`: the last directive this session, as the model read it, with its route, track,
+ * evidence and whether it was followed; after a skill Adage verified in place, its steps; with
+ * nothing fired, in either arm, `cmd.why.none`.
+ */
+export function whyText(rows: readonly Row[], reflexes: readonly Reflex[], ascii: boolean, skill: Skill | undefined = late.skill): string {
   for (let i = rows.length - 1; i >= 0; i--) {
     const row = rows[i]
     if (row === undefined || !row.mine) continue
     const directed = [...row.acts].reverse().find(a => a.act === 'directed' && a.route)
     if (directed?.route === undefined) continue
+    if (skill !== undefined && skill.at >= row.ts) return whySkill(skill, ascii)
     const route = directed.route
     const text = row.texts.find(t => t.route === route)?.text ?? ''
     const r = reflexOf(reflexes, route)
@@ -504,6 +567,7 @@ export function whyText(rows: readonly Row[], reflexes: readonly Reflex[], ascii
     lines.push('', [`route ${r !== undefined ? `${r.track}/` : ''}${route}`, r?.describe ?? '', followed ? 'followed' : 'not followed yet'].filter(p => p !== '').join(sep))
     return lines.join('\n')
   }
+  if (skill !== undefined) return whySkill(skill, ascii)
   return 'No reflex has spoken in this session yet.'
 }
 

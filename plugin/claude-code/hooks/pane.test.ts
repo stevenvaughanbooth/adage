@@ -1,13 +1,15 @@
 // The pane and `/adage …` through the engine (test-plan §6, B3), and the cross-cutting cases that
 // need the whole module: fail open (T-X-02), headless (T-X-03), the argv recorder (T-X-04), the
-// control arm drawn as a treated session with nothing fired (T-X-06).
+// control arm drawn as a treated session with nothing fired (T-X-06). The pane's decisions are
+// presses since B4 (dialog.test.ts); T-B3-05 keeps the copy beside them for persona (b).
 import type { TurnStepChunk, TurnStepResult } from 'claude-code'
 import { describe, expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 
+import { ON_QUESTION } from './ask'
 import { ALLOWED_VERBS, headOf } from './bridge'
-import { OFF_TEXT, ON_TEXT, PAUSED, RESUMED } from './commands'
-import { BAND, CARD, CLI, DELEGATE, GRAPH, LAPSED, LINE, OUTPUT, PANE_PROPS, PREDICT, STEP, SURFACES, TOOL, USER, block, start, world } from './fixtures/kit'
+import { OFF_TEXT, PAUSED, RESUMED } from './commands'
+import { BAND, CARD, CLI, DELEGATE, GRAPH, LAPSED, LINE, OUTPUT, PANE_PROPS, PREDICT, STEP, SURFACES, TOOL, TURN_END, USER, block, start, world } from './fixtures/kit'
 import type { Surface, World } from './fixtures/kit'
 
 const FEED = [LINE.learnerIdle, LINE.healthy, LINE.start, LINE.firedGen, LINE.firedLookup]
@@ -99,7 +101,7 @@ describe('B3 · the pane', () => {
     expect((await band.findAll({ type: 'Text' })).map(t => t.text).join('')).not.toContain('paused')
   })
 
-  test('T-B3-05: Reflexes is read-only: a Copy per review verb, the copy confirmed by a toast, Selects for strength and lifecycle', async ($, on) => {
+  test('T-B3-05: Reflexes: the review verbs are presses (T-B4-06), the command stays beside them to copy, confirmed by a toast; Selects for strength and lifecycle', async ($, on) => {
     const w = world(on, { feed: FEED })
     await start($, w)
     for (const surface of SURFACES) {
@@ -108,9 +110,10 @@ describe('B3 · the pane', () => {
       expect((await ui.findAll({ type: 'Select' })).map(s => s.key)).toEqual(['strength', 'lifecycle'])
       const ran = w.ran.length
       await ui.press({ key: 'reflex:acme/learned/codegen-after-schema' })
-      const copies = (await ui.findAll({ type: 'Button' })).filter(b => b.key?.startsWith('copy:') && b.key.endsWith('acme/learned/codegen-after-schema'))
-      expect(copies.map(b => b.text)).toEqual(['Copy: adage review strengthen acme/learned codegen-after-schema', 'Copy: adage review pin acme/learned codegen-after-schema'])
-      expect(await shown(ui)).toContain('make it a direct instruction')
+      await ui.press({ key: 'details:acme/learned/codegen-after-schema' })
+      const verbs = (await ui.findAll({ type: 'Button' })).filter(b => b.key?.startsWith('verb:') && b.key.endsWith('acme/learned/codegen-after-schema'))
+      expect(verbs.map(b => b.text)).toEqual(['make it a direct instruction', 'pin it'])
+      expect(await shown(ui)).toContain('adage review strengthen acme/learned codegen-after-schema')
       await ui.press({ key: 'copy:strengthen:acme/learned/codegen-after-schema' })
       expect(w.copies.at(-1)).toBe('adage review strengthen acme/learned codegen-after-schema')
       expect(w.toasts.at(-1)).toBe('copied: adage review strengthen acme/learned codegen-after-schema')
@@ -130,7 +133,8 @@ describe('B3 · the pane', () => {
     const ui = await pane($, 'terminal')
     await ui.press({ key: 'tab-reflexes' })
     await ui.press({ key: 'reflex:acme/learned/codegen-after-schema' })
-    await ui.press({ key: 'copy:pin:acme/learned/codegen-after-schema' })
+    await ui.press({ key: 'details:acme/learned/codegen-after-schema' })
+    await ui.press({ key: 'copy:strengthen:acme/learned/codegen-after-schema' })
     expect(w.toasts.at(-1)).toBe('copy is not available here · the command is in /adage health')
   })
 
@@ -182,12 +186,12 @@ describe('B3 · the pane', () => {
   test('§9.4: the follower ends three times early: feed stopped, run adage doctor', async ($, on) => {
     const w = world(on, { feed: FEED })
     await start($, w)
-    expect(w.spawned.filter(a => a[1] === 'watch').map(a => a.slice(8))).toEqual([[], ['--since', JSON.parse(LINE.firedLookup).cursor], ['--since', JSON.parse(LINE.firedLookup).cursor]])
+    expect(w.spawned.filter(a => a[1] === 'watch').map(a => a.slice(10))).toEqual([[], ['--since', JSON.parse(LINE.firedLookup).cursor], ['--since', JSON.parse(LINE.firedLookup).cursor]])
     expect(await shown(await pane($, 'terminal'))).toContain('feed stopped · run adage doctor')
   })
 
   // A serving map keeps work pending, which each act waits a moment on.
-  test('Explore in browser: one map, started once, then a link to it', { timeoutMs: 30_000 }, async ($, on) => {
+  test('T-B4-07, Explore in browser: one map, started once, then a link to it', { timeoutMs: 30_000 }, async ($, on) => {
     const w = world(on, { feed: FEED })
     await start($, w)
     const first = await pane($, 'terminal')
@@ -207,15 +211,17 @@ describe('B3 · the pane', () => {
 })
 
 describe('B3 · /adage', () => {
-  test('T-B3-09: one registration, immediate, with the hint; each verb answers as ux-design §7 says', async ($, on) => {
+  test('T-B3-09, T-B4-08: one registration, immediate, with the hint; each verb answers as ux-design §7 says; /adage on opens the ask', async ($, on) => {
     const w = world(on, { feed: FEED })
     await start($, w)
     expect(w.registered).toEqual([{ name: 'adage', description: expect.any(String), argumentHint: '[review]', immediate: true }])
     const run = async (args: string) => (await $.command.run({ command: 'adage', args } as never)).text
     const ran = w.ran.length
-    expect(await run('on')).toBe(ON_TEXT)
+    expect(await run('on')).toBeUndefined()
+    await w.clock.settle()
+    expect(w.asked).toEqual([{ question: ON_QUESTION, options: ['turn it on', 'leave it off'] }])
     expect(w.ran.length).toBe(ran)
-    expect(w.copies).toEqual(['adage on'])
+    expect(w.copies).toEqual([])
     expect(await run('off')).toBe(OFF_TEXT)
     expect(w.ran.slice(ran).map(r => r.argv)).toContainEqual([CLI, 'off'])
     expect(w.ran.slice(ran).filter(r => r.argv[1] === 'off')).toHaveLength(1)
@@ -284,22 +290,28 @@ describe('§4.9 · /clear', () => {
     const band = async () => (await (await $.ui.mount({ plugin: 'adage', surface: 'terminal', component: 'AbovePrompt', props: BAND(), requestId: `b-${id}` })).findAll({ type: 'Text' })).map(t => t.text).join('')
     expect(await band()).toBe('◠ adage  2 reflexes this session · ● healthy')
     id = 'sess-2'
-    await $.classic.SessionStart({ source: 'clear' } as never)
+    await $.classic.SessionStart({ source: 'clear', session_id: 'sess-2', cwd: '/w' } as never)
     await w.clock.settle()
-    expect(w.spawned.filter(a => a[1] === 'watch').at(-1)?.slice(6, 8)).toEqual(['--session', 'sess-2'])
+    expect(w.spawned.filter(a => a[1] === 'watch').at(-1)?.slice(8, 10)).toEqual(['--session', 'sess-2'])
     expect(await band()).toBe('ENGINE AbovePrompt')
     expect((await $.command.run({ command: 'adage', args: 'why' } as never)).text).toBe('No reflex has spoken in this session yet.')
+    // The new session's press was asked for with its id.
+    expect(JSON.parse(w.ran.find(r => r.argv[3] === 'Press')?.init?.stdin ?? '{}')).toMatchObject({ session_id: 'sess-2', source: 'clear' })
   })
 })
 
 describe('T-X-02 · fail open', () => {
   test('a binary that fails every ask: each hook answers what next answered, the call runs as written, one warning', async ($, on) => {
-    const w = world(on, { feed: FEED, hook: { TurnStep: '{', PreToolUse: '{' }, classic: { UserPromptSubmit: { additionalContext: ['ctx'] } } })
+    const w = world(on, { feed: FEED, hook: { TurnStep: '{', PreToolUse: '{', SkillPrompt: '{', Press: '{' }, classic: { UserPromptSubmit: { additionalContext: ['ctx'] } } })
     await start($, w)
+    await $.classic.SessionStart({ source: 'startup' } as never)
     expect(await $.classic.UserPromptSubmit({ prompt: 'x', source: 'user' } as never)).toEqual({ additionalContext: ['ctx'] })
     for (let k = 0; k < 3; k++) await drain($.turn.step(STEP))
     expect(w.requests).toBe(3)
     expect((await $.tool.call({ tool: 'Bash', command: 'make test', tool_use_id: 't9' } as never)) as unknown).toMatchObject({ result: { stdout: 'ok' } })
+    expect(await $.skill.prompt({ skill: 'x', text: 'the text' })).toEqual({ text: 'the text' })
+    expect(await $.turn.complete(TURN_END as never)).toEqual({ text: 'Done.' })
+    await w.clock.settle()
     expect(w.statuses).toEqual(['hooks are not answering; run adage doctor'])
   })
 
@@ -313,12 +325,16 @@ describe('T-X-02 · fail open', () => {
 })
 
 describe('T-X-03 · headless', () => {
-  test('no feed, no reads, nothing drawn; the observers still run', async ($, on) => {
+  test('no feed, no reads, nothing drawn, nothing asked; the observers still run', async ($, on) => {
     const w = world(on, { feed: FEED, classic: { UserPromptSubmit: { additionalContext: [block('codegen-after-schema')] } } })
     await start($, w, null, false)
     expect(w.spawned).toEqual([])
-    expect(w.ran.map(r => r.argv[1])).toEqual(['version'])
+    // The probe and the session's Standing (attached headless too, plan C5); nothing read to draw.
+    expect(w.ran.map(r => r.argv.slice(1, 4).join(' '))).toEqual(['version', 'hook claude Standing'])
     expect(await $.classic.UserPromptSubmit({ prompt: 'x', source: 'sdk' } as never)).toEqual({ additionalContext: [block('codegen-after-schema')] })
+    await $.turn.complete(TURN_END as never)
+    await w.clock.settle()
+    expect(w.asked).toEqual([])
     for (const surface of SURFACES) {
       const sites = [
         await $.ui.mount({ plugin: 'adage', surface, component: 'AbovePrompt', props: BAND() }),
@@ -332,16 +348,19 @@ describe('T-X-03 · headless', () => {
 
 /** Runs every hook, command and press the module has over one session. */
 async function everything($: Engine, w: World) {
-  await $.classic.SessionStart({ source: 'startup' } as never)
+  await $.classic.SessionStart({ source: 'startup', session_id: 'sess-1', cwd: '/w' } as never)
   await $.classic.UserPromptSubmit({ prompt: 'fix W-2042', source: 'user' } as never)
   await $.tool.call({ tool: 'Bash', command: 'pytest -q', tool_use_id: 't1' } as never)
   await drain($.turn.step(STEP))
   await $.classic.PostToolBatch({ tool_calls: [{ tool_name: 'Bash', tool_input: { command: 'pytest -q' }, tool_use_id: 't1' }] } as never)
   await $.classic.PostToolUseFailure({ tool_name: 'Bash', tool_input: {}, tool_use_id: 't1', error: 'x' } as never)
   await $.classic.Stop({ stop_hook_active: false } as never)
+  await $.turn.complete(TURN_END as never)
+  await w.clock.settle()
   for (const args of ['', 'status', 'watch', 'reflexes', 'review', 'health', 'doctor', 'why', 'off', 'on', 'pause', 'pause', 'savings', 'install claude-code', 'config set x']) {
     await $.command.run({ command: 'adage', args } as never)
   }
+  await w.clock.settle()
   const ui = await pane($, 'terminal')
   for (const tab of ['tab-reflexes', 'tab-health', 'tab-live']) {
     await ui.press({ key: tab })
@@ -357,14 +376,21 @@ async function everything($: Engine, w: World) {
 }
 
 describe('T-X-04 · authority', () => {
-  test('outside a press, the argv heads are exactly the allowed ones; install, config, review and on never', { timeoutMs: 60_000 }, async ($, on) => {
-    const w = world(on, { feed: FEED, hook: { TurnStep: PREDICT }, pretool: { updatedInput: { command: '.venv/bin/python -m pytest -q' } } })
+  test('outside a press, the argv heads are exactly the allowed ones; install and config never; a person-only verb only with the press on stdin', { timeoutMs: 60_000 }, async ($, on) => {
+    const w = world(on, { feed: FEED, hook: { TurnStep: PREDICT }, pretool: { updatedInput: { command: '.venv/bin/python -m pytest -q' } }, ask: (q, o) => o[0] })
     await start($, w)
     await everything($, w)
-    const heads = new Set([...w.ran.map(r => headOf(r.argv)), ...w.spawned.map(headOf)])
+    const pressed = w.ran.filter(r => typeof r.init?.stdin === 'string' && r.init.stdin.includes('"press"'))
+    const others = w.ran.filter(r => !pressed.includes(r))
+    const heads = new Set([...others.map(r => headOf(r.argv)), ...w.spawned.map(headOf)])
     const allowed = new Set(['hook', 'version', 'watch', 'graph', 'doctor', 'status', 'ledger note', 'off', 'map', 'condition', 'delegate'])
     for (const h of heads) expect(allowed.has(h), h).toBe(true)
     for (const h of ['install', 'config', 'review', 'on', 'add']) expect(heads.has(h)).toBe(false)
+    for (const r of pressed) {
+      expect(['review', 'on', 'add'].includes(r.argv[1] ?? '')).toBe(true)
+      expect(r.argv.some(a => /^[0-9a-f]{64}$/.test(a))).toBe(false)
+    }
+    expect(pressed.length).toBeGreaterThanOrEqual(2)
     expect(ALLOWED_VERBS.includes('review')).toBe(false)
     for (const r of w.ran) expect(r.init?.env?.CLAUDECODE).toBe('1')
   })

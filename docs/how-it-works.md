@@ -351,10 +351,19 @@ answers, which it observes and returns unchanged: a dim line under a prompt a re
 worded as what the reflex tells the agent; a marker under a tool row Adage rewrote, predicted,
 replaced or headed off; one band line above the prompt that counts what happened and names the
 health; a toast when learning changed something; and `/adage`, a pane with the live feed, the
-reflexes and the health checks. It decides nothing: the only command it runs from a pane is
-`adage condition`, the review verbs are commands to copy until a press asks for them, and the
-session's own rows reach it with every record that would name the arm removed, by the binary and
-again by the module ([usage](usage.md#claude-code)).
+reflexes and the health checks. It also shows learning as it happens: a dim `○ adage noticed`
+line under the tool batch that completed a sequence Adage has counted in earlier sessions (never a
+single call, never a forecast), and under a Skill tool row what Adage did with the skill (loaded it
+in the model's place, or verified its steps here and said which are stale, with `/adage why` for
+the list). The one thing it decides is who decides: every decision a person alone may make (enable
+a reflex that waits for review, let Adage run a step, use a team's reflexes, turn Adage back on) is
+asked in the dialog Claude Code itself uses to ask a question, at the end of a turn, or pressed in
+the pane, and runs through the press, a single-use token the binary issues at the session's start
+and the mod holds in memory; the token travels on stdin, so the model, which can only call tools,
+cannot press, and a Bash command it is talked into running gets none. An execution grant is two
+acts with the facts between (what it runs, what it changes, the diff). The session's own rows
+reach the module with every record that would name the arm removed, by the binary and again by the
+module ([usage](usage.md#claude-code)).
 
 ## Packages and future distribution
 
