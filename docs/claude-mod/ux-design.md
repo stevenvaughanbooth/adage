@@ -9,6 +9,27 @@
 > Q3b and Q12 are where it first is. Revised once after review: the first draft broke three of
 > its own rules (strength words on default surfaces, the arm visible in the pane, counts stated as
 > savings), and this version does not.
+>
+> **Built (B2, B3, 2026-10-03)** in `plugin/claude-code/hooks/` against 2.1.288; every string
+> below is the module's (`view.ts`, `commands.ts`) except where this note says otherwise, and
+> nothing has yet been drawn in a live session ([impl/B2-B3-notes.md](impl/B2-B3-notes.md)).
+> Where the build differs, and why: (1) a band second line for a failing check, `» problem:
+> {check} · /adage health`, which §5's priority names and §10 had no template for; (2) `/adage
+> on` prints `Turning Adage back on here is a decision for a person: run adage on in a terminal
+> (copied).` until the press (plan B4) turns it into the ask; (3) on the Desktop the opening line
+> stays the engine's own notice, not a toast: a hook's notice reaches a module only through
+> `session.append`, which no test can raise, so the toast waits for S9 Q7; (4) the line under a
+> prompt is matched to its prompt by the text (the hook payload carries no message id), so a
+> prompt typed twice draws the later one's lines; (5) `n: newest` scrolls to the top, where §6.1
+> draws the newest row; (6) bare `/adage` prints the card and opens the pane, as §7 and §6 each
+> say, and `/adage status`, `doctor` and `savings` are accepted beside §7's verbs (the card, the
+> Health tab, the card's own activity and savings rows); (7) the spinner suffix and the turn line
+> draw only once the binary reports `ui.spinner` and `ui.turn_line` in `adage --json`, which it
+> does not yet, so both stay off (their default); (8) `Explore in browser` is a button until the
+> map serves (its press starts `adage map --port 0`, which opens the browser) and a `Link` after;
+> (9) `toast.learned.formed` ends `new, from this session` or `new, from recent sessions`, as its
+> header does; (10) the toast `toast.lapsed` is used for a lapsed grant (§4.5's example wording
+> differs; the copy deck wins).
 
 ## 1. Principles
 

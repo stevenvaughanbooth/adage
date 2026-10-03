@@ -15,11 +15,12 @@
 
 ## 0. How to work this plan
 
-A proof of concept of the critical path (B1, C1, C2, C4, C6, C7's chain, C8's `ending`, E1, and
-an offline form of E2) was built on the branch `claude/mods-poc-m98u3o`; [poc/README.md](poc/README.md)
-indexes what landed, the contracts as built, the offline evaluation and its caveat, and each
-chunk's notes. Each chunk below carries a **POC** line saying what of it exists and what does
-not; the plan's estimates and acceptance criteria stand for the remainder.
+Every chunk of this plan is built on the branch `claude/mods-poc-m98u3o` (the name is
+historical: it began as the proof of concept). [impl/README.md](impl/README.md) maps each chunk
+to its commit and notes; [evaluation-plan.md](evaluation-plan.md) is the brief for the live
+evaluation, which is the only part not done: nothing has run in a live Claude Code session.
+Each chunk below keeps its **Built** line (the proof of concept's state where that is where it
+landed, then the hardening commit) so a reader knows where the code is and how it departs.
 
 - **One chunk, one branch, one pull request.** A chunk is done when its acceptance criteria all
   pass in CI and the docs it names are updated in the same change (`docs/how-it-works.md` rule:
@@ -459,6 +460,7 @@ workstream are ordered.
   `PreToolUse` step prints `(nothing)` because its `World` binds no environment); paired
   `hook_latency <before>,<after> - 500` shows the `pretool_no_match` p95 difference within 0.3 ms.
 - **Estimate.** 1.5 days. **Depends on.** Nothing.
+- **Built.** `09f2d1d` ([impl/A1-A2-C5-notes.md](impl/A1-A2-C5-notes.md)): the identity ring, the two-phase payload with `receipt`, `rewrite`, `advice`, `substitute` plans and the `verdict` phase.
 
 #### A2 · Spool `duration_us` and the doctor p95 check
 
@@ -471,6 +473,7 @@ workstream are ordered.
 - **Acceptance.** `adage doctor --json | jq '.checks[] | select(.check=="hook latency")'` present
   on a seeded home; paired `hook_latency` shows the no-match cost within 0.3 ms.
 - **Estimate.** 1 day. **Depends on.** Nothing.
+- **Built.** `09f2d1d`: `duration_us` on every spool record, `adage doctor`'s hook p95 line and threshold.
 
 #### A3 · `adage watch --follow --json`
 
@@ -490,6 +493,7 @@ workstream are ordered.
   RSS, sampled from `/proc/self/status` on Linux, flat within 10 MiB; the terminal pane's
   snapshots unchanged.
 - **Estimate.** 2.5 days. **Depends on.** Nothing.
+- **Built.** `97405bc` ([impl/A3-A6-notes.md](impl/A3-A6-notes.md)), `89d57ff` (`--stdin ignore`, tool-use ids, the `answered` and `recovery` acts).
 
 #### A4 · `adage ledger note` and the harness ledger file
 
@@ -512,6 +516,7 @@ workstream are ordered.
   (`zero_config_plugin.rs:717, 760`) pass with a `population()` that includes a harness line with
   predicted steps.
 - **Estimate.** 2 days. **Depends on.** Nothing.
+- **Built.** `97405bc`: the verb, the ledger file, its merge into the savings estimate with predicted steps in the population.
 
 #### A5 · JSON for the pane: status card `--json`, `tokens.ts`
 
@@ -523,6 +528,7 @@ workstream are ordered.
 - **Acceptance.** `the_committed_tokens_are_current` passes with the committed `tokens.ts`;
   `adage --json` parses and matches the card's rows one to one in a snapshot test.
 - **Estimate.** 1 day. **Depends on.** Nothing.
+- **Built.** `97405bc`: the card's JSON, `tokens.ts`; `89d57ff` adds `ui` and `recovery`; `af02e95` adds `runtime.routine_model`.
 
 #### A6 · `adage off`, `adage on`, `adage-exec version`
 
@@ -539,6 +545,7 @@ workstream are ordered.
   on` with `CLAUDECODE=1` and no press exits non-zero and leaves the file; `adage-exec version`
   prints one line and `adage-exec hook` latency is unchanged (paired run).
 - **Estimate.** 0.5 day. **Depends on.** Nothing.
+- **Built.** `97405bc`: `adage off`, `adage on`; `adage-exec version` from `d41d655`.
 
 #### A7 · The press token, and `require_person_or_press` at specific sites
 
@@ -594,6 +601,7 @@ workstream are ordered.
   `adage-exec recover` all refuse a press; `--stage --json` then `--confirm` records a grant,
   `--confirm` after a terms change refuses and after an output change answers the fresh diff.
 - **Estimate.** 4 days. **Depends on.** A6.
+- **Built.** `efcb365` ([impl/A7-A8-notes.md](impl/A7-A8-notes.md)): the `Press` hook event, the token's window and the tripwire, `require_or_press` at the named sites and nowhere else.
 
 #### A8 · One plugin, both binaries (reverses Track C D2)
 
@@ -626,6 +634,7 @@ workstream are ordered.
   of the design) becomes a presence probe and T-X-10/T-X-11 are retired; `release_plugin_startup`
   thresholds hold with two binaries staged.
 - **Estimate.** 2.5 days. **Depends on.** A7 (the press makes the marker the consent).
+- **Built.** `efcb365`: one plugin with both binaries, the shim, `claude-code-exec` kept as an alias that bundles nothing, CI on one plugin.
 
 ### Workstream B · The mod: see it (Layer 1 of the design)
 
@@ -659,7 +668,7 @@ Needs S9 Q1, Q2 (Layer 1), Q3 and Q6 to have passed. Every chunk here ships behi
   (the other's probe prints nothing); with the binary removed every hook returns `next(e)` and
   the hook outputs and spool records are identical to a run without the mod.
 - **Estimate.** 2.5 days. **Depends on.** A6, S9 Q1, Q6.
-- **POC.** Built (`4086596`, `9f6eceb`): one module per plugin, the probe and activation, the bridge's allow-list and `CLAUDECODE=1`, the classic observers, `scripts/check-plugin.mjs`, `VALIDATE.txt` diffed in CI, the CLI pinned at 2.1.288, `claude plugin test` (53 per plugin). Not built: drawing of any kind. The validator's rules shaped the layout (every `$` call in `register.ts`; see [poc/P3-notes.md](poc/P3-notes.md)).
+- **Built.** Built (`4086596`, `9f6eceb`): one module per plugin, the probe and activation, the bridge's allow-list and `CLAUDECODE=1`, the classic observers, `scripts/check-plugin.mjs`, `VALIDATE.txt` diffed in CI, the CLI pinned at 2.1.288, `claude plugin test` (53 per plugin). Not built: drawing of any kind. The validator's rules shaped the layout (every `$` call in `register.ts`; see [poc/P3-notes.md](poc/P3-notes.md)).
 
 #### B2 · Observe the command hooks; the rows and the band
 
@@ -683,6 +692,7 @@ Needs S9 Q1, Q2 (Layer 1), Q3 and Q6 to have passed. Every chunk here ships behi
   on the acme-billing sandbox shows the prompt line, the tool-row marker and the band as in
   design §1 (recording in `spikes/S9-claude-mods/results/`).
 - **Estimate.** 4 days. **Depends on.** B1, S9 Q3.
+- **Built.** `fe70973` ([impl/B2-B3-notes.md](impl/B2-B3-notes.md)): the rows, the markers, the band and its narrow-width priority, the toasts, from `adage watch --follow --json`.
 
 #### B3 · The pane and `/adage …`
 
@@ -704,6 +714,7 @@ Needs S9 Q1, Q2 (Layer 1), Q3 and Q6 to have passed. Every chunk here ships behi
   within the allow-list; the pane in a control-arm fixture is byte-identical to a treated
   no-match fixture.
 - **Estimate.** 5 days. **Depends on.** A3, A5, A6, B2.
+- **Built.** `fe70973`: the pane with its tabs, `/adage …`, `Explore in browser`, the settings rows.
 
 #### B4 · Asking in the engine's dialog, presses in the pane, and `Explore in browser`
 
@@ -739,6 +750,7 @@ Needs S9 Q1, Q2 (Layer 1), Q3 and Q6 to have passed. Every chunk here ships behi
   with `CLAUDECODE` set refuses; `Explore in browser` opens the map once; T-U-01's doing part
   passes without a terminal.
 - **Estimate.** 5 days. **Depends on.** A7, B3, S9 Q14.
+- **Built.** `4fd8e78` ([impl/B4-D5-notes.md](impl/B4-D5-notes.md)): the ask in the engine's dialog at `turn.complete`, the press minted at session start and spent on the verb, the pane's press buttons, the grant pane with the diff.
 
 ### Workstream C · Act in the model's place (Layers 2 and 4)
 
@@ -776,7 +788,7 @@ Needs S9 Q1, Q2 (Layer 1), Q3 and Q6 to have passed. Every chunk here ships behi
   write) p95 ≤ 10 ms; the Claude golden gains one silent `TurnStep` step and parity holds; the
   control arm emits nothing in the sim (C4).
 - **Estimate.** 4.5 days. **Depends on.** A1 (shared payload handling).
-- **POC.** Built (`45bc903`, `9a01b14`): the event, `By`, `Pending.command`, every kind of the §2.2 2b table but `routine` and `substitute`, every bound, `Judgement::Predicted`, `would_predict`, the `turn_step` record, the adapters and the spool consumers; T-C1-01 … T-C1-08 and the adapter half of T-C1-09 as unit tests; the golden's one silent step; `turn_step_nothing_pending` in `hook_latency` (one unpaired run). Not built: `Capabilities`, `duration_us`, `by` from ingest, the predicted step in `savings.rs`, the docs rows ([poc/P1-notes.md](poc/P1-notes.md)).
+- **Built.** Built (`45bc903`, `9a01b14`): the event, `By`, `Pending.command`, every kind of the §2.2 2b table but `routine` and `substitute`, every bound, `Judgement::Predicted`, `would_predict`, the `turn_step` record, the adapters and the spool consumers; T-C1-01 … T-C1-08 and the adapter half of T-C1-09 as unit tests; the golden's one silent step; `turn_step_nothing_pending` in `hook_latency` (one unpaired run). Not built: `Capabilities`, `duration_us`, `by` from ingest, the predicted step in `savings.rs`, the docs rows ([poc/P1-notes.md](poc/P1-notes.md)).
 
 #### C2 · The `predict` grant in adage-exec and the CLI
 
@@ -800,7 +812,7 @@ Needs S9 Q1, Q2 (Layer 1), Q3 and Q6 to have passed. Every chunk here ships behi
   approve, revoke and lapse, and its E2 action and receipts still run; `adage-exec hook` parity
   with `adage hook` holds with no grants.
 - **Estimate.** 3.5 days. **Depends on.** C1.
-- **POC.** Built (`d41d655`): `GrantMode` on the key and every selector, the predict planning path, the policy terms, the execute-only filters in the hook, `predict_grants`, `--predict`, `delegate predict on|off`, `status --json`, `revoke --predict`, `adage-exec version`, the "Predicted calls" section of `docs/execution.md`; T-C2-01 … T-C2-09. Departures: the checkout is taken from the working directory (the trait does not pass the root); a predict grant is withheld while the route holds any execute grant; the TUI routes view does not list predict grants ([poc/P2-notes.md](poc/P2-notes.md)).
+- **Built.** Built (`d41d655`): `GrantMode` on the key and every selector, the predict planning path, the policy terms, the execute-only filters in the hook, `predict_grants`, `--predict`, `delegate predict on|off`, `status --json`, `revoke --predict`, `adage-exec version`, the "Predicted calls" section of `docs/execution.md`; T-C2-01 … T-C2-09. Departures: the checkout is taken from the working directory (the trait does not pass the root); a predict grant is withheld while the route holds any execute grant; the TUI routes view does not list predict grants ([poc/P2-notes.md](poc/P2-notes.md)).
 
 #### C3 · Receipt as the result, rewrites checked by the engine
 
@@ -820,6 +832,7 @@ Needs S9 Q1, Q2 (Layer 1), Q3 and Q6 to have passed. Every chunk here ships behi
   the same payload without `dry_run` is unchanged (golden); `$.tool.check` agreement with
   `pretool::keeps_permissions` recorded on every settings fixture (Q4).
 - **Estimate.** 3 days. **Depends on.** A1, B1, C1 (for `by: Adage`), S9 Q2 (Layer 2), Q4.
+- **Built.** `89d57ff` (binary, [impl/C3-C7-C8-D2-C9-E-notes.md](impl/C3-C7-C8-D2-C9-E-notes.md)) and `af02e95` (the mod, [impl/C3-C9-mod-notes.md](impl/C3-C9-mod-notes.md)): the receipt as the result with its card, the beside line, rewrites checked by the engine, the advice on `differs`.
 
 #### C4 · The mod's `turn.step` and the simulator
 
@@ -839,7 +852,7 @@ Needs S9 Q1, Q2 (Layer 1), Q3 and Q6 to have passed. Every chunk here ships behi
   both arms; `claude plugin test` covers the generator with a stubbed `ask`; with the binary
   missing the step is forwarded unchanged.
 - **Estimate.** 4 days. **Depends on.** C1, C2, B1, S9 Q2 (Layer 2), Q9.
-- **POC.** Built (`4086596`, `f7b399e`): the `turn.step` generator (main loop only, `index > 0`, every kind, the `adage_` ids), the finish line taken after an `end_turn` stop, the sim's `TurnStep` and two-phase `PreToolUse` payloads, `Replay`'s `predict` and `pretool` expectations, `replay_claude` in both arms with the grant issued through `--predict`, `check_graph` counting predicted steps. Not run: a live session (no key), so S9 Q9's criteria and T-C4-06 stand open ([poc/P4b-notes.md](poc/P4b-notes.md)).
+- **Built.** Built (`4086596`, `f7b399e`): the `turn.step` generator (main loop only, `index > 0`, every kind, the `adage_` ids), the finish line taken after an `end_turn` stop, the sim's `TurnStep` and two-phase `PreToolUse` payloads, `Replay`'s `predict` and `pretool` expectations, `replay_claude` in both arms with the grant issued through `--predict`, `check_graph` counting predicted steps. Not run: a live session (no key), so S9 Q9's criteria and T-C4-06 stand open ([poc/P4b-notes.md](poc/P4b-notes.md)).
 
 #### C5 · Standing text, compaction, routing
 
@@ -856,6 +869,7 @@ Needs S9 Q1, Q2 (Layer 1), Q3 and Q6 to have passed. Every chunk here ships behi
   not emitted once `has_standing` is set; a control session answers empty `standing` and never
   `routine`; Q11 reported.
 - **Estimate.** 3 days. **Depends on.** B2, C1.
+- **Built.** `09f2d1d` (binary: the `Standing` event, `routine`) and `af02e95` (the mod: the cached section, compaction, routing to `runtime.routine_model`).
 
 #### C6 · The dead end that never runs
 
@@ -875,7 +889,7 @@ Needs S9 Q1, Q2 (Layer 1), Q3 and Q6 to have passed. Every chunk here ships behi
   no follow; the control arm runs the dead end as today and spools `would_substitute`; the demo's
   `dead_end_hits` falls in the `mod` arm.
 - **Estimate.** 2 days. **Depends on.** C3.
-- **POC.** Built (`9f6eceb`): the `dry_run` plan with `substitute`, the `verdict` phase with the route named, `Judgement::Substituted` and `would_substitute`, the mod's branch with two `$.tool.check`s and the context line, `adage delegate rewrites off` as the switch, the sim's dead-end turn becoming `make test`; T-C6-01 … T-C6-05 offline. Open: whether the engine shows the model a `context` added to a kept result; the mod's order against the `PreToolUse` command hook ([poc/P5-notes.md](poc/P5-notes.md)).
+- **Built.** Built (`9f6eceb`): the `dry_run` plan with `substitute`, the `verdict` phase with the route named, `Judgement::Substituted` and `would_substitute`, the mod's branch with two `$.tool.check`s and the context line, `adage delegate rewrites off` as the switch, the sim's dead-end turn becoming `make test`; T-C6-01 … T-C6-05 offline. Open: whether the engine shows the model a `context` added to a kept result; the mod's order against the `PreToolUse` command hook ([poc/P5-notes.md](poc/P5-notes.md)).
 
 #### C7 · Chains and multi-call steps
 
@@ -891,7 +905,7 @@ Needs S9 Q1, Q2 (Layer 1), Q3 and Q6 to have passed. Every chunk here ships behi
   `linked_files`, with a model step between; `requests` on lookup items falls by two in the `mod`
   arm of the demo.
 - **Estimate.** 3 days. **Depends on.** C4.
-- **POC.** The chain from a lookup's bound read batch is built with C1 (several `Read` calls in one response); a `ReadBatch` as one response of several calls beyond that binding is not.
+- **Built.** The chain from a lookup's bound read batch is built with C1 (several `Read` calls in one response); a `ReadBatch` as one response of several calls beyond that binding is not.
 
 #### C8 · The finish line at the last step
 
@@ -907,7 +921,7 @@ Needs S9 Q1, Q2 (Layer 1), Q3 and Q6 to have passed. Every chunk here ships behi
   obligation is met, no `block`); the sim's finish-line turn shows no Stop request in the `mod`
   arm; `requests` per finish line falls by one.
 - **Estimate.** 3 days. **Depends on.** C4, S9 Q15.
-- **POC.** `ending` is built with C1 and the mod: the finish line is taken after the model's `end_turn` stop (the mod holds the stop chunk, adds the calls and turns it into `tool_use`), so it saves the Stop gate's request, not the request that ended the turn; whether the engine records the rewritten stop is unverified.
+- **Built.** `ending` is built with C1 and the mod: the finish line is taken after the model's `end_turn` stop (the mod holds the stop chunk, adds the calls and turns it into `tool_use`), so it saves the Stop gate's request, not the request that ended the turn; whether the engine records the rewritten stop is unverified.
 
 #### C9 · Attachment: the tool description, the subagent prompt, and the mod capabilities
 
@@ -927,6 +941,7 @@ Needs S9 Q1, Q2 (Layer 1), Q3 and Q6 to have passed. Every chunk here ships behi
   description in a Q2 probe carries the test-runner line once per session; directives per session
   fall in the `mod` arm with hidden tests unchanged.
 - **Estimate.** 3 days. **Depends on.** C5.
+- **Built.** `89d57ff` (binary: the `Capabilities` fields and the attachment payloads) and `af02e95` (the mod: the Bash tool's description, the subagent prompt, the flags).
 
 ### Workstream D · Noticed and skills (binary first, mod to draw)
 
@@ -963,6 +978,7 @@ Needs S9 Q1, Q2 (Layer 1), Q3 and Q6 to have passed. Every chunk here ships behi
   1.3× of before, measured and pasted; `condition --auto` with one changed transcript under
   150 ms; `cargo test -p adage-graph --test border` still passes; every recorded index loads.
 - **Estimate.** 6 days. **Depends on.** Nothing.
+- **Built.** `ecd4e03` ([impl/D1-notes.md](impl/D1-notes.md)): candidates through the learner's `Store` port, the index shape, the CLI surface, `candidates_bench`.
 
 #### D2 · `noticed` at hook time
 
@@ -983,6 +999,7 @@ Needs S9 Q1, Q2 (Layer 1), Q3 and Q6 to have passed. Every chunk here ships behi
   held-out session notices the `make lint` candidate in both arms and `adage watch --once` shows
   the row; a live route fires its directive and no `noticed`; p95 as D1.
 - **Estimate.** 2 days. **Depends on.** D1.
+- **Built.** `89d57ff`: `noticed` at hook time within its bounds, silent in control, the fast path untouched without candidates.
 
 #### D3 · The `skill` response kind
 
@@ -1011,6 +1028,7 @@ Needs S9 Q1, Q2 (Layer 1), Q3 and Q6 to have passed. Every chunk here ships behi
   (`kind="skill"`) and is re-blessed; the eval gates unchanged (the
   `replay_with_the_learned_index_gives_every_recorded_directive` whitelist lists the new id).
 - **Estimate.** 5 days. **Depends on.** Nothing.
+- **Built.** `ecd4e03` ([impl/D3-D4-notes.md](impl/D3-D4-notes.md)): `do: skill` on a route, the directive, the judgement, the learned skill route, the `skill` prediction from a real route under `skills.invoke`.
 
 #### D4 · `verified.json` and `SkillPrompt`
 
@@ -1035,6 +1053,7 @@ Needs S9 Q1, Q2 (Layer 1), Q3 and Q6 to have passed. Every chunk here ships behi
   it, `echo '{…"skill":"acme-work-item"…}' | adage hook claude SkillPrompt` prints the annotated
   text; S9 Q13's three entry points verified in a live session once D5 lands.
 - **Estimate.** 3 days. **Depends on.** D3 (for `Step::Skill`, optional).
+- **Built.** `ecd4e03`: `verified.json` in adage-pack written by `adage train`, `adage hook claude SkillPrompt`.
 
 #### D5 · Drawing noticed, learning and skills
 
@@ -1047,6 +1066,7 @@ Needs S9 Q1, Q2 (Layer 1), Q3 and Q6 to have passed. Every chunk here ships behi
 - **Acceptance.** S9 Q12's read of the recording; `claude plugin test` for each row; no line for
   a single call (unit over fixture records); Q13's three entry points.
 - **Estimate.** 2.5 days. **Depends on.** D2, D4, B3.
+- **Built.** `4fd8e78`: the noticed line under the tool group with its ask, the learning toast's detail, the skill rows and `skill.prompt`.
 
 ### Workstream E · Evaluation
 
@@ -1063,7 +1083,7 @@ Needs S9 Q1, Q2 (Layer 1), Q3 and Q6 to have passed. Every chunk here ships behi
   explicit request-id count; the `mod-observe` replay diff is empty; `compare(runs, a="mod",
   b="a0")` reports the task-stratified permutation p and the bootstrap interval for `requests`.
 - **Estimate.** 2.5 days. **Depends on.** B1.
-- **POC.** Built (`13b2495`): the five arms, `requests` and `requests_verified`, `replay_hooks.py --identity`, the report's new metrics, the `demo` Python suite (35 tests); T-E1-01 … T-E1-04 offline. The arms were dry-run against fixtures, never against a model ([poc/P4a-notes.md](poc/P4a-notes.md)).
+- **Built.** Built (`13b2495`): the five arms, `requests` and `requests_verified`, `replay_hooks.py --identity`, the report's new metrics, the `demo` Python suite (35 tests); T-E1-01 … T-E1-04 offline. The arms were dry-run against fixtures, never against a model ([poc/P4a-notes.md](poc/P4a-notes.md)).
 
 #### E2 · Development gate for Layer 4
 
@@ -1081,7 +1101,8 @@ Needs S9 Q1, Q2 (Layer 1), Q3 and Q6 to have passed. Every chunk here ships behi
 - **Estimate.** 3 days plus model spend (`SESSION_CAP_USD` 0.50, `STUDY_CEILING_USD` 8.50 per
   run). **Depends on.** C4, E1.
 
-- **POC.** An offline form only (`f7b399e`): `crates/adage-eval/tests/predict_gate.rs` replays the recorded datasets with a `TurnStep` at every boundary in both arms and pins requests saved, zero in control, and the measured next-action accuracy as floors (the numbers and their caveat: [poc/README.md](poc/README.md)). The development gate itself needs model runs.
+- **Built.** An offline form only (`f7b399e`): `crates/adage-eval/tests/predict_gate.rs` replays the recorded datasets with a `TurnStep` at every boundary in both arms and pins requests saved, zero in control, and the measured next-action accuracy as floors (the numbers and their caveat: [poc/README.md](poc/README.md)). The development gate itself needs model runs.
+- **Built.** `89d57ff`: `dev_v9.py`'s `MOD` arm with its controls and the human step in a dry run; the runs themselves need a key (evaluation-plan.md §6).
 
 #### E3 · Registered confirmation
 
@@ -1097,6 +1118,7 @@ Needs S9 Q1, Q2 (Layer 1), Q3 and Q6 to have passed. Every chunk here ships behi
 - **Acceptance.** The protocol's `pass`; otherwise the finding is recorded and Layer 4 stays
   behind its grant as experimental.
 - **Depends on.** E2.
+- **Built.** `89d57ff`: the held-out scripts accept the arm name; `LAUNCH-STATUS.md` says no run has happened.
 
 ## 4. Sequencing
 
