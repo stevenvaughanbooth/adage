@@ -76,6 +76,7 @@ fn corpus(dir: &Path) -> (Vec<PathBuf>, String) {
 
 fn run(dir: &Path, files: &[PathBuf], home: &Path) -> Index {
     let inputs = Inputs {
+        identities: Default::default(),
         transcripts: files.to_vec(),
         outcomes: BTreeMap::new(),
         repo_override: Some("acme-billing".into()),

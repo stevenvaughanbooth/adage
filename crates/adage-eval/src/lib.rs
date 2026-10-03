@@ -232,14 +232,18 @@ pub fn learn_index(ds: &Dataset, train: &[String], cfg: &LearnConfig) -> Result<
     let home = tempfile::tempdir()?;
     let mut transcripts = Vec::new();
     let mut outcomes = BTreeMap::new();
+    let mut identities = BTreeMap::new();
     for id in train {
         let s = ds.session(id).with_context(|| format!("split names unknown session {id}"))?;
         transcripts.push(ds.path(s));
+        identities
+            .insert(s.id.clone(), adage_learn::EvidenceIdentity { task_id: s.task.clone(), ..Default::default() });
         if let Some(p) = s.passed {
             outcomes.insert(s.id.clone(), p);
         }
     }
     let inputs = Inputs {
+        identities,
         transcripts,
         outcomes,
         repo_override: Some(ds.manifest.repo.clone()),

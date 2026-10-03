@@ -44,7 +44,7 @@ impl Locator for LocalCheckout {
             // Paths are relative to the worktree the agent worked in; its key is its repository's
             // (`repo::repo_key`).
             Some(worktree) => worktree,
-            None => repo::find_root(cwd).unwrap_or_else(|| cwd.to_path_buf()),
+            None => cwd.is_dir().then(|| repo::find_root(cwd)).flatten().unwrap_or_else(|| cwd.to_path_buf()),
         };
         let repo = repo::key_for(&root, explicit);
         Located { root, repo }

@@ -383,6 +383,7 @@ pub fn mine(dir: &Path, plan: &Plan, state: &RunState) -> Result<Staged> {
     let mut cfg = if state.thresholds == "demo" { LearnConfig::demo() } else { LearnConfig::default() };
     cfg.provenance = state.provenance.clone();
     let inputs = Inputs {
+        identities: Default::default(),
         transcripts: transcripts.clone(),
         outcomes: BTreeMap::new(),
         repo_override: Some(plan.repo.key.clone()),

@@ -401,6 +401,7 @@ pub fn decode(lines: &[Value], cx: &Decode<'_>) -> Option<Session> {
         outcome: None,
         harness: CODEX.into(),
         prompts,
+        identity: Default::default(),
         ending: Default::default(),
     })
 }

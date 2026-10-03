@@ -12,10 +12,12 @@
 //! The crate depends on `adage-core` alone, and does no I/O.
 
 pub mod harness;
+pub mod identity;
 pub mod session;
 pub mod wire;
 
 pub use harness::{Capabilities, Harness};
+pub use identity::{EvidenceGroup, EvidenceIdentity, GroupBasis};
 pub use session::{Directed, Ending, PromptObs, Session, StepObs};
 
 use serde::{Deserialize, Serialize};

@@ -448,6 +448,10 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
         Some(p) => serde_json::from_str(&std::fs::read_to_string(p)?)?,
         None => BTreeMap::new(),
     };
+    let identities = match flag(args, "--identities") {
+        Some(p) => serde_json::from_str(&std::fs::read_to_string(p)?)?,
+        None => BTreeMap::new(),
+    };
     let cfg = if args.iter().any(|a| a == "--demo") {
         LearnConfig::demo()
     } else {
@@ -478,6 +482,7 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
     transcripts.sort();
     transcripts.dedup();
     let inputs = Inputs {
+        identities,
         transcripts,
         outcomes,
         repo_override: flag(args, "--repo"),

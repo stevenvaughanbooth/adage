@@ -1978,6 +1978,7 @@ mod prediction_tests {
             transcripts.push(path);
         }
         let inputs = adage_learn::Inputs {
+            identities: Default::default(),
             transcripts,
             outcomes: BTreeMap::new(),
             repo_override: Some("fixture".into()),

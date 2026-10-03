@@ -1029,12 +1029,12 @@ pub fn parse_chain(s: &str) -> Vec<Feat> {
     s.split(',').filter_map(Feat::parse).collect()
 }
 
-/// Inner fold of each session: distinct tasks (the id when there is none) in sorted order,
-/// dealt round-robin.
+/// Inner fold of each session: distinct evidence groups in sorted order, dealt round-robin.
+/// Unknown tasks share a group: missing metadata must not manufacture independent evidence.
 pub fn inner_folds(sessions: &[DbSession], k: usize) -> Vec<usize> {
-    let key = |s: &DbSession| s.task.clone().unwrap_or_else(|| s.id.clone());
-    let tasks: BTreeSet<String> = sessions.iter().map(key).collect();
-    let rank: BTreeMap<&String, usize> = tasks.iter().enumerate().map(|(i, t)| (t, i)).collect();
+    let key = |s: &DbSession| s.task.clone();
+    let tasks: BTreeSet<Option<String>> = sessions.iter().map(key).collect();
+    let rank: BTreeMap<_, usize> = tasks.iter().enumerate().map(|(i, t)| (t, i)).collect();
     sessions.iter().map(|s| rank[&key(s)] % k.max(1)).collect()
 }
 
@@ -1629,10 +1629,10 @@ pub const CAL_BINS: usize = 200;
 /// sessions alone: each candidate's posterior is recomputed on task-grouped inner folds (its
 /// opportunity and support lists restricted to the other folds, the same prior and κ) and
 /// compared with the outcomes in the held-out inner fold; the pairs are binned (width 1/200)
-/// and fitted by isotonic regression (pool adjacent violators). Deterministic. On small corpora
-/// the candidates are re-mined and re-scored on each inner training side
-/// (`select::fit_calibration`), exactly as the outer held-out evaluation does, so the fold's
-/// outcomes do not flatter patterns mined from them; [`Calibration::fit`] is the cheap form.
+/// and fitted by isotonic regression (pool adjacent violators). Deterministic. Production
+/// (`select::fit_calibration`) refits prototypes and candidates inside each inner training side,
+/// on a bounded sample of independent task representatives. [`Calibration::fit`] is an explicitly
+/// optimistic diagnostic retained for callers; production does not use it.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Calibration {
     /// (mean predicted, mean observed) of each isotonic block, ascending; linear in between,

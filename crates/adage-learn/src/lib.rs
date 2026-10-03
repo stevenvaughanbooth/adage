@@ -21,6 +21,7 @@ pub mod value;
 
 pub use adage_ingest::{cache, codex, opencode, scope};
 
+pub use adage_trace::EvidenceIdentity;
 use adage_tracks::proposals::Proposals;
 use adage_tracks::{io, Gauge, Manifest, Route, Scope, Track, TrackInfo, Trigger};
 use anyhow::Result;
@@ -34,6 +35,8 @@ use std::path::{Path, PathBuf};
 pub struct Report {
     pub sessions_read: usize,
     pub sessions_used: usize,
+    /// Identical copies removed before any evidence is counted. Conflicting ids are an error.
+    pub sessions_duplicates: usize,
     /// Sessions that received a directive: what it named is not their evidence.
     pub sessions_steered: usize,
     pub repos: BTreeMap<String, RepoReport>,
@@ -72,10 +75,13 @@ pub struct TrackReport {
     pub routes: Vec<String>,
 }
 
+#[derive(Default)]
 pub struct Inputs {
     pub transcripts: Vec<PathBuf>,
     /// Session id → task succeeded, where known.
     pub outcomes: BTreeMap<String, bool>,
+    /// Session id → declared evidence identity, applied after parsing/cache lookup.
+    pub identities: BTreeMap<String, adage_trace::EvidenceIdentity>,
     pub repo_override: Option<String>,
     /// The models directory (`$ADAGE_HOME/models`). No usable model there: no prompt-intent
     /// prototypes.
@@ -180,6 +186,9 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
     let mut batch = adage_ingest::batch::read(&inputs.transcripts, &opts);
     for s in &mut batch.sessions {
         s.outcome = inputs.outcomes.get(&s.id).copied();
+        if let Some(identity) = inputs.identities.get(&s.id) {
+            s.identity = identity.clone();
+        }
     }
     learn_sessions(batch, inputs.only_repo.as_deref(), inputs.models.as_deref(), tracks_root, index_path, cfg)
 }
@@ -208,6 +217,8 @@ pub fn learn_sessions_into(
     cfg: &LearnConfig,
 ) -> Result<Report> {
     let adage_ingest::batch::Batch { sessions, read, steered, cache_hits: hits, cache_misses: misses } = batch;
+    let sessions = sessions.into_iter().filter(|s| only.is_none_or(|repo| s.repo == repo)).collect();
+    let (sessions, duplicates) = evidence::unique_sessions(sessions)?;
     if let (Some(repo), true, Some(ic)) = (only, sessions.is_empty(), cfg.instincts.as_ref()) {
         // No session to learn from yet: bind the repository's instincts from its files (day 0),
         // when its root is known and they are not bound against it as its files are now.
@@ -242,6 +253,7 @@ pub fn learn_sessions_into(
     let weights = follow_weights(&sessions);
     let (mut report, planned) = plan(sessions, models, store, cfg)?;
     report.sessions_read = read;
+    report.sessions_duplicates = duplicates;
     report.sessions_steered = steered;
     (report.cache_hits, report.cache_misses) = (hits, misses);
     for p in &planned {
@@ -291,8 +303,9 @@ pub fn plan(
     cfg: &LearnConfig,
 ) -> Result<(Report, Vec<Planned>)> {
     let mut report = Report { thresholds: thresholds(cfg), ..Default::default() };
-    let mut sessions: Vec<Session> = sessions.into_iter().filter(|s| !s.steps.is_empty()).collect();
-    sessions.sort_by(|a, b| a.id.cmp(&b.id));
+    let (sessions, duplicates) = evidence::unique_sessions(sessions)?;
+    report.sessions_duplicates = duplicates;
+    let sessions: Vec<Session> = sessions.into_iter().filter(|s| !s.steps.is_empty()).collect();
     report.sessions_used = sessions.len();
     // The installed model, else the one bundled in the binary (`model::resolve`, as the hook
     // chooses). Fail open: without one, intent families are skipped and everything else is

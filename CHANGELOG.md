@@ -18,6 +18,15 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### Fixes from the architecture work
 
+- **Task-aware learning evidence.** Canonical sessions preserve declared task, group and attempt
+  ids; `condition --identities <file>` imports them and evaluation manifests pass their task ids
+  through the production learner. Retries stay together, unknown identities cannot establish task
+  diversity, and prompt fallback uses the complete recorded prompt. Calibration now refits
+  prototypes and candidates inside held-out folds on at most 400 independent task representatives,
+  including for large corpora. Learning reports declared, inferred and unknown identity counts.
+  Identical session copies count once; conflicting records with the same repository/session id
+  reject learning before tracks are written. Deleted trace directories retain their recorded root.
+
 - **Removed directories do not become unrelated repositories.** Repository discovery no longer
   attributes a deleted working directory to an ancestor checkout; explicitly recorded removed
   worktrees still belong to their main repository.

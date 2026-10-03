@@ -166,6 +166,7 @@ fn learn_once(paths: &Paths, cfg: &Config, root: &Path, repo: &str, transcripts:
         .map_err(|e| Failed("lock", format!("taking the tracks lock: {:?}", e.kind())))?;
     let before = diff::snapshot(&paths.tracks(), repo);
     let inputs = Inputs {
+        identities: Default::default(),
         transcripts,
         outcomes: Default::default(),
         repo_override: None,

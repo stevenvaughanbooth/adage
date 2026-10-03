@@ -48,6 +48,11 @@ use std::collections::{BTreeMap, BTreeSet};
 pub struct EngineReport {
     /// Traces mined.
     pub sessions: usize,
+    /// Distinct known evidence groups; prompt fingerprints are inferred, not declared task ids.
+    pub evidence_groups: usize,
+    pub sessions_with_declared_identity: usize,
+    pub sessions_with_inferred_identity: usize,
+    pub sessions_with_unknown_identity: usize,
     pub reflexes: usize,
     pub compiled: usize,
     /// Routes that passed judgement.
@@ -520,25 +525,13 @@ fn wilson_upper(k: u32, n: u32, z: f64) -> f64 {
 /// At least this many distinct tasks must support a directing route.
 const MIN_TASKS: usize = 2;
 
-/// The task a trace worked on, as far as the trace shows it: its first prompt, normalised (case
-/// and spacing). Repeats of one task (arms, retries, reruns) share it; a trace with no prompt is a
-/// task of its own.
-fn task_of(s: &Session) -> String {
-    let p: String =
-        s.prompt.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase().chars().take(240).collect();
-    if p.is_empty() {
-        format!("\u{0}{}", s.id)
-    } else {
-        p
-    }
-}
-
 /// Support must span distinct tasks (`MIN_TASKS`): steps repeated by reruns of one task (its
 /// scratch script, run after each edit in every attempt at it) are that task's, not the
 /// repository's. It applies to the steps a trigger directs (after an edit or a command); an
 /// avoid is a failure of the environment (`No module named pytest`), the same whatever the task.
 fn one_task(ss: &[&Session], support: &BTreeSet<String>) -> Result<(), String> {
-    let tasks: BTreeSet<String> = ss.iter().filter(|s| support.contains(&s.id)).map(|s| task_of(s)).collect();
+    let tasks: BTreeSet<String> =
+        ss.iter().filter(|s| support.contains(&s.id)).filter_map(|s| s.evidence_group().map(|g| g.key)).collect();
     if tasks.len() < MIN_TASKS {
         return Err(format!(
             "its {} supporting traces worked on {} task(s), fewer than {MIN_TASKS}",
@@ -547,6 +540,32 @@ fn one_task(ss: &[&Session], support: &BTreeSet<String>) -> Result<(), String> {
         ));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod identity_tests {
+    use super::*;
+
+    #[test]
+    fn empty_prompts_do_not_establish_task_diversity_but_declared_tasks_can() {
+        let mut sessions: Vec<Session> = (0..5)
+            .map(|i| {
+                serde_json::from_value(serde_json::json!({
+                    "id":format!("s{i}"), "root":"/fixture", "repo":"repo", "model":null, "day":"2026-10-01",
+                    "prompt":"", "steps":[], "steered":false, "directed":[], "outcome":null, "harness":"codex"
+                }))
+                .unwrap()
+            })
+            .collect();
+        let support = sessions.iter().map(|s| s.id.clone()).collect();
+        assert!(one_task(&sessions.iter().collect::<Vec<_>>(), &support).unwrap_err().contains("0 task(s)"));
+        for s in &mut sessions {
+            s.identity.task_id = Some("one-task".into());
+        }
+        assert!(one_task(&sessions.iter().collect::<Vec<_>>(), &support).unwrap_err().contains("1 task(s)"));
+        sessions[0].identity.task_id = Some("second-task".into());
+        assert!(one_task(&sessions.iter().collect::<Vec<_>>(), &support).is_ok());
+    }
 }
 
 /// Recount the executable prediction using the same generalized context matcher as the runtime.
@@ -957,6 +976,16 @@ pub fn run(ss: &[&Session], cfg: &LearnConfig, priors: &[Route], model: Option<&
     let lookup = crate::graph::lookup_routes(ss, cfg);
     let mut report = EngineReport {
         sessions: ss.len(),
+        evidence_groups: ss.iter().filter_map(|s| s.evidence_group().map(|g| g.key)).collect::<BTreeSet<_>>().len(),
+        sessions_with_declared_identity: ss
+            .iter()
+            .filter(|s| s.evidence_group().is_some_and(|g| g.basis != adage_trace::GroupBasis::PromptFingerprint))
+            .count(),
+        sessions_with_inferred_identity: ss
+            .iter()
+            .filter(|s| s.evidence_group().is_some_and(|g| g.basis == adage_trace::GroupBasis::PromptFingerprint))
+            .count(),
+        sessions_with_unknown_identity: ss.iter().filter(|s| s.evidence_group().is_none()).count(),
         reflexes: learned.reflexes.len(),
         compiled: out.routes.len(),
         dropped: out.dropped.clone(),
@@ -1301,6 +1330,7 @@ mod execution_equivalence_tests {
             transcripts.push(path);
         }
         let inputs = crate::Inputs {
+            identities: Default::default(),
             transcripts,
             repo_override: Some("equivalent".into()),
             outcomes: BTreeMap::new(),

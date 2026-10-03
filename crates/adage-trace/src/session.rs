@@ -47,6 +47,9 @@ pub const MAX_PROMPTS: usize = u16::MAX as usize;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Session {
     pub id: String,
+    /// Task, leakage group and attempt supplied by a corpus or dataset manifest.
+    #[serde(default, skip_serializing_if = "crate::EvidenceIdentity::is_empty")]
+    pub identity: crate::EvidenceIdentity,
     pub root: PathBuf,
     pub repo: String,
     pub model: Option<String>,

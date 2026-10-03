@@ -340,6 +340,9 @@ pub struct ConditionArgs {
     /// Session outcomes, as a JSON file of {session: bool}.
     #[arg(long, value_name = "FILE")]
     pub outcomes: Option<PathBuf>,
+    /// Evidence identity JSON: {session: {task_id, group_id, attempt_id}}.
+    #[arg(long, value_name = "FILE")]
+    pub identities: Option<PathBuf>,
     /// Force every trace into this repository key (with --instincts-only: the key to bind under).
     #[arg(long, value_name = "KEY")]
     pub repo: Option<String>,
