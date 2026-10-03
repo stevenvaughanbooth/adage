@@ -8,6 +8,8 @@ use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
+mod common;
+
 const MODEL_ID: &str = "fixture@000000000000";
 
 fn install_fixture_model(models: &Path) {
@@ -93,7 +95,7 @@ fn world() -> World {
 }
 
 fn hook(w: &World, prompt: &str) -> (String, i32) {
-    let mut c = Command::new(env!("CARGO_BIN_EXE_adage"))
+    let mut c = common::scrub(&mut Command::new(env!("CARGO_BIN_EXE_adage")))
         .args(["hook", "claude", "UserPromptSubmit"])
         .env("ADAGE_HOME", &w.home)
         .env("ADAGE_AUTO_LEARN", "0")
@@ -145,7 +147,7 @@ fn hook_fails_open_with_a_damaged_model() {
 
 /// Any hook event, as the installed hook receives it.
 fn hook_event(w: &World, event: &str, payload: serde_json::Value) -> String {
-    let mut c = Command::new(env!("CARGO_BIN_EXE_adage"))
+    let mut c = common::scrub(&mut Command::new(env!("CARGO_BIN_EXE_adage")))
         .args(["hook", "claude", event])
         .env("ADAGE_HOME", &w.home)
         .env("ADAGE_AUTO_LEARN", "0")

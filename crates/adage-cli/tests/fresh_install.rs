@@ -13,6 +13,8 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
+mod common;
+
 struct World {
     _dir: tempfile::TempDir,
     root: PathBuf,
@@ -41,6 +43,7 @@ impl World {
     }
     fn cmd(&self, args: &[&str], cwd: &Path) -> Command {
         let mut c = Command::new(env!("CARGO_BIN_EXE_adage"));
+        common::scrub(&mut c);
         c.args(args)
             .current_dir(cwd)
             .env("HOME", self.p("home"))
@@ -55,21 +58,7 @@ impl World {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
-        for v in [
-            "ADAGE_DISABLE",
-            "ADAGE_AUTO_LEARN",
-            "ADAGE_CONTROL",
-            "ADAGE_MODEL",
-            "ADAGE_ALLOW_NONINTERACTIVE",
-            "CLAUDECODE",
-            "OPENCODE",
-            "CODEX_SANDBOX",
-            "CODEX_SANDBOX_NETWORK_DISABLED",
-            "CLAUDE_CONFIG_DIR",
-            "XDG_DATA_HOME",
-        ] {
-            c.env_remove(v);
-        }
+        c.env_remove("XDG_DATA_HOME");
         c
     }
     fn run_in(&self, cwd: &Path, args: &[&str], stdin: &str, env: &[(&str, &str)]) -> Output {

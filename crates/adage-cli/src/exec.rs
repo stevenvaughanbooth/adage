@@ -65,6 +65,7 @@
 //! nothing but the repository moved (it then answers the fresh stage instead). On a machine still
 //! at E1 the first confirmed action writes the E2 policy and the marker with its grant.
 
+use crate::helpers::{flag, flags};
 use crate::install;
 use adage_core::{repo, CommandTable};
 use adage_exec::approvals::{self, Approval, ApprovalKey, Store};
@@ -101,19 +102,6 @@ fn kv<W: std::io::Write>(o: &mut Out<W>, key: &str, value: Line) -> std::io::Res
 /// Text from a script or a command's output, with control characters shown as `?`.
 fn clean(line: &str) -> String {
     line.chars().map(|c| if c.is_control() && c != '\t' { '?' } else { c }).collect()
-}
-
-fn flag(args: &[String], name: &str) -> Option<String> {
-    args.iter().position(|a| a == name).and_then(|i| args.get(i + 1).cloned())
-}
-
-fn flags(args: &[String], name: &str) -> Vec<String> {
-    args.windows(2).filter(|w| w[0] == name).map(|w| w[1].clone()).collect()
-}
-
-/// The marker the Claude Code plugins' session-start shims read.
-pub fn marker(paths: &Paths) -> PathBuf {
-    paths.root.join("exec").join("enabled")
 }
 
 fn repo_root(args: &[String]) -> Result<Option<PathBuf>> {
@@ -188,7 +176,7 @@ fn rewrites(on: bool, paths: &Paths) -> Result<()> {
     adage_store::config::set(paths, "runtime.rewrite", if on { "true" } else { "false" })
         .map_err(|e| anyhow::anyhow!(e))?;
     // The marker `delegate off` wrote before the switch existed.
-    let old = adage_hook::rewrite_off(paths);
+    let old = paths.rewrite_off();
     if on {
         match std::fs::remove_file(&old) {
             Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.into()),
@@ -221,7 +209,7 @@ fn rewrites(on: bool, paths: &Paths) -> Result<()> {
 /// `adage delegate predict on|off`: the machine's switch for calls made in the agent's place. Off
 /// writes `exec/predict-off`, which adage-exec reads at every `TurnStep`; grants are kept.
 fn predict(on: bool, paths: &Paths) -> Result<()> {
-    let marker = adage_exec::hook::predict_off(paths);
+    let marker = paths.predict_off();
     if on {
         crate::review::person_or_press("delegate predict on", paths)?;
         match std::fs::remove_file(&marker) {
@@ -290,7 +278,7 @@ fn switch(on: bool, args: &[String], paths: &Paths) -> Result<()> {
             }
         }
     }
-    let m = marker(paths);
+    let m = paths.delegate_marker();
     let mut o = Out::stdout();
     if on {
         std::fs::create_dir_all(m.parent().context("no directory")?)?;
@@ -353,7 +341,7 @@ fn switch_pressed(args: &[String], paths: &Paths) -> Result<()> {
             }
         }
     }
-    let m = marker(paths);
+    let m = paths.delegate_marker();
     std::fs::create_dir_all(m.parent().context("no directory")?)?;
     let body = json!({ "enabled_at": adage_exec::time::now(), "bin": "plugin", "via": "press" });
     std::fs::write(&m, serde_json::to_string_pretty(&body)? + "\n")?;
@@ -450,14 +438,14 @@ fn status(args: &[String], paths: &Paths) -> Result<()> {
             "auto": a.auto,
         }));
     }
-    let enabled = marker(paths).is_file();
+    let enabled = paths.delegate_marker().is_file();
     let lapsed = lapsed_here(paths, root.as_deref(), &store);
     // A harness registered twice runs every hook twice (`adage doctor` says the same).
     let dups = install::duplicates(&crate::detect::registrations(root.as_deref()), root.as_deref());
     if args.iter().any(|a| a == "--json") {
         let duplicates: Vec<Value> =
             dups.iter().map(|d| json!({ "harness": d.harness, "places": d.places, "fix": d.fix })).collect();
-        let predict = if adage_exec::hook::predict_off(paths).exists() { "off" } else { "on" };
+        let predict = if paths.predict_off().exists() { "off" } else { "on" };
         let v = json!({ "enabled": enabled, "predict": predict, "registrations": regs, "grants": grants, "lapsed": lapsed, "duplicates": duplicates });
         println!("{}", serde_json::to_string_pretty(&v)?);
         return Ok(());
@@ -837,9 +825,9 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
             confirm,
         });
     }
-    let table = CommandTable::load();
+    let table = &CommandTable::load();
     let plan =
-        route::plan(ir, &index, &root, &paths.tracks(), level, Some(&terms), &table).map_err(anyhow::Error::msg)?;
+        route::plan(ir, &index, &root, &paths.tracks(), level, Some(&terms), table).map_err(anyhow::Error::msg)?;
     let req = plan.request;
     if level != Level::E2 || !req.output.fields.is_empty() {
         req.output.validate()?;
@@ -849,7 +837,7 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
             bail!("--exit-when names {k}, which is not an output field");
         }
     }
-    let classified = route::predict_classified(&req, &table);
+    let classified = route::predict_classified(&req, table);
     let pol = adage_exec::policy::load(&paths.root)?;
     pol.permits(&req, classified).map_err(|e| {
         if level == Level::E2 && e.contains("caps execution") {
@@ -959,7 +947,7 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
     }
     let hazards = adage_exec::git::hazards(&root);
     let actx = adage_exec::approvals::AutoContext {
-        table: &table,
+        table,
         git_hazards: &hazards,
         sandbox_enforced: adage_exec::sandbox::detect().available(),
         policy_auto: pol.auto_approve,
@@ -1003,7 +991,7 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
     )?;
     print_attestations(&mut o, paths, ir)?;
     if level == Level::E2 {
-        preview(&mut o, paths, &root, ir, &req, &label, &store, &pol, &table)?;
+        preview(&mut o, paths, &root, ir, &req, &label, &store, &pol, table)?;
     }
     store.approve(Approval {
         key,
@@ -1032,7 +1020,7 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
     }
     o.note("The delegation lapses if the reflex, its script or its sandbox profile changes.")?;
     o.blank()?;
-    if !marker(paths).is_file() {
+    if !paths.delegate_marker().is_file() {
         o.next("adage delegate on", "execution is off; this makes hooks run delegated reflexes")?;
     } else {
         o.next("adage delegate status", "every delegated reflex")?;
@@ -1147,11 +1135,11 @@ fn delegate_predict(
     o.kv("recorded", Line::new().text(store_path.display().to_string()))?;
     o.blank()?;
     o.note("The grant lapses if the reflex's command, its contracts or a script it runs changes.")?;
-    if adage_exec::hook::predict_off(paths).exists() {
+    if paths.predict_off().exists() {
         o.note("Predictions are off on this machine (`adage delegate predict off`); nothing is predicted until they are on.")?;
     }
     o.blank()?;
-    if !marker(paths).is_file() {
+    if !paths.delegate_marker().is_file() {
         o.next("adage delegate on", "only adage-exec predicts; this makes hooks call it")?;
     } else {
         o.next("adage delegate status", "every delegated reflex")?;
@@ -1219,7 +1207,7 @@ fn staged(s: Staging<'_>) -> Result<()> {
             "terms": plan.terms,
             "proposed": plan.proposed,
             "facts": plan.facts,
-            "first": raise || !marker(s.paths).is_file(),
+            "first": raise || !s.paths.delegate_marker().is_file(),
             "ok": plan.refused.is_none(),
             "digest": digest,
             "recorded": recorded,
@@ -1273,7 +1261,7 @@ fn staged(s: Staging<'_>) -> Result<()> {
         adage_exec::policy::set_max_level(&s.paths.root, Level::E2)?;
         wrote.push("policy");
     }
-    let m = marker(s.paths);
+    let m = s.paths.delegate_marker();
     if !m.is_file() {
         std::fs::create_dir_all(m.parent().context("no directory")?)?;
         let body = json!({ "enabled_at": adage_exec::time::now(), "bin": "plugin", "via": s.via.as_str() });

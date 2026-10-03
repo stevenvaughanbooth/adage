@@ -5,6 +5,8 @@ use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
+mod common;
+
 struct World {
     _dir: tempfile::TempDir,
     root: PathBuf,
@@ -26,6 +28,7 @@ impl World {
     }
     fn cmd(&self, args: &[&str]) -> Command {
         let mut c = Command::new(env!("CARGO_BIN_EXE_adage"));
+        common::scrub(&mut c);
         c.args(args)
             .current_dir(self.p("work"))
             .env("ADAGE_HOME", self.p("data"))
@@ -33,15 +36,8 @@ impl World {
             .env("XDG_CONFIG_HOME", self.p("xdg"))
             .env("CODEX_HOME", self.p("codex"))
             .env("PATH", format!("{}:/usr/bin:/bin", self.p("bin").display()))
-            .env_remove("CLAUDE_CONFIG_DIR")
-            .env_remove("ADAGE_DISABLE")
-            .env_remove("ADAGE_CONTROL")
-            .env_remove("ADAGE_ARM")
             .env("ADAGE_ALLOW_NONINTERACTIVE", "1")
             .stdin(Stdio::null());
-        for v in ["CLAUDECODE", "OPENCODE", "CODEX_SANDBOX", "CODEX_SANDBOX_NETWORK_DISABLED"] {
-            c.env_remove(v);
-        }
         c
     }
     fn run(&self, args: &[&str]) -> Output {

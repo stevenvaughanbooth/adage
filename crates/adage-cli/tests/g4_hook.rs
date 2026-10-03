@@ -30,13 +30,16 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+mod common;
+
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
 fn adage(home: &Path) -> Command {
     let mut c = Command::new(env!("CARGO_BIN_EXE_adage"));
-    c.env("ADAGE_HOME", home).env("HOME", home).env("ADAGE_AUTO_LEARN", "0").env_remove("ADAGE_DISABLE");
+    common::scrub(&mut c);
+    c.env("ADAGE_HOME", home).env("HOME", home).env("ADAGE_AUTO_LEARN", "0");
     c
 }
 

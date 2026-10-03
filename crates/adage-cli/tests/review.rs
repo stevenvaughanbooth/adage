@@ -12,6 +12,8 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
+mod common;
+
 const REPO: &str = "acme";
 const NAME: &str = "acme/work-items";
 /// The import in [`populated`] has the learned track's name (a teammate's copy); its version tells them apart.
@@ -39,6 +41,7 @@ impl World {
     }
     fn cmd(&self, args: &[&str]) -> Command {
         let mut c = Command::new(env!("CARGO_BIN_EXE_adage"));
+        common::scrub(&mut c);
         c.args(args)
             .current_dir(self.p("work"))
             // Text assertions use UTF-8 glyphs regardless of the invoking terminal.
@@ -51,10 +54,6 @@ impl World {
             .env("TERM", "xterm")
             .env("LC_ALL", "en_US.UTF-8")
             .env_remove("ADAGE_ASCII")
-            .env_remove("CLAUDECODE")
-            .env_remove("OPENCODE")
-            .env_remove("CODEX_SANDBOX")
-            .env_remove("CODEX_SANDBOX_NETWORK_DISABLED")
             .env("ADAGE_ALLOW_NONINTERACTIVE", "1")
             .stdin(Stdio::null());
         c

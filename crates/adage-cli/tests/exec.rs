@@ -9,6 +9,8 @@ use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+mod common;
+
 struct World {
     _dir: tempfile::TempDir,
     root: PathBuf,
@@ -67,15 +69,13 @@ impl World {
     }
     fn run(&self, args: &[&str], env: &[(&str, &str)]) -> (String, String, i32) {
         let mut c = Command::new(env!("CARGO_BIN_EXE_adage"));
+        common::scrub(&mut c);
         c.args(args)
             .current_dir(self.p("acme-billing"))
             .env("ADAGE_HOME", self.p("adage"))
             .env("ADAGE_POLICY", self.p("adage/managed.toml"))
             .env("HOME", self.p("home"))
             .env("ADAGE_ALLOW_NONINTERACTIVE", "1");
-        for v in ["CLAUDECODE", "OPENCODE", "CODEX_SANDBOX", "CODEX_SANDBOX_NETWORK_DISABLED", "ADAGE_ARM"] {
-            c.env_remove(v);
-        }
         for (k, v) in env {
             c.env(k, v);
         }

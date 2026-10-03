@@ -21,6 +21,7 @@
 //! still waiting.
 
 use crate::detect;
+use crate::helpers::ago_short as ago;
 use adage_core::repo;
 use adage_store::Paths;
 use adage_tracks::{index, io, proposals, review, Index, Trigger};
@@ -68,22 +69,30 @@ pub enum Action {
 }
 
 impl Check {
-    /// The fix as an [`Action`]: `Run` when the fix is one `adage` command (the whole fix, or a
-    /// fix that begins with one in backticks, after an optional `run `, as the status card reads
-    /// it) and does not send the person to a terminal, else `Manual`; `None` without a fix.
+    /// The fix as an [`Action`]: `Run` with [`fix_command`]'s command, else `Manual`; `None`
+    /// without a fix. The status card names the same command, so the two never disagree.
     pub fn action(&self) -> Option<Action> {
-        let fix = self.fix.as_deref()?.trim();
-        let lead = fix.strip_prefix("run ").unwrap_or(fix);
-        let command = match lead.strip_prefix('`') {
-            Some(rest) => rest.split_once('`').map(|(c, _)| c).filter(|_| !fix.contains("terminal")),
-            None if !fix.contains([',', ';', '(', ':']) => Some(fix),
-            None => None,
-        };
-        Some(match command.filter(|c| c.starts_with("adage ")) {
-            Some(c) => Action::Run { command: c.to_string() },
+        let fix = self.fix.as_deref()?;
+        Some(match fix_command(fix) {
+            Some(command) => Action::Run { command },
             None => Action::Manual,
         })
     }
+}
+
+/// The `adage` command a fix asks for, if it is one: the whole fix when it is one bare command,
+/// else the backticked command it begins with, after an optional `run ` (`` run `adage
+/// condition` to recompile it ``). A fix that sends the person to a terminal is theirs to make,
+/// as is a fix in prose.
+pub fn fix_command(fix: &str) -> Option<String> {
+    let fix = fix.trim();
+    let lead = fix.strip_prefix("run ").unwrap_or(fix);
+    let command = match lead.strip_prefix('`') {
+        Some(rest) => rest.split_once('`').map(|(c, _)| c).filter(|_| !fix.contains("terminal")),
+        None if !fix.contains([',', ';', '(', ':']) => Some(fix),
+        None => None,
+    };
+    command.filter(|c| c.starts_with("adage ")).map(str::to_string)
 }
 
 /// `{check, label, status, detail, fix?, action?}`.
@@ -738,9 +747,9 @@ fn kill_switches(repo_root: Option<&Path>) -> Check {
     if std::env::var("ADAGE_DISABLE").as_deref() == Ok("1") {
         on.push("ADAGE_DISABLE=1: every hook does nothing".to_string());
     }
-    let off_here = repo_root.is_some_and(|r| r.join(".adage/disabled").exists());
+    let off_here = repo_root.is_some_and(|r| crate::switch::marker(r).exists());
     if let Some(r) = repo_root.filter(|_| off_here) {
-        on.push(format!("{}: Adage is off in this repository", detect::tilde(&r.join(".adage/disabled"))));
+        on.push(format!("{}: Adage is off in this repository", detect::tilde(&crate::switch::marker(r))));
     }
     if let Ok(v) = std::env::var("ADAGE_CONTROL") {
         match v.parse::<f64>() {
@@ -798,8 +807,7 @@ fn spools(paths: &Paths) -> Check {
 fn fail_open(paths: &Paths) -> Check {
     let p = paths.root.join(FAIL_OPEN_LOG);
     let Ok(text) = std::fs::read_to_string(&p) else { return pass("fail-open errors", "none recorded") };
-    let now =
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0);
+    let now = adage_core::time::now_ms();
     let recent: Vec<serde_json::Value> = text
         .lines()
         .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
@@ -830,16 +838,6 @@ fn chosen(keys: &[String]) -> String {
             format!("the {} repositories you chose ({}; learn.repos) are", keys.len(), keys.join(", "))
         }
         _ => format!("the {} repositories you chose ({}, …; learn.repos) are", keys.len(), keys[..2].join(", ")),
-    }
-}
-
-fn ago(now: u64, ts: u64) -> String {
-    let s = now.saturating_sub(ts) / 1000;
-    match s {
-        0..=59 => format!("{s}s ago"),
-        60..=3599 => format!("{}m ago", s / 60),
-        3600..=172_799 => format!("{}h ago", s / 3600),
-        _ => format!("{}d ago", s / 86_400),
     }
 }
 
@@ -1010,7 +1008,7 @@ fn live_learning(paths: &Paths) -> Vec<Check> {
 /// the switch the other way.
 pub fn rewrites_check(paths: &Paths) -> Check {
     let on = adage_store::config::load(paths).config.runtime_rewrite;
-    let marker = adage_hook::rewrite_off(paths).exists();
+    let marker = paths.rewrite_off().exists();
     let (detail, fix) = match (on, marker) {
         (true, false) => ("python tests → .venv (on)".to_string(), "adage delegate rewrites off"),
         (false, _) => (
@@ -1216,8 +1214,10 @@ mod tests {
         let c = rewrites_check(&paths);
         assert_eq!((c.status, c.detail.as_str()), (Status::Pass, "python tests → .venv (on)"));
         assert_eq!(c.fix.as_deref(), Some("adage delegate rewrites off"));
-        // The older marker turns them off whatever the setting says.
+        // The older marker turns them off whatever the setting says. Written where the hook reads
+        // it; doctor reads it through `Paths`, the one definition.
         let marker = adage_hook::rewrite_off(&paths);
+        assert_eq!(marker, paths.rewrite_off());
         std::fs::create_dir_all(marker.parent().unwrap()).unwrap();
         std::fs::write(&marker, "").unwrap();
         let c = rewrites_check(&paths);

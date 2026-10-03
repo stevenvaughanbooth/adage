@@ -527,6 +527,11 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### Seeing it
 
+- **The status card and `adage doctor` name the same fix.** Where a check's fix is one `adage`
+  command, the card's `next` row now names the command `adage doctor --json` offers as the
+  check's `action` (`adage condition` for a stale or damaged index, `adage models fetch` for the
+  embedding model), where it used to say `adage doctor`; a fix that sends you to a terminal still
+  points at `adage doctor`.
 - `adage watch` (a live pane), `adage ui` (the full-screen app), the interactive `adage init`
   wizard, `adage map`, `adage doctor` (every check, with fixes), `adage status`, `adage report`
   and `adage graph`. Plain `adage` prints the status card; `adage ui` opens the app.

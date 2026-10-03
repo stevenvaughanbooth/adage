@@ -18,6 +18,7 @@
 //! install is updated from Claude Code, not from here. This is the one command that replaces
 //! Adage's own binaries, and only when a person runs it: no hook or learner calls it.
 
+use crate::helpers::flag;
 use adage_term::{Line, Out};
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
@@ -135,10 +136,6 @@ fn plan(channel: Channel, branch: &str, co: Option<&Checkout>, beside: &dyn Fn(&
         }
         Channel::Plugin => None,
     }
-}
-
-fn flag(args: &[String], name: &str) -> Option<String> {
-    args.iter().position(|a| a == name).and_then(|i| args.get(i + 1).cloned())
 }
 
 /// Where `cargo install` puts binaries: `$CARGO_HOME/bin`, else `~/.cargo/bin`.

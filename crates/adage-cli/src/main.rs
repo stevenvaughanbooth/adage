@@ -26,6 +26,7 @@ mod exec;
 use adage_app::{evidence, words};
 use adage_hook::failopen;
 mod graph;
+mod helpers;
 mod history;
 use adage_hook::harness;
 mod hook;
@@ -63,6 +64,7 @@ use adage_learn::{Inputs, LearnConfig};
 use adage_store::Paths;
 use adage_tracks::io;
 use anyhow::{bail, Result};
+use helpers::flag;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
@@ -162,10 +164,6 @@ pub(crate) fn writable_data_dir(paths: &Paths) -> Result<()> {
 fn io_reason(e: &std::io::Error) -> String {
     let s = e.to_string();
     s.split(" (os error").next().unwrap_or(&s).to_lowercase()
-}
-
-fn flag(args: &[String], name: &str) -> Option<String> {
-    args.iter().position(|a| a == name).and_then(|i| args.get(i + 1).cloned())
 }
 
 fn run(args: &[String]) -> Result<()> {

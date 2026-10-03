@@ -11,8 +11,10 @@ use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+mod common;
+
 fn adage(root: &Path, args: &[&str]) -> (String, String, i32) {
-    let o = Command::new(env!("CARGO_BIN_EXE_adage"))
+    let o = common::scrub(&mut Command::new(env!("CARGO_BIN_EXE_adage")))
         .args(args)
         .current_dir(root)
         .env("ADAGE_HOME", root.join("adage"))
@@ -20,11 +22,6 @@ fn adage(root: &Path, args: &[&str]) -> (String, String, i32) {
         .env("ADAGE_ARM", "treated")
         .env("HOME", root.join("home"))
         .env("XDG_CONFIG_HOME", root.join("home/.config"))
-        .env_remove("ADAGE_DISABLE")
-        .env_remove("CLAUDECODE")
-        .env_remove("OPENCODE")
-        .env_remove("CODEX_SANDBOX")
-        .env_remove("CODEX_SANDBOX_NETWORK_DISABLED")
         .output()
         .unwrap();
     (

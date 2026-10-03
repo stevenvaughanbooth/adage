@@ -11,6 +11,8 @@ use std::path::PathBuf;
 use std::process::{Command, Output, Stdio};
 use std::time::{Duration, Instant};
 
+mod common;
+
 struct World {
     _dir: tempfile::TempDir,
     root: PathBuf,
@@ -58,6 +60,7 @@ impl World {
     }
     fn cmd(&self, args: &[&str]) -> Command {
         let mut c = Command::new(env!("CARGO_BIN_EXE_adage"));
+        common::scrub(&mut c);
         c.args(args)
             .current_dir(&self.root)
             .env("ADAGE_HOME", self.home())
@@ -65,17 +68,6 @@ impl World {
             .env("ADAGE_ARM", "treated")
             .env("ADAGE_TEST_NO_SPAWN", "record")
             .env("ADAGE_ALLOW_NONINTERACTIVE", "1");
-        for v in [
-            "ADAGE_DISABLE",
-            "ADAGE_AUTO_LEARN",
-            "ADAGE_CONTROL",
-            "CLAUDECODE",
-            "OPENCODE",
-            "CODEX_SANDBOX",
-            "CODEX_SANDBOX_NETWORK_DISABLED",
-        ] {
-            c.env_remove(v);
-        }
         c
     }
     fn run(&self, mut c: Command, stdin: &str) -> Output {

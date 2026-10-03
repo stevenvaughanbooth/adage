@@ -20,6 +20,8 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+mod common;
+
 struct Sandbox {
     _dir: tempfile::TempDir,
     root: PathBuf,
@@ -62,6 +64,7 @@ impl Sandbox {
     }
     fn command_of(&self, bin: &Path, args: &[&str], arm: &str) -> Command {
         let mut c = Command::new(bin);
+        common::scrub(&mut c);
         c.args(args)
             .current_dir(&self.root)
             .env("ADAGE_HOME", self.root.join("adage"))
@@ -71,12 +74,7 @@ impl Sandbox {
             .env("CODEX_HOME", self.root.join("home/.codex"))
             .env("ADAGE_ARM", arm)
             // The managed policy file, absent unless a test writes it.
-            .env("ADAGE_POLICY", self.root.join("managed-policy.toml"))
-            .env_remove("ADAGE_DISABLE")
-            .env_remove("CLAUDECODE")
-            .env_remove("OPENCODE")
-            .env_remove("CODEX_SANDBOX")
-            .env_remove("CODEX_SANDBOX_NETWORK_DISABLED");
+            .env("ADAGE_POLICY", self.root.join("managed-policy.toml"));
         c
     }
     fn run(&self, args: &[&str], stdin: &[u8], arm: &str) -> (String, String, i32) {

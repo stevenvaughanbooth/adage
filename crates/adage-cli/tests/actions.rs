@@ -17,6 +17,8 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
+mod common;
+
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap()
 }
@@ -58,21 +60,14 @@ fn open_up(p: &Path) {
 }
 
 fn env_for(c: &mut Command, home: &Path) {
+    common::scrub(c);
     // Exercise Apple's system Python launcher even when the developer's PATH has another Python.
     #[cfg(target_os = "macos")]
     c.env("PATH", "/usr/bin:/bin:/usr/sbin:/sbin");
     c.env("ADAGE_HOME", home)
         .env("ADAGE_POLICY", home.join("no-managed-policy.toml"))
         .env("ADAGE_ALLOW_NONINTERACTIVE", "1")
-        .env("ADAGE_AUTO_LEARN", "0")
-        .env_remove("CLAUDECODE")
-        .env_remove("OPENCODE")
-        .env_remove("CODEX_SANDBOX")
-        .env_remove("CODEX_SANDBOX_NETWORK_DISABLED")
-        .env_remove("ADAGE_ARM")
-        .env_remove("SSH_AUTH_SOCK")
-        .env_remove("ADAGE_DISABLE")
-        .env_remove("ADAGE_EXEC_FORCE_BACKEND");
+        .env("ADAGE_AUTO_LEARN", "0");
 }
 
 fn adage(home: &Path, cwd: &Path, args: &[&str]) -> Output {

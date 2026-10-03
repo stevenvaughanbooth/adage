@@ -94,7 +94,7 @@ fn text(status: &'static str, body: &str) -> Response {
 /// the binary, an installed one, or the hashed fallback).
 fn runtime(paths: &adage_store::Paths) -> Value {
     let config = adage_store::config::load(paths).config;
-    let marker = adage_hook::rewrite_off(paths).exists();
+    let marker = paths.rewrite_off().exists();
     let (model, fallback) = crate::status_card::embeddings(paths);
     json!({
         "rewrite": { "on": config.runtime_rewrite && !marker, "config": config.runtime_rewrite, "marker": marker },

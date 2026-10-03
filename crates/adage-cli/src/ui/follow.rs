@@ -40,6 +40,7 @@ use super::learnlog::{self, Tone};
 use super::tail::{BACKFILL_AGE, BACKFILL_BYTES, LOG_BACKFILL_BYTES};
 use super::theme::Lamp;
 use crate::autolearn::{read_json, Queue, Spawned};
+use adage_core::time::now_ms;
 use adage_store::{lock, spool, Paths};
 use adage_tracks::Strength;
 use anyhow::{bail, Result};
@@ -47,7 +48,7 @@ use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, UNIX_EPOCH};
 
 /// How often the files are polled.
 const POLL: Duration = Duration::from_millis(250);
@@ -104,10 +105,6 @@ impl Cursor {
         }
         Some(Cursor { at, log, spools })
     }
-}
-
-fn now_ms() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 
 fn mtime_ms(meta: &std::fs::Metadata) -> u64 {

@@ -11,6 +11,9 @@ use serde_json::{json, Value};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
+use std::sync::{Arc, Mutex, Weak};
+
+mod common;
 
 const SKILL: &str = "acme-work-item";
 
@@ -42,20 +45,47 @@ fn git(dir: &Path, args: &[&str]) {
     assert!(ok.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&ok.stderr));
 }
 
+/// `s` as it appears inside a JSON string.
+fn json_text(s: &str) -> String {
+    let quoted = serde_json::to_string(s).unwrap();
+    quoted[1..quoted.len() - 1].to_string()
+}
+
 fn has(t: &str) -> bool {
     std::env::var_os("PATH").is_some_and(|p| std::env::split_paths(&p).any(|d| d.join(t).is_file()))
 }
 
-/// The acme sandbox with the acme skill, compiled by `adage train` into `home`.
+/// The acme sandbox with the acme skill, compiled by `adage train` into `home`: the replay runs
+/// once and is shared (`Compiled`); each world is a copy of it.
 struct World {
     _t: tempfile::TempDir,
+    _compiled: Arc<Compiled>,
     repo: PathBuf,
     home: PathBuf,
     staged: PathBuf,
 }
 
-impl World {
-    fn new() -> World {
+/// `adage train` on the acme skill, run once for every test alive at the time: its replay in
+/// the sandbox may take up to a minute, and the tests only read what it found. The copy each test
+/// works on is a fresh world with the same contents.
+struct Compiled {
+    t: tempfile::TempDir,
+    staged: PathBuf,
+}
+
+impl Compiled {
+    fn shared() -> Arc<Compiled> {
+        static SHARED: Mutex<Weak<Compiled>> = Mutex::new(Weak::new());
+        let mut held = SHARED.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(c) = held.upgrade() {
+            return c;
+        }
+        let c = Arc::new(Compiled::new());
+        *held = Arc::downgrade(&c);
+        c
+    }
+
+    fn new() -> Compiled {
         let t = tempfile::tempdir().unwrap();
         let (repo, home) = (t.path().join("acme"), t.path().join("home"));
         copy_dir(&root().join("evals/sandboxes/acme-billing"), &repo);
@@ -76,7 +106,48 @@ impl World {
         })
         .unwrap();
         assert!(out.pack.is_some(), "the acme skill compiles");
-        World { _t: t, repo, home, staged: out.dir }
+        Compiled { t, staged: out.dir }
+    }
+}
+
+impl World {
+    fn new() -> World {
+        let compiled = Compiled::shared();
+        let t = tempfile::tempdir().unwrap();
+        copy_dir(compiled.t.path(), t.path());
+        let (repo, home) = (t.path().join("acme"), t.path().join("home"));
+        let staged = home.join(compiled.staged.strip_prefix(compiled.t.path().join("home")).unwrap());
+        // The two files that name the checkout by its path name the copy's. Nothing else under
+        // `home` may name the original, or the copy would not be the world `adage train` made.
+        // Both spellings: a record keeps the canonical path, a review the one it was given.
+        let spell = |p: &Path| {
+            let canonical = p.canonicalize().unwrap();
+            [p.to_path_buf(), canonical].map(|p| json_text(&p.to_string_lossy()))
+        };
+        let (from, to) = (spell(compiled.t.path()), spell(t.path()));
+        for f in ["review.json", "verified.json"] {
+            let p = staged.join(f);
+            let mut text = std::fs::read_to_string(&p).unwrap();
+            for (a, b) in from.iter().zip(&to).rev() {
+                text = text.replace(a.as_str(), b);
+            }
+            std::fs::write(&p, text).unwrap();
+        }
+        let mut left = vec![home.clone()];
+        while let Some(d) = left.pop() {
+            for e in std::fs::read_dir(&d).unwrap().flatten() {
+                if e.file_type().unwrap().is_dir() {
+                    left.push(e.path());
+                } else if let Ok(text) = std::fs::read_to_string(e.path()) {
+                    assert!(
+                        !from.iter().any(|f| text.contains(f.as_str())),
+                        "{} names the original world",
+                        e.path().display()
+                    );
+                }
+            }
+        }
+        World { _t: t, _compiled: compiled, repo, home, staged }
     }
 
     fn paths(&self) -> Paths {
@@ -84,18 +155,8 @@ impl World {
     }
 
     fn command(&self, args: &[&str]) -> Command {
-        let mut c = Command::new(env!("CARGO_BIN_EXE_adage"));
-        c.args(args)
-            .current_dir(&self.repo)
-            .env("ADAGE_HOME", &self.home)
-            .env("ADAGE_AUTO_LEARN", "0")
-            .env("ADAGE_ARM", "treated")
-            .env_remove("CLAUDECODE")
-            .env_remove("OPENCODE")
-            .env_remove("CODEX_SANDBOX")
-            .env_remove("CODEX_SANDBOX_NETWORK_DISABLED")
-            .env_remove("ADAGE_DISABLE")
-            .env_remove("SSH_AUTH_SOCK");
+        let mut c = common::adage(&self.home, &self.repo);
+        c.args(args).env("ADAGE_ARM", "treated");
         c
     }
 

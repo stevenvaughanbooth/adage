@@ -5,8 +5,11 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
+mod common;
+
 fn adage(home: &Path, args: &[&str]) -> Command {
     let mut c = Command::new(env!("CARGO_BIN_EXE_adage"));
+    common::scrub(&mut c);
     c.args(args)
         // Text assertions use UTF-8 glyphs regardless of the invoking terminal.
         .env("TERM", "xterm-256color")
@@ -17,14 +20,9 @@ fn adage(home: &Path, args: &[&str]) -> Command {
         .env("HOME", home.join("home"))
         .env("XDG_CONFIG_HOME", home.join("xdg"))
         .env("CODEX_HOME", home.join("codex"))
-        .env_remove("CLAUDE_CONFIG_DIR")
-        .env_remove("ADAGE_DISABLE")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    for v in ["CLAUDECODE", "OPENCODE", "CODEX_SANDBOX", "CODEX_SANDBOX_NETWORK_DISABLED"] {
-        c.env_remove(v);
-    }
     c
 }
 

@@ -82,7 +82,7 @@ pub fn share(name: &str, out: &Path, key: Option<&Path>, args: &[String], paths:
     let ack = args.iter().any(|a| a == "--ack-scripts");
     // `--repo-root <dir>`: the repository the track's scripts are pinned (L-ref) and vendored
     // against, whatever its key; else the repository `share` runs in, when it is the track's.
-    let given_root = match crate::flag(args, "--repo-root") {
+    let given_root = match crate::helpers::flag(args, "--repo-root") {
         Some(d) => {
             let p = PathBuf::from(&d).canonicalize().with_context(|| format!("--repo-root {d}"))?;
             Some(adage_core::repo::find_root(&p).unwrap_or(p))

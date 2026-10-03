@@ -21,9 +21,11 @@ const PERSON_ONLY: &str = "will not run inside an agent session";
 const AGENT: [(&str, &str); 4] =
     [("CLAUDECODE", "1"), ("OPENCODE", "1"), ("CODEX_SANDBOX", "seatbelt"), ("CODEX_SANDBOX_NETWORK_DISABLED", "1")];
 
+mod common;
+use common::text;
+
 struct World {
-    _dir: tempfile::TempDir,
-    root: PathBuf,
+    w: common::TempWorld,
 }
 
 fn track(repo: &str) -> Track {
@@ -70,13 +72,8 @@ impl World {
     /// A checkout `acme-billing` (a `.git` directory, no history) with one installed learned
     /// track and its index.
     fn new() -> World {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().canonicalize().unwrap();
-        for d in ["home", "adage", "acme-billing/.git", "acme-billing/scripts"] {
-            std::fs::create_dir_all(root.join(d)).unwrap();
-        }
-        std::fs::write(root.join("acme-billing/scripts/wi-lookup"), "#!/usr/bin/env python3\nprint('{}')\n").unwrap();
-        let w = World { _dir: dir, root };
+        let w = World { w: common::TempWorld::new(&["home", "adage", "acme-billing/.git", "acme-billing/scripts"]) };
+        std::fs::write(w.p("acme-billing/scripts/wi-lookup"), "#!/usr/bin/env python3\nprint('{}')\n").unwrap();
         let t = track("acme-billing");
         io::write(&w.paths().tracks().join(TRACK), &t).unwrap();
         Index::compile_root(&w.paths().tracks(), &[t]).0.write_atomic(&w.paths().index()).unwrap();
@@ -84,15 +81,10 @@ impl World {
     }
     /// A checkout with no reflexes at all (an empty `ADAGE_HOME`).
     fn bare() -> World {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().canonicalize().unwrap();
-        for d in ["home", "adage", "acme-billing/.git"] {
-            std::fs::create_dir_all(root.join(d)).unwrap();
-        }
-        World { _dir: dir, root }
+        World { w: common::TempWorld::new(&["home", "adage", "acme-billing/.git"]) }
     }
     fn p(&self, rel: &str) -> PathBuf {
-        self.root.join(rel)
+        self.w.p(rel)
     }
     fn repo(&self) -> PathBuf {
         self.p("acme-billing")
@@ -101,25 +93,11 @@ impl World {
         Paths::at(self.p("adage"))
     }
     fn base(&self, bin: &str, args: &[&str]) -> Command {
-        let mut c = Command::new(bin);
+        let mut c = common::hermetic(bin, &self.p("adage"), &self.repo());
         c.args(args)
-            .current_dir(self.repo())
-            .env("ADAGE_HOME", self.p("adage"))
             .env("ADAGE_POLICY", self.p("adage/managed.toml"))
             .env("HOME", self.p("home"))
-            .env("ADAGE_AUTO_LEARN", "0")
             .env("ADAGE_ARM", "treated");
-        for v in [
-            "CLAUDECODE",
-            "OPENCODE",
-            "CODEX_SANDBOX",
-            "CODEX_SANDBOX_NETWORK_DISABLED",
-            "ADAGE_DISABLE",
-            "ADAGE_ALLOW_NONINTERACTIVE",
-            "ADAGE_TRAIN_SESSION",
-        ] {
-            c.env_remove(v);
-        }
         c
     }
     /// `adage hook claude <event>` with `payload` on stdin: its stdout, trimmed.
@@ -199,10 +177,6 @@ fn feed(mut c: Command, stdin: &str) -> Output {
     // A verb that refuses before it reads stdin closes the pipe first: that is not a failure here.
     let _ = child.stdin.take().unwrap().write_all(stdin.as_bytes());
     child.wait_with_output().unwrap()
-}
-
-fn text(o: &Output) -> String {
-    format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr))
 }
 
 fn pressed(token: &str, session: &str) -> String {
@@ -536,7 +510,7 @@ fn an_action_is_staged_then_confirmed() {
     git(&["init", "-q"]);
     git(&["add", "."]);
     git(&["-c", "user.name=F", "-c", "user.email=f@example.com", "commit", "-qm", "fixture"]);
-    open_up(&w.root);
+    open_up(&w.w.root);
     let key = adage_core::repo::repo_key(&repo);
     let route = |id: &str| Route {
         id: id.into(),
@@ -750,9 +724,20 @@ fn a_committed_pack_can_be_trusted_with_a_press() {
     };
     git(&["init", "-q"]);
     git(&["add", "."]);
-    git(&["-c", "user.name=F", "-c", "user.email=f@example.com", "commit", "-qm", "team pack"]);
-    // The session opens after the commit's second is over (a commit's time is whole seconds).
-    std::thread::sleep(std::time::Duration::from_millis(1100));
+    // Committed a minute before the session opens (a commit's time is whole seconds, so one made
+    // now could share the window's second); the files' on-disk times are older than the window
+    // whatever the commit says.
+    let past = format!("@{} +0000", adage_core::time::now_ms() / 1000 - 60);
+    let o = Command::new("git")
+        .arg("-C")
+        .arg(&repo)
+        .args(["-c", "user.name=F", "-c", "user.email=f@example.com", "commit", "-qm", "team pack"])
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_AUTHOR_DATE", &past)
+        .env("GIT_COMMITTER_DATE", &past)
+        .output()
+        .unwrap();
+    assert!(o.status.success(), "git commit: {}", String::from_utf8_lossy(&o.stderr));
     let t = session(&w, "s");
     w.prompt("s", "hello");
     // Review M8: a pack the agent writes and commits during the session is offered (committed)

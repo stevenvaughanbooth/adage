@@ -7,6 +7,8 @@ use adage_tracks::*;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
+mod common;
+
 const NAME: &str = "github.com-acme-billing/work-items";
 const REPO: &str = "github.com/acme/billing";
 
@@ -38,15 +40,11 @@ impl World {
     /// The binary, isolated: its own data directory and HOME, no agent session, no ssh-agent.
     fn cmd(&self, adage_home: &str, cwd: &Path, args: &[&str]) -> Command {
         let mut c = Command::new(env!("CARGO_BIN_EXE_adage"));
+        common::scrub(&mut c);
         c.args(args)
             .current_dir(cwd)
             .env("ADAGE_HOME", self.p(adage_home))
             .env("HOME", self.p("home"))
-            .env_remove("CLAUDECODE")
-            .env_remove("OPENCODE")
-            .env_remove("CODEX_SANDBOX")
-            .env_remove("CODEX_SANDBOX_NETWORK_DISABLED")
-            .env_remove("SSH_AUTH_SOCK")
             .env("ADAGE_ALLOW_NONINTERACTIVE", "1")
             .env("PATH", self.p("bin"))
             .stdin(Stdio::null());

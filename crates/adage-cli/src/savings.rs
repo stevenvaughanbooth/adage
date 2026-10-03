@@ -97,7 +97,7 @@ pub fn render<W: std::io::Write>(o: &mut adage_term::Out<W>, s: &Summary) -> std
 
 /// `adage savings [--repo <path>] [--json]`: the estimate for this repository, computed now.
 pub fn run(args: &[String], paths: &Paths) -> anyhow::Result<()> {
-    let dir = match crate::flag(args, "--repo") {
+    let dir = match crate::helpers::flag(args, "--repo") {
         Some(d) => std::path::PathBuf::from(d),
         None => std::env::current_dir()?,
     };

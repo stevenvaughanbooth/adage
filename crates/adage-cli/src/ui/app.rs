@@ -920,7 +920,7 @@ fn execute(cmd: Cmd, s: &mut AppState, ctx: &Ctx, loader: &Loader, job: &mut Opt
                     .and_then(|()| config::set(&ctx.paths, key, &value).map_err(|e| anyhow::anyhow!(e)));
                 // Turning rewrites on clears the older marker too, as `adage delegate rewrites on`.
                 if key == "runtime.rewrite" && value == "true" && set.is_ok() {
-                    let _ = std::fs::remove_file(adage_hook::rewrite_off(&ctx.paths));
+                    let _ = std::fs::remove_file(ctx.paths.rewrite_off());
                 }
                 let loaded = config::load(&ctx.paths);
                 s.load_settings(&loaded);
@@ -981,7 +981,7 @@ pub fn run(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>) -> Result<()> {
     loader.want(Want::Routes);
     let mut sources = Sources::new(&ctx);
     let mut s = AppState::new(ctx.paths.config());
-    s.rewrite_marker = Some(adage_hook::rewrite_off(&ctx.paths));
+    s.rewrite_marker = Some(ctx.paths.rewrite_off());
     s.load_settings(&config::load(&ctx.paths));
     let mut job: Option<Job> = None;
     let mut ctx = ctx;
