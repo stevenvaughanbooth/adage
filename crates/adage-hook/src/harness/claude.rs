@@ -83,7 +83,9 @@ impl Adapter for Claude {
                 .iter()
                 .map(|call| call.get("tool_use_id")?.as_str())
                 .collect::<Option<Vec<_>>>()?,
-            "PostToolUse" | "PostToolUseFailure" => vec![p.get("tool_use_id")?.as_str()?],
+            // One decision per Bash call (`PreToolUse`), however many times it is delivered: the
+            // mod's verdict and the command hook that follows it carry the same id.
+            "PostToolUse" | "PostToolUseFailure" | "PreToolUse" => vec![p.get("tool_use_id")?.as_str()?],
             _ => return None,
         };
         super::tool_event_identity(self.name(), event, ids)
@@ -140,6 +142,8 @@ impl Adapter for Claude {
             .to_string(),
             // The mod's `turn.step` answer: the calls it yields in the model's place.
             Output::Predict(p) => json!({ "predict": p }).to_string(),
+            // The step goes to the person's routine model (the mod sends it there only when one is set).
+            Output::Routine => json!({ "routine": true }).to_string(),
         })
     }
 

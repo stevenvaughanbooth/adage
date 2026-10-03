@@ -199,21 +199,15 @@ impl Extension for Prefetch {
     }
 
     /// The reflexes whose `predict` grant still holds here ([`predict_grants`]), in the checkout
-    /// this step was asked from ([`predict_root`]).
+    /// the pipeline resolved this step's repository from (`root`).
     fn predict_grants(
         &self,
         repo_key: &str,
+        root: &std::path::Path,
         index: &adage_tracks::Index,
         paths: &adage_store::Paths,
     ) -> Vec<(String, String)> {
-        // The cheapest refusals first: a `TurnStep` is asked before every request the agent makes.
-        if predict_off(paths).exists() {
-            return Vec::new();
-        }
-        match predict_root(repo_key, index, paths) {
-            Some(root) => predict_grants(repo_key, &root, index, paths),
-            None => Vec::new(),
-        }
+        predict_grants(repo_key, root, index, paths)
     }
 }
 
@@ -221,27 +215,6 @@ impl Extension for Prefetch {
 /// is granted. Read at every `TurnStep`, so it takes effect at the next step of a running session.
 pub fn predict_off(paths: &adage_store::Paths) -> std::path::PathBuf {
     paths.root.join("exec").join("predict-off")
-}
-
-#[cfg(test)]
-thread_local! {
-    /// The working directory a test's in-process `TurnStep` is asked from: the process's own is
-    /// shared by every test thread.
-    static TEST_CWD: std::cell::RefCell<Option<std::path::PathBuf>> = const { std::cell::RefCell::new(None) };
-}
-
-/// The checkout a `TurnStep` was asked from. The pipeline does not pass its root to this question,
-/// so it is the repository of the working directory, which is the session's: the mod runs the
-/// binary there, as Claude Code runs its command hooks. A grant is checked against this checkout's
-/// scripts only when it resolves to `repo_key`; otherwise nothing is predicted.
-fn predict_root(repo_key: &str, index: &adage_tracks::Index, paths: &adage_store::Paths) -> Option<std::path::PathBuf> {
-    #[cfg(test)]
-    let cwd = TEST_CWD.with(|c| c.borrow().clone()).or_else(|| std::env::current_dir().ok())?;
-    #[cfg(not(test))]
-    let cwd = std::env::current_dir().ok()?;
-    let root = adage_core::repo::find_root(&cwd)?;
-    let keys: std::collections::BTreeSet<&str> = index.routes.iter().map(|r| r.repo.as_str()).collect();
-    (adage_core::repo::lookup_key(&root, Some(&paths.repo_keys()), &keys)? == repo_key).then_some(root)
 }
 
 /// The `(track, route)` pairs a `TurnStep` may predict in the checkout at `root` (plan §2.2 item
@@ -1583,6 +1556,7 @@ mod prediction_tests {
                 basis: Value::Null,
                 auto: false,
                 terms: Some(terms),
+                via: None,
             });
             store.save(&approvals::path(&self.paths.root)).unwrap();
             std::fs::write(self.paths.root.join("policy.toml"), "[exec]\nmax_level = \"E2\"\n").unwrap();
@@ -2753,6 +2727,7 @@ def test_latlong_invalid(invalid_latlong):
             basis: Value::Null,
             auto: false,
             terms,
+            via: None,
         };
         store.approvals.retain(|x| !(x.route == a.route && x.key.mode == a.key.mode && x.key.level == a.key.level));
         store.approvals.insert(0, a);
@@ -2760,13 +2735,9 @@ def test_latlong_invalid(invalid_latlong):
         std::fs::write(f.paths.root.join("policy.toml"), "[exec]\nmax_level = \"E2\"\n").unwrap();
     }
 
-    fn asked_from(dir: Option<&std::path::Path>) {
-        TEST_CWD.with(|c| *c.borrow_mut() = dir.map(std::path::Path::to_path_buf));
-    }
-
     /// T-C2-03 (the hook half): `predict_grants` names a granted reflex only while its key matches
     /// what the call would run now, policy permits it, the machine switch is on, the step is asked
-    /// from this repository, and no execute grant already acts on the route.
+    /// for this repository, and no execute grant already acts on the route.
     #[test]
     fn predict_grants_name_only_current_permitted_switched_on_grants() {
         let mut f = Fixture::new();
@@ -2775,19 +2746,15 @@ def test_latlong_invalid(invalid_latlong):
         grant_predict(&f, 1);
         let want = vec![("fixture/finish".to_string(), "regenerate-registry".to_string())];
         assert_eq!(predict_grants("fixture", &f.root, &f.index, &f.paths), want);
-        asked_from(Some(&f.root.join("src")));
-        assert_eq!(PREFETCH.predict_grants("fixture", &f.index, &f.paths), want, "asked from inside the checkout");
-        asked_from(Some(&f.paths.root));
-        assert!(PREFETCH.predict_grants("fixture", &f.index, &f.paths).is_empty(), "asked from elsewhere");
-        asked_from(Some(&f.root));
-        assert!(PREFETCH.predict_grants("other", &f.index, &f.paths).is_empty(), "another repository's key");
+        assert_eq!(PREFETCH.predict_grants("fixture", &f.root, &f.index, &f.paths), want, "through the extension");
+        assert!(PREFETCH.predict_grants("other", &f.root, &f.index, &f.paths).is_empty(), "another repository's key");
         // The machine switch.
         std::fs::create_dir_all(f.paths.root.join("exec")).unwrap();
         std::fs::write(predict_off(&f.paths), "x").unwrap();
-        assert!(PREFETCH.predict_grants("fixture", &f.index, &f.paths).is_empty());
+        assert!(PREFETCH.predict_grants("fixture", &f.root, &f.index, &f.paths).is_empty());
         assert!(predict_grants("fixture", &f.root, &f.index, &f.paths).is_empty());
         std::fs::remove_file(predict_off(&f.paths)).unwrap();
-        assert_eq!(PREFETCH.predict_grants("fixture", &f.index, &f.paths), want);
+        assert_eq!(PREFETCH.predict_grants("fixture", &f.root, &f.index, &f.paths), want);
         // Policy.
         let policy = f.paths.root.join("policy.toml");
         std::fs::write(&policy, "[exec]\nmax_level = \"E1\"\n").unwrap();
@@ -2816,7 +2783,6 @@ def test_latlong_invalid(invalid_latlong):
             Some(terms),
         );
         assert!(predict_grants("fixture", &f.root, &f.index, &f.paths).is_empty(), "two paths would make the call");
-        asked_from(None);
     }
 
     /// T-C1-10 under adage-exec: the hook pipeline with this extension and a person's predict
@@ -2828,7 +2794,6 @@ def test_latlong_invalid(invalid_latlong):
         with_obligation(&mut f);
         treated(&f, Arm::Treated);
         grant_predict(&f, 1);
-        asked_from(Some(&f.root));
         let step = |index: u32, ending: bool| {
             hook(
                 &f,
@@ -2854,7 +2819,6 @@ def test_latlong_invalid(invalid_latlong):
         assert!(crate::journal::list(&f.paths.root).unwrap().is_empty(), "adage-exec ran nothing");
         let spooled = adage_store::spool::read_all::<Value>(&f.paths.spool("fixture-session")).unwrap();
         assert!(spooled.iter().all(|r| r.get("exec").is_none()), "no execution was attempted: {spooled:?}");
-        asked_from(None);
     }
 
     /// A predict grant alone never runs anything in the hook: not the learned action, not a

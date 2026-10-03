@@ -112,6 +112,15 @@ fn track() -> Track {
                 Effect::Verify,
                 Strength::Inhibit,
             ),
+            // A skill at a prompt that names a commit (D3): no other scenario's prompt names one.
+            route(
+                "commit-review",
+                Trigger::Prompt { span: SpanKind::Sha },
+                Step::Skill { skill: "commit-review".into(), args: None },
+                vec![],
+                Effect::Observe,
+                Strength::Prime,
+            ),
             route(
                 "dead-pytest",
                 Trigger::AfterFailure { command: pytest_key, signature: "ACME_ENV is not set".into() },
@@ -243,6 +252,15 @@ fn claude_scenario(w: &World) -> Vec<(&'static str, Value)> {
                 json!({ "tool_calls": [{ "tool_name": "Bash", "tool_input": { "command": "./scripts/wi-lookup W-2042 --json" }, "tool_response": { "stdout": lookup_out, "stderr": "" } }] }),
             ),
         ),
+        // The same call about to run (one decision per `tool_use_id`): no environment is bound
+        // here, so nothing is rewritten and nothing is said.
+        (
+            "PreToolUse",
+            with(
+                "PreToolUse",
+                json!({ "tool_name": "Bash", "tool_use_id": "toolu_pytest_1", "tool_input": { "command": "python3 -m pytest tests" } }),
+            ),
+        ),
         (
             "PostToolUseFailure",
             with(
@@ -265,6 +283,11 @@ fn claude_scenario(w: &World) -> Vec<(&'static str, Value)> {
         ),
         ("Stop", with("Stop", json!({ "stop_hook_active": false }))),
         ("Stop", with("Stop", json!({ "stop_hook_active": false }))),
+        // A prompt naming a commit: the `skill` reflex says which skill this repository uses here.
+        (
+            "UserPromptSubmit",
+            with("UserPromptSubmit", json!({ "prompt": "Now review commit 3f2a9c1 before the release." })),
+        ),
         ("SessionEnd", with("SessionEnd", json!({ "reason": "other" }))),
     ]
 }
@@ -319,6 +342,150 @@ fn claude_code_golden() {
     assert!(t.contains("./scripts/wi-lookup W-2042 --json"));
     assert!(t.contains("\"decision\":\"block\""));
     assert_no_injection(&t);
+}
+
+/// The world's checkout with U11 in service and the project's environment bound
+/// (`.venv/bin/python`, pytest installed): what a `PreToolUse` rewrite needs.
+fn bind_u11(w: &World) -> String {
+    let paths = adage_store::Paths::at(w.p("adage"));
+    let root = w.p("acme");
+    let key = adage_core::repo::repo_key_cached(&root, &paths.repo_keys());
+    let origin = Origin::Instinct {
+        pack: "core".into(),
+        version: "0.1.0".into(),
+        instinct: "U11".into(),
+        ecosystem: None,
+        declared: None,
+    };
+    let mut u11 = route(
+        "python-env",
+        Trigger::AfterFailure { command: "exec python -m pytest".into(), signature: "No module".into() },
+        Step::Run { command: ".venv/bin/python -m pytest".into() },
+        vec![],
+        Effect::Verify,
+        Strength::Prime,
+    );
+    u11.evidence.origin = Some(origin);
+    let index = Index {
+        generation: "u11".into(),
+        routes: vec![index::IndexedRoute {
+            repo: key.clone(),
+            track: "acme/instincts".into(),
+            version: "0.1.0".into(),
+            exec: None,
+            route: u11,
+        }],
+        ..Default::default()
+    };
+    index.write_atomic(&paths.index()).unwrap();
+    std::fs::create_dir_all(root.join(".venv/bin")).unwrap();
+    std::fs::write(root.join(".venv/bin/python"), "").unwrap();
+    std::fs::write(root.join(".venv/pyvenv.cfg"), "version = 3.12.4\n").unwrap();
+    let binding = adage_pack::binding::binding_path(&paths.tracks(), &key);
+    std::fs::create_dir_all(binding.parent().unwrap()).unwrap();
+    let b = json!({ "root": root, "declared": "", "env": { "interpreter": ".venv/bin/python", "pytest": true, "modules": [] }, "packs": "" });
+    std::fs::write(binding, b.to_string()).unwrap();
+    key
+}
+
+fn pretool_records(w: &World, session: &str) -> Vec<Value> {
+    let paths = adage_store::Paths::at(w.p("adage"));
+    adage_store::spool::read_all::<Value>(&paths.spool(session))
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|r| r["kind"] == "pretool")
+        .collect()
+}
+
+/// T-A1-02 and T-A1-04 through the binary: the same `PreToolUse` delivered twice is decided once
+/// (the rewrite, then nothing) with one spool record; a payload with no `tool_use_id` is decided
+/// every time, as before.
+#[test]
+fn a_bash_call_is_decided_once_per_tool_use_id() {
+    let w = World::new();
+    bind_u11(&w);
+    let call = |id: Option<&str>| {
+        let mut p = json!({ "session_id": "s-pre", "cwd": w.repo(), "hook_event_name": "PreToolUse", "tool_name": "Bash",
+                            "tool_input": { "command": "python -m pytest tests -q" } });
+        if let Some(id) = id {
+            p["tool_use_id"] = json!(id);
+        }
+        w.hook("claude", "PreToolUse", &p)
+    };
+    let first: Value = serde_json::from_str(&call(Some("t1"))).expect("the rewrite");
+    assert_eq!(first["hookSpecificOutput"]["updatedInput"]["command"], ".venv/bin/python -m pytest tests -q");
+    assert_eq!(call(Some("t1")), "", "decided already");
+    let recs = pretool_records(&w, "s-pre");
+    assert_eq!(recs.len(), 1, "{recs:#?}");
+    assert_eq!(recs[0]["checked_by"], "planner");
+    assert!(recs[0]["duration_us"].is_u64());
+    assert!(!call(None).is_empty() && !call(None).is_empty(), "no id: decided each time");
+    assert_eq!(pretool_records(&w, "s-pre").len(), 3);
+}
+
+/// T-C5-01 through both binaries: `Standing` answers the same text for the session, records
+/// nothing in the spool, and the first prompt then leaves out the reflex it carries; a control
+/// session's text is empty.
+#[test]
+fn standing_is_answered_once_per_session_and_spools_nothing() {
+    let w = World::new();
+    let ask = |session: &str, env: &[(&str, &str)]| {
+        let p = json!({ "session_id": session, "cwd": w.repo(), "hook_event_name": "Standing" });
+        let (out, err, code) = w.run(&["hook", "claude", "Standing"], p.to_string().as_bytes(), env);
+        assert_eq!((err.as_str(), code), ("", 0));
+        serde_json::from_str::<Value>(&out).unwrap()
+    };
+    let first = ask("s-standing", &[]);
+    let text = first["standing"].as_str().unwrap();
+    assert!(text.contains("route=\"dead-unittest\"") && text.len() <= 2_000, "{text}");
+    assert_eq!(ask("s-standing", &[]), first);
+    let paths = adage_store::Paths::at(w.p("adage"));
+    assert!(!paths.spool("s-standing").exists(), "Standing records nothing");
+    let prompt = json!({ "session_id": "s-standing", "cwd": w.repo(), "hook_event_name": "UserPromptSubmit", "prompt": "Pick up W-2042" });
+    let out = w.hook("claude", "UserPromptSubmit", &prompt);
+    assert!(out.contains("wi-lookup W-2042") && !out.contains("dead-unittest"), "{out}");
+    let control = ask("s-control", &[("ADAGE_ARM", "control")]);
+    assert_eq!((control["standing"].as_str(), control["environment"].as_str()), (Some(""), Some("")));
+    assert!(control["compact"].as_str().is_some_and(|c| !c.is_empty()));
+}
+
+/// T-A2-03: `adage doctor --json` reports the hooks' p95 from the spools' `duration_us`, with the
+/// structured `action` beside the fix; the measurement is reused for a few seconds.
+#[test]
+fn doctor_reports_the_hook_latency_p95() {
+    if exec_parity() {
+        return; // `doctor` is adage's
+    }
+    let w = World::new();
+    let paths = adage_store::Paths::at(w.p("adage"));
+    let seed = |session: &str, us: u64, n: usize| {
+        for _ in 0..n {
+            let r = json!({ "ts": 1, "event": "PostToolBatch", "kind": "batch", "arm": "treated", "repo": "acme",
+                            "decision": { "directives": [], "would_have": [], "judgements": [], "observed": [] }, "duration_us": us });
+            adage_store::spool::append(&paths.spool(session), &r).unwrap();
+        }
+    };
+    let latency = || {
+        let (out, _, _) = w.run(&["doctor", "--json"], b"", &[]);
+        let v: Value = serde_json::from_str(&out).unwrap();
+        v["checks"].as_array().unwrap().iter().find(|c| c["check"] == "hook latency").cloned().expect("a latency check")
+    };
+    let c = latency();
+    assert_eq!((c["status"].as_str(), c["detail"].as_str()), (Some("pass"), Some("too few hooks to measure")));
+    let cache = paths.cache().join("hook-latency.json");
+    std::fs::remove_file(&cache).ok();
+    seed("s-slow", 12_000, 25);
+    let c = latency();
+    assert_eq!(c["status"], "warn", "{c}");
+    assert!(c["detail"].as_str().unwrap().starts_with("p95 12.0 ms over the last 25 tool batches"), "{c}");
+    assert!(c["fix"].is_string() && c["action"] == json!({ "kind": "manual" }), "{c}");
+    // Within the cache's lifetime the spools are not read again.
+    let at = std::fs::metadata(&cache).unwrap().modified().unwrap();
+    seed("s-slower", 30_000, 200);
+    assert_eq!(latency()["status"], "warn");
+    assert_eq!(std::fs::metadata(&cache).unwrap().modified().unwrap(), at, "the cached measurement");
+    std::fs::remove_file(&cache).unwrap();
+    assert_eq!(latency()["status"], "fail");
 }
 
 /// Text from tool output or prompts must never reach the agent except through validated slots.

@@ -24,10 +24,12 @@
 //! | `batch_no_match` | a lookup, a finish line and three context routes | a batch of `ls` (the fast path) |
 //! | `batch_context_fires` | the same | a batch editing `registry/a.csv` then running `make gen`: a context route fires |
 //! | `turn_step_nothing_pending` | the same | a `TurnStep` (the Claude Code mod's step boundary) in a fresh session: nothing directed, so the fast path; compare with `batch_no_match` |
+//! | `pretool_no_match` | the same | a `PreToolUse` for `ls -la` with a `tool_use_id`: no Python program named, so nothing is read (the identity ring is never consulted) |
+//! | `turn_step_predicts` | the same, `make gen` granted `predict` (`approvals.json`, `policy.toml` at E2) | a `TurnStep` in a session whose state holds the pending `make gen` directive: it predicts the call. Only when every binary given is `adage-exec` (`adage hook` holds no grants, so it never predicts) |
 //!
-//! `turn_step_predicts` (a pending directive under a seeded `predict` grant, run against
-//! `adage-exec`) waits for the grant itself (plan chunk C2): `adage hook` has no extension, so it
-//! never predicts, and this example cannot inject one into a spawned binary.
+//! The paired comparisons the plan's budgets are stated in: `turn_step_nothing_pending` against
+//! `batch_no_match`, and `pretool_no_match` of two builds; `turn_step_predicts` against its 10 ms
+//! bound.
 
 use adage_core::spans::SpanKind;
 use adage_core::Effect;
@@ -137,14 +139,30 @@ fn time(
     extra: serde_json::Value,
     runs: usize,
 ) -> (serde_json::Value, String) {
+    time_with(bins, home, repo, event, extra, runs, &|_| {})
+}
+
+/// [`time`], with `setup` run (untimed) before each spawn for the session it is given: a scenario
+/// that needs a session state in place.
+fn time_with(
+    bins: &[&str],
+    home: &Path,
+    repo: &Path,
+    event: &str,
+    extra: serde_json::Value,
+    runs: usize,
+    setup: &dyn Fn(&str),
+) -> (serde_json::Value, String) {
     let mut ms = vec![Vec::with_capacity(runs); bins.len()];
     let mut last = vec![String::new(); bins.len()];
     for i in 0..runs + 20 {
-        let mut payload = serde_json::json!({ "session_id": format!("bench-{i}"), "cwd": repo });
+        let session = format!("bench-{i}");
+        let mut payload = serde_json::json!({ "session_id": session, "cwd": repo });
         payload.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
         let payload = payload.to_string();
         for k in 0..bins.len() {
             let b = if i % 2 == 0 { k } else { bins.len() - 1 - k };
+            setup(&session);
             let t = Instant::now();
             let mut c = Command::new(bins[b])
                 .args(["hook", "claude", event])
@@ -176,6 +194,49 @@ fn time(
     let all: serde_json::Map<String, serde_json::Value> =
         bins.iter().zip(ms.iter_mut()).map(|(b, m)| (b.to_string(), stats(m))).collect();
     (serde_json::Value::Object(all), last.pop().unwrap_or_default())
+}
+
+/// `turn_step_predicts`: a person's `predict` grant on `finish-line-gen` (`make gen`), written as
+/// `adage review delegate … --predict` writes it (the key adage-exec plans now, at E2 under a
+/// policy that allows E2), and a session state holding its pending directive before each step.
+fn turn_step_predicts(
+    bins: &[&str],
+    home: &Path,
+    repo: &Path,
+    step: serde_json::Value,
+    runs: usize,
+) -> (serde_json::Value, String) {
+    use adage_exec::approvals::{self, Approval, Store};
+    let paths = adage_store::Paths::at(home);
+    let index = Index::try_load(&paths.index()).expect("the bench index");
+    let ir = index.routes.iter().find(|r| r.route.id == "finish-line-gen").expect("the finish line");
+    let req = adage_exec::route::plan_predict(ir, repo, &paths.tracks()).expect("a predict plan").request;
+    let key = approvals::ApprovalKey::for_request(&req, &ir.repo);
+    let approval: Approval = serde_json::from_value(serde_json::json!({
+        "key": key, "route": format!("{}/{}", ir.track, ir.route.id), "approved_on": "bench", "basis": null
+    }))
+    .unwrap();
+    let file = approvals::path(&paths.root);
+    let mut store = Store::load(&file).unwrap();
+    store.approve(approval);
+    store.save(&file).unwrap();
+    std::fs::write(paths.root.join("policy.toml"), "[exec]\nmax_level = \"E2\"\n").unwrap();
+    let table = adage_core::CommandTable::load();
+    let pending = adage_runtime::Pending {
+        route: ir.route.id.clone(),
+        expect_key: adage_runtime::command_key("make gen", &table),
+        expect_head: String::new(),
+        batches_left: 3,
+        command: "make gen".into(),
+    };
+    let seed = |session: &str| {
+        adage_store::state::update::<adage_runtime::SessionState, _>(&paths.state(session), |st| {
+            st.arm = Some(adage_runtime::Arm::Treated);
+            st.pending = vec![pending.clone()];
+        })
+        .unwrap();
+    };
+    time_with(bins, home, repo, "TurnStep", step, runs, &seed)
 }
 
 fn main() {
@@ -256,9 +317,19 @@ fn main() {
     assert!(last.trim().is_empty(), "{last}");
     out.insert("batch_no_match".into(), r);
     let step = serde_json::json!({ "hook_event_name": "TurnStep", "turn_id": "bench", "index": 1, "model": "claude-bench", "ending": true });
-    let (r, last) = time(bin, &home, &repo, "TurnStep", step, runs);
+    let (r, last) = time(bin, &home, &repo, "TurnStep", step.clone(), runs);
     assert!(last.trim().is_empty(), "nothing is directed, so nothing is predicted: {last}");
     out.insert("turn_step_nothing_pending".into(), r);
+    let ls = serde_json::json!({ "hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_use_id": "toolu_bench",
+                                 "tool_input": { "command": "ls -la" } });
+    let (r, last) = time(bin, &home, &repo, "PreToolUse", ls, runs);
+    assert!(last.trim().is_empty(), "{last}");
+    out.insert("pretool_no_match".into(), r);
+    if bin.iter().all(|b| Path::new(b).file_stem().is_some_and(|n| n == "adage-exec")) {
+        let (r, last) = turn_step_predicts(bin, &home, &repo, step, runs);
+        assert!(last.contains(r#""command":"make gen""#), "the granted step is predicted: {last}");
+        out.insert("turn_step_predicts".into(), r);
+    }
     let file = repo.join("registry/a.csv");
     let fires = serde_json::json!({ "tool_calls": [
         call("Edit", serde_json::json!({ "file_path": file, "old_string": "a", "new_string": "b" })),

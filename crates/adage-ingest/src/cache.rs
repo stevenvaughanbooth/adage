@@ -69,8 +69,10 @@ pub enum Read {
 /// a parse records, so an entry written before is never read as if it had it, even by a build
 /// whose executable happens to match (format 2: per-prompt import, `Session::prompts` and
 /// `StepObs::prompt`, Track G G0; format 3: `Session::ending`, the outcome proxies;
-/// format 4: native root-cwd provenance for direct-pytest verbosity pooling).
-pub const SESSION_FORMAT: u32 = 4;
+/// format 4: native root-cwd provenance for direct-pytest verbosity pooling; format 5: `Call.by`
+/// from the transcript's `adage_` tool-use ids, the calls the Claude Code mod made in the agent's
+/// place).
+pub const SESSION_FORMAT: u32 = 5;
 
 /// The identity of this parser: a cache written by any other build is not trusted.
 fn parser_id() -> String {

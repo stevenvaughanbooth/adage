@@ -46,22 +46,35 @@ pub fn stop_gate_failed(command: &str, exit: Option<i32>, sentences: &[String]) 
     finish_line(&s)
 }
 
+/// The skill directive's sentence (plan §2.3.1), around the skill's name: what
+/// `adage_runtime::render::route_text` writes for a `skill` step and [`named`] reads back.
+pub const SKILL_LEAD: &str = "In this repository the `";
+pub const SKILL_TAIL: &str = "` skill is used at this point";
+
+/// The skill directive's sentence for `skill` (already checked as a safe skill name).
+pub fn skill_sentence(skill: &str) -> String {
+    format!("{SKILL_LEAD}{skill}{SKILL_TAIL}")
+}
+
 /// What a rendered directive body names (Track G §3.2, steering by influence): the commands it
 /// directs or recommends, the runners it says to avoid, and the files it lists. The inverse of
 /// `adage_runtime::render::route_text` and `stop_reason` for every template: a command is an indented line (`  cmd`,
 /// `  1. cmd`) or a backquoted span, avoided runners follow `running ` up to ` fails (`, and files
-/// follow `lists these files: `. Nothing named (a body cut short, a template this does not know)
-/// is an empty result, which a learner treats as naming everything.
+/// follow `lists these files: `, and a skill is the name in the skill sentence ([`SKILL_LEAD`]),
+/// read before the backquote scan so it is never taken for a command. Nothing named (a body cut
+/// short, a template this does not know) is an empty result, which a learner treats as naming
+/// everything.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Named {
     pub commands: Vec<String>,
     pub avoided: Vec<String>,
     pub files: Vec<String>,
+    pub skills: Vec<String>,
 }
 
 impl Named {
     pub fn is_empty(&self) -> bool {
-        self.commands.is_empty() && self.avoided.is_empty() && self.files.is_empty()
+        self.commands.is_empty() && self.avoided.is_empty() && self.files.is_empty() && self.skills.is_empty()
     }
 }
 
@@ -69,6 +82,17 @@ impl Named {
 pub fn named(body: &str) -> Named {
     let mut n = Named::default();
     for line in body.lines() {
+        let skill = line
+            .split_once(SKILL_LEAD)
+            .and_then(|(_, after)| after.split_once(SKILL_TAIL))
+            .map(|(name, _)| name.trim())
+            .filter(|name| !name.is_empty() && !name.contains('`'));
+        if let Some(name) = skill {
+            // The skill sentence is the line's only backquoted span: nothing else on it is a
+            // command.
+            n.skills.push(name.to_string());
+            continue;
+        }
         if let Some(rest) = line.strip_prefix("  ") {
             // The generic template ends its command line with the exit clause.
             let rest = rest.split(" Ignore this if ").next().unwrap_or(rest).trim();
@@ -100,5 +124,6 @@ pub fn named(body: &str) -> Named {
         }
     }
     n.commands.dedup();
+    n.skills.dedup();
     n
 }

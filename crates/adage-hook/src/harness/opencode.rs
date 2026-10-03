@@ -74,7 +74,7 @@ impl Adapter for OpenCode {
             Output::Context(text) | Output::SessionContext { context: text, .. } => {
                 json!({ "context": text }).to_string()
             }
-            Output::Notice(_) | Output::Rewrite { .. } | Output::Predict(_) => return None,
+            Output::Notice(_) | Output::Rewrite { .. } | Output::Predict(_) | Output::Routine => return None,
         })
     }
 }

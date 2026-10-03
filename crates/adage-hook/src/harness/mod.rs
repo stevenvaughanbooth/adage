@@ -53,6 +53,10 @@ pub enum Output {
     /// At a step boundary (`TurnStep`): the calls Adage makes in the model's place (the Claude
     /// Code mod's `turn.step`). Harnesses without the event render nothing.
     Predict(Prediction),
+    /// At a step boundary: the model is about to be asked to do what a delivered directive already
+    /// says, so the step may go to the person's routine model (the mod's `routine_model`).
+    /// Harnesses without the event render nothing.
+    Routine,
 }
 
 /// Who is calling: the session and working directory every native payload must carry.
@@ -203,5 +207,21 @@ mod identity_tests {
         assert!(a.event_identity("PostToolBatch", &batch(&[])).is_none());
         assert!(adapter("codex").unwrap().event_identity("PostToolUse", &json!({"tool_use_id": "one"})).is_some());
         assert!(adapter("codex").unwrap().event_identity("PostToolUse", &json!({"id": "invented"})).is_none());
+    }
+
+    /// T-A1-01: a Bash call about to run has an identity of its own (one decision per call, the
+    /// mod's and the command hook's alike); without a usable `tool_use_id` it has none.
+    #[test]
+    fn a_pretool_call_is_identified_by_its_tool_use_id() {
+        let a = adapter("claude").unwrap();
+        let one = a.event_identity("PreToolUse", &json!({"tool_use_id": "t1"}));
+        assert!(one.is_some());
+        assert_eq!(one, a.event_identity("PreToolUse", &json!({"tool_use_id": "t1", "dry_run": true})));
+        assert_ne!(one, a.event_identity("PostToolUse", &json!({"tool_use_id": "t1"})), "another event");
+        assert_ne!(one, a.event_identity("PreToolUse", &json!({"tool_use_id": "t2"})));
+        assert!(a.event_identity("PreToolUse", &json!({})).is_none());
+        assert!(a.event_identity("PreToolUse", &json!({"tool_use_id": ""})).is_none());
+        assert!(a.event_identity("PreToolUse", &json!({"tool_use_id": "x".repeat(257)})).is_none());
+        assert!(a.event_identity("PreToolUse", &json!({"tool_use_id": "x".repeat(256)})).is_some());
     }
 }

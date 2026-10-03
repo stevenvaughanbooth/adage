@@ -177,6 +177,62 @@ pub struct SessionState {
     /// Read-batch directives whose files are bound ([`PendingReads`]).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub reads: Vec<PendingReads>,
+    /// The `PreToolUse` calls already decided this session, by a 64-bit hash of their harness
+    /// identity, oldest first and at most [`SEEN_PRETOOL`]: the Claude Code mod and the command
+    /// hook both see a Bash call, and only the first decides it ([`SessionState::see_pretool`]).
+    /// Never rebuilt from the spool: a rebuilt state starts empty, which can only decide again.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub seen_pretool: Vec<u64>,
+    /// The standing text the Claude Code mod placed in the session's cached system-prompt
+    /// section (the `Standing` event; the plan's `has_standing`): answered the same for the rest of
+    /// the session, and the first prompt does not announce its routes again.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub standing: Option<Standing>,
+}
+
+/// At most this many `PreToolUse` identities are kept per session ([`SessionState::seen_pretool`]).
+pub const SEEN_PRETOOL: usize = 64;
+
+impl SessionState {
+    /// Whether the `PreToolUse` call with this identity hash was decided this session.
+    pub fn has_seen_pretool(&self, id: u64) -> bool {
+        self.seen_pretool.contains(&id)
+    }
+
+    /// Record that the `PreToolUse` call with this identity hash is decided now: `false` when it
+    /// already was (the caller then decides nothing). The oldest identity makes room past
+    /// [`SEEN_PRETOOL`].
+    pub fn see_pretool(&mut self, id: u64) -> bool {
+        if self.has_seen_pretool(id) {
+            return false;
+        }
+        if self.seen_pretool.len() >= SEEN_PRETOOL {
+            let excess = self.seen_pretool.len() + 1 - SEEN_PRETOOL;
+            self.seen_pretool.drain(..excess);
+        }
+        self.seen_pretool.push(id);
+        true
+    }
+
+    /// The routes the agent was told this session: the directives emitted, and the standing
+    /// text's.
+    fn told(&self) -> impl Iterator<Item = &String> {
+        self.emitted.iter().chain(self.standing.iter().flat_map(|s| s.routes.iter()))
+    }
+}
+
+/// What a session's standing text is (the Claude Code mod's `Standing` event, its architecture
+/// §3.6): fixed for the session once answered.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Standing {
+    /// The repository's standing reflexes, each in its directive wrapper, at most
+    /// [`render::MAX_STANDING`] bytes ([`standing`]).
+    pub standing: String,
+    /// One sentence on the project's environment, when its instincts bound one.
+    pub environment: String,
+    /// The routes whose text `standing` carries: the first prompt does not announce them again.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub routes: Vec<String>,
 }
 
 /// At most this many test names are kept per session ([`SessionState::new_tests`]).
@@ -331,6 +387,15 @@ pub struct Prediction {
     pub calls: Vec<PredictedCall>,
 }
 
+/// A step routed to the person's routine model (the Claude Code mod's `routine_model`, its
+/// architecture §3.5): the model is about to be asked to do what a delivered `fire` directive
+/// already says, and no `predict` grant lets Adage make the call itself.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Routing {
+    pub route: String,
+    pub track: String,
+}
+
 /// A learned dead end replaced before it runs (architecture §3.4 of the Claude Code mod): the
 /// call meets an `avoid` route in service at full strength whose `instead` is a fixed command,
 /// and the mod runs `command` in the call's place ([`substitution`]).
@@ -379,6 +444,13 @@ pub struct Decision {
     /// The replacement it would make, recorded in both arms.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub would_substitute: Option<Substitution>,
+    /// The step goes to the routine model (`TurnStep`, only when the mod says one is set; empty
+    /// in the control arm and in observe mode).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub routine: Option<Routing>,
+    /// The routing it would make, recorded in both arms.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub would_route: Option<Routing>,
 }
 
 /// Embeds a raw prompt: `(model id, unit vector)`, or `None` when no model is available. Called
@@ -432,10 +504,18 @@ pub struct Policy {
     pub predict_grants: Vec<(String, String)>,
     /// At most this many predicted steps per session.
     pub predict_cap: u32,
+    /// Skills a `skill` step may invoke at a `TurnStep`, by name (architecture §3.11): each one
+    /// `adage train` recorded as inert in a pack a person accepted here, and only while the person
+    /// turned `skills.invoke` on. The hook fills it (`adage_hook::skill::invocable`); empty, no
+    /// skill is ever invoked, whatever the grants.
+    pub invoke_skills: Vec<String>,
     /// The mod's observe mode (`ADAGE_MOD_OBSERVE`): this decision is recorded as the control arm
     /// records it (what would have been predicted or substituted, and nothing done), while the
     /// session keeps its arm for every other event.
     pub observe: bool,
+    /// The person set a routine model (the mod's `routine_model`, a `config.toml` key it reads):
+    /// a `TurnStep` may answer `routine` ([`Decision::routine`]). Unset, no step is ever routed.
+    pub routine: bool,
 }
 
 /// The default of [`Policy::predict_cap`].
@@ -451,7 +531,9 @@ impl Default for Policy {
             exact_keys: false,
             predict_grants: Vec::new(),
             predict_cap: PREDICT_CAP,
+            invoke_skills: Vec::new(),
             observe: false,
+            routine: false,
         }
     }
 }
@@ -644,8 +726,16 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
             // 0. Inhibit first (Design §10.6): the dead ends to announce at the first prompt are chosen
             //    before anything else, so the caps never crowd a warning out, and nothing a
             //    warning contradicts is chosen beside it. They are still emitted last, as before.
+            // Routes the standing text already carries (the mod's cached section) are not said
+            // again.
+            let standing: Vec<&str> = st.standing.iter().flat_map(|s| s.routes.iter().map(String::as_str)).collect();
             let announce: Vec<&IndexedRoute> = if st.prompts == 1 {
-                routes.iter().copied().filter(|r| matches!(r.route.trigger, Trigger::SessionStart)).collect()
+                routes
+                    .iter()
+                    .copied()
+                    .filter(|r| matches!(r.route.trigger, Trigger::SessionStart))
+                    .filter(|r| !standing.contains(&r.route.id.as_str()))
+                    .collect()
             } else {
                 Vec::new()
             };
@@ -865,6 +955,19 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                                     let hit = glob::Pattern::new(paths).map(|g| g.matches(&rel)).unwrap_or(false);
                                     if hit && emit_ok(st, &out, &ir.route.id) {
                                         if let Some(t) = render::route_text(&ir.route, &[]) {
+                                            out.push(directive(ir, t));
+                                        }
+                                    }
+                                    continue;
+                                }
+                                // A skill after an edit (architecture §3.11): said once, judged on
+                                // the agent using it; never an obligation.
+                                if let (Trigger::AfterEdit { paths }, Step::Skill { skill, .. }) =
+                                    (&ir.route.trigger, &ir.route.step)
+                                {
+                                    if hits(paths) && emit_ok(st, &out, &ir.route.id) {
+                                        if let Some(t) = render::route_text(&ir.route, &[]) {
+                                            st.pending.push(pending_skill(ir, skill, ctx));
                                             out.push(directive(ir, t));
                                         }
                                     }
@@ -1132,6 +1235,10 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
             // The main loop's steps only: a subagent's step is its own turn, not the session's.
             if agent.is_none() {
                 predict_step(ctx, &routes, st, &mut d, turn_id, *index, *ending);
+                // A step Adage takes in the model's place sends no request to route.
+                if d.predicted_at.is_none() && *index > 0 {
+                    route_step(ctx, &routes, st, &mut d);
+                }
             }
         }
     }
@@ -1186,13 +1293,7 @@ fn predict_step(
     if st.last_step_predicted.as_ref().is_some_and(|(t, i)| t == turn_id && *i == previous) {
         return;
     }
-    let inhibits: Vec<&Route> = st
-        .emitted
-        .iter()
-        .filter_map(|id| routes.iter().find(|r| &r.route.id == id))
-        .map(|r| &r.route)
-        .filter(|r| matches!(r.step, Step::Avoid { .. }))
-        .collect();
+    let inhibits = told_inhibits(routes, st);
     let eligible = |id: &str, command: Option<&str>| -> Option<&IndexedRoute> {
         let ir = routes.iter().copied().find(|r| r.route.id == id)?;
         let granted = ctx.policy.predict_grants.iter().any(|(t, r)| t == &ir.track && r == id);
@@ -1208,10 +1309,12 @@ fn predict_step(
         let skill = p.expect_key.strip_prefix("control Skill ");
         let Some(ir) = eligible(&p.route, skill.is_none().then_some(p.command.as_str())) else { continue };
         let (kind, call) = match (skill, &ir.route.step) {
-            (Some(_), _) => (
-                PredictionKind::Skill,
-                PredictedCall { tool: "Skill".into(), input: serde_json::json!({ "skill": p.command }) },
-            ),
+            (Some(_), Step::Skill { skill, args }) => match skill_call(ctx, skill, args.as_deref()) {
+                Some(call) => (PredictionKind::Skill, call),
+                None => continue,
+            },
+            // A skill's key on a route that is not a skill step: nothing to invoke.
+            (Some(_), _) => continue,
             (None, Step::Sequence { .. }) => (PredictionKind::Sequence, bash(&p.command)),
             (None, _) => (PredictionKind::Run, bash(&p.command)),
         };
@@ -1262,6 +1365,108 @@ fn predict_step(
     if st.arm != Some(Arm::Control) && !ctx.policy.observe {
         d.predicted = Some(p);
     }
+}
+
+/// The Skill tool call that invokes `skill` (architecture §3.11): only a skill the policy lets a
+/// step invoke ([`Policy::invoke_skills`]: inert, accepted, `skills.invoke` on), with its arguments
+/// when the step has them.
+fn skill_call(ctx: &Ctx, skill: &str, args: Option<&str>) -> Option<PredictedCall> {
+    if !adage_tracks::safe_skill_name(skill) || !ctx.policy.invoke_skills.iter().any(|s| s == skill) {
+        return None;
+    }
+    let mut input = serde_json::json!({ "skill": skill });
+    if let Some(a) = args {
+        input["args"] = serde_json::json!(a);
+    }
+    Some(PredictedCall { tool: "Skill".into(), input })
+}
+
+/// A skill step's follow judgement: the agent uses the skill (the canonical key of a Skill tool
+/// call, [`adage_tracks::skill_key`]). `command` holds the skill's name, what a predicted step
+/// invokes.
+fn pending_skill(ir: &IndexedRoute, skill: &str, ctx: &Ctx) -> Pending {
+    Pending {
+        route: ir.route.id.clone(),
+        expect_key: adage_tracks::skill_key(skill),
+        expect_head: String::new(),
+        batches_left: ctx.params.follow_window,
+        command: skill.to_string(),
+    }
+}
+
+/// The dead ends the agent was told this session ([`SessionState::told`]): nothing they say not to
+/// run is predicted or routed.
+fn told_inhibits<'a>(routes: &[&'a IndexedRoute], st: &SessionState) -> Vec<&'a Route> {
+    st.told()
+        .filter_map(|id| routes.iter().find(|r| &r.route.id == id))
+        .map(|r| &r.route)
+        .filter(|r| matches!(r.step, Step::Avoid { .. }))
+        .collect()
+}
+
+/// A `TurnStep` the model will take ([`Policy::routine`] set, nothing predicted): routine when a
+/// delivered directive at full strength is pending, in play, not avoided by a dead end the agent
+/// was told, and holding no `predict` grant (with one, Adage makes the call instead, or a bound
+/// held it back), so the model is asked to do what the directive already says (the Claude Code
+/// mod's architecture §3.5). The first such directive in delivery order is named. Recorded as
+/// `would_route` in both arms; `routine` only in the treated arm outside observe mode.
+fn route_step(ctx: &Ctx, routes: &[&IndexedRoute], st: &SessionState, d: &mut Decision) {
+    if !ctx.policy.routine {
+        return;
+    }
+    let inhibits = told_inhibits(routes, st);
+    let found = st.pending.iter().find_map(|p| {
+        let ir = routes.iter().copied().find(|r| r.route.id == p.route)?;
+        let granted = ctx.policy.predict_grants.iter().any(|(t, r)| t == &ir.track && r == &p.route);
+        let inhibited = inhibits.iter().any(|inhibit| {
+            interlock::avoids(inhibit, &ir.route)
+                || matches!(&inhibit.step, Step::Avoid { avoid, .. } if !p.command.is_empty() && pattern::directs_avoided(avoid, &p.command))
+        });
+        let fire = adage_tracks::delivered_strength(&ir.route) == Strength::Fire;
+        (fire && !granted && !inhibited && !ir.exec_only())
+            .then(|| Routing { route: ir.route.id.clone(), track: ir.track.clone() })
+    });
+    let Some(r) = found else { return };
+    d.would_route = Some(r.clone());
+    if st.arm != Some(Arm::Control) && !ctx.policy.observe {
+        d.routine = Some(r);
+    }
+}
+
+/// A session's standing text (the Claude Code mod's `Standing` event, its architecture §3.6): the
+/// repository's reflexes said once at a session's start, whatever the task (its dead ends and the
+/// instincts' session-start advice), each in the wrapper and fixed template a directive has,
+/// then one line per procedure card ([`render::card_line`]), in index order, whole items only and
+/// at most [`render::MAX_STANDING`] bytes together. `environment` is the hook's sentence on the
+/// project's environment ([`render::environment_note`]), when one is bound. Deterministic for an
+/// index: the hook keeps the first answer for the session ([`SessionState::standing`]).
+pub fn standing(index: &Index, repo: &str, policy: &Policy, environment: String) -> Standing {
+    let mut items: Vec<(String, Option<String>)> = Vec::new();
+    for ir in index.for_repo(repo).filter(|r| in_play(policy, r)) {
+        if let (Trigger::SessionStart, Some(t)) = (&ir.route.trigger, render::route_text(&ir.route, &[])) {
+            items.push((render::wrap_directive(&directive(ir, t)), Some(ir.route.id.clone())));
+        }
+    }
+    for ir in index.for_repo(repo).filter(|r| in_play(policy, r)) {
+        if let Step::Card { card } = &ir.route.step {
+            if let Some(line) = render::card_line(card) {
+                items.push((render::wrap_directive(&directive(ir, line)), None));
+            }
+        }
+    }
+    let (mut text, mut routes) = (String::new(), Vec::new());
+    for (item, route) in items {
+        let sep = if text.is_empty() { 0 } else { 2 };
+        if text.len() + sep + item.len() > render::MAX_STANDING {
+            continue;
+        }
+        if sep > 0 {
+            text.push_str("\n\n");
+        }
+        text.push_str(&item);
+        routes.extend(route);
+    }
+    Standing { standing: text, environment, routes }
 }
 
 /// The learned replacement for a Bash call about to run, if it is a known dead end here: the
@@ -1364,8 +1569,7 @@ fn retire_reads(ctx: &Ctx, st: &mut SessionState, call: &Call, d: &mut Decision)
 fn approach_lock(routes: &[&IndexedRoute], st: &mut SessionState, out: Vec<Directive>) -> Vec<Directive> {
     let route_of = |id: &str| routes.iter().find(|r| r.route.id == id).map(|r| &r.route);
     let inhibits: Vec<&Route> = st
-        .emitted
-        .iter()
+        .told()
         .chain(out.iter().map(|d| &d.route))
         .filter_map(|id| route_of(id))
         .filter(|r| matches!(r.step, Step::Avoid { .. }))
@@ -1466,8 +1670,8 @@ fn embedding(ctx: &Ctx, text: &str, cache: &mut Option<Option<(String, Vec<f32>)
 }
 
 /// The context routes the newest alphabet event completes ([`CtxNet::walk`]), in index order,
-/// each emitted if `ok` allows: a run step, or a sequence, from its fixed template, with a follow
-/// judgement on its (first) command. No slot is bound and no obligation is made: a context
+/// each emitted if `ok` allows: a run step, a sequence or a skill, from its fixed template, with a
+/// follow judgement on its (first) command or on the skill's use. No slot is bound and no obligation is made: a context
 /// directs fixed commands only (`io::validate`), and never leads to a Stop request.
 fn fire_contexts(
     ctx: &Ctx,
@@ -1486,16 +1690,17 @@ fn fire_contexts(
         if !fired.contains(ir.route.id.as_str()) || !ok(st, out, ir) {
             continue;
         }
-        let first = match &ir.route.step {
-            Step::Run { command } => command,
+        let pending = match &ir.route.step {
+            Step::Run { command } => pending_for(ir, command, ctx),
             Step::Sequence { commands } => match commands.first() {
-                Some(c) => c,
+                Some(c) => pending_for(ir, c, ctx),
                 None => continue,
             },
+            Step::Skill { skill, .. } => pending_skill(ir, skill, ctx),
             _ => continue,
         };
         let Some(t) = render::route_text(&ir.route, &[]) else { continue };
-        st.pending.push(pending_for(ir, first, ctx));
+        st.pending.push(pending);
         out.push(directive(ir, t));
     }
 }
@@ -1598,6 +1803,15 @@ fn bind_prompt_route(
     text: &str,
     ctx: &Ctx,
 ) -> Option<(String, String, String, String)> {
+    if let Step::Skill { skill, .. } = &r.step {
+        // A skill binds nothing; under a prompt trigger the prompt must still carry a span of
+        // its kind. Judged on the agent using the skill.
+        if matches!(&r.trigger, Trigger::Prompt { span } if !spans.iter().any(|x| x.kind == *span)) {
+            return None;
+        }
+        let text = render::route_text(r, &[])?;
+        return Some((text, adage_tracks::skill_key(skill), String::new(), skill.clone()));
+    }
     let Step::Run { command } = &r.step else { return None };
     let mut bound: Vec<(String, String)> = Vec::new();
     let mut toks: Option<Vec<(adage_core::tokens::Token, adage_core::tokens::Mention)>> = None;
@@ -1763,5 +1977,7 @@ pub fn span_kind_label(k: SpanKind) -> &'static str {
     }
 }
 
+#[cfg(test)]
+mod skill_tests;
 #[cfg(test)]
 mod tests;
