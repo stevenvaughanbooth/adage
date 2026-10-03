@@ -33,7 +33,7 @@ fn export_fixture_golden() {
     assert!(read_export(&fixture()).is_some(), "recognised as an export");
     // Decoded as recorded: what is checked out on this machine must not change it.
     let t = CommandTable::load();
-    let cx = Decode { table: &t, locator: &AsRecorded, repo_override: None, subagent: false };
+    let cx = Decode { table: t, locator: &AsRecorded, repo_override: None, subagent: false };
     let s = read_trace(&fixture(), &cx).expect("a usable session");
     let mut got = format!(
         "id {}\nrepo {}\nroot {}\nmodel {:?}\nday {}\nprompt {:?}\nsteered {}\ndirected {:?}\n",
@@ -80,13 +80,13 @@ fn subagents_promptless_and_hostile_exports_yield_nothing_or_stay_bounded() {
     let t = CommandTable::load();
     let mut v: Value = serde_json::from_str(&std::fs::read_to_string(fixture()).unwrap()).unwrap();
     v["info"]["parentID"] = json!("ses_parent");
-    assert!(parse_export(&v, &t, None).is_none(), "sub-agent sessions are skipped");
+    assert!(parse_export(&v, t, None).is_none(), "sub-agent sessions are skipped");
     let promptless = json!({ "info": { "id": "s", "directory": "/x" }, "messages": [
         { "info": { "role": "user" }, "parts": [{ "type": "text", "text": "Adage finish-line check: run make gen", "synthetic": false }] }
     ] });
-    assert!(parse_export(&promptless, &t, None).is_none(), "Adage's own text is never a prompt");
+    assert!(parse_export(&promptless, t, None).is_none(), "Adage's own text is never a prompt");
     let hostile = json!({ "info": { "id": 5, "directory": [] }, "messages": "no" });
-    assert!(parse_export(&hostile, &t, None).is_none());
+    assert!(parse_export(&hostile, t, None).is_none());
     let weird = json!({ "info": { "id": "s", "directory": "/x", "time": { "created": "soon" } }, "messages": [
         { "info": { "role": "user" }, "parts": [{ "type": "text", "text": "do W-1" }] },
         { "info": { "role": "assistant" }, "parts": [
@@ -95,7 +95,7 @@ fn subagents_promptless_and_hostile_exports_yield_nothing_or_stay_bounded() {
             { "type": "tool", "tool": "bash", "state": null }
         ] }
     ] });
-    let s = parse_export(&weird, &t, None).expect("parses what it can");
+    let s = parse_export(&weird, t, None).expect("parses what it can");
     assert!(s.steps.len() <= 2 + 64);
 }
 

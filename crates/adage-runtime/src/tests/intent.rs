@@ -2,7 +2,7 @@
 
 use super::*;
 
-fn intent_fixture(model: &str, threshold: f32) -> (tempfile::TempDir, Index, CommandTable) {
+fn intent_fixture(model: &str, threshold: f32) -> (tempfile::TempDir, Index, &'static CommandTable) {
     let (dir, index, table) = fixture();
     let mut routes: Vec<Route> = index.routes.iter().map(|r| r.route.clone()).collect();
     let centroid = adage_intent::quantize(&adage_intent::unit(vec![1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]));
@@ -39,7 +39,7 @@ fn intent_route_fires_on_a_matching_prompt_only() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: Some(&fake_embed),
         params: Default::default(),
         policy: Default::default(),
@@ -60,7 +60,7 @@ fn intent_route_fires_on_a_matching_prompt_only() {
 }
 
 /// A card whose family's one prompt points along the first axis, at `threshold`.
-fn card_fixture(threshold: f32) -> (tempfile::TempDir, Index, CommandTable) {
+fn card_fixture(threshold: f32) -> (tempfile::TempDir, Index, &'static CommandTable) {
     use adage_tracks::card::{Card, CardFile};
     let (dir, index, table) = fixture();
     let mut routes: Vec<Route> = index.routes.iter().map(|r| r.route.clone()).collect();
@@ -114,7 +114,7 @@ fn a_card_is_said_once_at_a_close_prompt_or_at_the_first_edit_of_its_files_when_
             index: &index,
             repo: "acme".into(),
             root: dir.path(),
-            table: &table,
+            table,
             embed: Some(&fake_embed),
             params: Default::default(),
             policy: Default::default(),
@@ -159,7 +159,7 @@ fn a_card_names_the_test_command_of_an_execution_certified_verification_unless_t
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: Some(&fake_embed),
         params: Default::default(),
         policy: Default::default(),
@@ -180,7 +180,7 @@ fn a_card_names_the_test_command_of_an_execution_certified_verification_unless_t
         index: &index2,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: Some(&fake_embed),
         params: Default::default(),
         policy: Default::default(),
@@ -207,7 +207,7 @@ fn a_card_says_where_its_files_stand_now_instead_of_quoting_an_exemplar_unless_t
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: Some(&fake_embed),
         params: Default::default(),
         policy: Default::default(),
@@ -236,7 +236,7 @@ fn edits_that_add_tests_are_remembered_for_the_receipt() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -301,7 +301,7 @@ fn a_waiting_card_expires_at_the_next_prompt() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: Some(&fake_embed),
         params: Default::default(),
         policy: Default::default(),
@@ -330,7 +330,7 @@ fn intent_routes_fail_open_without_a_model() {
             index: &index,
             repo: "acme".into(),
             root: dir.path(),
-            table: &table,
+            table,
             embed,
             params: Default::default(),
             policy: Default::default(),
@@ -350,7 +350,7 @@ fn intent_routes_need_the_same_model_and_the_threshold() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: Some(&fake_embed),
         params: Default::default(),
         policy: Default::default(),
@@ -363,7 +363,7 @@ fn intent_routes_need_the_same_model_and_the_threshold() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: Some(&fake_embed),
         params: Default::default(),
         policy: Default::default(),
@@ -385,7 +385,7 @@ fn the_embedder_is_not_called_without_intent_routes() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: Some(&spy),
         params: Default::default(),
         policy: Default::default(),
@@ -448,7 +448,7 @@ fn state_rebuilt_from_the_spool_matches_the_live_state_after_every_event() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -493,7 +493,7 @@ fn state_rebuilt_from_the_spool_matches_the_live_state_after_every_event() {
                 rec["repo"] = json!("acme");
             }
             records.push(rec);
-            let rebuilt = rebuild::rebuild(&records, &index, "acme", &table).unwrap();
+            let rebuilt = rebuild::rebuild(&records, &index, "acme", table).unwrap();
             assert_eq!(restored(&rebuilt), restored(&st), "after event {i} ({name}), control {control}");
         }
         assert_eq!(st.emitted.len(), 4, "lookup, dead end, linked files, finish line");
@@ -511,7 +511,7 @@ fn a_rebuilt_state_never_requests_a_stop_the_live_one_would_not() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -535,7 +535,7 @@ fn a_rebuilt_state_never_requests_a_stop_the_live_one_would_not() {
         let d = decide(&ctx, &mut st, &ev);
         records.push(json!({ "kind": ev.name(), "arm": st.arm, "decision": d }));
     }
-    let mut rebuilt = rebuild::rebuild(&records, &index, "acme", &table).unwrap();
+    let mut rebuilt = rebuild::rebuild(&records, &index, "acme", table).unwrap();
     assert!(!st.obligations[0].met && rebuilt.obligations[0].met);
     let live = decide(&ctx, &mut st, &Event::Stop { stop_hook_active: false });
     let quiet = decide(&ctx, &mut rebuilt, &Event::Stop { stop_hook_active: false });

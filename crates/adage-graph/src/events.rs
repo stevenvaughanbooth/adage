@@ -663,7 +663,7 @@ mod tests {
         };
         let meta =
             Meta { day: Some("2026-08-29T10:40:00Z".into()), turns: Some(vec![0, 1, 2, 2, 3]), ..Default::default() };
-        let e = from_input(&s, &meta, &CommandTable::load());
+        let e = from_input(&s, &meta, CommandTable::load());
         assert_eq!(e.events.len(), 6);
         assert_eq!(e.events[0].ty, NodeType::Prompt);
         assert_eq!(e.events[2].key, "exec ./scripts/wi-lookup {id}");

@@ -57,7 +57,7 @@ pub fn dataset_with(name: &str, influence: Influence) -> Option<Vec<EventSession
     for s in m["sessions"].as_array()? {
         let file = dir.join(s["file"].as_str()?);
         let task = s["task"].as_str().map(str::to_string).or_else(|| s["id"].as_str().map(str::to_string));
-        if let Some(s) = read_trace(&file, &table, task, influence) {
+        if let Some(s) = read_trace(&file, table, task, influence) {
             out.push(s);
         }
     }
@@ -81,7 +81,7 @@ pub fn bundle(dir: &Path) -> Vec<EventSession> {
         }
     }
     files.sort();
-    let mut out: Vec<EventSession> = files.iter().filter_map(|f| read_transcript(f, &table, None)).collect();
+    let mut out: Vec<EventSession> = files.iter().filter_map(|f| read_transcript(f, table, None)).collect();
     out.sort_by(|a, b| a.id.cmp(&b.id));
     out
 }
@@ -188,7 +188,7 @@ pub fn synthetic_sessions(n: usize, events: usize, seed: u64) -> Vec<EventSessio
         let input = Session { id: format!("s{si:05}"), prompts: vec![Prompt { text, at_step: 0 }], steps };
         let day = format!("2026-09-{:02}", 1 + rng.below(20));
         let meta = events::Meta { day: Some(day), turns: Some(turns), effects: Some(effects), ..Default::default() };
-        out.push(events::from_input(&input, &meta, &table));
+        out.push(events::from_input(&input, &meta, table));
     }
     out
 }

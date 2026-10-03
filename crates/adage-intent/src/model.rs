@@ -37,10 +37,11 @@
 //! embedding a prompt then reads just the rows of its tokens (for the bundled table, the pages of
 //! the binary those rows are on).
 
-use crate::tokenize::WordPiece;
+use crate::tokenize::{self, WordPiece};
 use anyhow::{bail, ensure, Context, Result};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -404,11 +405,13 @@ fn decode(dtype: Dtype, bytes: &[u8], scale: f32, out: &mut [f32]) {
     }
 }
 
-fn parse_vocab(text: &str, size: usize) -> Result<HashMap<String, u32>> {
-    let mut vocab = HashMap::with_capacity(size);
+/// The vocabulary from `vocab.txt` text (one token per line, in id order); `key` makes each
+/// token a key, borrowed when the text lives for the process.
+fn parse_vocab<'a>(text: &'a str, size: usize, key: impl Fn(&'a str) -> Cow<'static, str>) -> Result<tokenize::Vocab> {
+    let mut vocab = tokenize::Vocab::with_capacity_and_hasher(size, Default::default());
     for (i, tok) in text.split('\n').enumerate() {
         if i < size {
-            vocab.insert(tok.to_string(), i as u32);
+            vocab.insert(key(tok), i as u32);
         }
     }
     ensure!(vocab.len() == size, "vocabulary has {} tokens, the manifest says {size}", vocab.len());
@@ -435,7 +438,7 @@ impl StaticModel {
         }
         let vocab_bytes = read_limited(&dir.join("vocab.txt"), MAX_VOCAB_BYTES)?;
         let vocab_text = String::from_utf8(vocab_bytes).context("vocab.txt is not UTF-8")?;
-        let vocab = parse_vocab(&vocab_text, m.vocab_size)?;
+        let vocab = parse_vocab(&vocab_text, m.vocab_size, |t| Cow::Owned(t.to_string()))?;
         ensure!((m.unk as usize) < m.vocab_size, "unk id out of range");
         let path = dir.join("model.safetensors");
         let mut file = File::open(&path)?;
@@ -466,13 +469,13 @@ impl StaticModel {
     /// bundled in the binary).
     pub fn from_static(
         id: &str,
-        vocab_txt: &str,
+        vocab_txt: &'static str,
         unk: u32,
         max_chars: usize,
         table: &'static [u8],
     ) -> Result<StaticModel> {
         let t = header_of_bytes(table)?;
-        let vocab = parse_vocab(vocab_txt, t.rows)?;
+        let vocab = parse_vocab(vocab_txt, t.rows, Cow::Borrowed)?;
         ensure!((unk as usize) < t.rows, "unk id out of range");
         Ok(StaticModel {
             id: id.to_string(),
@@ -1095,14 +1098,15 @@ pub(crate) mod tests {
         assert_eq!(derive_i8(&src).unwrap(), q, "deterministic");
         let vocab = std::fs::read_to_string(d.path().join("m/vocab.txt")).unwrap();
         let q: &'static [u8] = Box::leak(q.into_boxed_slice());
-        let s = StaticModel::from_static("fixture+i8", &vocab, 0, 100, q).unwrap();
+        let vocab: &'static str = Box::leak(vocab.into_boxed_str());
+        let s = StaticModel::from_static("fixture+i8", vocab, 0, 100, q).unwrap();
         assert!(s.quantised());
         for text in ["fix the failing tests", "write the readme docs"] {
             let (a, b) = (m.embed(text).unwrap(), s.embed(text).unwrap());
             assert!(crate::cosine(&a, &b) > 0.9999, "{text}");
         }
         // Installed int8 tables read the same from a file.
-        write_installed(&d.path().join("q"), "fixture+i8", 4, 0, 100, &vocab, q).unwrap();
+        write_installed(&d.path().join("q"), "fixture+i8", 4, 0, 100, vocab, q).unwrap();
         let f = StaticModel::open(&d.path().join("q")).unwrap();
         assert_eq!(f.embed("fix tests").unwrap(), s.embed("fix tests").unwrap());
     }

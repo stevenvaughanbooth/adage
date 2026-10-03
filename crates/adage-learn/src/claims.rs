@@ -31,7 +31,7 @@ pub const ANY_EDIT: &str = "**/*";
 /// the step must classify as verify.
 pub fn claimed_verify_route(sessions: &[&Session], command: &str, cfg: &LearnConfig) -> Option<Route> {
     let table = adage_core::CommandTable::load();
-    if adage_tracks::io::classify(command, &table) != Effect::Verify {
+    if adage_tracks::io::classify(command, table) != Effect::Verify {
         return None;
     }
     let want: Vec<String> = command.split_whitespace().map(str::to_string).collect();
@@ -176,7 +176,7 @@ pub fn claimed_lookup_route(sessions: &[&Session], tool: &str, example: &str, cf
     }
     let command = variants.iter().max_by(|a, b| a.1.cmp(b.1).then_with(|| b.0.cmp(a.0))).map(|(k, _)| k.clone())?;
     let effect =
-        crate::evidence::MaxRank::max_by_rank(effect, io::classify(&command, &adage_core::CommandTable::load()));
+        crate::evidence::MaxRank::max_by_rank(effect, io::classify(&command, adage_core::CommandTable::load()));
     ceiling(effect, false)?;
     let n = support.len() as u32;
     let rate = n as f64 / opportunities.max(1) as f64;

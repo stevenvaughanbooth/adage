@@ -77,7 +77,7 @@ mod tests {
         }
         let table = CommandTable::load();
         let index = Index::try_load(&w.paths.index()).unwrap();
-        let st = rebuild::rebuild(&recs, &index, "acme", &table).expect("rebuilt");
+        let st = rebuild::rebuild(&recs, &index, "acme", table).expect("rebuilt");
         assert_eq!((st.batches, st.obligations.len()), (1, 1));
         // A repository with no reflexes yet: its `seen` record too.
         let plain = tempfile::tempdir().unwrap();

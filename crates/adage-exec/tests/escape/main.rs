@@ -309,7 +309,7 @@ fn hostile_git_config_runs_nothing_outside() {
         let table = adage_core::CommandTable::load();
         let argv: Vec<String> = vec!["git".into(), "status".into()];
         assert!(
-            adage_exec::classify::inert(&argv, &table, &hazards).is_err(),
+            adage_exec::classify::inert(&argv, table, &hazards).is_err(),
             "a hostile repository keeps git's inert status"
         );
 

@@ -196,7 +196,7 @@ struct Want {
 impl Want {
     fn new(command: String) -> Want {
         let shape = compile::variants::shape(&command);
-        let effect = io::classify(&command, &adage_core::CommandTable::load());
+        let effect = io::classify(&command, adage_core::CommandTable::load());
         Want { command, shape, effect, skill: None }
     }
 
@@ -840,7 +840,7 @@ fn judge(
     let effect = match &r.step {
         Step::Sequence { commands } => commands
             .iter()
-            .map(|x| io::classify(x, &adage_core::CommandTable::load()))
+            .map(|x| io::classify(x, adage_core::CommandTable::load()))
             .fold(Effect::Observe, |a, e| if ceiling(e, by_edit) == Some(Strength::Fire) { a } else { e }),
         _ => r.effect,
     };

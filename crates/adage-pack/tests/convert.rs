@@ -131,7 +131,7 @@ fn routine_execution_evidence_survives_sharing_without_a_grant() {
     io::write(d.path(), &t).unwrap();
     let p = round_trip(&from_track_dir(d.path()).unwrap().pack);
     assert_eq!(p.routes[0].evidence.as_ref().unwrap().execution.as_ref(), Some(&evidence));
-    let r = adage_pack::bind::to_runtime(&p.routes[0], &p, &adage_core::CommandTable::load()).unwrap();
+    let r = adage_pack::bind::to_runtime(&p.routes[0], &p, adage_core::CommandTable::load()).unwrap();
     let ir = adage_tracks::IndexedRoute {
         repo: "another-repository".into(),
         track: "shared/routine".into(),

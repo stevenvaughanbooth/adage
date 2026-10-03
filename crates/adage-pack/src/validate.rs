@@ -524,7 +524,7 @@ pub struct Checked {
 /// Semantic validation of a parsed pack.
 pub fn validate(p: &Parsed) -> Result<Checked> {
     let table = CommandTable::load();
-    validate_manifest(&p.manifest, &table)?;
+    validate_manifest(&p.manifest, table)?;
     if p.routes.is_empty() {
         bail!("the pack has no routes");
     }
@@ -575,7 +575,7 @@ pub fn validate(p: &Parsed) -> Result<Checked> {
     let ids: BTreeSet<&str> = p.routes.iter().map(|r| r.id.as_str()).collect();
     let mut checked = Checked::default();
     for r in &p.routes {
-        let res = validate_route(r, p, &ids, &table).with_context(|| format!("route {}", r.id))?;
+        let res = validate_route(r, p, &ids, table).with_context(|| format!("route {}", r.id))?;
         checked.resolved.insert(r.id.clone(), res);
     }
     let intents = p.routes.iter().filter(|r| matches!(r.trigger, TriggerV2::Intent { .. })).count();
@@ -1377,19 +1377,19 @@ mod tests {
     fn programs() {
         let t = CommandTable::load();
         let v = |s: &str| s.split(' ').map(str::to_string).collect::<Vec<_>>();
-        assert_eq!(program(&v("make gen"), &t).unwrap(), Program::Tool("make".into()));
-        assert_eq!(program(&v("python3 -m pytest"), &t).unwrap(), Program::Tool("python3".into()));
+        assert_eq!(program(&v("make gen"), t).unwrap(), Program::Tool("make".into()));
+        assert_eq!(program(&v("python3 -m pytest"), t).unwrap(), Program::Tool("python3".into()));
         assert_eq!(
-            program(&v("python3 scripts/wi-lookup {item}"), &t).unwrap(),
+            program(&v("python3 scripts/wi-lookup {item}"), t).unwrap(),
             Program::Script { path: "scripts/wi-lookup".into(), interpreter: Some("python3".into()) }
         );
         assert_eq!(
-            program(&v("./scripts/x --json"), &t).unwrap(),
+            program(&v("./scripts/x --json"), t).unwrap(),
             Program::Script { path: "scripts/x".into(), interpreter: None }
         );
-        assert!(program(&v("python3 manage.py test"), &t).is_ok_and(|p| matches!(p, Program::Script { .. })));
-        assert!(program(&v("frobnicate"), &t).is_err());
-        assert!(program(&v("sh -c make"), &t).is_err());
-        assert!(program(&v("{prog} x"), &t).is_err());
+        assert!(program(&v("python3 manage.py test"), t).is_ok_and(|p| matches!(p, Program::Script { .. })));
+        assert!(program(&v("frobnicate"), t).is_err());
+        assert!(program(&v("sh -c make"), t).is_err());
+        assert!(program(&v("{prog} x"), t).is_err());
     }
 }

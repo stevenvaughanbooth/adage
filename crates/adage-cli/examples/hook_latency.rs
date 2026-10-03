@@ -265,7 +265,7 @@ fn turn_step_predicts(
     let table = adage_core::CommandTable::load();
     let pending = adage_runtime::Pending {
         route: ir.route.id.clone(),
-        expect_key: adage_runtime::command_key("make gen", &table),
+        expect_key: adage_runtime::command_key("make gen", table),
         expect_head: String::new(),
         batches_left: 3,
         command: "make gen".into(),

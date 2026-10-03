@@ -177,12 +177,34 @@ fn rank(e: Effect) -> u8 {
 /// The effect Adage itself assigns to a command template (slots filled with an inert value). The
 /// strongest effect of any action in the command wins.
 pub fn classify(command: &str, table: &CommandTable) -> Effect {
-    let filled = regex::Regex::new(r"\{[a-z_][a-z0-9_]*\}").unwrap().replace_all(command, "X-1");
-    normalize_shell(&filled, "/repo", table)
+    // A command's effect depends only on its text and the table, and learning asks for the same
+    // commands many times (each one is parsed as shell). With the built-in table, answers are
+    // remembered for the process, a bounded number of them.
+    static SLOT: std::sync::LazyLock<regex::Regex> =
+        std::sync::LazyLock::new(|| regex::Regex::new(r"\{[a-z_][a-z0-9_]*\}").unwrap());
+    static SEEN: std::sync::LazyLock<std::sync::Mutex<std::collections::HashMap<String, Effect>>> =
+        std::sync::LazyLock::new(Default::default);
+    let builtin = std::ptr::eq(table, CommandTable::load());
+    if builtin {
+        if let Some(e) = SEEN.lock().ok().and_then(|m| m.get(command).copied()) {
+            return e;
+        }
+    }
+    let filled = SLOT.replace_all(command, "X-1");
+    let effect = normalize_shell(&filled, "/repo", table)
         .iter()
         .map(|n| n.effect)
         .max_by_key(|e| rank(*e))
-        .unwrap_or(Effect::Environment)
+        .unwrap_or(Effect::Environment);
+    if builtin {
+        if let Ok(mut m) = SEEN.lock() {
+            if m.len() >= 16_384 {
+                m.clear();
+            }
+            m.insert(command.to_string(), effect);
+        }
+    }
+    effect
 }
 
 /// Whether a run step declared observe over the table's `environment` is a repository script
@@ -262,8 +284,8 @@ pub fn validate(t: &Track) -> Result<()> {
                 // Never trust a declared effect: classify the command ourselves. The one exception
                 // is a repository script the table does not know, which learning classified
                 // observe from the traces and says why (`evidence.effect_evidence`).
-                let actual = classify(command, &table);
-                if rank(actual) > rank(r.effect) && !inferred_observe(r, command, actual, &table) {
+                let actual = classify(command, table);
+                if rank(actual) > rank(r.effect) && !inferred_observe(r, command, actual, table) {
                     bail!("{}: command {:?} is {:?}, but the track declares {:?}", ctx(), command, actual, r.effect);
                 }
                 if r.strength == Strength::Inhibit {
@@ -292,7 +314,7 @@ pub fn validate(t: &Track) -> Result<()> {
                 if !slot_refs(avoid).is_empty() || !slot_refs(instead).is_empty() {
                     bail!("{}: an avoid step has slots nothing can bind", ctx());
                 }
-                if rank(classify(instead, &table)) > rank(Effect::Regenerate) {
+                if rank(classify(instead, table)) > rank(Effect::Regenerate) {
                     bail!("{}: the suggested command {:?} is not a verify or regenerate step", ctx(), instead);
                 }
             }
@@ -309,7 +331,7 @@ pub fn validate(t: &Track) -> Result<()> {
                     if !slot_refs(command).is_empty() {
                         bail!("{}: a sequence step has slots nothing can bind", ctx());
                     }
-                    let actual = classify(command, &table);
+                    let actual = classify(command, table);
                     if rank(actual) > rank(r.effect) {
                         bail!(
                             "{}: command {:?} is {:?}, but the track declares {:?}",
@@ -359,7 +381,7 @@ pub fn validate(t: &Track) -> Result<()> {
                 validate_skill(r, skill, args.as_deref()).map_err(|e| anyhow::anyhow!("{}: {e}", ctx()))?
             }
             Step::Advise { template, slots } => {
-                crate::advice::check(template, slots, &table).map_err(|e| anyhow::anyhow!("{}: {e}", ctx()))?;
+                crate::advice::check(template, slots, table).map_err(|e| anyhow::anyhow!("{}: {e}", ctx()))?;
                 // Advice directs nothing: prime, observe, no route slots, and a reactive trigger.
                 if r.strength != Strength::Prime || r.effect != Effect::Observe || !r.slots.is_empty() {
                     bail!("{}: an advisory step is prime, observe, with no route slots", ctx());

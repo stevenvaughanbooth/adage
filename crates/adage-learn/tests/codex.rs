@@ -37,7 +37,7 @@ fn fixtures() -> Vec<(PathBuf, bool, scenario::Session)> {
 /// not exist here, and what is checked out on this machine must not change them.
 fn recorded(path: &Path) -> adage_trace::Session {
     let t = CommandTable::load();
-    let cx = Decode { table: &t, locator: &AsRecorded, repo_override: None, subagent: false };
+    let cx = Decode { table: t, locator: &AsRecorded, repo_override: None, subagent: false };
     read_trace(path, &cx).unwrap_or_else(|| panic!("{}: a usable session", path.display()))
 }
 
@@ -201,7 +201,7 @@ fn a_stop_gate_failure_continuation_is_adages_text_not_a_prompt() {
         exec("c2", cmd),
         out("c2", 1, "1 failed"),
     ];
-    let s = parse_rollout(&lines, &t, None).expect("parses");
+    let s = parse_rollout(&lines, t, None).expect("parses");
     assert_eq!((s.prompt.as_str(), s.prompt_count()), ("Fix W-2042", 1));
     assert!(s.steered && s.directed.contains("finish-line-stop"), "{:?}", s.directed);
     assert!(s.exposed_to(&[cmd], false), "the rerun after the continuation is not the agent's own");
@@ -222,7 +222,7 @@ fn every_prompt_is_kept_and_anchored() {
         out("c3", 0, "Makefile"),
         user("thanks"),
     ];
-    let s = parse_rollout(&lines, &t, None).expect("parses");
+    let s = parse_rollout(&lines, t, None).expect("parses");
     let got: Vec<(&str, u32)> = s.prompts.iter().map(|p| (p.text.as_str(), p.at_step)).collect();
     assert_eq!(got, [("Pick up W-2042 please", 0), ("now run the tests", 1), ("thanks", 3)]);
     assert_eq!(s.steps.iter().map(|x| x.prompt).collect::<Vec<_>>(), [0, 1, 1]);
@@ -256,7 +256,7 @@ fn steering_subagents_paginated_prompts_and_hostile_rollouts() {
         exec("c3", "sleep 100"),
         user("Adage finish-line check: this session changed files matching schema/*.json …"),
     ];
-    let s = parse_rollout(&steered, &t, None).expect("parses");
+    let s = parse_rollout(&steered, t, None).expect("parses");
     assert_eq!(s.prompt, "Pick up W-2042 please");
     assert!(s.steered);
     assert!(s.directed.contains("lookup-work-item") && s.directed.contains("finish-line-stop"), "{:?}", s.directed);
@@ -271,11 +271,11 @@ fn steering_subagents_paginated_prompts_and_hostile_rollouts() {
         json!({ "parent_thread_id": "019a" }),
     ] {
         let lines = vec![meta(sub), user("do W-1"), exec("c", "ls"), out("c", 0, "")];
-        assert!(parse_rollout(&lines, &t, None).is_none(), "sub-agent threads are skipped");
+        assert!(parse_rollout(&lines, t, None).is_none(), "sub-agent threads are skipped");
     }
     let promptless =
         vec![meta(json!({})), user("Adage finish-line check: run make gen"), exec("c", "make gen"), out("c", 0, "")];
-    assert!(parse_rollout(&promptless, &t, None).is_none());
+    assert!(parse_rollout(&promptless, t, None).is_none());
     let hostile = vec![
         meta(json!({})),
         user("fix W-1"),
@@ -304,14 +304,14 @@ fn steering_subagents_paginated_prompts_and_hostile_rollouts() {
         line("event_msg", json!({ "type": "user_message", "message": 5 })),
         json!("not an object"),
     ];
-    let s = parse_rollout(&hostile, &t, None).expect("parses what it can");
+    let s = parse_rollout(&hostile, t, None).expect("parses what it can");
     assert!(s.steps.len() <= 64 + 2);
     assert!(
         s.steps.iter().any(|x| x.rel_path.as_deref() == Some("schema/x.json")),
         "apply_patch through a local shell call"
     );
-    assert!(parse_rollout(&[json!({ "type": "session_meta", "payload": [] })], &t, None).is_none());
-    assert!(parse_rollout(&[], &t, None).is_none());
+    assert!(parse_rollout(&[json!({ "type": "session_meta", "payload": [] })], t, None).is_none());
+    assert!(parse_rollout(&[], t, None).is_none());
 }
 
 #[test]

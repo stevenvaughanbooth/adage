@@ -59,7 +59,7 @@ fn a_sequence_follows_an_edit_and_a_context_fires_after_its_items() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -137,7 +137,7 @@ fn a_sequence_subsumes_the_finish_line_it_begins_with() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -195,7 +195,7 @@ fn a_finish_line_after_any_edit_rides_on_a_sequence_that_includes_it() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -229,7 +229,7 @@ fn a_context_needs_its_items_in_order_within_its_gap_of_alphabet_events() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -271,7 +271,7 @@ fn a_failed_command_is_a_failure_item_and_not_a_success() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -303,7 +303,7 @@ fn context_state_is_bounded_rebuilt_from_the_spool_and_reset_by_a_new_alphabet()
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -319,7 +319,7 @@ fn context_state_is_bounded_rebuilt_from_the_spool_and_reset_by_a_new_alphabet()
     for (i, ev) in events.iter().enumerate() {
         let d = decide(&ctx, &mut st, ev);
         records.push(json!({ "kind": ev.name(), "arm": st.arm, "decision": d }));
-        let rebuilt = rebuild::rebuild(&records, &index, "acme", &table).unwrap();
+        let rebuilt = rebuild::rebuild(&records, &index, "acme", table).unwrap();
         assert_eq!(rebuilt.ctx, st.ctx, "after event {i}");
         assert!(st.ctx.ring.len() <= crate::context::RING && st.ctx.since.iter().all(|s| *s <= crate::context::SPAN));
     }
@@ -330,7 +330,7 @@ fn context_state_is_bounded_rebuilt_from_the_spool_and_reset_by_a_new_alphabet()
     t.routes.retain(|r| r.id != "retry-ctx");
     let relearned = Index::compile(&[t]);
     assert_ne!(relearned.contexts("acme").digest, index.contexts("acme").digest);
-    assert!(rebuild::rebuild(&records, &relearned, "acme", &table).unwrap().ctx.is_empty());
+    assert!(rebuild::rebuild(&records, &relearned, "acme", table).unwrap().ctx.is_empty());
     // And a live state from the old alphabet starts over at its next alphabet event.
     let ctx2 = Ctx { index: &relearned, ..ctx };
     decide(&ctx2, &mut st, &Event::Batch { calls: vec![bash("make lint", "ok")] });
@@ -369,7 +369,7 @@ fn a_context_can_end_at_a_prompt() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -390,7 +390,7 @@ fn u11_routes() -> Vec<Route> {
     let mut r = route(
         "dead-end-0cdcfb",
         Trigger::AfterFailure {
-            command: command_key("python -m pytest", &table),
+            command: command_key("python -m pytest", table),
             signature: "No module named pytest".into(),
         },
         Step::Run { command: ".venv/bin/python -m pytest".into() },
@@ -426,7 +426,7 @@ fn a_directed_runner_narrowed_to_the_task_is_followed() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -489,7 +489,7 @@ fn the_learned_judge_reads_follows_by_the_repository_s_tokens() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -528,14 +528,14 @@ fn a_python_run_outside_the_project_environment_is_answered() {
     let mut click = u11_routes().remove(0);
     click.id = "dead-end-click".into();
     click.trigger = Trigger::AfterFailure {
-        command: command_key("python -m pytest", &table),
+        command: command_key("python -m pytest", table),
         signature: "No module named 'click'".into(),
     };
     routes.push(click);
     for probe in ["python", "python3"] {
         let mut a = route(
             &format!("instinct-u11-{probe}-click"),
-            Trigger::AfterFailure { command: command_key(probe, &table), signature: "No module named 'click'".into() },
+            Trigger::AfterFailure { command: command_key(probe, table), signature: "No module named 'click'".into() },
             Step::Advise {
                 template: "project-python".into(),
                 slots: [("interpreter".to_string(), ".venv/bin/python".to_string())].into(),
@@ -557,7 +557,7 @@ fn a_python_run_outside_the_project_environment_is_answered() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -608,7 +608,7 @@ fn a_piped_failure_fires_its_dead_end() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),

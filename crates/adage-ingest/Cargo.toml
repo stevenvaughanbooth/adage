@@ -6,7 +6,7 @@ edition.workspace = true
 license.workspace = true
 publish.workspace = true
 
-# Layer 2 (docs/architecture.md): depends on adage-core and adage-trace only. It knows harness
+# Layer 3 (xtask/src/layers.rs): depends on adage-core and adage-trace only. It knows harness
 # history formats and where traces live; it knows nothing of learning, the runtime or the store.
 [dependencies]
 adage-core = { path = "../adage-core" }

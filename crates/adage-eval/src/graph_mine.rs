@@ -343,9 +343,9 @@ pub fn run(dir: &Path, split: Option<&str>) -> Result<Report> {
     let table = CommandTable::load();
     let mut bundles = Vec::new();
     if dir.join("manifest.json").is_file() {
-        bundles.push(dataset(dir, split, &table)?);
+        bundles.push(dataset(dir, split, table)?);
     } else if dir.join("spec.json").is_file() {
-        bundles.push(gen_bundle(dir, &table)?);
+        bundles.push(gen_bundle(dir, table)?);
     } else {
         let mut dirs: Vec<PathBuf> = std::fs::read_dir(dir)
             .with_context(|| dir.display().to_string())?
@@ -358,7 +358,7 @@ pub fn run(dir: &Path, split: Option<&str>) -> Result<Report> {
             bail!("{}: not a dataset, a generated bundle or a suite", dir.display());
         }
         for d in dirs {
-            bundles.push(gen_bundle(&d, &table)?);
+            bundles.push(gen_bundle(&d, table)?);
         }
     }
     let with: Vec<&HeldOut> = bundles.iter().filter_map(|b| b.held_out.as_ref()).collect();

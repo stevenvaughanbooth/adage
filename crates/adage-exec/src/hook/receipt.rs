@@ -81,7 +81,7 @@ pub(super) fn covering_receipt(call: &PreCall<'_>) -> Option<PreNote> {
             &call.paths.tracks(),
             Level::E2,
             a.terms.as_ref(),
-            &CommandTable::load(),
+            CommandTable::load(),
         )
         .ok()?;
         let action = plan.request.action.as_ref()?;

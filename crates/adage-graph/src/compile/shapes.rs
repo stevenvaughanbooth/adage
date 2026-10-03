@@ -211,7 +211,7 @@ fn covering(v: &ItemView, input: &Input) -> Option<(String, String)> {
                 runs,
                 ok_sessions: a.literal_ok.get(lit).copied().unwrap_or(0),
                 ok_session_ids: a.literal_ok_ids.get(lit).cloned().unwrap_or_default(),
-                effect: max_effect(effect, io::classify(lit, &table)),
+                effect: max_effect(effect, io::classify(lit, table)),
                 directable: directable(lit),
             });
         }
@@ -234,7 +234,7 @@ fn fixed_command(v: &ItemView, target: Option<&str>, input: &Input) -> Result<(S
     // covers the others ([`variants`]).
     if let Some((key, lit)) = covering(v, input) {
         let table = adage_core::CommandTable::load();
-        let effect = max_effect(input.corpus.effect(&key).unwrap_or(Effect::Environment), io::classify(&lit, &table));
+        let effect = max_effect(input.corpus.effect(&key).unwrap_or(Effect::Environment), io::classify(&lit, table));
         return Ok((key, lit, effect));
     }
     match first {
@@ -404,7 +404,7 @@ fn segment_template(v: &ItemView, edits: &[String], input: &Input) -> Option<(St
         if let Some((_, _, t)) = best {
             let effect = keys.iter().filter_map(|k| input.corpus.effect(k)).fold(Effect::Observe, max_effect);
             let filled = t.replace("{part}", "x");
-            let effect = max_effect(effect, io::classify(&filled, &adage_core::CommandTable::load()));
+            let effect = max_effect(effect, io::classify(&filled, adage_core::CommandTable::load()));
             return Some((t.clone(), depth as u8, effect));
         }
     }
@@ -519,7 +519,7 @@ impl<'a> Builder<'a> {
             self.drop(r, format!("no trace ran {identity} with a value of its type"));
             return false;
         };
-        let effect = io::classify(&command, &adage_core::CommandTable::load());
+        let effect = io::classify(&command, adage_core::CommandTable::load());
         let trigger = Trigger::Prompt { span: SpanKind::Ticket };
         let Some(asp) = provisional(effect, false) else {
             self.drop(r, format!("{command:?} may never be directed"));

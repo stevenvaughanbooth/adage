@@ -8,7 +8,7 @@ use super::*;
 #[test]
 fn turn_step_predicts_a_delivered_directive() {
     let (dir, index, table) = predict_fixture(vec![]);
-    let ctx = predict_ctx(&dir, &index, &table, &["lookup", "gen"]);
+    let ctx = predict_ctx(&dir, &index, table, &["lookup", "gen"]);
     let mut st = SessionState { arm: Some(Arm::Treated), ..Default::default() };
     decide(&ctx, &mut st, &Event::Prompt { text: "Pick up W-2042 please".into() });
     assert_eq!(st.pending[0].command, "./scripts/wi-lookup W-2042 --json", "the rendered command is kept");
@@ -36,7 +36,7 @@ fn turn_step_predicts_a_delivered_directive() {
     // An armed obligation: only at the step that ends the turn.
     let mut st = SessionState {
         arm: Some(Arm::Treated),
-        obligations: vec![armed("gen", "make gen", &table)],
+        obligations: vec![armed("gen", "make gen", table)],
         ..Default::default()
     };
     assert!(decide(&ctx, &mut st, &step("u", 1, false)).predicted.is_none());
@@ -52,11 +52,11 @@ fn turn_step_predicts_a_delivered_directive() {
 #[test]
 fn turn_step_never_at_index_zero_nor_twice_in_a_row() {
     let (dir, index, table) = predict_fixture(vec![]);
-    let ctx = predict_ctx(&dir, &index, &table, &["lookup", "gen"]);
+    let ctx = predict_ctx(&dir, &index, table, &["lookup", "gen"]);
     let mut st = SessionState {
         arm: Some(Arm::Treated),
-        pending: vec![pending("lookup", "./scripts/wi-lookup W-2042 --json", &table)],
-        obligations: vec![armed("gen", "make gen", &table)],
+        pending: vec![pending("lookup", "./scripts/wi-lookup W-2042 --json", table)],
+        obligations: vec![armed("gen", "make gen", table)],
         ..Default::default()
     };
     let d = decide(&ctx, &mut st, &step("t", 0, true));
@@ -69,14 +69,14 @@ fn turn_step_never_at_index_zero_nor_twice_in_a_row() {
     assert_eq!(st.predictions, 2);
     // At a turn's end the mod asks with the index of the request the model just answered: a
     // prediction before that request (index - 1) is not "in a row" with it, one at it would be.
-    let mut st = SessionState { obligations: vec![armed("gen", "make gen", &table)], ..Default::default() };
+    let mut st = SessionState { obligations: vec![armed("gen", "make gen", table)], ..Default::default() };
     st.last_step_predicted = Some(("t".into(), 4));
     assert!(decide(&ctx, &mut st, &step("t", 5, true)).predicted.is_some(), "model step 5 came between");
     st.obligations[0].met = false;
     st.predicted_routes.clear();
     assert!(decide(&ctx, &mut st, &step("t", 5, true)).predicted.is_none(), "predicted at 5 already");
     // A new turn's step 1 after the last step of another turn is not "in a row".
-    let mut st = SessionState { obligations: vec![armed("gen", "make gen", &table)], ..Default::default() };
+    let mut st = SessionState { obligations: vec![armed("gen", "make gen", table)], ..Default::default() };
     st.last_step_predicted = Some(("t".into(), 0));
     assert!(decide(&ctx, &mut st, &step("u", 1, true)).predicted.is_some());
 }
@@ -85,11 +85,11 @@ fn turn_step_never_at_index_zero_nor_twice_in_a_row() {
 #[test]
 fn turn_step_holds_the_session_cap() {
     let (dir, index, table) = predict_fixture(vec![]);
-    let mut ctx = predict_ctx(&dir, &index, &table, &["lookup", "gen"]);
+    let mut ctx = predict_ctx(&dir, &index, table, &["lookup", "gen"]);
     ctx.policy.predict_cap = 1;
     let mut st = SessionState {
-        pending: vec![pending("lookup", "./scripts/wi-lookup W-2042 --json", &table)],
-        obligations: vec![armed("gen", "make gen", &table)],
+        pending: vec![pending("lookup", "./scripts/wi-lookup W-2042 --json", table)],
+        obligations: vec![armed("gen", "make gen", table)],
         ..Default::default()
     };
     assert!(decide(&ctx, &mut st, &step("t", 1, true)).predicted.is_some());
@@ -105,10 +105,10 @@ fn turn_step_holds_the_session_cap() {
 #[test]
 fn turn_step_in_the_control_arm_records_would_predict() {
     let (dir, index, table) = predict_fixture(vec![]);
-    let ctx = predict_ctx(&dir, &index, &table, &["lookup"]);
+    let ctx = predict_ctx(&dir, &index, table, &["lookup"]);
     let mut st = SessionState {
         arm: Some(Arm::Control),
-        pending: vec![pending("lookup", "./scripts/wi-lookup W-2042 --json", &table)],
+        pending: vec![pending("lookup", "./scripts/wi-lookup W-2042 --json", table)],
         ..Default::default()
     };
     let d = decide(&ctx, &mut st, &step("t", 1, false));
@@ -131,8 +131,8 @@ fn turn_step_predicts_nothing_without_a_grant_a_command_or_past_the_interlock() 
     );
     let (dir, index, table) = predict_fixture(vec![dead_gen]);
     let state = || SessionState {
-        pending: vec![pending("lookup", "./scripts/wi-lookup W-2042 --json", &table)],
-        obligations: vec![armed("gen", "make gen", &table)],
+        pending: vec![pending("lookup", "./scripts/wi-lookup W-2042 --json", table)],
+        obligations: vec![armed("gen", "make gen", table)],
         ..Default::default()
     };
     let nothing = |ctx: &Ctx, st: &mut SessionState, ev: &Event| {
@@ -140,21 +140,21 @@ fn turn_step_predicts_nothing_without_a_grant_a_command_or_past_the_interlock() 
         d.predicted.is_none() && d.would_predict.is_none() && st.predictions == 0
     };
     // No grant (the plain `adage hook`).
-    assert!(nothing(&predict_ctx(&dir, &index, &table, &[]), &mut state(), &step("t", 1, true)));
+    assert!(nothing(&predict_ctx(&dir, &index, table, &[]), &mut state(), &step("t", 1, true)));
     // A grant on another route only.
-    assert!(nothing(&predict_ctx(&dir, &index, &table, &["read-linked"]), &mut state(), &step("t", 1, true)));
-    let ctx = predict_ctx(&dir, &index, &table, &["lookup", "gen"]);
+    assert!(nothing(&predict_ctx(&dir, &index, table, &["read-linked"]), &mut state(), &step("t", 1, true)));
+    let ctx = predict_ctx(&dir, &index, table, &["lookup", "gen"]);
     // A pending entry from an older state: no command kept.
     let mut st = SessionState {
-        pending: vec![Pending { command: String::new(), ..pending("lookup", "x", &table) }],
+        pending: vec![Pending { command: String::new(), ..pending("lookup", "x", table) }],
         ..Default::default()
     };
     assert!(nothing(&ctx, &mut st, &step("t", 1, true)));
     // The dead end announced this session says not to run `make gen` (without it, it would be).
-    let mut st = SessionState { obligations: vec![armed("gen", "make gen", &table)], ..Default::default() };
+    let mut st = SessionState { obligations: vec![armed("gen", "make gen", table)], ..Default::default() };
     assert!(!nothing(&ctx, &mut st, &step("t", 1, true)));
     let mut st = SessionState {
-        obligations: vec![armed("gen", "make gen", &table)],
+        obligations: vec![armed("gen", "make gen", table)],
         emitted: vec!["dead-gen".into()],
         ..Default::default()
     };
@@ -188,7 +188,7 @@ fn turn_step_predicts_a_skill_and_a_sequence_first_command() {
         Strength::Prime,
     );
     let (dir, index, table) = predict_fixture(vec![release, seq]);
-    let mut ctx = predict_ctx(&dir, &index, &table, &["release", "lint-then-test"]);
+    let mut ctx = predict_ctx(&dir, &index, table, &["release", "lint-then-test"]);
     ctx.policy.invoke_skills = vec!["release-checklist".into()];
     let mut st = SessionState::default();
     decide(&ctx, &mut st, &Event::Batch { calls: vec![edit_call(&dir, "CHANGELOG.md")] });
@@ -219,7 +219,7 @@ fn turn_step_predicts_a_skill_and_a_sequence_first_command() {
 fn turn_step_predicts_a_chain_of_reads_bound_from_the_lookup() {
     let (dir, index, table) = predict_fixture(vec![]);
     std::fs::write(dir.path().join("acme/rates.py"), "x").unwrap();
-    let ctx = predict_ctx(&dir, &index, &table, &["read-linked"]);
+    let ctx = predict_ctx(&dir, &index, table, &["read-linked"]);
     let mut st = SessionState::default();
     decide(&ctx, &mut st, &Event::Prompt { text: "Pick up W-2042 please".into() });
     let out = r#"{"id":"W-2042","linked_files":["acme/billing.py","../etc/passwd","acme/rates.py"]}"#;
@@ -256,7 +256,7 @@ fn turn_step_predicts_a_chain_of_reads_bound_from_the_lookup() {
 #[test]
 fn turn_step_bounds_survive_a_rebuild() {
     let (dir, index, table) = predict_fixture(vec![]);
-    let ctx = predict_ctx(&dir, &index, &table, &["lookup"]);
+    let ctx = predict_ctx(&dir, &index, table, &["lookup"]);
     let mut st = SessionState { arm: Some(Arm::Treated), repo: Some("acme".into()), ..Default::default() };
     let mut records = Vec::new();
     for ev in [Event::Prompt { text: "Pick up W-2042 please".into() }, step("t", 1, false)] {
@@ -264,7 +264,7 @@ fn turn_step_bounds_survive_a_rebuild() {
         records.push(json!({ "event": "x", "kind": ev.name(), "arm": st.arm, "repo": "acme", "decision": d }));
     }
     assert_eq!(records[1]["kind"], "turn_step");
-    let rebuilt = rebuild::rebuild(&records, &index, "acme", &table).unwrap();
+    let rebuilt = rebuild::rebuild(&records, &index, "acme", table).unwrap();
     assert_eq!(rebuilt.predictions, 1);
     assert_eq!(rebuilt.last_step_predicted, Some(("t".into(), 1)));
     assert_eq!(rebuilt.predicted_routes, vec!["lookup".to_string()]);
@@ -278,11 +278,11 @@ fn turn_step_fast_path() {
     let t = adage_tracks::triggers::Triggers::default();
     let ev = step("t", 1, true);
     assert!(fast::skip(&t, &ev, "/r", || Some(SessionState::default())));
-    let met = Obligation { met: true, ..armed("gen", "make gen", &table) };
+    let met = Obligation { met: true, ..armed("gen", "make gen", table) };
     assert!(fast::skip(&t, &ev, "/r", || Some(SessionState { obligations: vec![met.clone()], ..Default::default() })));
     let due = [
-        SessionState { pending: vec![pending("lookup", "x", &table)], ..Default::default() },
-        SessionState { obligations: vec![armed("gen", "make gen", &table)], ..Default::default() },
+        SessionState { pending: vec![pending("lookup", "x", table)], ..Default::default() },
+        SessionState { obligations: vec![armed("gen", "make gen", table)], ..Default::default() },
         SessionState {
             reads: vec![PendingReads {
                 route: "r".into(),

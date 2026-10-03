@@ -177,7 +177,7 @@ pub struct Report {
 
 fn sessions(paths: &[&PathBuf], repo: &str) -> Vec<Session> {
     let table = adage_core::CommandTable::load();
-    paths.iter().filter_map(|p| adage_learn::import::parse_transcript(p, &table, Some(repo))).collect()
+    paths.iter().filter_map(|p| adage_learn::import::parse_transcript(p, table, Some(repo))).collect()
 }
 
 fn embed(e: &Embedder, text: &str) -> Vec<f32> {

@@ -157,7 +157,7 @@ impl World {
         let index = Index::load(&self.p("adage/index.json"));
         let ir = route::find(&index, "acme-billing", "acme-billing/work-items", "lookup-work-item").unwrap();
         let plan =
-            route::plan(ir, &index, &self.repo(), &self.p("adage/tracks"), Level::E1, None, &CommandTable::load())
+            route::plan(ir, &index, &self.repo(), &self.p("adage/tracks"), Level::E1, None, CommandTable::load())
                 .expect("a plain-text lookup plans typed, with no fields declared");
         let f = &plan.request.output.fields["files"];
         assert!(f.text, "its output is read as the paths its lines name: {f:?}");

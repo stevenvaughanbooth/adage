@@ -228,19 +228,19 @@ pub fn build(dir: &Path, plan: &Plan, state: &RunState) -> Result<Report> {
     let table = CommandTable::load();
     let routes = staged_routes(dir);
     let key = &plan.repo.key;
-    let explore = sessions_of(dir, state.jobs.iter().filter(|j| j.phase == "explore"), key, &table);
+    let explore = sessions_of(dir, state.jobs.iter().filter(|j| j.phase == "explore"), key, table);
     let explore_sessions: Vec<Session> = explore.iter().map(|(_, s)| s.clone()).collect();
     let mut claims = Vec::new();
     for c in &plan.claims {
-        let exercised = explore_sessions.iter().filter(|s| oracle::exercised(c, s, &table)).count();
-        let followed = explore_sessions.iter().filter(|s| oracle::followed(c, None, s, &table) == Some(true)).count();
+        let exercised = explore_sessions.iter().filter(|s| oracle::exercised(c, s, table)).count();
+        let followed = explore_sessions.iter().filter(|s| oracle::followed(c, None, s, table) == Some(true)).count();
         let verdict = if let Some(u) = &c.r#unsafe {
             Verdict::Unsafe { reason: u.clone() }
         } else if let Some((route, instead, failed_sessions, ran_sessions)) =
-            contradiction(c, &routes, &explore_sessions, &table)
+            contradiction(c, &routes, &explore_sessions, table)
         {
             Verdict::Contradicted { route, instead, failed_sessions, ran_sessions }
-        } else if let Some(route) = compiled(c, &routes, &table) {
+        } else if let Some(route) = compiled(c, &routes, table) {
             Verdict::Compiled { route }
         } else if let Some((_, why)) = plan.not_exercised.iter().find(|(id, _)| id == &c.id) {
             Verdict::NeverExercised { reason: why.clone() }
@@ -272,7 +272,7 @@ pub fn build(dir: &Path, plan: &Plan, state: &RunState) -> Result<Report> {
     }
 
     // Validation: per claim and arm, on the held-out tasks that exercise the claim.
-    let validate = sessions_of(dir, state.jobs.iter().filter(|j| j.phase == "validate"), key, &table);
+    let validate = sessions_of(dir, state.jobs.iter().filter(|j| j.phase == "validate"), key, table);
     let mut acceptance = Vec::new();
     if state.jobs.iter().any(|j| j.phase == "validate") {
         for (c, cr) in plan.claims.iter().zip(&claims) {
@@ -291,7 +291,7 @@ pub fn build(dir: &Path, plan: &Plan, state: &RunState) -> Result<Report> {
                     st.sessions += 1;
                     turns.push(j.outcome.turns as f64);
                     cost.push(j.outcome.cost_usd);
-                    if let Some(f) = oracle::followed(c, corrected, s, &table) {
+                    if let Some(f) = oracle::followed(c, corrected, s, table) {
                         st.applicable += 1;
                         st.followed += usize::from(f);
                     }

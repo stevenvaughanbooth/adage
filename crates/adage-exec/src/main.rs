@@ -194,7 +194,7 @@ fn cmd_run(a: &Args) -> Result<i32> {
         policy: &pol,
         store: &store,
         capability: &cap,
-        table: &table,
+        table,
         repo_key: repo_key(&req)?,
         cas: Some(home.join("cas")).filter(|p| p.is_dir()),
         home: adage_store::home_dir(),
@@ -273,7 +273,7 @@ fn cmd_approve(a: &Args) -> Result<i32> {
     let bound = req.bind()?;
     req.output.validate()?;
     let table = CommandTable::load();
-    let classified = adage_exec::classify::effect(&bound, &table);
+    let classified = adage_exec::classify::effect(&bound, table);
     if classified > req.effect && req.scripts.is_empty() {
         bail!("declared effect {} is lower than the classified {}", req.effect.as_str(), classified.as_str());
     }

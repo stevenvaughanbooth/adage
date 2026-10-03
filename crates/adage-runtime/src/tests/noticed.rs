@@ -56,7 +56,7 @@ fn noticing_ctx<'a>(dir: &'a tempfile::TempDir, index: &'a Index, table: &'a Com
 fn a_candidate_is_noticed_once_never_directed_and_alike_in_both_arms() {
     let (dir, _, table) = fixture();
     let index = noticing_index(vec![lint_candidate("run-lint", "exec make test", 2)]);
-    let ctx = noticing_ctx(&dir, &index, &table);
+    let ctx = noticing_ctx(&dir, &index, table);
     let events = [
         Event::Batch { calls: vec![edit_call(&dir, "acme/billing.py")] },
         Event::Batch { calls: vec![bash("make test", "OK")] },
@@ -96,7 +96,7 @@ fn a_candidate_is_noticed_once_never_directed_and_alike_in_both_arms() {
         [("acme".to_string(), vec![lint_candidate("run-lint", "exec make test", 2)])].into_iter().collect(),
     );
     assert!(live.candidates("acme").is_empty());
-    let ctx = noticing_ctx(&dir, &live, &table);
+    let ctx = noticing_ctx(&dir, &live, table);
     let mut st = SessionState { arm: Some(Arm::Treated), ..Default::default() };
     let mut directed = Vec::new();
     for ev in &events {
@@ -119,9 +119,9 @@ fn candidates_have_their_own_bounded_ring() {
     assert_ne!(before.candidate_contexts("acme").digest, after.candidate_contexts("acme").digest);
     assert_ne!(before.candidate_contexts("acme").digest, before.contexts("acme").digest);
     let mut st = SessionState { arm: Some(Arm::Treated), ..Default::default() };
-    decide(&noticing_ctx(&dir, &before, &table), &mut st, &Event::Batch { calls: vec![bash("git status", "")] });
+    decide(&noticing_ctx(&dir, &before, table), &mut st, &Event::Batch { calls: vec![bash("git status", "")] });
     let d = decide(
-        &noticing_ctx(&dir, &before, &table),
+        &noticing_ctx(&dir, &before, table),
         &mut st,
         &Event::Batch { calls: vec![edit_call(&dir, "acme/a.py")] },
     );
@@ -130,7 +130,7 @@ fn candidates_have_their_own_bounded_ring() {
     assert!(d.cand_ctx.is_some(), "the decision records the candidate ring it changed");
     let ctx_before = st.ctx.clone();
     // Relearned: the next edit pushes onto a fresh candidate ring, the routes' ring goes on.
-    let ctx = noticing_ctx(&dir, &after, &table);
+    let ctx = noticing_ctx(&dir, &after, table);
     decide(&ctx, &mut st, &Event::Batch { calls: vec![bash("git status", "")] });
     assert_eq!(st.ctx.alphabet, ctx_before.alphabet);
     let d = decide(&ctx, &mut st, &Event::Batch { calls: vec![edit_call(&dir, "acme/b.py")] });
@@ -156,7 +156,7 @@ fn candidates_have_their_own_bounded_ring() {
 fn noticed_and_the_candidate_ring_are_rebuilt_from_the_spool() {
     let (dir, _, table) = fixture();
     let index = noticing_index(vec![lint_candidate("run-lint", "exec make test", 2)]);
-    let ctx = noticing_ctx(&dir, &index, &table);
+    let ctx = noticing_ctx(&dir, &index, table);
     let mut st = SessionState { arm: Some(Arm::Treated), repo: Some("acme".into()), ..Default::default() };
     let mut records = Vec::new();
     for ev in [
@@ -169,7 +169,7 @@ fn noticed_and_the_candidate_ring_are_rebuilt_from_the_spool() {
         );
     }
     assert_eq!(records[1]["decision"]["noticed"][0]["candidate"], "run-lint");
-    let rebuilt = rebuild::rebuild(&records, &index, "acme", &table).unwrap();
+    let rebuilt = rebuild::rebuild(&records, &index, "acme", table).unwrap();
     assert_eq!((rebuilt.cand_ctx.clone(), rebuilt.noticed.clone()), (st.cand_ctx.clone(), st.noticed.clone()));
     // The rebuilt session does not notice it again.
     let mut again = rebuilt;
@@ -180,7 +180,7 @@ fn noticed_and_the_candidate_ring_are_rebuilt_from_the_spool() {
         assert!(decide(&ctx, &mut again, &ev).noticed.is_empty());
     }
     let relearned = noticing_index(vec![lint_candidate("run-lint-2", "exec make build", 2)]);
-    let rebuilt = rebuild::rebuild(&records, &relearned, "acme", &table).unwrap();
+    let rebuilt = rebuild::rebuild(&records, &relearned, "acme", table).unwrap();
     assert!(rebuilt.cand_ctx.is_empty() && rebuilt.noticed == vec!["run-lint".to_string()]);
 }
 
@@ -190,7 +190,7 @@ fn noticed_and_the_candidate_ring_are_rebuilt_from_the_spool() {
 #[test]
 fn the_control_arm_records_the_chain_the_treated_arm_makes() {
     let (dir, index, table) = predict_fixture(vec![]);
-    let ctx = predict_ctx(&dir, &index, &table, &["lookup", "read-linked"]);
+    let ctx = predict_ctx(&dir, &index, table, &["lookup", "read-linked"]);
     let mut st = SessionState { arm: Some(Arm::Control), ..Default::default() };
     decide(&ctx, &mut st, &Event::Prompt { text: "Pick up W-2042 please".into() });
     let d = decide(&ctx, &mut st, &step("t", 1, false));

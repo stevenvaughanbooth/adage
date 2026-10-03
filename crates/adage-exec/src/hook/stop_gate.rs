@@ -56,7 +56,7 @@ pub(super) fn stop_gate(call: &StopCall<'_>) -> Option<StopGate> {
     let name = label(&ir.track, &ir.route.id);
     let table = CommandTable::load();
     let mut req =
-        route::plan(ir, call.index, call.root, &call.paths.tracks(), Level::E2, a.terms.as_ref(), &table).ok()?.request;
+        route::plan(ir, call.index, call.root, &call.paths.tracks(), Level::E2, a.terms.as_ref(), table).ok()?.request;
     req.inputs = route::bound_from_command(&req.argv, &command)?;
     let action = req.action.clone()?;
     let now =
@@ -76,7 +76,7 @@ pub(super) fn stop_gate(call: &StopCall<'_>) -> Option<StopGate> {
         return None;
     }
     let cap = sandbox::detect();
-    let ctx = run_context(&pol, &store, &cap, &table, call.repo_key, home);
+    let ctx = run_context(&pol, &store, &cap, table, call.repo_key, home);
     let gates = adage_store::state::update::<adage_runtime::SessionState, _>(&call.paths.state(call.session), |st| {
         st.stop_gates += 1;
         st.stop_gates

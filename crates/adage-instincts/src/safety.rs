@@ -370,7 +370,7 @@ mod tests {
         let (_d, f) = files();
         let t = CommandTable::load();
         let g: Vec<String> = vec!["stringer".into()];
-        let ok = |l: &str| check_line(l, &f, &g, &t);
+        let ok = |l: &str| check_line(l, &f, &g, t);
         assert_eq!(ok("ACME_ENV=test python3 -m unittest discover -s tests").unwrap().effect, Effect::Verify);
         let gen = ok("python3 tools/gen.py").unwrap();
         assert_eq!(gen.scripts, vec!["tools/gen.py".to_string()]);
@@ -414,7 +414,7 @@ mod tests {
             "rm -rf build",
         ];
         for b in bad {
-            assert!(check_line(b, &f, &[], &t).is_err(), "{b:?} must be refused");
+            assert!(check_line(b, &f, &[], t).is_err(), "{b:?} must be refused");
         }
     }
 
@@ -422,7 +422,7 @@ mod tests {
     fn ids_match_the_learner() {
         // The demo's learned dead end for `make test` (docs/evals.md, adage-eval gates).
         let t = CommandTable::load();
-        let k = command_key("make test", &t).unwrap();
+        let k = command_key("make test", t).unwrap();
         assert_eq!(k, "exec make test");
         assert_eq!(format!("dead-end-{}", stable(&[&k])), "dead-end-d41b1e");
     }

@@ -217,7 +217,7 @@ impl Corpus {
                             .meta
                             .get(i)
                             .and_then(|m| effect_of(&m.effect))
-                            .unwrap_or_else(|| events::classify(argv, &table));
+                            .unwrap_or_else(|| events::classify(argv, table));
                         e.effect = Some(e.effect.map_or(eff, |x| max_effect(x, eff)));
                         let out = adage_core::tokens::bounded(output, input::MAX_OUTPUT);
                         if *failed {
@@ -285,7 +285,7 @@ impl Corpus {
     /// The effect class of `key` as the traces ran it, never below what Adage assigns the literal.
     pub fn effect(&self, key: &str) -> Option<Effect> {
         let (lit, _) = self.literal(key)?;
-        let assigned = adage_tracks::io::classify(lit, &adage_core::CommandTable::load());
+        let assigned = adage_tracks::io::classify(lit, adage_core::CommandTable::load());
         Some(self.acts.get(key).and_then(|a| a.effect).map_or(assigned, |e| max_effect(e, assigned)))
     }
 }

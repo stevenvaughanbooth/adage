@@ -453,7 +453,7 @@ fn add_claimed_steps(all: &mut Vec<adage_tracks::Track>, transcripts: &[PathBuf]
     use crate::claims::ClaimKind;
     let table = adage_core::CommandTable::load();
     let sessions: Vec<adage_learn::import::Session> =
-        transcripts.iter().filter_map(|p| adage_learn::read_session(p, &table, Some(&plan.repo.key))).collect();
+        transcripts.iter().filter_map(|p| adage_learn::read_session(p, table, Some(&plan.repo.key))).collect();
     let refs: Vec<&adage_learn::import::Session> = sessions.iter().filter(|s| !s.steps.is_empty()).collect();
     let name = format!("{}/{}", adage_learn::slug(&plan.repo.key), adage_learn::TRACK);
     for c in plan.claims.iter().filter(|c| !c.is_unsafe()) {
@@ -863,7 +863,7 @@ mod claimed_step_tests {
         };
         let table = adage_core::CommandTable::load();
         let sessions: Vec<adage_learn::import::Session> =
-            transcripts.iter().filter_map(|p| adage_learn::read_session(p, &table, Some(&plan.repo.key))).collect();
+            transcripts.iter().filter_map(|p| adage_learn::read_session(p, table, Some(&plan.repo.key))).collect();
         let refs: Vec<&adage_learn::import::Session> = sessions.iter().collect();
         let mut advice =
             adage_learn::claims::claimed_verify_route(&refs, "make test", &cfg).expect("the claim is followed");

@@ -814,7 +814,7 @@ mod tests {
     const CLICK: &str = include_str!("../../../evals/lab/skills/skills/click-bugfix/SKILL.md");
 
     fn g(text: &str) -> Graph {
-        parse(text.as_bytes(), "SKILL.md", "skill", &CommandTable::load())
+        parse(text.as_bytes(), "SKILL.md", "skill", CommandTable::load())
     }
 
     #[test]
@@ -866,14 +866,14 @@ mod tests {
     #[test]
     fn mentions_and_paths_are_not_commands() {
         let t = CommandTable::load();
-        assert!(is_command("make gen", &t));
-        assert!(is_command("scripts/wi-lookup <ID>", &t));
-        assert!(is_command(".venv/bin/python -m pytest", &t));
-        assert!(!is_command("schema/*.json", &t));
-        assert!(!is_command("acme/generated/models.py", &t));
-        assert!(!is_command("RuntimeError: ACME_ENV is not set", &t));
-        assert!(!is_command("OK", &t));
-        assert!(commands_in("It fails with `generated models are stale` if you skipped `make gen`.", &t).is_empty());
+        assert!(is_command("make gen", t));
+        assert!(is_command("scripts/wi-lookup <ID>", t));
+        assert!(is_command(".venv/bin/python -m pytest", t));
+        assert!(!is_command("schema/*.json", t));
+        assert!(!is_command("acme/generated/models.py", t));
+        assert!(!is_command("RuntimeError: ACME_ENV is not set", t));
+        assert!(!is_command("OK", t));
+        assert!(commands_in("It fails with `generated models are stale` if you skipped `make gen`.", t).is_empty());
         assert_eq!(sentences("Run `a`. Then b! `c` d. e.g. x"), ["Run `a`.", "Then b!", "`c` d. e.g. x"]);
     }
 

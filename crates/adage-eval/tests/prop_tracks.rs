@@ -497,7 +497,7 @@ fn check(
         index: &index,
         repo: "acme".into(),
         root: &root,
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -708,7 +708,7 @@ fn interlocking_holds_for_colliding_route_sets() {
                 .iter()
                 .enumerate()
                 .filter(|(_, s)| s.3 == imported)
-                .map(|(i, s)| colliding(i, *s, &table))
+                .map(|(i, s)| colliding(i, *s, table))
                 .collect(),
         };
         let tracks = [track("acme/learned", "desire-path", false), track("acme/imported", "imported:teammate", true)];
@@ -725,7 +725,7 @@ fn interlocking_holds_for_colliding_route_sets() {
             index: &index,
             repo: "acme".into(),
             root: &root,
-            table: &table,
+            table,
             embed: Some(&fake_embed),
             params: Default::default(),
             policy: Default::default(),

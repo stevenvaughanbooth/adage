@@ -32,7 +32,7 @@ mod classification_tests {
     use super::*;
 
     fn effect(cmd: &str) -> Effect {
-        shell::normalize_shell(cmd, "/repo", &CommandTable::load())[0].effect
+        shell::normalize_shell(cmd, "/repo", CommandTable::load())[0].effect
     }
 
     #[test]

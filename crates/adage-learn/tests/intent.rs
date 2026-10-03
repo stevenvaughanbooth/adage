@@ -196,7 +196,7 @@ fn mines_intent_routes_and_the_runtime_matches_new_phrasings() {
         index: &index,
         repo: "acme-docs".into(),
         root: root.path(),
-        table: &table,
+        table,
         embed: Some(&embed),
         params: Default::default(),
         policy: Default::default(),

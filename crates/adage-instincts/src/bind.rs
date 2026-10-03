@@ -146,7 +146,7 @@ pub fn bind_facts(
 ) -> BindResult {
     let cat = catalogue();
     let table = CommandTable::load();
-    let ctx = Ctx { facts, table: &table, cat };
+    let ctx = Ctx { facts, table, cat };
     let learned: Vec<&Route> = existing.iter().filter(|r| !r.evidence.provenance.starts_with("instinct:")).collect();
 
     let mut out = BindResult::default();
@@ -186,13 +186,13 @@ pub fn bind_facts(
                 out.skipped.push((c.instinct.clone(), format!("{rid} ({}): rejected in review", describe(&c))));
                 continue;
             }
-            if let Some(why) = learned_conflict(&c, &rid, &learned, &table) {
+            if let Some(why) = learned_conflict(&c, &rid, &learned, table) {
                 claimed.insert(slot, c.instinct.clone());
                 out.skipped.push((c.instinct.clone(), format!("{rid} ({}): {why}", describe(&c))));
                 continue;
             }
             let route = build(&c, &rid, cat);
-            match check_route(&route, cat, &table) {
+            match check_route(&route, cat, table) {
                 Ok(()) => {
                     claimed.insert(slot, c.instinct.clone());
                     out.origins.insert(rid, c.instinct.clone());
@@ -227,7 +227,7 @@ pub fn bind_facts(
                 evidence: evidence(cat, &a.instinct, a.ecosystem, a.declared),
                 authored: false,
             };
-            match check_advisory(&route, cat, &table) {
+            match check_advisory(&route, cat, table) {
                 Ok(()) => {
                     out.origins.insert(aid, a.instinct);
                     out.routes.push(route);

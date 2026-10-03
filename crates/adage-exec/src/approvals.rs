@@ -512,7 +512,7 @@ mod tests {
         assert_eq!(s.revoke("r", Some("t/r"), None), 1);
         assert!(s.approvals.is_empty());
         let actx =
-            AutoContext { table: &CommandTable::load(), git_hazards: &[], sandbox_enforced: true, policy_auto: true };
+            AutoContext { table: CommandTable::load(), git_hazards: &[], sandbox_enforced: true, policy_auto: true };
         let auto_predict = ExecRequest { mode: GrantMode::Predict, ..req() };
         assert!(auto_eligible(&auto_predict, &actx).is_err(), "never automatic");
     }
@@ -549,11 +549,11 @@ mod tests {
     #[test]
     fn inert_observe_class() {
         let table = CommandTable::load();
-        let ctx = AutoContext { table: &table, git_hazards: &[], sandbox_enforced: true, policy_auto: true };
+        let ctx = AutoContext { table, git_hazards: &[], sandbox_enforced: true, policy_auto: true };
         assert!(auto_eligible(&req(), &ctx).is_ok());
         let off = AutoContext { policy_auto: false, ..ctx };
         assert!(auto_eligible(&req(), &off).is_err(), "off by default");
-        let ctx = AutoContext { table: &table, git_hazards: &[], sandbox_enforced: true, policy_auto: true };
+        let ctx = AutoContext { table, git_hazards: &[], sandbox_enforced: true, policy_auto: true };
         let cases: Vec<Mutation> = vec![
             Box::new(|r| r.level = Level::E2),
             Box::new(|r| r.argv = vec!["make".into(), "test".into()]),
@@ -580,9 +580,9 @@ mod tests {
         git.argv = vec!["git".into(), "status".into()];
         git.contracts.clear();
         let hazards = vec!["core.fsmonitor".to_string()];
-        let hostile = AutoContext { table: &table, git_hazards: &hazards, sandbox_enforced: true, policy_auto: true };
+        let hostile = AutoContext { table, git_hazards: &hazards, sandbox_enforced: true, policy_auto: true };
         assert!(auto_eligible(&git, &hostile).is_err());
-        let clean = AutoContext { table: &table, git_hazards: &[], sandbox_enforced: true, policy_auto: true };
+        let clean = AutoContext { table, git_hazards: &[], sandbox_enforced: true, policy_auto: true };
         assert!(auto_eligible(&git, &clean).is_ok());
     }
 }

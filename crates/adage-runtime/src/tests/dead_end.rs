@@ -6,11 +6,11 @@ use super::*;
 #[test]
 fn turn_step_in_observe_mode_records_would_predict_only() {
     let (dir, index, table) = predict_fixture(vec![]);
-    let mut ctx = predict_ctx(&dir, &index, &table, &["lookup"]);
+    let mut ctx = predict_ctx(&dir, &index, table, &["lookup"]);
     ctx.policy.observe = true;
     let mut st = SessionState {
         arm: Some(Arm::Treated),
-        pending: vec![pending("lookup", "./scripts/wi-lookup W-2042 --json", &table)],
+        pending: vec![pending("lookup", "./scripts/wi-lookup W-2042 --json", table)],
         ..Default::default()
     };
     let d = decide(&ctx, &mut st, &step("t", 1, false));
@@ -37,7 +37,7 @@ fn after_failure_pair(strength: Strength) -> Route {
 fn a_learned_dead_end_is_substituted_only_from_a_firm_fixed_pair() {
     let (_dir, index, table) = fixture();
     let policy = Policy::default();
-    let sub = |index: &Index, cmd: &str| substitution(index, "acme", &policy, &table, cmd);
+    let sub = |index: &Index, cmd: &str| substitution(index, "acme", &policy, table, cmd);
     let s = sub(&index, "python3 -m unittest tests.test_billing -v").expect("the dead end");
     assert_eq!((s.route.as_str(), s.track.as_str(), s.command.as_str()), ("dead-unittest", "acme/t", "make test"));
     assert_eq!(
@@ -90,7 +90,7 @@ fn a_learned_dead_end_is_substituted_only_from_a_firm_fixed_pair() {
 #[test]
 fn a_substitution_is_its_own_judgement_and_never_in_control() {
     let (_dir, index, table) = fixture();
-    let s = substitution(&index, "acme", &Policy::default(), &table, "python3 -m unittest").unwrap();
+    let s = substitution(&index, "acme", &Policy::default(), table, "python3 -m unittest").unwrap();
     let d = substitute(Some(Arm::Treated), false, s.clone());
     assert_eq!(d.substituted.as_ref(), Some(&s));
     assert!(matches!(d.judgements.as_slice(), [Judgement::Substituted { route }] if route == "dead-unittest"));
@@ -199,7 +199,7 @@ fn a_reflex_in_the_standing_text_is_not_announced_again() {
         index: &index,
         repo: "acme".into(),
         root: dir.path(),
-        table: &table,
+        table,
         embed: None,
         params: Default::default(),
         policy: Default::default(),
@@ -234,14 +234,14 @@ fn routing_is_consented_and_never_in_control() {
     );
     let (dir, index, table) = predict_fixture(vec![prime]);
     let at = |grants: &[&str], routine: bool, observe: bool| {
-        let mut c = predict_ctx(&dir, &index, &table, grants);
+        let mut c = predict_ctx(&dir, &index, table, grants);
         c.policy.routine = routine;
         c.policy.observe = observe;
         c
     };
     let with = |arm: Arm, pending_routes: &[(&str, &str)]| SessionState {
         arm: Some(arm),
-        pending: pending_routes.iter().map(|(r, c)| pending(r, c, &table)).collect(),
+        pending: pending_routes.iter().map(|(r, c)| pending(r, c, table)).collect(),
         ..Default::default()
     };
     let lookup = [("lookup", "./scripts/wi-lookup W-2042 --json")];

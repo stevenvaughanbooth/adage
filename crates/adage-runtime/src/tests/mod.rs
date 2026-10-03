@@ -38,12 +38,12 @@ fn route(id: &str, trigger: Trigger, step: Step, slots: Vec<Slot>, effect: Effec
     }
 }
 
-fn fixture() -> (tempfile::TempDir, Index, CommandTable) {
+fn fixture() -> (tempfile::TempDir, Index, &'static CommandTable) {
     let dir = tempfile::tempdir().unwrap();
     std::fs::create_dir_all(dir.path().join("acme")).unwrap();
     std::fs::write(dir.path().join("acme/billing.py"), "x").unwrap();
     let table = CommandTable::load();
-    let lookup_key = command_key("./scripts/wi-lookup W-1 --json", &table);
+    let lookup_key = command_key("./scripts/wi-lookup W-1 --json", table);
     let track = Track {
         manifest: Manifest {
             track: TrackInfo {
@@ -241,7 +241,7 @@ fn decide_both(ctx: &Ctx, full: &mut SessionState, fast_st: &mut SessionState, e
 
 /// The lookup, its linked files and the finish line of [`fixture`], plus `extra`, in one track
 /// `acme/t`.
-fn predict_fixture(extra: Vec<Route>) -> (tempfile::TempDir, Index, CommandTable) {
+fn predict_fixture(extra: Vec<Route>) -> (tempfile::TempDir, Index, &'static CommandTable) {
     let (dir, base, table) = fixture();
     let mut routes: Vec<Route> =
         base.routes.iter().filter(|r| r.route.id != "dead-unittest").map(|r| r.route.clone()).collect();

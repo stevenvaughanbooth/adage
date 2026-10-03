@@ -78,13 +78,24 @@ fn beta_cf(a: f64, b: f64, x: f64) -> f64 {
 
 /// The regularised incomplete beta I_x(a, b), for a, b > 0 and x in [0, 1].
 pub fn inc_beta(a: f64, b: f64, x: f64) -> f64 {
+    inc_beta_with(ln_beta_front(a, b), a, b, x)
+}
+
+/// The part of [`inc_beta`]'s front factor that depends only on `a` and `b`, so a caller that
+/// evaluates it at many `x` computes it once. Kept as the first terms of the same left-to-right
+/// sum, so the result is bit-for-bit what [`inc_beta`] computed before.
+fn ln_beta_front(a: f64, b: f64) -> f64 {
+    ln_gamma(a + b) - ln_gamma(a) - ln_gamma(b)
+}
+
+fn inc_beta_with(ln_beta: f64, a: f64, b: f64, x: f64) -> f64 {
     if x <= 0.0 {
         return 0.0;
     }
     if x >= 1.0 {
         return 1.0;
     }
-    let ln_front = ln_gamma(a + b) - ln_gamma(a) - ln_gamma(b) + a * x.ln() + b * (1.0 - x).ln();
+    let ln_front = ln_beta + a * x.ln() + b * (1.0 - x).ln();
     let front = ln_front.exp();
     if x < (a + 1.0) / (a + b + 2.0) {
         front * beta_cf(a, b, x) / a
@@ -99,10 +110,15 @@ pub fn beta_quantile(q: f64, a: f64, b: f64) -> f64 {
         return f64::NAN;
     }
     let q = q.clamp(0.0, 1.0);
+    let ln_beta = ln_beta_front(a, b);
     let (mut lo, mut hi) = (0.0f64, 1.0f64);
     for _ in 0..100 {
+        // Once the interval has collapsed, every further halving leaves it as it is.
+        if lo == hi {
+            break;
+        }
         let mid = 0.5 * (lo + hi);
-        if inc_beta(a, b, mid) < q {
+        if inc_beta_with(ln_beta, a, b, mid) < q {
             lo = mid;
         } else {
             hi = mid;
@@ -315,6 +331,51 @@ mod tests {
         assert!(close(inc_beta(7.5, 7.5, 0.5), 0.5, 1e-12));
         assert!(close(inc_beta(2.0, 3.0, 0.4), 0.5248, 1e-12));
         assert!(close(inc_beta(10.0, 20.0, 0.3), 0.364_004_081_071_943_5, 1e-12));
+    }
+
+    /// The quantile as it was computed before `ln_beta_front` was hoisted and the bisection
+    /// stopped at a collapsed interval: the scores, and so the learned tracks, depend on it.
+    fn beta_quantile_reference(q: f64, a: f64, b: f64) -> f64 {
+        if !(a > 0.0 && b > 0.0) {
+            return f64::NAN;
+        }
+        let q = q.clamp(0.0, 1.0);
+        let (mut lo, mut hi) = (0.0f64, 1.0f64);
+        for _ in 0..100 {
+            let mid = 0.5 * (lo + hi);
+            let ln_front = ln_gamma(a + b) - ln_gamma(a) - ln_gamma(b) + a * mid.ln() + b * (1.0 - mid).ln();
+            let front = ln_front.exp();
+            let i = if mid <= 0.0 {
+                0.0
+            } else if mid >= 1.0 {
+                1.0
+            } else if mid < (a + 1.0) / (a + b + 2.0) {
+                front * beta_cf(a, b, mid) / a
+            } else {
+                1.0 - front * beta_cf(b, a, 1.0 - mid) / b
+            };
+            if i < q {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+        0.5 * (lo + hi)
+    }
+
+    #[test]
+    fn beta_quantile_is_bit_for_bit_the_reference() {
+        let mut n = 0;
+        for &q in &[0.0, 1e-9, 0.01, 0.05, 0.1, 0.5, 0.9, 0.95, 0.999, 1.0] {
+            for &a in &[0.05, 0.5, 1.0, 1.7, 3.0, 10.0, 41.5, 400.0, 5000.0] {
+                for &b in &[0.05, 0.5, 1.0, 2.25, 7.0, 33.0, 250.0, 9000.0] {
+                    let (x, y) = (beta_quantile(q, a, b), beta_quantile_reference(q, a, b));
+                    assert_eq!(x.to_bits(), y.to_bits(), "q={q} a={a} b={b}: {x} vs {y}");
+                    n += 1;
+                }
+            }
+        }
+        assert_eq!(n, 720);
     }
 
     #[test]

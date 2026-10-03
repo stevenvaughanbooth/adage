@@ -187,7 +187,7 @@ pub(super) fn act(turn: &Turn<'_>, directives: &[Directive], candidates: &[Candi
         return out;
     }
     let table = CommandTable::load();
-    let plan = match route::plan(ir, turn.index, turn.root, &turn.paths.tracks(), Level::E2, a.terms.as_ref(), &table) {
+    let plan = match route::plan(ir, turn.index, turn.root, &turn.paths.tracks(), Level::E2, a.terms.as_ref(), table) {
         Ok(p) => p,
         Err(e) => {
             out.notice = Some(unplanned_notice(a, &e));
@@ -214,7 +214,7 @@ pub(super) fn act(turn: &Turn<'_>, directives: &[Directive], candidates: &[Candi
         return out;
     };
     let cap = sandbox::detect();
-    let ctx = run_context(&pol, &store, &cap, &table, turn.repo_key, home);
+    let ctx = run_context(&pol, &store, &cap, table, turn.repo_key, home);
     // Prefer native tool-call identity: a redelivery must not become a fresh apply just
     // because decide() incremented a batch counter. Counters remain a best-effort fallback
     // for Stop and older payloads without IDs; those cannot promise redelivery deduplication.
@@ -499,7 +499,7 @@ mod tests {
         f.index = Index { routes: vec![ir.clone()], ..learned };
         f.approve(); // A test-only grant in this temporary home, never a real user's approval.
         let table = CommandTable::load();
-        let ctx = f.ctx(&table, (ir.track.clone(), ir.route.id.clone()));
+        let ctx = f.ctx(table, (ir.track.clone(), ir.route.id.clone()));
         let mut state = SessionState { arm: Some(Arm::Treated), ..Default::default() };
         let mut last = None;
         {

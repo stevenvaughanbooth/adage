@@ -518,7 +518,7 @@ pub(crate) fn lapsed_here(paths: &Paths, root: Option<&Path>, store: &Store) -> 
     let index = Index::load(&paths.index());
     let keys: std::collections::BTreeSet<&str> = index.routes.iter().map(|r| r.repo.as_str()).collect();
     let Some(key) = repo::lookup_key(root, Some(&paths.repo_keys()), &keys) else { return Vec::new() };
-    let planned = route::plan_grants(&key, root, &index, &paths.tracks(), store, &CommandTable::load());
+    let planned = route::plan_grants(&key, root, &index, &paths.tracks(), store, CommandTable::load());
     route::lapses(&planned, store)
 }
 
@@ -825,7 +825,7 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
             confirm,
         });
     }
-    let table = &CommandTable::load();
+    let table = CommandTable::load();
     let plan =
         route::plan(ir, &index, &root, &paths.tracks(), level, Some(&terms), table).map_err(anyhow::Error::msg)?;
     let req = plan.request;
@@ -1063,7 +1063,7 @@ fn delegate_predict(
     let plan = route::plan_predict(ir, root, &paths.tracks()).map_err(anyhow::Error::msg)?;
     let req = plan.request;
     let table = CommandTable::load();
-    let classified = route::predict_classified(&req, &table);
+    let classified = route::predict_classified(&req, table);
     let pol = adage_exec::policy::load(&paths.root)?;
     pol.permits(&req, classified).map_err(|e| {
         if e.contains("caps execution") {
@@ -1197,7 +1197,7 @@ fn staged(s: Staging<'_>) -> Result<()> {
     } else {
         current
     };
-    let plan = plan_grant(&s, &pol, &table)?;
+    let plan = plan_grant(&s, &pol, table)?;
     let digest = route::grant_digest(&plan.key, &plan.terms, &plan.snapshot);
     let answer = |recorded: bool, extra: Value| -> Value {
         let mut v = json!({

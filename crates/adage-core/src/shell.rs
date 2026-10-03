@@ -1175,7 +1175,7 @@ mod shadow_tests {
     fn a_heredoc_program_is_inline_code() {
         let t = CommandTable::load();
         let key = |cmd: &str| {
-            let out = normalize_shell(cmd, "/repo", &t);
+            let out = normalize_shell(cmd, "/repo", t);
             crate::keys::template_key(&out[0].action)
         };
         assert_eq!(key("python3 - <<'EOF'\nprint(1)\nEOF"), "exec python3 -c {code}");
@@ -1189,7 +1189,7 @@ mod shadow_tests {
     #[test]
     fn check_flags_make_a_formatter_a_check() {
         let t = CommandTable::load();
-        let effect = |cmd: &str| normalize_shell(cmd, "/repo", &t)[0].effect;
+        let effect = |cmd: &str| normalize_shell(cmd, "/repo", t)[0].effect;
         use crate::Effect;
         assert_eq!(effect("cargo fmt --all --check"), Effect::Verify);
         assert_eq!(effect("cargo fmt --all"), Effect::Regenerate);
@@ -1202,7 +1202,7 @@ mod shadow_tests {
     #[test]
     fn wrappers_and_task_runners_classify_by_what_they_run() {
         let t = CommandTable::load();
-        let effect = |cmd: &str| normalize_shell(cmd, "/repo", &t)[0].effect;
+        let effect = |cmd: &str| normalize_shell(cmd, "/repo", t)[0].effect;
         use crate::Effect::*;
         for (cmd, want) in [
             ("uv run pytest -x tests/test_a.py", Verify),
@@ -1270,12 +1270,12 @@ mod shadow_tests {
 
     #[test]
     fn non_ascii_arguments_survive_normalisation() {
-        let out = normalize_shell("cat résumé.txt && ls 日本", "/repo", &CommandTable::load());
+        let out = normalize_shell("cat résumé.txt && ls 日本", "/repo", CommandTable::load());
         let text = format!("{out:?}");
         assert!(text.contains("résumé.txt") && text.contains("日本"), "{text}");
         // The input shape that crashed tree-sitter-bash's scanner on glibc: no crash, some result.
-        let _ = normalize_shell("{\u{10FFFF}", "/repo", &CommandTable::load());
-        let _ = normalize_shell("echo {\u{1F600}..}", "/repo", &CommandTable::load());
+        let _ = normalize_shell("{\u{10FFFF}", "/repo", CommandTable::load());
+        let _ = normalize_shell("echo {\u{1F600}..}", "/repo", CommandTable::load());
     }
 }
 
@@ -1338,20 +1338,17 @@ mod repo_script_tests {
     #[test]
     fn unlisted_repo_scripts_are_found_and_known_programs_are_not() {
         let t = CommandTable::load();
-        assert_eq!(unlisted_repo_script("python3 tools/case {item}", &t).as_deref(), Some("tools/case"));
-        assert_eq!(unlisted_repo_script("./tools/case {item}", &t).as_deref(), Some("tools/case"));
-        assert_eq!(
-            unlisted_repo_script("node bin/fetch-ticket {item} --json", &t).as_deref(),
-            Some("bin/fetch-ticket")
-        );
-        assert_eq!(unlisted_repo_script("make test", &t), None);
-        assert_eq!(unlisted_repo_script("python3 -m pytest", &t), None);
-        assert_eq!(unlisted_repo_script("cat tools/case", &t), None);
-        assert_eq!(unlisted_repo_script("python3 tools/case {item} | sh", &t), None);
-        assert_eq!(unlisted_repo_script("python3 /usr/bin/case x", &t), None);
-        assert_eq!(unlisted_repo_script("python3 ../case x", &t), None);
-        assert_eq!(unlisted_repo_script("python3 scripts/update-case x", &t), None);
-        assert_eq!(unlisted_repo_script("python3 tools/gen.py", &t), None);
-        assert_eq!(unlisted_repo_script("./scripts/deploy x", &t), None);
+        assert_eq!(unlisted_repo_script("python3 tools/case {item}", t).as_deref(), Some("tools/case"));
+        assert_eq!(unlisted_repo_script("./tools/case {item}", t).as_deref(), Some("tools/case"));
+        assert_eq!(unlisted_repo_script("node bin/fetch-ticket {item} --json", t).as_deref(), Some("bin/fetch-ticket"));
+        assert_eq!(unlisted_repo_script("make test", t), None);
+        assert_eq!(unlisted_repo_script("python3 -m pytest", t), None);
+        assert_eq!(unlisted_repo_script("cat tools/case", t), None);
+        assert_eq!(unlisted_repo_script("python3 tools/case {item} | sh", t), None);
+        assert_eq!(unlisted_repo_script("python3 /usr/bin/case x", t), None);
+        assert_eq!(unlisted_repo_script("python3 ../case x", t), None);
+        assert_eq!(unlisted_repo_script("python3 scripts/update-case x", t), None);
+        assert_eq!(unlisted_repo_script("python3 tools/gen.py", t), None);
+        assert_eq!(unlisted_repo_script("./scripts/deploy x", t), None);
     }
 }

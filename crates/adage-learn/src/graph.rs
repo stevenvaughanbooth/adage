@@ -180,7 +180,7 @@ fn route_for(
     // The effect of what would be directed, never inherited; the ceiling comes first.
     let effect = effect
         .unwrap_or(Effect::Environment)
-        .max_by_rank(adage_tracks::io::classify(&command, &adage_core::CommandTable::load()));
+        .max_by_rank(adage_tracks::io::classify(&command, adage_core::CommandTable::load()));
     // A repository script the table does not know: classified by what the traces show it doing.
     let (effect, effect_evidence) = crate::effects::effect_of(effect, &command, sessions);
     ceiling(effect, false)?;

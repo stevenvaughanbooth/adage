@@ -10,7 +10,7 @@ use super::*;
 fn a_chain_reads_what_adages_lookup_bound_at_the_next_step_and_never_a_third() {
     let (dir, index, table) = predict_fixture(vec![]);
     std::fs::write(dir.path().join("acme/rates.py"), "x").unwrap();
-    let ctx = predict_ctx(&dir, &index, &table, &["lookup", "read-linked", "gen"]);
+    let ctx = predict_ctx(&dir, &index, table, &["lookup", "read-linked", "gen"]);
     let mut st = SessionState { arm: Some(Arm::Treated), ..Default::default() };
     decide(&ctx, &mut st, &Event::Prompt { text: "Pick up W-2042 please".into() });
     assert_eq!(decide(&ctx, &mut st, &step("t", 1, false)).predicted.unwrap().route, "lookup");
@@ -39,7 +39,7 @@ fn a_chain_reads_what_adages_lookup_bound_at_the_next_step_and_never_a_third() {
         d.judgements.iter().filter(|j| matches!(j, Judgement::Predicted { route } if route == "read-linked")).collect();
     assert_eq!(predicted.len(), 1, "one judgement for the response, whatever its calls: {:?}", d.judgements);
     // Something else is due, but a third step in a row is never predicted.
-    st.pending.push(pending("gen", "make gen", &table));
+    st.pending.push(pending("gen", "make gen", table));
     let d = decide(&ctx, &mut st, &step("t", 3, false));
     assert!(d.would_predict.is_none(), "a model step first");
     let d = decide(&ctx, &mut st, &step("t", 4, false));
@@ -52,7 +52,7 @@ fn a_chain_reads_what_adages_lookup_bound_at_the_next_step_and_never_a_third() {
 #[test]
 fn only_adages_own_lookup_chains_into_its_reads() {
     let (dir, index, table) = predict_fixture(vec![]);
-    let ctx = predict_ctx(&dir, &index, &table, &["read-linked"]);
+    let ctx = predict_ctx(&dir, &index, table, &["read-linked"]);
     let reads = |after_adage| PendingReads {
         route: "read-linked".into(),
         files: vec!["acme/billing.py".into()],
@@ -72,6 +72,6 @@ fn only_adages_own_lookup_chains_into_its_reads() {
                            "decision": { "directives": [], "would_have": [], "judgements": [], "observed": [],
                                          "continue_reason": null, "predicted_at": ["t", 2],
                                          "would_predict": { "kind": "chain", "route": "read-linked", "track": "acme/t", "calls": [] } } })];
-    let rebuilt = rebuild::rebuild(&records, &index, "acme", &table).unwrap();
+    let rebuilt = rebuild::rebuild(&records, &index, "acme", table).unwrap();
     assert!(rebuilt.reads.is_empty() && !rebuilt.chained && rebuilt.predictions == 1);
 }

@@ -68,7 +68,7 @@ pub fn read(traces: &[PathBuf], opts: &Options) -> Batch {
         keys.entry(root.to_path_buf()).or_insert_with(|| locator.locate(root, None).repo).clone()
     };
     let (over, only) = (opts.repo_override.as_deref(), opts.only_repo.as_deref());
-    let cx = Decode { table: &table, locator, repo_override: over, subagent: false };
+    let cx = Decode { table, locator, repo_override: over, subagent: false };
     for p in traces {
         let got = match cache.as_mut() {
             Some(c) => c.read(p, &cx, only, &mut repo_of),

@@ -112,7 +112,7 @@ fn status_shows_change(st: &crate::import::StepObs) -> bool {
 /// documentation).
 pub fn infer(command: &str, sessions: &[&Session]) -> Option<String> {
     let table = CommandTable::load();
-    let rel = adage_core::shell::unlisted_repo_script(command, &table)?;
+    let rel = adage_core::shell::unlisted_repo_script(command, table)?;
     let mut ran: BTreeSet<&str> = BTreeSet::new();
     let mut used: BTreeSet<&str> = BTreeSet::new();
     let mut inspected = false;
