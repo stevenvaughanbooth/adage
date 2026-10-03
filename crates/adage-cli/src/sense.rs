@@ -65,21 +65,21 @@ pub struct Options {
 impl Options {
     pub fn parse(args: &[String]) -> Result<Options> {
         let mut o = Options {
-            repo: crate::flag(args, "--repo"),
+            repo: crate::helpers::flag(args, "--repo"),
             demo: args.iter().any(|a| a == "--demo"),
             explicit_sources: args
                 .iter()
                 .any(|a| matches!(a.as_str(), "--transcripts" | "--claude-projects" | "--codex-sessions")),
             ..Default::default()
         };
-        if let Some(d) = crate::flag(args, "--since") {
+        if let Some(d) = crate::helpers::flag(args, "--since") {
             match d.parse::<u32>() {
                 Ok(n) if n > 0 => o.since_days = Some(n),
                 _ => bail!("--since takes a number of days, e.g. --since 30"),
             }
         }
-        o.claude_projects = crate::flag(args, "--claude-projects").map(PathBuf::from);
-        o.codex_sessions = crate::flag(args, "--codex-sessions").map(PathBuf::from);
+        o.claude_projects = crate::helpers::flag(args, "--claude-projects").map(PathBuf::from);
+        o.codex_sessions = crate::helpers::flag(args, "--codex-sessions").map(PathBuf::from);
         // The repository this runs in, unless a source, a key or every repository is named.
         if !o.explicit_sources && o.repo.is_none() && !args.iter().any(|a| a == "--all") {
             o.root = Some(crate::here_or_all("sense")?);

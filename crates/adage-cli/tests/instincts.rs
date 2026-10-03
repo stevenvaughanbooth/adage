@@ -12,6 +12,8 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+mod common;
+
 struct World {
     _dir: tempfile::TempDir,
     root: PathBuf,
@@ -66,6 +68,7 @@ impl World {
     }
     fn run(&self, args: &[&str], stdin: &[u8]) -> (String, String, i32) {
         let mut c = Command::new(env!("CARGO_BIN_EXE_adage"));
+        common::scrub(&mut c);
         c.args(args)
             .current_dir(self.p("plain"))
             // Text assertions use UTF-8 glyphs regardless of the invoking terminal.
@@ -80,14 +83,6 @@ impl World {
             .env("CODEX_HOME", self.p("home/.codex"))
             .env("ADAGE_ARM", "treated")
             .env("ADAGE_ALLOW_NONINTERACTIVE", "1")
-            .env_remove("ADAGE_DISABLE")
-            .env_remove("CLAUDECODE")
-            .env_remove("OPENCODE")
-            .env_remove("CODEX_SANDBOX")
-            .env_remove("CODEX_SANDBOX_NETWORK_DISABLED")
-            .env_remove("VIRTUAL_ENV")
-            .env_remove("CONDA_PREFIX")
-            .env_remove("ADAGE_EMBED_MODEL")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());

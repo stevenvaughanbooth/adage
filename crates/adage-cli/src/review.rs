@@ -578,7 +578,7 @@ fn decide(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
         v
     };
     let (Some(spec), Some(route_id), None) = (pos.first(), pos.get(1), pos.get(2)) else { bail!("{USAGE}") };
-    let by = crate::flag(args, "--by");
+    let by = crate::helpers::flag(args, "--by");
     let Some(verb) = Verb::parse(verb) else { bail!("{USAGE}") };
     let d = report(adage_app::review::decide(&person, verb, spec, route_id, by, paths)?);
     let mut o = Out::stdout();

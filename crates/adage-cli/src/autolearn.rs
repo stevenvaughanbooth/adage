@@ -298,6 +298,7 @@ pub fn run_auto(args: &[String], paths: &Paths) -> Result<()> {
 /// waiting for a person, value, new reflexes), in one line.
 pub mod notice {
     use super::*;
+    use crate::helpers::plural;
     use crate::savings::{Summary, Verdict};
     use adage_hook::autolearn::{Notice, Shown};
     use serde::{Deserialize, Serialize};
@@ -341,14 +342,6 @@ pub mod notice {
             .and_then(|s| serde_json::to_value(s.verdict).ok().and_then(|v| v.as_str().map(str::to_string)))
             .unwrap_or_else(|| "measuring".into());
         Basis { active, instincts, nascent, quiet, verdict, errors }
-    }
-
-    fn plural(n: usize, one: &str, many: &str) -> String {
-        if n == 1 {
-            format!("1 {one}")
-        } else {
-            format!("{n} {many}")
-        }
     }
 
     /// The line for `now` against `was` (what had been shown), or `None` if nothing is new. `adage`

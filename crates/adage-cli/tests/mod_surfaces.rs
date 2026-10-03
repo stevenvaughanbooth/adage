@@ -10,22 +10,18 @@ use std::process::{Child, ChildStdin, Command, Output, Stdio};
 use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, Instant};
 
+mod common;
+
 struct World {
-    _dir: tempfile::TempDir,
-    root: PathBuf,
+    w: common::TempWorld,
 }
 
 impl World {
     fn new() -> World {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().canonicalize().unwrap();
-        for d in ["home", "xdg", "codex", "data", "work/.git", "outside"] {
-            std::fs::create_dir_all(root.join(d)).unwrap();
-        }
-        World { _dir: dir, root }
+        World { w: common::TempWorld::new(&["home", "xdg", "codex", "data", "work/.git", "outside"]) }
     }
     fn p(&self, rel: &str) -> PathBuf {
-        self.root.join(rel)
+        self.w.p(rel)
     }
     fn repo(&self) -> PathBuf {
         self.p("work")
@@ -34,11 +30,8 @@ impl World {
         adage_store::Paths::at(self.p("data"))
     }
     fn cmd(&self, args: &[&str], cwd: &Path) -> Command {
-        let mut c = Command::new(env!("CARGO_BIN_EXE_adage"));
+        let mut c = common::adage(&self.p("data"), cwd);
         c.args(args)
-            .current_dir(cwd)
-            .env("ADAGE_HOME", self.p("data"))
-            .env("ADAGE_AUTO_LEARN", "0")
             .env("ADAGE_ARM", "treated")
             .env("HOME", self.p("home"))
             .env("XDG_CONFIG_HOME", self.p("xdg"))
@@ -51,17 +44,6 @@ impl World {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
-        for v in [
-            "ADAGE_DISABLE",
-            "CLAUDECODE",
-            "OPENCODE",
-            "CODEX_SANDBOX",
-            "CODEX_SANDBOX_NETWORK_DISABLED",
-            "CLAUDE_CONFIG_DIR",
-            "ADAGE_ALLOW_NONINTERACTIVE",
-        ] {
-            c.env_remove(v);
-        }
         c
     }
     fn run(&self, args: &[&str], cwd: &Path, stdin: &str, env: &[(&str, &str)], unset: &[&str]) -> Output {
@@ -95,9 +77,7 @@ impl World {
     }
 }
 
-fn text(o: &Output) -> String {
-    format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr))
-}
+use common::text;
 
 fn record(ts: u64, kind: &str, arm: &str, repo: &str, decision: Value) -> Value {
     let event = match kind {
@@ -205,9 +185,10 @@ fn the_feed_streams() {
                     "judgements": [], "observed": [] }),
         ),
     );
-    let t0 = Instant::now();
-    let d = feed.decision(base + 1);
-    assert!(t0.elapsed() < Duration::from_secs(2));
+    // Within 2 s (the test plan's bound, as for the learn line below): the wait is the bound.
+    let d = feed
+        .until(Duration::from_secs(2), |v| v["kind"] == "decision" && v["ts"] == base + 1)
+        .unwrap_or_else(|| panic!("no decision row within 2 s; got:\n{}", feed.all.join("\n")));
     assert_eq!(
         d["acts"][0],
         json!({ "act": "directed", "route": "lookup-work-item", "strength": "fire", "detail": "scripts/wi-lookup W-1", "instinct": false })
@@ -238,10 +219,11 @@ fn a_follower_told_to_ignore_stdin_keeps_streaming_with_its_pipe_closed() {
     let mut feed = Feed::start(&w, &["--session", "S", "--stdin", "ignore"]);
     drop(feed.stdin.take());
     feed.decision(base);
-    std::thread::sleep(Duration::from_millis(500));
-    assert!(feed.child.try_wait().unwrap().is_none(), "a closed stdin does not end it");
+    // A record written after the close comes through: the follower went round its loop, which
+    // asks first whether the stream has ended, at least once after its stdin closed.
     w.spool("S", record(base + 1, "batch", "treated", &key, json!({ "observed": ["exec ls"] })));
     feed.decision(base + 1);
+    assert!(feed.child.try_wait().unwrap().is_none(), "a closed stdin does not end it");
     #[cfg(unix)]
     {
         let pid = feed.child.id() as i32;
@@ -435,8 +417,23 @@ fn the_feed_ends_with_its_parent() {
             std::thread::sleep(Duration::from_millis(20));
         }
     };
-    // Stdin is /dev/null (not a pipe): it follows until stopped.
-    std::thread::sleep(Duration::from_millis(1500));
+    // Stdin is /dev/null (not a pipe): it follows until stopped. Once it has written a line it
+    // has been round its loop; a record written after that line comes through on a later round,
+    // each of which asks first whether the stream has ended.
+    let out = w.p("out.jsonl");
+    let read = || std::fs::read_to_string(&out).unwrap_or_default();
+    let wait = |what: &str, done: &dyn Fn(&str) -> bool| {
+        let end = Instant::now() + Duration::from_secs(10);
+        while !done(&read()) {
+            assert!(Instant::now() < end, "the follower wrote no {what}:\n{}", read());
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    };
+    wait("line", &|s| s.contains('\n'));
+    let key = w.key();
+    let ts = 1_790_000_200_000u64;
+    w.spool("S", record(ts, "batch", "treated", &key, json!({ "observed": ["x"] })));
+    wait("row for a record written after its first line", &|s| s.contains(&format!("\"ts\":{ts}")));
     let alive = |pid: u32| {
         std::fs::read_to_string(format!("/proc/{pid}/status"))
             .map(|s| {

@@ -25,6 +25,7 @@
 
 use crate::autolearn::{read_json, Queue, RunState};
 use crate::doctor::{self, Status};
+use crate::helpers::{ago, plural};
 use crate::savings;
 use adage_store::Paths;
 use adage_term::{Glyph, Line, Out, Role};
@@ -76,20 +77,6 @@ pub fn reflexes(index: &Index, repo: &str) -> Reflexes {
     r
 }
 
-fn ago(now: u64, ts: u64) -> String {
-    let s = now.saturating_sub(ts) / 1000;
-    match s {
-        0..=59 => "just now".into(),
-        60..=3599 => format!("{} min ago", s / 60),
-        3600..=172_799 => format!("{} h ago", s / 3600),
-        _ => format!("{} days ago", s / 86_400),
-    }
-}
-
-fn plural(n: usize, one: &str, many: &str) -> String {
-    format!("{n} {}", if n == 1 { one } else { many })
-}
-
 /// The health lamp as data: its word, its role, and the check it names.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Lamp {
@@ -128,9 +115,9 @@ fn health(paths: &Paths, root: Option<&Path>) -> (Lamp, Line, Option<Line>) {
     }
 }
 
-/// One problem as one plain line for the card, and where it is fixed: its own command when the fix
-/// is a single `adage …` command, else `adage doctor`, which has the whole sentence
-/// (docs/design/everyday-ux.md, rule 6).
+/// One problem as one plain line for the card, and where it is fixed: the fix's own `adage`
+/// command ([`doctor::fix_command`], the one `adage doctor --json` offers as its `action`), else
+/// `adage doctor`, which has the whole sentence (docs/design/everyday-ux.md, rule 6).
 fn brief(c: &doctor::Check) -> (String, String) {
     // Hooks: say which of their problems it is (not registered, cannot run, out of date).
     if let Some(harness) = c.check.strip_prefix("hooks: ").and_then(|h| h.split(' ').next()) {
@@ -143,7 +130,7 @@ fn brief(c: &doctor::Check) -> (String, String) {
         } else {
             format!("{harness} hooks cannot run")
         };
-        let command = c.fix.as_deref().and_then(single_command).unwrap_or_else(|| "adage doctor".into());
+        let command = c.fix.as_deref().and_then(doctor::fix_command).unwrap_or_else(|| "adage doctor".into());
         return (line, command);
     }
     let line = match c.check.as_str() {
@@ -160,21 +147,8 @@ fn brief(c: &doctor::Check) -> (String, String) {
         _ => "",
     };
     let line = if line.is_empty() { format!("{} needs a look", c.label) } else { line.to_string() };
-    let command = c.fix.as_deref().and_then(single_command).unwrap_or_else(|| "adage doctor".into());
+    let command = c.fix.as_deref().and_then(doctor::fix_command).unwrap_or_else(|| "adage doctor".into());
     (line, command)
-}
-
-/// The command a fix leads with, if it is an `adage` command: the whole fix when it is one bare
-/// command, else the backticked command it starts with (`` `adage install codex --write` adds
-/// it ``). A fix in prose has none.
-fn single_command(fix: &str) -> Option<String> {
-    let fix = fix.trim();
-    let cmd = match fix.strip_prefix('`') {
-        Some(rest) => rest.split_once('`')?.0,
-        None if !fix.contains([',', ';', '(']) => fix,
-        None => return None,
-    };
-    cmd.starts_with("adage ").then(|| cmd.to_string())
 }
 
 /// `text → command`, the command in the command colour.
@@ -389,7 +363,7 @@ fn repo_rows(paths: &Paths, repo: &str, root: &Path, index: &Index, now: u64) ->
         if c.rewritten > 0 {
             // Said as it stands now (first-run-fixes): the switch that turns rewrites off, or that
             // they are off; in main's layout.
-            let now_on = cfg.config.runtime_rewrite && !adage_hook::rewrite_off(paths).exists();
+            let now_on = cfg.config.runtime_rewrite && !paths.rewrite_off().exists();
             out.push((
                 "rewrites",
                 Line::new()
@@ -783,9 +757,28 @@ mod tests {
                 ("learning is taking far longer than it usually does", "adage doctor"),
             ),
             (check("packs", "a pack's digest changed", "adage add <pack>"), ("packs needs a look", "adage add <pack>")),
+            (
+                check("index", "no index yet, although tracks are installed", "run `adage condition`"),
+                ("Adage cannot read its compiled reflexes", "adage condition"),
+            ),
+            (
+                check(
+                    "auto-learn runs",
+                    "last automatic conditioning failed for acme",
+                    "run `adage condition` in a terminal to see the error; `adage doctor` passes once conditioning succeeds",
+                ),
+                ("learning failed on its last run", "adage doctor"),
+            ),
         ];
         for (c, (line, command)) in cases {
             assert_eq!(brief(&c), (line.to_string(), command.to_string()), "{}", c.check);
+            // The card names the command `adage doctor --json` offers as the check's action, and
+            // `adage doctor` itself when that action is the person's to take.
+            let offered = match c.action() {
+                Some(doctor::Action::Run { command }) => command,
+                _ => "adage doctor".to_string(),
+            };
+            assert_eq!(brief(&c).1, offered, "{}: the card and doctor disagree", c.check);
         }
     }
 

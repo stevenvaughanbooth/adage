@@ -11,6 +11,8 @@ use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
+mod common;
+
 const NAME: &str = "github.com-acme-billing/work-items";
 const REPO: &str = "github.com/acme/billing";
 
@@ -44,17 +46,12 @@ impl World {
         self.root.join(rel)
     }
     fn run(&self, adage_home: &str, args: &[&str]) -> Output {
-        Command::new(env!("CARGO_BIN_EXE_adage"))
+        common::scrub(&mut Command::new(env!("CARGO_BIN_EXE_adage")))
             .args(args)
             .current_dir(self.p("repo"))
             .env("PATH", self.p("bin"))
             .env("ADAGE_HOME", self.p(adage_home))
             .env("HOME", self.p("home"))
-            .env_remove("CLAUDECODE")
-            .env_remove("OPENCODE")
-            .env_remove("CODEX_SANDBOX")
-            .env_remove("CODEX_SANDBOX_NETWORK_DISABLED")
-            .env_remove("SSH_AUTH_SOCK")
             .env("ADAGE_ALLOW_NONINTERACTIVE", "1")
             .stdin(Stdio::null())
             .output()

@@ -10,6 +10,8 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+mod common;
+
 fn route(id: &str, trigger: Trigger, step: Step, effect: Effect, strength: Strength) -> Route {
     Route {
         id: id.into(),
@@ -78,12 +80,11 @@ fn world() -> World {
 fn hook(w: &World, event: &str, extra: serde_json::Value) -> String {
     let mut payload = json!({ "session_id": "s-1", "cwd": w.repo });
     payload.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
-    let mut c = Command::new(env!("CARGO_BIN_EXE_adage"))
+    let mut c = common::scrub(&mut Command::new(env!("CARGO_BIN_EXE_adage")))
         .args(["hook", "claude", event])
         .env("ADAGE_HOME", &w.home)
         .env("ADAGE_AUTO_LEARN", "0")
         .env("ADAGE_ARM", "treated")
-        .env_remove("ADAGE_DISABLE")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

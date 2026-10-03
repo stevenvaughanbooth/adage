@@ -11,6 +11,8 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
+mod common;
+
 const REPO: &str = "github.com/acme/billing";
 const SLUG: &str = "github-com-acme-billing";
 const NAME: &str = "acme/billing";
@@ -51,6 +53,7 @@ impl World {
     }
     fn cmd(&self, home: &str, cwd: &Path, args: &[&str]) -> Command {
         let mut c = Command::new(env!("CARGO_BIN_EXE_adage"));
+        common::scrub(&mut c);
         c.args(args)
             .current_dir(cwd)
             // Text assertions use UTF-8 glyphs regardless of the invoking terminal.
@@ -62,11 +65,6 @@ impl World {
             .env("HOME", self.p("home"))
             .env("PATH", self.p("bin"))
             .env("ADAGE_POLICY", self.p("no-managed-policy.toml"))
-            .env_remove("CLAUDECODE")
-            .env_remove("OPENCODE")
-            .env_remove("CODEX_SANDBOX")
-            .env_remove("CODEX_SANDBOX_NETWORK_DISABLED")
-            .env_remove("SSH_AUTH_SOCK")
             .env("ADAGE_ALLOW_NONINTERACTIVE", "1")
             .stdin(Stdio::null());
         c

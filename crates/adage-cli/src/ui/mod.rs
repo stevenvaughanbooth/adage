@@ -40,6 +40,7 @@ pub(crate) mod words;
 #[cfg(test)]
 mod tests;
 
+use crate::helpers::flag;
 use adage_store::Paths;
 use anyhow::{bail, Result};
 use std::io::IsTerminal;
@@ -79,10 +80,6 @@ pub fn interactive() -> bool {
 
 pub(crate) fn agent_marker() -> Option<&'static str> {
     crate::install::AGENT_ENV.iter().copied().find(|v| std::env::var_os(v).is_some_and(|x| !x.is_empty()))
-}
-
-fn flag(args: &[String], name: &str) -> Option<String> {
-    crate::flag(args, name)
 }
 
 /// `WxH`, e.g. `80x24`.

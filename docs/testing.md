@@ -67,7 +67,7 @@ Each component is tested through its own crate, without the others:
 | Live interaction | `adage-runtime`, `adage-hook` | `decide()` as a function of index, state, event, policy and checkout (`adage-runtime/src/tests.rs`) |
 | Application | `adage-app` | decisions against a temporary `ADAGE_HOME` (`review.rs` tests), without the binary |
 | Harnesses | `adage-hook::harness`, `adage-sim` | each adapter's translation; one scenario rendered in every harness's formats |
-| Front ends | `adage-cli` | the binary end to end (`tests/`), frames as snapshots (`ui/tests.rs`) |
+| Front ends | `adage-cli` | the binary end to end (`tests/`, through `tests/common/mod.rs`: one environment scrub, a hermetic `Command`, a temporary world), frames as snapshots (`ui/tests.rs`) |
 
 ## Known gaps
 

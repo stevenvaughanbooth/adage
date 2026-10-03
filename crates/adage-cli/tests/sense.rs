@@ -6,6 +6,8 @@ use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
+mod common;
+
 struct Tx {
     lines: Vec<Value>,
     sid: String,
@@ -59,7 +61,7 @@ impl World {
         self.root.join("home")
     }
     fn run(&self, args: &[&str]) -> Output {
-        Command::new(env!("CARGO_BIN_EXE_adage"))
+        common::scrub(&mut Command::new(env!("CARGO_BIN_EXE_adage")))
             .args(args)
             .current_dir(&self.root)
             // Text assertions use UTF-8 glyphs regardless of the invoking terminal.
@@ -69,10 +71,6 @@ impl World {
             .env("NO_COLOR", "1")
             .env("ADAGE_HOME", self.root.join("data"))
             .env("HOME", self.home())
-            .env_remove("CLAUDECODE")
-            .env_remove("OPENCODE")
-            .env_remove("CODEX_SANDBOX")
-            .env_remove("CODEX_SANDBOX_NETWORK_DISABLED")
             .stdin(Stdio::null())
             .output()
             .unwrap()

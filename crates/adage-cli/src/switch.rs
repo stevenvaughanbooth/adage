@@ -12,10 +12,10 @@ use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 
 /// The switch's file, relative to the repository root.
-pub const MARKER: &str = ".adage/disabled";
+pub const MARKER: &str = adage_store::paths::REPO_DISABLED;
 
 pub fn marker(root: &Path) -> PathBuf {
-    root.join(MARKER)
+    adage_store::Paths::repo_disabled(root)
 }
 
 /// Whether hooks do nothing here: the repository's switch is off, or `ADAGE_DISABLE=1`.

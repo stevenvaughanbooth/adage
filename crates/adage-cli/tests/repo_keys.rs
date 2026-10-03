@@ -10,6 +10,8 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+mod common;
+
 fn git(dir: &Path, args: &[&str]) -> Option<String> {
     let o = Command::new("git")
         .args(args)
@@ -60,13 +62,11 @@ fn adage(home: &Path, args: &[&str], stdin: &str) -> String {
 }
 
 fn adage_with(home: &Path, args: &[&str], stdin: &str, env: &[(&str, &str)]) -> String {
-    let mut c = Command::new(env!("CARGO_BIN_EXE_adage"))
+    let mut c = common::scrub(&mut Command::new(env!("CARGO_BIN_EXE_adage")))
         .args(args)
         .env("ADAGE_HOME", home)
         .env("ADAGE_AUTO_LEARN", "0")
         .env("ADAGE_ARM", "treated")
-        .env_remove("ADAGE_DISABLE")
-        .env_remove("CLAUDECODE")
         .envs(env.iter().copied())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

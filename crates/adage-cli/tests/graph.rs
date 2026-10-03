@@ -10,6 +10,8 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
+mod common;
+
 fn track() -> Track {
     Track {
         manifest: Manifest {
@@ -60,13 +62,13 @@ impl World {
     }
     fn run(&self, args: &[&str], stdin: &Value, arm: &str) -> String {
         let mut c = Command::new(env!("CARGO_BIN_EXE_adage"));
+        common::scrub(&mut c);
         c.args(args)
             .current_dir(&self.root)
             .env("ADAGE_HOME", self.root.join("adage"))
             .env("ADAGE_AUTO_LEARN", "0")
             .env("HOME", self.root.join("home"))
             .env("ADAGE_ARM", arm)
-            .env_remove("ADAGE_DISABLE")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());

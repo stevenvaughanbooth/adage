@@ -268,7 +268,7 @@ pub fn build(paths: &Paths, here: Option<&Path>, max_events: usize, warn: &mut d
     repos.extend(arm_sessions.keys().map(|(r, _)| r.clone()));
     repos.remove("");
     let savings: Vec<Value> = repos.iter().map(|r| savings_json(paths, r)).collect();
-    let marker = adage_hook::rewrite_off(paths).exists();
+    let marker = paths.rewrite_off().exists();
     let pretool: Vec<Value> = pretool
         .iter()
         .map(

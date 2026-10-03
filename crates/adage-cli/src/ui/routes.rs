@@ -340,7 +340,7 @@ pub fn load(paths: &Paths, root: Option<&Path>) -> Result<Routes> {
     let index = adage_tracks::Index::load(&paths.index());
     let table = adage_core::CommandTable::load();
     let policy = adage_exec::policy::load(&paths.root);
-    let enabled = crate::exec::marker(paths).is_file()
+    let enabled = paths.delegate_marker().is_file()
         || crate::detect::registrations(root)
             .iter()
             .any(|r| r.binary.as_ref().and_then(|p| p.file_stem()).is_some_and(|name| name == "adage-exec"));
@@ -351,7 +351,7 @@ pub fn load(paths: &Paths, root: Option<&Path>) -> Result<Routes> {
         .zip(current_repo.as_deref())
         .map(|(r, key)| adage_exec::hook::predict_grants(key, r, &index, paths))
         .unwrap_or_default();
-    let predict_off = adage_exec::hook::predict_off(paths).exists();
+    let predict_off = paths.predict_off().exists();
     for row in &mut rows.rows {
         let label = format!("{}/{}", row.reference, row.id);
         let track_label = format!("{}/{}", row.track, row.id);
@@ -361,8 +361,7 @@ pub fn load(paths: &Paths, root: Option<&Path>) -> Result<Routes> {
             view.reason = "ADAGE_DISABLE is set".into();
             continue;
         }
-        if root
-            .is_some_and(|p| current_repo.as_deref() == Some(row.repo.as_str()) && p.join(".adage/disabled").exists())
+        if root.is_some_and(|p| current_repo.as_deref() == Some(row.repo.as_str()) && crate::switch::marker(p).exists())
         {
             view.mode = "Disabled".into();
             view.reason = "Repository kill switch is set".into();
@@ -688,7 +687,7 @@ mod tests {
         store.save(&approvals::path(&paths.root)).unwrap();
         assert_eq!(view().mode, "Suggest", "grant does not turn the executing hook on");
         std::fs::create_dir_all(paths.root.join("exec")).unwrap();
-        std::fs::write(crate::exec::marker(&paths), "").unwrap();
+        std::fs::write(paths.delegate_marker(), "").unwrap();
         if adage_exec::sandbox::detect().available() {
             assert_eq!(view().mode, "Automatic");
             adage_store::config::set(&paths, "runtime.control", "1").unwrap();
@@ -782,6 +781,8 @@ mod tests {
         assert_eq!(view().mode, "Predicted", "{:?}", view());
         assert_eq!(load(&paths, None).unwrap().rows[0].execution.mode, "Grant saved");
         std::fs::create_dir_all(paths.root.join("exec")).unwrap();
+        // Written where adage-exec reads it; read here through `Paths`, the one definition.
+        assert_eq!(paths.predict_off(), adage_exec::hook::predict_off(&paths));
         std::fs::write(adage_exec::hook::predict_off(&paths), "").unwrap();
         assert_eq!(view().mode, "Paused");
         std::fs::remove_file(adage_exec::hook::predict_off(&paths)).unwrap();

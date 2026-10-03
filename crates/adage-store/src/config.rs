@@ -73,7 +73,7 @@ pub struct Config {
     /// `$CODEX_HOME/sessions` (else `~/.codex/sessions`) once Codex hooks are registered.
     pub learn_codex_auto: bool,
     pub learn_opencode_exports: Option<PathBuf>,
-    /// Keep parsed transcripts in `$ADAGE_HOME/cache/sessions` (`adage_learn::cache`).
+    /// Keep parsed transcripts in `$ADAGE_HOME/cache/sessions` (`adage_ingest::cache`).
     pub learn_parse_cache: bool,
     /// `ui.notices`: one-line notices at session start (`daily`, the default) or none (`off`).
     pub ui_notices: bool,
@@ -557,35 +557,60 @@ fn load_from(file: &Path, env: &dyn Fn(&str) -> Option<String>) -> Loaded {
         }
         values.insert(k.name, value);
     }
-    let text = |n: &str| values[n].0.clone();
-    let config = Config {
-        learn_auto: parse_bool(&text("learn.auto")).unwrap_or(true),
-        learn_repos: Some(text("learn.repos")).filter(|s| s != "all").map(|s| split_ids(&s)),
-        learn_min_interval_secs: text("learn.min_interval_secs").parse().unwrap_or(120),
+    let config = from_values(&|n| values[n].0.as_str());
+    Loaded { config, values, problems }
+}
+
+impl Default for Config {
+    /// Every key at its default in [`KEYS`]: what a missing file, with no environment, gives.
+    fn default() -> Config {
+        from_values(&|n| default_of(n))
+    }
+}
+
+/// A documented key's default: [`KEYS`] is the only place one is written.
+fn default_of(name: &str) -> &'static str {
+    key(name).map_or("", |k| k.default)
+}
+
+/// A boolean key's value. Every value reaching here was validated, so the default is the
+/// fallback only in name: it keeps a second literal from ever being written.
+fn bool_of<'v>(text: &dyn Fn(&str) -> &'v str, name: &str) -> bool {
+    parse_bool(text(name)).or_else(|| parse_bool(default_of(name))).unwrap_or_default()
+}
+
+/// A number key's value, with the same fallback as [`bool_of`].
+fn number_of<'v, T: std::str::FromStr + Default>(text: &dyn Fn(&str) -> &'v str, name: &str) -> T {
+    text(name).parse().ok().or_else(|| default_of(name).parse().ok()).unwrap_or_default()
+}
+
+/// The configuration from each key's validated value as text.
+fn from_values<'v>(text: &dyn Fn(&str) -> &'v str) -> Config {
+    Config {
+        learn_auto: bool_of(text, "learn.auto"),
+        learn_repos: Some(text("learn.repos")).filter(|s| *s != "all").map(split_ids),
+        learn_min_interval_secs: number_of(text, "learn.min_interval_secs"),
         learn_thresholds: if text("learn.thresholds") == "demo" { Thresholds::Demo } else { Thresholds::Default },
-        learn_claude_projects: home_relative(&text("learn.claude_projects")),
-        learn_codex_sessions: Some(text("learn.codex_sessions"))
-            .filter(|s| s != "auto")
-            .and_then(|s| home_relative(&s)),
+        learn_claude_projects: home_relative(text("learn.claude_projects")),
+        learn_codex_sessions: Some(text("learn.codex_sessions")).filter(|s| *s != "auto").and_then(home_relative),
         learn_codex_auto: text("learn.codex_sessions") == "auto",
         ui_notices: text("ui.notices") != "off",
-        learn_opencode_exports: home_relative(&text("learn.opencode_exports")),
-        learn_parse_cache: parse_bool(&text("learn.parse_cache")).unwrap_or(true),
-        runtime_control: text("runtime.control").parse().unwrap_or(0.1),
-        runtime_rewrite: parse_bool(&text("runtime.rewrite")).unwrap_or(true),
-        runtime_routine_model: text("runtime.routine_model"),
-        runtime_predict_cap: text("runtime.predict_cap").parse().unwrap_or(6),
-        skills_invoke: parse_bool(&text("skills.invoke")).unwrap_or(false),
-        ui_spinner: parse_bool(&text("ui.spinner")).unwrap_or(false),
-        ui_turn_line: parse_bool(&text("ui.turn_line")).unwrap_or(false),
-        ui_noticed: parse_bool(&text("ui.noticed")).unwrap_or(false),
-        learn_cards: parse_bool(&text("learn.cards")).unwrap_or(true),
-        learn_card_threshold: text("learn.card_threshold").parse().unwrap_or(0.811),
-        instincts_enabled: parse_bool(&text("instincts.enabled")).unwrap_or(true),
-        instincts_packs: split_ids(&text("instincts.packs")),
-        instincts_disabled: split_ids(&text("instincts.disabled")),
-    };
-    Loaded { config, values, problems }
+        learn_opencode_exports: home_relative(text("learn.opencode_exports")),
+        learn_parse_cache: bool_of(text, "learn.parse_cache"),
+        runtime_control: number_of(text, "runtime.control"),
+        runtime_rewrite: bool_of(text, "runtime.rewrite"),
+        runtime_routine_model: text("runtime.routine_model").to_string(),
+        runtime_predict_cap: number_of(text, "runtime.predict_cap"),
+        skills_invoke: bool_of(text, "skills.invoke"),
+        ui_spinner: bool_of(text, "ui.spinner"),
+        ui_turn_line: bool_of(text, "ui.turn_line"),
+        ui_noticed: bool_of(text, "ui.noticed"),
+        learn_cards: bool_of(text, "learn.cards"),
+        learn_card_threshold: number_of(text, "learn.card_threshold"),
+        instincts_enabled: bool_of(text, "instincts.enabled"),
+        instincts_packs: split_ids(text("instincts.packs")),
+        instincts_disabled: split_ids(text("instincts.disabled")),
+    }
 }
 
 /// Set `name` to `value` in the file, validated, keeping every other key. Returns the value as
@@ -656,6 +681,20 @@ mod tests {
         assert!(c.learns("github.com/acme/billing"));
         assert!(l.values.values().all(|(_, s)| *s == Source::Default));
         assert_eq!(l.values.len(), KEYS.len());
+    }
+
+    /// Each default is written once, in `KEYS`: every one passes its own key's validation, and
+    /// `Config::default()` (built from them) is what a missing file gives.
+    #[test]
+    fn every_default_is_valid_and_is_the_default_config() {
+        for k in KEYS {
+            assert!(from_text(k.kind, k.default).is_ok(), "{}: default {:?} is invalid", k.name, k.default);
+        }
+        let d = tempfile::tempdir().unwrap();
+        assert_eq!(load_from(&d.path().join(FILE), &no_env).config, Config::default());
+        let c = Config::default();
+        assert_eq!((c.runtime_predict_cap, c.learn_card_threshold), (6, 0.811));
+        assert!(c.runtime_rewrite && c.learn_cards && !c.skills_invoke && !c.ui_spinner);
     }
 
     #[test]

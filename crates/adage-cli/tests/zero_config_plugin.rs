@@ -15,6 +15,8 @@ use std::process::{Command, Output, Stdio};
 #[cfg(unix)]
 use std::time::{Duration, Instant};
 
+mod common;
+
 struct World {
     _dir: tempfile::TempDir,
     root: PathBuf,
@@ -80,6 +82,7 @@ impl World {
         }
     }
     fn env(&self, c: &mut Command) {
+        common::scrub(c);
         c.env("HOME", self.p("home"))
             .env("ADAGE_HOME", self.p("data"))
             .env("XDG_CONFIG_HOME", self.p("xdg"))
@@ -87,22 +90,7 @@ impl World {
             .env("PATH", format!("{}:/usr/bin:/bin", self.p("bin").display()))
             .env("ADAGE_TEST_NO_SPAWN", "record")
             .env("ADAGE_ARM", "treated");
-        for v in [
-            "ADAGE_DISABLE",
-            "ADAGE_AUTO_LEARN",
-            "ADAGE_CONTROL",
-            "ADAGE_MODEL_BASE_URL",
-            "CLAUDECODE",
-            "OPENCODE",
-            "CODEX_SANDBOX",
-            "CODEX_SANDBOX_NETWORK_DISABLED",
-            "CLAUDE_CONFIG_DIR",
-            "XDG_DATA_HOME",
-            "VIRTUAL_ENV",
-            "CONDA_PREFIX",
-        ] {
-            c.env_remove(v);
-        }
+        c.env_remove("XDG_DATA_HOME");
     }
     fn run(&self, exe: &Path, args: &[&str], stdin: &str, cwd: &Path) -> Output {
         let mut c = Command::new(exe);
