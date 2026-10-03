@@ -18,6 +18,9 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### Fixes from the architecture work
 
+- **Removed directories do not become unrelated repositories.** Repository discovery no longer
+  attributes a deleted working directory to an ancestor checkout; explicitly recorded removed
+  worktrees still belong to their main repository.
 - **A learn run reads earlier results through its store.** It reads earlier tracks, a person's
   review decisions, proposals, route explanations, instinct bindings and installed packs through
   the same `Store` it writes through, so a store other than `$ADAGE_HOME` (a team service) can

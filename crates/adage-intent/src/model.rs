@@ -1106,7 +1106,7 @@ pub(crate) mod tests {
             assert!(crate::cosine(&a, &b) > 0.9999, "{text}");
         }
         // Installed int8 tables read the same from a file.
-        write_installed(&d.path().join("q"), "fixture+i8", 4, 0, 100, &vocab, q).unwrap();
+        write_installed(&d.path().join("q"), "fixture+i8", 4, 0, 100, vocab, q).unwrap();
         let f = StaticModel::open(&d.path().join("q")).unwrap();
         assert_eq!(f.embed("fix tests").unwrap(), s.embed("fix tests").unwrap());
     }
