@@ -12,18 +12,22 @@
 //   command hook that follows for the same call prints nothing once a verdict decided it).
 //
 // Everything else, a failure included, runs the call as the model wrote it and leaves the command
-// hook to decide as it always has (§6 invariants 1 and 2). No `$` crosses into this file (`claude
-// plugin validate` follows `$` only within one file): register.ts hands it closures over its `$`,
-// and a test hands it stubs.
+// hook to decide as it always has (§6 invariants 1 and 2). `bashCall` is the call itself over
+// plain deps; `onBashCall` binds it to the mod and keeps the markers each decision earns.
 import type { ToolCallResult } from 'claude-code'
 
+import { askBinary } from './binary'
 import type { Asked } from './bridge'
-import { receiptAnswerOf, receiptPlanOf } from './receipt'
+import { mark } from './marks'
+import type { AnswerAt, EventAt, Mod, NextAt } from './mod'
+import { answeredMark, receiptAnswerOf, receiptPlanOf, shortId } from './receipt'
 import type { ReceiptAnswer } from './receipt'
+import { isRecord } from './shape'
 import { substituteOf } from './substitute'
+import { markText, receiptOf, rewriteOf } from './view/lines'
 
 /** What the mod tells the binary it found out (A1's `verdict`), exactly one decision per call. */
-export type Verdict = { engine: 'same' | 'differs'; substitute?: string } | { answered: 'receipt' }
+type Verdict = { engine: 'same' | 'differs'; substitute?: string } | { answered: 'receipt' }
 
 /** The binary's `PreToolUse` payload for the mod's two phases (A1, C3, C6), exactly. */
 export type PreToolPayload = {
@@ -77,9 +81,7 @@ export type CallDeps = {
 }
 
 /** Both phases run before the call does, so each has the budget a command hook would. */
-export const PRE_TOOL_TIMEOUT_MS = 2000
-
-const isRecord = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v)
+const PRE_TOOL_TIMEOUT_MS = 2000
 
 /** The plan's `rewrite`: the command the call would run as, when U11 bound an environment here. */
 export function rewritePlanOf(v: unknown): { command: string; kind: string } | undefined {
@@ -195,4 +197,44 @@ export async function bashCall<E extends BashCall>(e: E, next: (e: E) => Promise
   if (said.command === undefined || said.command === e.command) return withContext(await next(e), said.context)
   await quiet(deps.rewrote?.(id, e.command, said.command))
   return withContext(await next({ ...e, command: said.command }), said.context)
+}
+
+/** The rewrite under a call's row (`tool.rewrite`), and the same line under its dialog. */
+async function rewrote(m: Mod, id: string, from: string, to: string): Promise<void> {
+  const rw = rewriteOf(from, to)
+  if (rw === undefined) return
+  const x = { id, kind: 'rewrite' as const, ...rw }
+  await mark(m, x)
+  try {
+    m.ui.notice(id, markText(x, (await m.state.mode.read()).ascii))
+  } catch {
+    // No dialog is open for the call: the row's marker says it.
+  }
+}
+
+/**
+ * The hook body (`on('tool.call', { tool: 'Bash' }, …)`, §3.3, §3.4; C3, C6): a fresh receipt
+ * answers the call when the rules would have let it run unasked; a learned replacement or a rewrite
+ * runs only on the same verdict for both commands. Each decision keeps its marker for the row.
+ */
+export async function onBashCall(m: Mod, e: EventAt<'tool.call', { tool: 'Bash' }>, next: NextAt<'tool.call', { tool: 'Bash' }>): AnswerAt<'tool.call', { tool: 'Bash' }> {
+  return bashCall(e, next, {
+    isActive: m.rt.bin !== undefined,
+    isObserving: m.rt.observing,
+    ask: payload => askBinary(m, 'PreToolUse', payload, PRE_TOOL_TIMEOUT_MS),
+    context: async () => ({ sessionId: await m.session.id(), cwd: await m.session.cwd() }),
+    check: command => m.checkBash(command),
+    notice: (id, text) => m.ui.notice(id, text),
+    answered: async (id, a) => {
+      const x = answeredMark(id, a)
+      if (x !== undefined) await mark(m, x)
+    },
+    beside: (id, operation) => mark(m, { id, kind: 'receipt', receipt: shortId(operation) }),
+    made: (id, command) => mark(m, { id, kind: 'substituted', command }),
+    rewrote: (id, from, to) => rewrote(m, id, from, to),
+    delivered: async (id, context) => {
+      const rc = receiptOf(context)
+      if (rc !== undefined) await mark(m, { id, kind: 'receipt', receipt: rc })
+    },
+  })
 }

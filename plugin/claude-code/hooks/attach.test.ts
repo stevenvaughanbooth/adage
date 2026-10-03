@@ -1,10 +1,11 @@
 // Where Adage's standing text is attached, through the module as the engine loads it (plan C5, C9;
 // T-C5-02, T-C5-03, T-C5-05's offline half, T-C9-03): the binary's `Standing` answered beneath the
-// plugin by the test's `process.run` hook, and the engine's own composition, tool description,
-// compaction and subagent spawn by the test's hooks beneath. The pure placement is checked alone.
-import type { On, PromptComposeSection, SessionMessage } from 'claude-code'
+// plugin by the kit's world, and the engine's own composition, tool description and subagent spawn
+// by its hooks beneath. The pure placement is checked alone.
+import type { On, SessionMessage } from 'claude-code'
 import { describe, expect, test } from 'claude-code/testing'
 
+import { BASH_TOOL, SECTIONS, start, world } from './fixtures/kit'
 import { SECTION_ID, isAdageAttachment, standingOf, subagentOf, withInstruction, withNote, withPreamble, withSection, withoutAttachments } from './attach'
 
 const STANDING = '<adage-reflex track="acme/learned@1" route="dead-end-unittest" strength="inhibit" kind="avoid">\nDo not run python3 -m unittest here; run make test.\n</adage-reflex>'
@@ -12,14 +13,10 @@ const ENVIRONMENT = "In this repository, Python runs in the project's environmen
 const COMPACT = 'Keep the repository procedures this session followed: how tests run here, and what was run after which edits.'
 const SUBAGENT = '<adage-reflex track="acme/learned@1" route="lookup-work-item" strength="fire" kind="run">\nIn this repository, work item details are looked up with:\n  ./scripts/wi-lookup W-2045 --json\n</adage-reflex>'
 const ANSWER = { standing: STANDING, environment: ENVIRONMENT, compact: COMPACT }
-const ENGINE: PromptComposeSection[] = [
-  { id: 'intro', text: 'You are an assistant.', scope: 'shared' },
-  { id: 'memory', text: 'Nothing yet.', scope: 'session' },
-]
-const BASH = { tool: 'Bash', description: 'Executes a given bash command.', provider: { plugin: 'engine', tier: 'core' } } as const
+const ENGINE = SECTIONS
+const BASH = BASH_TOOL
 /** A render of the system prompt, as the engine raises it. */
 const COMPOSE = { model: 'claude-x', promptModel: 'claude-x', surfaces: [], tools: ['Bash', 'Read'], outputStyle: null, traits: [] } as const
-const START = { cwd: '/w', surface: null, isInteractive: false } as const
 
 type Opts = {
   version?: string
@@ -31,39 +28,21 @@ type Opts = {
   session?: () => string
 }
 
-function world(on: On, o: Opts) {
-  const env: Record<string, string> = { CLAUDE_PLUGIN_DATA: '/data' }
-  if (o.observe !== undefined) env.ADAGE_MOD_OBSERVE = o.observe
-  on('env.get', ($, e) => ({ value: env[e.name] }))
-  const asked: Record<string, unknown>[] = []
-  on('process.run', ($, e) => {
-    const out = (stdout: string) => ({ value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } })
-    if (e.argv[1] === 'version') return out(o.version ?? 'adage 0.1.0\n')
-    const p = JSON.parse(e.init?.stdin ?? '{}') as Record<string, unknown>
-    if (p.hook_event_name !== 'Standing') return out('')
-    asked.push(p)
-    if (o.garbage) return out('{')
-    const answer = o.standing === undefined ? ANSWER : o.standing(p)
-    return out(answer === undefined ? '' : JSON.stringify(answer))
+/** The kit's world with the binary answering `Standing`; `asked` is what it was asked, `spawned` the subagents started beneath. */
+function standingWorld(on: On, o: Opts) {
+  const w = world(on, {
+    ...(o.version === undefined ? {} : { version: o.version }),
+    ...(o.observe === undefined ? {} : { env: { ADAGE_MOD_OBSERVE: o.observe } }),
+    ...(o.session === undefined ? {} : { session: o.session }),
+    answer: (event, p) => (event !== 'Standing' ? undefined : o.garbage ? '{' : o.standing === undefined ? ANSWER : o.standing(p)),
   })
-  on('session.id', () => ({ value: o.session?.() ?? 'sess-1' }))
-  on('session.cwd', () => ({ value: '/w' }))
-  on('session.start', ($, e) => ({ cwd: e.cwd }))
-  on('classic.SessionStart', () => ({}))
-  on('prompt.compose', () => ({ sections: ENGINE }))
-  on('tool.describe', ($, e) => ({ description: e.description }))
-  const spawned: { prompt: string; description: string; subagentType: string }[] = []
-  on('agent.spawn', ($, e) => {
-    spawned.push({ prompt: e.prompt, description: e.description, subagentType: e.subagentType })
-    return { model: 'm', agentId: 'agent-1' }
-  })
-  return { asked, spawned }
+  return { get asked() { return w.payloads('Standing') }, spawned: w.agents, w }
 }
 
 describe('T-C5-02 · the section', () => {
   test('appended once as a session section after the engine\'s, the same text at every request, from one ask', async ($, on) => {
-    const w = world(on, {})
-    await $.session.start(START)
+    const w = standingWorld(on, {})
+    await start($, w.w, null, false)
     const composed = [await $.prompt.compose(COMPOSE), await $.prompt.compose(COMPOSE), await $.prompt.compose(COMPOSE)]
     for (const c of composed) {
       expect(c.sections).toEqual([...ENGINE, { id: SECTION_ID, text: STANDING, scope: 'session' }])
@@ -72,8 +51,8 @@ describe('T-C5-02 · the section', () => {
   })
 
   test('empty standing text: the engine\'s sections, unchanged', async ($, on) => {
-    world(on, { standing: () => ({ ...ANSWER, standing: '' }) })
-    await $.session.start(START)
+    const w = standingWorld(on, { standing: () => ({ ...ANSWER, standing: '' }) })
+    await start($, w.w, null, false)
     expect((await $.prompt.compose(COMPOSE)).sections).toEqual(ENGINE)
   })
 
@@ -82,8 +61,8 @@ describe('T-C5-02 · the section', () => {
     ['garbage', { garbage: true }],
   ] as [string, Opts][]) {
     test(`the binary answers ${name}: the sections and the description are unchanged, and the session is not asked again`, async ($, on) => {
-      const w = world(on, o)
-      await $.session.start(START)
+      const w = standingWorld(on, o)
+      await start($, w.w, null, false)
       expect((await $.prompt.compose(COMPOSE)).sections).toEqual(ENGINE)
       expect((await $.prompt.compose(COMPOSE)).sections).toEqual(ENGINE)
       expect((await $.tool.describe(BASH)).description).toBe(BASH.description)
@@ -92,8 +71,8 @@ describe('T-C5-02 · the section', () => {
   }
 
   test('inert: nothing is asked and nothing is attached', async ($, on) => {
-    const w = world(on, { version: '' })
-    await $.session.start(START)
+    const w = standingWorld(on, { version: '' })
+    await start($, w.w, null, false)
     expect((await $.prompt.compose(COMPOSE)).sections).toEqual(ENGINE)
     expect((await $.tool.describe(BASH)).description).toBe(BASH.description)
     await $.agent.spawn({ prompt: 'Find W-2045', description: 'Look up', subagentType: 'Explore' } as never)
@@ -102,16 +81,16 @@ describe('T-C5-02 · the section', () => {
   })
 
   test('observe mode: the payload says so (the binary answers as for the control arm)', async ($, on) => {
-    const w = world(on, { observe: '1' })
-    await $.session.start(START)
+    const w = standingWorld(on, { observe: '1' })
+    await start($, w.w, null, false)
     await $.prompt.compose(COMPOSE)
     expect(w.asked).toEqual([{ session_id: 'sess-1', cwd: '/w', hook_event_name: 'Standing', via: 'mod', observe: true }])
   })
 
   test('a /clear is a new session: asked once for each id', async ($, on) => {
     let id = 'sess-1'
-    const w = world(on, { session: () => id })
-    await $.session.start(START)
+    const w = standingWorld(on, { session: () => id })
+    await start($, w.w, null, false)
     await $.prompt.compose(COMPOSE)
     id = 'sess-2'
     await $.classic.SessionStart({ source: 'clear' } as never)
@@ -122,8 +101,8 @@ describe('T-C5-02 · the section', () => {
 
 describe('T-C9-03 · the Bash tool\'s description and the subagent\'s prompt', () => {
   test('tool.describe { tool: Bash } appends the environment note once; another tool is untouched', async ($, on) => {
-    world(on, {})
-    await $.session.start(START)
+    const w = standingWorld(on, {})
+    await start($, w.w, null, false)
     const first = await $.tool.describe(BASH)
     expect(first).toEqual({ description: `${BASH.description}\n\n${ENVIRONMENT}` })
     expect(await $.tool.describe(BASH)).toEqual(first)
@@ -132,14 +111,14 @@ describe('T-C9-03 · the Bash tool\'s description and the subagent\'s prompt', (
   })
 
   test('no environment bound: the description as the engine computed it', async ($, on) => {
-    world(on, { standing: () => ({ ...ANSWER, environment: '' }) })
-    await $.session.start(START)
+    const w = standingWorld(on, { standing: () => ({ ...ANSWER, environment: '' }) })
+    await start($, w.w, null, false)
     expect(await $.tool.describe(BASH)).toEqual({ description: BASH.description })
   })
 
   test('agent.spawn asks Standing with the subagent, after the session\'s own, and prepends what it answers', async ($, on) => {
-    const w = world(on, { standing: p => (p.agent === undefined ? ANSWER : { ...ANSWER, subagent: SUBAGENT }) })
-    await $.session.start(START)
+    const w = standingWorld(on, { standing: p => (p.agent === undefined ? ANSWER : { ...ANSWER, subagent: SUBAGENT }) })
+    await start($, w.w, null, false)
     await $.agent.spawn({ prompt: 'Find what W-2045 asks for', description: 'Look up the work item', subagentType: 'Explore' } as never)
     expect(w.spawned).toEqual([{ prompt: `${SUBAGENT}\n\nFind what W-2045 asks for`, description: 'Look up the work item', subagentType: 'Explore' }])
     expect(w.asked.map(p => p.agent)).toEqual([undefined, { type: 'Explore', description: 'Look up the work item', prompt: 'Find what W-2045 asks for' }])
@@ -151,8 +130,8 @@ describe('T-C9-03 · the Bash tool\'s description and the subagent\'s prompt', (
     ['the binary fails', { garbage: true }],
   ] as [string, Opts][]) {
     test(`${name}: next(e) unchanged`, async ($, on) => {
-      const w = world(on, o)
-      await $.session.start(START)
+      const w = standingWorld(on, o)
+      await start($, w.w, null, false)
       await $.agent.spawn({ prompt: 'Find W-2045', description: 'Look up', subagentType: 'Explore' } as never)
       expect(w.spawned.map(s => s.prompt)).toEqual(['Find W-2045'])
     })
@@ -190,7 +169,7 @@ describe('T-C5-03 · compaction', () => {
   })
 })
 
-describe('the placement, alone', () => {
+describe('T-C5-02, T-C9-03 · the placement, alone', () => {
   test('withSection: appended as session, a same-id section replaced, never doubled, empty leaves the list', () => {
     const added = withSection(ENGINE, STANDING)
     expect(added).toEqual([...ENGINE, { id: SECTION_ID, text: STANDING, scope: 'session' }])

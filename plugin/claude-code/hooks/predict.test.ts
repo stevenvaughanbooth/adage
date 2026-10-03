@@ -1,3 +1,5 @@
+// A `TurnStep` answer read into the calls it predicts, and those calls as `turn.step` chunks
+// (predict.ts; plan C4, C7; T-C4-01, T-C4-03, T-C7-03): one branch per kind, ids with provenance.
 import { describe, expect, test } from 'claude-code/testing'
 
 import { callChunks, predictedResult, predictionOf, toolUseId } from './predict'
@@ -7,7 +9,7 @@ const make = (kind: string, calls: unknown[], extra: Record<string, unknown> = {
 })
 const bash = (command: string) => ({ tool: 'Bash', input: { command } })
 
-describe('predictionOf: one branch per kind', () => {
+describe('T-C4-01, T-C4-03, T-C7-03 · predictionOf: one branch per kind', () => {
   test('run, obligation and sequence take exactly one call', () => {
     for (const kind of ['run', 'obligation', 'sequence']) {
       expect(predictionOf(make(kind, [bash('make gen')]))).toEqual({
@@ -58,7 +60,7 @@ describe('predictionOf: one branch per kind', () => {
   })
 })
 
-describe('chunks and ids', () => {
+describe('T-C4-01, T-C7-03 · chunks and ids', () => {
   test('ids carry the provenance and only [A-Za-z0-9_-]', () => {
     expect(toolUseId('codegen-after-schema', 'turn-1', 3, 0)).toBe('adage_codegen-after-schema_turn-1_3_0')
     expect(toolUseId('a/b_c', 'x:y z', 2, 1)).toBe('adage_a-b-c_x-y-z_2_1')

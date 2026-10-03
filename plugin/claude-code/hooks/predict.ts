@@ -3,6 +3,8 @@
 // malformed answer is "nothing" and the request goes out.
 import type { TurnStepChunk, TurnStepResult } from 'claude-code'
 
+import { isRecord } from './shape'
+
 export type PredictedCall = { tool: string; input: Record<string, unknown> }
 
 export type Prediction = { kind: PredictKind; route: string; track: string; calls: PredictedCall[] }
@@ -35,9 +37,6 @@ function skill(calls: PredictedCall[]) {
 function several(calls: PredictedCall[]) {
   return calls.length >= 1 ? calls : undefined
 }
-
-const isRecord = (v: unknown): v is Record<string, unknown> =>
-  v !== null && typeof v === 'object' && !Array.isArray(v)
 
 function callOf(v: unknown): PredictedCall | undefined {
   if (!isRecord(v) || typeof v.tool !== 'string' || v.tool === '' || !isRecord(v.input)) return undefined

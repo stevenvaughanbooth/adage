@@ -4,16 +4,21 @@
 // the procedures as a `session` section of the system prompt (cached for the session), the
 // environment note in the Bash tool's description, the compaction instruction at compaction, and a
 // subagent's text before its prompt. Every part is the binary's words; an empty part attaches
-// nothing, and a failed ask is an empty answer.
+// nothing, and a failed ask is an empty answer. The answer is asked once per session id and kept
+// in the runtime, so every request of the session reads the same text (the prompt cache keeps it).
 import type { PromptComposeSection } from 'claude-code'
+
+import { askBinary } from './binary'
+import type { AnswerAt, EventAt, Mod, NextAt } from './mod'
+import { isRecord, str } from './shape'
 
 /** The session's answer, kept for the session: the same text at every request (the cache holds it). */
 export type Standing = { standing: string; environment: string; compact: string }
 
-export const NO_STANDING: Standing = { standing: '', environment: '', compact: '' }
+const NO_STANDING: Standing = { standing: '', environment: '', compact: '' }
 
 /** The binary's `Standing` payload (C5, C9), exactly. */
-export type StandingPayload = {
+type StandingPayload = {
   session_id: string
   cwd: string
   hook_event_name: 'Standing'
@@ -25,13 +30,10 @@ export type StandingPayload = {
 }
 
 /** `Standing` is read-only and asked off the hot path (once a session, once a spawn). */
-export const STANDING_TIMEOUT_MS = 2000
+const STANDING_TIMEOUT_MS = 2000
 
 /** The section's id: a plugin's own is `<plugin>:<name>` (the engine's rule). */
 export const SECTION_ID = 'adage:procedures'
-
-const isRecord = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v)
-const str = (v: unknown): string => (typeof v === 'string' ? v : '')
 
 /** The answer's three session parts; anything missing or malformed is empty. */
 export function standingOf(answer: unknown): Standing {
@@ -81,4 +83,84 @@ export function isAdageAttachment(message: unknown): boolean {
 /** The messages compaction runs over, without Adage's own attachment rows when they are addressable. */
 export function withoutAttachments<M>(messages: readonly M[]): readonly M[] {
   return messages.some(isAdageAttachment) ? messages.filter(m => !isAdageAttachment(m)) : messages
+}
+
+/** The `Standing` payload for this session, and for a subagent about to start. */
+async function standingPayload(m: Mod, agent?: StandingPayload['agent']): Promise<StandingPayload> {
+  return {
+    session_id: await m.session.id(),
+    cwd: await m.session.cwd(),
+    hook_event_name: 'Standing',
+    via: 'mod',
+    ...(m.rt.observing ? { observe: true as const } : {}),
+    ...(agent === undefined ? {} : { agent }),
+  }
+}
+
+/**
+ * The session's standing text, asked once per session id; nothing while the mod is inert (the
+ * question waits for a binary, so a first session whose link the shim makes later still asks).
+ */
+export async function standing(m: Mod): Promise<Standing> {
+  if (m.rt.bin === undefined) return NO_STANDING
+  const session = await m.session.id()
+  if (m.rt.standingFor?.session !== session) {
+    const answer = standingPayload(m)
+      .then(p => askBinary(m, 'Standing', p, STANDING_TIMEOUT_MS))
+      .then(a => (a.ok ? standingOf(a.answer) : NO_STANDING), () => NO_STANDING)
+    m.rt.standingFor = { session, answer }
+  }
+  return m.rt.standingFor.answer
+}
+
+/** Standing text once, from the cache (§3.6, C5): the procedures as one `session` section of the system prompt. */
+export async function onCompose(m: Mod, e: EventAt<'prompt.compose'>, next: NextAt<'prompt.compose'>): AnswerAt<'prompt.compose'> {
+  const composed = await next(e)
+  if (m.rt.bin === undefined) return composed
+  const text = (await standing(m).catch(() => NO_STANDING)).standing
+  return text === '' ? composed : { ...composed, sections: withSection(composed.sections, text) }
+}
+
+/**
+ * The Bash tool's description carries the environment note once (§1b.3, C9): how Python and the
+ * tests run here, where the tool is described rather than at each call.
+ */
+export async function onDescribe(m: Mod, e: EventAt<'tool.describe', { tool: 'Bash' }>, next: NextAt<'tool.describe', { tool: 'Bash' }>): AnswerAt<'tool.describe', { tool: 'Bash' }> {
+  const described = await next(e)
+  if (m.rt.bin === undefined) return described
+  const note = (await standing(m).catch(() => NO_STANDING)).environment
+  const description = withNote(described.description, note)
+  return description === described.description ? described : { ...described, description }
+}
+
+/**
+ * Compaction keeps what the session followed (§3.7, C5): the binary's instruction, in both arms;
+ * Adage's own attachment rows go only where the engine marks them as the plugin's.
+ */
+export async function onCompact(m: Mod, e: EventAt<'session.compact'>, next: NextAt<'session.compact'>): AnswerAt<'session.compact'> {
+  if (m.rt.bin === undefined) return next(e)
+  const compact = (await standing(m).catch(() => NO_STANDING)).compact
+  const instructions = withInstruction(typeof e.instructions === 'string' ? e.instructions : undefined, compact)
+  // A transcript that is not a list (a host that hands none) is passed on as it came.
+  const messages = Array.isArray(e.messages) ? withoutAttachments(e.messages) : e.messages
+  if (instructions === e.instructions && messages === e.messages) return next(e)
+  return next({ ...e, messages, ...(instructions === undefined ? {} : { instructions }) })
+}
+
+/**
+ * A subagent is told the conventions its task binds before its first request (§3.8, C9). A fork
+ * carries the session's own context already, and is left as it is.
+ */
+export async function onSpawn(m: Mod, e: EventAt<'agent.spawn'>, next: NextAt<'agent.spawn'>): AnswerAt<'agent.spawn'> {
+  if (m.rt.bin === undefined || e.fork) return next(e)
+  let told = ''
+  try {
+    // The session's own answer first: the binary keeps the session's standing text from it.
+    await standing(m)
+    const asked = await askBinary(m, 'Standing', await standingPayload(m, { type: e.subagentType, description: e.description, prompt: e.prompt }), STANDING_TIMEOUT_MS)
+    told = asked.ok ? subagentOf(asked.answer) : ''
+  } catch {
+    // Told nothing: the subagent starts as the model asked.
+  }
+  return told === '' ? next(e) : next({ ...e, prompt: withPreamble(e.prompt, told) })
 }

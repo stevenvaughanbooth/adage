@@ -1,24 +1,14 @@
-// The live feed (docs/claude-mod/architecture.md §4.1; plan B3): one child, `adage watch --follow
-// --json --repo <cwd> --session <id>`, started when the session starts, for the session's life.
-// Every line it prints is one JSON object with a `cursor`; a child that ends is started again
-// `--since` the last cursor, so nothing is lost or repeated across a restart, and after three
-// children in a row end early the feed says it stopped. Every spool parser, lock probe and word
-// table stays in Rust: this file splits lines, keeps rows and decides when to reconnect.
-//
-// No `$` crosses into this file: register.ts hands `follow` a guarded spawner, a clock and the
-// function that writes what the lines say into `$.state`; a test hands it stubs.
-import type { ProcessSpawnChunk } from 'claude-code'
-
+// The live feed's lines (docs/claude-mod/architecture.md §4.1; plan B3): what `adage watch --follow
+// --json` prints, one JSON object per line with a `cursor`, read into the rows, ticks, health and
+// learner the drawings take. Every spool parser, lock probe and word table stays in Rust: this file
+// splits lines, reads them and keeps rows. follower.ts runs the child and applies what this reads.
 import type { Act, Health, Learner, Row, Tick } from './plugin'
+import { isRecord, num, records, str } from './shape'
 
 /** The most rows the pane keeps (ux-design §6.1: rows older than 500 drop). */
 export const MAX_ROWS = 500
 /** The conditioning ticker's length. */
-export const MAX_TICKS = 20
-/** After this many children in a row end early, the feed stops (ux-design §9.4). */
-export const MAX_FAILURES = 3
-/** A child that lived this long ended late, not early: the count starts again. */
-export const HEALTHY_MS = 60_000
+const MAX_TICKS = 20
 
 /**
  * The spool stem the binary files a session id under (`adage_store::paths::sanitise`): the id
@@ -63,10 +53,6 @@ export type Line =
   | { kind: 'learner'; cursor: string; state: Learner['state']; nextAt: number | null }
   | { kind: 'other'; cursor: string }
 
-const isRecord = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v)
-const str = (v: unknown): string => (typeof v === 'string' ? v : '')
-const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
-
 /**
  * The acts that exist only because the arm is control (A3, "The current session"). The binary
  * removes them from the reader's own rows; the mod removes them again, so a binary that missed one
@@ -92,13 +78,12 @@ function actOf(v: unknown): Act | undefined {
  * spools for the same event (so the two arms' Live tabs read the same, T-X-06). Another session's
  * rows are kept as `adage watch` shows them.
  */
-export function rowOf(v: Record<string, unknown>, mine: string): Omit<Row, 'seq'> {
+function rowOf(v: Record<string, unknown>, mine: string): Omit<Row, 'seq'> {
   const session = str(v.session)
   const isMine = session !== '' && session === mine
   const raw = (Array.isArray(v.acts) ? v.acts : []).map(actOf).filter((a): a is Act => a !== undefined)
   const acts = isMine ? raw.filter(a => !ARM_ACTS.has(a.act)) : raw
-  const texts = (Array.isArray(v.texts) ? v.texts : [])
-    .filter(isRecord)
+  const texts = records(v.texts)
     .map(t => ({ route: str(t.route), text: str(t.text) }))
     .filter(t => !isMine || acts.some(a => a.act === 'directed' && a.route === t.route))
   // The calls the record names (`tool_use_ids`): a line drawn under a batch finds its group by them.
@@ -133,7 +118,7 @@ export function parseLine(text: string, mine: string): Line | undefined {
     case 'decision':
       return { kind: 'decision', cursor, row: rowOf(v, mine) }
     case 'learn': {
-      const ticks = (Array.isArray(v.ticks) ? v.ticks : []).filter(isRecord).map(t => ({
+      const ticks = records(v.ticks).map(t => ({
         ts: num(v.ts),
         text: str(t.text),
         tone: str(t.tone),
@@ -145,7 +130,7 @@ export function parseLine(text: string, mine: string): Line | undefined {
       const state = isRecord(v.state) ? v.state : {}
       const word = state.word === 'problem' || state.word === 'check' ? state.word : 'healthy'
       const lamp = state.lamp === 'inhibit' || state.lamp === 'prime' ? state.lamp : 'fire'
-      const lights = (Array.isArray(v.lights) ? v.lights : []).filter(isRecord).map(l => ({
+      const lights = records(v.lights).map(l => ({
         label: str(l.label),
         lamp: (LAMPS.has(str(l.lamp)) ? l.lamp : 'off') as Health['lights'][number]['lamp'],
         hint: typeof l.hint === 'string' ? l.hint : null,
@@ -195,70 +180,3 @@ export function lastCursor(lines: readonly Line[], since: string): string {
   }
   return since
 }
-
-/** The reconnect rule as a pure step: after a child ended, how the feed stands. */
-export function afterEnd(failures: number, livedMs: number): { failures: number; stop: boolean } {
-  const next = livedMs >= HEALTHY_MS ? 1 : failures + 1
-  return { failures: next, stop: next >= MAX_FAILURES }
-}
-
-export type FollowDeps = {
-  /** The guarded `$.process.spawn` for one argv. */
-  spawn: (argv: string[]) => AsyncGenerator<ProcessSpawnChunk, unknown>
-  now: () => Promise<number>
-  /** The argv for a child resuming from `since` (`followArgs` bound to the session). */
-  argv: (since: string) => string[]
-  /** Hands the parsed lines of one chunk over; resolves once they are in `$.state`. */
-  apply: (lines: Line[], cursor: string) => Promise<void>
-  /** Says how the feed stands now. */
-  status: (status: 'following' | 'reconnecting' | 'stopped' | 'paused', failures: number) => Promise<void>
-  /** True while the person paused the feed (`/adage pause`, `p` in the pane): the child ends. */
-  isPaused: () => boolean
-  /** Parses one line (`parseLine` bound to this session's stem). */
-  parse: (text: string) => Line | undefined
-}
-
-/**
- * The follower's life: start a child, hand over its lines, start it again `--since` the last
- * cursor when it ends, and stop after `MAX_FAILURES` early ends in a row. A pause ends the child;
- * `follow` returns `'paused'` with the cursor, and a resume is a new `follow` from it.
- */
-export async function follow(deps: FollowDeps, since: string, failures: number): Promise<{ end: 'paused' | 'stopped'; cursor: string }> {
-  let cursor = since
-  for (;;) {
-    if (deps.isPaused()) {
-      await deps.status('paused', failures)
-      return { end: 'paused', cursor }
-    }
-    await deps.status(failures === 0 ? 'following' : 'reconnecting', failures)
-    const started = await deps.now()
-    let buffer = ''
-    try {
-      const child = deps.spawn(deps.argv(cursor))
-      for await (const chunk of child) {
-        if (chunk.stream !== 'stdout') continue
-        const split = splitLines(buffer, chunk.text)
-        buffer = split.rest
-        const lines = split.lines.map(deps.parse).filter((l): l is Line => l !== undefined)
-        if (lines.length > 0) {
-          cursor = lastCursor(lines, cursor)
-          await deps.apply(lines, cursor)
-        }
-        if (deps.isPaused()) {
-          await child.return(undefined)
-          break
-        }
-      }
-    } catch {
-      // It could not start, or ended badly: one failure, as an early end is.
-    }
-    if (deps.isPaused()) continue
-    const ended = afterEnd(failures, (await deps.now()) - started)
-    failures = ended.failures
-    if (ended.stop) {
-      await deps.status('stopped', failures)
-      return { end: 'stopped', cursor }
-    }
-  }
-}
-

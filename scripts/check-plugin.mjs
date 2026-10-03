@@ -203,6 +203,107 @@ for (const m of ci.matchAll(/npm install -g @anthropic-ai\/claude-code(@\S+)?/g)
   expect(ts.length === 0, `plugin/claude-code-exec ships hooks module files (${ts}); the mod lives in plugin/claude-code alone`)
 }
 
+// The mod's structure (docs/claude-mod/impl/mod-structure.md): register.ts is the only file that
+// touches `$`, and holds the state and store tables' cells and one delegating `on(...)` line per
+// hook, in VALIDATE.txt's order; every other module takes a `Mod`, has its test file, and the tests
+// share one set of fixtures. Each rule below is one of that page's "how to add" steps.
+checkModStructure("plugin/claude-code")
+
+function checkModStructure(pluginDir) {
+  const hooks = path.join(repo, pluginDir, "hooks")
+  const rel = (f) => path.relative(path.join(repo, pluginDir), f)
+  const walk = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((d) => (d.isDirectory() ? walk(path.join(dir, d.name)) : [path.join(dir, d.name)]))
+  const files = walk(hooks).filter((f) => /\.tsx?$/.test(f))
+  const tests = files.filter((f) => /\.test\.tsx?$/.test(f))
+  const modules = files.filter((f) => !tests.includes(f) && !f.includes(`${path.sep}fixtures${path.sep}`))
+  const src = (f) => readFileSync(f, "utf8")
+  const register = path.join(hooks, "register.ts")
+  const reg = src(register)
+
+  // `$` only in register.ts: no other module reads or writes state, the store or the engine.
+  for (const f of modules) {
+    if (f === register) continue
+    const text = src(f).replace(/^\s*(\/\/|\*|\/\*\*).*$/gm, "")
+    expect(!/\$\.[a-z]+\.[a-zA-Z]+\(/.test(text), `${rel(f)}: calls \`$\`; only register.ts does (it hands modules a Mod)`)
+    expect(!/import\s*\{[^}]*\b(atom|read|update)\b[^}]*\}\s*from\s*'claude-code'/.test(text), `${rel(f)}: imports the state library; only register.ts holds the atoms`)
+  }
+
+  // The state table: types/index.d.ts, plugin.ts `STATE0`, register.ts's atoms and its cells, the same keys in order.
+  const contract = src(path.join(repo, pluginDir, "types/index.d.ts")).match(/interface PluginState\s*\{\s*adage:\s*\{([^}]*)\}/)?.[1] ?? ""
+  const typeKeys = [...contract.matchAll(/^\s*(\w+):/gm)].map((m) => m[1])
+  const state0 = src(path.join(hooks, "plugin.ts")).match(/export const STATE0: AdageState = \{([^}]*)\}/)?.[1] ?? ""
+  const initialKeys = [...state0.matchAll(/^\s*(\w+):/gm)].map((m) => m[1])
+  const atoms = [...reg.matchAll(/^const (\w+) = atom\(\{ plugin: 'adage', key: '(\w+)' \} as const, STATE0\.(\w+)\)$/gm)]
+  const cells = [...reg.matchAll(/^\s+(\w+): \{ read: \(\) => read\(\$, (\w+)\), update: f => update\(\$, (\w+), f\) \},$/gm)]
+  const byConst = new Map(atoms.map((m) => [m[1], m[2]]))
+  expect(typeKeys.length > 0, `${pluginDir}/types/index.d.ts: no PluginState.adage`)
+  expect(initialKeys.join() === typeKeys.join(), `${pluginDir}/hooks/plugin.ts: STATE0's keys (${initialKeys}) are not types/index.d.ts's (${typeKeys})`)
+  expect(atoms.map((m) => m[2]).join() === typeKeys.join(), `${pluginDir}/hooks/register.ts: the atoms' keys (${atoms.map((m) => m[2])}) are not the state table's (${typeKeys})`)
+  for (const m of atoms) expect(m[2] === m[3], `${pluginDir}/hooks/register.ts: atom ${m[1]} starts from STATE0.${m[3]}, not STATE0.${m[2]}`)
+  expect(cells.map((m) => m[1]).join() === typeKeys.join(), `${pluginDir}/hooks/register.ts: the state cells (${cells.map((m) => m[1])}) are not the state table's (${typeKeys})`)
+  for (const m of cells) expect(byConst.get(m[2]) === m[1] && m[2] === m[3], `${pluginDir}/hooks/register.ts: the ${m[1]} cell reads ${m[2]} and writes ${m[3]}, not its own atom`)
+
+  // The store table: plugin.ts `STORE_KEYS` and register.ts's store cells; no other `$.store` key.
+  const storeKeys = (src(path.join(hooks, "plugin.ts")).match(/export const STORE_KEYS = \[([^\]]*)\] as const/)?.[1] ?? "").split(",").map((v) => v.trim().replace(/^'|'$/g, "")).filter(Boolean)
+  const storeCells = [...reg.matchAll(/^\s+(\w+): \{ get: \(\) => \$\.store\.get\('adage\.(\w+)'\), set: v => \$\.store\.set\('adage\.(\w+)', v\) \},$/gm)]
+  expect(storeKeys.length > 0, `${pluginDir}/hooks/plugin.ts: no STORE_KEYS literal`)
+  expect(storeCells.map((m) => m[1]).join() === storeKeys.join(), `${pluginDir}/hooks/register.ts: the store cells (${storeCells.map((m) => m[1])}) are not STORE_KEYS (${storeKeys})`)
+  for (const m of storeCells) expect(m[1] === m[2] && m[2] === m[3], `${pluginDir}/hooks/register.ts: the ${m[1]} store cell names adage.${m[2]} / adage.${m[3]}`)
+  expect([...reg.matchAll(/\$\.store\.(get|set)\(/g)].length === storeKeys.length * 2, `${pluginDir}/hooks/register.ts: a $.store call outside the store cells`)
+
+  // The runners: `$.process` only inside the guards (bridge.ts `guard`, `guardSpawn`; press.ts `guardPress`).
+  const runs = [...reg.matchAll(/\$\.process\.(run|spawn)\(/g)].length
+  const guarded = [...reg.matchAll(/guard(Spawn|Press)?\(\([^)]*\)( => |: ProcessSpawnRequest\) => )\$\.process\.(run|spawn)\(/g)].length
+  expect(runs === 3 && guarded === 3, `${pluginDir}/hooks/register.ts: every $.process call is the argument of guard, guardSpawn or guardPress (found ${runs} calls, ${guarded} guarded)`)
+
+  // The hooks: one delegating `on(...)` line each, in VALIDATE.txt's order, to an exported `on…` of the module.
+  const imports = new Map([...reg.matchAll(/^import \* as (\w+) from '\.\/([\w/]+)'$/gm)].map((m) => [m[1], m[2]]))
+  const ons = [...reg.matchAll(/^\s*(?:if \([^)]*\) )?on\('([\w.]+)', (?:(\{.*?\}), )?async (?:function\* )?\(\$, e(?:, next)?\) (?:=> |\{ return yield\* )(\w+)\.(on\w+)\(mod\(\$, options\), e(?:, next)?\)(?: \})?\)$/gm)]
+  const onCount = [...reg.matchAll(/^\s*(?:if \([^)]*\) )?on\(/gm)].length
+  expect(ons.length === onCount, `${pluginDir}/hooks/register.ts: ${onCount - ons.length} on(...) line(s) do more than delegate to a module's on… function with mod($, options)`)
+  const matcherText = (m) => {
+    if (m === undefined) return ""
+    const o = JSON.parse(m.replace(/'/g, '"').replace(/(\w+):/g, '"$1":'))
+    const part = (k, v) => (Array.isArray(v) ? `${k}=${v.join("|")}` : `${k}=${v}`)
+    return `{${Object.entries(o).map(([k, v]) => (k === "props" ? `props has {${Object.entries(v).map(([a, b]) => part(a, b)).join(", ")}}` : part(k, v))).join(", ")}}`
+  }
+  const listed = ons.map((m) => `${m[1]}${matcherText(m[2])}`).join(", ")
+  const validated = (src(path.join(repo, pluginDir, "VALIDATE.txt")).match(/> \.\/register\.ts hooks: (.*)$/m)?.[1] ?? "").replace(/… \[\+\d+ chars\]$/, "")
+  if (validated === "" || !listed.startsWith(validated)) {
+    let k = 0
+    while (k < validated.length && listed[k] === validated[k]) k++
+    const comma = listed.lastIndexOf(", ", k)
+    const at = comma < 0 ? 0 : comma + 2
+    problems.push(`${pluginDir}/hooks/register.ts: the hooks in order differ from VALIDATE.txt's at \`${listed.slice(at, at + 60)}\` (VALIDATE.txt: \`${validated.slice(at, at + 60)}\`); a hook added or moved needs VALIDATE.txt regenerated`)
+  }
+  for (const m of ons) {
+    const mod = imports.get(m[3])
+    const file = mod === undefined ? undefined : [".ts", ".tsx"].map((x) => path.join(hooks, `${mod}${x}`)).find(existsSync)
+    expect(file !== undefined, `${pluginDir}/hooks/register.ts: ${m[3]} is not a module of hooks/`)
+    if (file !== undefined) expect(new RegExp(`^export (async )?function\\*? ${m[4]}\\(m: Mod`, "m").test(src(file)), `${rel(file)}: no exported ${m[4]}(m: Mod, …) for ${m[1]}`)
+  }
+
+  // A press comes from a gesture only dialog.ts and allow.ts hold.
+  for (const f of modules) {
+    const holds = /import\s*\{[^}]*\b(ANSWER|BUTTON)\b[^}]*\}\s*from\s*'\.\/press'/.test(src(f))
+    expect(!holds || ["dialog.ts", "allow.ts"].includes(path.basename(f)), `${rel(f)}: holds a press gesture; only dialog.ts and allow.ts do`)
+  }
+
+  // One test file per module, named by it (a module of types alone excepted); test names carry the
+  // test plan's ids; the world beneath the plugin is fixtures/kit.ts's alone.
+  for (const f of modules) {
+    const typesOnly = !/^export (async )?(function|const|let|class)\b/m.test(src(f))
+    const test = f.replace(/\.tsx?$/, ".test.ts")
+    expect(typesOnly || existsSync(test), `${rel(f)}: no ${path.basename(test)} beside it`)
+  }
+  for (const f of tests) {
+    const text = src(f)
+    const titled = [...text.matchAll(/^(describe|test)\((['"`])(.*?)\2/gm)]
+    for (const t of titled) expect(/T-[A-Z0-9]+-\d\d/.test(t[3]), `${rel(f)}: ${t[1]} '${t[3]}' names no test-plan id (T-…)`)
+    expect(!/\bon\('(process\.run|process\.spawn|env\.get)'|mock\.(env|clock)\(|function world\(/.test(text), `${rel(f)}: stubs the engine itself; the world beneath the plugin is fixtures/kit.ts's`)
+  }
+}
+
 // A staged marketplace tree (the release workflow's output).
 const stagedAt = process.argv.indexOf("--staged")
 if (stagedAt > 0) {

@@ -5,12 +5,12 @@ import { describe, expect, test } from 'claude-code/testing'
 
 import { BANNED, CONFIRMED, STAGE, STAGE_MOVED } from './fixtures/kit'
 import { FIRST_LINE, allowDetails, allowLines, confirmCommand, confirmOf, diffCounts, diffText, routeOf, stageOf } from './grant'
-import type { Allow } from './kinds'
+import type { Allow } from './plugin'
 
 const staged = stageOf(STAGE)
 const allow = (over: Partial<Allow> = {}): Allow => ({ key: 'k', say: 'run make gen after a schema edit', kind: 'execute', track: 'acme/learned', route: 'codegen-after-schema', command: 'adage review delegate acme/learned codegen-after-schema --level e2 --stage --json', stage: staged ?? null, details: false, note: '', busy: false, ...over })
 
-describe('the stage', () => {
+describe('T-B4-03 · the stage', () => {
   test('every fact the pane draws, read off `--stage --json`', () => {
     if (staged === undefined) throw new Error('stage')
     expect(staged).toMatchObject({ ok: true, first: true, digest: STAGE.digest, argv: ['make', 'gen'], sandbox: 'Linux, Landlock ABI 7 + seccomp; network off', profile: 'p9f8e7d6', effect: 'regenerate', cache: ['__pycache__/**'], outputs: ['acme/generated/**'], inputs: ['schema/*.json'] })
@@ -60,7 +60,7 @@ describe('the stage', () => {
   })
 })
 
-describe('the confirm', () => {
+describe('T-B4-03 · the confirm', () => {
   test('recorded, or the fresh stage to decide on again', () => {
     expect(confirmOf(CONFIRMED)).toEqual({ recorded: true, wrote: ['policy', 'marker', 'grant'], takesEffect: 'in new sessions' })
     const moved = confirmOf(STAGE_MOVED)

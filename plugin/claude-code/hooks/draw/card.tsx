@@ -3,7 +3,7 @@
 // The text the command answered is the source, so a headless session and the VS Code panel read
 // the same words as plain text.
 import { ROLES } from '../tokens'
-import { parseCardText } from '../view'
+import { parseCardText } from '../view/card'
 import type { Els, Tree } from './els'
 
 export function cardTree(els: Els, text: string, copy: (command: string, surface: string) => void): Tree {

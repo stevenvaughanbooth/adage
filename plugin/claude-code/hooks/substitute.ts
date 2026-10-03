@@ -2,12 +2,10 @@
 // words it. A dry run's `substitute` names the command a learned dead end is replaced with, and the
 // final answer repeats it only once the person's rules were found to treat both commands alike
 // (call.ts makes both asks). Anything malformed is "no replacement" and the call runs as written.
+import { isRecord } from './shape'
 
 /** What the binary would run instead, and the one line said about it. */
 export type Substitute = { command: string; route: string; track: string; context: string }
-
-const isRecord = (v: unknown): v is Record<string, unknown> =>
-  v !== null && typeof v === 'object' && !Array.isArray(v)
 
 /** `{ command, route, track, context }` with a non-empty command, route and context, or undefined. */
 export function substituteOf(v: unknown): Substitute | undefined {

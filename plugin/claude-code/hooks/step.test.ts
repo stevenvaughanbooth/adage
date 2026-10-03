@@ -1,16 +1,19 @@
-// The turn.step generator with a stubbed ask and a stubbed stream beneath (step.ts takes both as
-// values): exactly the right chunks per kind, no request when predicted, forwarding otherwise, and
-// the finish line at an end_turn stop.
+// The turn.step hook (step.ts; test-plan §6 C4, C5, C7, C8): `turnStep` with a stubbed ask and a
+// stubbed stream beneath (it takes both as values): exactly the right chunks per kind, no request
+// when predicted, forwarding otherwise, the finish line at an end_turn stop; then `onStep` through
+// the engine, the binary answering beneath.
 import type { TurnStepChunk, TurnStepInput, TurnStepResult } from 'claude-code'
 import { describe, expect, test } from 'claude-code/testing'
 
 import type { Asked } from './bridge'
+import { USAGE, drain, start, world } from './fixtures/kit'
 import type { Predicted } from './plugin'
 import { turnStep } from './step'
+
+const PREDICT = { predict: { kind: 'obligation', route: 'codegen-after-schema', track: 'acme/billing@1', calls: [{ tool: 'Bash', input: { command: 'make gen' } }] } }
 import type { StepDeps, StepNext, TurnStepPayload } from './step'
 
 const STEP: TurnStepInput = { turnId: 'turn-1', index: 2, model: 'claude-x', messageCount: 5 }
-const USAGE = { input_tokens: 10, output_tokens: 5, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, model: 'claude-x' }
 
 /** The model beneath: streams `chunks`, then returns `result`; counts the requests made. */
 function model(chunks: TurnStepChunk[], result: TurnStepResult) {
@@ -51,15 +54,6 @@ function stub(answer: (p: TurnStepPayload) => Asked | Error, over: Partial<StepD
   return { deps, asked, recorded }
 }
 
-async function drain(gen: AsyncGenerator<TurnStepChunk, TurnStepResult | void>) {
-  const chunks: TurnStepChunk[] = []
-  for (;;) {
-    const r = await gen.next()
-    if (r.done) return { chunks, result: r.value }
-    chunks.push(r.value)
-  }
-}
-
 const predict = (kind: string, calls: unknown[]): Asked => ({
   ok: true,
   answer: { predict: { kind, route: 'codegen-after-schema', track: 'acme/billing@1', calls } },
@@ -67,7 +61,7 @@ const predict = (kind: string, calls: unknown[]): Asked => ({
 const MAKE_GEN = { tool: 'Bash', input: { command: 'make gen' } }
 const ID = (k: number) => `adage_codegen-after-schema_turn-1_2_${k}`
 
-describe('a prediction before the request', () => {
+describe('T-C4-01, T-C7-03 · a prediction before the request', () => {
   const cases: [string, unknown[]][] = [
     ['run', [MAKE_GEN]],
     ['obligation', [MAKE_GEN]],
@@ -113,7 +107,7 @@ describe('a prediction before the request', () => {
   }
 })
 
-describe('forwarding', () => {
+describe('T-C4-02 · forwarding', () => {
   const TOOL_STEP = () =>
     model(
       [
@@ -164,7 +158,7 @@ describe('forwarding', () => {
   })
 })
 
-describe('the finish line (ending)', () => {
+describe('T-C8-02 · the finish line (ending)', () => {
   test("an end_turn stop asks with ending: true; a prediction keeps the model's text and replaces the stop", async () => {
     const m = model(
       [
@@ -217,7 +211,7 @@ describe('the finish line (ending)', () => {
   })
 })
 
-describe('routing a step (C5, T-C5-04)', () => {
+describe('T-C5-04 · routing a step (C5)', () => {
   const ROUTINE: Asked = { ok: true, answer: { routine: true } }
   const ENDS = () => model([{ kind: 'text', index: 0, text: 'Done.' }, { kind: 'stop', stopReason: 'end_turn', usage: USAGE }], { turnId: 'turn-1', index: 2, answer: 'Done.', toolUses: [], stopReason: 'end_turn', usage: USAGE })
 
@@ -271,7 +265,7 @@ describe('routing a step (C5, T-C5-04)', () => {
   })
 })
 
-describe('observe mode and the skill check', () => {
+describe('T-B1-04, T-C4-03 · observe mode and the skill check', () => {
   const SKILL = { tool: 'Skill', input: { skill: 'release-notes' } }
   const RESULT: TurnStepResult = { turnId: 'turn-1', index: 2, answer: 'Done.', toolUses: [], stopReason: 'end_turn', usage: USAGE }
   const ENDS = () => model([{ kind: 'text', index: 0, text: 'Done.' }, { kind: 'stop', stopReason: 'end_turn', usage: USAGE }], RESULT)
@@ -312,5 +306,93 @@ describe('observe mode and the skill check', () => {
     const { chunks } = await drain(turnStep(STEP, m.next, deps))
     expect(m.requests).toHaveLength(0)
     expect(chunks[0]).toEqual({ kind: 'tool', index: 0, id: ID(0), name: 'Skill' })
+  })
+})
+
+describe('T-C4-01 … T-C4-03 · onStep through the engine', () => {
+  test('active: a TurnStep prediction is yielded in place of the request', async ($, on) => {
+    const w = world(on, { hook: { TurnStep: JSON.stringify(PREDICT) }, model: 'read' })
+    await start($, w, null, false)
+    const { chunks, result } = await drain($.turn.step(STEP))
+    expect(chunks).toEqual([
+      { kind: 'tool', index: 0, id: 'adage_codegen-after-schema_turn-1_2_0', name: 'Bash' },
+      { kind: 'input', index: 0, json: '{"command":"make gen"}' },
+      { kind: 'stop', stopReason: 'tool_use', usage: null },
+    ])
+    expect(result).toMatchObject({ stopReason: 'tool_use', toolUses: [{ name: 'Bash', input: { command: 'make gen' } }], usage: null })
+    expect(w.models.map(x => x.index)).toEqual([])
+    const asked = w.ran.find(r => r.argv[3] === 'TurnStep')
+    expect(asked?.argv).toEqual(['/data/bin/hook', 'hook', 'claude', 'TurnStep'])
+    expect(asked?.init?.env).toEqual({ CLAUDECODE: '1' })
+    expect(asked?.init?.timeoutMs).toBe(250)
+    expect(asked?.init?.cwd).toBe('/w')
+    expect(JSON.parse(asked?.init?.stdin ?? '')).toEqual({
+      session_id: 'sess-1',
+      cwd: '/w',
+      hook_event_name: 'TurnStep',
+      turn_id: 'turn-1',
+      index: 2,
+      model: 'claude-x',
+      ending: false,
+      via: 'mod',
+    })
+    expect(w.sets.map(s => s.key)).toEqual(['predicted'])
+  })
+
+  test('active: nothing predicted, the request goes out and streams unchanged', async ($, on) => {
+    const w = world(on, { model: 'read' })
+    await start($, w, null, false)
+    const { chunks, result } = await drain($.turn.step(STEP))
+    expect(w.models.map(x => x.index)).toEqual([2])
+    expect(chunks.map(c => c.kind)).toEqual(['text', 'tool', 'input', 'stop'])
+    expect(result).toMatchObject({ stopReason: 'tool_use', answer: 'Reading.' })
+  })
+
+  test('step 0 and a subagent step are forwarded without asking', async ($, on) => {
+    const w = world(on, { hook: { TurnStep: JSON.stringify(PREDICT) }, model: 'read' })
+    await start($, w, null, false)
+    await drain($.turn.step({ ...STEP, index: 0 }))
+    await drain($.turn.step({ ...STEP, agentId: 'agent-7' }))
+    expect(w.models.map(x => x.index)).toEqual([0, 2])
+    expect(w.ran.map(r => r.argv.slice(1).join(' '))).toEqual(['version', 'hook claude Standing'])
+  })
+
+  test('T-C5-04 · a headless session reads its routine model from the card at its first step, and routes from the next', async ($, on) => {
+    const w = world(on, { hook: { TurnStep: JSON.stringify({ routine: true }) }, card: { runtime: { routine_model: 'haiku' }, ui: {} }, model: 'read' })
+    await start($, w, null, false)
+    await drain($.turn.step(STEP))
+    await drain($.turn.step({ ...STEP, index: 3 }))
+    expect(w.models.map(x => x.index)).toEqual([2, 3])
+    expect(w.models.map(({ model, effort }) => ({ model, effort }))).toEqual([
+      { model: 'claude-x', effort: undefined },
+      { model: 'haiku', effort: 'low' },
+    ])
+    expect(w.ran.filter(r => r.argv[1] === '--json').map(r => r.argv)).toEqual([['/data/bin/adage', '--json', '--for-session']])
+    const steps = w.ran.filter(r => r.argv[3] === 'TurnStep').map(r => (JSON.parse(r.init?.stdin ?? '{}') as { routine_model?: true; model: string }))
+    expect(steps.map(s => s.routine_model)).toEqual([undefined, true])
+    expect(JSON.stringify(steps)).not.toContain('haiku')
+  })
+
+  test('no routine model on the card: a routine answer changes nothing', async ($, on) => {
+    const w = world(on, { hook: { TurnStep: JSON.stringify({ routine: true }) }, card: { runtime: { routine_model: '' } }, model: 'read' })
+    await start($, w, null, false)
+    await drain($.turn.step(STEP))
+    await drain($.turn.step({ ...STEP, index: 3 }))
+    expect(w.models.map(m => m.model)).toEqual(['claude-x', 'claude-x'])
+  })
+
+  test('a Skill prediction is yielded only for a skill `$.command.list()` lists', async ($, on) => {
+    const skill = { predict: { kind: 'skill', route: 'notes', track: 'acme/billing@1', calls: [{ tool: 'Skill', input: { skill: 'release-notes' } }] } }
+    const w = world(on, { hook: { TurnStep: JSON.stringify(skill) }, model: 'read' })
+    let listed = [{ name: 'review', description: '', source: 'plugin' as const }]
+    on('command.list', () => ({ value: listed }))
+    await start($, w, null, false)
+    expect((await drain($.turn.step(STEP))).chunks.map(c => c.kind)).toEqual(['text', 'tool', 'input', 'stop'])
+    expect(w.models.map(x => x.index)).toEqual([2])
+    expect(w.sets).toEqual([])
+    listed = [...listed, { name: 'release-notes', description: '', source: 'plugin' as const }]
+    const { chunks } = await drain($.turn.step(STEP))
+    expect(chunks[0]).toEqual({ kind: 'tool', index: 0, id: 'adage_notes_turn-1_2_0', name: 'Skill' })
+    expect(w.models.map(x => x.index)).toEqual([2])
   })
 })
