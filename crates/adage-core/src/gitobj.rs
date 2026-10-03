@@ -186,6 +186,62 @@ impl Repo {
     }
 }
 
+impl Repo {
+    /// The bytes of the file at `rel` (a repository-relative path, `/`-separated) in `HEAD`'s
+    /// tree: `None` when it is not committed there, or is larger than `max`. Read to tell a file
+    /// committed in the repository from one that only sits in the work tree (`adage add --trust`
+    /// accepts a press only for a pack committed in the repository, architecture §3.12).
+    pub fn committed(&mut self, rel: &str, max: usize) -> Option<Vec<u8>> {
+        let head = self.head()?;
+        let (kind, body) = self.object(&head, MAX_COMMIT)?;
+        if kind != OBJ_COMMIT {
+            return None;
+        }
+        let first = body.split(|&b| b == b'\n').next()?;
+        let mut id = parse_hex(std::str::from_utf8(first.strip_prefix(b"tree ")?).ok()?)?;
+        let parts: Vec<&str> = rel.split('/').filter(|p| !p.is_empty() && *p != ".").collect();
+        for (i, part) in parts.iter().enumerate() {
+            let (kind, tree) = self.object(&id, MAX_COMMIT)?;
+            if kind != OBJ_TREE {
+                return None;
+            }
+            let (mode, entry) = tree_entry(&tree, part)?;
+            let last = i + 1 == parts.len();
+            // A file is `100644` or `100755`; a directory `40000`; nothing else is followed.
+            if last != mode.starts_with("100") || (!last && mode != "40000") {
+                return None;
+            }
+            id = entry;
+        }
+        let (kind, blob) = self.object(&id, max)?;
+        (kind == OBJ_BLOB && blob.len() <= max).then_some(blob)
+    }
+}
+
+const OBJ_TREE: u8 = 2;
+const OBJ_BLOB: u8 = 3;
+
+/// The mode and id of `name` in a tree object (`<mode> <name>\0<20-byte id>`, repeated).
+fn tree_entry(tree: &[u8], name: &str) -> Option<(String, Oid)> {
+    let mut rest = tree;
+    while !rest.is_empty() {
+        let sp = rest.iter().position(|&b| b == b' ')?;
+        let nul = rest.iter().position(|&b| b == 0)?;
+        if nul < sp || rest.len() < nul + 21 {
+            return None;
+        }
+        let mode = std::str::from_utf8(&rest[..sp]).ok()?;
+        let entry = &rest[sp + 1..nul];
+        let mut id = [0u8; 20];
+        id.copy_from_slice(&rest[nul + 1..nul + 21]);
+        if entry == name.as_bytes() {
+            return Some((mode.to_string(), id));
+        }
+        rest = &rest[nul + 21..];
+    }
+    None
+}
+
 /// A commit's first `parent` header, if any (headers end at the first blank line).
 fn first_parent(body: &[u8]) -> Option<Oid> {
     for line in body.split(|&b| b == b'\n') {
@@ -431,6 +487,20 @@ mod tests {
         assert!(apply_delta(base, &[11, 1, 1, b'x'], 64).is_none(), "wrong base size");
         assert!(apply_delta(base, &[12, 1, 0], 64).is_none(), "reserved opcode");
         assert!(apply_delta(base, &[12, 4, 0x80 | 0x01 | 0x10, 10, 4], 64).is_none(), "copy past the base");
+    }
+
+    #[test]
+    fn tree_entries_are_found_by_exact_name() {
+        let mut tree = Vec::new();
+        for (mode, name, b) in [("40000", "pack", 1u8), ("100644", "pack.toml", 2), ("100755", "run", 3)] {
+            tree.extend_from_slice(format!("{mode} {name}\0").as_bytes());
+            tree.extend_from_slice(&[b; 20]);
+        }
+        assert_eq!(tree_entry(&tree, "pack"), Some(("40000".into(), [1; 20])));
+        assert_eq!(tree_entry(&tree, "pack.toml"), Some(("100644".into(), [2; 20])));
+        assert_eq!(tree_entry(&tree, "run"), Some(("100755".into(), [3; 20])));
+        assert_eq!(tree_entry(&tree, "pac"), None);
+        assert_eq!(tree_entry(&tree[..30], "run"), None, "a truncated tree");
     }
 
     #[test]

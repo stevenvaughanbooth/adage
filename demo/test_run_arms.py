@@ -193,6 +193,27 @@ class StagePluginTest(unittest.TestCase):
         self.assertTrue(os.access(dest / "dist" / "x86_64-unknown-linux-gnu" / "adage", os.X_OK))
         self.assertFalse((src / "dist" / "SHA256SUMS").exists(), "the source plugin is never written")
 
+    def test_one_plugin_stages_both_binaries(self):
+        # Plan A8: adage-exec beside adage in the one plugin, taken from beside the adage given
+        # unless named.
+        src = self.tmp / "src"
+        (src / "scripts").mkdir(parents=True)
+        fake_exec = self.tmp / "adage-exec"
+        fake_exec.write_text("#!/bin/sh\nexit 0\n")
+        dest = run.stage_plugin(src, self.fake, self.tmp / "staged", target="x86_64-unknown-linux-gnu")
+        import hashlib
+        sums = (dest / "dist" / "SHA256SUMS").read_text().splitlines()
+        self.assertEqual(sums, [
+            hashlib.sha256(self.fake.read_bytes()).hexdigest() + "  x86_64-unknown-linux-gnu/adage",
+            hashlib.sha256(fake_exec.read_bytes()).hexdigest() + "  x86_64-unknown-linux-gnu/adage-exec",
+        ])
+        self.assertTrue(os.access(dest / "dist" / "x86_64-unknown-linux-gnu" / "adage-exec", os.X_OK))
+        named = self.tmp / "elsewhere"
+        named.write_text("#!/bin/sh\necho named\n")
+        dest = run.stage_plugin(src, self.fake, self.tmp / "staged2", target="x86_64-unknown-linux-gnu",
+                                exec_binary=named)
+        self.assertEqual((dest / "dist" / "x86_64-unknown-linux-gnu" / "adage-exec").read_text(), named.read_text())
+
     @unittest.skipUnless((HERE.parent / "plugin" / "claude-code" / "scripts" / "session-start").exists()
                          and shutil.which("sh") and shutil.which("sha256sum"), "plugin shim or sh/sha256sum missing")
     def test_the_plugin_shim_links_the_staged_binary(self):
@@ -204,6 +225,7 @@ class StagePluginTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(r.stdout.strip(), "FAKE hook claude SessionStart", r.stdout + r.stderr)
         self.assertTrue(os.readlink(data / "bin" / "adage").startswith("adage-"))
+        self.assertEqual(os.readlink(data / "bin" / "hook"), "adage", "no marker: the hooks run adage")
 
 
 def write_spool(path, records, corrupt=False):

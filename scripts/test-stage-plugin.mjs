@@ -3,7 +3,7 @@
 import assert from "node:assert/strict"
 import { createHash } from "node:crypto"
 import { execFileSync, spawnSync } from "node:child_process"
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -32,6 +32,12 @@ try {
   for (const [file, value] of sums) writeFileSync(file, value)
   let result = stage()
   assert.equal(result.status, 0, result.stdout + result.stderr)
+  // One plugin, both binaries (plan A8); the retired alias bundles nothing.
+  const staged = path.join(root, "out", "plugin")
+  const sumsFile = readFileSync(path.join(staged, "claude-code", "dist", "SHA256SUMS"), "utf8")
+  for (const bin of ["adage", "adage-exec"]) assert.match(sumsFile, new RegExp(`  ${host.target}/${bin}\n`))
+  assert.ok(!existsSync(path.join(staged, "claude-code-exec", "dist")), "the alias bundles no binaries")
+  assert.ok(existsSync(path.join(staged, "claude-code-exec", "scripts", "session-start")), "the alias is staged")
   for (const [file, value] of sums) {
     rmSync(file)
     result = stage()
@@ -43,7 +49,7 @@ try {
     assert.match(result.stderr, /does not match/)
     writeFileSync(file, value)
   }
-  console.log("plugin archive integrity: verified pair accepted; missing and incorrect checksums rejected for both binaries")
+  console.log("plugin archive integrity: verified pair accepted into one plugin; missing and incorrect checksums rejected for both binaries")
 } finally {
   rmSync(root, { recursive: true, force: true })
 }

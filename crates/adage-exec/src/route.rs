@@ -812,8 +812,152 @@ pub fn lapses(planned: &[Planned<'_>], store: &crate::approvals::Store) -> Vec<L
     out
 }
 
+/// Path components whose files are caches, never sources: a staged run that writes under one of
+/// them proposes a cache glob, not an output.
+const CACHE_DIRS: &[&str] =
+    &["__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".cache", ".hypothesis", ".tox", ".nox"];
+
+/// The E2 terms the binary proposes for a route a person has declared none for (architecture
+/// §3.12, "stage, then confirm"): what a trial stage with no declared outputs changed, which it
+/// refused (`changed`, repository-relative paths). A path under a cache directory proposes that
+/// directory's glob as a cache; any other proposes its directory's glob as an output, or the file
+/// itself at the repository's top level (never a root wildcard). A verify step declares no
+/// outputs, so its proposed outputs are what its stage then refuses.
+pub fn propose_outputs(changed: &[String]) -> (Vec<String>, Vec<String>) {
+    let (mut outputs, mut cache) = (Vec::new(), Vec::new());
+    for path in changed {
+        let parts: Vec<&str> = path.split('/').filter(|p| !p.is_empty()).collect();
+        if let Some(at) = parts.iter().position(|p| CACHE_DIRS.contains(p)) {
+            cache.push(format!("{}/**", parts[..=at].join("/")));
+        } else if parts.len() > 1 {
+            outputs.push(format!("{}/**", parts[..parts.len() - 1].join("/")));
+        } else if let Some(file) = parts.first() {
+            outputs.push((*file).to_string());
+        }
+    }
+    for v in [&mut outputs, &mut cache] {
+        v.sort();
+        v.dedup();
+    }
+    (outputs, cache)
+}
+
+/// The fields of a grant a `--confirm` checks against what was staged, in the order a refusal
+/// names them: everything the approval key holds, then the declared terms.
+const DIGEST_FIELDS: &[&str] = &[
+    "scripts",
+    "argv_templates",
+    "effect",
+    "level",
+    "output_mode",
+    "profile_id",
+    "signer",
+    "mode",
+    "repo",
+    "terms",
+    "route_exec_digest",
+];
+
+fn short_hash(v: &serde_json::Value) -> String {
+    crate::sha256_hex(serde_json::to_string(v).unwrap_or_default().as_bytes())[..16].to_string()
+}
+
+/// What `review delegate --stage` answers and `--confirm` checks: `<snapshot>.<field>…`, the
+/// SHA-256 of the staged input snapshot and the staged change set (`snapshot`), then 16 hex of
+/// each field of the key and the terms ([`DIGEST_FIELDS`]), so a confirm can say which term
+/// changed between the two acts, and tell that from the repository merely moving on. Nothing is
+/// kept between the acts: the digest is all a confirm compares.
+pub fn grant_digest(key: &crate::approvals::ApprovalKey, terms: &Terms, snapshot: &serde_json::Value) -> String {
+    let k = serde_json::to_value(key).unwrap_or_default();
+    let t = serde_json::to_value(terms).unwrap_or_default();
+    let mut out = crate::sha256_hex(serde_json::to_string(snapshot).unwrap_or_default().as_bytes());
+    for f in DIGEST_FIELDS {
+        let v = if *f == "terms" { t.clone() } else { k.get(*f).cloned().unwrap_or(serde_json::Value::Null) };
+        out.push('.');
+        out.push_str(&short_hash(&v));
+    }
+    out
+}
+
+/// How a confirm's digest differs from the one it expected.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DigestChange {
+    Same,
+    /// Only the repository moved on (the snapshot): show the fresh stage again.
+    Snapshot,
+    /// These fields of the grant changed: refuse, naming them.
+    Terms(Vec<&'static str>),
+    /// `expect` is not a digest a stage answered.
+    Malformed,
+}
+
+/// Compare a confirm's fresh digest with the one the stage answered. `route_exec_digest` is
+/// named only when nothing that explains it (scripts, argv, effect, output) changed.
+pub fn digest_change(expect: &str, now: &str) -> DigestChange {
+    let (a, b): (Vec<&str>, Vec<&str>) = (expect.trim().split('.').collect(), now.split('.').collect());
+    if a.len() != b.len() || a.len() != DIGEST_FIELDS.len() + 1 {
+        return DigestChange::Malformed;
+    }
+    let mut changed: Vec<&'static str> =
+        DIGEST_FIELDS.iter().zip(a[1..].iter().zip(&b[1..])).filter(|(_, (x, y))| x != y).map(|(f, _)| *f).collect();
+    if changed.len() > 1 {
+        changed.retain(|f| *f != "route_exec_digest");
+    }
+    match (changed.is_empty(), a[0] == b[0]) {
+        (false, _) => DigestChange::Terms(changed),
+        (true, true) => DigestChange::Same,
+        (true, false) => DigestChange::Snapshot,
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn proposed_outputs_follow_what_a_trial_stage_changed() {
+        let changed = vec![
+            "acme/generated/models.py".to_string(),
+            "acme/generated/__init__.py".to_string(),
+            "acme/__pycache__/models.cpython-312.pyc".to_string(),
+            "VERSION".to_string(),
+        ];
+        let (outputs, cache) = propose_outputs(&changed);
+        assert_eq!(outputs, vec!["VERSION".to_string(), "acme/generated/**".to_string()]);
+        assert_eq!(cache, vec!["acme/__pycache__/**".to_string()]);
+        let (outputs, cache) = propose_outputs(&[".pytest_cache/v/cache/lastfailed".to_string()]);
+        assert!(outputs.is_empty());
+        assert_eq!(cache, vec![".pytest_cache/**".to_string()]);
+    }
+
+    /// T-A7-06's digest: a term change is named, a moved repository is a snapshot change only.
+    #[test]
+    fn a_digest_names_what_changed_between_stage_and_confirm() {
+        let key = crate::approvals::ApprovalKey {
+            repo: "r".into(),
+            route_exec_digest: "d1".into(),
+            argv_templates: vec![vec!["make".into(), "gen".into()]],
+            scripts: vec![("scripts/gen".into(), "aa".into())],
+            effect: Effect::Regenerate,
+            level: Level::E2,
+            output_mode: OutputMode::Typed,
+            profile_id: "p".into(),
+            signer: None,
+            mode: GrantMode::Execute,
+        };
+        let terms = Terms { outputs: vec!["gen/**".into()], ..Terms::default() };
+        let snap = serde_json::json!({ "inputs": { "schema.toml": "11" } });
+        let d = grant_digest(&key, &terms, &snap);
+        assert_eq!(digest_change(&d, &d), DigestChange::Same);
+        let moved = grant_digest(&key, &terms, &serde_json::json!({ "inputs": { "schema.toml": "22" } }));
+        assert_eq!(digest_change(&d, &moved), DigestChange::Snapshot);
+        let mut rescripted = key.clone();
+        rescripted.scripts = vec![("scripts/gen".into(), "bb".into())];
+        rescripted.route_exec_digest = "d2".into();
+        assert_eq!(digest_change(&d, &grant_digest(&rescripted, &terms, &snap)), DigestChange::Terms(vec!["scripts"]));
+        let widened = Terms { outputs: vec!["**".into()], ..Terms::default() };
+        assert_eq!(digest_change(&d, &grant_digest(&key, &widened, &snap)), DigestChange::Terms(vec!["terms"]));
+        assert_eq!(digest_change("nonsense", &d), DigestChange::Malformed);
+    }
+
     use super::*;
 
     fn v(xs: &[&str]) -> Vec<String> {
@@ -955,6 +1099,7 @@ mod tests {
             basis: serde_json::Value::Null,
             auto: false,
             terms: None,
+            via: None,
         });
         let table = CommandTable::load();
         let planned = plan_grants("acme-billing", d.path(), &index, d.path(), &store, &table);

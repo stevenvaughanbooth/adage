@@ -21,10 +21,12 @@ Arms (ARMS below; docs/claude-mod/architecture.md §9, test-plan §7.2):
   mod          the plugin only, treated
 
 The plugin arms load a copy of the plugin (default plugin/claude-code, --plugin-dir) staged under
-$DEMO_ROOT/plugins/ with the binary to serve it (default ADAGE_BIN, --plugin-bin) at
-dist/<target>/adage and its dist/SHA256SUMS, exactly as plugin/build.sh stages it, so the plugin's
-session-start shim links its own verified copy; nothing is downloaded and plugin/ is never written.
---no-stage loads --plugin-dir as it is (after plugin/build.sh).
+$DEMO_ROOT/plugins/ with the binaries to serve it, exactly as plugin/build.sh stages them: adage
+(default ADAGE_BIN, --plugin-bin) at dist/<target>/adage, and adage-exec (default ADAGE_EXEC_BIN,
+else the adage-exec beside that adage) at dist/<target>/adage-exec, with their dist/SHA256SUMS. One
+plugin ships both (plan A8): its session-start shim links bin/hook to adage-exec while
+$ADAGE_HOME/exec/enabled exists (what a predict grant needs), else to adage. Nothing is downloaded
+and plugin/ is never written. --no-stage loads --plugin-dir as it is (after plugin/build.sh).
 
 Every session runs under --debug with its debug log at runs/<id>/claude-debug.log; `requests` is
 counted from it as evals/reflex-proof/harness/heldout_analysis.requests() counts it
@@ -32,7 +34,7 @@ counted from it as evals/reflex-proof/harness/heldout_analysis.requests() counts
 
 Environment: DEMO_ROOT (default /tmp/adage-demo), DEMO_MODEL, DEMO_CONCURRENCY, DEMO_REPEATS,
 DEMO_TRAIN_REPEATS, DEMO_MAX_TURNS, DEMO_ARMS, ADAGE_BIN (default target/release/adage),
-DEMO_PLUGIN_DIR, DEMO_PLUGIN_BIN.
+ADAGE_EXEC_BIN, DEMO_PLUGIN_DIR, DEMO_PLUGIN_BIN.
 """
 
 import argparse
@@ -59,6 +61,8 @@ ADAGE_HOME = ROOT / "adage-home"
 ADAGE_BIN = Path(os.environ.get("ADAGE_BIN") or REPO / "target" / "release" / "adage")
 PLUGIN_DIR = Path(os.environ.get("DEMO_PLUGIN_DIR") or REPO / "plugin" / "claude-code")
 PLUGIN_BIN = Path(os.environ["DEMO_PLUGIN_BIN"]) if os.environ.get("DEMO_PLUGIN_BIN") else None
+# The executing binary staged beside adage in the one plugin; None: the adage-exec beside adage.
+EXEC_BIN = Path(os.environ["ADAGE_EXEC_BIN"]) if os.environ.get("ADAGE_EXEC_BIN") else None
 PLUGIN_STAGE = True
 EVAL_ARMS = [a for a in os.environ.get("DEMO_ARMS", "control,adage").split(",") if a]
 MODEL = os.environ.get("DEMO_MODEL", "claude-sonnet-5")
@@ -150,6 +154,8 @@ def settings_file(arm):
 #                   hook runs twice (implementation-plan §2.7.2)
 # adage_arm: ADAGE_ARM for the session (None: no ADAGE_* variable at all).
 # observe:   ADAGE_MOD_OBSERVE=1 (only the mod's observers register; architecture §9).
+# Both plugin arms load the one plugin (plan A8); with $ADAGE_HOME/exec/enabled its hooks run the
+# adage-exec staged inside it, which is what makes a predict grant answer a TurnStep.
 
 ARMS = {
     "train": {"hooks": "empty", "adage_arm": "treated", "observe": False},
@@ -199,21 +205,28 @@ def plugin_target():
     return f"{m}-pc-windows-msvc"
 
 
-def stage_plugin(src, binary, dest, target=None):
-    """A copy of the plugin at `src` in `dest`, serving `binary`: dist/<target>/adage and the
-    dist/SHA256SUMS line the shim verifies it against (`<sha256>  <target>/adage`, as sha256sum
-    prints it). The source's own dist/ is left behind, so a stale build.sh stage never wins."""
+def stage_plugin(src, binary, dest, target=None, exec_binary=None):
+    """A copy of the plugin at `src` in `dest`, serving `binary`: dist/<target>/adage, and
+    dist/<target>/adage-exec from `exec_binary` (default: the adage-exec beside `binary`, when there
+    is one), with the dist/SHA256SUMS lines the shim verifies them against (`<sha256>
+    <target>/<name>`, as sha256sum prints them). The source's own dist/ is left behind, so a stale
+    build.sh stage never wins."""
     src, dest, binary = Path(src), Path(dest), Path(binary)
     target = target or plugin_target()
+    exec_binary = Path(exec_binary) if exec_binary else binary.with_name("adage-exec")
     if dest.exists():
         shutil.rmtree(dest)
     shutil.copytree(src, dest, ignore=shutil.ignore_patterns("dist"), symlinks=True)
     bin_dir = dest / "dist" / target
     bin_dir.mkdir(parents=True)
-    shutil.copy2(binary, bin_dir / "adage")
-    (bin_dir / "adage").chmod(0o755)
-    digest = hashlib.sha256((bin_dir / "adage").read_bytes()).hexdigest()
-    (dest / "dist" / "SHA256SUMS").write_text(f"{digest}  {target}/adage\n")
+    lines = []
+    for name, path in (("adage", binary), ("adage-exec", exec_binary)):
+        if name == "adage-exec" and not path.is_file():
+            continue
+        shutil.copy2(path, bin_dir / name)
+        (bin_dir / name).chmod(0o755)
+        lines.append(f"{hashlib.sha256((bin_dir / name).read_bytes()).hexdigest()}  {target}/{name}\n")
+    (dest / "dist" / "SHA256SUMS").write_text("".join(lines))
     return dest
 
 
@@ -228,7 +241,8 @@ def plugin_for_runs():
         return PLUGIN_DIR
     with _PLUGIN_LOCK:
         if "dir" not in _STAGED:
-            _STAGED["dir"] = stage_plugin(PLUGIN_DIR, PLUGIN_BIN or ADAGE_BIN, ROOT / "plugins" / PLUGIN_DIR.name)
+            _STAGED["dir"] = stage_plugin(PLUGIN_DIR, PLUGIN_BIN or ADAGE_BIN, ROOT / "plugins" / PLUGIN_DIR.name,
+                                          exec_binary=EXEC_BIN)
         return _STAGED["dir"]
 
 

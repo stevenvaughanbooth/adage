@@ -60,8 +60,8 @@ export function dataDirFromRoot(root: string): string | undefined {
 /**
  * `<data>/bin/<BIN>`, the link the session-start shim made, from CLAUDE_PLUGIN_DATA when the
  * engine's process carries it, else derived from the plugin root. There is no PATH fallback: when
- * the shim linked `scripts/quiet` the probe reads nothing and the copy stays inert, and a PATH
- * binary would serve beside the other plugin's copy.
+ * the shim linked `scripts/quiet` (no binary could serve) the probe reads nothing and the mod stays
+ * inert, as the command hooks do.
  */
 export function hookBinary(pluginData: string | undefined, pluginRoot: string): string | undefined {
   const data = pluginData || dataDirFromRoot(pluginRoot)
@@ -69,9 +69,9 @@ export function hookBinary(pluginData: string | undefined, pluginRoot: string): 
 }
 
 /**
- * Probes the hook binary once (`<bin> version`): it serves when it exits 0 and prints something.
- * `scripts/quiet` prints nothing, so the copy whose shim went quiet stays inert. Resolves the
- * binary that serves, or undefined.
+ * The presence probe (`<bin> version`): a binary is there when it exits 0 and prints something.
+ * `scripts/quiet` prints nothing, so with no binary the mod stays inert. Resolves the binary that
+ * serves, or undefined.
  */
 export async function probe(run: Run, bin: string | undefined): Promise<string | undefined> {
   if (bin === undefined) return undefined

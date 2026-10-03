@@ -349,6 +349,7 @@ mod tests {
                 basis: serde_json::Value::Null,
                 auto: false,
                 terms: None,
+                via: None,
             });
             store.save(&approvals::path(&home)).unwrap();
             Self { _dir: dir, home, req }

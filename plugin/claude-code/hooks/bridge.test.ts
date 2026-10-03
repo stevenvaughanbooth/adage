@@ -28,7 +28,7 @@ function fake(answer: (argv: readonly string[]) => ProcessRunResult | Error): { 
   return { run: guard(raw), seen }
 }
 
-const BIN = '/data/bin/adage'
+const BIN = '/data/bin/hook'
 const PAYLOAD = { session_id: 's', cwd: '/w', hook_event_name: 'TurnStep', turn_id: 't', index: 1, model: 'm', ending: false }
 
 describe('ask', () => {
@@ -127,7 +127,7 @@ describe('probe', () => {
 
 describe('where the binary is', () => {
   test('CLAUDE_PLUGIN_DATA first, no PATH fallback', () => {
-    expect(hookBinary('/d/', '/anywhere')).toBe('/d/bin/adage')
+    expect(hookBinary('/d/', '/anywhere')).toBe('/d/bin/hook')
     expect(hookBinary(undefined, '/home/me/src/adage/plugin/claude-code')).toBeUndefined()
     expect(hookBinary('', '/home/me/src/adage/plugin/claude-code')).toBeUndefined()
   })
@@ -135,6 +135,6 @@ describe('where the binary is', () => {
   test('derived from an installed plugin root as Claude Code lays out plugins/data', () => {
     expect(dataDirFromRoot('/home/me/.claude/plugins/cache/adage/adage/0.1.0')).toBe('/home/me/.claude/plugins/data/adage-adage')
     expect(dataDirFromRoot('/c/plugins/cache/my.market/adage-exec/1.2.3/')).toBe('/c/plugins/data/adage-exec-my-market')
-    expect(hookBinary(undefined, '/c/plugins/cache/adage/adage/0.1.0')).toBe('/c/plugins/data/adage-adage/bin/adage')
+    expect(hookBinary(undefined, '/c/plugins/cache/adage/adage/0.1.0')).toBe('/c/plugins/data/adage-adage/bin/hook')
   })
 })

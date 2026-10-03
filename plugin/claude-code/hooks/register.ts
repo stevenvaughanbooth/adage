@@ -1,6 +1,7 @@
-// The adage mod (POC: plan B1, the B2 observers, C4, C6, C7, C8). One copy ships in each plugin; at
-// session.start each probes the hook binary its shim linked, and the copy whose link is
-// scripts/quiet stays inert: every hook then answers what next(e) answered, unchanged.
+// The adage mod (plan B1, the B2 observers, C4, C6, C7, C8). The plugin ships both binaries and
+// one copy of this module (A8): at session.start it probes the hook binary the shim linked
+// (adage-exec while execution is on, else adage), and while none is there (the link is
+// scripts/quiet) it stays inert: every hook then answers what next(e) answered, unchanged.
 //
 // Every `$` call of the mod is in this file: `claude plugin validate` follows `$` only into
 // functions declared in the same file, so bridge.ts, step.ts, substitute.ts, predict.ts and reflex.ts take plain
@@ -15,15 +16,14 @@ import { parseReflexes } from './reflex'
 import { TURN_STEP_TIMEOUT_MS, turnStep } from './step'
 import { PRE_TOOL_TIMEOUT_MS, substituteCall } from './substitute'
 
-// The $.state values this copy keeps (types/index.d.ts). `claude plugin validate` reads a state
-// reference only as literals in a const of this file, so the plugin name is spelled here (and is
-// the one line of this file the adage-exec copy changes).
+// The $.state values the mod keeps (types/index.d.ts). `claude plugin validate` reads a state
+// reference only as literals in a const of this file, so the plugin name is spelled here.
 const FIRED = { plugin: 'adage', key: 'fired' } as const
 const PREDICTED = { plugin: 'adage', key: 'predicted' } as const
 
 type Answered = { additionalContext?: string[]; block?: string }
 
-/** The hook binary that answered the probe; undefined while this copy is inert. */
+/** The hook binary that answered the probe; undefined while the mod is inert. */
 let bin: string | undefined
 
 /**
@@ -50,7 +50,7 @@ async function observe<A extends Answered>($: EngineInterface, answered: A, even
   return answered
 }
 
-/** Probes the binary the shim linked; the copy is active only while it answers. */
+/** Probes the binary the shim linked; the mod is active only while it answers. */
 async function activate($: EngineInterface): Promise<void> {
   const pluginData = await $.env.get('CLAUDE_PLUGIN_DATA')
   observing = ((await $.env.get('ADAGE_MOD_OBSERVE')) ?? '') !== ''

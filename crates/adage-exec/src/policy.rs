@@ -245,6 +245,25 @@ pub fn load(adage_home: &Path) -> Result<Policy> {
     Ok(p)
 }
 
+/// The policy as it would be with the personal file raised to E2 the way `set_max_level` raises
+/// it (automatic approval off, the sandbox required), for staging a first E2 grant on a machine
+/// still at E1 (architecture §3.12: the trial store only, nothing written). `None` when the
+/// managed file caps execution at E1, so no person here can raise it.
+pub fn trial_e2(adage_home: &Path) -> Result<Option<Policy>> {
+    let personal_path = personal_path(adage_home);
+    let mut personal = read(&personal_path)?.unwrap_or_default();
+    personal.exec.max_level = Some("E2".into());
+    personal.exec.auto_approve = Some("off".into());
+    personal.exec.require_sandbox = Some(true);
+    let managed_path = managed_path();
+    let managed = read(&managed_path)?;
+    let mut p = merge(Some(&personal), managed.as_ref())?;
+    if managed.is_some() {
+        p.sources.push(format!("{} (managed)", managed_path.display()));
+    }
+    Ok((p.max_level == Level::E2).then_some(p))
+}
+
 impl Policy {
     /// Why policy refuses this request (with its locally classified effect), or `Ok`.
     pub fn permits(&self, req: &ExecRequest, classified: Effect) -> Result<(), String> {

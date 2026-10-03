@@ -75,6 +75,8 @@ fn route_keys(r: &Route, table: &CommandTable) -> Vec<(String, &'static str)> {
         }
         Step::Sequence { commands } => commands.iter().map(|c| (command_key(c, table), "directs")).collect(),
         Step::Card { card } => card.commands.iter().map(|c| (command_key(&c.command, table), "directs")).collect(),
+        // A skill's use is keyed as the trace keys it (`control Skill <name>`).
+        Step::Skill { skill, .. } => vec![(adage_tracks::skill_key(skill), "directs")],
         Step::ReadBatch { .. } | Step::Advise { .. } => vec![],
     }
 }
@@ -191,6 +193,10 @@ pub fn build(paths: &Paths, here: Option<&Path>, max_events: usize, warn: &mut d
     events.sort_by_key(|e| e["ts"].as_u64().unwrap_or(0));
     let events: Vec<Value> = events.split_off(events.len().saturating_sub(max_events));
 
+    // What a person could be asked to grant (`offers`): every reflex's grants, and the policy a
+    // first grant would run under (a machine at E1 is raised with its first action).
+    let grants = adage_exec::approvals::Store::load(&adage_exec::approvals::path(&paths.root)).unwrap_or_default();
+    let trial = adage_exec::policy::trial_e2(&paths.root).ok().flatten();
     let mut railed: BTreeMap<String, (String, &'static str)> = BTreeMap::new();
     let mut routes = Vec::new();
     for inst in &installed {
@@ -228,7 +234,12 @@ pub fn build(paths: &Paths, here: Option<&Path>, max_events: usize, warn: &mut d
             let standing = standings.get(&(inst.reference.clone(), r.id.clone()));
             let (verbs, reasons) = standing.map(|s| (s.verbs.clone(), s.reasons.as_slice())).unwrap_or_default();
             let mut route = serde_json::to_value(Reflex::of(inst, r, whys.get(&r.id))).unwrap_or_default();
-            route["review"] = json!(Decisions::of(&inst.reference, r, verbs, reasons));
+            let mut decisions = Decisions::of(&inst.reference, r, verbs, reasons);
+            let label = format!("{}/{}", t.manifest.track.name, r.id);
+            let granted = grants.approvals.iter().any(|a| a.route == label && (repo.is_empty() || a.key.repo == *repo));
+            let permitted = trial.as_ref().is_some_and(|p| !p.effects_deny.contains(&r.effect));
+            decisions.offers.extend(crate::reflex::Offer::of(&inst.reference, r, granted, permitted));
+            route["review"] = json!(decisions);
             route["in_index"] = json!(indexed);
             route["live"] = json!(live.get(&(repo.clone(), r.id.clone())).map(Tally::read).unwrap_or_default());
             route["arms"] = Value::Object(arm_stats);

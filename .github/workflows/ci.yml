@@ -150,9 +150,12 @@ jobs:
       - name: npm launcher
         shell: bash
         run: node npm/test/launcher.test.mjs
+      # The one plugin's shim links both binaries (plan A8): build them, whatever was affected.
       - name: Claude Code session-start hook
         if: runner.os != 'Windows'
-        run: plugin/test/session-start.test.sh
+        run: |
+          cargo build --locked -p adage-cli -p adage-exec
+          plugin/test/session-start.test.sh
       - name: release plugin startup and real background bootstrap
         if: runner.os != 'Windows' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
         # Product latency budgets are checked on the shipped profile. Debug-only spawn
@@ -251,10 +254,10 @@ jobs:
         run: |
           claude plugin validate --strict plugin/claude-code 2>&1 | sed "s#$PWD/##g" > /tmp/validate.txt
           diff -u plugin/claude-code/VALIDATE.txt /tmp/validate.txt
+      # One plugin carries the mod (plan A8); the retired adage-exec alias loads no module, and
+      # its one SessionStart is exercised by plugin/test/session-start.test.sh.
       - name: claude plugin test
-        run: |
-          claude plugin test plugin/claude-code
-          claude plugin test plugin/claude-code-exec
+        run: claude plugin test plugin/claude-code
 
   design:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'

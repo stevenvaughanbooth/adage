@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // Structural checks on the Claude Code plugins and marketplace that `claude plugin validate` does
 // not make: versions agree with the workspace, and every hook command points at something that
-// exists. Two plugins: `adage`, and `adage-exec` (Track C §3.2), whose hooks replace the Adage
-// plugin's while execution is on; both session-start shims read the same marker, so exactly one
-// serves and hooks never fire twice.
+// exists. One plugin serves, `adage`, shipping both binaries (plan A8): its session-start shim
+// links bin/hook to adage-exec while the execution marker exists, else to adage, so the hooks are
+// registered once and never fire twice. `adage-exec` stays one release as a retired alias that
+// registers its SessionStart alone and quiets what an earlier version left behind.
 //
 // The marketplace installs each plugin from the `marketplace` branch (a `git-subdir` source), which
 // the release workflow writes with verified binaries for every target bundled
@@ -39,9 +40,10 @@ const market = json(".claude-plugin/marketplace.json")
 expect(market.metadata?.version === version, `marketplace metadata.version ${market.metadata?.version} != ${version}`)
 const names = []
 
-for (const [pluginDir, bin] of [
-  ["plugin/claude-code", "adage"],
-  ["plugin/claude-code-exec", "adage-exec"],
+// The plugin that serves, and the retired alias (`alias`: SessionStart alone, no module).
+for (const [pluginDir, alias] of [
+  ["plugin/claude-code", false],
+  ["plugin/claude-code-exec", true],
 ]) {
   const plugin = json(`${pluginDir}/.claude-plugin/plugin.json`)
   names.push(plugin.name)
@@ -65,7 +67,18 @@ for (const [pluginDir, bin] of [
   for (const s of ["scripts/session-start", "scripts/quiet"]) {
     expect(executable(path.join(repo, pluginDir, s)), `${pluginDir}: ${s} is missing or not executable`)
   }
-  expect(read(`${pluginDir}/scripts/session-start`).includes("exec/enabled"), `${pluginDir}: session-start does not read the exec marker`)
+  if (alias) {
+    // The retired adage-exec plugin: one SessionStart that runs no binary, and nothing else.
+    const h = json(`${pluginDir}/hooks/hooks.json`)
+    expect(Object.keys(h.hooks || {}).join() === "SessionStart", `${pluginDir}: the retired alias registers SessionStart alone`)
+    expect(!("modules" in h), `${pluginDir}: the retired alias loads no hooks module`)
+    expect(!("types" in plugin), `${pluginDir}: the retired alias names no types`)
+    expect(shim.includes("uninstall this one"), `${pluginDir}: the retired alias's shim does not ask to be uninstalled`)
+    expect(!/\bexec "\$DATA\/bin/.test(shim), `${pluginDir}: the retired alias's shim runs a binary`)
+    continue
+  }
+  expect(shim.includes("exec/enabled"), `${pluginDir}: session-start does not read the exec marker`)
+  expect(shim.includes("$DATA/bin/hook") && shim.includes("adage-exec"), `${pluginDir}: session-start does not link bin/hook to adage or adage-exec`)
 
   // The mod (docs/claude-mod/architecture.md §2): hooks.json may name one hooks module under
   // `modules` beside the command hooks; the module, the types contract plugin.json names, and the
@@ -111,13 +124,13 @@ for (const [pluginDir, bin] of [
           expect(executable(p), `${pluginDir} ${event}: ${cmd} is missing or not executable`)
         } else if (cmd.startsWith("${CLAUDE_PLUGIN_DATA}/")) {
           expect(hooks.SessionStart, `${pluginDir} ${event}: ${cmd} needs a SessionStart hook to install it`)
-          expect(cmd === "${CLAUDE_PLUGIN_DATA}/bin/" + bin, `${pluginDir} ${event}: runs ${cmd}, not bin/${bin}`)
+          expect(cmd === "${CLAUDE_PLUGIN_DATA}/bin/hook", `${pluginDir} ${event}: runs ${cmd}, not bin/hook`)
         } else {
           problems.push(`${pluginDir} ${event}: unexpected command ${cmd}`)
         }
-        // An E2 action runs at the edit and Stop events of the adage-exec plugin (at most 20 s of
-        // its own): those get 30 s; everything else stays at most 10 s.
-        const action = bin === "adage-exec" && (event === "PostToolBatch" || event === "Stop")
+        // An E2 action runs at the edit and Stop events (at most 20 s of its own), whichever
+        // binary bin/hook is this session: those get 30 s; everything else stays at most 10 s.
+        const action = event === "PostToolBatch" || event === "Stop"
         const limit = action ? 30 : 10
         expect(typeof h.timeout === "number" && h.timeout <= limit, `${pluginDir} ${event}: timeout must be set and at most ${limit} s`)
         if (action) expect(h.timeout === 30, `${pluginDir} ${event}: an action event's timeout is 30 s`)
@@ -143,26 +156,25 @@ const ci = read(".github/workflows/ci.yml")
 for (const m of ci.matchAll(/npm install -g @anthropic-ai\/claude-code(@\S+)?/g)) {
   expect(/^@\d+\.\d+\.\d+$/.test(m[1] || ""), `.github/workflows/ci.yml: the Claude Code CLI must be pinned to an exact version (${m[0]})`)
 }
-// Both plugins ship the same module, file for file, until A8 makes them one.
+// One module, in the plugin that serves (A8): the retired alias ships none.
 {
-  const ts = (dir) => (existsSync(path.join(repo, dir, "hooks")) ? readdirSync(path.join(repo, dir, "hooks")).filter((f) => /\.tsx?$/.test(f)).sort() : [])
-  const [a, b] = [ts("plugin/claude-code"), ts("plugin/claude-code-exec")]
-  expect(a.join(",") === b.join(","), `the two plugins' hooks modules differ in files: [${a}] vs [${b}]`)
+  const ts = existsSync(path.join(repo, "plugin/claude-code-exec/hooks"))
+    ? readdirSync(path.join(repo, "plugin/claude-code-exec/hooks")).filter((f) => /\.tsx?$/.test(f))
+    : []
+  expect(ts.length === 0, `plugin/claude-code-exec ships hooks module files (${ts}); the mod lives in plugin/claude-code alone`)
 }
 
 // A staged marketplace tree (the release workflow's output).
 const stagedAt = process.argv.indexOf("--staged")
 if (stagedAt > 0) {
   const root = path.resolve(process.argv[stagedAt + 1] || "")
-  for (const [pluginDir, bins] of [
-    ["plugin/claude-code", ["adage"]],
-    ["plugin/claude-code-exec", ["adage-exec", "adage"]],
-  ]) {
+  for (const [pluginDir, bins] of [["plugin/claude-code", ["adage", "adage-exec"]]]) {
     const dist = path.join(root, pluginDir, "dist")
     const sums = existsSync(path.join(dist, "SHA256SUMS")) ? readFileSync(path.join(dist, "SHA256SUMS"), "utf8") : ""
     for (const p of PLATFORMS) {
       for (const b of bins) {
-        if (p.os === "win32" && pluginDir.endsWith("-exec")) continue
+        // Execution needs an OS sandbox Windows does not have: no adage-exec there.
+        if (p.os === "win32" && b === "adage-exec") continue
         const rel = `${p.target}/${p.os === "win32" ? `${b}.exe` : b}`
         const file = path.join(dist, rel)
         if (!existsSync(file)) {

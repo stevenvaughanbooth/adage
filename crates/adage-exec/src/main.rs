@@ -306,6 +306,8 @@ fn cmd_approve(a: &Args) -> Result<i32> {
         basis: serde_json::Value::Null,
         auto: false,
         terms: None,
+        // Only a person at a terminal gets here: adage-exec's verbs never take a press.
+        via: Some(adage_tracks::review::Via::Terminal),
     });
     store.save(&path)?;
     println!("Recorded in {}.", path.display());

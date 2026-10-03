@@ -25,8 +25,8 @@
 | `design/` | The design tokens (`design/tokens/adage.tokens.json`, W3C DTCG), the single source for every surface ([style guide](design/style.md)) |
 | `web/map` | The map web app `adage map` serves, embedded in the binary |
 | `web/site` | The public website |
-| `plugin/claude-code` | The Claude Code plugin |
-| `plugin/claude-code-exec` | The `adage-exec` plugin, which serves hooks once `adage delegate on` |
+| `plugin/claude-code` | The Claude Code plugin: both binaries, the hooks, and the mod (`hooks/*.ts`) |
+| `plugin/claude-code-exec` | The retired `adage-exec` plugin, kept one release as an alias that asks to be uninstalled |
 | `plugin/opencode` | The OpenCode plugin (installed by `adage install opencode`) |
 | `npm/` | The npm launcher and per-platform packages |
 | `demo/` | Sandbox, runner, live dashboard |

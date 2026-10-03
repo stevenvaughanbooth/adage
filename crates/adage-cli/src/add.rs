@@ -214,7 +214,6 @@ fn decide(
 }
 
 pub fn add(args: &[String], paths: &Paths) -> Result<()> {
-    require_person("add")?;
     let usage = "usage: adage add <pack-dir> [--trust] [--repo-path <dir>]";
     let src = PathBuf::from(args.first().filter(|a| !a.starts_with("--")).context(usage)?);
     let trust = args.iter().any(|a| a == "--trust");
@@ -224,6 +223,14 @@ pub fn add(args: &[String], paths: &Paths) -> Result<()> {
         None => std::env::current_dir().ok(),
     };
     let cwd_root = at.and_then(|d| d.canonicalize().ok()).and_then(|d| find_root(&d));
+    // A team's pack committed in this repository can be trusted with a press from the session
+    // (architecture §3.12: the same trust as the repository's CLAUDE.md); anything else, a pack
+    // from outside the repository or one changed since its commit, needs a terminal.
+    if trust && cwd_root.as_deref().is_some_and(|root| adage_app::trust::committed_pack(&src, root)) {
+        crate::review::person_or_press("add --trust", paths)?;
+    } else {
+        require_person("add")?;
+    }
     if src.join(adage_pack::validate::MANIFEST).is_file() {
         return add_pack(&src, paths, trust, cwd_root.as_deref());
     }

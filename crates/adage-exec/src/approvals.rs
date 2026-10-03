@@ -122,6 +122,11 @@ pub struct Approval {
     /// requests derived from a compiled route (`crate::route`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub terms: Option<crate::route::Terms>,
+    /// How the person approved it: at a terminal, or with a press in the Claude Code session
+    /// (architecture §3.12). Set by the binary; `--by` stays the person's own name for it.
+    /// `None` for an automatic approval and for every approval recorded before presses existed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub via: Option<adage_tracks::review::Via>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -379,6 +384,7 @@ mod tests {
             basis: serde_json::Value::Null,
             auto: false,
             terms: None,
+            via: None,
         });
         assert!(store.find(&k).is_some());
         let mutations: Vec<(&str, Mutation)> = vec![
@@ -439,6 +445,7 @@ mod tests {
             basis: serde_json::json!({"sessions": 3}),
             auto: false,
             terms: None,
+            via: None,
         });
         s.save(&p).unwrap();
         let back = Store::load(&p).unwrap();
@@ -464,6 +471,7 @@ mod tests {
             basis: serde_json::Value::Null,
             auto: false,
             terms: None,
+            via: None,
         }
     }
 

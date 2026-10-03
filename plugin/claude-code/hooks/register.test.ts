@@ -56,10 +56,10 @@ async function drain(stream: AsyncGenerator<TurnStepChunk, TurnStepResult>) {
 const START = { cwd: '/w', surface: null, isInteractive: false } as const
 const STEP = { turnId: 'turn-1', index: 2, model: 'claude-x', messageCount: 4 }
 
-test('active: the probe runs `<data>/bin/adage version` with CLAUDECODE=1', async ($, on) => {
+test('active: the presence probe runs `<data>/bin/hook version` with CLAUDECODE=1', async ($, on) => {
   const w = world(on, { data: '/data', version: 'adage 0.1.0\n', turnStep: '' })
   await $.session.start(START)
-  expect(w.ran).toEqual([{ argv: ['/data/bin/adage', 'version'], init: { timeoutMs: 1000, env: { CLAUDECODE: '1' } } }])
+  expect(w.ran).toEqual([{ argv: ['/data/bin/hook', 'version'], init: { timeoutMs: 1000, env: { CLAUDECODE: '1' } } }])
 })
 
 test('active: a classic observer returns the command hooks\' answer unchanged and keeps what fired', async ($, on) => {
@@ -89,7 +89,7 @@ test('active: a TurnStep prediction is yielded in place of the request', async (
   expect(result).toMatchObject({ stopReason: 'tool_use', toolUses: [{ name: 'Bash', input: { command: 'make gen' } }], usage: null })
   expect(w.requests).toEqual([])
   const asked = w.ran.find(r => r.argv[1] === 'hook')
-  expect(asked?.argv).toEqual(['/data/bin/adage', 'hook', 'claude', 'TurnStep'])
+  expect(asked?.argv).toEqual(['/data/bin/hook', 'hook', 'claude', 'TurnStep'])
   expect(asked?.init?.env).toEqual({ CLAUDECODE: '1' })
   expect(asked?.init?.timeoutMs).toBe(250)
   expect(asked?.init?.cwd).toBe('/w')
@@ -114,7 +114,16 @@ test('active: nothing predicted, the request goes out and streams unchanged', as
   expect(result).toMatchObject({ stopReason: 'tool_use', answer: 'Reading.' })
 })
 
-test('inert (the link is scripts/quiet: version prints nothing): every hook forwards, no TurnStep asked', async ($, on) => {
+test('active whichever binary the shim linked: adage-exec answers the same presence probe', async ($, on) => {
+  const w = world(on, { data: '/data', version: 'adage-exec 0.1.0\n', turnStep: JSON.stringify(PREDICT) })
+  await $.session.start(START)
+  const { chunks } = await drain($.turn.step(STEP))
+  expect(chunks.map(c => c.kind)).toEqual(['tool', 'input', 'stop'])
+  expect(w.requests).toEqual([])
+  expect(w.ran.map(r => r.argv[0])).toEqual(['/data/bin/hook', '/data/bin/hook'])
+})
+
+test('inert with no binary (the link is scripts/quiet: version prints nothing): every hook forwards, no TurnStep asked', async ($, on) => {
   const w = world(on, { data: '/data', version: '', turnStep: JSON.stringify(PREDICT) })
   on('classic.PostToolBatch', () => ({ additionalContext: [REFLEX] }))
   await $.session.start(START)

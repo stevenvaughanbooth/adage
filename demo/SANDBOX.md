@@ -114,15 +114,19 @@ Every arm also gets `ADAGE_HOME=$DEMO_ROOT/adage-home` and `ADAGE_AUTO_LEARN=0` 
 `--debug --debug-file runs/<id>/claude-debug.log` and `--include-partial-messages`. stderr goes to
 `runs/<id>/stderr.log`.
 
-**The plugin's binary.** `plugin/build.sh` builds release binaries and stages
-`plugin/claude-code/dist/<host triple>/adage` with `dist/SHA256SUMS`; the plugin's
-`scripts/session-start` links `${CLAUDE_PLUGIN_DATA}/bin/adage` to that copy after checking its
-digest (else to `adage` on `PATH`), and every other hook runs that link. The runner does the same
-without writing to `plugin/`: it copies the plugin (default `plugin/claude-code`, `--plugin-dir`)
-to `$DEMO_ROOT/plugins/<name>/`, leaving any `dist/` behind, and stages the binary
-(default `ADAGE_BIN`, else `target/release/adage`; `--plugin-bin`) as
-`dist/<target>/adage` plus its `SHA256SUMS` line. `--no-stage` loads `--plugin-dir` as it is, for
-a plugin `plugin/build.sh` already staged. Nothing is downloaded.
+**The plugin's binaries.** One plugin ships both binaries (plan A8). `plugin/build.sh` builds
+release binaries and stages `plugin/claude-code/dist/<host triple>/adage` and `adage-exec` with
+`dist/SHA256SUMS`; the plugin's `scripts/session-start` links `${CLAUDE_PLUGIN_DATA}/bin/adage`
+and `bin/adage-exec` to those copies after checking their digests (else to `adage` and
+`adage-exec` on `PATH`), and links `bin/hook`, which every other hook runs, to `adage-exec` while
+`$ADAGE_HOME/exec/enabled` exists and to `adage` otherwise. A predict grant answers a `TurnStep`
+only through `adage-exec`, so the `mod` arm predicts only with that marker in the shared
+`ADAGE_HOME`. The runner stages the same way without writing to `plugin/`: it copies the plugin
+(default `plugin/claude-code`, `--plugin-dir`) to `$DEMO_ROOT/plugins/<name>/`, leaving any
+`dist/` behind, and stages `adage` (default `ADAGE_BIN`, else `target/release/adage`;
+`--plugin-bin`) and `adage-exec` (default `ADAGE_EXEC_BIN`, else the `adage-exec` beside that
+`adage`, when there is one) as `dist/<target>/…` with their `SHA256SUMS` lines. `--no-stage` loads
+`--plugin-dir` as it is, for a plugin `plugin/build.sh` already staged. Nothing is downloaded.
 
 **Keys recorded per run** (`metrics` in `state.json`), beside the earlier ones:
 

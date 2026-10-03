@@ -27,7 +27,7 @@ export type TurnStepPayload = {
 }
 
 export type StepDeps = {
-  /** False while the copy is inert: every step is forwarded unread. */
+  /** False while the mod is inert: every step is forwarded unread. */
   isActive: boolean
   /** Observe mode (ADAGE_MOD_OBSERVE): every step is asked about and forwarded; none is yielded. */
   isObserving: boolean

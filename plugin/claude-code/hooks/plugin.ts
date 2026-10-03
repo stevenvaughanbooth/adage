@@ -1,9 +1,12 @@
-// What differs between the two copies of the module: the hook binary's name here, and the plugin
-// name in register.ts's $.state references (validate reads those only as literals in that file).
+// The plugin's constants and state value types. One plugin ships both binaries (plan A8): the
+// session-start shim links the one that serves hook events at ${CLAUDE_PLUGIN_DATA}/bin/hook.
 import type { AdageFired, AdagePredicted } from '../types'
 
-/** The binary the shim links at ${CLAUDE_PLUGIN_DATA}/bin/<BIN> for hook events. */
-export const BIN = 'adage'
+/**
+ * The entry the shim makes for hook events: adage-exec while execution is on
+ * ($ADAGE_HOME/exec/enabled), else adage; scripts/quiet when no binary can serve.
+ */
+export const BIN = 'hook'
 
 export type Fired = AdageFired
 export type Predicted = AdagePredicted

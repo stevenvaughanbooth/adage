@@ -165,18 +165,34 @@ impl World {
         let o = self.adage(&a, "");
         assert!(o.status.success(), "{}", text(&o));
     }
-    /// A copy of the Claude Code plugin with this build's adage bundled and checksummed, as the
-    /// release stages it for the marketplace.
+    /// A copy of the Claude Code plugin with this build's adage, and adage-exec when it is built
+    /// beside it, bundled and checksummed, as the release stages it for the marketplace (one
+    /// plugin, both binaries: plan A8).
     #[cfg(unix)]
     fn staged_plugin(&self) -> Option<PathBuf> {
+        self.staged_plugin_with(true)
+    }
+    /// [`World::staged_plugin`], with adage-exec left out when `exec` is false.
+    #[cfg(unix)]
+    fn staged_plugin_with(&self, exec: bool) -> Option<PathBuf> {
         let t = target()?;
         let root = self.p("plugin");
+        let _ = std::fs::remove_dir_all(&root);
         copy_dir(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugin/claude-code"), &root);
         let _ = std::fs::remove_dir_all(root.join("dist"));
-        let bin = root.join("dist").join(t).join("adage");
-        std::fs::create_dir_all(bin.parent().unwrap()).unwrap();
-        std::fs::copy(env!("CARGO_BIN_EXE_adage"), &bin).unwrap();
-        std::fs::write(root.join("dist/SHA256SUMS"), format!("{}  {t}/adage\n", sha256(&bin))).unwrap();
+        let built = Path::new(env!("CARGO_BIN_EXE_adage"));
+        let mut sums = String::new();
+        for name in ["adage", "adage-exec"] {
+            let from = built.with_file_name(name);
+            if name == "adage-exec" && !(exec && from.is_file()) {
+                continue;
+            }
+            let bin = root.join("dist").join(t).join(name);
+            std::fs::create_dir_all(bin.parent().unwrap()).unwrap();
+            std::fs::copy(&from, &bin).unwrap();
+            sums.push_str(&format!("{}  {t}/{name}\n", sha256(&bin)));
+        }
+        std::fs::write(root.join("dist/SHA256SUMS"), sums).unwrap();
         Some(root)
     }
     #[cfg(unix)]
@@ -673,7 +689,10 @@ fn pretool_rewrites_to_the_verified_environment() {
 }
 
 /// Spools and a ledger for a synthetic population of `n_t` treated and `n_c` control sessions of
-/// `repo_key`, whose cost is `base` (treated) or `base + delta` (control), jittered.
+/// `repo_key`, whose cost is `base` (treated) or `base + delta` (control), jittered. Every fifth
+/// treated session's harness also reported it (`adage ledger note`'s file), with two steps Adage
+/// took in the model's place: its transcript line counts them as turns, the note does not, and
+/// the estimate must read them as turns not spent (T-A4-04).
 #[allow(clippy::too_many_arguments)]
 fn population(w: &World, repo_key: &str, n_t: usize, n_c: usize, base: f64, delta: f64, spread: f64, seed: u64) {
     let slug: String =
@@ -683,6 +702,7 @@ fn population(w: &World, repo_key: &str, n_t: usize, n_c: usize, base: f64, delt
     std::fs::create_dir_all(w.p("data/ledger")).unwrap();
     let mut rng = scenario::Rng::new(seed);
     let mut ledger = String::new();
+    let mut notes = String::new();
     let old = 1_000_000u64; // long finished
     for i in 0..(n_t + n_c) {
         let control = i >= n_t;
@@ -694,14 +714,27 @@ fn population(w: &World, repo_key: &str, n_t: usize, n_c: usize, base: f64, delt
         let jitter = (rng.below(1000) as f64 / 1000.0 - 0.5) * 2.0 * spread * base;
         let cost = base + jitter + if control { delta } else { 0.0 };
         let turns = 10 + rng.below(6) as u32 + if control { 2 } else { 0 };
+        let noted = !control && i % 5 == 0;
+        let predicted = if noted { 2 } else { 0 };
         ledger.push_str(&format!(
             "{}\n",
             json!({ "session_id": id, "harness": "claude-code", "models": ["claude-sonnet-4-6"], "started_at": old, "ended_at": old + 1,
-                    "model_turns": turns, "tool_calls": turns, "tokens": { "input": 1, "output": 1, "cache_write": 0, "cache_read": 1 },
+                    "model_turns": turns + predicted, "tool_calls": turns, "tokens": { "input": 1, "output": 1, "cache_write": 0, "cache_read": 1 },
                     "cost": { "usd": cost.max(0.0), "source": "priced@2026-06-24" }, "asked_for_help": false })
         ));
+        if noted {
+            let steps: Vec<Value> = (0..turns + predicted)
+                .map(|k| json!({ "index": k, "model": "claude-sonnet-4-6", "input": 1, "output": 1, "cache_read": 1, "cache_write": 0, "predicted": k % 4 == 1 && k < 8 }))
+                .collect();
+            notes.push_str(&format!(
+                "{}\n",
+                json!({ "session_id": id, "repo": repo_key, "harness": "claude-code", "harness_version": "2.1.288", "started_at": old,
+                        "ended_at": old + 1, "steps": steps, "cost_usd": cost.max(0.0), "noted_at": 9_000_000_000_000u64 })
+            ));
+        }
     }
     std::fs::write(w.p("data/ledger").join(format!("{slug}.jsonl")), ledger).unwrap();
+    std::fs::write(w.p("data/ledger/.harness.jsonl"), notes).unwrap();
 }
 
 /// The key hooks and the card use for a repository without origin.
@@ -742,6 +775,33 @@ fn savings_gate() {
     );
     let c = &v["cost_usd"];
     assert!(c["lo"].as_f64().unwrap() <= 0.10 && 0.10 <= c["hi"].as_f64().unwrap(), "covers the true Δ: {c}");
+    // T-A4-04: eight treated sessions reported by their harness, two predicted steps each, read as
+    // turns not spent: their ledger lines now count only the steps the model answered.
+    assert_eq!(
+        (v["harness"]["sessions"].as_u64(), v["harness"]["predicted_steps"].as_u64()),
+        (Some(8), Some(16)),
+        "{v}"
+    );
+    assert!(v["harness"]["recent"].as_array().unwrap().iter().all(|s| s["source"] == "harness"), "{v}");
+    let slug: String =
+        key.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '-' }).collect();
+    let merged = std::fs::read_to_string(w.p("data/ledger").join(format!("{slug}.jsonl"))).unwrap();
+    let noted: Value = merged
+        .lines()
+        .map(|l| serde_json::from_str::<Value>(l).unwrap())
+        .find(|l| l["session_id"] == "sess-2-000")
+        .unwrap();
+    let note_steps = std::fs::read_to_string(w.p("data/ledger/.harness.jsonl"))
+        .unwrap()
+        .lines()
+        .map(|l| serde_json::from_str::<Value>(l).unwrap())
+        .find(|n| n["session_id"] == "sess-2-000")
+        .unwrap()["steps"]
+        .as_array()
+        .unwrap()
+        .len() as u64;
+    assert_eq!(noted["model_turns"].as_u64(), Some(note_steps - 2), "{noted}");
+    assert_eq!(noted["cost"]["source"], "harness", "{noted}");
     assert!(c["winsorized_at"].as_f64().is_some(), "winsorisation disclosed: {c}");
     // A clear saving: the card says it, with its interval and the guardrail.
     population(&w, &key, 40, 12, 0.20, 0.10, 0.5, 4);
@@ -858,29 +918,38 @@ fn model_blocked() {
     assert!(text(&o).contains("mirror.example blocked by proxy"), "{}", text(&o));
 }
 
-/// 7. `delegate on` without the adage-exec plugin: the Adage plugin keeps serving, and says why.
+/// 7. Execution on (`$ADAGE_HOME/exec/enabled`): the hook binary follows the marker.
+///
+/// The one plugin's hooks run adage-exec when it is bundled (plan A8); without it, adage keeps
+/// serving and says why.
 #[test]
 #[cfg(unix)]
-fn exec_marker_without_plugin() {
+fn exec_marker_picks_the_hook_binary() {
     let w = World::new();
-    let Some(plugin) = w.staged_plugin() else { return };
     let repo = w.repo("work/acme");
     std::fs::create_dir_all(w.p("data/exec")).unwrap();
     std::fs::write(w.p("data/exec/enabled"), "{}").unwrap();
+    let start = json!({ "session_id": "s1", "cwd": repo, "hook_event_name": "SessionStart", "source": "startup" });
+    let Some(plugin) = w.staged_plugin_with(false) else { return };
     let data = w.p("plugin-data");
-    let (o, _) = w.shim(
-        &plugin,
-        &data,
-        &json!({ "session_id": "s1", "cwd": repo, "hook_event_name": "SessionStart", "source": "startup" }),
-    );
+    let (o, _) = w.shim(&plugin, &data, &start);
     assert!(o.status.success());
     let link = std::fs::read_link(data.join("bin/adage")).unwrap();
     assert!(link.to_string_lossy().starts_with("adage-"), "the real binary, not quiet: {link:?}");
+    assert_eq!(std::fs::read_link(data.join("bin/hook")).unwrap(), Path::new("adage"));
     let msg = system_message(&String::from_utf8_lossy(&o.stdout)).unwrap();
-    assert!(
-        msg.contains("delegation is on but the adage-exec plugin isn't installed; serving without execution"),
-        "{msg}"
-    );
+    assert!(msg.contains("execution is on, but no adage-exec binary was found"), "{msg}");
+    if !Path::new(env!("CARGO_BIN_EXE_adage")).with_file_name("adage-exec").is_file() {
+        eprintln!("skipped the bundled adage-exec leg: it is not built beside adage");
+        return;
+    }
+    let Some(plugin) = w.staged_plugin() else { return };
+    let data = w.p("plugin-data-exec");
+    let (o, _) = w.shim(&plugin, &data, &start);
+    assert!(o.status.success(), "{}", text(&o));
+    assert_eq!(std::fs::read_link(data.join("bin/hook")).unwrap(), Path::new("adage-exec"));
+    assert!(std::fs::read_link(data.join("bin/adage-exec")).unwrap().to_string_lossy().starts_with("adage-exec-"));
+    assert_eq!(system_message(&String::from_utf8_lossy(&o.stdout)), None, "nothing to say: execution serves");
 }
 
 /// 8. At most one notice a day per repository, and only when something is new.

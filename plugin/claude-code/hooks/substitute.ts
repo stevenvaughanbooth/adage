@@ -28,7 +28,7 @@ export type PreToolPayload = {
 }
 
 export type SubstituteDeps = {
-  /** False while the copy is inert: every call runs unread. */
+  /** False while the mod is inert: every call runs unread. */
   isActive: boolean
   /** Observe mode (ADAGE_MOD_OBSERVE): the binary is asked at every call; nothing is replaced. */
   isObserving: boolean
