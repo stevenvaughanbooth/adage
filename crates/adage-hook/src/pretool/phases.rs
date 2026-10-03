@@ -3,15 +3,15 @@
 //! `pretool`.
 
 use super::{already_decided, claim_if, decide_pretool, fresh_note, only_receipt, planner_checked, receipt};
-use super::{append_pretool, interpreter_plan, names_python, BashCall};
+use super::{append_pretool, interpreter_plan, names_python, pretool_record, BashCall};
+use crate::answer::{answer, ModAnswer, Plan, PlanAdvice, PlanReceipt, PlanRewrite, ReceiptAnswer};
 use crate::failopen::Failure;
 use crate::site::{self, observed};
-use crate::{identity, phase, record, PreNote};
-use adage_core::{repo, CommandTable};
+use crate::{identity, phase, PreNote};
+use adage_core::CommandTable;
 use adage_runtime::{Arm, Ctx, SessionState};
 use adage_store::state;
 use adage_tracks::Index;
-use serde_json::{json, Value};
 
 /// The mod's two phases of a Bash call ([`phase::Phase`]; architecture §3.3, §3.4 of the Claude
 /// Code mod).
@@ -44,43 +44,41 @@ pub(super) fn pretool_mod(call: &BashCall<'_>, phase: &phase::Phase) -> Result<O
     let (p, paths, root) = (call.p, call.paths, call.root);
     // What the mod can do here: always its full set in practice; read, never assumed.
     let caps = call.adapter.capabilities("PreToolUse", p);
-    let index = Index::try_load(&paths.index()).unwrap_or_default();
-    let routed = site::routed_key(&index, root, paths, false);
+    let index = call.index();
+    let routed = site::routed_key(index, root, paths, false);
     // A replaced command is a rewrite: off with `adage delegate rewrites off` like the others.
-    let rewrites_on = adage_store::config::load(paths).config.runtime_rewrite && !super::rewrite_off(paths).exists();
+    let rewrites_on = call.config().runtime_rewrite && !super::rewrite_off(paths).exists();
     let table = || CommandTable::load();
     let found =
-        |key: &str| adage_runtime::substitution(&index, key, &adage_runtime::Policy::default(), table(), call.command);
+        |key: &str| adage_runtime::substitution(index, key, &adage_runtime::Policy::default(), table(), call.command);
     match phase {
         phase::Phase::DryRun => {
-            let mut plan = serde_json::Map::new();
-            if let Some(s) = routed.as_deref().filter(|_| rewrites_on && caps.substitute_call).and_then(found) {
-                plan.insert("substitute".into(), json!(s));
-            }
+            let mut plan = Plan {
+                substitute: routed.as_deref().filter(|_| rewrites_on && caps.substitute_call).and_then(found),
+                ..Plan::default()
+            };
             if names_python(call.command) {
-                let key = repo::repo_key_cached(root, &paths.repo_keys());
-                if let Some(note) = receipt(call, &key) {
-                    plan.insert("receipt".into(), receipt_plan(&note, caps.answer_call));
-                }
-                match interpreter_plan(call, &key) {
+                let key = call.repo_key();
+                plan.receipt = receipt(call, key).map(|note| receipt_plan(&note, caps.answer_call));
+                match interpreter_plan(call, key) {
                     Some((adage_runtime::pretool::Pre::Rewrite { command, kind, .. }, _)) => {
-                        plan.insert("rewrite".into(), json!({ "command": command, "kind": kind }));
+                        plan.rewrite = Some(PlanRewrite { command, kind: kind.into() });
                     }
                     Some((adage_runtime::pretool::Pre::Advise { reason, kind }, _)) => {
-                        plan.insert("advice".into(), json!({ "kind": kind, "text": reason }));
+                        plan.advice = Some(PlanAdvice { kind: kind.into(), text: reason });
                     }
                     None => {}
                 }
             }
-            Ok((!plan.is_empty()).then(|| json!({ "plan": plan }).to_string()))
+            Ok((!plan.is_empty()).then(|| answer(&ModAnswer::Plan { plan })))
         }
         phase::Phase::Verdict(v) if v.answered == Some(phase::Answered::Receipt) => {
             if !names_python(call.command) || !caps.answer_call {
                 return Ok(None);
             }
-            let key = routed.clone().unwrap_or_else(|| repo::repo_key_cached(root, &paths.repo_keys()));
+            let key = routed.clone().unwrap_or_else(|| call.repo_key().to_string());
             match receipt(call, &key).filter(|n| n.fresh && n.result.is_some()) {
-                Some(note) => answer_with_receipt(call, &key, &index, note),
+                Some(note) => answer_with_receipt(call, &key, index, note),
                 None => Ok(None),
             }
         }
@@ -99,25 +97,25 @@ pub(super) fn pretool_mod(call: &BashCall<'_>, phase: &phase::Phase) -> Result<O
                 return Ok(None);
             };
             let decision = adage_runtime::substitute(arm, observe, sub);
-            let mut rec = json!({ "ts": record::now_ms(), "event": "PreToolUse", "kind": "pretool", "arm": arm, "propensity": propensity, "repo": key, "checked_by": "engine", "decision": decision });
+            let mut rec =
+                pretool_record(arm, propensity, &key).with("checked_by", "engine").with("decision", &decision);
             match &decision.substituted {
-                Some(_) => rec["substituted"] = json!(true),
+                Some(_) => rec.set("substituted", true),
                 None => {
-                    rec["would_substitute"] = json!(true);
-                    rec["withheld"] = json!(true);
+                    rec.set("would_substitute", true);
+                    rec.set("withheld", true);
                 }
             }
-            rec["duration_us"] = json!(record::duration_us(call.started));
             append_pretool(call, rec)?;
-            Ok(decision.substituted.map(|s| json!({ "substitute": s }).to_string()))
+            Ok(decision.substituted.map(|substitute| answer(&ModAnswer::Substitute { substitute })))
         }
         phase::Phase::Verdict(v) => {
             if !names_python(call.command) {
                 return Ok(None);
             }
-            let key = repo::repo_key_cached(root, &paths.repo_keys());
-            let receipt = fresh_note(receipt(call, &key));
-            let Some((pre, env)) = interpreter_plan(call, &key) else { return only_receipt(call, &key, receipt) };
+            let key = call.repo_key();
+            let receipt = fresh_note(receipt(call, key));
+            let Some((pre, env)) = interpreter_plan(call, key) else { return only_receipt(call, key, receipt) };
             let pre = match (v.engine, pre) {
                 (None, pre) => planner_checked(call, pre, &env),
                 (Some(phase::Engine::Same), pre) => pre,
@@ -129,7 +127,7 @@ pub(super) fn pretool_mod(call: &BashCall<'_>, phase: &phase::Phase) -> Result<O
                 }
                 (Some(phase::Engine::Differs), pre) => pre,
             };
-            decide_pretool(call, &key, receipt, pre, &env, phase.checked_by())
+            decide_pretool(call, key, receipt, pre, &env, phase.checked_by())
         }
     }
 }
@@ -137,18 +135,14 @@ pub(super) fn pretool_mod(call: &BashCall<'_>, phase: &phase::Phase) -> Result<O
 /// A covering receipt in the mod's dry-run plan: `fresh` and the command that ran, always; the
 /// note and the result the call would be answered with only when fresh (and the result only where
 /// a call can be answered).
-fn receipt_plan(note: &PreNote, answer: bool) -> Value {
-    let mut v = json!({ "fresh": note.fresh, "covering": note.covering });
-    if !note.operation.is_empty() {
-        v["operation"] = json!(note.operation);
+fn receipt_plan(note: &PreNote, answers: bool) -> PlanReceipt {
+    PlanReceipt {
+        fresh: note.fresh,
+        covering: note.covering.clone(),
+        operation: Some(note.operation.clone()).filter(|o| !o.is_empty()),
+        note: note.fresh.then(|| note.text.clone()),
+        result: note.result.clone().filter(|_| note.fresh && answers),
     }
-    if note.fresh {
-        v["note"] = json!(note.text);
-        if let Some(r) = note.result.as_ref().filter(|_| answer) {
-            v["result"] = json!(r);
-        }
-    }
-    v
 }
 
 /// The mod answered a Bash call with a fresh receipt's result instead of running it: in one state
@@ -174,7 +168,7 @@ fn answer_with_receipt(
         params: Default::default(),
         policy: adage_runtime::Policy::default(),
     };
-    let arms = site::ArmInputs::load(call.paths);
+    let arms = call.arms();
     let decided = state::update::<SessionState, _>(&call.paths.state(call.session), |st| {
         if call.identity.is_some_and(|id| !st.see_pretool(id)) {
             return None;
@@ -191,19 +185,22 @@ fn answer_with_receipt(
     })
     .map_err(|e| Failure::io("state", "recording a call answered by a receipt", &e))?;
     let Some((arm, propensity, decision)) = decided else { return Ok(None) };
-    let mut rec = json!({ "ts": record::now_ms(), "event": "PreToolUse", "kind": "pretool", "arm": arm, "propensity": propensity, "repo": key, "answered": "receipt", "receipt": true, "checked_by": "engine", "command": note.covering });
+    let mut rec = pretool_record(arm, propensity, key)
+        .with("answered", "receipt")
+        .with("receipt", true)
+        .with("checked_by", "engine")
+        .with("command", &note.covering);
     if let Some(card) = &note.card {
-        rec["card"] = json!(card);
+        rec.set("card", card);
     }
     match &decision {
-        Some(d) => rec["decision"] = json!(d),
-        None => rec["withheld"] = json!(true),
+        Some(d) => rec.set("decision", d),
+        None => rec.set("withheld", true),
     }
-    rec["duration_us"] = json!(record::duration_us(call.started));
     append_pretool(call, rec)?;
     Ok(decision.map(|_| {
-        json!({ "receipt": { "result": note.result, "note": note.text, "covering": note.covering, "card": note.card } })
-            .to_string()
+        let receipt = ReceiptAnswer { result: note.result, note: note.text, covering: note.covering, card: note.card };
+        answer(&ModAnswer::Receipt { receipt })
     }))
 }
 

@@ -3,33 +3,19 @@
 //! no reflexes yet leaves at its events ([`record_seen`]). Entry: [`session_start`], from
 //! `handle`.
 
+use crate::ctx::HookCtx;
 use crate::extension::guarded;
 use crate::failopen::{self, Failure};
-use crate::harness::{self, Output};
+use crate::harness::Output;
+use crate::record::{Record, RecordKind};
 use crate::respond::first_lapse_notice;
-use crate::{autolearn, record, site, Extension, SessionTexts};
+use crate::{autolearn, site, SessionTexts, Site};
 use adage_core::repo;
 use adage_runtime::{Arm, Event, SessionState};
 use adage_store::{state, Paths};
 use adage_tracks::Index;
-use serde_json::json;
 use std::path::{Path, PathBuf};
-use std::time::{Instant, UNIX_EPOCH};
-
-/// What a session start is about.
-pub(crate) struct Start<'a> {
-    pub(crate) adapter: &'a dyn harness::Adapter,
-    pub(crate) harness: &'a str,
-    pub(crate) event: &'a str,
-    pub(crate) session: &'a str,
-    pub(crate) root: &'a Path,
-    /// `root` is a repository (it has `.git`), not merely the session's working directory.
-    pub(crate) in_repo: bool,
-    pub(crate) paths: &'a Paths,
-    pub(crate) index: &'a Index,
-    /// When the hook began ([`record::duration_us`]).
-    pub(crate) started: Instant,
-}
+use std::time::UNIX_EPOCH;
 
 /// A session start (docs/zero-config.md §3.2, §3.3):
 ///
@@ -45,12 +31,11 @@ pub(crate) struct Start<'a> {
 ///    it): at the first bootstrap, what Adage is doing; afterwards, the learner's latest notice,
 ///    at most once a day and only when new. Rebuilding a damaged index says nothing.
 pub(crate) fn session_start(
-    s: &Start<'_>,
+    s: &HookCtx<'_>,
     damaged: bool,
     learner: &dyn Fn() -> Result<PathBuf, Failure>,
-    extension: Option<&dyn Extension>,
 ) -> Result<Option<String>, Failure> {
-    let routed = site::routed_key(s.index, s.root, s.paths, false);
+    let routed = site::routed_key(s.index(), s.root, s.paths, false);
     if let Some(repo_key) = &routed {
         if let Err(f) = record_start(s, repo_key) {
             failopen::record(&s.paths.root, s.harness, s.event, &f);
@@ -61,8 +46,8 @@ pub(crate) fn session_start(
     if !s.in_repo {
         return Ok(None);
     }
-    let cfg = adage_store::config::load(s.paths).config;
-    let key = routed.clone().unwrap_or_else(|| repo::repo_key_cached(s.root, &s.paths.repo_keys()));
+    let cfg = s.config();
+    let key = routed.clone().unwrap_or_else(|| s.repo_key().to_string());
     let q = autolearn::Queue::new(s.paths, &key);
     let run: Option<autolearn::RunState> = autolearn::read_json(&q.state());
     let first = run.is_none() && !q.shown().exists();
@@ -90,7 +75,7 @@ pub(crate) fn session_start(
         }
     } else if routed.is_none() {
         // No reflexes here yet, and none on the way this session: seen, not exposed.
-        record_seen(s.paths, s.session, s.adapter, s.event, &Event::SessionStart, &key, s.started);
+        record_seen(s, &Event::SessionStart, &key);
     }
     // Instincts bind against the live checkout, this session's (docs/instincts.md): bound against
     // another one (a per-task worktree, a clone the traces name), or before its declared files
@@ -113,6 +98,8 @@ pub(crate) fn session_start(
             failopen::record(&s.paths.root, s.harness, s.event, &f);
         }
     }
+    // The command hooks' set on purpose: a session start is always a command hook's (the mod never
+    // sends one), and the contract is delivered on that hook's own context channel.
     let context = if !damaged
         && s.adapter.harness().capabilities().session_contract
         && state::try_read::<SessionState>(&s.paths.state(s.session))
@@ -120,7 +107,8 @@ pub(crate) fn session_start(
             .flatten()
             .is_some_and(|st| st.arm == Some(Arm::Treated))
     {
-        extension.map(|ext| guarded(|| ext.session_texts(&key, s.root, s.index, s.paths))).unwrap_or_default()
+        let site = Site { repo_key: &key, root: s.root, index: s.index(), paths: s.paths };
+        s.opts.extension.map(|ext| guarded(|| ext.session_texts(&site))).unwrap_or_default()
     } else {
         SessionTexts::default()
     };
@@ -139,8 +127,8 @@ pub(crate) fn session_start(
         let now = autolearn::now_ms();
         let id = if ready { "ready" } else { "bootstrap" };
         match autolearn::write_json(&q.shown(), &autolearn::Shown { id: id.into(), at: now }) {
-            Ok(()) if ready => Some(ready_notice(s.index, &key)),
-            Ok(()) => Some(first_notice(s.root, &cfg)),
+            Ok(()) if ready => Some(ready_notice(s.index(), &key)),
+            Ok(()) => Some(first_notice(s.root, cfg)),
             // The data directory cannot be written: nothing can be learned, and a notice shown now
             // could not be remembered, so it would repeat at every session start. Say what is
             // wrong instead, once.
@@ -213,20 +201,24 @@ fn unwritable_notice(paths: &Paths, e: &std::io::Error) -> Option<String> {
 }
 
 /// Assign the session's arm (if it has none yet) and spool one `session_start` record.
-fn record_start(s: &Start<'_>, repo_key: &str) -> Result<(), Failure> {
-    let arms = site::ArmInputs::load(s.paths);
+fn record_start(s: &HookCtx<'_>, repo_key: &str) -> Result<(), Failure> {
+    let arms = s.arms();
     let (arm, propensity) = state::update::<SessionState, _>(&s.paths.state(s.session), |st| {
         arms.ensure(st, s.session, repo_key);
         (st.arm, st.propensity)
     })
     .map_err(|e| Failure::io("state", "assigning the session's arm", &e))?;
-    let mut rec = json!({ "ts": record::now_ms(), "event": s.event, "kind": "session_start", "arm": arm, "propensity": propensity, "repo": repo_key, "generation": s.index.generation });
-    record::name_harness(&mut rec, s.adapter);
-    rec["duration_us"] = json!(record::duration_us(s.started));
+    let mut rec = Record::new(RecordKind::SessionStart, s.event)
+        .with("arm", arm)
+        .with("propensity", propensity)
+        .with("repo", repo_key)
+        .with("generation", &s.index().generation)
+        .harness(s.adapter)
+        .timed(s.started);
     if let Some(bin) = serving_bin() {
-        rec["bin"] = json!(bin);
+        rec.set("bin", bin);
     }
-    record::append(s.paths, s.session, &rec)
+    rec.append(s.paths, s.session)
 }
 
 /// Which binary served a session's start, by its file name: the Claude Code plugin's shim links
@@ -240,41 +232,35 @@ fn serving_bin() -> Option<String> {
 /// Adage sees (docs/design/everyday-ux.md, state S1). Nothing else: no arm or propensity (the
 /// savings estimate counts only sessions exposed to reflexes), no decision (a rebuild replays only
 /// decisions), and no command, path or prompt. A failure is recorded and forgotten.
-pub(crate) fn record_seen(
-    paths: &Paths,
-    session: &str,
-    adapter: &dyn harness::Adapter,
-    event: &str,
-    ev: &Event,
-    repo_key: &str,
-    started: Instant,
-) {
+pub(crate) fn record_seen(ctx: &HookCtx<'_>, ev: &Event, repo_key: &str) {
+    let HookCtx { adapter, event, session, paths, started, .. } = *ctx;
     let calls = match ev {
         Event::Batch { calls } => calls.len(),
         Event::Failure { .. } => 1,
         _ => 0,
     };
-    let mut rec =
-        json!({ "ts": record::now_ms(), "event": event, "kind": ev.name(), "repo": repo_key, "unrouted": true });
+    let mut rec = Record::new(RecordKind::of(ev), event).with("repo", repo_key).with("unrouted", true);
     if calls > 0 {
-        rec["calls"] = json!(calls);
+        rec.set("calls", calls);
     }
-    record::name_harness(&mut rec, adapter);
-    rec["duration_us"] = json!(record::duration_us(started));
+    let mut rec = rec.harness(adapter).timed(started);
     if matches!(ev, Event::SessionStart) {
         if let Some(bin) = serving_bin() {
-            rec["bin"] = json!(bin);
+            rec.set("bin", bin);
         }
     }
-    record::append_or_log(paths, session, adapter.name(), event, &rec);
+    rec.append_or_log(paths, session, adapter.name(), event);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Delivery, Turn};
+    use crate::ctx::Reads;
+    use crate::harness;
+    use crate::{Delivery, Extension, Options, Turn};
     use adage_runtime::Directive;
     use serde_json::Value;
+    use std::time::Instant;
 
     #[test]
     fn session_contract_and_person_notice_use_separate_channels() {
@@ -297,7 +283,7 @@ mod tests {
             fn deliver(&self, _: &Turn<'_>, _: &[Directive]) -> Delivery {
                 Delivery::default()
             }
-            fn session_context(&self, _: &str, _: &Path, _: &Index, _: &Paths) -> Option<String> {
+            fn session_context(&self, _: &Site<'_>) -> Option<String> {
                 Some("test execution contract".into())
             }
         }
@@ -305,22 +291,26 @@ mod tests {
         let paths = Paths::at(temp.path().join("home"));
         std::fs::create_dir_all(&paths.root).unwrap();
         std::fs::write(paths.root.join("config.toml"), "[learn]\nauto = false\n[ui]\nnotices = \"off\"\n").unwrap();
-        let index = Index::default();
-        let start = Start {
+        static CONTRACT: Contract = Contract;
+        let p = Value::Null;
+        let start = |extension: Option<&'static dyn Extension>| HookCtx {
             adapter: &harness::claude::Claude,
             harness: "claude",
             event: "SessionStart",
+            p: &p,
             session: "contract-test",
+            cwd: temp.path(),
             root: temp.path(),
             in_repo: true,
             paths: &paths,
-            index: &index,
             started: Instant::now(),
+            opts: Options { learner: None, extension },
+            reads: Reads::default(),
         };
         let learner = || Err(Failure::new("test", "no learner needed"));
         for (arm, expected) in [(Arm::Control, false), (Arm::Treated, true)] {
-            state::update::<SessionState, _>(&paths.state(start.session), |st| st.arm = Some(arm)).unwrap();
-            let result = session_start(&start, false, &learner, Some(&Contract)).unwrap();
+            state::update::<SessionState, _>(&paths.state("contract-test"), |st| st.arm = Some(arm)).unwrap();
+            let result = session_start(&start(Some(&CONTRACT)), false, &learner).unwrap();
             assert_eq!(result.is_some(), expected);
             if let Some(result) = result {
                 let result: Value = serde_json::from_str(&result).unwrap();
@@ -328,7 +318,7 @@ mod tests {
                 assert!(result.get("systemMessage").is_none());
             }
         }
-        assert!(session_start(&start, true, &learner, Some(&Contract)).unwrap().is_none());
-        assert!(session_start(&start, false, &learner, None).unwrap().is_none());
+        assert!(session_start(&start(Some(&CONTRACT)), true, &learner).unwrap().is_none());
+        assert!(session_start(&start(None), false, &learner).unwrap().is_none());
     }
 }

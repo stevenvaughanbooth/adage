@@ -2,7 +2,8 @@
 //! (code.claude.com/docs/en/hooks). Directives go to `additionalContext`; the finish line uses
 //! Stop `decision: block`.
 
-use super::{Adapter, Capabilities, Event, Harness, Output};
+use super::{Adapter, Capabilities, Event, EventKind, Harness, Output};
+use crate::answer::{answer, ModAnswer};
 use adage_runtime::{By, Call};
 use serde_json::{json, Value};
 
@@ -60,14 +61,16 @@ fn call_from(v: &Value, failed: bool, agent: Option<&str>) -> Call {
     }
 }
 
-/// The events only the Claude Code mod sends: a command hook is never registered for them.
-pub const MOD_EVENTS: [&str; 3] = ["TurnStep", "Standing", crate::skill::EVENT];
+/// The events only the Claude Code mod sends: a command hook is never registered for them. From the
+/// event table ([`EventKind::mod_only`]).
+pub const MOD_EVENTS: [&str; 3] = Harness::ClaudeCode.mod_only_events();
 
 /// Whether the Claude Code mod sent this payload ([`Claude::capabilities`]).
 pub fn is_mods(event: &str, p: &Value) -> bool {
+    let kind = Harness::ClaudeCode.event_kind(event);
     p.get("via").and_then(Value::as_str) == Some("mod")
-        || MOD_EVENTS.contains(&event)
-        || (event == "PreToolUse" && crate::phase::Phase::of(p).is_some())
+        || kind.is_some_and(EventKind::mod_only)
+        || (kind == Some(EventKind::PreToolUse) && crate::phase::Phase::of(p).is_some())
 }
 
 /// A `TurnStep` payload (the mod's `turn.step`): `turn_id` and `index` are required.
@@ -100,8 +103,8 @@ impl Adapter for Claude {
     }
 
     fn event_identity(&self, event: &str, p: &Value) -> Option<String> {
-        let ids = match event {
-            "PostToolBatch" => p
+        let ids = match self.harness().event_kind(event)? {
+            EventKind::ToolBatch => p
                 .get("tool_calls")?
                 .as_array()?
                 .iter()
@@ -109,17 +112,24 @@ impl Adapter for Claude {
                 .collect::<Option<Vec<_>>>()?,
             // One decision per Bash call (`PreToolUse`), however many times it is delivered: the
             // mod's verdict and the command hook that follows it carry the same id.
-            "PostToolUse" | "PostToolUseFailure" | "PreToolUse" => vec![p.get("tool_use_id")?.as_str()?],
-            _ => return None,
+            EventKind::ToolUse | EventKind::Failure | EventKind::PreToolUse => vec![p.get("tool_use_id")?.as_str()?],
+            EventKind::SessionStart
+            | EventKind::Prompt
+            | EventKind::Stop
+            | EventKind::SessionEnd
+            | EventKind::TurnStep
+            | EventKind::Press
+            | EventKind::Standing
+            | EventKind::SkillPrompt => return None,
         };
         super::tool_event_identity(self.name(), event, ids)
     }
 
     fn translate(&self, event: &str, p: &Value, _cwd: &str) -> Option<Event> {
         let agent = p.get("agent_id").and_then(Value::as_str);
-        Some(match event {
-            "SessionStart" => Event::SessionStart,
-            "UserPromptSubmit" => {
+        Some(match self.harness().event_kind(event)? {
+            EventKind::SessionStart => Event::SessionStart,
+            EventKind::Prompt => {
                 // How Claude Code carries a Stop `block` reason onward is not documented: should
                 // Adage's own continuation ever come back as a prompt, it is not the person's.
                 let text = p.get("prompt")?.as_str()?;
@@ -128,17 +138,18 @@ impl Adapter for Claude {
                 }
                 Event::Prompt { text: text.to_string() }
             }
-            "PostToolBatch" => Event::Batch {
+            EventKind::ToolBatch => Event::Batch {
                 calls: p.get("tool_calls")?.as_array()?.iter().map(|c| call_from(c, false, agent)).collect(),
             },
-            "PostToolUse" => Event::Batch { calls: vec![call_from(p, false, None)] },
-            "PostToolUseFailure" => Event::Failure { call: call_from(p, true, None) },
-            "Stop" => {
+            EventKind::ToolUse => Event::Batch { calls: vec![call_from(p, false, None)] },
+            EventKind::Failure => Event::Failure { call: call_from(p, true, None) },
+            EventKind::Stop => {
                 Event::Stop { stop_hook_active: p.get("stop_hook_active").and_then(|x| x.as_bool()).unwrap_or(false) }
             }
-            "SessionEnd" => Event::SessionEnd,
-            "TurnStep" => turn_step(p)?,
-            _ => return None,
+            EventKind::SessionEnd => Event::SessionEnd,
+            EventKind::TurnStep => turn_step(p)?,
+            // The asks the hook answers itself: never a runtime event.
+            EventKind::PreToolUse | EventKind::Press | EventKind::Standing | EventKind::SkillPrompt => return None,
         })
     }
 
@@ -166,10 +177,16 @@ impl Adapter for Claude {
             })
             .to_string(),
             // The mod's `turn.step` answer: the calls it yields in the model's place.
-            Output::Predict(p) => json!({ "predict": p }).to_string(),
+            Output::Predict(predict) => answer(&ModAnswer::Predict { predict }),
             // The step goes to the person's routine model (the mod sends it there only when one is set).
-            Output::Routine => json!({ "routine": true }).to_string(),
+            Output::Routine => answer(&ModAnswer::Routine { routine: true }),
         })
+    }
+
+    /// Claude Code's records name no harness: they did not before there were others, and every
+    /// reader takes a record without one as Claude Code's.
+    fn recorded_name(&self) -> Option<&'static str> {
+        None
     }
 
     /// Claude Code caps `additionalContext` at 10,000 characters.

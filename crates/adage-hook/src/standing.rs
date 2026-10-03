@@ -1,15 +1,17 @@
 //! Claude Code's `Standing`: the mod's cached system-prompt section, and what a subagent is told
 //! at its spawn. Entry: [`standing`], from `handle`.
 
+use crate::answer::ModAnswer;
+use crate::ctx::HookCtx;
 use crate::failopen::Failure;
-use crate::harness::{self, Harness};
+use crate::harness;
 use crate::pretool::u11_in_service;
 use crate::site::{self, observed};
 use adage_core::CommandTable;
 use adage_runtime::{render, Arm, Ctx, SessionState};
 use adage_store::{state, Paths};
 use adage_tracks::Index;
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::path::Path;
 
 /// Claude Code's `Standing` (the mod's cached system-prompt section; its architecture §3.6, §3.7;
@@ -28,19 +30,14 @@ use std::path::Path;
 /// the standing reflexes), empty in the control arm. Read-only like the rest: what a subagent is
 /// told is not what the session was told. Each field is answered by the harness's capability
 /// ([`harness::Adapter::capabilities`], [`adage_runtime::standing_for`]).
-pub(crate) fn standing(
-    adapter: &dyn harness::Adapter,
-    p: &Value,
-    session: &str,
-    root: &Path,
-    paths: &Paths,
-    index: &Index,
-) -> Result<Option<String>, Failure> {
-    // Only Claude Code's mod asks it.
-    match adapter.harness() {
-        Harness::ClaudeCode => {}
-        Harness::Codex | Harness::OpenCode => return Ok(None),
+pub(crate) fn standing(ctx: &HookCtx<'_>) -> Result<Option<String>, Failure> {
+    let HookCtx { adapter, p, session, root, paths, .. } = *ctx;
+    // Only a harness whose mod keeps a cached section asks it.
+    let caps = adapter.capabilities("Standing", p);
+    if !caps.cached_section {
+        return Ok(None);
     }
+    let index = ctx.index();
     let Some(key) = site::routed_key(index, root, paths, false) else { return Ok(None) };
     let known = state::try_read::<SessionState>(&paths.state(session)).ok().flatten();
     let answer = match known.as_ref() {
@@ -50,7 +47,7 @@ pub(crate) fn standing(
         _ => {
             let environment = environment_note(root, paths, index, &key).unwrap_or_default();
             let made = adage_runtime::standing(index, &key, &adage_runtime::Policy::default(), environment);
-            let arms = site::ArmInputs::load(paths);
+            let arms = ctx.arms();
             state::update::<SessionState, _>(&paths.state(session), |st| {
                 arms.ensure(st, session, &key);
                 if st.arm == Some(Arm::Control) {
@@ -61,16 +58,16 @@ pub(crate) fn standing(
             .map_err(|e| Failure::io("state", "keeping the session's standing text", &e))?
         }
     };
-    let caps = adapter.capabilities("Standing", p);
     let s = adage_runtime::standing_for(&caps, answer.unwrap_or_default());
     let compact = if caps.compaction { render::COMPACT_INSTRUCTION } else { "" };
-    let mut out = json!({ "standing": s.standing, "environment": s.environment, "compact": compact });
-    if let Some(agent) = p.get("agent").filter(|a| a.is_object()) {
+    let subagent = p.get("agent").filter(|a| a.is_object()).map(|agent| {
         // The state as the answer above left it: the arm is assigned by now (unless observing).
         let st = state::try_read::<SessionState>(&paths.state(session)).ok().flatten();
-        out["subagent"] = json!(subagent_text(agent, &key, root, index, st.as_ref(), &caps, observed(p)));
-    }
-    Ok(Some(out.to_string()))
+        subagent_text(agent, &key, root, index, st.as_ref(), &caps, observed(p))
+    });
+    let standing =
+        ModAnswer::Standing { standing: s.standing, environment: s.environment, compact: compact.into(), subagent };
+    Ok(Some(crate::answer::answer(&standing)))
 }
 
 /// What a subagent is told at its spawn ([`adage_runtime::delegation`]), from its description
@@ -127,6 +124,7 @@ mod tests {
     use super::*;
     use crate::testkit::*;
     use crate::{handle, Options};
+    use serde_json::json;
     use std::time::Instant;
 
     fn standing_event(w: &ObligationWorld, session: &str, extra: Value) -> Option<Value> {

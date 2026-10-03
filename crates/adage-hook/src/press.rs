@@ -41,22 +41,64 @@
 //! boundary. A press read from a file, or a name the shell builds, goes unseen.
 //!
 //! Every spool record here is a fact, never the token: `press_issued`, `press_spent`, `tripwire`.
+//! Each carries `duration_us` like every other record: the hook's own time for the two a hook
+//! writes, and the spend's own time for `press_spent`, which a person-only verb writes.
 
-use crate::harness;
+use crate::answer::{answer, ModAnswer};
+use crate::harness::{self, Envelope, EventKind, Harness};
+use crate::record::{Record as SpoolRecord, RecordKind};
 use adage_core::repo;
 use adage_store::paths::sanitise;
 use adage_store::{state, Paths};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 /// The native event that asks for a token. Claude Code only: the mod is the only caller.
 pub const EVENT: &str = "Press";
 
-/// The invocations that close the window: anything the agent does. `SessionStart`, `Press`,
-/// `SessionEnd` and the mod's read-only asks (`Standing`, `SkillPrompt`) are not the agent acting.
-pub const CLOSERS: &[&str] =
-    &["UserPromptSubmit", "PreToolUse", "PostToolUse", "PostToolBatch", "PostToolUseFailure", "Stop", "TurnStep"];
+/// Whether an event of this kind is the agent acting, which closes the window. `SessionStart`,
+/// `Press`, `SessionEnd` and the mod's read-only asks (`Standing`, `SkillPrompt`) are not.
+const fn closes(kind: EventKind) -> bool {
+    match kind {
+        EventKind::Prompt
+        | EventKind::PreToolUse
+        | EventKind::ToolUse
+        | EventKind::ToolBatch
+        | EventKind::Failure
+        | EventKind::Stop
+        | EventKind::TurnStep => true,
+        EventKind::SessionStart
+        | EventKind::SessionEnd
+        | EventKind::Press
+        | EventKind::Standing
+        | EventKind::SkillPrompt => false,
+    }
+}
+
+/// The native names of the invocations that close the window ([`closes`]), in the order of the
+/// event table of Claude Code, the one harness that presses ([`presses`]).
+const fn closers<const N: usize>() -> [&'static str; N] {
+    let table = Harness::ClaudeCode.events();
+    let mut out = [""; N];
+    let (mut i, mut n) = (0, 0);
+    while i < table.len() {
+        if closes(table[i].1) {
+            assert!(n < N, "more closers than N");
+            out[n] = table[i].0;
+            n += 1;
+        }
+        i += 1;
+    }
+    assert!(n == N, "fewer closers than N");
+    out
+}
+
+/// The invocations that close the window: anything the agent does (a prompt, a tool call about
+/// to run or done, a `Stop`, a step), from Claude Code's event table
+/// ([`adage_trace::Harness::events`]).
+pub const CLOSERS: &[&str] = &closers::<7>();
 
 /// How long a token is honoured after it was issued.
 pub const MAX_AGE_MS: u64 = 24 * 60 * 60 * 1000;
@@ -150,9 +192,10 @@ fn now() -> u64 {
     adage_core::time::now_ms()
 }
 
-/// Append one press record to the session's spool; a failure loses the record, never the event.
-fn note(paths: &Paths, session: &str, rec: &Value) {
-    crate::record::append_or_log(paths, session, "claude", EVENT, rec);
+/// Append one press record to the session's spool with the time Adage spent on it since
+/// `started` (`duration_us`); a failure loses the record, never the event.
+fn note(paths: &Paths, session: &str, rec: SpoolRecord, started: Instant) {
+    rec.timed(started).append_or_log(paths, session, "claude", EVENT);
 }
 
 /// What [`gate`] decided for one invocation.
@@ -164,47 +207,81 @@ pub enum Gate {
     Answer(Option<String>),
 }
 
-/// The press's part of every Claude Code invocation, before the kill switches and the fast path.
-/// `off` is true when a kill switch is set: only a `Press` may answer then.
-pub fn gate(harness: &str, event: &str, p: &Value, session: &str, cwd: &Path, paths: &Paths, off: bool) -> Gate {
-    if harness::adapter(harness).map(|a| a.harness()) != Some(harness::Harness::ClaudeCode) {
-        return Gate::Pass;
+/// The press's part of one invocation, decided from its event alone ([`act_of`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Act {
+    /// Not the press's business.
+    Pass,
+    /// A `Press`: a token, if the window is open.
+    Issue,
+    /// A session start: the window opens.
+    Open,
+    /// The session ended: every token is refused from now on.
+    End,
+    /// The agent acted (`kind`): the window closes; `tripwire` when the act is a command hook's
+    /// Bash call, which the tripwire reads.
+    Close { kind: EventKind, tripwire: bool },
+}
+
+/// Whether a harness issues presses at all: one whose event table has a `Press` (the Claude Code
+/// mod is the only caller). Every other harness's invocations are not the press's business.
+fn presses(h: Harness) -> bool {
+    h.event_kind(EVENT) == Some(EventKind::Press)
+}
+
+/// What the press does at one invocation, from its harness's event table.
+pub(crate) fn act_of(harness: &str, event: &str, p: &Value) -> Act {
+    let Some(h) = harness::adapter(harness).map(|a| a.harness()).filter(|h| presses(*h)) else { return Act::Pass };
+    let Some(kind) = h.event_kind(event) else { return Act::Pass };
+    match kind {
+        EventKind::Press => Act::Issue,
+        EventKind::SessionStart => Act::Open,
+        EventKind::SessionEnd => Act::End,
+        // The mod's asks (a dry run, a verdict) come before the command hook for the same call;
+        // their answer is never shown, so only the command hook warns (and records).
+        k if !closes(k) => Act::Pass,
+        EventKind::PreToolUse => Act::Close { kind, tripwire: !harness::claude::is_mods(event, p) },
+        _ => Act::Close { kind, tripwire: false },
     }
-    match event {
-        EVENT => Gate::Answer(issue(p, session, paths)),
-        "SessionStart" => {
+}
+
+/// The press's part of every Claude Code invocation, before the kill switches and the fast path:
+/// `at` is the payload's session and working directory. `off` is true when a kill switch is set:
+/// only a `Press` may answer then. `started` is when the hook began (its records' `duration_us`).
+pub fn gate(harness: &str, event: &str, p: &Value, at: &Envelope, paths: &Paths, off: bool, started: Instant) -> Gate {
+    let (session, cwd) = (at.session.as_str(), at.cwd.as_path());
+    match act_of(harness, event, p) {
+        Act::Pass => Gate::Pass,
+        Act::Issue => Gate::Answer(issue(p, session, paths, started)),
+        Act::Open => {
             open(p, session, cwd, paths);
             Gate::Pass
         }
-        "SessionEnd" => {
+        Act::End => {
             end(session, paths);
             Gate::Pass
         }
-        e if CLOSERS.contains(&e) => {
+        Act::Close { kind, tripwire: warns } => {
             close(session, paths);
-            turn(e, session, paths);
-            // The mod's asks (a dry run, a verdict) come before the command hook for the same
-            // call; their answer is never shown, so only the command hook warns (and records).
-            match (e, off) {
-                ("PreToolUse", false) if !harness::claude::is_mods(e, p) => {
-                    tripwire(p, session, paths).map_or(Gate::Pass, |w| Gate::Answer(Some(w)))
-                }
-                _ => Gate::Pass,
+            turn(kind, session, paths);
+            if warns && !off {
+                return tripwire(p, session, paths, started).map_or(Gate::Pass, |w| Gate::Answer(Some(w)));
             }
+            Gate::Pass
         }
-        _ => Gate::Pass,
     }
 }
 
 /// [`gate`] for a payload not yet parsed: the kill switch `ADAGE_DISABLE` returns before the
 /// pipeline parses anything, and the press still runs there.
-pub fn before_kill_switch(harness: &str, event: &str, buf: &str, paths: &Paths) -> Option<String> {
-    if event != EVENT && event != "SessionStart" && event != "SessionEnd" && !CLOSERS.contains(&event) {
+pub fn before_kill_switch(harness: &str, event: &str, buf: &str, paths: &Paths, started: Instant) -> Option<String> {
+    // The press's business is decided by the event alone: only a payload it acts on is parsed.
+    if act_of(harness, event, &Value::Null) == Act::Pass {
         return None;
     }
     let p: Value = serde_json::from_str(buf).ok()?;
     let envelope = harness::adapter(harness)?.envelope(&p)?;
-    match gate(harness, event, &p, &envelope.session, &envelope.cwd, paths, true) {
+    match gate(harness, event, &p, &envelope, paths, true, started) {
         Gate::Answer(out) => out,
         Gate::Pass => None,
     }
@@ -274,10 +351,10 @@ fn busy_elsewhere(paths: &Paths, session: &str) -> bool {
 
 /// A prompt or a tool call marks the session mid-turn (touching the marker, so a long turn stays
 /// marked); `Stop` clears it. A failure loses the mark, never the event.
-fn turn(event: &str, session: &str, paths: &Paths) {
+fn turn(kind: EventKind, session: &str, paths: &Paths) {
     let path = turn_path(paths, session);
-    match event {
-        "UserPromptSubmit" | "PreToolUse" => {
+    match kind {
+        EventKind::Prompt | EventKind::PreToolUse => {
             let _ = std::fs::OpenOptions::new()
                 .create(true)
                 .truncate(false)
@@ -285,7 +362,7 @@ fn turn(event: &str, session: &str, paths: &Paths) {
                 .open(&path)
                 .and_then(|f| f.set_modified(std::time::SystemTime::now()));
         }
-        "Stop" => {
+        EventKind::Stop => {
             let _ = std::fs::remove_file(path);
         }
         _ => {}
@@ -316,7 +393,7 @@ fn end(session: &str, paths: &Paths) {
 }
 
 /// `Press`: a token while the window is open and none was issued for this start.
-fn issue(p: &Value, session: &str, paths: &Paths) -> Option<String> {
+fn issue(p: &Value, session: &str, paths: &Paths, started: Instant) -> Option<String> {
     let source = p.get("source").and_then(Value::as_str).unwrap_or("startup");
     if source == "compact" || !window_path(paths, session).exists() {
         return None;
@@ -338,21 +415,22 @@ fn issue(p: &Value, session: &str, paths: &Paths) -> Option<String> {
     note(
         paths,
         session,
-        &json!({ "ts": now(), "event": EVENT, "kind": "press_issued", "source": source, "chain": issued }),
+        SpoolRecord::new(RecordKind::PressIssued, EVENT).with("source", source).with("chain", issued),
+        started,
     );
-    Some(json!({ "press": token }).to_string())
+    Some(answer(&ModAnswer::Press { press: token }))
 }
 
 /// A Bash call naming the press hook, or carrying a press on its stdin: recorded every time, and
 /// the person warned once per session. Never a refusal, never a rewrite.
-fn tripwire(p: &Value, session: &str, paths: &Paths) -> Option<String> {
+fn tripwire(p: &Value, session: &str, paths: &Paths, started: Instant) -> Option<String> {
     let command = p.get("tool_input")?.get("command")?.as_str()?;
     if !names_press(command) {
         return None;
     }
     let warn = state::update::<Record, _>(&record_path(paths, session), |r| !std::mem::replace(&mut r.warned, true))
         .unwrap_or(true);
-    note(paths, session, &json!({ "ts": now(), "event": "PreToolUse", "kind": "tripwire", "warned": warn }));
+    note(paths, session, SpoolRecord::new(RecordKind::Tripwire, "PreToolUse").with("warned", warn), started);
     let text = "adage: a shell command in this session names Adage's press. A press is a person's answer in the session, never a command; the command will not be honoured as one.";
     warn.then(|| json!({ "systemMessage": text }).to_string())
 }
@@ -408,6 +486,7 @@ impl Refused {
 /// Spend `token` for `session` in the repository at `root` (as [`root_of`] gives it): on success
 /// the next token of the chain, which replaces it. `cmd` names the verb in the spool record.
 pub fn spend(paths: &Paths, token: &str, session: &str, root: &str, cmd: &str) -> Result<String, Refused> {
+    let started = Instant::now();
     let path = record_path(paths, session);
     if session.is_empty() || !path.exists() {
         return Err(Refused::Unknown);
@@ -439,7 +518,12 @@ pub fn spend(paths: &Paths, token: &str, session: &str, root: &str, cmd: &str) -
         Ok(r.chain)
     })
     .map_err(|_| Refused::Unknown)??;
-    note(paths, session, &json!({ "ts": at, "event": EVENT, "kind": "press_spent", "chain": spent, "verb": cmd }));
+    note(
+        paths,
+        session,
+        SpoolRecord::at(RecordKind::PressSpent, EVENT, at).with("chain", spent).with("verb", cmd),
+        started,
+    );
     Ok(next)
 }
 
@@ -447,6 +531,10 @@ pub fn spend(paths: &Paths, token: &str, session: &str, root: &str, cmd: &str) -
 mod tests {
     use super::*;
     use adage_store::spool;
+
+    fn at(session: &str, cwd: &Path) -> Envelope {
+        Envelope { session: session.into(), cwd: cwd.to_path_buf() }
+    }
 
     fn world() -> (tempfile::TempDir, Paths, PathBuf) {
         let dir = tempfile::tempdir().unwrap();
@@ -464,13 +552,21 @@ mod tests {
 
     fn start(paths: &Paths, repo: &Path, session: &str, source: &str) {
         assert_eq!(
-            gate("claude", "SessionStart", &payload(session, repo, source), session, repo, paths, false),
+            gate(
+                "claude",
+                "SessionStart",
+                &payload(session, repo, source),
+                &at(session, repo),
+                paths,
+                false,
+                Instant::now()
+            ),
             Gate::Pass
         );
     }
 
     fn press(paths: &Paths, repo: &Path, session: &str, source: &str) -> Option<String> {
-        match gate("claude", EVENT, &payload(session, repo, source), session, repo, paths, false) {
+        match gate("claude", EVENT, &payload(session, repo, source), &at(session, repo), paths, false, Instant::now()) {
             Gate::Answer(Some(out)) => {
                 Some(serde_json::from_str::<Value>(&out).unwrap()["press"].as_str().unwrap().to_string())
             }
@@ -481,7 +577,7 @@ mod tests {
 
     fn act(paths: &Paths, repo: &Path, session: &str, event: &str) {
         let p = json!({ "session_id": session, "cwd": repo, "tool_name": "Bash", "tool_input": { "command": "ls" } });
-        assert_eq!(gate("claude", event, &p, session, repo, paths, false), Gate::Pass);
+        assert_eq!(gate("claude", event, &p, &at(session, repo), paths, false, Instant::now()), Gate::Pass);
     }
 
     /// T-A7-07: the hash is SHA-256 of the raw token, compared in constant time; the chain moves
@@ -573,7 +669,7 @@ mod tests {
         // SessionEnd clears the hash.
         assert!(spend(&paths, &resumed, "s", &root, "on").is_ok());
         let p = json!({ "session_id": "s", "cwd": repo });
-        assert_eq!(gate("claude", "SessionEnd", &p, "s", &repo, &paths, false), Gate::Pass);
+        assert_eq!(gate("claude", "SessionEnd", &p, &at("s", &repo), &paths, false, Instant::now()), Gate::Pass);
         assert_eq!(state::read::<Record>(&record_path(&paths, "s")).unwrap().hash, None);
     }
 
@@ -623,7 +719,7 @@ mod tests {
         // SessionEnd removes the mark.
         act(&paths, &repo, "real", "PreToolUse");
         let p = json!({ "session_id": "real", "cwd": repo });
-        assert_eq!(gate("claude", "SessionEnd", &p, "real", &repo, &paths, false), Gate::Pass);
+        assert_eq!(gate("claude", "SessionEnd", &p, &at("real", &repo), &paths, false, Instant::now()), Gate::Pass);
         assert!(!turn_path(&paths, "real").exists());
         // Before anything acts, a lone session's press is honoured.
         let (_d2, paths2, repo2) = world();
@@ -642,7 +738,7 @@ mod tests {
             json!({ "session_id": "f", "cwd": repo, "source": "startup", "transcript_path": "/t/other.jsonl" }),
             json!({ "session_id": "f", "cwd": repo, "source": "startup", "transcript_path": "/t/f.txt" }),
         ] {
-            assert_eq!(gate("claude", "SessionStart", &p, "f", &repo, &paths, false), Gate::Pass);
+            assert_eq!(gate("claude", "SessionStart", &p, &at("f", &repo), &paths, false, Instant::now()), Gate::Pass);
             assert!(!window_path(&paths, "f").exists(), "{p}");
             assert_eq!(press(&paths, &repo, "f", "startup"), None);
         }
@@ -672,11 +768,14 @@ mod tests {
         assert!(!names_press("git commit -m 'press the button'"));
         let (_d, paths, repo) = world();
         let p = json!({ "session_id": "s", "cwd": repo, "tool_name": "Bash", "tool_input": { "command": "adage hook claude Press" } });
-        let Gate::Answer(Some(w)) = gate("claude", "PreToolUse", &p, "s", &repo, &paths, false) else { panic!() };
+        let Gate::Answer(Some(w)) = gate("claude", "PreToolUse", &p, &at("s", &repo), &paths, false, Instant::now())
+        else {
+            panic!()
+        };
         let v: Value = serde_json::from_str(&w).unwrap();
         assert!(v["systemMessage"].as_str().unwrap().contains("press"));
         assert!(v.get("hookSpecificOutput").is_none(), "never a deny or an updatedInput");
-        assert_eq!(gate("claude", "PreToolUse", &p, "s", &repo, &paths, false), Gate::Pass);
+        assert_eq!(gate("claude", "PreToolUse", &p, &at("s", &repo), &paths, false, Instant::now()), Gate::Pass);
         let recs: Vec<Value> = spool::read_all(&paths.spool("s")).unwrap();
         assert_eq!(recs.iter().filter(|r| r["kind"] == "tripwire").count(), 2);
         // Review M3: the mod's asks for a call (a dry run, a verdict) neither warn nor record; the
@@ -687,14 +786,19 @@ mod tests {
             for (k, v) in phase.as_object().unwrap() {
                 m[k] = v.clone();
             }
-            assert_eq!(gate("claude", "PreToolUse", &m, "s", &repo, &paths2, false), Gate::Pass, "{m}");
+            assert_eq!(
+                gate("claude", "PreToolUse", &m, &at("s", &repo), &paths2, false, Instant::now()),
+                Gate::Pass,
+                "{m}"
+            );
         }
         assert!(spool::read_all::<Value>(&paths2.spool("s")).unwrap_or_default().is_empty());
-        let Gate::Answer(Some(_)) = gate("claude", "PreToolUse", &p, "s", &repo, &paths2, false) else {
+        let Gate::Answer(Some(_)) = gate("claude", "PreToolUse", &p, &at("s", &repo), &paths2, false, Instant::now())
+        else {
             panic!("the command hook warns")
         };
         // Not under a kill switch, and not for another harness.
-        assert_eq!(gate("claude", "PreToolUse", &p, "s", &repo, &paths, true), Gate::Pass);
-        assert_eq!(gate("codex", EVENT, &p, "s", &repo, &paths, false), Gate::Pass);
+        assert_eq!(gate("claude", "PreToolUse", &p, &at("s", &repo), &paths, true, Instant::now()), Gate::Pass);
+        assert_eq!(gate("codex", EVENT, &p, &at("s", &repo), &paths, false, Instant::now()), Gate::Pass);
     }
 }

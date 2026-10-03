@@ -23,16 +23,25 @@ open, always.
 ## What's inside
 
 - `lib.rs`: `main(harness, event, opts) -> !` (panic hook, big stack, `catch_unwind`, always
-  exit 0); `run` (stdin, `ADAGE_DISABLE`); `handle` (one event with its payload and `Paths`:
-  `PreToolUse` goes to `pretool`, `SessionStart` to `session_start`, everything else to
-  `respond`, then the Stop gate and autolearn); `Options { learner, extension }`; `on_big_stack`;
-  the re-exports (the extension contract, `rewrite_off`). Only reading, the kill switches and the
-  dispatch live here; each event's handling is in its own module.
+  exit 0); `run` (stdin, `ADAGE_DISABLE`); `handle` (one event with its payload and `Paths`: the
+  press first, then the `.adage/disabled` switch, then one exhaustive `match` over the adapter's
+  `HookEvent`: `PreToolUse` to `pretool`, `Standing` to `standing`, `SkillPrompt` to `skill`, a
+  session start to `session_start`, every decided event to `respond`, then the Stop gate and
+  autolearn); `Options { learner, extension }`; `on_big_stack`; the re-exports (the extension
+  contract, `rewrite_off`). Only reading, the kill switches and the dispatch live here; each
+  event's handling is in its own module, and takes the event's `HookCtx`.
+- `ctx.rs`: `HookCtx`, one event's context and the reads it shares (configuration, index,
+  repository key, arm inputs), each made once, on first use.
 - `extension.rs`: the contract `adage-exec` implements, re-exported at the root: the
   `Extension` trait (`deliver`, `session_context`, `session_texts`, `exec_only`,
-  `pretool_context`, `stop_gate`) with `Turn`, `Stimulus`, `stimuli`, `Delivery`, `PreCall`,
-  `PreNote`, `ReceiptCard`, `SessionTexts`, `StopCall`, `StopGate`; `guarded` (an extension call
-  whose panic loses only that answer).
+  `predict_grants`, `pretool_context`, `stop_gate`) with `Site` (repository key, checkout, index,
+  data directory: what the four session-level methods take), `Turn`, `Stimulus`, `stimuli`,
+  `Delivery`, `PreCall`, `PreNote`, `ReceiptCard`, `SessionTexts`, `StopCall`, `StopGate`;
+  `guarded` (an extension call whose panic loses only that answer).
+- `answer.rs` (public): `ModAnswer`, every answer the binary sends the Claude Code mod (`plan`,
+  `substitute`, `receipt`, `standing`, `text`, `press`, `predict`, `routine`), and `answer`, the
+  one function that prints it. `tests/wire/*.json` pins each shape; the mod's tests read the same
+  files (docs/claude-mod/impl/wire.md).
 - `respond.rs`: decide and deliver every event but `PreToolUse` and `SessionStart` (the
   no-routes path, the fast path, `decide()` under the state lock, a candidates-only repository's
   noticing, `TurnStep` prediction and routing, the extension's delivery, the record).
@@ -45,13 +54,17 @@ open, always.
 - `phase.rs`: the mod's `PreToolUse` payload fields (`Phase::of`) and the public
   `identity_hash`; `identity.rs`: the keys of the session's two identity lists (`decided_key`,
   `answered_key`), which hold the same call under different hashes on purpose.
-- Shared helpers every module uses: `record.rs` (`now_ms`, `duration_us`, `name_harness`,
-  `append`, `append_or_log`) and `site.rs` (`routed_key`, `ArmInputs`, `observed`).
+- Shared helpers every module uses: `record.rs`, the spool record seam (`RecordKind`, every kind
+  a hook writes; the `Record` builder, which stamps `ts`, `event`, `kind`, `harness`,
+  `tool_use_id(s)` and `duration_us`; docs/spool.md lists every kind and its readers), and
+  `site.rs` (`routed_key`, `ArmInputs`, `observed`).
 - `testkit.rs` (`#[cfg(test)]`): `ObligationWorld` and the other worlds, the stand-in
   extensions, `bash_call`, `spooled`.
-- `harness/mod.rs`: the `Adapter` trait (`harness`, `name`, `envelope`, `translate`,
-  `event_identity`, `render`, `max_context` = 9,500, `is_learn_point`), `Output` (`Context`,
-  `SessionContext`, `Continue`, `Notice`, `Rewrite`), `Envelope`, `adapter(name)`,
+- `harness/mod.rs`: the `Adapter` trait (`harness`, `name`, `recorded_name`, `envelope`,
+  `capabilities`, `translate`, `classify`, `event_identity`, `render`, `max_context` = 9,500,
+  `is_learn_point`), `HookEvent` (what `handle` matches on), `EventKind` (re-exported from
+  adage-trace's event table), `Output` (`Context`, `SessionContext`, `Continue`, `Notice`,
+  `Rewrite`, `Predict`, `Routine`), `Envelope`, `adapter(name)`,
   `adapter_for(Harness)`, `is_own_text`, `calls`, `tool_event_identity`,
   `ACTION_HOOK_TIMEOUT_S`, `action_timeout`.
 - `harness/claude.rs` (`Claude`, `settings`, `response_text`), `harness/codex.rs` (`Codex`,
@@ -66,9 +79,10 @@ open, always.
 
 - In: a native JSON payload on stdin. `harness::adapter` picks the adapter by
   `Harness::hook_name` (`claude`, `codex`, `opencode`); `envelope` gives session and cwd;
-  `translate` gives an `adage_trace::Event` or `None` (do nothing).
-- Index: `Index::try_load(paths.index())`; a damaged index is served empty and a bootstrap
-  learner is asked for at the next session start.
+  `classify` names the event from adage-trace's event table (`Harness::events`), translating an
+  event the runtime decides into an `adage_trace::Event` (`HookEvent::Ignored`: do nothing).
+- Index: read once per event through `HookCtx::index` (`Index::try_load(paths.index())`); a
+  damaged index is served empty and a bootstrap learner is asked for at the next session start.
 - State and spool: `adage_store::state::update_or_rebuild` under the state lock, with
   `adage_runtime::rebuild` as the fallback; one spool record per decided event.
 - Decision: `respond` (`respond.rs`) builds `adage_runtime::Ctx` with `checkout::Disk`, `CommandTable::load()`,
@@ -102,16 +116,20 @@ Invariants to keep:
 - A new `Harness` variant needs an arm in `adapter_for` (the match is exhaustive).
 
 Tests: `cargo test -p adage-hook` (unit tests in each module's `mod tests`, built on the
-`testkit.rs` worlds; there is no `tests/` directory).
+`testkit.rs` worlds; `harness/dispatch_tests.rs` characterizes the dispatch, and
+`record/snapshot_tests.rs` with its insta snapshot under `src/record/snapshots/` every spool
+record's bytes; `tests/wire.rs` checks the answers to the mod against `tests/wire/*.json`,
+re-blessed with `ADAGE_BLESS=1`).
 `docs/claude-mod/impl/structure-hook.md` has the module map and the steps for adding a hook
-event. Then `cargo test -p adage-exec -p adage-cli -p adage-app`;
+event, a spool record kind and a mod answer. Then `cargo test -p adage-exec -p adage-cli -p adage-app`;
 `adage-cli`'s end-to-end tests run the binary, and `adage-exec`'s tests call `handle` with its
 extension. `READS` in `xtask/src/affected.rs` declares `plugin/` for this crate (the OpenCode
 plugin source). Before a release, `CONTRIBUTING.md`'s startup gate holds the plugin to its
 latency budget.
 
-Pitfalls: `pretool` is Claude Code only (`capabilities().pre_tool_rewrite`), and off in a
+Pitfalls: behaviour differs by `Capabilities` or by the event table, never by comparing a
+`Harness` value outside `harness/`. `pretool` is Claude Code only (`pre_tool_rewrite`), and off in a
 session started inside a virtualenv or conda environment. `ADAGE_TEST_FAULT` and
 `ADAGE_TEST_NO_SPAWN` exist only in debug builds. Codex has no tool batches and no failure
-signal (`harness/codex.rs`), so failure-triggered routes do not fire there. `harness/mod.rs`'s
-doc refers to a `hook.rs`; the decision core is `respond.rs` (and `pretool/` for `PreToolUse`).
+signal (`harness/codex.rs`), so failure-triggered routes do not fire there. The decision core
+is `respond.rs` (and `pretool/` for `PreToolUse`).

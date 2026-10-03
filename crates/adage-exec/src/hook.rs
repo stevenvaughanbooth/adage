@@ -38,7 +38,7 @@
 //! run already covered), and `pytest` (reading pytest's command lines and cache records).
 
 use adage_core::CommandTable;
-use adage_hook::{Delivery, Extension, PreCall, PreNote, SessionTexts, StopCall, StopGate, Turn};
+use adage_hook::{Delivery, Extension, PreCall, PreNote, SessionTexts, Site, StopCall, StopGate, Turn};
 use adage_runtime::{render, Directive};
 use serde_json::Value;
 
@@ -80,26 +80,14 @@ pub fn adage_beside() -> Option<std::path::PathBuf> {
 }
 
 impl Extension for Prefetch {
-    fn session_context(
-        &self,
-        repo_key: &str,
-        root: &std::path::Path,
-        index: &adage_tracks::Index,
-        paths: &adage_store::Paths,
-    ) -> Option<String> {
-        self.session_texts(repo_key, root, index, paths).context
+    fn session_context(&self, site: &Site<'_>) -> Option<String> {
+        self.session_texts(site).context
     }
 
     /// The contract and, for the person, a grant that stopped matching: one planning pass over
     /// this repository's grants serves both.
-    fn session_texts(
-        &self,
-        repo_key: &str,
-        root: &std::path::Path,
-        index: &adage_tracks::Index,
-        paths: &adage_store::Paths,
-    ) -> SessionTexts {
-        grants::session_texts(repo_key, root, index, paths)
+    fn session_texts(&self, site: &Site<'_>) -> SessionTexts {
+        grants::session_texts(site.repo_key, site.root, site.index, site.paths)
     }
 
     fn stop_gate(&self, call: &StopCall<'_>) -> Option<StopGate> {
@@ -167,25 +155,14 @@ impl Extension for Prefetch {
 
     /// Exec-only reflexes (vendored scripts) approved here at E1 or E2: only then are they
     /// directed, and only because this binary carries them out.
-    fn exec_only(
-        &self,
-        repo_key: &str,
-        index: &adage_tracks::Index,
-        paths: &adage_store::Paths,
-    ) -> Vec<(String, String)> {
-        grants::exec_only(repo_key, index, paths)
+    fn exec_only(&self, site: &Site<'_>) -> Vec<(String, String)> {
+        grants::exec_only(site.repo_key, site.index, site.paths)
     }
 
     /// The reflexes whose `predict` grant still holds here ([`predict_grants`]), in the checkout
-    /// the pipeline resolved this step's repository from (`root`).
-    fn predict_grants(
-        &self,
-        repo_key: &str,
-        root: &std::path::Path,
-        index: &adage_tracks::Index,
-        paths: &adage_store::Paths,
-    ) -> Vec<(String, String)> {
-        predict_grants(repo_key, root, index, paths)
+    /// the pipeline resolved this step's repository from (`site.root`).
+    fn predict_grants(&self, site: &Site<'_>) -> Vec<(String, String)> {
+        predict_grants(site.repo_key, site.root, site.index, site.paths)
     }
 }
 

@@ -15,7 +15,7 @@ pub mod harness;
 pub mod session;
 pub mod wire;
 
-pub use harness::{Capabilities, Harness};
+pub use harness::{Capabilities, EventKind, Harness};
 pub use session::{Directed, Ending, PromptObs, Session, StepObs};
 
 use serde::{Deserialize, Serialize};

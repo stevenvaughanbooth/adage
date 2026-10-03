@@ -19,8 +19,12 @@ format of Adage's own text inside a trace. Types only; it does no I/O.
 - `lib.rs`: `Call { tool, input, output, failed }` (serde), and `Event` (SessionStart, Prompt,
   Batch, Failure, Stop, SessionEnd; `Debug + Clone` only, not serde) with `Event::name()`.
 - `harness`: `Harness` (ClaudeCode, Codex, OpenCode), `Harness::ALL`, `id()`, `hook_name()`,
-  `display()`, `short()`, `capabilities()`, `parse()`; `Capabilities { pre_tool_rewrite,
-  session_contract, actions, person_notices }`.
+  `display()`, `short()`, `capabilities()`, `capabilities_with_mod()`, `parse()`; `Capabilities`
+  (the command hooks' four and the seven the Claude Code mod adds); and the one table of native
+  hook event names: `Harness::events()` (native name to `EventKind`), `event_kind(native)`,
+  `mod_only_events()`, with `EventKind` (`decided()`: the runtime event and record `kind`;
+  `mod_only()`). The hook's dispatch, adapters and press, and `adage_runtime::rebuild::kind_of`,
+  read it; a native name means the same in every harness that sends it.
 - `session`: `Session` (id, root, repo, model, day, prompt, steps, steered, directed, influence,
   outcome, harness, prompts, ending), `StepObs` (turn, key, norm, call, rel_path, prompt,
   project_pytest_root_cwd), `PromptObs`, `Ending`, `Directed`, `MAX_PROMPT_BYTES`, `MAX_PROMPTS`,
@@ -49,7 +53,10 @@ format of Adage's own text inside a trace. Types only; it does no I/O.
   observe the change: `cargo test -p adage-ingest -p adage-runtime -p adage-graph -p adage-learn
   -p adage-tracks -p adage-hook`, or `cargo xtask affected`. It reads no fixtures.
 - Adding a harness is adding a `Harness` variant: the compiler then lists every exhaustive
-  match to update (`capabilities`, the adapters, install placement). Keep `id`, `hook_name` and
+  match to update (`capabilities`, `events`, the adapters, install placement).
+- Adding a hook event is a row in the harness's table in `harness.rs` (and an `EventKind`
+  variant if it is a new kind): see `docs/claude-mod/impl/structure-hook.md`, "How to add a hook
+  event". Keep `id`, `hook_name` and
   `short` distinct (`names_are_distinct` tests it) and `parse` round-tripping.
 - Adding or changing a field of `Session`, `StepObs`, `PromptObs`, `Ending` or `Directed`: give it
   `#[serde(default)]` so older cached parses still read, and bump

@@ -44,21 +44,19 @@ pub const MAX_SPOOL_BYTES: u64 = 4 << 20;
 pub const MAX_RECORDS: usize = 10_000;
 
 /// The runtime event a record is for: its `kind`, or, in records written before `kind`, the
-/// harness event name (Claude Code, Codex, OpenCode) mapped to one.
+/// harness event name (Claude Code, Codex, OpenCode) mapped to one by the event table
+/// ([`adage_trace::Harness::events`]; a name means the same in every harness that sends it). An
+/// event the runtime does not decide (`PreToolUse`, the mod's asks) or an unknown name is `""`.
 pub fn kind_of(record: &Value) -> &str {
     if let Some(k) = record.get("kind").and_then(Value::as_str) {
         return k;
     }
-    match record.get("event").and_then(Value::as_str).unwrap_or("") {
-        "UserPromptSubmit" | "chat.message" => "prompt",
-        "PostToolBatch" | "PostToolUse" | "tool.execute.after" => "batch",
-        "PostToolUseFailure" | "tool.error" => "failure",
-        "Stop" | "session.idle" => "stop",
-        "SessionStart" | "session.created" => "session_start",
-        "SessionEnd" | "session.deleted" => "session_end",
-        "TurnStep" => "turn_step",
-        _ => "",
-    }
+    let event = record.get("event").and_then(Value::as_str).unwrap_or("");
+    adage_trace::Harness::ALL
+        .into_iter()
+        .find_map(|h| h.event_kind(event))
+        .and_then(adage_trace::EventKind::decided)
+        .unwrap_or("")
 }
 
 /// The session state the recorded decisions imply, or `None` if there is nothing to replay.
@@ -207,6 +205,8 @@ mod tests {
             ("PostToolUseFailure", "failure"),
             ("session.idle", "stop"),
             ("TurnStep", "turn_step"),
+            ("PreToolUse", ""),
+            ("Standing", ""),
             ("Mystery", ""),
         ] {
             assert_eq!(kind_of(&json!({ "event": event })), kind, "{event}");

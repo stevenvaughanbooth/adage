@@ -1,0 +1,13 @@
+{
+  "plan": {
+    "advice": {
+      "kind": "permissions",
+      "text": "Adage did not rewrite the command: your permission rules treat .venv/bin/python differently."
+    },
+    "receipt": {
+      "covering": ".venv/bin/python -m pytest tests -q",
+      "fresh": false,
+      "operation": "op-1a2b3c4d"
+    }
+  }
+}

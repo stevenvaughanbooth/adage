@@ -12,7 +12,7 @@
 //! | `session.idle` | `event` hook, `session.idle` | `stop_hook_active` |
 //! | `session.deleted` | `event` hook, `session.deleted` | — |
 
-use super::{calls, is_own_text, Adapter, Event, Harness, Output};
+use super::{calls, is_own_text, Adapter, Event, EventKind, Harness, Output};
 use adage_core::tools::from_opencode;
 use serde_json::{json, Value};
 
@@ -28,16 +28,16 @@ impl Adapter for OpenCode {
         let native = || {
             from_opencode(p.get("tool").and_then(|v| v.as_str()).unwrap_or(""), p.get("args").unwrap_or(&Value::Null))
         };
-        Some(match event {
-            "session.created" => Event::SessionStart,
-            "chat.message" => {
+        Some(match self.harness().event_kind(event)? {
+            EventKind::SessionStart => Event::SessionStart,
+            EventKind::Prompt => {
                 let text = p.get("prompt")?.as_str()?;
                 if is_own_text(text) {
                     return None;
                 }
                 Event::Prompt { text: text.to_string() }
             }
-            "tool.execute.after" => {
+            EventKind::ToolUse => {
                 p.get("tool")?.as_str()?;
                 // The shell tool reports a non-zero exit in `metadata.exit` and returns normally.
                 let failed = p.get("exit").and_then(|v| v.as_i64()).is_some_and(|c| c != 0);
@@ -48,7 +48,7 @@ impl Adapter for OpenCode {
                     Event::Batch { calls: cs }
                 }
             }
-            "tool.error" => {
+            EventKind::Failure => {
                 p.get("tool")?.as_str()?;
                 let mut cs = calls(native(), cwd, s("error"), true);
                 if cs.len() != 1 {
@@ -56,16 +56,18 @@ impl Adapter for OpenCode {
                 }
                 Event::Failure { call: cs.remove(0) }
             }
-            "session.idle" => {
+            EventKind::Stop => {
                 Event::Stop { stop_hook_active: p.get("stop_hook_active").and_then(|x| x.as_bool()).unwrap_or(false) }
             }
-            "session.deleted" => Event::SessionEnd,
-            _ => return None,
+            EventKind::SessionEnd => Event::SessionEnd,
+            // Not in OpenCode's table: the bridge sends none of these.
+            EventKind::ToolBatch
+            | EventKind::TurnStep
+            | EventKind::PreToolUse
+            | EventKind::Press
+            | EventKind::Standing
+            | EventKind::SkillPrompt => return None,
         })
-    }
-
-    fn is_learn_point(&self, event: &str) -> bool {
-        matches!(event, "session.idle" | "session.deleted")
     }
 
     fn render(&self, _event: &str, out: Output) -> Option<String> {
