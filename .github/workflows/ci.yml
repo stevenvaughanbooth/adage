@@ -238,13 +238,23 @@ jobs:
         run: node scripts/check-plugin.mjs
       - name: release archive checksum enforcement
         run: node scripts/test-stage-plugin.mjs
-      - name: install the Claude Code CLI (validation only; no agent runs)
-        run: npm install -g @anthropic-ai/claude-code
+      # Pinned: the mod's API is early access and moves between releases (docs/claude-mod
+      # architecture §6 invariant 10); bump it together with plugin/claude-code/VALIDATE.txt.
+      - name: install the Claude Code CLI (validation and plugin tests only; no agent runs)
+        run: npm install -g @anthropic-ai/claude-code@2.1.288
       - name: claude plugin validate
         run: |
           claude plugin validate --strict plugin/claude-code
           claude plugin validate --strict plugin/claude-code-exec
           claude plugin validate --strict .
+      - name: validate output matches the committed VALIDATE.txt
+        run: |
+          claude plugin validate --strict plugin/claude-code 2>&1 | sed "s#$PWD/##g" > /tmp/validate.txt
+          diff -u plugin/claude-code/VALIDATE.txt /tmp/validate.txt
+      - name: claude plugin test
+        run: |
+          claude plugin test plugin/claude-code
+          claude plugin test plugin/claude-code-exec
 
   design:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'

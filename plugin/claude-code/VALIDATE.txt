@@ -1,0 +1,15 @@
+Validating plugin manifest: plugin/claude-code/.claude-plugin/plugin.json
+
+  > types ./types/index.d.ts declares on $: nothing (no EngineInterface member)
+  > types ./types/index.d.ts declares state: adage.fired, adage.predicted
+
+Validating hooks: plugin/claude-code/hooks/hooks.json
+
+  > ./register.ts hooks: session.start, classic.SessionStart, classic.UserPromptSubmit, classic.PostToolBatch, classic.PostToolUseFailure, classic.Stop, turn.step
+  > ./register.ts calls: $.env.get (via activate), $.process.run (via runner), $.session.cwd, $.session.id, $.state.get, $.state.set
+  > ./register.ts env writes: nothing
+  > ./register.ts env reads: CLAUDE_PLUGIN_DATA
+  > ./register.ts state writes: adage.fired, adage.predicted
+  > ./register.ts state reads: adage.fired, adage.predicted
+
+√ Validation passed

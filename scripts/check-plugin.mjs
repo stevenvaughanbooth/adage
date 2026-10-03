@@ -13,7 +13,7 @@
 //   node scripts/check-plugin.mjs [--staged <dir>]
 
 import { createHash } from "node:crypto"
-import { accessSync, constants, existsSync, readFileSync } from "node:fs"
+import { accessSync, constants, existsSync, readdirSync, readFileSync } from "node:fs"
 import { PLATFORMS } from "../npm/config.mjs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -67,9 +67,41 @@ for (const [pluginDir, bin] of [
   }
   expect(read(`${pluginDir}/scripts/session-start`).includes("exec/enabled"), `${pluginDir}: session-start does not read the exec marker`)
 
+  // The mod (docs/claude-mod/architecture.md §2): hooks.json may name one hooks module under
+  // `modules` beside the command hooks; the module, the types contract plugin.json names, and the
+  // bridge's allow-list must be there. Only `hooks` and `modules` are read from hooks.json.
+  const hooksFile = json(`${pluginDir}/hooks/hooks.json`)
+  for (const key of Object.keys(hooksFile)) {
+    expect(key === "hooks" || key === "modules", `${pluginDir}/hooks/hooks.json: unexpected key ${key}`)
+  }
+  if ("modules" in hooksFile) {
+    const modules = hooksFile.modules
+    expect(Array.isArray(modules) && modules.length === 1, `${pluginDir}/hooks/hooks.json: modules must name exactly one hooks module`)
+    for (const m of Array.isArray(modules) ? modules : []) {
+      const ok = typeof m === "string" && /^\.\/[\w./-]+\.(ts|tsx|js|mjs)$/.test(m) && !m.includes("..")
+      expect(ok, `${pluginDir}/hooks/hooks.json: module ${m} must be a ./ path to a .ts, .tsx, .js or .mjs file inside hooks/`)
+      if (ok) expect(existsSync(path.join(repo, pluginDir, "hooks", m)), `${pluginDir}/hooks/hooks.json: module ${m} does not exist`)
+    }
+    expect(typeof plugin.types === "string", `${pluginDir}: plugin.json must name the module's $.state contract under "types"`)
+    const bridge = path.join(repo, pluginDir, "hooks/bridge.ts")
+    expect(existsSync(bridge), `${pluginDir}: the module has no hooks/bridge.ts`)
+    if (existsSync(bridge)) {
+      const list = readFileSync(bridge, "utf8").match(/export const ALLOWED_VERBS: readonly string\[\] = \[([^\]]*)\]/)?.[1]
+      expect(list !== undefined, `${pluginDir}/hooks/bridge.ts: no ALLOWED_VERBS literal`)
+      const verbs = (list ?? "").split(",").map((v) => v.trim().replace(/^['"]|['"]$/g, "")).filter(Boolean)
+      // Person-only verbs, install and config never run from a hook (architecture §2, §6 3a).
+      for (const v of verbs) {
+        expect(["hook", "version", "watch", "graph", "doctor", "status", "ledger", "off", "map"].includes(v), `${pluginDir}/hooks/bridge.ts: verb ${v} may not be in the allow-list`)
+      }
+    }
+  }
+  if (typeof plugin.types === "string") {
+    expect(existsSync(path.join(repo, pluginDir, plugin.types)), `${pluginDir}: plugin.json types ${plugin.types} does not exist`)
+  }
+
   // Hook commands: ${CLAUDE_PLUGIN_ROOT} paths must exist and be executable; ${CLAUDE_PLUGIN_DATA}
   // paths are created at SessionStart, which must therefore come first.
-  const hooks = json(`${pluginDir}/hooks/hooks.json`).hooks
+  const hooks = hooksFile.hooks
   for (const [event, groups] of Object.entries(hooks)) {
     for (const g of groups) {
       for (const h of g.hooks) {
@@ -103,6 +135,19 @@ for (const dir of ["plugin/claude-code", "plugin/claude-code-exec"]) {
   } catch {}
   expect(!server, `${dir}: Adage registers no MCP server`)
   expect(!("mcpServers" in json(`${dir}/.claude-plugin/plugin.json`)), `${dir}: Adage registers no MCP server`)
+}
+
+// The mod's API is pinned (architecture §6 invariant 10): CI installs the Claude Code version the
+// plugin was validated and tested against, never the latest.
+const ci = read(".github/workflows/ci.yml")
+for (const m of ci.matchAll(/npm install -g @anthropic-ai\/claude-code(@\S+)?/g)) {
+  expect(/^@\d+\.\d+\.\d+$/.test(m[1] || ""), `.github/workflows/ci.yml: the Claude Code CLI must be pinned to an exact version (${m[0]})`)
+}
+// Both plugins ship the same module, file for file, until A8 makes them one.
+{
+  const ts = (dir) => (existsSync(path.join(repo, dir, "hooks")) ? readdirSync(path.join(repo, dir, "hooks")).filter((f) => /\.tsx?$/.test(f)).sort() : [])
+  const [a, b] = [ts("plugin/claude-code"), ts("plugin/claude-code-exec")]
+  expect(a.join(",") === b.join(","), `the two plugins' hooks modules differ in files: [${a}] vs [${b}]`)
 }
 
 // A staged marketplace tree (the release workflow's output).

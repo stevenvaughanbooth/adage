@@ -3,5 +3,6 @@
   "version": "0.1.0",
   "description": "Agent traces become reflexes: Adage compiles the paths your agents take into reflexes and tells them, deterministically, what to do next.",
   "author": { "name": "Adage" },
-  "repository": "https://github.com/stevenvaughanbooth/adage"
+  "repository": "https://github.com/stevenvaughanbooth/adage",
+  "types": "./types/index.d.ts"
 }
