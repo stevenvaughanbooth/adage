@@ -750,7 +750,7 @@ pub(crate) fn resolve_program(
     Ok((program, full))
 }
 
-/// Run a checked request: resolve the program ([`resolve_program`]: scripts are hash-checked
+/// Run a checked request: resolve the program (`resolve_program`: scripts are hash-checked
 /// **now**, closing the gap between check and use), build the environment, spawn in the sandbox,
 /// project, render. E2 actions run through [`crate::stage`] instead.
 pub fn execute(req: &ExecRequest, ctx: &Context) -> Result<Delivered, Refusal> {

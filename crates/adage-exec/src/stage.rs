@@ -16,7 +16,7 @@
 //!    - Linux as root: sandboxed commands run as nobody, who cannot write root's files through an
 //!      overlay (overlayfs keeps the lower layer's owners), so the worktree is copied into
 //!      scratch, owned by nobody, and the copy is compared with the worktree afterwards.
-//! 2. **Verify** the change set ([`changes`], [`judge`]). A path under `.git` always refuses. For
+//! 2. **Verify** the change set ([`overlay_changes`] or [`tree_changes`], then [`judge`]). A path under `.git` always refuses. For
 //!    `regenerate`, every change must match a declared output glob and be a regular file written
 //!    or removed; changes under cache globs are discarded; anything else refuses the whole
 //!    application. For `verify`, no source may change; changes under cache globs are kept.
