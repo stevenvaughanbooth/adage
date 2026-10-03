@@ -22,6 +22,7 @@ pub mod batch;
 pub mod cache;
 pub mod claude;
 pub mod codex;
+pub mod corpus;
 pub mod format;
 pub mod locate;
 pub mod opencode;

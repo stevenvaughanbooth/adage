@@ -19,6 +19,7 @@ mod autolearn;
 mod cli;
 mod condition_out;
 mod config;
+mod corpus_cmd;
 mod detect;
 mod doctor;
 mod exec;
@@ -212,6 +213,7 @@ fn run(args: &[String]) -> Result<()> {
         Some("condition") if has("--auto") => autolearn::run_auto(rest, &paths),
         Some("condition") if has("--instincts-only") => instincts_only(rest, &paths),
         Some("condition") => condition(rest, &paths),
+        Some("corpus") => corpus_cmd::run(sub.expect("corpus subcommand").1, &paths),
         Some("train") => train::train(rest, &paths),
         Some("savings") => savings::run(rest, &paths),
         Some("config") => config::run(rest, &paths),

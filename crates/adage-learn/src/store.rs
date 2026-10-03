@@ -28,6 +28,19 @@ pub struct Compiled {
 
 /// What a learn run reads of earlier runs, and writes, and nothing else.
 pub trait Store {
+    /// Repository-scoped canonical evidence. A result-only store may leave these unsupported.
+    fn corpus_manifest(&self, _repo: &str) -> Result<Option<crate::corpus::Manifest>> {
+        Ok(None)
+    }
+    fn corpus_object(&self, _digest: &str) -> Result<Vec<u8>> {
+        anyhow::bail!("this store does not support canonical corpora")
+    }
+    fn write_corpus_object(&self, _digest: &str, _body: &[u8]) -> Result<()> {
+        anyhow::bail!("this store does not support canonical corpora")
+    }
+    fn write_corpus_manifest(&self, _manifest: &crate::corpus::Manifest) -> Result<()> {
+        anyhow::bail!("this store does not support canonical corpora")
+    }
     /// The track named `name`, when the store holds a readable one.
     fn track(&self, name: &str) -> Option<Track>;
     /// Whether the store holds anything under `name` (a track, or its decisions alone).
@@ -90,13 +103,106 @@ fn write_json(path: &Path, value: &impl serde::Serialize) {
     }
 }
 
+/// Raw evidence and computation caches contain source text. Write owner-only files and publish
+/// through a unique temporary file; readers cannot observe a partial record.
+fn write_private(path: &Path, body: &[u8]) -> Result<()> {
+    use std::io::Write;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let parent = path.parent().ok_or_else(|| anyhow::anyhow!("file has no parent"))?;
+    std::fs::create_dir_all(parent)?;
+    let (tmp, mut file) = loop {
+        let tmp = path.with_extension(format!("tmp-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        match options.open(&tmp) {
+            Ok(file) => break (tmp, file),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e.into()),
+        }
+    };
+    let result = (|| -> std::io::Result<()> {
+        file.write_all(body)?;
+        file.sync_all()?;
+        drop(file);
+        std::fs::rename(&tmp, path)?;
+        #[cfg(unix)]
+        std::fs::File::open(parent)?.sync_all()?;
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(tmp);
+    }
+    Ok(result?)
+}
+
 impl Files {
     fn dir(&self, name: &str) -> PathBuf {
         self.tracks_root.join(name)
     }
+
+    fn paths(&self) -> adage_store::Paths {
+        adage_store::Paths::at(self.index_path.parent().unwrap_or(Path::new(".")))
+    }
+
+    fn corpus_manifest_path(&self, repo: &str) -> PathBuf {
+        self.paths().corpus().join("repositories").join(format!("{}.json", crate::corpus::digest(repo.as_bytes())))
+    }
+
+    fn corpus_object_path(&self, digest: &str) -> Result<PathBuf> {
+        anyhow::ensure!(crate::corpus::valid_digest(digest), "invalid corpus object digest");
+        Ok(self.paths().corpus().join("objects").join(&digest[..2]).join(format!("{digest}.json")))
+    }
 }
 
 impl Store for Files {
+    fn corpus_manifest(&self, repo: &str) -> Result<Option<crate::corpus::Manifest>> {
+        let body = match std::fs::read(self.corpus_manifest_path(repo)) {
+            Ok(body) => body,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) => return Err(e.into()),
+        };
+        let manifest: crate::corpus::Manifest = serde_json::from_slice(&body)?;
+        manifest.validate(repo)?;
+        Ok(Some(manifest))
+    }
+
+    fn corpus_object(&self, digest: &str) -> Result<Vec<u8>> {
+        let file = std::fs::File::open(self.corpus_object_path(digest)?)?;
+        let max = adage_ingest::corpus::Limits::default().record_bytes as u64;
+        anyhow::ensure!(file.metadata()?.len() <= max, "oversized corpus object");
+        let mut body = Vec::new();
+        use std::io::Read;
+        file.take(max + 1).read_to_end(&mut body)?;
+        anyhow::ensure!(crate::corpus::digest(&body) == digest, "corpus object digest mismatch");
+        Ok(body)
+    }
+
+    fn write_corpus_object(&self, digest: &str, body: &[u8]) -> Result<()> {
+        anyhow::ensure!(crate::corpus::digest(body) == digest, "corpus object digest mismatch");
+        let path = self.corpus_object_path(digest)?;
+        // Verify an existing object too: a damaged object must never become committed evidence.
+        if path.exists() && self.corpus_object(digest).is_ok() {
+            return Ok(());
+        }
+        std::fs::create_dir_all(path.parent().expect("object has parent"))?;
+        write_private(&path, body)?;
+        Ok(())
+    }
+
+    fn write_corpus_manifest(&self, manifest: &crate::corpus::Manifest) -> Result<()> {
+        manifest.validate(&manifest.repo)?;
+        let path = self.corpus_manifest_path(&manifest.repo);
+        std::fs::create_dir_all(path.parent().expect("manifest has parent"))?;
+        write_private(&path, &serde_json::to_vec(manifest)?)?;
+        Ok(())
+    }
+
     fn track(&self, name: &str) -> Option<Track> {
         io::read(&self.dir(name)).ok()
     }

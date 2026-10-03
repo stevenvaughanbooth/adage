@@ -24,6 +24,7 @@ Set up:
 Conditioning:
   sense        what your agents actually do (read-only)
   condition    condition reflexes from traces now
+  corpus       import, inspect and learn canonical trace collections
   report       what Adage said, and what agents did
   graph        Adage's state as a graph
   train        compile a skill into reflexes

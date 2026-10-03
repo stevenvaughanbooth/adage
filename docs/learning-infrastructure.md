@@ -15,7 +15,7 @@ claim. Cheaper-model predictability requires a separate model-transfer compariso
 | Milestone | Deliverable | Acceptance | Status |
 | --- | --- | --- | --- |
 | M1 Evidence independence | Canonical task/group identity, preserved in graph calibration and route qualification | Retries stay in one fold; explicit groups survive import; unknown identity cannot establish task diversity; old traces remain readable | Complete |
-| M2 Corpus ingestion | Versioned, repository-scoped canonical corpus with bounded streaming and auditable rejection/deduplication | Input order does not change evidence; conflicting duplicates fail visibly; malformed and oversized records cannot silently become evidence | Pending |
+| M2 Corpus ingestion | Versioned, repository-scoped canonical corpus with bounded streaming and auditable rejection/deduplication | Input order does not change evidence; conflicting duplicates fail visibly; malformed and oversized records cannot silently become evidence | Complete |
 | M3 Scalable learning | Reusable repository learning checkpoints and incremental computation with explicit invalidation | Repeated runs avoid unchanged work; changed/deleted evidence and parameter changes invalidate correctly; full/incremental outputs agree | Pending |
 | M4 Outcomes and value | Conservative completion evidence and reproducible paired token/quality evaluation | Stale checks do not label final work successful; quality regressions reject savings claims; unknown usage and contaminated comparisons are visible | Pending |
 | M5 Verification and delivery | Required Rust checks, deterministic corpus/scale measurements, signed commits, remote branch and review | Results and limitations recorded against a commit; no unsupported savings or enterprise-capacity claim | Pending |
@@ -48,6 +48,38 @@ claim. Cheaper-model predictability requires a separate model-transfer compariso
   other repositories itself. Fixed deleted-directory attribution at ingestion as well.
 
 ## Deterministic fixture strategy
+
+### Canonical corpora
+
+```sh
+adage corpus export trace-a.jsonl trace-b.jsonl --repo acme/api --identities identities.json > corpus.jsonl
+adage corpus import corpus.jsonl --repo acme/api
+adage corpus inspect --repo acme/api
+adage corpus learn --repo acme/api
+```
+
+Each JSONL record is `{"schema":1,"session":<canonical Session>}`. Import processes one record at
+a time, limited to 8 MiB and 50,000 steps; at most 100 line/reason diagnostics are retained while
+all rejection counts are reported. Invalid JSON, unknown schemas, malformed session structure,
+oversized records and conflicting duplicate ids prevent manifest publication. Other repositories
+are counted separately and never mixed into the selected repository. Identical re-delivery is
+idempotent. Export uses the recorded checkout location rather than inspecting this machine.
+
+`corpus import --replace` explicitly replaces one repository's snapshot, including corrections
+and removals. Two conflicting records inside that same replacement still fail. An empty
+replacement followed by learning retires unsupported learned routes; authored routes and review
+records retain their normal protections. Selecting a repository absent from a nonempty input is
+an error, so a selection typo cannot clear its snapshot.
+
+Canonical objects are SHA-256 addressed and sharded by digest prefix under `$ADAGE_HOME/corpus`;
+owner-only files on Unix are published before one atomic repository manifest. Imports hold the
+normal writer lock. A failed import may leave unreferenced objects but cannot publish a partial
+manifest. Reads verify object content and repository/session ownership. Corruption is an error,
+not silently missing training data. Automatic garbage collection is not implemented.
+
+Ingestion memory is one bounded record plus the selected repository's id/digest manifest. Mining
+currently loads one repository's canonical sessions. This is a portable collection foundation,
+not a claim of distributed execution or bounded memory for an arbitrarily large single repository.
 
 ### Evidence identity
 
@@ -82,6 +114,11 @@ derive an expected answer by calling the same implementation under test. Every f
 bug gets a fixture at the lowest boundary that reproduces it. Scale benchmarks report resource
 cost separately from correctness and live outcome claims.
 
+- 2026-10-03: M2 implemented: bounded canonical JSONL, repository snapshots, private content
+  objects, transactional imports and export/import/inspect/learn CLI commands. Reviewed the one-line
+  help snapshot addition. Corpus tests verify interruption, corruption, idempotence, conflicts,
+  repository boundaries, exact learned candidate support and retirement after evidence removal.
+
 ## Verification record
 
 Foundation: workspace formatting and all-target Clippy pass on Rust 1.99; all 18 architecture,
@@ -98,3 +135,6 @@ and architecture guards pass. No live model outcome was measured.
 
 Live paid studies require an explicitly bounded run and available model credentials. Engineering
 checks and offline measurements do not establish production savings.
+
+M2: all ingestion, learner, store and architecture suites pass, as do the CLI corpus lifecycle,
+all 11 CLI grammar/help tests and both no-spawn guards. All-target workspace Clippy passes.

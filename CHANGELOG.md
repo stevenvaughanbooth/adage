@@ -18,6 +18,12 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### Fixes from the architecture work
 
+- **Canonical trace corpora.** `adage corpus export`, `import`, `inspect` and `learn` normalize
+  portable traces, publish repository-scoped evidence snapshots and feed them into the existing
+  learner. Imports bound record size, report malformed evidence, deduplicate delivery and reject
+  conflicts atomically. Explicit snapshot replacement supports corrections and removals; stored
+  objects are content-verified and private on Unix.
+
 - **Task-aware learning evidence.** Canonical sessions preserve declared task, group and attempt
   ids; `condition --identities <file>` imports them and evaluation manifests pass their task ids
   through the production learner. Retries stay together, unknown identities cannot establish task

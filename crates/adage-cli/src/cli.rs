@@ -71,6 +71,8 @@ pub enum Command {
         after_help = "With no source named, reads configured Claude/Codex history and OpenCode exports. Explicit sources replace these defaults. With no default history, binds applicable instincts in the current repository."
     )]
     Condition(ConditionArgs),
+    /// Import, inspect and learn from versioned canonical trace corpora.
+    Corpus(CorpusArgs),
     /// What Adage told agents, and whether they followed it.
     Report(JsonArgs),
     /// Adage's live state as a graph (JSON for tools; the map draws it).
@@ -379,6 +381,47 @@ pub struct ConditionArgs {
     /// Machine-readable output.
     #[arg(long)]
     pub json: bool,
+}
+
+#[derive(Args, Debug)]
+pub struct CorpusArgs {
+    #[command(subcommand)]
+    pub action: CorpusAction,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum CorpusAction {
+    /// Normalize native trace files to canonical JSONL on stdout.
+    Export {
+        #[arg(required = true, num_args = 1..)]
+        transcripts: Vec<PathBuf>,
+        #[arg(long)]
+        repo: Option<String>,
+        #[arg(long, value_name = "FILE")]
+        identities: Option<PathBuf>,
+    },
+    /// Atomically import one repository's canonical JSONL; print the audit report as JSON.
+    Import {
+        input: PathBuf,
+        #[arg(long)]
+        repo: String,
+        /// Replace the snapshot, including corrections and removals; default merges new ids.
+        #[arg(long)]
+        replace: bool,
+    },
+    /// Show the repository's committed evidence manifest as JSON.
+    Inspect {
+        #[arg(long)]
+        repo: String,
+    },
+    /// Learn the committed snapshot and compile its reflexes; print the report as JSON.
+    Learn {
+        #[arg(long)]
+        repo: String,
+        /// Low thresholds for synthetic fixtures.
+        #[arg(long)]
+        demo: bool,
+    },
 }
 
 #[derive(Args, Debug)]
@@ -822,6 +865,7 @@ fn overview(t: &Theme) -> StyledStr {
             &[
                 ("sense", "what your agents actually do (read-only)"),
                 ("condition", "condition reflexes from traces now"),
+                ("corpus", "import, inspect and learn canonical trace collections"),
                 ("report", "what Adage said, and what agents did"),
                 ("graph", "Adage's state as a graph"),
                 ("train", "compile a skill into reflexes"),

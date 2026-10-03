@@ -5,6 +5,7 @@ pub mod bridge;
 pub mod cards;
 pub mod cases;
 pub mod claims;
+pub mod corpus;
 pub mod diff;
 pub mod dormant;
 pub mod effects;
@@ -302,6 +303,18 @@ pub fn plan(
     store: &dyn store::Store,
     cfg: &LearnConfig,
 ) -> Result<(Report, Vec<Planned>)> {
+    plan_repository(sessions, None, models, store, cfg)
+}
+
+/// A committed corpus may explicitly remove every session of a repository. Include that empty
+/// repository in reconciliation so unsupported learned routes are not left live by a no-op.
+pub(crate) fn plan_repository(
+    sessions: Vec<Session>,
+    include_repo: Option<&str>,
+    models: Option<&Path>,
+    store: &dyn store::Store,
+    cfg: &LearnConfig,
+) -> Result<(Report, Vec<Planned>)> {
     let mut report = Report { thresholds: thresholds(cfg), ..Default::default() };
     let (sessions, duplicates) = evidence::unique_sessions(sessions)?;
     report.sessions_duplicates = duplicates;
@@ -316,6 +329,9 @@ pub fn plan(
     let mut by_repo: BTreeMap<String, Vec<&Session>> = BTreeMap::new();
     for s in &sessions {
         by_repo.entry(s.repo.clone()).or_default().push(s);
+    }
+    if let Some(repo) = include_repo {
+        by_repo.entry(repo.into()).or_default();
     }
 
     let today = adage_tracks::review::today();
@@ -351,7 +367,7 @@ pub fn plan(
         value::assess(&mut routes, ss, repo, &judged, &cfg.priors, cfg.uplift_bar());
         // Without the embedding model, prompt intents cannot be learned or judged: the ones
         // already learned are kept as they are.
-        if model.is_none() {
+        if model.is_none() && !ss.is_empty() {
             for r in prev.iter().flat_map(|t| t.routes.iter()) {
                 if matches!(r.trigger, Trigger::Intent { .. }) && !routes.iter().any(|x| x.id == r.id) {
                     routes.push(r.clone());
