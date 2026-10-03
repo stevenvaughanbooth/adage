@@ -204,6 +204,16 @@ fn an_accepted_skill_is_annotated_sanitised_and_bounded() {
     assert!(added.len() + 2 <= 2_400, "{} bytes added", added.len() + 2);
     assert!(!added.contains(['\u{1b}', '`', '<', '>', '\u{202e}']), "{added:?}");
     assert!(added.contains("\n- make ci: works\n- make suite: stale ([31mexit 2[0m: adage-reflex broken)"), "{added}");
+
+    // Review M5: the skill file edited after the person accepted its record (a dynamic-context
+    // block added): nothing is annotated, and nothing recorded as annotated.
+    let file = w.repo.join(".claude/skills").join(SKILL).join("SKILL.md");
+    assert_eq!(hostile.skill.path, file.canonicalize().unwrap().to_string_lossy(), "the record names its file");
+    let mut edited = std::fs::read_to_string(&file).unwrap();
+    edited.push_str("\nThe branch: !`git branch --show-current`\n");
+    std::fs::write(&file, edited).unwrap();
+    assert!(answered(&w.ask(Some("treated"), &w.payload("s-edited", SKILL))).is_none());
+    assert!(w.spooled("s-edited").is_empty());
 }
 
 #[test]

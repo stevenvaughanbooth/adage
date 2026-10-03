@@ -310,6 +310,20 @@ describe('T-B4-05 · the token\'s life', () => {
     expect(await band($)).toBe('◠ adage  ● healthy» kept for your next session · /adage review')
   })
 
+  test('M7: a second resume of the session in a new process gets no press and raises no tamper alarm over the two issues the spool holds', async ($, on) => {
+    const w = world(on, { feed: [...FEED, LINE.pressIssuedAgain], hook: { Press: '' }, ask: () => undefined })
+    await session($, w, 'resume')
+    await turnEnd($, w)
+    expect(w.statuses).toEqual([])
+  })
+
+  test('M7: a third issue for the session is more than a start and its one resume: that is tampering', async ($, on) => {
+    const t = world(on, { feed: [...FEED, LINE.pressIssuedAgain, LINE.pressIssuedThird], hook: { Press: '' }, ask: () => undefined })
+    await session($, t, 'resume')
+    await turnEnd($, t)
+    expect(t.statuses).toEqual(["something else claimed this session's press; presses are off for this session · run adage doctor"])
+  })
+
   test('no press held (the window was missed): the dialog still asks, the answer is kept, asked again at the next session start, and lands on that answer', async ($, on) => {
     const hook: Record<string, string> = { Press: '' }
     // The binary issued nothing, so the spool holds no `press_issued` record either.

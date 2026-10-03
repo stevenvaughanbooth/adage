@@ -9,7 +9,6 @@
 //! by the identity ring on the session state (`SessionState::seen_pretool`).
 
 use serde_json::Value;
-use sha2::{Digest, Sha256};
 
 /// What a mod's `PreToolUse` asks for.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -81,8 +80,7 @@ impl Phase {
 /// The 64-bit hash a call's harness identity is kept as (`SessionState::seen_pretool`): the first
 /// eight bytes of its SHA-256, so the state stays small and the identity's text is never stored.
 pub fn identity_hash(identity: &str) -> u64 {
-    let h = Sha256::digest(identity.as_bytes());
-    u64::from_le_bytes([h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7]])
+    adage_runtime::identity_hash(identity)
 }
 
 #[cfg(test)]

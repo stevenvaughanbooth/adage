@@ -466,6 +466,17 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   (the mod's `skill.prompt`) answers the skill's text as the model reads it with those lines added
   under a fixed, dated heading (sanitised, at most 2,400 bytes); the control arm changes nothing
   and records `would_annotate`.
+- **A skill edited after it was accepted is neither invoked nor annotated.** `verified.json` names
+  the skill file it was trained from (`skill.path`), and both `SkillPrompt` and a `skill`
+  prediction read that file again first: unless it still hashes to the record, nothing is added and
+  nothing is invoked, and whether it is inert is read from the file, not the record. A record from
+  an earlier build has no path and is not used until the skill is trained again.
+- **Predictions per session are a setting, and a withheld decision leaves the call as it was.**
+  `runtime.predict_cap` (default 6, 0 to 50, guarded) bounds the steps a session's model does not
+  take; it was fixed at 6. In the control arm and in the mod's observe mode a learned substitution
+  is recorded `would_substitute` without deciding the call, so the interpreter rewrite still
+  decides it exactly as without the mod. A call the mod answered with a receipt is observed once,
+  not again when the batch lists it.
 
 ### Review, packs and sharing
 
@@ -502,6 +513,17 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   with it. `graph --json` gives each reflex's `offers`, `status --json` the packs awaiting trust,
   and the terminal UI's routes view shows predict grants (docs/execution.md, "Deciding from the
   session").
+- **A press is harder to forge, and what it trusts must predate its session.** A window opens only
+  for a start that names the session's own transcript, and a session whose window opened while
+  another session on the machine was mid-turn (as a start written from a Bash call always is) has
+  its press refused for good, in any repository, whatever acts in it later; before, acting in it
+  once made it live. The tripwire reads a command with the shell's quotes taken out (`"Pr"ess`)
+  and warns from the command hook, which the mod's own asks no longer pre-empt. `adage add --trust`
+  takes a press only for a pack committed before the session opened and unchanged on disk since.
+  A verb reads stdin for a press only inside an agent session, so CI with an open pipe waits for
+  nothing. `adage-exec status` lists prediction grants apart, and `adage-exec revoke` revokes
+  execution grants unless `--mode predict` is given (before, both). A session resumed a second
+  time no longer warns that something else claimed its press.
 
 ### Seeing it
 

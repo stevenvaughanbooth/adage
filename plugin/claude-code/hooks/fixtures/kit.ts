@@ -60,6 +60,8 @@ export const LINE = {
   pressIssued: decision(0, SESSION, 'press_issued', []),
   /** A second issue for the same start: something else claimed the window (the tamper signal). */
   pressIssuedAgain: decision(8, SESSION, 'press_issued', []),
+  /** A third issue for the session: more than a start and its one resume. */
+  pressIssuedThird: decision(9, SESSION, 'press_issued', []),
   /** A tool batch that completed a candidate's context (plan D2): noticed once, in both arms. */
   noticed: (n: number, candidate: string, ids: string[], over: Record<string, unknown> = {}) =>
     decision(n, SESSION, 'tools', [{ act: 'noticed', candidate, support: 2, s_min: 3, review: false, ...over }], [], { tool_use_ids: ids }),

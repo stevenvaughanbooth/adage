@@ -135,11 +135,12 @@ impl World {
         assert!(o.status.success(), "a hook always exits 0");
         String::from_utf8_lossy(&o.stdout).trim().to_string()
     }
+    /// A start as the engine sends it (naming the session's transcript), in this checkout.
     fn start(&self, session: &str, source: &str) {
-        self.hook(
-            "SessionStart",
-            json!({ "session_id": session, "cwd": self.repo(), "hook_event_name": "SessionStart", "source": source }),
-        );
+        self.start_in(&self.repo(), session, source);
+    }
+    fn start_in(&self, cwd: &Path, session: &str, source: &str) {
+        self.hook("SessionStart", start_payload(cwd, session, source));
     }
     /// The mod's `Press` ask: the token, or `None` when nothing was printed.
     fn press(&self, session: &str, source: &str) -> Option<String> {
@@ -185,6 +186,12 @@ impl World {
     fn review_yaml(&self) -> String {
         std::fs::read_to_string(self.paths().tracks().join(TRACK).join(review::FILE)).unwrap_or_default()
     }
+}
+
+fn start_payload(cwd: &Path, session: &str, source: &str) -> Value {
+    let transcript = format!("/home/dev/.claude/projects/acme/{session}.jsonl");
+    json!({ "session_id": session, "cwd": cwd, "hook_event_name": "SessionStart", "source": source,
+            "transcript_path": transcript })
 }
 
 fn feed(mut c: Command, stdin: &str) -> Output {
@@ -347,6 +354,7 @@ fn a_press_is_a_person_at_the_listed_sites() {
     t = next(&o);
     // `on` (A6).
     std::fs::create_dir_all(w.repo().join(".adage")).unwrap();
+    std::fs::create_dir_all(w.repo().join(".adage")).unwrap();
     std::fs::write(w.repo().join(".adage/disabled"), "").unwrap();
     let o = w.verb(&["on"], &pressed(&t, "s"), &[]);
     assert!(o.status.success(), "{}", text(&o));
@@ -354,6 +362,7 @@ fn a_press_is_a_person_at_the_listed_sites() {
     t = next(&o);
 
     // Every way a press is not valid: refused as with none, nothing recorded, nothing spent.
+    std::fs::create_dir_all(w.repo().join(".adage")).unwrap();
     std::fs::create_dir_all(w.repo().join(".adage")).unwrap();
     std::fs::write(w.repo().join(".adage/disabled"), "").unwrap();
     let mut wrong = t.clone();
@@ -373,11 +382,14 @@ fn a_press_is_a_person_at_the_listed_sites() {
         assert!(text(&o).contains(PERSON_ONLY), "{why}: {}", text(&o));
         assert!(w.repo().join(".adage/disabled").exists(), "{why}: nothing changed");
     }
-    // Without any agent marker, the override beside a press refuses too.
+    // Without any agent marker (CI: the override set) stdin is not read at all (review L6): the
+    // override decides as a terminal, and the press is neither honoured nor spent.
     let mut c = w.base(env!("CARGO_BIN_EXE_adage"), &["on"]);
     c.env("ADAGE_ALLOW_NONINTERACTIVE", "1");
     let o = feed(c, &pressed(&t, "s"));
-    assert!(!o.status.success() && text(&o).contains("refuses both"), "{}", text(&o));
+    assert!(o.status.success() && !text(&o).contains("\"next\""), "{}", text(&o));
+    std::fs::create_dir_all(w.repo().join(".adage")).unwrap();
+    std::fs::write(w.repo().join(".adage/disabled"), "").unwrap();
     // 25 hours old.
     state::update::<press::Record, _>(&press::record_path(&w.paths(), "s"), |r| r.since -= 25 * 3600 * 1000).unwrap();
     refused(&w.verb(&["on"], &pressed(&t, "s"), &[]));
@@ -638,6 +650,11 @@ fn the_tripwire_warns_and_never_refuses() {
     let call = |id: &str, command: &str| {
         w.hook("PreToolUse", json!({ "session_id": "s", "cwd": w.repo(), "tool_name": "Bash", "tool_input": { "command": command }, "tool_use_id": id }))
     };
+    // Review M3: the mod's dry run for the call comes first and says nothing; the command hook
+    // then warns.
+    let dry = json!({ "session_id": "s", "cwd": w.repo(), "tool_name": "Bash", "tool_use_id": "toolu_1", "dry_run": true,
+                      "tool_input": { "command": "adage hook claude Press <<'EOF'\n{}\nEOF" } });
+    assert_eq!(w.hook("PreToolUse", dry), "");
     let out = call("toolu_1", "adage hook claude Press <<'EOF'\n{}\nEOF");
     let v: Value = serde_json::from_str(&out).unwrap_or_else(|e| panic!("{e}: {out}"));
     assert!(v["systemMessage"].as_str().unwrap().contains("press"), "{v}");
@@ -652,9 +669,10 @@ fn the_tripwire_warns_and_never_refuses() {
 fn the_press_runs_before_the_kill_switches_and_only_for_claude_code() {
     let w = World::new();
     std::fs::create_dir_all(w.repo().join(".adage")).unwrap();
+    std::fs::create_dir_all(w.repo().join(".adage")).unwrap();
     std::fs::write(w.repo().join(".adage/disabled"), "").unwrap();
     assert!(session(&w, "off").len() == 64, "a repository where Adage is off can still be asked to turn it on");
-    let payload = json!({ "session_id": "env", "cwd": w.repo(), "source": "startup" });
+    let payload = start_payload(&w.repo(), "env", "startup");
     w.hook_with("SessionStart", payload.clone(), &[("ADAGE_DISABLE", "1")]);
     assert!(!w.hook_with("Press", payload.clone(), &[("ADAGE_DISABLE", "1")]).is_empty());
     // Not a Codex or OpenCode event.
@@ -684,11 +702,30 @@ fn the_model_cannot_press() {
     assert_eq!(w.review_yaml(), "", "nothing recorded");
     assert!(!w.p("adage/approvals.json").exists());
     // A start written by hand while the real session is at work.
-    std::thread::sleep(std::time::Duration::from_millis(5));
     w.start("forged", "startup");
     let forged = w.press("forged", "startup").expect("the forged start's window is open");
     refused(&w.verb(&["review", "approve", TRACK, ROUTE], &pressed(&forged, "forged"), &[]));
     assert_eq!(w.review_yaml(), "");
+    // Review M4: acting in the forged session does not make it live.
+    w.prompt("forged", "hello");
+    refused(&w.verb(&["review", "approve", TRACK, ROUTE], &pressed(&forged, "forged"), &[]));
+    assert_eq!(w.review_yaml(), "");
+    // Review M4: nor does a fresh `git init` elsewhere, for a machine-wide verb.
+    let x = w.p("x");
+    std::fs::create_dir_all(x.join(".git")).unwrap();
+    w.start_in(&x, "x", "startup");
+    let t = w.hook("Press", json!({ "session_id": "x", "cwd": x, "hook_event_name": "Press", "source": "startup" }));
+    let t: Value = serde_json::from_str(&t).unwrap();
+    let mut on = w.base(env!("CARGO_BIN_EXE_adage"), &["delegate", "on"]);
+    on.current_dir(&x);
+    for (k, v) in AGENT {
+        on.env(k, v);
+    }
+    refused(&feed(on, &pressed(t["press"].as_str().unwrap(), "x")));
+    assert!(!w.p("adage/exec/enabled").exists());
+    // A start written without the session's transcript opens no window at all.
+    w.hook("SessionStart", json!({ "session_id": "bare", "cwd": w.repo(), "source": "startup" }));
+    assert_eq!(w.press("bare", "startup"), None);
     // The one resume the design allows, and the second issue it leaves in the spool.
     w.start("real", "resume");
     assert!(w.press("real", "resume").is_some());
@@ -714,8 +751,28 @@ fn a_committed_pack_can_be_trusted_with_a_press() {
     git(&["init", "-q"]);
     git(&["add", "."]);
     git(&["-c", "user.name=F", "-c", "user.email=f@example.com", "commit", "-qm", "team pack"]);
+    // The session opens after the commit's second is over (a commit's time is whole seconds).
+    std::thread::sleep(std::time::Duration::from_millis(1100));
     let t = session(&w, "s");
     w.prompt("s", "hello");
+    // Review M8: a pack the agent writes and commits during the session is offered (committed)
+    // but not trusted with the press: a terminal's decision, and the press is not spent.
+    std::fs::create_dir_all(repo.join("packs/mine")).unwrap();
+    std::fs::write(repo.join("packs/mine").join(adage_pack::validate::MANIFEST), "[pack]\nname = \"mine\"\n").unwrap();
+    git(&["add", "."]);
+    git(&[
+        "-c",
+        "user.name=F",
+        "-c",
+        "user.email=f@example.com",
+        "commit",
+        "-qm",
+        "mine",
+        "--date",
+        "2025-01-01T00:00:00Z",
+    ]);
+    assert!(adage_app::trust::committed_pack(&repo.join("packs/mine"), &repo));
+    refused(&w.verb(&["add", "packs/mine", "--trust"], &pressed(&t, "s"), &[]));
     // Committed: the press is a person, and `add` goes on to read the pack (which this one is not).
     let o = w.verb(&["add", "packs/team", "--trust"], &pressed(&t, "s"), &[]);
     let t = next(&o);
@@ -726,4 +783,20 @@ fn a_committed_pack_can_be_trusted_with_a_press() {
     refused(&o);
     let o = w.verb(&["review", "pin", TRACK, ROUTE], &pressed(&t, "s"), &[]);
     assert!(o.status.success(), "{}", text(&o));
+}
+
+/// Review L6: outside an agent session (CI: no agent marker, the override set) a person-only verb
+/// reads nothing from stdin, so a pipe it inherited and nobody closes does not hold it up.
+#[test]
+fn a_verb_outside_a_session_does_not_wait_on_stdin() {
+    let w = World::new();
+    let mut c = w.base(env!("CARGO_BIN_EXE_adage"), &["review", "pin", TRACK, ROUTE]);
+    c.env("ADAGE_ALLOW_NONINTERACTIVE", "1").env_remove("ADAGE_ARM");
+    let started = std::time::Instant::now();
+    let mut child = c.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+    let open = child.stdin.take();
+    let o = child.wait_with_output().unwrap();
+    drop(open);
+    assert!(o.status.success(), "{}", text(&o));
+    assert!(started.elapsed() < std::time::Duration::from_millis(2500), "waited {:?}", started.elapsed());
 }

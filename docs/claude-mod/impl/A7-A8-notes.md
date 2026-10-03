@@ -343,3 +343,43 @@ plugin/claude-code-exec/                the retired alias (adage-exec@adage), on
 The disk filled repeatedly during this work (five agents, one `target/`); I deleted only older
 duplicate test executables in `target/debug/deps` (cargo relinks them) and
 `target/debug/incremental`, as the rules allow.
+
+## Review fixes
+
+The binary's half of the branch review's press findings (REVIEW.md numbering), each with its
+test. The mod's half (H1, H2, M1, L4, L8) is in B4-D5-notes.md, "Review fixes".
+
+| Finding | What changed | Test |
+| --- | --- | --- |
+| **M3** The tripwire's warning was swallowed by the mod's own `dry_run` ask (the mod reads no `systemMessage` from it), and recorded twice | `press::gate` runs the tripwire only for a command hook's payload (`!harness::claude::is_mods(event, p)`): the mod's dry run and verdict for the call still close the window and mark the turn, but neither warn nor record. The command hook's `systemMessage`, the path §3.12 names, then warns once | `press::tests::the_tripwire_warns_once` (dry run, verdict and `via: mod` record nothing; the command hook warns); `adage-cli/tests/press.rs::the_tripwire_warns_and_never_refuses` (a dry run first, then the warning, two records for two command-hook calls) |
+| **M4** A Bash command could mint a press for a fresh `git init` directory (or, by forging one closer event, in the session's own repository) and run machine-wide verbs | Three changes. (1) `open` opens a window only for a start whose `transcript_path` ends `<session_id>.jsonl`, as every engine start does (the sim's payloads already did; the file need not exist, since Claude Code writes it lazily). (2) "Live" is now `Record.contested`, fixed when the window opens: a session is contested when another session on this machine is mid-turn then. Mid-turn is a marker, `sessions/<id>.press-turn`, created or touched (`set_modified`) by `UserPromptSubmit` and `PreToolUse`, removed by `Stop` and `SessionEnd`, and ignored once untouched for `press::TURN_MS` (1 h, so a session that died mid-turn stops contesting). A Bash call's `PreToolUse` always comes before the command runs, so a start it writes is contested. `spend` refuses a contested session's press with `NotLive`, for every verb, in every repository, for good: acting in it later no longer makes it live (the old `live()`, root-scoped with a 24 h age-out and the `closed` excuse, is gone). (3) `names_press` strips `"`, `'` and `\` before matching, and reads the event word up to its first non-alphanumeric character (`'Press'<p.json`, `Press\|tee`) | `press::tests::a_start_written_by_hand_is_not_the_live_session` (forged start refused, still refused after it acts; a fresh `git init` refused for `delegate on`; after `Stop` a second terminal's press works; a stale mark stops contesting; `SessionEnd` removes it); `a_start_without_its_transcript_opens_nothing`; `the_tripwire_warns_once` (five quoted forms); `press.rs::the_model_cannot_press` (forged start then a prompt in it, `delegate on` in a fresh repository, a start with no transcript) |
+| **M7** A second `--resume` of one session raised the tamper alarm | The binary allows one reissue per session id by design, so this is the mod's count: a one-line change in `plugin/claude-code/hooks/register.ts` `issuePress` (unavoidable: the alarm is computed there). A resume this engine process got no token for counts `issued = 2`, the two issues (start and one resume) the spool holds legitimately, where it counted 0. A third issue still alarms | `dialog.test.ts`: `M7: a second resume … raises no tamper alarm …`; `M7: a third issue … is tampering` (fixture line `LINE.pressIssuedThird`) |
+| **M8** `committed_pack` accepted a pack the agent wrote and committed in the session | The rule, `adage_app::trust::committed_before(src, root, since)`: committed at `HEAD` with the work tree's bytes (as before), and the commit that brought the pack's content to `HEAD` (`gitobj::Repo::committed_at`, first-parent walk while the pack's tree id is unchanged; its committer second wholly before `since`), and no file or directory of the pack changed on disk since `since` (status-change time on Unix, which no command short of the system clock sets; the modification time elsewhere). `since` is the press session's `Record.opened` (`adage_app::person::press_opened`). `add --trust` reads stdin first, then applies it; without a press (a terminal) the rule is the old one. `status --json`'s `packs_awaiting_trust` still lists committed packs (so the mod may ask), and the press is then refused for a recent one. The commit date alone is the committer's choice (`GIT_COMMITTER_DATE`), which is why the on-disk time is checked too. The ask's wording ("signed by …" from the pack's manifest) is the mod's and unchanged | `trust::tests::a_pack_committed_in_the_session_is_not_trusted_with_its_press` (a pack written in the session and committed with a date a year back: refused; one committed in the session from older files: refused; the earlier pack: trusted); `press.rs::a_committed_pack_can_be_trusted_with_a_press` (the agent's pack refused with the press, the team's taken) |
+| **L6** Every review verb waited up to 3 s on stdin whenever it was not a terminal | `adage_app::person::read_press()`: stdin is read only when an agent marker is set (the mod runs every verb with `CLAUDECODE=1`); `review delegate --confirm` still reads its `expect` everywhere. With no marker (a terminal, CI) nothing is read: a press piped beside `ADAGE_ALLOW_NONINTERACTIVE=1` with no marker is now ignored (neither honoured nor spent) where it was refused "both"; with a marker it is refused as before | `press.rs::a_verb_outside_a_session_does_not_wait_on_stdin` (an open, never-closed pipe: done well under 3 s); `a_press_is_refused_everywhere_else` (the no-marker case updated) |
+
+### What the press is now, and the residual (plainly)
+
+What holds: a press is issued only between an engine-shaped start and that session's first act;
+a start written while any Claude Code session on the machine is mid-turn (every start a Bash call
+writes, since the call's own `PreToolUse` marked its session first) yields a press no verb
+honours, in any repository; and the tripwire sees the forms the design names, quoting included.
+
+What does not, and is not claimed: an agent with a shell can still mint a usable press by
+forging more of the protocol. It can write a `Stop` (or `SessionEnd`) payload for its own session
+id first, which clears the mid-turn mark; it can start a background process that waits until the
+turn has ended; it can name the transcript path any start needs; and it can read a press from a
+file or build the event name from a variable, which the tripwire does not see. A Codex or OpenCode
+session's turn is not marked at all (only Claude Code's hooks run the gate). All of these forge
+hook payloads or the session's own state, which architecture §3.12 already says the press does
+not stand against ("a boundary against an agent that runs as the same user … which can … forge a
+hook payload"). The cost on the person's side: a session started while another one is mid-turn
+cannot press for its whole life (its answers wait, as when the window was missed).
+
+### Commands run (in /home/user/adage-poc)
+
+See A1-A2-C5-notes.md, "Review fixes", for the whole run; the press-specific results: `cargo test
+-p adage-cli --test press` 12 pass; `cargo test -p adage-hook --lib press` 6 pass;
+`cargo test -p adage-app --lib trust` 2 pass; `claude plugin test plugin/claude-code` 274 pass, 0
+fail (272 before; the two M7 tests added); `claude plugin validate --strict` for
+`plugin/claude-code`, `plugin/claude-code-exec` and `.` pass, and the first's output still equals
+`VALIDATE.txt` (unchanged); `node scripts/check-plugin.mjs` ok.

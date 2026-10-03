@@ -303,3 +303,9 @@ building; no other flag, the shared `target/`).
 - `cargo test -p xtask`: 18 passed.
 - `cargo build --release -p adage-learn --examples`, then `target/release/examples/candidates_bench 300 2 3`
   and `candidates_bench 24 2 5`: above.
+
+## Review fixes
+
+| Finding | What changed | Test |
+| --- | --- | --- |
+| **L5** `candidates::read_all` sorted by id and cut at 128, keeping alphabetical order where `normalize` promises the most support; `read` had no size bound | `read_all` keeps one entry per id (the strongest: `(review, support)`), and past `MAX_CANDIDATES` keeps the strongest, ties by id, then sorts by id: the rule `normalize` applies when the learner writes, now also for a file it did not write. `read` reads at most `MAX_FILE_BYTES` (8 MiB, far above 128 entries of 256 session ids) and refuses a larger file | `candidates::tests::read_all_keeps_the_strongest_past_the_bound` (138 entries, the 10 weakest with the lowest ids: all cut; a file grown past the bound is refused) |

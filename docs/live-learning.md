@@ -77,6 +77,7 @@ control = 0.1             # share of sessions held out as the control arm (0–1
 | `runtime.control` | `0.1` | `ADAGE_CONTROL` (any number; 1 or more is shadow mode, as before) |
 | `runtime.rewrite` | `true` | — (`adage delegate rewrites on\|off`; see docs/execution.md) |
 | `runtime.routine_model` | `""` | — (the Claude Code mod sends a step that only does what a delivered directive says to this model, at low effort; the hook is told only that one is set) |
+| `runtime.predict_cap` | `6` | — (a person's setting: at most this many steps per session Adage takes in the model's place under a `predict` grant, 0 to 50; 0 predicts none) |
 | `skills.invoke` | `false` | — (a person's setting: the Claude Code mod may invoke an inert, accepted skill at a `skill` reflex's step, under its `predict` grant; see docs/training.md) |
 
 Environment variables win over the file, and the file over the defaults. An unparseable file, an
@@ -91,7 +92,8 @@ adage config set <key> <value>   validated, written atomically
 
 Keys that change what Adage learns from or how much evidence it needs (`learn.repos`,
 `learn.thresholds`, `learn.claude_projects`, `learn.codex_sessions`, `learn.opencode_exports`,
-`instincts.packs`) need
+`instincts.packs`), and the two that let Adage act in the model's place (`runtime.predict_cap`,
+`skills.invoke`), need
 a person: a terminal (or `ADAGE_ALLOW_NONINTERACTIVE=1`), never inside an agent session, and
 never a press from the Claude Code session (a guarded key is set at a terminal only). Every
 other key only tunes Adage or turns something down, and can be set from anywhere.

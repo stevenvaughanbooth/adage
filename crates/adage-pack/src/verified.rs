@@ -28,6 +28,8 @@ pub const MAX_STEPS: usize = 64;
 pub const MAX_TEXT: usize = 600;
 /// At most this many staged skills are looked through for one name ([`find`]).
 pub const MAX_SKILLS: usize = 256;
+/// The largest skill file read again at use ([`current`]), in bytes.
+pub const MAX_SKILL_BYTES: u64 = 1024 * 1024;
 
 /// One skill's replay record.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -51,14 +53,18 @@ pub struct Verified {
     pub accepted_at: Option<String>,
 }
 
-/// The skill: its name as the harness lists it, the SHA-256 of the file compiled, and whether
-/// invoking it runs nothing by itself ([`inert`]).
+/// The skill: its name as the harness lists it, the SHA-256 of the file compiled, whether
+/// invoking it runs nothing by itself ([`inert`]), and where the file compiled is.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Skill {
     pub name: String,
     pub sha256: String,
     pub inert: bool,
+    /// The skill file `adage train` compiled, absolute. Read again at every use ([`current`]): a
+    /// record without one (written before it was kept) is never used.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub path: String,
 }
 
 /// One compiled step and what its replay found.
@@ -121,6 +127,9 @@ impl Verified {
         }
         if !crate::validate::sha256_hex_ok(&s.sha256) {
             bail!("verified.json: skill sha256 is not lowercase hex SHA-256");
+        }
+        if s.path.len() > 4096 || !(s.path.is_empty() || Path::new(&s.path).is_absolute()) {
+            bail!("verified.json: skill path is not an absolute path of at most 4096 bytes");
         }
         if self.repo.is_empty() || self.repo.len() > 256 {
             bail!("verified.json: repo {:?} is not allowed", self.repo);
@@ -206,16 +215,36 @@ pub fn find(skills: &Path, name: &str, repo: &str) -> Option<(PathBuf, Verified)
     find_all(skills, repo).into_iter().find(|(_, v)| v.skill.name == name)
 }
 
-/// Every accepted record for the repository `repo` under `skills`, as [`find`] reads them.
+/// Every accepted record for the repository `repo` under `skills`, as [`find`] reads them: the
+/// first [`MAX_SKILLS`] directories in name order, whatever order the directory lists them in.
 pub fn find_all(skills: &Path, repo: &str) -> Vec<(PathBuf, Verified)> {
     let Ok(rd) = std::fs::read_dir(skills) else { return Vec::new() };
     let mut dirs: Vec<PathBuf> =
-        rd.flatten().filter(|e| e.file_type().is_ok_and(|t| t.is_dir())).map(|e| e.path()).take(MAX_SKILLS).collect();
+        rd.flatten().filter(|e| e.file_type().is_ok_and(|t| t.is_dir())).map(|e| e.path()).collect();
     dirs.sort();
+    dirs.truncate(MAX_SKILLS);
     dirs.into_iter()
         .filter_map(|d| read(&d).ok().map(|v| (d, v)))
         .filter(|(_, v)| v.accepted() && v.repo == repo)
         .collect()
+}
+
+/// The skill as it is now, when it is still the file the record was compiled from: `Some(inert)`
+/// (recomputed from the file's text, [`inert`]) when the file at the record's path is a regular
+/// file of at most [`MAX_SKILL_BYTES`] whose SHA-256 is the record's; `None` when it changed, is
+/// gone, or the record names no file. A skill edited after a person accepted its record (a
+/// dynamic-context block added, say) is then neither invoked nor annotated.
+pub fn current(v: &Verified) -> Option<bool> {
+    if v.skill.path.is_empty() {
+        return None;
+    }
+    let p = Path::new(&v.skill.path);
+    let meta = std::fs::metadata(p).ok()?;
+    if !meta.is_file() || meta.len() > MAX_SKILL_BYTES {
+        return None;
+    }
+    let bytes = std::fs::read(p).ok()?;
+    (crate::digest::sha256_hex(&bytes) == v.skill.sha256).then(|| inert(&String::from_utf8_lossy(&bytes)))
 }
 
 /// Whether invoking a skill whose `SKILL.md` is `text` runs nothing by itself (architecture
@@ -252,7 +281,7 @@ mod tests {
     fn sample() -> Verified {
         Verified {
             schema: SCHEMA.into(),
-            skill: Skill { name: "acme-work-item".into(), sha256: "a".repeat(64), inert: true },
+            skill: Skill { name: "acme-work-item".into(), sha256: "a".repeat(64), inert: true, path: String::new() },
             repo: "acme@0123456789ab".into(),
             pack: "acme/skill-acme-work-item".into(),
             digest: "b".repeat(64),
@@ -327,6 +356,48 @@ mod tests {
         assert!(bad.check().is_err());
         let mut bad = sample();
         bad.accepted_at = Some("soon".into());
+        assert!(bad.check().is_err());
+    }
+
+    /// Review L2: past [`MAX_SKILLS`] staged skills, the ones read are the first in name order.
+    #[test]
+    fn find_all_takes_the_first_skills_in_name_order() {
+        let home = tempfile::tempdir().unwrap();
+        let skills = home.path().join("train/skills");
+        let mut v = sample();
+        v.accepted_at = Some("2026-10-03".into());
+        for i in 0..=MAX_SKILLS {
+            let dir = skills.join(format!("s{i:04}"));
+            std::fs::create_dir_all(&dir).unwrap();
+            if i == 0 || i == MAX_SKILLS {
+                v.skill.name = format!("s{i:04}");
+                write(&dir, &v).unwrap();
+            }
+        }
+        let names: Vec<String> = find_all(&skills, &v.repo).into_iter().map(|(_, v)| v.skill.name).collect();
+        assert_eq!(names, ["s0000"]);
+    }
+
+    /// Review M5: a record is used only while the skill file it names is the file compiled; its
+    /// inertness is read again from that file.
+    #[test]
+    fn a_record_is_current_only_while_its_skill_file_is_unchanged() {
+        let home = tempfile::tempdir().unwrap();
+        let file = home.path().join("SKILL.md");
+        let text = "---\nname: acme-work-item\n---\n\nRun `make test`.\n";
+        std::fs::write(&file, text).unwrap();
+        let mut v = sample();
+        assert_eq!(current(&v), None, "no path: never used");
+        v.skill.path = file.to_string_lossy().into_owned();
+        v.skill.sha256 = crate::digest::sha256_hex(text.as_bytes());
+        v.check().unwrap();
+        assert_eq!(current(&v), Some(true));
+        std::fs::write(&file, format!("{text}The branch: !`git branch --show-current`\n")).unwrap();
+        assert_eq!(current(&v), None, "changed after it was compiled");
+        std::fs::remove_file(&file).unwrap();
+        assert_eq!(current(&v), None, "gone");
+        let mut bad = sample();
+        bad.skill.path = "relative/SKILL.md".into();
         assert!(bad.check().is_err());
     }
 

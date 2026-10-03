@@ -13,6 +13,10 @@
 //! This module also says which skills a `skill` step may invoke at a `TurnStep`
 //! ([`invocable`]): only an inert skill in an accepted record, and only while the person has
 //! turned `skills.invoke` on.
+//!
+//! Both read the skill file again first (`verified::current`): a skill whose file no longer hashes
+//! to its record (edited since it was compiled and accepted) is neither annotated nor invoked,
+//! and its inertness is read from the file, never taken from the record alone.
 
 use crate::failopen::{self, Failure};
 use crate::harness::{Adapter, Harness};
@@ -87,7 +91,7 @@ pub fn invocable(paths: &Paths, root: &Path) -> Vec<String> {
     let key = repo::repo_key(root);
     verified::find_all(&skills_dir(paths), &key)
         .into_iter()
-        .filter(|(_, v)| v.skill.inert)
+        .filter(|(_, v)| v.skill.inert && verified::current(v) == Some(true))
         .map(|(_, v)| v.skill.name)
         .collect()
 }
@@ -113,6 +117,9 @@ pub fn prompt(
     }
     let key = repo::repo_key(root);
     let Some((_, record)) = verified::find(&skills_dir(paths), skill, &key) else { return Ok(None) };
+    if verified::current(&record).is_none() {
+        return Ok(None);
+    }
     let Some((added, works, stale)) = annotation(&record) else { return Ok(None) };
     // The arm, assigned here if this is the session's first decision (as `PreToolUse` does).
     let arm_env = std::env::var("ADAGE_ARM").ok();
@@ -162,7 +169,7 @@ mod tests {
     fn record(steps: Vec<Step>) -> Verified {
         Verified {
             schema: verified::SCHEMA.into(),
-            skill: Skill { name: "acme-work-item".into(), sha256: "a".repeat(64), inert: true },
+            skill: Skill { name: "acme-work-item".into(), sha256: "a".repeat(64), inert: true, path: String::new() },
             repo: "acme@0123456789ab".into(),
             pack: "acme/skill-acme-work-item".into(),
             digest: "b".repeat(64),
@@ -225,19 +232,33 @@ mod tests {
         let stage = |name: &str, inert: bool, accepted: bool| {
             let dir = skills_dir(&paths).join(name);
             std::fs::create_dir_all(&dir).unwrap();
+            let file = repo.join(".claude/skills").join(name).join("SKILL.md");
+            std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+            let text = if inert { "Run `make test`.\n" } else { "---\ncontext: fork\n---\nRun `make test`.\n" };
+            std::fs::write(&file, text).unwrap();
             let mut v = record(vec![step("make test", Outcome::Works, None, "2026-10-03")]);
             v.skill.name = name.into();
             v.skill.inert = inert;
+            v.skill.sha256 = adage_pack::digest::sha256_hex(text.as_bytes());
+            v.skill.path = file.to_string_lossy().into_owned();
             v.repo = key.clone();
             v.accepted_at = accepted.then(|| "2026-10-03".into());
             verified::write(&dir, &v).unwrap();
+            file
         };
         stage("release-checklist", true, true);
         stage("forked", false, true);
         stage("unreviewed", true, false);
+        let edited = stage("edited", true, true);
         assert!(invocable(&paths, &repo).is_empty(), "skills.invoke is off by default");
         adage_store::config::set(&paths, "skills.invoke", "true").unwrap();
+        assert_eq!(invocable(&paths, &repo), ["edited", "release-checklist"]);
+        // Review M5: a skill edited after its record was accepted (a dynamic-context block added)
+        // is not invoked; neither is one whose file is gone.
+        std::fs::write(&edited, "Run `make test`.\nThe branch: !`git branch --show-current`\n").unwrap();
         assert_eq!(invocable(&paths, &repo), ["release-checklist"]);
+        std::fs::remove_file(repo.join(".claude/skills/release-checklist/SKILL.md")).unwrap();
+        assert!(invocable(&paths, &repo).is_empty());
         assert!(rewrites_skill_text(Harness::ClaudeCode));
         assert!(!rewrites_skill_text(Harness::Codex) && !rewrites_skill_text(Harness::OpenCode));
     }

@@ -196,7 +196,8 @@ pack's deterministic digest, and nothing in it sets a strength or a grant.
 
 ```json
 { "schema": "adage-train-verified/1",
-  "skill": { "name": "acme-work-item", "sha256": "<hex>", "inert": true },
+  "skill": { "name": "acme-work-item", "sha256": "<hex>", "inert": true,
+             "path": "/home/dev/acme/.claude/skills/acme-work-item/SKILL.md" },
   "repo": "github.com/acme/billing", "pack": "billing/skill-acme-work-item", "digest": "<hex>",
   "steps": [
     { "id": "s4", "route": "acme-work-item-s4-verify", "command": "make test", "result": "works",
@@ -225,7 +226,11 @@ Adage verified these steps in this repository on 2026-10-03:
 Only verified and stale steps are listed, every value sanitised, at most 2,400 bytes. The skill
 file is untouched. A changed skill (a new `sha256`) is staged unaccepted until it is accepted
 again; training the same skill again into the same pack keeps the acceptance. In the control arm
-the text is unchanged and `would_annotate` is recorded.
+the text is unchanged and `would_annotate` is recorded. The skill file is read again at every
+use: when the file at `path` no longer hashes to `sha256` (edited since it was trained and
+accepted, or gone), nothing is added to its text, and it is never invoked; `inert` is read from
+the file again, not taken from the record. A record without a `path` (written by an earlier
+build) is not used until the skill is trained again.
 
 `inert` also decides whether a `skill` reflex may invoke the skill in the model's place
 (the mod's `turn.step`): only an inert skill, accepted here, with `adage config set skills.invoke

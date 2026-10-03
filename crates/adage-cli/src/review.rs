@@ -543,7 +543,15 @@ pub(crate) fn waiting_words(needs: usize, look: usize) -> Option<String> {
 /// since the one just spent is refused from now on, whatever the verb goes on to do. Every other
 /// person-only command keeps [`crate::share::require_person`], which never reads a press.
 pub(crate) fn person_or_press(cmd: &str, paths: &Paths) -> Result<(adage_app::Person, adage_app::person::Stdin)> {
-    let stdin = adage_app::person::read_stdin();
+    person_from(cmd, paths, adage_app::person::read_press())
+}
+
+/// [`person_or_press`] over a stdin already read.
+pub(crate) fn person_from(
+    cmd: &str,
+    paths: &Paths,
+    stdin: adage_app::person::Stdin,
+) -> Result<(adage_app::Person, adage_app::person::Stdin)> {
     let person = adage_app::person::require_or_press(cmd, stdin.press.as_ref(), paths)?;
     if let Some(next) = person.next() {
         use std::io::Write;

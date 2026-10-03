@@ -1100,8 +1100,10 @@ async function issuePress($: EngineInterface, e: { session_id?: string; source?:
   const cwd = typeof e.cwd === 'string' && e.cwd !== '' ? e.cwd : await $.session.cwd()
   const asked = await ask(runner($), hook, 'Press', { session_id: session, cwd, hook_event_name: 'Press', source, via: 'mod' }, PRESS_TIMEOUT_MS)
   const token = asked.ok && isObject(asked.answer) && isToken(asked.answer.press) ? asked.answer.press : ''
-  // A resume reissues once for the same id: the spool then holds two issues at most.
-  const issued = token === '' ? (same ? was.issued : 0) : source === 'resume' ? 2 : (same ? was.issued : 0) + 1
+  // A resume reissues once for the same id: the spool then holds two issues at most. A resume
+  // this process got nothing for (a second resume, after the binary's one reissue) counts the
+  // same two, so the spool's own two issues are not taken for tampering.
+  const issued = token === '' ? (same ? was.issued : source === 'resume' ? 2 : 0) : source === 'resume' ? 2 : (same ? was.issued : 0) + 1
   const next: Press =
     token !== ''
       ? { session, token, state: same && was.state === 'off' ? 'off' : 'held', issued, chain: same ? was.chain : 0 }

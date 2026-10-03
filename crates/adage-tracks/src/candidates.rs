@@ -49,6 +49,9 @@ pub const LEARNED_TRACK: &str = "learned";
 pub const MAX_CANDIDATES: usize = 128;
 /// At most this many session ids recorded per candidate (or per formed reflex).
 pub const MAX_SESSIONS: usize = 256;
+/// The largest `candidates.json` read, in bytes: well above what [`MAX_CANDIDATES`] entries of
+/// [`MAX_SESSIONS`] ids each take, so only a file not written by the learner is refused.
+pub const MAX_FILE_BYTES: u64 = 8 << 20;
 
 /// A candidate as the index holds it (and as the hook reads it).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -260,7 +263,14 @@ pub fn path(tracks_root: &Path, repo: &str) -> PathBuf {
 
 /// Read one `candidates.json`.
 pub fn read(path: &Path) -> Result<CandidateFile> {
-    let bytes = std::fs::read(path).with_context(|| path.display().to_string())?;
+    use std::io::Read;
+    let mut bytes = Vec::new();
+    std::fs::File::open(path)
+        .and_then(|f| f.take(MAX_FILE_BYTES + 1).read_to_end(&mut bytes))
+        .with_context(|| path.display().to_string())?;
+    if bytes.len() as u64 > MAX_FILE_BYTES {
+        bail!("{}: larger than {MAX_FILE_BYTES} bytes", path.display());
+    }
     let f: CandidateFile = serde_json::from_slice(&bytes).with_context(|| path.display().to_string())?;
     if f.schema != SCHEMA {
         bail!("{}: schema {:?}, not {SCHEMA:?}", path.display(), f.schema);
@@ -310,9 +320,16 @@ pub fn read_all(tracks_root: &Path) -> BTreeMap<String, Vec<Candidate>> {
         if cs.is_empty() {
             continue;
         }
-        cs.sort_by(|a, b| a.id.cmp(&b.id));
+        // One per id (the strongest), and past the bound the strongest kept, as `normalize` keeps
+        // them: a file the learner did not write is held to the same rule.
+        let strength = |c: &Candidate| (c.review, c.support);
+        cs.sort_by(|a, b| a.id.cmp(&b.id).then(strength(b).cmp(&strength(a))));
         cs.dedup_by(|a, b| a.id == b.id);
-        cs.truncate(MAX_CANDIDATES);
+        if cs.len() > MAX_CANDIDATES {
+            cs.sort_by(|a, b| strength(b).cmp(&strength(a)).then(a.id.cmp(&b.id)));
+            cs.truncate(MAX_CANDIDATES);
+            cs.sort_by(|a, b| a.id.cmp(&b.id));
+        }
         out.entry(f.repo.clone()).or_default().extend(cs);
     }
     out
@@ -399,6 +416,28 @@ mod tests {
         v["schema"] = "adage-candidates/9".into();
         std::fs::write(path(dir.path(), "acme-billing"), v.to_string()).unwrap();
         assert!(read_all(dir.path()).is_empty());
+    }
+
+    /// Review L5: a file over the bound (one the learner did not write) is read with the
+    /// strongest candidates kept, not the first ids; a file over the byte bound is not read.
+    #[test]
+    fn read_all_keeps_the_strongest_past_the_bound() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut f = CandidateFile::new("acme-billing", 5);
+        // The weakest have the lowest ids: an id-order cut would keep them.
+        f.candidates =
+            (0..MAX_CANDIDATES + 10).map(|i| entry(&format!("run-{i:06}"), if i < 10 { 1 } else { 3 })).collect();
+        let p = path(dir.path(), "acme-billing");
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(&p, serde_json::to_vec(&f).unwrap()).unwrap();
+        let all = read_all(dir.path());
+        let cs = &all["acme-billing"];
+        assert_eq!(cs.len(), MAX_CANDIDATES);
+        assert!(cs.iter().all(|c| c.support == 3), "the least seen are cut");
+        assert!(cs.windows(2).all(|w| w[0].id < w[1].id));
+        let big = std::fs::File::options().append(true).open(&p).unwrap();
+        big.set_len(MAX_FILE_BYTES + 1).unwrap();
+        assert!(read(&p).is_err());
     }
 
     #[test]

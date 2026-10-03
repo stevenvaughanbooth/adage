@@ -5,7 +5,15 @@
 //! It is not a boundary against an agent that runs as the same user with a shell (nothing in
 //! Adage is). It is a record that a person, not the model, decided (`via: press`), and a guard
 //! against steering: the model can only call tools, and a Bash command it is talked into running
-//! gets no token, because the only window in which one is issued has closed by then.
+//! gets no token, because the only window in which one is issued has closed by then, and a start
+//! it writes for a new session id lands while its own session is mid-turn ([`Record::contested`]).
+//!
+//! **Open.** The command hooks' `SessionStart` opens the window, and only for a payload that names
+//! the session's own transcript (`transcript_path` ending `<session_id>.jsonl`, as every start
+//! the engine sends does). A session whose window opened while another Claude Code session on
+//! this machine was mid-turn ([`turn_path`]: from its prompt or tool call to its `Stop`, an hour
+//! at most since its last) is *contested* for good: every verb refuses its press. A start written
+//! from a Bash call is always written mid-turn, by the session running that call.
 //!
 //! **Issue.** `adage hook claude Press` (payload `{ session_id, cwd, source }`), asked by the mod
 //! right after the command hooks' `SessionStart`, answers `{ "press": <64 hex> }` (32 random
@@ -22,13 +30,15 @@
 //! ([`Record`], the session state's locked two-slot format). A verb that accepts a press reads `{
 //! press, session }` on stdin and calls [`spend`]: the hash must match (compared in constant
 //! time), the token must be under 24 hours old, the session must not have ended, the verb must run
-//! in the session's repository, and the session must be the repository's live one ([`live`]). A
+//! in the session's repository, and the session must not be contested. A
 //! spent token is replaced by the next one in the chain, which the verb prints; the old one is
 //! refused from then on. `SessionEnd` clears the hash.
 //!
-//! **Tripwire.** A Bash call that names `hook claude Press`, or carries a press on its stdin, is
-//! recorded (`tripwire`) and the person is warned once per session. It is never refused: advice,
-//! not a boundary.
+//! **Tripwire.** A Bash call that names `hook claude Press` (quotes and backslashes ignored, so
+//! `"Pr"ess` names it too), or carries a press on its stdin heredoc, is recorded (`tripwire`) and
+//! the person is warned once per session, by the command hook (the mod's own asks for the same
+//! call neither warn nor record: their answer is never shown). It is never refused: advice, not a
+//! boundary. A press read from a file, or a name the shell builds, goes unseen.
 //!
 //! Every spool record here is a fact, never the token: `press_issued`, `press_spent`, `tripwire`.
 
@@ -51,6 +61,10 @@ pub const CLOSERS: &[&str] =
 
 /// How long a token is honoured after it was issued.
 pub const MAX_AGE_MS: u64 = 24 * 60 * 60 * 1000;
+
+/// How long a session counts as mid-turn after its last prompt or tool call with no `Stop`: a
+/// session that died mid-turn (no `Stop`, no `SessionEnd`) stops contesting new starts after this.
+pub const TURN_MS: u64 = 60 * 60 * 1000;
 
 /// The press state of one session. The token itself is never stored, only its SHA-256.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -86,6 +100,10 @@ pub struct Record {
     /// The person was warned once about a press seen in a Bash command.
     #[serde(default)]
     pub warned: bool,
+    /// The window opened while another session on this machine was mid-turn: as a start written
+    /// from that session's Bash call is. Every verb refuses this session's press, for good.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub contested: bool,
 }
 
 /// `sessions/<id>.press`: the session's [`Record`].
@@ -96,6 +114,12 @@ pub fn record_path(paths: &Paths, session: &str) -> PathBuf {
 /// `sessions/<id>.press-open`: present while the window is open.
 pub fn window_path(paths: &Paths, session: &str) -> PathBuf {
     paths.sessions().join(format!("{}.press-open", sanitise(session)))
+}
+
+/// `sessions/<id>.press-turn`: present while the session is mid-turn (made or touched by a prompt
+/// or a tool call, removed by `Stop` and `SessionEnd`).
+pub fn turn_path(paths: &Paths, session: &str) -> PathBuf {
+    paths.sessions().join(format!("{}.press-turn", sanitise(session)))
 }
 
 /// SHA-256 of the raw token, as hex.
@@ -161,8 +185,13 @@ pub fn gate(harness: &str, event: &str, p: &Value, session: &str, cwd: &Path, pa
         }
         e if CLOSERS.contains(&e) => {
             close(session, paths);
+            turn(e, session, paths);
+            // The mod's asks (a dry run, a verdict) come before the command hook for the same
+            // call; their answer is never shown, so only the command hook warns (and records).
             match (e, off) {
-                ("PreToolUse", false) => tripwire(p, session, paths).map_or(Gate::Pass, |w| Gate::Answer(Some(w))),
+                ("PreToolUse", false) if !harness::claude::is_mods(e, p) => {
+                    tripwire(p, session, paths).map_or(Gate::Pass, |w| Gate::Answer(Some(w)))
+                }
                 _ => Gate::Pass,
             }
         }
@@ -191,15 +220,19 @@ fn open(p: &Value, session: &str, cwd: &Path, paths: &Paths) {
     if source == "compact" {
         return;
     }
+    if !names_own_transcript(p, session) {
+        return;
+    }
     let path = record_path(paths, session);
     let fresh = !path.exists();
     if !fresh && source != "resume" {
         return;
     }
     let root = root_of(cwd);
+    let contested = busy_elsewhere(paths, session);
     let opened = state::update::<Record, _>(&path, |r| {
         if fresh {
-            *r = Record { opened: now(), root, ..Record::default() };
+            *r = Record { opened: now(), root, contested, ..Record::default() };
             if source == "resume" {
                 r.resumed = true;
             }
@@ -207,6 +240,7 @@ fn open(p: &Value, session: &str, cwd: &Path, paths: &Paths) {
         } else if !r.resumed && !r.ended {
             r.resumed = true;
             r.issued = false;
+            r.contested |= contested;
             true
         } else {
             false
@@ -214,6 +248,50 @@ fn open(p: &Value, session: &str, cwd: &Path, paths: &Paths) {
     });
     if opened.unwrap_or(false) {
         let _ = std::fs::write(window_path(paths, session), b"");
+    }
+}
+
+/// The start the engine sends names the session's transcript, `<session_id>.jsonl` (the file need
+/// not exist yet). A payload without one opens no window.
+fn names_own_transcript(p: &Value, session: &str) -> bool {
+    p.get("transcript_path")
+        .and_then(Value::as_str)
+        .map(Path::new)
+        .is_some_and(|t| t.extension().is_some_and(|x| x == "jsonl") && t.file_stem().is_some_and(|s| s == session))
+}
+
+/// Another session on this machine is mid-turn now: its [`turn_path`] exists and was touched less
+/// than [`TURN_MS`] ago.
+fn busy_elsewhere(paths: &Paths, session: &str) -> bool {
+    let mine = turn_path(paths, session);
+    let Ok(dir) = std::fs::read_dir(paths.sessions()) else { return false };
+    let now = std::time::SystemTime::now();
+    dir.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "press-turn") && *p != mine).any(
+        |p| {
+            std::fs::metadata(&p)
+                .and_then(|m| m.modified())
+                .is_ok_and(|t| now.duration_since(t).map_or(true, |d| d.as_millis() <= u128::from(TURN_MS)))
+        },
+    )
+}
+
+/// A prompt or a tool call marks the session mid-turn (touching the marker, so a long turn stays
+/// marked); `Stop` clears it. A failure loses the mark, never the event.
+fn turn(event: &str, session: &str, paths: &Paths) {
+    let path = turn_path(paths, session);
+    match event {
+        "UserPromptSubmit" | "PreToolUse" => {
+            let _ = std::fs::OpenOptions::new()
+                .create(true)
+                .truncate(false)
+                .write(true)
+                .open(&path)
+                .and_then(|f| f.set_modified(std::time::SystemTime::now()));
+        }
+        "Stop" => {
+            let _ = std::fs::remove_file(path);
+        }
+        _ => {}
     }
 }
 
@@ -230,6 +308,7 @@ fn close(session: &str, paths: &Paths) {
 /// `SessionEnd`: every token of the session is refused from now on.
 fn end(session: &str, paths: &Paths) {
     let _ = std::fs::remove_file(window_path(paths, session));
+    let _ = std::fs::remove_file(turn_path(paths, session));
     let path = record_path(paths, session);
     if path.exists() {
         let _ = state::update::<Record, _>(&path, |r| {
@@ -281,12 +360,16 @@ fn tripwire(p: &Value, session: &str, paths: &Paths) -> Option<String> {
     warn.then(|| json!({ "systemMessage": text }).to_string())
 }
 
-/// The command asks for a press (`hook claude Press`) or hands one to a verb (`"press"` on its
-/// stdin: a heredoc, an `echo` or a `printf`).
+/// The command asks for a press (`hook claude Press`, read with the shell's quotes and backslashes
+/// taken out, so `"Pr"ess`, `P\ress` and `'Press'<p.json` name it too) or hands one to a verb
+/// (`"press"` on its stdin: a heredoc, an `echo` or a `printf`). A name the shell builds from a
+/// variable or a substitution is not read.
 pub fn names_press(command: &str) -> bool {
-    let words: Vec<&str> = command.split_whitespace().collect();
-    words.windows(3).any(|w| w[0] == "hook" && w[1] == "claude" && w[2].trim_matches(['"', '\'']) == EVENT)
-        || command.contains("\"press\"")
+    let bare: String = command.chars().filter(|c| !matches!(c, '"' | '\'' | '\\')).collect();
+    let words: Vec<&str> = bare.split_whitespace().collect();
+    words.windows(3).any(|w| {
+        w[0] == "hook" && w[1] == "claude" && w[2].split(|c: char| !c.is_ascii_alphanumeric()).next() == Some(EVENT)
+    }) || command.contains("\"press\"")
         || command.contains("\\\"press\\\"")
 }
 
@@ -304,8 +387,8 @@ pub enum Refused {
     Ended,
     /// The verb runs in another repository than the session.
     OtherRepository,
-    /// Another session in this repository was already at work when this one started, and this
-    /// one has not acted yet ([`live`]).
+    /// Another session on this machine was mid-turn when this one started
+    /// ([`Record::contested`]).
     NotLive,
     /// No token could be minted for the next link.
     Unavailable,
@@ -319,7 +402,7 @@ impl Refused {
             Refused::Stale => "the press is more than 24 hours old",
             Refused::Ended => "the session has ended",
             Refused::OtherRepository => "the press belongs to a session in another repository",
-            Refused::NotLive => "the press belongs to a session that is not this repository's live session",
+            Refused::NotLive => "the press belongs to a session started while another session was at work",
             Refused::Unavailable => "no next press could be made",
         }
     }
@@ -336,7 +419,7 @@ pub fn spend(paths: &Paths, token: &str, session: &str, root: &str, cmd: &str) -
     if current.root != root {
         return Err(Refused::OtherRepository);
     }
-    if !live(paths, session, &current) {
+    if current.contested {
         return Err(Refused::NotLive);
     }
     let next = mint().ok_or(Refused::Unavailable)?;
@@ -363,26 +446,6 @@ pub fn spend(paths: &Paths, token: &str, session: &str, root: &str, cmd: &str) -
     Ok(next)
 }
 
-/// Whether `session` is a live session of its repository: one the agent has acted in, or, before
-/// that, one that started while no other session there was at work. A start written by hand (a
-/// `SessionStart` payload for a new id, from a Bash call in a running session) comes after that
-/// running session acted, so its press is refused until something acts in it too.
-pub fn live(paths: &Paths, session: &str, me: &Record) -> bool {
-    if me.closed.is_some() {
-        return true;
-    }
-    let mine = record_path(paths, session);
-    let Ok(dir) = std::fs::read_dir(paths.sessions()) else { return true };
-    let at = now();
-    !dir.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "press") && *p != mine).any(|p| {
-        state::read::<Record>(&p).is_ok_and(|r| {
-            r.root == me.root
-                && !r.ended
-                && r.closed.is_some_and(|c| c <= me.opened && at.saturating_sub(c) <= MAX_AGE_MS)
-        })
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -395,8 +458,10 @@ mod tests {
         (dir, paths, repo)
     }
 
+    /// A start as the engine sends it: it names the session's transcript.
     fn payload(session: &str, cwd: &Path, source: &str) -> Value {
-        json!({ "session_id": session, "cwd": cwd, "source": source })
+        let transcript = format!("/home/dev/.claude/projects/p/{session}.jsonl");
+        json!({ "session_id": session, "cwd": cwd, "source": source, "transcript_path": transcript })
     }
 
     fn start(paths: &Paths, repo: &Path, session: &str, source: &str) {
@@ -514,31 +579,77 @@ mod tests {
         assert_eq!(state::read::<Record>(&record_path(&paths, "s")).unwrap().hash, None);
     }
 
-    /// T-X-13 (L2, the hand-written start): a start for a new session id, written while another
-    /// session in the repository is at work, yields a token no verb in that repository honours.
+    /// T-X-13 (L2, the hand-written start), and review M4: a start written while another session
+    /// on this machine is mid-turn (as a Bash call's always is) is contested for good, in this
+    /// repository or a fresh one, whatever acts in it later; a start after that session's `Stop`,
+    /// or after its mark went stale, is not.
     #[test]
     fn a_start_written_by_hand_is_not_the_live_session() {
         let (_d, paths, repo) = world();
         start(&paths, &repo, "real", "startup");
         let real = press(&paths, &repo, "real", "startup").unwrap();
         act(&paths, &repo, "real", "UserPromptSubmit");
-        std::thread::sleep(std::time::Duration::from_millis(5));
+        assert!(turn_path(&paths, "real").exists(), "mid-turn");
         start(&paths, &repo, "forged", "startup");
         let forged = press(&paths, &repo, "forged", "startup").unwrap();
         let root = root_of(&repo);
         assert_eq!(spend(&paths, &forged, "forged", &root, "review approve"), Err(Refused::NotLive));
+        // Acting in the forged session (a hand-written prompt) does not make it live.
+        act(&paths, &repo, "forged", "UserPromptSubmit");
+        assert_eq!(spend(&paths, &forged, "forged", &root, "review approve"), Err(Refused::NotLive));
         assert!(spend(&paths, &real, "real", &root, "review approve").is_ok());
-        // Another repository's verb refuses the real token too.
-        let other = repo.parent().unwrap().join("other");
+        // A fresh `git init` elsewhere, for a machine-wide verb: refused the same way.
+        let other = repo.parent().unwrap().join("x");
         std::fs::create_dir_all(other.join(".git")).unwrap();
-        let next = state::read::<Record>(&record_path(&paths, "real")).unwrap();
-        assert!(next.hash.is_some());
+        start(&paths, &other, "elsewhere", "startup");
+        let t = press(&paths, &other, "elsewhere", "startup").unwrap();
+        assert_eq!(spend(&paths, &t, "elsewhere", &root_of(&other), "delegate on"), Err(Refused::NotLive));
+        // Another repository's verb refuses the real token too.
         assert_eq!(spend(&paths, "00", "real", &root_of(&other), "on"), Err(Refused::OtherRepository));
+        // The real session's turn ends (and the forged ones'): a start in another terminal now is
+        // the person's, and its press is honoured.
+        for s in ["real", "forged"] {
+            act(&paths, &repo, s, "Stop");
+        }
+        assert!(!turn_path(&paths, "real").exists());
+        start(&paths, &other, "second", "startup");
+        let t = press(&paths, &other, "second", "startup").unwrap();
+        assert!(spend(&paths, &t, "second", &root_of(&other), "delegate on").is_ok());
+        // A session that died mid-turn stops contesting an hour after its last act.
+        act(&paths, &repo, "real", "PreToolUse");
+        let stale = std::time::SystemTime::now() - std::time::Duration::from_millis(TURN_MS + 60_000);
+        std::fs::File::options().write(true).open(turn_path(&paths, "real")).unwrap().set_modified(stale).unwrap();
+        start(&paths, &repo, "third", "startup");
+        let t = press(&paths, &repo, "third", "startup").unwrap();
+        assert!(spend(&paths, &t, "third", &root, "on").is_ok());
+        // SessionEnd removes the mark.
+        act(&paths, &repo, "real", "PreToolUse");
+        let p = json!({ "session_id": "real", "cwd": repo });
+        assert_eq!(gate("claude", "SessionEnd", &p, "real", &repo, &paths, false), Gate::Pass);
+        assert!(!turn_path(&paths, "real").exists());
         // Before anything acts, a lone session's press is honoured.
         let (_d2, paths2, repo2) = world();
         start(&paths2, &repo2, "only", "startup");
         let t = press(&paths2, &repo2, "only", "startup").unwrap();
         assert!(spend(&paths2, &t, "only", &root_of(&repo2), "on").is_ok());
+    }
+
+    /// Review M4: a start that does not name the session's own transcript (as a payload written
+    /// by hand from the review's example does not) opens no window.
+    #[test]
+    fn a_start_without_its_transcript_opens_nothing() {
+        let (_d, paths, repo) = world();
+        for p in [
+            json!({ "session_id": "f", "cwd": repo, "source": "startup" }),
+            json!({ "session_id": "f", "cwd": repo, "source": "startup", "transcript_path": "/t/other.jsonl" }),
+            json!({ "session_id": "f", "cwd": repo, "source": "startup", "transcript_path": "/t/f.txt" }),
+        ] {
+            assert_eq!(gate("claude", "SessionStart", &p, "f", &repo, &paths, false), Gate::Pass);
+            assert!(!window_path(&paths, "f").exists(), "{p}");
+            assert_eq!(press(&paths, &repo, "f", "startup"), None);
+        }
+        start(&paths, &repo, "f", "startup");
+        assert!(press(&paths, &repo, "f", "startup").is_some());
     }
 
     /// T-A7-08 at the unit level: recorded every time, warned once, never a refusal.
@@ -547,6 +658,18 @@ mod tests {
         assert!(names_press("adage hook claude Press < p.json"));
         assert!(names_press("adage review approve t r <<'EOF'\n{\"press\": \"ab\", \"session\": \"s\"}\nEOF"));
         assert!(names_press("echo '{\"press\":\"x\"}' | adage on"));
+        // Review M4: the shell's quoting does not hide the name.
+        for evasive in [
+            "adage hook claude \"Pr\"ess < p.json",
+            "adage hook claude P\\ress < p.json",
+            "adage hook claude 'Press'<p.json",
+            "adage 'hook' \"claude\" Pr''ess",
+            "cat p.json | adage hook claude Press|tee out",
+        ] {
+            assert!(names_press(evasive), "{evasive}");
+        }
+        assert!(!names_press("adage hook claude PressRelease"));
+        assert!(!names_press("adage hook claude PreToolUse < p.json"));
         assert!(!names_press("adage review approve t r"));
         assert!(!names_press("git commit -m 'press the button'"));
         let (_d, paths, repo) = world();
@@ -558,6 +681,20 @@ mod tests {
         assert_eq!(gate("claude", "PreToolUse", &p, "s", &repo, &paths, false), Gate::Pass);
         let recs: Vec<Value> = spool::read_all(&paths.spool("s")).unwrap();
         assert_eq!(recs.iter().filter(|r| r["kind"] == "tripwire").count(), 2);
+        // Review M3: the mod's asks for a call (a dry run, a verdict) neither warn nor record; the
+        // command hook that follows them warns, once.
+        let (_d2, paths2, _) = world();
+        for phase in [json!({ "dry_run": true }), json!({ "verdict": { "engine": "same" } }), json!({ "via": "mod" })] {
+            let mut m = p.clone();
+            for (k, v) in phase.as_object().unwrap() {
+                m[k] = v.clone();
+            }
+            assert_eq!(gate("claude", "PreToolUse", &m, "s", &repo, &paths2, false), Gate::Pass, "{m}");
+        }
+        assert!(spool::read_all::<Value>(&paths2.spool("s")).unwrap_or_default().is_empty());
+        let Gate::Answer(Some(_)) = gate("claude", "PreToolUse", &p, "s", &repo, &paths2, false) else {
+            panic!("the command hook warns")
+        };
         // Not under a kill switch, and not for another harness.
         assert_eq!(gate("claude", "PreToolUse", &p, "s", &repo, &paths, true), Gate::Pass);
         assert_eq!(gate("codex", EVENT, &p, "s", &repo, &paths, false), Gate::Pass);

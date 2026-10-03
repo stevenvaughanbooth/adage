@@ -218,6 +218,63 @@ impl Repo {
     }
 }
 
+impl Repo {
+    /// The id of the tree or blob at `rel` in `commit`'s tree (`None` when absent).
+    fn entry_at(&mut self, commit: &Oid, rel: &str) -> Option<Oid> {
+        let (kind, body) = self.object(commit, MAX_COMMIT)?;
+        if kind != OBJ_COMMIT {
+            return None;
+        }
+        let first = body.split(|&b| b == b'\n').next()?;
+        let mut id = parse_hex(std::str::from_utf8(first.strip_prefix(b"tree ")?).ok()?)?;
+        for part in rel.split('/').filter(|p| !p.is_empty() && *p != ".") {
+            let (kind, tree) = self.object(&id, MAX_COMMIT)?;
+            if kind != OBJ_TREE {
+                return None;
+            }
+            id = tree_entry(&tree, part)?.1;
+        }
+        Some(id)
+    }
+
+    /// When the content at `rel` (a file or a directory) in `HEAD`'s tree was committed: the
+    /// committer time, in seconds since the epoch, of the oldest commit on `HEAD`'s first-parent
+    /// history that already held exactly this content, the walk stopping at [`MAX_WALK`]. `None`
+    /// when `HEAD` does not hold `rel`. The time is what the commit says, which whoever made the
+    /// commit chose.
+    pub fn committed_at(&mut self, rel: &str) -> Option<u64> {
+        let mut cur = self.head()?;
+        let want = self.entry_at(&cur, rel)?;
+        let mut at = None;
+        for _ in 0..MAX_WALK {
+            let (kind, body) = self.object(&cur, MAX_COMMIT)?;
+            if kind != OBJ_COMMIT {
+                return None;
+            }
+            at = committer_time(&body).or(at);
+            match first_parent(&body) {
+                Some(p) if self.entry_at(&p, rel) == Some(want) => cur = p,
+                _ => break,
+            }
+        }
+        at
+    }
+}
+
+/// The committer time of a commit (`committer <who> <secs> <zone>`, among the headers).
+fn committer_time(body: &[u8]) -> Option<u64> {
+    for line in body.split(|&b| b == b'\n') {
+        if line.is_empty() {
+            break;
+        }
+        if let Some(c) = line.strip_prefix(b"committer ") {
+            let c = std::str::from_utf8(c).ok()?;
+            return c.rsplit(' ').nth(1)?.parse().ok();
+        }
+    }
+    None
+}
+
 const OBJ_TREE: u8 = 2;
 const OBJ_BLOB: u8 = 3;
 
@@ -501,6 +558,13 @@ mod tests {
         assert_eq!(tree_entry(&tree, "run"), Some(("100755".into(), [3; 20])));
         assert_eq!(tree_entry(&tree, "pac"), None);
         assert_eq!(tree_entry(&tree[..30], "run"), None, "a truncated tree");
+    }
+
+    #[test]
+    fn the_committer_time_is_read_from_the_headers() {
+        let body = "tree 1111111111111111111111111111111111111111\nauthor A <a@b> 100 +0000\ncommitter C D <c@d> 1700000000 +0200\n\ncommitter x <y> 5 +0000\n";
+        assert_eq!(committer_time(body.as_bytes()), Some(1_700_000_000));
+        assert_eq!(committer_time(b"tree 1\n\ncommitter C <c> 5 +0000\n"), None);
     }
 
     #[test]

@@ -189,6 +189,11 @@ pub struct SessionState {
     /// Never rebuilt from the spool: a rebuilt state starts empty, which can only decide again.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub seen_pretool: Vec<u64>,
+    /// The calls the mod answered with a receipt's result ([`answered_by_receipt`], which observed
+    /// them), by the same hash, at most [`SEEN_PRETOOL`]: a `PostToolBatch` that lists one again
+    /// does not observe it twice.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub answered: Vec<u64>,
     /// The standing text the Claude Code mod placed in the session's cached system-prompt
     /// section (the `Standing` event; the plan's `has_standing`): answered the same for the rest of
     /// the session, and the first prompt does not announce its routes again.
@@ -229,11 +234,31 @@ pub struct Noticed {
     pub review: bool,
 }
 
+/// The 64-bit hash a call's harness identity (its `tool_use_id`) is kept as in the session state
+/// ([`SessionState::seen_pretool`], [`SessionState::answered`]): the first eight bytes of its
+/// SHA-256, so the state stays small and the identity's text is never stored.
+pub fn identity_hash(identity: &str) -> u64 {
+    use sha2::{Digest, Sha256};
+    let h = Sha256::digest(identity.as_bytes());
+    u64::from_le_bytes([h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7]])
+}
+
 /// At most this many `PreToolUse` identities are kept per session ([`SessionState::seen_pretool`]).
 pub const SEEN_PRETOOL: usize = 64;
 
 impl SessionState {
     /// Whether the `PreToolUse` call with this identity hash was decided this session.
+    /// Record that the call with this identity hash was answered by a receipt (and observed).
+    pub fn see_answered(&mut self, id: u64) {
+        if self.answered.contains(&id) {
+            return;
+        }
+        if self.answered.len() >= SEEN_PRETOOL {
+            self.answered.remove(0);
+        }
+        self.answered.push(id);
+    }
+
     pub fn has_seen_pretool(&self, id: u64) -> bool {
         self.seen_pretool.contains(&id)
     }
@@ -901,6 +926,11 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
             // A failed call the failure hook just reported, listed again in this batch.
             let mut open_failure = syms.as_ref().and_then(|_| st.ctx.open_failure(&net));
             let mut cand_open_failure = csyms.as_ref().and_then(|_| st.cand_ctx.open_failure(&cnet));
+            // A call the mod answered with a receipt was observed then: listed in the batch too,
+            // it is not observed again.
+            let answered =
+                |c: &&Call| c.tool_use_id.as_deref().is_some_and(|id| st.answered.contains(&identity_hash(id)));
+            let calls: Vec<&Call> = calls.iter().filter(|c| !answered(c)).collect();
             for call in calls {
                 for name in added_tests(call, ctx.root) {
                     if st.new_tests.len() < MAX_NEW_TESTS && !st.new_tests.contains(&name) {

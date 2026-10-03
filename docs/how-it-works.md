@@ -169,7 +169,8 @@ recorded as running nothing when it expands (no dynamic-context block, no `conte
 pack the person accepted, with `adage config set skills.invoke true` and a `predict` grant on the
 reflex. Verifying in place: whenever any trained skill expands, however it was invoked, its text
 reaches the model with a dated list of the steps the replay verified here or found stale
-(`verified.json`, [training](training.md#verified-in-place)). The control arm does neither and
+(`verified.json`, [training](training.md#verified-in-place)). Both read the skill file again
+first: a skill edited since it was trained and accepted is neither invoked nor annotated. The control arm does neither and
 records what it would have done.
 
 A procedure card is useful learned guidance, but delivering it is not evidence of CPU execution.

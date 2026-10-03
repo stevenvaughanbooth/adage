@@ -224,10 +224,18 @@ pub fn add(args: &[String], paths: &Paths) -> Result<()> {
     };
     let cwd_root = at.and_then(|d| d.canonicalize().ok()).and_then(|d| find_root(&d));
     // A team's pack committed in this repository can be trusted with a press from the session
-    // (architecture §3.12: the same trust as the repository's CLAUDE.md); anything else, a pack
-    // from outside the repository or one changed since its commit, needs a terminal.
-    if trust && cwd_root.as_deref().is_some_and(|root| adage_app::trust::committed_pack(&src, root)) {
-        crate::review::person_or_press("add --trust", paths)?;
+    // (architecture §3.12: the same trust as the repository's CLAUDE.md), when it is older than
+    // that session (review M8: committed before it opened, unchanged on disk since); anything
+    // else, a pack from outside the repository, one changed since its commit, or one written or
+    // committed during the press's session, needs a terminal.
+    if let Some(root) = cwd_root.as_deref().filter(|root| trust && adage_app::trust::committed_pack(&src, root)) {
+        let stdin = adage_app::person::read_press();
+        let since = stdin.press.as_ref().map(|p| adage_app::person::press_opened(paths, &p.session).unwrap_or(0));
+        if since.is_none_or(|t| adage_app::trust::committed_before(&src, root, t)) {
+            crate::review::person_from("add --trust", paths, stdin)?;
+        } else {
+            require_person("add")?;
+        }
     } else {
         require_person("add")?;
     }

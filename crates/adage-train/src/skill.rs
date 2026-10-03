@@ -90,6 +90,10 @@ pub struct Outcome {
     pub dir: PathBuf,
     /// The skill runs nothing when it is invoked ([`adage_pack::verified::inert`]).
     pub inert: bool,
+    /// The skill file compiled, absolute: `verified.json` names it, and the hook reads it again
+    /// at every use.
+    #[serde(skip)]
+    pub skill_file: PathBuf,
 }
 
 /// The repository a skill is compiled for.
@@ -303,6 +307,7 @@ pub fn run(o: &Options) -> Result<Outcome> {
         pack_name,
         dir: dir.clone(),
         inert,
+        skill_file: o.skill.canonicalize().unwrap_or_else(|_| std::path::absolute(&o.skill).unwrap_or_default()),
     };
     stage(&mut out)?;
     Ok(out)
@@ -420,6 +425,7 @@ pub fn verified(out: &Outcome, date: &str) -> adage_pack::verified::Verified {
             name: clean_text(&c.graph.skill.name).chars().take(64).collect(),
             sha256: c.graph.skill.sha256.clone(),
             inert: out.inert,
+            path: out.skill_file.to_string_lossy().into_owned(),
         },
         repo: out.repo_key.clone(),
         pack: out.pack_name.clone(),

@@ -397,7 +397,7 @@ its pin; only a script run by an interpreter named in argv (`python3`, `node`, `
 ```text
 adage-exec run     --repo <dir> --argv '<json array>' [request flags] [--dry-run] [--record]
 adage-exec approve --repo <dir> --argv '<json array>' [request flags] [--by <name>]
-adage-exec revoke  --repo <dir> [--track <t> --route <r>]
+adage-exec revoke  --repo <dir> [--track <t> --route <r>] [--mode execute|predict]
 adage-exec status  --repo <dir>
 adage-exec journal [--repo <dir>]
 adage-exec recover --id <operation-id> --acknowledge
@@ -406,7 +406,9 @@ adage-exec version
 ```
 
 `version` prints `adage-exec <version>` on one line and exits 0, reading nothing: it is the Claude
-Code mod's activation probe.
+Code mod's activation probe. `status` lists execution grants, then prediction grants (a step taken
+in the model's place, `adage review delegate --predict`) apart, when there are any; `revoke`
+revokes execution grants unless `--mode predict` names the others.
 
 Request flags: `--input k=v` and `--contract k=<anchored regex>` (one per `{slot}` in the argv
 template), `--effect observe`, `--level e1|e2`, `--output typed|raw`, `--fields '<json>'`,
@@ -632,31 +634,46 @@ and a token is issued only before its first act.
   agent-side event (`UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `PostToolBatch`,
   `PostToolUseFailure`, `Stop`, `TurnStep`) closes it, before the kill switches and the fast path,
   whether or not anything is recorded. `Press` itself runs before the kill switches, so a
-  repository where Adage is off can still be asked to turn it on. Claude Code only.
+  repository where Adage is off can still be asked to turn it on. Claude Code only. Only a start
+  that names the session's own transcript (`transcript_path` ending `<session_id>.jsonl`, as
+  every start Claude Code sends does) opens a window.
 - **Kept.** The binary keeps the token's SHA-256 only, in `sessions/<id>.press` (the window is the
   file `sessions/<id>.press-open`); the spool gets a `press_issued` record (and `press_spent`,
   `tripwire`), never the token.
 - **Spent.** A verb run by the mod reads `{ "press", "session" }` on stdin (never argv). It is
   honoured when the hash matches (compared in constant time), the token is under 24 hours old,
   the session has not ended (`SessionEnd` clears the hash), the verb runs in the session's
-  repository, and the session is the repository's live one: one the agent has acted in, or that
-  started while no other session there was at work (a `SessionStart` written by hand for a new
-  session id, from a running session's shell, is not). The verb then behaves exactly as at a
+  repository, and the session is not *contested*: its window did not open while another Claude
+  Code session on this machine was mid-turn (from a prompt or tool call to its `Stop`, an hour at
+  most since its last; marked by `sessions/<id>.press-turn`). A `SessionStart` written by hand
+  from a running session's Bash call is always written mid-turn, so its press is refused for good,
+  in that repository or any other, whatever acts in it later. A person who starts a second
+  session while another is mid-turn gets the same refusal there; that session's answers wait for
+  a later one, or a terminal. The verb then behaves exactly as at a
   terminal and prints `{ "next": <token> }` as its **first line** on stdout: the token it spent is
   refused from then on. Anything else (a wrong, spent, stale or foreign token, or a press beside
   `ADAGE_ALLOW_NONINTERACTIVE=1`) behaves exactly as no press: the person-only refusal, nothing
-  written, nothing spent.
+  written, nothing spent. Stdin is read (waiting up to 3 s for the writer) only inside an agent
+  session, where a press can be: with no agent variable set (a terminal, CI) a verb reads nothing
+  and waits for nothing, so a press piped there is neither honoured nor spent.
 - **Where.** Only `adage review approve|strengthen|weaken|extinguish|pin|dismiss`, `review revoke`,
   `review delegate` (every level, and `--predict`), `delegate on` (under a press it writes the
   plugin's marker only, and names the settings-file, Codex or OpenCode registrations that still
   need a terminal), `delegate policy --max-level e2`, `delegate predict on`, `adage on`, and `adage
   add <pack> --trust` for a pack directory committed in the repository and unchanged since its
-  commit (the same trust as the repository's `CLAUDE.md`). `install`, a guarded `config set`,
+  commit (the same trust as the repository's `CLAUDE.md`), and older than the press's session: the
+  commit that brought the pack's content to `HEAD` was made before the session's window opened,
+  and no file or directory of the pack has changed on disk since then (its status-change time,
+  which only the system clock sets). A pack written or committed during the session, by the agent
+  or anyone, needs a terminal. `install`, a guarded `config set`,
   `share`, `train accept`, `packs on`, `init`, `add` without `--trust` and every `adage-exec` verb
   refuse a press. Turning something down (`delegate off`, `policy --max-level e1`, `predict off`,
   `off`) needs no press, as before.
-- **Tripwire.** A Bash call that names `hook claude Press`, or carries `"press"` on its stdin, is
-  recorded and the person is warned once per session. It is never refused.
+- **Tripwire.** A Bash call that names `hook claude Press` (the shell's quotes and backslashes
+  taken out first, so `"Pr"ess` names it too), or carries `"press"` on its stdin heredoc, is
+  recorded and the person is warned once per session, by the command hook (the mod's own asks
+  for the call record nothing). It is never refused, and it does not see a press read from a file
+  or a name built from a variable.
 
 **Stage, then confirm.** An action is two acts, the facts between. `adage review delegate <track>
 <reflex> --level e1|e2 [terms] --stage --json` records nothing and answers, as one JSON object:

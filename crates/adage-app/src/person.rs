@@ -123,6 +123,16 @@ pub fn read_stdin() -> Stdin {
     rx.recv_timeout(STDIN_WAIT).map(|b| parse_stdin(&b)).unwrap_or_default()
 }
 
+/// [`read_stdin`] where a press may be on it: only inside an agent session (an agent marker set;
+/// the mod runs every verb with `CLAUDECODE=1`). At a terminal, or in CI (no marker), nothing is
+/// read and nothing waited for, so an inherited pipe that stays open costs a verb nothing.
+pub fn read_press() -> Stdin {
+    if agent_var().is_none() {
+        return Stdin::default();
+    }
+    read_stdin()
+}
+
 /// [`read_stdin`]'s parse, apart for tests.
 pub fn parse_stdin(bytes: &[u8]) -> Stdin {
     let Ok(raw) = serde_json::from_slice::<Raw>(bytes) else { return Stdin::default() };
@@ -158,6 +168,13 @@ pub fn require_or_press(cmd: &str, press: Option<&Press>, paths: &Paths) -> Resu
         Ok(next) => Ok(Person { via: Via::Press, next: Some(next) }),
         Err(_) => require(cmd),
     }
+}
+
+/// When the press session `session` opened its window (ms since the epoch): what a press is held
+/// to where its verb asks whether something is older than the session (`add --trust`).
+pub fn press_opened(paths: &Paths, session: &str) -> Option<u64> {
+    let path = adage_hook::press::record_path(paths, session);
+    adage_store::state::read::<adage_hook::press::Record>(&path).ok().map(|r| r.opened).filter(|&t| t > 0)
 }
 
 fn agent_var() -> Option<&'static str> {

@@ -785,10 +785,21 @@ type Assigned = (Option<Arm>, Option<f64>);
 /// Assign the session's arm if it has none (the control arm is left as it is) and mark the call
 /// decided, in one state update: `None` when the call was decided already (nothing more is done).
 fn claim(call: &BashCall<'_>, key: &str) -> Result<Option<Assigned>, Failure> {
+    claim_if(call, key, |_| true)
+}
+
+/// [`claim`], marking the call decided only when `decides` says the session's arm makes the
+/// decision: a decision withheld (the control arm, observe mode) leaves the call to whatever
+/// decides it next, the command hook's own rewrite included, as it is without the mod.
+fn claim_if(
+    call: &BashCall<'_>,
+    key: &str,
+    decides: impl Fn(Option<Arm>) -> bool,
+) -> Result<Option<Assigned>, Failure> {
     let arm_env = std::env::var("ADAGE_ARM").ok();
     let share: f64 = adage_store::config::load(call.paths).config.runtime_control;
     state::update::<SessionState, _>(&call.paths.state(call.session), |st| {
-        if call.identity.is_some_and(|id| !st.see_pretool(id)) {
+        if call.identity.is_some_and(|id| st.has_seen_pretool(id)) {
             return None;
         }
         if st.arm.is_none() {
@@ -796,6 +807,11 @@ fn claim(call: &BashCall<'_>, key: &str) -> Result<Option<Assigned>, Failure> {
             st.arm = Some(arm);
             st.propensity = Some(pr);
             st.repo = Some(key.to_string());
+        }
+        if decides(st.arm) {
+            if let Some(id) = call.identity {
+                st.see_pretool(id);
+            }
         }
         Some((st.arm, st.propensity))
     })
@@ -1032,8 +1048,13 @@ fn pretool_mod(call: &BashCall<'_>, phase: &phase::Phase) -> Result<Option<Strin
             let Some(sub) = found(&key).filter(|s| v.substitute.as_deref() == Some(s.route.as_str())) else {
                 return Ok(None);
             };
-            let Some((arm, propensity)) = claim(call, &key)? else { return Ok(None) };
-            let decision = adage_runtime::substitute(arm, observed(p), sub);
+            // Withheld (control arm, observe mode), the call stays undecided: the mod's rewrite
+            // verdict, or the command hook after it, decides it as today's product does.
+            let observe = observed(p);
+            let Some((arm, propensity)) = claim_if(call, &key, |arm| arm != Some(Arm::Control) && !observe)? else {
+                return Ok(None);
+            };
+            let decision = adage_runtime::substitute(arm, observe, sub);
             let ts = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
             let mut rec = json!({ "ts": ts, "event": "PreToolUse", "kind": "pretool", "arm": arm, "propensity": propensity, "repo": key, "checked_by": "engine", "decision": decision });
             match &decision.substituted {
@@ -1124,6 +1145,10 @@ fn answer_with_receipt(
         }
         let d = (st.arm != Some(Arm::Control))
             .then(|| adage_runtime::answered_by_receipt(&ctx, st, call.command, &note.covering));
+        // The batch that lists this call names it by its bare `tool_use_id`.
+        if let (Some(id), Some(_)) = (call.p["tool_use_id"].as_str().filter(|id| !id.is_empty()), &d) {
+            st.see_answered(adage_runtime::identity_hash(id));
+        }
         Some((st.arm, st.propensity, d))
     })
     .map_err(|e| Failure::io("state", "recording a call answered by a receipt", &e))?;
@@ -1632,8 +1657,9 @@ fn respond(
         Some((m.id, v))
     };
     let arm_env = std::env::var("ADAGE_ARM").ok();
-    // ADAGE_CONTROL, else `runtime.control` in config.toml, else 0.1.
-    let share: f64 = adage_store::config::load(paths).config.runtime_control;
+    // ADAGE_CONTROL, else `runtime.control` in config.toml, else 0.1; `runtime.predict_cap`, else 6.
+    let cfg = adage_store::config::load(paths).config;
+    let share: f64 = cfg.runtime_control;
     let spool_path = paths.spool(session);
     // Exec-only reflexes come into play only under an extension that carries them out.
     let exec_only: Vec<(String, String)> = match opts.extension {
@@ -1657,7 +1683,7 @@ fn respond(
         exact_keys: false,
         invoke_skills: if predict_grants.is_empty() { Vec::new() } else { skill::invocable(paths, root) },
         predict_grants,
-        predict_cap: adage_runtime::PREDICT_CAP,
+        predict_cap: cfg.runtime_predict_cap,
         observe: observed(p),
         routine,
     };
@@ -2442,6 +2468,20 @@ mod tests {
         }
     }
 
+    /// Review L1: `runtime.predict_cap` in config.toml bounds the predictions a session gets; at
+    /// 0 a granted step predicts nothing.
+    #[test]
+    fn the_predict_cap_is_read_from_the_config() {
+        let w = ObligationWorld::new();
+        let granted: &'static Predicts =
+            Box::leak(Box::new(Predicts(vec![("acme/finish-lines".into(), "regenerate-registry".into())])));
+        w.edit(granted).expect("the edit arms the obligation");
+        adage_store::config::set(&w.paths, "runtime.predict_cap", "0").unwrap();
+        assert!(turn_step(&w, granted, 2, true).is_none(), "the cap is reached before the first");
+        adage_store::config::set(&w.paths, "runtime.predict_cap", "6").unwrap();
+        assert!(turn_step(&w, granted, 3, true).is_some(), "the default cap allows it");
+    }
+
     /// Observe mode (`"observe": true`, the mod's `ADAGE_MOD_OBSERVE`): a treated session's step
     /// prints nothing and spools `would_predict`, as the control arm does; the arm is unchanged.
     #[test]
@@ -2702,6 +2742,73 @@ mod tests {
         let recs = pretool_records(&w);
         assert_eq!(recs.len(), 1);
         assert_eq!((recs[0]["withheld"].as_bool(), recs[0]["checked_by"].as_str()), (Some(true), Some("engine")));
+    }
+
+    /// Review M2: a substitution withheld (the control arm, observe mode) records
+    /// `would_substitute` and leaves the call undecided, so the interpreter rewrite still decides
+    /// it as today's product does: the mod's rewrite verdict in the control arm (withheld there
+    /// too), the command hook in observe mode (the rewrite made).
+    #[test]
+    fn a_withheld_substitution_leaves_the_call_to_the_rewrite() {
+        use adage_tracks::{index::IndexedRoute, Evidence, Route, RouteState, Step, Strength, Trigger};
+        let world = |arm: Arm| {
+            let w = u11_world(arm);
+            let mut index = Index::try_load(&w.paths.index()).unwrap();
+            let repo = index.routes[0].repo.clone();
+            index.routes.push(IndexedRoute {
+                repo,
+                track: "acme/dead-ends".into(),
+                version: "0.1.0".into(),
+                exec: None,
+                route: Route {
+                    id: "dead-end-pytest".into(),
+                    summary: String::new(),
+                    trigger: Trigger::SessionStart,
+                    step: Step::Avoid {
+                        avoid: "python3 -m pytest / python -m pytest".into(),
+                        instead: "make test".into(),
+                        signature: "No module named pytest".into(),
+                    },
+                    slots: vec![],
+                    effect: adage_core::Effect::Verify,
+                    strength: Strength::Inhibit,
+                    state: RouteState::Firm,
+                    exit: vec![],
+                    evidence: Evidence { support: 5, opportunities: 5, days: 3, ..Default::default() },
+                    authored: false,
+                },
+            });
+            index.write_atomic(&w.paths.index()).unwrap();
+            w
+        };
+        let sub = json!({ "verdict": { "engine": "same", "substitute": "dead-end-pytest" } });
+        let plan = |w: &ObligationWorld| bash_call(w, &NO_EXTENSION, "toolu_1", PYTEST, json!({ "dry_run": true }));
+        // The control arm: substitution withheld, then the rewrite verdict decides (withheld too).
+        let w = world(Arm::Control);
+        assert!(plan(&w).unwrap()["plan"].get("substitute").is_some());
+        assert!(bash_call(&w, &NO_EXTENSION, "toolu_1", PYTEST, sub.clone()).is_none());
+        assert!(w.state().seen_pretool.is_empty(), "a withheld substitution decides nothing");
+        assert!(bash_call(&w, &NO_EXTENSION, "toolu_1", PYTEST, json!({ "verdict": { "engine": "same" } })).is_none());
+        assert!(bash_call(&w, &NO_EXTENSION, "toolu_1", PYTEST, json!({})).is_none(), "decided once");
+        let recs = pretool_records(&w);
+        assert_eq!(recs.len(), 2, "{recs:?}");
+        assert_eq!(recs[0]["would_substitute"].as_bool(), Some(true));
+        assert_eq!((recs[1]["withheld"].as_bool(), recs[1]["pretool"]["rewrite"].as_str()), (Some(true), Some("test")));
+        // Observe mode: substitution withheld, then the command hook makes today's rewrite.
+        let w = world(Arm::Treated);
+        let mut observe = sub.clone();
+        observe["observe"] = json!(true);
+        assert!(bash_call(&w, &NO_EXTENSION, "toolu_1", PYTEST, observe).is_none());
+        let out = bash_call(&w, &NO_EXTENSION, "toolu_1", PYTEST, json!({})).expect("the command hook's rewrite");
+        assert_eq!(out["hookSpecificOutput"]["updatedInput"]["command"], ".venv/bin/python -m pytest tests -q");
+        let recs = pretool_records(&w);
+        assert_eq!(recs.len(), 2, "{recs:?}");
+        assert_eq!(recs[0]["would_substitute"].as_bool(), Some(true));
+        assert!(recs[1].get("withheld").is_none(), "{}", recs[1]);
+        // The treated arm still decides the call with the substitution.
+        let w = world(Arm::Treated);
+        assert!(bash_call(&w, &NO_EXTENSION, "toolu_1", PYTEST, sub).unwrap().get("substitute").is_some());
+        assert!(bash_call(&w, &NO_EXTENSION, "toolu_1", PYTEST, json!({})).is_none());
     }
 
     /// T-A1-03 and T-A1-04: 64 calls with ids of the largest size an identity takes each decide;
@@ -3057,6 +3164,18 @@ mod tests {
         assert!(bash_call(&w, &FRESH_RECEIPTS, "toolu_1", PYTEST, answered.clone()).is_none(), "the mod's retry");
         assert_eq!(pretool_records(&w).len(), 1);
         assert!(w.stop(&FRESH_RECEIPTS, false).is_none(), "met: the Stop gate asks nothing");
+        // Review L7: the batch that lists the answered call does not observe it a second time.
+        let history = w.state().history.len();
+        let answered_call = json!({ "tool_name": "Bash", "tool_use_id": "toolu_1", "tool_input": { "command": PYTEST },
+                                    "tool_response": "Adage answered this test run." });
+        w.event(&FRESH_RECEIPTS, "PostToolBatch", json!({ "tool_calls": [answered_call] }));
+        assert_eq!(w.state().history.len(), history);
+        let rec = spooled(&w).pop().unwrap();
+        assert_eq!(rec["decision"]["observed"], json!([]), "{rec}");
+        let other = json!({ "tool_name": "Bash", "tool_use_id": "toolu_9", "tool_input": { "command": "ls" },
+                            "tool_response": "a" });
+        w.event(&FRESH_RECEIPTS, "PostToolBatch", json!({ "tool_calls": [other] }));
+        assert!(w.state().history.len() > history, "another call is observed as ever");
         // A rebuilt state reads the met obligation off that record.
         let index = Index::try_load(&w.paths.index()).unwrap();
         let st = rebuild::rebuild(&spooled(&w), &index, "acme", &CommandTable::load()).unwrap();

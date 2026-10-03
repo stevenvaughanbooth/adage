@@ -739,7 +739,14 @@ fn preview<W: std::io::Write>(
 
 /// `adage review delegate` and `adage review revoke`.
 pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
-    let (person, stdin) = crate::review::person_or_press(&format!("review {verb}"), paths)?;
+    // `--confirm` reads the stage's digest on stdin wherever it runs; otherwise only a press can
+    // be there, and only inside a session.
+    let stdin = if args.iter().any(|a| a == "--confirm") {
+        adage_app::person::read_stdin()
+    } else {
+        adage_app::person::read_press()
+    };
+    let (person, stdin) = crate::review::person_from(&format!("review {verb}"), paths, stdin)?;
     // Positional arguments, wherever the flags are (`--level e1 <track> <reflex>` works too).
     let mut pos: Vec<&String> = Vec::new();
     let mut i = 0;
