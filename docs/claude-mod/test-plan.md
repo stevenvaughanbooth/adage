@@ -43,7 +43,7 @@
 | Level | Tooling | Isolation | Where it runs |
 | --- | --- | --- | --- |
 | L1 Unit, Rust | `cargo test -p <crate>` (`#[cfg(test)]`, large ones in `src/tests.rs`) | in-process, `tempfile` | every PR, for the affected packages (`cargo xtask affected`, `docs/testing.md`) |
-| L2 Integration, binary | `crates/adage-cli/tests/*` and `crates/adage-exec/tests/*`; shared helpers belong in the crate's `tests/common/mod.rs` (`docs/testing.md`); today each file defines its own `World` with a fresh `ADAGE_HOME`, `ADAGE_AUTO_LEARN=0`, `ADAGE_ARM=treated` (`hooks.rs:158`, `harness_sim.rs:63`, `zero_config_plugin.rs:89`) and `CLAUDECODE`, `OPENCODE`, `CODEX_SANDBOX*`, `ADAGE_DISABLE` removed; control cases set `ADAGE_ARM=control`; person-only cases remove `ADAGE_ARM` as well (it is in adage-exec's `AGENT_ENV`, `person.rs:11-12`) and set `ADAGE_ALLOW_NONINTERACTIVE=1`, as `adage-exec/tests/cli.rs:106-113` does; `NO_COLOR=1` only where a case reads a frame | per test tempdir | every PR |
+| L2 Integration, binary | `crates/adage-cli/tests/*` and `crates/adage-exec/tests/*`; shared helpers belong in the crate's `tests/common/mod.rs` (`docs/testing.md`); today each file defines its own `World` with a fresh `ADAGE_HOME`, `ADAGE_AUTO_LEARN=0`, `ADAGE_ARM=treated` (`hooks.rs:158`, `harness_sim.rs:63`, `zero_config_plugin.rs:89`) and `CLAUDECODE`, `OPENCODE`, `CODEX_SANDBOX*`, `ADAGE_DISABLE` removed; control cases set `ADAGE_ARM=control`; person-only cases remove `ADAGE_ARM` as well (it is in `adage_app::person::AGENT_ENV`, `crates/adage-app/src/person.rs:11`, with copies in adage-exec and adage-train) and set `ADAGE_ALLOW_NONINTERACTIVE=1`, as `adage-exec/tests/cli.rs:106-113` does; `NO_COLOR=1` only where a case reads a frame | per test tempdir | every PR |
 | L3 Golden and parity | `ADAGE_BLESS=1` goldens in `tests/golden/`, `adage-exec/tests/parity.rs` (the same scenario against both binaries, `hooks.rs:7-32`); a golden is an expected output, never an input | as L2 | every PR (affected) |
 | L4 Simulator | `crates/adage-sim` fixtures, `harness_sim.rs` (`replay_claude`, `check_graph`), `committed_fixtures_are_current` | as L2 | every PR; `cargo run -p adage-sim` on fixture change |
 | L5 Latency | `crates/adage-cli/examples/hook_latency.rs` in its paired mode (`<bin a>,<bin b>`, `:12, 124-160`), release builds of the base and the branch, 500 runs after the 20 warm-ups (the default is 300, `:181`), five repetitions; `learn_bench` (300 × 2, `learn_bench.rs:7`) | a quiet developer machine, named; numbers and the command in the PR | before merging A1, A2, A6, C1, D1, D2 (no workflow runs these today) |
@@ -283,7 +283,7 @@ the Then itself.
 ### C1 · `TurnStep`
 
 - **T-C1-01 · L1 · predicts a delivered directive.** Given a state with a `pending` for route R
-  (`expect_key: exec make gen`, `command: "make gen"`) and `with_predict_grants({R})`. When
+  (`expect_key: exec make gen`, `command: "make gen"`) and a `Policy` whose `predict_grants` holds R. When
   `TurnStep { turn_id: t, index: 1 }` is decided. Then `Decision.predicted` is `{ route: R, tool:
   Bash, input.command: "make gen", kind: run }` and `last_step_predicted == (t, 1)`,
   `predictions == 1`. An armed obligation predicts with `kind: obligation`.
@@ -331,8 +331,8 @@ the Then itself.
   for an effect above Regenerate, for an effect in `effects_deny`, for an environment action when
   the policy does not allow them, and for an `exec_only` route; allows it at `e2` otherwise;
   `exec/predict-off` present → `predict_grants` is empty.
-- **T-C2-04 · L2 · person only.** `adage review delegate T R --predict` with each of adage-exec's
-  six `AGENT_ENV` variables set in turn (`person.rs:11-12`) exits non-zero naming the variable and
+- **T-C2-04 · L2 · person only.** `adage review delegate T R --predict` with each variable of
+  `adage_app::person::AGENT_ENV` set in turn (`crates/adage-app/src/person.rs:11`) exits non-zero naming the variable and
   writes nothing; at a terminal (all six removed, `ADAGE_ALLOW_NONINTERACTIVE=1`) it writes the
   approval.
 - **T-C2-05 · L2 · round trip.** `delegate status --json` lists the grant with `mode: predict`;
