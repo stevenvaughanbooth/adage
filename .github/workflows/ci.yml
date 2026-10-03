@@ -95,6 +95,10 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: test (adage-store, the Windows-ported store, on every platform)
         run: cargo test --locked -p adage-store
+      # Fast deterministic evidence checks belong on every PR; the long replay gates stay in
+      # evals.yml. A change to quality or spend arithmetic must not wait for the weekly run.
+      - name: paired learning evidence contracts
+        run: cargo test --locked -p adage-eval --lib --test paired
       # A pull request tests the packages its changes can affect: those it changed, those whose
       # tests read a changed fixture, and every package that depends on one of them
       # (`cargo xtask affected`, xtask/src/affected.rs). A change outside every package (the

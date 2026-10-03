@@ -17,7 +17,7 @@ claim. Cheaper-model predictability requires a separate model-transfer compariso
 | M1 Evidence independence | Canonical task/group identity, preserved in graph calibration and route qualification | Retries stay in one fold; explicit groups survive import; unknown identity cannot establish task diversity; old traces remain readable | Complete |
 | M2 Corpus ingestion | Versioned, repository-scoped canonical corpus with bounded streaming and auditable rejection/deduplication | Input order does not change evidence; conflicting duplicates fail visibly; malformed and oversized records cannot silently become evidence | Complete |
 | M3 Scalable learning | Reusable repository mining checkpoints with explicit invalidation | Repeated runs avoid unchanged mining; changed/deleted evidence and mining parameters invalidate correctly; full/warm artifacts agree | Complete |
-| M4 Outcomes and value | Conservative completion evidence and reproducible paired token/quality evaluation | Stale checks do not label final work successful; quality regressions reject savings claims; unknown usage and contaminated comparisons are visible | Pending |
+| M4 Outcomes and value | Conservative completion evidence and reproducible paired token/quality evaluation | Stale checks do not label final work successful; quality regressions reject savings claims; unknown usage and contaminated comparisons are visible | Complete |
 | M5 Verification and delivery | Required Rust checks, deterministic corpus/scale measurements, signed commits, remote branch and review | Results and limitations recorded against a commit; no unsupported savings or enterprise-capacity claim | Pending |
 
 ## Implementation boundaries
@@ -38,14 +38,15 @@ claim. Cheaper-model predictability requires a separate model-transfer compariso
   the working branch, and installed a workspace-local Rust toolchain. Baseline verification is
   running. Confirmed the production bridge drops task identity before calibration and the route
   judge uses a separate truncated-prompt heuristic.
-- 2026-10-03: Baseline exposed an existing deleted-directory discovery bug and a new stable-Rust
-  lint; fixed both without weakening tests. The managed sandbox requires network permission for
-  tests that bind a local socket. The full suite is being rerun with that capability.
+- 2026-10-03: Baseline required a new stable-Rust lint fix. The managed sandbox requires network
+  permission for tests that bind a local socket, a UTF-8 terminal setting and a temporary root
+  without its injected `.git` directory. Tests retain their assertions.
 - 2026-10-03: M1 implemented. Task identity survives the canonical bridge, evaluation manifests,
   parse-cache reads and route qualification. Calibration refits prototypes and candidates on
   independent task representatives. Identical canonical deliveries are deduplicated; conflicting
   repository/session ids reject the run before evidence writes. Scoped canonical learning filters
-  other repositories itself. Fixed deleted-directory attribution at ingestion as well.
+  other repositories itself. Existing repository attribution is retained for removed subdirectories
+  and worktrees, covered by regression assertions.
 
 ## Deterministic fixture strategy
 
@@ -72,9 +73,9 @@ and incremental corpus updates, not approximate online learning or distributed m
 ### Canonical corpora
 
 ```sh
-adage corpus export trace-a.jsonl trace-b.jsonl --repo acme/api --identities identities.json > corpus.jsonl
+adage corpus export trace-a.jsonl trace-b.jsonl --repo acme/api --identities identities.json --outcomes outcomes.json > corpus.jsonl
 adage corpus import corpus.jsonl --repo acme/api
-adage corpus inspect --repo acme/api
+adage corpus inspect --repo acme/api --evidence > training-evidence.json
 adage corpus learn --repo acme/api
 ```
 
@@ -115,6 +116,86 @@ by session-id order, without consulting outcomes. Every fold refits its prototyp
 scores on its training side. It no longer reuses all-data prototypes or switches to optimistic
 all-data candidate selection on large corpora. Sparse groups can yield no calibration pairs;
 raw observational confidence is still not a causal benefit estimate or an execution approval.
+Route admission still uses its existing support/strength calculation and a minimum task-diversity
+gate; the cross-fitted calibration report does not replace that calculation. A future admission
+change needs its own held-out reliability evidence.
+
+### Outcomes and paired value
+
+`outcomes.json` maps session ids to independently graded booleans, for example
+`{"session-1":false}`; omit a session when its outcome is unknown. These recorded labels take
+precedence over trace proxies. Without a recorded label, an interrupted/help-seeking ending is a
+negative proxy. A check can supply a proxy only when it follows every mutation in a later model
+turn and serves the latest prompt. A stale check or no check leaves the outcome unknown. A
+passing check remains a proxy for completion, not an independent task grade.
+
+`corpus inspect --evidence` verifies one snapshot and returns its training generation, canonical
+group keys, identity coverage and outcome-source counts. `corpus learn` and `learn.log` carry the
+generation actually read. Copy `training_generation`, `training_groups`,
+`training_inferred_identity` and `training_unknown_identity` into a paired study. Qualification
+requires declared training identities; inferred prompts cannot prove separation from declared
+evaluation task ids. Use the same repository keys and task/group registry across both sets.
+
+```sh
+adage eval paired study.json
+adage eval paired study.json --require-token-target
+adage eval paired study.json --require-cost-target
+```
+
+The input schema is illustrated by
+[`paired-study.json`](../crates/adage-eval/tests/fixtures/paired-study.json), a synthetic one-pair
+format fixture that deliberately cannot qualify a commercial claim. Reports are JSON; a required
+target exits unsuccessfully when evidence does not qualify. `same_model` compares one model with
+and without the intervention; `model_transfer` compares a fixed baseline/intervention model pair.
+Do not mix models within one study. Each run identifies its task, environment and evaluator
+revisions. The environment revision must pin checkout, harness, tools, inputs and budget while
+the chosen experimental treatment is recorded in the study protocol. Retries contribute no
+additional independent pairs. Reused run ids, overlapping training groups, unknown outcomes or
+mismatched conditions invalidate qualification.
+
+Quality uses a conservative simultaneous 95% lower bound on paired improvement minus regression
+probability (Clopper–Pearson bounds with Bonferroni adjustment). The default allows at most two
+percentage points of quality loss, requires an observed baseline success rate of at least 80%,
+and never accepts fewer than 30 independent tasks. Thirty is only a floor: with zero discordant
+pairs, about 183 tasks are needed even to establish the two-point margin. Predeclare the margin,
+task population and sample size; repeatedly stopping when a threshold passes is not covered by
+these fixed-sample bounds.
+
+Token, model-call and billed-cost totals are separate. Input tokens include cached input once;
+cached tokens are not added again. Costs are recorded millionths of a US dollar, never guessed
+from token counts. Missing usage/cost remains missing. Savings are the ratio of aggregate totals,
+with a deterministic 2,000-resample task-pair bootstrap and an approximate one-sided 95% lower
+percentile bound. The default target is 20%; acceptance needs both the quality gate and that
+metric's savings bound. A bootstrap is an empirical estimate under representative independent
+task sampling, not a distribution-free guarantee about unseen enterprises. An all-identical
+synthetic fixture tests arithmetic; it provides no external validity.
+
+### Training and promotion workflow
+
+1. Collect native histories, task/group ids, model and repository provenance, intervention
+   exposure and independent outcomes. Keep failures, timeouts and unknown outcomes. Respect the
+   existing influence exclusion: behavior caused by Adage is not a new organic demonstration.
+2. Split task families before fitting, including paraphrases and retries. Use repository and
+   time holdouts for transfer claims. Keep a final test set untouched while tuning on validation.
+3. Import the training snapshot, inspect identity/outcome coverage, learn candidates and review
+   support, effects and uncertainty. A candidate is a hypothesis, not demonstrated savings.
+4. Freeze the corpus generation, compiled artifacts and policy. Run baseline and intervention
+   on fresh equivalent checkouts with randomized arm order, pinned model/settings and the same
+   independent grader. Count all scheduled tasks, failures and fallbacks. Sum the whole workflow's
+   model usage, including planning, hook/context overhead and retries.
+5. Evaluate the complete predeclared paired cohort, then use the existing review/enable/compile
+   controls for qualified candidates. Start narrow, measure live exposure and quality, and retain
+   rollback and extinguish behavior. Test cheaper-model transfer in a separate experiment.
+
+The next highest-value component is an experiment runner that freezes this protocol, collects
+provider billing/usage and complete outcomes, and binds each arm to an artifact digest. This
+evaluator checks submitted evidence; it cannot independently attest its completeness or grades.
+After real benefit is established, prioritize exact changed-evidence mining and worker/store
+adapters for large repositories, then task-level reliability and drift-driven requalification.
+The defensible product asset is the accumulated, permissioned evidence linking a typed reflex
+and its applicability to verified savings and quality across environments. Streaming storage,
+cross-validation, checkpointing and paired experiments are established techniques; this change
+does not establish patent novelty or freedom to operate.
 
 Outcome evals establish whether an intervention helps a real agent; they are not the only test
 of learning. Each milestone includes these lower-level contracts where relevant:
@@ -163,3 +244,8 @@ M3: all learner tests, architecture guards, CLI corpus lifecycle and no-spawn ch
 Checkpoint fixtures compare complete tracks/why/reviews and index bytes to full computation
 after each update, verify corrupt-cache recovery and confirm current human decisions still apply.
 All-target workspace Clippy passes. Scale timings remain pending.
+
+M4: all 28 evaluation unit tests and eight paired-outcome integration tests pass, alongside the
+canonical outcome fixtures, learner tests and two CLI corpus/evaluation flows. All-target
+workspace Clippy passes. Full-workspace verification and scale measurements are recorded below
+when complete; no live outcome study has been run.

@@ -399,6 +399,9 @@ pub enum CorpusAction {
         repo: Option<String>,
         #[arg(long, value_name = "FILE")]
         identities: Option<PathBuf>,
+        /// Independently graded task outcomes as {session: bool}.
+        #[arg(long, value_name = "FILE")]
+        outcomes: Option<PathBuf>,
     },
     /// Atomically import one repository's canonical JSONL; print the audit report as JSON.
     Import {
@@ -413,6 +416,9 @@ pub enum CorpusAction {
     Inspect {
         #[arg(long)]
         repo: String,
+        /// Audit identities and outcome provenance for a held-out evaluation.
+        #[arg(long)]
+        evidence: bool,
     },
     /// Learn the committed snapshot and compile its reflexes; print the report as JSON.
     Learn {

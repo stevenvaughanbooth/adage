@@ -18,7 +18,7 @@ pub mod wire;
 
 pub use harness::{Capabilities, Harness};
 pub use identity::{EvidenceGroup, EvidenceIdentity, GroupBasis};
-pub use session::{Directed, Ending, PromptObs, Session, StepObs};
+pub use session::{Directed, Ending, OutcomeBasis, OutcomeEvidence, PromptObs, Session, StepObs};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

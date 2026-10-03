@@ -21,6 +21,7 @@ pub mod exec_e1;
 pub mod fidelity;
 pub mod generate;
 pub mod graph_mine;
+pub mod paired;
 pub mod replay;
 /// The safety oracle, re-exported where the eval and its tests have always named it.
 pub use adage_safety as safety;

@@ -139,6 +139,11 @@ pub fn import(reader: impl BufRead, repo: &str, mode: Mode, limits: Limits, stor
 pub fn load(repo: &str, store: &dyn Store) -> Result<adage_ingest::batch::Batch> {
     let manifest = store.corpus_manifest(repo)?.context("no canonical corpus for this repository")?;
     manifest.validate(repo)?;
+    load_manifest(manifest, store)
+}
+
+fn load_manifest(manifest: Manifest, store: &dyn Store) -> Result<adage_ingest::batch::Batch> {
+    let repo = manifest.repo;
     let mut batch = adage_ingest::batch::Batch::default();
     for (id, hash) in manifest.sessions {
         let body = store.corpus_object(&hash)?;
@@ -153,11 +158,65 @@ pub fn load(repo: &str, store: &dyn Store) -> Result<adage_ingest::batch::Batch>
     Ok(batch)
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Audit {
+    pub repo: String,
+    pub training_generation: String,
+    pub sessions: usize,
+    pub training_groups: std::collections::BTreeSet<String>,
+    pub training_declared_identity: usize,
+    pub training_inferred_identity: usize,
+    pub training_unknown_identity: usize,
+    pub recorded_outcomes: usize,
+    pub proxy_outcomes: usize,
+    pub unknown_outcomes: usize,
+}
+
+/// Evaluation metadata from one committed snapshot; no prompt or tool output in the report.
+pub fn audit(repo: &str, store: &dyn Store) -> Result<Audit> {
+    let manifest = store.corpus_manifest(repo)?.context("no canonical corpus for this repository")?;
+    manifest.validate(repo)?;
+    let generation = manifest.generation.clone();
+    let batch = load_manifest(manifest, store)?;
+    let mut report = Audit {
+        repo: repo.into(),
+        training_generation: generation,
+        sessions: batch.sessions.len(),
+        training_groups: Default::default(),
+        training_declared_identity: 0,
+        training_inferred_identity: 0,
+        training_unknown_identity: 0,
+        recorded_outcomes: 0,
+        proxy_outcomes: 0,
+        unknown_outcomes: 0,
+    };
+    for session in batch.sessions {
+        match session.evidence_group() {
+            Some(group) => {
+                report.training_groups.insert(group.key);
+                if group.basis == adage_trace::GroupBasis::PromptFingerprint {
+                    report.training_inferred_identity += 1;
+                } else {
+                    report.training_declared_identity += 1;
+                }
+            }
+            None => report.training_unknown_identity += 1,
+        }
+        match session.outcome_evidence().basis {
+            adage_trace::OutcomeBasis::Recorded => report.recorded_outcomes += 1,
+            adage_trace::OutcomeBasis::Unknown => report.unknown_outcomes += 1,
+            _ => report.proxy_outcomes += 1,
+        }
+    }
+    Ok(report)
+}
+
 /// Normalize native histories into a portable canonical stream without probing local checkouts.
 pub fn export(
     paths: &[PathBuf],
     repo: Option<&str>,
     identities: &BTreeMap<String, adage_trace::EvidenceIdentity>,
+    outcomes: &BTreeMap<String, bool>,
     mut writer: impl std::io::Write,
 ) -> Result<usize> {
     let cx = adage_ingest::Decode {
@@ -173,6 +232,9 @@ pub fn export(
         if let Some(identity) = identities.get(&session.id) {
             session.identity = identity.clone();
         }
+        if let Some(outcome) = outcomes.get(&session.id) {
+            session.outcome = Some(*outcome);
+        }
         corpus::write(&mut writer, &session)?;
         count += 1;
     }
@@ -181,9 +243,14 @@ pub fn export(
 
 /// Learn a committed snapshot with the normal review and execution-admission boundaries.
 pub fn learn(repo: &str, models: Option<&Path>, store: &dyn Store, cfg: &crate::LearnConfig) -> Result<crate::Report> {
-    let batch = load(repo, store)?;
+    let manifest = store.corpus_manifest(repo)?.context("no canonical corpus for this repository")?;
+    manifest.validate(repo)?;
+    let generation = manifest.generation.clone();
+    let batch = load_manifest(manifest, store)?;
     if !batch.sessions.is_empty() {
-        return crate::learn_sessions_into(batch, Some(repo), models, store, cfg);
+        let mut report = crate::learn_sessions_into(batch, Some(repo), models, store, cfg)?;
+        report.corpus_generation = Some(generation);
+        return Ok(report);
     }
     let (mut report, planned) = crate::plan_repository(Vec::new(), Some(repo), models, store, cfg, false)?;
     for p in &planned {
@@ -193,5 +260,6 @@ pub fn learn(repo: &str, models: Option<&Path>, store: &dyn Store, cfg: &crate::
     let index = store.compile_index()?;
     report.index_generation = index.generation;
     report.conflicts = index.conflicts;
+    report.corpus_generation = Some(generation);
     Ok(report)
 }

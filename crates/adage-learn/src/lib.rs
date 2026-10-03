@@ -43,6 +43,9 @@ pub struct Report {
     pub sessions_steered: usize,
     pub repos: BTreeMap<String, RepoReport>,
     pub index_generation: String,
+    /// Committed canonical snapshot actually read by `corpus::learn`, when applicable.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub corpus_generation: Option<String>,
     pub thresholds: String,
     /// The embedding model prompt-intent prototypes were learned with; `None` if none is
     /// installed (there are then none).

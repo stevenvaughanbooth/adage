@@ -92,7 +92,7 @@ pub fn learn_line(ts: u64, l: &Learned) -> Value {
         }
         _ => Default::default(),
     };
-    json!({
+    let mut line = json!({
         "ts": ts,
         "kind": "condition",
         "trigger": l.trigger,
@@ -107,7 +107,11 @@ pub fn learn_line(ts: u64, l: &Learned) -> Value {
         "thresholds": rep.thresholds,
         "intent_model": rep.intent_model,
         "repos": repos,
-    })
+    });
+    if let Some(generation) = &rep.corpus_generation {
+        line["corpus_generation"] = json!(generation);
+    }
+    line
 }
 
 /// The `condition_error` line.

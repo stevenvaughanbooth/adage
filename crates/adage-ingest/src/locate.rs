@@ -44,7 +44,7 @@ impl Locator for LocalCheckout {
             // Paths are relative to the worktree the agent worked in; its key is its repository's
             // (`repo::repo_key`).
             Some(worktree) => worktree,
-            None => cwd.is_dir().then(|| repo::find_root(cwd)).flatten().unwrap_or_else(|| cwd.to_path_buf()),
+            None => repo::find_root(cwd).unwrap_or_else(|| cwd.to_path_buf()),
         };
         let repo = repo::key_for(&root, explicit);
         Located { root, repo }
@@ -103,6 +103,8 @@ mod tests {
         std::fs::create_dir_all(root.join("src/deep")).unwrap();
         let l = LocalCheckout.locate(&root.join("src/deep"), Some("acme"));
         assert_eq!(l, Located { root: root.clone(), repo: "acme".into() });
+        std::fs::remove_dir_all(root.join("src")).unwrap();
+        assert_eq!(LocalCheckout.locate(&root.join("src/deep"), Some("acme")).root, root);
         // No checkout above it: the directory itself.
         let bare = d.path().join("loose");
         assert_eq!(LocalCheckout.locate(&bare, Some("k")).root, bare);

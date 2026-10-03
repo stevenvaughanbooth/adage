@@ -18,6 +18,14 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### Fixes from the architecture work
 
+- **Auditable outcomes and paired savings evidence.** A passing check before later edits or a
+  new task no longer labels the final trace successful. Canonical exports accept independent
+  outcome labels; corpus audits distinguish recorded, proxy and unknown outcomes and expose
+  training groups and the exact learned generation. `adage eval paired` checks held-out task
+  pairs, quality noninferiority, token use and billed cost separately, rejecting repeated tasks,
+  train/test overlap, missing evidence and mismatched experimental conditions. Deterministic
+  fixtures cover stale checks, contamination, quality regressions and misleading token savings.
+
 - **Reusable mining checkpoints.** Repeated learning reuses unchanged repository mining while
   rerunning qualification, current review decisions and compilation. Content, parameter and build
   fingerprints invalidate stale calculations; corrupt caches trigger recomputation. `--no-cache`
@@ -36,11 +44,7 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   prototypes and candidates inside held-out folds on at most 400 independent task representatives,
   including for large corpora. Learning reports declared, inferred and unknown identity counts.
   Identical session copies count once; conflicting records with the same repository/session id
-  reject learning before tracks are written. Deleted trace directories retain their recorded root.
-
-- **Removed directories do not become unrelated repositories.** Repository discovery no longer
-  attributes a deleted working directory to an ancestor checkout; explicitly recorded removed
-  worktrees still belong to their main repository.
+  reject learning before tracks are written.
 - **A learn run reads earlier results through its store.** It reads earlier tracks, a person's
   review decisions, proposals, route explanations, instinct bindings and installed packs through
   the same `Store` it writes through, so a store other than `$ADAGE_HOME` (a team service) can
