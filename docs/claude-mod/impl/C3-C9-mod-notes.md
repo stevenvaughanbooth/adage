@@ -214,3 +214,52 @@ as `tool_use` with its `usage` kept (T-C8-02).
 | `cargo test -p adage-cli --bin adage -- ui::tests` | 41 passed after re-accepting two snapshots (`INSTA_UPDATE=always`): the settings tab gains the `runtime.routine_model` row (the frame's last row, `skills.invoke`, moves below the fold), the palette's match count 17 → 18 |
 | `cargo test -p adage-exec --test parity` | 23 passed (T-X-12) |
 | `cargo test -p xtask` | 18 passed |
+
+## Review fixes
+
+### M2 in REVIEW.md (M4 in the fix brief): a withheld substitution must not decide the call, mod half
+
+The binary half belongs to the Rust agent: in `crates/adage-hook/src/lib.rs` `pretool_mod`, a
+substitution verdict that is withheld (the control arm, or `observe`) must spool
+`would_substitute` without `claim` marking the call decided. The mod's half needed no change in
+logic. After a substitution verdict that made nothing, `bashCall` already falls through to the
+interpreter rewrite. In the control arm it asks the rewrite verdict (`engine: same|differs`), and
+once the binary leaves the call undecided, that verdict decides it (recorded withheld there). In
+observe mode it hands the call on as written with no further verdict, so the classic
+`PreToolUse` command hook makes today's U11 rewrite. `call.ts` now says this at the branch, and
+two tests in `substitute.test.ts` fix the contract the binary fix relies on:
+
+- `the control arm: a withheld substitution goes on to the rewrite verdict, and its answer
+  rewrites the call`: the asks are `dry_run`, `{engine:same, substitute}`, `{engine:same}`.
+- `observe mode: after the withheld substitution the call goes on as written with no further
+  verdict`: the asks are `dry_run` and the substitute verdict, both with `observe`.
+
+Live, the rewrite in these two cases happens only once the binary half lands. Until then the
+binary's claim leaves both the rewrite verdict and the command hook with nothing to say.
+
+### M6: `adage ledger note` at `turn.complete`
+
+- `turn.step` (register.ts): after `turnStep` returns, a main-loop step of an active mod is kept
+  as `{model, input, output, cache_read, cache_write, predicted}` (`ledger.ts` `stepOf`). A
+  predicted step is one `turnStep` recorded with `isEnding: false` (no request went out). It
+  counts no tokens, under the model the step asked for. A request that reported no usage is no
+  step.
+- A new `turn.complete` hook (no filter; main loop only; active only) runs `noteLedger` off the
+  hook's path. The turn's steps are appended to the session's (`accrue`: numbered on across
+  turns, started again when the session id changed, capped at the binary's 20,000). The note is
+  `ledger.ts` `noteOf`: `{session_id, repo: <cwd>, harness: "claude-code", harness_version:
+  $.session.version().version, started_at: $.session.usage().startedAt (0 when unavailable),
+  ended_at: now, steps, cost_usd?: $.session.usage().cost.usd}`. It goes on stdin to `[cli,
+  'ledger', 'note']` through the guarded runner (`bridge.ts` `note`, 10 s, in the session's
+  directory, `CLAUDECODE=1`). The binary keeps one line per session, so each turn's note carries
+  every step so far. A refusal (exit 2), a failure or a missing binary is ignored (fail open).
+  `hook_ms` is not sent (optional; the mod does not time its own dispatch).
+- Tests: `register.test.ts` `M6 · adage ledger note at the turn end` (the exact note over two
+  turns; a subagent's turn and steps excluded; a refused note leaves the turn's answer as
+  beneath; inert sends nothing); `ledger.test.ts` (step usage, numbering across turns and a
+  /clear, the cap, the note's optional cost); `bridge.test.ts` `note (…)`.
+- Live only: that `$.session.usage()` answers in the CLI (the types say the CLI always keeps a
+  cost ledger), and that the binary accepts the note (its spool must hold this session's
+  `session_start` for the repository `cwd` resolves to).
+
+Commands and results are in B4-D5-notes.md, "Review fixes".

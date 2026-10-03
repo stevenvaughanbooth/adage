@@ -259,3 +259,14 @@ agent's. No API key in this environment.
 - `cargo test -p xtask`: 18 passed.
 - `cargo test -p adage-learn` was not runnable: its lib test target does not compile in the
   learner's in-progress `diff.rs` (not this change).
+
+## Review fixes
+
+| Finding | What changed | Test |
+| --- | --- | --- |
+| **M5** A skill's inertness and hash were never checked again at use | `verified.json`'s `skill` gains `path` (the absolute file `adage train` compiled; `adage_train::skill::Outcome.skill_file`, canonical; `#[serde(default)]`, written only when set, checked absolute and at most 4,096 bytes). `adage_pack::verified::current(&Verified) -> Option<bool>` reads that file again (a regular file of at most 1 MiB, `MAX_SKILL_BYTES`), and answers `Some(inert)`, recomputed from the file's text, only when its SHA-256 is the record's. `skill::prompt` annotates nothing (and records nothing) unless `current` is `Some`; `skill::invocable` keeps a skill only when `v.skill.inert && current(v) == Some(true)`. A record written before this change has no path and is not used until the skill is trained again (fail closed: the skill is still read as written, unannotated and not invoked). The payload's `text` is not hashed: what the engine hands `skill.prompt` is the expanded prompt, not necessarily the file's bytes (front matter, arguments), so the file on disk is the check | `verified::tests::a_record_is_current_only_while_its_skill_file_is_unchanged`; `skill::tests::nothing_is_invocable_until_…` (an edited skill and a removed one drop out); `adage-cli/tests/skill_prompt.rs::an_accepted_skill_is_annotated_sanitised_and_bounded` (the record names its file; after a `` !`…` `` block is added, nothing is annotated or recorded) |
+| **L2** `verified::find_all` took 256 directories in read order, then sorted | It sorts every staged directory name first and then keeps the first `MAX_SKILLS` | `verified::tests::find_all_takes_the_first_skills_in_name_order` (257 directories; only the first by name is found) |
+
+Residual (M5): a skill of the same name elsewhere (a user-level skill shadowing the project's, or
+one a plugin ships) is not told apart: the record is keyed by name and repository, and the check
+is that the trained file is unchanged, not that the engine expanded that file.

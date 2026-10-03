@@ -738,8 +738,10 @@ handlers directly and checking `$.state` and the recorded `$.ui.*` calls.
 - **T-B4-05 · the token's life in the mod.** The press is asked in `classic.SessionStart` after
   `next(e)` with that payload's `session_id`; a `press_issued` record the mod did not cause sets
   `presses: 'off'` and one status warning; with no press held, the dialog still asks and the
-  answer is kept in `$.store` keyed by session for the next `classic.SessionStart`, with the band
-  line `» kept for your next session · /adage review`.
+  answer is kept in `$.store` with its repository root for the next `classic.SessionStart`, with
+  the band line `» kept for your next session · /adage review`; that start (in the same root only)
+  asks again (`ask.kept`) and presses only on `run it`, never from the store as it stands; a verb
+  that refuses the press before the spend leaves the token held.
 - **T-B4-06 · the pane's verbs.** An expanded Reflexes row shows one `Button` per `review.verbs`
   entry worded per `pane.verb.*`, lowercase hotkeys, each pressing through `press()`; the terminal
   command is shown dim with `Copy`; the **waiting for you** group lists every pending ask,
@@ -873,7 +875,7 @@ chunks to their commits):
   `synthetic`: 25, 25, 0, 12 of 24, 20 of 24. The strict figure understates a steered agent (the
   recorded agents never got a directive and found the script themselves, later); the live `mod`
   arm is where the figure that matters comes from. The measured values are pinned as floors.
-- **The mod's own tests** (L7, L8): 252 with the engine stubbed (`claude plugin test
+- **The mod's own tests** (L7, L8): 274 with the engine stubbed (`claude plugin test
   plugin/claude-code`), `validate --strict` diffed against `VALIDATE.txt`,
   `scripts/check-plugin.mjs` and `test-stage-plugin.mjs`.
 - **Latency** (L5): one unpaired run of `turn_step_nothing_pending` (p95 3.11 ms) against

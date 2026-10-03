@@ -306,3 +306,43 @@ docs/claude-mod/impl/A1-A2-C5-notes.md
 The disk filled several times during the work (other agents' builds share `target/`); I removed
 `target/debug/incremental`, `target/debug/examples` and test executables in `target/debug/deps`
 older than 20 minutes that had a newer build of the same name, nothing else.
+
+## Review fixes
+
+The binary's half of the branch review (REVIEW.md numbering) for this chunk's files, and the whole
+run's commands. The other findings are written up beside their chunks: M3, M4, M7, M8 and L6 in
+A7-A8-notes.md, M5 and L2 in D3-D4-notes.md, L5 in D1-notes.md, L7 in
+C3-C7-C8-D2-C9-E-notes.md; the mod's (H1, H2, M1, M6, the mod half of M2, L4, L8) in
+B4-D5-notes.md and C3-C9-mod-notes.md.
+
+| Finding | What changed | Test |
+| --- | --- | --- |
+| **M2** (binary half) A substitution verdict withheld (control arm, observe mode) marked the call decided, so neither the mod's rewrite verdict nor the command hook's U11 rewrite decided it afterwards | `pretool_mod`'s substitution verdict claims through `claim_if(call, key, decides)`: the arm is assigned as before, but the call is marked decided (`see_pretool`) only when the arm acts (`arm != Control && !observe`). Withheld, it spools `would_substitute` (and `withheld`) exactly as before and leaves the call undecided: in the control arm the mod's rewrite verdict then decides it (recorded withheld, as the U11 rewrite is in control); in observe mode the command hook rewrites it, as today's product does | `a_withheld_substitution_leaves_the_call_to_the_rewrite` (a world with both a learned `python -m pytest` dead end and a bound U11 environment: control, observe, and treated, which still substitutes and decides once); `a_dead_end_is_never_substituted_in_control_or_observe_mode` unchanged |
+| **L1** `runtime.predict_cap` was hard-coded | `adage_store::config`: key `runtime.predict_cap` (kind `Cap`, a whole number 0 to `MAX_PREDICT_CAP` = 50, default `6`, **guarded**: a higher cap lets Adage take more steps in the model's place), `Config.runtime_predict_cap`. `respond` loads the configuration once and hands `predict_cap: cfg.runtime_predict_cap` to `decide` (the runtime's `PREDICT_CAP` stays the `Policy` default) | `config::tests::set_validates_and_keeps_other_keys` (set, read back, 51/-1/`two` refused); `the_predict_cap_is_read_from_the_config` (cap 0: a granted finish line is not predicted; 6: it is) |
+| **L3** `adage-exec status` listed predict grants as execution grants; `revoke` revoked both modes | `status` prints `Execution grants for <key>: n` over execute grants only, then `Prediction grants for <key>: m` and those, only when there are any (a repository without predict grants prints exactly what it did). `revoke` takes `--mode execute\|predict` (default `execute`; anything else exits 2) and passes it to `Store::revoke`; a predict revoke says `Revoked n prediction grant(s)` | `adage-exec/tests/cli.rs::status_and_revoke_keep_grant_modes_apart` |
+
+### Commands run for the review fixes (in /home/user/adage-poc)
+
+| Command | Result |
+| --- | --- |
+| `cargo fmt --all`, then `cargo fmt --all -- --check` | clean |
+| `cargo clippy --workspace --all-targets -- -D warnings` | clean |
+| `cargo test -p adage-hook -p adage-runtime -p adage-exec -p adage-app -p adage-pack -p adage-cli -p adage-learn --no-fail-fast` | every binary passes but one: `adage-cli` `ui::tests::palette_finds_actions_and_reflexes_and_runs_them`, an insta snapshot that now lists the new `runtime.predict_cap` setting (19 matches for `str`, one row pushing the last off the bottom). Re-blessed with `INSTA_UPDATE=always`, then it passes. `hooks` 23, `parity` 23, `press` 12, `skill_prompt` 2 among them |
+| `cargo test -p adage-store -p adage-tracks -p adage-core -p adage-train --no-fail-fast` (crates changed outside the brief's list) | all pass |
+| `cargo test -p xtask` | 18 pass |
+| `claude plugin test plugin/claude-code` | 274 pass, 0 fail |
+| `claude plugin validate --strict` for `plugin/claude-code`, `plugin/claude-code-exec`, `.`; the first diffed with `VALIDATE.txt` as CI does | all pass; `VALIDATE.txt` unchanged |
+| `node scripts/check-plugin.mjs` | `plugins adage, adage-exec 0.1.0: ok` |
+
+The goldens (`crates/adage-cli/tests/golden`) are unchanged: no line added or removed, and
+`hooks` passes without `ADAGE_BLESS`. The one snapshot that changed:
+
+```diff
+-  + index                generati│ : str▌                                                                18 matches │
++  + index                generati│ : str▌                                                                19 matches │
+ …
+                                  │   Settings · runtime.routine_model     adage config set runtime.routine_model    │
++                                 │   Settings · runtime.predict_cap       adage config set runtime.predict_cap      │
+ …
+-                                 │   Settings · learn.thresholds          adage config set learn.thresholds         │
+```

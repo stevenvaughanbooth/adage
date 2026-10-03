@@ -519,3 +519,9 @@ batch_no_match_with_candidates 5.21 / 6.21; batch_notices 27.64 / 36.10 (noticed
 batch_context_fires 27.72 / 35.00; pretool_no_match 4.07 / 4.88; turn_step_nothing_pending
 5.08 / 6.03. The candidate net adds about 0.4 ms at p50 to the no-match path on a debug build.
 
+
+## Review fixes
+
+| Finding | What changed | Test |
+| --- | --- | --- |
+| **L7** A call answered by a receipt could be observed twice: once by `answered_by_receipt`, again when `PostToolBatch` lists it | `SessionState.answered: Vec<u64>` (hashes of the answered calls' bare `tool_use_id`, at most `SEEN_PRETOOL`, `#[serde(default)]`, not rebuilt from the spool), filled in `answer_with_receipt` when the treated arm answers. `decide`'s `Event::Batch` leaves those calls out before anything is observed. The hash moved to `adage_runtime::identity_hash` (`adage_hook::phase::identity_hash` calls it, unchanged in value) so the runtime can compute it | `adage-hook` `a_call_answered_by_a_fresh_receipt_is_one_record_and_meets_its_finish_line` (the batch listing `toolu_1` observes nothing and leaves the history as it was; another call in a later batch is observed) |
