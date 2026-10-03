@@ -5,7 +5,7 @@
 
 use super::*;
 use adage_core::spans::SpanKind;
-use adage_core::Effect;
+use adage_core::{CommandTable, Effect};
 use adage_tracks::*;
 use serde_json::json;
 

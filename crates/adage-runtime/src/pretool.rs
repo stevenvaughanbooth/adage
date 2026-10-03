@@ -9,7 +9,7 @@
 //! (`adage_instincts::verify_env`: pytest installed, the project importable from this checkout),
 //! never here. The replay metric of this lever is `adage eval replay-savings --mode pre-emptive`.
 //!
-//! **What is rewritten.** The command is read as a shell reads it ([`parse`]): a list of simple
+//! **What is rewritten.** The command is read as a shell reads it (`parse`): a list of simple
 //! commands joined by `;`, `&&`, `||`, `|`, `&` and newlines, with quotes, escapes, comments,
 //! redirections and heredocs. Only the command word of a simple command in that top-level list
 //! is ever rewritten. A heredoc body, a quoted string and a `-c` payload are data: never
