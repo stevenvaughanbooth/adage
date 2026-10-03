@@ -875,7 +875,7 @@ chunks to their commits):
   `synthetic`: 25, 25, 0, 12 of 24, 20 of 24. The strict figure understates a steered agent (the
   recorded agents never got a directive and found the script themselves, later); the live `mod`
   arm is where the figure that matters comes from. The measured values are pinned as floors.
-- **The mod's own tests** (L7, L8): 252 with the engine stubbed (`claude plugin test
+- **The mod's own tests** (L7, L8): 274 with the engine stubbed (`claude plugin test
   plugin/claude-code`), `validate --strict` diffed against `VALIDATE.txt`,
   `scripts/check-plugin.mjs` and `test-stage-plugin.mjs`.
 - **Latency** (L5): one unpaired run of `turn_step_nothing_pending` (p95 3.11 ms) against
