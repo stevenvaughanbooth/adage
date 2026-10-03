@@ -413,7 +413,7 @@ the launch work's new measurements and outstanding gates are in the
 | Shared hook adaptation and decisions | `crates/adage-hook`, `crates/adage-runtime` |
 | The Claude Code mod's decisions: predicted steps, a Bash call's two phases, standing text, routing | `crates/adage-runtime` (`predict_step`, `route_step`, `standing`), `crates/adage-hook/src/phase.rs`, [the mod's notes](claude-mod/impl/A1-A2-C5-notes.md) |
 | The mod's chains, finish line, receipt as the result, noticed candidates and attachment by capability | `crates/adage-runtime` (`predict_step`, `answered_by_receipt`, `notice`, `standing_for`, `delegation`), `crates/adage-hook/src/harness/claude.rs` (`capabilities`), [the notes](claude-mod/impl/C3-C7-C8-D2-C9-E-notes.md) |
-| Hook latency on this machine | `duration_us` on every spool record, `crates/adage-cli/src/doctor_latency.rs` |
+| Hook latency on this machine | `duration_us` on every spool record, `crates/adage-cli/src/doctor/latency.rs` |
 | Grants, sandbox, projected results and staged actions | `crates/adage-exec`, [execution](execution.md) |
 | Signed reusable programs | `crates/adage-pack`, `crates/adage-sign`, [packs](packs.md) |
 | User-visible state and controls | `crates/adage-cli/src/ui` |

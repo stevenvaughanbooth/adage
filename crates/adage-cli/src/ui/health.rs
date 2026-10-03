@@ -155,10 +155,8 @@ fn fix_for(c: &Check) -> Option<Fix> {
         // The fix fetches the default model: only when that is what the check asks for (not the
         // reinstall of another installed model, nor a binary whose bundled model is damaged).
         "embedding model" => {
-            let fix = c.fix.as_deref().unwrap_or("");
-            let other = fix.contains("models fetch ") && !fix.contains(&format!("models fetch {}", model::BASE_8M.key));
-            (fix.contains("adage models fetch") && !other && !fix.starts_with("reinstall adage"))
-                .then_some(Fix::FetchModel)
+            let base = format!("adage models fetch {}", model::BASE_8M.key);
+            c.command().is_some_and(|cmd| cmd == "adage models fetch" || cmd == base).then_some(Fix::FetchModel)
         }
         "index" | "tracks" | "auto-learn runs" | "auto-learn queue" => Some(Fix::LearnNow),
         "fail-open errors" => Some(Fix::OpenFailOpen),

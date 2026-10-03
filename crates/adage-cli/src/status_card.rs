@@ -116,7 +116,7 @@ fn health(paths: &Paths, root: Option<&Path>) -> (Lamp, Line, Option<Line>) {
 }
 
 /// One problem as one plain line for the card, and where it is fixed: the fix's own `adage`
-/// command ([`doctor::fix_command`], the one `adage doctor --json` offers as its `action`), else
+/// command ([`doctor::Check::command`], the one `adage doctor --json` offers as its `action`), else
 /// `adage doctor`, which has the whole sentence (docs/design/everyday-ux.md, rule 6).
 fn brief(c: &doctor::Check) -> (String, String) {
     // Hooks: say which of their problems it is (not registered, cannot run, out of date).
@@ -130,8 +130,7 @@ fn brief(c: &doctor::Check) -> (String, String) {
         } else {
             format!("{harness} hooks cannot run")
         };
-        let command = c.fix.as_deref().and_then(doctor::fix_command).unwrap_or_else(|| "adage doctor".into());
-        return (line, command);
+        return (line, c.command().unwrap_or("adage doctor").to_string());
     }
     let line = match c.check.as_str() {
         "cloud files" => "some files are only in the cloud, so Adage sees less of this repository",
@@ -147,8 +146,7 @@ fn brief(c: &doctor::Check) -> (String, String) {
         _ => "",
     };
     let line = if line.is_empty() { format!("{} needs a look", c.label) } else { line.to_string() };
-    let command = c.fix.as_deref().and_then(doctor::fix_command).unwrap_or_else(|| "adage doctor".into());
-    (line, command)
+    (line, c.command().unwrap_or("adage doctor").to_string())
 }
 
 /// `text → command`, the command in the command colour.
@@ -713,19 +711,20 @@ mod tests {
     /// when the fix is prose (docs/design/everyday-ux.md, rule 6).
     #[test]
     fn a_problem_is_one_line_and_its_command() {
-        let check = |id: &str, detail: &str, fix: &str| doctor::Check {
+        use doctor::Fix;
+        let check = |id: &str, detail: &str, fix: Fix| doctor::Check {
             check: id.into(),
             label: doctor::label(id),
             status: Status::Warn,
             detail: detail.into(),
-            fix: Some(fix.into()),
+            fix: Some(fix),
         };
         let cases = [
             (
                 check(
                     "cloud files",
                     "a cloud drive (iCloud Drive or another sync app) keeps 1368 git objects …",
-                    "move the repository out of the synced folder (for example to ~/code), or …",
+                    Fix::manual("move the repository out of the synced folder (for example to ~/code), or …"),
                 ),
                 ("some files are only in the cloud, so Adage sees less of this repository", "adage doctor"),
             ),
@@ -733,7 +732,7 @@ mod tests {
                 check(
                     "hooks: claude-code (out of date)",
                     "the registered hooks lack PreToolUse",
-                    "`adage install claude-code --scope user --write` adds it",
+                    Fix::run_in("{} adds it", "adage install claude-code --scope user --write"),
                 ),
                 (
                     "claude-code hooks need updating for this version of Adage",
@@ -744,7 +743,7 @@ mod tests {
                 check(
                     "hooks: codex",
                     "codex is installed, but Adage's hooks are not registered with it",
-                    "`adage install codex --write` (this repository) or add `--scope user`",
+                    Fix::run_in("{} (this repository) or add `--scope user`", "adage install codex --write"),
                 ),
                 ("Adage is not connected to codex yet", "adage install codex --write"),
             ),
@@ -752,20 +751,25 @@ mod tests {
                 check(
                     "auto-learn lock",
                     "learning is taking far longer than it usually does: …",
-                    "stop that learner (kill <pid>); the next session that ends starts a new one",
+                    Fix::manual("stop that learner (kill <pid>); the next session that ends starts a new one"),
                 ),
                 ("learning is taking far longer than it usually does", "adage doctor"),
             ),
-            (check("packs", "a pack's digest changed", "adage add <pack>"), ("packs needs a look", "adage add <pack>")),
             (
-                check("index", "no index yet, although tracks are installed", "run `adage condition`"),
+                check("packs", "a pack's digest changed", Fix::run("adage add ./team-pack")),
+                ("packs needs a look", "adage add ./team-pack"),
+            ),
+            (
+                check("index", "no index yet, although tracks are installed", Fix::run_in("run {}", "adage condition")),
                 ("Adage cannot read its compiled reflexes", "adage condition"),
             ),
             (
                 check(
                     "auto-learn runs",
                     "last automatic conditioning failed for acme",
-                    "run `adage condition` in a terminal to see the error; `adage doctor` passes once conditioning succeeds",
+                    Fix::manual(
+                        "run `adage condition` in a terminal to see the error; `adage doctor` passes once conditioning succeeds",
+                    ),
                 ),
                 ("learning failed on its last run", "adage doctor"),
             ),
@@ -774,7 +778,7 @@ mod tests {
             assert_eq!(brief(&c), (line.to_string(), command.to_string()), "{}", c.check);
             // The card names the command `adage doctor --json` offers as the check's action, and
             // `adage doctor` itself when that action is the person's to take.
-            let offered = match c.action() {
+            let offered = match c.fix.as_ref().map(Fix::action) {
                 Some(doctor::Action::Run { command }) => command,
                 _ => "adage doctor".to_string(),
             };

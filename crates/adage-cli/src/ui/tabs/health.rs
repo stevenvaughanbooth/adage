@@ -129,7 +129,7 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
             Span::styled(format!("  {}", c.detail), t.ink2()),
         ]));
         if let Some(fx) = &c.fix {
-            d.push(Line::from(vec![Span::styled(" fix  ", t.dim()), Span::styled(fx.clone(), t.command())]));
+            d.push(Line::from(vec![Span::styled(" fix  ", t.dim()), Span::styled(fx.prose(), t.command())]));
         }
         if let Some(Some(fix)) = h.fixes.get(s.check_sel) {
             d.push(Line::from(vec![Span::styled(" enter", t.key()), Span::raw(format!(" {}", fix.label()))]));
