@@ -1,0 +1,53 @@
+{
+  "protocol": {
+    "schema": 1,
+    "experiment": "synthetic-frozen-contract",
+    "repo": "acme/api",
+    "seed": 42,
+    "kind": "same_model",
+    "training_audit_sha256": "set-from-fixture-bytes",
+    "learner_revision": "synthetic-learner-v1",
+    "policy": {"min_groups": 2, "max_quality_loss": 0.02, "min_savings": 0.2, "min_baseline_success": 0.8},
+    "budget": {"max_model_calls": 10, "max_cost_microusd": 10000, "timeout_seconds": 300},
+    "baseline": {"model": "fixture-model-v1", "configuration_sha256": "set-from-fixture-bytes", "reflex_set_sha256": null},
+    "intervention": {"model": "fixture-model-v1", "configuration_sha256": "set-from-fixture-bytes", "reflex_set_sha256": "set-from-fixture-bytes"},
+    "tasks": [
+      {"identity": {"task_id": "EVAL-0"}, "task_revision": "task-v1", "environment_revision": "checkout+harness-v1", "evaluator_revision": "independent-grader-v1"}
+    ]
+  },
+  "training": {
+    "repo": "acme/api",
+    "training_generation": "0000000000000000000000000000000000000000000000000000000000000000",
+    "sessions": 1,
+    "training_groups": [],
+    "training_declared_identity": 1,
+    "training_inferred_identity": 0,
+    "training_unknown_identity": 0,
+    "recorded_outcomes": 1,
+    "proxy_outcomes": 0,
+    "unknown_outcomes": 0
+  },
+  "configuration": {"temperature": 0, "harness": "fixture-harness-v1", "autolearn": false},
+  "reflex_set": {"synthetic_fixture": true, "reflexes": ["inspect-edit-check"]},
+  "receipt": {
+    "schema": 1,
+    "protocol_sha256": "set-from-frozen-protocol",
+    "job_id": "set-from-frozen-schedule",
+    "run_id": "set-per-scheduled-run",
+    "observed": {
+      "model": "fixture-model-v1",
+      "configuration_sha256": "set-from-fixture-bytes",
+      "reflex_set_sha256": null,
+      "task_revision": "task-v1",
+      "environment_revision": "checkout+harness-v1",
+      "evaluator_revision": "independent-grader-v1",
+      "budget": {"max_model_calls": 10, "max_cost_microusd": 10000, "timeout_seconds": 300}
+    },
+    "status": "completed",
+    "passed": true,
+    "usage_complete": true,
+    "calls": [
+      {"id": "set-per-provider-request", "model": "fixture-model-v1", "usage": {"input_tokens": 800, "output_tokens": 200, "cached_input_tokens": 400, "model_calls": 1, "cost_microusd": 2000}}
+    ]
+  }
+}

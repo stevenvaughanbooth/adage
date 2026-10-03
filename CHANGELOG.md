@@ -18,6 +18,13 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### Fixes from the architecture work
 
+- **Frozen learning experiments.** `adage eval experiment object|freeze|report` binds a declared
+  test cohort to its training audit, model settings, compiled reflex set, budgets and grader.
+  Every scheduled task remains in the report, including missing results and timeouts. Whole
+  workflow accounting includes retries; changed artifacts, reused billing requests and incomplete
+  evidence cannot qualify a savings claim. The commands are offline; live harness adapters supply
+  independent grades and provider usage. New fixtures run in the fast PR checks.
+
 - **Auditable outcomes and paired savings evidence.** A passing check before later edits or a
   new task no longer labels the final trace successful. Canonical exports accept independent
   outcome labels; corpus audits distinguish recorded, proxy and unknown outcomes and expose

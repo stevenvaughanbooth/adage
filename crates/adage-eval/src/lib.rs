@@ -18,6 +18,7 @@ pub mod conventions;
 pub mod dataset;
 pub mod embed_eval;
 pub mod exec_e1;
+pub mod experiment;
 pub mod fidelity;
 pub mod generate;
 pub mod graph_mine;

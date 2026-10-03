@@ -19,6 +19,7 @@ claim. Cheaper-model predictability requires a separate model-transfer compariso
 | M3 Scalable learning | Reusable repository mining checkpoints with explicit invalidation | Repeated runs avoid unchanged mining; changed/deleted evidence and mining parameters invalidate correctly; full/warm artifacts agree | Complete |
 | M4 Outcomes and value | Conservative completion evidence and reproducible paired token/quality evaluation | Stale checks do not label final work successful; quality regressions reject savings claims; unknown usage and contaminated comparisons are visible | Complete |
 | M5 Verification and delivery | Required Rust checks, deterministic corpus/scale measurements, signed commits, remote branch and review | Results and limitations recorded against a commit; no unsupported savings or enterprise-capacity claim | Complete locally; hosted CI blocked by account billing |
+| M6 Frozen experiments | Immutable protocol, complete scheduled cohort, artifact integrity and workflow accounting | Missing jobs, retries, changed artifacts/settings, unknown usage and reused provider requests cannot qualify a savings claim | Complete locally; provider adapter remains next |
 
 ## Implementation boundaries
 
@@ -57,6 +58,10 @@ claim. Cheaper-model predictability requires a separate model-transfer compariso
   evidence audits and paired quality/token/cost qualification. Fast evaluation contracts now run
   in PR CI. Published signed milestone commits and opened
   [draft PR #31](https://github.com/stevenvaughanbooth/adage/pull/31).
+- 2026-10-03: M6 implemented. Experiments freeze the audited training snapshot, task cohort,
+  model/settings, compiled reflex set, budget and grader. Content-addressed receipts retain
+  failures and missing jobs in the denominator and charge every recorded workflow request.
+  Provider execution stays in the live harness; its automatic receipt adapter remains next.
 
 ## Implemented interfaces
 
@@ -182,6 +187,11 @@ synthetic fixture tests arithmetic; it provides no external validity.
 
 ### Training and promotion workflow
 
+The [frozen experiment workflow](learning-experiments.md) implements protocol registration,
+artifact/receipt integrity and complete cohort qualification. Use **reflex** for an individual
+behavior, **reflex set** for its versioned collection, **candidate** for an unqualified mined
+hypothesis and **pack** for a distributable bundle. Internal `Track` storage names remain as-is.
+
 1. Collect native histories, task/group ids, model and repository provenance, intervention
    exposure and independent outcomes. Keep failures, timeouts and unknown outcomes. Respect the
    existing influence exclusion: behavior caused by Adage is not a new organic demonstration.
@@ -203,9 +213,11 @@ stronger-model baseline versus cheaper-model-plus-Adage tests substitution quali
 Improved repeatability also needs repeated runs within tasks and a clustered variance analysis.
 The current paired evaluator does not estimate that variance or count retries as independent tasks.
 
-The next highest-value component is an experiment runner that freezes this protocol, collects
-provider billing/usage and complete outcomes, and binds each arm to an artifact digest. This
-evaluator checks submitted evidence; it cannot independently attest its completeness or grades.
+The next highest-value component is a provider adapter in the existing live runner that consumes
+the frozen schedule, enforces budgets and emits independently graded, reconciled request receipts.
+The experiment layer now binds each arm to artifact/settings digests and checks the complete
+scheduled cohort. It cannot independently attest provider completeness, grading or registration
+time; those remain collection/provenance obligations.
 After real benefit is established, prioritize exact changed-evidence mining and worker/store
 adapters for large repositories, then task-level reliability and drift-driven requalification.
 The defensible product asset is the accumulated, permissioned evidence linking a typed reflex
@@ -286,6 +298,15 @@ weekly/manual workflow; they were not run as part of these checks.
 Remote CI at `5186d81` did not start: GitHub's job annotation reports failed account payments or
 a spending limit that needs increasing. This blocks hosted verification, not local checks.
 [CI run](https://github.com/stevenvaughanbooth/adage/actions/runs/37155984759).
+
+M6: 47 evaluation tests pass (28 unit, eight paired, 11 frozen-experiment contracts). All 259
+CLI tests pass, including the new object → freeze → report flow. The final accounting change
+also passes a focused rerun of both corpus and experiment CLI flows. Formatting, all-target
+workspace Clippy with warnings denied, 18 architecture/hygiene guards and both no-spawn guards
+pass. Fixtures exercise omitted jobs, retry charges, timeouts, changed protocols/artifacts,
+reused provider ids, incomplete accounting, overflow and budget overruns hidden by missing cost.
+The local environment has no configured model credentials; no paid study or measured savings
+claim is included.
 
 ### Release scale smoke measurements
 

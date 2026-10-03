@@ -13,7 +13,7 @@ pub enum StudyKind {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct Policy {
     pub min_groups: usize,
     pub max_quality_loss: f64,
@@ -121,8 +121,10 @@ fn group(pair: &Pair) -> Option<String> {
 /// Exactly one independently evaluated task pair per evidence group. Multiple model cohorts
 /// must be reported separately; a model-transfer study deliberately compares different models.
 pub fn evaluate(study: &Study) -> Result<Report> {
-    ensure!(study.schema == 1, "unsupported paired-study schema");
-    let policy = &study.policy;
+    evaluate_with_reasons(study, BTreeSet::new())
+}
+
+pub(crate) fn validate_policy(policy: &Policy) -> Result<()> {
     ensure!(
         policy.min_groups >= 2
             && policy.max_quality_loss.is_finite()
@@ -133,9 +135,15 @@ pub fn evaluate(study: &Study) -> Result<Report> {
             && (0.0..=1.0).contains(&policy.min_baseline_success),
         "invalid evaluation policy"
     );
+    Ok(())
+}
+
+pub(crate) fn evaluate_with_reasons(study: &Study, mut reasons: BTreeSet<String>) -> Result<Report> {
+    ensure!(study.schema == 1, "unsupported paired-study schema");
+    let policy = &study.policy;
+    validate_policy(policy)?;
     let mut pairs: Vec<_> = study.pairs.iter().collect();
     pairs.sort_by_key(|p| (group(p), &p.baseline.id, &p.intervention.id));
-    let mut reasons = BTreeSet::new();
     if study.experiment.trim().is_empty() || study.training_generation.trim().is_empty() {
         reasons.insert("missing_experiment_provenance".into());
     }
