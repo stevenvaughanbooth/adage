@@ -70,7 +70,7 @@ pub struct Config {
     /// `$CODEX_HOME/sessions` (else `~/.codex/sessions`) once Codex hooks are registered.
     pub learn_codex_auto: bool,
     pub learn_opencode_exports: Option<PathBuf>,
-    /// Keep parsed transcripts in `$ADAGE_HOME/cache/sessions` (`adage_learn::cache`).
+    /// Keep parsed transcripts in `$ADAGE_HOME/cache/sessions` (`adage_ingest::cache`).
     pub learn_parse_cache: bool,
     /// `ui.notices`: one-line notices at session start (`daily`, the default) or none (`off`).
     pub ui_notices: bool,
