@@ -5,7 +5,7 @@ import unittest
 
 import receipt_replay as rr
 
-ARCHIVE = Path(__file__).parent / "results/20260930-receipt-replay/timelines"
+ARCHIVE = Path(__file__).parent / "fixtures/20260930-receipt-replay/timelines"
 CMD = ".venv/bin/python -m pytest tests/test_validate.py -q"
 
 
@@ -93,7 +93,7 @@ class ArchivedTransfer(unittest.TestCase):
 
 class CanaryV5(unittest.TestCase):
     """Development canary (launch-gate-v4/canary-v5): the two mechanisms behind zero eliminations."""
-    ROOT = Path(__file__).parent / "results/20260930-launch-canary/canary-v5/timelines"
+    ROOT = Path(__file__).parent / "fixtures/20260930-launch-canary/canary-v5/timelines"
 
     def load(self, name):
         return json.loads((self.ROOT / (name + ".json")).read_text())
@@ -133,7 +133,7 @@ class CanaryV5(unittest.TestCase):
 
 class CanaryV7(unittest.TestCase):
     """Development canary-v7, re-scored post hoc: every positive requested covered verification."""
-    ROOT = Path(__file__).parent / "results/20260930-launch-canary/canary-v7/timelines"
+    ROOT = Path(__file__).parent / "fixtures/20260930-launch-canary/canary-v7/timelines"
 
     def test_no_positive_is_an_elimination_once_failed_attempts_count(self):
         positives = sorted(self.ROOT.glob("*-positive-*.json"))

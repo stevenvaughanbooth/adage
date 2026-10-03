@@ -15,7 +15,7 @@ import heldout_tasks as tasks
 import split_audit
 
 PROTOCOL = json.loads(split_audit.PROTOCOL.read_text())
-ARCHIVE = Path(__file__).resolve().parent / "results/20261001-heldout-tasks"
+ARCHIVE = Path(__file__).resolve().parent / "fixtures/20261001-heldout-tasks"
 STUB = '''from __future__ import annotations
 
 

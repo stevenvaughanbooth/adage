@@ -76,5 +76,3 @@ Each component is tested through its own crate, without the others:
 - `adage-graph` keeps a second helper module beside `tests/common/` (scripted sessions):
   `tests/support/` (traces and datasets, read through `adage-ingest` and
   `adage_graph::canonical` as the learner reads them).
-- Several archived eval runs double as Python test fixtures in place
-  (`evals/reflex-proof/harness/results/<run>/`); they belong under a `fixtures/` directory.

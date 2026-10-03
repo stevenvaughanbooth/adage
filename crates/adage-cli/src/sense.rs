@@ -30,7 +30,7 @@ use adage_learn::import::Session;
 use adage_learn::LearnConfig;
 use adage_store::Paths;
 use adage_tracks::review::strength_str;
-use adage_tracks::{io, Route};
+use adage_tracks::Route;
 use anyhow::{bail, Result};
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -502,7 +502,8 @@ pub fn run(o: &Options, paths: &Paths) -> Result<Sense> {
     let settings = adage_store::config::load(paths).config;
     let mut cfg = if o.demo { LearnConfig::demo() } else { LearnConfig::for_thresholds(settings.learn_thresholds) };
     cfg.cards = crate::autolearn::card_params(&settings, paths);
-    let (report, planned) = adage_learn::plan(mined, Some(&paths.models()), &paths.tracks(), &cfg)?;
+    let store = adage_learn::store::Files::new(&paths.tracks(), &paths.index());
+    let (report, planned) = adage_learn::plan(mined, Some(&paths.models()), &store, &cfg)?;
     sense.thresholds = report.thresholds.clone();
     sense.intent_model = report.intent_model.clone();
 
@@ -557,7 +558,11 @@ pub fn run(o: &Options, paths: &Paths) -> Result<Sense> {
             .collect();
         let mut samples = a.samples.clone();
         samples.sort_by(|x, y| (&y.0, &y.1).cmp(&(&x.0, &x.1)));
-        let candidates = planned.iter().filter(|p| p.track.manifest.scope.repo == repo).flat_map(candidates).collect();
+        let candidates = planned
+            .iter()
+            .filter(|p| p.track.manifest.scope.repo == repo)
+            .flat_map(|p| candidates(&store, p))
+            .collect();
         sense.repos.push(RepoSense {
             repo: redacted(&repo),
             sessions: a.sessions,
@@ -588,8 +593,8 @@ pub fn run(o: &Options, paths: &Paths) -> Result<Sense> {
     Ok(sense)
 }
 
-fn candidates(p: &adage_learn::Planned) -> Vec<Candidate> {
-    let installed = io::read(&p.dir).ok();
+fn candidates(store: &dyn adage_learn::store::Store, p: &adage_learn::Planned) -> Vec<Candidate> {
+    let installed = store.track(&p.name);
     let suffix = p.track.manifest.track.name.rsplit('/').next().unwrap_or_default().to_string();
     let row = |r: &Route, status: &str| Candidate {
         track: suffix.clone(),

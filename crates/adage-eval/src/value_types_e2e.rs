@@ -88,7 +88,8 @@ pub fn run(
     let mut out = EndToEnd::default();
     let home = tempfile::tempdir()?;
     let cfg = LearnConfig::demo();
-    let (_, planned) = adage_learn::plan(sessions.to_vec(), None, &home.path().join("tracks"), &cfg)?;
+    let store = adage_learn::store::Files::new(&home.path().join("tracks"), &home.path().join("index.json"));
+    let (_, planned) = adage_learn::plan(sessions.to_vec(), None, &store, &cfg)?;
     let mut tracks: Vec<adage_tracks::Track> = planned.into_iter().map(|p| p.track).collect();
     for t in &mut tracks {
         for r in &mut t.routes {

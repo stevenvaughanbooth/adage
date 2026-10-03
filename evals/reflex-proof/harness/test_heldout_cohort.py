@@ -15,6 +15,19 @@ import heldout_analysis as analysis
 import heldout_cohort as runner
 import heldout_tasks
 
+# The runner reads its frozen task material from the archived run; the tests read their own copy.
+TASK_MANIFEST = Path(__file__).resolve().parent / "fixtures/20261001-heldout-tasks/manifest.json"
+
+
+def setUpModule():
+    global _task_manifest
+    _task_manifest, runner.TASK_MANIFEST = runner.TASK_MANIFEST, TASK_MANIFEST
+
+
+def tearDownModule():
+    runner.TASK_MANIFEST = _task_manifest
+
+
 FINITE = next(v for v in curve_tasks.VARIANTS if v["id"] == "finite")
 
 
@@ -191,7 +204,7 @@ class Freeze(unittest.TestCase):
 
     def test_the_archived_dev_v9b_report_selects_a4_with_the_orientation_card(self):
         """The selection input held-out freezes (a development result on one task, not evidence)."""
-        path = Path(__file__).parent / "results/20261001-dev-v9b/report.json"
+        path = Path(__file__).parent / "fixtures/20261001-dev-v9b/report.json"
         d = runner.design(path)
         self.assertEqual((d["arm"], d["card_orientation"], d["dev_protocol"]), ("A4", True, "dev-arms-2"))
         self.assertIsNone(d["card_checks"], "the shipped default; the hook sets no ADAGE_CARD_CHECKS")
