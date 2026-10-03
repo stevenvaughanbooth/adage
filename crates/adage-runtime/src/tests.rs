@@ -2464,7 +2464,7 @@ fn turn_step_never_at_index_zero_nor_twice_in_a_row() {
     let d = decide(&ctx, &mut st, &step("t", 0, true));
     assert!(d.predicted.is_none() && d.would_predict.is_none(), "index 0 is the prompt's request");
     assert_eq!(decide(&ctx, &mut st, &step("t", 1, true)).predicted.unwrap().route, "lookup");
-    let d = decide(&ctx, &mut st, &step("t", 2, true));
+    let d = decide(&ctx, &mut st, &step("t", 2, false));
     assert!(d.predicted.is_none() && d.would_predict.is_none(), "a model step separates two predictions");
     // A model step later, the next thing due (the lookup is never predicted twice).
     assert_eq!(decide(&ctx, &mut st, &step("t", 3, true)).predicted.unwrap().route, "gen");
