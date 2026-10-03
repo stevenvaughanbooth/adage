@@ -1,5 +1,0 @@
-Add a new validator to marshmallow: `marshmallow.validate.IsoDate(*, error=None)`, which accepts strings written exactly as `YYYY-MM-DD` (a four-digit year, two-digit month and two-digit day) that name a real calendar date; other forms such as `20240105`, `2024-1-05` or a date with a time fail. Its default error message is `Must satisfy IsoDate.`; a custom `error` message may interpolate `{input}`. Examples of valid input: `'2024-02-29'`. Examples of invalid input: `'2023-02-29'`.
-
-Follow the conventions of the existing validators, include tests and a docstring, and add a changelog entry.
-
-Do not create git commits.

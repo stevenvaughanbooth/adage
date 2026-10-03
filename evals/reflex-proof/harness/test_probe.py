@@ -182,7 +182,7 @@ class RuntimeInjectedNames(unittest.TestCase):
 class NativeCanaryOutput(unittest.TestCase):
     """Built from the archived launch-gate-v3 tool result: an exit-code prefix, the two canary lines,
     then a <sandbox_violations> block that Claude Code appends. Fixture, not confinement evidence."""
-    FIXTURE = Path(__file__).parent / "fixtures/20260930-launch-canary/canary-v4-aborted/native-canary-tool-result.json"
+    FIXTURE = Path(__file__).parent / "results/20260930-launch-canary/canary-v4-aborted/native-canary-tool-result.json"
 
     def fixture(self):
         return json.loads(self.FIXTURE.read_text())

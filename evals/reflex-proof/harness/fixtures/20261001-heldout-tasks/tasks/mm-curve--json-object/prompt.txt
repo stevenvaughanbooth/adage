@@ -1,5 +1,0 @@
-Add a new validator to marshmallow: `marshmallow.validate.JsonObject(*, error=None)`, which accepts strings holding a JSON document whose top-level value is an object, as parsed by `json.loads` (surrounding whitespace is allowed); arrays, other JSON values and malformed JSON fail. Its default error message is `Must satisfy JsonObject.`; a custom `error` message may interpolate `{input}`. Examples of valid input: `'{"a": 1}'`. Examples of invalid input: `'[1, 2]'`.
-
-Follow the conventions of the existing validators, include tests and a docstring, and add a changelog entry.
-
-Do not create git commits.
