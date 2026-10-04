@@ -23,7 +23,7 @@ claim. Cheaper-model predictability requires a separate model-transfer compariso
 | M7 Live evidence collection | Native provider accounting and independent grading connected to frozen jobs | Partial usage cannot look complete; no terminal attempt is rerun or discarded; observed provenance matches execution | Complete locally; live provider study remains unmeasured |
 | M8 End-to-end product proof | Native evidence → learning → review → hook → independently correct fresh outcome; actionable study preflight | No inserted reflexes, actual delivered commands repair held-out state, negative controls abstain; inert artifacts and execution blockers fail before spend | Complete locally; live model uptake and savings remain unmeasured |
 | M9 Local evaluation handoff | Train-only archive bridge, scenario observation, diagnostic fixtures, operator runbook and claim policies | Native identities/outcomes survive real export/import; template siblings cannot impersonate independent tasks; action observations cannot impersonate passing tests | Complete locally; paid execution belongs to the model-enabled operator |
-| M10 Pilot launch and completion evidence | Runnable learned E0 pilot, disjoint task pack, canonical treatment lineage, durable optional required checks and restart-safe obligations | No model spend during preparation; every paid attempt retained; exact learned artifact reviewed before use; missing, failed or stale checks never become current passes | Implemented; local validation recorded below; paid execution remains operator-controlled |
+| M10 Pilot launch and completion evidence | Runnable learned E0 pilot, disjoint task pack, canonical treatment lineage, durable optional required checks and restart-safe obligations | No model spend during preparation; every paid attempt retained; exact learned artifact reviewed before use; missing, failed or stale checks never become current passes | Complete locally; paid execution remains operator-controlled |
 
 ## Implementation boundaries
 
@@ -432,6 +432,38 @@ pass. The diagnostic CLI plan schedules exactly three baseline sessions and crea
 Cross-review caught and fixed same-record edit/publication ordering and a registry change during
 export; regressions keep both cases conservative. Production Rust is unchanged from M8, whose
 full workspace/evaluation results are recorded above. No live models were called for M9.
+
+M10: the full workspace run, excluding the separately tested evaluation crate, passes with
+1,154 passed, zero failed and three existing ignored tests. The final executor library includes
+one further regression and passes 125/125 in three consecutive parallel runs with actual OS
+sandbox staging. Seven required-completion integration cases require a live staging backend;
+four binary CLI tests cover readiness JSON/exit codes and protected configuration/recovery.
+Fast Rust evaluation contracts pass 55/55, including the canonical source export. All 148 live
+Python contracts pass with no skips, and all 11 pilot fixture selfchecks pass across 30 variants.
+Formatting, all-target workspace Clippy with warnings denied, 18 architecture/hygiene guards,
+both no-spawn guards and diff checks pass.
+
+The complete scripted pilot uses the real task generator and external grader, native canonical
+export/import, production-default learning, explicitly simulated operator CLI review, full
+canonical learned-artifact checks, frozen paired collection and resume. It records 20 training
+and ten held-out arm runs. Equal scripted usage produces no accepted savings; no provider is
+called. Review found and fixed older-pass resurrection across sessions, lost-journal linkage,
+and a transient inherited-lock race. A malformed synthetic native trace correctly produced no
+candidates until its missing message ids were repaired; learning thresholds were unchanged.
+
+Both release binaries were rebuilt from the Rust sources in `977d353`. The release smoke accepts
+canonical source export and the completion CLI, creates the actual 30-run/$30 private pilot
+plan, reports all uncollected usage as incomplete, and makes zero model calls. This environment's
+remaining paid-dispatch blockers are the agent-session boundary, missing Claude Code, and
+missing Claude authentication; the real Bubblewrap probe passes. Binary SHA-256 values:
+
+- `adage`: `7986d8c449d87719f381f9d55c4032ecf87d3e1cc49d73c49fdbf2a8eb56038a`
+- `adage-exec`: `a8e07b3cda295fda694e37d56eeffa8f41d66395fd98715767e9bb78781c60da`
+
+The branch contains current `main` (`2534963`). At `977d353`, GitHub again refused to start CI
+because account payments failed or its spending limit needs increasing
+([annotation](https://github.com/stevenvaughanbooth/adage/actions/runs/37225761512/job/111504957092)).
+No paid model evaluation or commercial savings measurement has been performed for this milestone.
 
 ### Release scale smoke measurements
 

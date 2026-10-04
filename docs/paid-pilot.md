@@ -5,6 +5,9 @@ operator review, a pinned compiled index, and held-out paired evaluation. It use
 Python maintenance tasks and independent external grader. It is an exploratory **synthetic
 paid pilot**, not evidence of customer token savings. No paid calls run until `--execute`.
 
+Until merged, use `codex/trace-learning-infrastructure` from
+[PR #31](https://github.com/stevenvaughanbooth/adage/pull/31).
+
 The treatment is learned **E0 advice** through the normal Adage hooks. It does not enable
 automatic command execution, completion enforcement, or a different model in the treatment arm.
 Both arms use the exact model revision you name.
