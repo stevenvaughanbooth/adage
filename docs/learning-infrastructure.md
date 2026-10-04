@@ -22,6 +22,7 @@ claim. Cheaper-model predictability requires a separate model-transfer compariso
 | M6 Frozen experiments | Immutable protocol, complete scheduled cohort, artifact integrity and workflow accounting | Missing jobs, retries, changed artifacts/settings, unknown usage and reused provider requests cannot qualify a savings claim | Complete locally |
 | M7 Live evidence collection | Native provider accounting and independent grading connected to frozen jobs | Partial usage cannot look complete; no terminal attempt is rerun or discarded; observed provenance matches execution | Complete locally; live provider study remains unmeasured |
 | M8 End-to-end product proof | Native evidence → learning → review → hook → independently correct fresh outcome; actionable study preflight | No inserted reflexes, actual delivered commands repair held-out state, negative controls abstain; inert artifacts and execution blockers fail before spend | Complete locally; live model uptake and savings remain unmeasured |
+| M9 Local evaluation handoff | Train-only archive bridge, scenario observation, diagnostic fixtures, operator runbook and claim policies | Native identities/outcomes survive real export/import; template siblings cannot impersonate independent tasks; action observations cannot impersonate passing tests | Complete locally; paid execution belongs to the model-enabled operator |
 
 ## Implementation boundaries
 
@@ -88,6 +89,16 @@ claim. Cheaper-model predictability requires a separate model-transfer compariso
   the free proof establishes deterministic mechanism and outcome only.
 
 ## Implemented interfaces
+
+### Run a model-enabled local evaluation
+
+Give the receiving agent [the local evaluation handoff](local-agent-evaluation.md). It includes
+capability boundaries, all nine missed-action scenario specifications, free checks, a three-run
+diagnostic config, independent task/group registry, train-only normalization bridge, normal
+learning/review, frozen validation/final commands, budgets, controls and expected report contents.
+The supported frozen runner remains Claude Code on Linux with E0 advice. Broader PR enforcement,
+external-tool recovery, static-rule comparisons and context/waiting claims need the explicitly
+listed implementation/instrumentation work before they can be advertised.
 
 ### Run the end-to-end proof
 
@@ -396,6 +407,16 @@ The deterministic end-to-end proof uses 16 training tasks and one fresh held-out
 fails before receiving the learned procedure and passes its independent grade afterward. It
 makes zero model calls and establishes neither a token-savings percentage nor population-level
 quality. The live Codex canary failed before inference with expired credentials (HTTP 401).
+
+M9: all 136 live Python tests pass with no skips, including 11 training-bridge contracts through
+the actual Rust export/import/learn/audit path and 24 advisory action-order contracts. The nine
+cardinal self-checks exercise all 42 synthetic variants, independent reference outcomes,
+tampered checks, partial fixes, symlinks and unrelated controls. They do not count those variants
+as independent learning/evaluation groups. All 18 architecture/hygiene guards and diff checks
+pass. The diagnostic CLI plan schedules exactly three baseline sessions and creates no run root.
+Cross-review caught and fixed same-record edit/publication ordering and a registry change during
+export; regressions keep both cases conservative. Production Rust is unchanged from M8, whose
+full workspace/evaluation results are recorded above. No live models were called for M9.
 
 ### Release scale smoke measurements
 

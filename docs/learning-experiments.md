@@ -1,5 +1,9 @@
 # Frozen learning experiments
 
+The [local-agent handoff](local-agent-evaluation.md) supplies the host checklist, training export,
+scenario diagnostics, staged budget, and complete pilot-to-final procedure for a model-enabled
+operator. Read its capability limits before choosing which selling point a study can test.
+
 `adage eval experiment` fixes the task cohort before measurement and binds results to the
 training audit, model settings and compiled reflex set. It runs offline. An external harness
 executes the scheduled jobs and supplies independently graded, complete workflow receipts.

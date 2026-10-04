@@ -17,7 +17,8 @@ the machine it runs on.
 | Property tests | `adage-eval/tests/prop_*.rs`, `adage-graph/tests/{agreement,border}.rs`, `adage-pack/tests/digests.rs` | `cargo test -p <crate> --features slow` where gated | — | `evals.yml` |
 | Eval gates | `adage-eval/tests/{gates,bench,parity,g4}.rs` over `evals/datasets/` | `cargo test -p adage-eval` | `ADAGE_BLESS=1` (generated datasets); `adage eval bench … --out evals/baselines/…` | `evals.yml` |
 | Learning experiment contracts | `adage-eval/tests/{paired,experiment}.rs` and evaluation unit tests | `cargo test --locked -p adage-eval --lib --test paired --test experiment` | reviewed assertions | `ci.yml`, always |
-| Live collector contracts (free) | `evals/live/test_{evidence,frozen}.py` | build `adage-cli`, then `python3 -m unittest evals/live/test_evidence.py evals/live/test_frozen.py` | handwritten provider fixture and reviewed assertions | `ci.yml`; frozen execution on Linux |
+| Live collector contracts (free) | `evals/live/test_*.py` | build `adage-cli`, then `python3 -m unittest discover -s evals/live -p 'test_*.py'` | handwritten provider fixtures and reviewed assertions | `ci.yml`; full suite on Linux, native evidence/action order on all platforms |
+| Cardinal workflow diagnostics (free) | `evals/live/sandboxes/cardinal/` | `python3 evals/live/sandboxes/cardinal/selfcheck.py` | explicit final-state and tamper assertions | `ci.yml`, Linux |
 | Architecture guards | `xtask/src/{layers,affected,hygiene,suites}.rs` | `cargo test -p xtask` | edit the declared tables | `ci.yml`, always |
 | Python suites | `evals/**/test_*.py` (`unittest`) | `cargo xtask test python [<suite>]` | — | `evals.yml` |
 | Web unit | `web/map/src/**/*.test.ts` (vitest) | `pnpm test` in `web/map` | — | `ci.yml` |
@@ -56,8 +57,9 @@ outside every package, such as the lockfile, CI itself or an undeclared director
 everything. The architecture guards always run. Pushes to `main`, the weekly run and manual
 dispatches test everything, on every platform. `evals.yml` runs the slow eval gates, the
 property tests and every Python suite weekly and on dispatch. Fast Rust experiment contracts
-and native accounting fixtures also run on every PR; Linux adds the frozen collector flow with
-simulated agents and the real validator. These checks never call a paid model API.
+and native accounting/action-order fixtures also run on every PR; Linux adds all live-runner
+contracts, the training export bridge through the real canonical decoder, and cardinal
+generator/grader self-checks. These checks never call a paid model API.
 
 ## Testing a component in isolation
 

@@ -18,6 +18,12 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### Fixes from the architecture work
 
+- **A reproducible handoff for local model evaluations.** Train-only live archives can be
+  exported into canonical learning with explicit task/group identities, independent outcomes
+  and source provenance. Diagnostic workflow fixtures and a conservative native-action audit
+  separate correct final state from evidence that tests were actually run. The local-agent
+  runbook provides staged budgets, capability gaps, controls and frozen claim criteria.
+
 - **A complete learning-to-delivery proof.** A deterministic CLI fixture turns native traces
   into reviewed reflexes, delivers the learned continuation through the real hook, and verifies
   a fresh task's corrected output. It checks review, disable, unrelated-task and repeated-delivery

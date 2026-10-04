@@ -1,5 +1,11 @@
 # Live evals
 
+For a model-enabled local agent, start with the
+[evaluation handoff](../../docs/local-agent-evaluation.md). It audits supported capabilities,
+provides free diagnostic fixtures, bridges train-only native archives into canonical learning,
+and separates a bounded pilot from a prospective savings claim. The shipped cardinal config is
+a three-session baseline smoke, not an independent training/test dataset.
+
 `runner.py` runs real headless Claude Code agents on a sandbox repository, with and without
 Adage. It generalises `demo/run.py`: the sandbox, tasks, prompts, arms, model and budget all come
 from a config file. It covers the with/without comparison of Design §12 (the eval loop) and
@@ -138,7 +144,8 @@ Free contract checks, including the real Rust validator and simulated agents:
 
 ```sh
 cargo build --locked -p adage-cli
-python3 -m unittest evals/live/test_evidence.py evals/live/test_frozen.py
+python3 -m unittest discover -s evals/live -p 'test_*.py'
+python3 evals/live/sandboxes/cardinal/selfcheck.py
 ```
 
 ## Phases and rounds
