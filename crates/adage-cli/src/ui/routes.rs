@@ -576,6 +576,7 @@ mod tests {
             stage::Outcome,
         };
         let mut receipt = Receipt {
+            verification: None,
             id: "operation".into(),
             ts: "2026-09-29T00:00:00Z".into(),
             session: "session".into(),

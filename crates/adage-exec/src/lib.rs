@@ -19,6 +19,7 @@
 
 pub mod approvals;
 pub mod classify;
+pub mod completion;
 pub mod env;
 pub mod git;
 pub mod hook;
@@ -37,6 +38,7 @@ pub mod sandbox;
 pub mod scan;
 pub mod stage;
 pub mod time;
+pub mod verification;
 
 pub use request::{ExecRequest, Level, OutputMode};
 

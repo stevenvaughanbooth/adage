@@ -40,6 +40,8 @@ const USAGE: &str = "usage:
   adage-exec approve <the same request flags> [--by <name>]
   adage-exec revoke  --repo <dir> [--track <t> --route <r>]
   adage-exec status  --repo <dir>
+  adage-exec completion --repo <dir> [--require <track/route>]... [--clear | --acknowledge]
+  adage-exec readiness --repo <dir> [--session <id>]
   adage-exec journal [--repo <dir>]
   adage-exec recover --id <operation-id> --acknowledge
   adage-exec doctor  [--json]";
@@ -344,6 +346,70 @@ fn cmd_status(a: &Args) -> Result<i32> {
     Ok(0)
 }
 
+fn completion_repo(a: &Args) -> Result<(PathBuf, String, adage_store::Paths)> {
+    let root = std::fs::canonicalize(a.one("--repo").context("--repo is required")?)?;
+    let key = adage_core::repo::repo_key(&root);
+    Ok((root, key, adage_store::Paths::from_env()))
+}
+
+fn cmd_completion(a: &Args) -> Result<i32> {
+    a.only(&["--repo", "--require"], &["--clear", "--acknowledge"])?;
+    let (root, repo, paths) = completion_repo(a)?;
+    let routes = a.all("--require");
+    let changes = !routes.is_empty() || a.has("--clear") || a.has("--acknowledge");
+    if !changes {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&adage_exec::completion::Requirements::load(&paths.root)?.routes(&repo))?
+        );
+        return Ok(0);
+    }
+    person::require_person("completion")?;
+    if [!routes.is_empty(), a.has("--clear"), a.has("--acknowledge")].into_iter().filter(|x| *x).count() != 1 {
+        bail!("choose --require, --clear, or --acknowledge");
+    }
+    if a.has("--acknowledge") {
+        if adage_exec::journal::pending(&paths.root, &root)?.is_some() {
+            bail!("inspect and acknowledge the pending action with `adage-exec recover` first");
+        }
+        let n = adage_exec::completion::AttemptGuard::open(&paths.root, &root)?.acknowledge()?;
+        println!("Acknowledged {n} interrupted completion attempt(s); no check is marked passed.");
+        return Ok(0);
+    }
+    let _lock = adage_store::lock::try_exclusive(&paths.root.join("completion.lock"))?
+        .context("completion configuration is busy")?;
+    let mut config = adage_exec::completion::Requirements::load(&paths.root)?;
+    if a.has("--clear") {
+        config.repositories.remove(&repo);
+    } else {
+        let index = adage_tracks::Index::try_load(&paths.index())
+            .map_err(|_| anyhow::anyhow!("compile reflexes before requiring a check"))?;
+        let pol = policy::load(&paths.root)?;
+        let store = Store::load(&approvals::path(&paths.root))?;
+        for label in &routes {
+            let check = adage_exec::completion::prepare(label, &repo, &root, &index, &paths, &pol, &store)?;
+            println!("Required at completion: {} ({})", check.command, check.label);
+        }
+        config.repositories.insert(repo, routes);
+    }
+    config.save(&paths.root)?;
+    println!(
+        "Saved {}. This changes completion requirements, not execution approvals.",
+        paths.root.join("completion.json").display()
+    );
+    Ok(0)
+}
+
+fn cmd_readiness(a: &Args) -> Result<i32> {
+    a.only(&["--repo", "--session"], &[])?;
+    let (root, repo, paths) = completion_repo(a)?;
+    let index = adage_tracks::Index::try_load(&paths.index())
+        .map_err(|_| anyhow::anyhow!("compiled index is missing or unreadable"))?;
+    let report = adage_exec::completion::inspect(&repo, &root, &index, &paths, a.one("--session").as_deref(), None)?;
+    println!("{}", serde_json::to_string_pretty(&report)?);
+    Ok(if report.ready { 0 } else { 3 })
+}
+
 fn cmd_doctor(a: &Args) -> Result<i32> {
     a.only(&[], &["--json"])?;
     let cap = sandbox::detect();
@@ -440,6 +506,8 @@ fn main() {
         "approve" => cmd_approve(&a),
         "revoke" => cmd_revoke(&a),
         "status" => cmd_status(&a),
+        "completion" => cmd_completion(&a),
+        "readiness" => cmd_readiness(&a),
         "doctor" => cmd_doctor(&a),
         "journal" => cmd_journal(&a),
         "recover" => cmd_recover(&a),
