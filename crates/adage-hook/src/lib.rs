@@ -1127,9 +1127,18 @@ fn respond(
                     st.stop_requests = st.stop_requests.saturating_sub(1);
                 }
             }
+            adage_runtime::ObligationState::capture(st)
         });
-        if let Err(e) = marked {
-            failopen::record(&paths.root, adapter.name(), event, &Failure::io("state", "marking obligations met", &e));
+        match marked {
+            Ok(snapshot) => decision.obligation_state = Some(snapshot),
+            Err(e) => {
+                failopen::record(
+                    &paths.root,
+                    adapter.name(),
+                    event,
+                    &Failure::io("state", "marking obligations met", &e),
+                );
+            }
         }
     }
     match delivery.stop.take() {
@@ -1488,6 +1497,29 @@ mod tests {
         }
     }
 
+    #[test]
+    fn a_rearmed_advisory_obligation_survives_corrupt_state_files() {
+        let w = ObligationWorld::new();
+        let ext = scripted(vec![]);
+        w.edit(ext).expect("the edit announces the obligation");
+        w.event(
+            ext,
+            "PostToolBatch",
+            json!({"tool_calls":[{"tool_name":"Bash","tool_input":{"command":"make gen"},"tool_response":"ok"}]}),
+        );
+        assert!(w.state().obligations[0].met, "the requested command was observed");
+        assert!(w.edit(ext).is_none(), "a later edit re-arms without repeating the directive");
+        assert!(!w.state().obligations[0].met);
+        std::fs::write(w.paths.state("s"), b"corrupt both state slots").unwrap();
+        let recovered = w.stop(ext, false).expect("the spool preserves the re-armed request");
+        assert!(recovered["reason"].as_str().unwrap().contains("running `make gen`"));
+        assert!(!w.state().obligations[0].met);
+        assert_eq!(w.state().stop_requests, 1);
+        std::fs::write(w.paths.state("s"), b"corrupt again").unwrap();
+        assert!(w.stop(ext, false).is_none(), "rebuilding also preserves the already-requested bound");
+        assert_eq!(w.state().stop_requests, 1);
+    }
+
     /// F1: a Stop-gate block no longer hides a learned finish-line obligation. The gate fails at
     /// the first Stop and the obligation is due there too: the agent gets both in one
     /// continuation. At the next Stop the gate passes, and the obligation has been requested.
@@ -1552,9 +1584,13 @@ mod tests {
         assert!(w.stop(ext, false).is_none(), "the action met the obligation: the turn ends");
         assert_eq!(ext.asked.load(std::sync::atomic::Ordering::SeqCst), 0, "no gate beside an action");
         assert!(w.state().obligations[0].met);
+        assert_eq!(w.state().stop_requests, 0, "the successful extension withdrew the request");
+        std::fs::write(w.paths.state("s"), b"corrupt both state slots").unwrap();
         let before = Instant::now();
         let next = w.stop(ext, false).expect("the gate runs at the next Stop");
         assert!(next["systemMessage"].as_str().unwrap().contains("passed"), "{next}");
+        assert!(w.state().obligations[0].met, "spool recovery preserves the extension's final state");
+        assert_eq!(w.state().stop_requests, 0, "a withdrawn Stop request does not reappear after recovery");
         assert_eq!(ext.asked.load(std::sync::atomic::Ordering::SeqCst), 1);
         let deadline = ext.deadlines.lock().unwrap()[0];
         let timeout = Duration::from_secs(u64::from(harness::ACTION_HOOK_TIMEOUT_S));

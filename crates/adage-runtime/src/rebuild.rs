@@ -13,7 +13,7 @@
 //! | `prompts`, `batches` | the count of prompt and batch events |
 //! | `emitted` | every would-have directive, in order (both arms record them) |
 //! | `history`, `first_edit_at_batch` | the observed call keys, in order |
-//! | `obligations` | each finish-line route emitted, from the index; met by `obligation_met` |
+//! | `obligations` | exact `obligation_state` snapshots; older records use emitted routes and `obligation_met` |
 //! | `stop_requests`, `stop_requested` | each recorded stop request, applied as the runtime does |
 //! | `stop_gates` | each `stop_gate` record (`adage-exec`'s finish-line gate ran), so the cap survives |
 //! | `intent` | the family of the last intent route emitted |
@@ -24,10 +24,12 @@
 //! state recorded under another alphabet (the index was relearned since) is dropped: its symbol
 //! ids mean other items now.
 //!
-//! What a record does not show is left out, on the quiet side: an in-flight follow judgement
-//! (`pending`, at most three batches long) is dropped, and an obligation re-armed by a later edit
-//! after it was met stays met (the spool keeps call keys, not the edited paths), so a rebuilt
-//! session may miss a stop request but never makes an extra one.
+//! An in-flight follow judgement (`pending`, at most three batches long) is not reconstructed.
+//! Current records preserve every change to advisory obligations, including a later edit that
+//! re-arms one after its command was observed. Older records lack exact edited paths: a recorded
+//! edit conservatively invalidates earlier met obligations rather than inventing freshness.
+//! Advisory `met` means the requested command was observed, never that a check passed. Stop
+//! requests remain bounded by the recorded session count and ordinary runtime policy.
 
 use crate::{command_key, push_history, Arm, Decision, Judgement, Obligation, SessionState};
 use adage_core::CommandTable;
@@ -82,12 +84,18 @@ pub fn rebuild(records: &[Value], index: &Index, repo: &str, table: &CommandTabl
             "stop_gate" => st.stop_gates = st.stop_gates.saturating_add(1),
             _ => {}
         }
-        let Some(d) = r.get("decision").and_then(|d| serde_json::from_value::<Decision>(d.clone()).ok()) else {
-            continue;
-        };
+        let Some(mut raw) = r.get("decision").cloned() else { continue };
+        // An incomplete new snapshot must not hide an otherwise readable legacy edit record.
+        // Decode it independently and use the conservative legacy path when it is malformed.
+        let snapshot = raw.as_object_mut().and_then(|d| d.remove("obligation_state"));
+        let Ok(mut d) = serde_json::from_value::<Decision>(raw) else { continue };
+        d.obligation_state = snapshot.and_then(|s| serde_json::from_value(s).ok());
         if let Some(c) = d.ctx {
             st.ctx = c;
         }
+        let legacy_edit = d.obligation_state.is_none()
+            && kind == "batch"
+            && d.observed.iter().any(|key| key.starts_with("edit ") || key.starts_with("write "));
         for key in d.observed {
             if kind == "batch" && (key.starts_with("edit ") || key.starts_with("write ")) {
                 st.first_edit_at_batch.get_or_insert(st.batches);
@@ -157,6 +165,40 @@ pub fn rebuild(records: &[Value], index: &Index, repo: &str, table: &CommandTabl
             st.stop_requests += 1;
             if let Some(o) = st.obligations.iter_mut().find(|o| !o.met && !o.stop_requested) {
                 o.stop_requested = true;
+            }
+        }
+        if let Some(snapshot) = d.obligation_state {
+            // A snapshot contains only existing finish-line routes, at most one entry per route;
+            // rebuilding cannot introduce an instruction absent from the current index. Its
+            // bound command/path are the ones the live runtime already recorded for the agent.
+            let mut seen = std::collections::BTreeSet::new();
+            st.obligations = snapshot
+                .obligations
+                .into_iter()
+                .filter(|o| {
+                    seen.insert(o.route.clone())
+                        && index.for_repo(repo).any(|ir| {
+                            ir.route.id == o.route
+                                && !ir.route.is_instinct()
+                                && matches!(
+                                    (&ir.route.trigger, &ir.route.step),
+                                    (Trigger::AfterEdit { .. }, Step::Run { .. })
+                                )
+                        })
+                })
+                .collect();
+            st.stop_requests = snapshot.stop_requests;
+        } else if legacy_edit {
+            // Legacy judgement lists do not preserve where an edit fell relative to a call in
+            // the same batch. Requiring another advisory check is safer than treating an earlier
+            // attempt as current. No synthetic success or outcome is inferred from the edit key.
+            for o in &mut st.obligations {
+                if o.met {
+                    o.met = false;
+                    o.stop_requested = false;
+                }
+                o.edited.clear();
+                o.fresh = false;
             }
         }
     }

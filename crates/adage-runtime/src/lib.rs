@@ -83,12 +83,14 @@ pub struct Pending {
     pub batches_left: u32,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Obligation {
     pub route: String,
     pub expect_key: String,
     pub command: String,
     pub paths: String,
+    /// The requested command was observed (or an approved action completed). This advisory
+    /// bookkeeping is not evidence that tests passed or that the current checkout is verified.
     pub met: bool,
     pub stop_requested: bool,
     /// The repository-relative path whose edit last armed it (what an E2 action reports).
@@ -244,6 +246,8 @@ pub enum Judgement {
     Ignored {
         route: String,
     },
+    /// The requested command was observed, regardless of its result. Verified completion is
+    /// established separately by execution receipts, never by this advisory judgement.
     ObligationMet {
         route: String,
     },
@@ -253,6 +257,21 @@ pub enum Judgement {
     Misfired {
         route: String,
     },
+}
+
+/// The bounded advisory obligation state after a decision or extension update. Keeping this
+/// exact state in the spool preserves later edits, bound commands and withdrawn Stop requests
+/// when the session's state files are lost. It carries no verification-success claim.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ObligationState {
+    pub obligations: Vec<Obligation>,
+    pub stop_requests: u32,
+}
+
+impl ObligationState {
+    pub fn capture(st: &SessionState) -> Self {
+        Self { obligations: st.obligations.clone(), stop_requests: st.stop_requests }
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -273,6 +292,10 @@ pub struct Decision {
     /// rebuilt from the spool takes it from ([`rebuild`]).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ctx: Option<CtxState>,
+    /// Present when advisory obligations changed or an edit was observed. The latter distinguishes
+    /// a known unrelated edit from an older spool's incomplete edit record ([`rebuild`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub obligation_state: Option<ObligationState>,
 }
 
 /// Embeds a raw prompt: `(model id, unit vector)`, or `None` when no model is available. Called
@@ -495,6 +518,7 @@ fn call_keys(call: &Call, ctx: &Ctx) -> Vec<(String, adage_core::Normalized)> {
 
 pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
     let mut d = Decision::default();
+    let obligations_before = ObligationState::capture(st);
     // Exec-only routes (vendored scripts) are carried out by adage-exec, never directed on their
     // own ([`Policy::exec_only`]).
     let routes: Vec<&IndexedRoute> = ctx.index.for_repo(&ctx.repo).filter(|r| in_play(&ctx.policy, r)).collect();
@@ -995,6 +1019,12 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
     d.would_have = out.clone();
     if st.arm != Some(Arm::Control) {
         d.directives = out;
+    }
+    if obligations_before.obligations != st.obligations
+        || obligations_before.stop_requests != st.stop_requests
+        || d.observed.iter().any(|key| key.starts_with("edit ") || key.starts_with("write "))
+    {
+        d.obligation_state = Some(ObligationState::capture(st));
     }
     d
 }
