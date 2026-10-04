@@ -1,0 +1,515 @@
+#!/usr/bin/env python3
+"""Prepare, execute and report one frozen Claude Code experiment.
+
+Preparation runs only sandbox generators and version probes. `run` is a read-only plan unless
+--execute is explicit. Paid execution reuses runner.Live's isolated homes, confinement and ledger.
+"""
+from __future__ import annotations
+
+import argparse
+import copy
+import hashlib
+import json
+import os
+import subprocess
+import sys
+import tempfile
+from decimal import Decimal
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+import evidence
+import runner
+from budget import execution_lock
+
+ADAPTER = "claude-code-frozen/v1"
+MAX_JSON = 64 * 1024 * 1024
+
+
+def encoded(value):
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode()
+
+
+def digest(body):
+    return hashlib.sha256(body).hexdigest()
+
+
+def file_digest(path):
+    sha = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            sha.update(block)
+    return sha.hexdigest()
+
+
+def read_json(path):
+    with Path(path).open("rb") as handle:
+        body = handle.read(MAX_JSON + 1)
+    if len(body) > MAX_JSON:
+        raise ValueError("experiment JSON exceeds 64 MiB")
+    return json.loads(body)
+
+
+def publish(path, value, *, replace=False):
+    """Atomic private publication. Return False for identical redelivery; never rewrite evidence."""
+    return publish_bytes(path, encoded(value), replace=replace)
+
+
+def publish_bytes(path, body, *, replace=False):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as handle:
+        temp = Path(handle.name)
+        try:
+            handle.write(body)
+            handle.flush()
+            os.fsync(handle.fileno())
+            if replace:
+                os.replace(temp, path)
+            else:
+                try:
+                    os.link(temp, path)
+                except FileExistsError:
+                    if path.read_bytes() != body:
+                        raise ValueError(f"refusing to replace experiment evidence: {path}") from None
+                    return False
+            directory = os.open(path.parent, os.O_RDONLY)
+            try:
+                os.fsync(directory)
+            finally:
+                os.close(directory)
+            return True
+        finally:
+            temp.unlink(missing_ok=True)
+
+
+class Objects:
+    def __init__(self, root):
+        self.root = Path(root).resolve()
+
+    def body(self, sha):
+        if not isinstance(sha, str) or len(sha) != 64 or any(c not in "0123456789abcdef" for c in sha):
+            raise ValueError("invalid experiment object digest")
+        path = self.root / f"{sha}.json"
+        with path.open("rb") as handle:
+            body = handle.read(MAX_JSON + 1)
+        if len(body) > MAX_JSON:
+            raise ValueError("experiment object exceeds 64 MiB")
+        if digest(body) != sha:
+            raise ValueError(f"experiment object checksum mismatch: {sha}")
+        return body
+
+    def get(self, sha):
+        return json.loads(self.body(sha))
+
+    def put(self, value):
+        body = encoded(value)
+        sha = digest(body)
+        if len(body) > MAX_JSON:
+            raise ValueError("experiment object exceeds 64 MiB")
+        publish_bytes(self.root / f"{sha}.json", body)
+        return sha
+
+
+def adage_json(adage, *args):
+    result = subprocess.run([str(adage), "eval", "experiment", *map(str, args)],
+                            capture_output=True, text=True, timeout=120)
+    if result.returncode:
+        raise ValueError(result.stderr.strip() or "experiment validation failed")
+    return json.loads(result.stdout)
+
+
+def group_key(repo, identity):
+    """Canonical adage-trace v1 declared group identity; Rust validates the complete schedule."""
+    kind = "group" if identity.get("group_id", "").strip() else "task"
+    value = identity.get(f"{kind}_id", "").strip()
+    if not value:
+        raise ValueError("frozen execution needs declared task identities")
+    sha = hashlib.sha256()
+    for part in ("adage-evidence-group-v1", repo, kind, value):
+        raw = part.encode()
+        sha.update(len(raw).to_bytes(8, "little"))
+        sha.update(raw)
+    return "group-v1:" + sha.hexdigest()
+
+
+def checkout_digest(root):
+    """Exact initial files and executable bits, without Git object timestamps or external links."""
+    root = Path(root)
+    files = []
+    for directory, names, entries in os.walk(root, followlinks=False):
+        names[:] = sorted(n for n in names if n != ".git")
+        for name in sorted(names + entries):
+            path = Path(directory) / name
+            if path.is_symlink():
+                raise ValueError("frozen sandbox inputs must not contain symlinks")
+            if path.is_file() and path.name != ".git":
+                files.append((path.relative_to(root).as_posix(), bool(path.stat().st_mode & 0o111), file_digest(path)))
+    return digest(encoded(sorted(files)))
+
+
+def task_revision(identity, prompt, checkout):
+    return digest(encoded({"identity": identity, "prompt": prompt, "checkout": checkout}))
+
+
+def environment_revision(spec):
+    return digest(encoded({k: spec[k] for k in ("adapter", "inputs", "private_inputs", "harness_version", "adage_sha256")}))
+
+
+def evaluator_revision(spec):
+    return digest(encoded({"command": spec["config"]["score"], "inputs": spec["inputs"]}))
+
+
+def check_inputs(spec, adage):
+    if spec.get("adapter") != ADAPTER or file_digest(adage) != spec["adage_sha256"]:
+        raise ValueError("runner or Adage build differs from the frozen experiment")
+    for path, sha in spec["inputs"].items():
+        if file_digest(path) != sha:
+            raise ValueError(f"frozen input changed: {path}")
+
+
+def prepared_spec(cfg, adage, input_paths, version):
+    # Pin the collector itself, its shared execution/accounting code and the supplied grader/data
+    # closure. Environment/container lockfiles can be declared as --input too.
+    paths = {HERE / name for name in ("frozen.py", "runner.py", "evidence.py", "budget.py")}
+    paths.add(runner.REPO / "demo" / "report.py")
+    private = sorted(str(Path(p).resolve()) for p in input_paths)
+    if any(not runner.under(p, runner.CONFINE_HIDE) for p in private):
+        raise ValueError("grader/data inputs must live under the standard confinement's hidden directories")
+    paths.update(Path(p) for p in private)
+    for key in ("sandbox", "score"):
+        for arg in runner.expand(cfg[key], dir="__future_checkout__", task="__future_task__", arm="off"):
+            if Path(arg).is_file():
+                paths.add(Path(arg).resolve())
+    return {"adapter": ADAPTER, "config": cfg, "harness_version": version,
+            "adage_sha256": file_digest(adage), "private_inputs": private,
+            "inputs": {str(p): file_digest(p) for p in sorted(paths)}}
+
+
+def prepare(config, audit_path, index_path, objects, out, adage, inputs, *, timeout=600,
+            learner_revision, policy=None, identities=None, intervention_model=None):
+    if sys.platform != "linux":
+        raise ValueError("frozen live preparation requires the Linux confinement profile")
+    cfg = runner.load_config(config, {})
+    if not cfg.get("confine") or cfg.get("confine_hide") or cfg.get("confine_expose"):
+        raise ValueError("frozen studies require confine=true with the standard hidden directories")
+    if not inputs:
+        raise ValueError("declare the independent grader/data dependency closure with --input")
+    if not isinstance(learner_revision, str) or not learner_revision.strip():
+        raise ValueError("record the learner build/parameters that actually produced the reflex set")
+    if type(timeout) is not int or timeout <= 0:
+        raise ValueError("timeout must be a positive integer")
+    version = runner.harness_version()
+    if not version:
+        raise ValueError("cannot pin the installed Claude Code version")
+    if type(cfg["max_turns"]) is not int or cfg["max_turns"] <= 0:
+        raise ValueError("max_turns must be a positive integer")
+    micros = Decimal(str(cfg["session_budget_usd"])) * 1_000_000
+    if micros != micros.to_integral_value():
+        raise ValueError("session budget must be an exact number of microdollars")
+    tasks = runner.tasks_for_round(cfg, 1)
+    if len(set(tasks)) != len(tasks):
+        raise ValueError("repeated evaluation task id")
+    if Decimal(str(cfg["budget_usd"])) * 1_000_000 < micros * len(tasks) * 2:
+        raise ValueError("budget_usd cannot reserve the complete paired cohort")
+    policy = policy or {"min_groups": 30, "max_quality_loss": 0.02, "min_savings": 0.2, "min_baseline_success": 0.8}
+    identities = identities or {}
+    cfg.update(rounds=1, concurrency=1, capture_usage=True, timeout_seconds=timeout, setting_sources="")
+    cfg["execution_cwd"] = str(Path(cfg.get("execution_cwd") or Path.cwd()).resolve())
+    for key in ("sandbox", "score"):
+        for i, arg in enumerate(cfg[key]):
+            expanded = runner.expand([arg], dir="__future_checkout__", task="__future_task__", arm="off")[0]
+            candidate = Path(expanded)
+            if not candidate.is_absolute():
+                candidate = Path(cfg["execution_cwd"]) / candidate
+            if candidate.is_file():
+                cfg[key][i] = str(candidate.resolve())
+            elif i == 0 and runner.shutil.which(expanded):
+                cfg[key][i] = str(Path(runner.shutil.which(expanded)).resolve())
+    cfg["eval"] = {"tasks": tasks, "repeats": 1, "arms": ["off", "adage"]}
+    spec = prepared_spec(cfg, adage, inputs, version)
+    test_tasks, prompts = [], {}
+    with tempfile.TemporaryDirectory(prefix="adage-frozen-prepare-") as scratch:
+        for i, task in enumerate(tasks):
+            identity = identities.get(task, {"task_id": task})
+            if identity.get("task_id") != task:
+                raise ValueError("execution task id must equal its canonical task_id")
+            prompt = runner.task_prompt(cfg, task, cfg["prompts"][i % len(cfg["prompts"])]).format(id=task)
+            prompts[task] = prompt
+            workdir = Path(scratch) / str(i) / cfg["workdir"]
+            workdir.parent.mkdir(parents=True)
+            subprocess.run(runner.expand(cfg["sandbox"], dir=str(workdir), task=task, arm="off"),
+                           check=True, capture_output=True, timeout=timeout, cwd=cfg["execution_cwd"])
+            test_tasks.append({"identity": identity, "task_revision": task_revision(identity, prompt, checkout_digest(workdir)),
+                               "environment_revision": environment_revision(spec), "evaluator_revision": evaluator_revision(spec)})
+    # The effective prompts, rather than rotating template positions, are the frozen inputs.
+    spec["config"]["task_prompts"] = prompts
+    other = copy.deepcopy(spec)
+    other["config"]["model"] = intervention_model or cfg["model"]
+    check_inputs(spec, adage)
+    budget = {"max_model_calls": cfg["max_turns"], "max_cost_microusd": int(micros), "timeout_seconds": timeout}
+    protocol = {"schema": 1, "experiment": cfg["name"], "repo": cfg["repo_key"], "seed": cfg.get("seed") or 0,
+                "kind": "same_model" if cfg["model"] == other["config"]["model"] else "model_transfer",
+                "training_audit_sha256": adage_json(adage, "object", audit_path, "--objects", objects.root)["sha256"],
+                "learner_revision": learner_revision,
+                "policy": policy, "budget": budget,
+                "baseline": {"model": cfg["model"], "configuration_sha256": objects.put(spec), "reflex_set_sha256": None},
+                "intervention": {"model": other["config"]["model"], "configuration_sha256": objects.put(other),
+                                 "reflex_set_sha256": None}, "tasks": test_tasks}
+    # Preserve the exact compiled index bytes; reformatting changes the runtime artifact digest.
+    # Rust's object command preserves input bytes and private atomic publication.
+    stored = adage_json(adage, "object", index_path, "--objects", objects.root)
+    protocol["intervention"]["reflex_set_sha256"] = stored["sha256"]
+    with tempfile.TemporaryDirectory() as temp:
+        path = Path(temp) / "protocol.json"
+        publish(path, protocol)
+        frozen = adage_json(adage, "freeze", path, "--objects", objects.root)
+    publish(out, frozen)
+    return frozen
+
+
+class Observer:
+    def __init__(self, frozen, job, spec, objects, adage):
+        self.frozen, self.job, self.spec, self.objects, self.adage = frozen, job, spec, objects, adage
+        p = frozen["protocol"]
+        self.task = next(t for t in p["tasks"] if group_key(p["repo"], t["identity"]) == job["group"])
+        self.observed, self.grade, self.grade_record, self.version = None, None, None, None
+
+    def prepared(self, live, run_id, task, arm, workdir, settings, env):
+        check_inputs(self.spec, self.adage)
+        if live.cfg != self.spec["config"] or not live.isolate:
+            raise ValueError("actual execution configuration changed")
+        exposed = [p for p in env.get("PATH", "").split(os.pathsep) if p]
+        exposed += [str(Path(env[k]).parent) for k in runner.CONFINE_FILE_ENV if env.get(k)]
+        private = [*self.spec["private_inputs"], str(live.root.resolve()), str(self.objects.root)]
+        if any(runner.under(path, exposed) for path in private):
+            raise ValueError("a mounted tool/auth directory would expose independent grader/data or study evidence")
+        if live.state["harness_version"] != self.spec["harness_version"]:
+            raise ValueError("harness version changed")
+        expected_side = "baseline" if arm == "off" else "intervention"
+        if expected_side != self.job["side"] or run_id != self.job["id"] or task != self.task["identity"]["task_id"]:
+            raise ValueError("execution does not match the frozen job")
+        prompt = self.spec["config"]["task_prompts"][task]
+        revision = task_revision(self.task["identity"], prompt, checkout_digest(workdir))
+        artifact = file_digest(live.home / "index.json") if arm == "adage" else None
+        self.observed = {"model": live.cfg["model"], "configuration_sha256": digest(encoded(self.spec)),
+                         "reflex_set_sha256": artifact, "task_revision": revision,
+                         "environment_revision": environment_revision(self.spec),
+                         "evaluator_revision": evaluator_revision(self.spec), "budget": self.frozen["protocol"]["budget"]}
+        expected = self.frozen["protocol"][self.job["side"]]
+        if any(self.observed[k] != self.task[k] for k in ("task_revision", "environment_revision", "evaluator_revision")):
+            raise ValueError("checkout or grading inputs changed before execution")
+        if any(self.observed[k] != expected[k] for k in ("model", "configuration_sha256", "reflex_set_sha256")):
+            raise ValueError("model, settings or reflex set changed before execution")
+        if arm == "adage" and (env.get("ADAGE_AUTO_LEARN") != "0" or env.get("ADAGE_ARM") != "treated"):
+            raise ValueError("frozen intervention must disable learning and deliver the treated arm")
+        env["ADAGE_DISABLE"] = "1" if arm == "off" else "0"
+        env["ADAGE_AUTO_LEARN"] = "0"
+
+    def event(self, event):
+        if event.get("type") == "system" and event.get("subtype") == "init":
+            self.version = event.get("claude_code_version")
+
+    def graded(self, stdout, returncode, timed_out):
+        self.grade = evidence.independent_grade(stdout, returncode, timed_out)
+        self.grade_record = {"stdout": stdout, "returncode": returncode, "timed_out": timed_out,
+                             "evaluator_revision": self.task["evaluator_revision"]}
+
+    def finish(self, live):
+        check_inputs(self.spec, self.adage)
+        if self.observed is None or self.version != self.spec["harness_version"].split()[0]:
+            raise ValueError("actual harness version or execution observations are missing/mismatched")
+        if self.job["side"] == "intervention" and file_digest(live.home / "index.json") != self.observed["reflex_set_sha256"]:
+            raise ValueError("reflex set changed during execution")
+        run_id = self.job["id"]
+        accounting = evidence.read_stream(live.root / "runs" / run_id / "stream.jsonl")
+        metrics = live.state["runs"][run_id].get("metrics", {})
+        result = evidence.receipt(self.frozen["protocol_sha256"], run_id, run_id, self.observed, accounting, self.grade,
+                                  timed_out=bool(metrics.get("timed_out")), exit_code=metrics.get("exit_code", 1))
+        result["evidence"] = {
+            "accounting": self.objects.put({"adapter": ADAPTER, "stream_sha256": accounting.stream_sha256,
+                                             "calls": accounting.calls, "complete": accounting.complete,
+                                             "reasons": accounting.reasons, "terminal": accounting.terminal}),
+            "grade": self.objects.put(self.grade_record),
+            "execution": self.objects.put({"observed": self.observed, "harness_version": self.version,
+                                            "exit_code": metrics.get("exit_code"), "timed_out": metrics.get("timed_out")})}
+        return result
+
+
+def bindings(frozen, objects, adage):
+    p = frozen["protocol"]
+    specs = {side: objects.get(p[side]["configuration_sha256"]) for side in ("baseline", "intervention")}
+    for side, spec in specs.items():
+        if digest(encoded(spec)) != p[side]["configuration_sha256"]:
+            raise ValueError("adapter settings must use the canonical frozen-prepare encoding")
+        check_inputs(spec, adage)
+        cfg = spec["config"]
+        budget = p["budget"]
+        if (cfg["model"] != p[side]["model"] or cfg["repo_key"] != p["repo"] or cfg.get("concurrency") != 1
+                or not cfg.get("confine") or cfg.get("confine_hide") or cfg.get("confine_expose")
+                or cfg.get("capture_usage") is not True or cfg.get("setting_sources") != ""
+                or cfg["max_turns"] != budget["max_model_calls"]
+                or cfg["timeout_seconds"] != budget["timeout_seconds"]
+                or Decimal(str(cfg["session_budget_usd"])) * 1_000_000 != budget["max_cost_microusd"]):
+            raise ValueError("execution settings do not enforce the frozen protocol")
+    return specs
+
+
+def submission(frozen, root):
+    receipts = []
+    for path in sorted((Path(root) / "receipts").glob("*.json")):
+        saved = read_json(path)
+        if saved.get("protocol_sha256") != frozen["protocol_sha256"]:
+            raise ValueError("receipt journal belongs to another protocol")
+        receipts.append(saved["sha256"])
+    return {"schema": 1, "protocol_sha256": frozen["protocol_sha256"], "receipts": receipts}
+
+
+def bind_root(frozen, root):
+    root = Path(root)
+    root.mkdir(parents=True, exist_ok=True)
+    marker = root / "protocol.json"
+    if not marker.exists() and any(p.name != ".runner.lock" for p in root.iterdir()):
+        raise ValueError("frozen execution requires a fresh root; historical runs cannot be registered retroactively")
+    publish(marker, {"protocol_sha256": frozen["protocol_sha256"], "adapter": ADAPTER})
+
+
+def report(frozen_path, frozen, objects, root, adage, required=None):
+    bind_root(frozen, root)
+    path = Path(root) / "submission.json"
+    publish(path, submission(frozen, root), replace=True)
+    args = [str(adage), "eval", "experiment", "report", str(frozen_path), str(path), "--objects", str(objects.root)]
+    if required:
+        args.append(required)
+    result = subprocess.run(args, capture_output=True, text=True, timeout=120)
+    if result.stdout:
+        publish(Path(root) / "report.json", json.loads(result.stdout), replace=True)
+    else:
+        # A corrupt source must not leave an earlier successful report as the current view.
+        publish(Path(root) / "report.json", {"schema": 1, "protocol_sha256": frozen["protocol_sha256"],
+                "evidence_complete": False, "report_valid": False, "error": result.stderr.strip()}, replace=True)
+    return result
+
+
+def execute(frozen_path, frozen, objects, root, adage, *, live_factory=runner.Live):
+    root = Path(root).resolve()
+    if any(not runner.under(path, runner.CONFINE_HIDE) for path in (root, objects.root)):
+        raise ValueError("run root and study objects must be under the confinement's hidden directories")
+    specs = bindings(frozen, objects, adage)
+    with execution_lock(root):
+        bind_root(frozen, root)
+        for job in frozen["jobs"]:
+            terminal = root / "receipts" / f"{job['id']}.json"
+            started = root / "started" / f"{job['id']}.json"
+            if terminal.exists():
+                saved = read_json(terminal)
+                existing = objects.get(saved["sha256"])
+                if existing["job_id"] != job["id"] or existing["protocol_sha256"] != frozen["protocol_sha256"]:
+                    raise ValueError("terminal receipt does not match its scheduled job")
+                continue
+            if started.exists():
+                raise ValueError(f"job {job['id']} started without a terminal receipt; reconcile it without rerunning")
+            spec = specs[job["side"]]
+            observer = Observer(frozen, job, spec, objects, adage)
+            live = live_factory(copy.deepcopy(spec["config"]), root, adage, 1, isolate=True, resume=False, observer=observer)
+            live.home = root / "private" / "reflexes" / job["id"]
+            live.home.mkdir(parents=True, exist_ok=True)
+            if job["side"] == "intervention":
+                sha = frozen["protocol"]["intervention"]["reflex_set_sha256"]
+                # `object` preserved the exact index bytes; copy privately without reformatting.
+                publish_bytes(live.home / "index.json", objects.body(sha))
+            if live.budget.data["blocked_reason"]:
+                break
+            if not publish(started, {"protocol_sha256": frozen["protocol_sha256"], "job_id": job["id"]}):
+                raise ValueError("job was already started")
+            task = observer.task["identity"]["task_id"]
+            prompt = spec["config"]["task_prompts"][task].replace("{", "{{").replace("}", "}}")
+            try:
+                live.run_one(job["id"], "eval", "off" if job["side"] == "baseline" else "adage", task, prompt)
+                value = observer.finish(live)
+                sha = objects.put(value)
+                publish(terminal, {"protocol_sha256": frozen["protocol_sha256"], "sha256": sha})
+            except Exception as exc:
+                publish(root / "errors" / f"{job['id']}.json", {"error": str(exc)[:1000], "job_id": job["id"]})
+                # Preserve the scheduled denominator and stop before spending on an invalid study.
+                report(frozen_path, frozen, objects, root, adage)
+                raise
+            publish(root / "submission.json", submission(frozen, root), replace=True)
+        result = report(frozen_path, frozen, objects, root, adage)
+        if result.returncode == 0 and not json.loads(result.stdout)["evidence_complete"]:
+            result.returncode = 2
+            result.stderr = "frozen collection is incomplete; inspect report.json and the accounting ledger\n"
+        return result
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest="command", required=True)
+    prep = commands.add_parser("prepare")
+    prep.add_argument("config", type=Path)
+    prep.add_argument("--training-audit", type=Path, required=True)
+    prep.add_argument("--reflex-set", type=Path, required=True)
+    prep.add_argument("--out", type=Path, required=True)
+    prep.add_argument("--input", type=Path, action="append", required=True)
+    prep.add_argument("--learner-revision", required=True)
+    prep.add_argument("--timeout-seconds", type=int, default=600)
+    prep.add_argument("--policy", type=Path)
+    prep.add_argument("--identities", type=Path)
+    prep.add_argument("--intervention-model")
+    run = commands.add_parser("run")
+    run.add_argument("frozen", type=Path)
+    run.add_argument("--root", type=Path, required=True)
+    run.add_argument("--execute", action="store_true")
+    rep = commands.add_parser("report")
+    rep.add_argument("frozen", type=Path)
+    rep.add_argument("--root", type=Path, required=True)
+    required = rep.add_mutually_exclusive_group()
+    required.add_argument("--require-token-target", action="store_true")
+    required.add_argument("--require-cost-target", action="store_true")
+    for command in (prep, run, rep):
+        command.add_argument("--objects", type=Path, required=True)
+        command.add_argument("--adage", type=Path, default=runner.REPO / "target" / "release" / "adage")
+    args = parser.parse_args(argv)
+    objects, adage = Objects(args.objects), args.adage.resolve()
+    if args.command == "prepare":
+        result = prepare(args.config, args.training_audit, args.reflex_set, objects, args.out, adage, args.input,
+                         timeout=args.timeout_seconds, learner_revision=args.learner_revision,
+                         policy=read_json(args.policy) if args.policy else None,
+                         identities=read_json(args.identities) if args.identities else None,
+                         intervention_model=args.intervention_model)
+        print(json.dumps({"protocol_sha256": result["protocol_sha256"], "runs": len(result["jobs"]),
+                          "max_cost_microusd": result["max_cost_microusd"]}))
+        return 0
+    frozen = adage_json(adage, "validate", args.frozen, "--objects", objects.root)
+    if args.command == "report":
+        required = "--require-token-target" if args.require_token_target else "--require-cost-target" if args.require_cost_target else None
+        with execution_lock(args.root):
+            result = report(args.frozen, frozen, objects, args.root, adage, required)
+    elif not args.execute:
+        bindings(frozen, objects, adage)
+        print(json.dumps({"execute": False, "protocol_sha256": frozen["protocol_sha256"],
+                          "jobs": frozen["jobs"], "max_cost_microusd": frozen["max_cost_microusd"]}, indent=2))
+        return 0
+    else:
+        if os.environ.get("CLAUDECODE"):
+            raise ValueError("refusing paid execution inside an agent session")
+        specs = bindings(frozen, objects, adage)
+        for spec in specs.values():
+            cfg = spec["config"]
+            if not runner.auth_source(os.environ, cfg.get("forward_env", []), bool(cfg.get("host_auth"))):
+                raise ValueError("configured Claude Code authentication is required for paid execution")
+        if not runner.shutil.which("bwrap"):
+            raise ValueError("frozen execution requires bubblewrap")
+        result = execute(args.frozen, frozen, objects, args.root.resolve(), adage)
+    print(result.stdout, end="")
+    if result.stderr:
+        print(result.stderr, file=sys.stderr, end="")
+    return result.returncode
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except (ValueError, OSError, subprocess.SubprocessError) as exc:
+        raise SystemExit(str(exc)) from None

@@ -18,13 +18,19 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### Fixes from the architecture work
 
+- **Frozen live collection.** `evals/live/frozen.py` prepares, plans, executes and reports a fixed
+  Claude Code study on Linux. It pins inputs and the compiled reflex set, enforces workflow
+  deadlines, preserves terminal results on resume and refuses to rerun interrupted attempts.
+  Immutable receipts retain independent grades and reconciled native usage with checksummed
+  source evidence. Simulated-agent contracts run against the real offline validator in CI.
+
 - **Native request accounting for learning studies.** The live-evaluation adapter reconciles
   completed Claude usage events against terminal and per-model totals, deduplicates assistant
   chunks by provider request, includes cache creation/read tokens once, and rejects incomplete
   logs. Independent graders must exit successfully with a boolean result. CLI list-price
   estimates remain separate from billed costs.
 
-- **Frozen learning experiments.** `adage eval experiment object|freeze|report` binds a declared
+- **Frozen learning experiments.** `adage eval experiment object|freeze|validate|report` binds a declared
   test cohort to its training audit, model settings, compiled reflex set, budgets and grader.
   Every scheduled task remains in the report, including missing results and timeouts. Whole
   workflow accounting includes retries; changed artifacts, reused billing requests and incomplete

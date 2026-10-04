@@ -19,8 +19,8 @@ claim. Cheaper-model predictability requires a separate model-transfer compariso
 | M3 Scalable learning | Reusable repository mining checkpoints with explicit invalidation | Repeated runs avoid unchanged mining; changed/deleted evidence and mining parameters invalidate correctly; full/warm artifacts agree | Complete |
 | M4 Outcomes and value | Conservative completion evidence and reproducible paired token/quality evaluation | Stale checks do not label final work successful; quality regressions reject savings claims; unknown usage and contaminated comparisons are visible | Complete |
 | M5 Verification and delivery | Required Rust checks, deterministic corpus/scale measurements, signed commits, remote branch and review | Results and limitations recorded against a commit; no unsupported savings or enterprise-capacity claim | Complete locally; hosted CI blocked by account billing |
-| M6 Frozen experiments | Immutable protocol, complete scheduled cohort, artifact integrity and workflow accounting | Missing jobs, retries, changed artifacts/settings, unknown usage and reused provider requests cannot qualify a savings claim | Complete locally; provider adapter remains next |
-| M7 Live evidence collection | Native provider accounting and independent grading connected to frozen jobs | Partial usage cannot look complete; no terminal attempt is rerun or discarded; observed provenance matches execution | Native accounting adapter verified; runner integration in progress |
+| M6 Frozen experiments | Immutable protocol, complete scheduled cohort, artifact integrity and workflow accounting | Missing jobs, retries, changed artifacts/settings, unknown usage and reused provider requests cannot qualify a savings claim | Complete locally |
+| M7 Live evidence collection | Native provider accounting and independent grading connected to frozen jobs | Partial usage cannot look complete; no terminal attempt is rerun or discarded; observed provenance matches execution | Complete locally; live provider study remains unmeasured |
 
 ## Implementation boundaries
 
@@ -62,12 +62,18 @@ claim. Cheaper-model predictability requires a separate model-transfer compariso
 - 2026-10-03: M6 implemented. Experiments freeze the audited training snapshot, task cohort,
   model/settings, compiled reflex set, budget and grader. Content-addressed receipts retain
   failures and missing jobs in the denominator and charge every recorded workflow request.
-  Provider execution stays in the live harness; its automatic receipt adapter remains next.
+  Provider execution stays in the live harness; M7 adds its automatic receipt adapter.
 - 2026-10-04: M7 native accounting adapter implemented. Real archived CLI traces demonstrate that
   ordinary assistant chunks carry provisional output counts and `costBasis=list` costs. The
   adapter requires completed request counters reconciled to terminal/per-model totals, preserves
   incomplete accounting, and never labels list-price estimates as actual bills. Eleven
-  deterministic adapter/grade tests cover these contracts; frozen execution integration follows.
+  deterministic adapter/grade tests cover these contracts.
+- 2026-10-04: M7 frozen execution implemented in the existing Python live harness. Preparation
+  pins actual training provenance, the complete held-out cohort, settings and source inputs;
+  execution checks fresh checkouts, preserves immutable terminal results and stops interrupted
+  attempts from spending again. The offline Rust validator verifies source-object integrity.
+  Local process tests exercise deadlines and invalid grades; simulated agents cross the real
+  Rust protocol/report boundary without model credentials or paid calls.
 
 ## Implemented interfaces
 
@@ -219,11 +225,14 @@ stronger-model baseline versus cheaper-model-plus-Adage tests substitution quali
 Improved repeatability also needs repeated runs within tasks and a clustered variance analysis.
 The current paired evaluator does not estimate that variance or count retries as independent tasks.
 
-The next highest-value component is a provider adapter in the existing live runner that consumes
-the frozen schedule, enforces budgets and emits independently graded, reconciled request receipts.
-The experiment layer now binds each arm to artifact/settings digests and checks the complete
-scheduled cohort. It cannot independently attest provider completeness, grading or registration
-time; those remain collection/provenance obligations.
+The [frozen live collector](../evals/live/README.md#frozen-studies) now consumes the fixed schedule,
+checks execution against pinned inputs and emits independently graded, reconciled request
+receipts. The next highest-value step is a representative live study using a reviewed reflex set,
+an untouched task cohort and explicit budget. No model credentials are configured in this work
+environment, so the current verification uses deterministic fixtures. The experiment layer checks
+artifact/settings digests and the complete scheduled cohort. It cannot independently attest
+provider completeness, grading, actual training lineage or registration time; those remain
+collection/provenance obligations. CLI list-price costs do not qualify as billed savings.
 After real benefit is established, prioritize exact changed-evidence mining and worker/store
 adapters for large repositories, then task-level reliability and drift-driven requalification.
 The defensible product asset is the accumulated, permissioned evidence linking a typed reflex
@@ -313,6 +322,19 @@ pass. Fixtures exercise omitted jobs, retry charges, timeouts, changed protocols
 reused provider ids, incomplete accounting, overflow and budget overruns hidden by missing cost.
 The local environment has no configured model credentials; no paid study or measured savings
 claim is included.
+
+M7: all 86 Python live-runner tests pass, including 11 native accounting/grade contracts and
+14 frozen collector/process contracts. The latter run simulated agents against the actual Rust
+validator; timeout tests execute local processes, including a child that outlives its parent.
+All 259 CLI tests and 48 fast evaluation tests pass (28 unit, eight paired, 12 experiment).
+Formatting, all-target workspace Clippy with warnings denied, 18 architecture/hygiene guards and
+both no-spawn guards pass. Inputs changed after freezing, visible study directories, corrupted
+source objects, grader errors and interrupted resume all fail conservatively. No paid model was
+called. The native accounting milestone is `9689cbc`; its
+[hosted CI job](https://github.com/stevenvaughanbooth/adage/actions/runs/37186652959/job/111389881517)
+again reports that it did not start because account payments failed or the spending limit needs
+increasing. The optimized binary used for M5 measurements predates M7; rebuild before preparing
+a study with this collector.
 
 ### Release scale smoke measurements
 

@@ -62,6 +62,7 @@ fn freeze_and_report_require_every_scheduled_run_and_preserve_the_registered_pro
     assert_eq!(frozen["max_cost_microusd"], 40000);
     let frozen_path = d.path().join("frozen.json");
     std::fs::write(&frozen_path, serde_json::to_vec(&frozen).unwrap()).unwrap();
+    assert_eq!(ok(run(d.path(), &["validate", frozen_path.to_str().unwrap(), "--objects", object_dir])), frozen);
     let f: Frozen = serde_json::from_value(frozen).unwrap();
     let receipts = f
         .jobs

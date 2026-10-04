@@ -8,6 +8,11 @@ Use this workflow for prospective savings studies. `adage eval paired` remains u
 exploring submitted pairs, but cannot establish that the full task list was supplied. Neither
 command proves a 20–30% saving without representative, independently graded live runs.
 
+For Claude Code on Linux, [`evals/live/frozen.py`](../evals/live/README.md#frozen-studies)
+prepares and executes this contract through the existing isolated live runner. It collects native
+request accounting and independent grades automatically. The commands below also document the
+provider-neutral contract for other collectors.
+
 ## Prepare and freeze
 
 Split training, validation and final test task families before learning. Keep retries and related
@@ -66,6 +71,7 @@ cohort; the single task below is a format example and cannot satisfy its 200-tas
 
 ```sh
 adage eval experiment freeze protocol.json --objects study/objects > study/frozen.json
+adage eval experiment validate study/frozen.json --objects study/objects
 ```
 
 Freezing verifies object checksums, training/test separation, unique declared groups, model
@@ -131,8 +137,13 @@ The adapter must derive `observed` from actual settings/artifact bytes, collect 
 accounting and independent grades, enforce timeout/budget, and reconcile the entire request
 ledger. The evaluator cannot attest provider authenticity, omitted requests behind a false
 completeness assertion, grader honesty, or that the artifact was trained on the claimed corpus.
-The existing live runner does not yet emit this contract automatically; its provider adapter
-is the next integration boundary. Historical runs cannot become preregistered studies.
+The frozen live adapter retains immutable accounting, grader and execution objects in the
+receipt's optional `evidence` map (names to object digests). Reporting verifies those objects too;
+corrupt or missing sources prevent qualification. Native stream checksums retain the connection
+to raw logs kept privately outside git. Claude assistant chunks can carry provisional output
+counts: this adapter requires completed requests reconciled with terminal and per-model totals.
+CLI list-price estimates are not billed costs, so cost stays unknown. Historical runs cannot
+become preregistered studies.
 
 ## Qualify the complete cohort
 
@@ -161,5 +172,7 @@ stronger-without for substitution. This schema freezes one comparison at a time;
 comparisons need an external multiplicity plan. Repeatability needs repeated within-task runs
 and clustered analysis; this fixed-pair evaluator does not establish reduced outcome variance.
 
-The synthetic fixtures in `adage-eval/tests/experiment.rs` and the CLI lifecycle test verify
-these contracts. They are not customer savings evidence.
+The synthetic fixtures in `adage-eval/tests/experiment.rs`, the CLI lifecycle test and
+`evals/live/test_frozen.py` verify these contracts. The Python flow uses simulated agents and the
+real Rust validator, plus actual local processes for deadline and grading failures. They are not
+customer savings evidence.

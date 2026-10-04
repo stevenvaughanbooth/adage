@@ -253,6 +253,10 @@ pub struct Receipt {
     /// Runner assertion that the complete workflow's calls (including retries) are present.
     pub usage_complete: bool,
     pub calls: Vec<ModelCall>,
+    /// Optional immutable source objects (native accounting, independent grade, execution
+    /// observations). Their integrity is checked; their authenticity remains the runner's job.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub evidence: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -333,9 +337,8 @@ fn run(p: &Protocol, task: &Task, side: Side, job: &Job) -> Run {
     }
 }
 
-/// Count every scheduled task. Missing jobs become unknown outcomes/usage; no complete-case
-/// filtering or best-of-retry selection is permitted. Protocol violations invalidate all bounds.
-pub fn evaluate(frozen: &Frozen, submitted: &Submission, objects: &dyn Objects) -> Result<Report> {
+/// Verify the immutable protocol, scheduled denominator and referenced training/artifact objects.
+pub fn validate(frozen: &Frozen, objects: &dyn Objects) -> Result<()> {
     let expected = freeze(frozen.protocol.clone(), objects)?;
     ensure!(
         expected.protocol_sha256 == frozen.protocol_sha256
@@ -343,6 +346,13 @@ pub fn evaluate(frozen: &Frozen, submitted: &Submission, objects: &dyn Objects) 
             && expected.max_cost_microusd == frozen.max_cost_microusd,
         "frozen protocol or schedule was changed"
     );
+    Ok(())
+}
+
+/// Count every scheduled task. Missing jobs become unknown outcomes/usage; no complete-case
+/// filtering or best-of-retry selection is permitted. Protocol violations invalidate all bounds.
+pub fn evaluate(frozen: &Frozen, submitted: &Submission, objects: &dyn Objects) -> Result<Report> {
+    validate(frozen, objects)?;
     ensure!(
         submitted.schema == 1 && submitted.protocol_sha256 == frozen.protocol_sha256,
         "submission protocol mismatch"
@@ -362,6 +372,10 @@ pub fn evaluate(frozen: &Frozen, submitted: &Submission, objects: &dyn Objects) 
     for sha in receipts {
         let r: Receipt = object(objects, &sha)?;
         ensure!(r.schema == 1, "unsupported experiment receipt schema");
+        ensure!(r.evidence.len() <= 16, "too many source objects in one receipt");
+        for source in r.evidence.values() {
+            bytes(objects, source)?;
+        }
         if r.protocol_sha256 != frozen.protocol_sha256 {
             reasons.insert("receipt_protocol_mismatch".into());
         }
@@ -489,7 +503,7 @@ fn read_bounded(path: impl AsRef<std::path::Path>) -> Result<Vec<u8>> {
 }
 
 pub fn cli(args: &[String]) -> Result<()> {
-    const USAGE: &str = "usage: adage eval experiment object <input.json> --objects <dir>\n       adage eval experiment freeze <protocol.json> --objects <dir>\n       adage eval experiment report <frozen.json> <submission.json> --objects <dir> [--require-token-target | --require-cost-target]";
+    const USAGE: &str = "usage: adage eval experiment object <input.json> --objects <dir>\n       adage eval experiment freeze <protocol.json> --objects <dir>\n       adage eval experiment validate <frozen.json> --objects <dir>\n       adage eval experiment report <frozen.json> <submission.json> --objects <dir> [--require-token-target | --require-cost-target]";
     let required = args.last().map(String::as_str).filter(|s| s.starts_with("--require-"));
     match args.first().map(String::as_str) {
         Some("object") if args.len() == 4 && args[2] == "--objects" => {
@@ -500,6 +514,11 @@ pub fn cli(args: &[String]) -> Result<()> {
         Some("freeze") if args.len() == 4 && args[2] == "--objects" => {
             let protocol = serde_json::from_slice(&read_bounded(&args[1])?)?;
             let frozen = freeze(protocol, &Directory(PathBuf::from(&args[3])))?;
+            println!("{}", serde_json::to_string_pretty(&frozen)?);
+        }
+        Some("validate") if args.len() == 4 && args[2] == "--objects" => {
+            let frozen = serde_json::from_slice(&read_bounded(&args[1])?)?;
+            validate(&frozen, &Directory(PathBuf::from(&args[3])))?;
             println!("{}", serde_json::to_string_pretty(&frozen)?);
         }
         Some("report") if (args.len() == 5 || args.len() == 6) && args[3] == "--objects" => {

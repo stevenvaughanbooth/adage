@@ -25,6 +25,96 @@ The dry run prints the number of agent runs as the product that makes it, e.g. `
 2 repeats = 12; eval 6 tasks x 3 repeats x 2 arms (control, adage) x 2 rounds = 72; total 84
 agent runs`.
 
+## Frozen studies
+
+Use `frozen.py` for a prospective savings study after training, candidate review and compilation
+have finished. It reuses the execution and budget machinery below, with a fixed paired cohort
+and the stricter [experiment contract](../../docs/learning-experiments.md). The exploratory
+rounds and summaries in `runner.py` remain useful for development; they are not this contract.
+
+This collector requires Linux, Bubblewrap, a pinned Claude Code version and a current Adage
+build. Supply an existing live config with `confine: true`, the standard hidden directories
+(no `confine_hide`/`confine_expose` overrides), a resolved model revision, held-out evaluation task
+ids and enough total budget to reserve both arms for every task. The collector fixes one round,
+one attempt per arm/task, sequential execution and no learning. Each job gets a fresh checkout
+and private home; the baseline disables reflexes and the intervention uses the exact frozen
+index. Project/local settings are disabled in favor of the explicit runner settings.
+
+```sh
+# Build this revision before preparing: the executable digest is part of the protocol.
+cargo build --release --locked -p adage-cli
+target/release/adage corpus inspect --repo acme/api --evidence > training-evidence.json
+
+# Preparation runs sandbox generators and version probes, but calls no model.
+python3 evals/live/frozen.py prepare config.json \
+  --training-audit training-evidence.json --reflex-set frozen-index.json \
+  --learner-revision 'actual-training-build-and-parameters' \
+  --input /absolute/path/to/grade.py --input /absolute/path/to/task-data.json \
+  --objects study/objects --out study/frozen.json
+
+# Read-only plan: no run directory is created.
+python3 evals/live/frozen.py run study/frozen.json \
+  --objects study/objects --root study/run
+
+# Paid execution requires configured authentication and an explicit --execute.
+python3 evals/live/frozen.py run study/frozen.json \
+  --objects study/objects --root study/run --execute
+
+# Recompute qualification offline from all immutable receipts.
+python3 evals/live/frozen.py report study/frozen.json \
+  --objects study/objects --root study/run --require-token-target
+```
+
+Use the same `--adage /absolute/path/to/adage` on every command when overriding the default
+`target/release/adage`. `--learner-revision` must describe the build and parameters that actually
+produced the reflex set; the collector cannot infer that provenance from its own build. The audit
+must describe that training snapshot. `--identities identities.json` supplies canonical identities
+keyed by execution task id; each `task_id` must equal that key. Related tasks belong in the same
+group across training and evaluation. A frozen cohort has one representative per independent
+group. `--policy policy.json` and `--timeout-seconds 600` set predeclared thresholds and budgets;
+`--intervention-model` prepares a fixed model-transfer comparison.
+
+Declare the complete grader/data dependency closure with repeated `--input` arguments, including
+local imports, test data and environment lockfiles. Keep these private files under the standard
+hidden roots (`/workspace`, `/tmp`, `/var/tmp`, `/home`, `/root` or `/mnt`) and outside mounted tool
+or authentication directories. The collector pins their contents, its own source, executable
+file arguments, initial checkout files and executable bits, effective prompts, working directory,
+harness version and Adage binary. It rejects checkout symlinks. Unlisted external dependencies
+are not made hermetic by these hashes; pin the installed environment separately. Inputs are
+checked before dispatch and after collection. Do not change them while the study is running.
+The run root and object directory must also stay under these hidden roots, outside mounted
+tool/authentication directories, so agents cannot read the other jobs' evidence.
+
+The workflow deadline covers preparation, agent execution and grading. The harness enforces
+`--max-turns` and `--max-budget-usd`; receipt validation also checks actual request counts and
+known billed costs against the frozen budget. A turn cap is not an independent provider request
+interceptor. The shared ledger reserves each session cap and blocks further dispatch when spend
+is unknown. Its admission accounting uses the CLI's cost estimate; actual billed cost remains
+unknown until an invoice/provider integration supplies it. A token claim can qualify separately
+from a cost claim. Unsupported helper/subagent or fallback-model accounting cannot silently
+qualify as complete usage.
+
+Completed, failed and timed-out receipts are immutable. Running the same command again skips
+terminal jobs, including bad or unknown grades. A started job without a terminal receipt stops
+resume: reconcile that original attempt without running a replacement. Never delete journal
+entries to improve results. Every scheduled job remains in the denominator, including jobs not
+run because the budget blocked. Incomplete collection exits unsuccessfully; a complete study
+with a negative quality/savings result still completes normally. Use `--require-token-target`
+on `report` when acceptance itself must control the exit status.
+
+Private objects retain native accounting, independent grader output and execution observations;
+raw streams remain under `study/run/runs`. Keep the entire study outside git. SHA-256 objects
+establish integrity, not provider authenticity or an independent registration timestamp. Publish
+the frozen digest before running a claim study. These contracts and fixtures do not establish
+20–30% customer savings; that needs representative live evidence.
+
+Free contract checks, including the real Rust validator and simulated agents:
+
+```sh
+cargo build --locked -p adage-cli
+python3 -m unittest evals/live/test_evidence.py evals/live/test_frozen.py
+```
+
 ## Phases and rounds
 
 | Phase | What happens |

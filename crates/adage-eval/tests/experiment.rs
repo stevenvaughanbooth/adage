@@ -324,3 +324,17 @@ fn objects_are_private_idempotent_and_cannot_overwrite_corrupt_evidence() {
     assert!(objects.put(b"not json").is_err());
     assert!(objects.read("../escape").is_err());
 }
+
+#[test]
+fn receipt_source_objects_must_exist_and_match_their_digests() {
+    let (f, mut s, mut o) = complete(2);
+    let sha = o.put(&serde_json::json!({"independent_grade": true}));
+    change(&mut s, &mut o, 0, |r| {
+        r.evidence.insert("grade".into(), sha.clone());
+    });
+    assert!(experiment::evaluate(&f, &s, &o).unwrap().evidence_complete);
+    o.0.insert(sha.clone(), b"{}".to_vec());
+    assert!(experiment::evaluate(&f, &s, &o).unwrap_err().to_string().contains("checksum mismatch"));
+    o.0.remove(&sha);
+    assert!(experiment::evaluate(&f, &s, &o).unwrap_err().to_string().contains("missing experiment object"));
+}
