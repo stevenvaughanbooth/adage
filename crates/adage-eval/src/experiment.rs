@@ -40,6 +40,106 @@ fn object<T: DeserializeOwned>(objects: &dyn Objects, sha: &str) -> Result<T> {
     serde_json::from_slice(&bytes(objects, sha)?).with_context(|| format!("invalid experiment object {sha}"))
 }
 
+/// Canonical source records retain every production route field, including review state.
+/// They are separate from the compiled index, which intentionally omits nascent candidates.
+#[derive(Debug, Serialize)]
+pub struct SourceTrack {
+    pub manifest: Manifest,
+    pub routes: Vec<adage_tracks::Route>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct Sources {
+    pub schema: u32,
+    pub tracks: Vec<SourceTrack>,
+    pub index: Index,
+}
+
+/// Read source tracks for experiment lineage without the runtime's fail-open loading policy.
+/// No review, compilation artifact or other file is written by this inspection.
+pub fn sources(root: &Path) -> Result<Sources> {
+    fn regular(path: &Path) -> Result<()> {
+        ensure!(
+            std::fs::symlink_metadata(path)?.file_type().is_file(),
+            "experiment source is not a regular file: {}",
+            path.display()
+        );
+        read_bounded(path)?;
+        Ok(())
+    }
+    let mut pending = vec![root.to_path_buf()];
+    let mut tracks = Vec::new();
+    while let Some(dir) = pending.pop() {
+        ensure!(
+            std::fs::symlink_metadata(&dir)?.file_type().is_dir(),
+            "experiment tracks path is not a directory: {}",
+            dir.display()
+        );
+        let manifest = dir.join("track.toml");
+        if manifest.try_exists()? {
+            regular(&manifest)?;
+            let routes = dir.join("routes");
+            ensure!(
+                std::fs::symlink_metadata(&routes)?.file_type().is_dir(),
+                "experiment routes path is not a directory: {}",
+                routes.display()
+            );
+            // Enumerate strictly before io::read: the service loader tolerates directory-entry
+            // errors, while a lineage snapshot must not silently lose one candidate.
+            for entry in std::fs::read_dir(&routes)? {
+                let path = entry?.path();
+                ensure!(
+                    path.extension().is_some_and(|ext| ext == "yaml"),
+                    "unexpected route source: {}",
+                    path.display()
+                );
+                regular(&path)?;
+            }
+            let mut track = adage_tracks::io::read(&dir)
+                .with_context(|| format!("invalid experiment source track {}", dir.display()))?;
+            track.routes.sort_by(|a, b| a.id.cmp(&b.id));
+            ensure!(
+                track.routes.windows(2).all(|pair| pair[0].id != pair[1].id),
+                "duplicate route id in experiment source track {}",
+                dir.display()
+            );
+            let exec = dir.join(adage_tracks::index::EXEC_FILE);
+            if exec.try_exists()? {
+                regular(&exec)?;
+                serde_json::from_slice::<BTreeMap<String, adage_tracks::index::ExecBinding>>(&read_bounded(&exec)?)
+                    .with_context(|| format!("invalid experiment exec bindings {}", exec.display()))?;
+            }
+            tracks.push(track);
+        } else {
+            for entry in std::fs::read_dir(&dir)? {
+                let entry = entry?;
+                if entry.file_name().to_string_lossy().starts_with('.') {
+                    continue;
+                }
+                ensure!(
+                    entry.file_type()?.is_dir(),
+                    "unexpected file outside a source track: {}",
+                    entry.path().display()
+                );
+                ensure!(entry.file_name() != "routes", "routes directory has no track.toml: {}", dir.display());
+                pending.push(entry.path());
+            }
+        }
+    }
+    tracks.sort_by(|a, b| {
+        (&a.manifest.scope.repo, &a.manifest.track.name).cmp(&(&b.manifest.scope.repo, &b.manifest.track.name))
+    });
+    ensure!(
+        tracks.windows(2).all(|pair| (&pair[0].manifest.scope.repo, &pair[0].manifest.track.name)
+            != (&pair[1].manifest.scope.repo, &pair[1].manifest.track.name)),
+        "duplicate repository/track identity in experiment sources"
+    );
+    let index = Index::compile_root(root, &tracks).0;
+    let tracks =
+        tracks.into_iter().map(|track| SourceTrack { manifest: track.manifest, routes: track.routes }).collect();
+    Ok(Sources { schema: 1, tracks, index })
+}
+
 #[derive(Debug, Serialize)]
 pub struct Artifact {
     pub sha256: String,
@@ -576,9 +676,12 @@ fn read_bounded(path: impl AsRef<std::path::Path>) -> Result<Vec<u8>> {
 }
 
 pub fn cli(args: &[String]) -> Result<()> {
-    const USAGE: &str = "usage: adage eval experiment object <input.json> --objects <dir>\n       adage eval experiment artifact <index.json> --repo <repo> [--checkout <dir>]\n       adage eval experiment freeze <protocol.json> --objects <dir>\n       adage eval experiment validate <frozen.json> --objects <dir>\n       adage eval experiment report <frozen.json> <submission.json> --objects <dir> [--require-token-target | --require-cost-target]";
+    const USAGE: &str = "usage: adage eval experiment sources <tracks-dir>\n       adage eval experiment object <input.json> --objects <dir>\n       adage eval experiment artifact <index.json> --repo <repo> [--checkout <dir>]\n       adage eval experiment freeze <protocol.json> --objects <dir>\n       adage eval experiment validate <frozen.json> --objects <dir>\n       adage eval experiment report <frozen.json> <submission.json> --objects <dir> [--require-token-target | --require-cost-target]";
     let required = args.last().map(String::as_str).filter(|s| s.starts_with("--require-"));
     match args.first().map(String::as_str) {
+        Some("sources") if args.len() == 2 => {
+            println!("{}", serde_json::to_string_pretty(&sources(Path::new(&args[1]))?)?);
+        }
         Some("artifact") if matches!(args.len(), 4 | 6) && args[2] == "--repo" => {
             ensure!(args.len() == 4 || args[4] == "--checkout", USAGE);
             let checkout = args.get(5).map(Path::new);

@@ -23,6 +23,7 @@ claim. Cheaper-model predictability requires a separate model-transfer compariso
 | M7 Live evidence collection | Native provider accounting and independent grading connected to frozen jobs | Partial usage cannot look complete; no terminal attempt is rerun or discarded; observed provenance matches execution | Complete locally; live provider study remains unmeasured |
 | M8 End-to-end product proof | Native evidence → learning → review → hook → independently correct fresh outcome; actionable study preflight | No inserted reflexes, actual delivered commands repair held-out state, negative controls abstain; inert artifacts and execution blockers fail before spend | Complete locally; live model uptake and savings remain unmeasured |
 | M9 Local evaluation handoff | Train-only archive bridge, scenario observation, diagnostic fixtures, operator runbook and claim policies | Native identities/outcomes survive real export/import; template siblings cannot impersonate independent tasks; action observations cannot impersonate passing tests | Complete locally; paid execution belongs to the model-enabled operator |
+| M10 Pilot launch and completion evidence | Runnable learned E0 pilot, disjoint task pack, canonical treatment lineage, durable optional required checks and restart-safe obligations | No model spend during preparation; every paid attempt retained; exact learned artifact reviewed before use; missing, failed or stale checks never become current passes | Implemented; local validation recorded below; paid execution remains operator-controlled |
 
 ## Implementation boundaries
 
@@ -91,6 +92,20 @@ claim. Cheaper-model predictability requires a separate model-transfer compariso
 ## Implemented interfaces
 
 ### Run a model-enabled local evaluation
+
+Start with [the packaged paid-pilot guide](paid-pilot.md). `evals/live/pilot.py` creates a private
+pilot root, fixes one total admission allocation across 20 training runs and ten held-out arm
+runs, collects real training traces, exports them through the canonical corpus, runs production
+learning and stops for actual candidate review. It freezes validation and test before either
+cohort is collected. The 15 semantic groups are synthetic programming and documentation tasks;
+siblings share an identity and entire groups stay in one split. Unknown accounting or grading
+blocks further spend. Original receipts and failed attempts survive resume.
+
+`adage eval experiment sources <tracks-dir>` exports full typed learned candidates and a
+recompiled index without writing files. The pilot checks that enabled behavior came from its
+original production learning output, allowing only reviewed lifecycle/strength changes. This
+does not turn a synthetic task pack into representative customer evidence. Small-group quality
+bounds remain strict; a first paid pilot can produce a useful negative or inconclusive result.
 
 Give the receiving agent [the local evaluation handoff](local-agent-evaluation.md). It includes
 capability boundaries, all nine missed-action scenario specifications, free checks, a three-run

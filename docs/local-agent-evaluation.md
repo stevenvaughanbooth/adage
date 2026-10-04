@@ -5,6 +5,11 @@ avoidable work. The first deliverable is a trustworthy live pilot, not a savings
 supported frozen collector is **Claude Code on Linux with Bubblewrap, using E0 advice**. Model
 access alone does not supply independent tasks, a grader, or proof that a feature is implemented.
 
+For the packaged first run, use [the paid-pilot launch guide](paid-pilot.md). Its coordinator
+provides the task pack, disjoint split registry, training export, production learning, review
+handoff, frozen validation/test cohorts and one bounded program allocation. The larger study
+outlined below remains the expansion plan after that mechanism pilot.
+
 ## Instruction to the receiving agent
 
 > Work from `codex/trace-learning-infrastructure` in stevenvaughanbooth/adage. Read this file,
@@ -27,7 +32,7 @@ transcripts, credentials, customer task data, study objects and reports belong o
 | --- | --- | --- |
 | Complete companion changes | Learned after-edit sequences; deterministic learning-to-hook proof | Whether a real model follows a learned sequence and leaves independently correct final artifacts |
 | Correct repository checks | Scoped verification advice and some environment/failed-verification recovery | Correct command selection, fewer failed attempts, and final correctness; not arbitrary external tool recovery |
-| Evidence before finishing or publishing | E0 completion reminders; some approved E2 checks and a bounded Stop continuation exist outside this E0 collector | Observe omissions and ordering; universal must-test enforcement and a PR gate bound to the exact head are **not implemented by this collector** |
+| Evidence before finishing or publishing | E0 reminders; separately opt-in E2 required checks with durable process/input evidence, readiness JSON and bounded Stop retries | This E0 collector observes omissions and ordering. Required checks are a separate treatment; universal enforcement, test discovery and an exact-head PR gate are **not implemented by this collector** |
 | External API/CLI recovery | Generic authenticated lookup routing is not established; executor networking is disabled | Scenario specification and a future adapter/implementation gate; do not claim this from a local shell substitution |
 | Real user journey | A task-specific external grader can check final behavior | Outcome if the necessary browser/service fixture is provided; no shipped universal browser grader |
 | Procedures after compaction | Contextual advice exists; context recovery benefit is unmeasured | Needs controlled long-context/compaction tasks with equivalent accepted requirements in every arm |
@@ -48,7 +53,9 @@ agents when `CLAUDECODE` is set; the operator must execute from a normal termina
 
 These are proposed limits, not authorization or predicted invoices. All model calls, including
 training and failed attempts, consume the agreed program budget. Each stage has its own root;
-the current runner does not enforce one shared ledger across separate studies.
+the underlying runner does not enforce one shared ledger across arbitrary separate studies.
+The packaged pilot coordinator partitions one explicit program cap and blocks further stages
+when an earlier stage has unresolved accounting; use that coordinator for the first run.
 
 | Stage | Sessions | Example session cap | Maximum reservation | Decision |
 | --- | ---: | ---: | ---: | --- |

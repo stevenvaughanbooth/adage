@@ -98,7 +98,7 @@ jobs:
       # Fast deterministic evidence checks belong on every PR; the long replay gates stay in
       # evals.yml. A change to quality or spend arithmetic must not wait for the weekly run.
       - name: learning experiment evidence contracts
-        run: cargo test --locked -p adage-eval --lib --test paired --test experiment
+        run: cargo test --locked -p adage-eval --lib --test paired --test experiment --test experiment_sources
       - name: native provider evidence contracts (no API calls)
         run: python3 -m unittest evals/live/test_evidence.py evals/live/test_scenarios.py
       - name: frozen live runner contracts (simulated agents, real validator)
@@ -107,6 +107,7 @@ jobs:
           cargo build --locked -p adage-cli
           python3 -m unittest discover -s evals/live -p 'test_*.py'
           python3 evals/live/sandboxes/cardinal/selfcheck.py
+          python3 evals/live/sandboxes/pilot/selfcheck.py
       # A pull request tests the packages its changes can affect: those it changed, those whose
       # tests read a changed fixture, and every package that depends on one of them
       # (`cargo xtask affected`, xtask/src/affected.rs). A change outside every package (the
@@ -137,6 +138,13 @@ jobs:
         run: |
           cargo test --locked -p xtask
           cargo test --locked -p adage-exec --test no_spawn
+      - name: completion checks execute in a real sandbox
+        if: runner.os == 'Linux'
+        env:
+          ADAGE_REQUIRE_COMPLETION_STAGING: "1"
+        run: |
+          sudo apt-get update && sudo apt-get install -y bubblewrap
+          cargo test --locked -p adage-exec --lib required_completion -- --nocapture
       - name: test
         if: steps.affected.outputs.args != ''
         env:

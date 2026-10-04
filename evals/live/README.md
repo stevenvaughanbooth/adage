@@ -1,5 +1,11 @@
 # Live evals
 
+For the packaged first paid run, use [the paid-pilot launch guide](../../docs/paid-pilot.md).
+`pilot.py` supplies a disjoint synthetic task pack, real-trace training bridge, production
+learning, human review checkpoint and frozen learned-E0 comparison under one explicit program
+allocation. Its free plan and checks make no model calls; paid training and evaluation require
+`--execute` on the operator's model-enabled Linux host.
+
 For a model-enabled local agent, start with the
 [evaluation handoff](../../docs/local-agent-evaluation.md). It audits supported capabilities,
 provides free diagnostic fixtures, bridges train-only native archives into canonical learning,

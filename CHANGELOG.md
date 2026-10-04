@@ -18,6 +18,17 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### Fixes from the architecture work
 
+- **A bounded paid-pilot launch path.** A local coordinator connects real model training traces,
+  production learning, explicit review and frozen held-out evaluation. The included programming
+  task pack has honest semantic groups, unrelated controls and an independent grader. No model
+  calls are made by its free checks; synthetic pilot results do not establish customer savings.
+
+- **Explicit, durable completion readiness.** Optional required verification reflexes run even
+  when the agent never started them, under existing E2 grants and sandbox gates. Current-input
+  execution evidence distinguishes passed, missing, stale, failed and unknown checks; durable
+  attempt limits survive restart. Ordinary advisory obligations also preserve later-edit
+  invalidation during recovery. Command completion remains distinct from coverage or task quality.
+
 - **A reproducible handoff for local model evaluations.** Train-only live archives can be
   exported into canonical learning with explicit task/group identities, independent outcomes
   and source provenance. Diagnostic workflow fixtures and a conservative native-action audit
