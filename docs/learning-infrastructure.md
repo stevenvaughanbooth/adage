@@ -20,6 +20,7 @@ claim. Cheaper-model predictability requires a separate model-transfer compariso
 | M4 Outcomes and value | Conservative completion evidence and reproducible paired token/quality evaluation | Stale checks do not label final work successful; quality regressions reject savings claims; unknown usage and contaminated comparisons are visible | Complete |
 | M5 Verification and delivery | Required Rust checks, deterministic corpus/scale measurements, signed commits, remote branch and review | Results and limitations recorded against a commit; no unsupported savings or enterprise-capacity claim | Complete locally; hosted CI blocked by account billing |
 | M6 Frozen experiments | Immutable protocol, complete scheduled cohort, artifact integrity and workflow accounting | Missing jobs, retries, changed artifacts/settings, unknown usage and reused provider requests cannot qualify a savings claim | Complete locally; provider adapter remains next |
+| M7 Live evidence collection | Native provider accounting and independent grading connected to frozen jobs | Partial usage cannot look complete; no terminal attempt is rerun or discarded; observed provenance matches execution | Native accounting adapter verified; runner integration in progress |
 
 ## Implementation boundaries
 
@@ -62,6 +63,11 @@ claim. Cheaper-model predictability requires a separate model-transfer compariso
   model/settings, compiled reflex set, budget and grader. Content-addressed receipts retain
   failures and missing jobs in the denominator and charge every recorded workflow request.
   Provider execution stays in the live harness; its automatic receipt adapter remains next.
+- 2026-10-04: M7 native accounting adapter implemented. Real archived CLI traces demonstrate that
+  ordinary assistant chunks carry provisional output counts and `costBasis=list` costs. The
+  adapter requires completed request counters reconciled to terminal/per-model totals, preserves
+  incomplete accounting, and never labels list-price estimates as actual bills. Eleven
+  deterministic adapter/grade tests cover these contracts; frozen execution integration follows.
 
 ## Implemented interfaces
 

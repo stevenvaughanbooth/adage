@@ -99,6 +99,8 @@ jobs:
       # evals.yml. A change to quality or spend arithmetic must not wait for the weekly run.
       - name: learning experiment evidence contracts
         run: cargo test --locked -p adage-eval --lib --test paired --test experiment
+      - name: native provider evidence contracts (no API calls)
+        run: python3 -m unittest evals/live/test_evidence.py
       # A pull request tests the packages its changes can affect: those it changed, those whose
       # tests read a changed fixture, and every package that depends on one of them
       # (`cargo xtask affected`, xtask/src/affected.rs). A change outside every package (the

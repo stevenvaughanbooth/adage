@@ -18,6 +18,12 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### Fixes from the architecture work
 
+- **Native request accounting for learning studies.** The live-evaluation adapter reconciles
+  completed Claude usage events against terminal and per-model totals, deduplicates assistant
+  chunks by provider request, includes cache creation/read tokens once, and rejects incomplete
+  logs. Independent graders must exit successfully with a boolean result. CLI list-price
+  estimates remain separate from billed costs.
+
 - **Frozen learning experiments.** `adage eval experiment object|freeze|report` binds a declared
   test cohort to its training audit, model settings, compiled reflex set, budgets and grader.
   Every scheduled task remains in the report, including missing results and timeouts. Whole
