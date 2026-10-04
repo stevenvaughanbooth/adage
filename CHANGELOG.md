@@ -18,6 +18,17 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### Fixes from the architecture work
 
+- **A complete learning-to-delivery proof.** A deterministic CLI fixture turns native traces
+  into reviewed reflexes, delivers the learned continuation through the real hook, and verifies
+  a fresh task's corrected output. It checks review, disable, unrelated-task and repeated-delivery
+  controls without calling a model. The README links the one-command reproduction.
+
+- **Studies fail before paying for an inert intervention.** Frozen experiments require an
+  actual compiled index with enabled reflexes for the selected repository. `adage eval experiment
+  artifact` checks its generation, directive safety, derived caches and checkout routing.
+  Live plans report readiness blockers, progress, budget reservations and output paths; execution
+  checks prerequisites and interrupted accounting before creating a new attempt.
+
 - **Frozen live collection.** `evals/live/frozen.py` prepares, plans, executes and reports a fixed
   Claude Code study on Linux. It pins inputs and the compiled reflex set, enforces workflow
   deadlines, preserves terminal results on resume and refuses to rerun interrupted attempts.

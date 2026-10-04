@@ -21,7 +21,22 @@ training, learn and review candidates, then freeze the compiled `index.json`. Di
 learning and changes to the reflex set during the experiment. Retain the learner build,
 parameters, training generation and learning report as provenance.
 
-Export the verified audit with `adage corpus inspect --repo acme/api --evidence`. Every training
+Check the artifact and a representative fresh checkout before collecting anything:
+
+```sh
+adage eval experiment artifact frozen-index.json --repo github.com/acme/api --checkout /path/to/fresh/api
+```
+
+This read-only check uses the runtime's actual index format and repository lookup. It rejects
+malformed or empty artifacts, pending/disabled reflexes, stale generations, inconsistent trigger
+caches and invalid directives. The report shows enabled reflexes and the subset ordinary hooks
+can deliver. The Claude collector requires at least one of the latter. Use the exact runtime
+repository key, such as `github.com/acme/api` for that GitHub origin, consistently in the training
+audit and protocol. A display label like `acme/api` will not match that origin. Checkout routing
+is checked again when preparing and dispatching jobs; valid bytes alone cannot establish delivery
+or that a reflex applies to every held-out task.
+
+Export the verified audit with `adage corpus inspect --repo github.com/acme/api --evidence`. Every training
 trace must have a declared identity; inferred/unknown identities prevent freezing because they
 cannot establish separation from the test registry. Pin models, settings, tools, checkout,
 context, grader, per-task budgets and the entire task list before collecting results. With the
@@ -49,7 +64,7 @@ cohort; the single task below is a format example and cannot satisfy its 200-tas
 {
   "schema": 1,
   "experiment": "api-reflex-savings-v1",
-  "repo": "acme/api",
+  "repo": "github.com/acme/api",
   "seed": 42,
   "kind": "same_model",
   "training_audit_sha256": "AUDIT_DIGEST",
@@ -74,8 +89,9 @@ adage eval experiment freeze protocol.json --objects study/objects > study/froze
 adage eval experiment validate study/frozen.json --objects study/objects
 ```
 
-Freezing verifies object checksums, training/test separation, unique declared groups, model
-cohorts and positive budgets. The cohort must meet `min_groups` and contain at most 10,000 tasks.
+Freezing verifies object checksums, the runtime-valid reflex artifact, training/test separation,
+unique declared groups, model cohorts and positive budgets. The cohort must meet `min_groups`
+and contain at most 10,000 tasks.
 The baseline disables reflex delivery; the intervention pins a reflex set. `same_model` requires
 identical model revisions; `model_transfer` requires different ones. Common environment/grader
 revisions apply to both arms. Differences in arm settings are explicit treatment choices that

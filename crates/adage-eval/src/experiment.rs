@@ -4,12 +4,13 @@
 
 use crate::paired::{self, Pair, Policy, Run, Study, StudyKind, Usage};
 use adage_learn::{corpus::Audit, EvidenceIdentity};
+use adage_tracks::{context::CtxNet, triggers::Triggers, Gauge, Index, Manifest, Scope, Track, TrackInfo};
 use anyhow::{ensure, Context, Result};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Read;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 const MAX_OBJECT_BYTES: usize = 64 * 1024 * 1024;
 const MAX_TASKS: usize = 10_000;
@@ -37,6 +38,78 @@ fn bytes(objects: &dyn Objects, sha: &str) -> Result<Vec<u8>> {
 
 fn object<T: DeserializeOwned>(objects: &dyn Objects, sha: &str) -> Result<T> {
     serde_json::from_slice(&bytes(objects, sha)?).with_context(|| format!("invalid experiment object {sha}"))
+}
+
+#[derive(Debug, Serialize)]
+pub struct Artifact {
+    pub sha256: String,
+    pub generation: String,
+    pub repo: String,
+    pub reflexes: usize,
+    /// Reflexes the ordinary directive hook can deliver, without an execution extension.
+    pub directive_reflexes: usize,
+    pub runtime_repo: Option<String>,
+}
+
+/// Inspect the actual runtime format before an experiment can spend on an inert intervention.
+/// This establishes a loadable, internally consistent artifact, not learned benefit or coverage.
+pub fn artifact(body: &[u8], repo: &str, checkout: Option<&Path>) -> Result<Artifact> {
+    ensure!(body.len() <= MAX_OBJECT_BYTES, "reflex set exceeds 64 MiB");
+    let index: Index = serde_json::from_slice(body).context("reflex set is not a compiled Adage index")?;
+    ensure!(
+        index.generation == digest(&serde_json::to_vec(&index.routes)?)[..16],
+        "reflex set generation is stale; recompile with the pinned Adage build"
+    );
+    let mut ids = BTreeSet::new();
+    for entry in &index.routes {
+        ensure!(ids.insert((&entry.repo, &entry.route.id)), "duplicate reflex id in compiled index");
+        ensure!(entry.route.state.is_live(), "compiled index contains an unapproved or disabled reflex");
+        // Use the same validation boundary as learning/import, rather than maintaining a second
+        // set of rules for slot binding, command effects and directive ceilings.
+        adage_tracks::io::validate(&Track {
+            manifest: Manifest {
+                track: TrackInfo {
+                    name: entry.track.clone(),
+                    version: entry.version.clone(),
+                    description: String::new(),
+                    provenance: String::new(),
+                },
+                scope: Scope { repo: entry.repo.clone() },
+                gauge: Gauge::default(),
+            },
+            routes: vec![entry.route.clone()],
+        })
+        .context("invalid compiled reflex")?;
+    }
+    let keys: BTreeSet<&str> = index.routes.iter().map(|r| r.repo.as_str()).collect();
+    for key in &keys {
+        let routes = || index.for_repo(key).map(|r| &r.route);
+        ensure!(
+            *index.triggers(key) == Triggers::of(routes()) && *index.contexts(key) == CtxNet::of(routes()),
+            "compiled trigger/context caches differ from the reflexes; recompile the index"
+        );
+    }
+    let reflexes = index.for_repo(repo).count();
+    ensure!(reflexes > 0, "reflex set has no enabled reflexes for repository {repo}; review and compile first");
+    let runtime_repo = if let Some(checkout) = checkout {
+        let root = adage_core::repo::find_root(checkout).context("experiment checkout is not a Git repository")?;
+        let resolved = adage_core::repo::lookup_key(&root, None, &keys);
+        ensure!(
+            resolved.as_deref() == Some(repo),
+            "checkout does not resolve to reflex repository {repo}; check its origin and training repository key"
+        );
+        resolved
+    } else {
+        None
+    };
+    Ok(Artifact {
+        sha256: digest(body),
+        generation: index.generation.clone(),
+        repo: repo.to_owned(),
+        reflexes,
+        directive_reflexes: index.for_repo(repo).filter(|r| !r.exec_only()).count(),
+        runtime_repo,
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -166,7 +239,7 @@ pub fn freeze(mut protocol: Protocol, objects: &dyn Objects) -> Result<Frozen> {
         ensure!(!arm.model.trim().is_empty(), "missing model revision");
         bytes(objects, &arm.configuration_sha256)?;
         if let Some(sha) = &arm.reflex_set_sha256 {
-            bytes(objects, sha)?;
+            artifact(&bytes(objects, sha)?, &p.repo, None)?;
         }
     }
     ensure!(
@@ -503,9 +576,14 @@ fn read_bounded(path: impl AsRef<std::path::Path>) -> Result<Vec<u8>> {
 }
 
 pub fn cli(args: &[String]) -> Result<()> {
-    const USAGE: &str = "usage: adage eval experiment object <input.json> --objects <dir>\n       adage eval experiment freeze <protocol.json> --objects <dir>\n       adage eval experiment validate <frozen.json> --objects <dir>\n       adage eval experiment report <frozen.json> <submission.json> --objects <dir> [--require-token-target | --require-cost-target]";
+    const USAGE: &str = "usage: adage eval experiment object <input.json> --objects <dir>\n       adage eval experiment artifact <index.json> --repo <repo> [--checkout <dir>]\n       adage eval experiment freeze <protocol.json> --objects <dir>\n       adage eval experiment validate <frozen.json> --objects <dir>\n       adage eval experiment report <frozen.json> <submission.json> --objects <dir> [--require-token-target | --require-cost-target]";
     let required = args.last().map(String::as_str).filter(|s| s.starts_with("--require-"));
     match args.first().map(String::as_str) {
+        Some("artifact") if matches!(args.len(), 4 | 6) && args[2] == "--repo" => {
+            ensure!(args.len() == 4 || args[4] == "--checkout", USAGE);
+            let checkout = args.get(5).map(Path::new);
+            println!("{}", serde_json::to_string_pretty(&artifact(&read_bounded(&args[1])?, &args[3], checkout)?)?);
+        }
         Some("object") if args.len() == 4 && args[2] == "--objects" => {
             let sha = Directory(PathBuf::from(&args[3])).put(&read_bounded(&args[1])?)?;
             println!("{}", serde_json::json!({"sha256": sha}));

@@ -39,11 +39,15 @@ ids and enough total budget to reserve both arms for every task. The collector f
 one attempt per arm/task, sequential execution and no learning. Each job gets a fresh checkout
 and private home; the baseline disables reflexes and the intervention uses the exact frozen
 index. Project/local settings are disabled in favor of the explicit runner settings.
+Preparation validates that this is a loadable compiled index with live directive reflexes for
+the selected repository. It also verifies that each generated checkout resolves to that same
+repository through the runtime's actual identity rules; a mismatched origin or checkout name
+must be fixed before freezing. The runtime copy is checked again before intervention dispatch.
 
 ```sh
 # Build this revision before preparing: the executable digest is part of the protocol.
 cargo build --release --locked -p adage-cli
-target/release/adage corpus inspect --repo acme/api --evidence > training-evidence.json
+target/release/adage corpus inspect --repo github.com/acme/api --evidence > training-evidence.json
 
 # Preparation runs sandbox generators and version probes, but calls no model.
 python3 evals/live/frozen.py prepare config.json \
@@ -52,7 +56,7 @@ python3 evals/live/frozen.py prepare config.json \
   --input /absolute/path/to/grade.py --input /absolute/path/to/task-data.json \
   --objects study/objects --out study/frozen.json
 
-# Read-only plan: no run directory is created.
+# Read-only plan and readiness checks: no run directory is created.
 python3 evals/live/frozen.py run study/frozen.json \
   --objects study/objects --root study/run
 
@@ -68,11 +72,25 @@ python3 evals/live/frozen.py report study/frozen.json \
 Use the same `--adage /absolute/path/to/adage` on every command when overriding the default
 `target/release/adage`. `--learner-revision` must describe the build and parameters that actually
 produced the reflex set; the collector cannot infer that provenance from its own build. The audit
-must describe that training snapshot. `--identities identities.json` supplies canonical identities
+must describe that training snapshot. Use the same repository key in the corpus and live config,
+matching the checkout's runtime identity: an origin of `https://github.com/acme/api.git` resolves
+to `github.com/acme/api`. `--identities identities.json` supplies canonical identities
 keyed by execution task id; each `task_id` must equal that key. Related tasks belong in the same
 group across training and evaluation. A frozen cohort has one representative per independent
 group. `--policy policy.json` and `--timeout-seconds 600` set predeclared thresholds and budgets;
 `--intervention-model` prepares a fixed model-transfer comparison.
+
+The plan returns `ready_to_execute`, actionable `blockers`, completed/pending job counts,
+the remaining reservation requirement, compiled reflex-set summary and output paths. It checks pinned inputs, existing
+receipts and interrupted jobs, the accounting ledger, private directory placement, Claude Code
+version and authentication availability. A local Bubblewrap no-op checks that the host permits
+the required namespaces. These probes make no model calls and write no study files. Missing
+authentication is reported as a blocker while the plan still exits successfully; `--execute`
+requires all readiness checks to pass before it creates a run or start marker. A fully collected
+study can be resumed for reporting without authentication or Bubblewrap. Readiness is a current
+host check, so execution also checks actual checkout inputs and repository routing in both arms
+before each dispatch. Authentication is checked locally for configuration only; these probes do
+not contact the provider to verify that a credential is valid or unexpired.
 
 Declare the complete grader/data dependency closure with repeated `--input` arguments, including
 local imports, test data and environment lockfiles. Keep these private files under the standard
@@ -101,6 +119,14 @@ entries to improve results. Every scheduled job remains in the denominator, incl
 run because the budget blocked. Incomplete collection exits unsuccessfully; a complete study
 with a negative quality/savings result still completes normally. Use `--require-token-target`
 on `report` when acceptance itself must control the exit status.
+If start markers or receipts exist, a missing `state.json` accounting ledger blocks resume;
+restore and reconcile the original ledger. Deleting it cannot reset the study's spend allowance.
+Each journaled job must retain exactly one original reservation at the frozen cap. Duplicate,
+missing or unrelated attempts and nonterminal accounting for a receipted job block dispatch.
+Settled CLI cost estimates must match the immutable native accounting source; these remain
+admission estimates, not billed-cost evidence. Explicitly authorized conservative cap charges
+retain their existing validation. The collector never repairs or refunds history automatically.
+The offline `report` command remains available from the immutable receipts.
 
 Private objects retain native accounting, independent grader output and execution observations;
 raw streams remain under `study/run/runs`. Keep the entire study outside git. SHA-256 objects

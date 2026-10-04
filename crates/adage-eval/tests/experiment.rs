@@ -338,3 +338,60 @@ fn receipt_source_objects_must_exist_and_match_their_digests() {
     o.0.remove(&sha);
     assert!(experiment::evaluate(&f, &s, &o).unwrap_err().to_string().contains("missing experiment object"));
 }
+
+#[test]
+fn frozen_interventions_require_an_enabled_runtime_artifact_for_the_selected_repository() {
+    let (mut protocol, mut objects) = protocol(2);
+    protocol.intervention.reflex_set_sha256 = Some(objects.put(&json!({"reflexes": ["placeholder"]})));
+    assert!(experiment::freeze(protocol.clone(), &objects).unwrap_err().to_string().contains("compiled Adage index"));
+    protocol.intervention.reflex_set_sha256 = Some(objects.put(&adage_tracks::Index::compile(&[])));
+    assert!(experiment::freeze(protocol, &objects).unwrap_err().to_string().contains("no enabled reflexes"));
+    let body = serde_json::to_vec(&fixture()["reflex_set"]).unwrap();
+    let report = experiment::artifact(&body, "acme/api", None).unwrap();
+    assert_eq!((report.reflexes, report.directive_reflexes), (1, 1));
+    assert!(report.runtime_repo.is_none());
+    assert!(experiment::artifact(&body, "unrelated/repo", None)
+        .unwrap_err()
+        .to_string()
+        .contains("no enabled reflexes"));
+}
+
+#[test]
+fn artifact_validation_rejects_stale_generation_and_suppressed_runtime_caches() {
+    let index: adage_tracks::Index = serde_json::from_value(fixture()["reflex_set"].clone()).unwrap();
+    let mut stale = index.clone();
+    stale.routes[0].route.summary.push_str(" changed");
+    assert!(experiment::artifact(&serde_json::to_vec(&stale).unwrap(), "acme/api", None)
+        .unwrap_err()
+        .to_string()
+        .contains("generation is stale"));
+    let mut suppressed = index.clone();
+    suppressed.triggers.insert("acme/api".into(), Default::default());
+    assert!(experiment::artifact(&serde_json::to_vec(&suppressed).unwrap(), "acme/api", None)
+        .unwrap_err()
+        .to_string()
+        .contains("trigger/context caches"));
+    // A legacy index without precomputed caches still gets the runtime's correct derived ones.
+    let mut legacy = index;
+    legacy.triggers.clear();
+    experiment::artifact(&serde_json::to_vec(&legacy).unwrap(), "acme/api", None).unwrap();
+}
+
+#[test]
+fn artifact_validation_preserves_review_and_shared_safety_boundaries() {
+    let index: adage_tracks::Index = serde_json::from_value(fixture()["reflex_set"].clone()).unwrap();
+    for (mut invalid, reason) in
+        [(index.clone(), "unapproved"), (index.clone(), "duplicate"), (index, "invalid compiled reflex")]
+    {
+        match reason {
+            "unapproved" => invalid.routes[0].route.state = adage_tracks::RouteState::Nascent,
+            "duplicate" => invalid.routes.push(invalid.routes[0].clone()),
+            _ => invalid.routes[0].route.step = adage_tracks::Step::Run { command: "make check; rm -rf .".into() },
+        }
+        invalid.attach_exec(&Default::default());
+        assert!(experiment::artifact(&serde_json::to_vec(&invalid).unwrap(), "acme/api", None)
+            .unwrap_err()
+            .to_string()
+            .contains(reason));
+    }
+}

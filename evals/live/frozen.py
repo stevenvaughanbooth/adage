@@ -21,7 +21,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import evidence
 import runner
-from budget import execution_lock
+from budget import Budget, cap_charge_valid, execution_lock, known_cost
 
 ADAPTER = "claude-code-frozen/v1"
 MAX_JSON = 64 * 1024 * 1024
@@ -120,6 +120,16 @@ def adage_json(adage, *args):
     return json.loads(result.stdout)
 
 
+def artifact(adage, index, repo, checkout=None):
+    args = ["artifact", index, "--repo", repo]
+    if checkout is not None:
+        args.extend(["--checkout", checkout])
+    result = adage_json(adage, *args)
+    if not result["directive_reflexes"]:
+        raise ValueError("the frozen Claude Code adapter requires at least one live directive reflex for this repository")
+    return result
+
+
 def group_key(repo, identity):
     """Canonical adage-trace v1 declared group identity; Rust validates the complete schedule."""
     kind = "group" if identity.get("group_id", "").strip() else "task"
@@ -200,6 +210,7 @@ def prepare(config, audit_path, index_path, objects, out, adage, inputs, *, time
         raise ValueError("record the learner build/parameters that actually produced the reflex set")
     if type(timeout) is not int or timeout <= 0:
         raise ValueError("timeout must be a positive integer")
+    artifact(adage, index_path, cfg["repo_key"])
     version = runner.harness_version()
     if not version:
         raise ValueError("cannot pin the installed Claude Code version")
@@ -241,6 +252,7 @@ def prepare(config, audit_path, index_path, objects, out, adage, inputs, *, time
             workdir.parent.mkdir(parents=True)
             subprocess.run(runner.expand(cfg["sandbox"], dir=str(workdir), task=task, arm="off"),
                            check=True, capture_output=True, timeout=timeout, cwd=cfg["execution_cwd"])
+            artifact(adage, index_path, cfg["repo_key"], workdir)
             test_tasks.append({"identity": identity, "task_revision": task_revision(identity, prompt, checkout_digest(workdir)),
                                "environment_revision": environment_revision(spec), "evaluator_revision": evaluator_revision(spec)})
     # The effective prompts, rather than rotating template positions, are the frozen inputs.
@@ -280,10 +292,7 @@ class Observer:
         check_inputs(self.spec, self.adage)
         if live.cfg != self.spec["config"] or not live.isolate:
             raise ValueError("actual execution configuration changed")
-        exposed = [p for p in env.get("PATH", "").split(os.pathsep) if p]
-        exposed += [str(Path(env[k]).parent) for k in runner.CONFINE_FILE_ENV if env.get(k)]
-        private = [*self.spec["private_inputs"], str(live.root.resolve()), str(self.objects.root)]
-        if any(runner.under(path, exposed) for path in private):
+        if exposed_private_inputs(self.spec, live.root.resolve(), self.objects, env):
             raise ValueError("a mounted tool/auth directory would expose independent grader/data or study evidence")
         if live.state["harness_version"] != self.spec["harness_version"]:
             raise ValueError("harness version changed")
@@ -292,9 +301,14 @@ class Observer:
             raise ValueError("execution does not match the frozen job")
         prompt = self.spec["config"]["task_prompts"][task]
         revision = task_revision(self.task["identity"], prompt, checkout_digest(workdir))
-        artifact = file_digest(live.home / "index.json") if arm == "adage" else None
+        expected_index = self.frozen["protocol"]["intervention"]["reflex_set_sha256"]
+        index_path = live.home / "index.json" if arm == "adage" else self.objects.root / f"{expected_index}.json"
+        inspected = artifact(self.adage, index_path, live.cfg["repo_key"], workdir)
+        if inspected["sha256"] != expected_index:
+            raise ValueError("frozen reflex set changed before execution")
+        index_sha = inspected["sha256"] if arm == "adage" else None
         self.observed = {"model": live.cfg["model"], "configuration_sha256": digest(encoded(self.spec)),
-                         "reflex_set_sha256": artifact, "task_revision": revision,
+                         "reflex_set_sha256": index_sha, "task_revision": revision,
                          "environment_revision": environment_revision(self.spec),
                          "evaluator_revision": evaluator_revision(self.spec), "budget": self.frozen["protocol"]["budget"]}
         expected = self.frozen["protocol"][self.job["side"]]
@@ -356,6 +370,176 @@ def bindings(frozen, objects, adage):
     return specs
 
 
+def confinement_probe():
+    """Check the required namespace capability with a local no-op, never an agent."""
+    if not runner.shutil.which("bwrap"):
+        return "Bubblewrap is not installed; install bubblewrap on the Linux execution host"
+    try:
+        result = subprocess.run(["bwrap", "--die-with-parent", "--unshare-pid", "--ro-bind", "/", "/",
+                                 "--proc", "/proc", "--dev", "/dev", "--", "/bin/true"],
+                                capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError) as exc:
+        return f"Bubblewrap cannot run: {exc}; use a host that permits its namespaces"
+    if result.returncode:
+        return f"Bubblewrap confinement is unavailable: {result.stderr.strip()[:500]}; use a host that permits its namespaces"
+    return None
+
+
+def exposed_private_inputs(spec, root, objects, env):
+    exposed = [p for p in env.get("PATH", "").split(os.pathsep) if p]
+    exposed += [str(Path(env[k]).parent) for k in runner.CONFINE_FILE_ENV if env.get(k)]
+    return [path for path in (*spec["private_inputs"], str(root), str(objects.root)) if runner.under(path, exposed)]
+
+
+def validate_admission_journal(frozen, objects, journaled, receipts, ledger):
+    """Original reservations and native cost estimates must survive every resume unchanged."""
+    attempts = ledger.data.get("attempts")
+    if not isinstance(attempts, list):
+        raise ValueError("accounting attempts must be a list of original reservations")
+    scheduled = {job["id"] for job in frozen["jobs"]}
+    by_run = {}
+    for attempt in attempts:
+        if not isinstance(attempt, dict) or attempt.get("run") not in scheduled or attempt.get("run") not in journaled:
+            raise ValueError("accounting contains an unknown or unjournaled job; reconcile the original ledger")
+        run = attempt["run"]
+        if run in by_run:
+            raise ValueError(f"duplicate original accounting attempt for job {run}")
+        cap = known_cost(attempt.get("cap_usd"))
+        if cap is None or Decimal(str(cap)) * 1_000_000 != frozen["protocol"]["budget"]["max_cost_microusd"]:
+            raise ValueError(f"original reservation cap differs from the frozen budget for job {run}")
+        if attempt.get("status") == "cap_charged" and not cap_charge_valid(attempt):
+            raise ValueError(f"invalid conservative cap charge for job {run}; restore the explicit original authorization")
+        by_run[run] = attempt
+    missing = journaled - by_run.keys()
+    if missing:
+        raise ValueError("missing original accounting attempt for journaled jobs: " + ", ".join(sorted(missing)))
+    for run, receipt in receipts.items():
+        attempt = by_run[run]
+        if attempt.get("status") not in ("settled", "unknown", "cap_charged"):
+            raise ValueError(f"receipted job {run} has a nonterminal accounting attempt")
+        source_sha = receipt.get("evidence", {}).get("accounting")
+        source = objects.get(source_sha) if source_sha else {}
+        terminal = source.get("terminal") or {}
+        estimate = known_cost(terminal.get("total_cost_usd"))
+        if attempt["status"] == "settled":
+            if estimate is None:
+                raise ValueError(f"settled cost requires a known immutable native accounting estimate for job {run}; preserve unknown spend or reconcile an explicitly authorized cap charge")
+            if known_cost(attempt.get("cost_usd")) != estimate:
+                raise ValueError(f"settled cost disagrees with immutable native accounting for job {run}; reconcile the original estimate")
+        if estimate is not None and attempt["status"] == "cap_charged" and estimate > attempt["charged_usd"]:
+            raise ValueError(f"native accounting exceeds the conservative cap charge for job {run}; reconcile the overrun")
+
+
+def preflight(frozen, objects, root, adage):
+    """Read-only readiness: source checks, existing journal and local execution prerequisites."""
+    root = Path(root).resolve()
+    blockers, completed, interrupted, reflex_set = [], [], [], None
+    journaled, receipts = set(), {}
+
+    def block(code, message):
+        blockers.append({"code": code, "message": message})
+
+    try:
+        specs = bindings(frozen, objects, adage)
+        index = objects.root / f"{frozen['protocol']['intervention']['reflex_set_sha256']}.json"
+        reflex_set = artifact(adage, index, frozen["protocol"]["repo"])
+    except (ValueError, OSError, KeyError, TypeError) as exc:
+        specs = {}
+        block("frozen_inputs", f"Frozen inputs are unavailable or changed: {exc}; restore the pinned inputs or prepare a new study")
+    if any(not runner.under(path, runner.CONFINE_HIDE) for path in (root, objects.root)):
+        block("private_paths", "Run root and study objects must be under the confinement's hidden directories; use /workspace, /tmp, /var/tmp, /home, /root or /mnt")
+    try:
+        marker = root / "protocol.json"
+        if root.exists() and not root.is_dir():
+            raise ValueError("the run root is not a directory")
+        if marker.exists():
+            if read_json(marker) != {"protocol_sha256": frozen["protocol_sha256"], "adapter": ADAPTER}:
+                raise ValueError("the run root belongs to another protocol or adapter")
+        elif root.exists() and any(p.name != ".runner.lock" for p in root.iterdir()):
+            raise ValueError("historical runs cannot be registered retroactively; choose a fresh run root")
+        scheduled = {job["id"] for job in frozen["jobs"]}
+        for path in (root / "receipts").glob("*.json"):
+            saved = read_json(path)
+            value = objects.get(saved["sha256"])
+            if (path.stem not in scheduled or saved.get("protocol_sha256") != frozen["protocol_sha256"]
+                    or value.get("job_id") != path.stem or value.get("protocol_sha256") != frozen["protocol_sha256"]):
+                raise ValueError("a terminal receipt does not match its scheduled job")
+            for sha in value.get("evidence", {}).values():
+                objects.body(sha)
+            completed.append(path.stem)
+            receipts[path.stem] = value
+            journaled.add(path.stem)
+        for path in (root / "started").glob("*.json"):
+            saved = read_json(path)
+            if (path.stem not in scheduled or saved.get("job_id") != path.stem
+                    or saved.get("protocol_sha256") != frozen["protocol_sha256"]):
+                raise ValueError("a start marker does not match its scheduled job")
+            journaled.add(path.stem)
+            if path.stem not in receipts:
+                interrupted.append(path.stem)
+        if interrupted:
+            block("interrupted_jobs", "Jobs started without a terminal receipt: " + ", ".join(interrupted)
+                  + "; reconcile each original attempt without rerunning or deleting its journal")
+    except (ValueError, OSError, KeyError, TypeError) as exc:
+        block("run_journal", f"Cannot resume this run root: {exc}; preserve its evidence and resolve the conflict")
+    pending = [job for job in frozen["jobs"] if job["id"] not in completed]
+    admission = None
+    if specs:
+        cfg = specs["baseline"]["config"]
+        try:
+            ledger_path = root / "state.json"
+            executed = any(any((root / name).glob("*.json")) for name in ("started", "receipts"))
+            if executed and not ledger_path.exists():
+                raise ValueError("state.json accounting ledger is missing after execution; restore and reconcile the original ledger before resuming")
+            state = read_json(ledger_path) if ledger_path.exists() else {}
+            if executed and (not isinstance(state, dict) or not isinstance(state.get("accounting"), dict)):
+                raise ValueError("state.json accounting ledger is missing after execution; restore and reconcile the original ledger before resuming")
+            # Budget refreshes a private in-memory copy only; preflight never persists or reserves.
+            ledger = Budget(state, cfg["budget_usd"], cfg["session_budget_usd"])
+            validate_admission_journal(frozen, objects, journaled, receipts, ledger)
+            admission = {"cap_usd": ledger.total, "accounted_usd": ledger.spent,
+                         "remaining_reservation_usd": len(pending) * ledger.per_session}
+            if pending and ledger.data["blocked_reason"]:
+                block("accounting", f"Dispatch is blocked: {ledger.data['blocked_reason']}; reconcile the original accounting ledger")
+            elif pending and ledger.spent + len(pending) * ledger.per_session > ledger.total + 1e-9:
+                block("budget", "The remaining budget cannot reserve every unfinished job; inspect the original ledger before starting a new study")
+        except (ValueError, OSError, KeyError, TypeError) as exc:
+            block("accounting", f"Cannot read the accounting ledger: {exc}; restore or reconcile its original records")
+    if pending and specs:
+        if sys.platform != "linux":
+            block("platform", "Frozen execution requires Linux; move the study to its pinned Linux execution host")
+        else:
+            error = confinement_probe()
+            if error:
+                block("confinement", error)
+        if os.environ.get("CLAUDECODE"):
+            block("agent_session", "Refusing paid execution inside an agent session; run --execute from an operator terminal")
+        version = runner.harness_version()
+        if any(version != spec["harness_version"] for spec in specs.values()):
+            block("harness", "Claude Code is missing or its version differs from the frozen study; restore the pinned harness version")
+        for side, spec in specs.items():
+            cfg = spec["config"]
+            forward = cfg.get("forward_env", [])
+            if not runner.auth_source(os.environ, forward, bool(cfg.get("host_auth"))):
+                block("authentication", f"{side}: configured Claude Code authentication is required; configure the selected authentication method before --execute")
+            env = runner.isolation_env(root / "__preflight_home__", os.environ, forward)
+            exposed = exposed_private_inputs(spec, root, objects, env)
+            if exposed:
+                block("private_mounts", f"{side}: a mounted tool/auth directory would expose independent grader/data or study evidence: "
+                      + ", ".join(exposed) + "; move private inputs outside those mounted directories and prepare again")
+    return {"execute": False, "ready_to_execute": not blockers, "protocol_sha256": frozen["protocol_sha256"],
+            "jobs": frozen["jobs"], "completed_runs": len(completed), "pending_runs": len(pending),
+            "interrupted_jobs": interrupted, "max_cost_microusd": frozen["max_cost_microusd"],
+            "admission": admission, "blockers": blockers, "reflex_set": reflex_set,
+            "outputs": {"run_root": str(root), "objects": str(objects.root), "report": str(root / "report.json"),
+                        "submission": str(root / "submission.json"), "receipts": str(root / "receipts")}}
+
+
+def require_ready(plan):
+    if plan["blockers"]:
+        raise ValueError("Frozen execution is not ready:\n" + "\n".join(item["message"] for item in plan["blockers"]))
+
+
 def submission(frozen, root):
     receipts = []
     for path in sorted((Path(root) / "receipts").glob("*.json")):
@@ -394,8 +578,7 @@ def report(frozen_path, frozen, objects, root, adage, required=None):
 
 def execute(frozen_path, frozen, objects, root, adage, *, live_factory=runner.Live):
     root = Path(root).resolve()
-    if any(not runner.under(path, runner.CONFINE_HIDE) for path in (root, objects.root)):
-        raise ValueError("run root and study objects must be under the confinement's hidden directories")
+    require_ready(preflight(frozen, objects, root, adage))
     specs = bindings(frozen, objects, adage)
     with execution_lock(root):
         bind_root(frozen, root)
@@ -487,20 +670,9 @@ def main(argv=None):
         with execution_lock(args.root):
             result = report(args.frozen, frozen, objects, args.root, adage, required)
     elif not args.execute:
-        bindings(frozen, objects, adage)
-        print(json.dumps({"execute": False, "protocol_sha256": frozen["protocol_sha256"],
-                          "jobs": frozen["jobs"], "max_cost_microusd": frozen["max_cost_microusd"]}, indent=2))
+        print(json.dumps(preflight(frozen, objects, args.root, adage), indent=2))
         return 0
     else:
-        if os.environ.get("CLAUDECODE"):
-            raise ValueError("refusing paid execution inside an agent session")
-        specs = bindings(frozen, objects, adage)
-        for spec in specs.values():
-            cfg = spec["config"]
-            if not runner.auth_source(os.environ, cfg.get("forward_env", []), bool(cfg.get("host_auth"))):
-                raise ValueError("configured Claude Code authentication is required for paid execution")
-        if not runner.shutil.which("bwrap"):
-            raise ValueError("frozen execution requires bubblewrap")
         result = execute(args.frozen, frozen, objects, args.root.resolve(), adage)
     print(result.stdout, end="")
     if result.stderr:

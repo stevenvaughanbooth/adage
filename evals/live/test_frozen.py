@@ -56,6 +56,8 @@ class FakeLive:
         events = [json.loads(row) for row in (HERE / "fixtures" / "claude-usage.jsonl").read_text().splitlines()]
         for row in events:
             row["session_id"] = run_id
+            if self.mode == "unknown-cost" and row.get("type") == "result":
+                row.pop("total_cost_usd", None)
             message = row.get("message") or row.get("event", {}).get("message")
             if message:
                 message["id"] += "-" + run_id
@@ -83,12 +85,20 @@ class FakeLive:
 class FrozenFlow(unittest.TestCase):
     def setUp(self):
         self.assertTrue(ADAGE.is_file(), "build the CLI first: cargo build --locked -p adage-cli")
+        for owner, name, result in ((runner, "harness_version", VERSION),
+                                    (runner, "auth_source", ("env", ["fixture-auth"])),
+                                    (frozen, "confinement_probe", None)):
+            probe = patch.object(owner, name, return_value=result)
+            probe.start()
+            self.addCleanup(probe.stop)
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.objects = frozen.Objects(self.root / "objects")
         self.generator = self.root / "generate.py"
-        self.generator.write_text("import pathlib,sys\np=pathlib.Path(sys.argv[1]);p.mkdir()\n(p/'source.txt').write_text('fixed task input')\n")
+        self.generator.write_text("import pathlib,sys\np=pathlib.Path(sys.argv[1]);p.mkdir()\n"
+                                  "(p/'source.txt').write_text('fixed task input')\n(p/'.git').mkdir()\n"
+                                  "(p/'.git'/'config').write_text('[remote \\\"origin\\\"]\\n\\turl = https://fixture/repo\\n')\n")
         self.grader = self.root / "grade.py"
         self.grader.write_text("print('{\"passed\":true}')\n")
         self.config = self.root / "config.json"
@@ -108,7 +118,7 @@ class FrozenFlow(unittest.TestCase):
             "recorded_outcomes": 1, "proxy_outcomes": 0, "unknown_outcomes": 0,
         })
         self.index = self.root / "index.json"
-        self.index.write_text('{ "synthetic_fixture": true, "reflexes": [] }\n')
+        self.index.write_bytes((HERE / "fixtures" / "reflex-index.json").read_bytes())
         self.path = self.root / "frozen.json"
         with patch.object(runner, "harness_version", return_value=VERSION):
             # Deliberately relaxed synthetic quality margin. Default production policy is unchanged.
@@ -121,6 +131,38 @@ class FrozenFlow(unittest.TestCase):
 
     def execute(self):
         return frozen.execute(self.path, self.frozen, self.objects, self.run_root, ADAGE, live_factory=FakeLive)
+
+    def collect_one_job(self):
+        instances = 0
+
+        def stop_between_jobs(*args, **kwargs):
+            nonlocal instances
+            instances += 1
+            if instances > 1:
+                raise RuntimeError("fixture stop between jobs")
+            return FakeLive(*args, **kwargs)
+
+        with self.assertRaisesRegex(RuntimeError, "fixture stop between jobs"):
+            frozen.execute(self.path, self.frozen, self.objects, self.run_root, ADAGE, live_factory=stop_between_jobs)
+        plan = frozen.preflight(self.frozen, self.objects, self.run_root, ADAGE)
+        self.assertTrue(plan["ready_to_execute"], plan)
+        self.assertEqual((plan["completed_runs"], plan["pending_runs"]), (1, 3))
+        return frozen.read_json(self.run_root / "state.json")
+
+    def test_prepare_rejects_an_unloadable_index_before_sandbox_generation(self):
+        self.index.write_text("{}")
+        with patch.object(frozen, "checkout_digest", side_effect=AssertionError("invalid index must fail before checkouts")):
+            with self.assertRaisesRegex(ValueError, "not a compiled Adage index"):
+                frozen.prepare(self.config, self.audit, self.index, self.objects, self.root / "invalid.json", ADAGE,
+                               [self.generator, self.grader], learner_revision="synthetic-learner-v1")
+        self.assertFalse((self.root / "invalid.json").exists())
+
+    def test_prepare_rejects_a_checkout_that_cannot_receive_the_frozen_reflexes(self):
+        self.generator.write_text(self.generator.read_text().replace("https://fixture/repo", "https://another/repository"))
+        with self.assertRaisesRegex(ValueError, "checkout does not resolve to reflex repository"):
+            frozen.prepare(self.config, self.audit, self.index, self.objects, self.root / "wrong-repo.json", ADAGE,
+                           [self.generator, self.grader], learner_revision="synthetic-learner-v1")
+        self.assertFalse((self.root / "wrong-repo.json").exists())
 
     def test_prepare_run_grade_report_and_resume_cross_the_real_rust_contract(self):
         validated = frozen.adage_json(ADAGE, "validate", self.path, "--objects", self.objects.root)
@@ -184,6 +226,33 @@ class FrozenFlow(unittest.TestCase):
         self.assertEqual(state["accounting"]["attempts"][0]["status"], "reserved")
         self.assertEqual(len(frozen.read_json(self.run_root / "report.json")["missing_jobs"]), 4)
 
+    def test_origin_drift_after_generation_blocks_both_arms_before_dispatch(self):
+        specs = frozen.bindings(self.frozen, self.objects, ADAGE)
+        original = frozen.checkout_digest
+
+        def drift(workdir):
+            (Path(workdir) / ".git" / "config").write_text('[remote "origin"]\n\turl = https://another/repository\n')
+            return original(workdir)  # Git metadata deliberately is not in the file-content digest.
+
+        for side, arm in (("baseline", "off"), ("intervention", "adage")):
+            with self.subTest(side=side):
+                root = self.root / side
+                root.mkdir()
+                job = next(job for job in self.frozen["jobs"] if job["side"] == side)
+                observer = frozen.Observer(self.frozen, job, specs[side], self.objects, ADAGE)
+                live = FakeLive(specs[side]["config"], root, ADAGE, 1, True, False, observer)
+                live.home = root / "private" / "reflexes"
+                if side == "intervention":
+                    frozen.publish_bytes(live.home / "index.json", self.index.read_bytes())
+                task = observer.task["identity"]["task_id"]
+                with patch.object(frozen, "checkout_digest", side_effect=drift), \
+                        patch.object(Budget, "dispatch", side_effect=AssertionError("must not dispatch after origin drift")) as dispatch:
+                    with self.assertRaisesRegex(ValueError, "checkout does not resolve to reflex repository"):
+                        live.run_one(job["id"], "eval", arm, task, specs[side]["config"]["task_prompts"][task])
+                dispatch.assert_not_called()
+                self.assertIsNone(observer.observed)
+                self.assertEqual(live.budget.data["attempts"][0]["status"], "reserved")
+
     def test_corrupt_native_or_grade_sources_invalidate_the_rust_report(self):
         self.execute()
         saved = frozen.read_json(next((self.run_root / "receipts").glob("*.json")))
@@ -206,6 +275,195 @@ class FrozenFlow(unittest.TestCase):
                 frozen.main(args + ["--execute"])
         self.assertFalse(self.run_root.exists())
 
+    def test_preflight_reports_missing_runtime_prerequisites_without_writes_or_dispatch(self):
+        with patch.object(frozen, "confinement_probe", return_value="Bubblewrap confinement is unavailable; enable namespaces"), \
+                patch.object(runner, "harness_version", return_value="different-version"), \
+                patch.object(runner, "auth_source", return_value=None):
+            plan = frozen.preflight(self.frozen, self.objects, self.run_root, ADAGE)
+            self.assertFalse(plan["ready_to_execute"])
+            self.assertEqual({b["code"] for b in plan["blockers"]}, {"confinement", "harness", "authentication"})
+            self.assertEqual((plan["completed_runs"], plan["pending_runs"]), (0, 4))
+            self.assertEqual(plan["admission"]["remaining_reservation_usd"], 4)
+            self.assertEqual(plan["outputs"]["report"], str(self.run_root / "report.json"))
+            args = ["run", str(self.path), "--objects", str(self.objects.root), "--root", str(self.run_root), "--adage", str(ADAGE)]
+            with contextlib.redirect_stdout(io.StringIO()) as output:
+                self.assertEqual(frozen.main(args), 0)
+            self.assertFalse(json.loads(output.getvalue())["ready_to_execute"])
+            with self.assertRaisesRegex(ValueError, "not ready"):
+                frozen.execute(self.path, self.frozen, self.objects, self.run_root, ADAGE, live_factory=FakeLive)
+        self.assertFalse(self.run_root.exists())
+        self.assertFalse(FakeLive.runs)
+
+    def test_preflight_detects_study_exposure_before_creating_start_markers(self):
+        with patch.dict(os.environ, {"PATH": str(self.root)}):
+            with self.assertRaisesRegex(ValueError, "would expose"):
+                self.execute()
+        self.assertFalse(self.run_root.exists())
+        self.assertFalse(FakeLive.runs)
+
+    def test_preflight_reads_journal_counts_and_completed_study_needs_no_auth(self):
+        self.execute()
+        before = {p: p.read_bytes() for p in self.run_root.rglob("*") if p.is_file()}
+        with patch.object(runner, "auth_source", side_effect=AssertionError("offline resume needs no authentication")), \
+                patch.object(frozen, "confinement_probe", side_effect=AssertionError("no unfinished jobs")):
+            plan = frozen.preflight(self.frozen, self.objects, self.run_root, ADAGE)
+        self.assertTrue(plan["ready_to_execute"], plan)
+        self.assertEqual((plan["completed_runs"], plan["pending_runs"]), (4, 0))
+        self.assertEqual(plan["reflex_set"]["directive_reflexes"], 1)
+        self.assertEqual(before, {p: p.read_bytes() for p in self.run_root.rglob("*") if p.is_file()})
+
+    def test_preflight_detects_unresolved_ledger_without_changing_it(self):
+        self.run_root.mkdir()
+        frozen.bind_root(self.frozen, self.run_root)
+        job = self.frozen["jobs"][0]
+        frozen.publish(self.run_root / "started" / f"{job['id']}.json",
+                       {"protocol_sha256": self.frozen["protocol_sha256"], "job_id": job["id"]})
+        state = {"accounting": {"version": 1, "blocked_reason": None, "attempts": [
+            {"run": job["id"], "status": "dispatched", "cap_usd": 1, "cost_usd": None}]}}
+        frozen.publish(self.run_root / "state.json", state)
+        with self.assertRaisesRegex(ValueError, "unresolved accounting"):
+            self.execute()
+        self.assertEqual(frozen.read_json(self.run_root / "state.json"), state)
+        self.assertEqual(len(list((self.run_root / "started").glob("*.json"))), 1)
+        self.assertFalse(FakeLive.runs)
+
+    def test_rolling_back_a_valid_ledger_cannot_refund_a_completed_attempt(self):
+        state = self.collect_one_job()
+        self.assertGreater(state["accounting"]["attempts"][0]["cost_usd"], 0)
+        state["accounting"]["attempts"] = []
+        frozen.publish(self.run_root / "state.json", state, replace=True)
+        with patch.object(Budget, "dispatch", side_effect=AssertionError("rolled-back ledger must not dispatch")) as dispatch:
+            with self.assertRaisesRegex(ValueError, "missing original accounting attempt"):
+                self.execute()
+        dispatch.assert_not_called()
+        self.assertEqual(frozen.read_json(self.run_root / "state.json"), state)
+        self.assertEqual(len(FakeLive.runs), 1)
+
+    def test_valid_partial_collection_resumes_and_keeps_the_original_attempt(self):
+        original = self.collect_one_job()["accounting"]["attempts"][0]
+        result = self.execute()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(json.loads(result.stdout)["evidence_complete"])
+        attempts = frozen.read_json(self.run_root / "state.json")["accounting"]["attempts"]
+        self.assertEqual(len(attempts), 4)
+        self.assertEqual(attempts[0], original)
+        self.assertEqual(len(FakeLive.runs), 4)
+
+    def test_reservations_and_settled_cost_must_match_the_immutable_receipt(self):
+        original = self.collect_one_job()
+        cases = (
+            ("duplicate", None, "duplicate original accounting attempt"),
+            ("run", "unknown-job", "unknown or unjournaled job"),
+            ("cap_usd", 0.5, "reservation cap differs"),
+            ("cost_usd", 0, "settled cost disagrees"),
+            ("status", "cancelled", "nonterminal accounting attempt"),
+            ("status", "reserved", "nonterminal accounting attempt"),
+            ("status", "dispatched", "nonterminal accounting attempt"),
+        )
+        for key, value, message in cases:
+            with self.subTest(key=key, value=value):
+                state = json.loads(json.dumps(original))
+                attempts = state["accounting"]["attempts"]
+                if key == "duplicate":
+                    attempts.append(dict(attempts[0]))
+                else:
+                    attempts[0][key] = value
+                frozen.publish(self.run_root / "state.json", state, replace=True)
+                with patch.object(Budget, "dispatch", side_effect=AssertionError("invalid ledger must not dispatch")) as dispatch:
+                    with self.assertRaisesRegex(ValueError, message):
+                        self.execute()
+                dispatch.assert_not_called()
+                self.assertEqual(frozen.read_json(self.run_root / "state.json"), state)
+                self.assertEqual(len(FakeLive.runs), 1)
+
+    def test_explicit_conservative_cap_resolution_preserves_the_original_reservation(self):
+        state = self.collect_one_job()
+        attempt = state["accounting"]["attempts"][0]
+        attempt.update(status="unknown", cost_usd=None)
+        ledger = Budget(state, 4, 1)
+        ledger.resolve_unknown_at_cap(attempt["run"], {
+            "kind": "human_cap_charge", "approved": True, "run": attempt["run"], "cap_usd": 1,
+            "statement": "Synthetic fixture authorization to reserve the original full cap", "source": "unit-test",
+        })
+        frozen.publish(self.run_root / "state.json", state, replace=True)
+        plan = frozen.preflight(self.frozen, self.objects, self.run_root, ADAGE)
+        self.assertTrue(plan["ready_to_execute"], plan)
+        self.assertEqual(plan["admission"]["accounted_usd"], 1)
+        self.assertEqual(plan["admission"]["remaining_reservation_usd"], 3)
+        attempt["resolution"]["authorization"]["approved"] = False
+        frozen.publish(self.run_root / "state.json", state, replace=True)
+        with self.assertRaisesRegex(ValueError, "invalid conservative cap charge"):
+            self.execute()
+        self.assertEqual(len(FakeLive.runs), 1)
+
+    def test_missing_native_cost_cannot_be_rewritten_as_a_free_settled_attempt(self):
+        FakeLive.mode = "unknown-cost"
+        self.assertEqual(self.execute().returncode, 2)
+        original = frozen.read_json(self.run_root / "state.json")
+        self.assertEqual(len(original["accounting"]["attempts"]), 1)
+        self.assertEqual(original["accounting"]["attempts"][0]["status"], "unknown")
+        plan = frozen.preflight(self.frozen, self.objects, self.run_root, ADAGE)
+        self.assertFalse(plan["ready_to_execute"])
+        self.assertTrue(any(blocker["code"] == "accounting" for blocker in plan["blockers"]))
+
+        forged = json.loads(json.dumps(original))
+        forged["accounting"]["attempts"][0].update(status="settled", cost_usd=0)
+        forged["accounting"]["blocked_reason"] = None
+        frozen.publish(self.run_root / "state.json", forged, replace=True)
+        with patch.object(Budget, "dispatch", side_effect=AssertionError("unknown native cost must not become free")) as dispatch:
+            with self.assertRaisesRegex(ValueError, "requires a known immutable native accounting estimate"):
+                self.execute()
+        dispatch.assert_not_called()
+        self.assertEqual(frozen.read_json(self.run_root / "state.json"), forged)
+        self.assertEqual(len(FakeLive.runs), 1)
+
+        ledger = Budget(original, 4, 1)
+        attempt = original["accounting"]["attempts"][0]
+        ledger.resolve_unknown_at_cap(attempt["run"], {
+            "kind": "human_cap_charge", "approved": True, "run": attempt["run"], "cap_usd": 1,
+            "statement": "Synthetic fixture authorization to charge the original full cap", "source": "unit-test",
+        })
+        frozen.publish(self.run_root / "state.json", original, replace=True)
+        plan = frozen.preflight(self.frozen, self.objects, self.run_root, ADAGE)
+        self.assertTrue(plan["ready_to_execute"], plan)
+        self.assertEqual(plan["admission"]["accounted_usd"], 1)
+        self.assertEqual(plan["admission"]["remaining_reservation_usd"], 3)
+        self.assertEqual(len(FakeLive.runs), 1)
+
+    def test_missing_ledger_cannot_reset_admission_after_a_job_was_started(self):
+        frozen.bind_root(self.frozen, self.run_root)
+        self.assertTrue(frozen.preflight(self.frozen, self.objects, self.run_root, ADAGE)["ready_to_execute"])
+        job = self.frozen["jobs"][0]
+        frozen.publish(self.run_root / "started" / f"{job['id']}.json",
+                       {"protocol_sha256": self.frozen["protocol_sha256"], "job_id": job["id"]})
+        plan = frozen.preflight(self.frozen, self.objects, self.run_root, ADAGE)
+        self.assertFalse(plan["ready_to_execute"])
+        self.assertIsNone(plan["admission"])
+        self.assertTrue(any(b["code"] == "accounting" and "ledger is missing" in b["message"] for b in plan["blockers"]))
+        with self.assertRaisesRegex(ValueError, "ledger is missing"):
+            self.execute()
+        self.assertFalse((self.run_root / "state.json").exists())
+        self.assertFalse(FakeLive.runs)
+        frozen.publish(self.run_root / "state.json", {})
+        with self.assertRaisesRegex(ValueError, "ledger is missing"):
+            self.execute()
+        self.assertEqual(frozen.read_json(self.run_root / "state.json"), {})
+        self.assertFalse(FakeLive.runs)
+
+    def test_missing_ledger_with_receipts_blocks_resume_but_offline_report_remains_available(self):
+        first = self.execute()
+        (self.run_root / "state.json").unlink()
+        # Receipts alone must retain the accounting requirement, even if start markers were lost.
+        for path in (self.run_root / "started").glob("*.json"):
+            path.unlink()
+        with self.assertRaisesRegex(ValueError, "ledger is missing"):
+            self.execute()
+        self.assertEqual(len(FakeLive.runs), 4)
+        self.assertFalse((self.run_root / "state.json").exists())
+        report = frozen.report(self.path, self.frozen, self.objects, self.run_root, ADAGE)
+        self.assertEqual(report.returncode, 0, report.stderr)
+        self.assertEqual(report.stdout, first.stdout)
+
     def test_existing_historical_output_cannot_be_registered_as_a_new_study(self):
         self.run_root.mkdir()
         (self.run_root / "state.json").write_text('{"historical":true}')
@@ -224,6 +482,17 @@ class FrozenFlow(unittest.TestCase):
 
 
 class LocalExecution(unittest.TestCase):
+    def test_confinement_probe_checks_installation_and_namespace_failure_without_an_agent(self):
+        with patch.object(runner.shutil, "which", return_value=None):
+            self.assertIn("not installed", frozen.confinement_probe())
+        with patch.object(runner.shutil, "which", return_value="/usr/bin/bwrap"), \
+                patch.object(frozen.subprocess, "run", return_value=subprocess.CompletedProcess([], 1, "", "not permitted")) as probe:
+            self.assertIn("not permitted", frozen.confinement_probe())
+            self.assertEqual(probe.call_args.args[0][-1], "/bin/true")
+        with patch.object(runner.shutil, "which", return_value="/usr/bin/bwrap"), \
+                patch.object(frozen.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, "", "")):
+            self.assertIsNone(frozen.confinement_probe())
+
     def test_grader_exit_status_type_and_timeout_are_checked_in_the_actual_runner(self):
         live = object.__new__(runner.Live)
         live.observer = None

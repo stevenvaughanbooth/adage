@@ -21,6 +21,7 @@ claim. Cheaper-model predictability requires a separate model-transfer compariso
 | M5 Verification and delivery | Required Rust checks, deterministic corpus/scale measurements, signed commits, remote branch and review | Results and limitations recorded against a commit; no unsupported savings or enterprise-capacity claim | Complete locally; hosted CI blocked by account billing |
 | M6 Frozen experiments | Immutable protocol, complete scheduled cohort, artifact integrity and workflow accounting | Missing jobs, retries, changed artifacts/settings, unknown usage and reused provider requests cannot qualify a savings claim | Complete locally |
 | M7 Live evidence collection | Native provider accounting and independent grading connected to frozen jobs | Partial usage cannot look complete; no terminal attempt is rerun or discarded; observed provenance matches execution | Complete locally; live provider study remains unmeasured |
+| M8 End-to-end product proof | Native evidence → learning → review → hook → independently correct fresh outcome; actionable study preflight | No inserted reflexes, actual delivered commands repair held-out state, negative controls abstain; inert artifacts and execution blockers fail before spend | Complete locally; live model uptake and savings remain unmeasured |
 
 ## Implementation boundaries
 
@@ -74,8 +75,50 @@ claim. Cheaper-model predictability requires a separate model-transfer compariso
   attempts from spending again. The offline Rust validator verifies source-object integrity.
   Local process tests exercise deadlines and invalid grades; simulated agents cross the real
   Rust protocol/report boundary without model credentials or paid calls.
+- 2026-10-04: M8 checked the latest remote `main` (`2534963`, already contained by this branch)
+  and added a single-command native-trace-to-delivery proof. A learned, reviewed dependency
+  sequence corrects a fresh independently graded task through the real hook; no authored reflex
+  is inserted. Operator studies now reject inert artifacts and wrong repository routing and show
+  actionable readiness before execution. Resume checks reconcile the immutable job journal with
+  the original admission ledger, including costs retained in native source evidence.
+- 2026-10-04: A bounded live Codex canary found a stored ChatGPT login but received HTTP 401:
+  its token could not be refreshed after logout/account change. It failed before inference.
+  Claude Code is not installed and no provider credentials are configured here. Live model
+  uptake and token-savings measurement therefore remain blocked on restored provider access;
+  the free proof establishes deterministic mechanism and outcome only.
 
 ## Implemented interfaces
+
+### Run the end-to-end proof
+
+From the repository checkout on Unix, with Rust and `make` installed:
+
+```sh
+cargo test --locked -p adage-cli --test learning_delivery -- --nocapture
+```
+
+The test creates a disposable repository and runs actual local commands. Sixteen distinct
+native-format rehearsal sessions enter through `corpus export`, `import` and `learn` with
+declared task identities and independently checked outcomes. Eight demonstrate a dependency
+update; eight unrelated documentation tasks provide controls. No reflex is inserted by the test,
+and production mining thresholds are unchanged. Embeddings are disabled to isolate deterministic
+procedure mining and keep this proof independent of model downloads.
+
+The learned `make deps` → `make check` sequence is initially a candidate requiring review.
+The isolated test acts as its reviewer through the normal CLI, checks the compiled artifact and
+runtime repository, then edits an unseen dependency in a fresh held-out checkout. That checkout
+starts with a stale lockfile and fails its check. The real hook supplies the learned continuation;
+the fixture executes exactly those delivered commands and independently verifies both files.
+Before review, with Adage disabled and on an unrelated edit, the hook abstains. Repeated delivery
+is suppressed, repeat import/learning preserves evidence and review, and held-out work never
+enters the training snapshot.
+
+The final `learning_delivery_proof={...}` line is a machine-readable account of these assertions.
+It explicitly reports `model_calls: 0` and `token_savings_measured: false`. This establishes that
+the mechanism transfers a learned procedure to a new input and corrects its state. A real model's
+decision to follow the reflex, net inference savings and population-level quality need a live
+held-out experiment. The [frozen collector](../evals/live/README.md#frozen-studies) prepares that
+next step and reports missing prerequisites in a read-only plan.
 
 ### Reusable mining
 
@@ -335,6 +378,24 @@ called. The native accounting milestone is `9689cbc`; its
 again reports that it did not start because account payments failed or the spending limit needs
 increasing. The optimized binary used for M5 measurements predates M7; rebuild before preparing
 a study with this collector.
+
+M8: the complete `cargo test --workspace --exclude adage-eval --locked --no-fail-fast`
+run passes with 1,121 passed, zero failed and three existing ignored tests, including the actual
+learning-to-hook proof and Bubblewrap execution/escape suites. The separate fast evaluation
+suite passes 51/51; all 101 Python live-runner tests pass with no skips. Resume fixtures reject
+missing or rolled-back admission ledgers, duplicate attempts, changed reservation caps and
+costs inconsistent with retained native evidence, including unknown costs rewritten as zero.
+A valid partial study resumes without
+repeating its completed job. Formatting, all-target workspace Clippy with warnings denied,
+18 architecture/hygiene guards and both no-spawn guards pass.
+
+The optimized CLI was rebuilt for M8 and its artifact command accepts the checked-in compiled
+fixture. Binary SHA-256:
+`e39786c0b63845d7477031134c3abecf9402b29fe44cace41713da920e288eda`.
+The deterministic end-to-end proof uses 16 training tasks and one fresh held-out task; the latter
+fails before receiving the learned procedure and passes its independent grade afterward. It
+makes zero model calls and establishes neither a token-savings percentage nor population-level
+quality. The live Codex canary failed before inference with expired credentials (HTTP 401).
 
 ### Release scale smoke measurements
 
