@@ -8,7 +8,7 @@
                        │     fix: `adage install codex --write`
                        │
                        │ Next: run adage watch in a split pane to see Adage work live, and adage ui
-                       │ for routes, review, health and settings.
+                       │ for reflexes, review, health and settings.
                        │
                        │
                        │

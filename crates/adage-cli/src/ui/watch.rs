@@ -91,6 +91,10 @@ pub fn run(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>) -> Result<()> {
         sources.poll(&mut live, health.as_ref().and_then(|h| h.repo_key.as_deref()));
         t.terminal.draw(|f| view::draw_live(f, f.area(), &live, health.as_ref(), &ctx, true))?;
         if let Some(k) = term::next_key()? {
+            if !live.help && k.code == KeyCode::Char('u') {
+                drop(t);
+                return super::app::run(ctx, before_tick);
+            }
             if live_key(&mut live, k.code, k.modifiers) {
                 break;
             }

@@ -50,16 +50,16 @@ fn watch_demo_replays_real_hook_decisions() {
     for s in [
         "adage watch · harbor-dispatch",
         "demo",
-        "→ lookup-incident [G]",
-        "withheld lookup-incident [G]",
+        "→ lookup-incident [fire]",
+        "withheld lookup-incident [fire]",
         "✓ followed lookup-incident",
-        "✗ derailed lookup-incident",
-        "→ dead-end-npm-test [R]",
+        "✗ not observed lookup-incident",
+        "→ dead-end-npm-test [inhibit]",
         "■ stop-request",
         "✓ met codegen-after-registry",
-        "(holdout)",
-        "learned harbor-dispatch/incidents: read-linked-files yellow→green",
-        "+ hooks cc",
+        "(control)",
+        "learned harbor-dispatch/incidents: read-linked-files prime→fire",
+        "+ hooks received cc",
         "+ auto-learn on",
     ] {
         assert!(t.contains(s), "the demo frame lacks {s:?}:\n{t}");

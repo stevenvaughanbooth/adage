@@ -7,14 +7,14 @@
 //! adage survey [--repo <key>] [--since <days>] [--json]   what your agents actually do (read-only)
 //! adage doctor [--json]              check the binary, data directory, index, tracks, model, hooks
 //! adage watch [--repo <path>] [--demo]  a live pane: health lights, hook activity, what Adage learns
-//! adage ui                           the full-screen app: live feed, routes and review, health fixes, settings
+//! adage ui                           the full-screen app: Home, command palette, live feed, routes, health, settings
 //! adage learn [options]              mine tracks from agent sessions and compile the index
 //! adage learn --auto --repo-root <path>   learn one repository quietly (what hooks start)
 //! adage config [get <key> | set <key> <value>] [--json]   settings in $ADAGE_HOME/config.toml
 //! adage status                       installed tracks, routes, aspects, and evidence
 //! adage report [--json]              directives emitted, followed, and derailed, from spools
-//! adage graph [--json] [--events <n>] situations → routes → steps → agent responses, with live counts
-//! adage graph --serve [--port <n>]   serve the signal box at http://127.0.0.1:<n>/ (default 8765)
+//! adage graph [--json] [--events <n>] [--demo] situations → reflexes → steps → agent responses
+//! adage graph --serve [--port <n>] [--demo] serve the map at http://127.0.0.1:<n>/ (default 8765)
 //! adage hooks-config <adage-path>    print a Claude Code hooks settings block (exec form)
 //! adage install <claude-code|opencode|codex> [--print|--write] [--scope project|user]
 //!                                    print (default) or write a harness's hook registration
@@ -155,7 +155,8 @@ fn run(args: &[String]) -> Result<()> {
         _ => {
             println!("usage: adage <init|survey|learn|status|report|graph|review|share|add|install|models|doctor|watch|ui|config|hooks-config|version|hook>");
             println!("       adage watch   live pane for a split terminal: health, hook activity, learning");
-            println!("       adage ui      full-screen app: live feed, routes and review, health fixes, settings");
+            println!("       adage         open the app at a terminal: Home, live activity, routes, health, settings");
+            println!("       adage ui      open the same app explicitly; Ctrl+K or : finds every action, w opens the web dashboard");
             Ok(())
         }
     }
@@ -204,27 +205,20 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
             transcripts.push(p);
         }
     }
-    // Default to Claude Code history only when no source was named: an explicit source that finds
-    // nothing is an error, never a silent fallback to other history.
-    let explicit = args.iter().any(|a| a == "--transcripts" || a == "--codex-sessions");
-    if let Some(dir) = flag(args, "--claude-projects").or_else(|| {
-        (!explicit).then(|| {
-            adage_store::home_dir()
-                .map(|h| h.join(".claude").join("projects").to_string_lossy().into_owned())
-                .unwrap_or_default()
-        })
-    }) {
-        let prefix = flag(args, "--cwd-prefix");
-        for p in adage_learn::import::discover(std::path::Path::new(&dir)) {
-            if let Some(pre) = &prefix {
-                // Cheap pre-filter on the transcript's recorded cwd.
-                let head = std::fs::read_to_string(&p).unwrap_or_default();
-                if !head.contains(&format!("\"cwd\":\"{pre}")) {
-                    continue;
-                }
-            }
-            transcripts.push(p);
-        }
+    // Explicit source arguments remain exclusive, including an explicitly empty folder.
+    // With no source arguments, every entry point resolves the same configured/detected stores.
+    let explicit =
+        args.iter().any(|a| matches!(a.as_str(), "--transcripts" | "--codex-sessions" | "--claude-projects"));
+    if let Some(dir) = flag(args, "--claude-projects") {
+        transcripts.extend(adage_learn::import::discover(std::path::Path::new(&dir)));
+    } else if !explicit {
+        transcripts.extend(
+            detect::history_sources(&adage_store::config::load(paths).config).into_iter().flat_map(|s| s.files),
+        );
+    }
+    if let Some(prefix) = flag(args, "--cwd-prefix") {
+        transcripts
+            .retain(|p| std::fs::read_to_string(p).is_ok_and(|text| text.contains(&format!("\"cwd\":\"{prefix}"))));
     }
     if transcripts.is_empty() {
         bail!("no transcripts found");
@@ -372,6 +366,26 @@ fn status(paths: &Paths) -> Result<()> {
 }
 
 fn report(paths: &Paths, json: bool) -> Result<()> {
+    if !json {
+        let graph = graph::build(paths, 0)?;
+        let counts = &graph["totals"];
+        println!("{} recorded sessions · all repositories", graph["sessions"]["total"]);
+        println!("Guidance delivered: {}", counts["emitted"]);
+        println!(
+            "With guidance: {} followed · {} not observed · {} obligations met",
+            counts["followed"], counts["derailed"], counts["obligation_met"]
+        );
+        println!(
+            "Control: {} opportunities withheld · {} followed unaided · {} not observed · {} obligations met unaided",
+            counts["would_have"],
+            counts["holdout"]["unaided"],
+            counts["holdout"]["not_reached"],
+            counts["holdout"]["obligation_met"]
+        );
+        println!("\nNot observed means the expected action was absent in the next 3 observed tool batches. Codex and OpenCode report per call; this is not a full-session verdict.");
+        println!("These raw counts include historical and unattributed events once. Open the web map for version-specific evidence and contributing traces.");
+        return Ok(());
+    }
     let mut totals: BTreeMap<String, u64> = BTreeMap::new();
     let dir = paths.sessions();
     let mut sessions = 0;
@@ -395,13 +409,6 @@ fn report(paths: &Paths, json: bool) -> Result<()> {
             }
         }
     }
-    if json {
-        println!("{}", serde_json::json!({ "sessions": sessions, "totals": totals }));
-    } else {
-        println!("{sessions} sessions");
-        for (k, v) in totals {
-            println!("  {k:<16} {v}");
-        }
-    }
+    println!("{}", serde_json::json!({ "sessions": sessions, "totals": totals }));
     Ok(())
 }

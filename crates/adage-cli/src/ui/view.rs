@@ -219,7 +219,7 @@ fn act_spans(a: &Act, t: &Theme, narrow: bool) -> Vec<Span<'static>> {
             vec![Span::styled(format!("withheld {route}{}", aspect_note(*aspect)), t.holdout())]
         }
         Act::Followed(r) => vec![Span::styled(format!("✓ {}{r}", verb("followed")), t.green())],
-        Act::Derailed(r) => vec![Span::styled(format!("✗ {}{r}", verb("derailed")), t.red())],
+        Act::Derailed(r) => vec![Span::styled(format!("✗ {}{r}", verb("not observed")), t.red())],
         Act::Met(r) => vec![Span::styled(format!("✓ met {r}"), t.green())],
         Act::Unaided(r) => vec![Span::styled(format!("✓ {}{r}", verb("unaided")), t.holdout())],
         Act::NotReached(r) => vec![Span::styled(format!("· {}{r}", verb("missed")), t.holdout())],
@@ -257,7 +257,7 @@ pub fn feed_line(i: &FeedItem, ctx: &Ctx, width: u16) -> Line<'static> {
         }
     }
     if wide && i.holdout {
-        spans.push(Span::styled("  (holdout)", t.holdout()));
+        spans.push(Span::styled("  (control)", t.holdout()));
     }
     Line::from(spans)
 }
@@ -275,7 +275,7 @@ pub fn tick_line(k: &Tick, ctx: &Ctx, width: u16) -> Line<'static> {
     Line::from(vec![
         Span::styled(clock(k.ts, ctx.tz, false), t.dim()),
         Span::raw(" "),
-        Span::styled(format!("{lead}{}", if width >= 100 { &k.text } else { &k.short }), style),
+        Span::styled(format!("{lead}{}", learning_label(if width >= 100 { &k.text } else { &k.short })), style),
     ])
 }
 
@@ -290,7 +290,7 @@ pub fn lights_line(h: Option<&Health>, t: &Theme) -> Line<'static> {
         // Non-breaking spaces keep each lamp and its label together when the line wraps.
         spans.push(Span::styled(t.lamp_mark(l.lamp).to_string(), t.lamp(l.lamp)));
         spans.push(Span::styled(
-            format!("{NBSP}{}", l.label.replace(' ', NBSP)),
+            format!("{NBSP}{}", display_counts(&l.label).replace(' ', NBSP)),
             if l.lamp == Lamp::Off { t.dim() } else { Style::default() },
         ));
     }
@@ -307,16 +307,22 @@ pub fn centered(area: Rect, w: u16, h: u16) -> Rect {
 pub fn popup(f: &mut Frame, area: Rect, title: &str, lines: Vec<Line<'static>>, t: &Theme, scroll: u16) {
     let w = lines
         .iter()
-        .map(|l| l.width() as u16)
+        .map(|l| l.width().min(u16::MAX as usize) as u16)
         .max()
         .unwrap_or(20)
+        .max(Line::raw(title).width().min(u16::MAX as usize) as u16)
         .saturating_add(4)
-        .clamp(30, area.width.saturating_sub(4).max(10));
-    let h = (lines.len() as u16).saturating_add(2).min(area.height.saturating_sub(2).max(3));
+        .max(30)
+        .min(area.width.saturating_sub(4).max(1));
+    let paragraph = Paragraph::new(lines).wrap(Wrap { trim: false });
+    let line_count = paragraph.line_count(w.saturating_sub(2)).min(u16::MAX as usize) as u16;
+    let h = line_count.saturating_add(2).min(area.height.saturating_sub(2).max(3));
     let r = centered(area, w, h);
     f.render_widget(Clear, r);
-    let block = Block::default().borders(Borders::ALL).title(Span::styled(format!(" {title} "), t.title()));
-    f.render_widget(Paragraph::new(lines).block(block).wrap(Wrap { trim: false }).scroll((scroll, 0)), r);
+    let block =
+        Block::default().style(t.surface()).borders(Borders::ALL).title(Span::styled(format!(" {title} "), t.title()));
+    let scroll = scroll.min(line_count.saturating_sub(r.height.saturating_sub(2)));
+    f.render_widget(paragraph.block(block).scroll((scroll, 0)), r);
 }
 
 pub fn watch_help(t: &Theme) -> Vec<Line<'static>> {
@@ -324,6 +330,7 @@ pub fn watch_help(t: &Theme) -> Vec<Line<'static>> {
         Line::from(vec![Span::styled(format!("{key:>7}  "), t.bold()), Span::raw(what.to_string())])
     };
     vec![
+        k("u", "open the full app and its action palette"),
         k("q", "quit"),
         k("p", "pause / resume the feed"),
         k("f", "this repository / all repositories"),
@@ -331,15 +338,23 @@ pub fn watch_help(t: &Theme) -> Vec<Line<'static>> {
         k("↑ ↓", "scroll the feed (G: back to newest)"),
         k("?", "this help"),
         Line::raw(""),
-        Line::from(Span::styled("● treated session   ◌ holdout (nothing delivered)", t.dim())),
+        Line::from(Span::styled("● guided trace   ◌ control (nothing delivered)", t.dim())),
         Line::from(vec![
-            Span::styled("→ route", t.green()),
-            Span::raw(" directive (colour = aspect)  "),
+            Span::styled("→ reflex", t.green()),
+            Span::raw(" response (colour = strength)  "),
             Span::styled("✓", t.green()),
             Span::raw(" followed  "),
             Span::styled("✗", t.red()),
-            Span::raw(" derailed"),
+            Span::raw(" not observed in follow window"),
         ]),
+        Line::from(Span::styled(
+            "Follow window: the next 3 observed tool batches after prompt/intent guidance.",
+            t.dim(),
+        )),
+        Line::from(Span::styled(
+            "Codex and OpenCode report per call. Missing observations do not prove the agent ignored guidance.",
+            t.dim(),
+        )),
     ]
 }
 
@@ -366,6 +381,28 @@ fn draw_feed(f: &mut Frame, area: Rect, live: &Live, key: Option<&str>, ctx: &Ct
     let start = end.saturating_sub(h);
     let lines: Vec<Line> = items[start..end].iter().map(|i| feed_line(i, ctx, area.width)).collect();
     f.render_widget(Paragraph::new(lines), area);
+}
+
+/// Translate human-readable counts supplied by older internals without changing IDs, paths,
+/// commands, serialized data or the exact response an agent receives.
+pub fn display_counts(text: &str) -> String {
+    text.replace(" route(s)", " reflexes").replace(" routes", " reflexes").replace(" track(s)", " collections")
+}
+
+/// Learning ticks use fixed templates; translate their labels for people while leaving the
+/// stored event and the reflex/collection identifiers intact.
+pub fn learning_label(text: &str) -> String {
+    let mut shown = display_counts(text)
+        .replace("new route ", "new reflex ")
+        .replace("tracks directory", "collection storage directory")
+        .replace(" sessions", " traces");
+    for (old, new) in [("green", "fire"), ("yellow", "prime"), ("red", "inhibit")] {
+        shown = shown
+            .replace(&format!(" {old}→"), &format!(" {new}→"))
+            .replace(&format!("→{old} "), &format!("→{new} "))
+            .replace(&format!(" {old} ("), &format!(" {new} ("));
+    }
+    shown
 }
 
 fn draw_ticker(f: &mut Frame, area: Rect, live: &Live, key: Option<&str>, ctx: &Ctx) {
@@ -396,6 +433,7 @@ fn section(title: String, t: &Theme) -> Block<'static> {
 /// (the full app has its own tab bar and status bar).
 pub fn draw_live(f: &mut Frame, area: Rect, live: &Live, health: Option<&Health>, ctx: &Ctx, chrome: bool) {
     let t = &ctx.theme;
+    f.render_widget(Block::default().style(t.base()), area);
     if area.width < 30 || area.height < 8 {
         f.render_widget(
             Paragraph::new("adage watch: make this pane larger (30×8 at least)").wrap(Wrap { trim: true }),
@@ -468,7 +506,11 @@ pub fn draw_live(f: &mut Frame, area: Rect, live: &Live, health: Option<&Health>
         let pause = if live.paused { "resume" } else { "pause" };
         let scope = if live.all_repos { "this repo" } else { "all repos" };
         let quiet = if live.hide_quiet { "show quiet" } else { "hide quiet" };
-        let hint = format!(" q quit · p {pause} · f {scope} · v {quiet} · ? help");
+        let hint = if area.width < 80 {
+            " u app · p pause · f scope · v quiet · ? help · q quit".into()
+        } else {
+            format!(" u open app · p {pause} · f {scope} · v {quiet} · ? help · q quit")
+        };
         f.render_widget(Paragraph::new(Span::styled(hint, t.dim())), keys);
     }
     if live.help {

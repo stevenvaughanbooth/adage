@@ -63,6 +63,8 @@ impl World {
             .current_dir(&self.root)
             .env("ADAGE_HOME", self.root.join("data"))
             .env("HOME", self.home())
+            .env("CODEX_HOME", self.home().join(".codex"))
+            .env("CLAUDE_CONFIG_DIR", self.home().join(".claude"))
             .env_remove("CLAUDECODE")
             .env_remove("OPENCODE")
             .env_remove("CODEX_SANDBOX")

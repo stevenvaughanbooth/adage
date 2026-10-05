@@ -470,10 +470,10 @@ fn watch_frames_at_split_pane_and_wide_sizes() {
     snap("watch-60x20", &small);
     // Colour carries the aspect: the green directive's text is green.
     let (x, y) = find(&buf, "→ lookup-incident").expect("a directive is shown");
-    assert_eq!(buf[(x + 2, y)].fg, Color::Green);
+    assert_eq!(buf[(x + 2, y)].fg, Color::Rgb(0x4a, 0xde, 0x80));
     let (wide, _) = render(110, 30, |f| view::draw_live(f, f.area(), &live, Some(&h), &c, true));
     snap("watch-110x30", &wide);
-    assert!(wide.contains("learned harbor-dispatch/incidents: lookup-incident yellow→green (24/25 sessions)"));
+    assert!(wide.contains("learned harbor-dispatch/incidents: lookup-incident prime→fire (24/25 traces)"));
 
     // All repositories, quiet events hidden, paused.
     let mut live = live;
@@ -497,11 +497,12 @@ fn no_color_spells_aspects_out() {
     let h = health();
     let c = ctx(paths, false);
     let (text, buf) = render(80, 24, |f| view::draw_live(f, f.area(), &live, Some(&h), &c, true));
-    assert!(text.contains("→ lookup-incident [G]") && text.contains("→ dead-end-npm-test [R]"), "{text}");
+    assert!(text.contains("→ lookup-incident [fire]") && text.contains("→ dead-end-npm-test [inhibit]"), "{text}");
     assert!(text.contains("+ adage 0.1.0") && text.contains("! no model"), "{text}");
     for y in 0..buf.area.height {
         for x in 0..buf.area.width {
             assert!(matches!(buf[(x, y)].fg, Color::Reset), "no colour at {x},{y}");
+            assert!(matches!(buf[(x, y)].bg, Color::Reset), "no background colour at {x},{y}");
         }
     }
 }
@@ -533,6 +534,7 @@ fn find(buf: &ratatui::buffer::Buffer, needle: &str) -> Option<(u16, u16)> {
 }
 
 fn route_row(id: &str, aspect: Aspect, verbs: Vec<&'static str>, reasons: Vec<(String, String)>) -> RouteRow {
+    let directive = "<adage-signal track=\"harbor-dispatch/incidents@0.3.0\" route=\"lookup-incident\" aspect=\"green\">\nIncidents are looked up with: `bin/fetch-incident INC-12`\n</adage-signal>".to_string();
     RouteRow {
         reference: "harbor-dispatch/incidents".into(),
         track: "harbor-dispatch/incidents".into(),
@@ -553,9 +555,16 @@ fn route_row(id: &str, aspect: Aspect, verbs: Vec<&'static str>, reasons: Vec<(S
         rate: 0.96,
         lower_bound: 0.8,
         live: LiveCounts { emitted: 3, followed: 2, derailed: 1, met: 0, would_have: 1, unaided: 1, not_reached: 0 },
-        directive: "<adage-signal track=\"harbor-dispatch/incidents@0.3.0\" route=\"lookup-incident\" aspect=\"green\">\nIncidents are looked up with: `bin/fetch-incident INC-12`\n</adage-signal>".into(),
+        measurement_info: "Counts apply to this installed version only.".into(),
+        historical_versions: vec![],
+        directive: directive.clone(),
         verbs,
         reasons,
+        review_preview: Some(crate::review::ReviewPreview {
+            revision: "reviewed-version".into(),
+            current_directive: directive,
+            proposal: None,
+        }),
     }
 }
 
@@ -594,7 +603,12 @@ fn app_frames_routes_health_settings() {
     let mut s = app_state();
     s.settings[0].value = "false".into();
     s.settings[0].source = "file".into();
-    for (tab, name) in [(Tab::Routes, "app-routes"), (Tab::Health, "app-health"), (Tab::Settings, "app-settings")] {
+    for (tab, name) in [
+        (Tab::Home, "app-home"),
+        (Tab::Routes, "app-routes"),
+        (Tab::Health, "app-health"),
+        (Tab::Settings, "app-settings"),
+    ] {
         s.tab = tab;
         let (text, _) = render(110, 30, |f| app::draw(f, &s, &c));
         snap(name, &text);
@@ -603,6 +617,353 @@ fn app_frames_routes_health_settings() {
     s.tab = Tab::Routes;
     let (narrow, _) = render(70, 30, |f| app::draw(f, &s, &c));
     assert!(narrow.contains("lookup-incident") && narrow.contains("Wilson lb 0.80"), "{narrow}");
+}
+
+fn choose_command(state: &mut AppState, query: &str) -> Option<Cmd> {
+    state.key(KeyCode::Char(':'), KeyModifiers::NONE);
+    for c in query.chars() {
+        assert!(state.key(KeyCode::Char(c), KeyModifiers::NONE).is_none());
+    }
+    state.key(KeyCode::Enter, KeyModifiers::NONE)
+}
+
+#[test]
+fn palette_is_global_searchable_and_never_executes_while_typing() {
+    let none = KeyModifiers::NONE;
+    let mut state = app_state();
+    for tab in [Tab::Home, Tab::Live, Tab::Routes, Tab::Health, Tab::Settings] {
+        state.tab = tab;
+        state.key(KeyCode::Char('k'), KeyModifiers::CONTROL);
+        assert!(matches!(state.modal, Some(Modal::Palette(_))));
+        // Normal app quit/navigation shortcuts are text inside the palette.
+        state.key(KeyCode::Char('q'), none);
+        state.key(KeyCode::Char('1'), none);
+        assert_eq!(state.tab, tab);
+        assert!(state.key(KeyCode::Enter, none).is_none());
+        assert!(matches!(state.modal, Some(Modal::Palette(_))));
+        state.key(KeyCode::Esc, none);
+        assert!(state.modal.is_none());
+        assert!(matches!(choose_command(&mut state, "open web"), Some(Cmd::OpenWeb)));
+    }
+    assert!(choose_command(&mut state, "DOWNLOAD MODEL").is_none());
+    assert!(matches!(state.modal, Some(Modal::Confirm { action: app::Action::FetchModel, .. })));
+    state.key(KeyCode::Esc, none);
+    assert!(choose_command(&mut state, "connect codex").is_none());
+    assert!(matches!(&state.modal, Some(Modal::Scope { harness }) if harness == "codex"));
+    assert!(matches!(state.key(KeyCode::Char('p'), none), Some(Cmd::PlanInstall { scope: "project", .. })));
+}
+
+#[test]
+fn palette_searches_routes_settings_and_keeps_review_confirmations() {
+    let mut state = app_state();
+    assert!(choose_command(&mut state, "open reflex read-linked").is_none());
+    assert_eq!(state.tab, Tab::Routes);
+    assert_eq!(state.selected_route().unwrap().id, "read-linked-files");
+    assert!(choose_command(&mut state, "strengthen read-linked").is_none());
+    assert!(matches!(state.modal, Some(Modal::Confirm { action: app::Action::Review { verb: "promote", .. }, .. })));
+    state.key(KeyCode::Esc, KeyModifiers::NONE);
+    assert!(choose_command(&mut state, "edit learn.auto").is_none());
+    assert_eq!(state.tab, Tab::Settings);
+    assert!(matches!(state.modal, Some(Modal::Edit { key: "learn.auto", .. })));
+}
+
+#[test]
+fn launch_vocabulary_keeps_learned_reflexes_distinct_from_instincts() {
+    let temp = tempfile::tempdir().unwrap();
+    let context = ctx(Paths::at(temp.path()), true);
+    let mut state = app_state();
+    let (home, buffer) = render(110, 30, |f| app::draw(f, &state, &context));
+    assert!(home.contains("Agent traces become reflexes."));
+    assert!(home.contains("Instincts are built in.") && home.contains("instincts are not available yet."));
+    assert_eq!(buffer[(109, 20)].bg, Color::Rgb(0x05, 0x05, 0x07));
+    assert_eq!(context.theme.accent().fg, Some(Color::Rgb(0x8b, 0x7c, 0xff)));
+    assert!(matches!(choose_command(&mut state, "demo trace"), Some(Cmd::OpenWebDemo)));
+    assert!(choose_command(&mut state, "review learned reflexes").is_some());
+    let detail: String = app::route_detail(state.selected_route().unwrap(), &context.theme)
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(detail.contains("fire · do this") && detail.contains("firm") && detail.contains("control"));
+    // Product copy changes must not alter the exact agent-facing wrapper or identifiers.
+    assert!(detail.contains("route=\"lookup-incident\"") && detail.contains("aspect=\"green\""));
+    let labels: Vec<_> = state.palette_entries().into_iter().map(|entry| entry.title).collect();
+    assert!(labels.contains(&"Import a signed pack".into()));
+    assert!(labels.iter().all(|label| !label.contains("route") && !label.contains("track")));
+}
+
+#[test]
+fn palette_forms_validate_before_preparing_any_write() {
+    use super::palette::FormKind;
+    let mut state = app_state();
+    assert!(choose_command(&mut state, "import a signed").is_none());
+    assert!(matches!(state.modal, Some(Modal::Form(ref form)) if form.kind == FormKind::AddTrack));
+    state.key(KeyCode::Enter, KeyModifiers::NONE);
+    assert!(state.key(KeyCode::Enter, KeyModifiers::NONE).is_none());
+    assert!(matches!(state.modal, Some(Modal::Form(ref form)) if form.error.is_some() && form.selected == 0));
+    for c in "~/shared track".chars() {
+        state.key(KeyCode::Char(c), KeyModifiers::NONE);
+    }
+    state.key(KeyCode::Enter, KeyModifiers::NONE);
+    assert!(matches!(
+        state.key(KeyCode::Enter, KeyModifiers::NONE),
+        Some(Cmd::PrepareTool(super::tools::Tool::AddTrack { trust: false, expected_digest: None, .. }))
+    ));
+}
+
+#[test]
+fn opening_repository_validates_location_and_preserves_the_data_directory() {
+    let temp = tempfile::tempdir().unwrap();
+    let repo = temp.path().join("project");
+    std::fs::create_dir_all(repo.join(".git")).unwrap();
+    std::fs::create_dir_all(repo.join("src")).unwrap();
+    let context = ctx(Paths::at(temp.path().join("data")), false);
+    let opened = app::repository_context(&context, &repo.join("src")).unwrap();
+    assert_eq!(opened.root, Some(repo.canonicalize().unwrap()));
+    assert_eq!(opened.label, "project");
+    assert_eq!(opened.paths.root, context.paths.root);
+    assert!(!opened.theme.color);
+    assert!(app::repository_context(&context, temp.path()).is_err());
+    assert!(app::repository_context(&context, &repo.join("missing")).is_err());
+    let relative = app::repository_context(&opened, Path::new("src")).unwrap();
+    assert_eq!(relative.root, opened.root);
+
+    let mut state = app_state();
+    assert!(choose_command(&mut state, "open a repository").is_none());
+    for c in repo.display().to_string().chars() {
+        state.key(KeyCode::Char(c), KeyModifiers::NONE);
+    }
+    assert!(matches!(state.key(KeyCode::Enter, KeyModifiers::NONE), Some(Cmd::OpenRepository(path)) if path == repo));
+}
+
+#[test]
+fn read_only_reports_offer_cancel_but_writes_keep_progress_open() {
+    let mut state = app_state();
+    for cancelable in [false, true] {
+        state.modal = Some(Modal::Progress { title: "Work".into(), status: "Working".into(), ratio: 0.0, cancelable });
+        let result = state.key(KeyCode::Esc, KeyModifiers::NONE);
+        if cancelable {
+            assert!(matches!(result, Some(Cmd::CancelJob)));
+        } else {
+            assert!(result.is_none());
+            assert!(matches!(state.modal, Some(Modal::Progress { .. })));
+        }
+    }
+}
+
+#[test]
+fn history_setup_and_learning_preflight_are_available_without_shell_commands() {
+    use super::palette::FormKind;
+    use super::tools::Tool;
+    let mut state = app_state();
+    assert!(matches!(choose_command(&mut state, "history sources"), Some(Cmd::HistorySources)));
+    assert!(matches!(
+        choose_command(&mut state, "import opencode history"),
+        Some(Cmd::PrepareTool(Tool::ExportOpenCode))
+    ));
+    for (query, kind, expected) in [
+        ("configure claude code history", FormKind::HistoryClaude, "claude-code"),
+        ("configure codex history", FormKind::HistoryCodex, "codex"),
+        ("configure opencode history", FormKind::HistoryOpenCode, "opencode"),
+    ] {
+        assert!(choose_command(&mut state, query).is_none());
+        assert!(matches!(&state.modal, Some(Modal::Form(form)) if form.kind == kind));
+        assert!(state.key(KeyCode::Enter, KeyModifiers::NONE).is_none());
+        assert!(matches!(&state.modal, Some(Modal::Form(form)) if form.error.is_some()));
+        for c in "/tmp/agent history".chars() {
+            state.key(KeyCode::Char(c), KeyModifiers::NONE);
+        }
+        assert!(
+            matches!(state.key(KeyCode::Enter, KeyModifiers::NONE), Some(Cmd::PrepareTool(Tool::SetHistorySource { harness, directory })) if harness == expected && directory == Path::new("/tmp/agent history"))
+        );
+    }
+    assert!(matches!(choose_command(&mut state, "learn from this repository"), Some(Cmd::PreviewLearning)));
+    state.pending_job_action = Some(app::Action::LearnNow);
+    state.complete_job("Review learning sources", Err("Nothing to learn for this repository yet.".into()));
+    assert!(state.pending_job_action.is_none());
+    assert!(matches!(&state.modal, Some(Modal::Message { error: true, .. })));
+    assert!(state.key(KeyCode::Enter, KeyModifiers::NONE).is_none());
+    state.pending_job_action = Some(app::Action::LearnNow);
+    state.complete_job(
+        "Review learning sources",
+        Ok(vec!["Codex: /tmp/history".into(), "4 readable sessions; 3 with actions".into()]),
+    );
+    assert!(
+        matches!(&state.modal, Some(Modal::Confirm { lines, action: app::Action::LearnNow, .. }) if lines.iter().any(|line| line.to_string().contains("3 with actions")))
+    );
+    assert!(state.key(KeyCode::Esc, KeyModifiers::NONE).is_none());
+    assert!(state.modal.is_none());
+}
+
+#[test]
+fn demo_setup_requires_a_real_workspace_and_opening_one_uses_persistent_data() {
+    use super::tools::Tool;
+    for command in [
+        Cmd::PlanInstall { harness: "codex".into(), scope: "user" },
+        Cmd::PrepareTool(Tool::ExportOpenCode),
+        Cmd::Do(app::Action::Tool(Tool::SetHistorySource {
+            harness: "codex".into(),
+            directory: "/tmp/sessions".into(),
+        })),
+        Cmd::PreviewLearning,
+        Cmd::Do(app::Action::FetchModel),
+        Cmd::Do(app::Action::SetConfig { key: "learn.auto", value: "true".into() }),
+    ] {
+        assert!(app::needs_real_workspace(&command));
+    }
+    assert!(!app::needs_real_workspace(&Cmd::OpenWebDemo));
+    assert!(!app::needs_real_workspace(&Cmd::Do(app::Action::Tool(Tool::Report))));
+    assert!(app::needs_real_workspace(&Cmd::Do(app::Action::Tool(Tool::Survey))));
+    let temp = tempfile::tempdir().unwrap();
+    let repo = temp.path().join("real-repo");
+    std::fs::create_dir_all(repo.join(".git")).unwrap();
+    let mut context = ctx(Paths::at(temp.path().join("demo-data")), true);
+    context.demo = true;
+    let demo_repo = temp.path().join("demo-repo");
+    std::fs::create_dir_all(demo_repo.join(".git")).unwrap();
+    context.root = Some(demo_repo.canonicalize().unwrap());
+    assert!(app::repository_context(&context, Path::new(".")).unwrap_err().to_string().contains("temporary demo"));
+    let opened = app::repository_context(&context, &repo).unwrap();
+    assert!(!opened.demo);
+    assert_eq!(opened.paths.root, Paths::from_env().root);
+    assert_ne!(opened.paths.root, context.paths.root);
+    assert!(!context.paths.root.exists());
+}
+
+#[test]
+fn health_shows_full_manual_hook_acceptance_steps_on_enter() {
+    let mut state = app_state();
+    let health = state.health.as_mut().unwrap();
+    health.checks.push(Check {
+        check: "hook activity: codex".into(),
+        status: Status::Warn,
+        detail: "Awaiting first hook receipt.".into(),
+        fix: Some("Accept new hooks in Codex /hooks, then start a session here.".into()),
+    });
+    health.fixes.push(None);
+    state.check_sel = health.checks.len() - 1;
+    state.tab = Tab::Health;
+    assert!(state.key(KeyCode::Enter, KeyModifiers::NONE).is_none());
+    assert!(
+        matches!(&state.modal, Some(Modal::Message { lines, .. }) if lines.iter().any(|line| line.contains("Codex /hooks")))
+    );
+}
+
+#[test]
+fn home_palette_and_last_setting_fit_small_terminals() {
+    let temp = tempfile::tempdir().unwrap();
+    let context = ctx(Paths::at(temp.path()), false);
+    let mut state = app_state();
+    for (width, height) in [(80, 24), (60, 20), (40, 10)] {
+        state.tab = Tab::Home;
+        let (home, _) = render(width, height, |f| app::draw(f, &state, &context));
+        assert!(home.contains("commands") && home.contains("web"), "{home}");
+        state.key(KeyCode::Char(':'), KeyModifiers::NONE);
+        let (palette, _) = render(width, height, |f| app::draw(f, &state, &context));
+        assert!(palette.contains("Commands") && palette.contains("Enter run"), "{palette}");
+        state.key(KeyCode::End, KeyModifiers::NONE);
+        let (last, _) = render(width, height, |f| app::draw(f, &state, &context));
+        assert!(last.contains("read-linked"), "last palette result should stay visible: {last}");
+        state.key(KeyCode::Esc, KeyModifiers::NONE);
+    }
+    state.tab = Tab::Settings;
+    state.setting_sel = state.settings.len() - 1;
+    let (settings, _) = render(60, 12, |f| app::draw(f, &state, &context));
+    assert!(settings.contains(state.settings.last().unwrap().key), "{settings}");
+    state.tab = Tab::Home;
+    state.key(KeyCode::Char(':'), KeyModifiers::NONE);
+    let (palette, _) = render(80, 24, |f| app::draw(f, &state, &context));
+    snap("app-palette", &palette);
+}
+
+#[test]
+fn popups_do_not_panic_on_small_terminal_widths() {
+    for width in [20, 26, 30, 40] {
+        let (text, _) = render(width, 10, |f| {
+            view::popup(
+                f,
+                f.area(),
+                "Help",
+                vec![ratatui::text::Line::raw("A long line that needs to wrap safely")],
+                &Theme { color: false },
+                0,
+            )
+        });
+        assert!(text.contains("Help"));
+    }
+    let long = format!("{}REPORT_END", "Wrapped report words. ".repeat(40));
+    let (tail, _) = render(40, 18, |f| {
+        view::popup(
+            f,
+            f.area(),
+            "A report with a long title",
+            vec![ratatui::text::Line::raw(long.clone())],
+            &Theme { color: false },
+            u16::MAX,
+        )
+    });
+    assert!(tail.contains("REPORT_END"), "Scrolling past the end should keep the last page visible: {tail}");
+    assert!(
+        tail.lines().filter(|line| line.contains("report words")).count() > 4,
+        "Wrapped content should use available height: {tail}"
+    );
+}
+
+#[test]
+fn proposed_reflex_review_shows_diff_and_both_directives_and_binds_confirmation() {
+    let mut state = app_state();
+    state.tab = Tab::Routes;
+    let row = &mut state.routes.as_mut().unwrap().as_mut().unwrap().rows[0];
+    row.review_preview.as_mut().unwrap().proposal = Some(crate::review::ProposalPreview {
+        on: "2026-10-05".into(),
+        reason: "The learned response changed.".into(),
+        diff: vec![("step", "run `bin/fetch-incident INC-12`".into(), "run `bin/fetch-incident INC-12 --json`".into())],
+        directive: "Fetch incident details with `bin/fetch-incident INC-12 --json`.".into(),
+    });
+    state.key(KeyCode::Char('a'), KeyModifiers::NONE);
+    let Some(Modal::Confirm { title, lines, .. }) = &state.modal else { panic!("confirmation required") };
+    assert_eq!(title, "Approve proposed change");
+    let text = lines.iter().map(ToString::to_string).collect::<Vec<_>>().join("\n");
+    assert!(text.contains("Current:  run `bin/fetch-incident INC-12`"), "{text}");
+    assert!(text.contains("Proposed: run `bin/fetch-incident INC-12 --json`"), "{text}");
+    assert!(text.contains("Proposed directive preview (example values):"), "{text}");
+    assert!(text.contains("Current directive preview (example values):"), "{text}");
+    assert!(text.contains("y approve proposed change"), "{text}");
+    let temp = tempfile::tempdir().unwrap();
+    let context = ctx(Paths::at(temp.path()), false);
+    for (width, height) in [(110, 30), (60, 20), (40, 12)] {
+        if let Some(Modal::Confirm { scroll, .. }) = &mut state.modal {
+            *scroll = 0;
+        }
+        let mut seen = String::new();
+        for _ in 0..18 {
+            let (frame, _) = render(width, height, |f| app::draw(f, &state, &context));
+            seen.push_str(&frame);
+            state.key(KeyCode::PageDown, KeyModifiers::NONE);
+        }
+        assert!(seen.contains("Current:"), "before values must remain reachable at {width} columns");
+        assert!(seen.contains("Proposed:"), "after values must remain reachable at {width} columns");
+        assert!(seen.contains("--json"), "the proposed response must remain reachable at {width} columns");
+        assert!(seen.contains("cancel"), "the confirmation footer must remain reachable at {width} columns");
+    }
+    // A background reload while the modal is open cannot silently change its authorization.
+    state.routes.as_mut().unwrap().as_mut().unwrap().rows[0].review_preview.as_mut().unwrap().revision =
+        "new-version".into();
+    let Some(Cmd::Do(app::Action::Review { expected_revision, .. })) =
+        state.key(KeyCode::Char('y'), KeyModifiers::NONE)
+    else {
+        panic!("bound confirmation required")
+    };
+    assert_eq!(expected_revision, "reviewed-version");
+}
+
+#[test]
+fn missing_review_preview_requires_a_reload_before_any_decision() {
+    let mut state = app_state();
+    state.tab = Tab::Routes;
+    state.routes.as_mut().unwrap().as_mut().unwrap().rows[0].review_preview = None;
+    assert!(matches!(state.key(KeyCode::Char('a'), KeyModifiers::NONE), Some(Cmd::Want(app::WantKind::Routes))));
+    assert!(matches!(state.modal, Some(Modal::Message { error: true, .. })));
 }
 
 #[test]
@@ -622,7 +983,8 @@ fn review_keys_confirm_and_respect_the_verbs_that_apply() {
     s.key(KeyCode::Down, none);
     s.key(KeyCode::Char('p'), none);
     match s.key(KeyCode::Char('y'), none) {
-        Some(Cmd::Do(app::Action::Review { verb, reference, route })) => {
+        Some(Cmd::Do(app::Action::Review { verb, reference, route, expected_revision })) => {
+            assert_eq!(expected_revision, "reviewed-version");
             assert_eq!(
                 (verb, reference.as_str(), route.as_str()),
                 ("promote", "harbor-dispatch/incidents", "read-linked-files")

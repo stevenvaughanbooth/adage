@@ -169,6 +169,12 @@ pub fn add(args: &[String], paths: &Paths) -> Result<()> {
     require_person("add")?;
     let src = PathBuf::from(args.first().filter(|a| !a.starts_with("--")).context("usage: adage add <dir> [--trust]")?);
     let trust = args.iter().any(|a| a == "--trust");
+    // The TUI pins the exact signed snapshot shown in its confirmation. Ordinary CLI imports
+    // keep their existing behavior; only a reviewed import supplies this optional token.
+    let expected_digest = crate::flag(args, "--expected-digest");
+    if expected_digest.is_none() && args.iter().any(|arg| arg == "--expected-digest") {
+        bail!("--expected-digest needs the signed snapshot shown in the import confirmation");
+    }
     if !src.join("track.toml").is_file() {
         bail!("{} is not a track directory (no track.toml)", src.display());
     }
@@ -188,19 +194,38 @@ pub fn add(args: &[String], paths: &Paths) -> Result<()> {
             std::fs::create_dir_all(to.parent().unwrap())?;
             std::fs::copy(src.join(rel), to)?;
         }
-        install(&stage, &src, paths, trust)
+        install(&stage, &src, paths, trust, expected_digest.as_deref())
     })();
     let _ = std::fs::remove_dir_all(&stage);
     result
 }
 
-fn install(stage: &Path, src: &Path, paths: &Paths, trust: bool) -> Result<()> {
+/// A confirmation must bind both track content and signing identity. The canonical digest
+/// alone is insufficient: unchanged content could be re-signed with an unapproved key.
+pub(crate) fn confirmation_digest(digest: &str, pem: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(b"adage-import-confirmation\0");
+    hasher.update(digest.as_bytes());
+    hasher.update(b"\0");
+    hasher.update(pem.as_bytes());
+    io::hex(&hasher.finalize())
+}
+
+fn check_confirmation(expected: Option<&str>, digest: &str, pem: &str) -> Result<()> {
+    if expected.is_some_and(|expected| expected != confirmation_digest(digest, pem)) {
+        bail!("This signed track changed after you reviewed it. Open Import again to inspect its current contents and signer; nothing was trusted or installed.");
+    }
+    Ok(())
+}
+
+fn install(stage: &Path, src: &Path, paths: &Paths, trust: bool, expected_digest: Option<&str>) -> Result<()> {
     // One writer of the tracks and index at a time (`adage learn`, automatic learners).
     let _tracks = adage_store::lock::exclusive(&paths.tracks_lock())?;
     let dir = stage.join("in");
     let digest = io::digest(&dir)?;
     let msg = adage_sign::message(&digest)?;
     let pem = std::fs::read_to_string(dir.join(SIG))?;
+    check_confirmation(expected_digest, &digest, &pem)?;
     let signer = adage_sign::verify_embedded(&msg, NAMESPACE, &pem).map_err(|e| {
         anyhow!("refusing: the signature does not match this track — it changed after signing, or was not signed as a track ({e:#})")
     })?;
@@ -301,6 +326,31 @@ fn at_probation(mut t: Track) -> (Track, Vec<Aspect>) {
 mod tests {
     use super::*;
     use adage_tracks::{Evidence, Gauge, Manifest, Route, Scope, Step, TrackInfo, Trigger};
+
+    #[test]
+    fn import_confirmation_pins_content_and_signer() {
+        let approved = confirmation_digest("track-a", "signature-a");
+        assert!(check_confirmation(Some(&approved), "track-a", "signature-a").is_ok());
+        assert!(check_confirmation(Some(&approved), "track-b", "signature-a").is_err());
+        assert!(check_confirmation(Some(&approved), "track-a", "signature-b").is_err());
+        assert!(check_confirmation(None, "track-b", "signature-b").is_ok(), "existing CLI use is unchanged");
+    }
+
+    #[test]
+    fn changed_import_is_rejected_before_trust_or_installation() {
+        let temp = tempfile::tempdir().unwrap();
+        let paths = Paths::at(temp.path().join("adage"));
+        let stage = temp.path().join("staging");
+        let src = stage.join("in");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("track.toml"), "changed after preview").unwrap();
+        std::fs::write(src.join(SIG), "signature").unwrap();
+        let error = install(&stage, &src, &paths, true, Some("reviewed-digest")).unwrap_err();
+        assert!(error.to_string().contains("changed after you reviewed"));
+        assert!(!trust_path(&paths).exists());
+        assert!(!paths.tracks().exists());
+        assert!(!paths.index().exists());
+    }
 
     #[test]
     fn probation_never_revives_retired_routes() {

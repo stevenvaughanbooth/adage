@@ -27,8 +27,8 @@
 //! pending while `requested_at > processed`. JSON files are replaced atomically.
 //!
 //! **Learner** ([`run_auto`]). Takes the repository's lock (or exits: another learner has it),
-//! waits until `--after`, then learns that repository only, from Claude Code history
-//! (`learn.claude_projects`), `learn.codex_sessions` and `learn.opencode_exports` if set, and any
+//! waits until `--after`, then learns that repository only, from configured or detected Claude
+//! Code and Codex history, `learn.opencode_exports` if set, and any
 //! transcript a hook named, through the parse cache. It holds `tracks.lock` while it writes, so it
 //! never interleaves with `adage learn`, a review decision or `adage add`. It appends the routes
 //! that changed to `learn.log` ([`crate::learnlog`]), then re-checks the queue once: a request
@@ -240,28 +240,8 @@ pub fn thresholds(t: Thresholds) -> LearnConfig {
 /// transcript a hook has named that they do not cover (remembered, so that evidence does not come
 /// and go between runs).
 fn sources(cfg: &Config, q: &Queue, req: Option<&Request>) -> Vec<PathBuf> {
-    let mut set: BTreeSet<PathBuf> = BTreeSet::new();
-    let claude = cfg
-        .learn_claude_projects
-        .clone()
-        .or_else(|| adage_store::home_dir().map(|h| h.join(".claude").join("projects")));
-    if let Some(d) = claude {
-        set.extend(adage_learn::import::discover(&d));
-    }
-    if let Some(d) = &cfg.learn_codex_sessions {
-        set.extend(adage_learn::codex::discover(d).0);
-    }
-    if let Some(d) = &cfg.learn_opencode_exports {
-        let mut files: Vec<PathBuf> = std::fs::read_dir(d)
-            .into_iter()
-            .flatten()
-            .flatten()
-            .map(|e| e.path())
-            .filter(|p| p.is_file() && p.extension().is_some_and(|x| x == "json"))
-            .collect();
-        files.sort();
-        set.extend(files);
-    }
+    let mut set: BTreeSet<PathBuf> =
+        crate::detect::history_sources(cfg).into_iter().flat_map(|source| source.files).collect();
     let mut remembered: Vec<String> = read_json(&q.sources()).unwrap_or_default();
     if let Some(t) = req.and_then(|r| r.transcript_path.as_deref()) {
         if !set.contains(Path::new(t)) && !remembered.iter().any(|r| r == t) {
@@ -278,6 +258,24 @@ fn sources(cfg: &Config, q: &Queue, req: Option<&Request>) -> Vec<PathBuf> {
     }
     set.extend(remembered.into_iter().map(PathBuf::from));
     set.into_iter().collect()
+}
+
+/// Read-only source resolution for preflight and survey, including transcript paths learned
+/// from hooks. Unlike the learner this never prunes or writes the remembered-source file.
+pub fn history_for_repo(paths: &Paths, repo: Option<&str>) -> Vec<PathBuf> {
+    let mut files: BTreeSet<PathBuf> = crate::detect::history_sources(&config::load(paths).config)
+        .into_iter()
+        .flat_map(|source| source.files)
+        .collect();
+    if let Some(repo) = repo {
+        let q = Queue::new(paths, repo);
+        let remembered: Vec<String> = read_json(&q.sources()).unwrap_or_default();
+        files.extend(remembered.into_iter().rev().take(MAX_SOURCES).map(PathBuf::from).filter(|p| p.is_file()));
+        if let Some(req) = read_json::<Request>(&q.request()) {
+            files.extend(req.transcript_path.map(PathBuf::from).filter(|p| p.is_file()));
+        }
+    }
+    files.into_iter().collect()
 }
 
 /// A learn failure for `learn.log`: a class and a fixed message.
@@ -397,7 +395,11 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         let paths = Paths::at(d.path().join("data"));
         let q = Queue::new(&paths, "acme");
-        let cfg = Config { learn_claude_projects: Some(d.path().join("none")), ..config::load(&paths).config };
+        let cfg = Config {
+            learn_claude_projects: Some(d.path().join("none")),
+            learn_codex_sessions: Some(d.path().join("none")),
+            ..config::load(&paths).config
+        };
         let t = d.path().join("rollout.jsonl");
         std::fs::write(&t, "{}").unwrap();
         let req = Request { transcript_path: Some(t.to_string_lossy().into()), ..Default::default() };

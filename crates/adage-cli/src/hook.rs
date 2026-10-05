@@ -59,6 +59,11 @@ pub fn run(harness: &str, event: &str) -> Result<Option<String>, Failure> {
         return Ok(None);
     }
     let paths = Paths::from_env();
+    // A received, recognised event proves the installed bridge is executing even before any
+    // reflexes exist. Receipt storage is bounded and never includes the event's content.
+    if adapter.translate(event, &p, &cwd.to_string_lossy()).is_some() {
+        crate::detect::record_hook_receipt(&paths, adapter.name(), &root);
+    }
     let out = respond(adapter, harness, event, &p, &session, &cwd, &root, &paths);
     if adapter.is_learn_point(event) {
         let transcript = p.get("transcript_path").and_then(|v| v.as_str());

@@ -1,6 +1,6 @@
- adage  1 Live  2 Routes (1 to review)  3 Health (2)  4 Settings
+ adage  0 Home  1 Live  2 Reflexes (1)  3 Health (2)  4 Settings
 config /home/me/.local/share/adage/config.toml
-the same settings as `adage config`; environment variables win over the file
+Choose a setting and press Enter to edit. Environment variables override saved values.
 
 learn.auto               false    (file)
   learn automatically, in the background, when an agent session stops or ends
@@ -9,11 +9,11 @@ learn.min_interval_secs  120      (default)
 learn.thresholds         default  (default)
   evidence bars for `adage learn` and automatic learning: default, or demo (lower)
 learn.claude_projects    ""       (default)
-  Claude Code history to learn from ("" = ~/.claude/projects)
+  Claude Code history for Survey and Learn ("" = $CLAUDE_CONFIG_DIR/projects, else ~/.claude/projects)
 learn.codex_sessions     ""       (default)
-  Codex rollouts automatic learning reads, e.g. ~/.codex/sessions ("" = none)
+  Codex history for Survey and Learn ("" = $CODEX_HOME/sessions, else ~/.codex/sessions)
 learn.opencode_exports   ""       (default)
-  a directory of `opencode export` files automatic learning reads ("" = none)
+  OpenCode export JSON folder for Survey and Learn ("" = none; hooks do not capture history)
 learn.parse_cache        true     (default)
   keep parsed transcripts in cache/sessions so re-learning parses only what changed
 runtime.holdout          0.1      (default)
@@ -27,4 +27,4 @@ Enter edits (Space toggles on/off and switches thresholds); every value is valid
 
 
 
- harbor-dispatch · gen 8216e29f · 4 routes · auto-learn on        Enter edit · Space toggle · ? help · q quit
+ harbor-dispatch · gen 8216e29f · 4 ref Enter edit · Space toggle · Ctrl+K commands · w web · ? help · q quit

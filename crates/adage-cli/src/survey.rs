@@ -51,9 +51,11 @@ pub struct Options {
     pub since_days: Option<u32>,
     pub demo: bool,
     pub claude_projects: Option<PathBuf>,
-    /// Codex rollouts (`$CODEX_HOME/sessions`), read only when asked.
+    /// An explicit Codex rollout source, replacing default source discovery.
     pub codex_sessions: Option<PathBuf>,
     pub transcripts: Vec<PathBuf>,
+    /// Preserve an explicitly empty --transcripts argument: it must not enable other sources.
+    pub explicit_sources: bool,
 }
 
 impl Options {
@@ -61,6 +63,9 @@ impl Options {
         let mut o = Options {
             repo: crate::flag(args, "--repo"),
             demo: args.iter().any(|a| a == "--demo"),
+            explicit_sources: args
+                .iter()
+                .any(|a| matches!(a.as_str(), "--transcripts" | "--claude-projects" | "--codex-sessions")),
             ..Default::default()
         };
         if let Some(d) = crate::flag(args, "--since") {
@@ -362,14 +367,30 @@ fn percentile(sorted: &[u32], p: f64) -> Option<u32> {
 }
 
 /// Session files, as `adage learn` finds them, and a description of where they came from.
-fn discover(o: &Options) -> (Vec<PathBuf>, String) {
+fn discover(o: &Options, paths: &Paths) -> (Vec<PathBuf>, String) {
     let mut files = o.transcripts.clone();
-    // Default to Claude Code history only when no source was named, as `adage learn` does.
-    let explicit = !o.transcripts.is_empty() || o.codex_sessions.is_some();
-    let dir = o
-        .claude_projects
-        .clone()
-        .or_else(|| (!explicit).then(|| home().map(|h| PathBuf::from(h).join(".claude/projects"))).flatten());
+    let explicit =
+        o.explicit_sources || !o.transcripts.is_empty() || o.codex_sessions.is_some() || o.claude_projects.is_some();
+    if !explicit {
+        let sources = crate::detect::history_sources(&adage_store::config::load(paths).config);
+        let description = sources
+            .iter()
+            .map(|s| {
+                format!(
+                    "{} history file(s) from {} in {}",
+                    s.files.len(),
+                    s.harness,
+                    red(&s.path.display().to_string())
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(" and ");
+        files.extend(crate::autolearn::history_for_repo(paths, o.repo.as_deref()));
+        files.sort();
+        files.dedup();
+        return (files, description);
+    }
+    let dir = o.claude_projects.clone();
     let mut source: Vec<String> = Vec::new();
     if let Some(d) = &o.codex_sessions {
         let (found, _) = adage_learn::codex::discover(d);
@@ -401,7 +422,7 @@ fn modified_before(p: &Path, cutoff_days: i64) -> bool {
 
 /// Run the survey. Reads history and installed tracks; writes nothing.
 pub fn run(o: &Options, paths: &Paths) -> Result<Survey> {
-    let (files, source) = discover(o);
+    let (files, source) = discover(o, paths);
     let table = CommandTable::load();
     let cutoff = o.since_days.map(|d| today_days() - i64::from(d));
     let since = cutoff.map(adage_tracks::review::civil_date);
@@ -432,7 +453,11 @@ pub fn run(o: &Options, paths: &Paths) -> Result<Survey> {
         a.keep_recent();
         mined.append(&mut a.mined);
     }
-    let cfg = if o.demo { LearnConfig::demo() } else { LearnConfig::default() };
+    let cfg = if o.demo {
+        LearnConfig::demo()
+    } else {
+        crate::autolearn::thresholds(adage_store::config::load(paths).config.learn_thresholds)
+    };
     let (report, planned) = adage_learn::plan(mined, Some(&paths.models()), &paths.tracks(), &cfg)?;
     survey.thresholds = report.thresholds.clone();
     survey.intent_model = report.intent_model.clone();

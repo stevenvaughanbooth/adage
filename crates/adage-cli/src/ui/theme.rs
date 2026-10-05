@@ -33,23 +33,23 @@ impl Theme {
     }
 
     pub fn green(&self) -> Style {
-        self.fg(Color::Green)
+        self.fg(Color::Rgb(0x4a, 0xde, 0x80))
     }
     pub fn yellow(&self) -> Style {
-        self.fg(Color::Yellow)
+        self.fg(Color::Rgb(0xfb, 0xbf, 0x24))
     }
     pub fn red(&self) -> Style {
-        self.fg(Color::Red)
+        self.fg(Color::Rgb(0xfb, 0x71, 0x85))
     }
     pub fn accent(&self) -> Style {
-        self.fg(Color::Cyan)
+        self.fg(Color::Rgb(0x8b, 0x7c, 0xff))
     }
     pub fn holdout(&self) -> Style {
-        self.fg(Color::Magenta).add_modifier(Modifier::ITALIC)
+        self.fg(Color::Rgb(0xc9, 0xbf, 0xff)).add_modifier(Modifier::ITALIC)
     }
     pub fn dim(&self) -> Style {
         if self.color {
-            Style::default().fg(Color::DarkGray)
+            Style::default().fg(Color::Rgb(0xa3, 0xa6, 0xb3))
         } else {
             Style::default().add_modifier(Modifier::DIM)
         }
@@ -58,7 +58,29 @@ impl Theme {
         Style::default().add_modifier(Modifier::BOLD)
     }
     pub fn selected(&self) -> Style {
-        Style::default().add_modifier(Modifier::REVERSED)
+        if self.color {
+            self.surface().fg(Color::Rgb(0xc9, 0xbf, 0xff)).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().add_modifier(Modifier::REVERSED)
+        }
+    }
+
+    /// Launch-site night and raised-surface tokens. Set both foreground and background so the
+    /// palette stays readable on light terminal themes; NO_COLOR leaves the terminal in charge.
+    pub fn base(&self) -> Style {
+        if self.color {
+            Style::default().fg(Color::Rgb(0xf4, 0xf4, 0xf7)).bg(Color::Rgb(0x05, 0x05, 0x07))
+        } else {
+            Style::default()
+        }
+    }
+
+    pub fn surface(&self) -> Style {
+        if self.color {
+            self.base().bg(Color::Rgb(0x14, 0x14, 0x1c))
+        } else {
+            Style::default()
+        }
     }
     pub fn title(&self) -> Style {
         self.accent().add_modifier(Modifier::BOLD)
@@ -76,9 +98,9 @@ impl Theme {
     pub fn aspect_mark(&self, a: Aspect) -> &'static str {
         match (self.color, a) {
             (true, _) => "●",
-            (false, Aspect::Green) => "[G]",
-            (false, Aspect::Yellow) => "[Y]",
-            (false, Aspect::Red) => "[R]",
+            (false, Aspect::Green) => "[fire]",
+            (false, Aspect::Yellow) => "[prime]",
+            (false, Aspect::Red) => "[inhibit]",
         }
     }
 

@@ -263,7 +263,7 @@ fn model_check(paths: &Paths, idx: &Index) -> Check {
     }
 }
 
-fn hooks_checks(repo_root: Option<&Path>, exe: Option<&Path>) -> Vec<Check> {
+fn hooks_checks(paths: &Paths, repo_root: Option<&Path>, exe: Option<&Path>) -> Vec<Check> {
     let found = detect::harnesses();
     let regs = detect::registrations(repo_root);
     let mut out = Vec::new();
@@ -272,9 +272,36 @@ fn hooks_checks(repo_root: Option<&Path>, exe: Option<&Path>) -> Vec<Check> {
         let mine: Vec<&detect::Registration> =
             regs.iter().filter(|r| r.harness == d.harness && r.kind != "plugin-data").collect();
         let plugin = regs.iter().any(|r| r.harness == d.harness && r.kind == "plugin-data");
+        if !mine.is_empty() || plugin {
+            let activity = format!("hook activity: {}", d.harness);
+            let next = match d.harness {
+                "codex" => "In Codex, open /hooks and accept Adage's hooks, then start a session in this repository. This notice stays until an event reaches Adage.",
+                "opencode" => "Restart OpenCode in this repository so its Adage plugin loads, then start a session. Hook activity and learning history are checked separately.",
+                _ => "Start a new Claude Code session in this repository. This notice stays until an event reaches Adage.",
+            };
+            out.push(match detect::last_hook_receipt(paths, d.harness, repo_root) {
+                Some(ts) if crate::learnlog::now_ms().saturating_sub(ts) <= RECENT_DAYS * 86_400_000 => pass(
+                    &activity,
+                    format!(
+                        "event received {}; registration and execution verified independently",
+                        ago(crate::learnlog::now_ms(), ts)
+                    ),
+                ),
+                Some(ts) => warn(
+                    &activity,
+                    format!("last event received {}; no recent hook activity", ago(crate::learnlog::now_ms(), ts)),
+                    next,
+                ),
+                None => warn(
+                    &activity,
+                    "registered; waiting for the first hook event (even with no learned reflexes)",
+                    next,
+                ),
+            });
+        }
         if mine.is_empty() {
             out.push(match (d.found(), plugin) {
-                (_, true) => pass(&name, "registered by the Adage plugin"),
+                (_, true) => pass(&name, "registration found in the Adage plugin; see hook activity for execution"),
                 (true, false) => warn(
                     &name,
                     format!("{} is installed, but Adage's hooks are not registered with it", d.harness),
@@ -303,12 +330,45 @@ fn hooks_checks(repo_root: Option<&Path>, exe: Option<&Path>) -> Vec<Check> {
                 Some(b) => {
                     let same = exe.is_some_and(|e| b.canonicalize().ok().as_deref() == Some(e));
                     let note = if same { " (this binary)".to_string() } else { " (another adage binary)".to_string() };
-                    out.push(pass(&name, format!("{at} runs {}{note}", detect::tilde(b))));
+                    out.push(pass(
+                        &name,
+                        format!("registered: {at} names {}{note}; see hook activity for execution", detect::tilde(b)),
+                    ));
                 }
             }
         }
     }
     out
+}
+
+fn history_checks(paths: &Paths, repo_root: Option<&Path>) -> Vec<Check> {
+    let cfg = adage_store::config::load(paths).config;
+    let regs = detect::registrations(repo_root);
+    let sources = detect::history_sources(&cfg);
+    let mut checks = Vec::new();
+    for source in &sources {
+        if !source.configured && !regs.iter().any(|r| r.harness == source.harness) && source.files.is_empty() {
+            continue;
+        }
+        let name = format!("history: {}", source.harness);
+        let detail = format!(
+            "{} history file(s) in {} · shared by Survey and Learn",
+            source.files.len(),
+            detect::tilde(&source.path)
+        );
+        if source.files.is_empty() {
+            checks.push(warn(&name, detail, format!("Use Configure {} history to choose a folder, or finish an agent session, then Survey session history. File counts are before repository filtering. Setting: {}.", detect::harness_name(source.harness), source.key)));
+        } else {
+            checks.push(pass(&name, detail));
+        }
+        if source.compressed > 0 {
+            checks.push(warn(&format!("history compressed: {}", source.harness), format!("{} compressed rollout(s) are skipped", source.compressed), "Adage currently reads uncompressed .jsonl rollouts. Choose a folder containing uncompressed sessions in Configure Codex history."));
+        }
+    }
+    if cfg.learn_opencode_exports.is_none() && regs.iter().any(|r| r.harness == "opencode") {
+        checks.push(warn("history: opencode", "hooks registered, but no learning history configured", "Use Import OpenCode history to read local sessions for this repository, or Configure OpenCode history to choose existing export JSON files. Hooks do not export or capture session history."));
+    }
+    checks
 }
 
 fn plugin_check(repo_root: Option<&Path>, exe: Option<&Path>) -> Option<Check> {
@@ -564,7 +624,8 @@ pub fn checks(paths: &Paths, repo_root: Option<&Path>) -> Vec<Check> {
     let scan = scan_tracks(&paths.tracks());
     let (index, idx) = index_check(paths, &scan);
     let mut checks = vec![bin, data_dir(paths), index, tracks_check(&scan), model_check(paths, &idx)];
-    checks.extend(hooks_checks(repo_root, exe.as_deref()));
+    checks.extend(hooks_checks(paths, repo_root, exe.as_deref()));
+    checks.extend(history_checks(paths, repo_root));
     checks.extend(plugin_check(repo_root, exe.as_deref()));
     checks.push(kill_switches(repo_root));
     checks.push(spools(paths));

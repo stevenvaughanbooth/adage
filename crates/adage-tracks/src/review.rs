@@ -79,6 +79,10 @@ pub struct Review {
     /// Who decided — only what the person chose to give with `--by`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub by: Option<String>,
+    /// Collection version whose runtime judgements form the baseline. Older reviews did not
+    /// record this; their counts must not be subtracted from a current version's measurements.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime_version: Option<String>,
     pub basis: Basis,
 }
 
@@ -169,6 +173,13 @@ pub fn validate(r: &Reviews) -> Result<()> {
         }
         if v.by.as_deref().is_some_and(|b| !safe_by(b)) {
             bail!("{FILE}: {id}: `by` must be 1-64 printable characters");
+        }
+        if v.runtime_version.as_deref().is_some_and(|v| {
+            v.is_empty()
+                || v.len() > 128
+                || !v.bytes().all(|c| c.is_ascii_alphanumeric() || matches!(c, b'.' | b'-' | b'+'))
+        }) {
+            bail!("{FILE}: {id}: malformed runtime version");
         }
         if !v.basis.lower_bound.is_finite() || v.basis.shape.len() > 64 {
             bail!("{FILE}: {id}: malformed basis");
@@ -323,8 +334,10 @@ mod tests {
 
     fn reviewed(r: &Route, d: Decision) -> Reviews {
         let mut rs = Reviews::default();
-        rs.routes
-            .insert(r.id.clone(), Review { decision: d, on: "2026-09-22".into(), by: None, basis: basis(r, 0, 0) });
+        rs.routes.insert(
+            r.id.clone(),
+            Review { decision: d, on: "2026-09-22".into(), by: None, runtime_version: None, basis: basis(r, 0, 0) },
+        );
         rs
     }
 
@@ -416,6 +429,22 @@ mod tests {
         assert_eq!(reconcile(None, &reviewed(&env, Decision::Approved), vec![other])[0].state, RouteState::Draft);
         // Other effects start in service.
         assert_eq!(initial_state(Effect::Verify), RouteState::Active);
+    }
+
+    #[test]
+    fn runtime_baseline_version_is_optional_for_existing_review_files() {
+        let r = route("a", Aspect::Yellow, 10, 12);
+        let mut rs = reviewed(&r, Decision::Approved);
+        let legacy = serde_yaml::to_string(&rs).unwrap();
+        assert!(!legacy.contains("runtime_version"));
+        let loaded: Reviews = serde_yaml::from_str(&legacy).unwrap();
+        assert_eq!(loaded.routes["a"].runtime_version, None);
+        rs.routes.get_mut("a").unwrap().runtime_version = Some("1.2.3".into());
+        let d = tempfile::tempdir().unwrap();
+        save(d.path(), &rs).unwrap();
+        assert_eq!(load(d.path()).unwrap().routes["a"].runtime_version.as_deref(), Some("1.2.3"));
+        rs.routes.get_mut("a").unwrap().runtime_version = Some("line\nbreak".into());
+        assert!(validate(&rs).is_err());
     }
 
     #[test]

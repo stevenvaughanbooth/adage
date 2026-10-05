@@ -16,16 +16,18 @@
 //! honoured: colour is dropped and aspects and lamps are spelled out.
 
 mod app;
-mod demo;
+pub(crate) mod demo;
 mod diff;
 mod feed;
 mod health;
 mod jobs;
 mod learnlog;
+mod palette;
 mod routes;
 mod tail;
 mod term;
 mod theme;
+mod tools;
 mod view;
 mod watch;
 mod wizard;

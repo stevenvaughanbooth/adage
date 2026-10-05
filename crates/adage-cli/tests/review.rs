@@ -76,7 +76,18 @@ impl World {
         let paths = self.paths();
         state::update::<SessionState, _>(&paths.state(sid), |s| s.repo = Some(repo.into())).unwrap();
         let js: Vec<Value> = judgements.iter().map(|(k, r)| json!({ "kind": k, "route": r })).collect();
-        spool::append(&paths.spool(sid), &json!({ "ts": 1, "event": "PostToolBatch", "arm": arm, "generation": "g", "decision": { "judgements": js } })).unwrap();
+        let version = self.track(NAME).manifest.track.version;
+        let exposures: Vec<Value> =
+            judgements.iter().map(|(_, route)| json!({ "route": route, "track": NAME, "version": version })).collect();
+        spool::append(
+            &paths.spool(sid),
+            &json!({ "ts": 1, "event": "PostToolBatch", "arm": arm, "generation": "g", "decision": {
+            "judgements": js,
+            "directives": if arm == "treated" { exposures.clone() } else { vec![] },
+            "would_have": if arm == "holdout" { exposures } else { vec![] },
+        } }),
+        )
+        .unwrap();
     }
 }
 
@@ -155,7 +166,13 @@ fn install(w: &World, reference: &str, t: &Track, reviews: &[(&Route, Decision)]
     for (r, d) in reviews {
         rs.routes.insert(
             r.id.clone(),
-            Review { decision: *d, on: "2026-09-01".into(), by: None, basis: review::basis(r, 0, 0) },
+            Review {
+                decision: *d,
+                on: "2026-09-01".into(),
+                by: None,
+                runtime_version: None,
+                basis: review::basis(r, 0, 0),
+            },
         );
     }
     review::save(&dir, &rs).unwrap();
@@ -272,11 +289,19 @@ fn queue_lists_each_reason_with_evidence_and_directive() {
     let dr = item(NAME, "derails");
     assert_eq!(dr["runtime"]["derailed"], 6, "holdout and other repositories are not counted");
     assert!(dr["reasons"][0]["detail"].as_str().unwrap().contains("demoting"));
+    assert!(dr["reasons"][0]["detail"].as_str().unwrap().contains("6 judged follow windows"));
+    assert!(dr["reasons"][0]["detail"].as_str().unwrap().contains("next 3 observed tool batches"));
+    assert!(!dr["reasons"][0]["detail"].as_str().unwrap().contains("treated sessions"));
     assert!(item(NAME, "approved-changed")["reasons"][0]["detail"]
         .as_str()
         .unwrap()
         .starts_with("approved on 2026-09-01; since then lower bound moved"));
     assert_eq!(item("@imported/acme/work-items", "lookup")["imported"], true);
+    assert_eq!(
+        item("@imported/acme/work-items", "lookup")["runtime"]["followed"],
+        0,
+        "an import does not inherit the local reflex's outcomes"
+    );
 
     let t = w.ok(&["review"]);
     for s in [
@@ -292,6 +317,67 @@ fn queue_lists_each_reason_with_evidence_and_directive() {
     // Deterministic: the same inputs give the same bytes.
     assert_eq!(w.ok(&["review", "--json"]), w.ok(&["review", "--json"]));
     assert_eq!(t, w.ok(&["review"]));
+}
+
+#[test]
+fn review_baselines_do_not_hide_new_version_failures_or_reuse_old_outcomes() {
+    let w = populated();
+    w.ok(&["review", "approve", NAME, "derails"]);
+    let reviewed = review::load(&w.track_dir(NAME)).unwrap();
+    assert_eq!(reviewed.routes["derails"].runtime_version.as_deref(), Some("0.1.0"));
+    assert_eq!(reviewed.routes["derails"].basis.derailed, 6);
+    assert!(!reasons(&w.queue()).contains_key(&key(NAME, "derails")), "reviewed windows stay acknowledged");
+
+    let mut next = w.track(NAME);
+    next.manifest.track.version = "0.2.0".into();
+    io::write(&w.track_dir(NAME), &next).unwrap();
+    assert!(
+        !reasons(&w.queue()).contains_key(&key(NAME, "derails")),
+        "old version outcomes cannot trigger advice for the new version"
+    );
+    for i in 0..6 {
+        w.session(&format!("next-{i}"), REPO, "treated", &[("derailed", "derails")]);
+    }
+    let q = w.queue();
+    let item = q["queue"].as_array().unwrap().iter().find(|item| item["route"] == "derails").unwrap();
+    assert_eq!(item["runtime"]["derailed"], 6, "the old version's acknowledged baseline is not subtracted");
+    assert_eq!(item["reasons"][0]["kind"], "derailing");
+    assert!(!item["reasons"][0]["detail"].as_str().unwrap().contains("since the last decision"));
+}
+
+#[test]
+fn legacy_or_duplicate_runtime_identity_does_not_trigger_review_advice() {
+    let w = populated();
+    // Bare route ids used by old records are not evidence against a current version.
+    let mut current = w.track(NAME);
+    current.manifest.track.version = "0.2.0".into();
+    io::write(&w.track_dir(NAME), &current).unwrap();
+    for i in 0..6 {
+        let sid = format!("legacy-{i}");
+        state::update::<SessionState, _>(&w.paths().state(&sid), |s| s.repo = Some(REPO.into())).unwrap();
+        spool::append(
+            &w.paths().spool(&sid),
+            &json!({
+                "ts": 1, "event": "PostToolBatch", "arm": "treated", "decision": {
+                    "judgements": [{"kind": "derailed", "route": "derails"}]
+                }
+            }),
+        )
+        .unwrap();
+    }
+    assert!(!reasons(&w.queue()).contains_key(&key(NAME, "derails")));
+    for i in 0..6 {
+        w.session(&format!("identified-{i}"), REPO, "treated", &[("derailed", "derails")]);
+    }
+    assert!(reasons(&w.queue()).contains_key(&key(NAME, "derails")));
+    // The same recorded name/version maps to two installations, so it cannot be assigned to either.
+    current.manifest.track.provenance = "imported:desire-path".into();
+    install(&w, "@imported/duplicate/work-items", &current, &[]);
+    let q = w.queue();
+    assert!(!reasons(&q).get(&key(NAME, "derails")).is_some_and(|r| r.contains(&"derailing".into())));
+    for item in q["queue"].as_array().unwrap().iter().filter(|item| item["route"] == "derails") {
+        assert_eq!(item["runtime"]["derailed"], 0, "ambiguous deliveries are not assigned: {item}");
+    }
 }
 
 #[test]
@@ -326,7 +412,8 @@ fn decisions_change_track_files_and_index() {
     let rs = review::load(&dir).unwrap();
     assert_eq!(rs.routes["lookup"].decision, Decision::Demoted);
     assert_eq!(rs.routes["lookup"].by, None, "no name unless the person gives one");
-    assert_eq!(rs.routes["lookup"].basis.followed, 6, "judgements so far are the new baseline");
+    assert_eq!(rs.routes["lookup"].basis.followed, 0, "a new version has no outcomes yet");
+    assert_eq!(rs.routes["lookup"].runtime_version.as_deref(), Some("1.0.0"));
     let o = w.run(&["review", "demote", NAME, "lookup"]);
     assert!(!o.status.success() && text(&o).contains("only a green route"), "{}", text(&o));
 

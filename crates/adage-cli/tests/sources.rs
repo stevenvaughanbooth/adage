@@ -39,6 +39,8 @@ fn adage(home: &Path, args: &[&str]) -> (String, String, bool) {
         .args(args)
         .env("HOME", home)
         .env("USERPROFILE", home)
+        .env("CODEX_HOME", home.join(".codex"))
+        .env("CLAUDE_CONFIG_DIR", home.join(".claude"))
         .env("ADAGE_HOME", home.join("adage"))
         .output()
         .unwrap();
@@ -57,6 +59,10 @@ fn an_empty_explicit_source_never_falls_back_to_claude_history() {
     let (out, _, _) = adage(home.path(), &["survey", "--codex-sessions", empty.path().to_str().unwrap()]);
     assert!(out.contains("0 session(s)"), "survey read only the named source:\n{out}");
     assert!(!out.contains("Claude Code history"), "{out}");
+    let (out, _, ok) = adage(home.path(), &["survey", "--transcripts", "--json"]);
+    assert!(ok);
+    let survey: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(survey["sessions"], 0, "an explicitly empty file list must remain empty");
 }
 
 #[test]

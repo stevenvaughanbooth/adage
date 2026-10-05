@@ -25,6 +25,8 @@ pub enum Fix {
     OpenFailOpen,
     EnableAutoLearn,
     OpenSettings,
+    SetHistorySource(String),
+    ImportOpenCode,
 }
 
 impl Fix {
@@ -36,6 +38,8 @@ impl Fix {
             Fix::OpenFailOpen => "open the fail-open log".into(),
             Fix::EnableAutoLearn => "turn auto-learn on".into(),
             Fix::OpenSettings => "open the settings".into(),
+            Fix::SetHistorySource(harness) => format!("Configure {} history", detect::harness_name(harness)),
+            Fix::ImportOpenCode => "import OpenCode history".into(),
         }
     }
 }
@@ -133,6 +137,12 @@ fn fix_for(c: &Check) -> Option<Fix> {
     if let Some(h) = c.check.strip_prefix("hooks: ") {
         return Some(Fix::InstallHooks(h.to_string()));
     }
+    if c.check.starts_with("history") {
+        if c.check == "history: opencode" && c.detail.contains("no learning history configured") {
+            return Some(Fix::ImportOpenCode);
+        }
+        return c.check.rsplit_once(": ").map(|(_, harness)| Fix::SetHistorySource(harness.to_string()));
+    }
     match c.check.as_str() {
         "embedding model" => Some(Fix::FetchModel),
         "index" | "tracks" | "auto-learn runs" | "auto-learn queue" => Some(Fix::LearnNow),
@@ -172,7 +182,14 @@ pub fn gather(paths: &Paths, root: Option<&Path>) -> Health {
     lights.push(if broken {
         Light { label: "hooks broken".into(), lamp: Lamp::Fail }
     } else if !names.is_empty() {
-        Light { label: format!("hooks {}", names.join("+")), lamp: Lamp::Ok }
+        let received = working.iter().all(|h| {
+            detect::last_hook_receipt(paths, h, root)
+                .is_some_and(|ts| now_ms().saturating_sub(ts) <= RECENT_DAYS * 86_400_000)
+        });
+        Light {
+            label: format!("{} {}", if received { "hooks received" } else { "hooks registered" }, names.join("+")),
+            lamp: if received { Lamp::Ok } else { Lamp::Warn },
+        }
     } else if installed {
         Light { label: "no hooks".into(), lamp: Lamp::Warn }
     } else {
@@ -180,7 +197,7 @@ pub fn gather(paths: &Paths, root: Option<&Path>) -> Health {
     });
     let n = routes_repo.unwrap_or(index.routes.len());
     lights.push(Light {
-        label: format!("{n} route{}", if n == 1 { "" } else { "s" }),
+        label: format!("{n} reflex{}", if n == 1 { "" } else { "es" }),
         lamp: by("index").map_or(Lamp::Off, |c| {
             if n == 0 && c.status == Status::Pass {
                 Lamp::Warn

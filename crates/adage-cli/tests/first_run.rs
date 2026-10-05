@@ -97,6 +97,40 @@ fn check<'a>(v: &'a Value, name: &str) -> &'a Value {
 }
 
 #[test]
+fn hook_health_distinguishes_registration_from_first_received_event_without_reflexes() {
+    use std::io::Write;
+    let w = World::new();
+    let installed = w.run(&["install", "codex", "--write"]);
+    assert!(installed.status.success(), "{}", text(&installed));
+    let (before, _) = doctor(&w);
+    assert_eq!(check(&before, "hooks: codex")["status"], "pass");
+    let pending = check(&before, "hook activity: codex");
+    assert_eq!(pending["status"], "warn");
+    assert!(pending["fix"].as_str().unwrap().contains("/hooks"));
+    let mut child = w
+        .cmd(&["hook", "codex", "SessionStart"])
+        .env("ADAGE_AUTO_LEARN", "0")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(json!({"session_id":"fixture-private-session", "cwd":w.p("work")}).to_string().as_bytes())
+        .unwrap();
+    let out = child.wait_with_output().unwrap();
+    assert!(out.stdout.is_empty() && out.stderr.is_empty(), "a receipt does not inject context");
+    assert!(!w.p("data/index.json").exists(), "there need not be any learned reflexes");
+    let (after, _) = doctor(&w);
+    assert_eq!(check(&after, "hook activity: codex")["status"], "pass");
+    let receipt = std::fs::read_to_string(w.p("data/hook-receipts/codex.json")).unwrap();
+    assert!(!receipt.contains("fixture-private-session"));
+}
+
+#[test]
 fn init_detects_harnesses_prints_snippets_and_writes_nothing() {
     let w = World::new();
     std::fs::create_dir_all(w.p("home/.claude")).unwrap();

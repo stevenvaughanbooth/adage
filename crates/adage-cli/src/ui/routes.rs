@@ -41,11 +41,15 @@ pub struct RouteRow {
     pub rate: f64,
     pub lower_bound: f64,
     pub live: LiveCounts,
+    pub measurement_info: String,
+    pub historical_versions: Vec<String>,
     pub directive: String,
     /// Decisions that apply (`adage review <verb>`).
     pub verbs: Vec<&'static str>,
     /// Why it awaits review; empty if it does not.
     pub reasons: Vec<(String, String)>,
+    /// The reviewed current/proposed versions and the revision that confirmation must match.
+    pub review_preview: Option<crate::review::ReviewPreview>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -102,11 +106,22 @@ pub fn from_graph(
                     unaided: n(&l["holdout"]["unaided"]),
                     not_reached: n(&l["holdout"]["not_reached"]),
                 },
+                measurement_info: r["measurement_info"]["description"]
+                    .as_str()
+                    .unwrap_or("Counts apply to this installed version only.")
+                    .into(),
+                historical_versions: r["measurement_history"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|m| m["version"].as_str().map(String::from))
+                    .collect(),
                 directive: r["directive"].as_str().unwrap_or("").to_string(),
                 verbs: st.map(|s| s.verbs.clone()).unwrap_or_default(),
                 reasons: st
                     .map(|s| s.reasons.iter().map(|(k, d)| (k.to_string(), d.clone())).collect())
                     .unwrap_or_default(),
+                review_preview: st.map(|s| s.preview.clone()),
                 reference,
                 id,
             }

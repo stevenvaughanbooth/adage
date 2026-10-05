@@ -9,6 +9,14 @@ version as the GitHub Release notes.
 
 ### Added
 
+- **Palette-led terminal and web UX.** The terminal app opens on Home with a searchable command
+  palette for repository setup, history sources, learning, review, reports, and signed packs.
+  The launch-themed web map includes an isolated demo, setup guidance, and trace inspection with
+  links from version-specific outcomes to their contributing sessions and recorded responses.
+- **Inspectable learning and approvals.** Learn previews its history sources and scoped session
+  counts; OpenCode history can be imported from the app. Proposed reflex changes show before/after
+  fields and directives, with confirmation bound to the reviewed revision. Health distinguishes
+  registered hooks from received events and keeps first-receipt setup instructions visible.
 - **Live learning.** Adage now learns by itself while agents work: when a session stops or ends
   (Claude Code and Codex `Stop`/`SessionEnd`, OpenCode `session.idle`/`session.deleted`), the hook
   starts a detached background learner for that repository, at most once per
@@ -70,6 +78,11 @@ version as the GitHub Release notes.
 
 ### Fixed
 
+- Reflex measurements and review warnings no longer inherit outcomes from ambiguous installations
+  or older versions. Complete selected traces remain available outside the recent-event window,
+  and missing observations are described as a bounded follow window rather than deliberate refusal.
+- Demo setup actions require opening a real repository and switching to persistent workspace data,
+  protecting real hook configuration from changes made while exploring the scripted demo.
 - **Over-broad dead-end warnings.** A dead end named every runner that failed before the working
   command, including `python3 -m unittest`, which passes once `ACME_ENV` is set. Dead ends are now
   keyed by failure signature: a runner is named only if its failures share the route's signature

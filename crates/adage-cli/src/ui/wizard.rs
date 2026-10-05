@@ -296,7 +296,7 @@ fn detail(w: &Wizard, t: &Theme) -> Vec<Line<'static>> {
         },
         Kind::Learn => {
             out.push(Line::raw("Run a first `adage learn`: it reads your agents' session history (Claude Code"));
-            out.push(Line::raw("under ~/.claude/projects), mines routes, writes tracks, and compiles the index"));
+            out.push(Line::raw("under ~/.claude/projects), learns reflexes, stores collections, and builds the index"));
             out.push(Line::raw("hooks read. It reads transcripts; it never runs anything they contain."));
         }
         Kind::AutoLearn => {
@@ -305,7 +305,7 @@ fn detail(w: &Wizard, t: &Theme) -> Vec<Line<'static>> {
                 Some((false, src)) => format!("off ({src})"),
                 None => "unknown".to_string(),
             };
-            out.push(Line::raw("Learn automatically after agent sessions end, so routes keep up with how your"));
+            out.push(Line::raw("Learn automatically after agent sessions end, so reflexes keep up with how your"));
             out.push(Line::raw("agents work. This sets `learn.auto = true` in:"));
             out.push(Line::from(Span::styled(format!("  {}", w.config_path), t.bold())));
             out.push(dim(&format!("Now: {now}.")));
@@ -339,7 +339,7 @@ fn detail(w: &Wizard, t: &Theme) -> Vec<Line<'static>> {
                     Span::styled("adage watch", t.accent().patch(t.bold())),
                     Span::raw(" in a split pane to see Adage work live, and "),
                     Span::styled("adage ui", t.accent().patch(t.bold())),
-                    Span::raw(" for routes, review, health and settings."),
+                    Span::raw(" for reflexes, review, health and settings."),
                 ]));
             }
         },
@@ -373,6 +373,7 @@ fn hint(w: &Wizard) -> &'static str {
 pub fn draw(f: &mut Frame, w: &Wizard, ctx: &Ctx) {
     let t = &ctx.theme;
     let area = f.area();
+    f.render_widget(Block::default().style(t.base()), area);
     let [title, body, keys] =
         Layout::vertical([Constraint::Length(1), Constraint::Min(5), Constraint::Length(1)]).areas(area);
     f.render_widget(

@@ -1,0 +1,24 @@
+ adage  0 Home  1 Live  2 Reflexes  3 Health  4 Settings
+ ┌ Commands ──────────────────────────────────────────────────────────────────┐
+ │ > ▏                                                                        │
+ │ 45 commands · type to search                                               │
+ │ › Navigate       Open a repository                                         │
+ │   Explore        Open the web map                                          │
+ │   Explore        Explore demo trace graph                                  │
+ │   Learn          Learn from this repository                                │
+ │   Review         Review learned reflexes                                   │
+ │   Navigate       Home                                                      │
+ │   Navigate       Live activity                                             │
+ │   Navigate       Health and setup                                          │
+ │   Navigate       Settings                                                  │
+ │   Setup          Connect Claude Code                                       │
+ │   Setup          Connect Codex                                             │
+ │   Setup          Connect OpenCode                                          │
+ │   Setup          Download embedding model                                  │
+ │   Setup          History sources                                           │
+ │Choose or switch the Git workspace without leaving this app                 │
+ │                                                                            │
+ │                                                                            │
+ │ ↑ ↓ choose · Enter run · Ctrl+U clear · Esc close                          │
+ └────────────────────────────────────────────────────────────────────────────┘
+ harbor-dispatch · gen 8216e29f ·  Enter commands · : commands · w web · q quit

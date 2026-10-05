@@ -1,17 +1,22 @@
- adage  1 Live  2 Routes (1 to review)  3 Health (2)  4 Settings
-harbor-dispatch/incidents @ 0.3.0  [harbor-di│ ● lookup-incident  green (ceiling green)
-* ● lookup-incident 24/25 · ✓2 ✗1            │ track    harbor-dispatch/incidents @ 0.3.0
-  ● read-linked-files 24/25 · ✓2 ✗1          │ repo     harbor-dispatch
-                                             │ state    active · effect observe
-                                             │ when     a prompt names a ticket
-                                             │ do       run `bin/fetch-incident {item}`
-                                             │ evidence 24/25 sessions · rate 0.96 · Wilson lb 0.80
-                                             │ live     directed 3 · followed 2 · derailed 1 · met 0
-                                             │ holdout  would-have 1 · unaided 1 · missed 0
-                                             │ review   new: learned by `adage learn` and never reviewed
-                                             │ keys     a approve · r reject · d demote · n pin
+ adage  0 Home  1 Live  2 Reflexes (1)  3 Health (2)  4 Settings
+harbor-dispatch/incidents @ 0.3.0  [harbor-di│ ● lookup-incident  fire · do this (ceiling fire)
+* ● lookup-incident 24/25 · ✓2 ✗1            │ collection harbor-dispatch/incidents @ 0.3.0
+  ● read-linked-files 24/25 · ✓2 ✗1          │ repo       harbor-dispatch
+                                             │ state      firm · effect observe
+                                             │ when       a prompt names a ticket
+                                             │ do         run `bin/fetch-incident {item}`
+                                             │ evidence   24/25 traces · rate 0.96 · Wilson lb 0.80
+                                             │ live       delivered 3 · followed 2 · not observed 1 · met 0
+                                             │ control    withheld 1 · unaided 1 · not observed 0
+                                             │ counts     Counts apply to this installed version only.
+                                             │ Not observed: the expected action was absent in the next 3
+                                             │ observed tool batches. Codex and OpenCode report per call;
+                                             │ this is not a full-session verdict.
+                                             │ review     new: learned by `adage learn` and never reviewed
+                                             │ keys       a approve · r extinguish · d weaken · n pin
                                              │
-                                             │ directive, exactly as delivered (example values):
+                                             │
+                                             │ Current directive preview (example values):
                                              │   <adage-signal track="harbor-dispatch/incidents@0.3.0"
                                              │ route="lookup-incident" aspect="green">
                                              │   Incidents are looked up with: `bin/fetch-incident INC-12`
@@ -21,10 +26,5 @@ harbor-dispatch/incidents @ 0.3.0  [harbor-di│ ● lookup-incident  green (cei
                                              │
                                              │
                                              │
-                                             │
-                                             │
-                                             │
-                                             │
-                                             │
 ─────────────────────────────────────────────┘
- harbor-dispatch · gen 8216e29f · 4 routes · auto-learn on    a/r/d/p/n/x review · R reload · ? help · q quit
+ harbor-dispatch · gen 8216e29f ·  / find · a/r review · R reload · Ctrl+K commands · w web · ? help · q quit

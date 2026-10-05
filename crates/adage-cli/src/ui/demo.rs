@@ -170,7 +170,23 @@ pub fn setup() -> Result<DemoHome> {
     )?;
     std::fs::create_dir_all(&home.paths.root)?;
     std::fs::write(home.paths.config(), "[learn]\nauto = true\n")?;
+    std::fs::write(
+        home.paths.root.join("demo.json"),
+        "{\"kind\":\"scripted_demo\",\"real_hook_decisions\":true,\"simulated_learning\":true}\n",
+    )?;
     install_track(&home.paths, &track(0))?;
+    Ok(home)
+}
+
+/// A complete, isolated example for the web server and shareable graph snapshots. The hooks
+/// process scripted agent actions; no real agent histories or personal configuration are read.
+pub fn seeded() -> Result<DemoHome> {
+    let home = setup()?;
+    let exe = std::env::current_exe()?;
+    play(&home, &exe, 1, Duration::ZERO, &AtomicBool::new(false));
+    if !std::fs::read_dir(home.paths.sessions()).is_ok_and(|mut entries| entries.next().is_some()) {
+        anyhow::bail!("The demo hook engine did not record any sessions. Please try again.");
+    }
     Ok(home)
 }
 

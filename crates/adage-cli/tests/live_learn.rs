@@ -62,6 +62,8 @@ impl World {
             .current_dir(&self.root)
             .env("ADAGE_HOME", self.home())
             .env("HOME", self.root.join("home"))
+            .env("CODEX_HOME", self.root.join("codex"))
+            .env("CLAUDE_CONFIG_DIR", self.root.join("home/.claude"))
             .env("ADAGE_ARM", "treated")
             .env("ADAGE_TEST_NO_SPAWN", "record")
             .env("ADAGE_ALLOW_NONINTERACTIVE", "1");
@@ -327,6 +329,41 @@ fn learn_auto_logs_what_changed() {
     let last = w.log().pop().unwrap();
     assert_eq!((last["kind"].as_str(), last["class"].as_str()), (Some("learn_error"), Some("repo")), "{last}");
     assert!(!last.to_string().contains(&*w.root.to_string_lossy()));
+}
+
+#[test]
+fn survey_and_both_learning_modes_resolve_custom_codex_home_and_configured_override() {
+    let w = World::new();
+    let custom = w.root.join("custom-codex");
+    let history = scenario::history(adage_sim::CODEX_SEED);
+    for session in &history {
+        let path = custom.join(codex::rel_path(session));
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, codex::rollout(session, &w.repo())).unwrap();
+    }
+    w.config("[learn]\nthresholds = 'demo'\n");
+    let survey = w.cmd(&["survey", "--json", "--demo"]).env("CODEX_HOME", &custom).output().unwrap();
+    assert!(survey.status.success(), "{}", World::text(&survey));
+    let surveyed: Value = serde_json::from_slice(&survey.stdout).unwrap();
+    assert_eq!(surveyed["sessions"].as_u64(), Some(history.len() as u64), "{surveyed}");
+    let learned = w.cmd(&["learn", "--auto", "--repo-root", &w.repo()]).env("CODEX_HOME", &custom).output().unwrap();
+    assert!(learned.status.success(), "{}", World::text(&learned));
+    assert_eq!(w.log().last().unwrap()["sessions_read"], surveyed["sessions"]);
+    let manual = w.cmd(&["learn", "--json"]).env("CODEX_HOME", &custom).output().unwrap();
+    assert!(manual.status.success(), "{}", World::text(&manual));
+    let manual: Value = serde_json::from_slice(&manual.stdout).unwrap();
+    assert_eq!(manual["sessions_read"], surveyed["sessions"]);
+
+    // An explicit setting must win over the detected store, including an empty folder.
+    let empty = w.root.join("configured-empty");
+    std::fs::create_dir_all(&empty).unwrap();
+    w.config(&format!("[learn]\ncodex_sessions = {}\n", serde_json::to_string(&empty).unwrap()));
+    let survey = w.cmd(&["survey", "--json"]).env("CODEX_HOME", &custom).output().unwrap();
+    let surveyed: Value = serde_json::from_slice(&survey.stdout).unwrap();
+    assert_eq!(surveyed["sessions"], 0);
+    let learned = w.cmd(&["learn", "--auto", "--repo-root", &w.repo()]).env("CODEX_HOME", &custom).output().unwrap();
+    assert!(learned.status.success());
+    assert_eq!(w.log().last().unwrap()["sessions_read"], 0);
 }
 
 #[test]
