@@ -23,6 +23,7 @@
 pub mod autolearn;
 pub mod failopen;
 pub mod harness;
+pub mod receipt;
 
 use adage_core::{repo, CommandTable};
 use adage_intent::model;
@@ -355,6 +356,12 @@ pub fn handle(
     if root.join(".adage/disabled").exists() {
         return Ok(None);
     }
+    let translated = adapter.translate(event, &p, &cwd.to_string_lossy());
+    if in_repo && (translated.is_some() || event == "PreToolUse") {
+        // Registration alone cannot prove delivery. Record once, without changing output or
+        // opening the session state/spool; receipt failures never interrupt the agent.
+        let _ = receipt::record(paths, &root, adapter.harness().id());
+    }
     if event == "PreToolUse" {
         return pretool(adapter, &p, &session, &cwd, &root, paths, opts.extension);
     }
@@ -367,7 +374,6 @@ pub fn handle(
         Some(find) => find().ok_or_else(|| Failure::new("condition", "finding the adage binary: not found")),
         None => std::env::current_exe().map_err(|e| Failure::io("condition", "finding the adage binary", &e)),
     };
-    let translated = adapter.translate(event, &p, &cwd.to_string_lossy());
     if matches!(translated, Some(Event::SessionStart)) {
         let start = Start { adapter, harness, event, session: &session, root: &root, in_repo, paths, index: &index };
         return session_start(&start, damaged, &learner, opts.extension);

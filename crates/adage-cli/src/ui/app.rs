@@ -9,6 +9,7 @@
 //! first, and review decisions and hook installs go through the same functions as `adage review`
 //! and `adage install --write`, with the same refusals (effect ceilings, an agent session).
 
+use super::forms::{self, Form, Kind as FormKind};
 use super::health::{Fix, Health};
 use super::jobs::{self, Job, Loaded, Loader, Want};
 use super::keys;
@@ -17,6 +18,7 @@ use super::routes::{RouteRow, Routes};
 use super::tabs;
 use super::term::{self, Term};
 use super::theme::Theme;
+use super::tools::{self, Tool};
 use super::view::{self, Ctx, Live};
 use super::watch::{self, Sources};
 use super::words;
@@ -36,6 +38,7 @@ use std::time::Instant;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tab {
+    Home,
     Live,
     Reflexes,
     Map,
@@ -43,18 +46,20 @@ pub enum Tab {
     Settings,
 }
 
-pub const TABS: [(Tab, &str); 5] = [
+pub const TABS: [(Tab, &str); 6] = [
     (Tab::Live, "Live"),
     (Tab::Reflexes, "Reflexes"),
     (Tab::Map, "Map"),
     (Tab::Health, "Health"),
     (Tab::Settings, "Settings"),
+    (Tab::Home, "Home"),
 ];
 
 impl Tab {
     /// This tab's keys, for the status bar and the overlay.
     pub fn keys(self) -> &'static [keys::Key] {
         match self {
+            Tab::Home => keys::HOME,
             Tab::Live => keys::LIVE,
             Tab::Reflexes => keys::REFLEXES,
             Tab::Map => keys::MAP,
@@ -79,10 +84,12 @@ pub enum Action {
         verb: &'static str,
         reference: String,
         route: String,
+        expected_revision: String,
     },
     Install(Box<Plan>),
     FetchModel,
     LearnNow,
+    Tool(Tool),
     SetConfig {
         key: &'static str,
         value: String,
@@ -90,6 +97,7 @@ pub enum Action {
 }
 
 pub enum Modal {
+    Form(Form),
     Help {
         scroll: u16,
     },
@@ -134,6 +142,11 @@ pub enum Cmd {
     Do(Action),
     PlanInstall { harness: String, scope: &'static str },
     OpenFailOpen,
+    PreviewLearning,
+    PrepareTool(Tool),
+    OpenRepository(PathBuf),
+    OpenWeb { focus: Option<String>, traces: bool },
+    CancelJob,
     Want(WantKind),
 }
 
@@ -191,12 +204,15 @@ pub struct AppState {
     pub palette: Option<Palette>,
     pub toasts: Vec<Toast>,
     pub notices: Vec<String>,
+    pub pending_job_action: Option<Action>,
+    pub job_cancelable: bool,
+    pub home_sel: usize,
 }
 
 impl AppState {
     pub fn new(config_path: PathBuf) -> AppState {
         AppState {
-            tab: Tab::Live,
+            tab: Tab::Home,
             live: Live::default(),
             health: None,
             routes: None,
@@ -212,6 +228,9 @@ impl AppState {
             palette: None,
             toasts: vec![],
             notices: vec![],
+            pending_job_action: None,
+            job_cancelable: false,
+            home_sel: 0,
         }
     }
 
@@ -267,6 +286,23 @@ impl AppState {
         self.toasts.retain(|t| t.ttl > 0);
     }
 
+    pub fn complete_job(&mut self, title: &str, done: Result<Vec<String>, String>) {
+        self.modal = None;
+        self.job_cancelable = false;
+        let pending = self.pending_job_action.take();
+        match done {
+            Ok(mut lines) => {
+                if let Some(action) = pending {
+                    lines.extend([String::new(),"Conditioning reads these sources, learns reflexes, binds applicable instincts, and recompiles the index.".into(),"Enter / y confirms. Esc / n cancels.".into()]);
+                    self.confirm("Condition from these sources", lines.into_iter().map(Line::raw).collect(), action);
+                } else {
+                    self.modal = Some(Modal::Viewer { title: title.into(), source: None, lines, scroll: 0 });
+                }
+            }
+            Err(e) => self.message(title, vec![e], true),
+        }
+    }
+
     fn switch(&mut self, tab: Tab) -> Option<Cmd> {
         self.tab = tab;
         tab.wants_routes().then_some(Cmd::Want(WantKind::Routes))
@@ -308,7 +344,7 @@ impl AppState {
                     self.modal = Some(Modal::Help { scroll: 0 });
                     return None;
                 }
-                KeyCode::Tab | KeyCode::BackTab | KeyCode::Char('1'..='5') => {
+                KeyCode::Tab | KeyCode::BackTab | KeyCode::Char('1'..='6') => {
                     let i = TABS.iter().position(|(t, _)| *t == self.tab).unwrap_or(0);
                     let next = match code {
                         KeyCode::Tab => (i + 1) % TABS.len(),
@@ -322,6 +358,7 @@ impl AppState {
             }
         }
         match self.tab {
+            Tab::Home => super::tabs::home::key(self, code),
             Tab::Live => {
                 let open =
                     self.live.inspect || self.live.map_hint || self.live.filtering || !self.live.filter.is_empty();
@@ -368,8 +405,44 @@ impl AppState {
         None
     }
 
-    fn run_entry(&mut self, run: palette::Run) -> Option<Cmd> {
+    pub(super) fn run_entry(&mut self, run: palette::Run) -> Option<Cmd> {
         match run {
+            palette::Run::Form(kind) => {
+                let mut form = Form::new(kind);
+                if let Some(row) = self.selected_route() {
+                    form.reflex = Some((row.reference.clone(), row.id.clone()));
+                    if kind == FormKind::SharePack {
+                        form.values[0] = row.reference.clone();
+                    }
+                }
+                if kind == FormKind::Delegate && form.reflex.is_none() {
+                    self.message(
+                        "Select a reflex",
+                        vec!["Select a reflex in Reflexes, then choose Delegate.".into()],
+                        false,
+                    );
+                } else {
+                    self.modal = Some(Modal::Form(form));
+                }
+                None
+            }
+            palette::Run::Revoke => {
+                if let Some(row) = self.selected_route() {
+                    Some(Cmd::PrepareTool(Tool::Revoke { reference: row.reference.clone(), route: row.id.clone() }))
+                } else {
+                    self.message(
+                        "Select a reflex",
+                        vec!["Select a reflex in Reflexes, then revoke its delegation.".into()],
+                        false,
+                    );
+                    None
+                }
+            }
+            palette::Run::Connect(harness) => self.start_fix(Fix::InstallHooks(harness.into())),
+            palette::Run::Tool(tool) => {
+                Some(if tool.mutates() { Cmd::PrepareTool(tool) } else { Cmd::Do(Action::Tool(tool)) })
+            }
+            palette::Run::Web { traces } => Some(Cmd::OpenWeb { focus: None, traces }),
             palette::Run::Tab(t) => self.switch(t),
             palette::Run::Setting(i) => {
                 self.setting_sel = i.min(self.settings.len().saturating_sub(1));
@@ -396,6 +469,7 @@ impl AppState {
             _ => {}
         };
         match m {
+            Modal::Form(form) => forms::key(self, form, code),
             Modal::Help { mut scroll } => match code {
                 // Scrolls when taller than the screen; any other key closes it.
                 KeyCode::Up
@@ -436,6 +510,9 @@ impl AppState {
                 None
             }
             Modal::Progress { .. } => {
+                if code == KeyCode::Esc && self.job_cancelable {
+                    return Some(Cmd::CancelJob);
+                }
                 self.modal = Some(m);
                 None
             }
@@ -514,21 +591,12 @@ impl AppState {
                 );
                 None
             }
-            Fix::LearnNow => {
-                self.confirm(
-                    "Condition now",
-                    vec![
-                        Line::raw("Condition this repository now, exactly as a background conditioner does:"),
-                        Line::raw("read its traces, form reflexes, update its tracks, recompile the index,"),
-                        Line::raw("and log what changed."),
-                        Line::raw(""),
-                        same("adage condition --auto --repo-root <repo>"),
-                        hint,
-                    ],
-                    Action::LearnNow,
-                );
-                None
-            }
+            Fix::LearnNow => Some(Cmd::PreviewLearning),
+            Fix::History(h) => self.run_entry(palette::Run::Form(match h.as_str() {
+                "codex" => FormKind::HistoryCodex,
+                "opencode" => FormKind::HistoryOpenCode,
+                _ => FormKind::HistoryClaude,
+            })),
             Fix::OpenSettings => {
                 self.tab = Tab::Settings;
                 None
@@ -600,6 +668,7 @@ pub fn draw(f: &mut Frame, s: &AppState, ctx: &Ctx) {
     draw_tabs(f, tabs_a, s, ctx);
     f.render_widget(Paragraph::new(view::rule("", None, area.width, t)), rule_a);
     match s.tab {
+        Tab::Home => tabs::home::draw(f, content, s, ctx),
         Tab::Live => view::draw_live(f, content, &s.live, s.health.as_ref(), ctx, false),
         Tab::Reflexes => tabs::reflexes::draw(f, content, s, ctx),
         Tab::Map => tabs::map::draw(f, content, s, ctx),
@@ -730,6 +799,7 @@ fn app_help(tab: Tab, t: &Theme) -> Vec<Line<'static>> {
 
 fn draw_modal(f: &mut Frame, area: Rect, m: &Modal, s: &AppState, t: &Theme) {
     match m {
+        Modal::Form(form) => forms::draw(f, area, form, t),
         Modal::Help { scroll } => view::popup_keys(f, area, app_help(s.tab, t), t, *scroll),
         Modal::Confirm { title, lines, scroll, .. } => view::popup(f, area, title, lines.clone(), t, *scroll),
         Modal::Message { title, lines, error, scroll } => {
@@ -774,7 +844,8 @@ fn draw_modal(f: &mut Frame, area: Rect, m: &Modal, s: &AppState, t: &Theme) {
                 ])),
                 g,
             );
-            f.render_widget(Paragraph::new(Span::styled(t.text(status), t.dim())).wrap(Wrap { trim: true }), st);
+            let status = if s.job_cancelable { format!("{status} · Esc cancels") } else { status.clone() };
+            f.render_widget(Paragraph::new(Span::styled(t.text(&status), t.dim())).wrap(Wrap { trim: true }), st);
         }
         Modal::Scope { harness } => view::popup(
             f,
@@ -854,9 +925,81 @@ pub fn install_confirm(p: &Plan, t: &Theme) -> Vec<Line<'static>> {
 // Runtime
 
 /// Carry out a command. Returns `true` to quit.
-fn execute(cmd: Cmd, s: &mut AppState, ctx: &Ctx, loader: &Loader, job: &mut Option<Job>) -> bool {
+fn execute(
+    cmd: Cmd,
+    s: &mut AppState,
+    ctx: &Ctx,
+    loader: &Loader,
+    job: &mut Option<Job>,
+    dashboard: &mut Option<crate::map::Server>,
+) -> bool {
     let t = &ctx.theme;
+    if ctx.demo
+        && matches!(
+            &cmd,
+            Cmd::PlanInstall { .. }
+                | Cmd::PreviewLearning
+                | Cmd::PrepareTool(_)
+                | Cmd::Do(Action::Install(_) | Action::FetchModel | Action::LearnNow | Action::SetConfig { .. })
+        )
+    {
+        s.message("Demo workspace", vec!["The demo uses temporary sample data. To set up your agent or condition real history, choose Open repository from the palette first.".into()], false);
+        return false;
+    }
     match cmd {
+        Cmd::OpenRepository(_) => unreachable!("handled by the event loop"),
+        Cmd::CancelJob => { *job = None; s.pending_job_action = None; s.job_cancelable = false; s.modal = None; },
+        Cmd::OpenWeb { focus, traces } => {
+            let result = (|| -> Result<String> {
+                if dashboard.is_none() { *dashboard = Some(crate::map::Server::start(ctx.paths.clone(), ctx.root.clone(), ctx.demo)?); }
+                let server = dashboard.as_ref().expect("started");
+                let url = server.url(focus.as_deref(), traces);
+                server.open(&url)?;
+                Ok(url)
+            })();
+            match result { Ok(url) => s.message("Web map opened", vec![url, "Keep this terminal app open while using the live map. Use its Traces view to inspect complete sessions.".into()], false), Err(e) => s.message("Could not open the browser", vec![format!("{e:#}"), dashboard.as_ref().map(|d|d.url(focus.as_deref(),traces)).unwrap_or_default()], true) }
+        },
+        Cmd::PreviewLearning => {
+            if let Some(root) = ctx.root.clone() {
+                let paths = ctx.paths.clone();
+                let j = Job::spawn("Preview conditioning sources", move |_| crate::history::preview(&paths, &root));
+                s.pending_job_action = Some(Action::LearnNow);
+                s.job_cancelable = true;
+                s.modal = Some(Modal::Progress {title:j.title.clone(),status:"Reading sources; Esc cancels".into(),ratio:0.0});
+                *job = Some(j);
+            } else { s.message("Open a repository", vec!["Choose Open repository from the palette, then Condition now.".into()],false); }
+        },
+        Cmd::PrepareTool(mut tool) => {
+            let preview = (|| -> Result<Vec<String>> {
+                let mut lines = vec![format!("Repository: {}", ctx.label)];
+                match &mut tool {
+                    Tool::AddTrack { directory, trust, expected_digest } => {
+                        *directory = tools::history_source_directory(directory, ctx.root.as_deref())?;
+                        let (summary, token) = crate::add::preview_import(directory, ctx.root.as_deref(), *trust)?;
+                        *expected_digest = Some(token); lines.extend(summary);
+                        lines.push("No execution grant is created.".into());
+                    },
+                    Tool::SetHistorySource { harness, directory } => {
+                        *directory = tools::history_source_directory(directory, ctx.root.as_deref())?;
+                        lines.push(format!("Set {harness} history to {}.", directory.display()));
+                        lines.push("This source replaces automatic detection for Sense and Condition, including background conditioning.".into());
+                    },
+                    Tool::ExportOpenCode => lines.extend(["Read OpenCode's local session list and export up to 50 sessions for this repository from the latest 500.".into(),"Copies are stored in the configured exports folder, or Adage's history/opencode folder. Run this import again for new history.".into()]),
+                    Tool::ShareTrack { track, output, .. } => lines.push(format!("Sign and export {track} to {} using your SSH signing agent.", output.display())),
+                    Tool::InstallModel(dir) => lines.push(format!("Validate and install the local embedding model from {}.",dir.display())),
+                    Tool::Delegate { reference, route, level, outputs, cache, effect } => {
+                        lines.push(format!("Grant {level} execution to {route} in {reference}."));
+                        lines.push(format!("E2 outputs: {outputs}; cache inputs: {cache}; effect: {effect}."));
+                        lines.push("Delegation authorizes hooks to execute this reflex within its approved limits. Existing policy checks still apply.".into());
+                    },
+                    Tool::Revoke { route, .. } => lines.push(format!("Withdraw the execution grant for {route}.")),
+                    Tool::Pack { name, enabled } => lines.push(format!("{} pack {name} in this repository and recompile its bindings.", if *enabled {"Enable"}else{"Disable"})),
+                    _ => {},
+                }
+                lines.push("Enter / y confirms. Esc / n cancels.".into()); Ok(lines)
+            })();
+            match preview { Ok(lines) => s.confirm(tool.title(),lines.into_iter().map(Line::raw).collect(),Action::Tool(tool)),Err(e)=>s.message("Cannot prepare action",vec![format!("{e:#}")],true) }
+        },
         Cmd::Quit => return true,
         Cmd::Want(WantKind::Routes) => loader.want(Want::Routes),
         Cmd::Want(WantKind::Health) => loader.want(Want::Health),
@@ -869,9 +1012,15 @@ fn execute(cmd: Cmd, s: &mut AppState, ctx: &Ctx, loader: &Loader, job: &mut Opt
             Err(e) => s.message("Cannot install", vec![format!("{e:#}")], true),
         },
         Cmd::Do(action) => match action {
-            Action::Review { verb, reference, route } => {
+            Action::Tool(tool) => {
+                if ctx.demo && tool.mutates() { s.message("Demo workspace",vec!["Choose Open repository to work with your own data.".into()],false); return false; }
+                let j=tools::run(ctx.paths.clone(),ctx.root.clone(),tool);
+                s.job_cancelable=j.cancelable;
+                s.modal=Some(Modal::Progress{title:j.title.clone(),status:j.status.clone(),ratio:0.0}); *job=Some(j);
+            },
+            Action::Review { verb, reference, route, expected_revision } => {
                 // `crate::review` takes the lexicon's verbs.
-                match crate::review::decide_quietly(verb, &reference, &route, &ctx.paths) {
+                match crate::review::decide_quietly(verb, &reference, &route, &expected_revision, &ctx.paths) {
                     Ok(_) => s.toast(format!("{route}: {} recorded", words::verb(verb)), true),
                     Err(e) => s.message("Refused", vec![format!("{e:#}")], true),
                 }
@@ -890,7 +1039,9 @@ fn execute(cmd: Cmd, s: &mut AppState, ctx: &Ctx, loader: &Loader, job: &mut Opt
                                 "Codex asks you to review new hooks before they run: open /hooks in Codex.".into(),
                             );
                         }
-                        s.message("Hooks installed", lines, false)
+                        lines.push("Hooks are registered. Health shows whether the first hook has arrived.".into());
+                        lines.push("Next: History sources in the palette, then Condition now and Review in Reflexes.".into());
+                        s.message("Hooks registered", lines, false)
                     }
                     Err(e) => s.message("Not written", vec![format!("{e:#}")], true),
                 }
@@ -903,8 +1054,7 @@ fn execute(cmd: Cmd, s: &mut AppState, ctx: &Ctx, loader: &Loader, job: &mut Opt
             }
             Action::LearnNow => match ctx.root.clone() {
                 Some(root) => {
-                    let key = adage_core::repo::repo_key_cached(&root, &ctx.paths.repo_keys());
-                    let j = jobs::learn_now(ctx.paths.clone(), vec![(key, root)]);
+                    let j = tools::run(ctx.paths.clone(), Some(root), Tool::Condition);
                     s.modal = Some(Modal::Progress { title: j.title.clone(), status: j.status.clone(), ratio: 0.0 });
                     *job = Some(j);
                 }
@@ -975,8 +1125,14 @@ fn pretty_fail_open(line: &str) -> String {
     }
 }
 
-pub fn run(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>) -> Result<()> {
-    let loader = Loader::spawn(ctx.paths.clone(), ctx.root.clone());
+pub fn run(ctx: Ctx, before_tick: Option<Box<dyn FnMut()>>) -> Result<()> {
+    run_inner(ctx, before_tick, false, false)
+}
+pub(super) fn from_watch(ctx: Ctx, before_tick: Option<Box<dyn FnMut()>>, web: bool) -> Result<()> {
+    run_inner(ctx, before_tick, true, web)
+}
+fn run_inner(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>, from_watch: bool, web: bool) -> Result<()> {
+    let mut loader = Loader::spawn(ctx.paths.clone(), ctx.root.clone());
     // The Live tab's review count and the palette's reflexes need them from the start.
     loader.want(Want::Routes);
     let mut sources = Sources::new(&ctx);
@@ -984,8 +1140,17 @@ pub fn run(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>) -> Result<()> {
     s.rewrite_marker = Some(adage_hook::rewrite_off(&ctx.paths));
     s.load_settings(&config::load(&ctx.paths));
     let mut job: Option<Job> = None;
+    let mut dashboard = None;
     let mut ctx = ctx;
     let mut t = Term::enter()?;
+    if from_watch {
+        s.tab = Tab::Live;
+        if web {
+            execute(Cmd::OpenWeb { focus: None, traces: false }, &mut s, &ctx, &loader, &mut job, &mut dashboard);
+        } else {
+            s.palette = Some(Palette::default());
+        }
+    }
     let mut ticks = 0u64;
     loop {
         if let Some(f) = before_tick.as_mut() {
@@ -1015,14 +1180,8 @@ pub fn run(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>) -> Result<()> {
                 Some(done) => {
                     let title = j.title.clone();
                     job = None;
-                    s.modal = None;
-                    match done {
-                        Ok(lines) => {
-                            let last = lines.iter().rev().find(|l| !l.trim().is_empty()).cloned().unwrap_or_default();
-                            s.toast(format!("{title}: {}", if last.is_empty() { "done".into() } else { last }), true);
-                        }
-                        Err(e) => s.message(&title, vec![e], true),
-                    }
+                    s.complete_job(&title, done);
+                    s.load_settings(&config::load(&ctx.paths));
                     loader.want(Want::Health);
                     loader.want(Want::Routes);
                 }
@@ -1050,7 +1209,32 @@ pub fn run(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>) -> Result<()> {
         t.terminal.draw(|f| draw(f, &s, &ctx))?;
         if let Some(k) = term::next_key_within(watch::wait(&s.live))? {
             if let Some(cmd) = s.key(k.code, k.modifiers) {
-                if execute(cmd, &mut s, &ctx, &loader, &mut job) {
+                if let Cmd::OpenRepository(directory) = cmd {
+                    match repository_context(&ctx, &directory) {
+                        Ok(next) => {
+                            // Stop the old server and demo player before changing any data source.
+                            dashboard = None;
+                            before_tick = None;
+                            job = None;
+                            loader = Loader::spawn(next.paths.clone(), next.root.clone());
+                            loader.want(Want::Routes);
+                            sources = Sources::new(&next);
+                            s = AppState::new(next.paths.config());
+                            s.rewrite_marker = Some(adage_hook::rewrite_off(&next.paths));
+                            s.load_settings(&config::load(&next.paths));
+                            ctx = next;
+                            s.message("Repository opened",vec![format!("Repository: {}",ctx.label),format!("Adage data: {}",ctx.paths.root.display()),"Choose Connect your agent, then History sources and Condition now from the palette.".into()],false);
+                        }
+                        Err(e) => {
+                            let mut form = Form::new(FormKind::OpenRepository);
+                            form.values[0] = directory.display().to_string();
+                            form.error = Some(format!("{e:#}"));
+                            s.modal = Some(Modal::Form(form));
+                        }
+                    }
+                    continue;
+                }
+                if execute(cmd, &mut s, &ctx, &loader, &mut job, &mut dashboard) {
                     break;
                 }
             }
@@ -1058,4 +1242,32 @@ pub fn run(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>) -> Result<()> {
     }
     drop(t);
     Ok(())
+}
+
+pub(super) fn repository_context(ctx: &Ctx, directory: &std::path::Path) -> Result<Ctx> {
+    use anyhow::Context;
+    let expanded = match directory.strip_prefix("~") {
+        Ok(rest) => adage_store::home_dir().context("Could not find your home folder; enter a full path")?.join(rest),
+        Err(_) => directory.to_path_buf(),
+    };
+    let path = if expanded.is_absolute() {
+        expanded
+    } else {
+        ctx.root.clone().unwrap_or(std::env::current_dir()?).join(expanded)
+    };
+    let path = path.canonicalize().with_context(|| format!("{} is not an accessible folder", path.display()))?;
+    if !path.is_dir() {
+        anyhow::bail!("Choose a folder, not a file.");
+    }
+    let root = adage_core::repo::find_root(&path)
+        .context("That folder is not inside a Git repository. Choose a repository folder.")?;
+    if ctx.demo
+        && ctx.root.as_ref().and_then(|p| p.canonicalize().ok()).is_some_and(|demo_root| root.starts_with(demo_root))
+    {
+        anyhow::bail!("This is the temporary demo repository. Choose your own repository folder to leave the demo.");
+    }
+    let paths = if ctx.demo { adage_store::Paths::from_env() } else { ctx.paths.clone() };
+    let mut next = Ctx::at(paths, Some(root));
+    next.theme = ctx.theme;
+    Ok(next)
 }

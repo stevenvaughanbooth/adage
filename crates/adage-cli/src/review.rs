@@ -90,15 +90,15 @@ fn list(paths: &Paths, as_json: bool, verbose: bool) -> Result<()> {
                 let mut row = serde_json::to_value(Reflex::of(it.inst, r, whys.get(&r.id))).unwrap_or_default();
                 row["review"] = json!(Decisions::of(&it.inst.reference, r, verbs(r, it.proposal.is_some()), &it.reasons));
                 row["waits"] = json!(waits(&it.reasons));
-                row["live"] = json!(live.get(&(t.manifest.scope.repo.clone(), r.id.clone())).cloned().unwrap_or_default());
+                row["live"] = json!(live.get(&(it.inst.reference.clone(), r.id.clone())).cloned().unwrap_or_default());
                 row["example_values"] = json!(preview(t, r).1);
                 row["last_review"] = json!(it.inst.reviews.routes.get(&r.id).map(|v| json!({ "decision": v.decision.as_str(), "on": v.on, "by": v.by })));
                 row["proposal"] = json!(it.proposal.map(|p| {
-                    let diff: Vec<Value> = crate::proposal::diff(r, &p.route)
+                    let diff: Vec<Value> = crate::proposal::diff(r, &adage_app::review::proposed_route(it.inst, p))
                         .into_iter()
                         .map(|(field, pinned, proposed)| json!({ "field": field, "pinned": pinned, "proposed": proposed }))
                         .collect();
-                    json!({ "on": p.on, "reason": p.reason, "diff": diff, "directive": preview(t, &crate::proposal::applied(p)).0 })
+                    json!({ "on": p.on, "reason": p.reason, "diff": diff, "directive": adage_app::review::review_preview(it.inst, r).ok().and_then(|v| v.proposal).map(|v| v.directive) })
                 }));
                 row
             })
@@ -341,9 +341,15 @@ fn print_item<W: std::io::Write>(o: &mut Out<W>, it: &Item, verbose: bool) -> Re
             "proposed",
             Line::new().text("`adage review approve` applies these changes (the reflex stays pinned):"),
         ))?;
-        for (field, pinned, proposed) in crate::proposal::diff(r, &p.route) {
+        for (field, pinned, proposed) in crate::proposal::diff(r, &adage_app::review::proposed_route(it.inst, p)) {
             o.line(&Line::new().text("    ").push(Role::Inhibit, format!("- {field:<9} {pinned}")))?;
             o.line(&Line::new().text("    ").push(Role::Fire, format!("+ {field:<9} {proposed}")))?;
+        }
+        if let Some(proposed) = adage_app::review::review_preview(it.inst, r)?.proposal {
+            o.line(&row("proposed response", Line::new()))?;
+            for line in proposed.directive.lines() {
+                o.line(&Line::new().text("    ").quiet(line))?;
+            }
         }
     }
     let decide = verbs(r, it.proposal.is_some()).join("|");
@@ -577,12 +583,26 @@ fn decide(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
 }
 
 /// A decision from `adage ui`: the same guard and the same code path as `adage review <verb>`.
-pub(crate) fn decide_quietly(verb: &str, spec: &str, route_id: &str, paths: &Paths) -> Result<Decided> {
+pub(crate) fn decide_quietly(
+    verb: &str,
+    spec: &str,
+    route_id: &str,
+    expected_revision: &str,
+    paths: &Paths,
+) -> Result<Decided> {
     let person = adage_app::person::require(&format!("review {verb}"))?;
     let Some(verb) = Verb::parse(verb) else { bail!("{USAGE}") };
     // `adage ui` decides on its event loop: it waits a moment for a running learner, never longer.
     let wait = std::time::Duration::from_secs(2);
-    Ok(report(adage_app::review::decide_within(&person, verb, spec, route_id, None, paths, wait)?))
+    Ok(report(adage_app::review::decide_reviewed_within(
+        &person,
+        verb,
+        spec,
+        route_id,
+        expected_revision,
+        paths,
+        wait,
+    )?))
 }
 
 /// What a decision did: the header's facts and the rows under it.

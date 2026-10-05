@@ -5,11 +5,11 @@ import { Command } from "cmdk";
 import { useState } from "react";
 import type { Graph } from "../api/types";
 import { routeKey } from "../lib/graph";
-import { STRENGTHS, type Strength, isInstinct, lifecycle, orderedVerbs, reviewCommand, strength, verb } from "../lib/words";
+import { STRENGTHS, type Strength, isInstinct, lifecycle, orderedVerbs, strength, verb } from "../lib/words";
 import { type View, useUrl } from "../state/url";
 import { THEMES, setTheme } from "../state/theme";
 import { KindGlyph, Lamp } from "./glyphs";
-import { Modal, copyCommand } from "./ui";
+import { Modal } from "./ui";
 
 function Hl({ text, q }: { text: string; q: string }) {
   const i = q ? text.toLowerCase().indexOf(q.toLowerCase()) : -1;
@@ -88,18 +88,22 @@ export function Palette({ graph, open, onClose, onShortcuts }: { graph: Graph | 
             </Command.Group>
           )}
           <Command.Group heading="Actions" className={GROUP}>
+            <Command.Item value="setup connect claude code codex opencode install hooks configure history import sources get started" onSelect={go("setup")} className={ITEM}>
+              <span className="grow">Set up my repository · connect an agent</span>
+              <span className="text-xs text-ink-3">terminal palette guide</span>
+            </Command.Item>
             {decisions.map(({ r, v }) => (
               <Command.Item
                 key={`${routeKey(r)}:${v}`}
                 value={`${v} ${r.id} ${verb(v)}`}
-                onSelect={run(() => void copyCommand(reviewCommand(v, r)))}
+                onSelect={run(() => setUrl({ view: "setup", reflex: routeKey(r) }, true))}
                 className={ITEM}
               >
                 <span className="grow truncate">
                   {v[0]?.toUpperCase()}
                   {v.slice(1)} <Hl text={r.id} q={q.trim()} />…
                 </span>
-                <span className="font-mono text-xs text-ink-3">copies adage review {v}</span>
+                <span className="font-mono text-xs text-ink-3">review in terminal palette</span>
               </Command.Item>
             ))}
             {STRENGTHS.map((s) => (
@@ -134,9 +138,9 @@ export function Palette({ graph, open, onClose, onShortcuts }: { graph: Graph | 
                 <span className="grow">Theme: {t}</span>
               </Command.Item>
             ))}
-            <Command.Item value="copy adage condition learn" onSelect={run(() => void copyCommand("adage condition"))} className={ITEM}>
+            <Command.Item value="condition learn earlier traces history sources" onSelect={go("setup")} className={ITEM}>
               <span className="grow">Condition from earlier traces</span>
-              <span className="font-mono text-xs text-ink-3">copies adage condition</span>
+              <span className="font-mono text-xs text-ink-3">preview sources in terminal</span>
             </Command.Item>
           </Command.Group>
           <Command.Group heading="Go to" className={GROUP}>
@@ -177,7 +181,7 @@ export function Palette({ graph, open, onClose, onShortcuts }: { graph: Graph | 
             <kbd>?</kbd> all shortcuts
           </span>
           <span className="grow" />
-          <span className="hidden truncate md:inline">Changes are copied as adage commands; the map stays read-only</span>
+          <span className="hidden truncate md:inline">Use the terminal palette for changes; the map explains each step</span>
         </div>
       </Command>
     </Modal>

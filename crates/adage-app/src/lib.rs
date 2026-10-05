@@ -13,6 +13,7 @@
 pub mod error;
 pub mod evidence;
 pub mod graph;
+pub mod history;
 pub mod person;
 pub mod proposal;
 pub mod reflex;

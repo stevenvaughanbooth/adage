@@ -276,7 +276,13 @@ fn graph_carries_quiet_cards_sequences_savings_and_rewrites() {
     assert_eq!(g["pretool"], json!([{ "repo": "acme", "rewritten": 1, "advised": 0, "withheld": 1 }]));
     assert_eq!(g["runtime"]["rewrite"], json!({ "on": true, "config": true, "marker": false }));
     assert_eq!(g["runtime"]["card_threshold"], 0.811);
-    let kinds: Vec<&str> = g["events"].as_array().unwrap().iter().filter_map(|e| e["kind"].as_str()).collect();
+    let kinds: Vec<&str> = g["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|e| e["kind"].as_str())
+        .filter(|kind| *kind == "pretool")
+        .collect();
     assert_eq!(kinds, ["pretool", "pretool"], "rewrites reach the timeline");
 
     // Savings: below the gate, counts only, never dollars.
@@ -353,7 +359,10 @@ fn every_surface_renders_a_reflex_the_same_way() {
         assert_eq!(review[k], status[k], "review and status disagree on {k}");
     }
     // What each surface adds, the same object where two of them carry it.
-    assert_eq!(keys(&map).difference(&shared).cloned().collect::<Vec<_>>(), ["arms", "in_index", "live", "review"]);
+    assert_eq!(
+        keys(&map).difference(&shared).cloned().collect::<Vec<_>>(),
+        ["arms", "in_index", "live", "measurement_history", "measurement_info", "measurement_sessions", "review"]
+    );
     assert!(keys(&review).is_superset(&["review".to_string(), "live".to_string()].into()));
     assert_eq!(review["review"]["verbs"], map["review"]["verbs"]);
     assert_eq!(review["live"], map["live"]);

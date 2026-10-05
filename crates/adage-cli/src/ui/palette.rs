@@ -3,9 +3,11 @@
 //! the palette teaches the CLI.
 
 use super::app::{AppState, Tab};
+use super::forms::Kind as FormKind;
 use super::fuzzy;
 use super::keys;
 use super::theme::Theme;
+use super::tools::Tool;
 use adage_term::Glyph;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
@@ -33,6 +35,13 @@ impl Section {
 /// What choosing an entry does.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Run {
+    Form(FormKind),
+    Connect(&'static str),
+    Tool(Tool),
+    Web {
+        traces: bool,
+    },
+    Revoke,
     /// Press `key` in `tab` (a review action applies to the selected reflex).
     Key(Tab, char),
     /// Select a reflex in the Reflexes tab: `(reference, id)`.
@@ -72,13 +81,47 @@ pub fn entries(s: &AppState) -> Vec<Entry> {
         lamp: None,
     };
     let mut v = vec![
+        action("Open repository", "Choose a Git folder; leave the demo", "", Run::Form(FormKind::OpenRepository)),
+        action("Connect Claude Code", "Register Claude hooks; preview exact changes", "", Run::Connect("claude-code")),
+        action("Connect Codex", "Register Codex hooks; then accept in /hooks", "", Run::Connect("codex")),
+        action("Connect OpenCode", "Register OpenCode hooks", "", Run::Connect("opencode")),
+        action("History sources", "Detected and configured trace folders", "", Run::Tool(Tool::HistorySources)),
+        action(
+            "Configure Claude Code history",
+            "Choose Claude projects folder",
+            "",
+            Run::Form(FormKind::HistoryClaude),
+        ),
+        action("Configure Codex history", "Choose Codex sessions folder", "", Run::Form(FormKind::HistoryCodex)),
+        action("Configure OpenCode history", "Choose exports folder", "", Run::Form(FormKind::HistoryOpenCode)),
+        action(
+            "Import OpenCode history",
+            "Copy local sessions for this repository",
+            "",
+            Run::Tool(Tool::ExportOpenCode),
+        ),
+        action("Condition now", "Learn from history; preview sources first", "c", Run::Key(Tab::Health, 'c')),
+        action("Sense session history", "Read-only survey of agent traces", "", Run::Tool(Tool::Survey)),
+        action("Installed reflexes and evidence", "Status report", "", Run::Tool(Tool::Status)),
+        action("Measured savings", "With Adage versus control", "", Run::Tool(Tool::Savings)),
+        action("Guidance outcomes", "Report observed agent responses", "", Run::Tool(Tool::Report)),
+        action("Graph report", "Situations, reflexes, and responses", "", Run::Tool(Tool::Graph)),
+        action("Installed packs and instincts", "List active pack bindings", "", Run::Tool(Tool::Packs)),
+        action("Available packs", "Browse marketplace", "", Run::Tool(Tool::Marketplace)),
+        action("Enable pack", "Bind an installed instinct pack", "", Run::Form(FormKind::PackOn)),
+        action("Disable pack", "Stop binding a pack in this repository", "", Run::Form(FormKind::PackOff)),
+        action("Import a signed pack", "Verify identity, then install", "", Run::Form(FormKind::AddPack)),
+        action("Export a signed pack", "Sign and share a collection", "", Run::Form(FormKind::SharePack)),
+        action("Evaluate a dataset", "Offline replay evaluation", "", Run::Form(FormKind::Evaluate)),
+        action("Install a local model", "Validate a model folder", "", Run::Form(FormKind::InstallModel)),
+        action("Explore complete traces in browser", "Open live session graphs", "", Run::Web { traces: true }),
         action("Strengthen reflex…", "adage review strengthen", "s", Run::Key(Tab::Reflexes, 's')),
+        action("Revoke selected delegation", "Withdraw permission to execute", "", Run::Revoke),
         action("Weaken reflex…", "adage review weaken", "w", Run::Key(Tab::Reflexes, 'w')),
         action("Extinguish reflex…", "adage review extinguish", "x", Run::Key(Tab::Reflexes, 'x')),
         action("Approve reflex…", "adage review approve", "a", Run::Key(Tab::Reflexes, 'a')),
         action("Pin reflex…", "adage review pin", "n", Run::Key(Tab::Reflexes, 'n')),
         action("Delegate reflex…", "adage review delegate", "d", Run::Key(Tab::Reflexes, 'd')),
-        action("Condition this repository now", "adage condition", "c", Run::Key(Tab::Health, 'c')),
         action("Fetch the intent model", "adage models fetch", "m", Run::Key(Tab::Health, 'm')),
         action("Install hooks", "adage init", "i", Run::Key(Tab::Health, 'i')),
         action("Recheck health", "adage doctor", "R", Run::Key(Tab::Health, 'R')),
@@ -112,6 +155,7 @@ pub fn entries(s: &AppState) -> Vec<Entry> {
         (Tab::Map, "Map", "3"),
         (Tab::Health, "Health", "4"),
         (Tab::Settings, "Settings", "5"),
+        (Tab::Home, "Home", "6"),
     ] {
         let note = match tab {
             Tab::Live => "adage watch",
@@ -121,7 +165,7 @@ pub fn entries(s: &AppState) -> Vec<Entry> {
         };
         v.push(goto(name.to_string(), note, Some(k), Run::Tab(tab)));
     }
-    v.push(goto("Open the map in the browser".into(), "adage map", Some("o"), Run::Key(Tab::Map, 'o')));
+    v.push(goto("Open the map in the browser".into(), "adage map", Some("o"), Run::Web { traces: false }));
     for (i, row) in s.settings.iter().enumerate() {
         v.push(goto(
             format!("Settings · {}", row.key),
@@ -138,14 +182,33 @@ pub fn matches(s: &AppState, query: &str) -> Vec<(Entry, Vec<usize>)> {
     let mut scored: Vec<(Entry, i64, Vec<usize>)> = entries(s)
         .into_iter()
         .filter_map(|e| {
-            let m = fuzzy::score(query, &e.title).or_else(|| {
-                fuzzy::score(query, &e.note).map(|m| fuzzy::Match { score: m.score - 50, positions: vec![] })
-            })?;
+            // Treat words independently, so “connect codex” cannot greedily consume the
+            // leading C of Codex while matching “connect”. A compact query stays fuzzy.
+            let words: Vec<_> = query.split_whitespace().collect();
+            let mut m = fuzzy::Match { score: 0, positions: vec![] };
+            for word in &words {
+                let part = fuzzy::score(word, &e.title).or_else(|| {
+                    fuzzy::score(word, &e.note).map(|part| fuzzy::Match { score: part.score - 50, positions: vec![] })
+                })?;
+                m.score += part.score;
+                m.positions.extend(part.positions);
+            }
+            if !words.is_empty() {
+                m.score /= words.len() as i64;
+            }
+            m.positions.sort_unstable();
+            m.positions.dedup();
             Some((e, m.score, m.positions))
         })
         .collect();
     // Stable: entries keep their order among equals, so an empty query lists them as written.
-    scored.sort_by(|a, b| a.0.section.cmp(&b.0.section).then(b.1.cmp(&a.1)));
+    scored.sort_by(|a, b| {
+        if query.is_empty() {
+            a.0.section.cmp(&b.0.section).then(b.1.cmp(&a.1))
+        } else {
+            b.1.cmp(&a.1).then(a.0.section.cmp(&b.0.section))
+        }
+    });
     if query.is_empty() {
         // Without a query, a few reflexes only: the palette is for jumping, the tab for browsing.
         let mut n = 0;
@@ -284,7 +347,7 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, p: &Palette, t: &Theme) {
     hint.insert(0, Span::raw(""));
     lines.push(row(hint));
     lines.push(row(vec![Span::styled(
-        t.fit("every action also shows the adage command that does the same thing", inner_w),
+        t.fit("Choose an action here; no terminal command copying needed", inner_w),
         t.dim(),
     )]));
     lines.push(edge(bl, br));

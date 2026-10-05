@@ -51,6 +51,10 @@ impl World {
             .env("PATH", format!("{}:/usr/bin:/bin", self.p("bin").display()))
             .env("ADAGE_TEST_NO_SPAWN", "record")
             .env("ADAGE_ARM", "treated")
+            // Text assertions use UTF-8 glyphs regardless of the invoking terminal.
+            .env("TERM", "xterm-256color")
+            .env("LC_ALL", "C.UTF-8")
+            .env("ADAGE_ASCII", "0")
             .env("NO_COLOR", "1")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -417,8 +421,8 @@ fn b7_status_shows_the_evidence_the_decision_used() {
     assert!(!t.contains("-0.00") && !t.contains("0/7"), "{t}");
 }
 
-/// B10: a fresh install, hooks registered and nothing learned yet, is healthy: a green card, no
-/// doctor warning, and the repository's past traces counted.
+/// B10: registration and delivery are distinct: a fresh install waits for its first hook, then
+/// becomes healthy even before learning, with the repository's past traces counted.
 #[test]
 fn b10_a_fresh_install_is_healthy_and_counts_past_traces() {
     let w = World::new();
@@ -433,7 +437,31 @@ fn b10_a_fresh_install_is_healthy_and_counts_past_traces() {
     );
     assert!(o.status.success(), "{}", text(&o));
     let v = w.doctor(&repo);
-    assert!(warnings(&v).is_empty(), "a fresh install has nothing to fix: {:?}", warnings(&v));
+    let checks = v["checks"].as_array().unwrap();
+    let registered = checks.iter().find(|c| c["check"] == "hooks: claude-code").unwrap();
+    assert_eq!(registered["status"], "pass", "registration is valid: {registered}");
+    let pending: Vec<_> = checks.iter().filter(|c| c["status"] != "pass").collect();
+    assert_eq!(pending.len(), 1, "only first delivery is pending: {:?}", warnings(&v));
+    assert_eq!(pending[0]["check"], "hook activity: claude-code");
+    assert_eq!(pending[0]["status"], "warn");
+    assert_eq!(pending[0]["detail"], "Registered; no hook has been observed in this repository yet.");
+    assert!(pending[0]["fix"].as_str().unwrap().contains("send a prompt"), "an actionable next step: {}", pending[0]);
+
+    // An actual prompt proves delivery even with no learned reflexes. It must stay quiet and
+    // must not start the learner, so health cannot be green merely because a hook is registered.
+    let payload = json!({
+        "session_id": "s-first-delivery", "cwd": repo, "hook_event_name": "UserPromptSubmit",
+        "prompt": "hello", "transcript_path": "/dev/null"
+    });
+    let o = w.run_in(&w.root, &["hook", "claude", "UserPromptSubmit"], &payload.to_string(), &[]);
+    assert!(o.status.success() && o.stdout.is_empty() && o.stderr.is_empty(), "{}", text(&o));
+    assert!(w.spawned().is_empty(), "a prompt does not start learning: {:?}", w.spawned());
+    let v = w.doctor(&repo);
+    assert!(warnings(&v).is_empty(), "first delivery completes fresh-install health: {:?}", warnings(&v));
+    let receipt = v["checks"].as_array().unwrap().iter().find(|c| c["check"] == "hook activity: claude-code").unwrap();
+    assert_eq!(receipt["status"], "pass");
+    let detail = receipt["detail"].as_str().unwrap();
+    assert!(detail.contains("last received") && detail.contains("do not prove a reflex fired"), "{detail}");
     let o = w.run_in(&repo, &[], "", &[]);
     let card = text(&o);
     assert!(card.lines().next().unwrap().contains("● healthy"), "{card}");

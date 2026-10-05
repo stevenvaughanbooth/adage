@@ -426,6 +426,9 @@ pub struct ShareArgs {
 
 #[derive(Args, Debug)]
 pub struct AddArgs {
+    /// Bind the UI confirmation to the exact pack and signature that were previewed.
+    #[arg(long, hide = true)]
+    pub expected_digest: Option<String>,
     /// The pack directory.
     pub dir: PathBuf,
     /// Trust the pack's signer.

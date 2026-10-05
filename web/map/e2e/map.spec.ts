@@ -7,7 +7,7 @@ import { DEMO_PORT, EMPTY_PORT } from "./ports";
 
 const DEMO = `http://127.0.0.1:${DEMO_PORT}`;
 const EMPTY = `http://127.0.0.1:${EMPTY_PORT}`;
-const VIEWS = ["map", "traces", "evidence", "health", "how"] as const;
+const VIEWS = ["map", "traces", "evidence", "health", "how", "setup"] as const;
 
 async function axe(page: Page) {
   const r = await new AxeBuilder({ page }).analyze();
@@ -148,11 +148,13 @@ test("a dropped stream says offline, not connecting", async ({ page }) => {
   await expect(page.getByTestId("live-pill")).toContainText("Offline");
 });
 
-test("first run says exactly what to run", async ({ page }) => {
+test("first run leads to the terminal palette setup guide", async ({ page }) => {
   await page.goto(`${EMPTY}/`);
   await expect(page.getByRole("heading", { name: /Your first reflex forms/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Copy adage init" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Copy adage condition" })).toBeVisible();
+  await page.getByRole("button", { name: "Set up my repository" }).click();
+  await expect(page.getByRole("main", { name: "Setup" })).toBeVisible();
+  await expect(page.getByText("History sources", { exact: true })).toBeVisible();
+  await expect(page.getByText("Condition now", { exact: true })).toBeVisible();
   expect(await axe(page)).toEqual([]);
 });
 
@@ -230,7 +232,7 @@ for (const colorScheme of ["light", "dark"] as const) {
       const quiet = inspector.getByRole("region", { name: "Quiet" });
       await expect(quiet.getByRole("heading", { name: "Quiet: agents already do this" })).toBeVisible();
       await expect(quiet.getByRole("img", { name: /uplift \+0\.04 against the 0\.10 bar/ })).toBeVisible();
-      await expect(quiet.getByRole("button", { name: /adage review approve acme-billing\/learned lint-after-edit/ })).toBeVisible();
+      await expect(quiet.getByRole("button", { name: /deliver it anyway.*Open terminal action guide/ })).toBeVisible();
       await expect(inspector.getByText("What the agent would see")).toBeVisible();
       // It has its own place in the tree, apart from install steps, and its own chip.
       const rail = page.getByRole("navigation", { name: "Reflex tree" });
@@ -291,7 +293,7 @@ for (const colorScheme of ["light", "dark"] as const) {
       await page.goto(`${DEMO}/?view=health`);
       await ready(page);
       await expect(page.getByTestId("runtime-rewrites")).toContainText("Rewrites to the project’s environment: on");
-      await expect(page.getByTestId("runtime-rewrites").getByRole("button", { name: /adage delegate rewrites off/ })).toBeVisible();
+      await expect(page.getByTestId("runtime-rewrites").getByRole("button", { name: /turn rewrites off.*Open terminal action guide/ })).toBeVisible();
       await expect(page.getByTestId("runtime-model")).toContainText("Bundled model");
       await expect(page.getByTestId("runtime-model")).toContainText("potion-base-8m-i8 (bundled)");
       expect(await axe(page)).toEqual([]);
@@ -324,8 +326,8 @@ test("first-run health failure can be rechecked without reloading", async ({ pag
   await expect(page.getByText("Could not check hooks.", { exact: false })).toBeVisible();
   await page.unroute("**/api/v1/health");
   await page.getByRole("button", { name: "Recheck setup" }).click();
-  await expect(page.getByText("not set up: run adage init", { exact: true })).toBeVisible();
-  await expect(page.getByTestId("live-pill")).toContainText("Ready");
+  await expect(page.getByText("not set up: open Setup", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("live-pill")).toContainText("Map online");
 });
 
 test("sample data is labeled and a failed refresh exposes stale data", async ({ page }) => {

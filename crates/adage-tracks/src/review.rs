@@ -69,6 +69,10 @@ pub struct Basis {
     pub followed: u32,
     #[serde(default)]
     pub ignored: u32,
+    /// The runtime cohort counted by this basis. Older reviews have no version and do not
+    /// subtract their totals from a newly version-scoped measurement.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime_version: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -118,6 +122,7 @@ pub fn basis(r: &Route, followed: u32, ignored: u32) -> Basis {
         lower_bound: (r.evidence.lower_bound * 1e4).round() / 1e4,
         followed,
         ignored,
+        runtime_version: None,
     }
 }
 

@@ -18,3 +18,18 @@ pub fn applied(p: &Proposal) -> Route {
     r.authored = true;
     r
 }
+
+/// All changed fields of the exact route approval installs. Structured values retain their
+/// complete contents, including slot contracts, card commands and execution evidence.
+pub fn diff(before: &Route, after: &Route) -> Vec<(&'static str, String, String)> {
+    let a = serde_json::to_value(before).unwrap_or_default();
+    let b = serde_json::to_value(after).unwrap_or_default();
+    let text = |v: &serde_json::Value| {
+        v.as_str().map(String::from).unwrap_or_else(|| serde_json::to_string_pretty(v).unwrap_or_default())
+    };
+    ["summary", "trigger", "step", "slots", "effect", "strength", "state", "exit", "evidence", "authored"]
+        .into_iter()
+        .filter(|field| a[*field] != b[*field])
+        .map(|field| (field, text(&a[field]), text(&b[field])))
+        .collect()
+}

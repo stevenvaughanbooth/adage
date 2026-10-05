@@ -7,6 +7,7 @@
 //! The Live tab is the watch view itself (`view::draw_live`, `watch::live_key`).
 
 pub mod health;
+pub mod home;
 pub mod map;
 pub mod reflexes;
 pub mod settings;

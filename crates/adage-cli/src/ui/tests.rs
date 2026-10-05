@@ -518,19 +518,19 @@ fn a_reflex_is_named_by_what_it_told_this_session() {
     let (a, b, a2, b2, c2) =
         (delivered("s-a", "INC-24"), delivered("s-b", "INC-17"), ignored("s-a"), ignored("s-b"), ignored("s-c"));
     let lines = |gists: &std::collections::BTreeMap<String, String>| -> Vec<String> {
-        view::feed_lines(&[&a, &b, &a2, &b2, &c2], &cx, 110, &Default::default(), gists)
+        view::feed_lines(&[&a, &b, &a2, &b2, &c2], &cx, 150, &Default::default(), gists)
             .into_iter()
             .map(|(_, l)| l.spans.iter().map(|s| s.content.to_string()).collect::<String>().trim_end().to_string())
             .collect()
     };
     let none = lines(&Default::default());
-    assert!(none[2].ends_with("ignored bin/fetch-incident INC-24"), "{none:?}");
-    assert!(none[3].ends_with("ignored bin/fetch-incident INC-17"), "{none:?}");
-    assert!(none[4].ends_with("ignored lookup-incident"), "never told s-c: {none:?}");
+    assert!(none[2].ends_with("not observed bin/fetch-incident INC-24"), "{none:?}");
+    assert!(none[3].ends_with("not observed bin/fetch-incident INC-17"), "{none:?}");
+    assert!(none[4].ends_with("not observed lookup-incident"), "never told s-c: {none:?}");
     let gists =
         [("lookup-incident".to_string(), "on a prompt that names a ticket, run bin/fetch-incident {item}".to_string())]
             .into();
-    assert!(lines(&gists)[4].ends_with("ignored on a prompt that names a ticket, run bin/fetch-incident {item}"));
+    assert!(lines(&gists)[4].ends_with("not observed on a prompt that names a ticket, run bin/fetch-incident {item}"));
 }
 
 /// A session in a repository with no reflexes yet is shown as watched, with its calls counted
@@ -848,7 +848,7 @@ fn watch_frames_at_split_pane_and_wide_sizes_in_colour_and_no_color() {
         "✓ followed bin/fetch-incident INC-2045",
         // Never delivered to this session in the feed, and no reflexes loaded: its id, not
         // what another session was told.
-        "✗ ignored lookup-incident",
+        "✗ not observed lookup-incident",
         "→ ◠ ● inhibit  npm run check",
         "─ conditioning ─",
         "lookup-incident                             prime → fire       24/25 · lb 0.80",
@@ -1169,6 +1169,11 @@ fn route_row(
         with: Arm::default(),
         control: Arm::default(),
         directive: String::new(),
+        review_preview: Some(adage_app::review::ReviewPreview {
+            revision: "fixture-revision".into(),
+            current_directive: "Fixture response".into(),
+            proposal: None,
+        }),
         verbs,
         reasons: vec![],
         more: Default::default(),
@@ -1321,6 +1326,7 @@ fn app_frames_every_tab() {
         (Tab::Map, "app-map"),
         (Tab::Health, "app-health"),
         (Tab::Settings, "app-settings"),
+        (Tab::Home, "app-home"),
     ] {
         s.tab = tab;
         let text = app_frame(&s, &c, 150, 35);
@@ -1438,7 +1444,7 @@ fn reflexes_keys_filter_chips_groups_and_review() {
     assert_eq!(s.selected_route().unwrap().id, "start-with-npm-check");
     s.key(KeyCode::Char('s'), NONE);
     match s.key(KeyCode::Char('y'), NONE) {
-        Some(Cmd::Do(app::Action::Review { verb, reference, route })) => {
+        Some(Cmd::Do(app::Action::Review { verb, reference, route, .. })) => {
             assert_eq!(
                 (verb, reference.as_str(), route.as_str()),
                 ("strengthen", "harbor-dispatch/intents", "start-with-npm-check")
@@ -1465,17 +1471,13 @@ fn reflexes_keys_filter_chips_groups_and_review() {
     s.reflexes.sel = Some("group:extinguished".into());
     s.key(KeyCode::Enter, NONE);
     assert_eq!(tabs::reflexes::tree(&s).len(), before + 1);
-    // `t` lists traces; `o` names the map command; `d` the delegate command.
+    // Browser navigation returns an executable command, and delegation opens guided inputs.
     tabs::reflexes::select(&mut s, "harbor-dispatch/incidents", "lookup-incident");
-    s.key(KeyCode::Char('o'), NONE);
     assert!(
-        matches!(&s.modal, Some(Modal::Message { lines, .. }) if lines.iter().any(|l| l.contains("adage map --focus lookup-incident")))
+        matches!(s.key(KeyCode::Char('o'), NONE),Some(Cmd::OpenWeb {focus:Some(key),traces:false}) if key.contains("lookup-incident") && key.contains("harbor-dispatch/incidents"))
     );
-    s.key(KeyCode::Esc, NONE);
     s.key(KeyCode::Char('d'), NONE);
-    assert!(
-        matches!(&s.modal, Some(Modal::Message { lines, .. }) if lines.iter().any(|l| l.contains("adage review delegate")))
-    );
+    assert!(matches!(&s.modal, Some(Modal::Form(form)) if form.kind == super::forms::Kind::Delegate));
     s.key(KeyCode::Esc, NONE);
     s.key(KeyCode::Char('t'), NONE);
     assert!(matches!(&s.modal, Some(Modal::Viewer { .. })));
@@ -1529,12 +1531,10 @@ fn map_layers_share_ends_focus_and_keys() {
     s.key(KeyCode::Char('-'), NONE);
     assert!(s.map.compact && s.toasts.last().is_some_and(|t| t.text.contains("rows is the smallest")));
     assert!(app_frame(&s, &c, 150, 35).contains("zoom rows (min)"));
-    // `o` names the web map command; enter opens the reflex in the Reflexes tab.
-    s.key(KeyCode::Char('o'), NONE);
+    // `o` opens the live map directly; Enter navigates inside the terminal app.
     assert!(
-        matches!(&s.modal, Some(Modal::Message { lines, .. }) if lines.iter().any(|l| l.contains("adage map --focus dead-end-npm-test")))
+        matches!(s.key(KeyCode::Char('o'), NONE),Some(Cmd::OpenWeb {focus:Some(key),traces:false}) if key.contains("dead-end-npm-test"))
     );
-    s.key(KeyCode::Esc, NONE);
     s.key(KeyCode::Enter, NONE);
     assert_eq!(s.tab, Tab::Reflexes);
     assert_eq!(s.selected_route().unwrap().id, "dead-end-npm-test");
@@ -1699,8 +1699,10 @@ fn tabs_toasts_and_health_keys() {
     assert!(s.key(KeyCode::Enter, NONE).is_none());
     assert!(matches!(&s.modal, Some(Modal::Scope { harness }) if harness == "codex"));
     assert!(matches!(s.key(KeyCode::Char('u'), NONE), Some(Cmd::PlanInstall { scope: "user", .. })));
-    s.key(KeyCode::Char('c'), NONE);
-    assert!(matches!(&s.modal, Some(Modal::Confirm { title, .. }) if title == "Condition now"));
+    assert!(matches!(s.key(KeyCode::Char('c'), NONE), Some(Cmd::PreviewLearning)));
+    s.pending_job_action = Some(app::Action::LearnNow);
+    s.complete_job("Preview", Ok(vec!["Codex: 8 readable sessions".into()]));
+    assert!(matches!(&s.modal, Some(Modal::Confirm { title, .. }) if title == "Condition from these sources"));
     assert!(matches!(s.key(KeyCode::Char('y'), NONE), Some(Cmd::Do(app::Action::LearnNow))));
     // Settings: a boolean toggles; thresholds switch with Space; a number opens the editor, whose
     // value `adage_store::config::set` validates when it is saved.
@@ -2045,8 +2047,7 @@ fn narrow_screens_keep_indents_answers_and_the_current_tab() {
     s.check_sel = s.health.as_ref().unwrap().fixes.iter().position(|f| f.is_none()).unwrap();
     s.toasts.clear();
     assert!(s.key(KeyCode::Enter, NONE).is_none());
-    assert!(s.modal.is_none());
-    assert_eq!(s.toasts.len(), 1, "enter on a check with no fix says why");
+    assert!(matches!(s.modal, Some(Modal::Viewer { .. })), "read the whole check, not a disappearing toast");
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -2400,4 +2401,126 @@ fn reflexes_escape_recovers_from_combined_filters() {
     assert!(!s.reflexes.filtering);
     assert!(s.reflexes.filter.is_empty());
     assert_eq!(s.reflexes.hidden, [false; 3]);
+}
+
+#[test]
+fn setup_palette_reaches_every_source_and_current_pack_workflow() {
+    use super::{forms::Kind, tools::Tool};
+    let mut s = app_state();
+    assert_eq!(AppState::new("unused".into()).tab, Tab::Home);
+    for (query, expected) in [
+        ("connect codex", palette::Run::Connect("codex")),
+        ("configure codex", palette::Run::Form(Kind::HistoryCodex)),
+        ("history sources", palette::Run::Tool(Tool::HistorySources)),
+        ("import opencode", palette::Run::Tool(Tool::ExportOpenCode)),
+        ("condition now", palette::Run::Key(Tab::Health, 'c')),
+        ("available packs", palette::Run::Tool(Tool::Marketplace)),
+    ] {
+        let found = palette::matches(&s, query);
+        assert!(found.iter().any(|(e, _)| e.run == expected), "{query} must be discoverable");
+    }
+    s.run_entry(palette::Run::Connect("codex"));
+    assert!(matches!(s.modal,Some(Modal::Scope{ref harness}) if harness=="codex"));
+}
+
+#[test]
+fn source_form_preserves_spaces_and_requires_confirmation() {
+    use super::{
+        forms::{Form, Kind},
+        tools::Tool,
+    };
+    let mut s = app_state();
+    s.modal = Some(Modal::Form(Form::new(Kind::HistoryCodex)));
+    for ch in "/tmp/history with $(literal)".chars() {
+        assert!(s.key(KeyCode::Char(ch), NONE).is_none());
+    }
+    assert!(
+        matches!(s.key(KeyCode::Enter,NONE),Some(Cmd::PrepareTool(Tool::SetHistorySource{harness,directory})) if harness=="codex" && directory==std::path::Path::new("/tmp/history with $(literal)"))
+    );
+    s.run_entry(palette::Run::Form(Kind::AddPack));
+    assert!(s.key(KeyCode::Enter, NONE).is_none());
+    assert!(matches!(&s.modal,Some(Modal::Form(f)) if f.error.is_some()));
+}
+
+#[test]
+fn conditioning_preflight_cannot_skip_to_mutation_or_survive_failure() {
+    let mut s = app_state();
+    assert!(matches!(s.start_fix(super::health::Fix::LearnNow), Some(Cmd::PreviewLearning)));
+    assert!(s.modal.is_none());
+    s.pending_job_action = Some(app::Action::LearnNow);
+    s.complete_job("Preview", Err("History folder is unreadable".into()));
+    assert!(s.pending_job_action.is_none());
+    assert!(matches!(s.modal, Some(Modal::Message { error: true, .. })));
+    assert!(s.key(KeyCode::Enter, NONE).is_none());
+    s.pending_job_action = Some(app::Action::LearnNow);
+    s.complete_job("Preview", Ok(vec!["Codex: 12 sessions in this repository".into()]));
+    assert!(
+        matches!(&s.modal,Some(Modal::Confirm{lines,..}) if lines.iter().any(|l|l.to_string().contains("12 sessions")))
+    );
+    assert!(s.key(KeyCode::Esc, NONE).is_none());
+}
+
+#[test]
+fn reviewed_revision_survives_background_reload_and_full_proposal_is_visible() {
+    use adage_app::review::{ProposalPreview, ReviewPreview};
+    let mut s = app_state();
+    s.tab = Tab::Reflexes;
+    tabs::reflexes::select(&mut s, "harbor-dispatch/incidents", "lookup-incident");
+    let rows = &mut s.routes.as_mut().unwrap().as_mut().unwrap().rows;
+    rows[0].review_preview = Some(ReviewPreview {
+        revision: "original".into(),
+        current_directive: "old response".into(),
+        proposal: Some(ProposalPreview {
+            on: "v2".into(),
+            reason: "evidence changed".into(),
+            diff: vec![("step", "old".into(), "new".into())],
+            directive: "exact proposed response".into(),
+        }),
+    });
+    s.key(KeyCode::Char('a'), NONE);
+    let Some(Modal::Confirm { lines, .. }) = &s.modal else { panic!("confirmation") };
+    let text = lines.iter().map(ToString::to_string).collect::<Vec<_>>().join("\n");
+    assert!(
+        text.contains("old response") && text.contains("exact proposed response") && text.contains("step: old → new")
+    );
+    s.routes.as_mut().unwrap().as_mut().unwrap().rows[0].review_preview.as_mut().unwrap().revision = "reloaded".into();
+    assert!(
+        matches!(s.key(KeyCode::Enter,NONE),Some(Cmd::Do(app::Action::Review{expected_revision,..})) if expected_revision=="original")
+    );
+}
+
+#[test]
+fn unreadable_review_fails_closed_and_manual_health_steps_do_not_disappear() {
+    let mut s = app_state();
+    s.tab = Tab::Reflexes;
+    tabs::reflexes::select(&mut s, "harbor-dispatch/incidents", "lookup-incident");
+    s.routes.as_mut().unwrap().as_mut().unwrap().rows[0].review_preview = None;
+    s.key(KeyCode::Char('a'), NONE);
+    assert!(matches!(s.modal, Some(Modal::Message { error: true, .. })));
+    assert!(s.key(KeyCode::Enter, NONE).is_none());
+    s.tab = Tab::Health;
+    s.check_sel = 0;
+    let h = s.health.as_mut().unwrap();
+    h.fixes[0] = None;
+    h.checks[0].detail = "Registered; waiting for first delivery".into();
+    h.checks[0].fix = Some("Open /hooks inside Codex and accept Adage".into());
+    s.key(KeyCode::Enter, NONE);
+    assert!(matches!(&s.modal,Some(Modal::Viewer{lines,..}) if lines.iter().any(|l|l.contains("/hooks"))));
+}
+
+#[test]
+fn leaving_demo_uses_persistent_data_and_cannot_reopen_the_demo_root() {
+    let d = tempfile::tempdir().unwrap();
+    let demo = d.path().join("demo");
+    let repo = d.path().join("real project");
+    std::fs::create_dir_all(demo.join(".git")).unwrap();
+    std::fs::create_dir_all(repo.join(".git")).unwrap();
+    let mut c = Ctx::at(Paths::at(d.path().join("temporary-data")), Some(demo.clone()));
+    c.demo = true;
+    assert!(app::repository_context(&c, &demo).is_err());
+    let next = app::repository_context(&c, &repo).unwrap();
+    assert!(!next.demo);
+    assert_eq!(next.paths.root, Paths::from_env().root);
+    assert_ne!(next.paths.root, c.paths.root);
+    assert_eq!(next.root.unwrap(), repo.canonicalize().unwrap());
 }

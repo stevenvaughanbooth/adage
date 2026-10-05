@@ -225,7 +225,7 @@ pub fn add(args: &[String], paths: &Paths) -> Result<()> {
     };
     let cwd_root = at.and_then(|d| d.canonicalize().ok()).and_then(|d| find_root(&d));
     if src.join(adage_pack::validate::MANIFEST).is_file() {
-        return add_pack(&src, paths, trust, cwd_root.as_deref());
+        return add_pack(&src, paths, trust, cwd_root.as_deref(), crate::flag(args, "--expected-digest").as_deref());
     }
     if !src.is_dir() {
         return Err(crate::hint(
@@ -301,13 +301,18 @@ fn builtin_entry(files: &BTreeMap<String, Vec<u8>>) -> Option<adage_pack::market
     b.get(&name).map(|(e, _)| e.clone())
 }
 
-fn add_pack(src: &Path, paths: &Paths, trust: bool, cwd_root: Option<&Path>) -> Result<()> {
-    // Exactly the listed files, read once: what is checked is what is installed.
-    let files = adage_pack::validate::read_dir_files(src).map_err(|e| anyhow!("refusing: {e:#}"))?;
-    let digest = adage_pack::pack_digest(&files);
+/// Verify the exact same snapshot for the read-only preview and the eventual install.
+struct VerifiedImport {
+    pack: Pack,
+    digest: String,
+    signed: Option<(Vec<u8>, String, PublicKey)>,
+}
+
+fn verify_import(src: &Path, files: &BTreeMap<String, Vec<u8>>) -> Result<VerifiedImport> {
+    let digest = adage_pack::pack_digest(files);
     // A pack of the marketplace built into Adage is trusted by its pin, as the base instincts are
     // pre-installed; any other bytes under its name are not that pack.
-    let pinned = builtin_entry(&files);
+    let pinned = builtin_entry(files);
     if let Some(e) = &pinned {
         if e.digest != digest {
             bail!(
@@ -333,10 +338,65 @@ fn add_pack(src: &Path, paths: &Paths, trust: bool, cwd_root: Option<&Path>) -> 
             Some((msg, pem, signer))
         }
     };
-    let pack = Pack::from_files(&files).map_err(|e| anyhow!("refusing: the pack fails validation: {e:#}"))?;
+    let pack = Pack::from_files(files).map_err(|e| anyhow!("refusing: the pack fails validation: {e:#}"))?;
+    Ok(VerifiedImport { pack, digest, signed })
+}
+
+/// Bind consent to the content, signer, actual trust scope and whether new trust was requested.
+fn import_revision(files: &BTreeMap<String, Vec<u8>>, scope: &str, trust: bool) -> String {
+    let mut hash = Sha256::new();
+    hash.update(b"adage-import-preview-v1\0");
+    hash.update(adage_pack::pack_digest(files).as_bytes());
+    let signature = files.get(adage_pack::validate::SIG).map(Vec::as_slice).unwrap_or_default();
+    hash.update((signature.len() as u64).to_le_bytes());
+    hash.update(signature);
+    hash.update((scope.len() as u64).to_le_bytes());
+    hash.update(scope.as_bytes());
+    hash.update([u8::from(trust)]);
+    io::hex(&hash.finalize())
+}
+
+pub fn preview_import(src: &Path, root: Option<&Path>, trust: bool) -> Result<(Vec<String>, String)> {
+    let files = adage_pack::validate::read_dir_files(src)?;
+    let verified = verify_import(src, &files)?;
+    let pack = &verified.pack;
+    let scope = trust_scope(pack, root);
+    let identity = verified
+        .signed
+        .as_ref()
+        .map(|(_, _, key)| fingerprint(key))
+        .unwrap_or_else(|| "built-in marketplace pin".into());
+    let mut lines = vec![
+        format!("Pack: {}", pack.manifest.pack.name),
+        format!("Verified identity: {identity}"),
+        format!("Content digest: {}", verified.digest),
+        format!("Applies to: {}", serde_json::to_string(&pack.manifest.applicability)?),
+        format!("Trust scope: {}", if scope == "*" { "all repositories (*)" } else { &scope }),
+        if verified.signed.is_none() {
+            "Verified against the built-in marketplace pin; no new signer is trusted.".into()
+        } else if trust {
+            "Confirms this signer for the trust scope above.".into()
+        } else {
+            "Adds no new signer trust; import requires an existing trusted signer.".into()
+        },
+        "Installs the verified pack. Imported reflexes require review; this grants no execution permission.".into(),
+    ];
+    for route in &pack.routes {
+        lines.push(format!("Reflex {}: {}", route.id, serde_json::to_string(&route.steps)?));
+    }
+    Ok((lines, import_revision(&files, &scope, trust)))
+}
+
+fn add_pack(src: &Path, paths: &Paths, trust: bool, cwd_root: Option<&Path>, expected: Option<&str>) -> Result<()> {
+    // Read once. The confirmed bytes are also the bytes verified, trusted and installed below.
+    let files = adage_pack::validate::read_dir_files(src).map_err(|e| anyhow!("refusing: {e:#}"))?;
+    let VerifiedImport { pack, digest, signed } = verify_import(src, &files)?;
+    let scope = trust_scope(&pack, cwd_root);
+    if expected.is_some_and(|revision| revision != import_revision(&files, &scope, trust)) {
+        bail!("The pack or trust scope changed after its preview. Review it again before importing; nothing was installed or trusted.");
+    }
     let signer_fp = signed.as_ref().map(|(_, _, k)| fingerprint(k));
     packs::policy_check(paths, &pack, signer_fp.as_deref())?;
-    let scope = trust_scope(&pack, cwd_root);
     // One writer of the tracks and index at a time (`adage condition`, automatic learners).
     let tracks_lock = adage_store::lock::exclusive(&paths.tracks_lock())?;
     let (decision, verified) = match &signed {
@@ -567,6 +627,27 @@ pub(crate) fn at_forming(mut t: Track) -> (Track, Vec<Strength>) {
 mod tests {
     use super::*;
     use adage_tracks::{Evidence, Gauge, Manifest, Route, Scope, Step, TrackInfo, Trigger};
+
+    #[test]
+    fn changed_preview_refuses_before_trust_or_install() {
+        let temp = tempfile::tempdir().unwrap();
+        let marketplace = adage_pack::builtin::marketplace().unwrap();
+        let name = &marketplace.packs[0].0.name;
+        let files = marketplace.files(name).unwrap();
+        let src = temp.path().join("pack");
+        adage_pack::install::write_verified(&files, &adage_pack::pack_digest(&files), &src).unwrap();
+        let (_, preview) = preview_import(&src, None, true).unwrap();
+        // Pack digests deliberately exclude the signature; changing just that must still
+        // invalidate consent, even for a built-in pack which does not require a signature.
+        std::fs::write(src.join(adage_pack::validate::SIG), "changed signer").unwrap();
+        let paths = Paths::at(temp.path().join("data"));
+        let error = add_pack(&src, &paths, true, None, Some(&preview)).unwrap_err();
+        assert!(error.to_string().contains("changed after its preview"));
+        assert!(!paths.root.exists(), "no trust, pack, index or lock is written");
+        let token = import_revision(&files, "repo-a", false);
+        assert_ne!(token, import_revision(&files, "repo-b", false), "scope changes invalidate consent");
+        assert_ne!(token, import_revision(&files, "repo-a", true), "new signer trust needs consent");
+    }
 
     #[test]
     fn forming_never_revives_extinguished_routes() {

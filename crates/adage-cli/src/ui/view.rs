@@ -414,7 +414,7 @@ fn act_spans(a: &Act, t: &Theme, fit_: Fit, room: usize, hot: u8, name: &dyn Fn(
         ],
         Act::Ignored(r) => vec![
             Span::styled(format!("{} ", t.glyph(Glyph::Fail)), t.red()),
-            Span::styled(verb("ignored"), t.ink2()),
+            Span::styled(verb("not observed"), t.ink2()),
             Span::raw(name(r)),
         ],
         Act::Misfired(r) => vec![
@@ -872,7 +872,7 @@ pub fn legend(t: &Theme) -> Vec<Line<'static>> {
             Span::styled(format!("  {} ", t.glyph(Glyph::Ok)), t.green()),
             Span::raw("followed   "),
             Span::styled(format!("{} ", t.glyph(Glyph::Fail)), t.red()),
-            Span::raw("ignored   "),
+            Span::raw("not observed within 3 tool batches   "),
             Span::styled(format!("{} ", t.glyph(Glyph::Off)), t.dim()),
             Span::styled("control arm: reflexes withheld on purpose", t.dim()),
         ]),

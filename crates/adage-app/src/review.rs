@@ -15,15 +15,16 @@
 use crate::error::hint;
 use crate::person::Person;
 use adage_learn::LearnConfig;
-use adage_runtime::{render, SessionState};
-use adage_store::{spool, state, Paths};
+use adage_runtime::render;
+use adage_store::Paths;
 use adage_tracks::proposals::{self, Proposal, Proposals};
 use adage_tracks::review::{self, strength_str, Decision, Review, Reviews};
 use adage_tracks::{
     ceiling, index, io, wilson_lower, Contract, Index, Route, RouteState, Step, Strength, Track, Trigger,
 };
 use anyhow::{bail, Context, Result};
-use serde_json::Value;
+use serde_json::json;
+use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -96,32 +97,11 @@ pub fn resolve<'a>(all: &'a [Installed], spec: &str) -> Result<&'a Installed> {
         .ok_or_else(|| hint(format!("no installed track {spec:?}"), "`adage status` lists installed tracks"))
 }
 
-/// Followed / ignored judgements per (repository, route), from treated sessions' spools only:
+/// Followed / ignored judgements per (installed reference, route), for the current recorded version:
 /// in the control arm nothing was delivered, so nothing could be followed or ignored.
 pub fn judgements(paths: &Paths) -> BTreeMap<(String, String), (u32, u32)> {
-    let mut out: BTreeMap<(String, String), (u32, u32)> = BTreeMap::new();
-    let Ok(rd) = std::fs::read_dir(paths.sessions()) else { return out };
-    let mut spools: Vec<PathBuf> =
-        rd.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "spool")).collect();
-    spools.sort();
-    for p in spools {
-        let st: SessionState = state::read(&p.with_extension("state")).unwrap_or_default();
-        let Some(repo) = st.repo else { continue };
-        let recs: Vec<Value> = spool::read_all(&p).unwrap_or_default();
-        for r in recs.iter().filter(|r| r["arm"] == "treated") {
-            for j in r["decision"]["judgements"].as_array().into_iter().flatten() {
-                let Some(route) = j["route"].as_str() else { continue };
-                let e = out.entry((repo.clone(), route.to_string())).or_default();
-                match j["kind"].as_str() {
-                    // Followed, whether or not the command then failed.
-                    Some("followed" | "misfired") => e.0 += 1,
-                    Some("ignored") => e.1 += 1,
-                    _ => {}
-                }
-            }
-        }
-    }
-    out
+    let Ok((installed, _)) = discover(&paths.tracks()) else { return BTreeMap::new() };
+    crate::graph::current_judgements(paths, &installed)
 }
 
 /// Whether a route is in service.
@@ -332,11 +312,13 @@ pub fn queue<'a>(
         let m = &inst.track.manifest;
         for r in &inst.track.routes {
             let rv = inst.reviews.routes.get(&r.id);
-            let (f0, d0) = judged.get(&(m.scope.repo.clone(), r.id.clone())).copied().unwrap_or_default();
+            let (f0, d0) = judged.get(&(inst.reference.clone(), r.id.clone())).copied().unwrap_or_default();
             // Only what happened since the last decision counts toward a new signal.
             let (followed, ignored) = match rv {
-                Some(v) => (f0.saturating_sub(v.basis.followed), d0.saturating_sub(v.basis.ignored)),
-                None => (f0, d0),
+                Some(v) if v.basis.runtime_version.as_deref() == Some(&m.track.version) => {
+                    (f0.saturating_sub(v.basis.followed), d0.saturating_sub(v.basis.ignored))
+                }
+                _ => (f0, d0),
             };
             let mut reasons: Vec<(&'static str, String)> = Vec::new();
             let instinct = origin_label(r);
@@ -402,10 +384,14 @@ pub fn queue<'a>(
             {
                 let advice =
                     if r.strength == Strength::Fire { "consider weakening it" } else { "consider extinguishing it" };
-                let since = if rv.is_some() { " since the last decision" } else { "" };
+                let since = if rv.is_some_and(|v| v.basis.runtime_version.as_deref() == Some(&m.track.version)) {
+                    " since the last decision"
+                } else {
+                    ""
+                };
                 reasons.push((
                     "ignoring",
-                    format!("agents ignored this reflex in {ignored} of {n} treated traces{since}; {advice}"),
+                    format!("the directed action was not observed within the next three action batches in {ignored} of {n} treated traces{since}; {advice}"),
                 ));
             }
             // A routine with execution evidence waits for a decision on its evidence once; after
@@ -453,6 +439,72 @@ pub fn verbs(r: &Route, proposed: bool) -> Vec<&'static str> {
 pub struct Standing {
     pub verbs: Vec<&'static str>,
     pub reasons: Vec<(&'static str, String)>,
+    /// Absent when advisory proposal state cannot be read safely; no decision may be confirmed.
+    pub preview: Option<ReviewPreview>,
+}
+
+/// The state a person inspected, bound to the exact installed route and proposal.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReviewPreview {
+    pub revision: String,
+    pub current_directive: String,
+    pub proposal: Option<ProposalPreview>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProposalPreview {
+    pub on: String,
+    pub reason: String,
+    pub diff: Vec<(&'static str, String, String)>,
+    pub directive: String,
+}
+
+fn revision(inst: &Installed, route: &Route) -> Result<String> {
+    // Discovery is tolerant for read-only views. Decisions must not hide a malformed proposal.
+    let proposals =
+        proposals::load(&inst.dir).context("Cannot inspect the proposed change; no review decision was made")?;
+    if proposals != inst.proposals {
+        bail!("The proposed change changed while loading; reload the reflex before reviewing it");
+    }
+    let value = json!({ "reference": inst.reference, "manifest": inst.track.manifest, "routes": inst.track.routes,
+        "route": route, "reviews": inst.reviews, "proposals": proposals });
+    Ok(format!("{:x}", Sha256::digest(serde_json::to_vec(&value)?)))
+}
+
+/// The effective proposed route, including the imported-reflex strength ceiling.
+pub fn proposed_route(inst: &Installed, p: &Proposal) -> Route {
+    let mut route = crate::proposal::applied(p);
+    if inst.imported && route.strength == Strength::Fire {
+        route.strength = Strength::Prime;
+    }
+    route
+}
+
+fn directive(track: &Track, route: &Route) -> String {
+    if route.evidence.execution.is_some() {
+        "Execution only: no directive is delivered to the agent. Approval of this evidence does not grant execution."
+            .into()
+    } else {
+        preview(track, route).0
+    }
+}
+
+pub fn review_preview(inst: &Installed, route: &Route) -> Result<ReviewPreview> {
+    let proposal = crate::proposal::current(inst.proposals.routes.get(&route.id), route).map(|p| {
+        let applied = proposed_route(inst, p);
+        let mut track = inst.track.clone();
+        if applied != *route && !inst.imported {
+            let bump = if review::shape(&applied) != review::shape(route) { Bump::Major } else { Bump::Patch };
+            track.manifest.track.version = bumped(&track.manifest.track.version, bump);
+        }
+        ProposalPreview {
+            on: p.on.clone(),
+            reason: p.reason.clone(),
+            diff: crate::proposal::diff(route, &applied),
+            directive: directive(&track, &applied),
+        }
+    });
+    Ok(ReviewPreview { revision: revision(inst, route)?, current_directive: directive(&inst.track, route), proposal })
 }
 
 pub fn standings(paths: &Paths, here: Option<&Path>) -> Result<BTreeMap<(String, String), Standing>> {
@@ -463,7 +515,10 @@ pub fn standings(paths: &Paths, here: Option<&Path>) -> Result<BTreeMap<(String,
     for inst in &all {
         for r in &inst.track.routes {
             let proposed = crate::proposal::current(inst.proposals.routes.get(&r.id), r).is_some();
-            out.insert((inst.reference.clone(), r.id.clone()), Standing { verbs: verbs(r, proposed), reasons: vec![] });
+            out.insert(
+                (inst.reference.clone(), r.id.clone()),
+                Standing { verbs: verbs(r, proposed), reasons: vec![], preview: review_preview(inst, r).ok() },
+            );
         }
     }
     for it in queue(&all, &judged, &index, paths, here) {
@@ -602,7 +657,7 @@ pub fn decide(
     paths: &Paths,
 ) -> Result<Outcome> {
     let _tracks = adage_store::lock::exclusive(&paths.tracks_lock())?;
-    apply(verb, spec, route_id, by, paths)
+    apply(verb, spec, route_id, by, None, paths)
 }
 
 /// [`decide`], waiting at most `patience` for the tracks lock: for a front end that must not
@@ -620,10 +675,33 @@ pub fn decide_within(
     let Some(_tracks) = adage_store::lock::exclusive_within(&paths.tracks_lock(), patience)? else {
         anyhow::bail!("a learn run is writing the reflexes now; nothing was recorded, so try again in a moment");
     };
-    apply(verb, spec, route_id, by, paths)
+    apply(verb, spec, route_id, by, None, paths)
 }
 
-fn apply(verb: Verb, spec: &str, route_id: &str, by: Option<String>, paths: &Paths) -> Result<Outcome> {
+/// Confirm exactly what a front end showed, rechecking the revision under the writer lock.
+pub fn decide_reviewed_within(
+    _person: &Person,
+    verb: Verb,
+    spec: &str,
+    route_id: &str,
+    expected_revision: &str,
+    paths: &Paths,
+    patience: std::time::Duration,
+) -> Result<Outcome> {
+    let Some(_tracks) = adage_store::lock::exclusive_within(&paths.tracks_lock(), patience)? else {
+        bail!("Conditioning is updating reflexes now; nothing was recorded. Reload and review again in a moment");
+    };
+    apply(verb, spec, route_id, None, Some(expected_revision), paths)
+}
+
+fn apply(
+    verb: Verb,
+    spec: &str,
+    route_id: &str,
+    by: Option<String>,
+    expected_revision: Option<&str>,
+    paths: &Paths,
+) -> Result<Outcome> {
     if let Some(b) = &by {
         review::check_by(b)?;
     }
@@ -639,6 +717,10 @@ fn apply(verb: Verb, spec: &str, route_id: &str, by: Option<String>, paths: &Pat
         hint(format!("{} has no reflex {route_id:?}", inst.reference), format!("its reflexes: {}", ids.join(", ")))
     })?;
     let before = r.clone();
+    let actual_revision = revision(inst, r)?;
+    if expected_revision.is_some_and(|expected| expected != actual_revision) {
+        bail!("This reflex or its proposed change changed after you opened the review. Nothing was written. Reload and inspect the new proposal before confirming.");
+    }
     let proposal = crate::proposal::current(props.routes.get(route_id.as_str()), r).cloned();
     if verb == Verb::Dismiss {
         let p = proposal
@@ -666,10 +748,7 @@ fn apply(verb: Verb, spec: &str, route_id: &str, by: Option<String>, paths: &Pat
         Verb::Approve if proposal.is_some() => {
             // Apply the proposed version; it stays pinned, so later drift is proposed again.
             let p = proposal.as_ref().unwrap();
-            *r = crate::proposal::applied(p);
-            if inst.imported && r.strength == Strength::Fire {
-                r.strength = Strength::Prime;
-            }
+            *r = proposed_route(inst, p);
             props.routes.remove(route_id.as_str());
             props.dismissed.remove(route_id.as_str());
             let bump = if review::shape(r) != review::shape(&before) { Bump::Major } else { Bump::Patch };
@@ -752,8 +831,9 @@ fn apply(verb: Verb, spec: &str, route_id: &str, by: Option<String>, paths: &Pat
         }
         Verb::Dismiss => unreachable!("handled above"),
     };
-    let (followed, ignored) = judgements(paths).get(&(repo.clone(), route_id.to_string())).copied().unwrap_or_default();
-    let basis = review::basis(r, followed, ignored);
+    let (followed, ignored) =
+        judgements(paths).get(&(inst.reference.clone(), route_id.to_string())).copied().unwrap_or_default();
+    let mut basis = review::basis(r, followed, ignored);
     let after = r.clone();
     // Pack-level approval: approving one environment-effect instinct approves the pack's
     // environment steps for this repository, now and when learning binds them again.
@@ -775,11 +855,17 @@ fn apply(verb: Verb, spec: &str, route_id: &str, by: Option<String>, paths: &Pat
             }
         }
     }
-    reviews.routes.insert(route_id.to_string(), Review { decision, on: review::today(), by, basis });
     // An import keeps its author's version: it names the release that was shared.
     if after != before && !inst.imported {
         track.manifest.track.version = bumped(&track.manifest.track.version, bump);
     }
+    // A version bump starts a new measurement cohort; old counts cannot mask new outcomes.
+    basis.runtime_version = Some(track.manifest.track.version.clone());
+    if track.manifest.track.version != inst.track.manifest.track.version {
+        basis.followed = 0;
+        basis.ignored = 0;
+    }
+    reviews.routes.insert(route_id.to_string(), Review { decision, on: review::today(), by, basis });
     io::validate(&track).context("the reviewed track fails validation; nothing was written")?;
     io::write(&inst.dir, &track)?;
     review::save(&inst.dir, &reviews)?;
@@ -974,5 +1060,97 @@ mod tests {
             assert_eq!(Verb::parse(v.as_str()), Some(v));
         }
         assert_eq!(Verb::parse("delegate"), None);
+    }
+
+    fn proposal_home() -> (tempfile::TempDir, Paths) {
+        let mut pinned = route("t", Strength::Prime, RouteState::Firm);
+        pinned.authored = true;
+        let (dir, paths) = home(vec![pinned.clone()]);
+        let mut changed = pinned.clone();
+        changed.step = Step::Run { command: "make check".into() };
+        changed.summary = "Run all checks".into();
+        let props = proposals::propose(&Proposals::default(), &[(pinned, Some(changed))], "2026-10-05");
+        proposals::save(&paths.tracks().join("acme/learned"), &props).unwrap();
+        (dir, paths)
+    }
+    fn inspected(paths: &Paths) -> ReviewPreview {
+        standings(paths, None).unwrap().remove(&("acme/learned".into(), "t".into())).unwrap().preview.unwrap()
+    }
+    fn confirm(paths: &Paths, preview: &ReviewPreview) -> Result<Outcome> {
+        decide_reviewed_within(
+            &Person::for_tests(),
+            Verb::Approve,
+            "acme/learned",
+            "t",
+            &preview.revision,
+            paths,
+            std::time::Duration::from_millis(20),
+        )
+    }
+    #[test]
+    fn the_proposed_preview_is_exactly_what_approval_installs() {
+        let (_dir, paths) = proposal_home();
+        let shown = inspected(&paths);
+        assert!(shown.current_directive.contains("make test"));
+        let proposed = shown.proposal.as_ref().unwrap();
+        assert!(proposed.diff.iter().any(|(key, before, after)| *key == "step"
+            && before.contains("make test")
+            && after.contains("make check")));
+        assert!(proposed.diff.iter().any(|(key, _, _)| *key == "summary"));
+        assert!(proposed.directive.contains("make check"));
+        let result = confirm(&paths, &shown).unwrap();
+        let track = io::read(&paths.tracks().join("acme/learned")).unwrap();
+        assert_eq!(preview(&track, &track.routes[0]).0, proposed.directive);
+        assert!(result.proposal_applied);
+        assert!(track.routes[0].authored);
+    }
+    #[test]
+    fn changed_removed_or_new_proposals_cannot_be_approved_from_an_old_preview() {
+        for change in ["changed", "removed", "new", "route", "version", "malformed"] {
+            let (_dir, paths) = proposal_home();
+            let dir = paths.tracks().join("acme/learned");
+            let original_props = proposals::load(&dir).unwrap();
+            if change == "new" {
+                proposals::save(&dir, &Proposals::default()).unwrap();
+            }
+            let shown = inspected(&paths);
+            match change {
+                "changed" => {
+                    let mut p = original_props.clone();
+                    p.routes.get_mut("t").unwrap().route.step = Step::Run { command: "make lint".into() };
+                    proposals::save(&dir, &p).unwrap();
+                }
+                "removed" => proposals::save(&dir, &Proposals::default()).unwrap(),
+                "new" => proposals::save(&dir, &original_props).unwrap(),
+                "route" | "version" => {
+                    let mut t = io::read(&dir).unwrap();
+                    if change == "route" {
+                        t.routes[0].summary = "Changed".into();
+                    } else {
+                        t.manifest.track.version = "0.2.0".into();
+                    }
+                    io::write(&dir, &t).unwrap();
+                }
+                "malformed" => std::fs::write(dir.join(proposals::FILE), "routes: [invalid").unwrap(),
+                _ => unreachable!(),
+            }
+            let before = io::read(&dir).unwrap();
+            assert!(confirm(&paths, &shown).is_err(), "accepted {change} state");
+            assert_eq!(io::read(&dir).unwrap(), before);
+            assert!(!paths.index().exists());
+            assert!(!dir.join(review::FILE).exists());
+        }
+    }
+    #[test]
+    fn malformed_proposals_disable_confirmation_and_lock_contention_writes_nothing() {
+        let (_dir, paths) = proposal_home();
+        let shown = inspected(&paths);
+        let held = adage_store::lock::exclusive(&paths.tracks_lock()).unwrap();
+        assert!(confirm(&paths, &shown).is_err());
+        drop(held);
+        let dir = paths.tracks().join("acme/learned");
+        std::fs::write(dir.join(proposals::FILE), "routes: [invalid").unwrap();
+        assert!(standings(&paths, None).unwrap()[&("acme/learned".into(), "t".into())].preview.is_none());
+        assert!(!paths.index().exists());
     }
 }

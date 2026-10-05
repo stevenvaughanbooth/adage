@@ -20,11 +20,12 @@ const fn k(keys: &'static str, label: &'static str, about: &'static str, bar: bo
 
 /// `adage watch`.
 pub const WATCH: &[Key] = &[
+    k(":", "palette", "open the full app command palette (also ctrl-k)", true),
     k("p", "pause", "pause or resume the feed", true),
     k("f", "scope", "this repository or all repositories", true),
     k("/", "filter", "filter the feed by trace, reflex or command", true),
     k("enter", "inspect", "what the agent saw at the newest event shown", true),
-    k("m", "open map", "how to open the map", true),
+    k("m", "open map", "open the live web map from the terminal app", true),
     k("?", "keys", "this list", true),
     k("j/k ↑↓", "scroll", "scroll the feed", false),
     k("G", "newest", "back to the newest event", false),
@@ -38,9 +39,12 @@ pub const GLOBAL: &[Key] = &[
     k("?", "keys", "this list", true),
     k(":", "palette", "command palette (also ctrl-k): every action and reflex", true),
     k("tab", "next tab", "next tab (shift-tab: previous)", false),
-    k("1-5", "tabs", "Live, Reflexes, Map, Health, Settings", false),
+    k("1-6", "tabs", "Live, Reflexes, Map, Health, Settings, Home", false),
     k("q", "quit", "quit", false),
 ];
+
+pub const HOME: &[Key] =
+    &[k("enter", "choose", "open the selected step", true), k("j/k", "move", "select a step", true)];
 
 pub const LIVE: &[Key] = &[
     k("p", "pause", "pause or resume the feed", true),
@@ -62,7 +66,7 @@ pub const REFLEXES: &[Key] = &[
     k("a", "approve", "approve it as it is (adage review approve)", false),
     k("n", "pin", "pin it: conditioning proposes instead of overwriting", false),
     k("m", "dismiss", "dismiss a pinned reflex's proposed change", false),
-    k("d", "delegate", "let the reflex act (shows adage review delegate)", false),
+    k("d", "delegate", "review execution authority in a guided form", false),
     k("t", "traces", "the traces it fired in", false),
     k("o", "open in map", "the same reflex in the web map (adage map --focus)", false),
     k("F P I", "strengths", "show or hide fire, prime, inhibit", false),
@@ -81,7 +85,7 @@ pub const MAP: &[Key] = &[
 ];
 
 pub const HEALTH: &[Key] = &[
-    k("enter", "fix", "fix the selected check (⏎ marks fixable ones)", true),
+    k("enter", "fix", "fix the selected check, or read its full explanation and next steps", true),
     k("R", "recheck", "run the checks again", true),
     k("j/k", "move", "select a check", false),
     k("i", "install hooks", "install hooks for a harness", false),

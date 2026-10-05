@@ -148,6 +148,17 @@ pub fn run(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>) -> Result<()> {
         live.tick_pulse(Instant::now(), ctx.theme.motion);
         t.terminal.draw(|f| view::draw_live(f, f.area(), &live, health.as_ref(), &ctx, true))?;
         if let Some(k) = term::next_key_within(wait(&live))? {
+            if !live.filtering
+                && !live.help
+                && !live.inspect
+                && !live.map_hint
+                && (matches!(k.code, KeyCode::Char(':' | 'm'))
+                    || (k.code == KeyCode::Char('k') && k.modifiers.contains(KeyModifiers::CONTROL)))
+            {
+                drop(t);
+                drop(loader);
+                return super::app::from_watch(ctx, before_tick, k.code == KeyCode::Char('m'));
+            }
             if live_key(&mut live, k.code, k.modifiers) {
                 break;
             }

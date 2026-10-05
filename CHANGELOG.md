@@ -64,6 +64,17 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### Launch clarity and local experience
 
+- **Guided terminal Home and one palette:** choose a repository, connect a harness, configure or
+  import local history, preview conditioning, run reports, manage models and signed packs, and open
+  the browser map through forms. Demo data and real repository operations stay separate.
+- **Review the exact change:** proposal and pack confirmations bind to the previewed content;
+  stale previews fail before trust or installation changes. Hook registration is shown separately
+  from confirmed delivery, including Codex's manual acceptance step.
+- **Follow the evidence:** complete trace inventories and individual session views extend beyond
+  the recent activity window, retain URL selections and browser navigation, and distinguish
+  current-version outcomes from historical or unattributed events.
+
+
 - **Adage owns an approved verification.** With E2 allowed and one learned verification approved,
   a treated Claude Code or Codex session starts with a short, factual contract naming the command
   Adage runs (at most two), when, and that it runs again at finish; only grants that still match

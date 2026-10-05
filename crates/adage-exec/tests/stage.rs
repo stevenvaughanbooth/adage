@@ -269,7 +269,7 @@ fn approved_project_python_runs_pytest_against_staged_source() {
             trigger: adage_tracks::Trigger::AfterEdit { paths: "tests/*.py".into() },
             step: adage_tracks::Step::Run { command: command.into() },
             slots: vec![],
-            effect: adage_tracks::io::classify(command, &table),
+            effect: adage_tracks::io::classify(command, table),
             strength: adage_tracks::Strength::Fire,
             state: adage_tracks::RouteState::Firm,
             exit: vec![],
@@ -278,7 +278,7 @@ fn approved_project_python_runs_pytest_against_staged_source() {
         },
     };
     let index = adage_tracks::Index { routes: vec![ir.clone()], ..Default::default() };
-    let planned = || adage_exec::route::plan(&ir, &index, &repo, &repo, Level::E2, None, &table).unwrap().request;
+    let planned = || adage_exec::route::plan(&ir, &index, &repo, &repo, Level::E2, None, table).unwrap().request;
     let original_request = planned();
     assert!(original_request.scripts.is_empty(), "pytest selections must remain staged inputs");
     let store = approved(&original_request);
@@ -292,7 +292,7 @@ fn approved_project_python_runs_pytest_against_staged_source() {
     assert!(cap.available(), "native proof requires an enforced sandbox");
     let policy = e3_policy();
     let start = std::time::Instant::now();
-    let staged = stage::stage(&req, &context(&policy, &store, &cap, &table)).unwrap();
+    let staged = stage::stage(&req, &context(&policy, &store, &cap, table)).unwrap();
     assert_eq!(staged.exit, Some(0), "{}", String::from_utf8_lossy(&staged.stderr));
     assert!(staged.plan.refused.is_empty(), "{:?}", staged.plan);
     assert_eq!(snapshot(&repo), before, "verification must never modify original sources or environment");
@@ -616,7 +616,7 @@ fn approved_project_python_runs_full_pinned_baseline_suites() {
                 trigger: adage_tracks::Trigger::AfterEdit { paths: "src/**/*.py".into() },
                 step: adage_tracks::Step::Run { command: command.into() },
                 slots: vec![],
-                effect: adage_tracks::io::classify(command, &table),
+                effect: adage_tracks::io::classify(command, table),
                 strength: adage_tracks::Strength::Fire,
                 state: adage_tracks::RouteState::Firm,
                 exit: vec![],
@@ -626,12 +626,12 @@ fn approved_project_python_runs_full_pinned_baseline_suites() {
         };
         let index = adage_tracks::Index { routes: vec![ir.clone()], ..Default::default() };
         let terms = adage_exec::route::Terms { cache: vec!["adage-baseline-result.xml".into()], ..Default::default() };
-        let req = adage_exec::route::plan(&ir, &index, &repo, &repo, Level::E2, Some(&terms), &table).unwrap().request;
+        let req = adage_exec::route::plan(&ir, &index, &repo, &repo, Level::E2, Some(&terms), table).unwrap().request;
         assert!(req.scripts.is_empty());
         let store = approved(&req);
         let before = snapshot(&repo);
         let start = std::time::Instant::now();
-        let result = stage::stage(&req, &context(&policy, &store, &cap, &table));
+        let result = stage::stage(&req, &context(&policy, &store, &cap, table));
         let wall_ms = start.elapsed().as_secs_f64() * 1000.0;
         let unchanged = snapshot(&repo) == before && snapshot(&original) == original_before;
         let row = match result {

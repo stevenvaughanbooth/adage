@@ -57,6 +57,7 @@ pub fn label(check: &str) -> String {
     }
     match check {
         "session spools" => "trace spools".into(),
+        "tracks" => "reflex collections".into(),
         other => other.into(),
     }
 }
@@ -189,8 +190,8 @@ fn tracks_check(scan: &TrackScan) -> Check {
         let shown: Vec<&str> = scan.invalid.iter().take(3).map(String::as_str).collect();
         return fail(
             "tracks",
-            format!("{} invalid track(s), which hooks ignore: {}", scan.invalid.len(), shown.join("; ")),
-            "fix or remove the named track directories, then run `adage condition` to recompile",
+            format!("{} invalid reflex collection(s), which hooks ignore: {}", scan.invalid.len(), shown.join("; ")),
+            "fix or remove the named reflex collection directories, then run `adage condition` to recompile",
         );
     }
     if scan.valid.is_empty() {
@@ -203,7 +204,11 @@ fn tracks_check(scan: &TrackScan) -> Check {
     }
     pass(
         "tracks",
-        format!("{} track(s) ({} imported), {routes} reflex(es), all valid", scan.valid.len(), scan.imported),
+        format!(
+            "{} reflex collection(s) ({} imported), {routes} reflex(es), all valid",
+            scan.valid.len(),
+            scan.imported
+        ),
     )
 }
 
@@ -945,6 +950,27 @@ pub fn rewrites_check(paths: &Paths) -> Check {
     Check { fix: Some(fix.into()), ..pass("rewrites", detail) }
 }
 
+fn hook_delivery_checks(paths: &Paths, root: Option<&Path>) -> Vec<Check> {
+    let Some(root) = root else { return Vec::new() };
+    let registered = detect::registrations(Some(root));
+    let mut checks = Vec::new();
+    for harness in ["claude-code", "codex", "opencode"] {
+        if !registered.iter().any(|r| r.harness == harness) {
+            continue;
+        }
+        let name = format!("hook activity: {harness}");
+        match adage_hook::receipt::read(paths, root, harness) {
+            Some(receipt) => checks.push(pass(&name, format!("Hook delivery observed here: last received {} (refreshed about once per minute); first received {} UTC. Registration and receipt do not prove a reflex fired.", ago(crate::learnlog::now_ms(), receipt.last_seen()), review::civil_date((receipt.first_seen_ms / 86_400_000) as i64)))),
+            None => checks.push(warn(&name, "Registered; no hook has been observed in this repository yet.", if harness == "codex" {
+                "Open Codex in this repository, use /hooks to review and accept Adage's hooks, then send a prompt. This acceptance happens inside Codex; Adage cannot do it for you."
+            } else {
+                "Start a new agent session in this repository and send a prompt, then refresh Health."
+            })),
+        }
+    }
+    checks
+}
+
 /// Every check, in display order, for the repository at `repo_root` (if any). `adage watch` and
 /// `adage ui` re-run these every few seconds.
 pub fn checks(paths: &Paths, repo_root: Option<&Path>) -> Vec<Check> {
@@ -962,6 +988,7 @@ pub fn checks(paths: &Paths, repo_root: Option<&Path>) -> Vec<Check> {
         model_check(paths, &idx),
     ];
     checks.extend(hooks_checks(repo_root, exe.as_deref()));
+    checks.extend(hook_delivery_checks(paths, repo_root));
     checks.extend(plugin_check(repo_root, exe.as_deref()));
     checks.extend(cloud_check(repo_root));
     checks.push(kill_switches(repo_root));

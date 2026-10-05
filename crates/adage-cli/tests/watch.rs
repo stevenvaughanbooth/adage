@@ -57,13 +57,14 @@ fn watch_demo_replays_real_hook_decisions() {
         "→ ◠ FIRE       bin/fetch-incident INC-",
         "○ would fire bin/fetch-incident INC-",
         "✓ followed bin/fetch-incident INC-",
-        "✗ ignored bin/fetch-incident INC-",
+        "✗ not observed bin/fetch-incident INC-",
         "→ ◠ INHIBIT    npm run check",
         "■ finish line: asked the agent to continue",
         "✓ finish line met: npm run codegen",
         "after bin/fetch-incident {id}, read",
         "prime → fire",
-        "hooks claude",
+        "claude hook received",
+        ": palette",
         "auto-condition",
     ] {
         assert!(t.contains(s), "the demo frame lacks {s:?}:\n{t}");

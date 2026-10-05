@@ -84,6 +84,24 @@ impl World {
         let paths = self.paths();
         state::update::<SessionState, _>(&paths.state(sid), |s| s.repo = Some(repo.into())).unwrap();
         let js: Vec<Value> = judgements.iter().map(|(k, r)| json!({ "kind": k, "route": r })).collect();
+        // Outcomes are meaningful only with a recorded exposure to this collection/version.
+        let t = self.track(NAME);
+        let exposures: Vec<Value> = judgements
+            .iter()
+            .map(|(_, id)| {
+                json!({
+                    "route": id, "track": t.manifest.track.name, "version": t.manifest.track.version,
+                    "strength": "prime", "text": "Test exposure"
+                })
+            })
+            .collect();
+        let exposure =
+            if arm == "control" { json!({"would_have": exposures}) } else { json!({"directives": exposures}) };
+        spool::append(
+            &paths.spool(sid),
+            &json!({ "ts": 0, "event": "UserPromptSubmit", "arm": arm, "decision": exposure }),
+        )
+        .unwrap();
         spool::append(&paths.spool(sid), &json!({ "ts": 1, "event": "PostToolBatch", "arm": arm, "generation": "g", "decision": { "judgements": js } })).unwrap();
     }
 }
@@ -343,7 +361,8 @@ fn decisions_change_track_files_and_index() {
     let rs = review::load(&dir).unwrap();
     assert_eq!(rs.routes["lookup"].decision, Decision::Weakened);
     assert_eq!(rs.routes["lookup"].by, None, "no name unless the person gives one");
-    assert_eq!(rs.routes["lookup"].basis.followed, 6, "judgements so far are the new baseline");
+    assert_eq!(rs.routes["lookup"].basis.followed, 0, "a changed version starts a new runtime cohort");
+    assert_eq!(rs.routes["lookup"].basis.runtime_version.as_deref(), Some("1.0.0"));
     let o = w.run(&["review", "weaken", NAME, "lookup"]);
     assert!(!o.status.success() && text(&o).contains("only a fire reflex"), "{}", text(&o));
 

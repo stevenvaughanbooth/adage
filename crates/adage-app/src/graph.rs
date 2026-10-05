@@ -17,13 +17,17 @@ pub use crate::reflex::trigger;
 use crate::reflex::{Control, Decisions, Live, Reflex};
 use crate::review::{discover, standings};
 use adage_core::{pattern, CommandTable};
-use adage_runtime::{command_key, SessionState};
-use adage_store::{spool, state, Paths};
+use adage_runtime::command_key;
+use adage_store::Paths;
 use adage_tracks::{Index, Route, Step};
 use anyhow::Result;
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
+use std::path::Path;
+
+mod measurements;
+pub(crate) use measurements::current_judgements;
+pub use measurements::trace;
 
 const MAX_OBSERVED: usize = 18;
 const MAX_LEARNING: usize = 60;
@@ -55,12 +59,6 @@ struct ArmSets {
     hit_avoided: BTreeSet<String>,
 }
 
-type ArmMap = BTreeMap<(String, String, String), ArmSets>;
-
-fn sets<'a>(m: &'a mut ArmMap, repo: &str, id: &str, arm: &str) -> &'a mut ArmSets {
-    m.entry((repo.to_string(), id.to_string(), arm.to_string())).or_default()
-}
-
 /// The observed-command keys a route speaks for, to mark which of the agents' paths are railed.
 fn route_keys(r: &Route, table: &CommandTable) -> Vec<(String, &'static str)> {
     match &r.step {
@@ -88,101 +86,8 @@ pub fn build(paths: &Paths, here: Option<&Path>, max_events: usize, warn: &mut d
     // The decisions a person can make about each route; the map offers them as commands to copy.
     let standings = standings(paths, here).unwrap_or_default();
 
-    // Routes, keyed by (repo, route id) as the runtime identifies them.
-    let mut live: BTreeMap<(String, String), Tally> = BTreeMap::new();
-    let mut observed: BTreeMap<String, (u64, BTreeSet<String>)> = BTreeMap::new();
-    let mut events: Vec<Value> = Vec::new();
-    let (mut treated, mut control, mut stops) = (0u64, 0u64, 0u64);
-
-    // The commands each dead-end route warns against, to count sessions that ran one anyway.
-    let avoided: Vec<(String, String, Vec<String>)> = installed
-        .iter()
-        .flat_map(|i| {
-            let repo = i.track.manifest.scope.repo.clone();
-            i.track.routes.iter().filter_map(move |r| match &r.step {
-                Step::Avoid { avoid, .. } => {
-                    Some((repo.clone(), r.id.clone(), avoid.split(" / ").map(|a| a.trim().to_string()).collect()))
-                }
-                _ => None,
-            })
-        })
-        .collect();
-    let mut arms: ArmMap = BTreeMap::new();
-    let mut arm_sessions: BTreeMap<(String, String), BTreeSet<String>> = BTreeMap::new();
-    // PreToolUse records per repository: commands rewritten to the project's environment, advice
-    // given instead (a permission rule, `pip install`), and either withheld in the control arm.
-    let mut pretool: BTreeMap<String, Pretool> = BTreeMap::new();
-
-    let mut spools: Vec<PathBuf> = std::fs::read_dir(paths.sessions())
-        .map(|rd| rd.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "spool")).collect())
-        .unwrap_or_default();
-    spools.sort();
-    for p in &spools {
-        let st: SessionState = state::read(&p.with_extension("state")).unwrap_or_default();
-        let repo = st.repo.clone().unwrap_or_default();
-        // The whole (sanitised) id: OpenCode ids and Codex UUIDv7s begin with the creation time,
-        // so sessions started together share a long prefix. Displays shorten it themselves.
-        let sid: String = p.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
-        let recs: Vec<Value> = spool::read_all(p).unwrap_or_default();
-        match recs.iter().find_map(|r| r["arm"].as_str()).map(arm_word) {
-            Some("treated") => treated += 1,
-            Some("control") => control += 1,
-            _ => {}
-        }
-        for r in &recs {
-            if r["kind"] == "pretool" {
-                let p = pretool.entry(repo.clone()).or_default();
-                let what = &r["pretool"];
-                if r["withheld"] == true {
-                    p.withheld += 1;
-                } else if what["rewrite"].is_string() {
-                    p.rewritten += 1;
-                } else if what["advise"].is_string() {
-                    p.advised += 1;
-                }
-            }
-            let d = &r["decision"];
-            let ids = |k: &str| -> Vec<String> {
-                d[k].as_array().into_iter().flatten().filter_map(|x| x["route"].as_str().map(String::from)).collect()
-            };
-            let (directed, would) = (ids("directives"), ids("would_have"));
-            tally(&mut live, &repo, &sid, r);
-            let arm = r["arm"].as_str().map(arm_word).unwrap_or("unknown").to_string();
-            arm_sessions.entry((repo.clone(), arm.clone())).or_default().insert(sid.clone());
-            for id in directed.iter().chain(&would) {
-                sets(&mut arms, &repo, id, &arm).applied.insert(sid.clone());
-            }
-            for j in d["judgements"].as_array().into_iter().flatten() {
-                match (j["kind"].as_str(), j["route"].as_str()) {
-                    (Some("followed"), Some(id)) => {
-                        sets(&mut arms, &repo, id, &arm).followed.insert(sid.clone());
-                    }
-                    (Some("obligation_met"), Some(id)) => {
-                        sets(&mut arms, &repo, id, &arm).met.insert(sid.clone());
-                    }
-                    _ => {}
-                }
-            }
-            for k in d["observed"].as_array().into_iter().flatten().filter_map(|k| k.as_str()) {
-                let k = k.trim_end_matches(" !failed");
-                for (rrepo, id, keys) in &avoided {
-                    if *rrepo == repo && keys.iter().any(|runner| pattern::runs_avoided(runner, k)) {
-                        sets(&mut arms, &repo, id, &arm).hit_avoided.insert(sid.clone());
-                    }
-                }
-            }
-            for k in d["observed"].as_array().into_iter().flatten().filter_map(|k| k.as_str()) {
-                let e = observed.entry(k.to_string()).or_default();
-                e.0 += 1;
-                e.1.insert(sid.clone());
-            }
-            stops += d["continue_reason"].is_string() as u64;
-            events.extend(event(&repo, &sid, r));
-        }
-    }
-    events.sort_by_key(|e| e["ts"].as_u64().unwrap_or(0));
-    let events: Vec<Value> = events.split_off(events.len().saturating_sub(max_events));
-
+    let scan = measurements::read(paths, &installed, max_events, warn);
+    let observed = &scan.observed;
     let mut railed: BTreeMap<String, (String, &'static str)> = BTreeMap::new();
     let mut routes = Vec::new();
     for inst in &installed {
@@ -191,34 +96,24 @@ pub fn build(paths: &Paths, here: Option<&Path>, max_events: usize, warn: &mut d
         // Why each learned reflex exists (`.why.json`): what its strength was decided on.
         let whys = adage_tracks::why::load(&inst.dir);
         for r in &t.routes {
-            let indexed =
-                index.routes.iter().any(|x| &x.repo == repo && x.route.id == r.id && x.track == t.manifest.track.name);
+            let indexed = index.routes.iter().any(|x| {
+                &x.repo == repo
+                    && x.route.id == r.id
+                    && x.track == t.manifest.track.name
+                    && x.version == t.manifest.track.version
+            });
             for (k, how) in route_keys(r, table) {
                 railed.entry(k).or_insert((r.id.clone(), how));
             }
-            let arm_stats: serde_json::Map<String, Value> = ["treated", "control"]
-                .iter()
-                .map(|a| {
-                    let s = arms.get(&(repo.clone(), r.id.clone(), a.to_string()));
-                    let n = |f: fn(&ArmSets) -> &BTreeSet<String>| s.map_or(0, |s| f(s).len());
-                    let json = json!({
-                        "sessions": arm_sessions.get(&(repo.clone(), a.to_string())).map_or(0, |s| s.len()),
-                        "applied": n(|s| &s.applied),
-                        "followed": n(|s| &s.followed),
-                        "met": n(|s| &s.met),
-                        // Only sessions the route applied to: before it was learned, it could not help.
-                        "hit_avoided": s.map_or(0, |s| s.hit_avoided.intersection(&s.applied).count()),
-                    });
-                    (a.to_string(), json)
-                })
-                .collect();
             let standing = standings.get(&(inst.reference.clone(), r.id.clone()));
             let (verbs, reasons) = standing.map(|s| (s.verbs.clone(), s.reasons.as_slice())).unwrap_or_default();
             let mut route = serde_json::to_value(Reflex::of(inst, r, whys.get(&r.id))).unwrap_or_default();
             route["review"] = json!(Decisions::of(&inst.reference, r, verbs, reasons));
             route["in_index"] = json!(indexed);
-            route["live"] = json!(live.get(&(repo.clone(), r.id.clone())).map(Tally::read).unwrap_or_default());
-            route["arms"] = Value::Object(arm_stats);
+            let measurements = scan.measurement(inst, r);
+            for (key, value) in measurements.as_object().into_iter().flatten() {
+                route[key] = value.clone();
+            }
             routes.push(route);
         }
     }
@@ -240,12 +135,13 @@ pub fn build(paths: &Paths, here: Option<&Path>, max_events: usize, warn: &mut d
 
     // The savings estimate per repository, as `adage savings` and the status card state it.
     let mut repos: BTreeSet<String> = installed.iter().map(|i| i.track.manifest.scope.repo.clone()).collect();
-    repos.extend(pretool.keys().cloned());
-    repos.extend(arm_sessions.keys().map(|(r, _)| r.clone()));
+    repos.extend(scan.pretool.keys().cloned());
+    repos.extend(scan.arm_sessions.keys().map(|(r, _)| r.clone()));
     repos.remove("");
     let savings: Vec<Value> = repos.iter().map(|r| savings_json(paths, r)).collect();
     let marker = adage_hook::rewrite_off(paths).exists();
-    let pretool: Vec<Value> = pretool
+    let pretool: Vec<Value> = scan
+        .pretool
         .iter()
         .map(
             |(repo, p)| json!({ "repo": repo, "rewritten": p.rewritten, "advised": p.advised, "withheld": p.withheld }),
@@ -255,11 +151,20 @@ pub fn build(paths: &Paths, here: Option<&Path>, max_events: usize, warn: &mut d
     let out = json!({
         "generation": index.generation,
         "home": paths.root.display().to_string(),
-        "sessions": { "total": spools.len(), "treated": treated, "control": control },
-        "stop_requests": stops,
+        "sessions": { "total": scan.spools.len(), "treated": scan.treated, "control": scan.control },
+        "stop_requests": scan.stops,
         "routes": routes,
         "observed": observed,
-        "events": events,
+        "events": scan.events,
+        "totals": scan.totals.read(),
+        "attribution": { "exposures": scan.attribution_counts, "judgements": scan.judgement_attribution,
+            "description": "Raw totals count each recorded decision once. Reflex measurements require an unambiguous collection and version; unidentified legacy records and duplicate identities are not assigned to a current reflex." },
+        "trace_events": scan.trace_events,
+        "trace_sessions": scan.trace_sessions,
+        "trace_info": { "source": "recorded_hook_decisions", "events_total": scan.trace_events_total,
+            "events_visible": scan.trace_events.len(), "truncated": scan.trace_events_total > scan.trace_events.len(),
+            "limit": max_events.min(1000), "complete_session_inventory": true, "session_endpoint": "/api/v1/trace",
+            "description": "Recorded hook decisions and normalized actions, not raw prompts, tool outputs or private reasoning. Hooks that cannot change a decision may be skipped; this is not a complete agent transcript." },
         "learning": learning(paths),
         "bars": { "min_support": bar.min_support, "fire_lower_bound": bar.fire_lower_bound, "uplift_min": bar.uplift_min },
         "savings": savings,
@@ -294,54 +199,19 @@ impl Tally {
     }
 }
 
-/// Count one spool record of session `sid` in `repo` into the reflexes it directed, would have
-/// directed, and was judged on.
-fn tally(live: &mut BTreeMap<(String, String), Tally>, repo: &str, sid: &str, r: &Value) {
-    let d = &r["decision"];
-    let ids = |k: &str| -> Vec<String> {
-        d[k].as_array().into_iter().flatten().filter_map(|x| x["route"].as_str().map(String::from)).collect()
-    };
-    for id in ids("directives") {
-        let l = live.entry((repo.to_string(), id)).or_default();
-        l.emitted += 1;
-        l.sessions.insert(sid.to_string());
-    }
-    for id in ids("would_have") {
-        live.entry((repo.to_string(), id)).or_default().would_have += 1;
-    }
-    let control = r["arm"].as_str().map(arm_word) == Some("control");
-    for j in d["judgements"].as_array().into_iter().flatten() {
-        let (Some(kind), Some(id)) = (j["kind"].as_str(), j["route"].as_str()) else { continue };
-        let l = live.entry((repo.to_string(), id.to_string())).or_default();
-        match (judgement_word(kind), control) {
-            ("followed", false) => l.followed += 1,
-            ("ignored", false) => l.ignored += 1,
-            ("misfired", false) => l.misfired += 1,
-            ("obligation_met", false) => l.obligation_met += 1,
-            ("followed", true) => l.unaided += 1,
-            ("ignored", true) => l.not_reached += 1,
-            ("obligation_met", true) => l.obligation_met_unaided += 1,
-            _ => {}
-        }
-    }
-}
-
-/// What each reflex did in sessions, by `(repo, route id)`, counted as the map counts it.
+/// Current attributable outcomes, keyed by `(installed reference, route id)`, exactly as the map.
 pub fn live(paths: &Paths) -> BTreeMap<(String, String), Live> {
-    let mut live: BTreeMap<(String, String), Tally> = BTreeMap::new();
-    let mut spools: Vec<PathBuf> = std::fs::read_dir(paths.sessions())
-        .map(|rd| rd.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "spool")).collect())
-        .unwrap_or_default();
-    spools.sort();
-    for p in &spools {
-        let st: SessionState = state::read(&p.with_extension("state")).unwrap_or_default();
-        let repo = st.repo.clone().unwrap_or_default();
-        let sid: String = p.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
-        for r in spool::read_all(p).unwrap_or_default().iter() {
-            tally(&mut live, &repo, &sid, r);
+    let Ok((installed, _)) = discover(&paths.tracks()) else {
+        return BTreeMap::new();
+    };
+    let scan = measurements::read(paths, &installed, 0, &mut |_| {});
+    let mut result = BTreeMap::new();
+    for inst in &installed {
+        for route in &inst.track.routes {
+            result.insert((inst.reference.clone(), route.id.clone()), scan.live(inst, route));
         }
     }
-    live.into_iter().map(|(k, t)| (k, t.read())).collect()
+    result
 }
 
 #[derive(Default)]
@@ -415,6 +285,10 @@ pub fn event(repo: &str, sid: &str, r: &Value) -> Option<Value> {
     Some(json!({
         "ts": r["ts"], "session": sid, "arm": r["arm"].as_str().map(arm_word), "event": r["event"], "repo": repo,
         "directed": directed, "would": would, "judged": judged, "observed": keys, "continue": cont,
+        // A streaming event lacks prior session exposures, so preserve the actual identity
+        // and text without inventing an installed route key or a causal outcome link.
+        "directives": d["directives"].as_array().cloned().unwrap_or_default(),
+        "would_have": d["would_have"].as_array().cloned().unwrap_or_default(),
     }))
 }
 
@@ -423,7 +297,9 @@ pub fn event(repo: &str, sid: &str, r: &Value) -> Option<Value> {
 fn learning(paths: &Paths) -> Vec<Value> {
     use std::io::{Read, Seek, SeekFrom};
     const TAIL: u64 = 64 << 10;
-    let Ok(mut f) = std::fs::File::open(paths.learn_log()) else { return vec![] };
+    let Ok(mut f) = std::fs::File::open(paths.learn_log()) else {
+        return vec![];
+    };
     let len = f.metadata().map(|m| m.len()).unwrap_or(0);
     let start = len.saturating_sub(TAIL);
     let mut buf = Vec::new();
@@ -486,6 +362,16 @@ mod tests {
         assert_eq!(e["withheld"], true);
         assert_eq!(e["pretool"]["rewrite"], "test");
         assert!(super::event("acme", "s1", &serde_json::json!({ "kind": "pretool" })).is_none());
+    }
+
+    #[test]
+    fn streamed_directives_keep_their_exact_recorded_identity_and_response() {
+        let directive = serde_json::json!({ "route":"test", "track":"acme/work", "version":"0.2.0", "strength":"prime", "text":"The recorded response" });
+        let record = serde_json::json!({ "arm":"treated", "decision":{"directives":[directive.clone()], "would_have":[directive.clone()]} });
+        let event = super::event("acme", "s1", &record).unwrap();
+        assert_eq!(event["directives"][0], directive);
+        assert_eq!(event["would_have"][0], directive);
+        assert!(event["directives"][0].get("route_key").is_none());
     }
 
     #[test]

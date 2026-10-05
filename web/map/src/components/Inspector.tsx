@@ -3,6 +3,8 @@
 
 import type { ReactNode } from "react";
 import type { ArmStats, Card, CardCommand, Graph, Route, Uplift } from "../api/types";
+import { MeasurementLinks } from "./MeasurementLinks";
+import { relates } from "../lib/traces";
 import { findRoute, routeKey } from "../lib/graph";
 import {
   CONTROL_NOTE,
@@ -100,8 +102,8 @@ function Gauge({ lb, bar }: { lb: number; bar: number }) {
   );
 }
 
-function Bar({ label, k, n, control, better }: { label: string; k: number; n: number; control?: boolean; better?: "high" | "low" }) {
-  const share = n ? k / n : 0;
+function Bar({ label, k, n, control, better }: { label: string; k: number | null; n: number; control?: boolean; better?: "high" | "low" }) {
+  const share = n && k !== null ? k / n : 0;
   return (
     <>
       <span className={cx("truncate", control ? "text-ink-3" : "text-ink-2")}>{label}</span>
@@ -112,7 +114,7 @@ function Bar({ label, k, n, control, better }: { label: string; k: number; n: nu
         />
       </div>
       <span className={cx("text-right font-mono tabular-nums", control ? "text-ink-2" : "text-ink-1")}>
-        {k}/{n}
+        {k === null ? "unavailable" : `${k}/${n}`}
       </span>
     </>
   );
@@ -388,7 +390,7 @@ export function Inspector({ graph }: { graph: Graph }) {
   const r = findRoute(graph, url.reflex);
   if (!r) {
     return (
-      <aside aria-label="Inspector" tabIndex={0} className="scroll-thin flex min-h-0 flex-col gap-5 overflow-y-auto border-t border-line bg-panel p-5 lg:border-t-0 lg:border-l">
+      <aside id="reflex-inspector" aria-label="Inspector" tabIndex={0} className="scroll-thin flex min-h-0 flex-col gap-5 overflow-y-auto border-t border-line bg-panel p-5 lg:border-t-0 lg:border-l">
         <Overview graph={graph} />
       </aside>
     );
@@ -405,11 +407,11 @@ export function Inspector({ graph }: { graph: Graph }) {
   const card = isCard(r) ? r.step.card : undefined;
   const why = e.why;
   const waits = (r.review?.reasons ?? []).filter((x) => !(quiet && x.kind === "quiet"));
-  const traces = graph.events.filter((ev) => ev.repo === r.repo && (ev.directed.includes(r.id) || ev.would.includes(r.id) || ev.judged.some(([, id]) => id === r.id)));
+  const traces = graph.events.filter((ev) => relates(ev, r));
   const nTraces = new Set(traces.map((t) => t.session)).size;
   const recent = traces.slice(-4).reverse();
   return (
-    <aside aria-label="Inspector" className="scroll-thin flex min-h-0 flex-col gap-[18px] overflow-y-auto border-t border-line bg-panel p-5 lg:border-t-0 lg:border-l" key={routeKey(r)}>
+    <aside id="reflex-inspector" aria-label="Inspector" tabIndex={-1} className="scroll-thin flex min-h-0 flex-col gap-[18px] overflow-y-auto border-t border-line bg-panel p-5 lg:border-t-0 lg:border-l" key={routeKey(r)}>
       <div className="flex flex-col gap-2">
         <span className="lbl">{inst ? "Instinct" : card ? "Reflex · procedure card" : "Reflex"}</span>
         <h2 className="m-0 flex min-w-0 items-center gap-2 font-mono text-[17px] font-medium">
@@ -559,7 +561,7 @@ export function Inspector({ graph }: { graph: Graph }) {
       )}
 
       <Section label="vs control" source={LIVE_SOURCE} note={CONTROL_NOTE}>
-        <WithVsControl r={r} />
+        <MeasurementLinks route={r} />
         <p className="m-0 font-mono text-[11px] text-ink-3">
           live · directed {r.live.emitted} · {judgement("followed")} {r.live.followed} · {judgement("ignored")} {r.live.ignored}
           {r.live.misfired ? ` · ${judgement("misfired")} ${r.live.misfired}` : ""}
@@ -577,7 +579,7 @@ export function Inspector({ graph }: { graph: Graph }) {
             {recent.map((t, i) => (
               <li key={`${t.ts}${i}`} className="flex gap-2">
                 <span className="text-ink-3">{new Date(t.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-                <span className="truncate">{t.session.slice(0, 8)}</span>
+                <button type="button" className="truncate text-accent-soft underline" onClick={() => setUrl({ view: "traces", session: t.session, traceRepo: t.repo, sequence: t.sequence ?? null }, true)}>{t.session.slice(0, 8)}</button>
                 <span className={t.arm === "control" ? "text-ink-3" : "text-ink-1"}>
                   {t.arm === "control" ? "control" : t.directed.includes(r.id) ? "directed" : t.judged.find(([, id]) => id === r.id)?.[0] ? judgement(t.judged.find(([, id]) => id === r.id)?.[0] ?? "") : "applied"}
                 </span>
