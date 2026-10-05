@@ -1,0 +1,90 @@
+[
+  {
+    "task": "mm-curve--odd",
+    "arm": "learned",
+    "local_archive": {
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--odd/learned/native-transcript.jsonl": "e77eed49627e98c630e262d1dd838f69940c0d858aa6816c1462548913247662",
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--odd/learned/stdout.jsonl": "81751991546a4639e0430ffc953f261695cff297958db9cafe72e0c5620b44a4",
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--odd/learned/production-hooks.jsonl": "ccdeff407694b149edc40042bc3575bda0b1326a8e272e3c59e9ce6f2d90b34c",
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--odd/learned/production-session.spool": "219e24f9aa68a28dd1737f8d702c56ecfe7bac07bd8791c5bd5e9b492e732d72",
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--odd/learned/collection.json": "bd0ba91155524e97aafbe17a6736fb626422f08d76d406cb45315d083f84e3d2"
+    }
+  },
+  {
+    "task": "mm-curve--odd",
+    "arm": "automatic",
+    "local_archive": {
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--odd/automatic/native-transcript.jsonl": "620e3cd33eff788f922dfdb34162a46c457baf6da6da6d8222042cf3dad744e3",
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--odd/automatic/stdout.jsonl": "a8df1006fecfea2e214f3f400e0f59e4e5b1f0da320055b5d45b6c5b51a41810",
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--odd/automatic/production-hooks.jsonl": "dac4f89b450be3350dd69375974385e061c2c1ffb83acc86c9b6e0a57f9823b1",
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--odd/automatic/production-session.spool": "f95b82b0663e996927c623c374ca71b85cfccdbd4e8d722292395317c57eeb10",
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--odd/automatic/collection.json": "3a902bddba26c03cf7807890709dc3785d3f53c36ef02923e9f6fbeaa8954354"
+    }
+  },
+  {
+    "task": "mm-curve--finite",
+    "arm": "automatic",
+    "local_archive": {
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--finite/automatic/native-transcript.jsonl": "6fa5986ed72b4a39a823eb4eda6cac930103395aa0be68e46d45835ac7b206d7",
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--finite/automatic/stdout.jsonl": "2384d865be330d47ee3c656575df347140fd40863eb2e7c3cd20af6662e6d455",
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--finite/automatic/production-hooks.jsonl": "8d790967dd2084f39a4a3599a13256d885d8bacae67f26f7eea58188d48eec32",
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--finite/automatic/production-session.spool": "7eb97396a994320ec13c2a8c2b020f77b70538ea33d3dc841ff473bd94001b97",
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--finite/automatic/collection.json": "bcc8a66ce880ab9b57c738eb8b0e3eb61dca6626c69d815e1338a4676a458954"
+    }
+  },
+  {
+    "task": "mm-curve--finite",
+    "arm": "learned",
+    "local_archive": {
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--finite/learned/native-transcript.jsonl": "971f4838c5737755590c2cd592e4b0e9c12288c462ffda25a3f58aee2cfe939a",
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--finite/learned/stdout.jsonl": "9f2c141ec4ced663ceba509ecf0a23e7f20ba51b720efb25485d889f2e4c6b4e",
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--finite/learned/production-hooks.jsonl": "022ebb994a8eb91132cdb32677c26a2025b6198fdb6d212eed4260a7428410ad",
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--finite/learned/production-session.spool": "29749d1f71e0866c752dca7b5f5ea7b083eb9f178480426232491edd3478d70a",
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--finite/learned/collection.json": "dbbfbbb4fe1ad65c6ccbe3a308d92e8450f20f2046f5e80069f603d0b7df1819"
+    }
+  },
+  {
+    "task": "mm-curve--no-adjacent-duplicates",
+    "arm": "learned",
+    "local_archive": {
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--no-adjacent-duplicates/learned/native-transcript.jsonl": "2b41b1d89b788f28c43a0c6db748b04ff753099e5ff1fd5c907e218e2882035c",
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--no-adjacent-duplicates/learned/stdout.jsonl": "7cccd7960bcdd2a433186ba8e7f7a2559cc4c4bd1247d1b2feaa9bce4608ff19",
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--no-adjacent-duplicates/learned/production-hooks.jsonl": "37c47b53985d0dc364240c65a0484723f38894a21508adaa9147c606c911f93e",
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--no-adjacent-duplicates/learned/production-session.spool": "48b8ca393e5c98da33fc5a4c18f46f31ab5cbb4573e5e3dda3299d603e73babd",
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--no-adjacent-duplicates/learned/collection.json": "8bd28d4517a1214fa0fd3a531c1ec75c63d69ffa5c8d3b6963085ad8a3febb22"
+    }
+  },
+  {
+    "task": "mm-curve--no-adjacent-duplicates",
+    "arm": "automatic",
+    "local_archive": {
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--no-adjacent-duplicates/automatic/native-transcript.jsonl": "61555c0d8f58b8378e461f088de02e98ddbc66e80e7593f317a7a68d485509e9",
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--no-adjacent-duplicates/automatic/stdout.jsonl": "8106d3273b368fa4f9b8e735bcec1988d4033d7f696e73d5734f64ca2d5760b4",
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--no-adjacent-duplicates/automatic/production-hooks.jsonl": "ce43776f5d1132e0db94f56837fb52282f7c5079434e23c251337269a039c1b2",
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--no-adjacent-duplicates/automatic/production-session.spool": "e0b3f2e08085e778ca152ec3ac85d01fd4186ddb5cce259f24851889ddcc3bcd",
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--no-adjacent-duplicates/automatic/collection.json": "12e68b6ae74b851eba03edb66cfb4d4abf0446068ac305857dc134950e675ba3"
+    }
+  },
+  {
+    "task": "mm-curve--max-utf8-bytes",
+    "arm": "automatic",
+    "local_archive": {
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--max-utf8-bytes/automatic/native-transcript.jsonl": "6ed7615573a735ac7d278dc1407cde5ae6e01b8358780fd2595bc12e759647b3",
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--max-utf8-bytes/automatic/stdout.jsonl": "18aebe0015d087227ed4b3c2e27ae2b5c6fa3c7be10ef303589f569eda78dbcb",
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--max-utf8-bytes/automatic/production-hooks.jsonl": "1bf5430c6dbfcfc71ccf5820b6456cf0dcffbcd265c1f92a59c5bd8236c931c1",
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--max-utf8-bytes/automatic/production-session.spool": "3fd2d5107056e48e9c5d3c114c37f4543a4498dc8dff2408dbc929b26222e4fb",
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--max-utf8-bytes/automatic/collection.json": "33e28c0e1b3bfae6dfcbcaa8f2cbaea88a6458443854ac2de78f0176ae509967"
+    }
+  },
+  {
+    "task": "mm-curve--max-utf8-bytes",
+    "arm": "learned",
+    "local_archive": {
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--max-utf8-bytes/learned/native-transcript.jsonl": "6d7c4075e6b22885541885d87fc6eda5c09cb96b6b2d2cfc154966c32887e047",
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--max-utf8-bytes/learned/stdout.jsonl": "b0c32178e825162b9b5a08875ab878c8199219dae3d2903347328913a377fef2",
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--max-utf8-bytes/learned/production-hooks.jsonl": "ab54f3f1440065ab363a621a084d3a0bb5c727a4ec269eda7acd4cc07844b758",
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--max-utf8-bytes/learned/production-session.spool": "1e7204e5a46975838fa35a604a53c06191979c8ef686525ee02f204bb64cff22",
+      "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--max-utf8-bytes/learned/collection.json": "750db886eb8aa20b92d2211b6dd2c4494a1a760ba21574f8c93f1216fbe68e79"
+    }
+  }
+]

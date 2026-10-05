@@ -1,0 +1,17 @@
+id: run-declared-test-command
+summary: After an undeclared test runner fails the wrong way in, run the repository's declared test command
+shape: after
+detector: U3
+trigger:
+  on: after_failure
+  command: '{runner}'
+  signature: '{signature}'
+steps:
+- id: run
+  run:
+    argv:
+    - '{command}'
+  effect: verify
+strength: prime
+exit:
+- when: intent_changes

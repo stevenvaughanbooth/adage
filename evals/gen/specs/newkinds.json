@@ -1,0 +1,15 @@
+{
+  "name": "newkinds",
+  "description": "Track G G3's new capability: the scope, env_sync and sequence conventions (python-make only), learnable by the graph engine with no learner code of their own. Each has 2 bugfix, 2 registry, 4 control, 3 scoped and 3 deps tasks.",
+  "sandboxes": [
+    {"seed": 51, "spec": {"name": "py-billing-new", "stack": "python-make", "skin": "billing",
+      "conventions": {"dead_end": "env_guard", "decoys": ["unused_target", "lookalike_regen"], "scope": true, "env_sync": true, "sequence": true},
+      "tasks": {"bugfix": 2, "registry": 2, "control": 4, "scoped": 3, "deps": 3}}},
+    {"seed": 52, "spec": {"name": "py-logistics-new", "stack": "python-make", "skin": "logistics",
+      "conventions": {"dead_end": "wrong_runner", "decoys": ["lookalike_verify", "legacy_script"], "scope": true, "env_sync": true, "sequence": true},
+      "tasks": {"bugfix": 2, "registry": 2, "control": 4, "scoped": 3, "deps": 3}}},
+    {"seed": 53, "spec": {"name": "py-clinic-new", "stack": "python-make", "skin": "clinic",
+      "conventions": {"dead_end": "env_guard", "instinct_violation": false, "decoys": ["unused_target", "lookalike_regen"], "scope": true, "env_sync": true, "sequence": true},
+      "tasks": {"bugfix": 2, "registry": 2, "control": 4, "scoped": 3, "deps": 3}}}
+  ]
+}

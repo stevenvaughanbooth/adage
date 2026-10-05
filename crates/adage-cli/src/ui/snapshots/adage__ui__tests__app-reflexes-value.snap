@@ -1,0 +1,44 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+expression: text
+---
+ adage    1 Live   2 Reflexes (3)  3 Map   4 Health (2)  5 Settings   6 Home                                                   harbor-dispatch · LIVE
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ / filter reflexes, commands, files                     │  ◠ tests-after-rules-edit
+ FIRE 3  PRIME 6  INHIBIT 1  ◌ quiet 1  all states ▾    │  mode     Suggest · No execution grant
+                                                        │  when     an edit touches src/dispatch/rules_*.ts
+ ▾ harbor-dispatch/incidents@0.3.0                      │  do       npm run check -- {tests}
+   F ◠ lookup-incident         firm     24/25           │  PRIME · firm · harbor-dispatch/learned@0.3.0
+   F ◠ read-linked-files       firm     13/17           │
+   I ◠ dead-end-npm-test       firm     11/43           │  ADVISORY PREVIEW (EXAMPLE VALUES)
+                                                        │    (no preview: the reflex has no directive text)
+ ▾ harbor-dispatch/intents@0.3.0                        │
+   P ◠ start-with-npm-check    forming  6/9             │  EVIDENCE
+                                                        │    from conditioning: value: saves ~1.25 calls when followed (P(saves) 0.93, 90% lower bound
+ ▾ harbor-dispatch/learned@0.3.0                        │    0.40); 7 triggers, 0 ran it — a desire path: no trace took the step yet, so its strength
+   P ▤ card-carrier-rules      forming  4 traces        │    rests on the value estimate
+▌  P ◠ tests-after-rules-edit  firm     value           │    live since installed: fired 0 · followed 0 · not observed within 3 batches 0 · finish
+                                                        │    line met 0
+ ▾ @imported/@bound/harbor-skills@0.3.0 · pack          │    enforced: after an edit to src/dispatch/rules_*.ts the agent is told to run `npm run
+   F ◈ release-notes-s2-chang… firm     –               │    check -- {tests}`; if it then stops without running it, Adage asks it once to run it
+                                                        │    before finishing (at most 2 such requests a session)
+ ▾ nascent · waits for review                           │
+   ○ ◠ regen-openapi-client    nascent  3/4             │  LIFECYCLE
+                                                        │    ○ nascent ──── ● forming ──── ● firm
+ ▾ quiet · agents already do this; approve to deliver   │    ceiling fire · effect observe
+   ◌ ◠ read-before-edit-9a1c   quiet    21/23           │
+                                                        │  ACTIONS
+ ▾ instincts · adage/finish-line@0.1.0                  │    s strengthen   w weaken   x extinguish   a approve   n pin   m dismiss
+   P ◉ finish-line/regenerate  firm     –               │    d delegate   t traces (0)   o open in map
+                                                        │    same as adage review strengthen harbor-dispatch/learned tests-after-rules-edit from any
+ ▸ extinguished · 1                                     │    shell
+                                                        │
+                                                        │
+                                                        │
+                                                        │
+                                                        │
+                                                        │
+                                                        │
+                                                        │
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ? keys · : palette · / filter · j/k move · enter expand · tab next tab                                                                        q quit

@@ -1,0 +1,215 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/stevenvaughanbooth/adage/evals/bench/result.schema.json",
+  "title": "Adage bench result record (schema v1 and v2)",
+  "description": "One line of a bench results file (JSON Lines, keys sorted). Written by `adage eval bench run|sweep` and kept in evals/baselines/*.jsonl. Every record carries the envelope; `record` says which body follows. Version 2 adds the security, simulator and live tiers, `exec_level`, and the `arms` record (arm deltas and harm counts); packs carry such records as attestations (Track C §1.8), self-reported by their signer.",
+  "type": "object",
+  "required": ["schema_version", "record", "run_id", "tier", "suite", "adage_version", "params", "params_hash", "split"],
+  "properties": {
+    "schema_version": { "enum": [1, 2] },
+    "record": { "enum": ["run", "trial", "directive", "aggregate", "scorecard", "arms"] },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{16}$",
+      "description": "Deterministic: SHA-256 (first 16 hex digits) of the canonical JSON of the schema version, tier, suite definition, dataset content hashes and params hash."
+    },
+    "tier": { "enum": ["l0", "l0-sec", "l1", "l2", "l3"], "description": "l0: offline replay of recorded sessions (the only tier of version 1). l0-sec: the sandbox escape and staging suites. l1: the simulator. l2: live sandboxes. l3 (version 2): live agents on real open-source repositories at pinned commits (RepoBench-Local, evals/repobench)." },
+    "exec_level": { "enum": ["e0", "e1", "e2"], "description": "Version 2: the execution level the attested arm used." },
+    "suite": { "type": "string" },
+    "git_sha": { "type": "string", "description": "Only when given (--git-sha or ADAGE_GIT_SHA), and never with --deterministic." },
+    "adage_version": { "type": "string" },
+    "params": { "$ref": "#/$defs/params" },
+    "params_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "SHA-256 of the params' canonical JSON (keys sorted, no whitespace)." },
+    "dataset": {
+      "type": "object",
+      "description": "Present on per-unit records (trial, directive, per-unit aggregate); absent on pooled and run-level records.",
+      "required": ["id", "content_sha256"],
+      "properties": {
+        "id": { "type": "string" },
+        "content_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      },
+      "additionalProperties": false
+    },
+    "split": {
+      "type": "object",
+      "required": ["kind", "name", "seed"],
+      "properties": {
+        "kind": { "enum": ["group", "hash", "temporal", "all", "named", "cv", "final", "suite"], "description": "group/hash/temporal/all/named: one unit's split. cv/final: pooled over the suite's units of that role. suite: the whole run." },
+        "name": { "type": "string" },
+        "seed": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "reason": { "type": "string", "description": "Baseline files only, on the scorecard: why it was blessed." }
+  },
+  "allOf": [
+    { "if": { "properties": { "record": { "const": "run" } } }, "then": { "$ref": "#/$defs/run" } },
+    { "if": { "properties": { "record": { "const": "trial" } } }, "then": { "$ref": "#/$defs/trial" } },
+    { "if": { "properties": { "record": { "const": "directive" } } }, "then": { "$ref": "#/$defs/directive" } },
+    { "if": { "properties": { "record": { "const": "aggregate" } } }, "then": { "$ref": "#/$defs/aggregate" } },
+    { "if": { "properties": { "record": { "const": "scorecard" } } }, "then": { "$ref": "#/$defs/scorecard" } },
+    { "if": { "properties": { "record": { "const": "arms" } } }, "then": { "$ref": "#/$defs/arms" } },
+    { "if": { "properties": { "schema_version": { "const": 1 } } }, "then": { "properties": { "tier": { "const": "l0" }, "record": { "not": { "const": "arms" } } }, "not": { "required": ["exec_level"] } } }
+  ],
+  "$defs": {
+    "arms": {
+      "description": "Version 2: arms compared on one suite (for example E0 against E2), their deltas, and harm counts.",
+      "required": ["arms", "deltas"],
+      "properties": {
+        "arms": { "type": "object", "minProperties": 1, "maxProperties": 32, "additionalProperties": { "type": "object", "additionalProperties": { "type": "number" } } },
+        "deltas": { "type": "object", "maxProperties": 32, "additionalProperties": { "type": "number" } },
+        "harm": { "type": "object", "maxProperties": 32, "additionalProperties": { "type": "integer", "minimum": 0 } },
+        "sessions": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "role": { "enum": ["cv", "final", "safety"] },
+    "params": {
+      "type": "object",
+      "description": "adage_tracks::params::EngineParams, complete.",
+      "required": ["runtime", "learn"],
+      "properties": {
+        "runtime": {
+          "type": "object",
+          "required": ["follow_window", "max_directives_per_session", "max_directives_per_decision", "max_stop_requests", "history", "control_share"],
+          "properties": {
+            "follow_window": { "type": "integer", "minimum": 1 },
+            "max_directives_per_session": { "type": "integer", "minimum": 1 },
+            "max_directives_per_decision": { "type": "integer", "minimum": 1 },
+            "max_stop_requests": { "type": "integer", "minimum": 0 },
+            "history": { "type": "integer", "minimum": 1 },
+            "control_share": { "type": "number", "minimum": 0, "maximum": 1 }
+          },
+          "additionalProperties": false
+        },
+        "learn": {
+          "type": "object",
+          "required": ["min_support", "fire_lower_bound", "prime_rate", "retain_rate", "dead_end_consistency", "dead_end_signatures", "finish_line_contrast", "intent_ubiquitous", "intent_contrast", "material_lower_bound", "dormant_exposure"],
+          "properties": {
+            "min_support": { "type": "integer", "minimum": 1 },
+            "fire_lower_bound": { "type": "number", "minimum": 0, "maximum": 1 },
+            "prime_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+            "retain_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+            "dead_end_consistency": { "type": "array", "items": { "type": "integer", "minimum": 0 }, "minItems": 2, "maxItems": 2 },
+            "dead_end_signatures": { "type": "integer", "minimum": 1 },
+            "finish_line_contrast": { "type": "number", "minimum": 0, "maximum": 1 },
+            "intent_ubiquitous": { "type": "number", "minimum": 0, "maximum": 1 },
+            "intent_contrast": { "type": "number", "minimum": 0, "maximum": 1 },
+            "material_lower_bound": { "type": "number", "minimum": 0, "maximum": 1 },
+            "dormant_exposure": { "type": "number", "minimum": 0, "maximum": 1 }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "run": {
+      "required": ["label", "window", "preset", "objective", "units"],
+      "properties": {
+        "label": { "type": "string" },
+        "window": { "type": "integer" },
+        "preset": { "enum": ["demo", "default"] },
+        "objective": {
+          "type": "object",
+          "required": ["lambda_fp", "lambda_gt", "route_precision_margin"],
+          "properties": { "lambda_fp": { "type": "number" }, "lambda_gt": { "type": "number" }, "route_precision_margin": { "type": "number" } }
+        },
+        "units": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["dataset", "split", "role", "train_sessions", "test_sessions", "scored_sessions", "leaky", "index_generation", "learned_routes"],
+            "properties": {
+              "dataset": { "type": "string" },
+              "split": { "type": "string" },
+              "role": { "$ref": "#/$defs/role" },
+              "train_sessions": { "type": "integer" },
+              "test_sessions": { "type": "integer" },
+              "scored_sessions": { "type": "integer" },
+              "leaky": { "type": "boolean" },
+              "index_generation": { "type": "string" },
+              "learned_routes": { "type": "integer" }
+            }
+          }
+        }
+      }
+    },
+    "trial": {
+      "description": "One scored test session.",
+      "required": ["dataset", "role", "session", "task", "turns", "directives", "correct", "correct_in_window", "false_directives", "turns_saved", "turns_saved_at_window", "key_steps", "covered"],
+      "properties": {
+        "role": { "$ref": "#/$defs/role" },
+        "session": { "type": "string" },
+        "task": { "type": "string" },
+        "turns": { "type": "integer" },
+        "directives": { "type": "integer" },
+        "correct": { "type": "integer" },
+        "correct_in_window": { "type": "integer" },
+        "false_directives": { "type": "integer" },
+        "turns_saved": { "type": "integer" },
+        "turns_saved_at_window": { "type": "integer" },
+        "key_steps": { "type": "integer" },
+        "covered": { "type": "integer" }
+      }
+    },
+    "directive": {
+      "description": "One would-have directive in a scored test session.",
+      "required": ["dataset", "role", "session", "route", "kind", "event", "turn", "correct", "in_window", "matched_turn", "turns_saved"],
+      "properties": {
+        "role": { "$ref": "#/$defs/role" },
+        "session": { "type": "string" },
+        "route": { "type": "string" },
+        "kind": { "type": "string" },
+        "event": { "type": "string" },
+        "turn": { "type": "integer" },
+        "correct": { "type": "boolean" },
+        "in_window": { "type": "boolean" },
+        "matched_turn": { "type": ["integer", "null"] },
+        "turns_saved": { "type": "integer" }
+      }
+    },
+    "aggregate": {
+      "required": ["role", "metric", "estimate", "ci_low", "ci_high", "ci_method", "n"],
+      "properties": {
+        "role": { "$ref": "#/$defs/role" },
+        "metric": {
+          "enum": [
+            "precision", "precision_at_window", "false_directive_rate", "recall",
+            "turns_saved_at_window_per_session", "false_directives_per_session",
+            "dead_end_accuracy", "finish_line_accuracy", "unsafe_directives", "fast_path_mismatches",
+            "route_precision", "route_recall", "route_f1", "calibration_ece", "objective", "objective_cv_mean"
+          ]
+        },
+        "estimate": { "type": "number" },
+        "ci_low": { "type": ["number", "null"] },
+        "ci_high": { "type": ["number", "null"] },
+        "ci_method": { "enum": ["wilson", "normal", "count", "none"] },
+        "n": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "scorecard": {
+      "required": ["label", "objective", "feasible", "terms", "guardrails", "final"],
+      "properties": {
+        "label": { "type": "string" },
+        "objective": { "type": "number", "description": "Mean of J over the cross-validation units." },
+        "feasible": { "type": "boolean" },
+        "terms": { "type": "object", "additionalProperties": true },
+        "guardrails": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "value", "limit", "op", "pass"],
+            "properties": {
+              "name": { "type": "string" },
+              "value": { "type": "number" },
+              "limit": { "type": "number" },
+              "op": { "enum": ["<=", ">="] },
+              "pass": { "type": "boolean" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "final": { "type": "object", "description": "The temporal final check: reported, never ranked on." }
+      }
+    }
+  }
+}

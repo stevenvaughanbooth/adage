@@ -1,2 +1,0 @@
-1 identities in agent at "/Users/stevenbooth/Documents/skill-compile/spikes/S6-ssh-signing/sandbox/agent.sock":
-  SHA256:RRS1qaB387PKzfCznKbu671wfEMVUfDtUg0KIWhXLZE adage-spike-dev

@@ -1,0 +1,43 @@
+Repository notes learned from earlier sessions in this repo:
+- `Read: tests/test_shell_completion.py` shows: Choice, click.shell_completion, click.types, fish
+- `Read: src/click/shell_completion.py` shows: Context, Determine, Parameter, complete, incomplete
+- `Bash: python -m pip install -e . -q && python -m pip install pytest -q && python -m pytest tests/tes` shows: test_add_different_name
+- `Read: src/click/core.py limit=100` shows: Command
+- `Read: src/click/parser.py offset=261 limit=100` shows: _Option
+- `Bash: source .venv/bin/activate && python -m pytest tests/ -xvs 2>&1 | head -100` shows: test_boolean_conversion
+- `Bash: python /tmp/test_default_order.py` failed here; what worked: `Bash: PYTHONPATH=src python /tmp/test_default_order.py`
+- `Bash: python test_flag_bug.py` shows: Option
+- `Read: src/click/exceptions.py` shows: Context
+- `Read: tests/test_termui.py` shows: @click.command, cli, click.echo, result.output, runner, runner.invoke
+- `Bash: python test_empty_suffix.py` shows: NameAlice
+- `Read: tests/test_shell_completion.py limit=100` shows: _CLICK_COMPLETE, _get_completions, _get_words, cli.name, comp.get_completions
+- `Read: src/click/types.py offset=377 limit=25` shows: Complete, c.lower, c.startswith, click.shell_completion, incomplete.lower, str_choices
+- `Read: src/click/core.py limit=100` shows: FLAG_NEEDS_VALUE, UNSET
+- `Read: src/click/core.py offset=3183 limit=150` shows: add_to_parser
+- `Read: tests/test_shell_completion.py offset=250 limit=50` shows: renamed
+- `Read: src/click/parser.py offset=400 limit=150` shows: Long, omitting, opt
+- `Read: tests/test_options.py offset=665 limit=20` shows: test_missing_envvar
+- `Read: tests/test_shell_completion.py offset=359 limit=30` shows: _CLI_COMPLETE
+- `Bash: grep -n "show_envvar\|get_error_hint" tests/*.py` shows: test_show_envvar
+- `Read: src/click/core.py offset=1891 limit=50` shows: _complete_visible_commands
+- `Read: src/click/core.py offset=2400 limit=40` shows: Process, cast, process_value
+- `Bash: find . -name "test_*.py" -o -name "*_test.py" | head -20` shows: test_defaults.py, test_options.py, test_parser.py, tests/test_defaults.py, tests/test_options.py, tests/test_parser.py
+- `Grep: def type_cast_value path=src/click/core.py output_mode=content` shows: Context, t.Any
+- `Read: src/click/core.py offset=873 limit=200` shows: iter_params_for_processing, make_context
+- `Grep: type_cast_value\( path=src/click/core.py output_mode=content` shows: self.type_cast_value
+- `Read: src/click/core.py offset=2680 limit=30` shows: .get_error_hint, self.envvar, self.show_envvar
+- `Bash: grep -n "nargs" tests/test_shell_completion.py` shows: test_argument_nargs, test_option_nargs
+- `Bash: python -m pytest tests/test_shell_completion.py::test_option_nargs -xvs` failed here; what worked: `Bash: ls -la ; Bash: .venv/bin/python -m pytest tests/test_shell_completion.py::test_option_nargs -xvs`
+- `Bash: python -m pip install pytest -q && python -m pytest tests/test_options.py -v` failed here; what worked: `Bash: pip install -e . -q && python -m pytest tests/test_options.py -v --tb=short 2>&1 | head -100`
+- `Read: tests/test_shell_completion.py offset=340 limit=30` shows: bee, nbee, tbee, test_full_complete
+- `Grep: show_default|default path=src/click/core.py output_mode=content head_limit=50` shows: self.show_default
+- `Bash: grep -r "Choice\|choice" tests --include="*.py" -l | head -10` shows: test_types.py, tests/test_types.py
+- `Read: src/click/core.py offset=2640 limit=400` shows: _flag_needs_value, nargs, self._flag_needs_value, self.default, self.nargs
+- `Read: src/click/shell_completion.py` shows: CLI, Command, Completion, Group, ShellComplete, comp, incomplete, shell_complete, words
+- `Bash: find . -name "*test*.py" -o -name "test_*" | head -20` shows: test_basic.py, test_options.py, tests/test_basic.py, tests/test_options.py
+- `Read: tests/test_shell_completion.py limit=500` shows: @pytest.mark.usefixtures, _patch_for_completion, fish, nplain, result.output, runner, runner.invoke, zsh
+- `Bash: find src -type f -name "*.py" | head -20` shows: core.py, decorators.py, src/click, src/click/core.py, src/click/decorators.py, src/click/termui.py, termui.py
+- `Read: src/click/core.py offset=2415 limit=30` shows: Legacy, MissingParameter, exc, exposed, introduction, legacy, receive, self.callback, self.required, self.value_is_missing, value_is_missing
+- `Bash: find . -type f -name "*.py" | grep -E "(core|argument|option)" | head -20` shows: core.py, src/click, src/click/core.py, test_arguments.py, test_options.py, tests/test_arguments.py, tests/test_options.py
+- `Read: src/click/core.py offset=2783 limit=200` shows: True/False, _split_opt, default_string, default_value, distinct, inspect.isfunction, opt, self.is_bool_flag, self.opts, self.secondary_opts, show_default_is_str
+- `Read: src/click/shell_completion.py offset=539 limit=60` shows: allow_extra_args, allow_interspersed_args, cmd.make_context, ctx._protected_args, ctx.args, resilient_parsing, sub_ctx, sub_ctx._protected_args, sub_ctx.args, sub_sub_ctx

@@ -1,0 +1,600 @@
+{
+ "written": "2026-09-29, before any showcase session, any card learned on these families, or any detection score on their prompts",
+ "question": "What does the SHIPPED product (hooks installed as `adage init` installs them, the background learner `adage condition --auto`, procedure cards delivered by hook, uplift gating) do to the cost, speed and pass rate of recurring developer tasks, across 5 families on 5 repositories, when it learns each family from 4 ordinary sessions of the user's history with no harness intervention? Publishable numbers for the website: pooled and per family, with intervals, n, spend and caveats.",
+ "product": {
+  "binary": "the release build of this branch (`cargo build --release -p adage-cli -p adage-exec -p adage-train`; the dry run used /tmp/adage-go-target/release/adage, `adage 0.1.0`); the live run records `adage --version` and the commit it was built from",
+  "requirement": "`adage config` lists learn.cards and the hooks include UserPromptSubmit and Stop (sc_run.py/gv_run.py product check); runs refuse otherwise",
+  "binary_dry_run": {
+   "path": "/tmp/adage-go-target/release/adage",
+   "version": "adage 0.1.0",
+   "sha256": "1918e9b4cd3684b06bf7fa37a71194ed32327f01132bf475d8bf87bb11f5195e",
+   "built": "2026-09-29 21:35 UTC, release profile, from this branch (the GO validation's build)"
+  },
+  "binary_rule": "The live run uses a binary whose dry run (dryrun.py) is recorded here: run it with the dry-run binary above, or re-run dryrun.py with the new binary first and add its conditioning results to dry_run_findings (before any session). The binary's sha256 and version are recorded with the runs.",
+  "binary_7db8b22": {
+   "source": "claude/repo-maturity-roadmap-l95ohs @ 7db8b22 (Cards: group files each task names whole after itself by role)",
+   "build": "CARGO_PROFILE_DEV_DEBUG=0 CARGO_TARGET_DIR=/tmp/adage-showcase-target cargo build --release --locked -p adage-cli (2026-09-29 22:52 UTC; the target was deleted afterwards)",
+   "version": "adage 0.1.0",
+   "sha256": "009a4ce7263738f1533fea775ec51bdebfc037d9bb0fcc5b89000588bc03da11",
+   "dry_run": "dryrun-7db8b22.json"
+  },
+  "binary_for_live_run": "a release build of 7db8b22 or a later commit whose dry run is recorded here (product.binary_rule). The live run needs adage-exec too (runner.py's adage_exec, next to adage): build -p adage-cli -p adage-exec -p adage-train, re-run dryrun.py on that build, and record its sha256 before any session",
+  "binary_live_run": {
+   "source": "claude/repo-maturity-roadmap-l95ohs @ c04baef24b3d1a9f7ef023391b1799caf3f68e3a (main with 7db8b22 merged, plus result docs; no product change since 7db8b22)",
+   "build": "CARGO_TARGET_DIR=/tmp/adage-showcase-target CARGO_PROFILE_DEV_DEBUG=0 cargo build --release --locked -p adage-cli -p adage-exec -p adage-train (2026-09-29 23:02 UTC, rustc 1.94.1)",
+   "path": "/tmp/adage-showcase-target/release/adage",
+   "version": "adage 0.1.0",
+   "sha256": "009a4ce7263738f1533fea775ec51bdebfc037d9bb0fcc5b89000588bc03da11",
+   "sha256_adage_exec": "7187764584980ada6ce4bc487ee2a5f858d08324c745d23270ce82aa296d75ae",
+   "sha256_adage_train": "915666bad85723e624db87f02253d012035866748057a8b033784730e0c88501",
+   "note": "the adage binary is byte-identical to the 7db8b22 dry-run build (same sha256)",
+   "dry_run": "dryrun-c04baef.json (dryrun/gate.<family>.json now hold this run)"
+  }
+ },
+ "families": {
+  "click-type": {
+   "repository": "pallets/click @ 06b2a67 (8.6.0 unreleased)",
+   "ecosystem": "Python: uv venv, pytest",
+   "procedure": "add `click.<NAME>`: ParamType class + instance in src/click/types.py, export in __init__.py, docs/api.md autodata, a docs/parameter-types.md bullet, a CHANGES.md entry, a test; Click's light-imports CI test stays green",
+   "source": "ported from recurring-workflows (10 variants validated there) + 2 new (TIME, LOG_LEVEL)",
+   "variants_in_order": [
+    "hex-color",
+    "port",
+    "duration",
+    "ip-address",
+    "semver",
+    "percentage",
+    "byte-size",
+    "slug",
+    "date",
+    "host-port",
+    "time",
+    "log-level"
+   ],
+   "training": [
+    "hex-color",
+    "port",
+    "duration",
+    "ip-address"
+   ],
+   "held_out": [
+    "semver",
+    "percentage",
+    "byte-size",
+    "slug",
+    "date",
+    "host-port",
+    "time",
+    "log-level"
+   ],
+   "hidden_check": "rw hidden test (behaviour valid/invalid through a command, both docs, the unreleased changelog entry, an own test) + the whole suite with Click's pristine tests/test_imports.py",
+   "negatives": [
+    "click-d251cb0a",
+    "click-1a4d8c1b",
+    "click-eaf33a95",
+    "neg-click-choice-hidden",
+    "neg-click-doc-custom-type",
+    "neg-click-path-resolve"
+   ],
+   "repo_key": "github.com/pallets/click"
+  },
+  "mm-validator": {
+   "repository": "marshmallow-code/marshmallow @ 7f0792bd (4.4.0 unreleased)",
+   "ecosystem": "Python: uv venv, pytest",
+   "procedure": "add `marshmallow.validate.<Name>` with the validators' error/_repr_args/_format_error conventions, a docstring, a CHANGELOG.rst entry and tests",
+   "source": "ported from recurring-workflows + 2 new (Alphanumeric, MaxWords)",
+   "variants_in_order": [
+    "starts-with",
+    "multiple-of",
+    "unique",
+    "hexadecimal",
+    "ends-with",
+    "ip-address",
+    "not-blank",
+    "ascii",
+    "contains",
+    "lowercase",
+    "alphanumeric",
+    "max-words"
+   ],
+   "training": [
+    "starts-with",
+    "multiple-of",
+    "unique",
+    "hexadecimal"
+   ],
+   "held_out": [
+    "ends-with",
+    "ip-address",
+    "not-blank",
+    "ascii",
+    "contains",
+    "lowercase",
+    "alphanumeric",
+    "max-words"
+   ],
+   "hidden_check": "rw hidden test (valid, invalid with the default message, custom error interpolation, repr, docstring, unreleased changelog entry, an own test) + the whole suite",
+   "negatives": [
+    "marshmallow-39e7c833",
+    "marshmallow-65374df0",
+    "marshmallow-f07eadc8",
+    "neg-mm-email-plus",
+    "neg-mm-range-bounds",
+    "neg-mm-hex-field"
+   ],
+   "repo_key": "github.com/marshmallow-code/marshmallow"
+  },
+  "go-flag": {
+   "repository": "urfave/cli v3 @ 58ec406e",
+   "ecosystem": "Go",
+   "procedure": "add `cli.<Name>Flag` + `cmd.<Name>(name)`: flag_<x>.go (FlagBase alias, value type, accessor), tests, docs/v3/examples/flags/basics.md, generated API docs godoc-current.txt AND the approved copy testdata/godoc-v3.x.txt (CI's v3diff)",
+   "source": "ported from recurring-workflows/confirm + 2 new (HostPortFlag, UUIDFlag)",
+   "variants_in_order": [
+    "url",
+    "port",
+    "regexp",
+    "ip",
+    "percent",
+    "bytesize",
+    "date",
+    "hexcolor",
+    "cidr",
+    "semver",
+    "hostport",
+    "uuid"
+   ],
+   "training": [
+    "url",
+    "port",
+    "regexp",
+    "ip"
+   ],
+   "held_out": [
+    "percent",
+    "bytesize",
+    "date",
+    "hexcolor",
+    "cidr",
+    "semver",
+    "hostport",
+    "uuid"
+   ],
+   "hidden_check": "rw hidden Go test (valid/invalid through Command.Run, the three docs files, an own test) + `go test -count=1 .`",
+   "negatives": [
+    "urfave-cli-7492c456",
+    "urfave-cli-72ca6b88",
+    "urfave-cli-db7d18f2",
+    "neg-go-trimspace-env",
+    "neg-go-timestamp-local",
+    "neg-go-yaml-docs"
+   ],
+   "repo_key": "github.com/urfave/cli"
+  },
+  "http-header": {
+   "repository": "hyperium/http @ fdc6ab8 (1.5.0+)",
+   "ecosystem": "Rust: cargo",
+   "procedure": "add `http::header::<CONST>`: a documented entry in the standard_headers! table (src/header/name.rs), the re-export in src/header/mod.rs, tests (upstream #583 also extends the all-standard-headers lists in tests/)",
+   "source": "new (data-expansion corpus repository; card research never used it)",
+   "variants_in_order": [
+    "priority",
+    "accept-patch",
+    "content-digest",
+    "server-timing",
+    "coop",
+    "sec-fetch-dest",
+    "permissions-policy",
+    "x-forwarded-for",
+    "clear-site-data",
+    "timing-allow-origin",
+    "repr-digest",
+    "early-data"
+   ],
+   "training": [
+    "priority",
+    "accept-patch",
+    "content-digest",
+    "server-timing"
+   ],
+   "held_out": [
+    "coop",
+    "sec-fetch-dest",
+    "permissions-policy",
+    "x-forwarded-for",
+    "clear-site-data",
+    "timing-allow-origin",
+    "repr-digest",
+    "early-data"
+   ],
+   "hidden_check": "source check: a `standard_headers!` entry with a doc comment; an own test naming the constant; `cargo test` (unit, integration, doc tests) with a hidden integration test: the constant, as_str, from_bytes/from_static in three letter cases",
+   "negatives": [
+    "http-6e2dd42a",
+    "http-bc3b0441",
+    "http-7767ff70",
+    "neg-http-doc-accept-ranges",
+    "neg-http-status-const",
+    "neg-http-headername-bug"
+   ],
+   "repo_key": "github.com/hyperium/http"
+  },
+  "chi-middleware": {
+   "repository": "go-chi/chi v5 @ 3d1777a",
+   "ecosystem": "Go",
+   "procedure": "add `middleware.<Name>`: middleware/<name>.go with a Go doc comment, middleware/<name>_test.go, a README 'Core middlewares' row and its pkg.go.dev link",
+   "source": "new (data-expansion corpus repository; card research never used it)",
+   "variants_in_order": [
+    "nosniff",
+    "allow-methods",
+    "hsts",
+    "require-header",
+    "method-override",
+    "allow-hosts",
+    "lowercase-path",
+    "block-user-agents",
+    "api-key",
+    "vary",
+    "content-length-required",
+    "max-header-count"
+   ],
+   "training": [
+    "nosniff",
+    "allow-methods",
+    "hsts",
+    "require-header"
+   ],
+   "held_out": [
+    "method-override",
+    "allow-hosts",
+    "lowercase-path",
+    "block-user-agents",
+    "api-key",
+    "vary",
+    "content-length-required",
+    "max-header-count"
+   ],
+   "hidden_check": "source checks: doc comment, README row + link, an own test; `go test -count=1 ./...` with a hidden httptest table of every prompt example",
+   "negatives": [
+    "chi-1f927a8e",
+    "chi-87c34a24",
+    "chi-05f1ef7b",
+    "neg-chi-throttle-retry-after",
+    "neg-chi-readme-clientip",
+    "neg-chi-nocache-bug"
+   ],
+   "repo_key": "github.com/go-chi/chi"
+  }
+ },
+ "design": {
+  "families_in_order": [
+   "click-type",
+   "mm-validator",
+   "go-flag",
+   "http-header",
+   "chi-middleware"
+  ],
+  "held_out_per_family": 8,
+  "repeats": 2,
+  "training_per_family": 4,
+  "model": "claude-haiku-4-5-20251001 (primary), Claude Code as installed, version recorded per session",
+  "runner": "evals/live/runner.py through the GO validation's gv_run.py (imported unchanged by sc_run.py): --host-auth, confine: true (bubblewrap), isolated HOME per session, tools pinned, max_turns 60, concurrency 2, CLAUDECODE and CLAUDE_CODE_SESSION_ID never forwarded",
+  "training": "per family, 4 sessions, sequential, the product installed (adage hooks-config), ADAGE_HOME persistent, nothing else set: the product's own background learner forms the family and compiles the card after each session; the driver waits for the learner before the next session; the runner's learn phase is refused",
+  "held_out": "per family, 8 variants x 2 repeats x {control, adage}, arm order seeded per (variant, repeat) with seed 20260929, paired by (variant, repeat), learning frozen (ADAGE_AUTO_LEARN=0) so every pair sees the index learned from the 4 training sessions",
+  "arms": {
+   "control": "hooks installed, directives (cards included) computed and logged, not delivered (ADAGE_ARM=control)",
+   "adage": "the full product (ADAGE_ARM=treated)"
+  },
+  "sonnet_arm": {
+   "families": [
+    "mm-validator",
+    "chi-middleware"
+   ],
+   "held_out": 6,
+   "repeats": 1,
+   "model": "claude-sonnet-5",
+   "variants": "the first 6 held-out variants of each family, in the order above",
+   "index": "a copy of the family's Haiku-learned ADAGE_HOME (no Sonnet training): the same card, a stronger model",
+   "why_these_families": "the two cheapest families (expected $/session), one Python and one Go, one ported and one new"
+  },
+  "identical_to_go_validation": "training as a user, learner wait, frozen held-out index, arms, pairing, seeding, isolation, turn cap and runner are the GO validation's (evals/launch/go-validation), reused unchanged",
+  "deviations_from_a_pure_user_flow": [
+   "learning is frozen during held-out sessions (a user's index would keep learning from them)",
+   "the driver waits for the learner between training sessions",
+   "the Sonnet arm reuses the Haiku-learned index (a Sonnet user would have Sonnet-learned cards)",
+   "prompts follow one template per family (the shipped detector is strict: 0/6 informal paraphrases were recognised in the Go research family); paraphrase recall is out of scope"
+  ],
+  "stages": {
+   "A": "training, all 5 families (20 sessions), then sc_detect.py per family ($0 probe: card formed, held-out delivery, false fires on 6 negatives)",
+   "B": "held out, repeat 1, all 5 families (80 sessions), then the interim harm check R4",
+   "C": "held out, repeat 2, all 5 families (80 sessions)",
+   "D": "the Sonnet arm (24 sessions), only with budget left (R6)",
+   "order_rationale": "every family's repeat 1 before any repeat 2, Sonnet last: if the global cap binds, it costs repeats or the Sonnet arm, never whole families"
+  }
+ },
+ "metrics": {
+  "primary": "$/task, Claude Haiku 4.5, INTENTION TO TREAT over every held-out pair of the 5 families (detection misses included): billed total_cost_usd per session; adage/control - 1 as the ratio of the pooled paired sums (sessions of pricier families weigh more, as dollars do); 90% CI",
+  "secondary": {
+   "calls": "tool calls per session, same estimator",
+   "wall_time": "wall-clock seconds per session (runner `elapsed`), same estimator; the machine is shared, so read it with the caveat",
+   "pass_rate": "hidden check per arm (Wilson 90%) and the paired difference adage - control (same bootstrap)",
+   "card_delivery_rate": "share of adage held-out sessions whose spool records a card delivered (route card-..., kind directives), Wilson 90%",
+   "false_fires": "cards delivered to the 30 same-repository negative prompts (6 per family: 3 RepoBench one-off fixes whose real fix edits the family's files, 3 hard negatives) in the $0 probe through the installed hook after training, at the prompt OR at the first edit of a card file (both count); Wilson 90% upper bound; the prompt/edit split is reported"
+  },
+  "per_family": "every primary and secondary metric within each family (8 variant clusters, 16 pairs)",
+  "sonnet": "the same contrasts for the Sonnet arm, per family (6 pairs) and pooled (12 pairs): directional only",
+  "diagnostic": [
+   "sensitivity: the primary without pairs where either session hit the 60-turn cap",
+   "the primary restricted to the variants the $0 probe delivered the card for (a pre-treatment subset, fixed before any held-out session)",
+   "$ per resolved task per arm",
+   "censored sessions",
+   "per-check failure counts",
+   "control would-have deliveries (balance)"
+  ]
+ },
+ "analysis": {
+  "code": "analyze.py (render.py turns its output into RESULTS.md and results.json)",
+  "estimator": "ratio of paired sums - 1 (cost, calls, wall); mean paired difference (pass)",
+  "bootstrap": "Rao-Wu rescaled bootstrap, stratified by family, clustered by variant: from each family's n_h variants draw m_h = n_h - 1 with replacement (both repeats of a variant together), weight n_h/m_h; percentile interval",
+  "why_rao_wu": "with 8 clusters per stratum the naive percentile bootstrap under-covers; on plasmode data with a known truth the Rao-Wu interval covered 0.89 pooled and 0.875 per family (power.json ci90_coverage_known_truth), against 0.885 pooled for the naive percentile interval",
+  "level": 0.9,
+  "n_boot": 10000,
+  "seed": 20260929,
+  "pairs": "complete (variant, repeat) pairs with both sessions ok or censored; infra and scorer errors are re-run by the runner's resume and never analysed; their cost stays in the spend",
+  "families_are_fixed": "the CI is conditional on these 5 families (strata), not a sample of all possible families: it states the uncertainty from variants and sessions, not from which families were chosen"
+ },
+ "power": {
+  "target_half_width_points": 6,
+  "method": "plasmode simulation (analyze.py --power, power.json): the 36 real card-vs-control pairs of the recurring-workflows research (calibration.json: click-type, mm-validator, go-flag; Haiku 4.5), each family's card effect removed, variants resampled with their repeats; a card effect applied to the variants the card reaches (75% of variants, as the GO dry run's 5/8-8/8 detection suggests), family effects varying with sd 6 points, no effect elsewhere; 200 datasets x 1,000 resamples per design",
+  "chosen_design": "5 families x 8 held-out variants x 2 repeats (160 held-out sessions)",
+  "result": {
+   "half_width_median_points": 4.87,
+   "half_width_p90_points": 5.84,
+   "p_half_width_le_6": 0.935,
+   "p_ci_excludes_0_at_true_card_effect_-20pct": 0.995,
+   "p_ci_excludes_0_at_true_card_effect_-10pct": 0.775,
+   "itt_estimate_at_true_card_effect_-20pct": -0.1481,
+   "per_family_half_width_median_points": 9.69,
+   "sonnet_arm_half_width_median_points": 11.92,
+   "ci90_coverage_known_truth": {
+    "pooled": 0.89,
+    "per_family": 0.875,
+    "design": "5x8x2"
+   }
+  },
+  "alternatives": {
+   "5x8x2": {
+    "held_out_sessions": 160,
+    "half_width_median": 4.87,
+    "p_half_width_le_target": 0.935,
+    "p_ci_upper_below_0_at_true_-10pct": 0.775
+   },
+   "5x8x1": {
+    "held_out_sessions": 80,
+    "half_width_median": 6.65,
+    "p_half_width_le_target": 0.24,
+    "p_ci_upper_below_0_at_true_-10pct": 0.56
+   },
+   "5x9x1": {
+    "held_out_sessions": 90,
+    "half_width_median": 6.17,
+    "p_half_width_le_target": 0.445,
+    "p_ci_upper_below_0_at_true_-10pct": 0.515
+   },
+   "5x6x2": {
+    "held_out_sessions": 120,
+    "half_width_median": 5.72,
+    "p_half_width_le_target": 0.65,
+    "p_ci_upper_below_0_at_true_-10pct": 0.61
+   },
+   "5x10x2": {
+    "held_out_sessions": 200,
+    "half_width_median": 4.48,
+    "p_half_width_le_target": 0.99,
+    "p_ci_upper_below_0_at_true_-10pct": 0.83
+   },
+   "4x8x2": {
+    "held_out_sessions": 128,
+    "half_width_median": 5.42,
+    "p_half_width_le_target": 0.78,
+    "p_ci_upper_below_0_at_true_-10pct": 0.665
+   }
+  },
+  "what_it_buys": "About $51 of Haiku sessions buys a pooled 90% interval of about +/-4.9 points (P(<=6) = 0.935): a true card effect of -20% (about 15% ITT) excludes 0 99.5% of the time, and one of -10% 78% of the time. It does NOT buy per-family precision: each family's interval is about +/-10 points, so per-family numbers are descriptive and a family-level saving under ~10% will often not exclude 0. One repeat instead of two (5x8x1, about $22 less) would widen the pooled interval to +/-6.7 (P(<=6) = 0.24). Ten held-out variants per family (5x10x2, 14 variants each, about $11 more) would reach P(<=6) = 0.99 but exceeds the $60 aim. The Sonnet arm's ~$7 buys a directional number (+/-12 points), not a precise one."
+ },
+ "budget": {
+  "per_session_estimates_usd": {
+   "click-type": {
+    "train": 0.4,
+    "held_out": 0.37,
+    "basis": "research live: control $0.399, card $0.334 (12 each)"
+   },
+   "mm-validator": {
+    "train": 0.235,
+    "held_out": 0.21,
+    "basis": "research live: control $0.235, card $0.181 (12 each)"
+   },
+   "go-flag": {
+    "train": 0.35,
+    "held_out": 0.29,
+    "basis": "confirmation live: control $0.347 (6/12 hit 60 turns), card $0.230"
+   },
+   "http-header": {
+    "train": 0.33,
+    "held_out": 0.3,
+    "basis": "data-expansion http bug fixes $0.481 (HeaderMap internals, 6 sessions); a header constant is a smaller edit but compiles the crate several times; bytes $0.329"
+   },
+   "chi-middleware": {
+    "train": 0.26,
+    "held_out": 0.23,
+    "basis": "data-expansion chi bug fixes $0.214 (10 sessions); families cost 1.0-1.5x their repository's bug fixes"
+   }
+  },
+  "sonnet_per_session_usd": {
+   "mm-validator": 0.294,
+   "chi-middleware": 0.322
+  },
+  "sonnet_basis": "Claude Sonnet 5 is $2/$10 per MTok against Haiku 4.5's $1/$5 (2x per token); stronger models use fewer turns (research: Sonnet-class agents avoid most procedural waste): assumed 0.7x the tokens, so 1.4x the $",
+  "sessions": {
+   "haiku_train": 20,
+   "haiku_held_out": 160,
+   "sonnet_held_out": 24,
+   "total": 204
+  },
+  "central_usd": {
+   "haiku": 51.1,
+   "sonnet": 7.39,
+   "total": 58.49
+  },
+  "pessimistic_usd": {
+   "haiku": 66.43,
+   "sonnet": 9.61,
+   "total": 76.04
+  },
+  "stages_central_usd": {
+   "A_training": 6.3,
+   "B_held_out_repeat_1": 22.4,
+   "C_held_out_repeat_2": 22.4,
+   "D_sonnet": 7.39
+  },
+  "caps_usd": {
+   "global": 60.0,
+   "per_root": {
+    "click-type": 17.47,
+    "mm-validator": 9.96,
+    "go-flag": 13.88,
+    "http-header": 14.2,
+    "chi-middleware": 10.92,
+    "mm-validator-sonnet": 4.59,
+    "chi-middleware-sonnet": 5.02
+   }
+  },
+  "offline_usd": 0.0,
+  "note": "The global cap is hard: sc_run.py sums the spend recorded in every showcase root before each --execute and clamps each runner's cap to what remains. At the pessimistic factor the Haiku stages alone would exceed it; the stage order (every family's repeat 1 before any repeat 2, Sonnet last) makes a binding cap cost repeats and the Sonnet arm, never whole families."
+ },
+ "stopping_rules": {
+  "R1": "global cap $60 across every showcase root: before each --execute, gv_run.py sums the spend recorded in all 7 roots, refuses once it reaches $60, and clamps the runner's cap (checked before every session) to what remains; per-root caps as budget.caps_usd. Sessions in flight when a cap is reached finish (at most 2, about $0.8)",
+  "R2": "after training (stage A), per family: if the learner did not run (learner-waits.jsonl shows a timeout, or learn.log is empty), that is infrastructure: fix and re-run the family's training in a fresh root (the first root's spend stays in the ledger). If the learner ran and formed no card, that is the product's behaviour: the family continues to held out (ITT) and is reported as 'no card formed'",
+  "R3": "the $0 probe (sc_detect.py) is REPORTED, never a stop: detection misses are part of what the shipped product does; its delivered_tasks fix the pre-treatment delivered subset",
+  "R4": "interim, after stage B (repeat 1 of all 5 families; `analyze.py --interim`, exit 4 = stop): stop for harm if adage has >= 5 fewer passes than control over the repeat-1 pairs, OR the pooled $/task is > +15% with its 90% CI lower bound > 0. No stopping for efficacy. Calibrated on plasmode data before any session (synthetic.json): false stop 0.01 under a true null and 0.05 at a true -20%; stops 0.485 / 0.74 of the time under a 25 / 35-point pass loss and 0.77 under a +25% cost harm. If R4 stops, stages C and D do not run and the report is the repeat-1 analysis, labelled interim-stopped-for-harm",
+  "R4_thresholds": {
+   "net_pass_loss": 5,
+   "pass_ci_upper_below_0": false,
+   "usd_point": 0.15,
+   "n_boot": 2000
+  },
+  "R5": "infrastructure (disk full, auth or rate limits, container restart): pause and resume the same root; affected sessions are re-run by the runner's resume, their cost stays in the ledger",
+  "R6": "the Sonnet arm (stage D) starts only after stage C, and only if at least half its central estimate remains under the global cap (config min_remaining_usd); if the cap stops it part-way, it is reported with the pairs it has, labelled incomplete",
+  "R7": "no family, variant, arm or session is dropped, added or re-run for its outcome; the only re-runs are infrastructure errors (R5) and a learner that did not run (R2)"
+ },
+ "reporting": {
+  "outputs": "render.py -> RESULTS.md and results.json (schema adage-showcase-results/1), from analysis.json; only the quantities defined here",
+  "headline_rule": "The headline states the primary with its 90% CI, n pairs, n variants, n families and the model. Wording by the CI alone: upper bound < 0 -> 'Adage cut the cost per task by X%'; lower bound > 0 -> 'Adage raised the cost per task by X%'; otherwise -> 'no detectable change in cost per task (X%)'. The same rule words every secondary and every per-family number.",
+  "always_reported": [
+   "every family, whatever its result",
+   "pass rate per arm and its paired difference",
+   "card delivery rate and false fires",
+   "n (pairs, variants, families), censored sessions",
+   "total spend, including training, infrastructure re-runs and the Sonnet arm",
+   "the caveats below"
+  ],
+  "per_family_rule": "per-family numbers are reported with their intervals and the note that each rests on 8 variants (interval coverage about 88%); no family is singled out as the headline",
+  "sonnet_rule": "the Sonnet arm is reported as directional (12 pairs, about +/-12 points), with the note that it used the Haiku-learned index",
+  "incomplete_rule": "if any stage did not complete, the report says which, reports what completed, and the status field is 'incomplete' or 'interim-stopped-for-harm'",
+  "caveats_preregistered": [
+   "Families, prompts, hidden checks and gold patches were written by the Adage team; prompts follow one template per family, and the shipped detector recognises near-template prompts, not informal paraphrases (0/6 in the Go research family).",
+   "The Adage arm's saving is intention-to-treat: sessions whose prompt the detector missed count, at no saving.",
+   "Learning was frozen during held-out sessions; a user's index would keep learning from them.",
+   "Each family rests on 8 held-out variants; per-family intervals are about +/-10 points and cover about 88% of the time.",
+   "The pooled figure weights families by their cost; the interval is conditional on these 5 families.",
+   "Wall time was measured on a shared machine.",
+   "The Sonnet arm is small (12 pairs) and used cards learned from Haiku sessions.",
+   "The go-flag family's CI requires an approval step (testdata/godoc-v3.x.txt) that no research training session performed; a card only repeats what earlier sessions did."
+  ]
+ },
+ "predictions": {
+  "usd": "pooled ITT -10% to -20% with a build of 7db8b22 or later (every family carded in the dry run); research: -18.8% CLAUDE.md card on click+marshmallow, -33.8% hook card on Go; with the first dry-run binary (chi-middleware uncarded) it would be -8% to -16%",
+  "calls": "-10% to -25%",
+  "wall_time": "-5% to -20%",
+  "pass_rate": "unchanged within +/-1 pass per family",
+  "card_delivery": ">= 75% of adage held-out sessions in every family (dry run: 8/8 held-out prompts per family through the hook)",
+  "false_fires": "about 3 of 30, all at the first edit of a card file on same-file fixes (dry run); 0 at the prompt",
+  "by_family": "the largest savings on go-flag and chi-middleware (per-task file names, more search to save); the smallest on http-header (the compile loop dominates and repeats in both arms)",
+  "sonnet": "a smaller relative saving than Haiku (stronger models waste less on procedure)"
+ },
+ "roots": {
+  "haiku": {
+   "click-type": "/tmp/adage-showcase/runs/click-type",
+   "mm-validator": "/tmp/adage-showcase/runs/mm-validator",
+   "go-flag": "/tmp/adage-showcase/runs/go-flag",
+   "http-header": "/tmp/adage-showcase/runs/http-header",
+   "chi-middleware": "/tmp/adage-showcase/runs/chi-middleware"
+  },
+  "sonnet": {
+   "mm-validator": "/tmp/adage-showcase/runs/mm-validator-sonnet",
+   "chi-middleware": "/tmp/adage-showcase/runs/chi-middleware-sonnet"
+  },
+  "gate": "<root>/gate.json"
+ },
+ "calibration": {
+  "power": "power.json (analyze.py --power)",
+  "operating_characteristics": "synthetic.json (analyze.py --synthetic)",
+  "data": "calibration.json",
+  "null_error_rate": {
+   "reports_saving": 0.07,
+   "reports_increase": 0.005,
+   "nominal_two_sided": 0.1
+  }
+ },
+ "dry_run_findings": {
+  "when": "2026-09-29, before any showcase session; $0 (dryrun.py, dryrun.json, dryrun/gate.<family>.json)",
+  "binary": "/tmp/adage-go-target/release/adage (sha256 1918e9b4…195e)",
+  "validation": "60/60 variants fail on the base and pass with the gold patch (validation.json); slowest hidden check 28 s (chi), 22 s (http, shared Cargo target)",
+  "configs": "all 7 configs plan through sc_run.py -> gv_run.py -> runner: 36 sessions per Haiku family (4 train, 16 control, 16 adage), 12 per Sonnet config (6 control, 6 adage); training sessions get only ADAGE_HOME; held-out arms ADAGE_ARM control/treated with ADAGE_AUTO_LEARN=0; nothing forbidden forwarded; the Sonnet configs refuse train/learn and an unlearned home",
+  "conditioning": "the product's learner over 4 synthetic training transcripts per family built from the gold patches (the real diffs as Edit/Write calls, the family's test command, a final reply), then the probe through the installed hook",
+  "cards": {
+   "click-type": "card formed; held out 8/8 at the prompt; negatives 0/6",
+   "mm-validator": "card formed; held out 8/8 at the prompt; negatives 2/6, both at the first edit of src/marshmallow/validate.py (grey zone): marshmallow-65374df0 (OneOf.options bug), marshmallow-f07eadc8 (Email IDN bug)",
+   "go-flag": "card formed (flag_<x>.go, flag_<x>_test.go, basics.md, godoc-current.txt, testdata/godoc-v3.x.txt: the gold patch's approval step is in the card because the synthetic history did it; live training sessions may not); held out 8/8; negatives 0/6",
+   "http-header": "card formed; held out 8/8; negatives 1/6, at the first edit of src/header/name.rs (neg-http-doc-accept-ranges, a doc edit of an existing constant)",
+   "chi-middleware": "NO CARD: the 4 training traces stay 4 families of one. The product joins traces when prompts are similar (cosine >= 0.6) AND the shapes of their edited files overlap (Jaccard >= 0.25), a file's shape being (directory, name-token count, first token, extension). chi names each middleware's files after it (no_sniff.go, allow_methods.go, hsts.go, require_header.go), so only README.md is shared: Jaccard 0.2. Real sessions will name files the same way (upstream does), so the prediction is no card for this family with this binary"
+  },
+  "implications": [
+   "chi-middleware is kept, unchanged: the family was fixed before the dry run, and dropping or renaming it because the product misses it would select families to suit the product. With this binary it is predicted to contribute ~0 to the pooled ITT (about 1/6 of the pooled cost weight) and to cost ~$8.4 for that. A product fix to the file-shape rule, if it lands before the live run, is used only under product.binary_rule (a new dry run recorded here first)",
+   "the grey-zone file signal (card at the first edit of a card file) works in this binary (it was broken in the GO validation's card-branch build) and fired on 3 of the 12 same-file negatives: false fires are defined to include it, and the prompt/edit split is reported"
+  ],
+  "analysis": "synthetic.json: every pre-registered check holds (false stop 0.01 under a true null, two-sided error 0.075 at nominal 0.10); power.json as in `power`; dryrun/RESULTS.synthetic.md and dryrun/results.synthetic.json show the published format on SYNTHETIC numbers",
+  "rerun_7db8b22": {
+   "when": "2026-09-29, before any showcase session; $0",
+   "binary": "release build of 7db8b22 (sha256 009a4ce7…3da11)",
+   "result_file": "dryrun-7db8b22.json; dryrun/gate.<family>.json now hold this run",
+   "validation": "60/60 (unchanged)",
+   "configs": "all 7 plan as before",
+   "analysis": "every synthetic check holds",
+   "cards": {
+    "click-type": "card formed; held out 8/8 at the prompt; negatives 0/6",
+    "mm-validator": "card formed; held out 8/8 at the prompt; negatives 2/6, both at the first edit of src/marshmallow/validate.py (marshmallow-65374df0, marshmallow-f07eadc8), 0 at the prompt",
+    "go-flag": "card formed; held out 8/8 at the prompt; negatives 0/6",
+    "http-header": "card formed; held out 8/8 at the prompt; negatives 1/6, at the first edit of src/header/name.rs (neg-http-doc-accept-ranges), 0 at the prompt",
+    "chi-middleware": "CARD FORMED (README.md, middleware/<x>.go, middleware/<x>_test.go; go test -count=1 ./middleware/); held out 8/8: 7 at the prompt, 1 at the first edit (lowercase-path, at middleware/lowercase_path.go); negatives 0/6"
+   },
+   "false_fires_total": "3/30, all at the first edit of a card file, 0 at the prompt (unchanged from the first dry run)",
+   "implication": "with this binary every family forms a card on synthetic history; the chi-middleware 'no card' prediction is withdrawn for builds of 7db8b22 or later"
+  },
+  "rerun_c04baef": {
+   "when": "2026-09-29 23:04 UTC, before any showcase session; $0",
+   "binary": "release build of c04baef (adage sha256 009a4ce7…3da11, identical to the 7db8b22 build; adage-exec 71877645…75ae)",
+   "result_file": "dryrun-c04baef.json; dryrun/gate.<family>.json now hold this run",
+   "validation": "60/60 (unchanged)",
+   "configs": "all 7 plan as before",
+   "analysis": "every synthetic check holds",
+   "cards": "identical to rerun_7db8b22: every family forms a card; held out 8/8 per family (chi-middleware 7 at the prompt, 1 at the first edit); negatives 2/6 mm-validator, 1/6 http-header, 0/6 elsewhere, all at the first edit",
+   "false_fires_total": "3/30, all at the first edit of a card file, 0 at the prompt",
+   "implication": "this build is the live run's binary (product.binary_live_run)"
+  }
+ },
+ "revisions": [
+  "2026-09-29, before any session: dry-run findings added (chi-middleware forms no card with this binary; false fires include the at-edit signal and the split is reported); interim rule R4 set on synthetic operating characteristics (net pass loss >= 5 alone; the paired-CI condition was dropped because it made the rule too weak against pass harm with no gain in false stops); Rao-Wu bootstrap chosen over the naive percentile bootstrap on known-truth coverage",
+  "2026-09-29, before any session: dry run re-run on a release build of 7db8b22 (card-family grouping by file role); chi-middleware now forms a card and the probe delivers it for 8/8 held-out prompts; false fires unchanged (3/30, all at the first edit); predictions updated; the live run uses a build of 7db8b22 or later whose dry run is recorded here",
+  "2026-09-29 23:05 UTC, before any session: live-run binary built at c04baef with adage-exec and adage-train (product.binary_live_run); its dry run (dryrun-c04baef.json) matches the 7db8b22 run exactly, and the adage binary is byte-identical to it. Dry-run output written to dryrun-c04baef.json instead of the default dryrun.json so the earlier records are kept",
+  "2026-09-29/30, during the live run (no analysis change): the README's commands ran verbatim with `nice` in front of each runner call (the machine is shared); ADAGE_HOME (<root>/private/adage-home) was also created by the driver script before each family's training, as gv_run.py's train phase already does; each root's state.json, gate.json, learner log and learned home were committed to evals/showcase/live/ after every stage as checkpoints (the container restarts); the interim R4 output is live/interim.json. No session was re-run: no infrastructure error, no learner timeout, no refusal",
+  "2026-09-30 03:15 UTC, AFTER the analysis ran (presentation only, no number changes): render.py's results.json `data.raw_runs` now points to evals/showcase/live/ (the committed run records) instead of saying they were not committed. Recorded after the fact because the edit was made after rendering, before commit"
+ ]
+}

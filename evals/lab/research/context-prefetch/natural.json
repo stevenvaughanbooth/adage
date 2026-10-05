@@ -1,0 +1,11 @@
+{
+ "targets": 617,
+ "share_named": 0.277,
+ "hunt_calls_named": 1.19,
+ "hunt_calls_not_named": 1.6,
+ "reduction": 0.252,
+ "reduction_ci90": [
+  0.126,
+  0.368
+ ]
+}

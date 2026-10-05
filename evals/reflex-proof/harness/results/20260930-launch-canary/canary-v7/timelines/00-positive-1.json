@@ -1,0 +1,156 @@
+{
+ "arm": "automatic",
+ "events": [
+  {
+   "adage_pre_context": false,
+   "command": null,
+   "completed": true,
+   "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+   "id": "toolu_01HbYziFhawrn3zdWdruBvEr",
+   "kind": "tool",
+   "name": "Read",
+   "path": null,
+   "receipt_note": false
+  },
+  {
+   "adage_pre_context": false,
+   "command": null,
+   "completed": true,
+   "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+   "id": "toolu_016Moe8v6TcPc7QJQE1Woy6n",
+   "kind": "tool",
+   "name": "Edit",
+   "path": "src/marshmallow/validate.py",
+   "receipt_note": false
+  },
+  {
+   "adage_pre_context": false,
+   "command": null,
+   "completed": true,
+   "digest": "31eb5bf7f494e4a4b93d5e00bcb8f72c22053fd4e7ab67c6599124d7ae16657a",
+   "id": "toolu_01Y7jbwdhRoT1GHKK2H8xoZG",
+   "kind": "tool",
+   "name": "Edit",
+   "path": "src/marshmallow/validate.py",
+   "receipt_note": false
+  },
+  {
+   "adage_pre_context": false,
+   "command": null,
+   "completed": true,
+   "digest": "9ccb273374234910c8ad5e3da53c1d17617a96e8317cf12a18f469aa66e79b96",
+   "id": "toolu_01JUWanJxiyGp4rgrjZL5ThA",
+   "kind": "tool",
+   "name": "Read",
+   "path": null,
+   "receipt_note": false
+  },
+  {
+   "adage_pre_context": false,
+   "command": "wc -l <repo>/tests/test_validate.py",
+   "completed": true,
+   "digest": "9ccb273374234910c8ad5e3da53c1d17617a96e8317cf12a18f469aa66e79b96",
+   "id": "toolu_01UGiymVbuxaBsUqqWqyY64w",
+   "kind": "tool",
+   "name": "Bash",
+   "path": null,
+   "receipt_note": false
+  },
+  {
+   "adage_pre_context": false,
+   "command": null,
+   "completed": true,
+   "digest": "9ccb273374234910c8ad5e3da53c1d17617a96e8317cf12a18f469aa66e79b96",
+   "id": "toolu_01WULyxPQ7ztUetuvEhd2p6u",
+   "kind": "tool",
+   "name": "Read",
+   "path": null,
+   "receipt_note": false
+  },
+  {
+   "adage_pre_context": false,
+   "command": null,
+   "completed": true,
+   "digest": "9ccb273374234910c8ad5e3da53c1d17617a96e8317cf12a18f469aa66e79b96",
+   "id": "toolu_011JSmrSER1SqkCPHsgGimJF",
+   "kind": "tool",
+   "name": "Read",
+   "path": null,
+   "receipt_note": false
+  },
+  {
+   "adage_pre_context": false,
+   "command": null,
+   "completed": true,
+   "digest": "9ccb273374234910c8ad5e3da53c1d17617a96e8317cf12a18f469aa66e79b96",
+   "id": "toolu_01CmHLHgT8TfmYdvb41hQzSf",
+   "kind": "tool",
+   "name": "Read",
+   "path": null,
+   "receipt_note": false
+  },
+  {
+   "adage_pre_context": false,
+   "command": null,
+   "completed": true,
+   "digest": "9ccb273374234910c8ad5e3da53c1d17617a96e8317cf12a18f469aa66e79b96",
+   "id": "toolu_01Fc29ej48xY1bZzLeXuC1FZ",
+   "kind": "tool",
+   "name": "Edit",
+   "path": "tests/test_validate.py",
+   "receipt_note": false
+  },
+  {
+   "adage_pre_context": false,
+   "command": null,
+   "completed": true,
+   "digest": "7fa79a66088a24710a00ef82ad1bd1148482807a7b49a79b228763d40d9b8a45",
+   "id": "toolu_0163ZXiXMmLZjrKJsk1vsGx5",
+   "kind": "tool",
+   "name": "Read",
+   "path": null,
+   "receipt_note": false
+  },
+  {
+   "adage_pre_context": false,
+   "command": null,
+   "completed": true,
+   "digest": "7fa79a66088a24710a00ef82ad1bd1148482807a7b49a79b228763d40d9b8a45",
+   "id": "toolu_011dexUt34je9C9vyB5Q15ZC",
+   "kind": "tool",
+   "name": "Edit",
+   "path": "CHANGELOG.rst",
+   "receipt_note": false
+  },
+  {
+   "changed": [
+    ".pytest_cache/.gitignore",
+    ".pytest_cache/CACHEDIR.TAG",
+    ".pytest_cache/README.md",
+    ".pytest_cache/v/cache/nodeids"
+   ],
+   "command": ".venv/bin/python -m pytest tests/test_validate.py -q",
+   "completion_delivered": true,
+   "digest": "4782bdeecf289efc114af7fcc903e0e4bfa21f55015dfc3a6a183ca0ac0cab7d",
+   "kind": "receipt",
+   "operation": "2b62a830cf53e126b0f8db2f02ce8a7693351dac1076a97267598b02e7e75eb7",
+   "outcome": "applied",
+   "phase": "completed",
+   "route": "github-com-marshmallow-code-marshmallow/learned/run-175d85"
+  },
+  {
+   "adage_pre_context": true,
+   "command": "python -m pytest tests/test_validate.py::test_finite_accepts_finite_numbers tests/test_validate.py::test_finite_rejects_nan_and_infinities tests/test_validate.py::test_finite_custom_message -xvs",
+   "completed": false,
+   "digest": "4782bdeecf289efc114af7fcc903e0e4bfa21f55015dfc3a6a183ca0ac0cab7d",
+   "id": "toolu_01MrVCD7TGngoSBjXkeLf4uL",
+   "kind": "tool",
+   "name": "Bash",
+   "path": null,
+   "receipt_note": true
+  }
+ ],
+ "final_digest": "4782bdeecf289efc114af7fcc903e0e4bfa21f55015dfc3a6a183ca0ac0cab7d",
+ "root": "<repo>",
+ "session": "00-positive-1"
+}

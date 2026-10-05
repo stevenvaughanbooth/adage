@@ -1,0 +1,21 @@
+{
+ "protocol": "all-held-out (data-expansion small repo)",
+ "repos": {
+  "serde-json": {
+   "train": [],
+   "buffer": [],
+   "test": [
+    "serde-json-82c5182b",
+    "serde-json-2c8e2b08",
+    "serde-json-d796aaa4",
+    "serde-json-7933880d"
+   ],
+   "cutoff": "2019-02-28T01:07:20-08:00",
+   "first_test": "2019-02-28T01:07:20-08:00",
+   "note": "all held out: too few tasks for a chronological split"
+  }
+ },
+ "excluded": {},
+ "digest": "34d8493581ba8b13c0800da922841b7ca2bacaff1488b10e446a09c21f86d629",
+ "repo_key": "github.com/serde-rs/json"
+}

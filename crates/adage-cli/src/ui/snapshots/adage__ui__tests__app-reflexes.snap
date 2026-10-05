@@ -1,0 +1,39 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+expression: text
+---
+ adage    1 Live   2 Reflexes (2)  3 Map   4 Health (2)  5 Settings   6 Home                                                   harbor-dispatch · LIVE
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ / filter reflexes, commands, files                     │  ◠ lookup-incident
+ FIRE 2  PRIME 3  INHIBIT 1  all states ▾               │  mode     Suggest · No execution grant
+                                                        │  when     a prompt names a ticket
+ ▾ harbor-dispatch/incidents@0.3.0                      │  do       bin/fetch-incident {item}
+▌  F ◠ lookup-incident         firm     24/25           │  FIRE · firm · harbor-dispatch/incidents@0.3.0 · last fired 12:04:00
+   F ◠ read-linked-files       firm     13/17           │  ○ waits for review: new · conditioned and never reviewed
+   I ◠ dead-end-npm-test       firm     11/43           │
+                                                        │  ADVISORY PREVIEW (EXAMPLE VALUES)
+ ▾ harbor-dispatch/intents@0.3.0                        │  <adage-reflex track="harbor-dispatch/incidents@0.3.0" reflex="lookup-incident"
+   P ◠ start-with-npm-check    forming  6/9             │  strength="fire">
+                                                        │  Incidents here are looked up with a script. A known next step here is:
+ ▾ nascent · waits for review                           │    bin/fetch-incident INC-2045. Ignore this if the user is asking for something else.
+   ○ ◠ regen-openapi-client    nascent  3/4             │  Learned by Adage from this repository's earlier agent sessions; not requested by the user.
+                                                        │  </adage-reflex>
+ ▾ instincts · adage/finish-line@0.1.0                  │
+   P ◉ finish-line/regenerate  firm     –               │  EVIDENCE
+                                                        │    from conditioning: 24/25 traces took it · lower bound 0.80 · 8 turns saved per trace
+ ▸ extinguished · 1                                     │    live since installed: fired 3 · followed 2 · not observed within 3 batches 1 · finish
+                                                        │    line met 0
+                                                        │
+                                                        │  WITH THE REFLEX vs CONTROL
+                                                        │    live since installed: traces where the agent took the step
+                                                        │    with the reflex  █████████████████     10/12
+                                                        │    control          ████                  1/5
+                                                        │
+                                                        │  LIFECYCLE
+                                                        │    ○ nascent ──── ● forming ──── ● firm
+                                                        │    ceiling fire · effect observe
+                                                        │
+                                                        │  ACTIONS
+                                                        │    s strengthen   w weaken   x extinguish   a approve   n pin   m dismiss
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ? keys · : palette · / filter · j/k move · enter expand · tab next tab                                                                        q quit

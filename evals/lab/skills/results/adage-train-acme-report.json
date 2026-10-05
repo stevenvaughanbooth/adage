@@ -1,0 +1,66 @@
+{
+  "run": "skill-lab",
+  "source": "<lab-root>/acme0/.claude/skills/acme-work-item/SKILL.md",
+  "source_sha256": "87c0e73b3cbeb4ec41f44ec5d2f67ccab6fe4d7b757335b34d79ec5437a627fd",
+  "provenance": "synthetic:skill:87c0e73b3cbeb4ec41f44ec5d2f67ccab6fe4d7b757335b34d79ec5437a627fd@skill-lab",
+  "harness": "claude-code",
+  "model": "claude-haiku-4-5",
+  "repo_key": "acme0@8b31871b76f8",
+  "sessions": {
+    "explore": 8
+  },
+  "skipped": 0,
+  "failed": 0,
+  "cost_usd": 0.1574033,
+  "budget_usd": 1.0,
+  "claims": [
+    {
+      "id": "c1",
+      "claim": "lookup: `scripts/wi-lookup` (e.g. W-2042)",
+      "at": "SKILL.md:12",
+      "verdict": "not_compiled",
+      "reason": "followed in 2/2 exploration sessions; below the learning thresholds (default)",
+      "exercised": 2,
+      "followed": 2
+    },
+    {
+      "id": "c2",
+      "claim": "regenerate_after(schema/*.json): `make gen`",
+      "at": "SKILL.md:15",
+      "verdict": "not_compiled",
+      "reason": "followed in 1/1 exploration sessions; below the learning thresholds (default)",
+      "exercised": 1,
+      "followed": 1
+    },
+    {
+      "id": "c3",
+      "claim": "avoid: `make test` → `make test`",
+      "at": "SKILL.md:19",
+      "verdict": "not_compiled",
+      "reason": "followed in 1/2 exploration sessions; below the learning thresholds (default)",
+      "exercised": 2,
+      "followed": 1
+    },
+    {
+      "id": "c4",
+      "claim": "verify: `make ci`",
+      "at": "SKILL.md:22",
+      "verdict": "not_compiled",
+      "reason": "`make ci` was followed in 2/2 sessions, but not after the last edit in enough of them, or as often without an edit (a claimed check is compiled when sessions run it after their edits; thresholds default)",
+      "exercised": 2,
+      "followed": 2
+    },
+    {
+      "id": "c5",
+      "claim": "regenerate_after(?): `make gen`",
+      "at": "SKILL.md:22",
+      "verdict": "never_exercised",
+      "reason": "no input glob is named, so nothing triggers it",
+      "exercised": 0,
+      "followed": 0
+    }
+  ],
+  "staged_routes": [],
+  "acceptance": [],
+  "staged": "<lab-root>/trainhome/train/skill-lab/staged"
+}

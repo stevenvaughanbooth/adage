@@ -3,13 +3,14 @@
 //! hand-built edge cases. Golden files in `tests/golden/`; regenerate with `ADAGE_BLESS=1`.
 
 use adage_core::CommandTable;
+use adage_ingest::{batch, read_trace, AsRecorded, Decode};
 use adage_learn::codex::{discover, parse_rollout, read_rollout};
+use adage_learn::import::Exposure as _;
 use adage_learn::opencode::read_export;
-use adage_learn::{learn, Inputs, LearnConfig};
+use adage_learn::{learn_sessions, LearnConfig};
 use adage_sim::{codex as sim, scenario, CODEX_SEED};
-use adage_tracks::{Aspect, Index, SlotSource, Step, Trigger};
+use adage_tracks::{Index, SlotSource, Step, Strength, Trigger};
 use serde_json::{json, Value};
-use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 fn golden(name: &str, got: &str) {
@@ -32,9 +33,17 @@ fn fixtures() -> Vec<(PathBuf, bool, scenario::Session)> {
         .collect()
 }
 
+/// A fixture rollout decoded as recorded: the simulator's sessions ran in a directory that need
+/// not exist here, and what is checked out on this machine must not change them.
+fn recorded(path: &Path) -> adage_trace::Session {
+    let t = CommandTable::load();
+    let cx = Decode { table: t, locator: &AsRecorded, repo_override: None, subagent: false };
+    read_trace(path, &cx).unwrap_or_else(|| panic!("{}: a usable session", path.display()))
+}
+
 fn describe(path: &Path) -> String {
-    let lines = read_rollout(path).expect("recognised as a rollout");
-    let s = parse_rollout(&lines, &CommandTable::load(), None).expect("a usable session");
+    assert!(read_rollout(path).is_some(), "recognised as a rollout");
+    let s = recorded(path);
     let mut got = format!(
         "file {}\nid {}\nrepo {}\nroot {}\nmodel {:?}\nday {}\nprompt {:?}\nsteered {}\n",
         path.file_name().unwrap().to_string_lossy(),
@@ -70,10 +79,8 @@ fn rollout_fixtures_golden() {
 
 #[test]
 fn every_fixture_parses_with_its_prompt_and_calls() {
-    let t = CommandTable::load();
     for (path, _, s) in fixtures() {
-        let lines = read_rollout(&path).unwrap();
-        let got = parse_rollout(&lines, &t, None).unwrap_or_else(|| panic!("{}", path.display()));
+        let got = recorded(&path);
         assert_eq!(got.prompt, s.prompt, "{}", s.name);
         let calls: usize = s.turns.iter().map(|t| t.calls.len()).sum();
         let distinct: std::collections::BTreeSet<u32> = got.steps.iter().map(|x| x.turn).collect();
@@ -88,22 +95,17 @@ fn every_fixture_parses_with_its_prompt_and_calls() {
 fn learns_all_four_route_kinds_from_codex_rollouts() {
     let d = tempfile::tempdir().unwrap();
     let files: Vec<PathBuf> = fixtures().into_iter().map(|f| f.0).collect();
-    let inputs = Inputs {
-        transcripts: files,
-        outcomes: BTreeMap::new(),
-        repo_override: None,
-        models: None,
-        cache: None,
-        only_repo: None,
-    };
-    let rep = learn(&inputs, &d.path().join("tracks"), &d.path().join("index.json"), &LearnConfig::demo()).unwrap();
+    let batch = batch::read(&files, &batch::Options { locator: &AsRecorded, ..Default::default() });
+    let rep =
+        learn_sessions(batch, None, None, &d.path().join("tracks"), &d.path().join("index.json"), &LearnConfig::demo())
+            .unwrap();
     assert_eq!((rep.sessions_read, rep.sessions_used), (12, 12));
     assert!(rep.repos.contains_key("acme-billing"), "the repository key is the checkout's directory name");
     let index = Index::load(&d.path().join("index.json"));
     let routes: Vec<_> = index.routes.iter().map(|r| &r.route).collect();
     let lookup = routes.iter().find(|r| matches!(r.trigger, Trigger::Prompt { .. })).expect("prompt route");
     assert_eq!(lookup.step, Step::Run { command: "python3 scripts/wi-lookup {item}".into() });
-    assert_eq!(lookup.aspect, Aspect::Green);
+    assert_eq!(lookup.strength, Strength::Fire);
     let linked = routes
         .iter()
         .find(|r| matches!(r.step, Step::ReadBatch { .. }))
@@ -183,6 +185,56 @@ fn out(call: &str, code: i32, body: &str) -> Value {
     )
 }
 
+/// F3: Codex turns a Stop `block` reason into the next user prompt. The finish-line gate's
+/// failure is Adage's direction there, never the person's prompt, and the session is steered.
+#[test]
+fn a_stop_gate_failure_continuation_is_adages_text_not_a_prompt() {
+    let t = CommandTable::load();
+    let cmd = ".venv/bin/python -m pytest tests -q";
+    let gate = adage_runtime::render::stop_gate_failed(cmd, Some(1), None);
+    let lines = vec![
+        meta(json!({})),
+        user("Fix W-2042"),
+        exec("c1", "ls"),
+        out("c1", 0, "Makefile"),
+        user(&gate),
+        exec("c2", cmd),
+        out("c2", 1, "1 failed"),
+    ];
+    let s = parse_rollout(&lines, t, None).expect("parses");
+    assert_eq!((s.prompt.as_str(), s.prompt_count()), ("Fix W-2042", 1));
+    assert!(s.steered && s.directed.contains("finish-line-stop"), "{:?}", s.directed);
+    assert!(s.exposed_to(&[cmd], false), "the rerun after the continuation is not the agent's own");
+}
+
+#[test]
+fn every_prompt_is_kept_and_anchored() {
+    let t = CommandTable::load();
+    let lines = vec![
+        meta(json!({})),
+        user("Pick up W-2042 please"),
+        exec("c1", "python3 scripts/wi-lookup W-2042"),
+        out("c1", 0, "ID: W-2042"),
+        user("now run the tests"),
+        exec("c2", "make test"),
+        exec("c3", "ls"),
+        out("c2", 0, "ok"),
+        out("c3", 0, "Makefile"),
+        user("thanks"),
+    ];
+    let s = parse_rollout(&lines, t, None).expect("parses");
+    let got: Vec<(&str, u32)> = s.prompts.iter().map(|p| (p.text.as_str(), p.at_step)).collect();
+    assert_eq!(got, [("Pick up W-2042 please", 0), ("now run the tests", 1), ("thanks", 3)]);
+    assert_eq!(s.steps.iter().map(|x| x.prompt).collect::<Vec<_>>(), [0, 1, 1]);
+    assert_eq!(s.prompt, s.prompts[0].text);
+    // The committed fixtures: every step serves a prompt the session has.
+    for (path, _, _) in fixtures() {
+        let s = recorded(&path);
+        assert_eq!(s.prompts[0].text, s.prompt, "{}", path.display());
+        assert!(s.steps.iter().all(|x| (x.prompt as usize) < s.prompts.len()));
+    }
+}
+
 #[test]
 fn steering_subagents_paginated_prompts_and_hostile_rollouts() {
     let t = CommandTable::load();
@@ -195,7 +247,7 @@ fn steering_subagents_paginated_prompts_and_hostile_rollouts() {
         user("Pick up W-2042 please"),
         line(
             "response_item",
-            json!({ "type": "message", "role": "developer", "content": [{ "type": "input_text", "text": "<adage-signal track=\"acme-billing/work-items@0.1.0\" route=\"lookup-work-item\" aspect=\"green\">\nIn this repository…\n</adage-signal>" }] }),
+            json!({ "type": "message", "role": "developer", "content": [{ "type": "input_text", "text": "<adage-reflex track=\"acme-billing/work-items@0.1.0\" route=\"lookup-work-item\" strength=\"fire\">\nIn this repository…\n</adage-reflex>" }] }),
         ),
         exec("c1", "python3 scripts/wi-lookup W-2042"),
         exec("c2", "ls"),
@@ -204,7 +256,7 @@ fn steering_subagents_paginated_prompts_and_hostile_rollouts() {
         exec("c3", "sleep 100"),
         user("Adage finish-line check: this session changed files matching schema/*.json …"),
     ];
-    let s = parse_rollout(&steered, &t, None).expect("parses");
+    let s = parse_rollout(&steered, t, None).expect("parses");
     assert_eq!(s.prompt, "Pick up W-2042 please");
     assert!(s.steered);
     assert!(s.directed.contains("lookup-work-item") && s.directed.contains("finish-line-stop"), "{:?}", s.directed);
@@ -219,11 +271,11 @@ fn steering_subagents_paginated_prompts_and_hostile_rollouts() {
         json!({ "parent_thread_id": "019a" }),
     ] {
         let lines = vec![meta(sub), user("do W-1"), exec("c", "ls"), out("c", 0, "")];
-        assert!(parse_rollout(&lines, &t, None).is_none(), "sub-agent threads are skipped");
+        assert!(parse_rollout(&lines, t, None).is_none(), "sub-agent threads are skipped");
     }
     let promptless =
         vec![meta(json!({})), user("Adage finish-line check: run make gen"), exec("c", "make gen"), out("c", 0, "")];
-    assert!(parse_rollout(&promptless, &t, None).is_none());
+    assert!(parse_rollout(&promptless, t, None).is_none());
     let hostile = vec![
         meta(json!({})),
         user("fix W-1"),
@@ -252,14 +304,14 @@ fn steering_subagents_paginated_prompts_and_hostile_rollouts() {
         line("event_msg", json!({ "type": "user_message", "message": 5 })),
         json!("not an object"),
     ];
-    let s = parse_rollout(&hostile, &t, None).expect("parses what it can");
+    let s = parse_rollout(&hostile, t, None).expect("parses what it can");
     assert!(s.steps.len() <= 64 + 2);
     assert!(
         s.steps.iter().any(|x| x.rel_path.as_deref() == Some("schema/x.json")),
         "apply_patch through a local shell call"
     );
-    assert!(parse_rollout(&[json!({ "type": "session_meta", "payload": [] })], &t, None).is_none());
-    assert!(parse_rollout(&[], &t, None).is_none());
+    assert!(parse_rollout(&[json!({ "type": "session_meta", "payload": [] })], t, None).is_none());
+    assert!(parse_rollout(&[], t, None).is_none());
 }
 
 #[test]

@@ -5,7 +5,7 @@
 //! lock (`adage_runtime::fast`). They are deliberately coarse: they say "this event might
 //! matter" far more often than it does, and must never say "cannot matter" when it can.
 
-use crate::model::{Route, Step, Trigger};
+use crate::model::{CtxItem, Route, Step, Trigger};
 use adage_core::spans::SpanKind;
 use serde::{Deserialize, Serialize};
 
@@ -17,6 +17,10 @@ pub struct Triggers {
     /// Span kinds that prompt routes bind from.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub prompt_spans: Vec<SpanKind>,
+    /// Learned value types that prompt routes bind from (`SlotSource::PromptValue`): a prompt
+    /// with no token any of them accepts cannot bind one ([`Triggers::prompt_might_bind`]).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub prompt_types: Vec<adage_core::vtype::Runs>,
     /// Intent routes: every prompt must be embedded.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub intent: bool,
@@ -24,10 +28,11 @@ pub struct Triggers {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub first_prompt: bool,
     /// Words one of which a tool call's input must contain for it to match an after-command or
-    /// after-failure trigger, or to run a command a dead end avoids (recorded for measurement).
+    /// after-failure trigger or any command item of a context, or to run a command a dead end
+    /// avoids (recorded for measurement).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub words: Vec<String>,
-    /// Globs whose edits make finish-line obligations.
+    /// Globs whose edits make finish-line obligations, or are an edit item of a context.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub edit_globs: Vec<String>,
     /// A trigger no word can stand for (not a plain command key): every call takes the full path.
@@ -98,7 +103,21 @@ impl Triggers {
         let mut t = Triggers::default();
         for r in routes {
             match &r.trigger {
-                Trigger::Prompt { span } => t.prompt_spans.push(*span),
+                Trigger::Prompt { span } => {
+                    // A typed slot binds from its own type, not from the (legacy) span kind.
+                    let typed: Vec<&adage_core::vtype::Runs> = r
+                        .slots
+                        .iter()
+                        .filter_map(|s| match &s.source {
+                            crate::model::SlotSource::PromptValue { vtype, .. } => Some(&vtype.runs),
+                            _ => None,
+                        })
+                        .collect();
+                    if typed.is_empty() || r.slots.iter().any(|s| s.source.vtype().is_none()) {
+                        t.prompt_spans.push(*span);
+                    }
+                    t.prompt_types.extend(typed.into_iter().cloned());
+                }
                 Trigger::Intent { .. } => t.intent = true,
                 Trigger::SessionStart => t.first_prompt = true,
                 Trigger::AfterCommand { command } | Trigger::AfterFailure { command, .. } => match key_word(command) {
@@ -106,6 +125,27 @@ impl Triggers {
                     None => t.any_call = true,
                 },
                 Trigger::AfterEdit { paths } => t.edit_globs.push(paths.clone()),
+                // Track G §7.3: context matching reads alphabet events only, so what can matter is
+                // an event of *any* item of the context, not only its last: each one moves the
+                // session's context state. The words of every command, the literal pieces of every
+                // glob, every learned value type, and any intent.
+                Trigger::Context { items, .. } => {
+                    for it in items {
+                        match it {
+                            CtxItem::Act { keys } | CtxItem::Fail { keys, .. } => {
+                                for k in keys {
+                                    match key_word(k) {
+                                        Some(w) => t.words.push(w),
+                                        None => t.any_call = true,
+                                    }
+                                }
+                            }
+                            CtxItem::Edit { glob } => t.edit_globs.push(glob.clone()),
+                            CtxItem::PromptValue { vtype } => t.prompt_types.push(vtype.runs.clone()),
+                            CtxItem::Intent { .. } => t.intent = true,
+                        }
+                    }
+                }
             }
             // A dead end's avoided runners: their runs are recorded (`adage graph` counts them).
             if let Step::Avoid { avoid, .. } = &r.step {
@@ -119,6 +159,8 @@ impl Triggers {
         }
         t.prompt_spans.sort();
         t.prompt_spans.dedup();
+        t.prompt_types.sort();
+        t.prompt_types.dedup();
         t.words.sort();
         t.words.dedup();
         t.edit_globs.sort();
@@ -134,6 +176,16 @@ impl Triggers {
         self.any_call
             || self.words.iter().any(|w| haystack.contains(w.as_str()))
             || self.edit_globs.iter().any(|g| glob_fragments(g).iter().all(|f| haystack.contains(f.as_str())))
+    }
+
+    /// Whether a prompt might bind a learned value type: one of its tokens (as the runtime
+    /// tokenises it, `adage_core::tokens`) is accepted by one of the types. Exact, not coarse:
+    /// the runtime binds only such a token.
+    pub fn prompt_might_bind(&self, text: &str) -> bool {
+        !self.prompt_types.is_empty()
+            && adage_core::tokens::tokens(text, adage_core::tokens::PROMPT_TOKENS)
+                .iter()
+                .any(|tok| self.prompt_types.iter().any(|t| adage_core::vtype::matches(t, &tok.text)))
     }
 
     /// Whether any call at all could matter (no word, glob or opaque trigger).
@@ -165,6 +217,43 @@ mod tests {
         assert_eq!(glob_fragments("*.py"), vec![".py"]);
         assert_eq!(glob_fragments("src/[ab]x/**/*.rs"), vec!["src", "x", ".rs"]);
         assert!(glob_fragments("*").is_empty());
+    }
+
+    /// Track G §7.3: every item of a context can move the session's context state, so each one's
+    /// words, globs and value types are in the triggers, not only the last item's.
+    #[test]
+    fn every_context_item_is_in_the_triggers() {
+        use crate::model::*;
+        let runs = adage_core::vtype::Runs::default();
+        let vtype =
+            ValueType { id: "vt-0".into(), runs: runs.clone(), regex: String::new(), samples_hash: String::new() };
+        let r = Route {
+            id: "ctx".into(),
+            summary: String::new(),
+            trigger: Trigger::Context {
+                items: vec![
+                    CtxItem::Fail { keys: vec!["exec python3 -m pytest".into()], signature: "boom".into() },
+                    CtxItem::Edit { glob: "schema/*.json".into() },
+                    CtxItem::PromptValue { vtype },
+                    CtxItem::Act { keys: vec!["exec make gen".into(), "exec {path}".into()] },
+                ],
+                within: 8,
+            },
+            step: Step::Run { command: "make check".into() },
+            slots: vec![],
+            effect: adage_core::Effect::Verify,
+            strength: crate::model::Strength::Prime,
+            state: RouteState::Firm,
+            exit: vec![],
+            evidence: Evidence::default(),
+            authored: false,
+        };
+        let t = Triggers::of([&r]);
+        assert_eq!(t.words, ["make", "pytest"]);
+        assert_eq!(t.edit_globs, ["schema/*.json"]);
+        assert_eq!(t.prompt_types, [runs]);
+        assert!(t.any_call, "a key no word stands for");
+        assert!(!t.intent);
     }
 
     #[test]

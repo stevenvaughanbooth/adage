@@ -1,0 +1,670 @@
+{
+ "per_slice": [
+  {
+   "bench": "v1",
+   "repo": "attrs",
+   "model": "haiku45",
+   "arm": "control",
+   "k": 13,
+   "n": 16,
+   "rate": 0.812,
+   "wilson90": [
+    0.612,
+    0.922
+   ]
+  },
+  {
+   "bench": "v1",
+   "repo": "attrs",
+   "model": "haiku45",
+   "arm": "adage",
+   "k": 12,
+   "n": 16,
+   "rate": 0.75,
+   "wilson90": [
+    0.545,
+    0.882
+   ],
+   "diff": [
+    -0.062,
+    -0.295,
+    0.178
+   ]
+  },
+  {
+   "bench": "v1",
+   "repo": "attrs",
+   "model": "haiku45",
+   "arm": "agents-md",
+   "k": 12,
+   "n": 16,
+   "rate": 0.75,
+   "wilson90": [
+    0.545,
+    0.882
+   ],
+   "diff": [
+    -0.062,
+    -0.295,
+    0.178
+   ]
+  },
+  {
+   "bench": "v1",
+   "repo": "click",
+   "model": "haiku45",
+   "arm": "control",
+   "k": 8,
+   "n": 16,
+   "rate": 0.5,
+   "wilson90": [
+    0.31,
+    0.69
+   ]
+  },
+  {
+   "bench": "v1",
+   "repo": "click",
+   "model": "haiku45",
+   "arm": "adage",
+   "k": 8,
+   "n": 16,
+   "rate": 0.5,
+   "wilson90": [
+    0.31,
+    0.69
+   ],
+   "diff": [
+    0.0,
+    -0.269,
+    0.269
+   ]
+  },
+  {
+   "bench": "v1",
+   "repo": "click",
+   "model": "haiku45",
+   "arm": "agents-md",
+   "k": 6,
+   "n": 16,
+   "rate": 0.375,
+   "wilson90": [
+    0.208,
+    0.578
+   ],
+   "diff": [
+    -0.125,
+    -0.378,
+    0.153
+   ]
+  },
+  {
+   "bench": "v1",
+   "repo": "click",
+   "model": "sonnet5",
+   "arm": "control",
+   "k": 5,
+   "n": 8,
+   "rate": 0.625,
+   "wilson90": [
+    0.348,
+    0.839
+   ]
+  },
+  {
+   "bench": "v1",
+   "repo": "click",
+   "model": "sonnet5",
+   "arm": "adage",
+   "k": 5,
+   "n": 8,
+   "rate": 0.625,
+   "wilson90": [
+    0.348,
+    0.839
+   ],
+   "diff": [
+    0.0,
+    -0.35,
+    0.35
+   ]
+  },
+  {
+   "bench": "v1",
+   "repo": "click",
+   "model": "sonnet5",
+   "arm": "agents-md",
+   "k": 5,
+   "n": 8,
+   "rate": 0.625,
+   "wilson90": [
+    0.348,
+    0.839
+   ],
+   "diff": [
+    0.0,
+    -0.35,
+    0.35
+   ]
+  },
+  {
+   "bench": "v1",
+   "repo": "marshmallow",
+   "model": "haiku45",
+   "arm": "control",
+   "k": 12,
+   "n": 12,
+   "rate": 1.0,
+   "wilson90": [
+    0.816,
+    1.0
+   ]
+  },
+  {
+   "bench": "v1",
+   "repo": "marshmallow",
+   "model": "haiku45",
+   "arm": "adage",
+   "k": 12,
+   "n": 12,
+   "rate": 1.0,
+   "wilson90": [
+    0.816,
+    1.0
+   ],
+   "diff": [
+    0.0,
+    -0.184,
+    0.184
+   ]
+  },
+  {
+   "bench": "v1",
+   "repo": "marshmallow",
+   "model": "haiku45",
+   "arm": "agents-md",
+   "k": 12,
+   "n": 12,
+   "rate": 1.0,
+   "wilson90": [
+    0.816,
+    1.0
+   ],
+   "diff": [
+    0.0,
+    -0.184,
+    0.184
+   ]
+  },
+  {
+   "bench": "v1",
+   "repo": "urfave-cli",
+   "model": "haiku45",
+   "arm": "control",
+   "k": 3,
+   "n": 16,
+   "rate": 0.188,
+   "wilson90": [
+    0.078,
+    0.388
+   ]
+  },
+  {
+   "bench": "v1",
+   "repo": "urfave-cli",
+   "model": "haiku45",
+   "arm": "adage",
+   "k": 4,
+   "n": 16,
+   "rate": 0.25,
+   "wilson90": [
+    0.118,
+    0.455
+   ],
+   "diff": [
+    0.062,
+    -0.178,
+    0.295
+   ]
+  },
+  {
+   "bench": "v1",
+   "repo": "urfave-cli",
+   "model": "haiku45",
+   "arm": "agents-md",
+   "k": 4,
+   "n": 16,
+   "rate": 0.25,
+   "wilson90": [
+    0.118,
+    0.455
+   ],
+   "diff": [
+    0.062,
+    -0.178,
+    0.295
+   ]
+  },
+  {
+   "bench": "v1",
+   "repo": "vue-core",
+   "model": "haiku45",
+   "arm": "control",
+   "k": 3,
+   "n": 16,
+   "rate": 0.188,
+   "wilson90": [
+    0.078,
+    0.388
+   ]
+  },
+  {
+   "bench": "v1",
+   "repo": "vue-core",
+   "model": "haiku45",
+   "arm": "adage",
+   "k": 3,
+   "n": 16,
+   "rate": 0.188,
+   "wilson90": [
+    0.078,
+    0.388
+   ],
+   "diff": [
+    0.0,
+    -0.229,
+    0.229
+   ]
+  },
+  {
+   "bench": "v1",
+   "repo": "vue-core",
+   "model": "haiku45",
+   "arm": "agents-md",
+   "k": 5,
+   "n": 16,
+   "rate": 0.312,
+   "wilson90": [
+    0.161,
+    0.518
+   ],
+   "diff": [
+    0.125,
+    -0.126,
+    0.358
+   ]
+  },
+  {
+   "bench": "v1",
+   "repo": "vue-core",
+   "model": "sonnet5",
+   "arm": "control",
+   "k": 3,
+   "n": 8,
+   "rate": 0.375,
+   "wilson90": [
+    0.161,
+    0.652
+   ]
+  },
+  {
+   "bench": "v1",
+   "repo": "vue-core",
+   "model": "sonnet5",
+   "arm": "adage",
+   "k": 2,
+   "n": 8,
+   "rate": 0.25,
+   "wilson90": [
+    0.087,
+    0.54
+   ],
+   "diff": [
+    -0.125,
+    -0.447,
+    0.235
+   ]
+  },
+  {
+   "bench": "v1",
+   "repo": "vue-core",
+   "model": "sonnet5",
+   "arm": "agents-md",
+   "k": 1,
+   "n": 8,
+   "rate": 0.125,
+   "wilson90": [
+    0.028,
+    0.411
+   ],
+   "diff": [
+    -0.25,
+    -0.543,
+    0.107
+   ]
+  },
+  {
+   "bench": "v2",
+   "repo": "attrs",
+   "model": "haiku45",
+   "arm": "control",
+   "k": 19,
+   "n": 24,
+   "rate": 0.792,
+   "wilson90": [
+    0.63,
+    0.895
+   ]
+  },
+  {
+   "bench": "v2",
+   "repo": "attrs",
+   "model": "haiku45",
+   "arm": "adage",
+   "k": 19,
+   "n": 24,
+   "rate": 0.792,
+   "wilson90": [
+    0.63,
+    0.895
+   ],
+   "diff": [
+    0.0,
+    -0.192,
+    0.192
+   ]
+  },
+  {
+   "bench": "v2",
+   "repo": "click",
+   "model": "haiku45",
+   "arm": "control",
+   "k": 10,
+   "n": 24,
+   "rate": 0.417,
+   "wilson90": [
+    0.268,
+    0.582
+   ]
+  },
+  {
+   "bench": "v2",
+   "repo": "click",
+   "model": "haiku45",
+   "arm": "adage",
+   "k": 9,
+   "n": 24,
+   "rate": 0.375,
+   "wilson90": [
+    0.233,
+    0.542
+   ],
+   "diff": [
+    -0.042,
+    -0.26,
+    0.182
+   ]
+  },
+  {
+   "bench": "v2",
+   "repo": "click",
+   "model": "sonnet5",
+   "arm": "control",
+   "k": 5,
+   "n": 8,
+   "rate": 0.625,
+   "wilson90": [
+    0.348,
+    0.839
+   ]
+  },
+  {
+   "bench": "v2",
+   "repo": "click",
+   "model": "sonnet5",
+   "arm": "adage",
+   "k": 4,
+   "n": 8,
+   "rate": 0.5,
+   "wilson90": [
+    0.249,
+    0.751
+   ],
+   "diff": [
+    -0.125,
+    -0.455,
+    0.249
+   ]
+  },
+  {
+   "bench": "v2",
+   "repo": "marshmallow",
+   "model": "haiku45",
+   "arm": "control",
+   "k": 18,
+   "n": 18,
+   "rate": 1.0,
+   "wilson90": [
+    0.869,
+    1.0
+   ]
+  },
+  {
+   "bench": "v2",
+   "repo": "marshmallow",
+   "model": "haiku45",
+   "arm": "adage",
+   "k": 18,
+   "n": 18,
+   "rate": 1.0,
+   "wilson90": [
+    0.869,
+    1.0
+   ],
+   "diff": [
+    0.0,
+    -0.131,
+    0.131
+   ]
+  },
+  {
+   "bench": "v2",
+   "repo": "vue-core",
+   "model": "haiku45",
+   "arm": "control",
+   "k": 6,
+   "n": 16,
+   "rate": 0.375,
+   "wilson90": [
+    0.208,
+    0.578
+   ]
+  },
+  {
+   "bench": "v2",
+   "repo": "vue-core",
+   "model": "haiku45",
+   "arm": "adage",
+   "k": 5,
+   "n": 16,
+   "rate": 0.312,
+   "wilson90": [
+    0.161,
+    0.518
+   ],
+   "diff": [
+    -0.062,
+    -0.316,
+    0.202
+   ]
+  },
+  {
+   "bench": "v2",
+   "repo": "vue-core",
+   "model": "sonnet5",
+   "arm": "control",
+   "k": 2,
+   "n": 8,
+   "rate": 0.25,
+   "wilson90": [
+    0.087,
+    0.54
+   ]
+  },
+  {
+   "bench": "v2",
+   "repo": "vue-core",
+   "model": "sonnet5",
+   "arm": "adage",
+   "k": 3,
+   "n": 8,
+   "rate": 0.375,
+   "wilson90": [
+    0.161,
+    0.652
+   ],
+   "diff": [
+    0.125,
+    -0.235,
+    0.447
+   ]
+  }
+ ],
+ "pooled": {
+  "v1/haiku45/adage": {
+   "rd": 0.0,
+   "ci90": [
+    -0.066,
+    0.066
+   ],
+   "n_arm": 76,
+   "n_control": 76
+  },
+  "v1/haiku45/agents-md": {
+   "rd": 0.0,
+   "ci90": [
+    -0.092,
+    0.092
+   ],
+   "n_arm": 76,
+   "n_control": 76
+  },
+  "v1/sonnet5/adage": {
+   "rd": -0.062,
+   "ci90": [
+    -0.188,
+    0.0
+   ],
+   "n_arm": 16,
+   "n_control": 16
+  },
+  "v1/sonnet5/agents-md": {
+   "rd": -0.125,
+   "ci90": [
+    -0.25,
+    0.0
+   ],
+   "n_arm": 16,
+   "n_control": 16
+  },
+  "v1/all/adage": {
+   "rd": -0.011,
+   "ci90": [
+    -0.071,
+    0.044
+   ],
+   "n_arm": 92,
+   "n_control": 92
+  },
+  "v1/all/agents-md": {
+   "rd": -0.022,
+   "ci90": [
+    -0.097,
+    0.052
+   ],
+   "n_arm": 92,
+   "n_control": 92
+  },
+  "v2/haiku45/adage": {
+   "rd": -0.024,
+   "ci90": [
+    -0.087,
+    0.025
+   ],
+   "n_arm": 82,
+   "n_control": 82
+  },
+  "v2/sonnet5/adage": {
+   "rd": 0.0,
+   "ci90": [
+    -0.125,
+    0.125
+   ],
+   "n_arm": 16,
+   "n_control": 16
+  },
+  "v2/all/adage": {
+   "rd": -0.02,
+   "ci90": [
+    -0.087,
+    0.041
+   ],
+   "n_arm": 98,
+   "n_control": 98
+  },
+  "all/haiku45/adage": {
+   "rd": -0.013,
+   "ci90": [
+    -0.06,
+    0.032
+   ],
+   "n_arm": 158,
+   "n_control": 158
+  },
+  "all/haiku45/agents-md": {
+   "rd": 0.0,
+   "ci90": [
+    -0.092,
+    0.092
+   ],
+   "n_arm": 76,
+   "n_control": 158
+  },
+  "all/sonnet5/adage": {
+   "rd": -0.031,
+   "ci90": [
+    -0.125,
+    0.062
+   ],
+   "n_arm": 32,
+   "n_control": 32
+  },
+  "all/sonnet5/agents-md": {
+   "rd": -0.125,
+   "ci90": [
+    -0.25,
+    0.0
+   ],
+   "n_arm": 16,
+   "n_control": 32
+  },
+  "all/all/adage": {
+   "rd": -0.016,
+   "ci90": [
+    -0.063,
+    0.029
+   ],
+   "n_arm": 190,
+   "n_control": 190
+  },
+  "all/all/agents-md": {
+   "rd": -0.022,
+   "ci90": [
+    -0.097,
+    0.052
+   ],
+   "n_arm": 92,
+   "n_control": 190
+  }
+ }
+}

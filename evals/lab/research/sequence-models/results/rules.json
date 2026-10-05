@@ -1,0 +1,1644 @@
+[
+ {
+  "a": [
+   "Read src/marshmallow/validate.py",
+   "Glob src/marshmallow/validate.py"
+  ],
+  "b": [
+   "Bash git add src/attr/validators.py && git commit -m \"$(cat <<'EOF' <<more",
+   "Bash git add src/marshmallow/validate.py tests/test_validate.py && git commit -m \"$(cat <<'EOF' <<more",
+   "Bash git add src/attr/validators.py tests/test_validators.py && git commit -m \"$(cat <<'EOF' <<more"
+  ],
+  "p_train": 0.5,
+  "lift": 5.47,
+  "support_sessions": 11,
+  "train_skip_dist": 19.8,
+  "train_inst_waste": 2.0,
+  "held_out_n": 20,
+  "held_out_precision": 0.4,
+  "held_out_ci": [
+   0.24237593194656679,
+   0.5814593716787926
+  ],
+  "held_out_inst_waste": 3.25,
+  "repos": [
+   "marshmallow"
+  ]
+ },
+ {
+  "a": [
+   "Read tests/test_validators.py"
+  ],
+  "b": [
+   "Bash git add src/attr/validators.py && git commit -m \"$(cat <<'EOF' <<more",
+   "Bash git add src/marshmallow/validate.py tests/test_validate.py && git commit -m \"$(cat <<'EOF' <<more",
+   "Bash git add src/attr/validators.py tests/test_validators.py && git commit -m \"$(cat <<'EOF' <<more"
+  ],
+  "p_train": 0.429,
+  "lift": 4.69,
+  "support_sessions": 11,
+  "train_skip_dist": 17.2,
+  "train_inst_waste": 2.56,
+  "held_out_n": 62,
+  "held_out_precision": 0.339,
+  "held_out_ci": [
+   0.2484361534801692,
+   0.44247361883237807
+  ],
+  "held_out_inst_waste": 2.24,
+  "repos": [
+   "attrs"
+  ]
+ },
+ {
+  "a": [
+   "Read flag_bool_with_inverse.go",
+   "Read flag_bool_with_inverse_test.go",
+   "Read flag_impl.go"
+  ],
+  "b": [
+   "Bash go test -v -run \"TestBareDash\" 2>&1",
+   "Bash go test ... --timeout=10m",
+   "Bash go test -v 2>&1 | tail -50"
+  ],
+  "p_train": 0.415,
+  "lift": 15.8,
+  "support_sessions": 9,
+  "train_skip_dist": 13.6,
+  "train_inst_waste": 1.31,
+  "held_out_n": 25,
+  "held_out_precision": 0.28,
+  "held_out_ci": [
+   0.15953015329646714,
+   0.44344428998798097
+  ],
+  "held_out_inst_waste": 1.71,
+  "repos": [
+   "urfave-cli"
+  ]
+ },
+ {
+  "a": [
+   "Read tests/test_make.py",
+   "Read tests/test_options.py",
+   "Read tests/test_utils.py"
+  ],
+  "b": [
+   "Bash .venv/bin/python -m pytest tests/ -x --tb=short 2>&1 | head -100",
+   "Bash .venv/bin/python -m pytest tests/ -x --tb=short -q",
+   "Bash .venv/bin/python -m pytest tests/ -x --tb=short 2>&1 | tail -50"
+  ],
+  "p_train": 0.414,
+  "lift": 6.1,
+  "support_sessions": 16,
+  "train_skip_dist": 16.5,
+  "train_inst_waste": 3.54,
+  "held_out_n": 65,
+  "held_out_precision": 0.231,
+  "held_out_ci": [
+   0.15661458435879988,
+   0.3264447150166989
+  ],
+  "held_out_inst_waste": 3.27,
+  "repos": [
+   "attrs",
+   "click",
+   "marshmallow"
+  ]
+ },
+ {
+  "a": [
+   "Read tests/test_validators.py"
+  ],
+  "b": [
+   "Bash .venv/bin/python -m pytest tests/test_make.py::TestFields -xvs",
+   "Bash .venv/bin/python -m pytest tests/test_validators.py -x",
+   "Bash .venv/bin/python -m pytest tests/test_validators.py -q"
+  ],
+  "p_train": 0.381,
+  "lift": 6.64,
+  "support_sessions": 11,
+  "train_skip_dist": 11.2,
+  "train_inst_waste": 1.96,
+  "held_out_n": 62,
+  "held_out_precision": 0.177,
+  "held_out_ci": [
+   0.11162977903784446,
+   0.2701897655872504
+  ],
+  "held_out_inst_waste": 2.18,
+  "repos": [
+   "attrs"
+  ]
+ },
+ {
+  "a": [
+   "Read tests/test_make.py",
+   "Read tests/test_options.py",
+   "Read tests/test_utils.py"
+  ],
+  "b": [
+   "Bash .venv/bin/python -m pytest tests/test_make.py::TestFields -xvs",
+   "Bash .venv/bin/python -m pytest tests/test_validators.py -x",
+   "Bash .venv/bin/python -m pytest tests/test_validators.py -q"
+  ],
+  "p_train": 0.374,
+  "lift": 6.52,
+  "support_sessions": 14,
+  "train_skip_dist": 7.8,
+  "train_inst_waste": 1.84,
+  "held_out_n": 65,
+  "held_out_precision": 0.031,
+  "held_out_ci": [
+   0.010234033024330512,
+   0.08881217445868153
+  ],
+  "held_out_inst_waste": 2.5,
+  "repos": [
+   "attrs",
+   "click",
+   "marshmallow"
+  ]
+ },
+ {
+  "a": [
+   "Write /tmp/test_debug.py",
+   "Write /tmp/test_hide_input_leak.py",
+   "Write /tmp/test_comprehensive.py"
+  ],
+  "b": [
+   "Write /tmp/test_debug.py",
+   "Write /tmp/test_hide_input_leak.py",
+   "Write /tmp/test_comprehensive.py"
+  ],
+  "p_train": 0.356,
+  "lift": 66.74,
+  "support_sessions": 8,
+  "train_skip_dist": 4.8,
+  "train_inst_waste": 1.57,
+  "held_out_n": 14,
+  "held_out_precision": 0.214,
+  "held_out_ci": [
+   0.08906095297635841,
+   0.4320698965225499
+  ],
+  "held_out_inst_waste": 1.0,
+  "repos": [
+   "attrs",
+   "click"
+  ]
+ },
+ {
+  "a": [
+   "Read tests/test_termui.py"
+  ],
+  "b": [
+   "Bash python -m pytest tests/test_termui.py -q",
+   "Bash python -m pytest tests/test_fields.py -q",
+   "Bash python -m pytest tests/test_termui.py -x 2>&1 | tail -20"
+  ],
+  "p_train": 0.349,
+  "lift": 5.74,
+  "support_sessions": 9,
+  "train_skip_dist": 17.4,
+  "train_inst_waste": 2.2,
+  "held_out_n": 31,
+  "held_out_precision": 0.097,
+  "held_out_ci": [
+   0.03933871183855415,
+   0.21895413046486192
+  ],
+  "held_out_inst_waste": 9.0,
+  "repos": [
+   "click"
+  ]
+ },
+ {
+  "a": [
+   "Edit src/click/termui.py",
+   "Edit src/click/_termui_impl.py"
+  ],
+  "b": [
+   "Bash python -m pytest tests/test_termui.py -q",
+   "Bash python -m pytest tests/test_fields.py -q",
+   "Bash python -m pytest tests/test_termui.py -x 2>&1 | tail -20"
+  ],
+  "p_train": 0.345,
+  "lift": 5.68,
+  "support_sessions": 11,
+  "train_skip_dist": 13.7,
+  "train_inst_waste": 2.24,
+  "held_out_n": 60,
+  "held_out_precision": 0.317,
+  "held_out_ci": [
+   0.2276212018844361,
+   0.4215353185615656
+  ],
+  "held_out_inst_waste": 4.11,
+  "repos": [
+   "click"
+  ]
+ },
+ {
+  "a": [
+   "Edit src/attr/validators.py",
+   "Edit src/attr/validators.pyi"
+  ],
+  "b": [
+   "Bash .venv/bin/python -m pytest tests/test_make.py::TestFields -xvs",
+   "Bash .venv/bin/python -m pytest tests/test_validators.py -x",
+   "Bash .venv/bin/python -m pytest tests/test_validators.py -q"
+  ],
+  "p_train": 0.333,
+  "lift": 5.81,
+  "support_sessions": 12,
+  "train_skip_dist": 9.8,
+  "train_inst_waste": 2.12,
+  "held_out_n": 46,
+  "held_out_precision": 0.152,
+  "held_out_ci": [
+   0.0846572536115502,
+   0.2583398396638711
+  ],
+  "held_out_inst_waste": 2.29,
+  "repos": [
+   "attrs"
+  ]
+ },
+ {
+  "a": [
+   "Grep def fields\\( py",
+   "Bash grep -n \"def test.*fields\" tests/test_make.py",
+   "Grep def fields py"
+  ],
+  "b": [
+   "Bash git add src/attr/validators.py && git commit -m \"$(cat <<'EOF' <<more",
+   "Bash git add src/marshmallow/validate.py tests/test_validate.py && git commit -m \"$(cat <<'EOF' <<more",
+   "Bash git add src/attr/validators.py tests/test_validators.py && git commit -m \"$(cat <<'EOF' <<more"
+  ],
+  "p_train": 0.329,
+  "lift": 3.6,
+  "support_sessions": 13,
+  "train_skip_dist": 24.0,
+  "train_inst_waste": 2.68,
+  "held_out_n": 38,
+  "held_out_precision": 0.184,
+  "held_out_ci": [
+   0.10307253608887472,
+   0.3073341543212058
+  ],
+  "held_out_inst_waste": 3.0,
+  "repos": [
+   "attrs",
+   "marshmallow"
+  ]
+ },
+ {
+  "a": [
+   "Bash grep -n \"deep_iterable\\|deep_mapping\" tests/test_validators.py | head -20",
+   "Bash grep -n \"deep_iterable\\|deep_mapping\" tests/test_validators.py | head -30",
+   "Bash grep -n \"deep_mapping\" tests/test_validators.py | head -30"
+  ],
+  "b": [
+   "Bash python -m pytest tests/test_validators.py -x --tb=short",
+   "Bash python -m pytest tests/test_make.py -x --tb=short",
+   "Bash python -m pytest tests/test_make.py --tb=short 2>&1 | tail -50"
+  ],
+  "p_train": 0.327,
+  "lift": 5.38,
+  "support_sessions": 10,
+  "train_skip_dist": 15.4,
+  "train_inst_waste": 2.25,
+  "held_out_n": 54,
+  "held_out_precision": 0.315,
+  "held_out_ci": [
+   0.22181056359160412,
+   0.4254932282012433
+  ],
+  "held_out_inst_waste": 2.94,
+  "repos": [
+   "attrs"
+  ]
+ },
+ {
+  "a": [
+   "Bash grep -n \"deep_iterable\\|deep_mapping\" tests/test_validators.py | head -20",
+   "Bash grep -n \"deep_iterable\\|deep_mapping\" tests/test_validators.py | head -30",
+   "Bash grep -n \"deep_mapping\" tests/test_validators.py | head -30"
+  ],
+  "b": [
+   "Bash git add src/attr/validators.py && git commit -m \"$(cat <<'EOF' <<more",
+   "Bash git add src/marshmallow/validate.py tests/test_validate.py && git commit -m \"$(cat <<'EOF' <<more",
+   "Bash git add src/attr/validators.py tests/test_validators.py && git commit -m \"$(cat <<'EOF' <<more"
+  ],
+  "p_train": 0.327,
+  "lift": 3.57,
+  "support_sessions": 9,
+  "train_skip_dist": 18.1,
+  "train_inst_waste": 2.5,
+  "held_out_n": 54,
+  "held_out_precision": 0.241,
+  "held_out_ci": [
+   0.158902301475421,
+   0.3473230070345653
+  ],
+  "held_out_inst_waste": 2.46,
+  "repos": [
+   "attrs"
+  ]
+ },
+ {
+  "a": [
+   "Bash grep -n \"deep_iterable\\|deep_mapping\" tests/test_validators.py | head -20",
+   "Bash grep -n \"deep_iterable\\|deep_mapping\" tests/test_validators.py | head -30",
+   "Bash grep -n \"deep_mapping\" tests/test_validators.py | head -30"
+  ],
+  "b": [
+   "Bash .venv/bin/python -m pytest tests/test_make.py::TestFields -xvs",
+   "Bash .venv/bin/python -m pytest tests/test_validators.py -x",
+   "Bash .venv/bin/python -m pytest tests/test_validators.py -q"
+  ],
+  "p_train": 0.327,
+  "lift": 5.69,
+  "support_sessions": 10,
+  "train_skip_dist": 12.5,
+  "train_inst_waste": 2.06,
+  "held_out_n": 54,
+  "held_out_precision": 0.074,
+  "held_out_ci": [
+   0.03368601553783785,
+   0.15511270558571116
+  ],
+  "held_out_inst_waste": 2.25,
+  "repos": [
+   "attrs"
+  ]
+ },
+ {
+  "a": [
+   "Bash find . -type f -name \"*.go\" | head -20",
+   "Bash find . -name \"*.go\" -type f | head -20",
+   "Bash find . -type d -name \"*compiler*\" | head -20"
+  ],
+  "b": [
+   "Bash go test -v -run \"TestBareDash\" 2>&1",
+   "Bash go test ... --timeout=10m",
+   "Bash go test -v 2>&1 | tail -50"
+  ],
+  "p_train": 0.326,
+  "lift": 12.4,
+  "support_sessions": 14,
+  "train_skip_dist": 17.7,
+  "train_inst_waste": 1.57,
+  "held_out_n": 19,
+  "held_out_precision": 0.263,
+  "held_out_ci": [
+   0.13442670077258825,
+   0.4509418777672411
+  ],
+  "held_out_inst_waste": 2.0,
+  "repos": [
+   "urfave-cli"
+  ]
+ },
+ {
+  "a": [
+   "Bash find . -type f -name \"*.py\" | head -20",
+   "Bash find . -type f -name \"*.pyi\" | head -20",
+   "Bash find src -type f -name \"*.py\" | head -20"
+  ],
+  "b": [
+   "Bash git add src/attr/validators.py && git commit -m \"$(cat <<'EOF' <<more",
+   "Bash git add src/marshmallow/validate.py tests/test_validate.py && git commit -m \"$(cat <<'EOF' <<more",
+   "Bash git add src/attr/validators.py tests/test_validators.py && git commit -m \"$(cat <<'EOF' <<more"
+  ],
+  "p_train": 0.324,
+  "lift": 3.55,
+  "support_sessions": 33,
+  "train_skip_dist": 29.3,
+  "train_inst_waste": 3.74,
+  "held_out_n": 79,
+  "held_out_precision": 0.291,
+  "held_out_ci": [
+   0.21509348922802782,
+   0.38101952691735436
+  ],
+  "held_out_inst_waste": 3.7,
+  "repos": [
+   "attrs",
+   "click",
+   "marshmallow"
+  ]
+ },
+ {
+  "a": [
+   "Edit src/attr/validators.py",
+   "Edit src/attr/validators.pyi"
+  ],
+  "b": [
+   "Bash python -m pytest tests/test_validators.py -x --tb=short",
+   "Bash python -m pytest tests/test_make.py -x --tb=short",
+   "Bash python -m pytest tests/test_make.py --tb=short 2>&1 | tail -50"
+  ],
+  "p_train": 0.292,
+  "lift": 4.81,
+  "support_sessions": 10,
+  "train_skip_dist": 12.1,
+  "train_inst_waste": 2.67,
+  "held_out_n": 46,
+  "held_out_precision": 0.457,
+  "held_out_ci": [
+   0.34150482607929294,
+   0.5763698105801347
+  ],
+  "held_out_inst_waste": 3.1,
+  "repos": [
+   "attrs"
+  ]
+ },
+ {
+  "a": [
+   "Edit src/attr/validators.py",
+   "Edit src/attr/validators.pyi"
+  ],
+  "b": [
+   "Bash git add src/attr/validators.py && git commit -m \"$(cat <<'EOF' <<more",
+   "Bash git add src/marshmallow/validate.py tests/test_validate.py && git commit -m \"$(cat <<'EOF' <<more",
+   "Bash git add src/attr/validators.py tests/test_validators.py && git commit -m \"$(cat <<'EOF' <<more"
+  ],
+  "p_train": 0.278,
+  "lift": 3.04,
+  "support_sessions": 10,
+  "train_skip_dist": 17.2,
+  "train_inst_waste": 3.05,
+  "held_out_n": 46,
+  "held_out_precision": 0.239,
+  "held_out_ci": [
+   0.1520427372821699,
+   0.35520508267439604
+  ],
+  "held_out_inst_waste": 2.45,
+  "repos": [
+   "attrs"
+  ]
+ },
+ {
+  "a": [
+   "Grep def fields\\( py",
+   "Bash grep -n \"def test.*fields\" tests/test_make.py",
+   "Grep def fields py"
+  ],
+  "b": [
+   "Bash .venv/bin/python -m pytest tests/test_make.py::TestFields -xvs",
+   "Bash .venv/bin/python -m pytest tests/test_validators.py -x",
+   "Bash .venv/bin/python -m pytest tests/test_validators.py -q"
+  ],
+  "p_train": 0.276,
+  "lift": 4.82,
+  "support_sessions": 10,
+  "train_skip_dist": 13.2,
+  "train_inst_waste": 1.48,
+  "held_out_n": 38,
+  "held_out_precision": 0.026,
+  "held_out_ci": [
+   0.005892242967082402,
+   0.10971779264803845
+  ],
+  "held_out_inst_waste": 3.0,
+  "repos": [
+   "attrs",
+   "click",
+   "marshmallow"
+  ]
+ },
+ {
+  "a": [
+   "Bash grep -n \"func buildTestContext\" *.go",
+   "Bash grep -n \"func runCompletion\\|func shouldRunCompletion\" *.go",
+   "Bash grep -n \"ShellComplete\" *.go | head -40"
+  ],
+  "b": [
+   "Bash go test -v -run \"TestBareDash\" 2>&1",
+   "Bash go test ... --timeout=10m",
+   "Bash go test -v 2>&1 | tail -50"
+  ],
+  "p_train": 0.275,
+  "lift": 10.45,
+  "support_sessions": 10,
+  "train_skip_dist": 12.8,
+  "train_inst_waste": 1.14,
+  "held_out_n": 11,
+  "held_out_precision": 0.455,
+  "held_out_ci": [
+   0.24209040759667674,
+   0.6849489783667957
+  ],
+  "held_out_inst_waste": 1.2,
+  "repos": [
+   "urfave-cli"
+  ]
+ },
+ {
+  "a": [
+   "Grep generate-shell-completion go",
+   "Grep UseShortOptionHandling go",
+   "Grep prefixFor"
+  ],
+  "b": [
+   "Bash go test -v -run \"TestBareDash\" 2>&1",
+   "Bash go test ... --timeout=10m",
+   "Bash go test -v 2>&1 | tail -50"
+  ],
+  "p_train": 0.273,
+  "lift": 10.38,
+  "support_sessions": 9,
+  "train_skip_dist": 14.9,
+  "train_inst_waste": 1.87,
+  "held_out_n": 21,
+  "held_out_precision": 0.048,
+  "held_out_ci": [
+   0.010694923098549346,
+   0.1878210659801764
+  ],
+  "held_out_inst_waste": 2.0,
+  "repos": [
+   "urfave-cli"
+  ]
+ },
+ {
+  "a": [
+   "Read help.go",
+   "Read completion_test.go",
+   "Read help_test.go"
+  ],
+  "b": [
+   "Bash go test -v -run \"TestBareDash\" 2>&1",
+   "Bash go test ... --timeout=10m",
+   "Bash go test -v 2>&1 | tail -50"
+  ],
+  "p_train": 0.271,
+  "lift": 10.3,
+  "support_sessions": 8,
+  "train_skip_dist": 11.8,
+  "train_inst_waste": 1.74,
+  "held_out_n": 34,
+  "held_out_precision": 0.029,
+  "held_out_ci": [
+   0.006588373606571867,
+   0.1216201425702683
+  ],
+  "held_out_inst_waste": 1.0,
+  "repos": [
+   "urfave-cli"
+  ]
+ },
+ {
+  "a": [
+   "Bash find . -type f -name \"*.py\" | head -20",
+   "Bash find . -type f -name \"*.pyi\" | head -20",
+   "Bash find src -type f -name \"*.py\" | head -20"
+  ],
+  "b": [
+   "Bash python -m pytest tests/test_make.py::TestFields -xvs",
+   "Bash python -m pytest tests/test_schema.py::test_fields_must_be_declared_as_instances -xvs",
+   "Bash python -m pytest tests/test_termui.py -xvs 2>&1 | head -100"
+  ],
+  "p_train": 0.269,
+  "lift": 7.69,
+  "support_sessions": 26,
+  "train_skip_dist": 22.6,
+  "train_inst_waste": 2.38,
+  "held_out_n": 79,
+  "held_out_precision": 0.278,
+  "held_out_ci": [
+   0.20391262048019893,
+   0.3677223966436912
+  ],
+  "held_out_inst_waste": 3.27,
+  "repos": [
+   "attrs",
+   "click",
+   "marshmallow"
+  ]
+ },
+ {
+  "a": [
+   "Edit src/marshmallow/validate.py",
+   "Edit src/marshmallow/fields.py",
+   "Edit src/marshmallow/schema.py"
+  ],
+  "b": [
+   "Bash git add src/attr/validators.py && git commit -m \"$(cat <<'EOF' <<more",
+   "Bash git add src/marshmallow/validate.py tests/test_validate.py && git commit -m \"$(cat <<'EOF' <<more",
+   "Bash git add src/attr/validators.py tests/test_validators.py && git commit -m \"$(cat <<'EOF' <<more"
+  ],
+  "p_train": 0.267,
+  "lift": 2.92,
+  "support_sessions": 11,
+  "train_skip_dist": 15.1,
+  "train_inst_waste": 1.75,
+  "held_out_n": 37,
+  "held_out_precision": 0.243,
+  "held_out_ci": [
+   0.14737826818219524,
+   0.37410493241519516
+  ],
+  "held_out_inst_waste": 2.22,
+  "repos": [
+   "marshmallow"
+  ]
+ },
+ {
+  "a": [
+   "Edit src/attr/validators.py",
+   "Edit src/attr/validators.pyi"
+  ],
+  "b": [
+   "Bash pip install -e \".[dev]\" -q && python -m pytest tests/ -x --tb=short --ignore=tests/test_packaging.py -q",
+   "Bash pip install pytest -q && python -m pytest tests/test_validate.py::test_oneof_options -xvs",
+   "Bash python3 -m pip install pytest -q 2>&1 | tail -5"
+  ],
+  "p_train": 0.264,
+  "lift": 6.06,
+  "support_sessions": 9,
+  "train_skip_dist": 8.4,
+  "train_inst_waste": 1.74,
+  "held_out_n": 46,
+  "held_out_precision": 0.304,
+  "held_out_ci": [
+   0.20621802577852294,
+   0.42421783918890155
+  ],
+  "held_out_inst_waste": 1.57,
+  "repos": [
+   "attrs"
+  ]
+ },
+ {
+  "a": [
+   "Read src/click/termui.py",
+   "Read src/click/_termui_impl.py",
+   "Read src/click/termui.py [136, 152]"
+  ],
+  "b": [
+   "Bash python -m pytest tests/test_termui.py -q",
+   "Bash python -m pytest tests/test_fields.py -q",
+   "Bash python -m pytest tests/test_termui.py -x 2>&1 | tail -20"
+  ],
+  "p_train": 0.262,
+  "lift": 4.31,
+  "support_sessions": 13,
+  "train_skip_dist": 19.0,
+  "train_inst_waste": 2.45,
+  "held_out_n": 62,
+  "held_out_precision": 0.242,
+  "held_out_ci": [
+   0.16448707007029406,
+   0.34096856562978173
+  ],
+  "held_out_inst_waste": 4.33,
+  "repos": [
+   "click"
+  ]
+ },
+ {
+  "a": [
+   "Grep fish src/click/shell_completion.py",
+   "Grep def _parse_decls src/click/core.py content",
+   "Grep get_pager_file|echo_via_pager src/click"
+  ],
+  "b": [
+   "Bash python -m pytest tests/test_termui.py -q",
+   "Bash python -m pytest tests/test_fields.py -q",
+   "Bash python -m pytest tests/test_termui.py -x 2>&1 | tail -20"
+  ],
+  "p_train": 0.259,
+  "lift": 4.26,
+  "support_sessions": 10,
+  "train_skip_dist": 18.1,
+  "train_inst_waste": 1.93,
+  "held_out_n": 41,
+  "held_out_precision": 0.317,
+  "held_out_ci": [
+   0.21205873978127085,
+   0.44473915021215693
+  ],
+  "held_out_inst_waste": 4.15,
+  "repos": [
+   "click"
+  ]
+ },
+ {
+  "a": [
+   "Bash source .venv/bin/activate && python << 'EOF' <<more",
+   "Bash source .venv/bin/activate && python -c \" <<more",
+   "Bash source .venv/bin/activate && python3 << 'EOF' <<more"
+  ],
+  "b": [
+   "Bash source .venv/bin/activate && python -m pytest tests/test_shell_completion.py::test_fish_multiline_help_complete -xvs",
+   "Bash source .venv/bin/activate && python -m pytest tests/test_shell_completion.py -v",
+   "Bash source .venv/bin/activate && python -m pytest tests/test_validators.py::TestDeepMapping -xvs"
+  ],
+  "p_train": 0.247,
+  "lift": 14.37,
+  "support_sessions": 8,
+  "train_skip_dist": 6.0,
+  "train_inst_waste": 2.5,
+  "held_out_n": 41,
+  "held_out_precision": 0.171,
+  "held_out_ci": [
+   0.09529759082356865,
+   0.28693861116460123
+  ],
+  "held_out_inst_waste": 1.43,
+  "repos": [
+   "attrs",
+   "click"
+  ]
+ },
+ {
+  "a": [
+   "Read command_parse.go",
+   "Read command_test.go",
+   "Read command_run.go"
+  ],
+  "b": [
+   "Bash go test -v -run \"TestBareDash\" 2>&1",
+   "Bash go test ... --timeout=10m",
+   "Bash go test -v 2>&1 | tail -50"
+  ],
+  "p_train": 0.238,
+  "lift": 9.07,
+  "support_sessions": 10,
+  "train_skip_dist": 10.1,
+  "train_inst_waste": 1.6,
+  "held_out_n": 47,
+  "held_out_precision": 0.319,
+  "held_out_ci": [
+   0.21978611043251098,
+   0.4382030367583981
+  ],
+  "held_out_inst_waste": 1.8,
+  "repos": [
+   "urfave-cli"
+  ]
+ },
+ {
+  "a": [
+   "Bash find . -type f -name \"*.py\" | grep -E \"(validator|attr)\" | head -20",
+   "Bash find . -type f -name \"*.py\" | grep -E \"(validator|config)\" | head -20",
+   "Bash find . -type f -name \"*.py\" | grep -E \"(complet|fish)\" | head -20"
+  ],
+  "b": [
+   "Bash git add src/attr/validators.py && git commit -m \"$(cat <<'EOF' <<more",
+   "Bash git add src/marshmallow/validate.py tests/test_validate.py && git commit -m \"$(cat <<'EOF' <<more",
+   "Bash git add src/attr/validators.py tests/test_validators.py && git commit -m \"$(cat <<'EOF' <<more"
+  ],
+  "p_train": 0.235,
+  "lift": 2.57,
+  "support_sessions": 27,
+  "train_skip_dist": 24.2,
+  "train_inst_waste": 2.85,
+  "held_out_n": 73,
+  "held_out_precision": 0.329,
+  "held_out_ci": [
+   0.24586299074487275,
+   0.42391230124806967
+  ],
+  "held_out_inst_waste": 2.88,
+  "repos": [
+   "attrs",
+   "click",
+   "marshmallow"
+  ]
+ },
+ {
+  "a": [
+   "Bash pip install -e . -q",
+   "Bash pip install pytest -q",
+   "Bash pip install -e . -q && python3 << 'EOF' <<more"
+  ],
+  "b": [
+   "Bash python -m pytest tests/test_validators.py -x --tb=short",
+   "Bash python -m pytest tests/test_make.py -x --tb=short",
+   "Bash python -m pytest tests/test_make.py --tb=short 2>&1 | tail -50"
+  ],
+  "p_train": 0.233,
+  "lift": 3.84,
+  "support_sessions": 33,
+  "train_skip_dist": 9.9,
+  "train_inst_waste": 1.98,
+  "held_out_n": 159,
+  "held_out_precision": 0.264,
+  "held_out_ci": [
+   0.21092868595978795,
+   0.3252667031730537
+  ],
+  "held_out_inst_waste": 2.86,
+  "repos": [
+   "attrs",
+   "click",
+   "marshmallow"
+  ]
+ },
+ {
+  "a": [
+   "Read src/attrs/validators.py",
+   "Read src/attrs/__init__.pyi",
+   "Read src/attrs/exceptions.py"
+  ],
+  "b": [
+   "Bash git add src/attr/validators.py && git commit -m \"$(cat <<'EOF' <<more",
+   "Bash git add src/marshmallow/validate.py tests/test_validate.py && git commit -m \"$(cat <<'EOF' <<more",
+   "Bash git add src/attr/validators.py tests/test_validators.py && git commit -m \"$(cat <<'EOF' <<more"
+  ],
+  "p_train": 0.228,
+  "lift": 2.5,
+  "support_sessions": 13,
+  "train_skip_dist": 20.1,
+  "train_inst_waste": 3.15,
+  "held_out_n": 47,
+  "held_out_precision": 0.213,
+  "held_out_ci": [
+   0.13163985491374414,
+   0.3251664376835819
+  ],
+  "held_out_inst_waste": 2.1,
+  "repos": [
+   "attrs"
+  ]
+ },
+ {
+  "a": [
+   "Bash .venv/bin/python -m pytest tests/test_make.py::TestFields -xvs",
+   "Bash .venv/bin/python -m pytest tests/test_validators.py -x",
+   "Bash .venv/bin/python -m pytest tests/test_validators.py -q"
+  ],
+  "b": [
+   "Bash .venv/bin/python -m pytest tests/ -x --tb=short 2>&1 | head -100",
+   "Bash .venv/bin/python -m pytest tests/ -x --tb=short -q",
+   "Bash .venv/bin/python -m pytest tests/ -x --tb=short 2>&1 | tail -50"
+  ],
+  "p_train": 0.227,
+  "lift": 3.34,
+  "support_sessions": 10,
+  "train_skip_dist": 7.8,
+  "train_inst_waste": 1.56,
+  "held_out_n": 38,
+  "held_out_precision": 0.184,
+  "held_out_ci": [
+   0.10307253608887472,
+   0.3073341543212058
+  ],
+  "held_out_inst_waste": 1.71,
+  "repos": [
+   "attrs",
+   "click"
+  ]
+ },
+ {
+  "a": [
+   "Bash find . -type f -name \"*.py\" | grep -E \"(validator|attr)\" | head -20",
+   "Bash find . -type f -name \"*.py\" | grep -E \"(validator|config)\" | head -20",
+   "Bash find . -type f -name \"*.py\" | grep -E \"(complet|fish)\" | head -20"
+  ],
+  "b": [
+   "Bash git commit --amend -m \"$(cat <<'EOF' <<more",
+   "Bash git commit -m \"$(cat <<'EOF' <<more",
+   "Bash git add -A && git commit -m \"$(cat <<'EOF' <<more"
+  ],
+  "p_train": 0.226,
+  "lift": 4.03,
+  "support_sessions": 26,
+  "train_skip_dist": 21.8,
+  "train_inst_waste": 2.73,
+  "held_out_n": 73,
+  "held_out_precision": 0.356,
+  "held_out_ci": [
+   0.27062540317097833,
+   0.4519858421030933
+  ],
+  "held_out_inst_waste": 2.65,
+  "repos": [
+   "attrs",
+   "click",
+   "marshmallow",
+   "urfave-cli"
+  ]
+ },
+ {
+  "a": [
+   "Edit tests/test_shell_completion.py"
+  ],
+  "b": [
+   "Edit tests/test_shell_completion.py"
+  ],
+  "p_train": 0.224,
+  "lift": 20.47,
+  "support_sessions": 8,
+  "train_skip_dist": 5.1,
+  "train_inst_waste": 1.55,
+  "held_out_n": 37,
+  "held_out_precision": 0.189,
+  "held_out_ci": [
+   0.10595447265376678,
+   0.3147883491220216
+  ],
+  "held_out_inst_waste": 1.71,
+  "repos": [
+   "click"
+  ]
+ },
+ {
+  "a": [
+   "Bash wc -l tests/test_termui.py",
+   "Bash grep -n \"hide_input\" tests/test_termui.py",
+   "Bash wc -l tests/test_fields.py"
+  ],
+  "b": [
+   "Bash python -m pytest tests/test_make.py::TestFields -xvs",
+   "Bash python -m pytest tests/test_schema.py::test_fields_must_be_declared_as_instances -xvs",
+   "Bash python -m pytest tests/test_termui.py -xvs 2>&1 | head -100"
+  ],
+  "p_train": 0.218,
+  "lift": 6.25,
+  "support_sessions": 8,
+  "train_skip_dist": 15.8,
+  "train_inst_waste": 1.58,
+  "held_out_n": 25,
+  "held_out_precision": 0.12,
+  "held_out_ci": [
+   0.0489878055629169,
+   0.2652407782920388
+  ],
+  "held_out_inst_waste": 7.0,
+  "repos": [
+   "click",
+   "marshmallow"
+  ]
+ },
+ {
+  "a": [
+   "Read src/click/shell_completion.py",
+   "Read src/click/exceptions.py",
+   "Read src/click/formatting.py"
+  ],
+  "b": [
+   "Bash python -m pytest tests/test_termui.py -q",
+   "Bash python -m pytest tests/test_fields.py -q",
+   "Bash python -m pytest tests/test_termui.py -x 2>&1 | tail -20"
+  ],
+  "p_train": 0.212,
+  "lift": 3.48,
+  "support_sessions": 17,
+  "train_skip_dist": 21.2,
+  "train_inst_waste": 2.28,
+  "held_out_n": 104,
+  "held_out_precision": 0.221,
+  "held_out_ci": [
+   0.1617567192726616,
+   0.2946938419772772
+  ],
+  "held_out_inst_waste": 4.65,
+  "repos": [
+   "click"
+  ]
+ },
+ {
+  "a": [
+   "Read tests/test_make.py",
+   "Read tests/test_options.py",
+   "Read tests/test_utils.py"
+  ],
+  "b": [
+   "Bash git add src/attr/validators.py && git commit -m \"$(cat <<'EOF' <<more",
+   "Bash git add src/marshmallow/validate.py tests/test_validate.py && git commit -m \"$(cat <<'EOF' <<more",
+   "Bash git add src/attr/validators.py tests/test_validators.py && git commit -m \"$(cat <<'EOF' <<more"
+  ],
+  "p_train": 0.212,
+  "lift": 2.32,
+  "support_sessions": 9,
+  "train_skip_dist": 23.0,
+  "train_inst_waste": 3.14,
+  "held_out_n": 65,
+  "held_out_precision": 0.262,
+  "held_out_ci": [
+   0.1826951633492823,
+   0.3594430732404452
+  ],
+  "held_out_inst_waste": 2.76,
+  "repos": [
+   "attrs",
+   "click",
+   "marshmallow"
+  ]
+ },
+ {
+  "a": [
+   "Read src/attrs/validators.py",
+   "Read src/attrs/__init__.pyi",
+   "Read src/attrs/exceptions.py"
+  ],
+  "b": [
+   "Bash pip install -e \".[dev]\" -q && python -m pytest tests/ -x --tb=short --ignore=tests/test_packaging.py -q",
+   "Bash pip install pytest -q && python -m pytest tests/test_validate.py::test_oneof_options -xvs",
+   "Bash python3 -m pip install pytest -q 2>&1 | tail -5"
+  ],
+  "p_train": 0.211,
+  "lift": 4.83,
+  "support_sessions": 11,
+  "train_skip_dist": 6.8,
+  "train_inst_waste": 1.67,
+  "held_out_n": 47,
+  "held_out_precision": 0.213,
+  "held_out_ci": [
+   0.13163985491374414,
+   0.3251664376835819
+  ],
+  "held_out_inst_waste": 1.8,
+  "repos": [
+   "attrs"
+  ]
+ },
+ {
+  "a": [
+   "Read src/attrs/validators.py",
+   "Read src/attrs/__init__.pyi",
+   "Read src/attrs/exceptions.py"
+  ],
+  "b": [
+   "Bash .venv/bin/python -m pytest tests/test_make.py::TestFields -xvs",
+   "Bash .venv/bin/python -m pytest tests/test_validators.py -x",
+   "Bash .venv/bin/python -m pytest tests/test_validators.py -q"
+  ],
+  "p_train": 0.211,
+  "lift": 3.67,
+  "support_sessions": 12,
+  "train_skip_dist": 11.2,
+  "train_inst_waste": 2.17,
+  "held_out_n": 47,
+  "held_out_precision": 0.064,
+  "held_out_ci": [
+   0.025793525244054986,
+   0.14935677092225483
+  ],
+  "held_out_inst_waste": 2.33,
+  "repos": [
+   "attrs"
+  ]
+ },
+ {
+  "a": [
+   "Bash find . -type f -name \"*.go\" | head -20",
+   "Bash find . -name \"*.go\" -type f | head -20",
+   "Bash find . -type d -name \"*compiler*\" | head -20"
+  ],
+  "b": [
+   "Bash rm test_converter_tuple.py",
+   "Bash rm test_frozen_issue.py",
+   "Bash rm test_bare_dash.go"
+  ],
+  "p_train": 0.209,
+  "lift": 5.28,
+  "support_sessions": 9,
+  "train_skip_dist": 24.6,
+  "train_inst_waste": 2.11,
+  "held_out_n": 19,
+  "held_out_precision": 0.053,
+  "held_out_ci": [
+   0.01182929338160552,
+   0.2049780216380722
+  ],
+  "held_out_inst_waste": 2.0,
+  "repos": [
+   "urfave-cli",
+   "vue-core"
+  ]
+ },
+ {
+  "a": [
+   "Write test_converter_tuple.py",
+   "Write test_prompt_fix.py",
+   "Write test_help_collision.py"
+  ],
+  "b": [
+   "Bash rm test_converter_tuple.py",
+   "Bash rm test_frozen_issue.py",
+   "Bash rm test_bare_dash.go"
+  ],
+  "p_train": 0.207,
+  "lift": 5.21,
+  "support_sessions": 21,
+  "train_skip_dist": 13.6,
+  "train_inst_waste": 2.32,
+  "held_out_n": 51,
+  "held_out_precision": 0.431,
+  "held_out_ci": [
+   0.3236048597157248,
+   0.5460559464973584
+  ],
+  "held_out_inst_waste": 3.68,
+  "repos": [
+   "attrs",
+   "click",
+   "marshmallow",
+   "urfave-cli"
+  ]
+ },
+ {
+  "a": [
+   "Read src/marshmallow/fields.py",
+   "Read src/marshmallow/schema.py",
+   "Read src/marshmallow/utils.py"
+  ],
+  "b": [
+   "Bash git commit --amend -m \"$(cat <<'EOF' <<more",
+   "Bash git commit -m \"$(cat <<'EOF' <<more",
+   "Bash git add -A && git commit -m \"$(cat <<'EOF' <<more"
+  ],
+  "p_train": 0.205,
+  "lift": 3.66,
+  "support_sessions": 9,
+  "train_skip_dist": 22.5,
+  "train_inst_waste": 2.0,
+  "held_out_n": 23,
+  "held_out_precision": 0.13,
+  "held_out_ci": [
+   0.05335049987037251,
+   0.28532593882444707
+  ],
+  "held_out_inst_waste": 2.33,
+  "repos": [
+   "marshmallow"
+  ]
+ },
+ {
+  "a": [
+   "Bash find . -type f -name \"*.py\" | head -20",
+   "Bash find . -type f -name \"*.pyi\" | head -20",
+   "Bash find src -type f -name \"*.py\" | head -20"
+  ],
+  "b": [
+   "Bash python -m pytest tests/test_termui.py -q",
+   "Bash python -m pytest tests/test_fields.py -q",
+   "Bash python -m pytest tests/test_termui.py -x 2>&1 | tail -20"
+  ],
+  "p_train": 0.204,
+  "lift": 3.35,
+  "support_sessions": 19,
+  "train_skip_dist": 28.7,
+  "train_inst_waste": 2.77,
+  "held_out_n": 79,
+  "held_out_precision": 0.203,
+  "held_out_ci": [
+   0.13858513360607516,
+   0.2861818893888631
+  ],
+  "held_out_inst_waste": 4.81,
+  "repos": [
+   "attrs",
+   "click",
+   "marshmallow"
+  ]
+ },
+ {
+  "a": [
+   "Bash find . -type f -name \"*.py\" | grep -E \"(validator|attr)\" | head -20",
+   "Bash find . -type f -name \"*.py\" | grep -E \"(validator|config)\" | head -20",
+   "Bash find . -type f -name \"*.py\" | grep -E \"(complet|fish)\" | head -20"
+  ],
+  "b": [
+   "Bash python -m pytest tests/test_validators.py -x --tb=short",
+   "Bash python -m pytest tests/test_make.py -x --tb=short",
+   "Bash python -m pytest tests/test_make.py --tb=short 2>&1 | tail -50"
+  ],
+  "p_train": 0.2,
+  "lift": 3.3,
+  "support_sessions": 22,
+  "train_skip_dist": 20.0,
+  "train_inst_waste": 3.09,
+  "held_out_n": 73,
+  "held_out_precision": 0.247,
+  "held_out_ci": [
+   0.17364346020492122,
+   0.33762397194463356
+  ],
+  "held_out_inst_waste": 3.44,
+  "repos": [
+   "attrs",
+   "click",
+   "marshmallow"
+  ]
+ },
+ {
+  "a": [
+   "Grep _is_class_var src/attr/_make.py content",
+   "Grep def fields src/attr/_make.py content",
+   "Bash grep -n \"_CLASSVAR_PREFIXES\" src/attr/_make.py"
+  ],
+  "b": [
+   "Bash git add src/attr/validators.py && git commit -m \"$(cat <<'EOF' <<more",
+   "Bash git add src/marshmallow/validate.py tests/test_validate.py && git commit -m \"$(cat <<'EOF' <<more",
+   "Bash git add src/attr/validators.py tests/test_validators.py && git commit -m \"$(cat <<'EOF' <<more"
+  ],
+  "p_train": 0.196,
+  "lift": 2.15,
+  "support_sessions": 10,
+  "train_skip_dist": 28.0,
+  "train_inst_waste": 2.7,
+  "held_out_n": 52,
+  "held_out_precision": 0.404,
+  "held_out_ci": [
+   0.2993709716017278,
+   0.517833806116997
+  ],
+  "held_out_inst_waste": 4.38,
+  "repos": [
+   "attrs"
+  ]
+ },
+ {
+  "a": [
+   "Read src/attrs/validators.py",
+   "Read src/attrs/__init__.pyi",
+   "Read src/attrs/exceptions.py"
+  ],
+  "b": [
+   "Bash python -m pytest tests/test_validators.py -x --tb=short",
+   "Bash python -m pytest tests/test_make.py -x --tb=short",
+   "Bash python -m pytest tests/test_make.py --tb=short 2>&1 | tail -50"
+  ],
+  "p_train": 0.193,
+  "lift": 3.18,
+  "support_sessions": 10,
+  "train_skip_dist": 12.0,
+  "train_inst_waste": 2.82,
+  "held_out_n": 47,
+  "held_out_precision": 0.277,
+  "held_out_ci": [
+   0.18368200074704866,
+   0.3938340046064272
+  ],
+  "held_out_inst_waste": 3.23,
+  "repos": [
+   "attrs"
+  ]
+ },
+ {
+  "a": [
+   "Read src/marshmallow/fields.py",
+   "Read src/marshmallow/schema.py",
+   "Read src/marshmallow/utils.py"
+  ],
+  "b": [
+   "Bash git add src/attr/validators.py && git commit -m \"$(cat <<'EOF' <<more",
+   "Bash git add src/marshmallow/validate.py tests/test_validate.py && git commit -m \"$(cat <<'EOF' <<more",
+   "Bash git add src/attr/validators.py tests/test_validators.py && git commit -m \"$(cat <<'EOF' <<more"
+  ],
+  "p_train": 0.192,
+  "lift": 2.1,
+  "support_sessions": 8,
+  "train_skip_dist": 24.6,
+  "train_inst_waste": 3.29,
+  "held_out_n": 23,
+  "held_out_precision": 0.391,
+  "held_out_ci": [
+   0.24398810736871135,
+   0.5615049628356473
+  ],
+  "held_out_inst_waste": 2.78,
+  "repos": [
+   "marshmallow"
+  ]
+ },
+ {
+  "a": [
+   "Read src/attr/_make.py",
+   "Read src/attr/validators.py",
+   "Read src/attr/__init__.pyi"
+  ],
+  "b": [
+   "Bash git add src/attr/validators.py && git commit -m \"$(cat <<'EOF' <<more",
+   "Bash git add src/marshmallow/validate.py tests/test_validate.py && git commit -m \"$(cat <<'EOF' <<more",
+   "Bash git add src/attr/validators.py tests/test_validators.py && git commit -m \"$(cat <<'EOF' <<more"
+  ],
+  "p_train": 0.186,
+  "lift": 2.04,
+  "support_sessions": 24,
+  "train_skip_dist": 23.5,
+  "train_inst_waste": 2.88,
+  "held_out_n": 128,
+  "held_out_precision": 0.312,
+  "held_out_ci": [
+   0.2495760851820873,
+   0.38318759193226143
+  ],
+  "held_out_inst_waste": 3.35,
+  "repos": [
+   "attrs"
+  ]
+ },
+ {
+  "a": [
+   "Bash find . -type f -name \"*.py\" | head -20",
+   "Bash find . -type f -name \"*.pyi\" | head -20",
+   "Bash find src -type f -name \"*.py\" | head -20"
+  ],
+  "b": [
+   "Bash python -m pytest tests/test_validators.py -x --tb=short",
+   "Bash python -m pytest tests/test_make.py -x --tb=short",
+   "Bash python -m pytest tests/test_make.py --tb=short 2>&1 | tail -50"
+  ],
+  "p_train": 0.185,
+  "lift": 3.05,
+  "support_sessions": 18,
+  "train_skip_dist": 21.4,
+  "train_inst_waste": 3.0,
+  "held_out_n": 79,
+  "held_out_precision": 0.354,
+  "held_out_ci": [
+   0.27206668209600704,
+   0.4464363291568351
+  ],
+  "held_out_inst_waste": 4.5,
+  "repos": [
+   "attrs",
+   "click",
+   "marshmallow"
+  ]
+ },
+ {
+  "a": [
+   "Bash find . -type f -name \"*.py\" | head -20",
+   "Bash find . -type f -name \"*.pyi\" | head -20",
+   "Bash find src -type f -name \"*.py\" | head -20"
+  ],
+  "b": [
+   "Bash .venv/bin/python -m pytest tests/ -x --tb=short 2>&1 | head -100",
+   "Bash .venv/bin/python -m pytest tests/ -x --tb=short -q",
+   "Bash .venv/bin/python -m pytest tests/ -x --tb=short 2>&1 | tail -50"
+  ],
+  "p_train": 0.185,
+  "lift": 2.73,
+  "support_sessions": 20,
+  "train_skip_dist": 27.2,
+  "train_inst_waste": 3.95,
+  "held_out_n": 79,
+  "held_out_precision": 0.114,
+  "held_out_ci": [
+   0.06749305979088085,
+   0.18592797005361347
+  ],
+  "held_out_inst_waste": 3.44,
+  "repos": [
+   "attrs",
+   "click",
+   "marshmallow"
+  ]
+ },
+ {
+  "a": [
+   "Edit src/click/shell_completion.py",
+   "Edit src/click/core.py",
+   "Edit src/click/formatting.py"
+  ],
+  "b": [
+   "Bash python -m pytest tests/test_termui.py -q",
+   "Bash python -m pytest tests/test_fields.py -q",
+   "Bash python -m pytest tests/test_termui.py -x 2>&1 | tail -20"
+  ],
+  "p_train": 0.185,
+  "lift": 3.04,
+  "support_sessions": 9,
+  "train_skip_dist": 13.3,
+  "train_inst_waste": 1.55,
+  "held_out_n": 73,
+  "held_out_precision": 0.068,
+  "held_out_ci": [
+   0.03373305993555347,
+   0.1341006758866615
+  ],
+  "held_out_inst_waste": 2.2,
+  "repos": [
+   "click"
+  ]
+ },
+ {
+  "a": [
+   "Read tests/test_shell_completion.py"
+  ],
+  "b": [
+   "Edit tests/test_shell_completion.py"
+  ],
+  "p_train": 0.184,
+  "lift": 16.75,
+  "support_sessions": 8,
+  "train_skip_dist": 9.3,
+  "train_inst_waste": 1.44,
+  "held_out_n": 51,
+  "held_out_precision": 0.118,
+  "held_out_ci": [
+   0.06206897658440693,
+   0.21175551517419927
+  ],
+  "held_out_inst_waste": 2.0,
+  "repos": [
+   "click"
+  ]
+ },
+ {
+  "a": [
+   "Bash find . -type f -name \"*.py\" | grep -E \"(validator|attr)\" | head -20",
+   "Bash find . -type f -name \"*.py\" | grep -E \"(validator|config)\" | head -20",
+   "Bash find . -type f -name \"*.py\" | grep -E \"(complet|fish)\" | head -20"
+  ],
+  "b": [
+   "Bash pip install -e . -q",
+   "Bash pip install pytest -q",
+   "Bash pip install -e . -q && python3 << 'EOF' <<more"
+  ],
+  "p_train": 0.183,
+  "lift": 4.59,
+  "support_sessions": 21,
+  "train_skip_dist": 6.4,
+  "train_inst_waste": 1.24,
+  "held_out_n": 73,
+  "held_out_precision": 0.205,
+  "held_out_ci": [
+   0.13889461657565766,
+   0.29311888565220334
+  ],
+  "held_out_inst_waste": 1.53,
+  "repos": [
+   "attrs",
+   "click",
+   "marshmallow"
+  ]
+ },
+ {
+  "a": [
+   "Bash find . -type f -name \"*.py\" | grep -E \"(validator|attr)\" | head -20",
+   "Bash find . -type f -name \"*.py\" | grep -E \"(validator|config)\" | head -20",
+   "Bash find . -type f -name \"*.py\" | grep -E \"(complet|fish)\" | head -20"
+  ],
+  "b": [
+   "Bash .venv/bin/python -m pytest tests/test_make.py::TestFields -xvs",
+   "Bash .venv/bin/python -m pytest tests/test_validators.py -x",
+   "Bash .venv/bin/python -m pytest tests/test_validators.py -q"
+  ],
+  "p_train": 0.183,
+  "lift": 3.18,
+  "support_sessions": 21,
+  "train_skip_dist": 15.3,
+  "train_inst_waste": 2.19,
+  "held_out_n": 73,
+  "held_out_precision": 0.137,
+  "held_out_ci": [
+   0.08367425589996583,
+   0.21624936312507215
+  ],
+  "held_out_inst_waste": 2.2,
+  "repos": [
+   "attrs",
+   "click",
+   "marshmallow"
+  ]
+ },
+ {
+  "a": [
+   "Read src/attr/_make.py",
+   "Read src/attr/validators.py",
+   "Read src/attr/__init__.pyi"
+  ],
+  "b": [
+   "Bash pip install -e \".[dev]\" -q && python -m pytest tests/ -x --tb=short --ignore=tests/test_packaging.py -q",
+   "Bash pip install pytest -q && python -m pytest tests/test_validate.py::test_oneof_options -xvs",
+   "Bash python3 -m pip install pytest -q 2>&1 | tail -5"
+  ],
+  "p_train": 0.182,
+  "lift": 4.17,
+  "support_sessions": 16,
+  "train_skip_dist": 12.7,
+  "train_inst_waste": 1.98,
+  "held_out_n": 128,
+  "held_out_precision": 0.281,
+  "held_out_ci": [
+   0.22092808050986262,
+   0.35062954279021086
+  ],
+  "held_out_inst_waste": 2.58,
+  "repos": [
+   "attrs"
+  ]
+ },
+ {
+  "a": [
+   "Edit help_test.go",
+   "Edit completion_test.go",
+   "Edit command_test.go"
+  ],
+  "b": [
+   "Bash go test -v -run \"TestBareDash\" 2>&1",
+   "Bash go test ... --timeout=10m",
+   "Bash go test -v 2>&1 | tail -50"
+  ],
+  "p_train": 0.18,
+  "lift": 6.85,
+  "support_sessions": 8,
+  "train_skip_dist": 5.6,
+  "train_inst_waste": 1.12,
+  "held_out_n": 56,
+  "held_out_precision": 0.089,
+  "held_out_ci": [
+   0.04413520201240686,
+   0.17229956767264676
+  ],
+  "held_out_inst_waste": 1.6,
+  "repos": [
+   "urfave-cli"
+  ]
+ },
+ {
+  "a": [
+   "Read src/click/termui.py",
+   "Read src/click/_termui_impl.py",
+   "Read src/click/termui.py [136, 152]"
+  ],
+  "b": [
+   "Bash python -m pytest tests/test_make.py::TestFields -xvs",
+   "Bash python -m pytest tests/test_schema.py::test_fields_must_be_declared_as_instances -xvs",
+   "Bash python -m pytest tests/test_termui.py -xvs 2>&1 | head -100"
+  ],
+  "p_train": 0.179,
+  "lift": 5.11,
+  "support_sessions": 9,
+  "train_skip_dist": 13.9,
+  "train_inst_waste": 1.47,
+  "held_out_n": 62,
+  "held_out_precision": 0.177,
+  "held_out_ci": [
+   0.11162977903784446,
+   0.2701897655872504
+  ],
+  "held_out_inst_waste": 4.91,
+  "repos": [
+   "click"
+  ]
+ },
+ {
+  "a": [
+   "Read src/attr/_make.py",
+   "Read src/attr/validators.py",
+   "Read src/attr/__init__.pyi"
+  ],
+  "b": [
+   "Bash .venv/bin/python -m pytest tests/test_make.py::TestFields -xvs",
+   "Bash .venv/bin/python -m pytest tests/test_validators.py -x",
+   "Bash .venv/bin/python -m pytest tests/test_validators.py -q"
+  ],
+  "p_train": 0.177,
+  "lift": 3.09,
+  "support_sessions": 19,
+  "train_skip_dist": 13.8,
+  "train_inst_waste": 1.82,
+  "held_out_n": 128,
+  "held_out_precision": 0.047,
+  "held_out_ci": [
+   0.024428848486879446,
+   0.0880833712061301
+  ],
+  "held_out_inst_waste": 2.17,
+  "repos": [
+   "attrs"
+  ]
+ },
+ {
+  "a": [
+   "Bash find . -type f -name \"*.py\" | head -20",
+   "Bash find . -type f -name \"*.pyi\" | head -20",
+   "Bash find src -type f -name \"*.py\" | head -20"
+  ],
+  "b": [
+   "Bash git commit --amend -m \"$(cat <<'EOF' <<more",
+   "Bash git commit -m \"$(cat <<'EOF' <<more",
+   "Bash git add -A && git commit -m \"$(cat <<'EOF' <<more"
+  ],
+  "p_train": 0.176,
+  "lift": 3.13,
+  "support_sessions": 19,
+  "train_skip_dist": 27.1,
+  "train_inst_waste": 2.84,
+  "held_out_n": 79,
+  "held_out_precision": 0.291,
+  "held_out_ci": [
+   0.21509348922802782,
+   0.38101952691735436
+  ],
+  "held_out_inst_waste": 3.39,
+  "repos": [
+   "attrs",
+   "click",
+   "marshmallow"
+  ]
+ }
+]

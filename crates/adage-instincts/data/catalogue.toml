@@ -1,0 +1,309 @@
+# The detector catalogue (docs/instincts.md): every instinct detector this build has, by id, with
+# what it detects and how strongly it may direct.
+#
+# An instinct ships as a pack (packs/<name>/ in the Adage repository, listed by its marketplace,
+# .adage/marketplace.toml; docs/marketplace.md) whose routes are templates naming a detector here.
+# The detector, in Rust (src/detect.rs), reads the repository's *declared* facts (src/declared.rs)
+# and fills the templates in. So this file says what a build can detect; the marketplace decides
+# what ships. [pack] is the catalogue's own name and version (core@0.1.0), which instinct packs name
+# as their catalogue. Nothing here reaches an agent as text: directives are rendered by Adage from
+# fixed templates, and every bound route is validated like any untrusted track
+# (adage_tracks::io::validate).
+#
+# Fields per instinct:
+#   id          stable catalogue id (U = universal, N = node, P = python, R = rust, G = go, X = cross)
+#   priority    P0 (bound now) or P1 (catalogued; detector is a stub until the model can express it)
+#   enabled     whether its detector is built; a disabled instinct never binds, in any pack
+#   title       for people (docs, `adage doctor`), never for the agent
+#   trigger     the trigger it binds to (a Trigger variant, or one the model still lacks)
+#   directive   a sketch of what the fixed template says
+#   cap         the strongest strength it may ever be given (always prime for instincts)
+#   detection   what in the repository it is detected from (no session history)
+#   fp_risk     false-positive risk: very-low, low, low-med, medium
+#   kind        route | advisory (a fixed advisory template, `Step::Advise`)
+#   needs       model/runtime extensions it requires before it can be delivered as designed
+
+[pack]
+name = "core"
+version = "0.1.0"
+
+[[instinct]]
+id = "U1"
+priority = "P0"
+enabled = true
+title = "Declared wrapper explains a failure"
+trigger = "after_failure"
+directive = "After runner R fails, run the declared script or target S that wraps R with what it lacks"
+cap = "prime"
+detection = "A Makefile target or package.json script whose body invokes R plus env vars, setup flags or --import"
+fp_risk = "low"
+kind = "route"
+needs = []
+
+[[instinct]]
+id = "U2"
+priority = "P0"
+enabled = false
+title = "No blind retry"
+trigger = "repeat_failure"
+directive = "The same command failed the same way twice with no edit between; read the error before retrying"
+cap = "prime"
+detection = "Runtime history only (same key, same signature, twice, no edit between); timeouts and connection errors exempt"
+fp_risk = "medium"
+kind = "advisory"
+needs = ["Trigger::RepeatFailure"]
+
+[[instinct]]
+id = "U3"
+priority = "P0"
+enabled = true
+title = "The repository's declared test command"
+trigger = "after_failure"
+directive = "After an undeclared test runner fails, run the repository's one declared test entry point"
+cap = "prime"
+detection = "Exactly one test entry point (Makefile test/tests, package.json test, tox, nox, justfile, Taskfile) whose body classifies as verify or lower"
+fp_risk = "low-med"
+kind = "route"
+needs = []
+
+[[instinct]]
+id = "U4"
+priority = "P0"
+enabled = true
+title = "Don't hand-edit generated files"
+trigger = "after_edit"
+directive = "This file is generated; change its inputs and run the generator instead"
+cap = "prime"
+detection = "Code generated ... DO NOT EDIT, @generated, go:generate outputs, and files a declared generator script writes"
+fp_risk = "very-low"
+kind = "advisory"
+needs = []
+
+[[instinct]]
+id = "U5"
+priority = "P0"
+enabled = true
+title = "Declared regeneration"
+trigger = "after_edit"
+directive = "After editing files matching the generator's inputs, run the declared regenerate target"
+cap = "prime"
+detection = "Makefile rule prerequisites (e.g. models.py: schema/*.json), or the input paths a declared generator script names"
+fp_risk = "low"
+kind = "route"
+needs = []
+
+[[instinct]]
+id = "U6"
+priority = "P0"
+enabled = true
+title = "Don't hand-edit lockfiles"
+trigger = "after_edit"
+directive = "This lockfile is maintained by its package manager; change the manifest instead"
+cap = "prime"
+detection = "A lockfile present at the repository root"
+fp_risk = "very-low"
+kind = "advisory"
+needs = []
+
+[[instinct]]
+id = "N1"
+priority = "P0"
+enabled = true
+title = "Package manager discipline (node)"
+trigger = "after_failure"
+directive = "This repository uses pnpm (yarn, bun): after npm install, npm ci, npm test (or the other of pnpm and yarn) fails because it is the wrong package manager, use the declared one"
+cap = "prime"
+detection = "packageManager field or a pnpm/yarn/bun lockfile, and no npm lockfile; each route needs the wrong tool's own refusal as its signature (Unsupported URL Type, an only-allow guard, EBADDEVENGINES, no package-lock.json, corepack, command not found)"
+fp_risk = "very-low"
+kind = "route"
+needs = []
+
+[[instinct]]
+id = "P1"
+priority = "P0"
+enabled = true
+title = "Python runner wrapper / uv run"
+trigger = "after_failure"
+directive = "After pytest fails (in any of its spellings), run the declared wrapper that sets its environment"
+cap = "prime"
+detection = "pytest configured (pyproject, pytest.ini, setup.cfg, tox.ini, conftest.py) and a Makefile wrapper that sets env or flags (bound on the wrapper's signatures), else tox -e py when tox's base test environment runs plain commands (bound on a missing environment's signatures); nox sessions are code and are reported, not bound"
+fp_risk = "low"
+kind = "route"
+needs = []
+
+[[instinct]]
+id = "U7"
+priority = "P1"
+enabled = false
+title = "Manifest changed, sync environment"
+trigger = "after_edit"
+directive = "After editing a dependency section, run the package manager's install"
+cap = "prime"
+detection = "Package manager from the lockfile; pack-level approval because this is an environment effect"
+fp_risk = "medium"
+kind = "route"
+needs = ["an edit trigger scoped to a manifest's dependency section"]
+
+[[instinct]]
+id = "U8"
+priority = "P1"
+enabled = false
+title = "CI runs checks the agent skipped"
+trigger = "after_edit"
+directive = "CI lints these files; run the check it runs before finishing"
+cap = "prime"
+detection = "CI run: steps that classify as verify"
+fp_risk = "low"
+kind = "route"
+needs = []
+
+[[instinct]]
+id = "U9"
+priority = "P1"
+enabled = false
+title = "Watch mode never exits"
+trigger = "after_failure"
+directive = "That command watches and never exits; run its one-shot form"
+cap = "prime"
+detection = "Table: jest --watch, vitest, tsc -w and similar"
+fp_risk = "low"
+kind = "route"
+needs = ["timeout signal in Event::Failure"]
+
+[[instinct]]
+id = "U10"
+priority = "P1"
+enabled = false
+title = "Missing dependency is declared"
+trigger = "after_failure"
+directive = "That module is declared in the manifest; install the project's dependencies"
+cap = "prime"
+detection = "ModuleNotFoundError / Cannot find module, only if the module is in the manifest (rules out typosquatting)"
+fp_risk = "low"
+kind = "route"
+needs = ["slot bound from failure output", "pack-level approval in adage init"]
+
+[[instinct]]
+id = "U11"
+priority = "P0"
+enabled = true
+title = "Use the project's environment"
+trigger = "after_failure"
+directive = "After pytest, tox or nox fails outside the project's environment (command not found, No module named pytest or the project's own package), run pytest inside it: .venv/bin/python -m pytest, else uv run pytest; after any other python run fails to import the project or a declared test dependency, name the project's interpreter"
+cap = "prime"
+detection = "A .venv or venv with pyvenv.cfg, else a uv project (uv.lock or tool.uv) whose dependency groups have pytest; Python only (node_modules/.bin is not bound yet)"
+fp_risk = "low"
+kind = "route"
+needs = []
+
+[[instinct]]
+id = "N2"
+priority = "P1"
+enabled = false
+title = "Path-alias loader"
+trigger = "after_failure"
+directive = "An import alias failed to resolve; run through the declared loader"
+cap = "prime"
+detection = "tsconfig paths plus a --import loader"
+fp_risk = "low"
+kind = "route"
+needs = []
+
+[[instinct]]
+id = "N3"
+priority = "P1"
+enabled = false
+title = "Monorepo scope"
+trigger = "after_failure"
+directive = "Missing script at the root: run it in the workspace package that declares it"
+cap = "prime"
+detection = "package.json workspaces"
+fp_risk = "medium"
+kind = "route"
+needs = []
+
+[[instinct]]
+id = "R1"
+priority = "P1"
+enabled = false
+title = "Crate scope"
+trigger = "after_edit"
+directive = "Test the edited workspace member, not the whole workspace"
+cap = "prime"
+detection = "Cargo workspace members"
+fp_risk = "low"
+kind = "route"
+needs = ["slot bound from the edited path"]
+
+[[instinct]]
+id = "R2"
+priority = "P1"
+enabled = false
+title = "clippy/fmt gate"
+trigger = "after_edit"
+directive = "CI gates on clippy and fmt; run them before finishing"
+cap = "prime"
+detection = "CI steps running cargo clippy -D warnings / cargo fmt --check"
+fp_risk = "low"
+kind = "route"
+needs = []
+
+[[instinct]]
+id = "G1"
+priority = "P1"
+enabled = false
+title = "go generate"
+trigger = "after_edit"
+directive = "After editing a file with a go:generate directive, run go generate"
+cap = "prime"
+detection = "//go:generate lines"
+fp_risk = "low"
+kind = "route"
+needs = []
+
+[[instinct]]
+id = "X1"
+priority = "P1"
+enabled = false
+title = "protobuf / sqlc / OpenAPI codegen"
+trigger = "after_edit"
+directive = "After editing a generator input, run the declared generator"
+cap = "prime"
+detection = "Generator configs (buf.gen.yaml, sqlc.yaml, openapi generator configs)"
+fp_risk = "low"
+kind = "route"
+needs = []
+
+# Undeclared runners an agent is likely to try first, per ecosystem (U3, P1). A probe equal to the
+# repository's declared test command is never used.
+[probes]
+python = ["pytest", "python -m pytest", "python3 -m pytest", "python -m unittest", "python3 -m unittest"]
+node = ["npm test"]
+pytest = ["pytest", "python -m pytest", "python3 -m pytest"]
+
+# Code generators that `go generate` directives and generator recipes commonly run. They are not in
+# adage-core's command table (so they classify as environment there); inside a *body* that the
+# directed command expands to they count as regenerate. The directed command itself is always
+# classified by adage-core alone.
+[generators]
+known = [
+  "stringer", "mockgen", "protoc", "buf", "sqlc", "oapi-codegen", "enumer", "gqlgen", "easyjson",
+  "controller-gen", "counterfeiter", "moq", "ent", "wire", "genny", "go-bindata", "templ",
+]
+
+# Root lockfiles and the tool that maintains each (U6).
+[lockfiles]
+"package-lock.json" = "npm"
+"npm-shrinkwrap.json" = "npm"
+"pnpm-lock.yaml" = "pnpm"
+"yarn.lock" = "yarn"
+"bun.lock" = "bun"
+"bun.lockb" = "bun"
+"Cargo.lock" = "cargo"
+"go.sum" = "go"
+"poetry.lock" = "poetry"
+"uv.lock" = "uv"
+"Pipfile.lock" = "pipenv"
+"pdm.lock" = "pdm"
+"Gemfile.lock" = "bundler"
+"composer.lock" = "composer"

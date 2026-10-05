@@ -1,0 +1,3138 @@
+{
+ "prices_usd_per_mtok": {
+  "claude-haiku-4-5": {
+   "input": 1.0,
+   "output": 5.0,
+   "cache_read": 0.1,
+   "cache_write_5m": 1.25,
+   "cache_write_1h": 2.0
+  },
+  "claude-sonnet-5": {
+   "input": 2.0,
+   "output": 10.0,
+   "cache_read": 0.2,
+   "cache_write_5m": 2.5,
+   "cache_write_1h": 4.0
+  }
+ },
+ "pricing_check": "claude-api reference (cached 2026-09-25): Haiku 4.5 $1/$5, Sonnet 5 $2/$10 (Sonnet 5.5 same); cache write 1.25x (5m) / 2x (1h), read 0.1x. Matches crates/adage-core/src/pricing.toml (which carries only the 5m write rate); the harness bills the 1h writes the usage records show.",
+ "ttl_check_v2": {
+  "haiku": {
+   "cache_write_tokens_1h_share": 1.0,
+   "model_total_over_billed": 0.9999999999999999
+  },
+  "sonnet": {
+   "cache_write_tokens_1h_share": 1.0,
+   "model_total_over_billed": 1.0000000000000002
+  }
+ },
+ "q1_per_model": {
+  "v2": {
+   "haiku": {
+    "sessions": 40,
+    "tasks": 16,
+    "passed": 16,
+    "usd_per_task_1h_actual": {
+     "value": 0.39326039749999997,
+     "ci90": [
+      0.33178931707317083,
+      0.457471722857143
+     ],
+     "n": 40
+    },
+    "usd_per_task_5m": {
+     "value": 0.3531948350000001,
+     "ci90": [
+      0.2963625702380953,
+      0.41265378918918916
+     ],
+     "n": 40
+    },
+    "calls_per_task": {
+     "value": 42.85,
+     "ci90": [
+      37.73684210526316,
+      48.027027027027025
+     ],
+     "n": 40
+    },
+    "pass_rate_cluster": {
+     "value": 0.4,
+     "ci90": [
+      0.225,
+      0.5789473684210527
+     ],
+     "n": 40
+    },
+    "pass_rate_wilson": [
+     0.4,
+     0.2828648452726892,
+     0.5298058444564024
+    ],
+    "usd_per_resolved_pooled_actual": {
+     "value": 0.98315099375,
+     "ci90": [
+      0.6142742499999999,
+      1.9129855222222223
+     ]
+    },
+    "usd_per_resolved_pooled_5m": {
+     "value": 0.8829870875,
+     "ci90": [
+      0.5499632195652174,
+      1.7201764444444447
+     ]
+    }
+   },
+   "sonnet": {
+    "sessions": 16,
+    "tasks": 16,
+    "passed": 7,
+    "usd_per_task_1h_actual": {
+     "value": 0.6362361,
+     "ci90": [
+      0.44917213749999996,
+      0.8371910000000001
+     ],
+     "n": 16
+    },
+    "usd_per_task_5m": {
+     "value": 0.5713153500000001,
+     "ci90": [
+      0.4003147,
+      0.7555499500000002
+     ],
+     "n": 16
+    },
+    "calls_per_task": {
+     "value": 31.625,
+     "ci90": [
+      24.6875,
+      39.25
+     ],
+     "n": 16
+    },
+    "pass_rate_cluster": {
+     "value": 0.4375,
+     "ci90": [
+      0.25,
+      0.625
+     ],
+     "n": 16
+    },
+    "pass_rate_wilson": [
+     0.4375,
+     0.25765800882980394,
+     0.6354218150786473
+    ],
+    "usd_per_resolved_pooled_actual": {
+     "value": 1.4542539428571428,
+     "ci90": [
+      0.7815930888888889,
+      3.1110961500000003
+     ]
+    },
+    "usd_per_resolved_pooled_5m": {
+     "value": 1.3058636571428575,
+     "ci90": [
+      0.6957057555555556,
+      2.7864852750000004
+     ]
+    }
+   },
+   "paired_task_balanced_actual": {
+    "haiku_usd": {
+     "value": 0.40995598020833335,
+     "ci90": [
+      0.3427413433333334,
+      0.4791605385416667
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_calls": {
+     "value": 43.875,
+     "ci90": [
+      38.36458333333333,
+      49.34427083333333
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_pass": {
+     "value": 0.3958333333333333,
+     "ci90": [
+      0.20833333333333331,
+      0.5833333333333333
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_per_resolved": {
+     "value": 1.0356782657894739,
+     "ci90": [
+      0.6456453246584882,
+      2.0509660844507582
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_per_resolved_pooled": {
+     "value": 0.9831509937499999,
+     "ci90": [
+      0.6133411348517785,
+      1.9168793743750001
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd": {
+     "value": 0.6362361,
+     "ci90": [
+      0.44756146687500004,
+      0.8410979118750002
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_calls": {
+     "value": 31.625,
+     "ci90": [
+      24.375,
+      39.125
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_pass": {
+     "value": 0.4375,
+     "ci90": [
+      0.25,
+      0.625
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd_per_resolved": {
+     "value": 1.4542539428571428,
+     "ci90": [
+      0.7828265876136364,
+      3.1366520975000025
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd_per_resolved_pooled": {
+     "value": 1.4542539428571428,
+     "ci90": [
+      0.7828265876136364,
+      3.136652097500003
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_over_haiku_usd": {
+     "value": 1.5519619927892612,
+     "ci90": [
+      1.2431826196042024,
+      1.8476405687798216
+     ],
+     "finite_draws": 5000
+    },
+    "pass_gap_pts": {
+     "value": 4.166666666666669,
+     "ci90": [
+      -10.416666666666663,
+      16.666666666666675
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_over_haiku_usd_per_resolved": {
+     "value": 1.4041560887140934,
+     "ci90": [
+      0.9756512609645904,
+      2.0433364931297775
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_saving_vs_sonnet_per_resolved": {
+     "value": 0.41857567706766896,
+     "ci90": [
+      -0.0252026895738638,
+      1.3944779805628018
+     ],
+     "finite_draws": 5000
+    },
+    "breakeven_haiku_pass": {
+     "value": 0.28190123342756856,
+     "ci90": [
+      0.14453601080935882,
+      0.4611909583255623
+     ],
+     "finite_draws": 5000
+    },
+    "n_tasks": 16
+   },
+   "paired_task_balanced_5m": {
+    "haiku_usd": {
+     "value": 0.3685363942708334,
+     "ci90": [
+      0.30646558328125,
+      0.4321534207291667
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_calls": {
+     "value": 43.875,
+     "ci90": [
+      38.36458333333333,
+      49.34427083333333
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_pass": {
+     "value": 0.3958333333333333,
+     "ci90": [
+      0.20833333333333331,
+      0.5833333333333333
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_per_resolved": {
+     "value": 0.9310393118421054,
+     "ci90": [
+      0.5790592451685186,
+      1.8505953530492427
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_per_resolved_pooled": {
+     "value": 0.8829870875000002,
+     "ci90": [
+      0.5480199239130435,
+      1.72516807138889
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd": {
+     "value": 0.5713153500000001,
+     "ci90": [
+      0.3978542825,
+      0.7599587843750003
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_calls": {
+     "value": 31.625,
+     "ci90": [
+      24.375,
+      39.125
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_pass": {
+     "value": 0.4375,
+     "ci90": [
+      0.25,
+      0.625
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd_per_resolved": {
+     "value": 1.3058636571428575,
+     "ci90": [
+      0.6964852818333335,
+      2.835679478750001
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd_per_resolved_pooled": {
+     "value": 1.3058636571428575,
+     "ci90": [
+      0.6964852818333335,
+      2.835679478750001
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_over_haiku_usd": {
+     "value": 1.5502277627976864,
+     "ci90": [
+      1.2321924226423295,
+      1.8528322639801753
+     ],
+     "finite_draws": 5000
+    },
+    "pass_gap_pts": {
+     "value": 4.166666666666669,
+     "ci90": [
+      -10.416666666666663,
+      16.666666666666675
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_over_haiku_usd_per_resolved": {
+     "value": 1.402587023483621,
+     "ci90": [
+      0.9724394828464453,
+      2.040889880472074
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_saving_vs_sonnet_per_resolved": {
+     "value": 0.37482434530075204,
+     "ci90": [
+      -0.027369331593402643,
+      1.2539346827916675
+     ],
+     "finite_draws": 5000
+    },
+    "breakeven_haiku_pass": {
+     "value": 0.28221659455411024,
+     "ci90": [
+      0.144059128003152,
+      0.46313602799674525
+     ],
+     "finite_draws": 5000
+    },
+    "n_tasks": 16
+   }
+  },
+  "v1": {
+   "haiku": {
+    "sessions": 32,
+    "tasks": 16,
+    "passed": 11,
+    "usd_per_task_1h_actual": {
+     "value": 0.23311679687500003,
+     "ci90": [
+      0.20919794062500005,
+      0.25682485625000007
+     ],
+     "n": 32
+    },
+    "usd_per_task_5m": {
+     "value": 0.20320543749999997,
+     "ci90": [
+      0.18265292656250004,
+      0.22354859374999994
+     ],
+     "n": 32
+    },
+    "calls_per_task": {
+     "value": 28.6875,
+     "ci90": [
+      27.40625,
+      29.6875
+     ],
+     "n": 32
+    },
+    "pass_rate_cluster": {
+     "value": 0.34375,
+     "ci90": [
+      0.1875,
+      0.53125
+     ],
+     "n": 32
+    },
+    "pass_rate_wilson": [
+     0.34375,
+     0.2227602410620698,
+     0.48910135208004957
+    ],
+    "usd_per_resolved_pooled_actual": {
+     "value": 0.6781579545454547,
+     "ci90": [
+      0.44938720000000004,
+      1.2887354000000002
+     ]
+    },
+    "usd_per_resolved_pooled_5m": {
+     "value": 0.5911430909090909,
+     "ci90": [
+      0.39125640833333336,
+      1.1250399750000002
+     ]
+    }
+   },
+   "sonnet": {
+    "sessions": 16,
+    "tasks": 16,
+    "passed": 8,
+    "usd_per_task_1h_actual": {
+     "value": 0.49975397500000013,
+     "ci90": [
+      0.3751842000000001,
+      0.6275399625
+     ],
+     "n": 16
+    },
+    "usd_per_task_5m": {
+     "value": 0.4409320375,
+     "ci90": [
+      0.33081100625000004,
+      0.5543290062500001
+     ],
+     "n": 16
+    },
+    "calls_per_task": {
+     "value": 25.125,
+     "ci90": [
+      21.75,
+      27.875
+     ],
+     "n": 16
+    },
+    "pass_rate_cluster": {
+     "value": 0.5,
+     "ci90": [
+      0.3125,
+      0.6875
+     ],
+     "n": 16
+    },
+    "pass_rate_wilson": [
+     0.5,
+     0.3098430968465716,
+     0.6901569031534285
+    ],
+    "usd_per_resolved_pooled_actual": {
+     "value": 0.9995079500000003,
+     "ci90": [
+      0.5744469000000001,
+      1.8942696800000007
+     ]
+    },
+    "usd_per_resolved_pooled_5m": {
+     "value": 0.881864075,
+     "ci90": [
+      0.5049766500000001,
+      1.6741144600000002
+     ]
+    }
+   },
+   "paired_task_balanced_actual": {
+    "haiku_usd": {
+     "value": 0.23311679687500003,
+     "ci90": [
+      0.20969363218750003,
+      0.25724230828125
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_calls": {
+     "value": 28.6875,
+     "ci90": [
+      27.4375,
+      29.65625
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_pass": {
+     "value": 0.34375,
+     "ci90": [
+      0.1875,
+      0.53125
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_per_resolved": {
+     "value": 0.6781579545454547,
+     "ci90": [
+      0.44799659599264713,
+      1.2870627025000008
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_per_resolved_pooled": {
+     "value": 0.6781579545454547,
+     "ci90": [
+      0.44799659599264713,
+      1.2870627025000008
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd": {
+     "value": 0.499753975,
+     "ci90": [
+      0.379927139375,
+      0.6283058187500001
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_calls": {
+     "value": 25.125,
+     "ci90": [
+      22.0,
+      27.9375
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_pass": {
+     "value": 0.5,
+     "ci90": [
+      0.3125,
+      0.6875
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd_per_resolved": {
+     "value": 0.99950795,
+     "ci90": [
+      0.5845827174999999,
+      1.938271170666667
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd_per_resolved_pooled": {
+     "value": 0.9995079500000003,
+     "ci90": [
+      0.5845827175000001,
+      1.938271170666667
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_over_haiku_usd": {
+     "value": 2.1437922178897044,
+     "ci90": [
+      1.70483523246906,
+      2.578935181572475
+     ],
+     "finite_draws": 5000
+    },
+    "pass_gap_pts": {
+     "value": 15.625,
+     "ci90": [
+      3.125,
+      28.125
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_over_haiku_usd_per_resolved": {
+     "value": 1.4738571497991717,
+     "ci90": [
+      1.0197220418230484,
+      1.9539903914254644
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_saving_vs_sonnet_per_resolved": {
+     "value": 0.32134999545454535,
+     "ci90": [
+      0.01482215232323234,
+      0.8098155635714287
+     ],
+     "finite_draws": 5000
+    },
+    "breakeven_haiku_pass": {
+     "value": 0.2332315584633419,
+     "ci90": [
+      0.12336335988263382,
+      0.3877194554313569
+     ],
+     "finite_draws": 5000
+    },
+    "n_tasks": 16
+   },
+   "paired_task_balanced_5m": {
+    "haiku_usd": {
+     "value": 0.20320543749999997,
+     "ci90": [
+      0.18291464515625003,
+      0.223803189453125
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_calls": {
+     "value": 28.6875,
+     "ci90": [
+      27.4375,
+      29.65625
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_pass": {
+     "value": 0.34375,
+     "ci90": [
+      0.1875,
+      0.53125
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_per_resolved": {
+     "value": 0.5911430909090908,
+     "ci90": [
+      0.3907035501562499,
+      1.12221809425
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_per_resolved_pooled": {
+     "value": 0.5911430909090908,
+     "ci90": [
+      0.39070355015624997,
+      1.12221809425
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd": {
+     "value": 0.4409320375,
+     "ci90": [
+      0.33499202187500005,
+      0.55478025
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_calls": {
+     "value": 25.125,
+     "ci90": [
+      22.0,
+      27.9375
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_pass": {
+     "value": 0.5,
+     "ci90": [
+      0.3125,
+      0.6875
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd_per_resolved": {
+     "value": 0.881864075,
+     "ci90": [
+      0.5145468745454546,
+      1.7131120402499997
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd_per_resolved_pooled": {
+     "value": 0.881864075,
+     "ci90": [
+      0.5145468745454546,
+      1.71311204025
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_over_haiku_usd": {
+     "value": 2.1698830647678906,
+     "ci90": [
+      1.7212029856869757,
+      2.6141991941678357
+     ],
+     "finite_draws": 5000
+    },
+    "pass_gap_pts": {
+     "value": 15.625,
+     "ci90": [
+      3.125,
+      28.125
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_over_haiku_usd_per_resolved": {
+     "value": 1.4917946070279249,
+     "ci90": [
+      1.0290214791907992,
+      1.9785368307065205
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_saving_vs_sonnet_per_resolved": {
+     "value": 0.2907209840909092,
+     "ci90": [
+      0.020800713576923105,
+      0.7298907792777778
+     ],
+     "finite_draws": 5000
+    },
+    "breakeven_haiku_pass": {
+     "value": 0.2304271636192913,
+     "ci90": [
+      0.12156840676965454,
+      0.38424576121568715
+     ],
+     "finite_draws": 5000
+    },
+    "n_tasks": 16
+   }
+  },
+  "v2_all_arms": {
+   "haiku": {
+    "sessions": 80,
+    "tasks": 16,
+    "passed": 30,
+    "usd_per_task_1h_actual": {
+     "value": 0.3822634287500001,
+     "ci90": [
+      0.3251941605263159,
+      0.440907018918919
+     ],
+     "n": 80
+    },
+    "usd_per_task_5m": {
+     "value": 0.3431712349999999,
+     "ci90": [
+      0.29085881312500006,
+      0.3975733769736842
+     ],
+     "n": 80
+    },
+    "calls_per_task": {
+     "value": 42.2875,
+     "ci90": [
+      37.848837209302324,
+      46.82432432432432
+     ],
+     "n": 80
+    },
+    "pass_rate_cluster": {
+     "value": 0.375,
+     "ci90": [
+      0.2125,
+      0.5375
+     ],
+     "n": 80
+    },
+    "pass_rate_wilson": [
+     0.375,
+     0.29143170886680947,
+     0.4667465320983717
+    ],
+    "usd_per_resolved_pooled_actual": {
+     "value": 1.0193691433333334,
+     "ci90": [
+      0.6450775380952382,
+      1.9857102941176474
+     ]
+    },
+    "usd_per_resolved_pooled_5m": {
+     "value": 0.9151232933333336,
+     "ci90": [
+      0.5775879845238096,
+      1.785894191176471
+     ]
+    }
+   },
+   "sonnet": {
+    "sessions": 32,
+    "tasks": 16,
+    "passed": 14,
+    "usd_per_task_1h_actual": {
+     "value": 0.5730579812500001,
+     "ci90": [
+      0.4121133375,
+      0.74552125625
+     ],
+     "n": 32
+    },
+    "usd_per_task_5m": {
+     "value": 0.5118461218750001,
+     "ci90": [
+      0.3653090781250001,
+      0.6676638406250002
+     ],
+     "n": 32
+    },
+    "calls_per_task": {
+     "value": 28.34375,
+     "ci90": [
+      22.59375,
+      33.96875
+     ],
+     "n": 32
+    },
+    "pass_rate_cluster": {
+     "value": 0.4375,
+     "ci90": [
+      0.25,
+      0.625
+     ],
+     "n": 32
+    },
+    "pass_rate_wilson": [
+     0.4375,
+     0.3037776070112922,
+     0.5809670302455555
+    ],
+    "usd_per_resolved_pooled_actual": {
+     "value": 1.3098468142857143,
+     "ci90": [
+      0.7278226608695652,
+      2.686337125
+     ]
+    },
+    "usd_per_resolved_pooled_5m": {
+     "value": 1.1699339928571433,
+     "ci90": [
+      0.6457745500000003,
+      2.410661833333334
+     ]
+    }
+   },
+   "paired_task_balanced_actual": {
+    "haiku_usd": {
+     "value": 0.3957033333333334,
+     "ci90": [
+      0.3328970050260417,
+      0.45959199309895843
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_calls": {
+     "value": 42.88541666666667,
+     "ci90": [
+      38.166406249999994,
+      47.578125
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_pass": {
+     "value": 0.36979166666666663,
+     "ci90": [
+      0.20833333333333334,
+      0.53125
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_per_resolved": {
+     "value": 1.0700709859154933,
+     "ci90": [
+      0.6712481156138307,
+      2.0192317369318187
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_per_resolved_pooled": {
+     "value": 1.0193691433333334,
+     "ci90": [
+      0.6375936474347826,
+      1.934271053090278
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd": {
+     "value": 0.5730579812500001,
+     "ci90": [
+      0.4104423478125,
+      0.7529201818750001
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_calls": {
+     "value": 28.34375,
+     "ci90": [
+      22.5,
+      34.282812500000006
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_pass": {
+     "value": 0.4375,
+     "ci90": [
+      0.25,
+      0.625
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd_per_resolved": {
+     "value": 1.3098468142857145,
+     "ci90": [
+      0.7241409016111111,
+      2.6788147412500005
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd_per_resolved_pooled": {
+     "value": 1.3098468142857145,
+     "ci90": [
+      0.7241409016111111,
+      2.6788147412500014
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_over_haiku_usd": {
+     "value": 1.448201046027748,
+     "ci90": [
+      1.1729442720079248,
+      1.7156749763765722
+     ],
+     "finite_draws": 5000
+    },
+    "pass_gap_pts": {
+     "value": 6.7708333333333375,
+     "ci90": [
+      -2.0833333333333313,
+      15.625
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_over_haiku_usd_per_resolved": {
+     "value": 1.2240746936663107,
+     "ci90": [
+      0.9400228679442544,
+      1.5659104049097317
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_saving_vs_sonnet_per_resolved": {
+     "value": 0.23977582837022116,
+     "ci90": [
+      -0.062358241702422684,
+      0.8196940685442781
+     ],
+     "finite_draws": 5000
+    },
+    "breakeven_haiku_pass": {
+     "value": 0.30209893937034027,
+     "ci90": [
+      0.16051695074896719,
+      0.48594349109714813
+     ],
+     "finite_draws": 5000
+    },
+    "n_tasks": 16
+   },
+   "paired_task_balanced_5m": {
+    "haiku_usd": {
+     "value": 0.35546364973958333,
+     "ci90": [
+      0.2979157025,
+      0.41391218548177083
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_calls": {
+     "value": 42.88541666666667,
+     "ci90": [
+      38.166406249999994,
+      47.578125
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_pass": {
+     "value": 0.36979166666666663,
+     "ci90": [
+      0.20833333333333334,
+      0.53125
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_per_resolved": {
+     "value": 0.9612538133802818,
+     "ci90": [
+      0.6003330725505052,
+      1.8162795564147731
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_per_resolved_pooled": {
+     "value": 0.915123293333333,
+     "ci90": [
+      0.5710969543952358,
+      1.739529772647059
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd": {
+     "value": 0.5118461218750001,
+     "ci90": [
+      0.3639800473437501,
+      0.6748574362500002
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_calls": {
+     "value": 28.34375,
+     "ci90": [
+      22.5,
+      34.282812500000006
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_pass": {
+     "value": 0.4375,
+     "ci90": [
+      0.25,
+      0.625
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd_per_resolved": {
+     "value": 1.169933992857143,
+     "ci90": [
+      0.6436794772500002,
+      2.3977167293750012
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd_per_resolved_pooled": {
+     "value": 1.169933992857143,
+     "ci90": [
+      0.6436794772500002,
+      2.3977167293750012
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_over_haiku_usd": {
+     "value": 1.4399394206692706,
+     "ci90": [
+      1.159234323049307,
+      1.7119206057938425
+     ],
+     "finite_draws": 5000
+    },
+    "pass_gap_pts": {
+     "value": 6.7708333333333375,
+     "ci90": [
+      -2.0833333333333313,
+      15.625
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_over_haiku_usd_per_resolved": {
+     "value": 1.2170916531847402,
+     "ci90": [
+      0.9307439120393277,
+      1.556822231587408
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_saving_vs_sonnet_per_resolved": {
+     "value": 0.20868017947686124,
+     "ci90": [
+      -0.06414609033617423,
+      0.7297868796633602
+     ],
+     "finite_draws": 5000
+    },
+    "breakeven_haiku_pass": {
+     "value": 0.3038322263561991,
+     "ci90": [
+      0.16098890061509782,
+      0.49008393652792115
+     ],
+     "finite_draws": 5000
+    },
+    "n_tasks": 16
+   }
+  }
+ },
+ "q2_waste": {
+  "oracle_ceilings": {
+   "haiku": {
+    "failed calls (is_error or env signature)": {
+     "sessions": 40,
+     "usd_per_task": 0.04110649500000001,
+     "usd_ci": [
+      0.029210814285714287,
+      0.05388950000000001
+     ],
+     "usd_share": 0.10452742066406522,
+     "usd_share_ci": [
+      0.08010934583213991,
+      0.12781730290024734
+     ],
+     "calls_per_task": 3.9,
+     "calls_ci": [
+      2.9,
+      4.925
+     ],
+     "calls_share": 0.09101516919486581,
+     "calls_share_ci": [
+      0.07088901801278326,
+      0.10943983402489627
+     ]
+    },
+    "environment friction (U11's W)": {
+     "sessions": 40,
+     "usd_per_task": 0.01834654,
+     "usd_ci": [
+      0.014424000000000001,
+      0.02171175000000001
+     ],
+     "usd_share": 0.04665239652055227,
+     "usd_share_ci": [
+      0.0365621924955332,
+      0.05736114897512556
+     ],
+     "calls_per_task": 2.45,
+     "calls_ci": [
+      1.8611111111111112,
+      2.975609756097561
+     ],
+     "calls_share": 0.057176196032672114,
+     "calls_share_ci": [
+      0.04263786242183058,
+      0.07196710075394105
+     ]
+    },
+    "test-discovery searches": {
+     "sessions": 40,
+     "usd_per_task": 0.026227517500000002,
+     "usd_ci": [
+      0.01849035952380953,
+      0.03414171818181819
+     ],
+     "usd_share": 0.06669249603247934,
+     "usd_share_ci": [
+      0.049764745260438066,
+      0.08523800212926287
+     ],
+     "calls_per_task": 2.95,
+     "calls_ci": [
+      2.2325581395348837,
+      3.6923076923076925
+     ],
+     "calls_share": 0.06884480746791131,
+     "calls_share_ci": [
+      0.05391600454029512,
+      0.08529411764705883
+     ]
+    },
+    "failed test-runner calls": {
+     "sessions": 40,
+     "usd_per_task": 0.0106622725,
+     "usd_ci": [
+      0.007013589473684211,
+      0.01434679024390244
+     ],
+     "usd_share": 0.027112499930786953,
+     "usd_share_ci": [
+      0.01802316545747677,
+      0.036130864155585425
+     ],
+     "calls_per_task": 1.375,
+     "calls_ci": [
+      0.9736842105263158,
+      1.7560975609756098
+     ],
+     "calls_share": 0.03208868144690782,
+     "calls_share_ci": [
+      0.022058823529411766,
+      0.04171704957678356
+     ]
+    },
+    "every search/listing (Grep, Glob, find, grep, ls)": {
+     "sessions": 40,
+     "usd_per_task": 0.06283814250000001,
+     "usd_ci": [
+      0.04936867073170732,
+      0.07770429736842108
+     ],
+     "usd_share": 0.1597876188384822,
+     "usd_share_ci": [
+      0.13340055577335166,
+      0.18775486124269541
+     ],
+     "calls_per_task": 7.425,
+     "calls_ci": [
+      5.880952380952381,
+      9.18421052631579
+     ],
+     "calls_share": 0.17327887981330223,
+     "calls_share_ci": [
+      0.14699205448354144,
+      0.2009626955475331
+     ]
+    },
+    "failed or friction (union)": {
+     "sessions": 40,
+     "usd_per_task": 0.04816974749999999,
+     "usd_ci": [
+      0.03598275,
+      0.061351988372093026
+     ],
+     "usd_share": 0.12248817273801388,
+     "usd_share_ci": [
+      0.0963443108796016,
+      0.14657729676956557
+     ],
+     "calls_per_task": 4.9,
+     "calls_ci": [
+      3.7777777777777777,
+      6.025
+     ],
+     "calls_share": 0.11435239206534423,
+     "calls_share_ci": [
+      0.09085328422344997,
+      0.13518005540166206
+     ]
+    }
+   },
+   "sonnet": {
+    "failed calls (is_error or env signature)": {
+     "sessions": 16,
+     "usd_per_task": 0.02898207464929347,
+     "usd_ci": [
+      0.011810599298586934,
+      0.04924257464929347
+     ],
+     "usd_share": 0.04555238951278224,
+     "usd_share_ci": [
+      0.020545872452448682,
+      0.0750041276351276
+     ],
+     "calls_per_task": 1.375,
+     "calls_ci": [
+      0.9375,
+      1.8125
+     ],
+     "calls_share": 0.043478260869565216,
+     "calls_share_ci": [
+      0.03263403263403263,
+      0.05567010309278351
+     ]
+    },
+    "environment friction (U11's W)": {
+     "sessions": 16,
+     "usd_per_task": 0.0239718125,
+     "usd_ci": [
+      0.00915465,
+      0.04402977499999999
+     ],
+     "usd_share": 0.03767754218913388,
+     "usd_share_ci": [
+      0.014229368968681438,
+      0.0699694724497465
+     ],
+     "calls_per_task": 1.4375,
+     "calls_ci": [
+      0.75,
+      2.25
+     ],
+     "calls_share": 0.045454545454545456,
+     "calls_share_ci": [
+      0.02464788732394366,
+      0.07092198581560284
+     ]
+    },
+    "test-discovery searches": {
+     "sessions": 16,
+     "usd_per_task": 0.08000506250000002,
+     "usd_ci": [
+      0.0335209625,
+      0.13178874999999998
+     ],
+     "usd_share": 0.12574744265532878,
+     "usd_share_ci": [
+      0.06297808468408676,
+      0.18814829756607768
+     ],
+     "calls_per_task": 2.375,
+     "calls_ci": [
+      1.4375,
+      3.4375
+     ],
+     "calls_share": 0.07509881422924901,
+     "calls_share_ci": [
+      0.04940711462450593,
+      0.09878419452887538
+     ]
+    },
+    "failed test-runner calls": {
+     "sessions": 16,
+     "usd_per_task": 0.004677325,
+     "usd_ci": [
+      0.0024829375,
+      0.006996825
+     ],
+     "usd_share": 0.007351555499601485,
+     "usd_share_ci": [
+      0.0033928423134176973,
+      0.013676155793734693
+     ],
+     "calls_per_task": 0.5,
+     "calls_ci": [
+      0.25,
+      0.75
+     ],
+     "calls_share": 0.015810276679841896,
+     "calls_share_ci": [
+      0.007668711656441718,
+      0.027906976744186046
+     ]
+    },
+    "every search/listing (Grep, Glob, find, grep, ls)": {
+     "sessions": 16,
+     "usd_per_task": 0.17968182208983696,
+     "usd_ci": [
+      0.09956315000000003,
+      0.268260394179674
+     ],
+     "usd_share": 0.2824137487480465,
+     "usd_share_ci": [
+      0.20787410422782457,
+      0.33887818858342955
+     ],
+     "calls_per_task": 7.0,
+     "calls_ci": [
+      5.0,
+      9.125
+     ],
+     "calls_share": 0.22134387351778656,
+     "calls_share_ci": [
+      0.1891348088531187,
+      0.2520491803278688
+     ]
+    },
+    "failed or friction (union)": {
+     "sessions": 16,
+     "usd_per_task": 0.037020074649293466,
+     "usd_ci": [
+      0.015843049649293468,
+      0.061958474649293466
+     ],
+     "usd_share": 0.0581860643388413,
+     "usd_share_ci": [
+      0.027775727375187242,
+      0.09508587998271434
+     ],
+     "calls_per_task": 2.0,
+     "calls_ci": [
+      1.25,
+      2.8125
+     ],
+     "calls_share": 0.06324110671936758,
+     "calls_share_ci": [
+      0.04326923076923077,
+      0.08620689655172414
+     ]
+    }
+   }
+  },
+  "u11": {
+   "post-hoc_p1.0_haiku": {
+    "sessions": 40,
+    "tasks": 16,
+    "test_set_id": "b871bcbd310f",
+    "baseline": {
+     "usd_per_task": 0.39326039749999997,
+     "calls_per_task": 42.85
+    },
+    "usd_saved_per_task": 0.00186002,
+    "usd_saved_ci": [
+     0.0008057589743589744,
+     0.0030346952380952384
+    ],
+    "usd_saved_share": 0.004729741443136287,
+    "usd_saved_share_ci": [
+     0.0018300302784048537,
+     0.008564887732525632
+    ],
+    "calls_saved_per_task": 0.29422851789101945,
+    "calls_saved_ci": [
+     0.13224165384916226,
+     0.46744585337081
+    ],
+    "directives": 11,
+    "useful": 11
+   },
+   "post-hoc_p1.0_sonnet": {
+    "sessions": 16,
+    "tasks": 16,
+    "test_set_id": "6383e51aa75d",
+    "baseline": {
+     "usd_per_task": 0.6362361,
+     "calls_per_task": 31.625
+    },
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "usd_saved_share_ci": [
+     0.0,
+     0.0
+    ],
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "directives": 0,
+    "useful": 0
+   },
+   "post-hoc_p0.5_haiku": {
+    "sessions": 40,
+    "tasks": 16,
+    "test_set_id": "b871bcbd310f",
+    "baseline": {
+     "usd_per_task": 0.39326039749999997,
+     "calls_per_task": 42.85
+    },
+    "usd_saved_per_task": 0.0008793962500000003,
+    "usd_saved_ci": [
+     0.0003695263157894737,
+     0.0014427646341463414
+    ],
+    "usd_saved_share": 0.0022361678307564648,
+    "usd_saved_share_ci": [
+     0.000858165831542115,
+     0.004071896397879538
+    ],
+    "calls_saved_per_task": 0.14422851789101948,
+    "calls_saved_ci": [
+     0.0646740862815947,
+     0.2298727128536248
+    ],
+    "directives": 11,
+    "useful": 11
+   },
+   "post-hoc_p0.5_sonnet": {
+    "sessions": 16,
+    "tasks": 16,
+    "test_set_id": "6383e51aa75d",
+    "baseline": {
+     "usd_per_task": 0.6362361,
+     "calls_per_task": 31.625
+    },
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "usd_saved_share_ci": [
+     0.0,
+     0.0
+    ],
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "directives": 0,
+    "useful": 0
+   },
+   "predictive_p1.0_haiku": {
+    "sessions": 40,
+    "tasks": 16,
+    "test_set_id": "b871bcbd310f",
+    "baseline": {
+     "usd_per_task": 0.39326039749999997,
+     "calls_per_task": 42.85
+    },
+    "usd_saved_per_task": 0.0051815375000000006,
+    "usd_saved_ci": [
+     0.003125947222222222,
+     0.00710146511627907
+    ],
+    "usd_saved_share": 0.013175843621528151,
+    "usd_saved_share_ci": [
+     0.007386037114524405,
+     0.020049231083866376
+    ],
+    "calls_saved_per_task": 0.8631849339507875,
+    "calls_saved_ci": [
+     0.5323434260850785,
+     1.171088181806545
+    ],
+    "directives": 21,
+    "useful": 21
+   },
+   "predictive_p1.0_sonnet": {
+    "sessions": 16,
+    "tasks": 16,
+    "test_set_id": "6383e51aa75d",
+    "baseline": {
+     "usd_per_task": 0.6362361,
+     "calls_per_task": 31.625
+    },
+    "usd_saved_per_task": 0.003116241666666667,
+    "usd_saved_ci": [
+     -0.002196041666666667,
+     0.0079667125
+    ],
+    "usd_saved_share": 0.0048979328061810185,
+    "usd_saved_share_ci": [
+     -0.003641910098105802,
+     0.014208864175785303
+    ],
+    "calls_saved_per_task": 0.4334789287587197,
+    "calls_saved_ci": [
+     -0.0028260425385101956,
+     0.8690538440689556
+    ],
+    "directives": 6,
+    "useful": 5
+   },
+   "predictive_p0.5_haiku": {
+    "sessions": 40,
+    "tasks": 16,
+    "test_set_id": "b871bcbd310f",
+    "baseline": {
+     "usd_per_task": 0.39326039749999997,
+     "calls_per_task": 42.85
+    },
+    "usd_saved_per_task": 0.00248951875,
+    "usd_saved_ci": [
+     0.0015006987179487178,
+     0.003419156097560976
+    ],
+    "usd_saved_share": 0.00633045881514169,
+    "usd_saved_share_ci": [
+     0.0035248503556520308,
+     0.009653125125115406
+    ],
+    "calls_saved_per_task": 0.4256849339507873,
+    "calls_saved_ci": [
+     0.2620731558148082,
+     0.5780649259925915
+    ],
+    "directives": 21,
+    "useful": 21
+   },
+   "predictive_p0.5_sonnet": {
+    "sessions": 16,
+    "tasks": 16,
+    "test_set_id": "6383e51aa75d",
+    "baseline": {
+     "usd_per_task": 0.6362361,
+     "calls_per_task": 31.625
+    },
+    "usd_saved_per_task": 0.0014574958333333334,
+    "usd_saved_ci": [
+     -0.0011871708333333333,
+     0.0038471062500000006
+    ],
+    "usd_saved_share": 0.0022908097062290765,
+    "usd_saved_share_ci": [
+     -0.0019273370711303443,
+     0.006852007495871308
+    ],
+    "calls_saved_per_task": 0.21472892875871968,
+    "calls_saved_ci": [
+     -0.002826042538510251,
+     0.43155384406895564
+    ],
+    "directives": 6,
+    "useful": 5
+   }
+  }
+ },
+ "q4_routing": {
+  "actual": {
+   "conservative": {
+    "haiku_usd": {
+     "value": 0.40371903618750005,
+     "ci90": [
+      0.3369483533625,
+      0.47269621982343757
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_calls": {
+     "value": 43.875,
+     "ci90": [
+      38.36458333333333,
+      49.34427083333333
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_pass": {
+     "value": 0.3958333333333333,
+     "ci90": [
+      0.20833333333333331,
+      0.5833333333333333
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_per_resolved": {
+     "value": 1.019921775631579,
+     "ci90": [
+      0.6352671964382557,
+      2.020611197400001
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_per_resolved_pooled": {
+     "value": 0.9669073311562503,
+     "ci90": [
+      0.6016324890603261,
+      1.8881797293218747
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd": {
+     "value": 0.6362361,
+     "ci90": [
+      0.44756146687500004,
+      0.8410979118750002
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_calls": {
+     "value": 31.625,
+     "ci90": [
+      24.375,
+      39.125
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_pass": {
+     "value": 0.4375,
+     "ci90": [
+      0.25,
+      0.625
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd_per_resolved": {
+     "value": 1.4542539428571428,
+     "ci90": [
+      0.7828265876136364,
+      3.1366520975000025
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd_per_resolved_pooled": {
+     "value": 1.4542539428571428,
+     "ci90": [
+      0.7828265876136364,
+      3.136652097500003
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_over_haiku_usd": {
+     "value": 1.575937825494341,
+     "ci90": [
+      1.2644460467465406,
+      1.8728168828955578
+     ],
+     "finite_draws": 5000
+    },
+    "pass_gap_pts": {
+     "value": 4.166666666666669,
+     "ci90": [
+      -10.416666666666663,
+      16.666666666666675
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_over_haiku_usd_per_resolved": {
+     "value": 1.4258485087805943,
+     "ci90": [
+      0.9924634798471313,
+      2.07308590975004
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_saving_vs_sonnet_per_resolved": {
+     "value": 0.4343321672255638,
+     "ci90": [
+      -0.005796550620146811,
+      1.4135232605541206
+     ],
+     "finite_draws": 5000
+    },
+    "breakeven_haiku_pass": {
+     "value": 0.2776124748847657,
+     "ci90": [
+      0.142385310558144,
+      0.45350095582443856
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_share_removed": 0.015213692010697777,
+    "description": "U11 predictive (measured here, p_follow 0.5) + output shaping at token-cost's central estimate (+1%)"
+   },
+   "central": {
+    "haiku_usd": {
+     "value": 0.376774228104011,
+     "ci90": [
+      0.313034061433323,
+      0.44294892154355137
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_calls": {
+     "value": 43.875,
+     "ci90": [
+      38.36458333333333,
+      49.34427083333333
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_pass": {
+     "value": 0.3958333333333333,
+     "ci90": [
+      0.20833333333333331,
+      0.5833333333333333
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_per_resolved": {
+     "value": 0.9518506815259226,
+     "ci90": [
+      0.5907688991637585,
+      1.8873108049655654
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_per_resolved_pooled": {
+     "value": 0.8994333641787737,
+     "ci90": [
+      0.5573669592113013,
+      1.7590093631115904
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd": {
+     "value": 0.6362361,
+     "ci90": [
+      0.44756146687500004,
+      0.8410979118750002
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_calls": {
+     "value": 31.625,
+     "ci90": [
+      24.375,
+      39.125
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_pass": {
+     "value": 0.4375,
+     "ci90": [
+      0.25,
+      0.625
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd_per_resolved": {
+     "value": 1.4542539428571428,
+     "ci90": [
+      0.7828265876136364,
+      3.1366520975000025
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd_per_resolved_pooled": {
+     "value": 1.4542539428571428,
+     "ci90": [
+      0.7828265876136364,
+      3.136652097500003
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_over_haiku_usd": {
+     "value": 1.6886401790314671,
+     "ci90": [
+      1.3572500061782489,
+      2.0052543217928727
+     ],
+     "finite_draws": 5000
+    },
+    "pass_gap_pts": {
+     "value": 4.166666666666669,
+     "ci90": [
+      -10.416666666666663,
+      16.666666666666675
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_over_haiku_usd_per_resolved": {
+     "value": 1.5278173048379942,
+     "ci90": [
+      1.0685509330514436,
+      2.217388523097404
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_saving_vs_sonnet_per_resolved": {
+     "value": 0.5024032613312203,
+     "ci90": [
+      0.06825863387572673,
+      1.5213617263469144
+     ],
+     "finite_draws": 5000
+    },
+    "breakeven_haiku_pass": {
+     "value": 0.25908420599759246,
+     "ci90": [
+      0.1331916431923095,
+      0.4213099229763167
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_share_removed": 0.08093979282229247,
+    "description": "U11 predictive (measured, p_follow 1) + half of waste-anatomy's learned output cap (per repo) + file-pointer hint at p_follow 0.5 (context-prefetch +1.9%) + half the commit habit (1.5%)"
+   },
+   "optimistic": {
+    "haiku_usd": {
+     "value": 0.34845760647741003,
+     "ci90": [
+      0.2887521512208135,
+      0.4104032155710931
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_calls": {
+     "value": 43.875,
+     "ci90": [
+      38.36458333333333,
+      49.34427083333333
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_pass": {
+     "value": 0.3958333333333333,
+     "ci90": [
+      0.20833333333333331,
+      0.5833333333333333
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_per_resolved": {
+     "value": 0.8803139532060885,
+     "ci90": [
+      0.5457113249855179,
+      1.7438657703325648
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_per_resolved_pooled": {
+     "value": 0.8301037962208199,
+     "ci90": [
+      0.5152590613369562,
+      1.6211824428592143
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd": {
+     "value": 0.6362361,
+     "ci90": [
+      0.44756146687500004,
+      0.8410979118750002
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_calls": {
+     "value": 31.625,
+     "ci90": [
+      24.375,
+      39.125
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_pass": {
+     "value": 0.4375,
+     "ci90": [
+      0.25,
+      0.625
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd_per_resolved": {
+     "value": 1.4542539428571428,
+     "ci90": [
+      0.7828265876136364,
+      3.1366520975000025
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd_per_resolved_pooled": {
+     "value": 1.4542539428571428,
+     "ci90": [
+      0.7828265876136364,
+      3.136652097500003
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_over_haiku_usd": {
+     "value": 1.8258637153361903,
+     "ci90": [
+      1.4698419744918463,
+      2.1654492367795894
+     ],
+     "finite_draws": 5000
+    },
+    "pass_gap_pts": {
+     "value": 4.166666666666669,
+     "ci90": [
+      -10.416666666666663,
+      16.666666666666675
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_over_haiku_usd_per_resolved": {
+     "value": 1.6519719329232196,
+     "ci90": [
+      1.1576359367581248,
+      2.3896793456542893
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_saving_vs_sonnet_per_resolved": {
+     "value": 0.5739399896510543,
+     "ci90": [
+      0.13687060485445363,
+      1.6229089580286402
+     ],
+     "finite_draws": 5000
+    },
+    "breakeven_haiku_pass": {
+     "value": 0.23961262624655674,
+     "ci90": [
+      0.12336343753804614,
+      0.38885428443631936
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_share_removed": 0.15001213959525794,
+    "description": "U11 predictive (measured, p_follow 1) + waste-anatomy's learned output cap in full (click 10%, vue-core 6.3%, LORO) + file-pointer hint at p_follow 1 (+4.0%) + commit habit (3%)"
+   },
+   "procedural_oracle": {
+    "haiku_usd": {
+     "value": 0.3627637416666667,
+     "ci90": [
+      0.3024461361458334,
+      0.42534692494791676
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_calls": {
+     "value": 43.875,
+     "ci90": [
+      38.36458333333333,
+      49.34427083333333
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_pass": {
+     "value": 0.3958333333333333,
+     "ci90": [
+      0.20833333333333331,
+      0.5833333333333333
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_per_resolved": {
+     "value": 0.9164557684210527,
+     "ci90": [
+      0.576869888125,
+      1.7830916187500003
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_per_resolved_pooled": {
+     "value": 0.8627266249999997,
+     "ci90": [
+      0.5420033262770562,
+      1.660655377222222
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd": {
+     "value": 0.6362361,
+     "ci90": [
+      0.44756146687500004,
+      0.8410979118750002
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_calls": {
+     "value": 31.625,
+     "ci90": [
+      24.375,
+      39.125
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_pass": {
+     "value": 0.4375,
+     "ci90": [
+      0.25,
+      0.625
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd_per_resolved": {
+     "value": 1.4542539428571428,
+     "ci90": [
+      0.7828265876136364,
+      3.1366520975000025
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd_per_resolved_pooled": {
+     "value": 1.4542539428571428,
+     "ci90": [
+      0.7828265876136364,
+      3.136652097500003
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_over_haiku_usd": {
+     "value": 1.753858026375247,
+     "ci90": [
+      1.411857225250375,
+      2.0758576901979287
+     ],
+     "finite_draws": 5000
+    },
+    "pass_gap_pts": {
+     "value": 4.166666666666669,
+     "ci90": [
+      -10.416666666666663,
+      16.666666666666675
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_over_haiku_usd_per_resolved": {
+     "value": 1.5868239286252235,
+     "ci90": [
+      1.116720044483342,
+      2.297178601595525
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_saving_vs_sonnet_per_resolved": {
+     "value": 0.5377981744360901,
+     "ci90": [
+      0.10026117025524454,
+      1.5774933236447368
+     ],
+     "finite_draws": 5000
+    },
+    "breakeven_haiku_pass": {
+     "value": 0.24945006575258252,
+     "ci90": [
+      0.12718797477019497,
+      0.4083981799722234
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_share_removed": 0.11511538023590795,
+    "description": "every failed or environment-friction call deleted (oracle, not a lever)"
+   },
+   "optimistic_plus_3.3pts": {
+    "haiku_usd": {
+     "value": 0.34845760647741003,
+     "ci90": [
+      0.2887521512208135,
+      0.4104032155710931
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_calls": {
+     "value": 43.875,
+     "ci90": [
+      38.36458333333333,
+      49.34427083333333
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_pass": {
+     "value": 0.4288333333333333,
+     "ci90": [
+      0.24133333333333332,
+      0.6163333333333333
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_per_resolved": {
+     "value": 0.8125711771723515,
+     "ci90": [
+      0.5153837076362272,
+      1.5077521833678869
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_per_resolved_pooled": {
+     "value": 0.766839534615076,
+     "ci90": [
+      0.48601322259947055,
+      1.408800142827109
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd": {
+     "value": 0.6362361,
+     "ci90": [
+      0.44756146687500004,
+      0.8410979118750002
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_calls": {
+     "value": 31.625,
+     "ci90": [
+      24.375,
+      39.125
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_pass": {
+     "value": 0.4375,
+     "ci90": [
+      0.25,
+      0.625
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd_per_resolved": {
+     "value": 1.4542539428571428,
+     "ci90": [
+      0.7828265876136364,
+      3.1366520975000025
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd_per_resolved_pooled": {
+     "value": 1.4542539428571428,
+     "ci90": [
+      0.7828265876136364,
+      3.136652097500003
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_over_haiku_usd": {
+     "value": 1.8258637153361903,
+     "ci90": [
+      1.4698419744918463,
+      2.1654492367795894
+     ],
+     "finite_draws": 5000
+    },
+    "pass_gap_pts": {
+     "value": 0.8666666666666711,
+     "ci90": [
+      -13.716666666666665,
+      13.36666666666667
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_over_haiku_usd_per_resolved": {
+     "value": 1.7896942245942922,
+     "ci90": [
+      1.2831116827525553,
+      2.622815421779166
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_saving_vs_sonnet_per_resolved": {
+     "value": 0.6416827656847913,
+     "ci90": [
+      0.201490845141286,
+      1.783840998492722
+     ],
+     "finite_draws": 5000
+    },
+    "breakeven_haiku_pass": {
+     "value": 0.23961262624655674,
+     "ci90": [
+      0.12336343753804614,
+      0.38885428443631936
+     ],
+     "finite_draws": 5000
+    }
+   }
+  },
+  "5m": {
+   "conservative": {
+    "haiku_usd": {
+     "value": 0.3629543874531179,
+     "ci90": [
+      0.30124804241130726,
+      0.4265494706446851
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_calls": {
+     "value": 43.875,
+     "ci90": [
+      38.36458333333333,
+      49.34427083333333
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_pass": {
+     "value": 0.3958333333333333,
+     "ci90": [
+      0.20833333333333331,
+      0.5833333333333333
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_per_resolved": {
+     "value": 0.9169373998815611,
+     "ci90": [
+      0.5684495189302254,
+      1.8244868524827145
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_per_resolved_pooled": {
+     "value": 0.8684672879999787,
+     "ci90": [
+      0.5374192517024454,
+      1.6984137278241906
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd": {
+     "value": 0.5713153500000001,
+     "ci90": [
+      0.3978542825,
+      0.7599587843750003
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_calls": {
+     "value": 31.625,
+     "ci90": [
+      24.375,
+      39.125
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_pass": {
+     "value": 0.4375,
+     "ci90": [
+      0.25,
+      0.625
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd_per_resolved": {
+     "value": 1.3058636571428575,
+     "ci90": [
+      0.6964852818333335,
+      2.835679478750001
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd_per_resolved_pooled": {
+     "value": 1.3058636571428575,
+     "ci90": [
+      0.6964852818333335,
+      2.835679478750001
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_over_haiku_usd": {
+     "value": 1.5740692763324036,
+     "ci90": [
+      1.2527303244272328,
+      1.87820885225548
+     ],
+     "finite_draws": 5000
+    },
+    "pass_gap_pts": {
+     "value": 4.166666666666669,
+     "ci90": [
+      -10.416666666666663,
+      16.666666666666675
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_over_haiku_usd_per_resolved": {
+     "value": 1.4241579166816984,
+     "ci90": [
+      0.9895354817642309,
+      2.0694707985094336
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_saving_vs_sonnet_per_resolved": {
+     "value": 0.38892625726129637,
+     "ci90": [
+      -0.010956150433523201,
+      1.2702874312601715
+     ],
+     "finite_draws": 5000
+    },
+    "breakeven_haiku_pass": {
+     "value": 0.27794202363150067,
+     "ci90": [
+      0.14195731460626843,
+      0.4557736421847199
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_share_removed": 0.015146419470347672,
+    "description": "U11 predictive (measured here, p_follow 0.5) + output shaping at token-cost's central estimate (+1%)"
+   },
+   "central": {
+    "haiku_usd": {
+     "value": 0.338767985143031,
+     "ci90": [
+      0.279583446031886,
+      0.39967091800494453
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_calls": {
+     "value": 43.875,
+     "ci90": [
+      38.36458333333333,
+      49.34427083333333
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_pass": {
+     "value": 0.3958333333333333,
+     "ci90": [
+      0.20833333333333331,
+      0.5833333333333333
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_per_resolved": {
+     "value": 0.8558349098350257,
+     "ci90": [
+      0.5302100984721506,
+      1.701272119178116
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_per_resolved_pooled": {
+     "value": 0.8079637303881787,
+     "ci90": [
+      0.49921088943817993,
+      1.5842302749106667
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd": {
+     "value": 0.5713153500000001,
+     "ci90": [
+      0.3978542825,
+      0.7599587843750003
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_calls": {
+     "value": 31.625,
+     "ci90": [
+      24.375,
+      39.125
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_pass": {
+     "value": 0.4375,
+     "ci90": [
+      0.25,
+      0.625
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd_per_resolved": {
+     "value": 1.3058636571428575,
+     "ci90": [
+      0.6964852818333335,
+      2.835679478750001
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd_per_resolved_pooled": {
+     "value": 1.3058636571428575,
+     "ci90": [
+      0.6964852818333335,
+      2.835679478750001
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_over_haiku_usd": {
+     "value": 1.6864502404463793,
+     "ci90": [
+      1.3443273646346512,
+      2.0135243338652917
+     ],
+     "finite_draws": 5000
+    },
+    "pass_gap_pts": {
+     "value": 4.166666666666669,
+     "ci90": [
+      -10.416666666666663,
+      16.666666666666675
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_over_haiku_usd_per_resolved": {
+     "value": 1.5258359318324384,
+     "ci90": [
+      1.0648377783898473,
+      2.2098315194853373
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_saving_vs_sonnet_per_resolved": {
+     "value": 0.4500287473078317,
+     "ci90": [
+      0.05806797726215002,
+      1.3654521915338371
+     ],
+     "finite_draws": 5000
+    },
+    "breakeven_haiku_pass": {
+     "value": 0.25942063958210826,
+     "ci90": [
+      0.13282353902709618,
+      0.4237161876879997
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_share_removed": 0.08077467949047634,
+    "description": "U11 predictive (measured, p_follow 1) + half of waste-anatomy's learned output cap (per repo) + file-pointer hint at p_follow 0.5 (context-prefetch +1.9%) + half the commit habit (1.5%)"
+   },
+   "optimistic": {
+    "haiku_usd": {
+     "value": 0.3133221032217684,
+     "ci90": [
+      0.2578255698709633,
+      0.37068772927075155
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_calls": {
+     "value": 43.875,
+     "ci90": [
+      38.36458333333333,
+      49.34427083333333
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_pass": {
+     "value": 0.3958333333333333,
+     "ci90": [
+      0.20833333333333331,
+      0.5833333333333333
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_per_resolved": {
+     "value": 0.7915505765602571,
+     "ci90": [
+      0.48902749110396837,
+      1.5728378783480064
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_per_resolved_pooled": {
+     "value": 0.7457208733050701,
+     "ci90": [
+      0.4609515474213098,
+      1.4619347580489328
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd": {
+     "value": 0.5713153500000001,
+     "ci90": [
+      0.3978542825,
+      0.7599587843750003
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_calls": {
+     "value": 31.625,
+     "ci90": [
+      24.375,
+      39.125
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_pass": {
+     "value": 0.4375,
+     "ci90": [
+      0.25,
+      0.625
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd_per_resolved": {
+     "value": 1.3058636571428575,
+     "ci90": [
+      0.6964852818333335,
+      2.835679478750001
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd_per_resolved_pooled": {
+     "value": 1.3058636571428575,
+     "ci90": [
+      0.6964852818333335,
+      2.835679478750001
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_over_haiku_usd": {
+     "value": 1.823412214221047,
+     "ci90": [
+      1.4560289214119078,
+      2.174383334870788
+     ],
+     "finite_draws": 5000
+    },
+    "pass_gap_pts": {
+     "value": 4.166666666666669,
+     "ci90": [
+      -10.416666666666663,
+      16.666666666666675
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_over_haiku_usd_per_resolved": {
+     "value": 1.6497539081047565,
+     "ci90": [
+      1.15434769280342,
+      2.384811280555058
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_saving_vs_sonnet_per_resolved": {
+     "value": 0.5143130805826004,
+     "ci90": [
+      0.11737611819056652,
+      1.457496835467564
+     ],
+     "finite_draws": 5000
+    },
+    "breakeven_haiku_pass": {
+     "value": 0.23993477535571844,
+     "ci90": [
+      0.1232361742075723,
+      0.39135030591395636
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_share_removed": 0.14982045710386105,
+    "description": "U11 predictive (measured, p_follow 1) + waste-anatomy's learned output cap in full (click 10%, vue-core 6.3%, LORO) + file-pointer hint at p_follow 1 (+4.0%) + commit habit (3%)"
+   },
+   "procedural_oracle": {
+    "haiku_usd": {
+     "value": 0.3259872508266639,
+     "ci90": [
+      0.2703996757896419,
+      0.3836397213277481
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_calls": {
+     "value": 43.875,
+     "ci90": [
+      38.36458333333333,
+      49.34427083333333
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_pass": {
+     "value": 0.3958333333333333,
+     "ci90": [
+      0.20833333333333331,
+      0.5833333333333333
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_per_resolved": {
+     "value": 0.8235467389305194,
+     "ci90": [
+      0.5168766230624467,
+      1.6057947044629408
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_per_resolved_pooled": {
+     "value": 0.7745362175044794,
+     "ci90": [
+      0.4851077120484601,
+      1.4929241976058751
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd": {
+     "value": 0.5713153500000001,
+     "ci90": [
+      0.3978542825,
+      0.7599587843750003
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_calls": {
+     "value": 31.625,
+     "ci90": [
+      24.375,
+      39.125
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_pass": {
+     "value": 0.4375,
+     "ci90": [
+      0.25,
+      0.625
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd_per_resolved": {
+     "value": 1.3058636571428575,
+     "ci90": [
+      0.6964852818333335,
+      2.835679478750001
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd_per_resolved_pooled": {
+     "value": 1.3058636571428575,
+     "ci90": [
+      0.6964852818333335,
+      2.835679478750001
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_over_haiku_usd": {
+     "value": 1.752569612925702,
+     "ci90": [
+      1.4003081007493179,
+      2.0842342159927796
+     ],
+     "finite_draws": 5000
+    },
+    "pass_gap_pts": {
+     "value": 4.166666666666669,
+     "ci90": [
+      -10.416666666666663,
+      16.666666666666675
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_over_haiku_usd_per_resolved": {
+     "value": 1.5856582212184922,
+     "ci90": [
+      1.113029933466073,
+      2.3008589944442783
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_saving_vs_sonnet_per_resolved": {
+     "value": 0.482316918212338,
+     "ci90": [
+      0.08725221401573054,
+      1.42335014093571
+     ],
+     "finite_draws": 5000
+    },
+    "breakeven_haiku_pass": {
+     "value": 0.24963345066199505,
+     "ci90": [
+      0.12691006699004062,
+      0.41090212922935954
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_share_removed": 0.11545438688180298,
+    "description": "every failed or environment-friction call deleted (oracle, not a lever)"
+   },
+   "optimistic_plus_3.3pts": {
+    "haiku_usd": {
+     "value": 0.3133221032217684,
+     "ci90": [
+      0.2578255698709633,
+      0.37068772927075155
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_calls": {
+     "value": 43.875,
+     "ci90": [
+      38.36458333333333,
+      49.34427083333333
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_pass": {
+     "value": 0.4288333333333333,
+     "ci90": [
+      0.24133333333333332,
+      0.6163333333333333
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_per_resolved": {
+     "value": 0.7306384062691841,
+     "ci90": [
+      0.4624038029529516,
+      1.3599345056790881
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_usd_per_resolved_pooled": {
+     "value": 0.6888876427760463,
+     "ci90": [
+      0.4352105878377203,
+      1.2696204740793664
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd": {
+     "value": 0.5713153500000001,
+     "ci90": [
+      0.3978542825,
+      0.7599587843750003
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_calls": {
+     "value": 31.625,
+     "ci90": [
+      24.375,
+      39.125
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_pass": {
+     "value": 0.4375,
+     "ci90": [
+      0.25,
+      0.625
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd_per_resolved": {
+     "value": 1.3058636571428575,
+     "ci90": [
+      0.6964852818333335,
+      2.835679478750001
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_usd_per_resolved_pooled": {
+     "value": 1.3058636571428575,
+     "ci90": [
+      0.6964852818333335,
+      2.835679478750001
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_over_haiku_usd": {
+     "value": 1.823412214221047,
+     "ci90": [
+      1.4560289214119078,
+      2.174383334870788
+     ],
+     "finite_draws": 5000
+    },
+    "pass_gap_pts": {
+     "value": 0.8666666666666711,
+     "ci90": [
+      -13.716666666666665,
+      13.36666666666667
+     ],
+     "finite_draws": 5000
+    },
+    "sonnet_over_haiku_usd_per_resolved": {
+     "value": 1.7872912865488584,
+     "ci90": [
+      1.276420678237058,
+      2.61505705480012
+     ],
+     "finite_draws": 5000
+    },
+    "haiku_saving_vs_sonnet_per_resolved": {
+     "value": 0.5752252508736734,
+     "ci90": [
+      0.1756757091960693,
+      1.6006137313509916
+     ],
+     "finite_draws": 5000
+    },
+    "breakeven_haiku_pass": {
+     "value": 0.23993477535571844,
+     "ci90": [
+      0.1232361742075723,
+      0.39135030591395636
+     ],
+     "finite_draws": 5000
+    }
+   }
+  }
+ },
+ "q3_failures": {
+  "v2": {
+   "haiku": {
+    "failed_sessions": 24,
+    "categories": {
+     "wrong_fix_finished": 16,
+     "turn_cap_with_edit": 6,
+     "breaks_build_or_import": 2
+    },
+    "category_shares": {
+     "wrong_fix_finished": 0.6666666666666666,
+     "turn_cap_with_edit": 0.25,
+     "breaks_build_or_import": 0.08333333333333333
+    },
+    "touched_gold_by_category": {
+     "wrong_fix_finished|gold=True": 16,
+     "turn_cap_with_edit|gold=True": 5,
+     "breaks_build_or_import|gold=True": 2,
+     "turn_cap_with_edit|gold=False": 1
+    },
+    "median_hidden_test_fail_fraction": 0.04412719013627514,
+    "procedural_waste_share_of_usd": {
+     "failed_sessions": 0.1335805479246492,
+     "passed_sessions": 0.09855627788164276
+    }
+   },
+   "sonnet": {
+    "failed_sessions": 9,
+    "categories": {
+     "wrong_fix_finished": 7,
+     "breaks_build_or_import": 1,
+     "no_source_change": 1
+    },
+    "category_shares": {
+     "wrong_fix_finished": 0.7777777777777778,
+     "breaks_build_or_import": 0.1111111111111111,
+     "no_source_change": 0.1111111111111111
+    },
+    "touched_gold_by_category": {
+     "wrong_fix_finished|gold=True": 7,
+     "breaks_build_or_import|gold=True": 1,
+     "no_source_change|gold=False": 1
+    },
+    "median_hidden_test_fail_fraction": 0.01639344262295082,
+    "procedural_waste_share_of_usd": {
+     "failed_sessions": 0.04538257673610402,
+     "passed_sessions": 0.08267892331280123
+    }
+   }
+  },
+  "v1": {
+   "haiku": {
+    "failed_sessions": 21,
+    "categories": {
+     "turn_cap_with_edit": 10,
+     "wrong_fix_finished": 4,
+     "no_source_change": 7
+    },
+    "category_shares": {
+     "turn_cap_with_edit": 0.47619047619047616,
+     "wrong_fix_finished": 0.19047619047619047,
+     "no_source_change": 0.3333333333333333
+    },
+    "touched_gold_by_category": {
+     "turn_cap_with_edit|gold=True": 8,
+     "wrong_fix_finished|gold=True": 4,
+     "no_source_change|gold=False": 7,
+     "turn_cap_with_edit|gold=False": 2
+    },
+    "median_hidden_test_fail_fraction": 0.043478260869565216,
+    "procedural_waste_share_of_usd": {
+     "failed_sessions": 0.10332130480843968,
+     "passed_sessions": 0.09296151309401353
+    }
+   },
+   "sonnet": {
+    "failed_sessions": 8,
+    "categories": {
+     "wrong_fix_finished": 2,
+     "turn_cap_with_edit": 6
+    },
+    "category_shares": {
+     "wrong_fix_finished": 0.25,
+     "turn_cap_with_edit": 0.75
+    },
+    "touched_gold_by_category": {
+     "wrong_fix_finished|gold=True": 2,
+     "turn_cap_with_edit|gold=True": 6
+    },
+    "median_hidden_test_fail_fraction": 0.03629404523772888,
+    "procedural_waste_share_of_usd": {
+     "failed_sessions": 0.0484174432228667,
+     "passed_sessions": 0.09635847865905439
+    }
+   }
+  },
+  "v2_all_arms": {
+   "haiku": {
+    "failed_sessions": 50,
+    "categories": {
+     "wrong_fix_finished": 34,
+     "turn_cap_with_edit": 12,
+     "breaks_build_or_import": 4
+    },
+    "category_shares": {
+     "wrong_fix_finished": 0.68,
+     "turn_cap_with_edit": 0.24,
+     "breaks_build_or_import": 0.08
+    },
+    "touched_gold_by_category": {
+     "wrong_fix_finished|gold=True": 33,
+     "turn_cap_with_edit|gold=True": 11,
+     "breaks_build_or_import|gold=True": 4,
+     "wrong_fix_finished|gold=False": 1,
+     "turn_cap_with_edit|gold=False": 1
+    },
+    "median_hidden_test_fail_fraction": 0.04412719013627514,
+    "procedural_waste_share_of_usd": {
+     "failed_sessions": 0.11665176553102324,
+     "passed_sessions": 0.11506666369772507
+    }
+   },
+   "sonnet": {
+    "failed_sessions": 18,
+    "categories": {
+     "wrong_fix_finished": 15,
+     "breaks_build_or_import": 2,
+     "no_source_change": 1
+    },
+    "category_shares": {
+     "wrong_fix_finished": 0.8333333333333334,
+     "breaks_build_or_import": 0.1111111111111111,
+     "no_source_change": 0.05555555555555555
+    },
+    "touched_gold_by_category": {
+     "wrong_fix_finished|gold=True": 15,
+     "breaks_build_or_import|gold=True": 2,
+     "no_source_change|gold=False": 1
+    },
+    "median_hidden_test_fail_fraction": 0.014999442399910783,
+    "procedural_waste_share_of_usd": {
+     "failed_sessions": 0.05491381222005131,
+     "passed_sessions": 0.07631669838686184
+    }
+   }
+  },
+  "per_task": [
+   {
+    "task": "click-0cd28d65",
+    "haiku_v2": "2/3",
+    "sonnet_v2": "1/1",
+    "haiku_v1": "1/2",
+    "sonnet_v1": "1/1"
+   },
+   {
+    "task": "click-19fd4d6e",
+    "haiku_v2": "0/3",
+    "sonnet_v2": "0/1",
+    "haiku_v1": "0/2",
+    "sonnet_v1": "0/1"
+   },
+   {
+    "task": "click-2468b709",
+    "haiku_v2": "1/3",
+    "sonnet_v2": "1/1",
+    "haiku_v1": "2/2",
+    "sonnet_v1": "1/1"
+   },
+   {
+    "task": "click-3bb230dc",
+    "haiku_v2": "3/3",
+    "sonnet_v2": "1/1",
+    "haiku_v1": "2/2",
+    "sonnet_v1": "1/1"
+   },
+   {
+    "task": "click-b67832c2",
+    "haiku_v2": "0/3",
+    "sonnet_v2": "0/1",
+    "haiku_v1": "0/2",
+    "sonnet_v1": "0/1"
+   },
+   {
+    "task": "click-c3535905",
+    "haiku_v2": "1/3",
+    "sonnet_v2": "1/1",
+    "haiku_v1": "1/2",
+    "sonnet_v1": "1/1"
+   },
+   {
+    "task": "click-c943271a",
+    "haiku_v2": "0/3",
+    "sonnet_v2": "0/1",
+    "haiku_v1": "0/2",
+    "sonnet_v1": "0/1"
+   },
+   {
+    "task": "click-fc5c7f45",
+    "haiku_v2": "3/3",
+    "sonnet_v2": "1/1",
+    "haiku_v1": "2/2",
+    "sonnet_v1": "1/1"
+   },
+   {
+    "task": "vue-core-2cde6f75",
+    "haiku_v2": "2/2",
+    "sonnet_v2": "1/1",
+    "haiku_v1": "1/2",
+    "sonnet_v1": "1/1"
+   },
+   {
+    "task": "vue-core-38577161",
+    "haiku_v2": "0/2",
+    "sonnet_v2": "0/1",
+    "haiku_v1": "0/2",
+    "sonnet_v1": "0/1"
+   },
+   {
+    "task": "vue-core-54097087",
+    "haiku_v2": "2/2",
+    "sonnet_v2": "0/1",
+    "haiku_v1": "0/2",
+    "sonnet_v1": "0/1"
+   },
+   {
+    "task": "vue-core-5dda1920",
+    "haiku_v2": "0/2",
+    "sonnet_v2": "0/1",
+    "haiku_v1": "0/2",
+    "sonnet_v1": "0/1"
+   },
+   {
+    "task": "vue-core-76d42dc1",
+    "haiku_v2": "0/2",
+    "sonnet_v2": "0/1",
+    "haiku_v1": "0/2",
+    "sonnet_v1": "0/1"
+   },
+   {
+    "task": "vue-core-bfcfe9e4",
+    "haiku_v2": "0/2",
+    "sonnet_v2": "0/1",
+    "haiku_v1": "0/2",
+    "sonnet_v1": "0/1"
+   },
+   {
+    "task": "vue-core-ef82a267",
+    "haiku_v2": "0/2",
+    "sonnet_v2": "0/1",
+    "haiku_v1": "0/2",
+    "sonnet_v1": "1/1"
+   },
+   {
+    "task": "vue-core-f8d42e1c",
+    "haiku_v2": "2/2",
+    "sonnet_v2": "1/1",
+    "haiku_v1": "2/2",
+    "sonnet_v1": "1/1"
+   }
+  ]
+ },
+ "turn_cap_natural_experiment": {
+  "haiku": {
+   "v1_cap30": [
+    0.34375,
+    0.2227602410620698,
+    0.48910135208004957
+   ],
+   "v2_cap60": [
+    0.4,
+    0.2828648452726892,
+    0.5298058444564024
+   ],
+   "v1_calls": 28.6875,
+   "v2_calls": 42.85
+  },
+  "sonnet": {
+   "v1_cap30": [
+    0.5,
+    0.3098430968465716,
+    0.6901569031534285
+   ],
+   "v2_cap60": [
+    0.4375,
+    0.25765800882980394,
+    0.6354218150786473
+   ],
+   "v1_calls": 25.125,
+   "v2_calls": 31.625
+  }
+ }
+}

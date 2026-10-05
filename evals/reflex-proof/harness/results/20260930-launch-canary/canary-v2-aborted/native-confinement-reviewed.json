@@ -1,0 +1,35 @@
+{
+  "checks": {
+    "dependency_write": true,
+    "git_write": true,
+    "inside_write": true,
+    "network": true,
+    "outside_write": true,
+    "read": true
+  },
+  "cohort_root": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v1",
+  "controls": {
+    "network_connected": true,
+    "read_canary_exists": true
+  },
+  "cost_usd": 0.0258378,
+  "hashes": {
+    ".reflex-fixture": "f9cd61f6d4fd7a97ee04625a6bbdb0f8420b10856d629e1d7aa244b433758786",
+    "claude-debug.log": "1e1df563c6379759bf79849c8b518869bc6f3b9c1c688f85fcb17798c9c25183",
+    "latest": "1e1df563c6379759bf79849c8b518869bc6f3b9c1c688f85fcb17798c9c25183",
+    "manifest.json": "40f25362bf6307f1c6588d1bb817e6fd3c022ae09b9887311218858fbc193eff",
+    "native-transcript.jsonl": "2c9500b3c9d766502f99306bcd56176078569f7e89744090ab0990149fa5ea51",
+    "outside-control.json": "dfc9b4040cc31927c0f857dc75ecad3456c3e1ef7e2b8766401bfd11cce94154",
+    "run.json": "c148a5689e7e78e29d78649c7cf0b2b6b741d74e0ce596b021704f9a780b1844",
+    "settings.json": "1babebd1c415a4839cb42e8e841210351c4d3003350a8ea604543effc691e993",
+    "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stdout.jsonl": "4f1b30b1055afad3da27785de673eead4cb41c9c94693d6f4b01bb472257b839",
+    "stream-observations.jsonl": "421dc83580f3c114b470a9dceb7c904954e3f62db0ec8d532e984d7ee7ed6b19",
+    "summary.json": "47800f7260a32834c16bc1a2b53b98abd15e0fa2c8c0057124824b6ec5cd5e5f",
+    "transcript-provenance.json": "cc2ab32392731cb2d5fd72427d1e91c965fee7aebdd64163188e22c2ee590ec0"
+  },
+  "manifest_sha256": "40f25362bf6307f1c6588d1bb817e6fd3c022ae09b9887311218858fbc193eff",
+  "model": "claude-haiku-4-5-20251001",
+  "passed": true,
+  "reviewed_at": "2026-10-01T00:28:16.017421+00:00"
+}

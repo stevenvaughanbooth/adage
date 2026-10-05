@@ -6,19 +6,12 @@
 //! `adage install`: `CLAUDE_CONFIG_DIR` (default `~/.claude`), `XDG_CONFIG_HOME` (default
 //! `~/.config`) for OpenCode, and `CODEX_HOME` (default `~/.codex`).
 
+use adage_trace::Harness;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
-pub const HARNESSES: [&str; 3] = ["claude-code", "opencode", "codex"];
-
-pub fn harness_name(harness: &str) -> &str {
-    match harness {
-        "claude" | "claude-code" => "Claude Code",
-        "codex" => "Codex",
-        "opencode" => "OpenCode",
-        other => other,
-    }
-}
+/// Every harness, in the order registrations are listed.
+pub const HARNESSES: [&str; 3] = [Harness::ClaudeCode.id(), Harness::OpenCode.id(), Harness::Codex.id()];
 
 fn env_path(var: &str) -> Option<PathBuf> {
     std::env::var_os(var).filter(|v| !v.is_empty()).map(PathBuf::from)
@@ -43,139 +36,34 @@ pub fn codex_dir() -> Option<PathBuf> {
     env_path("CODEX_HOME").or_else(|| home().map(|h| h.join(".codex")))
 }
 
-/// One resolved history source. Configuration wins over harness home detection, including an
-/// explicitly configured folder which is missing. Never silently fall back from a bad setting.
-#[derive(Debug, Clone)]
-pub struct HistorySource {
-    pub harness: &'static str,
-    pub key: &'static str,
-    pub path: PathBuf,
-    pub configured: bool,
-    pub files: Vec<PathBuf>,
-    pub compressed: usize,
-}
-
-pub fn history_sources(cfg: &adage_store::config::Config) -> Vec<HistorySource> {
-    let dirs = [
-        (
-            "claude-code",
-            "learn.claude_projects",
-            cfg.learn_claude_projects.clone(),
-            claude_dir().map(|p| p.join("projects")),
-        ),
-        ("codex", "learn.codex_sessions", cfg.learn_codex_sessions.clone(), codex_dir().map(|p| p.join("sessions"))),
-        ("opencode", "learn.opencode_exports", cfg.learn_opencode_exports.clone(), None),
-    ];
-    dirs.into_iter()
-        .filter_map(|(harness, key, configured, detected)| {
-            let explicitly_set = configured.is_some();
-            let path = configured.or(detected)?;
-            let (mut files, compressed) = match harness {
-                "claude-code" => (adage_learn::import::discover(&path), 0),
-                "codex" => adage_learn::codex::discover(&path),
-                _ => (
-                    std::fs::read_dir(&path)
-                        .into_iter()
-                        .flatten()
-                        .flatten()
-                        .map(|e| e.path())
-                        .filter(|p| p.is_file() && p.extension().is_some_and(|x| x == "json"))
-                        .collect(),
-                    0,
-                ),
-            };
-            files.sort();
-            Some(HistorySource { harness, key, path, configured: explicitly_set, files, compressed })
-        })
-        .collect()
-}
-
-pub fn history_summary(cfg: &adage_store::config::Config) -> Vec<String> {
-    let mut lines = vec!["Survey and Learn use these same history sources:".into()];
-    for source in history_sources(cfg) {
-        lines.push(format!(
-            "{}: {} history file(s) · {} ({}){}",
-            source.harness,
-            source.files.len(),
-            tilde(&source.path),
-            if source.configured { "configured" } else { "detected" },
-            if source.path.is_dir() { "" } else { " — folder not found" }
-        ));
-        if source.compressed > 0 {
-            lines.push(format!(
-                "{} compressed Codex file(s) cannot yet be read; only uncompressed rollouts are included.",
-                source.compressed
-            ));
-        }
-    }
-    if cfg.learn_opencode_exports.is_none() {
-        lines.push("OpenCode: Import OpenCode history, or choose an exports folder in Configure OpenCode history. Hook registration alone does not capture its session history.".into());
-    }
-    lines.push(
-        "File counts are before parsing and repository filtering. Survey shows readable sessions for this repository."
-            .into(),
-    );
-    lines
-}
-
-#[derive(serde::Serialize, serde::Deserialize)]
-struct HookReceipt {
-    root_hash: String,
-    ts: u64,
-}
-
-fn receipt_path(paths: &adage_store::Paths, harness: &str) -> Option<PathBuf> {
-    let name = match harness {
-        "claude" | "claude-code" => "claude-code",
-        "codex" => "codex",
-        "opencode" => "opencode",
-        _ => return None,
-    };
-    Some(paths.root.join("hook-receipts").join(format!("{name}.json")))
-}
-
-fn root_hash(root: &Path) -> String {
-    use sha2::{Digest, Sha256};
-    format!(
-        "{:x}",
-        Sha256::digest(root.canonicalize().unwrap_or_else(|_| root.to_path_buf()).to_string_lossy().as_bytes())
-    )
-}
-
-fn receipts(path: &Path) -> Vec<HookReceipt> {
-    if !std::fs::metadata(path).is_ok_and(|m| m.len() <= 8192) {
-        return vec![];
-    }
-    std::fs::read(path).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
-}
-
-/// A tiny, bounded receipt independent of installed reflexes. No prompt, tool, session id or
-/// repository path is kept. Never wait for another hook: health telemetry cannot delay guidance.
-pub fn record_hook_receipt(paths: &adage_store::Paths, harness: &str, root: &Path) {
-    let Some(path) = receipt_path(paths, harness) else { return };
-    let Ok(Some(_lock)) = adage_store::lock::try_exclusive(&path.with_extension("lock")) else { return };
-    let mut entries = receipts(&path);
-    let hash = root_hash(root);
-    entries.retain(|entry| entry.root_hash != hash);
-    entries.push(HookReceipt { root_hash: hash, ts: crate::learnlog::now_ms() });
-    if entries.len() > 16 {
-        entries.drain(..entries.len() - 16);
-    }
-    if let Ok(bytes) = serde_json::to_vec(&entries) {
-        let _ = adage_store::config::write_atomic(&path, &bytes);
-    }
-}
-
-pub fn last_hook_receipt(paths: &adage_store::Paths, harness: &str, root: Option<&Path>) -> Option<u64> {
-    let path = receipt_path(paths, harness)?;
-    let hash = root.map(root_hash);
-    receipts(&path).into_iter().filter(|e| hash.as_ref().is_none_or(|h| *h == e.root_hash)).map(|e| e.ts).max()
-}
-
 /// An executable named `name` on `PATH`, if any.
 pub fn on_path(name: &str) -> Option<PathBuf> {
     let path = std::env::var_os("PATH")?;
     std::env::split_paths(&path).map(|d| d.join(name)).find(|p| executable(p))
+}
+
+/// How the person runs this adage from a terminal, for the notices a session shows: `adage` when
+/// it is on `PATH`; else, for a Claude Code plugin user (no `adage` on `PATH`), the plugin's
+/// stable binary `<plugin data>/bin/adage`, which the plugin keeps pointing at its verified copy
+/// (this process runs a digest-named copy beside it); else this binary's own path.
+pub fn adage_command() -> String {
+    if on_path("adage").is_some() {
+        return "adage".into();
+    }
+    let Ok(exe) = std::env::current_exe() else { return "adage".into() };
+    let dir = exe.parent().filter(|d| d.file_name().is_some_and(|n| n == "bin"));
+    let stable = dir.map(|d| d.join("adage")).filter(|l| l.symlink_metadata().is_ok());
+    command_for(&stable.unwrap_or(exe))
+}
+
+/// A binary's path as a person types it: `~` for the home directory, quoted if it has a space.
+pub fn command_for(p: &Path) -> String {
+    let t = tilde(p);
+    if t.contains(' ') {
+        format!("'{t}'")
+    } else {
+        t
+    }
 }
 
 pub fn executable(p: &Path) -> bool {
@@ -240,16 +128,16 @@ pub fn harnesses() -> Vec<Detected> {
     HARNESSES
         .iter()
         .map(|&h| {
-            let (bin, dir) = match h {
-                "claude-code" => ("claude", claude_dir()),
-                "opencode" => ("opencode", opencode_dir()),
-                _ => ("codex", codex_dir()),
-            };
+            let p = crate::placement::of(Harness::parse(h).expect("HARNESSES are harness ids"));
+            let (bin, dir) = (p.command, (p.config_dir)());
             let mut evidence = Vec::new();
             if let Some(p) = on_path(bin) {
                 evidence.push(format!("`{bin}` on PATH ({})", tilde(&p)));
             }
-            if let Some(d) = dir.filter(|d| d.is_dir()) {
+            // An empty Codex home is not Codex: `CODEX_HOME` pointed at a directory Codex never used
+            // (Codex writes its config, auth and sessions there at its first run).
+            let used = |d: &Path| h != "codex" || std::fs::read_dir(d).is_ok_and(|mut rd| rd.next().is_some());
+            if let Some(d) = dir.filter(|d| d.is_dir() && used(d)) {
                 evidence.push(format!("{} exists", tilde(&d)));
             }
             Detected { harness: h, evidence }
@@ -268,6 +156,8 @@ pub struct Registration {
     /// `settings` (hooks in a settings file), `plugin` (the OpenCode plugin file), or
     /// `plugin-data` (the Claude Code plugin's staged binary).
     pub kind: &'static str,
+    /// For `settings`: the hook events Adage's entries are registered under there.
+    pub events: Vec<String>,
 }
 
 fn read_json(p: &Path) -> Option<Value> {
@@ -278,10 +168,10 @@ fn read_json(p: &Path) -> Option<Value> {
     serde_json::from_slice(&bytes).ok()
 }
 
-/// Binaries named by Adage's own hook entries in a Claude Code or Codex settings document.
-fn hook_binaries(doc: &Value, harness: &str) -> Vec<PathBuf> {
+/// Adage's own hook entries in a Claude Code or Codex settings document: `(event, binary)`.
+fn adage_hooks(doc: &Value, harness: &str) -> Vec<(String, PathBuf)> {
     let mut out = Vec::new();
-    for entries in doc.get("hooks").and_then(|h| h.as_object()).into_iter().flat_map(|o| o.values()) {
+    for (event, entries) in doc.get("hooks").and_then(|h| h.as_object()).into_iter().flatten() {
         for h in entries
             .as_array()
             .into_iter()
@@ -300,14 +190,32 @@ fn hook_binaries(doc: &Value, harness: &str) -> Vec<PathBuf> {
                 _ => cmd.split_once(" hook codex ").map(|(b, _)| unquote(b)),
             };
             if let Some(b) = bin.filter(|b| !b.is_empty()) {
-                let b = PathBuf::from(b);
-                if !out.contains(&b) {
-                    out.push(b);
-                }
+                out.push((event.clone(), PathBuf::from(b)));
             }
         }
     }
     out
+}
+
+/// Binaries named by Adage's own hook entries in a Claude Code or Codex settings document.
+fn hook_binaries(doc: &Value, harness: &str) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = Vec::new();
+    for (_, b) in adage_hooks(doc, harness) {
+        if !out.contains(&b) {
+            out.push(b);
+        }
+    }
+    out
+}
+
+/// The hook events this version of Adage registers for `harness` (what `adage install` writes).
+pub fn wanted_events(harness: &str) -> Vec<String> {
+    let doc = match harness {
+        "claude-code" => adage_hook::harness::claude::settings("adage"),
+        "codex" => adage_hook::harness::codex::settings("adage"),
+        _ => return Vec::new(),
+    };
+    doc["hooks"].as_object().map(|o| o.keys().cloned().collect()).unwrap_or_default()
 }
 
 /// Undo `harness::codex::sh_quote`.
@@ -335,33 +243,56 @@ fn opencode_binary(p: &Path) -> Option<Option<PathBuf>> {
 /// Every registration of Adage's hooks, in user scope and in `repo` (a repository root) if given.
 pub fn registrations(repo: Option<&Path>) -> Vec<Registration> {
     let mut out = Vec::new();
+    // Settings files: every harness's user scope, then the repository's (in harness order).
+    let settings_harnesses: Vec<Harness> = Harness::ALL
+        .into_iter()
+        .filter(|h| crate::placement::of(*h).kind == crate::placement::Kind::Settings)
+        .collect();
     let mut settings: Vec<(&'static str, PathBuf)> = Vec::new();
-    if let Some(d) = claude_dir() {
-        settings.push(("claude-code", d.join("settings.json")));
-        settings.push(("claude-code", d.join("settings.local.json")));
-    }
-    if let Some(d) = codex_dir() {
-        settings.push(("codex", d.join("hooks.json")));
+    for &h in &settings_harnesses {
+        let p = crate::placement::of(h);
+        if let Some(d) = (p.config_dir)() {
+            settings.extend(p.user_files.iter().map(|f| (h.id(), d.join(f))));
+        }
     }
     if let Some(r) = repo {
-        settings.push(("claude-code", r.join(".claude/settings.json")));
-        settings.push(("claude-code", r.join(".claude/settings.local.json")));
-        settings.push(("codex", r.join(".codex/hooks.json")));
+        for &h in &settings_harnesses {
+            settings.extend(crate::placement::of(h).project_files.iter().map(|f| (h.id(), r.join(f))));
+        }
     }
     for (h, p) in settings {
         if let Some(doc) = read_json(&p) {
+            let mut events: Vec<String> = adage_hooks(&doc, h).into_iter().map(|(e, _)| e).collect();
+            events.sort();
+            events.dedup();
             for b in hook_binaries(&doc, h) {
-                out.push(Registration { harness: h, location: p.clone(), binary: Some(b), kind: "settings" });
+                out.push(Registration {
+                    harness: h,
+                    location: p.clone(),
+                    binary: Some(b),
+                    kind: "settings",
+                    events: events.clone(),
+                });
             }
         }
     }
-    let mut plugins: Vec<PathBuf> = opencode_dir().map(|d| d.join("plugins/adage.js")).into_iter().collect();
-    if let Some(r) = repo {
-        plugins.push(r.join(".opencode/plugins/adage.js"));
-    }
-    for p in plugins {
-        if let Some(bin) = opencode_binary(&p) {
-            out.push(Registration { harness: "opencode", location: p, binary: bin, kind: "plugin" });
+    for h in Harness::ALL.into_iter().filter(|h| crate::placement::of(*h).kind == crate::placement::Kind::Plugin) {
+        let p = crate::placement::of(h);
+        let mut plugins: Vec<PathBuf> =
+            (p.config_dir)().map(|d| p.user_files.iter().map(|f| d.join(f)).collect()).unwrap_or_default();
+        if let Some(r) = repo {
+            plugins.extend(p.project_files.iter().map(|f| r.join(f)));
+        }
+        for path in plugins {
+            if let Some(bin) = opencode_binary(&path) {
+                out.push(Registration {
+                    harness: h.id(),
+                    location: path,
+                    binary: bin,
+                    kind: "plugin",
+                    events: Vec::new(),
+                });
+            }
         }
     }
     // The Claude Code plugin stages its binary in its data directory (`${CLAUDE_PLUGIN_DATA}`,
@@ -376,7 +307,13 @@ pub fn registrations(repo: Option<&Path>) -> Vec<Registration> {
         for d in dirs {
             let bin = d.join("bin/adage");
             if bin.symlink_metadata().is_ok() {
-                out.push(Registration { harness: "claude-code", location: d, binary: Some(bin), kind: "plugin-data" });
+                out.push(Registration {
+                    harness: "claude-code",
+                    location: d,
+                    binary: Some(bin),
+                    kind: "plugin-data",
+                    events: Vec::new(),
+                });
             }
         }
     }
@@ -387,42 +324,6 @@ pub fn registrations(repo: Option<&Path>) -> Vec<Registration> {
 mod tests {
     use super::*;
     use serde_json::json;
-
-    #[test]
-    fn hook_receipts_are_private_bounded_and_repository_scoped() {
-        let temp = tempfile::tempdir().unwrap();
-        let paths = adage_store::Paths::at(temp.path());
-        let root = temp.path().join("private-repository");
-        assert_eq!(last_hook_receipt(&paths, "codex", Some(&root)), None);
-        record_hook_receipt(&paths, "codex", &root);
-        assert!(last_hook_receipt(&paths, "codex", Some(&root)).is_some());
-        assert_eq!(last_hook_receipt(&paths, "codex", Some(&temp.path().join("other"))), None);
-        assert_eq!(last_hook_receipt(&paths, "claude-code", Some(&root)), None);
-        let path = receipt_path(&paths, "codex").unwrap();
-        let text = std::fs::read_to_string(&path).unwrap();
-        assert!(!text.contains("private-repository"));
-        for i in 0..30 {
-            record_hook_receipt(&paths, "codex", &temp.path().join(i.to_string()));
-        }
-        assert_eq!(receipts(&path).len(), 16);
-        assert_eq!(last_hook_receipt(&paths, "codex", Some(&root)), None);
-        assert!(last_hook_receipt(&paths, "codex", None).is_some());
-    }
-
-    #[test]
-    fn configured_history_never_falls_back_to_detected_homes() {
-        let temp = tempfile::tempdir().unwrap();
-        let paths = adage_store::Paths::at(temp.path());
-        let cfg = adage_store::config::Config {
-            learn_claude_projects: Some(temp.path().join("missing-claude")),
-            learn_codex_sessions: Some(temp.path().join("missing-codex")),
-            learn_opencode_exports: Some(temp.path().join("missing-opencode")),
-            ..adage_store::config::load(&paths).config
-        };
-        let sources = history_sources(&cfg);
-        assert_eq!(sources.len(), 3);
-        assert!(sources.iter().all(|s| s.configured && s.files.is_empty() && s.path.starts_with(temp.path())));
-    }
 
     #[test]
     fn finds_adage_hook_entries_only() {

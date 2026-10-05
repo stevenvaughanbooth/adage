@@ -1,72 +1,138 @@
-//! `adage ui`: the full-screen app. Home and a global command palette lead to Live, Routes (every installed
-//! route, with review actions), Health (every check, live, with one-key fixes), Settings
-//! (`config.toml`).
+//! `adage ui`: the full-screen app. Tabs: Live (the watch view, larger), Reflexes (every reflex
+//! and instinct, with review actions), Map (stimulus → reflex → response), Health (every check,
+//! live, with one-key fixes), Settings (`config.toml`). A command palette (`:` or ctrl-k) reaches
+//! every action and reflex; `?` lists the keys, from the same table as the status bar.
 //!
 //! [`AppState`] is plain data; [`draw`] renders it and [`AppState::key`] maps a key to a state
 //! change or a [`Cmd`] for the runtime ([`run`]) to carry out — writing files, running jobs.
-//! Every action that changes something asks first, and review decisions and hook installs go
-//! through the same functions as `adage review` and `adage install --write`, with the same
-//! refusals (effect ceilings, an agent session).
+//! Each tab lives in `tabs/`: its keys and its drawing. Every action that changes something asks
+//! first, and review decisions and hook installs go through the same functions as `adage review`
+//! and `adage install --write`, with the same refusals (effect ceilings, an agent session).
 
-use super::diff::{self, Op};
+use super::forms::{self, Form, Kind as FormKind};
 use super::health::{Fix, Health};
 use super::jobs::{self, Job, Loaded, Loader, Want};
-use super::palette::{self, Command, Entry, Form, FormKind, Palette};
-use super::routes::{self, RouteRow, Routes};
+use super::keys;
+use super::palette::{self, Palette};
+use super::routes::{RouteRow, Routes};
+use super::tabs;
 use super::term::{self, Term};
-use super::theme::{Lamp, Theme};
+use super::theme::Theme;
 use super::tools::{self, Tool};
 use super::view::{self, Ctx, Live};
 use super::watch::{self, Sources};
+use super::words;
 use crate::doctor::Status;
 use crate::install::Plan;
 use adage_store::config;
+use adage_term::Glyph;
 use anyhow::Result;
 use ratatui::crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Gauge, Paragraph, Wrap};
+use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 use ratatui::Frame;
 use std::path::PathBuf;
+use std::time::Instant;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tab {
     Home,
     Live,
-    Routes,
+    Reflexes,
+    Map,
     Health,
     Settings,
 }
 
-const TABS: [(Tab, &str); 5] = [
-    (Tab::Home, "Home"),
+pub const TABS: [(Tab, &str); 6] = [
     (Tab::Live, "Live"),
-    (Tab::Routes, "Reflexes"),
+    (Tab::Reflexes, "Reflexes"),
+    (Tab::Map, "Map"),
     (Tab::Health, "Health"),
     (Tab::Settings, "Settings"),
+    (Tab::Home, "Home"),
 ];
+
+impl Tab {
+    /// This tab's keys, for the status bar and the overlay.
+    pub fn keys(self) -> &'static [keys::Key] {
+        match self {
+            Tab::Home => keys::HOME,
+            Tab::Live => keys::LIVE,
+            Tab::Reflexes => keys::REFLEXES,
+            Tab::Map => keys::MAP,
+            Tab::Health => keys::HEALTH,
+            Tab::Settings => keys::SETTINGS,
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        TABS.iter().find(|(t, _)| *t == self).map_or("", |(_, n)| n)
+    }
+
+    fn wants_routes(self) -> bool {
+        matches!(self, Tab::Reflexes | Tab::Map)
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum Action {
-    Review { verb: &'static str, reference: String, route: String, expected_revision: String },
+    /// A review decision: `verb` is the one `crate::review` takes (`strengthen`, …).
+    Review {
+        verb: &'static str,
+        reference: String,
+        route: String,
+        expected_revision: String,
+    },
     Install(Box<Plan>),
     FetchModel,
     LearnNow,
-    SetConfig { key: &'static str, value: String },
     Tool(Tool),
+    SetConfig {
+        key: &'static str,
+        value: String,
+    },
 }
 
 pub enum Modal {
-    Palette(Palette),
     Form(Form),
-    Help,
-    Confirm { title: String, lines: Vec<Line<'static>>, action: Action, scroll: u16 },
-    Message { title: String, lines: Vec<String>, error: bool, scroll: u16 },
-    Progress { title: String, status: String, ratio: f64, cancelable: bool },
-    Viewer { title: String, lines: Vec<String>, scroll: u16 },
-    Scope { harness: String },
-    Edit { key: &'static str, buffer: String, error: Option<String> },
+    Help {
+        scroll: u16,
+    },
+    Confirm {
+        title: String,
+        lines: Vec<Line<'static>>,
+        action: Action,
+        scroll: u16,
+    },
+    Message {
+        title: String,
+        lines: Vec<String>,
+        error: bool,
+        scroll: u16,
+    },
+    Progress {
+        title: String,
+        status: String,
+        ratio: f64,
+    },
+    /// Lines to read: `source` is the file they come from, when they come from one.
+    Viewer {
+        title: String,
+        source: Option<String>,
+        lines: Vec<String>,
+        scroll: u16,
+    },
+    Scope {
+        harness: String,
+    },
+    Edit {
+        key: &'static str,
+        buffer: String,
+        error: Option<String>,
+    },
 }
 
 /// What the runtime must do after a key.
@@ -76,14 +142,10 @@ pub enum Cmd {
     Do(Action),
     PlanInstall { harness: String, scope: &'static str },
     OpenFailOpen,
-    OpenLearningLog,
-    OpenWeb,
-    OpenWebDemo,
-    Refresh,
-    PrepareTool(Tool),
-    HistorySources,
     PreviewLearning,
+    PrepareTool(Tool),
     OpenRepository(PathBuf),
+    OpenWeb { focus: Option<String>, traces: bool },
     CancelJob,
     Want(WantKind),
 }
@@ -93,6 +155,18 @@ pub enum WantKind {
     Routes,
     Health,
 }
+
+/// A short note at the bottom of the screen that goes away by itself.
+#[derive(Debug, Clone)]
+pub struct Toast {
+    pub text: String,
+    pub ok: bool,
+    /// Frames left.
+    pub ttl: u16,
+}
+
+/// Frames a toast stays (about four seconds).
+pub const TOAST_FRAMES: u16 = 26;
 
 /// One `adage config` key as the Settings tab shows it.
 pub struct SettingRow {
@@ -105,7 +179,7 @@ pub struct SettingRow {
 }
 
 impl SettingRow {
-    fn boolean(&self) -> bool {
+    pub fn boolean(&self) -> bool {
         matches!(self.default, "true" | "false")
     }
 }
@@ -115,17 +189,24 @@ pub struct AppState {
     pub live: Live,
     pub health: Option<Health>,
     pub routes: Option<Result<Routes, String>>,
-    pub route_sel: usize,
-    pub detail_scroll: u16,
+    pub reflexes: tabs::reflexes::State,
+    pub map: tabs::map::State,
     pub check_sel: usize,
     pub setting_sel: usize,
     pub settings: Vec<SettingRow>,
     /// Problems `adage_store::config` found in the file.
     pub settings_problems: Vec<String>,
     pub config_path: PathBuf,
+    /// `exec/rewrite-off`: the marker an older `adage delegate off` wrote, which turns rewrites
+    /// off whatever `runtime.rewrite` says. Settings shows the effective state.
+    pub rewrite_marker: Option<PathBuf>,
     pub modal: Option<Modal>,
+    pub palette: Option<Palette>,
+    pub toasts: Vec<Toast>,
     pub notices: Vec<String>,
     pub pending_job_action: Option<Action>,
+    pub job_cancelable: bool,
+    pub home_sel: usize,
 }
 
 impl AppState {
@@ -135,16 +216,21 @@ impl AppState {
             live: Live::default(),
             health: None,
             routes: None,
-            route_sel: 0,
-            detail_scroll: 0,
+            reflexes: tabs::reflexes::State::default(),
+            map: tabs::map::State::default(),
             check_sel: 0,
             setting_sel: 0,
             settings: vec![],
             settings_problems: vec![],
             config_path,
+            rewrite_marker: None,
             modal: None,
+            palette: None,
+            toasts: vec![],
             notices: vec![],
             pending_job_action: None,
+            job_cancelable: false,
+            home_sel: 0,
         }
     }
 
@@ -158,101 +244,223 @@ impl AppState {
                 SettingRow { key: k.name, value, source: source.to_string(), doc: k.doc, default: k.default }
             })
             .collect();
+        // Rewrites are off while the older marker exists, whatever the file says.
+        if self.rewrite_marker.as_ref().is_some_and(|m| m.exists()) {
+            if let Some(r) = self.settings.iter_mut().find(|r| r.key == "runtime.rewrite") {
+                r.value = "false".into();
+                r.source = "exec/rewrite-off marker".into();
+            }
+        }
         self.settings_problems = loaded.problems.clone();
         self.setting_sel = self.setting_sel.min(self.settings.len().saturating_sub(1));
     }
 
-    pub(super) fn complete_job(&mut self, title: &str, done: Result<Vec<String>, String>) {
-        let pending = self.pending_job_action.take();
-        match done {
-            Ok(mut lines) if pending.is_some() => {
-                lines.extend([
-                    String::new(),
-                    "Adage will update learned reflexes and record what changed. Inspect results in Reflexes and Learning history.".into(),
-                    "Enter / y confirm · Esc / n cancel".into(),
-                ]);
-                self.confirm("Learn from these sources", lines.into_iter().map(Line::raw).collect(), pending.unwrap());
-            }
-            Ok(lines) => self.modal = Some(Modal::Viewer { title: title.into(), lines, scroll: 0 }),
-            Err(error) => self.message(title, error.lines().map(String::from).collect(), true),
-        }
-    }
-
-    fn route_rows(&self) -> &[RouteRow] {
+    pub fn route_rows(&self) -> &[RouteRow] {
         match &self.routes {
             Some(Ok(r)) => &r.rows,
             _ => &[],
         }
     }
 
+    /// The reflex selected in the Reflexes tab.
     pub fn selected_route(&self) -> Option<&RouteRow> {
-        self.route_rows().get(self.route_sel)
+        tabs::reflexes::selected(self)
     }
 
-    fn checks_len(&self) -> usize {
+    pub fn checks_len(&self) -> usize {
         self.health.as_ref().map_or(0, |h| h.checks.len())
+    }
+
+    pub fn toast(&mut self, text: impl Into<String>, ok: bool) {
+        self.toasts.push(Toast { text: text.into(), ok, ttl: TOAST_FRAMES });
+        if self.toasts.len() > 3 {
+            self.toasts.remove(0);
+        }
+    }
+
+    /// Age the toasts by a frame.
+    pub fn tick(&mut self) {
+        for t in &mut self.toasts {
+            t.ttl = t.ttl.saturating_sub(1);
+        }
+        self.toasts.retain(|t| t.ttl > 0);
+    }
+
+    pub fn complete_job(&mut self, title: &str, done: Result<Vec<String>, String>) {
+        self.modal = None;
+        self.job_cancelable = false;
+        let pending = self.pending_job_action.take();
+        match done {
+            Ok(mut lines) => {
+                if let Some(action) = pending {
+                    lines.extend([String::new(),"Conditioning reads these sources, learns reflexes, binds applicable instincts, and recompiles the index.".into(),"Enter / y confirms. Esc / n cancels.".into()]);
+                    self.confirm("Condition from these sources", lines.into_iter().map(Line::raw).collect(), action);
+                } else {
+                    self.modal = Some(Modal::Viewer { title: title.into(), source: None, lines, scroll: 0 });
+                }
+            }
+            Err(e) => self.message(title, vec![e], true),
+        }
+    }
+
+    fn switch(&mut self, tab: Tab) -> Option<Cmd> {
+        self.tab = tab;
+        tab.wants_routes().then_some(Cmd::Want(WantKind::Routes))
+    }
+
+    /// Whether the current tab is taking typed text (a filter), so letters are not commands.
+    fn typing(&self) -> bool {
+        match self.tab {
+            Tab::Live => self.live.filtering,
+            Tab::Reflexes => self.reflexes.filtering,
+            _ => false,
+        }
     }
 
     /// Map a key to a state change, or a command for the runtime.
     pub fn key(&mut self, code: KeyCode, mods: KeyModifiers) -> Option<Cmd> {
-        if code == KeyCode::Char('c') && mods.contains(KeyModifiers::CONTROL) {
+        let ctrl = mods.contains(KeyModifiers::CONTROL);
+        if code == KeyCode::Char('c') && ctrl {
             return Some(Cmd::Quit);
         }
+        if let Some(p) = self.palette.take() {
+            return self.palette_key(p, code);
+        }
         if let Some(m) = self.modal.take() {
-            return self.modal_key(m, code, mods);
+            return self.modal_key(m, code);
         }
-        if code == KeyCode::Char(':') || (code == KeyCode::Char('k') && mods.contains(KeyModifiers::CONTROL)) {
-            self.modal = Some(Modal::Palette(Palette::default()));
-            return None;
-        }
-        match code {
-            KeyCode::Char('q') => return Some(Cmd::Quit),
-            KeyCode::Char('w') => return Some(Cmd::OpenWeb),
-            KeyCode::Char('?') => {
-                self.modal = Some(Modal::Help);
-                return None;
+        if !self.typing() {
+            match code {
+                KeyCode::Char('k') if ctrl => {
+                    self.palette = Some(Palette::default());
+                    return None;
+                }
+                KeyCode::Char(':') => {
+                    self.palette = Some(Palette::default());
+                    return None;
+                }
+                KeyCode::Char('q') => return Some(Cmd::Quit),
+                KeyCode::Char('?') => {
+                    self.modal = Some(Modal::Help { scroll: 0 });
+                    return None;
+                }
+                KeyCode::Tab | KeyCode::BackTab | KeyCode::Char('1'..='6') => {
+                    let i = TABS.iter().position(|(t, _)| *t == self.tab).unwrap_or(0);
+                    let next = match code {
+                        KeyCode::Tab => (i + 1) % TABS.len(),
+                        KeyCode::BackTab => (i + TABS.len() - 1) % TABS.len(),
+                        KeyCode::Char(c) => c as usize - '1' as usize,
+                        _ => i,
+                    };
+                    return self.switch(TABS[next].0);
+                }
+                _ => {}
             }
-            KeyCode::Tab | KeyCode::BackTab | KeyCode::Char('0'..='4') => {
-                let i = TABS.iter().position(|(t, _)| *t == self.tab).unwrap_or(0);
-                let next = match code {
-                    KeyCode::Tab => (i + 1) % TABS.len(),
-                    KeyCode::BackTab => (i + TABS.len() - 1) % TABS.len(),
-                    KeyCode::Char(c) => c as usize - '0' as usize,
-                    _ => i,
-                };
-                self.tab = TABS[next].0;
-                return (self.tab == Tab::Routes).then_some(Cmd::Want(WantKind::Routes));
-            }
-            _ => {}
         }
         match self.tab {
-            Tab::Home => match code {
-                KeyCode::Char('d') => Some(Cmd::OpenWebDemo),
-                KeyCode::Enter => {
-                    self.modal = Some(Modal::Palette(Palette::default()));
-                    None
-                }
-                KeyCode::Char('l') => self.start_fix(Fix::LearnNow),
-                KeyCode::Char('i') => {
-                    self.modal = Some(Modal::Palette(Palette { query: "connect".into(), selected: 0 }));
-                    None
-                }
-                _ => None,
-            },
+            Tab::Home => super::tabs::home::key(self, code),
             Tab::Live => {
-                if code == KeyCode::Esc {
+                let open =
+                    self.live.inspect || self.live.map_hint || self.live.filtering || !self.live.filter.is_empty();
+                if code == KeyCode::Esc && !open {
                     return None;
                 }
                 watch::live_key(&mut self.live, code, mods);
                 None
             }
-            Tab::Routes => self.routes_key(code),
-            Tab::Health => self.health_key(code),
-            Tab::Settings => self.settings_key(code),
+            Tab::Reflexes => tabs::reflexes::key(self, code),
+            Tab::Map => tabs::map::key(self, code),
+            Tab::Health => tabs::health::key(self, code),
+            Tab::Settings => tabs::settings::key(self, code),
         }
     }
 
-    fn modal_key(&mut self, m: Modal, code: KeyCode, mods: KeyModifiers) -> Option<Cmd> {
+    fn palette_key(&mut self, mut p: Palette, code: KeyCode) -> Option<Cmd> {
+        let found = palette::matches(self, &p.query);
+        match code {
+            KeyCode::Esc => return None,
+            KeyCode::Up => p.sel = p.sel.saturating_sub(1),
+            KeyCode::Down => p.sel = (p.sel + 1).min(found.len().saturating_sub(1)),
+            KeyCode::Tab => {
+                if let Some((e, _)) = found.get(p.sel) {
+                    p.query = e.title.trim_end_matches('…').to_string();
+                    p.sel = 0;
+                }
+            }
+            KeyCode::Backspace => {
+                p.query.pop();
+                p.sel = 0;
+            }
+            KeyCode::Enter => {
+                let (e, _) = found.into_iter().nth(p.sel)?;
+                return self.run_entry(e.run);
+            }
+            KeyCode::Char(c) if p.query.chars().count() < 60 => {
+                p.query.push(c);
+                p.sel = 0;
+            }
+            _ => {}
+        }
+        self.palette = Some(p);
+        None
+    }
+
+    pub(super) fn run_entry(&mut self, run: palette::Run) -> Option<Cmd> {
+        match run {
+            palette::Run::Form(kind) => {
+                let mut form = Form::new(kind);
+                if let Some(row) = self.selected_route() {
+                    form.reflex = Some((row.reference.clone(), row.id.clone()));
+                    if kind == FormKind::SharePack {
+                        form.values[0] = row.reference.clone();
+                    }
+                }
+                if kind == FormKind::Delegate && form.reflex.is_none() {
+                    self.message(
+                        "Select a reflex",
+                        vec!["Select a reflex in Reflexes, then choose Delegate.".into()],
+                        false,
+                    );
+                } else {
+                    self.modal = Some(Modal::Form(form));
+                }
+                None
+            }
+            palette::Run::Revoke => {
+                if let Some(row) = self.selected_route() {
+                    Some(Cmd::PrepareTool(Tool::Revoke { reference: row.reference.clone(), route: row.id.clone() }))
+                } else {
+                    self.message(
+                        "Select a reflex",
+                        vec!["Select a reflex in Reflexes, then revoke its delegation.".into()],
+                        false,
+                    );
+                    None
+                }
+            }
+            palette::Run::Connect(harness) => self.start_fix(Fix::InstallHooks(harness.into())),
+            palette::Run::Tool(tool) => {
+                Some(if tool.mutates() { Cmd::PrepareTool(tool) } else { Cmd::Do(Action::Tool(tool)) })
+            }
+            palette::Run::Web { traces } => Some(Cmd::OpenWeb { focus: None, traces }),
+            palette::Run::Tab(t) => self.switch(t),
+            palette::Run::Setting(i) => {
+                self.setting_sel = i.min(self.settings.len().saturating_sub(1));
+                self.switch(Tab::Settings)
+            }
+            palette::Run::Reflex(reference, id) => {
+                tabs::reflexes::select(self, &reference, &id);
+                self.switch(Tab::Reflexes)
+            }
+            palette::Run::Key(tab, c) => {
+                let want = self.switch(tab);
+                let cmd = self.key(KeyCode::Char(c), KeyModifiers::NONE);
+                cmd.or(want)
+            }
+        }
+    }
+
+    fn modal_key(&mut self, m: Modal, code: KeyCode) -> Option<Cmd> {
         let nudge = |s: &mut u16| match code {
             KeyCode::Up | KeyCode::Char('k') => *s = s.saturating_sub(1),
             KeyCode::Down | KeyCode::Char('j') => *s = s.saturating_add(1),
@@ -261,68 +469,21 @@ impl AppState {
             _ => {}
         };
         match m {
-            Modal::Palette(mut p) => {
-                if code == KeyCode::Esc || (code == KeyCode::Char('k') && mods.contains(KeyModifiers::CONTROL)) {
-                    return None;
+            Modal::Form(form) => forms::key(self, form, code),
+            Modal::Help { mut scroll } => match code {
+                // Scrolls when taller than the screen; any other key closes it.
+                KeyCode::Up
+                | KeyCode::Char('k')
+                | KeyCode::Down
+                | KeyCode::Char('j')
+                | KeyCode::PageUp
+                | KeyCode::PageDown => {
+                    nudge(&mut scroll);
+                    self.modal = Some(Modal::Help { scroll });
+                    None
                 }
-                let entries = self.palette_entries();
-                let found = palette::matches(&entries, &p.query);
-                match code {
-                    KeyCode::Up | KeyCode::BackTab => p.selected = p.selected.saturating_sub(1),
-                    KeyCode::Down | KeyCode::Tab => p.selected = (p.selected + 1).min(found.len().saturating_sub(1)),
-                    KeyCode::PageDown => p.selected = (p.selected + 8).min(found.len().saturating_sub(1)),
-                    KeyCode::PageUp => p.selected = p.selected.saturating_sub(8),
-                    KeyCode::Home => p.selected = 0,
-                    KeyCode::End => p.selected = found.len().saturating_sub(1),
-                    KeyCode::Enter => {
-                        if let Some(i) = found.get(p.selected) {
-                            return self.palette_command(entries[*i].command);
-                        }
-                    }
-                    KeyCode::Backspace => {
-                        p.query.pop();
-                        p.selected = 0;
-                    }
-                    KeyCode::Char('u') if mods.contains(KeyModifiers::CONTROL) => {
-                        p.query.clear();
-                        p.selected = 0;
-                    }
-                    KeyCode::Char(c)
-                        if !mods.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) && p.query.len() < 128 =>
-                    {
-                        p.query.push(c);
-                        p.selected = 0;
-                    }
-                    _ => {}
-                }
-                self.modal = Some(Modal::Palette(p));
-                None
-            }
-            Modal::Form(mut form) => {
-                match code {
-                    KeyCode::Esc => return None,
-                    KeyCode::BackTab | KeyCode::Up => form.selected = form.selected.saturating_sub(1),
-                    KeyCode::Tab | KeyCode::Down => form.selected = (form.selected + 1) % form.values.len(),
-                    KeyCode::Enter if form.selected + 1 < form.values.len() => form.selected += 1,
-                    KeyCode::Enter => return self.submit_form(form),
-                    KeyCode::Backspace => {
-                        form.values[form.selected].pop();
-                        form.error = None;
-                    }
-                    KeyCode::Char('u') if mods.contains(KeyModifiers::CONTROL) => form.values[form.selected].clear(),
-                    KeyCode::Char(c)
-                        if !mods.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
-                            && form.values[form.selected].len() < 4096 =>
-                    {
-                        form.values[form.selected].push(c);
-                        form.error = None;
-                    }
-                    _ => {}
-                }
-                self.modal = Some(Modal::Form(form));
-                None
-            }
-            Modal::Help => None,
+                _ => None,
+            },
             Modal::Confirm { title, lines, action, mut scroll } => match code {
                 KeyCode::Char('y') | KeyCode::Enter => Some(Cmd::Do(action)),
                 KeyCode::Char('n') | KeyCode::Esc | KeyCode::Char('q') => None,
@@ -340,16 +501,18 @@ impl AppState {
                 self.modal = Some(Modal::Message { title, lines, error, scroll: s });
                 None
             }
-            Modal::Viewer { title, lines, scroll: mut s } => {
+            Modal::Viewer { title, source, lines, scroll: mut s } => {
                 if matches!(code, KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q')) {
                     return None;
                 }
                 nudge(&mut s);
-                self.modal = Some(Modal::Viewer { title, lines, scroll: s });
+                self.modal = Some(Modal::Viewer { title, source, lines, scroll: s });
                 None
             }
-            Modal::Progress { cancelable: true, .. } if code == KeyCode::Esc => Some(Cmd::CancelJob),
             Modal::Progress { .. } => {
+                if code == KeyCode::Esc && self.job_cancelable {
+                    return Some(Cmd::CancelJob);
+                }
                 self.modal = Some(m);
                 None
             }
@@ -371,9 +534,7 @@ impl AppState {
                     self.modal = Some(Modal::Edit { key, buffer, error: None });
                     None
                 }
-                KeyCode::Char(c)
-                    if !mods.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) && buffer.len() < 4096 =>
-                {
+                KeyCode::Char(c) if buffer.len() < 64 => {
                     buffer.push(c);
                     self.modal = Some(Modal::Edit { key, buffer, error: None });
                     None
@@ -386,480 +547,29 @@ impl AppState {
         }
     }
 
-    fn confirm(&mut self, title: &str, lines: Vec<Line<'static>>, action: Action) {
+    pub fn confirm(&mut self, title: &str, lines: Vec<Line<'static>>, action: Action) {
         self.modal = Some(Modal::Confirm { title: title.to_string(), lines, action, scroll: 0 });
     }
 
-    fn message(&mut self, title: &str, lines: Vec<String>, error: bool) {
+    pub fn message(&mut self, title: &str, lines: Vec<String>, error: bool) {
         self.modal = Some(Modal::Message { title: title.to_string(), lines, error, scroll: 0 });
-    }
-
-    pub fn palette_entries(&self) -> Vec<Entry> {
-        let mut entries = vec![
-            Entry::new(
-                "Navigate",
-                "Open a repository",
-                "Choose or switch the Git workspace without leaving this app",
-                Command::Form(FormKind::OpenRepository),
-            ),
-            Entry::new(
-                "Explore",
-                "Open the web map",
-                "Start the local server and open the interactive app in your browser",
-                Command::Web,
-            ),
-            Entry::new(
-                "Explore",
-                "Explore demo trace graph",
-                "Open a sample trace in the web map; your own data is unchanged",
-                Command::WebDemo,
-            ),
-            Entry::new(
-                "Learn",
-                "Learn from this repository",
-                "Read agent traces, find repeated patterns, and update reflexes; preview before running",
-                Command::Learn,
-            ),
-            Entry::new(
-                "Review",
-                "Review learned reflexes",
-                "Inspect guidance, supporting evidence, and proposed changes",
-                Command::Routes,
-            ),
-            Entry::new("Navigate", "Home", "Understand Adage and see your next steps", Command::Home),
-            Entry::new("Navigate", "Live activity", "Watch guidance and learning as your agents work", Command::Live),
-            Entry::new(
-                "Navigate",
-                "Health and setup",
-                "Check readiness, diagnose problems, and apply fixes",
-                Command::Health,
-            ),
-            Entry::new("Navigate", "Settings", "Change learning preferences and thresholds", Command::Settings),
-            Entry::new(
-                "Setup",
-                "Connect Claude Code",
-                "Install hooks for this repository or your user account",
-                Command::Hooks("claude-code"),
-            ),
-            Entry::new(
-                "Setup",
-                "Connect Codex",
-                "Install hooks for this repository or your user account",
-                Command::Hooks("codex"),
-            ),
-            Entry::new(
-                "Setup",
-                "Connect OpenCode",
-                "Install hooks for this repository or your user account",
-                Command::Hooks("opencode"),
-            ),
-            Entry::new(
-                "Setup",
-                "Download embedding model",
-                "Fetch the verified 31 MB model for matching intent",
-                Command::Model,
-            ),
-            Entry::new(
-                "Setup",
-                "History sources",
-                "Inspect detected and configured sources shared by Survey and Learn",
-                Command::HistorySources,
-            ),
-            Entry::new(
-                "Setup",
-                "Configure Claude Code history",
-                "Set history source folder when detection needs an override",
-                Command::Form(FormKind::HistoryClaude),
-            ),
-            Entry::new(
-                "Setup",
-                "Configure Codex history",
-                "Set history source folder when detection needs an override",
-                Command::Form(FormKind::HistoryCodex),
-            ),
-            Entry::new(
-                "Setup",
-                "Configure OpenCode history",
-                "Set history source to a folder of existing session exports",
-                Command::Form(FormKind::HistoryOpenCode),
-            ),
-            Entry::new(
-                "Setup",
-                "Import OpenCode history",
-                "Copy local session exports for this repository; run again after new sessions",
-                Command::ImportOpenCode,
-            ),
-            Entry::new(
-                "Setup",
-                "Install a local model",
-                "Use model files already on your computer",
-                Command::Form(FormKind::InstallModel),
-            ),
-            Entry::new(
-                "Learn",
-                "Enable automatic learning",
-                "Learn whenever an agent session stops or ends",
-                Command::AutoLearn,
-            ),
-            Entry::new(
-                "Inspect",
-                "Installed collections",
-                "Browse reflex collections and evidence across all repositories",
-                Command::Status,
-            ),
-            Entry::new(
-                "Inspect",
-                "Survey session history",
-                "Analyze configured and detected agent history for this repository",
-                Command::Survey,
-            ),
-            Entry::new(
-                "Inspect",
-                "Outcome report",
-                "See delivered guidance, observed responses, and control opportunities",
-                Command::Report,
-            ),
-            Entry::new(
-                "Inspect",
-                "Reflex trace graph",
-                "Read the connections between learned reflexes and their triggers",
-                Command::Graph,
-            ),
-            Entry::new(
-                "Inspect",
-                "Evaluate a dataset",
-                "Replay a folder of evaluation traces and inspect results",
-                Command::Form(FormKind::Evaluate),
-            ),
-            Entry::new(
-                "Collections",
-                "Import a signed pack",
-                "Verify and install reflexes from a signed pack folder",
-                Command::Form(FormKind::AddTrack),
-            ),
-            Entry::new(
-                "Collections",
-                "Export a signed pack",
-                "Package a reflex collection using a key from your SSH signing agent",
-                Command::Form(FormKind::ShareTrack),
-            ),
-            Entry::new(
-                "Logs",
-                "Learning history",
-                "Read recent learning runs, changes, and errors",
-                Command::LearningLog,
-            ),
-            Entry::new(
-                "Logs",
-                "Hook error log",
-                "Inspect fail-open errors; agents continue working if a hook fails",
-                Command::Errors,
-            ),
-            Entry::new("Inspect", "Refresh all data", "Reload health checks, reflexes, and settings", Command::Refresh),
-            Entry::new(
-                "Live",
-                if self.live.paused { "Resume live activity" } else { "Pause live activity" },
-                "Pause only the display; agents and learning keep running",
-                Command::Pause,
-            ),
-            Entry::new(
-                "Live",
-                if self.live.all_repos { "Show this repository" } else { "Show all repositories" },
-                "Change the scope of the live feed",
-                Command::Scope,
-            ),
-            Entry::new(
-                "Live",
-                if self.live.hide_quiet { "Show quiet events" } else { "Hide quiet events" },
-                "Choose whether to include events without guidance",
-                Command::Quiet,
-            ),
-            Entry::new("Help", "Keyboard shortcuts", "Learn the keys for your current screen", Command::Help),
-            Entry::new("App", "Quit Adage", "Close this terminal app and its local web server", Command::Quit),
-        ];
-        if self.tab == Tab::Routes {
-            if let Some(route) = self.selected_route() {
-                for (key, verb) in routes::ACTIONS {
-                    if route.verbs.contains(&verb) {
-                        entries.insert(
-                            0,
-                            Entry::new(
-                                "Selected reflex",
-                                format!("{} {}", route_review_label(verb, route), route.id),
-                                verb_effect(verb),
-                                Command::Review(key),
-                            ),
-                        );
-                    }
-                }
-            }
-        }
-        for setting in &self.settings {
-            entries.push(Entry::new(
-                "Setting",
-                format!("Edit {}", setting.key),
-                setting.doc,
-                Command::Setting(setting.key),
-            ));
-        }
-        for (index, route) in self.route_rows().iter().enumerate() {
-            entries.push(Entry::new(
-                "Reflex",
-                format!("Open reflex {}", route.id),
-                format!("{} · {}", route.reference, route.trigger),
-                Command::Route(index),
-            ));
-        }
-        entries
-    }
-
-    fn palette_command(&mut self, command: Command) -> Option<Cmd> {
-        match command {
-            Command::Home => self.tab = Tab::Home,
-            Command::Live => self.tab = Tab::Live,
-            Command::Routes => {
-                self.tab = Tab::Routes;
-                self.route_sel = self.route_rows().iter().position(|r| !r.reasons.is_empty()).unwrap_or(0);
-                self.detail_scroll = 0;
-                return Some(Cmd::Want(WantKind::Routes));
-            }
-            Command::Health => {
-                self.tab = Tab::Health;
-                return Some(Cmd::Want(WantKind::Health));
-            }
-            Command::Settings => self.tab = Tab::Settings,
-            Command::Web => return Some(Cmd::OpenWeb),
-            Command::WebDemo => return Some(Cmd::OpenWebDemo),
-            Command::Learn => return self.start_fix(Fix::LearnNow),
-            Command::Model => return self.start_fix(Fix::FetchModel),
-            Command::Hooks(harness) => return self.start_fix(Fix::InstallHooks(harness.into())),
-            Command::AutoLearn => return self.start_fix(Fix::EnableAutoLearn),
-            Command::Errors => return Some(Cmd::OpenFailOpen),
-            Command::LearningLog => return Some(Cmd::OpenLearningLog),
-            Command::Refresh => return Some(Cmd::Refresh),
-            Command::Pause => {
-                self.live.toggle_pause();
-                self.tab = Tab::Live;
-            }
-            Command::Scope => {
-                self.live.all_repos = !self.live.all_repos;
-                self.tab = Tab::Live;
-            }
-            Command::Quiet => {
-                self.live.hide_quiet = !self.live.hide_quiet;
-                self.tab = Tab::Live;
-            }
-            Command::Review(key) => return self.routes_key(KeyCode::Char(key)),
-            Command::Route(index) => {
-                self.tab = Tab::Routes;
-                self.route_sel = index;
-                self.detail_scroll = 0;
-            }
-            Command::Setting(key) => {
-                self.tab = Tab::Settings;
-                if let Some(index) = self.settings.iter().position(|s| s.key == key) {
-                    self.setting_sel = index;
-                    let setting = &self.settings[index];
-                    self.modal = Some(Modal::Edit { key, buffer: setting.value.clone(), error: None });
-                }
-            }
-            Command::Status => return Some(Cmd::Do(Action::Tool(Tool::Status))),
-            Command::Survey => return Some(Cmd::Do(Action::Tool(Tool::Survey))),
-            Command::HistorySources => return Some(Cmd::HistorySources),
-            Command::ImportOpenCode => return Some(Cmd::PrepareTool(Tool::ExportOpenCode)),
-            Command::Report => return Some(Cmd::Do(Action::Tool(Tool::Report))),
-            Command::Graph => return Some(Cmd::Do(Action::Tool(Tool::Graph))),
-            Command::Form(kind) => {
-                let mut form = Form::new(kind);
-                if kind == FormKind::ShareTrack {
-                    if let Some(route) = self.selected_route() {
-                        form.values[0] = route.reference.clone();
-                    }
-                }
-                self.modal = Some(Modal::Form(form));
-            }
-            Command::Help => self.modal = Some(Modal::Help),
-            Command::Quit => return Some(Cmd::Quit),
-        }
-        None
-    }
-
-    fn submit_form(&mut self, mut form: Form) -> Option<Cmd> {
-        if let Some(index) = form.values.iter().position(|value| value.trim().is_empty()) {
-            form.selected = index;
-            form.error = Some(format!("Enter {} to continue.", form.kind.fields()[index].0.to_lowercase()));
-            self.modal = Some(Modal::Form(form));
-            return None;
-        }
-        let value = |index: usize| form.values[index].trim().to_string();
-        let tool = match form.kind {
-            FormKind::OpenRepository => return Some(Cmd::OpenRepository(value(0).into())),
-            FormKind::Evaluate => Tool::Eval(value(0).into()),
-            FormKind::InstallModel => Tool::InstallModel(value(0).into()),
-            FormKind::HistoryClaude => {
-                Tool::SetHistorySource { harness: "claude-code".into(), directory: value(0).into() }
-            }
-            FormKind::HistoryCodex => Tool::SetHistorySource { harness: "codex".into(), directory: value(0).into() },
-            FormKind::HistoryOpenCode => {
-                Tool::SetHistorySource { harness: "opencode".into(), directory: value(0).into() }
-            }
-            FormKind::AddTrack => {
-                let trust = match value(1).to_lowercase().as_str() {
-                    "true" => true,
-                    "false" => false,
-                    _ => {
-                        form.selected = 1;
-                        form.error = Some("Trust signer must be true or false.".into());
-                        self.modal = Some(Modal::Form(form));
-                        return None;
-                    }
-                };
-                Tool::AddTrack { directory: value(0).into(), trust, expected_digest: None }
-            }
-            FormKind::ShareTrack => Tool::ShareTrack { track: value(0), output: value(1).into(), key: None },
-        };
-        if tool.mutates() {
-            Some(Cmd::PrepareTool(tool))
-        } else {
-            Some(Cmd::Do(Action::Tool(tool)))
-        }
-    }
-
-    fn routes_key(&mut self, code: KeyCode) -> Option<Cmd> {
-        let n = self.route_rows().len();
-        match code {
-            KeyCode::Char('/') => {
-                self.modal = Some(Modal::Palette(Palette { query: "Open reflex ".into(), selected: 0 }));
-            }
-            KeyCode::Up | KeyCode::Char('k') => {
-                self.route_sel = self.route_sel.saturating_sub(1);
-                self.detail_scroll = 0;
-            }
-            KeyCode::Down | KeyCode::Char('j') => {
-                self.route_sel = (self.route_sel + 1).min(n.saturating_sub(1));
-                self.detail_scroll = 0;
-            }
-            KeyCode::PageDown => self.detail_scroll = self.detail_scroll.saturating_add(5),
-            KeyCode::PageUp => self.detail_scroll = self.detail_scroll.saturating_sub(5),
-            KeyCode::Char('R') => return Some(Cmd::Want(WantKind::Routes)),
-            KeyCode::Char(c) => {
-                let (_, verb) = *routes::ACTIONS.iter().find(|(k, _)| *k == c)?;
-                let r = self.selected_route()?.clone();
-                let Some(verb) = r.verbs.iter().copied().find(|v| *v == verb) else {
-                    self.message(
-                        "Not available",
-                        vec![
-                            format!("`{verb}` does not apply to {} as it stands.", r.id),
-                            format!("Available: {}", r.verbs.join(", ")),
-                        ],
-                        true,
-                    );
-                    return None;
-                };
-                let t = Theme::from_env();
-                let Some(preview) = &r.review_preview else {
-                    self.message(
-                        "Reload before reviewing",
-                        vec!["Reload this reflex to inspect its current version and proposed changes.".into()],
-                        true,
-                    );
-                    return Some(Cmd::Want(WantKind::Routes));
-                };
-                let proposed = preview.proposal.is_some() && verb == "approve";
-                let title = if proposed { "Approve proposed change" } else { "Review reflex" };
-                let mut lines = vec![
-                    Line::from(vec![
-                        Span::raw(format!(
-                            "{} ",
-                            if proposed { "Apply the proposed change to" } else { review_label(verb) }
-                        )),
-                        Span::styled(r.id.clone(), t.bold()),
-                        Span::raw(format!(" in {}?", r.reference)),
-                    ]),
-                    Line::raw(""),
-                ];
-                if proposed {
-                    lines.push(Line::raw(
-                        "Approval replaces the current reflex with the proposed version. It stays pinned.",
-                    ));
-                } else {
-                    lines.push(Line::raw(verb_effect(verb)));
-                    if preview.proposal.is_some() {
-                        lines.push(Line::raw("The proposed version below will not be installed by this decision."));
-                    }
-                }
-                lines.extend(review_preview_lines(preview, &t));
-                lines.push(Line::raw(""));
-                lines.push(Line::raw("The decision is saved in review history and the index is rebuilt."));
-                lines
-                    .push(Line::raw("If this reflex or its proposal changes before confirmation, nothing is written."));
-                lines.push(Line::raw(""));
-                lines.push(Line::from(Span::styled(
-                    if proposed {
-                        "y approve proposed change · n cancel · PgDn/PgUp scroll"
-                    } else {
-                        "y confirm · n cancel · PgDn/PgUp scroll"
-                    },
-                    t.dim(),
-                )));
-                self.confirm(
-                    title,
-                    lines,
-                    Action::Review {
-                        verb,
-                        reference: r.reference.clone(),
-                        route: r.id.clone(),
-                        expected_revision: preview.revision.clone(),
-                    },
-                );
-            }
-            _ => {}
-        }
-        None
-    }
-
-    fn health_key(&mut self, code: KeyCode) -> Option<Cmd> {
-        let n = self.checks_len();
-        let fix_of = |s: &AppState, want: &dyn Fn(&Fix) -> bool| -> Option<Fix> {
-            let h = s.health.as_ref()?;
-            let sel = h.fixes.get(s.check_sel).cloned().flatten().filter(|f| want(f));
-            sel.or_else(|| h.fixes.iter().flatten().find(|f| want(f)).cloned())
-        };
-        let fix = match code {
-            KeyCode::Up | KeyCode::Char('k') => {
-                self.check_sel = self.check_sel.saturating_sub(1);
-                return None;
-            }
-            KeyCode::Down | KeyCode::Char('j') => {
-                self.check_sel = (self.check_sel + 1).min(n.saturating_sub(1));
-                return None;
-            }
-            KeyCode::Char('R') => return Some(Cmd::Want(WantKind::Health)),
-            KeyCode::Enter => {
-                let health = self.health.as_ref()?;
-                let fix = health.fixes.get(self.check_sel).cloned().flatten();
-                if fix.is_none() {
-                    if let Some(check) = health.checks.get(self.check_sel).filter(|check| check.fix.is_some()) {
-                        let title = check.check.clone();
-                        let lines = vec![check.detail.clone(), String::new(), check.fix.clone().unwrap()];
-                        self.message(&title, lines, false);
-                    }
-                }
-                fix
-            }
-            KeyCode::Char('i') => fix_of(self, &|f| matches!(f, Fix::InstallHooks(_))),
-            KeyCode::Char('m') => Some(Fix::FetchModel),
-            KeyCode::Char('l') => Some(Fix::LearnNow),
-            KeyCode::Char('s') => Some(Fix::OpenSettings),
-            KeyCode::Char('o') => Some(Fix::OpenFailOpen),
-            _ => None,
-        }?;
-        self.start_fix(fix)
     }
 
     pub fn start_fix(&mut self, fix: Fix) -> Option<Cmd> {
         let t = Theme::from_env();
-        let hint = Line::from(Span::styled("y confirm · n cancel", t.dim()));
+        let hint = Line::from(vec![
+            Span::styled("y", t.key()),
+            Span::styled(format!(" confirm{}", t.sep()), t.dim()),
+            Span::styled("n", t.key()),
+            Span::styled(" cancel", t.dim()),
+        ]);
+        let same = |cmd: &str| {
+            Line::from(vec![
+                Span::styled("same as ", t.dim()),
+                Span::styled(cmd.to_string(), t.command()),
+                Span::styled(" from any shell", t.dim()),
+            ])
+        };
         match fix {
             Fix::InstallHooks(h) => {
                 self.modal = Some(Modal::Scope { harness: h });
@@ -868,11 +578,13 @@ impl AppState {
             Fix::OpenFailOpen => Some(Cmd::OpenFailOpen),
             Fix::FetchModel => {
                 self.confirm(
-                    "Fetch the embedding model",
+                    "Fetch the intent model",
                     vec![
-                        Line::raw("Download the verified 31 MB model into Adage's data directory."),
-                        Line::raw("It helps Adage recognize similar intentions across your traces."),
+                        Line::raw("Download potion-base-8M (SHA-256 verified) into Adage's data directory."),
+                        Line::raw("It lets conditioning find intent families; installed, it is used instead"),
+                        Line::raw("of the copy bundled in adage."),
                         Line::raw(""),
+                        same("adage models fetch"),
                         hint,
                     ],
                     Action::FetchModel,
@@ -880,111 +592,51 @@ impl AppState {
                 None
             }
             Fix::LearnNow => Some(Cmd::PreviewLearning),
-            Fix::SetHistorySource(harness) => self.palette_command(Command::Form(match harness.as_str() {
-                "claude-code" => FormKind::HistoryClaude,
+            Fix::History(h) => self.run_entry(palette::Run::Form(match h.as_str() {
                 "codex" => FormKind::HistoryCodex,
-                _ => FormKind::HistoryOpenCode,
+                "opencode" => FormKind::HistoryOpenCode,
+                _ => FormKind::HistoryClaude,
             })),
-            Fix::ImportOpenCode => Some(Cmd::PrepareTool(Tool::ExportOpenCode)),
             Fix::OpenSettings => {
                 self.tab = Tab::Settings;
                 None
             }
             Fix::EnableAutoLearn => {
-                self.confirm(
-                    "Turn auto-learn on",
-                    vec![
-                        Line::raw("Set learn.auto = true in config.toml: Adage then learns in the background"),
-                        Line::raw("whenever an agent session in a repository stops or ends."),
-                        Line::raw(""),
-                        hint,
-                    ],
-                    Action::SetConfig { key: "learn.auto", value: "true".into() },
-                );
+                self.confirm_auto_condition(true);
                 None
             }
         }
     }
 
-    fn settings_key(&mut self, code: KeyCode) -> Option<Cmd> {
-        let n = self.settings.len();
-        match code {
-            KeyCode::Up | KeyCode::Char('k') => self.setting_sel = self.setting_sel.saturating_sub(1),
-            KeyCode::Down | KeyCode::Char('j') => self.setting_sel = (self.setting_sel + 1).min(n.saturating_sub(1)),
-            KeyCode::Enter | KeyCode::Char(' ') | KeyCode::Char('e') => {
-                let row = self.settings.get(self.setting_sel)?;
-                if row.boolean() {
-                    let next = if row.value == "true" { "false" } else { "true" };
-                    return Some(Cmd::Do(Action::SetConfig { key: row.key, value: next.into() }));
-                }
-                if row.key == "learn.thresholds" && code == KeyCode::Char(' ') {
-                    let next = if row.value == "demo" { "default" } else { "demo" };
-                    return Some(Cmd::Do(Action::SetConfig { key: row.key, value: next.into() }));
-                }
-                self.modal = Some(Modal::Edit { key: row.key, buffer: row.value.clone(), error: None });
-            }
-            _ => {}
-        }
-        None
-    }
-}
-
-fn aspect_name(a: adage_tracks::Aspect) -> &'static str {
-    match a {
-        adage_tracks::Aspect::Green => "fire",
-        adage_tracks::Aspect::Yellow => "prime",
-        adage_tracks::Aspect::Red => "inhibit",
-    }
-}
-
-fn strength_label(value: &str) -> &str {
-    match value {
-        "green" => "fire",
-        "yellow" => "prime",
-        "red" => "inhibit",
-        other => other,
-    }
-}
-
-fn lifecycle_label(value: &str) -> &str {
-    match value {
-        "draft" => "nascent (awaiting review)",
-        "probation" => "forming",
-        "active" => "firm",
-        "retired" => "extinguished",
-        "demoted" => "weakened",
-        other => other,
-    }
-}
-
-fn review_label(verb: &str) -> &str {
-    match verb {
-        "promote" => "strengthen",
-        "demote" => "weaken",
-        "reject" => "extinguish",
-        other => other,
-    }
-}
-
-fn route_review_label<'a>(verb: &'a str, route: &routes::RouteRow) -> &'a str {
-    if verb == "approve" && route.review_preview.as_ref().is_some_and(|preview| preview.proposal.is_some()) {
-        "approve proposed change to"
-    } else {
-        review_label(verb)
-    }
-}
-
-fn verb_effect(verb: &str) -> &'static str {
-    match verb {
-        "approve" => "Approve: accept this reflex, apply its proposed change, or start using a new reflex.",
-        "reject" => {
-            "Extinguish: retire the reflex; learning keeps it retired unless its evidence strengthens materially."
-        }
-        "demote" => "Weaken: fire → prime. Suggest this response while retaining the review decision.",
-        "promote" => "Strengthen: prime → fire. Direct this response, within its allowed effect ceiling.",
-        "pin" => "Pin: mark it authored; learning proposes changes instead of overwriting it.",
-        "dismiss" => "Dismiss: keep the pinned reflex and silence its proposed change.",
-        _ => "",
+    /// Ask before turning auto-condition on or off: the Health fix and the Settings toggle say
+    /// the same thing.
+    pub fn confirm_auto_condition(&mut self, on: bool) {
+        let t = Theme::from_env();
+        let (title, value, what) = if on {
+            ("Turn auto-condition on", "true", "Adage then conditions in the background")
+        } else {
+            ("Turn auto-condition off", "false", "Adage then no longer conditions in the background")
+        };
+        self.confirm(
+            title,
+            vec![
+                Line::raw(format!("Set learn.auto = {value} in config.toml: {what}")),
+                Line::raw("whenever an agent's trace in a repository stops or ends."),
+                Line::raw(""),
+                Line::from(vec![
+                    Span::styled("same as ", t.dim()),
+                    Span::styled(format!("adage config set learn.auto {value}"), t.command()),
+                    Span::styled(" from any shell", t.dim()),
+                ]),
+                Line::from(vec![
+                    Span::styled("y", t.key()),
+                    Span::styled(format!(" confirm{}", t.sep()), t.dim()),
+                    Span::styled("n", t.key()),
+                    Span::styled(" cancel", t.dim()),
+                ]),
+            ],
+            Action::SetConfig { key: "learn.auto", value: value.into() },
+        );
     }
 }
 
@@ -994,589 +646,206 @@ fn verb_effect(verb: &str) -> &'static str {
 pub fn draw(f: &mut Frame, s: &AppState, ctx: &Ctx) {
     let t = &ctx.theme;
     let area = f.area();
-    f.render_widget(Block::default().style(t.base()), area);
     if area.width < 40 || area.height < 10 {
         f.render_widget(
-            Paragraph::new("adage ui: make the terminal larger (40×10 at least)").wrap(Wrap { trim: true }),
+            Paragraph::new(t.text("adage ui: make the terminal larger (40×10 at least)")).wrap(Wrap { trim: true }),
             area,
         );
         return;
     }
-    let [tabs, body, status] =
-        Layout::vertical([Constraint::Length(1), Constraint::Min(5), Constraint::Length(1)]).areas(area);
-    draw_tabs(f, tabs, s, ctx);
+    let [tabs_a, rule_a, body, rule_b, status] = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Min(5),
+        Constraint::Length(1),
+        Constraint::Length(1),
+    ])
+    .areas(area);
+    // Toasts never cover the tab: the newest sits on the rule above the status bar, and any
+    // older ones take rows from the bottom of the tab while they last.
+    let extra = (s.toasts.len() as u16).saturating_sub(1).min(body.height.saturating_sub(5));
+    let [content, _] = Layout::vertical([Constraint::Min(1), Constraint::Length(extra)]).areas(body);
+    draw_tabs(f, tabs_a, s, ctx);
+    f.render_widget(Paragraph::new(view::rule("", None, area.width, t)), rule_a);
     match s.tab {
-        Tab::Home => draw_home(f, body, s, ctx),
-        Tab::Live => view::draw_live(f, body, &s.live, s.health.as_ref(), ctx, false),
-        Tab::Routes => draw_routes(f, body, s, ctx),
-        Tab::Health => draw_health(f, body, s, ctx),
-        Tab::Settings => draw_settings(f, body, s, ctx),
+        Tab::Home => tabs::home::draw(f, content, s, ctx),
+        Tab::Live => view::draw_live(f, content, &s.live, s.health.as_ref(), ctx, false),
+        Tab::Reflexes => tabs::reflexes::draw(f, content, s, ctx),
+        Tab::Map => tabs::map::draw(f, content, s, ctx),
+        Tab::Health => tabs::health::draw(f, content, s, ctx),
+        Tab::Settings => tabs::settings::draw(f, content, s, ctx),
     }
+    f.render_widget(Paragraph::new(view::rule("", None, area.width, t)), rule_b);
+    draw_toasts(f, Rect { height: extra + 1, y: rule_b.y - extra, ..rule_b }, s, t);
     draw_status(f, status, s, ctx);
     if let Some(m) = &s.modal {
         draw_modal(f, body, m, s, t);
+    }
+    if let Some(p) = &s.palette {
+        palette::draw(f, area, s, p, t);
     }
 }
 
 fn draw_tabs(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
     let t = &ctx.theme;
-    if area.width < 65 {
-        let name = TABS.iter().find(|(tab, _)| *tab == s.tab).map(|(_, name)| *name).unwrap_or("Home");
-        f.render_widget(
-            Paragraph::new(Line::from(vec![
-                Span::styled(" adage ", t.title()),
-                Span::styled(name, t.selected()),
-                Span::styled(" · Tab screens · : commands", t.dim()),
-            ])),
-            area,
-        );
-        return;
-    }
-    let mut spans = vec![Span::styled(" adage ", t.title())];
+    // Narrow terminals name only the current tab (the others keep their number), so where you
+    // are is never cut off the edge.
+    let tabs = |compact: bool| {
+        let mut spans = vec![Span::styled(" adage", t.title()), Span::raw(if compact { " " } else { "   " })];
+        for (i, (tab, name)) in TABS.iter().enumerate() {
+            let badge = match tab {
+                Tab::Health => s.health.as_ref().map_or(0, |h| h.count(Status::Warn) + h.count(Status::Fail)),
+                Tab::Reflexes => match &s.routes {
+                    Some(Ok(r)) => r.waiting(),
+                    _ => 0,
+                },
+                _ => 0,
+            };
+            if *tab == s.tab {
+                spans.push(Span::styled(format!(" {} {name} ", i + 1), t.accent().patch(t.selected()).patch(t.bold())));
+            } else if compact {
+                spans.push(Span::styled(format!(" {}", i + 1), t.ink2()));
+            } else {
+                spans.push(Span::styled(format!(" {} ", i + 1), t.dim()));
+                spans.push(Span::styled(format!("{name} "), t.ink2()));
+            }
+            if badge > 0 {
+                spans.push(Span::styled(format!("({badge})"), t.yellow()));
+            }
+            if !compact {
+                spans.push(Span::raw(" "));
+            }
+        }
+        spans
+    };
+    let full = tabs(false);
+    let mut spans =
+        if full.iter().map(|s| s.width()).sum::<usize>() <= area.width as usize { full } else { tabs(true) };
+    let mut right = vec![Span::styled(format!("{}{}", ctx.label, t.sep()), t.ink2())];
     if ctx.demo {
-        spans.push(Span::styled("demo ", t.holdout()));
+        right.insert(0, Span::styled(format!("demo{}", t.sep()), t.control()));
     }
-    for (i, (tab, name)) in TABS.iter().enumerate() {
-        let mut label = format!(" {i} {name} ");
-        if *tab == Tab::Health && area.width >= 90 {
-            if let Some(h) = &s.health {
-                let bad = h.count(Status::Warn) + h.count(Status::Fail);
-                if bad > 0 {
-                    label = format!(" {i} {name} ({bad}) ");
-                }
-            }
-        }
-        if *tab == Tab::Routes && area.width >= 90 {
-            if let Some(Ok(r)) = &s.routes {
-                let q = r.rows.iter().filter(|r| !r.reasons.is_empty()).count();
-                if q > 0 {
-                    label = format!(" {i} {name} ({q}) ");
-                }
-            }
-        }
-        spans.push(Span::styled(label, if *tab == s.tab { t.selected().patch(t.bold()) } else { t.dim() }));
+    if s.live.paused {
+        right.push(Span::styled(
+            format!("{} paused +{}", t.ch("‖", "="), s.live.held.len()),
+            t.yellow().patch(t.bold()),
+        ));
+    } else if t.color {
+        right.push(Span::styled(format!("{} ", t.glyph(Glyph::Lamp)), t.green()));
+        right.push(Span::raw("live"));
+    } else {
+        right.push(Span::styled("LIVE", t.bold()));
     }
-    if s.tab == Tab::Live {
-        let state = if s.live.paused { format!("  PAUSED +{}", s.live.held.len()) } else { "  LIVE".into() };
-        spans.push(Span::styled(state, if s.live.paused { t.yellow() } else { t.green() }));
+    right.push(Span::raw(" "));
+    let lw: usize = spans.iter().map(|s| s.width()).sum();
+    let rw: usize = right.iter().map(|s| s.width()).sum();
+    if lw + rw < area.width as usize {
+        spans.push(Span::raw(" ".repeat(area.width as usize - lw - rw)));
+        spans.extend(right);
     }
     f.render_widget(Paragraph::new(Line::from(spans)), area);
 }
 
 fn draw_status(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
     let t = &ctx.theme;
-    let h = s.health.as_ref();
-    let gen = h
-        .and_then(|h| h.generation.as_deref())
-        .map(|g| g[..g.len().min(8)].to_string())
-        .unwrap_or_else(|| "none".into());
-    let routes = h.map(|h| h.routes_repo.unwrap_or(h.routes_total)).unwrap_or(0);
-    let auto = match h.and_then(|h| h.auto_learn.as_ref()) {
-        Some((true, _)) => "on",
-        Some((false, _)) => "off",
-        None => "?",
+    let room = (area.width as usize).saturating_sub(9);
+    let mut spans = vec![Span::raw(" ")];
+    let typing = match s.tab {
+        Tab::Live if s.live.filtering => Some(&s.live.filter),
+        Tab::Reflexes if s.reflexes.filtering => Some(&s.reflexes.filter),
+        _ => None,
     };
-    let keys = match s.tab {
-        Tab::Home => "Enter commands",
-        Tab::Live => "p pause · f scope · v quiet",
-        Tab::Routes => "/ find · a/r review · R reload",
-        Tab::Health => "Enter fix · R recheck",
-        Tab::Settings => "Enter edit · Space toggle",
-    };
-    let left = Line::from(vec![
-        Span::styled(format!(" {} ", ctx.label), t.bold()),
-        Span::styled(format!("· gen {gen} · {routes} reflexes · auto-learn {auto}"), t.dim()),
-    ]);
-    // The keys stay whole at the right; the state on the left gives way.
-    let right = if area.width < 65 {
-        " : commands · w web · ? help · q quit ".to_string()
-    } else if area.width < 105 {
-        format!(" {keys} · : commands · w web · q quit ")
+    if let Some(q) = typing {
+        spans.push(Span::styled("/ ", t.key()));
+        spans.push(Span::raw(q.clone()));
+        spans.push(Span::styled(t.ch("▌", "_"), t.accent()));
+        spans.push(Span::styled(format!("   enter keep{}esc clear", t.sep()), t.dim()));
     } else {
-        format!(" {keys} · Ctrl+K commands · w web · ? help · q quit ")
-    };
-    let right_w = (right.chars().count() as u16).min(area.width);
-    let [l, r] = Layout::horizontal([Constraint::Min(0), Constraint::Length(right_w)]).areas(area);
-    f.render_widget(Paragraph::new(left), l);
-    f.render_widget(Paragraph::new(Span::styled(right, t.dim())), r);
+        spans.extend(keys::bar(&[keys::GLOBAL, s.tab.keys()], t, room));
+    }
+    let used: usize = spans.iter().map(|s| s.width()).sum();
+    spans.push(Span::raw(" ".repeat((area.width as usize).saturating_sub(used + 7))));
+    spans.push(Span::styled("q", t.key()));
+    spans.push(Span::styled(" quit ", t.dim()));
+    f.render_widget(Paragraph::new(Line::from(spans)), area);
 }
 
-fn draw_home(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
-    let t = &ctx.theme;
-    let routes = s.health.as_ref().map(|h| h.routes_repo.unwrap_or(h.routes_total));
-    let review = s.route_rows().iter().filter(|r| !r.reasons.is_empty()).count();
-    let issues = s.health.as_ref().map(|h| h.count(Status::Fail) + h.count(Status::Warn));
-    let mut lines = vec![
-        Line::from(Span::styled("Agent traces become reflexes.", t.title())),
-        Line::raw("Repeated work becomes a learned response, with evidence you can review."),
-        Line::raw(""),
-        Line::from(vec![Span::styled("Workspace  ", t.dim()), Span::styled(ctx.label.clone(), t.bold())]),
-        Line::from(vec![
-            Span::styled("Readiness  ", t.dim()),
-            Span::raw(match issues {
-                Some(0) => "All health checks passed".into(),
-                Some(n) => format!("{n} setup checks need attention · 3 opens Health"),
-                None => "Checking your setup…".into(),
-            }),
-        ]),
-        Line::from(vec![
-            Span::styled("Guidance   ", t.dim()),
-            Span::raw(match routes {
-                Some(n) => {
-                    let scope = if s.health.as_ref().is_some_and(|health| health.routes_repo.is_some()) {
-                        "here"
-                    } else {
-                        "installed"
-                    };
-                    format!("{n} reflexes {scope} · {review} to review across all repositories")
-                }
-                None => "Loading learned reflexes…".into(),
-            }),
-        ]),
-        Line::raw(""),
-        Line::from(Span::styled("Connect → Learn → Review → Observe", t.bold())),
-        Line::raw("i  Connect your coding agent, then check History sources in : commands."),
-        Line::raw("l  Learn reflexes from repeated patterns in this repository."),
-        Line::raw("2  Review each reflex, its evidence, and its response."),
-        Line::raw("1  Observe which reflexes fire and how your agents respond."),
-        Line::raw(""),
-        Line::from(Span::styled("Reflexes are learned. Instincts are built in.", t.bold())),
-        Line::raw("This build exposes learned reflexes; instincts are not available yet."),
-        Line::raw(""),
-        Line::from(Span::styled("Ctrl+K / :  Search every command", t.title())),
-        Line::from(Span::styled("w  Open the web map · d  Explore a demo trace", t.accent().patch(t.bold()))),
-        Line::raw("The local server opens your browser automatically."),
-    ];
-    if ctx.root.is_none() && !ctx.demo {
-        lines.insert(
-            7,
-            Line::from(Span::styled("No Git repository selected. Press : and choose Open a repository.", t.yellow())),
-        );
-    }
-    if area.height < 20 {
-        lines = vec![
-            Line::from(Span::styled("Agent traces become reflexes.", t.title())),
-            Line::raw(format!("Workspace: {}", ctx.label)),
-            Line::raw("i Connect → l Learn → 2 Reflexes → 1 Live"),
-            Line::raw(""),
-            Line::from(Span::styled("Enter / :  Search every command", t.bold())),
-            Line::from(Span::styled("w Web map · d Demo trace", t.accent())),
-            Line::raw("3 Health and setup · 4 Settings"),
-        ];
-    }
-    f.render_widget(
-        Paragraph::new(lines).wrap(Wrap { trim: false }),
-        area.inner(ratatui::layout::Margin { horizontal: 2, vertical: 1 }),
-    );
-}
-
-fn kv(k: &str, v: String, t: &Theme) -> Line<'static> {
-    Line::from(vec![Span::styled(format!("{k:<11}"), t.dim()), Span::raw(v)])
-}
-
-pub fn route_detail(r: &RouteRow, t: &Theme) -> Vec<Line<'static>> {
-    let l = &r.live;
-    let mut lines = vec![
-        Line::from(vec![
-            Span::styled(format!("{} ", t.aspect_mark(r.aspect)), t.aspect(r.aspect)),
-            Span::styled(r.id.clone(), t.bold()),
-            Span::styled(
-                format!(
-                    "  {} · {} (ceiling {})",
-                    aspect_name(r.aspect),
-                    match r.aspect {
-                        adage_tracks::Aspect::Green => "do this",
-                        adage_tracks::Aspect::Yellow => "consider this",
-                        adage_tracks::Aspect::Red => "avoid this",
-                    },
-                    strength_label(&r.ceiling)
-                ),
-                t.aspect(r.aspect),
-            ),
-        ]),
-        kv("collection", format!("{} @ {}{}", r.track, r.version, if r.imported { " (imported)" } else { "" }), t),
-        kv("repo", r.repo.clone(), t),
-        kv(
-            "state",
-            format!(
-                "{} · effect {}{}{}",
-                lifecycle_label(&r.state),
-                r.effect,
-                if r.authored { " · pinned" } else { "" },
-                if r.in_index { "" } else { " · not in the index" }
-            ),
-            t,
-        ),
-        kv("when", r.trigger.clone(), t),
-        kv("do", r.step.clone(), t),
-        kv(
-            "evidence",
-            format!("{}/{} traces · rate {:.2} · Wilson lb {:.2}", r.support, r.opportunities, r.rate, r.lower_bound),
-            t,
-        ),
-        kv(
-            "live",
-            format!("delivered {} · followed {} · not observed {} · met {}", l.emitted, l.followed, l.derailed, l.met),
-            t,
-        ),
-        kv("control", format!("withheld {} · unaided {} · not observed {}", l.would_have, l.unaided, l.not_reached), t),
-        kv("counts", r.measurement_info.clone(), t),
-        Line::raw("Not observed: the expected action was absent in the next 3 observed tool batches. Codex and OpenCode report per call; this is not a full-session verdict."),
-    ];
-    if !r.historical_versions.is_empty() {
-        lines.push(kv(
-            "history",
-            format!(
-                "{} · Open the web map for version-specific evidence and contributing traces.",
-                r.historical_versions.join(", ")
-            ),
-            t,
-        ));
-    }
-    for (k, d) in &r.reasons {
-        lines.push(Line::from(vec![
-            Span::styled(format!("{:<11}", "review"), t.dim()),
-            Span::styled(format!("{k}: "), t.yellow().patch(t.bold())),
-            Span::raw(d.clone()),
-        ]));
-    }
-    let keys: Vec<String> = routes::ACTIONS
-        .iter()
-        .filter(|(_, v)| r.verbs.contains(v))
-        .map(|(k, v)| {
-            format!(
-                "{k} {}",
-                if *v == "approve" && r.review_preview.as_ref().is_some_and(|p| p.proposal.is_some()) {
-                    "approve proposed change"
-                } else {
-                    review_label(v)
-                }
-            )
-        })
-        .collect();
-    lines.push(kv("keys", keys.join(" · "), t));
-    lines.push(Line::raw(""));
-    if let Some(preview) = &r.review_preview {
-        lines.extend(review_preview_lines(preview, t));
-    } else {
-        lines.push(Line::from(Span::styled("current directive preview (example values):", t.dim())));
-        for d in r.directive.lines() {
-            lines.push(Line::from(Span::styled(format!("  {d}"), t.aspect(r.aspect))));
+/// The toasts, newest at the bottom of `body`, right-aligned.
+fn draw_toasts(f: &mut Frame, body: Rect, s: &AppState, t: &Theme) {
+    for (k, toast) in s.toasts.iter().rev().enumerate() {
+        let y = body.bottom().saturating_sub(1 + k as u16);
+        if y < body.top() {
+            break;
         }
+        let (mark, style) = if toast.ok { (t.glyph(Glyph::Ok), t.green()) } else { (t.glyph(Glyph::Fail), t.red()) };
+        let text = t.fit(&t.text(&toast.text), (body.width as usize).saturating_sub(8));
+        let line =
+            Line::from(vec![Span::styled(format!(" {mark} "), style.patch(t.bold())), Span::raw(format!("{text} "))]);
+        let w = (line.width() as u16).min(body.width);
+        let r = Rect { x: body.right().saturating_sub(w + 1), y, width: w, height: 1 };
+        f.render_widget(ratatui::widgets::Clear, r);
+        f.render_widget(Paragraph::new(line), r);
     }
-    lines
-}
-
-fn review_preview_lines(preview: &crate::review::ReviewPreview, t: &Theme) -> Vec<Line<'static>> {
-    let mut lines = Vec::new();
-    if let Some(proposal) = &preview.proposal {
-        lines.push(Line::raw(""));
-        lines.push(Line::from(Span::styled(format!("Proposed change · {}", proposal.on), t.bold())));
-        lines.push(Line::raw(proposal.reason.clone()));
-        lines.push(Line::raw("Current → proposed fields:"));
-        for (field, before, after) in &proposal.diff {
-            let display = |value: &str| match *field {
-                "aspect" => strength_label(value).to_string(),
-                "state" => lifecycle_label(value).to_string(),
-                _ => value.to_string(),
-            };
-            lines.push(Line::from(Span::styled(format!("  {field}"), t.bold())));
-            lines.push(Line::raw(format!("    Current:  {}", display(before))));
-            lines.push(Line::raw(format!("    Proposed: {}", display(after))));
-        }
-        lines.push(Line::raw(""));
-        lines.push(Line::from(Span::styled("Proposed directive preview (example values):", t.bold())));
-        lines.extend(proposal.directive.lines().map(|line| Line::raw(format!("  {line}"))));
-    }
-    lines.push(Line::raw(""));
-    lines.push(Line::from(Span::styled("Current directive preview (example values):", t.dim())));
-    lines.extend(preview.current_directive.lines().map(|line| Line::raw(format!("  {line}"))));
-    lines
-}
-
-fn draw_routes(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
-    let t = &ctx.theme;
-    let rows = match &s.routes {
-        None => {
-            f.render_widget(Paragraph::new(Span::styled("loading reflexes…", t.dim())), area);
-            return;
-        }
-        Some(Err(e)) => {
-            f.render_widget(Paragraph::new(Span::styled(format!("could not load reflexes: {e}"), t.red())), area);
-            return;
-        }
-        Some(Ok(r)) => &r.rows,
-    };
-    if rows.is_empty() {
-        let lines = vec![
-            Line::raw("No learned reflexes yet."),
-            Line::from(Span::styled(
-                "Press : and choose Learn from this repository to build reflexes from agent traces.",
-                t.dim(),
-            )),
-        ];
-        f.render_widget(Paragraph::new(lines).wrap(Wrap { trim: true }), area);
-        return;
-    }
-    let wide = area.width >= 100;
-    let [list, detail] = if wide {
-        Layout::horizontal([Constraint::Percentage(42), Constraint::Percentage(58)]).areas(area)
-    } else {
-        Layout::vertical([Constraint::Percentage(45), Constraint::Percentage(55)]).areas(area)
-    };
-    // The list, grouped by track.
-    let mut lines: Vec<Line> = Vec::new();
-    let mut sel_line = 0;
-    let mut last_ref = None;
-    for (i, r) in rows.iter().enumerate() {
-        if last_ref != Some(&r.reference) {
-            last_ref = Some(&r.reference);
-            lines.push(Line::from(vec![
-                Span::styled(r.reference.clone(), t.title()),
-                Span::styled(format!(" @ {}  [{}]", r.version, r.repo), t.dim()),
-            ]));
-        }
-        if i == s.route_sel {
-            sel_line = lines.len();
-        }
-        let mark = if r.reasons.is_empty() { " " } else { "*" };
-        let row_style = if i == s.route_sel { t.selected() } else { Style::default() };
-        let counts = format!(" {}/{} · ✓{} ✗{}", r.support, r.opportunities, r.live.followed, r.live.derailed);
-        lines.push(Line::from(vec![
-            Span::styled(format!("{mark} "), t.yellow().patch(t.bold())),
-            Span::styled(format!("{} ", t.aspect_mark(r.aspect)), t.aspect(r.aspect)),
-            Span::styled(r.id.clone(), row_style),
-            Span::styled(counts, t.dim()),
-        ]));
-    }
-    let block = Block::default().borders(Borders::RIGHT | Borders::BOTTOM).border_style(t.dim());
-    let inner = block.inner(list);
-    let h = inner.height as usize;
-    let offset = sel_line.saturating_sub(h.saturating_sub(2)).min(lines.len().saturating_sub(h));
-    f.render_widget(block, list);
-    f.render_widget(Paragraph::new(lines).scroll((offset as u16, 0)), inner);
-    if let Some(r) = s.selected_route() {
-        f.render_widget(
-            Paragraph::new(route_detail(r, t)).wrap(Wrap { trim: false }).scroll((s.detail_scroll, 0)),
-            detail.inner(ratatui::layout::Margin { horizontal: 1, vertical: 0 }),
-        );
-    }
-}
-
-fn draw_health(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
-    let t = &ctx.theme;
-    let Some(h) = &s.health else {
-        f.render_widget(Paragraph::new(Span::styled("running checks…", t.dim())), area);
-        return;
-    };
-    let [list, detail] = Layout::vertical([Constraint::Min(3), Constraint::Length(6)]).areas(area);
-    let name_w = h.checks.iter().map(|c| c.check.chars().count()).max().unwrap_or(10).min(28);
-    let mut lines: Vec<Line> = Vec::new();
-    for (i, c) in h.checks.iter().enumerate() {
-        let lamp = match c.status {
-            Status::Pass => Lamp::Ok,
-            Status::Warn => Lamp::Warn,
-            Status::Fail => Lamp::Fail,
-        };
-        let sel = i == s.check_sel;
-        let fixable = h.fixes.get(i).is_some_and(|f| f.is_some()) || c.fix.is_some();
-        lines.push(Line::from(vec![
-            Span::styled(format!("{} ", t.lamp_mark(lamp)), t.lamp(lamp)),
-            Span::styled(format!("{:<name_w$}", c.check), if sel { t.selected() } else { t.bold() }),
-            Span::styled(if fixable { " ⏎ " } else { "   " }, t.accent()),
-            Span::raw(view::display_counts(&c.detail)),
-        ]));
-    }
-    for n in s.notices.iter().rev().take(3) {
-        lines.push(Line::from(Span::styled(n.clone(), t.yellow())));
-    }
-    let hgt = list.height as usize;
-    let offset = s.check_sel.saturating_sub(hgt.saturating_sub(1));
-    f.render_widget(Paragraph::new(lines).scroll((offset as u16, 0)), list);
-
-    let mut d: Vec<Line> = Vec::new();
-    if let Some(c) = h.checks.get(s.check_sel) {
-        d.push(Line::from(Span::styled(c.check.clone(), t.bold())));
-        d.push(Line::raw(view::display_counts(&c.detail)));
-        if let Some(Some(fix)) = h.fixes.get(s.check_sel) {
-            d.push(Line::from(Span::styled(format!("Enter: {}", fix.label()), t.accent().patch(t.bold()))));
-        } else if let Some(fx) = &c.fix {
-            d.push(Line::from(vec![Span::styled("detail: ", t.dim()), Span::raw(fx.clone())]));
-            d.push(Line::raw("Enter: read full setup instructions · : find setup actions"));
-        }
-    }
-    let block = Block::default().borders(Borders::TOP).border_style(t.dim()).title(Span::styled(
-        format!(
-            " {} passed · {} warnings · {} failures ",
-            h.count(Status::Pass),
-            h.count(Status::Warn),
-            h.count(Status::Fail)
-        ),
-        t.title(),
-    ));
-    let inner = block.inner(detail);
-    f.render_widget(block, detail);
-    f.render_widget(Paragraph::new(d).wrap(Wrap { trim: false }), inner);
-}
-
-fn draw_settings(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
-    let t = &ctx.theme;
-    let mut lines = vec![
-        Line::from(vec![Span::styled("config ", t.dim()), Span::raw(crate::detect::tilde(&s.config_path))]),
-        Line::from(Span::styled(
-            "Choose a setting and press Enter to edit. Environment variables override saved values.",
-            t.dim(),
-        )),
-        Line::raw(""),
-    ];
-    for p in &s.settings_problems {
-        lines.push(Line::from(Span::styled(format!("! {p}"), t.yellow())));
-    }
-    if !s.settings_problems.is_empty() {
-        lines.push(Line::raw(""));
-    }
-    let key_w = s.settings.iter().map(|r| r.key.len()).max().unwrap_or(10);
-    let val_w = s.settings.iter().map(|r| r.value.chars().count().max(2)).max().unwrap_or(8).min(40);
-    let mut selected_line = 0;
-    for (i, row) in s.settings.iter().enumerate() {
-        let sel = i == s.setting_sel;
-        if sel {
-            selected_line = lines.len();
-        }
-        let shown = if row.value.is_empty() { "\"\"".to_string() } else { row.value.clone() };
-        let source_style = if row.source == "default" { t.dim() } else { t.accent() };
-        lines.push(Line::from(vec![
-            Span::styled(format!("{:<key_w$}", row.key), if sel { t.selected() } else { Style::default() }),
-            Span::raw("  "),
-            Span::styled(format!("{shown:<val_w$}"), t.bold()),
-            Span::raw("  "),
-            Span::styled(format!("({})", row.source), source_style),
-        ]));
-        lines.push(Line::from(Span::styled(format!("  {}", row.doc), t.dim())));
-    }
-    lines.push(Line::raw(""));
-    lines.push(Line::from(Span::styled(
-        "Enter edits (Space toggles on/off and switches thresholds); every value is validated before it is saved.",
-        t.dim(),
-    )));
-    // Measure wrapping so the selected setting and its explanation stay visible on short terminals.
-    let wrapped_before: usize =
-        lines.iter().take(selected_line).map(|line| line.width().max(1).div_ceil(area.width.max(1) as usize)).sum();
-    let offset = wrapped_before.saturating_sub(area.height.saturating_sub(4) as usize);
-    f.render_widget(
-        Paragraph::new(lines).wrap(Wrap { trim: false }).scroll((offset.min(u16::MAX as usize) as u16, 0)),
-        area,
-    );
 }
 
 fn app_help(tab: Tab, t: &Theme) -> Vec<Line<'static>> {
-    let k = |key: &str, what: &str| {
-        Line::from(vec![Span::styled(format!("{key:>9}  "), t.bold()), Span::raw(what.to_string())])
-    };
-    let mut v = vec![
-        k("Ctrl+K :", "search every command"),
-        k("0-4 Tab", "switch screens (0 is Home)"),
-        k("w", "start and open the web map"),
-        k("q", "quit"),
-        k("?", "this help"),
-        Line::raw(""),
-    ];
-    match tab {
-        Tab::Home => {
-            v.push(k("d", "explore a demo trace in the web map"));
-            v.push(k("Enter", "open the command menu"));
-            v.push(k("i", "connect a coding agent"));
-            v.push(k("l", "learn from this repository"));
-        }
-        Tab::Live => v.extend(view::watch_help(t).into_iter().skip(1)),
-        Tab::Routes => {
-            v.push(k("/", "find a reflex by name, collection, or trigger"));
-            v.push(k("↑ ↓", "select a reflex"));
-            v.push(k("PgUp PgDn", "scroll the detail"));
-            for (c, verb) in routes::ACTIONS {
-                v.push(k(&c.to_string(), verb_effect(verb)));
-            }
-            v.push(k("R", "reload"));
-            v.push(Line::from(Span::styled("* marks reflexes awaiting review", t.dim())));
-        }
-        Tab::Health => {
-            v.push(k("↑ ↓", "select a check"));
-            v.push(k("Enter", "fix the selected check (⏎ marks fixable ones)"));
-            v.push(k("i", "install hooks for a harness"));
-            v.push(k("m", "fetch the embedding model"));
-            v.push(k("l", "run learn now"));
-            v.push(k("s", "open the settings"));
-            v.push(k("o", "open the fail-open log"));
-            v.push(k("R", "re-run the checks"));
-        }
-        Tab::Settings => {
-            v.push(k("↑ ↓", "select a setting"));
-            v.push(k("Enter", "edit (toggles booleans)"));
-            v.push(k("Space", "toggle on/off, or switch thresholds"));
-        }
+    let mut v = keys::overlay(&[("everywhere", keys::GLOBAL), (tab.name(), tab.keys())], t);
+    if tab == Tab::Live {
+        v.push(Line::raw(""));
+        v.extend(view::legend(t));
     }
     v
 }
 
 fn draw_modal(f: &mut Frame, area: Rect, m: &Modal, s: &AppState, t: &Theme) {
     match m {
-        Modal::Palette(p) => draw_palette(f, area, p, s, t),
-        Modal::Form(form) => {
-            let mut lines = vec![Line::raw("Paths may be absolute, relative to this repository, or start with ~/.")];
-            for (index, ((label, hint), value)) in form.kind.fields().iter().zip(&form.values).enumerate() {
-                lines.push(Line::raw(""));
-                lines.push(Line::from(Span::styled(label.to_string(), t.bold())));
-                lines.push(Line::from(Span::styled(hint.to_string(), t.dim())));
-                let style = if index == form.selected { t.selected() } else { Style::default() };
-                let cursor = if index == form.selected { "▏" } else { "" };
-                lines.push(Line::from(Span::styled(format!("> {value}{cursor}"), style)));
-            }
-            if let Some(error) = &form.error {
-                lines.push(Line::from(Span::styled(error.clone(), t.red())));
-            }
-            lines.push(Line::raw(""));
-            lines.push(Line::from(Span::styled(
-                "Tab / ↑ ↓ field · Enter next / continue · Ctrl+U clear · Esc cancel",
-                t.dim(),
-            )));
-            // Keep the focused field visible when a form is taller than the terminal.
-            let scroll = if area.height < 18 { form.selected.saturating_mul(5) as u16 } else { 0 };
-            view::popup(f, area, form.kind.title(), lines, t, scroll);
-        }
-        Modal::Help => view::popup(f, area, "help", app_help(s.tab, t), t, 0),
+        Modal::Form(form) => forms::draw(f, area, form, t),
+        Modal::Help { scroll } => view::popup_keys(f, area, app_help(s.tab, t), t, *scroll),
         Modal::Confirm { title, lines, scroll, .. } => view::popup(f, area, title, lines.clone(), t, *scroll),
         Modal::Message { title, lines, error, scroll } => {
             let style = if *error { t.red() } else { Style::default() };
             let mut ls: Vec<Line> = lines.iter().map(|l| Line::from(Span::styled(l.clone(), style))).collect();
             ls.push(Line::raw(""));
-            ls.push(Line::from(Span::styled("Enter or Esc closes", t.dim())));
+            ls.push(Line::from(Span::styled("enter or esc closes", t.dim())));
             view::popup(f, area, title, ls, t, *scroll)
         }
-        Modal::Viewer { title, lines, scroll } => {
-            let mut ls: Vec<Line> = lines.iter().map(|l| Line::raw(l.clone())).collect();
-            ls.push(Line::from(Span::styled("↑ ↓ scroll · Esc closes", t.dim())));
+        Modal::Viewer { title, source, lines, scroll } => {
+            let mut ls: Vec<Line> = Vec::new();
+            if let Some(p) = source {
+                // A long path keeps its end, the file's name: `…/adage/fail-open.log`.
+                let room = (area.width as usize).saturating_sub(8);
+                ls.push(Line::from(Span::styled(words::fit_left(p, room, t.more()), t.dim())));
+                ls.push(Line::raw(""));
+            }
+            ls.extend(lines.iter().map(|l| Line::raw(l.clone())));
+            ls.push(Line::from(Span::styled(format!("{} scroll{}esc closes", t.arrows(), t.sep()), t.dim())));
             view::popup(f, area, title, ls, t, *scroll)
         }
-        Modal::Progress { title, status, ratio, cancelable } => {
-            let r = view::centered(area, 64.min(area.width.saturating_sub(2)), 6);
+        Modal::Progress { title, status, ratio } => {
+            let r = view::centered(area, 64.min(area.width.saturating_sub(2)), 5);
             f.render_widget(ratatui::widgets::Clear, r);
             let block = Block::default()
-                .style(t.surface())
                 .borders(Borders::ALL)
-                .title(Span::styled(format!(" {title} "), t.title()));
+                .border_set(t.border())
+                .border_style(t.accent())
+                .title(Span::styled(format!(" {} ", t.text(title)), t.command().patch(t.bold())));
             let inner = block.inner(r);
             f.render_widget(block, r);
-            let [g, st, hint] =
-                Layout::vertical([Constraint::Length(1), Constraint::Length(2), Constraint::Length(1)]).areas(inner);
-            f.render_widget(Gauge::default().gauge_style(t.accent()).ratio(*ratio), g);
-            f.render_widget(Paragraph::new(Span::styled(status.clone(), t.dim())).wrap(Wrap { trim: true }), st);
+            let [g, st] = Layout::vertical([Constraint::Length(1), Constraint::Length(2)]).areas(inner);
+            // The bar as the wizard draws it, so ADAGE_ASCII reaches it too.
+            let pct = format!(" {:>3.0}%", ratio.clamp(0.0, 1.0) * 100.0);
+            let bar_w = (g.width as usize).saturating_sub(pct.len());
+            let done = (ratio.clamp(0.0, 1.0) * bar_w as f64).round() as usize;
             f.render_widget(
-                Paragraph::new(Span::styled(
-                    if *cancelable { "Esc cancels this report" } else { "Please wait while changes are saved" },
-                    t.dim(),
-                )),
-                hint,
+                Paragraph::new(Line::from(vec![
+                    Span::styled(t.ch("━", "=").repeat(done), t.accent()),
+                    Span::styled(t.ch("─", "-").repeat(bar_w - done), t.dim()),
+                    Span::styled(pct, t.dim()),
+                ])),
+                g,
             );
+            let status = if s.job_cancelable { format!("{status} · Esc cancels") } else { status.clone() };
+            f.render_widget(Paragraph::new(Span::styled(t.text(&status), t.dim())).wrap(Wrap { trim: true }), st);
         }
         Modal::Scope { harness } => view::popup(
             f,
@@ -1585,11 +854,11 @@ fn draw_modal(f: &mut Frame, area: Rect, m: &Modal, s: &AppState, t: &Theme) {
             vec![
                 Line::raw("Where should Adage's hooks be registered?"),
                 Line::raw(""),
-                Line::from(vec![Span::styled("  p  ", t.bold()), Span::raw("this repository only")]),
-                Line::from(vec![Span::styled("  u  ", t.bold()), Span::raw("user scope: every repository")]),
+                Line::from(vec![Span::styled("  p  ", t.key()), Span::raw("this repository only")]),
+                Line::from(vec![Span::styled("  u  ", t.key()), Span::raw("user scope: every repository")]),
                 Line::raw(""),
                 Line::from(Span::styled(
-                    "You will see the exact file and diff before anything is written. Esc cancels.",
+                    "You will see the exact file and diff before anything is written. esc cancels.",
                     t.dim(),
                 )),
             ],
@@ -1602,87 +871,25 @@ fn draw_modal(f: &mut Frame, area: Rect, m: &Modal, s: &AppState, t: &Theme) {
                 Line::from(Span::styled(key.to_string(), t.bold())),
                 Line::from(Span::styled(doc.to_string(), t.dim())),
                 Line::raw(""),
-                Line::from(vec![Span::raw("> "), Span::styled(format!("{buffer}▏"), t.accent())]),
+                Line::from(vec![Span::raw("> "), Span::styled(format!("{buffer}{}", t.ch("▏", "_")), t.accent())]),
             ];
             if let Some(e) = error {
                 ls.push(Line::from(Span::styled(e.clone(), t.red())));
             }
             ls.push(Line::raw(""));
-            ls.push(Line::from(Span::styled("Enter saves · Esc cancels", t.dim())));
+            ls.push(Line::from(vec![
+                Span::styled("same as ", t.dim()),
+                Span::styled(format!("adage config set {key} <value>"), t.command()),
+            ]));
+            ls.push(Line::from(Span::styled(format!("enter saves{}esc cancels", t.sep()), t.dim())));
             view::popup(f, area, "Edit setting", ls, t, 0)
         }
     }
 }
 
-fn draw_palette(f: &mut Frame, area: Rect, p: &Palette, s: &AppState, t: &Theme) {
-    let r = view::centered(area, 90.min(area.width.saturating_sub(2)), 22.min(area.height));
-    f.render_widget(ratatui::widgets::Clear, r);
-    let block = Block::default()
-        .style(t.surface())
-        .borders(Borders::ALL)
-        .border_style(t.accent())
-        .title(Span::styled(" Commands ", t.title()));
-    let inner = block.inner(r);
-    f.render_widget(block, r);
-    let [search, count, list, detail, keys] = Layout::vertical([
-        Constraint::Length(1),
-        Constraint::Length(1),
-        Constraint::Min(1),
-        Constraint::Length(if inner.height >= 12 { 3 } else { 1 }),
-        Constraint::Length(1),
-    ])
-    .areas(inner);
-    f.render_widget(
-        Paragraph::new(Line::from(vec![Span::styled(" > ", t.accent()), Span::raw(format!("{}▏", p.query))])),
-        search,
-    );
-    let entries = s.palette_entries();
-    let found = palette::matches(&entries, &p.query);
-    f.render_widget(
-        Paragraph::new(Span::styled(format!(" {} commands · type to search", found.len()), t.dim())),
-        count,
-    );
-    if found.is_empty() {
-        f.render_widget(
-            Paragraph::new(" No matches. Try “model”, “connect”, or “logs”.").wrap(Wrap { trim: true }),
-            list,
-        );
-    } else {
-        let offset = p.selected.saturating_sub(list.height.saturating_sub(1) as usize);
-        let lines: Vec<Line> = found
-            .iter()
-            .enumerate()
-            .skip(offset)
-            .take(list.height as usize)
-            .map(|(index, i)| {
-                let entry = &entries[*i];
-                let mark = if index == p.selected { "›" } else { " " };
-                let label = if list.width >= 64 {
-                    format!(" {mark} {:<14} {}", entry.group, entry.title)
-                } else {
-                    format!(" {mark} {}", entry.title)
-                };
-                Line::from(Span::styled(label, if index == p.selected { t.selected() } else { Style::default() }))
-            })
-            .collect();
-        f.render_widget(Paragraph::new(lines), list);
-        if let Some(i) = found.get(p.selected) {
-            f.render_widget(
-                Paragraph::new(Span::styled(format!(" {}", entries[*i].detail), t.dim())).wrap(Wrap { trim: true }),
-                detail,
-            );
-        }
-    }
-    let hint = if keys.width >= 64 {
-        " ↑ ↓ choose · Enter run · Ctrl+U clear · Esc close"
-    } else {
-        " ↑ ↓ choose · Enter run · Esc close"
-    };
-    f.render_widget(Paragraph::new(Span::styled(hint, t.accent())), keys);
-}
-
 /// The confirmation for an install: the exact file and a diff of what changes.
 pub fn install_confirm(p: &Plan, t: &Theme) -> Vec<Line<'static>> {
+    use super::diff::{self, Op};
     let mut lines = vec![
         Line::from(vec![Span::raw("Write "), Span::styled(p.target.display().to_string(), t.bold())]),
         Line::from(Span::styled(
@@ -1710,23 +917,12 @@ pub fn install_confirm(p: &Plan, t: &Theme) -> Vec<Line<'static>> {
     if p.harness == "codex" {
         lines.push(Line::raw("Codex then asks you to approve new hooks: open /hooks in Codex."));
     }
-    lines.push(Line::from(Span::styled("y write · n cancel · ↑ ↓ scroll", t.dim())));
+    lines.push(Line::from(Span::styled(format!("y write{s}n cancel{s}{} scroll", t.arrows(), s = t.sep()), t.dim())));
     lines
 }
 
 // ---------------------------------------------------------------------------------------------
 // Runtime
-
-/// A scripted demo can review its own fixture, but setup belongs to an explicitly opened
-/// real workspace. In particular, user-scope hook installs must never escape the demo.
-pub(super) fn needs_real_workspace(cmd: &Cmd) -> bool {
-    match cmd {
-        Cmd::PlanInstall { .. } | Cmd::PrepareTool(_) | Cmd::PreviewLearning | Cmd::HistorySources => true,
-        Cmd::Do(Action::Tool(tool)) => tool.mutates() || matches!(tool, Tool::Survey),
-        Cmd::Do(Action::Install(_) | Action::FetchModel | Action::LearnNow | Action::SetConfig { .. }) => true,
-        _ => false,
-    }
-}
 
 /// Carry out a command. Returns `true` to quit.
 fn execute(
@@ -1735,213 +931,79 @@ fn execute(
     ctx: &Ctx,
     loader: &Loader,
     job: &mut Option<Job>,
-    dashboard: &mut Option<crate::serve::Dashboard>,
+    dashboard: &mut Option<crate::map::Server>,
 ) -> bool {
     let t = &ctx.theme;
-    if ctx.demo && needs_real_workspace(&cmd) {
-        s.message("Open your repository to set up Adage", vec![
-            "You are exploring a scripted demo. Setup and learning start in your own workspace.".into(),
-            "Press : and choose Open a repository to leave the demo. Adage will use your normal data directory and keep this temporary demo separate.".into(),
-        ], false);
+    if ctx.demo
+        && matches!(
+            &cmd,
+            Cmd::PlanInstall { .. }
+                | Cmd::PreviewLearning
+                | Cmd::PrepareTool(_)
+                | Cmd::Do(Action::Install(_) | Action::FetchModel | Action::LearnNow | Action::SetConfig { .. })
+        )
+    {
+        s.message("Demo workspace", vec!["The demo uses temporary sample data. To set up your agent or condition real history, choose Open repository from the palette first.".into()], false);
         return false;
     }
     match cmd {
-        Cmd::Quit => return true,
-        Cmd::OpenRepository(_) => unreachable!("repository changes are handled by the event loop"),
-        Cmd::CancelJob => {
-            *job = None;
-            s.pending_job_action = None;
-            s.message("Report canceled", vec!["No changes were made.".into()], false);
-        }
-        Cmd::HistorySources => {
-            let mut lines = crate::detect::history_summary(&config::load(&ctx.paths).config);
-            lines.push(String::new());
-            lines.push("Use Configure Claude Code / Codex / OpenCode history to select a different folder.".into());
-            lines.push(
-                "Use Import OpenCode history to copy this repository's local sessions into an exports folder.".into(),
-            );
-            lines.push(
-                "Then Survey session history, or Learn from this repository to preview readable session counts.".into(),
-            );
-            s.modal = Some(Modal::Viewer { title: "History sources".into(), lines, scroll: 0 });
-        }
+        Cmd::OpenRepository(_) => unreachable!("handled by the event loop"),
+        Cmd::CancelJob => { *job = None; s.pending_job_action = None; s.job_cancelable = false; s.modal = None; },
+        Cmd::OpenWeb { focus, traces } => {
+            let result = (|| -> Result<String> {
+                if dashboard.is_none() { *dashboard = Some(crate::map::Server::start(ctx.paths.clone(), ctx.root.clone(), ctx.demo)?); }
+                let server = dashboard.as_ref().expect("started");
+                let url = server.url(focus.as_deref(), traces);
+                server.open(&url)?;
+                Ok(url)
+            })();
+            match result { Ok(url) => s.message("Web map opened", vec![url, "Keep this terminal app open while using the live map. Use its Traces view to inspect complete sessions.".into()], false), Err(e) => s.message("Could not open the browser", vec![format!("{e:#}"), dashboard.as_ref().map(|d|d.url(focus.as_deref(),traces)).unwrap_or_default()], true) }
+        },
         Cmd::PreviewLearning => {
-            let Some(root) = &ctx.root else {
-                s.message(
-                    "Choose a repository first",
-                    vec!["Press : and choose Open a repository, then learn from its history.".into()],
-                    false,
-                );
-                return false;
-            };
-            let j = jobs::preview_learning(ctx.paths.clone(), root.clone());
-            s.pending_job_action = Some(Action::LearnNow);
-            s.modal = Some(Modal::Progress {
-                title: j.title.clone(),
-                status: j.status.clone(),
-                ratio: 0.0,
-                cancelable: true,
-            });
-            *job = Some(j);
-        }
+            if let Some(root) = ctx.root.clone() {
+                let paths = ctx.paths.clone();
+                let j = Job::spawn("Preview conditioning sources", move |_| crate::history::preview(&paths, &root));
+                s.pending_job_action = Some(Action::LearnNow);
+                s.job_cancelable = true;
+                s.modal = Some(Modal::Progress {title:j.title.clone(),status:"Reading sources; Esc cancels".into(),ratio:0.0});
+                *job = Some(j);
+            } else { s.message("Open a repository", vec!["Choose Open repository from the palette, then Condition now.".into()],false); }
+        },
+        Cmd::PrepareTool(mut tool) => {
+            let preview = (|| -> Result<Vec<String>> {
+                let mut lines = vec![format!("Repository: {}", ctx.label)];
+                match &mut tool {
+                    Tool::AddTrack { directory, trust, expected_digest } => {
+                        *directory = tools::history_source_directory(directory, ctx.root.as_deref())?;
+                        let (summary, token) = crate::add::preview_import(directory, ctx.root.as_deref(), *trust)?;
+                        *expected_digest = Some(token); lines.extend(summary);
+                        lines.push("No execution grant is created.".into());
+                    },
+                    Tool::SetHistorySource { harness, directory } => {
+                        *directory = tools::history_source_directory(directory, ctx.root.as_deref())?;
+                        lines.push(format!("Set {harness} history to {}.", directory.display()));
+                        lines.push("This source replaces automatic detection for Sense and Condition, including background conditioning.".into());
+                    },
+                    Tool::ExportOpenCode => lines.extend(["Read OpenCode's local session list and export up to 50 sessions for this repository from the latest 500.".into(),"Copies are stored in the configured exports folder, or Adage's history/opencode folder. Run this import again for new history.".into()]),
+                    Tool::ShareTrack { track, output, .. } => lines.push(format!("Sign and export {track} to {} using your SSH signing agent.", output.display())),
+                    Tool::InstallModel(dir) => lines.push(format!("Validate and install the local embedding model from {}.",dir.display())),
+                    Tool::Delegate { reference, route, level, outputs, cache, effect } => {
+                        lines.push(format!("Grant {level} execution to {route} in {reference}."));
+                        lines.push(format!("E2 outputs: {outputs}; cache inputs: {cache}; effect: {effect}."));
+                        lines.push("Delegation authorizes hooks to execute this reflex within its approved limits. Existing policy checks still apply.".into());
+                    },
+                    Tool::Revoke { route, .. } => lines.push(format!("Withdraw the execution grant for {route}.")),
+                    Tool::Pack { name, enabled } => lines.push(format!("{} pack {name} in this repository and recompile its bindings.", if *enabled {"Enable"}else{"Disable"})),
+                    _ => {},
+                }
+                lines.push("Enter / y confirms. Esc / n cancels.".into()); Ok(lines)
+            })();
+            match preview { Ok(lines) => s.confirm(tool.title(),lines.into_iter().map(Line::raw).collect(),Action::Tool(tool)),Err(e)=>s.message("Cannot prepare action",vec![format!("{e:#}")],true) }
+        },
+        Cmd::Quit => return true,
         Cmd::Want(WantKind::Routes) => loader.want(Want::Routes),
         Cmd::Want(WantKind::Health) => loader.want(Want::Health),
-        Cmd::Refresh => {
-            loader.want(Want::Health);
-            loader.want(Want::Routes);
-            s.load_settings(&config::load(&ctx.paths));
-            s.message("Refreshing", vec!["Health, reflexes, and settings are being refreshed.".into()], false);
-        }
-        Cmd::OpenWeb | Cmd::OpenWebDemo => {
-            let demo = matches!(cmd, Cmd::OpenWebDemo);
-            if dashboard.is_none() {
-                match crate::serve::Dashboard::start(&ctx.paths) {
-                    Ok(server) => *dashboard = Some(server),
-                    Err(error) => {
-                        s.message(
-                            "Could not start the web map",
-                            vec![format!("{error:#}"), "Press w to try again.".into()],
-                            true,
-                        );
-                        return false;
-                    }
-                }
-            }
-            let server = dashboard.as_ref().unwrap();
-            match if demo { server.open_demo() } else { server.open() } {
-                Ok(url) => s.message(
-                    "Web map opened",
-                    vec![
-                        url,
-                        "Keep this terminal app open while using the dashboard.".into(),
-                        "Press w any time to open it again.".into(),
-                    ],
-                    false,
-                ),
-                Err(error) => s.message(
-                    "Web map is ready",
-                    vec![
-                        format!("Browser could not open: {error:#}"),
-                        format!("Open {} in your browser, or press w to retry.", server.url()),
-                    ],
-                    true,
-                ),
-            }
-        }
-        Cmd::PrepareTool(mut tool) => {
-            let mut lines = vec![Line::raw("Review before writing files:"), Line::raw("")];
-            match &mut tool {
-                Tool::AddTrack { directory, trust, expected_digest } => {
-                    match tools::import_summary(directory, ctx.root.as_deref()) {
-                        Ok((summary, digest)) => {
-                            lines.extend(summary.into_iter().map(Line::raw));
-                            *expected_digest = Some(digest);
-                        }
-                        Err(error) => {
-                            s.message(
-                                "Cannot import this pack",
-                                format!("{error:#}").lines().map(String::from).collect(),
-                                true,
-                            );
-                            return false;
-                        }
-                    }
-                    lines.push(Line::raw(if *trust {
-                        "Explicitly trust this signing identity for future imports: YES"
-                    } else {
-                        "Only an already trusted signing identity will be accepted."
-                    }));
-                }
-                Tool::InstallModel(source) => lines.push(Line::raw(format!(
-                    "Install model files from {} into Adage's data directory.",
-                    source.display()
-                ))),
-                Tool::ShareTrack { track, output, .. } => {
-                    lines.push(Line::raw(format!("Export {track} to {}", output.display())));
-                    lines.push(Line::raw(
-                        "Sign the copy using your SSH agent. Existing destination files are protected.",
-                    ));
-                }
-                Tool::SetHistorySource { harness, directory } => {
-                    match tools::history_source_directory(directory, ctx.root.as_deref()) {
-                        Ok(path) => *directory = path,
-                        Err(error) => {
-                            s.message("Cannot use this history folder", vec![format!("{error:#}")], true);
-                            return false;
-                        }
-                    }
-                    lines.push(Line::raw(format!("Use {} for {harness} history.", directory.display())));
-                    lines.push(Line::raw(
-                        "Save this source in Adage's config for Survey, Learn now, and automatic learning.",
-                    ));
-                    lines.push(Line::raw(
-                        "This overrides automatic detection across repositories. Original session files are unchanged.",
-                    ));
-                }
-                Tool::ExportOpenCode => {
-                    let Some(root) = &ctx.root else {
-                        s.message(
-                            "Choose a repository first",
-                            vec!["Press : and choose Open a repository before importing its history.".into()],
-                            false,
-                        );
-                        return false;
-                    };
-                    let cfg = config::load(&ctx.paths).config;
-                    let destination =
-                        cfg.learn_opencode_exports.unwrap_or_else(|| ctx.paths.root.join("history/opencode"));
-                    lines.push(Line::raw(format!("Repository: {}", root.display())));
-                    lines.push(Line::raw(
-                        "Use OpenCode's local export command to copy up to 50 matching sessions from its latest 500.",
-                    ));
-                    lines.push(Line::raw(format!(
-                        "Save or refresh exports in {} and configure this history source.",
-                        destination.display()
-                    )));
-                    lines.push(Line::raw("Original sessions are unchanged. Run Import OpenCode history again after new sessions; hooks do not export them automatically."));
-                }
-                _ => {}
-            }
-            lines.push(Line::raw(""));
-            lines.push(Line::raw("Enter / y confirm · Esc / n cancel"));
-            s.confirm(tool.title(), lines, Action::Tool(tool));
-        }
-        Cmd::OpenLearningLog => {
-            let path = ctx.paths.learn_log();
-            let lines = match std::fs::read_to_string(&path) {
-                Ok(text) => {
-                    let all: Vec<_> = text
-                        .lines()
-                        .flat_map(super::learnlog::parse)
-                        .map(|tick| {
-                            format!("{} {}", view::clock(tick.ts, ctx.tz, true), view::learning_label(&tick.text))
-                        })
-                        .collect();
-                    if all.is_empty() {
-                        vec!["No learning runs recorded yet. Use the command menu to learn from this repository.".into()]
-                    } else {
-                        all.into_iter().rev().take(500).collect()
-                    }
-                }
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                    vec!["No learning runs recorded yet. Use the command menu to learn from this repository.".into()]
-                }
-                Err(error) => vec![format!("Could not read learning history: {error}")],
-            };
-            s.modal = Some(Modal::Viewer { title: "Learning history · newest first".into(), lines, scroll: 0 });
-        }
-        Cmd::OpenFailOpen => {
-            let p = ctx.paths.root.join(crate::doctor::FAIL_OPEN_LOG);
-            let lines: Vec<String> = match std::fs::read_to_string(&p) {
-                Ok(text) => {
-                    let all: Vec<String> = text.lines().map(pretty_fail_open).collect();
-                    all[all.len().saturating_sub(200)..].to_vec()
-                }
-                Err(_) => vec!["No fail-open errors recorded.".into()],
-            };
-            let scroll = lines.len().saturating_sub(10) as u16;
-            s.modal = Some(Modal::Viewer { title: crate::detect::tilde(&p), lines, scroll });
-        }
+        Cmd::OpenFailOpen => s.modal = Some(fail_open_viewer(&ctx.paths)),
         Cmd::PlanInstall { harness, scope } => match crate::install::plan(&harness, scope, ctx.root.as_deref(), None) {
             Ok(p) => {
                 let lines = install_confirm(&p, t);
@@ -1951,38 +1013,35 @@ fn execute(
         },
         Cmd::Do(action) => match action {
             Action::Tool(tool) => {
-                let j = tools::run(ctx.paths.clone(), ctx.root.clone(), tool);
-                s.modal = Some(Modal::Progress {
-                    title: j.title.clone(),
-                    status: j.status.clone(),
-                    ratio: 0.0,
-                    cancelable: j.cancelable,
-                });
-                *job = Some(j);
-            }
+                if ctx.demo && tool.mutates() { s.message("Demo workspace",vec!["Choose Open repository to work with your own data.".into()],false); return false; }
+                let j=tools::run(ctx.paths.clone(),ctx.root.clone(),tool);
+                s.job_cancelable=j.cancelable;
+                s.modal=Some(Modal::Progress{title:j.title.clone(),status:j.status.clone(),ratio:0.0}); *job=Some(j);
+            },
             Action::Review { verb, reference, route, expected_revision } => {
+                // `crate::review` takes the lexicon's verbs.
                 match crate::review::decide_quietly(verb, &reference, &route, &expected_revision, &ctx.paths) {
-                    Ok(lines) => s.message("Review recorded", lines, false),
+                    Ok(_) => s.toast(format!("{route}: {} recorded", words::verb(verb)), true),
                     Err(e) => s.message("Refused", vec![format!("{e:#}")], true),
                 }
                 loader.want(Want::Routes);
                 loader.want(Want::Health);
             }
             Action::Install(p) => {
-                match crate::install::apply(&p) {
-                    Ok(()) => {
+                match crate::install::apply_backed_up(&p) {
+                    Ok(backup) => {
                         let mut lines = vec![format!("wrote {}", p.target.display())];
+                        if let Some(b) = backup {
+                            lines.push(format!("the previous version is in {}", b.display()));
+                        }
                         if p.harness == "codex" {
                             lines.push(
                                 "Codex asks you to review new hooks before they run: open /hooks in Codex.".into(),
                             );
                         }
-                        lines.push("Registration saved. Start a new agent session in this repository, then check Health for the first hook receipt.".into());
-                        lines.extend(crate::detect::history_summary(&config::load(&ctx.paths).config));
-                        lines.push(
-                            "Next: History sources → Survey session history → Learn from this repository.".into(),
-                        );
-                        s.message("Hooks registered · awaiting activity", lines, false)
+                        lines.push("Hooks are registered. Health shows whether the first hook has arrived.".into());
+                        lines.push("Next: History sources in the palette, then Condition now and Review in Reflexes.".into());
+                        s.message("Hooks registered", lines, false)
                     }
                     Err(e) => s.message("Not written", vec![format!("{e:#}")], true),
                 }
@@ -1990,36 +1049,29 @@ fn execute(
             }
             Action::FetchModel => {
                 let j = jobs::fetch_model(ctx.paths.clone());
-                s.modal = Some(Modal::Progress {
-                    title: j.title.clone(),
-                    status: j.status.clone(),
-                    ratio: 0.0,
-                    cancelable: j.cancelable,
-                });
+                s.modal = Some(Modal::Progress { title: j.title.clone(), status: j.status.clone(), ratio: 0.0 });
                 *job = Some(j);
             }
-            Action::LearnNow => {
-                if ctx.root.is_none() {
-                    s.message(
-                        "Choose a repository first",
-                        vec!["Press : and choose Open a repository, then learn from its traces.".into()],
-                        false,
-                    );
-                    return false;
+            Action::LearnNow => match ctx.root.clone() {
+                Some(root) => {
+                    let j = tools::run(ctx.paths.clone(), Some(root), Tool::Condition);
+                    s.modal = Some(Modal::Progress { title: j.title.clone(), status: j.status.clone(), ratio: 0.0 });
+                    *job = Some(j);
                 }
-                let j = jobs::learn_now(ctx.paths.clone(), ctx.root.clone());
-                s.modal = Some(Modal::Progress {
-                    title: j.title.clone(),
-                    status: j.status.clone(),
-                    ratio: 0.0,
-                    cancelable: j.cancelable,
-                });
-                *job = Some(j);
-            }
+                None => s.message(
+                    "Not inside a repository",
+                    vec!["Conditioning reads one repository's traces: open adage inside one, or run `adage condition --all` for every repository's.".into()],
+                    true,
+                ),
+            },
             Action::SetConfig { key, value } => {
                 // `adage config set`'s own guard and validation.
                 let set = crate::share::require_person("config set")
                     .and_then(|()| config::set(&ctx.paths, key, &value).map_err(|e| anyhow::anyhow!(e)));
+                // Turning rewrites on clears the older marker too, as `adage delegate rewrites on`.
+                if key == "runtime.rewrite" && value == "true" && set.is_ok() {
+                    let _ = std::fs::remove_file(adage_hook::rewrite_off(&ctx.paths));
+                }
                 let loaded = config::load(&ctx.paths);
                 s.load_settings(&loaded);
                 match set {
@@ -2030,6 +1082,8 @@ fn execute(
                                 vec![format!("{key} = {stored} is in config.toml, but {src} overrides it: the effective value is {v}.")],
                                 false,
                             );
+                        } else {
+                            s.toast(format!("{key} = {stored}"), true);
                         }
                     }
                     Err(e) => s.modal = Some(Modal::Edit { key, buffer: value, error: Some(format!("{e:#}")) }),
@@ -2039,6 +1093,20 @@ fn execute(
         },
     }
     false
+}
+
+/// The fail-open log, newest at the bottom: titled for what it is, the file named inside.
+pub fn fail_open_viewer(paths: &adage_store::Paths) -> Modal {
+    let p = paths.root.join(crate::doctor::FAIL_OPEN_LOG);
+    let lines: Vec<String> = match std::fs::read_to_string(&p) {
+        Ok(text) => {
+            let all: Vec<String> = text.lines().map(pretty_fail_open).collect();
+            all[all.len().saturating_sub(200)..].to_vec()
+        }
+        Err(_) => vec!["No fail-open errors recorded.".into()],
+    };
+    let scroll = lines.len().saturating_sub(10) as u16;
+    Modal::Viewer { title: "Fail-open errors".into(), source: Some(crate::detect::tilde(&p)), lines, scroll }
 }
 
 fn pretty_fail_open(line: &str) -> String {
@@ -2057,16 +1125,32 @@ fn pretty_fail_open(line: &str) -> String {
     }
 }
 
-pub fn run(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>) -> Result<()> {
+pub fn run(ctx: Ctx, before_tick: Option<Box<dyn FnMut()>>) -> Result<()> {
+    run_inner(ctx, before_tick, false, false)
+}
+pub(super) fn from_watch(ctx: Ctx, before_tick: Option<Box<dyn FnMut()>>, web: bool) -> Result<()> {
+    run_inner(ctx, before_tick, true, web)
+}
+fn run_inner(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>, from_watch: bool, web: bool) -> Result<()> {
     let mut loader = Loader::spawn(ctx.paths.clone(), ctx.root.clone());
+    // The Live tab's review count and the palette's reflexes need them from the start.
     loader.want(Want::Routes);
     let mut sources = Sources::new(&ctx);
     let mut s = AppState::new(ctx.paths.config());
+    s.rewrite_marker = Some(adage_hook::rewrite_off(&ctx.paths));
     s.load_settings(&config::load(&ctx.paths));
     let mut job: Option<Job> = None;
-    let mut dashboard: Option<crate::serve::Dashboard> = None;
+    let mut dashboard = None;
     let mut ctx = ctx;
     let mut t = Term::enter()?;
+    if from_watch {
+        s.tab = Tab::Live;
+        if web {
+            execute(Cmd::OpenWeb { focus: None, traces: false }, &mut s, &ctx, &loader, &mut job, &mut dashboard);
+        } else {
+            s.palette = Some(Palette::default());
+        }
+    }
     let mut ticks = 0u64;
     loop {
         if let Some(f) = before_tick.as_mut() {
@@ -2081,15 +1165,13 @@ pub fn run(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>) -> Result<()> {
                     ctx.tz = view::local_offset();
                 }
                 Loaded::Routes(r) => {
-                    // Keep the selection on the same route across reloads.
-                    let keep = s.selected_route().map(|r| (r.reference.clone(), r.id.clone()));
-                    s.routes = Some(r);
-                    if let Some((reference, id)) = keep {
-                        if let Some(i) = s.route_rows().iter().position(|r| r.reference == reference && r.id == id) {
-                            s.route_sel = i;
-                        }
+                    if let Ok(rs) = &r {
+                        s.live.waiting = Some(rs.waiting());
+                        s.live.quiet = rs.quiet();
+                        s.live.needs = rs.needs();
+                        s.live.gists = rs.gists();
                     }
-                    s.route_sel = s.route_sel.min(s.route_rows().len().saturating_sub(1));
+                    s.routes = Some(r);
                 }
             }
         }
@@ -2099,9 +1181,9 @@ pub fn run(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>) -> Result<()> {
                     let title = j.title.clone();
                     job = None;
                     s.complete_job(&title, done);
+                    s.load_settings(&config::load(&ctx.paths));
                     loader.want(Want::Health);
                     loader.want(Want::Routes);
-                    s.load_settings(&config::load(&ctx.paths));
                 }
                 None => {
                     if let Some(Modal::Progress { status, ratio, .. }) = &mut s.modal {
@@ -2113,7 +1195,9 @@ pub fn run(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>) -> Result<()> {
         }
         let key = s.health.as_ref().and_then(|h| h.repo_key.clone());
         sources.poll(&mut s.live, key.as_deref());
+        s.live.tick_pulse(Instant::now(), ctx.theme.motion);
         ticks += 1;
+        s.tick();
         if ticks.is_multiple_of(20) {
             s.load_settings(&config::load(&ctx.paths));
         }
@@ -2123,35 +1207,28 @@ pub fn run(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>) -> Result<()> {
             s.notices.drain(..extra);
         }
         t.terminal.draw(|f| draw(f, &s, &ctx))?;
-        if let Some(k) = term::next_key()? {
+        if let Some(k) = term::next_key_within(watch::wait(&s.live))? {
             if let Some(cmd) = s.key(k.code, k.modifiers) {
                 if let Cmd::OpenRepository(directory) = cmd {
                     match repository_context(&ctx, &directory) {
                         Ok(next) => {
-                            let leaving_demo = ctx.demo;
-                            if leaving_demo {
-                                // The old server owns the temporary demo paths. A later w opens a
-                                // server on the user's persistent data, never the demo directory.
-                                dashboard = None;
-                            }
+                            // Stop the old server and demo player before changing any data source.
+                            dashboard = None;
+                            before_tick = None;
+                            job = None;
                             loader = Loader::spawn(next.paths.clone(), next.root.clone());
                             loader.want(Want::Routes);
                             sources = Sources::new(&next);
                             s = AppState::new(next.paths.config());
+                            s.rewrite_marker = Some(adage_hook::rewrite_off(&next.paths));
                             s.load_settings(&config::load(&next.paths));
                             ctx = next;
-                            if leaving_demo {
-                                s.message("Your workspace is open", vec![
-                                    format!("Repository: {}", ctx.label),
-                                    format!("Adage data: {}", ctx.paths.root.display()),
-                                    "You have left the demo. Choose Connect your agent, then History sources in the command palette.".into(),
-                                ], false);
-                            }
+                            s.message("Repository opened",vec![format!("Repository: {}",ctx.label),format!("Adage data: {}",ctx.paths.root.display()),"Choose Connect your agent, then History sources and Condition now from the palette.".into()],false);
                         }
-                        Err(error) => {
+                        Err(e) => {
                             let mut form = Form::new(FormKind::OpenRepository);
                             form.values[0] = directory.display().to_string();
-                            form.error = Some(format!("{error:#}"));
+                            form.error = Some(format!("{e:#}"));
                             s.modal = Some(Modal::Form(form));
                         }
                     }
@@ -2184,7 +1261,9 @@ pub(super) fn repository_context(ctx: &Ctx, directory: &std::path::Path) -> Resu
     }
     let root = adage_core::repo::find_root(&path)
         .context("That folder is not inside a Git repository. Choose a repository folder.")?;
-    if ctx.demo && ctx.root.as_ref().is_some_and(|demo_root| root.starts_with(demo_root)) {
+    if ctx.demo
+        && ctx.root.as_ref().and_then(|p| p.canonicalize().ok()).is_some_and(|demo_root| root.starts_with(demo_root))
+    {
         anyhow::bail!("This is the temporary demo repository. Choose your own repository folder to leave the demo.");
     }
     let paths = if ctx.demo { adage_store::Paths::from_env() } else { ctx.paths.clone() };

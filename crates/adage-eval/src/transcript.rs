@@ -5,7 +5,7 @@
 //! `PostToolBatch`, each call's failure for `PostToolUseFailure`, and the tool response text the
 //! hook payload carried (`toolUseResult`, which for `Read` has no text at all). This module keeps
 //! that structure, and converts it into the runtime's [`Event`]s exactly as the Claude Code
-//! adapter does (`crates/adage-cli/src/harness/claude.rs`).
+//! adapter does (`crates/adage-hook/src/harness/claude.rs`).
 
 use adage_runtime::{Call, Event};
 use serde_json::Value;
@@ -35,7 +35,7 @@ pub struct Transcript {
     pub id: String,
     pub cwd: String,
     pub items: Vec<Item>,
-    /// The session received Adage directives (hook attachments carrying `<adage-signal`).
+    /// The session received Adage directives (hook attachments carrying `<adage-reflex`).
     pub steered: bool,
     pub directed: BTreeSet<String>,
 }
@@ -146,13 +146,26 @@ pub fn parse(text: &str) -> Option<Transcript> {
         }
         let typ = rec.get("type").and_then(Value::as_str).unwrap_or("");
         if matches!(typ, "attachment" | "system") {
-            if line.contains("<adage-signal") {
+            // Only hook output steers (`adage_learn::import`): an edited file's snippet that
+            // quotes the wrapper does not.
+            let hook_output = match typ {
+                "attachment" => rec["attachment"]["type"].as_str().is_some_and(|t| t.starts_with("hook")),
+                _ => rec.get("subtype").and_then(Value::as_str).is_some_and(|t| t.contains("hook")),
+            };
+            if !hook_output {
+                continue;
+            }
+            if line.contains("<adage-reflex") {
                 steered = true;
                 route_ids(line, &mut directed);
             }
             if line.contains("Adage finish-line check") {
                 steered = true;
                 directed.insert("finish-line-stop".into());
+            }
+            // A receipt for work Adage already ran (PreToolUse): Adage's text too.
+            if line.contains("<adage-receipt") {
+                steered = true;
             }
             continue;
         }

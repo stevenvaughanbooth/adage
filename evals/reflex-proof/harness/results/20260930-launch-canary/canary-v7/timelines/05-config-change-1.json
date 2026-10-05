@@ -1,0 +1,310 @@
+{
+ "arm": "automatic",
+ "events": [
+  {
+   "adage_pre_context": false,
+   "command": null,
+   "completed": true,
+   "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+   "id": "toolu_01GAW1sNsrqEBh7gR3TEMWpu",
+   "kind": "tool",
+   "name": "Read",
+   "path": null,
+   "receipt_note": false
+  },
+  {
+   "adage_pre_context": false,
+   "command": null,
+   "completed": true,
+   "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+   "id": "toolu_01HqwPGVrMGje5agu59w6Mid",
+   "kind": "tool",
+   "name": "Read",
+   "path": null,
+   "receipt_note": false
+  },
+  {
+   "adage_pre_context": false,
+   "command": "wc -l <repo>/src/marshmallow/validate.py",
+   "completed": true,
+   "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+   "id": "toolu_013dAkCHPv6QM1oTuLEzuj8B",
+   "kind": "tool",
+   "name": "Bash",
+   "path": null,
+   "receipt_note": false
+  },
+  {
+   "adage_pre_context": false,
+   "command": null,
+   "completed": true,
+   "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+   "id": "toolu_01DGcpH2wjGkHeKSkGHZbWjx",
+   "kind": "tool",
+   "name": "Read",
+   "path": null,
+   "receipt_note": false
+  },
+  {
+   "adage_pre_context": false,
+   "command": null,
+   "completed": true,
+   "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+   "id": "toolu_01D1krHgd6yDtXDNeqAcodee",
+   "kind": "tool",
+   "name": "Read",
+   "path": null,
+   "receipt_note": false
+  },
+  {
+   "adage_pre_context": false,
+   "command": "tail -20 <repo>/src/marshmallow/validate.py",
+   "completed": true,
+   "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+   "id": "toolu_018CaPkSGDty5SKdtAhSp8rt",
+   "kind": "tool",
+   "name": "Bash",
+   "path": null,
+   "receipt_note": false
+  },
+  {
+   "adage_pre_context": false,
+   "command": null,
+   "completed": true,
+   "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+   "id": "toolu_01MZ3X6dLvhAeGjNs662LgCP",
+   "kind": "tool",
+   "name": "Read",
+   "path": null,
+   "receipt_note": false
+  },
+  {
+   "adage_pre_context": false,
+   "command": null,
+   "completed": true,
+   "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+   "id": "toolu_011qpHu81fJBxcz991c3WXrW",
+   "kind": "tool",
+   "name": "Edit",
+   "path": "src/marshmallow/validate.py",
+   "receipt_note": false
+  },
+  {
+   "adage_pre_context": false,
+   "command": null,
+   "completed": true,
+   "digest": "31eb5bf7f494e4a4b93d5e00bcb8f72c22053fd4e7ab67c6599124d7ae16657a",
+   "id": "toolu_01QAKaHU4eToSA5Hf7Tr5BUK",
+   "kind": "tool",
+   "name": "Edit",
+   "path": "src/marshmallow/validate.py",
+   "receipt_note": false
+  },
+  {
+   "adage_pre_context": false,
+   "command": null,
+   "completed": true,
+   "digest": "7e0d0584acfbda790532cf2b9bac710c007b080ffe2620f6c6a58594ccbe0808",
+   "id": "toolu_01UE5Qda5PqH7nguhToFd15J",
+   "kind": "tool",
+   "name": "Read",
+   "path": null,
+   "receipt_note": false
+  },
+  {
+   "adage_pre_context": false,
+   "command": "tail -30 <repo>/tests/test_validate.py",
+   "completed": true,
+   "digest": "7e0d0584acfbda790532cf2b9bac710c007b080ffe2620f6c6a58594ccbe0808",
+   "id": "toolu_01GBEWwHcLrhDVrsG4VgRwkW",
+   "kind": "tool",
+   "name": "Bash",
+   "path": null,
+   "receipt_note": false
+  },
+  {
+   "adage_pre_context": false,
+   "command": "wc -l <repo>/tests/test_validate.py",
+   "completed": true,
+   "digest": "7e0d0584acfbda790532cf2b9bac710c007b080ffe2620f6c6a58594ccbe0808",
+   "id": "toolu_01P5u5rUGSznq6Jogt8LSTEY",
+   "kind": "tool",
+   "name": "Bash",
+   "path": null,
+   "receipt_note": false
+  },
+  {
+   "adage_pre_context": false,
+   "command": null,
+   "completed": true,
+   "digest": "7e0d0584acfbda790532cf2b9bac710c007b080ffe2620f6c6a58594ccbe0808",
+   "id": "toolu_014WSYtSATmYmkSroqKFUmRs",
+   "kind": "tool",
+   "name": "Read",
+   "path": null,
+   "receipt_note": false
+  },
+  {
+   "adage_pre_context": false,
+   "command": "tail -5 <repo>/tests/test_validate.py",
+   "completed": true,
+   "digest": "7e0d0584acfbda790532cf2b9bac710c007b080ffe2620f6c6a58594ccbe0808",
+   "id": "toolu_01TU1thsWHdLtrcdrXqfDTuH",
+   "kind": "tool",
+   "name": "Bash",
+   "path": null,
+   "receipt_note": false
+  },
+  {
+   "adage_pre_context": false,
+   "command": null,
+   "completed": true,
+   "digest": "7e0d0584acfbda790532cf2b9bac710c007b080ffe2620f6c6a58594ccbe0808",
+   "id": "toolu_01FN7AmYHgUPmMLRNHtkYPMo",
+   "kind": "tool",
+   "name": "Edit",
+   "path": "tests/test_validate.py",
+   "receipt_note": false
+  },
+  {
+   "adage_pre_context": false,
+   "command": null,
+   "completed": true,
+   "digest": "15f30313fffab3de7c2315d081edf95a045915a43be47eda85094a2f38dce127",
+   "id": "toolu_01E4uPVwXwQvLbmhUjKAd99v",
+   "kind": "tool",
+   "name": "Read",
+   "path": null,
+   "receipt_note": false
+  },
+  {
+   "adage_pre_context": false,
+   "command": null,
+   "completed": true,
+   "digest": "15f30313fffab3de7c2315d081edf95a045915a43be47eda85094a2f38dce127",
+   "id": "toolu_01GuPbgGvnu1jznd9XG7BqFt",
+   "kind": "tool",
+   "name": "Edit",
+   "path": "CHANGELOG.rst",
+   "receipt_note": false
+  },
+  {
+   "changed": [
+    ".pytest_cache/.gitignore",
+    ".pytest_cache/CACHEDIR.TAG",
+    ".pytest_cache/README.md",
+    ".pytest_cache/v/cache/nodeids"
+   ],
+   "command": ".venv/bin/python -m pytest tests/test_validate.py -q",
+   "completion_delivered": true,
+   "digest": "3c439e3e6151b1b20f979e612f24510fb3a0c03e4500a814d2553aeee3e8ba67",
+   "kind": "receipt",
+   "operation": "73302ea55d897391b9343e14963919bc80592d26938177899cc1fdfae7181560",
+   "outcome": "applied",
+   "phase": "completed",
+   "route": "github-com-marshmallow-code-marshmallow/learned/run-175d85"
+  },
+  {
+   "adage_pre_context": false,
+   "command": null,
+   "completed": true,
+   "digest": "3c439e3e6151b1b20f979e612f24510fb3a0c03e4500a814d2553aeee3e8ba67",
+   "id": "toolu_01JSWmAkBiqECVr9RxWyVqLt",
+   "kind": "tool",
+   "name": "Grep",
+   "path": null,
+   "receipt_note": false
+  },
+  {
+   "adage_pre_context": false,
+   "command": null,
+   "completed": true,
+   "digest": "3c439e3e6151b1b20f979e612f24510fb3a0c03e4500a814d2553aeee3e8ba67",
+   "id": "toolu_0116mSjvrAz3YraWUbMR5sd3",
+   "kind": "tool",
+   "name": "Read",
+   "path": null,
+   "receipt_note": false
+  },
+  {
+   "adage_pre_context": false,
+   "command": null,
+   "completed": true,
+   "digest": "3c439e3e6151b1b20f979e612f24510fb3a0c03e4500a814d2553aeee3e8ba67",
+   "id": "toolu_017eERvp1oSe5VVF1uqkasPF",
+   "kind": "tool",
+   "name": "Edit",
+   "path": "pyproject.toml",
+   "receipt_note": false
+  },
+  {
+   "adage_pre_context": true,
+   "command": "python -m pytest tests/test_validate.py::test_finite_accepts_finite_numbers tests/test_validate.py::test_finite_rejects_nan_and_infinities tests/test_validate.py::test_finite_custom_message -xvs",
+   "completed": false,
+   "digest": "d8773963e6afae8b904021287e19af0d461c47c01cecac0636bac86c1c06b997",
+   "id": "toolu_01Y2tVieo5YRyKz8M8K2h1nB",
+   "kind": "tool",
+   "name": "Bash",
+   "path": null,
+   "receipt_note": false
+  },
+  {
+   "adage_pre_context": false,
+   "command": ".venv/bin/python -m pytest tests/test_validate.py::test_finite_accepts_finite_numbers tests/test_validate.py::test_finite_rejects_nan_and_infinities tests/test_validate.py::test_finite_custom_message -xvs",
+   "completed": true,
+   "digest": "d8773963e6afae8b904021287e19af0d461c47c01cecac0636bac86c1c06b997",
+   "id": "toolu_01RWBfBCvxGQYQWEnLt7GawS",
+   "kind": "tool",
+   "name": "Bash",
+   "path": null,
+   "receipt_note": false
+  },
+  {
+   "adage_pre_context": false,
+   "command": ".venv/bin/python -m pytest tests/test_validate.py -q",
+   "completed": true,
+   "digest": "d8773963e6afae8b904021287e19af0d461c47c01cecac0636bac86c1c06b997",
+   "id": "toolu_012KtQJiQswVBBtxHGrXb7vD",
+   "kind": "tool",
+   "name": "Bash",
+   "path": null,
+   "receipt_note": false
+  },
+  {
+   "adage_pre_context": false,
+   "command": ".venv/bin/python -c \"from marshmallow.validate import Finite; v = Finite(); print(f'Finite validator created: {v}'); print(f'Valid: {v(42)}'); import math; print(f'Invalid (inf): {repr(v(float(\\\"inf\\\")))}')\" 2>&1 | grep -v \"No entry for terminal\"",
+   "completed": true,
+   "digest": "d8773963e6afae8b904021287e19af0d461c47c01cecac0636bac86c1c06b997",
+   "id": "toolu_01TCXdPsmvDQHJRJm9TrNo2v",
+   "kind": "tool",
+   "name": "Bash",
+   "path": null,
+   "receipt_note": false
+  },
+  {
+   "adage_pre_context": false,
+   "command": ".venv/bin/python -c \"from marshmallow.validate import Finite; v = Finite(); print(f'Valid int: {v(0)}'); print(f'Valid float: {v(-1.25)}'); print(f'Valid large: {v(1e300)}'); print('Finite validator works correctly!')\" 2>&1 | grep -v \"No entry for terminal\"",
+   "completed": true,
+   "digest": "d8773963e6afae8b904021287e19af0d461c47c01cecac0636bac86c1c06b997",
+   "id": "toolu_01AjbU2ugyCuu5m9ct2r7Jqc",
+   "kind": "tool",
+   "name": "Bash",
+   "path": null,
+   "receipt_note": false
+  },
+  {
+   "adage_pre_context": false,
+   "command": "git diff --stat",
+   "completed": true,
+   "digest": "d8773963e6afae8b904021287e19af0d461c47c01cecac0636bac86c1c06b997",
+   "id": "toolu_01YQtmviQhW23wumPeVWSeLB",
+   "kind": "tool",
+   "name": "Bash",
+   "path": null,
+   "receipt_note": false
+  }
+ ],
+ "final_digest": "d8773963e6afae8b904021287e19af0d461c47c01cecac0636bac86c1c06b997",
+ "root": "<repo>",
+ "session": "05-config-change-1"
+}

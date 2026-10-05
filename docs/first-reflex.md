@@ -1,0 +1,166 @@
+# Your first useful reflex
+
+Adage is an unreleased developer preview. Start with ordinary work in one repository: available
+instincts help immediately, while repeated agent sessions supply evidence for learned reflexes. A
+learned candidate is not automatically permission to run its command.
+
+## Connect and learn
+
+Nothing is published yet (no release binaries, Homebrew tap, npm package or plugin marketplace),
+so build the CLI from source. The repository is private for now, so this requires access to it:
+
+```sh
+cargo install --locked --path crates/adage-cli
+cd /path/to/your/repository
+adage init
+```
+
+Run `init` in your own terminal. Its interactive wizard shows the hook configuration before
+installing it and offers to learn this repository's existing sessions. A run inside an agent or
+with `--print` is a preview, not completed setup, and `init --yes` registers no hooks (it ends by
+saying so, with the `adage install <harness> --write` that does). If you already installed the
+Claude Code plugin, or registered the hooks for every repository (`--scope user`), Adage keeps that
+registration and does not add a second copy of the same hooks; `adage doctor` flags one made by hand.
+
+```sh
+adage doctor
+adage condition --repo-root .
+adage review
+```
+
+`doctor` identifies connection or model problems and gives their fixes. `condition --repo-root .`
+imports the supported existing history recorded in this repository (any of its checkouts) and
+binds applicable instincts; without `--repo-root` it conditions every repository your history
+holds. `review` explains candidates and their evidence. It is fine to have no candidates: a fresh repository can have instincts without learned
+behavior, and inconsistent or insufficient history should not produce an automatic action.
+
+Start a normal coding session. `adage watch` shows activity alongside it; `adage ui` brings review,
+health and settings together. After additional sessions, let background learning run or condition
+again. There is no universal number of sessions that guarantees a reflex. Our guided ten-session
+example is an evaluation result, not an onboarding requirement.
+
+## Understand what is active
+
+| What you see | What happens | What to check |
+|---|---|---|
+| Instinct or learned guidance | The agent receives context and still chooses its action | Relevant guidance appears in a normal session |
+| Learned execution candidate | A supported routine has evidence; it stays silent without a matching execution grant | Review its trigger, command and supporting histories |
+| Approved CPU action | The execution companion can run it when the trigger and all checks pass | A successful execution result appears and the agent uses it |
+
+`adage review approve` accepts evidence or a proposed reflex change. It does **not** grant script
+execution. `adage delegate on` connects the execution companion. It does **not** approve every reflex.
+
+## Enable one verification reflex
+
+Automatic execution currently requires macOS or Linux, including WSL. Build the companion beside
+the CLI if your installation does not supply it:
+
+```sh
+# Run from the Adage source checkout.
+cargo install --locked --path crates/adage-exec
+```
+
+Use your own terminal for the following decisions. Review the candidate in its target repository.
+Verification actions require an explicit E2 opt-in on this machine:
+
+```sh
+adage delegate policy --max-level e2
+```
+
+It writes these settings under `[exec]` in your personal policy file and prints its path
+(`$ADAGE_HOME/policy.toml`, or the default Adage data directory if no override is set), keeping
+any other policy in it:
+
+```toml
+[exec]
+max_level = "E2"
+auto_approve = "off"
+require_sandbox = true
+```
+
+It refuses to run inside an agent session. `adage delegate policy` shows the current policy;
+`--max-level e1` turns actions back off. A managed policy can still prohibit E2. This opt-in
+enables review of actions; each reflex still needs its own grant. See
+[execution policy](execution.md#policy) for precedence and default locations.
+
+For a learned pytest verification candidate, substitute the actual track and reflex shown by
+`adage review` into this example. Declare only caches that command needs:
+
+```sh
+adage review delegate TRACK REFLEX --level e2 --effect verify \
+  --cache '.pytest_cache/**' --cache '.pytest_cache/.gitignore' \
+  --cache 'tests/__pycache__/**' \
+  --cache 'src/**/__pycache__/**' --timeout-ms 20000 --repo .
+adage delegate on --repo .
+adage delegate status --repo .
+```
+
+20 seconds is the most an E2 action may run (it runs inside a hook); a larger `--timeout-ms` is
+lowered to it, and the approval says so. The approval command stages the action and validates
+its behavior before saving a grant. A failed
+stage or policy check saves no approval. Verify actions cannot apply source changes. Use explicit
+repository directories for cache globs; `**/__pycache__/**` at the root is intentionally rejected.
+Pytest's named cache is a narrow exception for caches, not permission for arbitrary hidden outputs.
+Its hidden `.gitignore` needs the explicit declaration shown above because wildcard matching
+does not implicitly include hidden files. The repository's own `.gitignore` remains protected.
+
+An E1 lookup has a different output contract; do not use these E2 flags for it. The full
+[execution guide](execution.md) covers bounded complete results, scripts, policy and revocation.
+
+## What happens in your next session
+
+Start a new agent session after `adage delegate on`. In Claude Code and Codex, Adage now owns that
+one verification:
+
+- **At the start**, the agent gets a short note: which command Adage runs (approved by you,
+  sandboxed), after which edits, and that Adage runs it again when the agent finishes if files
+  changed. Control sessions, about one in ten, get no note and run nothing, so the effect can be
+  measured.
+- **After the matching edits**, Adage runs the command and gives the agent a receipt: the result,
+  exit code, time, a receipt id, how many tests pytest collected and, by name, the tests the agent
+  added in this session. If the agent then starts a test run the fresh receipt already covers, it
+  gets a note saying so; the call still runs if it is made.
+- **When the agent finishes**, if the check has not passed on the files as they are now, Adage
+  runs it again. Passed: you see one line, such as ``adage: ran `.venv/bin/python -m pytest tests
+  -q` at finish: passed (exit 0, 1.0 s).`` Failed: the agent is asked once to continue, with the
+  failing tests named, in a message that begins `Adage finish-line check:` and says it is from
+  Adage, not from you. A second failure ends the turn with one line for you; the check runs at
+  most twice per session.
+- **If your approval lapses**, because the command, a pinned script or the Python environment
+  changed, nothing runs and you are told in one line (Claude Code; the agent never sees it), at
+  most once per session: which approval, what changed, and the exact `adage review delegate …`
+  command that approves it again. Check the change before you run it. `adage delegate status`
+  lists every lapsed approval.
+
+## Recognize success—and recover
+
+Perform a normal task that fits the learned context. A successful CPU execution is one observation;
+the useful outcome is that the agent consumes the result and avoids repeating the action. If it
+runs the same check again, do not count that as saved work. Model-request counts and API costs
+also do not measure physical GPU utilization or energy. So far, agents in the
+[real-repository studies](../evals/reflex-proof/LAUNCH-STATUS.md) repeated the check in every
+transfer session (0/4 eliminations); one development study on a single task used fewer model
+requests with this design; on four held-out tasks it used 0.67× the agent alone's requests but
+passed hidden tests 17/20 against 19/20, so execution mode is not yet proven to keep quality.
+Advisory mode alone used 0.78× with the same 19/20 ([README](../README.md#evidence-so-far)).
+
+If nothing executes, check `adage delegate status`, `adage review`, and `adage doctor`: a missing
+grant, policy ceiling, unmatched context, changed command or dependency, stale grant, sandbox
+failure or duplicate suppression can all correctly withhold an action. Inspect the reported reason
+before changing thresholds. Continue ordinary work while evidence accumulates.
+
+If Adage cannot confirm that an action completed, the agent is told not to retry it, and actions
+in that worktree pause. Inspect it with `adage-exec journal --repo .`, then acknowledge with
+`adage-exec recover --id <id> --acknowledge`; acknowledging confirms neither success nor rollback.
+
+To stop automatic actions, run `adage delegate off --repo .`. To withdraw one permission, run
+`adage review revoke TRACK REFLEX --repo .`. Importing or sharing a reflex never transfers your
+machine's execution grants.
+
+To remove Adage's hooks, run `adage install claude-code --remove` (add `--scope user` for the
+registration in `~/.claude/settings.json`; `codex` and `opencode` work the same way). It shows the
+diff, keeps the previous file as `<file>.adage-bak`, and leaves your own hooks and settings as they
+were. Adage's data stays in its data directory until you delete it. If you installed the Claude
+Code plugin (its marketplace is not published yet), use `/plugin uninstall adage@adage`.
+
+For measured results and remaining release gates, see [launch status](../evals/reflex-proof/LAUNCH-STATUS.md).

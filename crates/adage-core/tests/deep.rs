@@ -1,7 +1,7 @@
 //! Regression: deeply nested shell must not exhaust the stack (found by the adage-eval property
 //! tests). A 15 KB `a && a && … && ls` — within `MAX_COMMAND`, and not bracket nesting, so
 //! `too_deep` let it through — overflowed even an 8 MiB stack: the hook process aborted, and so
-//! did `adage learn` over any history containing such a command.
+//! did `adage condition` over any history containing such a command.
 
 use adage_core::shell::normalize_shell;
 use adage_core::CommandTable;
@@ -9,7 +9,7 @@ use adage_core::CommandTable;
 fn on_small_stack(cmd: String) -> usize {
     std::thread::Builder::new()
         .stack_size(1 << 20)
-        .spawn(move || normalize_shell(&cmd, "/repo", &CommandTable::load()).len())
+        .spawn(move || normalize_shell(&cmd, "/repo", CommandTable::load()).len())
         .unwrap()
         .join()
         .expect("normalize_shell must not panic or overflow")
@@ -45,11 +45,11 @@ fn pathological_input_is_normalised_quickly() {
     }
     // A long alternation in quotes is one argument, not a pipeline.
     let grep = format!("grep -E \"{}\" x.txt", "ab|".repeat(1000));
-    assert_eq!(normalize_shell(&grep, "/repo", &CommandTable::load()).len(), 1);
+    assert_eq!(normalize_shell(&grep, "/repo", CommandTable::load()).len(), 1);
 }
 
 fn notes(cmd: &str) -> Vec<String> {
-    normalize_shell(cmd, "/repo", &CommandTable::load()).into_iter().map(|n| n.note).collect()
+    normalize_shell(cmd, "/repo", CommandTable::load()).into_iter().map(|n| n.note).collect()
 }
 
 /// The cut-off is a property of the command, not of the machine (it used to be a 50 ms timeout).

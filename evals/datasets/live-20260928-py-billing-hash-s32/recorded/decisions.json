@@ -1,0 +1,201 @@
+{
+"eval-196-r1-adage": [
+{
+"arm": "treated",
+"event": "UserPromptSubmit",
+"generation": "7f2d49f80ea4fc48",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+}
+],
+"eval-196-r1-holdout": [
+{
+"arm": "control",
+"event": "UserPromptSubmit",
+"generation": "7f2d49f80ea4fc48",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+}
+],
+"eval-196-r2-adage": [
+{
+"arm": "treated",
+"event": "UserPromptSubmit",
+"generation": "7f2d49f80ea4fc48",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+},
+{
+"arm": "treated",
+"event": "PostToolBatch",
+"generation": "7f2d49f80ea4fc48",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+},
+{
+"arm": "treated",
+"event": "PostToolBatch",
+"generation": "7f2d49f80ea4fc48",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+},
+{
+"arm": "treated",
+"event": "PostToolBatch",
+"generation": "7f2d49f80ea4fc48",
+"judgements": [],
+"would_continue": false,
+"would_have": [
+"finish-line-c83ca5"
+]
+},
+{
+"arm": "treated",
+"event": "PostToolBatch",
+"generation": "7f2d49f80ea4fc48",
+"judgements": [
+[
+"followed",
+"finish-line-c83ca5"
+]
+],
+"would_continue": false,
+"would_have": []
+},
+{
+"arm": "treated",
+"event": "PostToolBatch",
+"generation": "7f2d49f80ea4fc48",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+},
+{
+"arm": "treated",
+"event": "PostToolBatch",
+"generation": "7f2d49f80ea4fc48",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+}
+],
+"eval-196-r2-holdout": [
+{
+"arm": "control",
+"event": "UserPromptSubmit",
+"generation": "7f2d49f80ea4fc48",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+}
+],
+"eval-2565-r1-adage": [
+{
+"arm": "treated",
+"event": "UserPromptSubmit",
+"generation": "7f2d49f80ea4fc48",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+},
+{
+"arm": "treated",
+"event": "PostToolBatch",
+"generation": "7f2d49f80ea4fc48",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+}
+],
+"eval-2565-r1-holdout": [
+{
+"arm": "control",
+"event": "UserPromptSubmit",
+"generation": "7f2d49f80ea4fc48",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+}
+],
+"eval-2565-r2-adage": [
+{
+"arm": "treated",
+"event": "UserPromptSubmit",
+"generation": "7f2d49f80ea4fc48",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+}
+],
+"eval-2565-r2-holdout": [
+{
+"arm": "control",
+"event": "UserPromptSubmit",
+"generation": "7f2d49f80ea4fc48",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+}
+],
+"eval-567-r1-adage": [
+{
+"arm": "treated",
+"event": "UserPromptSubmit",
+"generation": "7f2d49f80ea4fc48",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+}
+],
+"eval-567-r1-holdout": [
+{
+"arm": "control",
+"event": "UserPromptSubmit",
+"generation": "7f2d49f80ea4fc48",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+},
+{
+"arm": "control",
+"event": "PostToolBatch",
+"generation": "7f2d49f80ea4fc48",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+},
+{
+"arm": "control",
+"event": "PostToolBatch",
+"generation": "7f2d49f80ea4fc48",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+}
+],
+"eval-567-r2-adage": [
+{
+"arm": "treated",
+"event": "UserPromptSubmit",
+"generation": "7f2d49f80ea4fc48",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+}
+],
+"eval-567-r2-holdout": [
+{
+"arm": "control",
+"event": "UserPromptSubmit",
+"generation": "7f2d49f80ea4fc48",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+}
+]
+}

@@ -1,0 +1,455 @@
+#!/usr/bin/env python3
+"""Tests for the procedural sandbox generator. Runs no agent and spends nothing.
+
+  python3 -m unittest discover evals/gen        (or: python3 evals/gen/test_gen.py)
+
+Node-stack bundles are checked when node >= 20.6 and npm are on PATH, and skipped otherwise; the
+python-make stack is always checked in full. The rehearsal's learn check runs when an adage binary
+is built (target/release/adage or target/debug/adage) and is skipped otherwise.
+"""
+
+import contextlib
+import io
+import json
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+REPO = HERE.parent.parent
+sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(REPO / "evals" / "live"))
+import gen  # noqa: E402
+import grammar  # noqa: E402
+import rehearse  # noqa: E402
+import runner  # noqa: E402
+import selfcheck  # noqa: E402
+from stacks import STACKS  # noqa: E402
+
+NODE_OK, NODE_WHY = selfcheck.node_ok()
+SUITE = None
+TMP = None
+
+
+def setUpModule():
+    global SUITE, TMP
+    TMP = tempfile.TemporaryDirectory(prefix="adage-gen-test-")
+    with contextlib.redirect_stdout(io.StringIO()):
+        SUITE = gen.build_suite("smoke", Path(TMP.name) / "suite")
+
+
+def tearDownModule():
+    TMP.cleanup()
+
+
+def bundles(stack=None):
+    out = selfcheck.bundles(SUITE)
+    if stack:
+        out = [b for b in out if json.loads((b / "tasks.json").read_text())["stack"] == stack]
+    return out
+
+
+def usable(b):
+    return json.loads((b / "tasks.json").read_text())["stack"] != "node-npm" or NODE_OK
+
+
+class Grammar(unittest.TestCase):
+    def bad(self, spec, fragment):
+        with self.assertRaises(grammar.SpecError) as cm:
+            grammar.resolve(spec, 1, STACKS)
+        self.assertIn(fragment, str(cm.exception))
+
+    def test_invalid_specs_are_refused(self):
+        base = {"stack": "python-make", "skin": "billing"}
+        self.bad({**base, "stack": "cobol"}, "spec.stack")
+        self.bad({**base, "skin": "space"}, "spec.skin")
+        self.bad({**base, "colour": 1}, "unknown keys")
+        self.bad({**base, "conventions": {"dead_end": "path_alias"}}, "supports modes")
+        self.bad({**base, "conventions": {"scoped": True}}, "unknown keys")
+        # Track G G3 kinds: python-make only; a sequence needs the registry; tasks need their kind.
+        self.bad({**base, "stack": "node-npm", "conventions": {"scope": True}}, "only the python-make stack")
+        self.bad({**base, "conventions": {"sequence": True, "finish_line": False}, "tasks": {"registry": 0}},
+                 "conventions.sequence needs")
+        self.bad({**base, "tasks": {"scoped": 1}}, "tasks.scoped needs conventions.scope")
+        self.bad({**base, "tasks": {"deps": 1}}, "tasks.deps needs conventions.env_sync")
+        self.bad({**base, "conventions": {"finish_line": False}, "tasks": {"registry": 1, "control": 2}}, "finish_line")
+        self.bad({**base, "conventions": {"lookup": False, "linked_files": False}}, "need conventions.lookup")
+        self.bad({**base, "tasks": {"bugfix": 6, "registry": 2, "control": 1}}, "at least 25%")
+        self.bad({**base, "conventions": {"decoys": ["nope"]}}, "conventions.decoys")
+        self.bad({**base, "id_digits": [3, 2]}, "id_digits")
+
+    def test_defaults_and_auto_mode(self):
+        plan = grammar.resolve({"stack": "node-npm", "skin": "clinic"}, 7, STACKS)
+        self.assertIn(plan.conv.dead_end, STACKS["node-npm"].DEAD_END_MODES)
+        kinds = [t.kind for t in plan.tasks]
+        self.assertEqual((kinds.count("bugfix"), kinds.count("registry"), kinds.count("control")), (4, 2, 2))
+        self.assertEqual(grammar.resolve({"stack": "node-npm", "skin": "clinic"}, 7, STACKS).tasks[0].id, plan.tasks[0].id)
+
+    def test_every_stack_skin_and_mode_generates(self):
+        from skins import SKINS
+        with tempfile.TemporaryDirectory() as t:
+            for stack, cls in STACKS.items():
+                for skin in SKINS:
+                    for mode in cls.DEAD_END_MODES:
+                        spec = {"stack": stack, "skin": skin, "conventions": {"dead_end": mode, "decoys": 4},
+                                "tasks": {"bugfix": 6, "registry": 3, "control": 3}}
+                        out = gen.build(spec, 3, Path(t) / f"{stack}-{skin}-{mode}", repo=False)
+                        self.assertTrue((out / "conventions.json").exists())
+
+
+class Determinism(unittest.TestCase):
+    def test_same_seed_same_bytes(self):
+        with tempfile.TemporaryDirectory() as t, contextlib.redirect_stdout(io.StringIO()):
+            again = gen.build_suite("smoke", Path(t) / "again")
+            for b in bundles():
+                other = again / b.name
+                self.assertEqual(selfcheck.tree_digest(b), selfcheck.tree_digest(other), b.name)
+                self.assertEqual(gen.git(b / "repo", "rev-parse", "HEAD"), gen.git(other / "repo", "rev-parse", "HEAD"))
+            self.assertEqual((SUITE / "suite.json").read_bytes(), (again / "suite.json").read_bytes())
+
+    def test_other_seed_other_sandbox(self):
+        spec = json.loads((bundles()[0] / "spec.json").read_text())
+        with tempfile.TemporaryDirectory() as t:
+            a = gen.build(spec["spec"], spec["seed"] + 1, Path(t) / "a")
+            self.assertNotEqual(selfcheck.tree_digest(a), selfcheck.tree_digest(bundles()[0]))
+
+    def test_repo_only_matches_the_bundle(self):
+        b = bundles("python-make")[0]
+        spec = json.loads((b / "spec.json").read_text())
+        with tempfile.TemporaryDirectory() as t, contextlib.redirect_stdout(io.StringIO()):
+            # From the bundle's spec.json, and from the canonical inline JSON the live configs embed.
+            self.assertEqual(gen.main(["--spec", str(b / "spec.json"), "--seed", str(spec["seed"]),
+                                       "--repo-only", str(Path(t) / "r")]), 0)
+            self.assertEqual(gen.main(["--spec-json", grammar.canonical(spec["spec"]), "--seed", str(spec["seed"]),
+                                       "--repo-only", str(Path(t) / "s")]), 0)
+            self.assertEqual(gen.git(Path(t) / "r", "rev-parse", "HEAD"), spec["commit"])
+            self.assertEqual(gen.git(Path(t) / "s", "rev-parse", "HEAD"), spec["commit"])
+
+
+class Schema(unittest.TestCase):
+    # `adage-conventions/1` (docs/evals.md), the schema `adage eval routes` reads.
+    CONV_KEYS = {"id", "kind", "command", "avoided", "signature", "glob", "id_pattern", "samples", "counter_samples",
+                 "steps", "notes", "mode"}
+    DOC_KEYS = {"schema", "sandbox", "description", "conventions", "decoys"}
+    # The schema's kinds (an instinct violation is a dead end with that mode; decoys are apart).
+    SCHEMA_KINDS = {"lookup", "linked_files", "dead_end", "finish_line", "scope", "env_sync", "sequence"}
+
+    def test_conventions(self):
+        for b in bundles():
+            doc = json.loads((b / "conventions.json").read_text())
+            self.assertLessEqual(set(doc), self.DOC_KEYS)
+            self.assertEqual(doc["schema"], grammar.CONVENTIONS_SCHEMA)
+            self.assertEqual(doc["sandbox"], json.loads((b / "tasks.json").read_text())["repo"])
+            ids = [c["id"] for c in grammar.entries(doc)]
+            self.assertEqual(len(ids), len(set(ids)))
+            for c in doc["conventions"]:
+                self.assertLessEqual(set(c), self.CONV_KEYS, c)
+                self.assertIn(c["kind"], self.SCHEMA_KINDS)
+                self.assertTrue(c["command"] and c["notes"])
+                if "{" in c["command"]:
+                    self.assertTrue(c["samples"], c)
+                if c["kind"] == "dead_end":
+                    self.assertTrue(c["avoided"] and c["signature"])
+                    self.assertIsInstance(c["avoided"], list)
+                    self.assertIn(c["mode"], grammar.DEAD_END_MODES + ("instinct_violation",))
+                if c["kind"] == "finish_line":
+                    self.assertTrue(c["glob"] and c["signature"])
+                if c["kind"] == "lookup":
+                    rx = re.compile(c["id_pattern"])
+                    self.assertIn("{item}", c["command"])
+                    self.assertTrue(all(rx.fullmatch(x) for x in c["samples"]))
+                    self.assertFalse(any(rx.fullmatch(x) for x in c["counter_samples"]))
+            for d in doc.get("decoys", []):
+                self.assertEqual(d["kind"], "decoy")
+                self.assertIn(d["mode"], grammar.DECOY_MODES)
+
+    def test_tasks(self):
+        for b in bundles():
+            tasks = json.loads((b / "tasks.json").read_text())
+            conv_ids = {c["id"] for c in grammar.entries(json.loads((b / "conventions.json").read_text()))}
+            ts = tasks["tasks"]
+            control = [t for t in ts if t["kind"] == "control"]
+            self.assertGreaterEqual(len(control) * 4, len(ts), "at least 25% control tasks")
+            for t in ts:
+                self.assertIn(t["kind"], grammar.TASK_KINDS)
+                self.assertIn(t["split"], ("train", "eval"))
+                self.assertGreaterEqual(len(t["prompts"]), 2)
+                self.assertLessEqual(set(t["exercises"]), conv_ids)
+                self.assertTrue((b / t["hidden"]).exists())
+                self.assertGreater(t["hidden_tests"], 0)
+                self.assertFalse(str(b / t["hidden"]).startswith(str(b / "repo")))
+                if t["kind"] == "control":
+                    self.assertEqual(t["exercises"], [])
+                if t["kind"] == "registry":
+                    self.assertIn("finish-line", t["exercises"])
+            self.assertLessEqual(set(tasks["session_conventions"]), conv_ids)
+
+    def test_live_configs_plan_with_the_runner(self):
+        for b in bundles():
+            for name in ("config.json", "config-control.json"):
+                cfg = runner.load_config(b / name, {})
+                p = runner.describe(cfg, ["train", "learn", "eval", "report"], [1], Path("/nonexistent/root"),
+                                    Path("adage"))
+                self.assertEqual(p["totals"]["sessions"], p["estimate"]["total_runs"])
+                s = p["sessions"][0]
+                self.assertEqual(s["sandbox"][1], str(REPO / "evals" / "gen" / "gen.py"))
+                json.loads(s["sandbox"][3])  # the inline spec survives the runner's formatting
+
+    def test_live_config_commands_run(self):
+        b = bundles("python-make")[0]
+        cfg = runner.load_config(b / "config.json", {})
+        task = cfg["train"]["tasks"][0]
+        with tempfile.TemporaryDirectory() as t:
+            d = Path(t) / "runs" / "x" / cfg["workdir"]
+            d.parent.mkdir(parents=True)
+            subprocess.run(runner.expand(cfg["sandbox"], dir=str(d), task=task), check=True, capture_output=True)
+            self.assertEqual(gen.git(d, "rev-parse", "HEAD"), json.loads((b / "spec.json").read_text())["commit"])
+            out = subprocess.run(runner.expand(cfg["score"], dir=str(d), task=task), capture_output=True, text=True)
+            r = json.loads(out.stdout)
+            self.assertFalse(r["passed"])
+            self.assertGreater(r["hidden_tests_run"], 0)
+            ctl = runner.load_config(b / "config-control.json", {})
+            c = Path(t) / "runs" / "y" / cfg["workdir"]
+            c.parent.mkdir(parents=True)
+            subprocess.run(runner.expand(ctl["sandbox"], dir=str(c), task=ctl["train"]["tasks"][0]), check=True,
+                           capture_output=True)
+            self.assertIn("Brief", (c / "BRIEF.md").read_text())
+
+    def test_bundle_scorer_is_self_contained(self):
+        b = bundles("python-make")[0]
+        with tempfile.TemporaryDirectory() as t:
+            moved = Path(t) / "moved"
+            shutil.copytree(b, moved, symlinks=True)
+            tid = json.loads((moved / "tasks.json").read_text())["tasks"][0]["id"]
+            out = subprocess.run([sys.executable, str(moved / "score.py"), str(moved / "repo"), tid],
+                                 capture_output=True, text=True, cwd=t)
+            self.assertEqual(out.returncode, 0, out.stderr)
+            self.assertFalse(json.loads(out.stdout)["passed"])
+
+
+class SelfCheck(unittest.TestCase):
+    def test_smoke_suite_selfcheck(self):
+        ran = 0
+        for b in bundles():
+            if not usable(b):
+                continue
+            c = selfcheck.Checker(b)
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    status = c.run_all()
+            finally:
+                c.tmp.cleanup()
+            self.assertEqual(status, "ok", f"{b.name}: {c.failed}\n" + "\n".join(c.lines))
+            ran += 1
+        self.assertGreaterEqual(ran, len(bundles("python-make")))
+        if not NODE_OK:
+            self.skipTest(f"node-npm bundles not checked: {NODE_WHY}")
+
+
+class Rehearsal(unittest.TestCase):
+    def test_transcripts_are_written(self):
+        b = bundles("python-make")[0]
+        with tempfile.TemporaryDirectory() as t:
+            rep = rehearse.rehearse_bundle(b, Path(t) / "r", 1, None, learn=False)
+            self.assertTrue(rep["all_passed"])
+            files = list((Path(t) / "r" / "transcripts").glob("*/*.jsonl"))
+            self.assertEqual(len(files), len(json.loads((b / "tasks.json").read_text())["tasks"]))
+            for f in files:
+                recs = [json.loads(line) for line in f.read_text().splitlines()]
+                self.assertEqual(recs[0]["type"], "user")
+                self.assertTrue(all(r["sessionId"] == recs[0]["sessionId"] for r in recs))
+                uses = [c for r in recs if r["type"] == "assistant" for c in r["message"]["content"]]
+                self.assertTrue(all(u["type"] == "tool_use" for u in uses))
+
+    def test_yaml_subset(self):
+        text = ("id: x\nstep:\n  do: avoid\n  avoid: node\n  signature: 'error: ''test failed'''\nslots: []\n"
+                "exit:\n- when: intent_changes\nevidence:\n  rate: 1.0\n  models:\n  - a\n")
+        self.assertEqual(rehearse.yaml_load(text), {
+            "id": "x", "step": {"do": "avoid", "avoid": "node", "signature": "error: 'test failed'"}, "slots": [],
+            "exit": [{"when": "intent_changes"}], "evidence": {"rate": 1.0, "models": ["a"]}})
+        # A learned value type's branches: a list of lists.
+        text = ("runs:\n  branches:\n  - - run: lit\n      text: '#'\n    - run: class\n      lo: 3\n"
+                "  - - run: class\n      lo: 2\nregex: ^x$\n")
+        self.assertEqual(rehearse.yaml_load(text), {
+            "runs": {"branches": [[{"run": "lit", "text": "#"}, {"run": "class", "lo": 3}], [{"run": "class", "lo": 2}]]},
+            "regex": "^x$"})
+
+    def test_learn_recovers_every_convention(self):
+        exe = rehearse.find_adage(None)
+        if not exe:
+            self.skipTest("no adage binary (cargo build -p adage-cli)")
+        for b in bundles():
+            if not usable(b):
+                continue
+            with tempfile.TemporaryDirectory() as t:
+                rep = rehearse.rehearse_bundle(b, Path(t) / "r", 2, exe, learn=True)
+            self.assertTrue(rep["ok"], json.dumps({k: rep.get(k) for k in
+                                                   ("comparison", "unexpected_routes", "learn_error")}, indent=1)[:4000])
+            self.assertEqual(rep["recovered"], rep["expected"])
+            self.assertEqual(rep["decoys_learned"], 0)
+
+    def test_every_id_shape_is_recovered(self):
+        """Track G G1 gate: every convention of every idshapes bundle is
+        recovered (the lookup included, whatever the id's shape), and end to end (learn, then the
+        hook's decision on every prompt and on fresh and adversarial ids) lookup recall is at least
+        0.95 with no unsafe bind."""
+        exe = rehearse.find_adage(None)
+        if not exe:
+            self.skipTest("no adage binary (cargo build -p adage-cli)")
+        if not NODE_OK:
+            self.skipTest(f"the idshapes suite has node-npm bundles: {NODE_WHY}")
+        with tempfile.TemporaryDirectory() as t:
+            with contextlib.redirect_stdout(io.StringIO()):
+                suite = gen.build_suite("idshapes", Path(t) / "suite")
+            for b in selfcheck.bundles(suite):
+                if not usable(b):
+                    continue
+                rep = rehearse.rehearse_bundle(b, b / "rehearsal", 2, exe, learn=True)
+                self.assertTrue(rep["ok"], json.dumps({k: rep.get(k) for k in
+                                                       ("bundle", "comparison", "unexpected_routes", "learn_error")},
+                                                      indent=1)[:4000])
+                self.assertEqual(rep["recovered"], rep["expected"])
+            out = subprocess.run([str(exe), "eval", "types", str(suite), "--end-to-end", "--json"],
+                                 capture_output=True, text=True)
+            self.assertEqual(out.returncode, 0, out.stderr)
+            r = json.loads(out.stdout)
+            self.assertGreaterEqual(r["all"]["e2e_recall"], 0.95, json.dumps(r["all"]))
+            self.assertEqual(r["all"]["e2e_unsafe"], 0)
+            self.assertEqual(r["all"]["unsafe_accepts"], 0)
+
+
+class NewKinds(unittest.TestCase):
+    """Track G G3: the scope, env_sync and sequence conventions (`specs/newkinds.json`)."""
+
+    def test_existing_specs_are_unchanged(self):
+        # The new keys are left out of a normalised spec unless asked for, so every existing
+        # bundle keeps its bytes (the smoke suite's are checked against a fresh build in CI by
+        # the determinism tests; here, the specs themselves).
+        for suite in ("smoke", "idshapes"):
+            for entry in gen.load_suite(suite)["sandboxes"]:
+                spec = grammar.normalise(entry["spec"], STACKS)
+                self.assertFalse(set(spec["conventions"]) & set(grammar.NEW_KINDS), (suite, spec["name"]))
+                self.assertFalse(set(spec["tasks"]) & {"scoped", "deps"}, (suite, spec["name"]))
+
+    def test_new_kinds_plan_and_conventions(self):
+        entry = gen.load_suite("newkinds")["sandboxes"][0]
+        plan, stack = gen.plan_for(entry["spec"], entry["seed"])
+        kinds = [t.kind for t in plan.tasks]
+        self.assertEqual((kinds.count("scoped"), kinds.count("deps")), (3, 3))
+        conv = {c["kind"]: c for c in stack.conventions()["conventions"]}
+        self.assertNotIn("finish_line", conv, "the sequence replaces the finish line")
+        self.assertEqual(conv["sequence"]["steps"], ["make gen", "make check"])
+        self.assertEqual(conv["scope"]["command"], "make -C packages/{part} check")
+        self.assertEqual(sorted(conv["scope"]["samples"]), sorted(plan.skin.packages))
+        self.assertEqual((conv["env_sync"]["command"], conv["env_sync"]["glob"]), ("make deps", "requirements.txt"))
+        for t in plan.tasks:
+            if t.kind in ("scoped", "deps"):
+                self.assertFalse(re.search(r"\b[A-Z][A-Z0-9]{0,9}-\d{1,7}\b", " ".join(stack.prompts(t))))
+
+    def test_the_new_kinds_are_learned(self):
+        entry = gen.load_suite("newkinds")["sandboxes"][0]
+        with tempfile.TemporaryDirectory() as t, contextlib.redirect_stdout(io.StringIO()):
+            b = gen.build(entry["spec"], entry["seed"], Path(t) / "b")
+            c = selfcheck.Checker(b)
+            try:
+                status = c.run_all()
+            finally:
+                c.tmp.cleanup()
+            self.assertEqual(status, "ok", f"{c.failed}\n" + "\n".join(c.lines))
+            exe = rehearse.find_adage(None)
+            if not exe:
+                rep = rehearse.rehearse_bundle(b, b / "rehearsal", 2, None, learn=False)
+                self.assertTrue(rep["all_passed"])
+                self.skipTest("no adage binary (cargo build -p adage-cli)")
+            graph = rehearse.rehearse_bundle(b, Path(t) / "graph", 2, exe, learn=True)
+        self.assertTrue(graph["ok"], json.dumps({k: graph.get(k) for k in
+                                                 ("comparison", "unexpected_routes", "learn_error")}, indent=1)[:4000])
+        rows = {r["kind"]: r for r in graph["comparison"]}
+        for kind in grammar.NEW_KINDS:
+            self.assertTrue(rows[kind]["ok"], f"{kind} was not learned")
+        env = next(r for r in graph["comparison"] if r["kind"] == "env_sync")
+        self.assertEqual(env["learned"]["state"], "nascent", "an environment step is nascent until reviewed")
+        self.assertEqual(graph["decoys_learned"], 0)
+
+
+class IdShapes(unittest.TestCase):
+    """Tracker id shapes (Track G §4.4): `id_shape` in a spec, and the held-out set `adage eval types` uses."""
+
+    BASE = {"stack": "python-make", "skin": "billing", "tasks": {"bugfix": 4, "registry": 2, "control": 2}}
+
+    def test_default_shape_leaves_existing_specs_unchanged(self):
+        self.assertNotIn("id_shape", grammar.normalise(self.BASE, STACKS))
+        self.assertNotIn("id_shape", grammar.normalise({**self.BASE, "id_shape": "prefix_dash"}, STACKS))
+        self.assertEqual(grammar.normalise({**self.BASE, "id_shape": "uuid"}, STACKS)["id_shape"], "uuid")
+        with self.assertRaises(grammar.SpecError):
+            grammar.resolve({**self.BASE, "id_shape": "emoji"}, 1, STACKS)
+        # The default shape draws the ids it always drew.
+        a = grammar.resolve(self.BASE, 5, STACKS)
+        b = grammar.resolve({**self.BASE, "id_shape": "prefix_dash"}, 5, STACKS)
+        self.assertEqual([t.id for t in a.tasks], [t.id for t in b.tasks])
+
+    def test_every_shape(self):
+        want = {"prefix_dash": r"BIL-\d+", "hash_num": r"\d+", "uuid": grammar.UUID_RE, "path_num": r"bil/\d+",
+                "branch": r"fix/[a-z]{5}-\d+", "mixed": r"BIL-\d+|\d+"}
+        for shape in grammar.ID_SHAPES:
+            for seed in (1, 2, 3):
+                spec = {**self.BASE, "id_shape": shape}
+                plan, stack = gen.plan_for(spec, seed)
+                ids = [t.id for t in plan.tasks if t.kind != "control"]
+                self.assertEqual(len(set(ids)), len(ids))
+                pattern = re.compile(next(c for c in stack.conventions()["conventions"] if c["kind"] == "lookup")["id_pattern"])
+                found = grammar.mention_regex(shape, "BIL")
+                for t in plan.tasks:
+                    prompts = stack.prompts(t)
+                    if t.kind == "control":
+                        self.assertFalse(any(found.search(p) for p in prompts), (shape, prompts))
+                        continue
+                    self.assertRegex(t.id, f"^(?:{want[shape]})$")
+                    self.assertTrue(pattern.fullmatch(t.id), (shape, t.id, pattern.pattern))
+                    self.assertTrue(all(grammar.mention(t.id) in p for p in prompts))
+                    self.assertEqual({m.group(0) for p in prompts for m in found.finditer(p)}, {grammar.mention(t.id)})
+                if shape == "mixed":
+                    self.assertEqual(sum(i.isdigit() for i in ids), len(ids) // 2)
+                ho = grammar.held_out(plan.spec, ids, seed)
+                self.assertEqual(ho, grammar.held_out(plan.spec, ids, seed))
+                self.assertEqual((len(ho["fresh"]), len(ho["near_miss"])), (200, 200), shape)
+                self.assertTrue(all(pattern.fullmatch(v) for v in ho["fresh"]))
+                self.assertFalse(set(ho["fresh"]) & set(ids))
+                self.assertFalse(any(pattern.fullmatch(n["value"]) for n in ho["near_miss"]))
+                kinds = {n["kind"] for n in ho["near_miss"]}
+                self.assertEqual(kinds, {"wrong_prefix", "shorter", "longer", "leading_dash", "shell"}, shape)
+
+    def test_shaped_bundle_selfchecks_and_rehearses(self):
+        # `bil/412` ids hold a slash: the lookup tool, hidden test names and run directories must cope.
+        with tempfile.TemporaryDirectory() as t, contextlib.redirect_stdout(io.StringIO()):
+            b = gen.build({**self.BASE, "id_shape": "path_num"}, 4, Path(t) / "b")
+            c = selfcheck.Checker(b)
+            try:
+                status = c.run_all()
+            finally:
+                c.tmp.cleanup()
+            self.assertEqual(status, "ok", f"{c.failed}\n" + "\n".join(c.lines))
+            rep = rehearse.rehearse_bundle(b, b / "rehearsal", 2, None, learn=False)
+            self.assertTrue(rep["all_passed"])
+            ho = json.loads((b / "rehearsal" / "held_out.json").read_text())
+            self.assertEqual(ho["id_shape"], "path_num")
+            exe = rehearse.find_adage(None)
+            if not exe:
+                self.skipTest("no adage binary (cargo build -p adage-cli)")
+            out = subprocess.run([str(exe), "eval", "types", str(b), "--json"], capture_output=True, text=True)
+            self.assertEqual(out.returncode, 0, out.stderr)
+            r = json.loads(out.stdout)["bundles"][0]
+            self.assertTrue(r["learned"]["slot_found"], r)
+            self.assertTrue(r["learned"]["regex"].startswith("^(?:bil/[0-9]{"), r["learned"]["regex"])
+            self.assertGreaterEqual(r["learned"]["accepted"] / r["learned"]["fresh"], 0.99)
+            self.assertEqual(r["learned"]["rejected"], r["learned"]["near_misses"])
+            self.assertFalse(r["hardcoded"]["slot_found"])
+            self.assertEqual(r["unsafe_accepts"], [])
+
+
+if __name__ == "__main__":
+    unittest.main()

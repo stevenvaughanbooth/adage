@@ -34,7 +34,7 @@ import solutions  # noqa: E402
 
 SPEC = json.loads((HERE / "incidents.json").read_text())
 TASKS = {t["id"]: t for t in SPEC["tasks"]}
-# adage-core's path-span pattern (crates/adage-core/src/spans.rs): what `adage learn` treats as a
+# adage-core's path-span pattern (crates/adage-core/src/spans.rs): what `adage condition` treats as a
 # listed file in plain-text lookup output.
 PATH_SPAN = re.compile(r"(?:^|[\s`'(])((?:\.{0,2}/)?[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*\.[A-Za-z0-9]{1,6})\b", re.M)
 SIGNATURE = "Error [ERR_MODULE_NOT_FOUND]: Cannot find package '@harbor/dispatch' imported from"

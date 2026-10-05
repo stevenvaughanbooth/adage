@@ -1,8 +1,9 @@
 //! `adage graph` through the binary: counts come from real hook decisions, split by arm, so a
-//! holdout session (nothing delivered) is never counted as a derail.
+//! control session (nothing delivered) is never counted as an ignore.
 
 use adage_core::spans::SpanKind;
 use adage_core::Effect;
+use adage_tracks::card;
 use adage_tracks::*;
 use serde_json::{json, Value};
 use std::io::Write;
@@ -32,8 +33,8 @@ fn track() -> Track {
                 contract: Contract::Pattern { regex: r"^W-\d{4}$".into() },
             }],
             effect: Effect::Observe,
-            aspect: Aspect::Green,
-            state: RouteState::Active,
+            strength: Strength::Fire,
+            state: RouteState::Firm,
             exit: vec![Exit::IntentChanges],
             evidence: Evidence { support: 7, opportunities: 8, provenance: "desire-path".into(), ..Default::default() },
             authored: false,
@@ -95,33 +96,28 @@ impl World {
 fn graph_splits_judgements_by_arm() {
     let w = World::new();
     w.session("s-treated", "treated", true);
-    w.session("s-holdout", "holdout", false);
+    w.session("s-control", "control", false);
     let g: Value = serde_json::from_str(&w.run(&["graph", "--json"], &json!({}), "treated")).unwrap();
-    assert_eq!(g["sessions"], json!({ "total": 2, "treated": 1, "holdout": 1 }));
+    assert_eq!(g["sessions"], json!({ "total": 2, "treated": 1, "control": 1 }));
     let r = &g["routes"][0];
     assert_eq!(r["id"], "lookup");
     assert_eq!(r["trigger"]["kind"], "prompt");
     assert!(r["directive"].as_str().unwrap().contains("wi-lookup W-"), "{}", r["directive"]);
     assert_eq!(r["live"]["emitted"], 1, "delivered once, in the treated session");
     assert_eq!(r["live"]["followed"], 1);
-    assert_eq!(r["live"]["derailed"], 0, "the holdout session never saw it, so it cannot have derailed");
-    assert_eq!(r["live"]["holdout"]["not_reached"], 1);
+    assert_eq!(r["live"]["ignored"], 0, "the control session never saw it, so it cannot have ignored");
+    assert_eq!(r["live"]["control"]["not_reached"], 1);
     assert_eq!(r["arms"]["treated"], json!({ "sessions": 1, "applied": 1, "followed": 1, "met": 0, "hit_avoided": 0 }));
-    assert_eq!(r["arms"]["holdout"], json!({ "sessions": 1, "applied": 1, "followed": 0, "met": 0, "hit_avoided": 0 }));
+    assert_eq!(r["arms"]["control"], json!({ "sessions": 1, "applied": 1, "followed": 0, "met": 0, "hit_avoided": 0 }));
     let railed = g["observed"]
         .as_array()
         .unwrap()
         .iter()
         .find(|o| o["route"] == "lookup")
-        .expect("the lookup command is on rails");
+        .expect("a reflex directs the lookup command");
     assert_eq!(railed["how"], "directs");
     let kinds: Vec<&str> = g["events"].as_array().unwrap().iter().filter_map(|e| e["arm"].as_str()).collect();
-    assert!(kinds.contains(&"treated") && kinds.contains(&"holdout"));
-    let report = w.run(&["report"], &json!({}), "treated");
-    assert!(report.contains("Guidance delivered: 1"), "{report}");
-    assert!(report.contains("With guidance: 1 followed · 0 not observed"), "{report}");
-    assert!(report.contains("Control: 1 opportunities withheld · 0 followed unaided · 1 not observed"), "{report}");
-    assert!(report.contains("next 3 observed tool batches"), "{report}");
+    assert!(kinds.contains(&"treated") && kinds.contains(&"control"));
 }
 
 #[test]
@@ -139,218 +135,235 @@ fn graph_on_an_empty_home_is_empty_not_an_error() {
     assert_eq!(g["sessions"]["total"], 0);
 }
 
+/// A reflex kept quiet on its uplift, a procedure card, an ordered sequence and a context
+/// trigger: the graph carries what the map shows for each, and the repository's savings
+/// estimate, rewrite counts and the rewrite switch.
 #[test]
-fn traces_include_quiet_boundaries_and_report_truncation_without_cached_state() {
+fn graph_carries_quiet_cards_sequences_savings_and_rewrites() {
     let w = World::new();
-    w.session("trace-session", "treated", true);
-    // A recorded quiet boundary must survive graph rendering, even though current hook fast
-    // paths can skip recording Stop when nothing is pending. Older/versioned spools can hold it.
-    let spool = w.root.join("adage/sessions/trace-session.spool");
-    let records: Vec<Value> = adage_store::spool::read_all(&spool).unwrap();
-    let total = records.len() + 1;
-    adage_store::spool::append(
-        &spool,
-        &json!({
-            "ts": records.last().unwrap()["ts"].as_u64().unwrap() + 1,
-            "arm": "treated", "repo": "acme", "event": "Stop", "kind": "stop",
-            "decision": { "directives": [], "would_have": [], "judgements": [], "observed": [] },
-        }),
-    )
-    .unwrap();
-    std::fs::remove_file(w.root.join("adage/sessions/trace-session.state")).unwrap();
-    let g: Value = serde_json::from_str(&w.run(&["graph", "--json", "--events", "2"], &json!({}), "treated")).unwrap();
-    let trace = g["trace_events"].as_array().unwrap();
-    assert_eq!(trace.len(), 2);
-    assert_eq!(trace[1]["event"], "Stop", "quiet stop is part of the recorded sequence");
-    assert_eq!(trace[1]["sequence"], total);
-    assert_eq!(trace[1]["harness"], "claude");
-    assert_eq!(trace[1]["repo"], "acme", "the spool preserves repository identity without cached state");
-    assert_eq!(g["trace_info"]["events_total"], total);
-    assert_eq!(g["trace_info"]["events_visible"], 2);
-    assert_eq!(g["trace_info"]["truncated"], true);
-    assert_eq!(g["trace_sessions"][0]["events_total"], total);
-    assert_eq!(g["trace_sessions"][0]["events_visible"], 2);
-    assert_eq!(g["trace_sessions"][0]["truncated"], true);
-    assert_eq!(g["routes"][0]["live"]["emitted"], 1);
-    assert!(g["trace_info"]["description"].as_str().unwrap().contains("private agent reasoning are not recorded"));
-    assert!(trace.iter().all(|event| event.get("prompt").is_none() && event.get("thinking").is_none()));
-}
+    let mut t = track();
+    let base = t.routes[0].clone();
+    t.routes.push(Route {
+        id: "quiet-lint".into(),
+        summary: "agents already lint".into(),
+        trigger: Trigger::AfterEdit { paths: "src/*.py".into() },
+        step: Step::Run { command: "make lint".into() },
+        slots: vec![],
+        effect: Effect::Verify,
+        strength: Strength::Prime,
+        state: RouteState::Nascent,
+        evidence: Evidence {
+            support: 9,
+            opportunities: 10,
+            provenance: "desire-path".into(),
+            uplift: Some(Uplift {
+                kind: "run-after-edit".into(),
+                p_follow: 0.95,
+                p_self: 0.9,
+                mean: 0.05,
+                lower: -0.02,
+                prior_self: 0.6,
+                traces: 10,
+                traces_took: 9,
+                gated: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+        ..base.clone()
+    });
+    t.routes.push(Route {
+        id: "card-add-flag".into(),
+        summary: "adding a flag".into(),
+        trigger: Trigger::Intent {
+            family: "add-flag".into(),
+            model: "potion-base-8m@b9c0e3a1b2c3".into(),
+            centroid: vec![3536; 8],
+            threshold: 0.811,
+        },
+        step: Step::Card {
+            card: card::Card {
+                sessions: 4,
+                passed: 3,
+                files: vec![
+                    card::CardFile { path: "flags/flag_<x>.go".into(), sessions: 4 },
+                    card::CardFile { path: "docs/flags.md".into(), sessions: 3 },
+                ],
+                exemplars: vec![],
+                commands: vec![card::CardCommand {
+                    command: "go test ./flags".into(),
+                    sessions: 4,
+                    runs: 5,
+                    failed: 1,
+                    error: String::new(),
+                    verified: Some(true),
+                }],
+                avoid: vec![],
+                finish: Some("go vet ./...".into()),
+                prompts: vec![],
+            },
+        },
+        slots: vec![],
+        effect: Effect::Observe,
+        strength: Strength::Prime,
+        state: RouteState::Firm,
+        ..base.clone()
+    });
+    t.routes.push(Route {
+        id: "seq-gen-test".into(),
+        summary: "generate, then test".into(),
+        trigger: Trigger::AfterEdit { paths: "schema/*.json".into() },
+        step: Step::Sequence { commands: vec!["make gen".into(), "make test".into()] },
+        slots: vec![],
+        effect: Effect::Regenerate,
+        ..base.clone()
+    });
+    io::write(&w.root.join("adage/tracks/acme/work"), &t).unwrap();
+    io::read(&w.root.join("adage/tracks/acme/work")).expect("the track reads back");
+    Index::compile(&[t]).write_atomic(&w.root.join("adage/index.json")).unwrap();
+    w.session("s-treated", "treated", true);
+    // A PreToolUse rewrite, and one withheld in a control session.
+    let spool = w.root.join("adage/sessions/s-treated.spool");
+    assert!(spool.exists(), "the hook spooled the session");
+    for (arm, withheld) in [("treated", false), ("control", true)] {
+        let mut r = json!({ "ts": 9, "event": "PreToolUse", "kind": "pretool", "arm": arm, "repo": "acme",
+                            "pretool": { "rewrite": "test", "interpreter": ".venv/bin/python" } });
+        if withheld {
+            r["withheld"] = json!(true);
+        }
+        adage_store::spool::append(&spool, &r).unwrap();
+    }
 
-#[test]
-fn graph_demo_is_reviewable_and_does_not_touch_the_requested_home() {
-    let dir = tempfile::tempdir().unwrap();
-    let real_home = dir.path().join("adage");
-    let output = Command::new(env!("CARGO_BIN_EXE_adage"))
-        .args(["graph", "--demo", "--json", "--events", "1000"])
-        .env("ADAGE_HOME", &real_home)
-        .env("HOME", dir.path())
-        .output()
-        .unwrap();
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
-    let graph: Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(graph["source"]["kind"], "demo");
-    assert_eq!(graph["sessions"]["total"], 3);
-    assert_eq!(graph["trace_sessions"].as_array().unwrap().len(), 3);
-    assert!(!graph["trace_events"].as_array().unwrap().is_empty());
-    assert_eq!(graph["trace_info"]["truncated"], false);
-    assert!(graph["trace_events"]
+    let g: Value = serde_json::from_str(&w.run(&["graph", "--json"], &json!({}), "treated")).unwrap();
+    let route = |id: &str| g["routes"].as_array().unwrap().iter().find(|r| r["id"] == id).cloned().expect(id);
+
+    let q = route("quiet-lint");
+    assert_eq!(q["quiet"], true);
+    assert_eq!(q["evidence"]["uplift"]["gated"], true);
+    assert!(q["evidence"]["uplift"]["line"].as_str().unwrap().contains("Quiet: agents already do this"), "{q}");
+    assert!(q["review"]["reasons"].as_array().unwrap().iter().any(|r| r["kind"] == "quiet"), "{q}");
+    assert_eq!(q["evidence"]["basis"], "count");
+    assert!(q["evidence"]["describe"].as_str().unwrap().starts_with("9/10 traces"), "{q}");
+    assert_eq!(g["bars"]["uplift_min"], 0.1);
+
+    let c = route("card-add-flag");
+    assert_eq!(c["shape"], "card");
+    assert_eq!(c["quiet"], false);
+    assert_eq!(c["trigger"]["threshold"], 0.811);
+    let card = &c["step"]["card"];
+    assert_eq!(card["sessions"], 4);
+    assert_eq!(card["passed"], 3);
+    assert_eq!(card["files"][0]["path"], "flags/flag_<x>.go");
+    assert_eq!(
+        card["commands"][0],
+        json!({ "command": "go test ./flags", "sessions": 4, "runs": 5, "failed": 1, "error": null, "verified": true })
+    );
+    assert_eq!(card["finish"], "go vet ./...");
+    assert_eq!(card["grey_from"], 0.711);
+    assert_eq!(card["shared"], false);
+    assert_eq!(c["evidence"]["basis"], "family");
+    assert!(!c["review"]["verbs"].as_array().unwrap().contains(&json!("strengthen")), "a card is prime at most");
+
+    let s = route("seq-gen-test");
+    assert_eq!(s["step"]["commands"], json!(["make gen", "make test"]));
+    assert_eq!(s["step"]["label"], "make gen → make test");
+
+    // The lookup reflex is followed and delivered in the treated session; nothing misfired.
+    assert_eq!(route("lookup")["live"]["misfired"], 0);
+    assert!(route("lookup")["obligation"].is_null());
+
+    // PreToolUse: one rewrite, one withheld in the control arm; rewrites are on by default.
+    assert_eq!(g["pretool"], json!([{ "repo": "acme", "rewritten": 1, "advised": 0, "withheld": 1 }]));
+    assert_eq!(g["runtime"]["rewrite"], json!({ "on": true, "config": true, "marker": false }));
+    assert_eq!(g["runtime"]["card_threshold"], 0.811);
+    let kinds: Vec<&str> = g["events"]
         .as_array()
         .unwrap()
         .iter()
-        .any(|event| !event["directives"].as_array().unwrap().is_empty()));
-    assert!(!real_home.exists(), "demo never initializes the user's data directory");
-    assert!(!std::path::Path::new(graph["home"].as_str().unwrap()).exists(), "snapshot cleans its temporary home");
+        .filter_map(|e| e["kind"].as_str())
+        .filter(|kind| *kind == "pretool")
+        .collect();
+    assert_eq!(kinds, ["pretool", "pretool"], "rewrites reach the timeline");
+
+    // Savings: below the gate, counts only, never dollars.
+    let sv = g["savings"].as_array().unwrap().iter().find(|s| s["repo"] == "acme").expect("acme's savings");
+    assert_eq!(sv["verdict"], "measuring");
+    assert_eq!(sv["gate_met"], false);
+    assert!(sv.get("cost_usd").is_none(), "{sv}");
+    assert_eq!(sv["need"], json!({ "control": 10, "treated": 30 }));
+    assert!(sv["lines"][0].as_str().unwrap().starts_with("measuring savings: 0 of 10"), "{sv}");
+    assert!(sv["guardrail"].is_null());
+    assert_eq!(sv["counts"]["rewritten"], 1);
+    assert!(!w.root.join("adage/ledger").exists(), "the graph writes no summary");
+
+    // The marker `delegate off` wrote before the switch turns them off too.
+    std::fs::create_dir_all(w.root.join("adage/exec")).unwrap();
+    std::fs::write(w.root.join("adage/exec/rewrite-off"), "").unwrap();
+    let g: Value = serde_json::from_str(&w.run(&["graph", "--json"], &json!({}), "treated")).unwrap();
+    assert_eq!(g["runtime"]["rewrite"], json!({ "on": false, "config": true, "marker": true }));
 }
 
 #[test]
-fn traces_split_repository_changes_and_keep_tied_steps_in_recorded_order() {
+fn graph_exposes_cpu_candidate_evidence_without_an_advisory_preview() {
     let w = World::new();
-    let spool = w.root.join("adage/sessions/cross-repo.spool");
-    for repo in ["beta", "alpha", "beta"] {
-        adage_store::spool::append(
-            &spool,
-            &json!({
-                "ts": 1000, "arm": "treated", "repo": repo, "event": "PostToolBatch", "kind": "batch",
-                "decision": { "directives": [], "would_have": [], "judgements": [], "observed": ["exec ls"] },
-            }),
-        )
-        .unwrap();
+    let mut t = track();
+    let mut r = t.routes[0].clone();
+    r.id = "routine-test".into();
+    r.trigger = Trigger::AfterEdit { paths: "src/*.rs".into() };
+    r.step = Step::Run { command: "cargo test".into() };
+    r.slots.clear();
+    r.effect = Effect::Verify;
+    r.strength = Strength::Prime;
+    r.evidence.execution = Some(ExecutionEvidence { opportunities: 5, successful: 5, sessions: 5 });
+    t.routes.push(r);
+    io::write(&w.root.join("adage/tracks/acme/work"), &t).unwrap();
+    Index::compile(&[t]).write_atomic(&w.root.join("adage/index.json")).unwrap();
+    let g: Value = serde_json::from_str(&w.run(&["graph", "--json"], &json!({}), "treated")).unwrap();
+    let candidate = g["routes"].as_array().unwrap().iter().find(|r| r["id"] == "routine-test").unwrap();
+    assert_eq!(candidate["execution_only"], true);
+    assert!(candidate["directive"].is_null(), "an execution-only reflex directs nothing");
+    assert_eq!(candidate["evidence"]["execution"], json!({"opportunities":5,"successful":5,"sessions":5}));
+    assert_eq!(candidate["review"]["next"], "adage review delegate acme/work routine-test --level e2");
+    assert!(candidate["review"]["reasons"].as_array().unwrap().iter().any(|r| r["kind"] == "execution"));
+    let advisory = g["routes"].as_array().unwrap().iter().find(|r| r["id"] == "lookup").unwrap();
+    assert_eq!(advisory["execution_only"], false);
+    assert!(advisory["evidence"]["execution"].is_null());
+    assert!(advisory["review"]["next"].is_null());
+    assert!(advisory["directive"].as_str().unwrap().contains("wi-lookup"));
+}
+
+/// One reflex, one shape: `adage status --json`, `adage review --json` and the map
+/// (`adage graph --json`) render the same reflex with the same fields and values
+/// (`adage_app::reflex::Reflex`); each surface only adds what is its own.
+#[test]
+fn every_surface_renders_a_reflex_the_same_way() {
+    let w = World::new();
+    // Waiting for a person, so the review queue lists it too.
+    let mut t = track();
+    t.routes[0].state = RouteState::Nascent;
+    io::write(&w.root.join("adage/tracks/acme/work"), &t).unwrap();
+    Index::compile(&[t]).write_atomic(&w.root.join("adage/index.json")).unwrap();
+    w.session("s-treated", "treated", true);
+    let json = |args: &[&str]| -> Value { serde_json::from_str(&w.run(args, &json!({}), "treated")).unwrap() };
+    let map = json(&["graph", "--json"])["routes"][0].clone();
+    let status = json(&["status", "--json"])["tracks"][0]["reflexes"][0].clone();
+    let review = json(&["review", "--json"])["queue"][0].clone();
+    let keys = |v: &Value| -> std::collections::BTreeSet<String> { v.as_object().unwrap().keys().cloned().collect() };
+    // Every field of the reflex itself, in each surface, equal.
+    let shared = keys(&status);
+    for k in ["id", "track", "reference", "state", "strength", "origin", "trigger", "step", "evidence", "directive"] {
+        assert!(shared.contains(k), "{k} is part of every reflex");
     }
-    let graph: Value =
-        serde_json::from_str(&w.run(&["graph", "--json", "--events", "2"], &json!({}), "treated")).unwrap();
-    let events = graph["trace_events"].as_array().unwrap();
-    assert_eq!(events.iter().map(|event| event["sequence"].as_u64().unwrap()).collect::<Vec<_>>(), vec![2, 3]);
-    let summaries = graph["trace_sessions"].as_array().unwrap();
-    assert_eq!(summaries.len(), 2, "every recorded repository remains selectable");
-    let alpha = summaries.iter().find(|summary| summary["repo"] == "alpha").unwrap();
-    let beta = summaries.iter().find(|summary| summary["repo"] == "beta").unwrap();
-    assert_eq!((alpha["events_total"].as_u64(), alpha["events_visible"].as_u64()), (Some(1), Some(1)));
-    assert_eq!(alpha["truncated"], false);
-    assert_eq!((beta["events_total"].as_u64(), beta["events_visible"].as_u64()), (Some(2), Some(1)));
-    assert_eq!(beta["truncated"], true);
-    let hidden: Value =
-        serde_json::from_str(&w.run(&["graph", "--json", "--events", "0"], &json!({}), "treated")).unwrap();
-    assert_eq!(hidden["trace_events"], json!([]));
-    assert_eq!(hidden["trace_sessions"].as_array().unwrap().len(), 2, "inventory survives a hidden event window");
-    assert_eq!(hidden["trace_info"]["events_total"], 3);
-    assert_eq!(hidden["trace_info"]["events_visible"], 0);
-}
-
-fn append_record(w: &World, session: &str, ts: u64, decision: Value) {
-    adage_store::spool::append(
-        &w.root.join(format!("adage/sessions/{session}.spool")),
-        &json!({
-            "ts": ts, "repo": "acme", "arm": "treated", "event": "PostToolBatch", "decision": decision,
-        }),
-    )
-    .unwrap();
-}
-
-fn directive(track: &str, version: &str) -> Value {
-    json!({ "route": "lookup", "track": track, "version": version, "aspect": "green", "text": "The recorded response" })
-}
-
-#[test]
-fn measurements_use_recorded_collection_and_version_not_only_route_id() {
-    let w = World::new();
-    let mut imported = track();
-    imported.manifest.track.name = "shared/work".into();
-    imported.manifest.track.provenance = "imported".into();
-    io::write(&w.root.join("adage/tracks/@imported/shared/work"), &imported).unwrap();
-    append_record(
-        &w,
-        "old-version",
-        1,
-        json!({ "directives": [directive("acme/work", "0.1.0")], "would_have": [directive("acme/work", "0.1.0")] }),
+    for k in &shared {
+        assert_eq!(map[k], status[k], "the map and status disagree on {k}");
+        assert_eq!(review[k], status[k], "review and status disagree on {k}");
+    }
+    // What each surface adds, the same object where two of them carry it.
+    assert_eq!(
+        keys(&map).difference(&shared).cloned().collect::<Vec<_>>(),
+        ["arms", "in_index", "live", "measurement_history", "measurement_info", "measurement_sessions", "review"]
     );
-    append_record(
-        &w,
-        "old-version",
-        2,
-        json!({ "judgements": [{"kind": "followed", "route": "lookup"}], "observed": ["exec ./scripts/wi-lookup {item}"] }),
-    );
-    let mut current = track();
-    current.manifest.track.version = "0.2.0".into();
-    io::write(&w.root.join("adage/tracks/acme/work"), &current).unwrap();
-    append_record(&w, "new-version", 3, json!({ "directives": [directive("acme/work", "0.2.0")] }));
-    let graph: Value = serde_json::from_str(&w.run(&["graph", "--json"], &json!({}), "treated")).unwrap();
-    let routes = graph["routes"].as_array().unwrap();
-    let local = routes.iter().find(|route| route["track"] == "acme/work").unwrap();
-    let imported = routes.iter().find(|route| route["track"] == "shared/work").unwrap();
-    assert_eq!(graph["totals"]["emitted"], 2);
-    assert_eq!(graph["totals"]["would_have"], 0, "treated would-have mirrors must not count as control exposures");
-    assert_eq!(graph["totals"]["followed"], 1);
-    assert_eq!(local["live"]["emitted"], 1);
-    assert_eq!(local["live"]["followed"], 0, "old outcomes cannot attach to changed reflexes");
-    assert_eq!(imported["live"]["emitted"], 0, "same route id in another collection is not a match");
-    assert_eq!(imported["measurement_history"], json!([]));
-    let historical = &local["measurement_history"][0];
-    assert_eq!(historical["version"], "0.1.0");
-    assert_eq!(historical["live"]["emitted"], 1);
-    assert_eq!(historical["live"]["followed"], 1);
-    assert_eq!(historical["measurement_sessions"][0]["session"], "old-version");
-    assert_eq!(historical["measurement_sessions"][0]["applied"], json!([1]));
-    assert_eq!(historical["measurement_sessions"][0]["followed"], json!([2]));
-    let trace: Value = serde_json::from_str(&w.run(
-        &["graph", "--json", "--session", "old-version", "--repo", "acme"],
-        &json!({}),
-        "treated",
-    ))
-    .unwrap();
-    assert_eq!(trace["events"][1]["judgements"][0]["version"], "0.1.0");
-    assert_eq!(trace["events"][1]["judgements"][0]["exposure_sequence"], 1);
-    assert_eq!(trace["events"][1]["judgements"][0]["attribution"], "historical");
-    assert_eq!(trace["events"][0]["directives"][0]["text"], "The recorded response");
-}
-
-#[test]
-fn duplicate_installations_and_legacy_records_never_inflate_measurements() {
-    let w = World::new();
-    io::write(&w.root.join("adage/tracks/@imported/acme/work"), &track()).unwrap();
-    append_record(&w, "ambiguous", 1, json!({ "directives": [directive("acme/work", "0.1.0")] }));
-    append_record(&w, "ambiguous", 2, json!({ "judgements": [{"kind": "followed", "route": "lookup"}] }));
-    append_record(&w, "legacy", 3, json!({ "directives": [{"route": "lookup", "text": "Legacy response"}] }));
-    append_record(&w, "legacy", 4, json!({ "judgements": [{"kind": "derailed", "route": "lookup"}] }));
-    let graph: Value = serde_json::from_str(&w.run(&["graph", "--json"], &json!({}), "treated")).unwrap();
-    assert_eq!(graph["routes"].as_array().unwrap().len(), 2);
-    for route in graph["routes"].as_array().unwrap() {
-        assert_eq!(route["live"]["emitted"], 0);
-        assert_eq!(route["live"]["followed"], 0);
-        assert_eq!(route["live"]["derailed"], 0);
-        assert_eq!(route["measurement_info"]["status"], "ambiguous");
-        assert_eq!(route["measurement_sessions"], json!([]));
-    }
-    assert_eq!(graph["totals"]["emitted"], 2);
-    assert_eq!(graph["totals"]["followed"], 1);
-    assert_eq!(graph["totals"]["derailed"], 1);
-    assert_eq!(graph["attribution"]["exposures"]["ambiguous"], 1);
-    assert_eq!(graph["attribution"]["exposures"]["legacy"], 1);
-    assert_eq!(graph["attribution"]["judgements"]["ambiguous"], 1);
-    assert_eq!(graph["attribution"]["judgements"]["legacy"], 1);
-}
-
-#[test]
-fn all_sessions_remain_selectable_outside_the_recent_event_window() {
-    let w = World::new();
-    for ts in 0..450 {
-        append_record(&w, "old-session", ts, json!({ "observed": ["exec ls"] }));
-    }
-    for ts in 450..1050 {
-        append_record(&w, "new-session", ts, json!({ "observed": ["exec pwd"] }));
-    }
-    let graph: Value =
-        serde_json::from_str(&w.run(&["graph", "--json", "--events", "400"], &json!({}), "treated")).unwrap();
-    let old = graph["trace_sessions"].as_array().unwrap().iter().find(|s| s["session"] == "old-session").unwrap();
-    assert_eq!(old["events_total"], 450);
-    assert_eq!(old["events_visible"], 0);
-    let trace: Value = serde_json::from_str(&w.run(
-        &["graph", "--json", "--session", "old-session", "--repo", "acme"],
-        &json!({}),
-        "treated",
-    ))
-    .unwrap();
-    assert_eq!(trace["complete"], true);
-    assert_eq!(trace["events_total"], 450);
-    assert_eq!(trace["events"][0]["sequence"], 1);
-    assert_eq!(trace["events"][449]["sequence"], 450);
+    assert!(keys(&review).is_superset(&["review".to_string(), "live".to_string()].into()));
+    assert_eq!(review["review"]["verbs"], map["review"]["verbs"]);
+    assert_eq!(review["live"], map["live"]);
 }

@@ -156,7 +156,7 @@
 ],
 "eval-W-2041-r1-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionStart",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -164,7 +164,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -174,7 +174,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -182,7 +182,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -190,7 +190,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -198,7 +198,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -206,7 +206,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -214,12 +214,12 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [
 [
-"derailed",
+"ignored",
 "lookup-work-item"
 ]
 ],
@@ -227,7 +227,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -235,7 +235,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -243,7 +243,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -251,7 +251,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -259,7 +259,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -267,7 +267,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -275,7 +275,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -283,7 +283,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -291,7 +291,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -299,7 +299,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -307,7 +307,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -315,7 +315,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -323,7 +323,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -331,7 +331,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -339,7 +339,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -347,7 +347,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -355,7 +355,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -363,7 +363,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -371,7 +371,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -379,7 +379,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -387,7 +387,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -395,7 +395,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -403,7 +403,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -411,7 +411,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -419,7 +419,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -427,7 +427,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -435,7 +435,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -443,7 +443,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionEnd",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -608,7 +608,7 @@
 ],
 "eval-W-2041-r2-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionStart",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -616,7 +616,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -626,7 +626,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -634,7 +634,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -642,12 +642,12 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [
 [
-"derailed",
+"ignored",
 "lookup-work-item"
 ]
 ],
@@ -655,7 +655,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -663,7 +663,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -671,7 +671,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -679,7 +679,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -687,7 +687,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -697,7 +697,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -705,7 +705,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -713,7 +713,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -721,7 +721,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -729,7 +729,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -737,7 +737,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -745,7 +745,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -753,7 +753,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -761,7 +761,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -769,7 +769,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -777,7 +777,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "Stop",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -785,7 +785,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionEnd",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -950,7 +950,7 @@
 ],
 "eval-W-2041-r3-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionStart",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -958,7 +958,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -968,7 +968,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "Stop",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -976,7 +976,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionEnd",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1133,7 +1133,7 @@
 ],
 "eval-W-2042-r1-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionStart",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1141,7 +1141,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1151,7 +1151,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1159,7 +1159,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1167,12 +1167,12 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [
 [
-"derailed",
+"ignored",
 "lookup-work-item"
 ]
 ],
@@ -1180,7 +1180,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1188,7 +1188,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1196,7 +1196,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1204,7 +1204,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1212,7 +1212,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1220,7 +1220,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1228,7 +1228,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1236,7 +1236,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1244,7 +1244,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1252,7 +1252,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1260,7 +1260,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1268,7 +1268,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1276,7 +1276,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1284,7 +1284,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1292,7 +1292,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1300,7 +1300,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1308,7 +1308,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1316,7 +1316,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "Stop",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1324,7 +1324,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionEnd",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1505,7 +1505,7 @@
 ],
 "eval-W-2042-r2-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionStart",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1513,7 +1513,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1523,7 +1523,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1531,7 +1531,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1539,12 +1539,12 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [
 [
-"derailed",
+"ignored",
 "lookup-work-item"
 ]
 ],
@@ -1552,7 +1552,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1560,7 +1560,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1568,7 +1568,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1576,7 +1576,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1584,7 +1584,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1592,7 +1592,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1600,7 +1600,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1608,7 +1608,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1616,7 +1616,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1624,7 +1624,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1632,7 +1632,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1640,7 +1640,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1648,7 +1648,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1656,7 +1656,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1666,7 +1666,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1674,7 +1674,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1682,7 +1682,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1690,7 +1690,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1698,7 +1698,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1706,7 +1706,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1714,7 +1714,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "Stop",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1722,7 +1722,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionEnd",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1871,7 +1871,7 @@
 ],
 "eval-W-2042-r3-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionStart",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1879,7 +1879,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1889,7 +1889,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1897,7 +1897,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1905,7 +1905,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1913,7 +1913,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1921,12 +1921,12 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [
 [
-"derailed",
+"ignored",
 "lookup-work-item"
 ]
 ],
@@ -1934,7 +1934,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1942,7 +1942,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1950,7 +1950,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1958,7 +1958,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1968,7 +1968,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1976,7 +1976,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1984,7 +1984,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -1992,7 +1992,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2000,7 +2000,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2008,7 +2008,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2016,7 +2016,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "Stop",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2024,7 +2024,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionEnd",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2173,7 +2173,7 @@
 ],
 "eval-W-2043-r1-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionStart",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2181,7 +2181,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2191,7 +2191,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2199,7 +2199,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2207,7 +2207,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2215,12 +2215,12 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [
 [
-"derailed",
+"ignored",
 "lookup-work-item"
 ]
 ],
@@ -2228,7 +2228,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2236,7 +2236,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2244,7 +2244,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2252,7 +2252,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2260,7 +2260,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2268,7 +2268,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2276,7 +2276,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2284,7 +2284,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2294,7 +2294,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2302,7 +2302,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2310,7 +2310,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2318,7 +2318,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2326,7 +2326,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2334,7 +2334,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2342,7 +2342,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2350,7 +2350,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2358,7 +2358,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2366,7 +2366,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "Stop",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2374,7 +2374,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionEnd",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2531,7 +2531,7 @@
 ],
 "eval-W-2043-r2-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionStart",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2539,7 +2539,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2549,7 +2549,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2557,7 +2557,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2565,7 +2565,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2573,7 +2573,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2581,7 +2581,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2589,12 +2589,12 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [
 [
-"derailed",
+"ignored",
 "lookup-work-item"
 ]
 ],
@@ -2602,7 +2602,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2610,7 +2610,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2618,7 +2618,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2626,7 +2626,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2634,7 +2634,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2642,7 +2642,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2650,7 +2650,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2658,7 +2658,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2666,7 +2666,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2674,7 +2674,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2682,7 +2682,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2690,7 +2690,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2698,7 +2698,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2706,7 +2706,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2714,7 +2714,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2722,7 +2722,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2730,7 +2730,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2738,7 +2738,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2746,7 +2746,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2754,7 +2754,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2762,7 +2762,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2770,7 +2770,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2778,7 +2778,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2786,7 +2786,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2794,7 +2794,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2802,7 +2802,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2810,7 +2810,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2818,7 +2818,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2826,7 +2826,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionEnd",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2967,7 +2967,7 @@
 ],
 "eval-W-2043-r3-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionStart",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2975,7 +2975,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2985,7 +2985,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -2993,7 +2993,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3001,7 +3001,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3009,7 +3009,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3017,7 +3017,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3025,12 +3025,12 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [
 [
-"derailed",
+"ignored",
 "lookup-work-item"
 ]
 ],
@@ -3038,7 +3038,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3046,7 +3046,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3054,7 +3054,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3062,7 +3062,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3070,7 +3070,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3078,7 +3078,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3086,7 +3086,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3094,7 +3094,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3102,7 +3102,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3110,7 +3110,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3118,7 +3118,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3126,7 +3126,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "Stop",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3134,7 +3134,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionEnd",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3259,7 +3259,7 @@
 ],
 "eval-W-2044-r1-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionStart",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3267,7 +3267,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3277,7 +3277,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3285,7 +3285,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3293,7 +3293,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3301,7 +3301,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3309,12 +3309,12 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [
 [
-"derailed",
+"ignored",
 "lookup-work-item"
 ]
 ],
@@ -3322,7 +3322,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3330,7 +3330,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3338,7 +3338,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3346,7 +3346,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3354,7 +3354,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3362,7 +3362,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3370,7 +3370,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3378,7 +3378,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3386,7 +3386,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3394,7 +3394,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3402,7 +3402,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3410,7 +3410,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3418,7 +3418,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3426,7 +3426,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3434,7 +3434,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3442,7 +3442,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3450,7 +3450,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3458,7 +3458,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3466,7 +3466,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "Stop",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3474,7 +3474,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionEnd",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3639,7 +3639,7 @@
 ],
 "eval-W-2044-r2-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionStart",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3647,7 +3647,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3657,7 +3657,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3665,7 +3665,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3673,7 +3673,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3681,12 +3681,12 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [
 [
-"derailed",
+"ignored",
 "lookup-work-item"
 ]
 ],
@@ -3694,7 +3694,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3702,7 +3702,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3710,7 +3710,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3718,7 +3718,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3726,7 +3726,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3734,7 +3734,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3742,7 +3742,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3750,7 +3750,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3758,7 +3758,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3766,7 +3766,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3774,7 +3774,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3782,7 +3782,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3790,7 +3790,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3798,7 +3798,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3806,7 +3806,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3814,7 +3814,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3822,7 +3822,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3830,7 +3830,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3838,7 +3838,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3846,7 +3846,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3856,7 +3856,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3864,7 +3864,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3872,7 +3872,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3880,7 +3880,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3888,7 +3888,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3896,7 +3896,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3904,7 +3904,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -3912,7 +3912,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionEnd",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4069,7 +4069,7 @@
 ],
 "eval-W-2044-r3-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionStart",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4077,7 +4077,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4087,7 +4087,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4095,7 +4095,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4103,7 +4103,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4111,12 +4111,12 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [
 [
-"derailed",
+"ignored",
 "lookup-work-item"
 ]
 ],
@@ -4124,7 +4124,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4132,7 +4132,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4140,7 +4140,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4148,7 +4148,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4156,7 +4156,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4164,7 +4164,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4172,7 +4172,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4180,7 +4180,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4188,7 +4188,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4196,7 +4196,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4204,7 +4204,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4212,7 +4212,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4220,7 +4220,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "Stop",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4228,7 +4228,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionEnd",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4336,7 +4336,7 @@
 ],
 "eval-W-2045-r1-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionStart",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4344,7 +4344,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4354,7 +4354,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4362,7 +4362,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4370,7 +4370,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4378,12 +4378,12 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [
 [
-"derailed",
+"ignored",
 "lookup-work-item"
 ]
 ],
@@ -4391,7 +4391,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4399,7 +4399,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4407,7 +4407,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4415,7 +4415,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4423,7 +4423,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4431,7 +4431,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4439,7 +4439,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4447,7 +4447,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4455,7 +4455,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4463,7 +4463,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4471,7 +4471,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4479,7 +4479,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "Stop",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4487,7 +4487,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionEnd",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4603,7 +4603,7 @@
 ],
 "eval-W-2045-r2-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionStart",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4611,7 +4611,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4621,7 +4621,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "Stop",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4629,7 +4629,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionEnd",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4745,7 +4745,7 @@
 ],
 "eval-W-2045-r3-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionStart",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4753,7 +4753,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4763,7 +4763,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4771,7 +4771,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4779,7 +4779,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4787,7 +4787,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4795,7 +4795,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4803,12 +4803,12 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [
 [
-"derailed",
+"ignored",
 "lookup-work-item"
 ]
 ],
@@ -4816,7 +4816,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4824,7 +4824,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4832,7 +4832,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4840,7 +4840,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4848,7 +4848,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4856,7 +4856,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4864,7 +4864,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4872,7 +4872,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4880,7 +4880,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4888,7 +4888,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4896,7 +4896,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4904,7 +4904,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4912,7 +4912,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4922,7 +4922,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [
@@ -4935,7 +4935,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4943,7 +4943,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4951,7 +4951,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4959,7 +4959,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4967,7 +4967,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "Stop",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -4975,7 +4975,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionEnd",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5131,7 +5131,7 @@
 ],
 "eval-W-2046-r1-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionStart",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5139,7 +5139,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5149,7 +5149,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "Stop",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5157,7 +5157,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionEnd",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5289,7 +5289,7 @@
 ],
 "eval-W-2046-r2-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionStart",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5297,7 +5297,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5307,7 +5307,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5315,7 +5315,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5323,7 +5323,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5331,7 +5331,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5339,12 +5339,12 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [
 [
-"derailed",
+"ignored",
 "lookup-work-item"
 ]
 ],
@@ -5352,7 +5352,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5360,7 +5360,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5368,7 +5368,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5376,7 +5376,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5384,7 +5384,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5392,7 +5392,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5400,7 +5400,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5408,7 +5408,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5418,7 +5418,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5426,7 +5426,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5434,7 +5434,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5444,7 +5444,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [
@@ -5457,7 +5457,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5465,7 +5465,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5473,7 +5473,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5481,7 +5481,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5489,7 +5489,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5497,7 +5497,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5505,7 +5505,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5513,7 +5513,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "Stop",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5521,7 +5521,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionEnd",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5645,7 +5645,7 @@
 ],
 "eval-W-2046-r3-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionStart",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5653,7 +5653,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5663,7 +5663,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5671,7 +5671,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5679,7 +5679,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5687,7 +5687,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5695,12 +5695,12 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [
 [
-"derailed",
+"ignored",
 "lookup-work-item"
 ]
 ],
@@ -5708,7 +5708,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5716,7 +5716,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5724,7 +5724,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5732,7 +5732,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5740,7 +5740,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5748,7 +5748,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5756,7 +5756,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5766,7 +5766,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5774,7 +5774,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5782,7 +5782,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5792,7 +5792,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [
@@ -5805,7 +5805,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5813,7 +5813,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5821,7 +5821,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5829,7 +5829,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5837,7 +5837,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5845,7 +5845,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5853,7 +5853,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "Stop",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5861,7 +5861,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionEnd",
 "generation": "cba1ddfc934b8685",
 "judgements": [],
@@ -5955,7 +5955,7 @@
 ],
 "eval2-W-2041-r1-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionStart",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -5963,7 +5963,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -5974,7 +5974,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -5982,7 +5982,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -5990,7 +5990,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -5998,12 +5998,12 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [
 [
-"derailed",
+"ignored",
 "lookup-work-item"
 ]
 ],
@@ -6011,7 +6011,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6019,7 +6019,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6027,7 +6027,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6035,7 +6035,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6043,7 +6043,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6051,7 +6051,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6059,7 +6059,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6067,7 +6067,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6075,7 +6075,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6083,7 +6083,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6091,7 +6091,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6099,7 +6099,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6107,7 +6107,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6115,7 +6115,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6123,7 +6123,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6131,7 +6131,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6139,7 +6139,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6147,7 +6147,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6155,7 +6155,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6163,7 +6163,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6171,7 +6171,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6179,7 +6179,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6187,7 +6187,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6195,7 +6195,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6203,7 +6203,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6213,7 +6213,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6221,7 +6221,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6229,7 +6229,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionEnd",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6339,7 +6339,7 @@
 ],
 "eval2-W-2041-r2-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionStart",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6347,7 +6347,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6358,7 +6358,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6366,7 +6366,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6374,7 +6374,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6382,7 +6382,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6390,12 +6390,12 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [
 [
-"derailed",
+"ignored",
 "lookup-work-item"
 ]
 ],
@@ -6403,7 +6403,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6411,7 +6411,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6419,7 +6419,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6427,7 +6427,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6435,7 +6435,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6443,7 +6443,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6451,7 +6451,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6459,7 +6459,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6467,7 +6467,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6475,7 +6475,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6483,7 +6483,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6491,7 +6491,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6499,7 +6499,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6507,7 +6507,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6515,7 +6515,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6523,7 +6523,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6531,7 +6531,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6539,7 +6539,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6547,7 +6547,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6555,7 +6555,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6563,7 +6563,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6571,7 +6571,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6579,7 +6579,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6587,7 +6587,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6595,7 +6595,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "Stop",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6603,7 +6603,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionEnd",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6697,7 +6697,7 @@
 ],
 "eval2-W-2041-r3-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionStart",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6705,7 +6705,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6716,7 +6716,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6724,7 +6724,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6732,7 +6732,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6740,7 +6740,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6748,12 +6748,12 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [
 [
-"derailed",
+"ignored",
 "lookup-work-item"
 ]
 ],
@@ -6761,7 +6761,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6769,7 +6769,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6777,7 +6777,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6785,7 +6785,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6793,7 +6793,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6801,7 +6801,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6809,7 +6809,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6817,7 +6817,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6825,7 +6825,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6833,7 +6833,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6841,7 +6841,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6849,7 +6849,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6857,7 +6857,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6865,7 +6865,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6873,7 +6873,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6883,7 +6883,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6891,7 +6891,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6899,7 +6899,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6907,7 +6907,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6915,7 +6915,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6923,7 +6923,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6931,7 +6931,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6939,7 +6939,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6947,7 +6947,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6955,7 +6955,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "Stop",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -6963,7 +6963,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionEnd",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7057,7 +7057,7 @@
 ],
 "eval2-W-2042-r1-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionStart",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7065,7 +7065,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7076,7 +7076,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7084,7 +7084,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7092,7 +7092,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7100,12 +7100,12 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [
 [
-"derailed",
+"ignored",
 "lookup-work-item"
 ]
 ],
@@ -7113,7 +7113,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7121,7 +7121,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7129,7 +7129,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7137,7 +7137,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7145,7 +7145,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7153,7 +7153,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7161,7 +7161,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7169,7 +7169,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7177,7 +7177,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7185,7 +7185,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7193,7 +7193,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7201,7 +7201,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7209,7 +7209,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7217,7 +7217,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7225,7 +7225,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7233,7 +7233,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7241,7 +7241,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "Stop",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7249,7 +7249,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionEnd",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7383,7 +7383,7 @@
 ],
 "eval2-W-2042-r2-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionStart",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7391,7 +7391,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7402,7 +7402,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7410,7 +7410,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7418,7 +7418,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7426,12 +7426,12 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [
 [
-"derailed",
+"ignored",
 "lookup-work-item"
 ]
 ],
@@ -7439,7 +7439,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7447,7 +7447,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7455,7 +7455,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7463,7 +7463,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7473,7 +7473,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7481,7 +7481,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7489,7 +7489,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7497,7 +7497,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7505,7 +7505,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7513,7 +7513,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7521,7 +7521,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7529,7 +7529,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7537,7 +7537,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7545,7 +7545,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7553,7 +7553,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7561,7 +7561,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "Stop",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7569,7 +7569,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionEnd",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7663,7 +7663,7 @@
 ],
 "eval2-W-2042-r3-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionStart",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7671,7 +7671,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7682,7 +7682,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7690,7 +7690,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7698,7 +7698,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7706,7 +7706,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7714,12 +7714,12 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [
 [
-"derailed",
+"ignored",
 "lookup-work-item"
 ]
 ],
@@ -7727,7 +7727,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7735,7 +7735,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7743,7 +7743,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7751,7 +7751,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7759,7 +7759,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7767,7 +7767,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7775,7 +7775,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7783,7 +7783,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7791,7 +7791,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7799,7 +7799,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7807,7 +7807,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7815,7 +7815,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7823,7 +7823,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7831,7 +7831,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7839,7 +7839,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "Stop",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7847,7 +7847,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionEnd",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7941,7 +7941,7 @@
 ],
 "eval2-W-2043-r1-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionStart",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7949,7 +7949,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7960,7 +7960,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7968,7 +7968,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7976,7 +7976,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "Stop",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -7984,7 +7984,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionEnd",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8078,7 +8078,7 @@
 ],
 "eval2-W-2043-r2-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionStart",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8086,7 +8086,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8097,7 +8097,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8105,7 +8105,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8113,7 +8113,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8121,12 +8121,12 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [
 [
-"derailed",
+"ignored",
 "lookup-work-item"
 ]
 ],
@@ -8134,7 +8134,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8142,7 +8142,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8150,7 +8150,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8158,7 +8158,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8166,7 +8166,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8174,7 +8174,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8182,7 +8182,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8190,7 +8190,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8198,7 +8198,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8206,7 +8206,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8214,7 +8214,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8222,7 +8222,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8230,7 +8230,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8238,7 +8238,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8246,7 +8246,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8254,7 +8254,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8262,7 +8262,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "Stop",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8270,7 +8270,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionEnd",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8404,7 +8404,7 @@
 ],
 "eval2-W-2043-r3-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionStart",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8412,7 +8412,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8423,7 +8423,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8431,7 +8431,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8439,12 +8439,12 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [
 [
-"derailed",
+"ignored",
 "lookup-work-item"
 ]
 ],
@@ -8452,7 +8452,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8460,7 +8460,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8468,7 +8468,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8476,7 +8476,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8484,7 +8484,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8492,7 +8492,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8500,7 +8500,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8508,7 +8508,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8516,7 +8516,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8524,7 +8524,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8532,7 +8532,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8540,7 +8540,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8548,7 +8548,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8556,7 +8556,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8564,7 +8564,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8572,7 +8572,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8580,7 +8580,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8588,7 +8588,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8598,7 +8598,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8606,7 +8606,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8614,7 +8614,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8622,7 +8622,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8630,7 +8630,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8638,7 +8638,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8646,7 +8646,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "Stop",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8654,7 +8654,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionEnd",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8748,7 +8748,7 @@
 ],
 "eval2-W-2044-r1-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionStart",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8756,7 +8756,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8767,7 +8767,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8775,7 +8775,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8783,7 +8783,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8791,7 +8791,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8799,12 +8799,12 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [
 [
-"derailed",
+"ignored",
 "lookup-work-item"
 ]
 ],
@@ -8812,7 +8812,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8820,7 +8820,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8828,7 +8828,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8836,7 +8836,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8844,7 +8844,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8852,7 +8852,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8860,7 +8860,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8868,7 +8868,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8876,7 +8876,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8884,7 +8884,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8892,7 +8892,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8900,7 +8900,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8908,7 +8908,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8916,7 +8916,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8924,7 +8924,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8932,7 +8932,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8940,7 +8940,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8948,7 +8948,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8956,7 +8956,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8964,7 +8964,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8972,7 +8972,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8980,7 +8980,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8988,7 +8988,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -8998,7 +8998,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9006,7 +9006,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9014,7 +9014,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9022,7 +9022,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9030,7 +9030,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionEnd",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9156,7 +9156,7 @@
 ],
 "eval2-W-2044-r2-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionStart",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9164,7 +9164,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9175,7 +9175,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9183,7 +9183,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9191,12 +9191,12 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [
 [
-"derailed",
+"ignored",
 "lookup-work-item"
 ]
 ],
@@ -9204,7 +9204,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9212,7 +9212,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9220,7 +9220,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9228,7 +9228,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9236,7 +9236,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9244,7 +9244,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9254,7 +9254,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9262,7 +9262,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9270,7 +9270,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9278,7 +9278,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9286,7 +9286,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9294,7 +9294,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9302,7 +9302,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9310,7 +9310,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "Stop",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9318,7 +9318,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionEnd",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9412,7 +9412,7 @@
 ],
 "eval2-W-2044-r3-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionStart",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9420,7 +9420,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9431,7 +9431,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9439,7 +9439,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9447,7 +9447,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9455,7 +9455,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9463,7 +9463,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9471,12 +9471,12 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [
 [
-"derailed",
+"ignored",
 "lookup-work-item"
 ]
 ],
@@ -9484,7 +9484,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9492,7 +9492,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9500,7 +9500,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9508,7 +9508,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9516,7 +9516,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9524,7 +9524,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9532,7 +9532,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9540,7 +9540,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9548,7 +9548,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9556,7 +9556,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9564,7 +9564,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9572,7 +9572,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9580,7 +9580,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9588,7 +9588,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9596,7 +9596,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9604,7 +9604,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9612,7 +9612,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9620,7 +9620,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9628,7 +9628,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9636,7 +9636,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9644,7 +9644,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9652,7 +9652,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9660,7 +9660,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9668,7 +9668,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9676,7 +9676,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9684,7 +9684,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9692,7 +9692,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9700,7 +9700,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionEnd",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9833,7 +9833,7 @@
 ],
 "eval2-W-2045-r1-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionStart",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9841,7 +9841,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9852,7 +9852,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9860,7 +9860,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9868,7 +9868,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9876,12 +9876,12 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [
 [
-"derailed",
+"ignored",
 "lookup-work-item"
 ]
 ],
@@ -9889,7 +9889,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9897,7 +9897,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9905,7 +9905,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9913,7 +9913,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9923,7 +9923,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9931,7 +9931,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9941,7 +9941,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [
@@ -9954,7 +9954,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9962,7 +9962,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9970,7 +9970,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9978,7 +9978,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9986,7 +9986,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "Stop",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -9994,7 +9994,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionEnd",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10119,7 +10119,7 @@
 ],
 "eval2-W-2045-r2-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionStart",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10127,7 +10127,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10138,7 +10138,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10146,7 +10146,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10154,7 +10154,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10162,7 +10162,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10170,12 +10170,12 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [
 [
-"derailed",
+"ignored",
 "lookup-work-item"
 ]
 ],
@@ -10183,7 +10183,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10191,7 +10191,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10199,7 +10199,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10207,7 +10207,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10215,7 +10215,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10223,7 +10223,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10231,7 +10231,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10239,7 +10239,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10247,7 +10247,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10255,7 +10255,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10263,7 +10263,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10271,7 +10271,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10279,7 +10279,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10287,7 +10287,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10295,7 +10295,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10303,7 +10303,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10311,7 +10311,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10319,7 +10319,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10327,7 +10327,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10335,7 +10335,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10343,7 +10343,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10351,7 +10351,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10359,7 +10359,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10367,7 +10367,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10375,7 +10375,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10383,7 +10383,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10391,7 +10391,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10399,7 +10399,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10407,7 +10407,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10415,7 +10415,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10423,7 +10423,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10431,7 +10431,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10439,7 +10439,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10447,7 +10447,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10455,7 +10455,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10463,7 +10463,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10471,7 +10471,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10479,7 +10479,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10487,7 +10487,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10495,7 +10495,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10503,7 +10503,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10511,7 +10511,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10519,7 +10519,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10527,7 +10527,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10535,7 +10535,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10543,7 +10543,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionEnd",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10700,7 +10700,7 @@
 ],
 "eval2-W-2045-r3-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionStart",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10708,7 +10708,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10719,7 +10719,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10727,7 +10727,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10735,7 +10735,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10743,7 +10743,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10751,12 +10751,12 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [
 [
-"derailed",
+"ignored",
 "lookup-work-item"
 ]
 ],
@@ -10764,7 +10764,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10772,7 +10772,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10780,7 +10780,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10788,7 +10788,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10796,7 +10796,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10804,7 +10804,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10812,7 +10812,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10820,7 +10820,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10828,7 +10828,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10836,7 +10836,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10844,7 +10844,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10852,7 +10852,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10860,7 +10860,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10868,7 +10868,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10876,7 +10876,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10884,7 +10884,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10892,7 +10892,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10900,7 +10900,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10908,7 +10908,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10916,7 +10916,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10924,7 +10924,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10932,7 +10932,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10940,7 +10940,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10948,7 +10948,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10956,7 +10956,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10964,7 +10964,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10972,7 +10972,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -10980,7 +10980,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionEnd",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11121,7 +11121,7 @@
 ],
 "eval2-W-2046-r1-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionStart",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11129,7 +11129,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11140,7 +11140,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11148,7 +11148,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11156,7 +11156,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11164,7 +11164,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11172,12 +11172,12 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [
 [
-"derailed",
+"ignored",
 "lookup-work-item"
 ]
 ],
@@ -11185,7 +11185,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11193,7 +11193,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11201,7 +11201,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11209,7 +11209,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11217,7 +11217,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11225,7 +11225,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11233,7 +11233,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11243,7 +11243,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [
@@ -11256,7 +11256,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11264,7 +11264,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11272,7 +11272,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11280,7 +11280,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11288,7 +11288,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11296,7 +11296,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "Stop",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11304,7 +11304,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionEnd",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11453,7 +11453,7 @@
 ],
 "eval2-W-2046-r2-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionStart",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11461,7 +11461,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11472,7 +11472,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11480,7 +11480,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11488,12 +11488,12 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [
 [
-"derailed",
+"ignored",
 "lookup-work-item"
 ]
 ],
@@ -11501,7 +11501,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11509,7 +11509,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11517,7 +11517,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11525,7 +11525,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11533,7 +11533,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11541,7 +11541,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11549,7 +11549,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11557,7 +11557,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11565,7 +11565,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11573,7 +11573,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11581,7 +11581,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11589,7 +11589,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11597,7 +11597,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11605,7 +11605,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11613,7 +11613,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11621,7 +11621,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11629,7 +11629,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11637,7 +11637,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11645,7 +11645,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11653,7 +11653,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11661,7 +11661,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11669,7 +11669,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11677,7 +11677,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11685,7 +11685,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11695,7 +11695,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11703,7 +11703,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11713,7 +11713,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11721,7 +11721,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionEnd",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11846,7 +11846,7 @@
 ],
 "eval2-W-2046-r3-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionStart",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11854,7 +11854,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11865,7 +11865,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11873,7 +11873,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11881,12 +11881,12 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [
 [
-"derailed",
+"ignored",
 "lookup-work-item"
 ]
 ],
@@ -11894,7 +11894,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11902,7 +11902,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11910,7 +11910,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11918,7 +11918,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11926,7 +11926,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11934,7 +11934,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11942,7 +11942,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11950,7 +11950,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11958,7 +11958,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11966,7 +11966,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11974,7 +11974,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11982,7 +11982,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -11992,7 +11992,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [
@@ -12005,7 +12005,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -12013,7 +12013,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -12021,7 +12021,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -12029,7 +12029,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -12037,7 +12037,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -12045,7 +12045,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "Stop",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],
@@ -12053,7 +12053,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "SessionEnd",
 "generation": "8dd5ec01ed76c4bd",
 "judgements": [],

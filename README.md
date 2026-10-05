@@ -1,378 +1,213 @@
-# Adage
+<p align="center">
+  <img alt="Adage: agent traces become reflexes" src="web/site/public/og.jpg" width="100%">
+</p>
 
-**Train reflexes. Skip rediscovery.**
+<p align="center">
+  <a href="LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
+  <img alt="Written in Rust" src="https://img.shields.io/badge/written%20in-Rust-orange.svg">
+  <img alt="Works with Claude Code, Codex and OpenCode" src="https://img.shields.io/badge/works%20with-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20OpenCode-8b7cf6.svg">
+  <img alt="Status: unreleased developer preview" src="https://img.shields.io/badge/status-unreleased%20developer%20preview-yellow.svg">
+  <img alt="Execution: macOS and Linux" src="https://img.shields.io/badge/execution-macOS%20%C2%B7%20Linux-lightgrey.svg">
+</p>
 
-Adage learns repeated patterns in your coding agents' work and turns them into **reflexes**:
-local guidance about what to do next, when a familiar situation appears. Each reflex has a
-trigger, a response, and evidence you can inspect. The agent runs every command through its own
-tools and permissions; Adage supplies text and never executes the response itself.
+<p align="center">
+  <b>Your coding agent keeps relearning the same lessons. Adage remembers them.</b>
+</p>
 
-**Fire** directs a response, **prime** suggests it, and **inhibit** warns against a learned dead end.
-Reflexes are learned; **instincts** would be built-in responses and are **not available in this build**.
-The file format and advanced CLI still call a reflex a `route` and its collection a `track`.
+> [!IMPORTANT]
+> **Unreleased developer preview.** Nothing is published yet: no release binaries, no installer
+> scripts, no Homebrew tap, no npm package and no Claude Code plugin marketplace. Build it from
+> source ([Install](#install)); the repository is private for now, so that requires access to it.
+> Advisory instincts and reflexes work in Claude Code today. Opt-in CPU execution runs on macOS
+> and Linux; Windows execution is unsupported. The launch studies so far are small and used one
+> model (Claude Haiku 4.5) on one repository; see [Evidence so far](#evidence-so-far).
 
-```text
-agent traces → repeated patterns → learned reflexes → guidance → observed outcomes
-      ↑                                                              │
-      └──────────────────── learn from later work ────────────────────┘
-```
+---
 
-## Try this checkout
+Every session, your agent rediscovers how your repository works: that tests run with `make test`,
+not `pytest`; that work items are looked up with a script; that editing a schema means
+regenerating code. You pay for that exploration again and again.
 
-Build from the repository root with stable Rust, then launch Adage in your terminal:
-
-```bash
-cargo build --release --locked -p adage-cli
-target/release/adage
-```
-
-On Windows, the binary is `target/release/adage.exe`.
-
-Start on **Home**. Press **Ctrl+K** or **:** anywhere to search the command palette, or use
-**0–4** and **Tab / Shift+Tab** to switch screens. Everyday setup, learning, review, settings,
-reports, and signed collection import/export are available in the app.
-
-To explore first, press **d** on Home or choose **Explore demo trace graph**. The browser opens
-three scripted guided/control examples with navigable trace graphs. The hooks made the recorded
-decisions; the demo's learning evidence is simulated and labeled. This demo does not use or
-change your repository's agent history.
-
-## Connect your repository
-
-Use the command palette for each step; no terminal commands are needed after launching Adage.
-
-1. **Open a repository** and choose the Git checkout you want Adage to learn about.
-2. Choose **Connect Claude Code**, **Connect Codex**, or **Connect OpenCode**. Pick repository
-   or user scope and inspect the exact configuration change before confirming. For Codex,
-   open **`/hooks` in Codex** and accept the new hooks; registration in Adage does not replace
-   Codex's approval. Adage keeps this next step visible until it receives a hook.
-3. Open **History sources** to see the folders Survey and Learn use. Claude Code and Codex
-   history are detected from their configured homes. Use **Configure Claude Code history**,
-   **Configure Codex history**, or **Configure OpenCode history** to choose another folder.
-   For OpenCode, choose **Import OpenCode history** to copy local session exports for the
-   selected repository into the configured exports folder, or Adage's local history folder. Run it again after later OpenCode sessions:
-   hook registration does not export new history automatically. An existing exports folder
-   can be selected instead.
-4. Choose **Learn from this repository**. Its preview shows the source folders, readable
-   sessions for this repository, sessions with actions, and previously guided sessions before
-   you confirm. **Survey session history** lets you inspect candidates first. Survey, manual
-   learning, and automatic learning use the same sources. If there is no usable history, Adage
-   explains how to add it. Learning may finish without finding a pattern strong enough to become a reflex.
-5. Open **Review learned reflexes**. Inspect each trigger, response, and evidence. For a pinned
-   reflex with a proposed change, the review shows the current/proposed field differences and
-   both directive previews. **Approve proposed change** applies exactly the version you
-   reviewed; if it changes before confirmation, Adage asks you to reload and inspect it again.
-6. Start or resume your coding agent in that repository, then check **Health** and **Live**.
-   **Hooks registered** means configuration exists. **Hooks received** means Adage has actually
-   received a hook for this repository. A receipt verifies delivery, not that a reflex was
-   applicable or useful; inspect the resulting trace for that.
-
-Press **w**, or choose **Open the web map**, for your live workspace. Adage starts a local
-server, chooses an available port, and opens the browser. Keep the terminal app open to keep
-that server available. The web app is read-only: it shows learned reflexes, evidence, recorded
-traces, and incoming activity; its **Set up my repository** path guides you back to the terminal
-app for changes. Its navigation palette helps you move between those views.
-
-The live workspace and the scripted demo are labeled separately. Opening
-[`brain.html`](crates/adage-cli/assets/brain.html) directly loads the embedded demo, without a
-server; it does not show your own live sessions. In either surface, a trace contains recorded
-actions, guidance, and outcomes.
-
-## What Adage learns
-
-From real sessions in a repository, Adage learns five kinds of reflex:
-
-| Reflex | Learned from | Response |
-| --- | --- | --- |
-| **Prompt → lookup** | Agents passing an ID from the prompt to the same command | **Fire / prime:** “Work item details are looked up with: `python3 scripts/wi-lookup W-2042`” |
-| **Linked files** | Agents reading, one turn at a time, the files a lookup listed | **Prime:** “That result lists these files … read them together in one turn” |
-| **Dead ends** | A verify command that fails, followed by one that works | **Inhibit:** “Running `python3 -m unittest` fails (…). Use this instead: `make test`” |
-| **Finish line** | A regenerate step that follows edits to a path pattern | **Fire:** after the edit, and once at Stop if still unmet: “changes to `schema/*.json` must be followed by `make gen`” |
-| **Intent** | Prompts with similar meaning whose sessions ran the same command first | **Fire / prime:** “Requests like this one usually start by running: `make test`” (optional; choose **Download embedding model**) |
-
-Every reflex carries evidence in distinct sessions, including a Wilson lower bound, and an
-effect class that caps how strongly it can direct the agent. Typed slot contracts check prompt
-values before they reach a directive (`^W-\d{4}$`, for example). File paths must be safe,
-repository-relative, and exist.
-
-## Terminal and web reference
-
-### Watch it live
-
-`adage watch` (or `adage doctor --watch`) is a compact live pane for a split terminal. It works in
-60×20 and grows with the pane:
+Adage reads the session transcripts your agents already leave behind, finds the procedures they
+keep repeating, and compiles them into **reflexes**: small, deterministic responses that give the
+agent the right step at the right moment, with the evidence attached. New reasoning stays with the
+agent; the repeated part gets cheaper.
 
 ```text
- adage watch · harbor-dispatch · gen 44876069                         LIVE
-+ adage 0.1.0  + hooks cc  + 4 reflexes  + auto-learn on  - no model
-+ fail-open 0
- activity · harbor-dispatch ────────────────────────────────────────────
-12:04:00 ●d76f0f cc prompt  → lookup-incident [fire]
-12:04:01 ◌19b2cf cc prompt  withheld lookup-incident [fire]
-12:04:02 ●d76f0f cc tools   → read-linked-files [prime]  ✓ followed lookup-i
-12:04:05 ●bc0c7d cc tools   ✗ not observed lookup-incident
-12:04:06 ●bc0c7d cc failure → dead-end-npm-test [inhibit]
-12:04:07 ●bc0c7d cc stop    ■ stop-request
-12:04:08 ●bc0c7d cc tools   ✓ met codegen-after-registry
- learning ──────────────────────────────────────────────────────────────
-12:04 auto-learn: 27/28 traces used, 730ms, 2 changes, gen 44876069
-12:04   learned incidents: read-linked-files prime→fire (13 of 17 sess
- q quit · p pause · f all repos · v hide quiet · ? help
+  agent traces ──► adage condition ──► reflexes ──► index ──► hooks
+  + instincts                        (tracks,               ├─ guidance / supported rewrites
+  + adage train                       packs)                └─ approved adage-exec actions
 ```
 
-- **Top:** health lamps, re-checked every few seconds: the binary, hook registration and
-  receipt for this repository, its reflexes in the index, auto-learn, the embedding model, recent fail-open errors.
-- **Middle:** every hook call as it happens, from the session spools: time, session, harness, event,
-  and what Adage did: a directive (→, coloured by strength), withheld in a control trace (◌),
-  followed ✓ or not observed within the follow window ✗, a finish line met, or a stop request.
-- **Bottom:** what learning changed, from `learn.log`, manual or automatic; its title says
-  *learning now…* while a background learner holds this repository's lock.
+## Highlights
 
-For prompt/intent guidance, the follow window is the next **3 observed tool batches**.
-Codex and OpenCode report each tool call separately. “Not observed” means the directed action
-was absent in that window; it does not establish deliberate ignoring or the final outcome of
-the session.
+- **Learns from history you already have.** Claude Code, Codex and OpenCode transcripts, read
+  locally, one repository at a time.
+- **Works on day one.** Built-in *instincts* read your Makefile, `package.json`, CI and lockfiles
+  before there is any history. They ship as packs from the marketplace in this repository;
+  `adage packs` shows which apply and turns any off.
+- **Keeps learning.** After each session ends, a background learner updates the reflexes. No
+  re-runs needed.
+- **Compiles skills.** `adage train SKILL.md` turns a skill's steps into verified reflexes, replayed
+  in a sandbox so stale instructions are caught.
+- **Measures itself.** 1 session in 10 is a silent control, so savings are measured against a
+  baseline, never assumed.
+- **Nothing runs without you.** By default Adage only advises. Running commands is a separate,
+  opt-in, sandboxed binary for macOS and Linux.
+- **Shareable.** Reflexes travel as signed, reviewable packs you can commit or hand to a teammate:
+  the same format the built-in instincts ship in.
+- **Small and fast.** One ~10 MB Rust binary with a bundled embedding model, deterministic and
+  fail-open.
 
-Keys: `q` quits, `p` pauses, `f` switches between this repository and all of them, `v` hides events
-where Adage said nothing, `↑`/`↓` scroll, `?` shows help. `NO_COLOR` is honoured: strengths are then
-spelled out (`[fire]`, `[prime]`, `[inhibit]`), as above.
+## Install
 
-`adage ui` (or plain `adage` at a terminal) is the full-screen app, with five tabs:
-
-| Tab | What it does |
-| --- | --- |
-| **Home** | Explains the learning loop, shows readiness and next steps, and opens the command palette |
-| **Live** | the watch view, larger |
-| **Reflexes** | Learned reflexes grouped by collection: fire/prime/inhibit strength, trigger and response, trace evidence, live outcomes, and directive previews with example values. Proposed changes show the field diff and proposed response. Approve (`a`), extinguish (`r`), weaken (`d`), strengthen (`p`), pin (`n`), or dismiss (`x`), with a confirmation before each decision |
-| **Health** | every doctor check, live, including live learning's. `Enter` fixes the selected one where a key can: register hooks (confirming the exact file and diff), fetch the model (with progress), learn this repository now (what a background learner runs: `adage learn --auto --repo-root`), turn auto-learn on, open the settings, or open the fail-open log |
-| **Settings** | every `adage config` key with its value and where it came from (default, file, or environment); `Enter` edits, `Space` toggles, and `adage config set`'s validation and agent-session refusal apply |
-
-Use **0–4** or **Tab / Shift+Tab** to navigate. The command palette also includes trace surveys,
-outcome reports, collection status, reflex trace graphs, learning and error logs, evaluation datasets,
-offline model installation, and signed pack import/export. Path forms accept spaces and `~` without
-shell quoting. Import trust is explicit, and exports use your SSH signing agent.
-
-`adage watch --demo` and `adage ui --demo` replay a small scripted scenario (three sessions of the
-harbor-dispatch demo, through real hook calls) into a temporary data directory, so you can see it
-all without an agent running. In the terminal app, choose **Explore demo trace graph** (or press
-**d** from Home) to open the three guided/control examples in the map. The map uses the launch
-site’s day/night themes and lets you inspect each recorded hook, response, and outcome.
-`adage graph --serve --demo` also serves an isolated demo; opening `brain.html` directly loads
-the embedded example without a server. Demo learning evidence is simulated and labeled.
-`adage watch --once [--size 80x24]` prints a single frame as text.
-Decisions, installs and settings refuse inside an agent session, as their commands do.
-
-### Advanced CLI: Claude Code
+Adage is an unreleased developer preview: build it from source. Until the repository is public,
+this requires access to it. You need Rust and a C compiler.
 
 ```bash
-# 1. Build the binary and stage it into the plugin
-plugin/build.sh
-
-# 2. Learn from your existing Claude Code history (reads ~/.claude/projects). After this,
-#    Adage keeps learning by itself as sessions end (see "Live learning" below).
-target/release/adage learn
-target/release/adage status
-
-# 3. Run Claude Code with the Adage plugin
-claude --plugin-dir plugin/claude-code
+cargo install --locked --git https://github.com/stevenvaughanbooth/adage adage-cli
+adage init                                   # inside your repository
 ```
 
-### Advanced CLI: OpenCode and Codex
+For a first session, expected results and the separate approval path for CPU actions, follow
+[Your first useful reflex](docs/first-reflex.md).
 
-```bash
-cargo build --release -p adage-cli
-target/release/adage install opencode            # print the plugin; add --write to install it
-target/release/adage install codex               # print a hooks.json; add --write to merge it
-opencode export <session-id> > s.json && target/release/adage learn --transcripts s.json
-target/release/adage learn --codex-sessions ~/.codex/sessions   # Codex rollouts
+**Not published yet:** the Claude Code plugin marketplace, Homebrew and npm. Until the first
+release is out, none of these exist; once they do:
+
+```text
+/plugin marketplace add stevenvaughanbooth/adage      # in Claude Code (not published yet)
+/plugin install adage@adage
+brew install stevenvaughanbooth/tap/adage             # not published yet
+npm install -g @adage-sh/cli                          # not published yet
 ```
 
-`--write` installs into the repository (`.opencode/plugins/adage.js`, `.codex/hooks.json`) or, with
-`--scope user`, the harness's documented user location; it never runs inside an agent session.
-`adage install claude-code` does the same for Claude Code settings. What each harness supports, and
-what it cannot do yet (Codex reports no tool failures to hooks, so only routes that react to a
-failed command stay silent there; learned dead ends are announced at the first prompt), is in
-[docs/harnesses.md](docs/harnesses.md).
+Building from a checkout, the release channels and the separate `adage-exec` and `adage-train`
+binaries are in [docs/usage.md](docs/usage.md#other-ways-to-install).
 
-`adage status` shows every track and route with its aspect and evidence; `adage report` summarises
-directives emitted, followed, and derailed. Data lives in `~/Library/Application Support/Adage`
-(macOS), `~/.local/share/adage` (Linux) or `%APPDATA%\Adage` (Windows); `ADAGE_HOME` overrides it.
+## Quickstart
 
-**Kill switches:** `ADAGE_DISABLE=1`, or a `.adage/disabled` file in a repository.
+For a guided interface, run `adage ui` after building Adage. Home explains the next step;
+`Ctrl-K` opens the palette for connecting a harness, selecting history, conditioning a repository,
+reviewing reflexes, and opening the browser map. Forms and confirmations keep these actions in the
+app. `adage ui --demo` lets you explore with isolated sample data.
 
-**Live learning:** available history is learned automatically. When an agent's session stops or
-ends, the hook starts a background learner for that repository (detached; the hook never waits,
-and never says anything different). It learns at most once per `learn.min_interval_secs` per
-repository, one learner at a time, and appends each route that changed (new, retired, yellow →
-green, evidence, awaiting review) to `$ADAGE_HOME/learn.log`. `adage doctor` shows the last run
-per repository. OpenCode exports are snapshots: use **Import OpenCode history** again to make
-new sessions available; hooks do not refresh those exports. The file contract for tools that follow it live is
-[docs/live-learning.md](docs/live-learning.md).
 
-**Settings:** `$ADAGE_HOME/config.toml`, shown and changed with `adage config`:
+Start a session in a repository. The first time, you see one line (the agent never sees it):
 
-```bash
-adage config                                  # every key, its value, and where it came from
-adage config set learn.auto false             # stop learning automatically (ADAGE_AUTO_LEARN=0 also works)
-adage config set learn.thresholds demo        # lower evidence bars, for small histories
-adage config set learn.min_interval_secs 300  # learn each repository at most every 5 minutes
+```text
+adage: learning from 23 past sessions in this repo; reflexes arrive within a minute. Nothing runs without you.
 ```
 
-| Key | Default | |
+From the next prompt on, the agent gets its reflexes. Run `adage` anytime to see where things
+stand:
+
+```text
+adage 0.1.0 · github.com/acme/billing · ● healthy
+
+reflexes    14 active: 4 instincts, 9 learned, 1 from your team
+learning    after each session · last: 2 min ago, 1 change
+activity    last 30 days: 61 sessions · 188 directives · 152 followed · 7 dead ends headed off
+savings     ✓ ~$0.034 and 3.1 turns per session, API-list equivalent (95% CI $0.011–$0.058)
+
+next  adage review · adage ui · adage map · adage doctor
+```
+
+<sub>Illustrative numbers. Until a repository has enough sessions for a real comparison, the card
+shows counts, not dollars.</sub>
+
+## Evidence so far
+
+**Adage learns your repository's recurring work and gives your agent what it would otherwise go
+looking for.** Adage saves model calls by handling learned reflexes and instincts on your CPU; we
+count that in model requests, tokens and API cost. GPU use and energy are not measured.
+
+On four held-out tasks in a real repository ([Marshmallow](https://github.com/marshmallow-code/marshmallow)),
+frozen before any result was read and never used for tuning, each run five times with and without
+Adage (Claude Haiku 4.5, scored by hidden tests the agent never sees):
+
+- **Advisory mode, the default** (instincts, the orientation card and learned advice; nothing runs
+  on the agent's behalf): **about 22% fewer model calls** (29.0 → 22.8 per session, 0.78×; one-sided
+  95% upper bound 0.83; fewer in 18 of 20 paired blocks) and **a third lower cost** ($0.201 →
+  $0.135 per session), **with the same correctness** (hidden tests 19/20 in both). This comparison
+  was registered before the study, to be reported beside its gated test.
+- **Execution mode, opt-in and experimental** (Adage also runs the person-approved tests on your
+  CPU and checks the finish line): more savings in testing (0.67×, upper bound 0.73), but hidden
+  tests passed 17/20 against 19/20, which misses the registered quality rule, so the study's verdict
+  for execution mode is that it did not pass. It is not yet proven to keep quality and stays opt-in.
+- **Safety controls:** all five (a failing test, a later edit, a config change, a broader change, an
+  explicit rerun request) ran as designed, and none skipped necessary work.
+
+One repository and one model so far; transfer to cheaper models and more repositories are next.
+The launch site's "How we tested" page explains the method in plain words. The full study
+history, misses included, is in [docs/benchmarks.md](docs/benchmarks.md#launch-evidence-cpu-execution-and-cross-session-learning),
+with every record in the [launch evidence index](evals/reflex-proof/LAUNCH-STATUS.md).
+
+## What it learns
+
+| Reflex | Learned from | What the agent hears |
 | --- | --- | --- |
-| `learn.auto` | `true` | Learn automatically when sessions stop or end (`ADAGE_AUTO_LEARN` wins) |
-| `learn.min_interval_secs` | `120` | At most one automatic learn per repository per interval |
-| `learn.thresholds` | `default` | `default` or `demo`, for `adage learn` too (`--demo` wins) |
-| `learn.claude_projects` | `""` | Claude Code history (`""` = `$CLAUDE_CONFIG_DIR/projects`, or `~/.claude/projects`) |
-| `learn.codex_sessions` | `""` | Codex rollouts (`""` = `$CODEX_HOME/sessions`, or `~/.codex/sessions`) |
-| `learn.opencode_exports` | `""` | A directory of `opencode export` files automatic learning reads |
-| `learn.parse_cache` | `true` | Keep parsed transcripts in `cache/sessions` (owner-only), so re-learning parses only what changed |
-| `runtime.holdout` | `0.1` | Holdout share (`ADAGE_HOLDOUT` wins) |
+| **Avoid a dead end** | A command that keeps failing, then one that works | "`python3 -m unittest` fails here. Use `make test`." |
+| **Look the item up** | Agents passing an ID from the prompt to the same script | "Work items are looked up with `scripts/wi-lookup W-2042`." |
+| **Regenerate after an edit** | A step that always follows edits to certain files | "Changes to `schema/*.json` must be followed by `make gen`." |
+| **Steps in order** | Commands run in sequence after an edit | "After editing `registry/*.csv`: `make gen`, then `make check`." |
+| **Procedure cards** | Several sessions doing the same kind of task | The files to edit, the test that works and the commands that failed, delivered once |
 
-`config set` refuses inside an agent session.
+The full list and how each is delivered: [docs/usage.md](docs/usage.md#what-adage-learns).
 
-**Intent families (optional):** `adage models fetch` downloads the pinned static embedding model
-(potion-base-8M, 31 MB, SHA-256 verified; `adage models install <dir>` for offline machines) into
-the data directory. `adage learn` then clusters each repository's prompts into intent families
-(exact kNN + deterministic Louvain, split and merged by what the sessions did next — spike S7) and
-learns an intent route per usable family. Without the model everything else works unchanged: learning
-skips intent families and hooks never load a model.
+## Earlier advisory results
 
-**Sharing:** `adage share <track> --out <dir> [--key <path>]` checks every file for absolute paths,
-home-directory paths and secret-looking strings, re-validates the track, and signs its digest
-(`sshsig`, namespace `adage-track`; ssh-agent first, else the key file, whose passphrase is asked for at
-the terminal). `adage add <dir>` verifies the
-signature against `$ADAGE_HOME/trusted-signers` or the repository's `.adage/trusted-signers` (approved
-once with `--trust` and pinned by hash in `$ADAGE_HOME/trust.json`) and installs the routes at
-probation, never green, under `tracks/@imported/` where `adage learn` never writes; if you later learn
-the same route yourself, your first-hand route wins. Adding a newer version keeps your own review
-decisions for every route that survives. An unknown signer needs `--trust`. Both commands refuse to run inside an agent
-session (`CLAUDECODE`) or without a terminal; `ADAGE_ALLOW_NONINTERACTIVE=1` lifts only the terminal check.
+Real Claude Code sessions, each paired with a control session on the same task. These measure
+advice and procedure cards, not CPU execution. Every number links to its data in
+[docs/benchmarks.md](docs/benchmarks.md).
 
-**Review:** `adage review [--json]` lists the routes that need a person's decision: new routes from
-`adage learn`, routes whose aspect or evidence changed materially since the last decision (shape,
-aspect, a Wilson lower bound moving by 0.10, or support doubling or halving), imports at probation,
-rejected routes that came back stronger, and routes whose directed response was repeatedly not observed within the follow window in guided sessions. Each
-entry shows its evidence, effect and ceiling, and the exact directive text with example slot values.
-A pinned route is never overwritten: when learning (or a re-import) finds a materially different
-version, it waits as *proposed*, with a diff; `approve` applies it (still pinned) and `dismiss` keeps
-yours. `adage review <approve|reject|demote|promote|pin|dismiss> <track> <route> [--by <name>]` records the decision
-in the track's `review.yaml`, re-validates the track, and recompiles the index. Promotion never exceeds
-the effect ceiling, and an import cannot be promoted to green without first-hand evidence learned
-locally. `adage learn` keeps rejected routes retired until they strengthen materially, and holds
-demotions and promotions. A rejected route also keeps a teammate's import of the same route out of
-the index. Decisions refuse to run inside an agent session. Listing is allowed there.
+| Setting | Cost per task | Tests passed (control → Adage) |
+| --- | ---: | ---: |
+| Recurring tasks on 5 open-source repos (shipped product, Haiku 4.5, 80 pairs) | **−28.2%** | 59/80 → 51/80 ⚠️ |
+| A compiled skill vs. no help (12 sessions per arm) | **$0.122 → $0.034** | 9/12 → 12/12 |
+| Sandbox repo, Sonnet 5, held-out tasks (36 per arm) | **−24%** | 100% → 100% |
+| One-off bug fixes on 13 real repos | 0–4% | unchanged |
 
-**Experiment:** `runtime.holdout = 0.1` (default; `ADAGE_HOLDOUT` overrides) holds out 10% of sessions — Adage computes what it would
-have said and logs it, but says nothing — so every claimed effect is measured against a control.
+**Read with care.** The pass-rate drop in the first row is almost entirely one family, where the
+learned procedure faithfully repeated sessions that never wrote a test. One-off bug fixes gain
+little, because the expensive part is reasoning about new code. Adage helps most with work your
+repository repeats. Sample sizes are small; the [benchmarks page](docs/benchmarks.md) has every
+interval and caveat.
 
-## Results
+## Safe by default
 
-Real **Claude Haiku 4.5** agents, headless, each in a fresh copy of a sandbox repository whose
-conventions they cannot guess. Adage learned from 18 training sessions, then two learning-loop rounds
-of held-out work items ran 18 sessions with Adage and 18 without (hooks active, directives withheld).
-Hidden tests scored every run. Round 2 learned from every earlier session.
+- Adage **advises**. It doesn't run commands for the agent unless you turn on delegation at a
+  terminal (`adage delegate on`), and then only reflexes you approved, inside an OS sandbox, on
+  macOS or Linux. On Windows it advises but executes nothing, and its hook invocation there is
+  untested.
+- **No network** from any hook or learner. Transcripts are read locally, and background learning
+  reads only the current repository's.
+- Settings files change only when you install, and `adage install … --write` shows the diff and
+  keeps a backup.
+- Off switches: `ADAGE_DISABLE=1`, or a `.adage/disabled` file in a repository.
 
-| Round 2, held-out | With Adage | Without | p (permutation) |
-| --- | ---: | ---: | ---: |
-| Turns before first edit (median) | **2** | 20 | 0.0002 |
-| Seconds to first edit (median) | **12.0** | 42.5 | 0.0001 |
-| Total turns (median) | **9** | 27.5 | < 0.001 |
-| Cost per run (mean, USD) | **0.053** | 0.135 | 0.0001 |
-| Hidden checks passed | **100%** | 78% | 0.11 (n.s. at n = 18) |
+[How Adage works](docs/how-it-works.md) has exactly what runs automatically, what needs your
+approval, and what the evidence does and doesn't show.
 
-Round 1 showed the loop at work: removing exploration exposed a dead end (agents that no longer read
-the Makefile tried `pytest` first: 1.44 failed runs per session). Round 2 learned it as an inhibit reflex
-and it disappeared (0.00). Without Adage, 4 of 18 round-1 agents gave up asking what the ticket was.
-Full data: [demo/results](demo/results/); interactive results page published as an artifact.
+## Documentation
 
-### A second demo: a stronger model, a different stack
-
-Next, **Claude Sonnet 5** on **harbor-dispatch**, a TypeScript service on Node 26 whose conventions
-differ from the first sandbox:
-
-- incidents like `INC-94` resolve only through `bin/fetch-incident`;
-- `npm test` fails and `npm run check` works;
-- `registry/*.csv` edits need `npm run codegen`.
-
-There were 84 sessions: 12 for training, then 36 with Adage and 36 without over two rounds. The run
-cost $6.55 in total.
-
-| Round 2, held-out | With Adage | Without | p (permutation) |
-| --- | ---: | ---: | ---: |
-| Turns before first edit (median) | **3** | 6 | 0.02 |
-| Seconds to first edit (median) | **6.7** | 11.0 | < 0.001 |
-| Exploration calls before first edit (median) | **2** | 4 | < 0.001 |
-| Total turns (median) | **7** | 10 | 0.002 |
-| Cost per run (mean, USD) | **0.065** | 0.086 | < 0.001 |
-| Hidden checks passed | 100% | 100% | — |
-
-Sonnet found every convention on its own:
-
-- it ran the lookup unaided in every training session;
-- it met the finish-line obligation 100% of the time in both arms;
-- it never tried `npm test`, so no dead end was learned.
-
-Adage's effect therefore moved from avoiding failures (Haiku: 78% → 100% hidden checks) to
-**skipping exploration**: agents went to the lookup and the linked files directly. That halved the
-turns before the first edit and cut cost by 24%, with quality unchanged. The weaker the agent is at
-finding conventions, the more Adage adds.
-
-Results are in [demo/results/20260923-1249-harbor-dispatch-claude-sonnet-5](demo/results/20260923-1249-harbor-dispatch-claude-sonnet-5/).
-
-## Reproduce the experiments
-
-`demo/` runs real headless Claude Code agents on a sandbox repository whose conventions an agent
-cannot guess (work items only via a tracker CLI; tests only via `make test`; `make gen` required
-after schema edits), with twelve work items and hidden checks.
-
-```bash
-python3 demo/run.py all                  # train (no Adage) → learn → held-out eval, two arms
-python3 demo/dashboard/serve.py          # live dashboard at http://127.0.0.1:8765
-```
-
-The map page lives with the binary (`crates/adage-cli/assets/brain.html`); `adage graph
---serve` serves it without the Python server.
-
-See [demo/SANDBOX.md](demo/SANDBOX.md). `python3 demo/sandbox/selfcheck.py` proves every work item
-fails untouched and passes with its reference solution.
-
-## Repository
-
-| Path | Contents |
+| | |
 | --- | --- |
-| `crates/adage-core` | Canonical actions, shell normaliser (tree-sitter-bash + command table as data), effect classes, spans, repo identity |
-| `crates/adage-store` | Per-session two-slot state files and CRC-framed spools — no daemon |
-| `crates/adage-tracks` | Track format, validation, canonical digest, compiled index |
-| `crates/adage-runtime` | Hook-time decisions and directive rendering from fixed templates |
-| `crates/adage-learn` | Transcript import and the route miners |
-| `crates/adage-sign` | Native `sshsig` signing (ssh-agent or key file) and `allowed_signers` verification |
-| `crates/adage-intent` | Prompt normalisation, the static embedding model in plain Rust (WordPiece + safetensors rows read on demand), deterministic kNN + Louvain clustering, behavioural split/merge |
-| `crates/adage-eval` | `adage eval`: offline replay of recorded sessions through the runtime, scored against what agents did; safety oracle; property tests |
-| `crates/adage-cli` | The `adage` binary; harness adapters in `src/harness/` |
-| `crates/adage-sim` | Harness simulator: seeded mock histories (`sim/fixtures/`) and native hook payloads for Claude Code, OpenCode, and Codex |
-| `plugin/claude-code` | The Claude Code plugin |
-| `plugin/opencode` | The OpenCode plugin (installed by `adage install opencode`) |
-| `demo/` | Sandbox, runner, live dashboard |
-| `evals/` | Eval datasets (90 real demo sessions, synthetic, adversarial) and the live proving-ground runner — see [docs/evals.md](docs/evals.md) |
-| `docs/` | [Design spec](docs/Adage%20—%20Design%20Spec.md) · [Architecture](docs/Adage%20—%20Architecture.md) · [Implementation plan](docs/Adage%20—%20Implementation%20Plan.md) |
-| `spikes/` | The experiments that settled the architecture — see [the board](spikes/README.md) |
+| [How Adage works](docs/how-it-works.md) | The behavior reference and current limits |
+| [Usage](docs/usage.md) | Every command, the live views (`adage watch`, `adage ui`), settings, sharing and review |
+| [Packs and the marketplace](docs/marketplace.md) | What a packaged reflex looks like, the base instincts, sharing and hosting |
+| [Benchmarks and evidence](docs/benchmarks.md) | Every published number, with data, code and caveats |
+| [Harnesses](docs/harnesses.md) | What Claude Code, Codex and OpenCode each support |
+| [Execution](docs/execution.md) | Opt-in, sandboxed `adage-exec` |
+| [Training](docs/training.md) | Compiling skills with `adage train` |
+| [Repository layout and status](docs/repository.md) | Crates, plugins and what's built so far |
 
-`cargo test --workspace` runs the suite, including the normaliser's 315 golden fixtures.
+## Contributing
 
-## Status
-
-v0.1: Claude Code, plus OpenCode and Codex adapters and importers, built against their
-documentation and source and verified end to end by the harness simulator (learn from each
-harness's mock history, replay a held-out session through its native hooks in both arms), but not
-yet run against a live installation — see [docs/harnesses.md](docs/harnesses.md#verification). Tracks are shared
-directly (`adage share` / `adage add`) and reviewed with `adage review`. Intent families use static
-embeddings (`adage models fetch`; everything else works without the model). Hardened against an
-adversarial review (tracks are untrusted input; effects re-derived; bounded hot path; symlink-safe
-paths). Built-in instincts are not available in this build. Team depots and lockfiles are designed but not yet built. See the implementation plan.
+Contributions are welcome. Please sign off your commits (`git commit -s`); see
+[CONTRIBUTING.md](CONTRIBUTING.md). `cargo test --workspace --locked` runs the suite.
 
 ## License
 
-Adage is licensed under the [Apache License 2.0](LICENSE). Third-party licenses for everything
-compiled into the binary are in [NOTICE](NOTICE). Contributions are welcome under the same
-license with a DCO sign-off (`git commit -s`); see [CONTRIBUTING.md](CONTRIBUTING.md).
+Adage is licensed under the [Apache License 2.0](LICENSE). Third-party licenses are in
+[NOTICE](NOTICE).

@@ -1,0 +1,48 @@
+{
+  "kind": "engineering-validation",
+  "replays": [
+    {
+      "cohort": "curve-v2",
+      "sessions": 15,
+      "before": {
+        "compiled": 1,
+        "contexts": 0,
+        "routes": 4
+      },
+      "after": {
+        "compiled": 1,
+        "contexts": 0,
+        "routes": 4
+      },
+      "binary_sha256": "ab909549c93758240df1b9087212ba958d47527067810e96e28706bdacfdbf17"
+    },
+    {
+      "cohort": "curve-guided-v1",
+      "sessions": 5,
+      "before": {
+        "compiled": 0,
+        "contexts": 0,
+        "routes": 1
+      },
+      "after": {
+        "compiled": 9,
+        "contexts": 0,
+        "routes": 1
+      },
+      "binary_sha256": "ab909549c93758240df1b9087212ba958d47527067810e96e28706bdacfdbf17"
+    }
+  ],
+  "paid_calls": 0,
+  "grants_created": false,
+  "automatic_actions": 0,
+  "efficacy_claim": false,
+  "synthetic_regression": "Five native-shaped edit-test-unrelated-action histories certify; four histories and failed continuation reject; execution-only candidates cannot fall back to advice.",
+  "limits": [
+    "Closed advisory candidates retain priority under the unchanged20000 scoring cap.",
+    "Real-history development replay is not held-out efficacy."
+  ],
+  "focused_rust_tests_passed": 120,
+  "harness_tests_passed": 81,
+  "release_build": true,
+  "format_check": true
+}

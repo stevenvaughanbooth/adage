@@ -11,7 +11,7 @@ really runs in the sandbox, and each session is written as a Claude Code transcr
 output. The root gets the live runner's layout (runs/, transcripts/, state.json, adage-home/), so
 the rest of the pipeline runs unchanged:
 
-  1. `adage learn --demo` over the 12 training sessions; checks that all four conventions are learned
+  1. `adage condition --demo` over the 12 training sessions; checks that all four conventions are learned
      (lookup with an INC contract, linked files, the npm-test dead end, the registry finish line);
   2. the runner's classification and metrics over every session, and the results page;
   3. `build_demo.py` turns the root into an `adage eval` dataset, and `adage eval --split round1`
@@ -134,7 +134,7 @@ def main(argv):
     state = {"config": CFG["name"], "model": "scripted-rehearsal", "runs": {}, "rounds": {}, "labels": CFG["labels"],
              "phase": "done", "started": 1790000000.0}
     plan = runner.plan(CFG, ["train", "eval"], 1)
-    plan = [p for p in plan if p[2] in ("train", "holdout")]
+    plan = [p for p in plan if p[2] in ("train", "control")]
     t0 = 1790000000.0
     print(f"scripting {len(plan)} sessions in fresh sandboxes under {root}/runs")
     for i, (run_id, phase, arm, task, prompt_t) in enumerate(plan):
@@ -160,7 +160,7 @@ def main(argv):
     train = [r for r in state["runs"].values() if r["phase"] == "train"]
     tx = [str(next((root / "transcripts").glob(f"*/{r['metrics']['session_id']}.jsonl"))) for r in train]
     (root / "outcomes.json").write_text(json.dumps({r["metrics"]["session_id"]: r["metrics"]["passed"] for r in train}))
-    out = subprocess.run([str(adage), "learn", *CFG["learn_args"], "--json", "--repo", CFG["repo_key"],
+    out = subprocess.run([str(adage), "condition", *CFG["learn_args"], "--json", "--repo", CFG["repo_key"],
                           "--outcomes", str(root / "outcomes.json"), "--transcripts", *tx],
                          capture_output=True, text=True, env=dict(scorer.env(), ADAGE_HOME=str(home)))
     if out.returncode != 0:
@@ -173,7 +173,7 @@ def main(argv):
     for t in tracks:
         r = t["route"]
         slots = "; ".join(f"{x['name']}: {json.dumps(x['contract'])}" for x in r.get("slots", []))
-        print(f"  {r['id']:<22} {r['aspect']:<6} trigger={json.dumps(r['trigger'])}\n{'':<25}step={json.dumps(r['step'])}"
+        print(f"  {r['id']:<22} {r['strength']:<7} trigger={json.dumps(r['trigger'])}\n{'':<25}step={json.dumps(r['step'])}"
               + (f"\n{'':<25}slots={slots}" if slots else ""))
     lookup = next((t["route"] for t in tracks if t["route"]["id"] == "lookup-work-item"), None)
     dead = next((t["route"] for t in tracks if t["route"]["id"].startswith("dead-end")), None)
@@ -194,8 +194,8 @@ def main(argv):
     # 2. the runner's report and results page over the scripted state.
     summary = runner.summarise(state, 1)
     page = report.build(state, root / "results")
-    print(f"\nrunner summary (holdout arm only here; no directives were delivered): "
-          f"{json.dumps({k: v.get('holdout') for k, v in summary['metrics'].items()})}")
+    print(f"\nrunner summary (control arm only here; no directives were delivered): "
+          f"{json.dumps({k: v.get('control') for k, v in summary['metrics'].items()})}")
     print(f"results page: {page / 'index.html'}")
 
     # 3. build an offline dataset and replay the held-out sessions.

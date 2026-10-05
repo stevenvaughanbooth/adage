@@ -1,0 +1,49 @@
+{
+  "name": "@adage/map",
+  "private": true,
+  "version": "0.0.0",
+  "description": "adage map: the web app the adage binary serves (crates/adage-cli/src/map/)",
+  "license": "Apache-2.0",
+  "type": "module",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "vite",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "build": "vite build",
+    "embed": "node scripts/embed.mjs",
+    "assets": "pnpm build && pnpm embed",
+    "drift": "node scripts/drift.mjs",
+    "e2e": "playwright test",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@fontsource-variable/bricolage-grotesque": "^5.3.0",
+    "@fontsource-variable/hanken-grotesk": "^5.3.0",
+    "@fontsource-variable/red-hat-mono": "^5.3.0",
+    "@xyflow/react": "^12.12.0",
+    "cmdk": "^1.1.1",
+    "elkjs": "^0.11.1",
+    "motion": "^12.43.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "three": "0.186.1"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@playwright/test": "1.56.1",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^22.20.4",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/three": "0.186.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~5.9.3",
+    "vite": "^8.3.1",
+    "vitest": "^4.1.11"
+  }
+}

@@ -1,0 +1,28 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+expression: text
+---
+ adage watch  harbor-dispatch                  LIVE  FIRE 1  PRIME 1  INHIBIT 1
+
+─ now ──────────────────────────────────────────────────────────────────────────
+ 12:04:01 00c4a1 cc  prompt   ○ would fire bin/fetch-incident INC-2045 (withhel…
+ 12:04:02 00a11c cc  tools    → ◠ PRIME      That result lists these files: rea…
+                              ✓ followed bin/fetch-incident INC-2045
+ 12:04:03 000b0b cc  tools    · 1 call, nothing to say
+ 12:04:04 000b0b cc  failure  → ◠ INHIBIT    npm run check
+ 12:04:05 000b0b cc  tools    ✗ not observed lookup-incident
+ 12:04:06 00c4a1 cc  tools    ○ found bin/fetch-incident INC-2045 unaided
+ 12:04:07 000b0b cc  stop     ■ finish line: asked the agent to continue
+ 12:04:08 00a11c cc  tools    ✓ finish line met: codegen-after-registry
+
+─ conditioning ─────────────────────────────────────────────────────────────────
+   ◠ lookup-incident           prime → fire       24/25 · lb 0.80
+   ◠ dead-end-npm-test         new · inhibit      6/7
+ ✗ 12:04 conditioning failed (io): tracks directory is not writable
+   ○ 1 to look over · adage review
+
+─ health ───────────────────────────────────────────────────────────────────────
+ + hooks claude    + 4 reflexes    + auto-condition
+ ! no model · adage models fetch
+────────────────────────────────────────────────────────────────────────────────
+ : palette · p pause · f scope · / filter · enter inspect · m open map   q quit

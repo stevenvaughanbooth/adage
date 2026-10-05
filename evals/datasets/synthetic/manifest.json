@@ -1,4 +1,5 @@
 {
+  "conventions": "conventions.json",
   "default_split": "hash:0.5",
   "description": "Generated sessions with known behaviour on the acme-billing sandbox (adage eval generate synthetic)",
   "learn": "demo",
@@ -12,7 +13,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-00",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1100"
     },
     {
       "file": "sessions/syn-01.jsonl",
@@ -20,7 +22,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-01",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1101"
     },
     {
       "file": "sessions/syn-02.jsonl",
@@ -28,7 +31,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-02",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1102"
     },
     {
       "file": "sessions/syn-03.jsonl",
@@ -36,7 +40,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-03",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1103"
     },
     {
       "file": "sessions/syn-04.jsonl",
@@ -44,7 +49,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-04",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1104"
     },
     {
       "file": "sessions/syn-05.jsonl",
@@ -52,7 +58,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-05",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1105"
     },
     {
       "file": "sessions/syn-06.jsonl",
@@ -60,7 +67,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-06",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1106"
     },
     {
       "file": "sessions/syn-07.jsonl",
@@ -68,7 +76,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-07",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1107"
     },
     {
       "file": "sessions/syn-08.jsonl",
@@ -76,7 +85,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-08",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1108"
     },
     {
       "file": "sessions/syn-09.jsonl",
@@ -84,7 +94,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-09",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1109"
     },
     {
       "file": "sessions/syn-10.jsonl",
@@ -92,7 +103,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-10",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1110"
     },
     {
       "file": "sessions/syn-11.jsonl",
@@ -100,7 +112,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-11",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1111"
     },
     {
       "file": "sessions/syn-12.jsonl",
@@ -108,7 +121,8 @@
       "passed": false,
       "phase": "synthetic",
       "run": "syn-12",
-      "stale_generated": true
+      "stale_generated": true,
+      "task": "W-1112"
     },
     {
       "file": "sessions/syn-13.jsonl",
@@ -116,7 +130,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-13",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1113"
     },
     {
       "file": "sessions/syn-14.jsonl",
@@ -124,7 +139,8 @@
       "passed": false,
       "phase": "synthetic",
       "run": "syn-14",
-      "stale_generated": true
+      "stale_generated": true,
+      "task": "W-1114"
     },
     {
       "file": "sessions/syn-15.jsonl",
@@ -132,7 +148,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-15",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1115"
     },
     {
       "file": "sessions/syn-16.jsonl",
@@ -140,7 +157,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-16",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1116"
     },
     {
       "file": "sessions/syn-17.jsonl",
@@ -148,7 +166,8 @@
       "passed": false,
       "phase": "synthetic",
       "run": "syn-17",
-      "stale_generated": true
+      "stale_generated": true,
+      "task": "W-1117"
     },
     {
       "file": "sessions/syn-18.jsonl",
@@ -156,7 +175,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-18",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1118"
     },
     {
       "file": "sessions/syn-19.jsonl",
@@ -164,7 +184,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-19",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1119"
     },
     {
       "file": "sessions/syn-20.jsonl",
@@ -172,7 +193,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-20",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1120"
     },
     {
       "file": "sessions/syn-21.jsonl",
@@ -180,7 +202,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-21",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1121"
     },
     {
       "file": "sessions/syn-22.jsonl",
@@ -188,7 +211,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-22",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1122"
     },
     {
       "file": "sessions/syn-23.jsonl",
@@ -196,7 +220,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-23",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1123"
     },
     {
       "file": "sessions/syn-24.jsonl",
@@ -204,7 +229,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-24",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1124"
     },
     {
       "file": "sessions/syn-25.jsonl",
@@ -212,7 +238,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-25",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1125"
     },
     {
       "file": "sessions/syn-26.jsonl",
@@ -220,7 +247,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-26",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1126"
     },
     {
       "file": "sessions/syn-27.jsonl",
@@ -228,7 +256,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-27",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1127"
     },
     {
       "file": "sessions/syn-28.jsonl",
@@ -236,7 +265,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-28",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1128"
     },
     {
       "file": "sessions/syn-29.jsonl",
@@ -244,7 +274,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-29",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1129"
     },
     {
       "file": "sessions/syn-30.jsonl",
@@ -252,7 +283,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-30",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1130"
     },
     {
       "file": "sessions/syn-31.jsonl",
@@ -260,7 +292,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-31",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1131"
     },
     {
       "file": "sessions/syn-32.jsonl",
@@ -268,7 +301,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-32",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1132"
     },
     {
       "file": "sessions/syn-33.jsonl",
@@ -276,7 +310,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-33",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1133"
     },
     {
       "file": "sessions/syn-34.jsonl",
@@ -284,7 +319,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-34",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1134"
     },
     {
       "file": "sessions/syn-35.jsonl",
@@ -292,7 +328,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-35",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1135"
     },
     {
       "file": "sessions/syn-36.jsonl",
@@ -300,7 +337,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-36",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1136"
     },
     {
       "file": "sessions/syn-37.jsonl",
@@ -308,7 +346,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-37",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1137"
     },
     {
       "file": "sessions/syn-38.jsonl",
@@ -316,7 +355,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-38",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1138"
     },
     {
       "file": "sessions/syn-39.jsonl",
@@ -324,7 +364,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-39",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1139"
     },
     {
       "file": "sessions/syn-40.jsonl",
@@ -332,7 +373,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-40",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1140"
     },
     {
       "file": "sessions/syn-41.jsonl",
@@ -340,7 +382,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-41",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1141"
     },
     {
       "file": "sessions/syn-42.jsonl",
@@ -348,7 +391,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-42",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1142"
     },
     {
       "file": "sessions/syn-43.jsonl",
@@ -356,7 +400,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-43",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1143"
     },
     {
       "file": "sessions/syn-44.jsonl",
@@ -364,7 +409,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-44",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1144"
     },
     {
       "file": "sessions/syn-45.jsonl",
@@ -372,7 +418,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-45",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1145"
     },
     {
       "file": "sessions/syn-46.jsonl",
@@ -380,7 +427,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-46",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1146"
     },
     {
       "file": "sessions/syn-47.jsonl",
@@ -388,7 +436,8 @@
       "passed": true,
       "phase": "synthetic",
       "run": "syn-47",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-1147"
     },
     {
       "file": "sessions/syn-chore-0.jsonl",

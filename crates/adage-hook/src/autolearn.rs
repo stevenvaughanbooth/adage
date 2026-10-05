@@ -1,0 +1,283 @@
+//! The hook's part of live learning (Architecture §4.7.2; the learner itself is `adage condition
+//! --auto`, in `adage-cli/src/autolearn.rs`, which documents the queue files).
+//!
+//! When a session stops or ends, after its normal decision, the hook calls [`on_turn_end`]. If
+//! `learn.auto` is on and `learn.repos` names the repository (`all`, the default, names every
+//! one), it records a request for the repository and, unless a learner for it is already running
+//! or scheduled, starts one: the adage binary (`learner`), detached, in its own process group,
+//! with no standard streams. Nothing here changes what the hook prints.
+
+use crate::failopen::Failure;
+use adage_store::config;
+use adage_store::{lock, Paths};
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
+
+pub use adage_core::time::now_ms;
+
+/// Debug builds only: `record` writes the learner command a hook would start to
+/// `learn-queue/spawn-record.jsonl` instead of starting it; `fail` makes starting it fail.
+#[cfg(debug_assertions)]
+pub const TEST_SPAWN_ENV: &str = "ADAGE_TEST_NO_SPAWN";
+#[cfg(debug_assertions)]
+pub const SPAWN_RECORD: &str = "spawn-record.jsonl";
+
+/// A request to learn a repository: the latest session end there.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Request {
+    pub repo: String,
+    pub root: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transcript_path: Option<String>,
+    pub harness: String,
+    pub requested_at: u64,
+    /// Asked at a session's start (docs/zero-config.md §3.2): the learner binds instincts and
+    /// recompiles the index first, then learns.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub bootstrap: bool,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+pub struct Spawned {
+    pub at: u64,
+    pub after: u64,
+}
+
+/// A learner's last run.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct RunState {
+    pub pid: u32,
+    pub started_at: u64,
+    #[serde(default)]
+    pub finished_at: Option<u64>,
+    pub outcome: String,
+    #[serde(default)]
+    pub processed: u64,
+    /// Runs in a row that ended in an error: from the third, the next learner waits twice as
+    /// long each time (up to 64 intervals), and a notice says so.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub errors: u32,
+}
+
+fn is_zero(n: &u32) -> bool {
+    *n == 0
+}
+
+/// A one-line notice for the person, written by the learner (`<slug>.notice.json`) and shown by
+/// the hook at a session start (docs/zero-config.md §3.3). `id` changes only when there is
+/// something new to say.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Notice {
+    pub id: String,
+    pub text: String,
+    /// `health`, `waiting`, `value` or `reflexes` (the wording priority, highest first).
+    pub kind: String,
+    pub at: u64,
+    /// What the notice was composed from (the learner's; the hook ignores it).
+    #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
+    pub basis: serde_json::Value,
+    /// What had been shown when it was composed: "new" is measured from here.
+    #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
+    pub baseline: serde_json::Value,
+}
+
+/// The last notice shown for a repository (`<slug>.notice-shown.json`).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Shown {
+    pub id: String,
+    pub at: u64,
+}
+
+/// At most one notice per repository in this many milliseconds.
+pub const NOTICE_EVERY_MS: u64 = 86_400_000;
+
+/// The notice to show now for this repository, if any: a new one (an id not shown last), at
+/// least [`NOTICE_EVERY_MS`] after the last shown, with `ui.notices` on. Showing it records it.
+pub fn take_notice(paths: &Paths, repo: &str) -> Option<String> {
+    if !config::load(paths).config.ui_notices {
+        return None;
+    }
+    let q = Queue::new(paths, repo);
+    let n: Notice = read_json(&q.notice())?;
+    let shown: Shown = read_json(&q.shown()).unwrap_or_default();
+    let now = now_ms();
+    if n.id.is_empty() || n.id == shown.id || now.saturating_sub(shown.at) < NOTICE_EVERY_MS {
+        return None;
+    }
+    write_json(&q.shown(), &Shown { id: n.id, at: now }).ok()?;
+    Some(n.text)
+}
+
+/// One repository's queue files.
+pub struct Queue {
+    dir: PathBuf,
+    pub slug: String,
+}
+
+impl Queue {
+    pub fn new(paths: &Paths, repo: &str) -> Queue {
+        Queue { dir: paths.learn_queue(), slug: adage_tracks::layout::slug(repo) }
+    }
+    fn file(&self, suffix: &str) -> PathBuf {
+        self.dir.join(format!("{}{suffix}", self.slug))
+    }
+    pub fn request(&self) -> PathBuf {
+        self.file(".json")
+    }
+    pub fn lock(&self) -> PathBuf {
+        self.file(".lock")
+    }
+    pub fn spawned(&self) -> PathBuf {
+        self.file(".spawn.json")
+    }
+    pub fn state(&self) -> PathBuf {
+        self.file(".state.json")
+    }
+    pub fn sources(&self) -> PathBuf {
+        self.file(".sources.json")
+    }
+    pub fn notice(&self) -> PathBuf {
+        self.file(".notice.json")
+    }
+    pub fn shown(&self) -> PathBuf {
+        self.file(".notice-shown.json")
+    }
+}
+
+pub fn read_json<T: DeserializeOwned>(p: &Path) -> Option<T> {
+    serde_json::from_slice(&std::fs::read(p).ok()?).ok()
+}
+
+pub fn write_json<T: Serialize>(p: &Path, v: &T) -> std::io::Result<()> {
+    config::write_atomic(p, &serde_json::to_vec(v).map_err(std::io::Error::other)?)
+}
+
+/// What a hook's trigger did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Triggered {
+    /// `learn.auto` is off.
+    Off,
+    /// The directory is not a repository (no `.git`): there is nothing to learn there.
+    NotARepository,
+    /// The repository is not one `learn.repos` names: its sessions are recorded, its history is
+    /// not read.
+    NotChosen,
+    /// Recorded; a learner is running (it re-checks the queue before it exits).
+    Running,
+    /// Recorded; a learner has already been started to learn at a later time.
+    Scheduled,
+    /// Recorded, and a learner started: at once (`None`), or waiting until the given time.
+    Started(Option<u64>),
+}
+
+/// The hook's part: record the request and start a learner if none is running or scheduled.
+/// `bootstrap`: asked at a session's start, for a repository with no reflexes yet or a damaged
+/// index (docs/zero-config.md §3.2).
+pub fn on_turn_end(
+    paths: &Paths,
+    root: &Path,
+    harness: &str,
+    transcript_path: Option<&str>,
+    learner: &Path,
+    bootstrap: bool,
+) -> Result<Triggered, Failure> {
+    let cfg = config::load(paths).config;
+    if !cfg.learn_auto {
+        return Ok(Triggered::Off);
+    }
+    if !root.join(".git").exists() {
+        return Ok(Triggered::NotARepository);
+    }
+    let repo = adage_core::repo::repo_key_cached(root, &paths.repo_keys());
+    if !cfg.learns(&repo) {
+        return Ok(Triggered::NotChosen);
+    }
+    // The checkout can be gone before its learner runs (a worktree removed as its task ends).
+    adage_core::repo::remember_key_cached(root, &repo, &paths.repo_keys());
+    let q = Queue::new(paths, &repo);
+    let now = now_ms();
+    let transcript_path = transcript_path
+        .filter(|t| t.len() <= 4096 && !t.chars().any(char::is_control) && Path::new(t).is_absolute())
+        .map(str::to_string);
+    let req = Request {
+        repo,
+        root: root.to_string_lossy().into_owned(),
+        transcript_path,
+        harness: harness.to_string(),
+        requested_at: now,
+        bootstrap,
+    };
+    write_json(&q.request(), &req).map_err(|e| Failure::io("condition", "recording a learn request", &e))?;
+    if lock::is_held(&q.lock()).map_err(|e| Failure::io("condition", "checking the learner lock", &e))? {
+        return Ok(Triggered::Running);
+    }
+    let last: Spawned = read_json(&q.spawned()).unwrap_or_default();
+    if last.after > now {
+        return Ok(Triggered::Scheduled);
+    }
+    let run = read_json::<RunState>(&q.state()).unwrap_or_default();
+    // Back off after repeated errors: from the third in a row, twice the interval per error
+    // (at least a minute, at most 64 intervals).
+    let base = if run.errors >= 3 { cfg.learn_min_interval_secs.max(60) } else { cfg.learn_min_interval_secs };
+    let factor = 1u64 << run.errors.saturating_sub(2).min(6);
+    let earliest = run.started_at.max(last.after).saturating_add(base * 1000 * factor);
+    // A bootstrap (no reflexes yet, or a damaged index) starts at once, unless learning keeps
+    // failing here.
+    let after = (earliest > now && (!bootstrap || run.errors >= 3)).then_some(earliest);
+    spawn(paths, root, after, learner, bootstrap)?;
+    let _ = write_json(&q.spawned(), &Spawned { at: now, after: after.unwrap_or(now) });
+    Ok(Triggered::Started(after))
+}
+
+/// Start `<learner> condition --auto --repo-root <root> [--after <ms>]` (the adage binary), detached,
+/// and do not wait.
+fn spawn(paths: &Paths, root: &Path, after: Option<u64>, learner: &Path, bootstrap: bool) -> Result<(), Failure> {
+    let mut args: Vec<String> =
+        vec!["condition".into(), "--auto".into(), "--repo-root".into(), root.to_string_lossy().into()];
+    if bootstrap {
+        args.push("--bootstrap".into());
+    }
+    if let Some(a) = after {
+        args.extend(["--after".to_string(), a.to_string()]);
+    }
+    #[cfg(debug_assertions)]
+    match std::env::var(TEST_SPAWN_ENV).as_deref() {
+        Ok("record") => {
+            use std::io::Write;
+            let line = serde_json::json!({ "ts": now_ms(), "args": args });
+            let _ = std::fs::create_dir_all(paths.learn_queue());
+            let mut f = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(paths.learn_queue().join(SPAWN_RECORD))
+                .map_err(|e| Failure::io("condition", "recording a spawn", &e))?;
+            return f
+                .write_all(format!("{line}\n").as_bytes())
+                .map_err(|e| Failure::io("condition", "recording a spawn", &e));
+        }
+        Ok("fail") => return Err(Failure::new("condition", "starting the learner: injected failure")),
+        _ => {}
+    }
+    let _ = paths;
+    let mut c = std::process::Command::new(learner);
+    c.args(&args)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        // Its own process group: a terminal's Ctrl-C or a harness killing the hook's group does
+        // not reach it.
+        c.process_group(0);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const DETACHED_PROCESS: u32 = 0x0000_0008;
+        const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
+        c.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
+    }
+    c.spawn().map(drop).map_err(|e| Failure::io("condition", "starting the learner", &e))
+}

@@ -7,6 +7,7 @@ use crate::autolearn::Queue;
 use crate::detect;
 use crate::doctor::{self, Check, Status};
 use adage_core::repo;
+use adage_intent::model;
 use adage_store::{config, lock, Paths};
 use adage_tracks::Index;
 use std::path::Path;
@@ -25,21 +26,19 @@ pub enum Fix {
     OpenFailOpen,
     EnableAutoLearn,
     OpenSettings,
-    SetHistorySource(String),
-    ImportOpenCode,
+    History(String),
 }
 
 impl Fix {
     pub fn label(&self) -> String {
         match self {
             Fix::InstallHooks(h) => format!("install {h} hooks"),
-            Fix::FetchModel => "fetch the embedding model".into(),
-            Fix::LearnNow => "learn this repository now".into(),
+            Fix::FetchModel => "fetch the intent model".into(),
+            Fix::LearnNow => "condition this repository now".into(),
             Fix::OpenFailOpen => "open the fail-open log".into(),
-            Fix::EnableAutoLearn => "turn auto-learn on".into(),
+            Fix::EnableAutoLearn => "turn auto-condition on".into(),
             Fix::OpenSettings => "open the settings".into(),
-            Fix::SetHistorySource(harness) => format!("Configure {} history", detect::harness_name(harness)),
-            Fix::ImportOpenCode => "import OpenCode history".into(),
+            Fix::History(h) => format!("configure {h} history"),
         }
     }
 }
@@ -48,6 +47,19 @@ impl Fix {
 pub struct Light {
     pub label: String,
     pub lamp: Lamp,
+    /// The command that fixes it, when it needs one.
+    pub hint: Option<String>,
+}
+
+impl Light {
+    pub fn new(label: impl Into<String>, lamp: Lamp) -> Light {
+        Light { label: label.into(), lamp, hint: None }
+    }
+
+    fn hint(mut self, cmd: &str) -> Light {
+        self.hint = Some(cmd.to_string());
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -56,13 +68,14 @@ pub struct Health {
     /// One per check: its fix, if it needs and has one.
     pub fixes: Vec<Option<Fix>>,
     pub lights: Vec<Light>,
+    /// Harnesses whose hooks run for this repository (`claude`, `codex`, …).
+    pub harnesses: Vec<String>,
     pub generation: Option<String>,
-    pub routes_total: usize,
-    /// Routes for this repository, when it has a key.
-    pub routes_repo: Option<usize>,
     pub repo_key: Option<String>,
-    /// The effective `learn.auto`, and where it came from (`default`, `file`, `env …`).
-    pub auto_learn: Option<(bool, String)>,
+    /// The repository's savings estimate (`crate::savings`), once it has a ledger.
+    pub savings: Option<crate::savings::Summary>,
+    /// The notice shown at session start today, if one was (`ui.notices`).
+    pub notice: Option<String>,
 }
 
 impl Health {
@@ -79,9 +92,7 @@ fn lamp(s: Status) -> Lamp {
     }
 }
 
-fn now_ms() -> u64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
-}
+use adage_core::time::now_ms;
 
 /// Fail-open errors in the last [`RECENT_DAYS`] days.
 fn fail_open_recent(paths: &Paths) -> usize {
@@ -93,7 +104,7 @@ fn fail_open_recent(paths: &Paths) -> usize {
         .count()
 }
 
-/// The repository key hooks would use for `root`, given the index; else the key `adage learn`
+/// The repository key hooks would use for `root`, given the index; else the key `adage condition`
 /// would give it.
 pub fn repo_key(paths: &Paths, root: &Path, index: &Index) -> String {
     let keys: std::collections::BTreeSet<&str> = index.routes.iter().map(|r| r.repo.as_str()).collect();
@@ -131,20 +142,29 @@ fn fix_for(c: &Check) -> Option<Fix> {
     if c.check == "auto-learn" && c.detail.starts_with("off") {
         return Some(Fix::EnableAutoLearn);
     }
+    if let Some(h) = c.check.strip_prefix("history: ") {
+        return Some(Fix::History(h.to_string()));
+    }
     if c.status == Status::Pass {
         return None;
     }
     if let Some(h) = c.check.strip_prefix("hooks: ") {
+        // Registered twice (the plugin and a settings file): installing again cannot fix that;
+        // the check's own advice says which entries to remove.
+        if h.ends_with(" (twice)") {
+            return None;
+        }
         return Some(Fix::InstallHooks(h.to_string()));
     }
-    if c.check.starts_with("history") {
-        if c.check == "history: opencode" && c.detail.contains("no learning history configured") {
-            return Some(Fix::ImportOpenCode);
-        }
-        return c.check.rsplit_once(": ").map(|(_, harness)| Fix::SetHistorySource(harness.to_string()));
-    }
     match c.check.as_str() {
-        "embedding model" => Some(Fix::FetchModel),
+        // The fix fetches the default model: only when that is what the check asks for (not the
+        // reinstall of another installed model, nor a binary whose bundled model is damaged).
+        "embedding model" => {
+            let fix = c.fix.as_deref().unwrap_or("");
+            let other = fix.contains("models fetch ") && !fix.contains(&format!("models fetch {}", model::BASE_8M.key));
+            (fix.contains("adage models fetch") && !other && !fix.starts_with("reinstall adage"))
+                .then_some(Fix::FetchModel)
+        }
         "index" | "tracks" | "auto-learn runs" | "auto-learn queue" => Some(Fix::LearnNow),
         "fail-open errors" => Some(Fix::OpenFailOpen),
         "config" => Some(Fix::OpenSettings),
@@ -166,82 +186,82 @@ pub fn gather(paths: &Paths, root: Option<&Path>) -> Health {
     let by = |name: &str| checks.iter().find(|c| c.check == name);
 
     let mut lights = Vec::new();
-    lights.push(Light {
-        label: format!("adage {}", env!("CARGO_PKG_VERSION")),
-        lamp: by("binary").map_or(Lamp::Off, |c| lamp(c.status)),
-    });
+    if let Some(c) = by("binary").filter(|c| c.status != Status::Pass) {
+        lights.push(Light::new(format!("adage {}", env!("CARGO_PKG_VERSION")), lamp(c.status)).hint("adage doctor"));
+    }
     // Hooks that would run for this repository: user scope, or registered in it.
     let regs = detect::registrations(root);
     let working: Vec<&str> =
         regs.iter().filter(|r| r.binary.as_deref().is_some_and(detect::executable)).map(|r| r.harness).collect();
     let broken = regs.iter().any(|r| !r.binary.as_deref().is_some_and(detect::executable));
     let installed = detect::harnesses().iter().any(|d| d.found());
-    let mut names: Vec<&str> = working.iter().map(|h| super::feed::harness_short(h)).collect();
+    let mut names: Vec<String> = working.iter().map(|h| super::feed::harness_name(h).to_string()).collect();
     names.sort();
     names.dedup();
-    lights.push(if broken {
-        Light { label: "hooks broken".into(), lamp: Lamp::Fail }
-    } else if !names.is_empty() {
-        let received = working.iter().all(|h| {
-            detect::last_hook_receipt(paths, h, root)
-                .is_some_and(|ts| now_ms().saturating_sub(ts) <= RECENT_DAYS * 86_400_000)
-        });
-        Light {
-            label: format!("{} {}", if received { "hooks received" } else { "hooks registered" }, names.join("+")),
-            lamp: if received { Lamp::Ok } else { Lamp::Warn },
-        }
-    } else if installed {
-        Light { label: "no hooks".into(), lamp: Lamp::Warn }
-    } else {
-        Light { label: "no harness".into(), lamp: Lamp::Off }
-    });
-    let n = routes_repo.unwrap_or(index.routes.len());
-    lights.push(Light {
-        label: format!("{n} reflex{}", if n == 1 { "" } else { "es" }),
-        lamp: by("index").map_or(Lamp::Off, |c| {
-            if n == 0 && c.status == Status::Pass {
-                Lamp::Warn
-            } else {
-                lamp(c.status)
-            }
-        }),
-    });
-    // Any live-learning check short of pass (a failed run, a stuck learner, a backlog) dims it.
-    let learning_trouble = checks.iter().any(|c| c.check.starts_with("auto-learn") && c.status != Status::Pass);
-    lights.push(Light {
-        label: match &auto_learn {
-            Some((true, _)) => "auto-learn on".into(),
-            Some((false, _)) => "auto-learn off".into(),
-            None => "auto-learn ?".into(),
-        },
-        lamp: match (&auto_learn, learning_trouble) {
-            (_, true) => Lamp::Warn,
-            (Some((true, _)), false) => Lamp::Ok,
-            _ => Lamp::Off,
-        },
-    });
-    let model = by("embedding model");
-    let model_installed = model.is_some_and(|c| c.status == Status::Pass && c.detail.contains("installed;"));
-    lights.push(Light {
-        label: if model_installed { "model".into() } else { "no model".into() },
-        lamp: match model.map(|c| c.status) {
-            Some(Status::Pass) if model_installed => Lamp::Ok,
-            Some(Status::Pass) | None => Lamp::Off,
-            Some(s) => lamp(s),
-        },
-    });
-    lights.push(Light {
-        label: format!("fail-open {fail_open}"),
-        lamp: if fail_open == 0 { Lamp::Ok } else { Lamp::Warn },
-    });
-    Health {
-        checks,
-        fixes,
-        lights,
-        generation,
-        routes_total: index.routes.len(),
-        routes_repo,
-        repo_key: key,
-        auto_learn,
+    if broken {
+        lights.push(Light::new("hooks broken", Lamp::Fail).hint("adage doctor"));
     }
+    for harness in working.iter().copied().collect::<std::collections::BTreeSet<_>>() {
+        let name = super::feed::harness_name(harness);
+        let activity = by(&format!("hook activity: {harness}"));
+        let received = activity.is_some_and(|c| c.status == Status::Pass);
+        lights.push(Light::new(
+            if received { format!("{name} hook received") } else { format!("{name} registered; awaiting hook") },
+            if received { Lamp::Ok } else { Lamp::Warn },
+        ));
+    }
+    if names.is_empty() && !broken {
+        lights.push(if installed {
+            Light::new("no hooks", Lamp::Warn).hint("adage init")
+        } else {
+            Light::new("no harness found", Lamp::Off)
+        });
+    }
+    let n = routes_repo.unwrap_or(index.routes.len());
+    let index_check = by("index");
+    lights.push(match index_check.map(|c| c.status) {
+        // A fresh install has none yet: nothing is wrong, the first session conditions.
+        Some(Status::Pass) if n == 0 => Light::new("no reflexes yet", Lamp::Off).hint("adage condition"),
+        Some(Status::Pass) => Light::new(format!("{n} reflex{}", if n == 1 { "" } else { "es" }), Lamp::Ok),
+        Some(s) => Light::new("index", lamp(s)).hint("adage condition"),
+        None => Light::new("no index", Lamp::Off).hint("adage condition"),
+    });
+    // Any live-conditioning check short of pass (a failed run, a stuck learner, a backlog) dims it.
+    let learning_trouble = checks.iter().any(|c| c.check.starts_with("auto-learn") && c.status != Status::Pass);
+    // Recorded, never read: this repository is not one `learn.repos` names.
+    let left_out = key.as_deref().is_some_and(|k| !loaded.config.learns(k));
+    lights.push(match (&auto_learn, learning_trouble) {
+        (_, true) => Light::new("auto-condition", Lamp::Warn).hint("adage doctor"),
+        (Some((true, _)), false) if left_out => Light::new("not conditioned here", Lamp::Off).hint("adage init"),
+        (Some((true, _)), false) => Light::new("auto-condition", Lamp::Ok),
+        _ => Light::new("auto-condition off", Lamp::Off),
+    });
+    // What hooks embed with: an installed model, the one bundled in the binary, or the hashed
+    // fallback (`status_card::embeddings`, as the status card and doctor say it).
+    let model = by("embedding model");
+    let (embedder, unchosen_fallback) = crate::status_card::embeddings(paths);
+    let hashed = embedder == "hashed fallback";
+    let label = if hashed {
+        "no model"
+    } else if embedder.ends_with("(bundled)") {
+        "bundled model"
+    } else {
+        "model"
+    };
+    lights.push(match model.map(|c| c.status) {
+        Some(Status::Pass) if !hashed => Light::new(label, Lamp::Ok),
+        Some(Status::Pass) | None => Light::new(label, Lamp::Off),
+        // An installed model that cannot be used, while another one serves.
+        Some(_) if !hashed && !unchosen_fallback => Light::new(label, Lamp::Warn).hint("adage doctor"),
+        Some(s) => Light::new(label, lamp(s)).hint("adage models fetch"),
+    });
+    if fail_open > 0 {
+        lights.push(
+            Light::new(format!("{fail_open} fail-open error{}", if fail_open == 1 { "" } else { "s" }), Lamp::Warn)
+                .hint("adage doctor"),
+        );
+    }
+    let savings = key.as_deref().and_then(|k| crate::savings::read(paths, k));
+    let notice = key.as_deref().and_then(|k| crate::status_card::notice_today(paths, k, now_ms()));
+    Health { checks, fixes, lights, harnesses: names, generation, repo_key: key, savings, notice }
 }

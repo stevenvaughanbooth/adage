@@ -1,6 +1,6 @@
 //! Proposed changes to pinned routes (Implementation plan §4.1): `proposals.yaml` beside a track.
 //!
-//! A pinned (`authored`) route is edit-locked: `adage learn` never overwrites it. When the miner's
+//! A pinned (`authored`) route is edit-locked: `adage condition` never overwrites it. When the learner's
 //! own version of that route differs from it *materially* — by [`crate::review::material_change`],
 //! the same definition the review queue uses — learn records the mined version here as a
 //! proposal, and `adage review` shows it with a diff. Approving applies it (the route stays
@@ -11,7 +11,7 @@
 //! (`adage share` copies only track files), and is rewritten by every learn run.
 
 use crate::model::*;
-use crate::review::{basis, material_change, Basis};
+use crate::review::{basis, material_change_with, Basis};
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -28,7 +28,7 @@ pub struct Proposal {
     /// The pinned route the proposal was made against. If the pinned route has changed since
     /// (edited by hand), the proposal is stale and is not applied.
     pub against: Basis,
-    /// The miner's version of the route.
+    /// The learner's version of the route.
     pub route: Route,
 }
 
@@ -98,15 +98,20 @@ pub fn save(dir: &Path, p: &Proposals) -> Result<()> {
 
 /// Recompute a track's proposals after a learn run.
 ///
-/// For each pinned route, `mined` holds the miner's version of it, if the miner still finds it.
+/// For each pinned route, `mined` holds the learner's version of it, if the learner still finds it.
 /// A proposal is made when that version differs materially from the pinned route, unless a person
 /// dismissed an equivalent proposal. An unchanged proposal keeps its original date, so re-learning
 /// the same sessions writes the same bytes.
 pub fn propose(prev: &Proposals, pinned: &[(Route, Option<Route>)], today: &str) -> Proposals {
+    propose_with(prev, pinned, today, crate::review::MATERIAL_LOWER_BOUND)
+}
+
+/// [`propose`] with a tuned material lower-bound threshold (`LearnParams::material_lower_bound`).
+pub fn propose_with(prev: &Proposals, pinned: &[(Route, Option<Route>)], today: &str, material: f64) -> Proposals {
     let mut out = Proposals::default();
     for (p, mined) in pinned {
         let Some(m) = mined else {
-            // The miner no longer finds it: nothing to propose, but a dismissal still stands.
+            // The learner no longer finds it: nothing to propose, but a dismissal still stands.
             if let Some(d) = prev.dismissed.get(&p.id) {
                 out.dismissed.insert(p.id.clone(), d.clone());
             }
@@ -115,9 +120,9 @@ pub fn propose(prev: &Proposals, pinned: &[(Route, Option<Route>)], today: &str)
         let mut m = m.clone();
         m.authored = false;
         let against = basis(p, 0, 0);
-        let Some(reason) = material_change(&against, &m) else { continue };
+        let Some(reason) = material_change_with(&against, &m, material) else { continue };
         if let Some(d) = prev.dismissed.get(&p.id) {
-            if material_change(d, &m).is_none() {
+            if material_change_with(d, &m, material).is_none() {
                 out.dismissed.insert(p.id.clone(), d.clone());
                 continue;
             }
@@ -144,8 +149,8 @@ mod tests {
             step: Step::Run { command: command.into() },
             slots: vec![],
             effect: Effect::Verify,
-            aspect: Aspect::Yellow,
-            state: RouteState::Active,
+            strength: Strength::Prime,
+            state: RouteState::Firm,
             exit: vec![],
             evidence: Evidence {
                 support,

@@ -1,0 +1,39 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+expression: text
+---
+ adage    1 Live   2 Reflexes (2)  3 Map   4 Health (2)  5 Settings   6 Home                                                   harbor-dispatch · LIVE
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ 4 passed · 2 warnings · 0 failures   same checks as adage doctor
+
+▌ + binary               adage 0.╭─ palette ────────────────────────────────────────────────────────────────────────╮
+  + index                generati│ : str▌                                                                29 matches │
+  ! embedding model    ⏎ no embed├──────────────────────────────────────────────────────────────────────────────────┤
+  + hooks: claude-co…    ~/work/h│ ACTIONS                                                                          │
+  ! hooks: codex       ⏎ codex is│ › Strengthen reflex…                   adage review strengthen                 s │
+  + fail-open errors     none in │                                                                                  │
+                                 │ REFLEXES                                                                         │
+                                 │   PRIME ◠ start-with-npm-check         prime · forming · 6/9                     │
+                                 │                                                                                  │
+                                 │ GO TO                                                                            │
+                                 │   Settings · runtime.control           adage config set runtime.control          │
+                                 │   Settings · runtime.rewrite           adage config set runtime.rewrite          │
+                                 │   Settings · learn.repos               adage config set learn.repos              │
+                                 │                                                                                  │
+                                 │ ACTIONS                                                                          │
+                                 │   Installed reflexes and evidence      Status report                             │
+                                 │                                                                                  │
+                                 │ GO TO                                                                            │
+                                 ├──────────────────────────────────────────────────────────────────────────────────┤
+                                 │ ↑↓ move · enter run · tab complete · esc close                                   │
+                                 │ Choose an action here; no terminal command copying needed                        │
+                                 ╰──────────────────────────────────────────────────────────────────────────────────╯
+
+
+─ check ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ binary  adage 0.1.0 at ~/bin/adage
+
+
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ? keys · : palette · enter fix · R recheck                                                                                                    q quit

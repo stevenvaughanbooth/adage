@@ -1,0 +1,14 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+assertion_line: 227
+expression: text
+---
+◆  Ready
+│  ✓ adage doctor · 4 passed · 2 to look at · 0 failing
+│  ! embedding model  no embedding model, so the hashed fallback is in use; intent reflexes cannot
+│    fire
+│    fix run `adage models fetch`
+│  ! hooks: codex  codex is installed, but Adage's hooks are not registered with it
+│    fix `adage install codex --write`
+│
+└  enter finishes

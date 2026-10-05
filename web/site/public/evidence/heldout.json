@@ -1,0 +1,379 @@
+{
+  "schema": "adage-heldout-evidence-2",
+  "status": "result",
+  "study": {
+    "name": "Held-out comparison",
+    "repository": "Marshmallow",
+    "model": "Claude Haiku 4.5",
+    "tasks": [
+      "mm-curve--has-keys",
+      "mm-curve--iso-date",
+      "mm-curve--json-object",
+      "mm-curve--lat-long"
+    ],
+    "repetitions": 5,
+    "blocks": 20,
+    "sessions": 65,
+    "controls": [
+      "failed",
+      "later-edit",
+      "config-change",
+      "broader",
+      "rerun"
+    ],
+    "arms": {
+      "A0": "The agent alone (no Adage)",
+      "NOEXEC": "Advisory mode (the default): instincts, the orientation card and learned advice; nothing executed",
+      "BEST": "Execution mode (opt-in): advisory plus person-approved CPU test runs and the finish-line check"
+    },
+    "pass_rule": {
+      "threshold": 0.9,
+      "confidence": 0.95,
+      "quality_margin": 1,
+      "text": "The one-sided 95% upper bound of Adage's model requests divided by the agent alone's, over the paired blocks, is at most 0.90, and Adage's hidden-test passes are at least the agent alone's minus one. Every applicable G criterion must also hold."
+    },
+    "frozen": "The four tasks were frozen on 2026-10-01 before any development result was read and were never used for tuning. Their prompts carry no work order, no test block and no instruction to run tests.",
+    "protocol": {
+      "analysis": "heldout-analysis-1",
+      "revisions": "launch-gate-1 revisions 9 to 11",
+      "document": "docs/launch-gate-protocol.md",
+      "code": "evals/reflex-proof/harness/heldout_analysis.py",
+      "tasks": "evals/reflex-proof/harness/results/20261001-heldout-tasks/README.md"
+    }
+  },
+  "result": {
+    "outcome": "fail",
+    "valid": true,
+    "verdict": "NO-GO",
+    "label": "Did not pass",
+    "headline": "Adage did not pass the held-out comparison.",
+    "best_arm": "A4",
+    "primary": {
+      "ratio": 0.6741,
+      "lower": 0.6258,
+      "upper": 0.7265,
+      "blocks": 20,
+      "blocks_fewer": 18,
+      "sign_flip_p": 0.0001,
+      "passed": true,
+      "threshold": 0.9,
+      "included_blocks": 20
+    },
+    "quality": {
+      "best": 17,
+      "a0": 19,
+      "noexec": 19,
+      "of": 20,
+      "margin": 1,
+      "passed": false
+    },
+    "arms": {
+      "A0": {
+        "label": "The agent alone (no Adage)",
+        "sessions": 20,
+        "mean_requests": 29,
+        "requests_included": 580,
+        "observed_requests": 580,
+        "hidden_test_passes": 19,
+        "censored": 0,
+        "verification_requests": 177,
+        "cost_usd": 4.019241,
+        "cost_per_session_usd": 0.200962,
+        "tokens": {
+          "sessions": 20,
+          "input": 4680,
+          "output": 172121,
+          "cache_read": 18064556,
+          "cache_write": 673750,
+          "total": 18915107,
+          "per_session": 945755
+        }
+      },
+      "NOEXEC": {
+        "label": "Advisory mode (the default): instincts, the orientation card and learned advice; nothing executed",
+        "sessions": 20,
+        "mean_requests": 22.75,
+        "requests_included": 455,
+        "observed_requests": 455,
+        "hidden_test_passes": 19,
+        "censored": 0,
+        "verification_requests": 138,
+        "cost_usd": 2.699776,
+        "cost_per_session_usd": 0.134989,
+        "tokens": {
+          "sessions": 20,
+          "input": 3680,
+          "output": 145342,
+          "cache_read": 10792802,
+          "cache_write": 445053,
+          "total": 11386877,
+          "per_session": 569344
+        }
+      },
+      "BEST": {
+        "label": "Execution mode (opt-in): advisory plus person-approved CPU test runs and the finish-line check",
+        "sessions": 20,
+        "mean_requests": 19.55,
+        "requests_included": 391,
+        "observed_requests": 391,
+        "hidden_test_passes": 17,
+        "censored": 0,
+        "verification_requests": 95,
+        "cost_usd": 2.701385,
+        "cost_per_session_usd": 0.135069,
+        "tokens": {
+          "sessions": 20,
+          "input": 3210,
+          "output": 142445,
+          "cache_read": 10019977,
+          "cache_write": 491976,
+          "total": 10657608,
+          "per_session": 532880
+        }
+      }
+    },
+    "tokens_converted": true,
+    "modes": {
+      "advisory": {
+        "arm": "NOEXEC",
+        "role": "the default",
+        "registered": "report-only comparison, registered before the study",
+        "ratio": 0.7845,
+        "lower": 0.7374,
+        "upper": 0.833,
+        "threshold": 0.9,
+        "clears_line": true,
+        "fewer_requests_percent": 22,
+        "blocks": 20,
+        "blocks_fewer": 18,
+        "sign_flip_p": 0.0023,
+        "mean_requests": 22.75,
+        "mean_requests_alone": 29,
+        "cost_per_session_usd": 0.134989,
+        "cost_per_session_alone_usd": 0.200962,
+        "cost_change_percent": -32.8,
+        "hidden_test_passes": 19,
+        "hidden_test_passes_alone": 19,
+        "of": 20,
+        "failed_blocks": [
+          {
+            "block": 5,
+            "task": "mm-curve--has-keys"
+          }
+        ],
+        "failed_blocks_alone": [
+          {
+            "block": 5,
+            "task": "mm-curve--has-keys"
+          }
+        ],
+        "failures_shared_by_all_arms": [
+          {
+            "block": 5,
+            "task": "mm-curve--has-keys"
+          }
+        ],
+        "status": "clear"
+      },
+      "execution": {
+        "arm": "BEST",
+        "role": "opt-in",
+        "registered": "the study's gated test",
+        "ratio": 0.6741,
+        "lower": 0.6258,
+        "upper": 0.7265,
+        "threshold": 0.9,
+        "clears_line": true,
+        "fewer_requests_percent": 33,
+        "blocks": 20,
+        "blocks_fewer": 18,
+        "sign_flip_p": 0.0001,
+        "mean_requests": 19.55,
+        "mean_requests_alone": 29,
+        "cost_per_session_usd": 0.135069,
+        "cost_per_session_alone_usd": 0.200962,
+        "cost_change_percent": -32.8,
+        "hidden_test_passes": 17,
+        "hidden_test_passes_alone": 19,
+        "of": 20,
+        "failed_blocks": [
+          {
+            "block": 5,
+            "task": "mm-curve--has-keys"
+          },
+          {
+            "block": 8,
+            "task": "mm-curve--lat-long"
+          },
+          {
+            "block": 9,
+            "task": "mm-curve--has-keys"
+          }
+        ],
+        "failed_blocks_alone": [
+          {
+            "block": 5,
+            "task": "mm-curve--has-keys"
+          }
+        ],
+        "failures_shared_by_all_arms": [
+          {
+            "block": 5,
+            "task": "mm-curve--has-keys"
+          }
+        ],
+        "outcome": "fail",
+        "quality_rule_passed": false,
+        "failed_criteria": [
+          "G5"
+        ],
+        "status": "experimental-quality"
+      }
+    },
+    "criteria": [
+      {
+        "id": "G1",
+        "applies": true,
+        "passed": true,
+        "rule": "single repository: the frozen learned home holds the certified verification route run-175d85 (checked at freeze); the two-repository clause belongs to the cross-repository decision"
+      },
+      {
+        "id": "G2",
+        "applies": true,
+        "passed": true,
+        "rule": "BEST positive sessions: a learned verification ran in >= 50%, and >= 75% of those had a successful receipt"
+      },
+      {
+        "id": "G3",
+        "applies": false,
+        "passed": null,
+        "rule": "confirmed eliminations were the r1-r7 primary; r8/r9 replaced it with model requests per session, which this stratum gates, and its two-repository clauses cannot apply to one repository; eliminations are reported"
+      },
+      {
+        "id": "G4",
+        "applies": false,
+        "passed": null,
+        "rule": "a repeat-elimination mechanism criterion superseded by the r9 primary; repeats were gated in development (D4); NOEXEC equivalent-command and BEST repeat fractions are reported"
+      },
+      {
+        "id": "G5",
+        "applies": true,
+        "passed": false,
+        "rule": "BEST hidden-test failures <= min(A0 failures, NOEXEC failures) over all blocks; stricter than the r9 margin of one, so it governs quality"
+      },
+      {
+        "id": "G6",
+        "applies": true,
+        "passed": true,
+        "rule": "zero skipped necessary verification (controls and positives), zero executions without a grant or in NOEXEC/A0, zero foreign or unapproved receipts, zero undeclared writes, zero unknown costs"
+      },
+      {
+        "id": "G7",
+        "applies": true,
+        "passed": true,
+        "rule": "at most 25% of BEST CPU executions in positive sessions unnecessary (receipt stale before the session ended); controls are stale by construction and excluded"
+      },
+      {
+        "id": "G8",
+        "applies": true,
+        "passed": true,
+        "rule": "BEST total requests <= NOEXEC total and BEST cost <= 105% of NOEXEC, over included blocks with the censoring rule"
+      },
+      {
+        "id": "G9",
+        "applies": false,
+        "passed": null,
+        "rule": "the pipeline-unseen repository (more-itertools) is not run in this stratum; G9 stays required for any claim that covers it"
+      }
+    ],
+    "controls": [
+      {
+        "condition": "failed",
+        "collected": true,
+        "realized": true,
+        "necessary_work_skipped": false
+      },
+      {
+        "condition": "later-edit",
+        "collected": true,
+        "realized": true,
+        "necessary_work_skipped": false
+      },
+      {
+        "condition": "config-change",
+        "collected": true,
+        "realized": true,
+        "necessary_work_skipped": false
+      },
+      {
+        "condition": "broader",
+        "collected": true,
+        "realized": true,
+        "necessary_work_skipped": false
+      },
+      {
+        "condition": "rerun",
+        "collected": true,
+        "realized": true,
+        "necessary_work_skipped": false
+      }
+    ],
+    "controls_passed": true,
+    "sensitivity": {
+      "without_censored_blocks": {
+        "ratio": 0.6741,
+        "lower": 0.6258,
+        "upper": 0.7265,
+        "blocks": 20,
+        "blocks_fewer": 18,
+        "sign_flip_p": 0.0001,
+        "passed": true,
+        "excluded_blocks": []
+      },
+      "without_has_keys": {
+        "ratio": 0.6414,
+        "lower": 0.5902,
+        "upper": 0.6987,
+        "blocks": 15,
+        "blocks_fewer": 14,
+        "sign_flip_p": 0.0003,
+        "passed": true
+      }
+    },
+    "report_only": {
+      "noexec_vs_a0": {
+        "ratio": 0.7845,
+        "lower": 0.7374,
+        "upper": 0.833,
+        "blocks": 20,
+        "blocks_fewer": 18,
+        "sign_flip_p": 0.0023,
+        "passed": true
+      },
+      "best_vs_noexec": {
+        "ratio": 0.8593,
+        "lower": 0.8,
+        "upper": 0.9197,
+        "blocks": 20,
+        "blocks_fewer": 14,
+        "sign_flip_p": 0.1858,
+        "passed": false
+      }
+    },
+    "excluded_blocks": [],
+    "warnings": [],
+    "problems": [],
+    "lapses": [],
+    "assignments": 65,
+    "collected": 65,
+    "build_commit": "8770f8cdd97728962e3ca25b3bf13a1352cc5dfe"
+  },
+  "source": {
+    "report": "/evidence/heldout-report.json",
+    "report_sha256": "a3ec997154f8ce0152d502fd85a4ae66be223f0ca958d164e09dc38a4e748e11",
+    "decision_record": "/evidence/heldout-record.md",
+    "archived": null,
+    "converted_at": "2026-10-01T18:45:24.445Z",
+    "converter": "web/site/scripts/heldout-evidence.mjs"
+  }
+}

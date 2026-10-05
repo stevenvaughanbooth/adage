@@ -3,9 +3,10 @@
 //! `tests/golden/`; regenerate with `ADAGE_BLESS=1` and review the diff.
 
 use adage_core::CommandTable;
+use adage_ingest::{read_trace, AsRecorded, Decode};
 use adage_learn::opencode::{parse_export, read_export};
 use adage_learn::{learn, Inputs, LearnConfig};
-use adage_tracks::{Aspect, Index, Step, Trigger};
+use adage_tracks::{Index, Step, Strength, Trigger};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -29,8 +30,11 @@ fn golden(name: &str, got: &str) {
 
 #[test]
 fn export_fixture_golden() {
-    let v = read_export(&fixture()).expect("recognised as an export");
-    let s = parse_export(&v, &CommandTable::load(), None).expect("a usable session");
+    assert!(read_export(&fixture()).is_some(), "recognised as an export");
+    // Decoded as recorded: what is checked out on this machine must not change it.
+    let t = CommandTable::load();
+    let cx = Decode { table: t, locator: &AsRecorded, repo_override: None, subagent: false };
+    let s = read_trace(&fixture(), &cx).expect("a usable session");
     let mut got = format!(
         "id {}\nrepo {}\nroot {}\nmodel {:?}\nday {}\nprompt {:?}\nsteered {}\ndirected {:?}\n",
         s.id,
@@ -47,6 +51,9 @@ fn export_fixture_golden() {
     }
     golden("opencode-session.txt", &got);
     assert_eq!(s.prompt, "Pick up W-1040 and get it done.", "synthetic parts are never the prompt");
+    assert_eq!(s.prompts[0].text, s.prompt);
+    assert!(s.steps.iter().all(|x| (x.prompt as usize) < s.prompts.len()));
+    assert!(s.prompts.windows(2).all(|w| w[0].at_step <= w[1].at_step));
     assert!(s.directed.contains("lookup-work-item") && s.directed.contains("read-linked-files"));
     assert!(!got.contains("sleep 100"), "unfinished calls are skipped");
 }
@@ -73,13 +80,13 @@ fn subagents_promptless_and_hostile_exports_yield_nothing_or_stay_bounded() {
     let t = CommandTable::load();
     let mut v: Value = serde_json::from_str(&std::fs::read_to_string(fixture()).unwrap()).unwrap();
     v["info"]["parentID"] = json!("ses_parent");
-    assert!(parse_export(&v, &t, None).is_none(), "sub-agent sessions are skipped");
+    assert!(parse_export(&v, t, None).is_none(), "sub-agent sessions are skipped");
     let promptless = json!({ "info": { "id": "s", "directory": "/x" }, "messages": [
         { "info": { "role": "user" }, "parts": [{ "type": "text", "text": "Adage finish-line check: run make gen", "synthetic": false }] }
     ] });
-    assert!(parse_export(&promptless, &t, None).is_none(), "Adage's own text is never a prompt");
+    assert!(parse_export(&promptless, t, None).is_none(), "Adage's own text is never a prompt");
     let hostile = json!({ "info": { "id": 5, "directory": [] }, "messages": "no" });
-    assert!(parse_export(&hostile, &t, None).is_none());
+    assert!(parse_export(&hostile, t, None).is_none());
     let weird = json!({ "info": { "id": "s", "directory": "/x", "time": { "created": "soon" } }, "messages": [
         { "info": { "role": "user" }, "parts": [{ "type": "text", "text": "do W-1" }] },
         { "info": { "role": "assistant" }, "parts": [
@@ -88,7 +95,7 @@ fn subagents_promptless_and_hostile_exports_yield_nothing_or_stay_bounded() {
             { "type": "tool", "tool": "bash", "state": null }
         ] }
     ] });
-    let s = parse_export(&weird, &t, None).expect("parses what it can");
+    let s = parse_export(&weird, t, None).expect("parses what it can");
     assert!(s.steps.len() <= 2 + 64);
 }
 
@@ -172,7 +179,7 @@ fn learns_all_four_route_kinds_from_opencode_exports() {
     let routes: Vec<_> = index.routes.iter().map(|r| &r.route).collect();
     let lookup = routes.iter().find(|r| matches!(r.trigger, Trigger::Prompt { .. })).expect("prompt route");
     assert_eq!(lookup.step, Step::Run { command: "python3 scripts/wi-lookup {item}".into() });
-    assert_eq!(lookup.aspect, Aspect::Green);
+    assert_eq!(lookup.strength, Strength::Fire);
     assert!(routes.iter().any(|r| matches!(r.step, Step::ReadBatch { .. })), "linked-files route");
     assert!(
         routes.iter().any(|r| matches!(&r.step, Step::Avoid { instead, .. } if instead == "make test")),

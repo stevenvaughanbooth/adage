@@ -116,7 +116,7 @@ fn packed_refs_and_linked_worktrees() {
     assert_eq!(repo_key(&main), want);
 
     // A linked worktree: `.git` is a file, HEAD lives in the worktree's git dir, objects and refs
-    // in the common dir. Its own directory name is the name part of its key.
+    // in the common dir. It has its main checkout's key, so reflexes learned there reach it.
     let wt_git = main.join(".git/worktrees/feature");
     std::fs::create_dir_all(&wt_git).unwrap();
     std::fs::write(wt_git.join("HEAD"), "ref: refs/heads/main\n").unwrap();
@@ -124,7 +124,7 @@ fn packed_refs_and_linked_worktrees() {
     let wt = d.path().join("feature");
     std::fs::create_dir_all(&wt).unwrap();
     std::fs::write(wt.join(".git"), format!("gitdir: {}\n", wt_git.display())).unwrap();
-    assert_eq!(repo_key(&wt), format!("feature@{}", &id(0x30)[..12]));
+    assert_eq!(repo_key(&wt), format!("app@{}", &id(0x30)[..12]));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -332,5 +332,5 @@ fn matches_git_rev_list() {
 
     let wt = d.path().join("wt");
     git(&w, &["worktree", "add", "-q", "-b", "side", wt.to_str().unwrap()]).unwrap();
-    assert_eq!(repo_key(&wt), format!("wt@{}", &root[..12]), "linked worktree");
+    assert_eq!(repo_key(&wt), want, "a linked worktree has its main checkout's key");
 }

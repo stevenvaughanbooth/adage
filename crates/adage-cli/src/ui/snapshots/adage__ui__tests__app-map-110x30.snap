@@ -1,0 +1,34 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+expression: text
+---
+ adage    1 Live   2 Reflexes (2)  3 Map   4 Health (2)  5 Settings   6 Home           harbor-dispatch · LIVE
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ focus off    zoom boxes (max)    layout stimulus → reflex → response     4 reflexes · 1 instinct · 54 traces
+
+   STIMULUS                               REFLEX                                 RESPONSE
+ ╭────────────────────────────╮         ╭────────────────────────────╮         ╭────────────────────────────╮
+ │ PROMPT                     │────────▶│ F ◠ lookup-incident        │────────▶│ RUN                        │
+ │ names a ticket             │         │ fire · firm · 24/25 · lb … │         │ bin/fetch-incident {item}  │
+ ╰────────────────────────────╯         ╰────────────────────────────╯         ╰────────────────────────────╯
+
+ ╭────────────────────────────╮         ╭────────────────────────────╮         ╭────────────────────────────╮
+ │ AFTER COMMAND              │────────▶│ F ◠ read-linked-files      │────────▶│ READ TOGETHER              │
+ │ bin/fetch-incident {item}… │         │ fire · firm · 13/17 · lb … │         │ read ≤5 listed files at o… │
+ ╰────────────────────────────╯         ╰────────────────────────────╯         ╰────────────────────────────╯
+
+ ╭────────────────────────────╮         ╭────────────────────────────╮         ╭────────────────────────────╮
+ │ AFTER FAILURE              │────────▶│ I ◠ dead-end-npm-test      │───┬────▶│ RUN INSTEAD                │
+ │ npm test fails: HARBOR_EN… │         │ inhibit · firm · 11/43 · … │   │     │ npm run check (not npm te… │
+ ╰────────────────────────────╯         ╰────────────────────────────╯   │     ╰────────────────────────────╯
+                                                                         │
+ ╭────────────────────────────╮         ╭────────────────────────────╮   │
+ │ INTENT                     │────────▶│ P ◠ start-with-npm-check   │───╯
+ │ run the tests              │         │ prime · forming · 6/9 · l… │
+ ╰────────────────────────────╯         ╰────────────────────────────╯
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ▸ lookup-incident  fire · firm · 24/25 traces · 8 turns saved
+ o open in browser: adage map --focus lookup-incident   enter inspect in Reflexes
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ? keys · : palette · enter inspect · f focus · +/- zoom · j/k move · o open in browser                q quit

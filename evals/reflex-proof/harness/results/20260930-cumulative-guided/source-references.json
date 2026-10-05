@@ -1,0 +1,74 @@
+{
+  "evals/lab/research/recurring-workflows/families.py": {
+    "commit": "7c31ee733b1b1db3782b0fbdd781dc2fd6f18cae",
+    "sha256": "0592230842e8f6cf0f7f8696464027da464cd41bbe997be1950a2deec49c41d1"
+  },
+  "evals/live/budget.py": {
+    "commit": "7c31ee733b1b1db3782b0fbdd781dc2fd6f18cae",
+    "sha256": "de4f9c2376204ac2e6ffff71ec43bcbf9318366c7f8a1eb5d1aed186279c27d2"
+  },
+  "evals/live/runner.py": {
+    "commit": "7c31ee733b1b1db3782b0fbdd781dc2fd6f18cae",
+    "sha256": "914ebd5dfc0238b17d1038e9fe706da947f42f91ab5a80c133c8bc0350e81f19"
+  },
+  "evals/reflex-proof/harness/LEARNING-CURVE.md": {
+    "commit": "7c31ee733b1b1db3782b0fbdd781dc2fd6f18cae",
+    "sha256": "690bbb327b51cef2e8801ca77a00538dd4714ad3b67af0be046a059d69ba641b"
+  },
+  "evals/reflex-proof/harness/REAL-REPO-PAIRS.md": {
+    "commit": "7c31ee733b1b1db3782b0fbdd781dc2fd6f18cae",
+    "sha256": "d5a6b7859bb23de1601f19b5fb7816dfbfc699e85b826d300bb72203d1bba396"
+  },
+  "evals/reflex-proof/harness/bash_action_audit.py": {
+    "commit": "7c31ee733b1b1db3782b0fbdd781dc2fd6f18cae",
+    "sha256": "1b1ff9d152f96c347682006f972c43516293e03c1ab7dc3d2a59726bbbdf94a7"
+  },
+  "evals/reflex-proof/harness/curve_tasks.py": {
+    "commit": "7c31ee733b1b1db3782b0fbdd781dc2fd6f18cae",
+    "sha256": "9be77f97b2d3b7de606b11a03b73df7cab0f55cdc83251f1a7863a1ef5aba229"
+  },
+  "evals/reflex-proof/harness/learning_curve.py": {
+    "commit": "7c31ee733b1b1db3782b0fbdd781dc2fd6f18cae",
+    "sha256": "2db5a6a5db580094647f90a8098a21f31d72c525287f8eae34c585c7391d334c"
+  },
+  "evals/reflex-proof/harness/probe.py": {
+    "commit": "7c31ee733b1b1db3782b0fbdd781dc2fd6f18cae",
+    "sha256": "0c7bd1e043428200c97e3c80c79ada22c8c1473ba2ce9640c861a2dcfb6660e4"
+  },
+  "evals/reflex-proof/harness/real_repo_gate.py": {
+    "commit": "7c31ee733b1b1db3782b0fbdd781dc2fd6f18cae",
+    "sha256": "e4b819a851e1e5325983259b4946abe4e6b050801d33fce08e85311a7cb9d76e"
+  },
+  "evals/reflex-proof/harness/real_repo_pairs.py": {
+    "commit": "7c31ee733b1b1db3782b0fbdd781dc2fd6f18cae",
+    "sha256": "4b1aac547369157a8faedfed372741e811d3ad972baf3d075f09a225e1374f8a"
+  },
+  "evals/repobench/common.py": {
+    "commit": "7c31ee733b1b1db3782b0fbdd781dc2fd6f18cae",
+    "sha256": "ecbc22b6a895453319709cdca73fa478e76786929f535196bc0b7ee9fc4ec44d"
+  },
+  "evals/repobench/repos.json": {
+    "commit": "7c31ee733b1b1db3782b0fbdd781dc2fd6f18cae",
+    "sha256": "1bdb8ffb5b64411d5913549aec287f091b08e6a7096e9ad5c70c5b7c1b1b5030"
+  },
+  "evals/repobench/sandbox.py": {
+    "commit": "7c31ee733b1b1db3782b0fbdd781dc2fd6f18cae",
+    "sha256": "3579ef53fe4db9a28a046727fef916b8f810cb39557110e9a2d1733b1abf912c"
+  },
+  "evals/repobench/score.py": {
+    "commit": "7c31ee733b1b1db3782b0fbdd781dc2fd6f18cae",
+    "sha256": "e63d2c3bb7ffe9049bf95e7a712f562c4ed87a5000b6b7da63e89d863de9ebdd"
+  },
+  "evals/showcase/fam_python.py": {
+    "commit": "7c31ee733b1b1db3782b0fbdd781dc2fd6f18cae",
+    "sha256": "9a7e2c5137e90b7ff1f07a9f1518baa15fba791560dc234c2fad366871d227c9"
+  },
+  "evals/showcase/families.py": {
+    "commit": "7c31ee733b1b1db3782b0fbdd781dc2fd6f18cae",
+    "sha256": "275d9c0113f8e9fdd1ef75562cff112c61934e00926b7e2f54f11514378616a8"
+  },
+  "evals/showcase/sc_score.py": {
+    "commit": "7c31ee733b1b1db3782b0fbdd781dc2fd6f18cae",
+    "sha256": "338307033ea3c76df0c0ec965ba1290991862b02f752b0a6985a25a94bf13e61"
+  }
+}

@@ -1,0 +1,15 @@
+### SessionStart
+(nothing)
+
+### UserPromptSubmit
+(nothing)
+
+### PostToolUse
+{"hookSpecificOutput":{"additionalContext":"<adage-reflex track=\"github-com-acme-billing/instincts@0.1.0\" route=\"finish-line-e7e809\" strength=\"prime\" kind=\"obligation\" origin=\"instinct\">\nIn this repository, changes to files matching schema/*.json must be followed by running:\n  make gen\nMakefile declares this. Ignore this if this is an exploratory or draft change.\nAdage default for repositories like this one (from this repository's Makefile); not requested by the user.\n</adage-reflex>","hookEventName":"PostToolUse"}}
+
+### Stop
+(nothing)
+
+### SessionEnd
+(nothing)
+

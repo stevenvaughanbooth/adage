@@ -1,0 +1,413 @@
+{
+ "skill": "acme-work-item",
+ "skill_tokens": 370,
+ "tasks": [
+  "W-2041",
+  "W-2042",
+  "W-2043",
+  "W-2044",
+  "W-2045",
+  "W-2046"
+ ],
+ "arms": {
+  "neither": {
+   "n": 12,
+   "pass_rate": 0.583,
+   "task_pass_rate": 0.583,
+   "mean_cost_usd": 0.0926,
+   "median_turns": 24.0,
+   "mean_turns": 24.3333,
+   "mean_dead_ends": 0,
+   "mean_input_tokens": 420097.6667,
+   "mean_output_tokens": 4707.75,
+   "mean_model_calls": 22.9167,
+   "mean_directive_tokens": 0,
+   "routes_delivered": {},
+   "procedure": {
+    "s1": {
+     "did": 6,
+     "applicable": 12,
+     "exact": 3,
+     "timely": null,
+     "forbidden_used": 0
+    },
+    "s2": {
+     "did": 2,
+     "applicable": 2,
+     "exact": 2,
+     "timely": 2,
+     "forbidden_used": 0
+    },
+    "s3": {
+     "did": 6,
+     "applicable": 12,
+     "exact": 6,
+     "timely": null,
+     "forbidden_used": 0
+    },
+    "s4": {
+     "did": 10,
+     "applicable": 12,
+     "exact": 8,
+     "timely": null,
+     "forbidden_used": 2
+    },
+    "s5": {
+     "did": 6,
+     "applicable": 12,
+     "exact": 6,
+     "timely": 6,
+     "forbidden_used": 0
+    }
+   }
+  },
+  "skill": {
+   "n": 12,
+   "pass_rate": 1.0,
+   "task_pass_rate": 1,
+   "mean_cost_usd": 0.0334,
+   "median_turns": 6.0,
+   "mean_turns": 7,
+   "mean_dead_ends": 0,
+   "mean_input_tokens": 102286.6667,
+   "mean_output_tokens": 1668.9167,
+   "mean_model_calls": 6.8333,
+   "mean_directive_tokens": 0,
+   "routes_delivered": {},
+   "skill_tokens_read": 2528,
+   "procedure": {
+    "s1": {
+     "did": 12,
+     "applicable": 12,
+     "exact": 12,
+     "timely": null,
+     "forbidden_used": 0
+    },
+    "s2": {
+     "did": 4,
+     "applicable": 4,
+     "exact": 4,
+     "timely": 4,
+     "forbidden_used": 0
+    },
+    "s3": {
+     "did": 8,
+     "applicable": 12,
+     "exact": 8,
+     "timely": null,
+     "forbidden_used": 0
+    },
+    "s4": {
+     "did": 12,
+     "applicable": 12,
+     "exact": 12,
+     "timely": null,
+     "forbidden_used": 0
+    },
+    "s5": {
+     "did": 12,
+     "applicable": 12,
+     "exact": 12,
+     "timely": 12,
+     "forbidden_used": 0
+    }
+   }
+  },
+  "compiled": {
+   "n": 12,
+   "pass_rate": 1.0,
+   "task_pass_rate": 1,
+   "mean_cost_usd": 0.046,
+   "median_turns": 10.5,
+   "mean_turns": 10.5833,
+   "mean_dead_ends": 0,
+   "mean_input_tokens": 161025.1667,
+   "mean_output_tokens": 2444.8333,
+   "mean_model_calls": 10.1667,
+   "mean_directive_tokens": 563.3333,
+   "routes_delivered": {
+    "skill-s1-lookup": 12,
+    "skill-s4-avoid": 12,
+    "skill-s4-avoid-pytest": 12,
+    "skill-s1-read": 12,
+    "skill-s4-s5-seq": 8,
+    "skill-s5-verify": 8,
+    "skill-s2-regenerate": 4
+   },
+   "procedure": {
+    "s1": {
+     "did": 12,
+     "applicable": 12,
+     "exact": 12,
+     "timely": null,
+     "forbidden_used": 0
+    },
+    "s2": {
+     "did": 4,
+     "applicable": 4,
+     "exact": 4,
+     "timely": 4,
+     "forbidden_used": 0
+    },
+    "s3": {
+     "did": 8,
+     "applicable": 12,
+     "exact": 8,
+     "timely": null,
+     "forbidden_used": 0
+    },
+    "s4": {
+     "did": 12,
+     "applicable": 12,
+     "exact": 12,
+     "timely": null,
+     "forbidden_used": 0
+    },
+    "s5": {
+     "did": 8,
+     "applicable": 12,
+     "exact": 8,
+     "timely": 8,
+     "forbidden_used": 0
+    }
+   },
+   "value_captured": {
+    "pass_rate": 1.0,
+    "mean_cost_usd": 0.79,
+    "mean_turns": 0.79,
+    "mean_input_tokens": 0.82
+   }
+  }
+ },
+ "per_task": {
+  "W-2041": {
+   "skill": [
+    {
+     "passed": true,
+     "cost": 0.0314,
+     "turns": 6
+    },
+    {
+     "passed": true,
+     "cost": 0.0303,
+     "turns": 6
+    }
+   ],
+   "compiled": [
+    {
+     "passed": true,
+     "cost": 0.043,
+     "turns": 9
+    },
+    {
+     "passed": true,
+     "cost": 0.0398,
+     "turns": 8
+    }
+   ],
+   "neither": [
+    {
+     "passed": false,
+     "cost": 0.1112,
+     "turns": 26
+    },
+    {
+     "passed": false,
+     "cost": 0.0619,
+     "turns": 18
+    }
+   ]
+  },
+  "W-2042": {
+   "neither": [
+    {
+     "passed": true,
+     "cost": 0.0701,
+     "turns": 18
+    },
+    {
+     "passed": true,
+     "cost": 0.0861,
+     "turns": 22
+    }
+   ],
+   "skill": [
+    {
+     "passed": true,
+     "cost": 0.03,
+     "turns": 6
+    },
+    {
+     "passed": true,
+     "cost": 0.0331,
+     "turns": 6
+    }
+   ],
+   "compiled": [
+    {
+     "passed": true,
+     "cost": 0.0551,
+     "turns": 13
+    },
+    {
+     "passed": true,
+     "cost": 0.0331,
+     "turns": 7
+    }
+   ]
+  },
+  "W-2043": {
+   "neither": [
+    {
+     "passed": false,
+     "cost": 0.0443,
+     "turns": 11
+    },
+    {
+     "passed": true,
+     "cost": 0.1065,
+     "turns": 27
+    }
+   ],
+   "compiled": [
+    {
+     "passed": true,
+     "cost": 0.0377,
+     "turns": 8
+    },
+    {
+     "passed": true,
+     "cost": 0.0375,
+     "turns": 8
+    }
+   ],
+   "skill": [
+    {
+     "passed": true,
+     "cost": 0.0307,
+     "turns": 6
+    },
+    {
+     "passed": true,
+     "cost": 0.0321,
+     "turns": 6
+    }
+   ]
+  },
+  "W-2044": {
+   "skill": [
+    {
+     "passed": true,
+     "cost": 0.0325,
+     "turns": 7
+    },
+    {
+     "passed": true,
+     "cost": 0.0299,
+     "turns": 6
+    }
+   ],
+   "neither": [
+    {
+     "passed": true,
+     "cost": 0.1319,
+     "turns": 37
+    },
+    {
+     "passed": true,
+     "cost": 0.0829,
+     "turns": 22
+    }
+   ],
+   "compiled": [
+    {
+     "passed": true,
+     "cost": 0.0484,
+     "turns": 12
+    },
+    {
+     "passed": true,
+     "cost": 0.0495,
+     "turns": 11
+    }
+   ]
+  },
+  "W-2045": {
+   "compiled": [
+    {
+     "passed": true,
+     "cost": 0.0752,
+     "turns": 18
+    },
+    {
+     "passed": true,
+     "cost": 0.0429,
+     "turns": 10
+    }
+   ],
+   "skill": [
+    {
+     "passed": true,
+     "cost": 0.0373,
+     "turns": 8
+    },
+    {
+     "passed": true,
+     "cost": 0.0368,
+     "turns": 9
+    }
+   ],
+   "neither": [
+    {
+     "passed": false,
+     "cost": 0.1224,
+     "turns": 31
+    },
+    {
+     "passed": true,
+     "cost": 0.0672,
+     "turns": 18
+    }
+   ]
+  },
+  "W-2046": {
+   "neither": [
+    {
+     "passed": true,
+     "cost": 0.109,
+     "turns": 31
+    },
+    {
+     "passed": false,
+     "cost": 0.1179,
+     "turns": 31
+    }
+   ],
+   "skill": [
+    {
+     "passed": true,
+     "cost": 0.0435,
+     "turns": 10
+    },
+    {
+     "passed": true,
+     "cost": 0.0332,
+     "turns": 8
+    }
+   ],
+   "compiled": [
+    {
+     "passed": true,
+     "cost": 0.0427,
+     "turns": 11
+    },
+    {
+     "passed": true,
+     "cost": 0.0476,
+     "turns": 12
+    }
+   ]
+  }
+ },
+ "total_cost_usd": 2.0648
+}

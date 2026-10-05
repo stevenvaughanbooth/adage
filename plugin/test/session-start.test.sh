@@ -1,7 +1,8 @@
 #!/bin/sh
 # Exercises plugin/claude-code/scripts/session-start: how it finds the binary (bundled and verified,
-# then PATH, including npm's launcher), and that every path exits 0 with nothing on stdout but the
-# binary's own output.
+# then PATH, including npm's launcher), that every path exits 0, that a failure is one JSON
+# `systemMessage` line on stdout (what Claude Code shows the person) with the other hooks pointed
+# at scripts/quiet, and that `delegate on` without the adage-exec plugin keeps serving.
 #
 #   plugin/test/session-start.test.sh [path/to/adage]     (default: target/debug/adage)
 #
@@ -15,6 +16,9 @@ SS="$REPO/plugin/claude-code/scripts/session-start"
 W=$(cd "$(mktemp -d)" && pwd -P) # physical path: node reports resolved paths
 trap 'rm -rf "$W"' EXIT
 export ADAGE_HOME="$W/adage-home"
+export HOME="$W/home" XDG_CONFIG_HOME="$W/xdg" CODEX_HOME="$W/codex"
+mkdir -p "$HOME" "$XDG_CONFIG_HOME" "$CODEX_HOME"
+unset CLAUDE_CONFIG_DIR ADAGE_TEST_NO_SPAWN || true
 unset ADAGE_DISABLE || true
 case "$(uname -s)-$(uname -m)" in
   Darwin-arm64) T=aarch64-apple-darwin ;; Darwin-x86_64) T=x86_64-apple-darwin ;;
@@ -46,17 +50,44 @@ check "bundled: exits 0" [ "$code" = 0 ]
 check "bundled: links adage-<sha>" sh -c "readlink '$W/data1/bin/adage' | grep -q '^adage-[0-9a-f]\{64\}\$'"
 check "bundled: binary runs" sh -c "'$W/data1/bin/adage' version | grep -q '^adage '"
 
+# Native providers and the portable fallback must produce the same digest in both plugins.
+printf 'abc' >"$W/digest input"
+DIGEST=ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
+mkdir -p "$W/fallback-bin"
+for provider in sha256sum openssl; do
+  printf '#!/bin/sh\nexit 1\n' >"$W/fallback-bin/$provider"
+  chmod +x "$W/fallback-bin/$provider"
+done
+for script in "$SS" "$REPO/plugin/claude-code-exec/scripts/session-start"; do
+  sed -n '/^sha256()/p' "$script" >"$W/digest-function"
+  GOT=$(PATH="$BASE" sh -c '. "$1"; sha256 "$2"' sh "$W/digest-function" "$W/digest input")
+  check "digest: native provider ($script)" [ "$GOT" = "$DIGEST" ]
+  if PATH="$BASE" command -v shasum >/dev/null 2>&1; then
+    GOT=$(PATH="$W/fallback-bin:$BASE" sh -c '. "$1"; sha256 "$2"' sh "$W/digest-function" "$W/digest input")
+    check "digest: portable fallback ($script)" [ "$GOT" = "$DIGEST" ]
+  fi
+done
+
 # 2. Bundled binary tampered with: ignored, with a hint; PATH has nothing: fail open.
 R2="$W/root2"; cp -R "$R1" "$R2"; printf 'x' >>"$R2/dist/$T/adage"
+mkdir -p "$R2/scripts"; cp "$REPO/plugin/claude-code/scripts/quiet" "$R2/scripts/quiet"
 run "$R2" "$W/data2" "$BASE"
 check "tampered: exits 0" [ "$code" = 0 ]
-check "tampered: nothing on stdout" [ ! -s "$W/out" ]
-check "tampered: says why on stderr" grep -q "does not match dist/SHA256SUMS" "$W/err"
-check "tampered: hint to install" grep -q "no adage binary found" "$W/err"
-check "tampered: no binary linked" [ ! -e "$W/data2/bin/adage" ]
+check "tampered: one systemMessage line on stdout" sh -c "[ \$(wc -l <'$W/out') = 1 ] && grep -q '^{\"systemMessage\":\"adage: the bundled binary for .* does not match its checksum' '$W/out'"
+check "tampered: stdout is JSON" node -e "JSON.parse(require('fs').readFileSync('$W/out','utf8'))"
+check "tampered: nothing on stderr" [ ! -s "$W/err" ]
+check "tampered: reason in \$DATA/status" grep -q "does not match its checksum" "$W/data2/status"
+check "tampered: other hooks run scripts/quiet" [ "$(target_of "$W/data2/bin/adage")" = "$R2/scripts/quiet" ]
+
+# 2b. No bundled binary and nothing on PATH: the install hint, as a systemMessage.
+R2B="$W/root2b"; mkdir -p "$R2B/scripts"; cp "$REPO/plugin/claude-code/scripts/quiet" "$R2B/scripts/quiet"
+run "$R2B" "$W/data2b" "$BASE"
+check "no binary: exits 0" [ "$code" = 0 ]
+check "no binary: install hint" grep -q '"systemMessage":"adage: no binary for .*; install with brew install .* or npm i -g' "$W/out"
+check "no binary: a quiet hook still answers" sh -c "echo '{}' | '$W/data2b/bin/adage' hook claude UserPromptSubmit; [ \$? = 0 ]"
 
 # 3. No bundled binary; adage on PATH (Homebrew, installers, cargo): linked at its PATH location.
-R3="$W/root3"; mkdir -p "$R3"
+R3="$W/root3"; mkdir -p "$R3/scripts"; cp "$REPO/plugin/claude-code/scripts/quiet" "$R3/scripts/quiet"
 mkdir -p "$W/pathbin"; ln -s "$BIN" "$W/pathbin/adage"
 run "$R3" "$W/data3" "$W/pathbin:$BASE"
 check "PATH: exits 0" [ "$code" = 0 ]
@@ -86,5 +117,62 @@ fi
 # 5. Missing arguments: fail open.
 run "" "" "$BASE"
 check "no args: exits 0 silently" sh -c "[ '$code' = 0 ] && [ ! -s '$W/out' ]"
+
+# 6. Execution on or off: exactly one of the two plugins serves (Track C D2).
+XS="$REPO/plugin/claude-code-exec/scripts/session-start"
+XR="$REPO/plugin/claude-code-exec"
+runx() { set +e; echo "$PAYLOAD" | PATH="$2" "$XS" "$XR" "$1" >"$W/out" 2>"$W/err"; code=$?; set -e; }
+runx "$W/xdata1" "$W/pathbin:$BASE"
+check "exec off: exec plugin exits 0 silently" sh -c "[ '$code' = 0 ] && [ ! -s '$W/out' ]"
+check "exec off: exec plugin is quiet" [ "$(target_of "$W/xdata1/bin/adage-exec")" = "$XR/scripts/quiet" ]
+mkdir -p "$ADAGE_HOME/exec"; echo '{}' >"$ADAGE_HOME/exec/enabled"
+# The adage-exec plugin is not installed: the Adage plugin keeps serving, and says why.
+rm -f "$ADAGE_HOME/exec/plugin-seen"
+run "$R3" "$W/data7" "$W/pathbin:$BASE"
+check "exec on, no exec plugin: exits 0" [ "$code" = 0 ]
+check "exec on, no exec plugin: still serves" [ "$(target_of "$W/data7/bin/adage")" = "$W/pathbin/adage" ]
+check "exec on, no exec plugin: says so" grep -q "delegation is on but the adage-exec plugin isn't installed" "$W/out"
+# Installed (beside this plugin, as in a checkout): the Adage plugin goes quiet.
+mkdir -p "$W/claude-code-exec"
+run "$R3" "$W/data6" "$W/pathbin:$BASE"
+check "exec on: adage plugin exits 0 silently" sh -c "[ '$code' = 0 ] && [ ! -s '$W/out' ]"
+check "exec on: adage plugin is quiet" [ "$(target_of "$W/data6/bin/adage")" = "$R3/scripts/quiet" ]
+mkdir -p "$W/xpath"; ln -s "$BIN" "$W/xpath/adage"
+if [ -x "$(dirname "$BIN")/adage-exec" ]; then ln -s "$(dirname "$BIN")/adage-exec" "$W/xpath/adage-exec"; fi
+runx "$W/xdata2" "$W/xpath:$BASE"
+check "exec on: exec plugin exits 0" [ "$code" = 0 ]
+check "exec on: exec plugin serves" sh -c "readlink '$W/xdata2/bin/adage-exec' | grep -q '/adage'"
+
+# A plugin-only installation must retain its learner after delegation is enabled. There is no
+# adage on this PATH: the executor must find its verified companion in plugin-data/bin.
+EXEC_BIN="$(dirname "$BIN")/adage-exec"
+[ -x "$EXEC_BIN" ] || { echo "build adage-exec beside $BIN to test bundled delegation"; exit 1; }
+export ADAGE_HOME="$W/bundled-adage-home"
+mkdir -p "$ADAGE_HOME/exec"; echo '{}' >"$ADAGE_HOME/exec/enabled"
+XR="$W/bundled-exec"; mkdir -p "$XR/dist/$T" "$XR/scripts"
+cp "$EXEC_BIN" "$XR/dist/$T/adage-exec"; cp "$BIN" "$XR/dist/$T/adage"
+cp "$REPO/plugin/claude-code-exec/scripts/quiet" "$XR/scripts/quiet"
+(cd "$XR/dist" && { shasum -a 256 "$T/adage" "$T/adage-exec" 2>/dev/null || sha256sum "$T/adage" "$T/adage-exec"; } >SHA256SUMS)
+cp -R "$REPO/evals/sandboxes/acme-billing" "$W/billing"; mkdir -p "$W/billing/.git"
+PAYLOAD="{\"session_id\":\"exec-bootstrap\",\"cwd\":\"$W/billing\",\"hook_event_name\":\"SessionStart\",\"source\":\"startup\"}"
+ADAGE_AUTO_LEARN=1 runx "$W/bundled-data" "$BASE"
+check "bundled exec: learner installed beside executor" [ -x "$W/bundled-data/bin/adage" ]
+check "bundled exec: learner verified and digest named" sh -c "readlink '$W/bundled-data/bin/adage' | grep -q '^adage-[0-9a-f]\{64\}\$'"
+n=0
+while ! grep -q '"kind":"condition"' "$ADAGE_HOME/learn.log" 2>/dev/null && [ "$n" -lt 120 ]; do
+  sleep 1; n=$((n + 1))
+done
+check "bundled exec: real detached learner bootstraps instincts" grep -q '"kind":"condition"' "$ADAGE_HOME/learn.log"
+check "bundled exec: real learner builds index" [ -s "$ADAGE_HOME/index.json" ]
+# A corrupt or absent learner must never be installed or quietly disable background learning.
+printf 'tampered' >>"$XR/dist/$T/adage"
+runx "$W/tampered-companion" "$BASE"
+check "bundled exec: tampered companion fails open with notice" grep -q 'bundled learner is missing or does not match its checksum' "$W/out"
+check "bundled exec: tampered companion leaves quiet hook" [ "$(target_of "$W/tampered-companion/bin/adage-exec")" = "$XR/scripts/quiet" ]
+check "bundled exec: tampered companion is not installed" [ ! -e "$W/tampered-companion/bin/adage" ]
+rm "$XR/dist/$T/adage"
+runx "$W/missing-companion" "$BASE"
+check "bundled exec: missing companion explained" grep -q 'bundled learner is missing or does not match its checksum' "$W/out"
+rm -f "$ADAGE_HOME/exec/enabled"
 
 [ "$fails" = 0 ] && echo "session-start ok" || { echo "$fails failure(s)"; exit 1; }

@@ -1,0 +1,5 @@
+Add a new validator to marshmallow: `marshmallow.validate.HasKeys(keys, *, error=None)`, which succeeds if the input is a mapping (such as a `dict`) that contains every key in `keys`; extra keys are allowed, and input that is not a mapping fails. Its default error message is `Missing required keys.`; a custom `error` message may interpolate `{input}` and `{keys}`. Examples of valid input: `HasKeys(['id', 'name'])`: `{'id': 1, 'name': 'x'}`. Examples of invalid input: `{'id': 1}`.
+
+Follow the conventions of the existing validators, include tests and a docstring, and add a changelog entry.
+
+Do not create git commits.

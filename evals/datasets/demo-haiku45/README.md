@@ -8,9 +8,9 @@ sandbox (`demo/sandbox/generate.py`), and hidden checks scored it afterwards.
 | Phase | Arm | Round | Sessions | Notes |
 | --- | --- | ---: | ---: | --- |
 | train | no Adage | 1 | 18 | 6 work items (W-1041…W-1046) × 3 prompt phrasings |
-| eval | holdout | 1 | 18 | Held-out items (W-2041…W-2046). Hooks ran and logged what they would have said; nothing was delivered |
+| eval | control | 1 | 18 | Held-out items (W-2041…W-2046). Hooks ran and logged what they would have said; nothing was delivered |
 | eval | adage | 1 | 18 | Same items, with directives delivered |
-| eval | holdout | 2 | 18 | Round 2 learned from all 54 earlier sessions |
+| eval | control | 2 | 18 | Round 2 learned from all 54 earlier sessions |
 | eval | adage | 2 | 18 | |
 
 Labels come from the demo's hidden checks. 77 of 90 sessions passed. One ended with stale generated
@@ -22,11 +22,11 @@ in those.
 - `manifest.json` has each session's id, run, phase, arm and round, plus its labels (`passed`,
   `stale_generated`, `result`, `turns`, `turns_to_first_edit`, `dead_end_hits`, `cost_usd`). It also
   holds the named splits:
-  - `round1`: train on the 18 training sessions, test on the 18 round-1 holdout sessions.
+  - `round1`: train on the 18 training sessions, test on the 18 round-1 control sessions.
   - `round2`: train on the 54 sessions the live round-2 learner read, test on the 18 round-2
-    holdout sessions.
-  - `learn: "demo"` selects the thresholds the demo used (`adage learn --demo`).
-- `sessions/<run>.jsonl` holds one Claude Code transcript per run, in the format `adage learn` reads.
+    control sessions.
+  - `learn: "demo"` selects the thresholds the demo used (`adage condition --demo`).
+- `sessions/<run>.jsonl` holds one Claude Code transcript per run, in the format `adage condition` reads.
 - `sandbox.txt` lists the sandbox's files. Replay creates them as empty files, so that
   repository-path contracts behave as they did live.
 - `recorded/` holds what the live hooks did:
@@ -45,9 +45,9 @@ The raw archive is not in git (it is 70 MB and machine-specific). The script rea
 modifies it. Its output is deterministic.
 
 - **Source.** The script reads the real on-disk transcripts (`raw/transcripts/`), which are the same
-  files the live `adage learn` read. It uses the session file named in the run's state. One run
+  files the live `adage condition` read. It uses the session file named in the run's state. One run
   directory also holds an earlier, superseded attempt at the same run, which is left out. It leaves out subagent
-  transcripts, because `adage learn` never reads them.
+  transcripts, because `adage condition` never reads them.
 - **Kept.** User prompts, assistant tool calls and text, tool results and the hook-visible
   `toolUseResult`, and Adage's own hook attachments (`hook_additional_context`).
 - **Dropped.**
@@ -67,7 +67,7 @@ modifies it. Its output is deterministic.
 ## What it reproduces
 
 - Learning from the curated `round2` training sessions reproduces the live round-2 index's routes
-  (ids and aspects). Two deliberate learner changes came after the live run: the signature-keyed
+  (ids and strengths). Two deliberate learner changes came after the live run: the signature-keyed
   dead-end miner narrowed the dead end, and dead ends and linked files now carry an exit condition.
   Before them the whole index matched byte for byte (generation `8dd5ec01ed76c4bd`).
 - Replaying the 36 round-2 eval sessions against that index reproduces every live decision

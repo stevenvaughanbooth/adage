@@ -2,7 +2,8 @@
 
 Read the [README](README.md) first, then the [design spec](docs/Adage%20—%20Design%20Spec.md),
 [architecture](docs/Adage%20—%20Architecture.md) and
-[implementation plan](docs/Adage%20—%20Implementation%20Plan.md). Security reports go through
+[implementation plan](docs/Adage%20—%20Implementation%20Plan.md). [Components and boundaries](docs/architecture.md) is the current map of
+what each crate owns and may depend on; `cargo test -p xtask` enforces it. Security reports go through
 [SECURITY.md](SECURITY.md), never a public issue.
 
 ## Build
@@ -25,19 +26,49 @@ Windows x64. Run it locally before sending a change:
 ```bash
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo test --workspace --locked        # includes the normaliser's golden fixtures and, with node, the OpenCode plugin test
+cargo test --workspace --locked        # includes the normaliser's table-driven cases and, with node, the OpenCode plugin test
 node npm/test/launcher.test.mjs        # the npm launcher, against target/debug/adage
 plugin/test/session-start.test.sh      # how the Claude Code plugin finds its binary
 node scripts/check-plugin.mjs          # plugin and marketplace versions and hook paths
+node scripts/test-stage-plugin.mjs     # reject missing/mismatched release archive checksums (Unix)
 claude plugin validate --strict plugin/claude-code && claude plugin validate --strict .
 cargo deny check                       # licenses, advisories, bans, sources (deny.toml)
 scripts/cross-check.sh                 # clippy for every release target, including Windows, from any host
 ```
 
+On a pull request, CI tests only the packages a change can affect: the changed ones, the ones whose
+tests read a changed fixture, and everything that depends on them. To see that set locally, run
+`cargo xtask affected` (against `origin/main`; `--files <paths>` to ask about specific paths). A
+test that reads a file outside its crate must be declared in `READS` in `xtask/src/affected.rs`.
+
 `scripts/cross-check.sh` proves that code compiles for other targets (it stubs out the C compiler
 tree-sitter's build script needs, so it never links). Only CI proves that it links and passes tests
 there. Code that differs by platform goes behind `cfg(unix)` / `cfg(windows)`, and tests that need
 Unix-only facilities (symlinks, `#!/bin/sh` scripts) are `#[cfg(unix)]`.
+
+Before a Unix plugin release, also run the optimized artifact gate:
+
+```bash
+cargo test --release --locked -p adage-cli --test zero_config_plugin release_plugin_startup -- --nocapture
+cargo build --release --locked -p adage-cli -p adage-exec
+plugin/test/session-start.test.sh target/release/adage
+```
+
+The startup gate stages a checksummed release binary and dispatches the checked-in plugin hook
+registration. It requires a real background bootstrap from 12 historical sessions, a useful
+post-failure response, first startup under 1,500 ms and all ten repeated starts under 200 ms.
+Those latency limits apply to optimized release artifacts; the debug integration suite tests
+semantics without applying release budgets to a larger instrumented binary. Tests that need
+`ADAGE_TEST_NO_SPAWN` are explicitly ignored in release builds because the recorder and fault
+injection exist only with debug assertions. The release gate uses neither, and cannot silently
+skip an unsupported Unix target. The shell suite additionally checks that bundled delegation
+installs its verified learner companion and actually bootstraps without an `adage` on PATH.
+
+Local success on one machine does not establish the full release matrix. CI must link and test
+each promised target, and release staging must have checksummed archives for every required
+binary. Windows automatic execution remains unavailable (E0 only); the Unix startup gate does
+not validate Windows Claude Code plugin invocation. Validate that harness integration separately
+before describing Windows plugin support as verified.
 
 ## Evals
 
@@ -86,7 +117,7 @@ Releases are built by [dist](https://github.com/axodotdev/cargo-dist) from `dist
 
 Publishing needs, in the repository settings: the `HOMEBREW_TAP_TOKEN` secret (push access to
 `stevenvaughanbooth/homebrew-tap`), and for npm the `NPM_TOKEN` secret plus the variable
-`ADAGE_NPM_PUBLISH=true`. The npm package is `@adage/cli` (decision D3): claim the `@adage` scope
-first (`npm org create adage`); if it is taken, set `PACKAGE_NAME = "adage-cli"` in
-`npm/config.mjs`, the one place the name lives. macOS signing (decision D4) is off until the Apple
+`ADAGE_NPM_PUBLISH=true`. The npm package is `@adage-sh/cli` (decision D3), in the `adage-sh` npm org;
+`npm/config.mjs` is the one place the name lives. The `NPM_TOKEN` must be an automation token of
+an account that can publish to that org. macOS signing (decision D4) is off until the Apple
 Developer ID secrets exist; see the note in `dist-workspace.toml`.

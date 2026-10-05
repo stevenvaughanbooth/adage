@@ -1,0 +1,422 @@
+[
+ {
+  "task": "click-type--hex-color",
+  "ok": true,
+  "base_hidden_failed": [
+   "test_changelog",
+   "test_documented",
+   "test_has_tests",
+   "test_invalid[#12345]",
+   "test_invalid[#ggg]",
+   "test_invalid[fff]",
+   "test_is_param_type",
+   "test_valid[#000000-#000000]",
+   "test_valid[#1a2B3c-#1a2b3c]",
+   "test_valid[#FFF-#ffffff]"
+  ],
+  "base_suite_failed": [],
+  "gold_passed": true,
+  "gold_failed": [],
+  "gold_seconds": 23.27,
+  "n_tests": 2252
+ },
+ {
+  "task": "click-type--port",
+  "ok": true,
+  "base_hidden_failed": [
+   "test_changelog",
+   "test_documented",
+   "test_has_tests",
+   "test_invalid[0]",
+   "test_invalid[65536]",
+   "test_invalid[http]",
+   "test_is_param_type",
+   "test_valid[1-1]",
+   "test_valid[65535-65535]",
+   "test_valid[80-80]"
+  ],
+  "base_suite_failed": [],
+  "gold_passed": true,
+  "gold_failed": [],
+  "gold_seconds": 24.07,
+  "n_tests": 2252
+ },
+ {
+  "task": "click-type--duration",
+  "ok": true,
+  "base_hidden_failed": [
+   "test_changelog",
+   "test_documented",
+   "test_has_tests",
+   "test_invalid[10]",
+   "test_invalid[1x]",
+   "test_invalid[30m1h]",
+   "test_invalid[h]",
+   "test_is_param_type",
+   "test_valid[1d2h3m4s-expected3]",
+   "test_valid[1h30m-expected0]",
+   "test_valid[2d-expected2]",
+   "test_valid[45s-expected1]"
+  ],
+  "base_suite_failed": [],
+  "gold_passed": true,
+  "gold_failed": [],
+  "gold_seconds": 25.48,
+  "n_tests": 2254
+ },
+ {
+  "task": "click-type--ip-address",
+  "ok": true,
+  "base_hidden_failed": [
+   "test_changelog",
+   "test_documented",
+   "test_has_tests",
+   "test_invalid[1.2.3]",
+   "test_invalid[256.1.1.1]",
+   "test_invalid[localhost]",
+   "test_is_param_type",
+   "test_valid[127.0.0.1-expected0]",
+   "test_valid[192.168.1.20-expected2]",
+   "test_valid[::1-expected1]"
+  ],
+  "base_suite_failed": [],
+  "gold_passed": true,
+  "gold_failed": [],
+  "gold_seconds": 26.1,
+  "n_tests": 2252
+ },
+ {
+  "task": "click-type--semver",
+  "ok": true,
+  "base_hidden_failed": [
+   "test_changelog",
+   "test_documented",
+   "test_has_tests",
+   "test_invalid[1.2.3.4]",
+   "test_invalid[1.2.x]",
+   "test_invalid[1.2]",
+   "test_is_param_type",
+   "test_valid[1.2.3-expected0]",
+   "test_valid[10.0.1-expected2]",
+   "test_valid[v0.10.0-expected1]"
+  ],
+  "base_suite_failed": [],
+  "gold_passed": true,
+  "gold_failed": [],
+  "gold_seconds": 22.22,
+  "n_tests": 2252
+ },
+ {
+  "task": "click-type--percentage",
+  "ok": true,
+  "base_hidden_failed": [
+   "test_changelog",
+   "test_documented",
+   "test_has_tests",
+   "test_invalid[-1]",
+   "test_invalid[101%]",
+   "test_invalid[abc]",
+   "test_is_param_type",
+   "test_valid[0-0.0]",
+   "test_valid[100%-1.0]",
+   "test_valid[12.5-0.125]",
+   "test_valid[50%-0.5]"
+  ],
+  "base_suite_failed": [],
+  "gold_passed": true,
+  "gold_failed": [],
+  "gold_seconds": 23.79,
+  "n_tests": 2253
+ },
+ {
+  "task": "click-type--byte-size",
+  "ok": true,
+  "base_hidden_failed": [
+   "test_changelog",
+   "test_documented",
+   "test_has_tests",
+   "test_invalid[-1KB]",
+   "test_invalid[10XB]",
+   "test_invalid[KB]",
+   "test_is_param_type",
+   "test_valid[1.5MB-1500000]",
+   "test_valid[10KB-10000]",
+   "test_valid[1KiB-1024]",
+   "test_valid[2gib-2147483648]",
+   "test_valid[512-512]"
+  ],
+  "base_suite_failed": [],
+  "gold_passed": true,
+  "gold_failed": [],
+  "gold_seconds": 22.69,
+  "n_tests": 2254
+ },
+ {
+  "task": "click-type--slug",
+  "ok": true,
+  "base_hidden_failed": [
+   "test_changelog",
+   "test_documented",
+   "test_has_tests",
+   "test_invalid[-a]",
+   "test_invalid[Hello]",
+   "test_invalid[a--b]",
+   "test_invalid[a_b]",
+   "test_is_param_type",
+   "test_valid[a1-b2-a1-b2]",
+   "test_valid[abc-abc]",
+   "test_valid[my-post-2-my-post-2]"
+  ],
+  "base_suite_failed": [],
+  "gold_passed": true,
+  "gold_failed": [],
+  "gold_seconds": 23.52,
+  "n_tests": 2253
+ },
+ {
+  "task": "click-type--date",
+  "ok": true,
+  "base_hidden_failed": [
+   "test_changelog",
+   "test_documented",
+   "test_has_tests",
+   "test_invalid[01/02/2024]",
+   "test_invalid[2023-02-29]",
+   "test_invalid[2024-13-01]",
+   "test_is_param_type",
+   "test_valid[1999-12-31-expected1]",
+   "test_valid[2024-02-29-expected0]"
+  ],
+  "base_suite_failed": [],
+  "gold_passed": true,
+  "gold_failed": [],
+  "gold_seconds": 23.39,
+  "n_tests": 2251
+ },
+ {
+  "task": "click-type--host-port",
+  "ok": true,
+  "base_hidden_failed": [
+   "test_changelog",
+   "test_documented",
+   "test_has_tests",
+   "test_invalid[:80]",
+   "test_invalid[host:0]",
+   "test_invalid[host:http]",
+   "test_invalid[localhost]",
+   "test_is_param_type",
+   "test_valid[example.com:443-expected1]",
+   "test_valid[localhost:8080-expected0]"
+  ],
+  "base_suite_failed": [],
+  "gold_passed": true,
+  "gold_failed": [],
+  "gold_seconds": 22.32,
+  "n_tests": 2252
+ },
+ {
+  "task": "mm-validator--starts-with",
+  "ok": true,
+  "base_hidden_failed": [
+   "test_hidden_changelog",
+   "test_hidden_custom_error",
+   "test_hidden_docstring",
+   "test_hidden_has_tests",
+   "test_hidden_invalid[]",
+   "test_hidden_invalid[xab]",
+   "test_hidden_repr",
+   "test_hidden_valid[ab]",
+   "test_hidden_valid[abc]"
+  ],
+  "base_suite_failed": [],
+  "gold_passed": true,
+  "gold_failed": [],
+  "gold_seconds": 11.53,
+  "n_tests": 1200
+ },
+ {
+  "task": "mm-validator--multiple-of",
+  "ok": true,
+  "base_hidden_failed": [
+   "test_hidden_changelog",
+   "test_hidden_custom_error",
+   "test_hidden_docstring",
+   "test_hidden_has_tests",
+   "test_hidden_invalid[10]",
+   "test_hidden_invalid[4]",
+   "test_hidden_repr",
+   "test_hidden_valid[-6]",
+   "test_hidden_valid[0]",
+   "test_hidden_valid[9]"
+  ],
+  "base_suite_failed": [],
+  "gold_passed": true,
+  "gold_failed": [],
+  "gold_seconds": 11.24,
+  "n_tests": 1201
+ },
+ {
+  "task": "mm-validator--unique",
+  "ok": true,
+  "base_hidden_failed": [
+   "test_hidden_changelog",
+   "test_hidden_custom_error",
+   "test_hidden_docstring",
+   "test_hidden_has_tests",
+   "test_hidden_invalid[value0]",
+   "test_hidden_invalid[value1]",
+   "test_hidden_repr",
+   "test_hidden_valid[value0]",
+   "test_hidden_valid[value1]",
+   "test_hidden_valid[value2]"
+  ],
+  "base_suite_failed": [],
+  "gold_passed": true,
+  "gold_failed": [],
+  "gold_seconds": 10.57,
+  "n_tests": 1201
+ },
+ {
+  "task": "mm-validator--hexadecimal",
+  "ok": true,
+  "base_hidden_failed": [
+   "test_hidden_changelog",
+   "test_hidden_custom_error",
+   "test_hidden_docstring",
+   "test_hidden_has_tests",
+   "test_hidden_invalid[0x1f]",
+   "test_hidden_invalid[]",
+   "test_hidden_invalid[xyz]",
+   "test_hidden_repr",
+   "test_hidden_valid[0]",
+   "test_hidden_valid[deadBEEF]"
+  ],
+  "base_suite_failed": [],
+  "gold_passed": true,
+  "gold_failed": [],
+  "gold_seconds": 12.36,
+  "n_tests": 1201
+ },
+ {
+  "task": "mm-validator--ends-with",
+  "ok": true,
+  "base_hidden_failed": [
+   "test_hidden_changelog",
+   "test_hidden_custom_error",
+   "test_hidden_docstring",
+   "test_hidden_has_tests",
+   "test_hidden_invalid[]",
+   "test_hidden_invalid[main.pyc]",
+   "test_hidden_repr",
+   "test_hidden_valid[.py]",
+   "test_hidden_valid[main.py]"
+  ],
+  "base_suite_failed": [],
+  "gold_passed": true,
+  "gold_failed": [],
+  "gold_seconds": 14.18,
+  "n_tests": 1200
+ },
+ {
+  "task": "mm-validator--ip-address",
+  "ok": true,
+  "base_hidden_failed": [
+   "test_hidden_changelog",
+   "test_hidden_custom_error",
+   "test_hidden_docstring",
+   "test_hidden_has_tests",
+   "test_hidden_invalid[256.0.0.1]",
+   "test_hidden_invalid[localhost]",
+   "test_hidden_repr",
+   "test_hidden_valid[127.0.0.1]",
+   "test_hidden_valid[::1]",
+   "test_hidden_version"
+  ],
+  "base_suite_failed": [],
+  "gold_passed": true,
+  "gold_failed": [],
+  "gold_seconds": 12.88,
+  "n_tests": 1201
+ },
+ {
+  "task": "mm-validator--not-blank",
+  "ok": true,
+  "base_hidden_failed": [
+   "test_hidden_changelog",
+   "test_hidden_custom_error",
+   "test_hidden_docstring",
+   "test_hidden_has_tests",
+   "test_hidden_invalid[",
+   "test_hidden_invalid[\\t\\n]",
+   "test_hidden_invalid[]",
+   "test_hidden_repr",
+   "test_hidden_valid[",
+   "test_hidden_valid[a]"
+  ],
+  "base_suite_failed": [],
+  "gold_passed": true,
+  "gold_failed": [],
+  "gold_seconds": 13.47,
+  "n_tests": 1201
+ },
+ {
+  "task": "mm-validator--ascii",
+  "ok": true,
+  "base_hidden_failed": [
+   "test_hidden_changelog",
+   "test_hidden_custom_error",
+   "test_hidden_docstring",
+   "test_hidden_has_tests",
+   "test_hidden_invalid[\\u65e5\\u672c]",
+   "test_hidden_invalid[h\\xe9llo]",
+   "test_hidden_repr",
+   "test_hidden_valid[]",
+   "test_hidden_valid[hello]"
+  ],
+  "base_suite_failed": [],
+  "gold_passed": true,
+  "gold_failed": [],
+  "gold_seconds": 12.32,
+  "n_tests": 1200
+ },
+ {
+  "task": "mm-validator--contains",
+  "ok": true,
+  "base_hidden_failed": [
+   "test_hidden_changelog",
+   "test_hidden_custom_error",
+   "test_hidden_docstring",
+   "test_hidden_has_tests",
+   "test_hidden_invalid[abc]",
+   "test_hidden_invalid[value1]",
+   "test_hidden_repr",
+   "test_hidden_valid[axb]",
+   "test_hidden_valid[value1]"
+  ],
+  "base_suite_failed": [],
+  "gold_passed": true,
+  "gold_failed": [],
+  "gold_seconds": 9.27,
+  "n_tests": 1200
+ },
+ {
+  "task": "mm-validator--lowercase",
+  "ok": true,
+  "base_hidden_failed": [
+   "test_hidden_changelog",
+   "test_hidden_custom_error",
+   "test_hidden_docstring",
+   "test_hidden_has_tests",
+   "test_hidden_invalid[ABC]",
+   "test_hidden_invalid[Abc]",
+   "test_hidden_repr",
+   "test_hidden_valid[a-1]",
+   "test_hidden_valid[abc]"
+  ],
+  "base_suite_failed": [],
+  "gold_passed": true,
+  "gold_failed": [],
+  "gold_seconds": 10.03,
+  "n_tests": 1200
+ }
+]

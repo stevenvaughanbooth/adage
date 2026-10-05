@@ -1,0 +1,156 @@
+{
+ "generation": "8dd5ec01a3f2b7c4",
+ "home": "~/.adage",
+ "sessions": {
+  "total": 0,
+  "treated": 0,
+  "control": 0
+ },
+ "stop_requests": 0,
+ "routes": [
+  {
+   "id": "finish-line/regenerate",
+   "summary": "edits to schema/*.json must be followed by make gen",
+   "gist": "edits to schema/*.json must be followed by make gen",
+   "track": "adage/finish-line",
+   "version": "0.1.0",
+   "reference": "acme-billing/instincts",
+   "repo": "acme-billing",
+   "imported": false,
+   "in_index": true,
+   "execution_only": false,
+   "instinct": true,
+   "origin": {
+    "kind": "instinct",
+    "label": "instinct U1 (from Makefile)",
+    "pack": "adage/regenerate",
+    "instinct": "U1",
+    "declared": "Makefile",
+    "version": "0.1.0"
+   },
+   "review": {
+    "verbs": [
+     "approve",
+     "extinguish",
+     "pin"
+    ],
+    "reasons": [],
+    "next": null
+   },
+   "strength": "prime",
+   "ceiling": "prime",
+   "effect": "regenerate",
+   "state": "firm",
+   "authored": false,
+   "trigger": {
+    "kind": "after_edit",
+    "label": "an edit touches schema/*.json"
+   },
+   "step": {
+    "kind": "run",
+    "label": "make gen"
+   },
+   "directive": "<adage-reflex track=\"acme-billing/learned@0.3.0\" route=\"finish-line/regenerate\" strength=\"prime\">\nIn this repository, changes to files matching schema/*.json must be followed by running:\n  make gen\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>",
+   "evidence": {
+    "support": 7,
+    "opportunities": 7,
+    "rate": 1,
+    "lower_bound": 0.65,
+    "turns_saved": 0.6,
+    "days": 9,
+    "exposed": 0,
+    "dormant_since": null,
+    "provenance": "instinct"
+   },
+   "live": {
+    "emitted": 0,
+    "would_have": 0,
+    "followed": 0,
+    "ignored": 1,
+    "misfired": 0,
+    "obligation_met": 0,
+    "control": {
+     "unaided": 0,
+     "not_reached": 0,
+     "obligation_met": 0
+    },
+    "sessions": 0
+   },
+   "arms": {
+    "treated": {
+     "sessions": 0,
+     "applied": 0,
+     "followed": 0,
+     "met": 0,
+     "hit_avoided": 0
+    },
+    "control": {
+     "sessions": 0,
+     "applied": 0,
+     "followed": 0,
+     "met": 0,
+     "hit_avoided": 0
+    }
+   },
+   "measurement_sessions": [],
+   "measurement_history": [],
+   "measurement_info": {
+    "status": "current",
+    "description": "Illustrative test-fixture measurements for this collection and version."
+   },
+   "shape": "run",
+   "quiet": false,
+   "obligation": null
+  }
+ ],
+ "observed": [],
+ "events": [],
+ "totals": {
+  "emitted": 0,
+  "would_have": 0,
+  "followed": 0,
+  "ignored": 0,
+  "misfired": 0,
+  "obligation_met": 0,
+  "control": {
+   "unaided": 0,
+   "not_reached": 0,
+   "obligation_met": 0
+  },
+  "sessions": 0
+ },
+ "attribution": {
+  "exposures": {},
+  "judgements": {},
+  "description": "Illustrative fixture. Raw totals count each event once."
+ },
+ "trace_events": [],
+ "trace_sessions": [],
+ "trace_info": {
+  "source": "recorded_hook_decisions",
+  "events_total": 0,
+  "events_visible": 0,
+  "truncated": false,
+  "limit": 400,
+  "complete_session_inventory": true,
+  "session_endpoint": "/api/v1/trace",
+  "description": "Illustrative recorded hook decisions for browser tests."
+ },
+ "learning": [],
+ "bars": {
+  "min_support": 3,
+  "fire_lower_bound": 0.5,
+  "uplift_min": 0.1
+ },
+ "savings": [],
+ "pretool": [],
+ "runtime": {
+  "rewrite": {
+   "on": true,
+   "config": true,
+   "marker": false
+  },
+  "control": 0.1,
+  "card_threshold": 0.811
+ }
+}

@@ -1,0 +1,3083 @@
+{
+ "u11_post": {
+  "name": "U11 post-hoc",
+  "assumptions": {
+   "sat": "goal",
+   "p_follow": 1.0,
+   "misfire_calls": 2.0,
+   "hindsight": false
+  },
+  "summary": {
+   "sessions": 158,
+   "tasks": 38,
+   "calls": 5110,
+   "test_set_id": "6a795a362ccb",
+   "baseline": {
+    "usd_per_task": 0.26039232658227857,
+    "calls_per_task": 32.34177215189873
+   },
+   "calls_saved_per_task": 0.8771773971863286,
+   "calls_saved_ci": [
+    0.5812504660568998,
+    1.1881448235483871
+   ],
+   "calls_saved_share": 0.027122119130223075,
+   "calls_saved_share_ci": [
+    0.01780083800530743,
+    0.0376847971176103
+   ],
+   "usd_saved_per_task": 0.004868975527426161,
+   "usd_saved_ci": [
+    0.0032718250000000008,
+    0.006546410470085471
+   ],
+   "usd_saved_share": 0.018698613708525193,
+   "usd_saved_share_ci": [
+    0.012125786294717389,
+    0.026575296257123324
+   ],
+   "tokens_saved_per_task": 36057.01898734177,
+   "pass_rate_effect": {
+    "point": 0.0,
+    "worst_case": -0.0,
+    "worst_case_ci": [
+     -0.016835408386943633,
+     -0.0
+    ],
+    "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+   },
+   "s_hat_rust": 0.8898356250344299,
+   "s_hat_rust_ci95": [
+    0.5488133909087355,
+    1.2908565444289442
+   ],
+   "directives": 62,
+   "useful": 61,
+   "harmful": 0,
+   "superseded": 0,
+   "useful_rate": 0.9838709677419355,
+   "useful_lb90": 0.930884108588354,
+   "harmful_rate": 0.0,
+   "per_10_calls": 0.12133072407045009,
+   "gates": {
+    "useful_lb90>=0.8": true,
+    "harmful<=1%": true,
+    "per_10_calls<=1": true
+   },
+   "custom_classes": 0,
+   "uncalibrated_classes": []
+  },
+  "by_route": {
+   "dead-end-0cdcfb": {
+    "directives": 50,
+    "useful": 49,
+    "harmful": 0,
+    "saved": 113.0,
+    "cost": 1.1089822448646405
+   },
+   "dead-end-855e84": {
+    "directives": 12,
+    "useful": 12,
+    "harmful": 0,
+    "saved": 29.0,
+    "cost": 0.29698899969542225
+   }
+  },
+  "by_slice": {
+   "attrs": {
+    "sessions": 40,
+    "usd_saved_per_task": 0.009839653333333333,
+    "usd_saved_ci": [
+     0.006300380000000001,
+     0.013352453333333337
+    ],
+    "usd_saved_share": 0.052033117408118675,
+    "calls_saved_per_task": 1.882372565109452,
+    "calls_saved_ci": [
+     1.1860793472838498,
+     2.5795163233703504
+    ],
+    "s_hat_rust": 1.932372565109452,
+    "directives": 27
+   },
+   "click": {
+    "sessions": 40,
+    "usd_saved_per_task": 0.0033752325,
+    "usd_saved_ci": [
+     0.0022602250000000003,
+     0.004495675
+    ],
+    "usd_saved_share": 0.011862454561142256,
+    "calls_saved_per_task": 0.5653205963356388,
+    "calls_saved_ci": [
+     0.3905355702924511,
+     0.7381409862256295
+    ],
+    "s_hat_rust": 0.5653205963356388,
+    "directives": 19
+   },
+   "marshmallow": {
+    "sessions": 30,
+    "usd_saved_per_task": 0.008023423333333337,
+    "usd_saved_ci": [
+     0.0043175366666666675,
+     0.011761746666666668
+    ],
+    "usd_saved_share": 0.035383151202798294,
+    "calls_saved_per_task": 1.356210076587876,
+    "calls_saved_ci": [
+     0.6936891620669525,
+     2.0519834609106486
+    ],
+    "s_hat_rust": 1.356210076587876,
+    "directives": 16
+   },
+   "urfave-cli": {
+    "sessions": 16,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   },
+   "vue-core": {
+    "sessions": 32,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   }
+  }
+ },
+ "u11_predictive": {
+  "name": "U11 predictive",
+  "assumptions": {
+   "sat": "goal",
+   "p_follow": 1.0,
+   "misfire_calls": 2.0,
+   "hindsight": false
+  },
+  "summary": {
+   "sessions": 158,
+   "tasks": 38,
+   "calls": 5110,
+   "test_set_id": "6a795a362ccb",
+   "baseline": {
+    "usd_per_task": 0.26039232658227857,
+    "calls_per_task": 32.34177215189873
+   },
+   "calls_saved_per_task": 1.6322714300629688,
+   "calls_saved_ci": [
+    1.2239057403455271,
+    2.042047265580113
+   ],
+   "calls_saved_share": 0.050469449305273785,
+   "calls_saved_share_ci": [
+    0.03706765756613397,
+    0.06444050747744275
+   ],
+   "usd_saved_per_task": 0.009066540482218206,
+   "usd_saved_ci": [
+    0.006796573245614034,
+    0.011386505643130816
+   ],
+   "usd_saved_share": 0.03481876982021346,
+   "usd_saved_share_ci": [
+    0.025252852981327793,
+    0.045672629343276226
+   ],
+   "tokens_saved_per_task": 70333.21518987342,
+   "pass_rate_effect": {
+    "point": 0.0,
+    "worst_case": -0.0,
+    "worst_case_ci": [
+     -0.016835408386943633,
+     -0.0
+    ],
+    "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+   },
+   "s_hat_rust": 1.6955625693034753,
+   "s_hat_rust_ci95": [
+    1.178595938489406,
+    2.2088739746535264
+   ],
+   "directives": 98,
+   "useful": 93,
+   "harmful": 0,
+   "superseded": 61,
+   "useful_rate": 0.9489795918367347,
+   "useful_lb90": 0.8988874784740276,
+   "harmful_rate": 0.0,
+   "per_10_calls": 0.1917808219178082,
+   "gates": {
+    "useful_lb90>=0.8": true,
+    "harmful<=1%": true,
+    "per_10_calls<=1": true
+   },
+   "custom_classes": 0,
+   "uncalibrated_classes": []
+  },
+  "by_route": {
+   "pre:python -m pytest": {
+    "directives": 78,
+    "useful": 76,
+    "harmful": 0,
+    "saved": 213.0,
+    "cost": 1.65736797945856
+   },
+   "pre:python3 -m pytest": {
+    "directives": 19,
+    "useful": 17,
+    "harmful": 0,
+    "saved": 57.0,
+    "cost": 0.43683686522777637
+   },
+   "dead-end-0cdcfb": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.006909205364614122
+   }
+  },
+  "by_slice": {
+   "attrs": {
+    "sessions": 40,
+    "usd_saved_per_task": 0.013596052404761907,
+    "usd_saved_ci": [
+     0.008828653571428572,
+     0.018050361571428572
+    ],
+    "usd_saved_share": 0.07189734913397122,
+    "calls_saved_per_task": 2.702798220117404,
+    "calls_saved_ci": [
+     1.8096362056773092,
+     3.571807523505014
+    ],
+    "s_hat_rust": 2.952798220117404,
+    "directives": 36
+   },
+   "click": {
+    "sessions": 40,
+    "usd_saved_per_task": 0.008629259999999998,
+    "usd_saved_ci": [
+     0.00660696,
+     0.010780600000000003
+    ],
+    "usd_saved_share": 0.030328045444656757,
+    "calls_saved_per_task": 1.4827223571132178,
+    "calls_saved_ci": [
+     1.1586790816594112,
+     1.7809436701254395
+    ],
+    "s_hat_rust": 1.4827223571132178,
+    "directives": 34
+   },
+   "marshmallow": {
+    "sessions": 30,
+    "usd_saved_per_task": 0.018116696666666664,
+    "usd_saved_ci": [
+     0.014762473333333337,
+     0.02119757
+    ],
+    "usd_saved_share": 0.07989430331922724,
+    "calls_saved_per_task": 3.0159354286908053,
+    "calls_saved_ci": [
+     2.4845679130205967,
+     3.5173231866460757
+    ],
+    "s_hat_rust": 3.0159354286908053,
+    "directives": 28
+   },
+   "urfave-cli": {
+    "sessions": 16,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   },
+   "vue-core": {
+    "sessions": 32,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   }
+  }
+ },
+ "loro_pre": {
+  "name": "cross-repo LORO day-0 loro_pre",
+  "assumptions": {
+   "sat": "goal",
+   "p_follow": 1.0,
+   "misfire_calls": 2.0,
+   "hindsight": false
+  },
+  "summary": {
+   "sessions": 158,
+   "tasks": 38,
+   "calls": 5110,
+   "test_set_id": "6a795a362ccb",
+   "baseline": {
+    "usd_per_task": 0.26039232658227857,
+    "calls_per_task": 32.34177215189873
+   },
+   "calls_saved_per_task": 1.4471635893182682,
+   "calls_saved_ci": [
+    1.0835882643239672,
+    1.8051083223868216
+   ],
+   "calls_saved_share": 0.04474595833899928,
+   "calls_saved_share_ci": [
+    0.03298271112532054,
+    0.05685573397619396
+   ],
+   "usd_saved_per_task": 0.007767073847596382,
+   "usd_saved_ci": [
+    0.005799207494952926,
+    0.009686677305015972
+   ],
+   "usd_saved_share": 0.029828351509206815,
+   "usd_saved_share_ci": [
+    0.021515950613666575,
+    0.0387983270017599
+   ],
+   "tokens_saved_per_task": 62814.57594936709,
+   "pass_rate_effect": {
+    "point": 0.0,
+    "worst_case": -0.0,
+    "worst_case_ci": [
+     -0.016835408386943633,
+     -0.0
+    ],
+    "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+   },
+   "s_hat_rust": 1.535771184254977,
+   "s_hat_rust_ci95": [
+    1.088424242768369,
+    1.9784052881765128
+   ],
+   "directives": 103,
+   "useful": 96,
+   "harmful": 0,
+   "superseded": 6,
+   "useful_rate": 0.9320388349514563,
+   "useful_lb90": 0.8792250782639858,
+   "harmful_rate": 0.0,
+   "per_10_calls": 0.20156555772994128,
+   "gates": {
+    "useful_lb90>=0.8": true,
+    "harmful<=1%": true,
+    "per_10_calls<=1": true
+   },
+   "custom_classes": 0,
+   "uncalibrated_classes": [
+    "command"
+   ]
+  },
+  "by_route": {
+   "xfer:python -m pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 72,
+    "useful": 70,
+    "harmful": 0,
+    "saved": 212.0,
+    "cost": 1.5487009145534059
+   },
+   "xfer:source .venv/bin/activate && python -> .venv/bin/python": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.007926877006184921
+   },
+   "xfer:python3 -m pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 11,
+    "useful": 10,
+    "harmful": 0,
+    "saved": 28.0,
+    "cost": 0.28700894702810137
+   },
+   "xfer:bin/pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 2,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.07321152988534144
+   },
+   "xfer:.venv/bin/python -m pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 6,
+    "useful": 6,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.06991836061824296
+   },
+   "xfer:.venv/bin/python -> source .venv/bin/activate && python3": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.06059788029034874
+   },
+   "xfer:rm *.py && .venv/bin/python -m pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.009552976404135358
+   },
+   "xfer:.venv/bin/pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 5,
+    "useful": 4,
+    "harmful": 0,
+    "saved": 1.0,
+    "cost": 0.06765198516152796
+   },
+   "xfer:pip install -e && python -> pip install -e && python3": {
+    "directives": 2,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 2.0,
+    "cost": 0.14255703927605015
+   },
+   "xfer:source .venv/bin/activate && pip install -e && python -> source .venv/bin/activate && python3": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 2.0,
+    "cost": 0.06038428986303634
+   },
+   "xfer:.venv/bin/* install -e && .venv/bin/python3 -> .venv/bin/python": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.0206420876272715
+   }
+  },
+  "by_slice": {
+   "attrs": {
+    "sessions": 40,
+    "usd_saved_per_task": 0.013203219333333339,
+    "usd_saved_ci": [
+     0.009045717666666666,
+     0.017168700500000002
+    ],
+    "usd_saved_share": 0.06982000670787272,
+    "calls_saved_per_task": 2.6784266263370005,
+    "calls_saved_ci": [
+     1.8301204601061811,
+     3.50060622420699
+    ],
+    "s_hat_rust": 2.878426626337,
+    "directives": 34
+   },
+   "click": {
+    "sessions": 40,
+    "usd_saved_per_task": 0.009899691923076926,
+    "usd_saved_ci": [
+     0.0077460157692307696,
+     0.012115685000000001
+    ],
+    "usd_saved_share": 0.03479305369535492,
+    "calls_saved_per_task": 1.6461356752000829,
+    "calls_saved_ci": [
+     1.3509219441767153,
+     1.9209449422401668
+    ],
+    "s_hat_rust": 1.696135675200083,
+    "directives": 49
+   },
+   "marshmallow": {
+    "sessions": 30,
+    "usd_saved_per_task": 0.01010270725546059,
+    "usd_saved_ci": [
+     0.007188075716999052,
+     0.013071089230769233
+    ],
+    "usd_saved_share": 0.04455275554169971,
+    "calls_saved_per_task": 1.8556451683601003,
+    "calls_saved_ci": [
+     1.3914916052717021,
+     2.32023710390296
+    ],
+    "s_hat_rust": 1.9889785016934336,
+    "directives": 20
+   },
+   "urfave-cli": {
+    "sessions": 16,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   },
+   "vue-core": {
+    "sessions": 32,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   }
+  },
+  "by_repo": {
+   "attrs": {
+    "sessions": 40,
+    "calls_saved_per_task": 2.6784266263370005,
+    "calls_saved_ci": [
+     1.8301204601061811,
+     3.50060622420699
+    ],
+    "usd_saved_per_task": 0.013203219333333339,
+    "usd_saved_ci": [
+     0.009045717666666666,
+     0.017168700500000002
+    ],
+    "usd_saved_share": 0.06982000670787272,
+    "directives": 34,
+    "useful_rate": 0.8823529411764706
+   },
+   "click": {
+    "sessions": 40,
+    "calls_saved_per_task": 1.6461356752000829,
+    "calls_saved_ci": [
+     1.3509219441767153,
+     1.9209449422401668
+    ],
+    "usd_saved_per_task": 0.009899691923076926,
+    "usd_saved_ci": [
+     0.0077460157692307696,
+     0.012115685000000001
+    ],
+    "usd_saved_share": 0.03479305369535492,
+    "directives": 49,
+    "useful_rate": 0.9795918367346939
+   },
+   "marshmallow": {
+    "sessions": 30,
+    "calls_saved_per_task": 1.8556451683601003,
+    "calls_saved_ci": [
+     1.3914916052717021,
+     2.32023710390296
+    ],
+    "usd_saved_per_task": 0.01010270725546059,
+    "usd_saved_ci": [
+     0.007188075716999052,
+     0.013071089230769233
+    ],
+    "usd_saved_share": 0.04455275554169971,
+    "directives": 20,
+    "useful_rate": 0.9
+   },
+   "urfave-cli": {
+    "sessions": 16,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "directives": 0,
+    "useful_rate": 0.0
+   },
+   "vue-core": {
+    "sessions": 32,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "directives": 0,
+    "useful_rate": 0.0
+   }
+  }
+ },
+ "loro_post": {
+  "name": "cross-repo LORO day-0 loro_post",
+  "assumptions": {
+   "sat": "goal",
+   "p_follow": 1.0,
+   "misfire_calls": 2.0,
+   "hindsight": false
+  },
+  "summary": {
+   "sessions": 158,
+   "tasks": 38,
+   "calls": 5110,
+   "test_set_id": "6a795a362ccb",
+   "baseline": {
+    "usd_per_task": 0.26039232658227857,
+    "calls_per_task": 32.34177215189873
+   },
+   "calls_saved_per_task": 0.92955311870465,
+   "calls_saved_ci": [
+    0.6591015502894617,
+    1.2147295242375478
+   ],
+   "calls_saved_share": 0.028741564139987217,
+   "calls_saved_share_ci": [
+    0.019995819690622904,
+    0.0383120816730042
+   ],
+   "usd_saved_per_task": 0.005083185872912836,
+   "usd_saved_ci": [
+    0.003619425375747628,
+    0.006615459499536608
+   ],
+   "usd_saved_share": 0.019521258324433216,
+   "usd_saved_share_ci": [
+    0.01327338276559246,
+    0.026507975410773193
+   ],
+   "tokens_saved_per_task": 42204.917721518985,
+   "pass_rate_effect": {
+    "point": 0.0,
+    "worst_case": -0.0,
+    "worst_case_ci": [
+     -0.016835408386943633,
+     -0.0
+    ],
+    "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+   },
+   "s_hat_rust": 1.0181607136413588,
+   "s_hat_rust_ci95": [
+    0.6838051499527424,
+    1.372666082428399
+   ],
+   "directives": 99,
+   "useful": 92,
+   "harmful": 0,
+   "superseded": 5,
+   "useful_rate": 0.9292929292929293,
+   "useful_lb90": 0.8745330560268626,
+   "harmful_rate": 0.0,
+   "per_10_calls": 0.19373776908023482,
+   "gates": {
+    "useful_lb90>=0.8": true,
+    "harmful<=1%": true,
+    "per_10_calls<=1": true
+   },
+   "custom_classes": 0,
+   "uncalibrated_classes": [
+    "command"
+   ]
+  },
+  "by_route": {
+   "xfer:python -m pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 73,
+    "useful": 71,
+    "harmful": 0,
+    "saved": 142.0,
+    "cost": 1.5665536888555402
+   },
+   "xfer:source .venv/bin/activate && python -> .venv/bin/python": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.005284584670789947
+   },
+   "xfer:python3 -m pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 10,
+    "useful": 9,
+    "harmful": 0,
+    "saved": 18.0,
+    "cost": 0.27002139117442026
+   },
+   "xfer:.venv/bin/python -m pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 6,
+    "useful": 6,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.06991836061824296
+   },
+   "xfer:.venv/bin/python -> source .venv/bin/activate && python3": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.06059788029034874
+   },
+   "xfer:rm *.py && .venv/bin/python -m pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.009552976404135358
+   },
+   "xfer:.venv/bin/pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 5,
+    "useful": 4,
+    "harmful": 0,
+    "saved": 1.0,
+    "cost": 0.06765198516152796
+   },
+   "xfer:source .venv/bin/activate && pip install -e && python -> source .venv/bin/activate && python3": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 2.0,
+    "cost": 0.06038428986303634
+   },
+   "xfer:.venv/bin/* install -e && .venv/bin/python3 -> .venv/bin/python": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.0206420876272715
+   }
+  },
+  "by_slice": {
+   "attrs": {
+    "sessions": 40,
+    "usd_saved_per_task": 0.009736261833333336,
+    "usd_saved_ci": [
+     0.006323320833333335,
+     0.013120130666666669
+    ],
+    "usd_saved_share": 0.05148637232714343,
+    "calls_saved_per_task": 1.9289173725417275,
+    "calls_saved_ci": [
+     1.2366089627469057,
+     2.603270955626368
+    ],
+    "s_hat_rust": 2.1289173725417276,
+    "directives": 33
+   },
+   "click": {
+    "sessions": 40,
+    "usd_saved_per_task": 0.0048766594230769235,
+    "usd_saved_ci": [
+     0.0032285138461538463,
+     0.0066087225
+    ],
+    "usd_saved_share": 0.017139308422876413,
+    "calls_saved_per_task": 0.7510835700715642,
+    "calls_saved_ci": [
+     0.5249439914933622,
+     0.9753108997039714
+    ],
+    "s_hat_rust": 0.8010835700715642,
+    "directives": 46
+   },
+   "marshmallow": {
+    "sessions": 30,
+    "usd_saved_per_task": 0.007287550588793924,
+    "usd_saved_ci": [
+     0.004549504510921178,
+     0.01006974
+    ],
+    "usd_saved_share": 0.03213796576207958,
+    "calls_saved_per_task": 1.3223118350267669,
+    "calls_saved_ci": [
+     0.924836025144129,
+     1.7197987314484988
+    ],
+    "s_hat_rust": 1.4556451683601002,
+    "directives": 20
+   },
+   "urfave-cli": {
+    "sessions": 16,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   },
+   "vue-core": {
+    "sessions": 32,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   }
+  },
+  "by_repo": {
+   "attrs": {
+    "sessions": 40,
+    "calls_saved_per_task": 1.9289173725417275,
+    "calls_saved_ci": [
+     1.2366089627469057,
+     2.603270955626368
+    ],
+    "usd_saved_per_task": 0.009736261833333336,
+    "usd_saved_ci": [
+     0.006323320833333335,
+     0.013120130666666669
+    ],
+    "usd_saved_share": 0.05148637232714343,
+    "directives": 33,
+    "useful_rate": 0.8787878787878788
+   },
+   "click": {
+    "sessions": 40,
+    "calls_saved_per_task": 0.7510835700715642,
+    "calls_saved_ci": [
+     0.5249439914933622,
+     0.9753108997039714
+    ],
+    "usd_saved_per_task": 0.0048766594230769235,
+    "usd_saved_ci": [
+     0.0032285138461538463,
+     0.0066087225
+    ],
+    "usd_saved_share": 0.017139308422876413,
+    "directives": 46,
+    "useful_rate": 0.9782608695652174
+   },
+   "marshmallow": {
+    "sessions": 30,
+    "calls_saved_per_task": 1.3223118350267669,
+    "calls_saved_ci": [
+     0.924836025144129,
+     1.7197987314484988
+    ],
+    "usd_saved_per_task": 0.007287550588793924,
+    "usd_saved_ci": [
+     0.004549504510921178,
+     0.01006974
+    ],
+    "usd_saved_share": 0.03213796576207958,
+    "directives": 20,
+    "useful_rate": 0.9
+   },
+   "urfave-cli": {
+    "sessions": 16,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "directives": 0,
+    "useful_rate": 0.0
+   },
+   "vue-core": {
+    "sessions": 32,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "directives": 0,
+    "useful_rate": 0.0
+   }
+  }
+ },
+ "loro_pre_pf05": {
+  "name": "cross-repo LORO day-0 loro_pre_pf05",
+  "assumptions": {
+   "sat": "goal",
+   "p_follow": 0.5,
+   "misfire_calls": 2.0,
+   "hindsight": false
+  },
+  "summary": {
+   "sessions": 158,
+   "tasks": 38,
+   "calls": 5110,
+   "test_set_id": "6a795a362ccb",
+   "baseline": {
+    "usd_per_task": 0.26039232658227857,
+    "calls_per_task": 32.34177215189873
+   },
+   "calls_saved_per_task": 0.71615093109042,
+   "calls_saved_ci": [
+    0.5350393732446763,
+    0.8943736723209138
+   ],
+   "calls_saved_share": 0.022143218612971884,
+   "calls_saved_share_ci": [
+    0.01630863277338069,
+    0.028185613078093787
+   ],
+   "usd_saved_per_task": 0.0037637017972159113,
+   "usd_saved_ci": [
+    0.0027972730382058593,
+    0.004702719059274061
+   ],
+   "usd_saved_share": 0.014453965854583896,
+   "usd_saved_share_ci": [
+    0.010425664430798069,
+    0.018832209464392922
+   ],
+   "tokens_saved_per_task": 30843.933544303796,
+   "pass_rate_effect": {
+    "point": 0.0,
+    "worst_case": -0.0,
+    "worst_case_ci": [
+     -0.008417704193471817,
+     -0.0
+    ],
+    "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+   },
+   "s_hat_rust": 1.535771184254977,
+   "s_hat_rust_ci95": [
+    1.088424242768369,
+    1.9784052881765128
+   ],
+   "directives": 103,
+   "useful": 96,
+   "harmful": 0,
+   "superseded": 6,
+   "useful_rate": 0.9320388349514563,
+   "useful_lb90": 0.8792250782639858,
+   "harmful_rate": 0.0,
+   "per_10_calls": 0.20156555772994128,
+   "gates": {
+    "useful_lb90>=0.8": true,
+    "harmful<=1%": true,
+    "per_10_calls<=1": true
+   },
+   "custom_classes": 0,
+   "uncalibrated_classes": [
+    "command"
+   ]
+  },
+  "by_route": {
+   "xfer:python -m pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 72,
+    "useful": 70,
+    "harmful": 0,
+    "saved": 212.0,
+    "cost": 1.5487009145534059
+   },
+   "xfer:source .venv/bin/activate && python -> .venv/bin/python": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.007926877006184921
+   },
+   "xfer:python3 -m pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 11,
+    "useful": 10,
+    "harmful": 0,
+    "saved": 28.0,
+    "cost": 0.28700894702810137
+   },
+   "xfer:bin/pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 2,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.07321152988534144
+   },
+   "xfer:.venv/bin/python -m pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 6,
+    "useful": 6,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.06991836061824296
+   },
+   "xfer:.venv/bin/python -> source .venv/bin/activate && python3": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.06059788029034874
+   },
+   "xfer:rm *.py && .venv/bin/python -m pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.009552976404135358
+   },
+   "xfer:.venv/bin/pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 5,
+    "useful": 4,
+    "harmful": 0,
+    "saved": 1.0,
+    "cost": 0.06765198516152796
+   },
+   "xfer:pip install -e && python -> pip install -e && python3": {
+    "directives": 2,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 2.0,
+    "cost": 0.14255703927605015
+   },
+   "xfer:source .venv/bin/activate && pip install -e && python -> source .venv/bin/activate && python3": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 2.0,
+    "cost": 0.06038428986303634
+   },
+   "xfer:.venv/bin/* install -e && .venv/bin/python3 -> .venv/bin/python": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.0206420876272715
+   }
+  },
+  "by_slice": {
+   "attrs": {
+    "sessions": 40,
+    "usd_saved_per_task": 0.006456285916666667,
+    "usd_saved_ci": [
+     0.0044010274166666665,
+     0.008415854083333335
+    ],
+    "usd_saved_share": 0.034141516143078865,
+    "calls_saved_per_task": 1.328426626337001,
+    "calls_saved_ci": [
+     0.9051204601061811,
+     1.7381062242069905
+    ],
+    "s_hat_rust": 2.878426626337,
+    "directives": 34
+   },
+   "click": {
+    "sessions": 40,
+    "usd_saved_per_task": 0.004701959711538462,
+    "usd_saved_ci": [
+     0.003623578173076923,
+     0.005792285961538461
+    ],
+    "usd_saved_share": 0.016525315937923255,
+    "calls_saved_per_task": 0.8086356752000826,
+    "calls_saved_ci": [
+     0.6634219441767153,
+     0.945944942240167
+    ],
+    "s_hat_rust": 1.696135675200083,
+    "directives": 49
+   },
+   "marshmallow": {
+    "sessions": 30,
+    "usd_saved_per_task": 0.004944501961063629,
+    "usd_saved_ci": [
+     0.003483941191832859,
+     0.006422109615384616
+    ],
+    "usd_saved_share": 0.021805163861167366,
+    "calls_saved_per_task": 0.9223118350267668,
+    "calls_saved_ci": [
+     0.6914916052717021,
+     1.1535704372362934
+    ],
+    "s_hat_rust": 1.9889785016934336,
+    "directives": 20
+   },
+   "urfave-cli": {
+    "sessions": 16,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   },
+   "vue-core": {
+    "sessions": 32,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   }
+  },
+  "by_repo": {
+   "attrs": {
+    "sessions": 40,
+    "calls_saved_per_task": 1.328426626337001,
+    "calls_saved_ci": [
+     0.9051204601061811,
+     1.7381062242069905
+    ],
+    "usd_saved_per_task": 0.006456285916666667,
+    "usd_saved_ci": [
+     0.0044010274166666665,
+     0.008415854083333335
+    ],
+    "usd_saved_share": 0.034141516143078865,
+    "directives": 34,
+    "useful_rate": 0.8823529411764706
+   },
+   "click": {
+    "sessions": 40,
+    "calls_saved_per_task": 0.8086356752000826,
+    "calls_saved_ci": [
+     0.6634219441767153,
+     0.945944942240167
+    ],
+    "usd_saved_per_task": 0.004701959711538462,
+    "usd_saved_ci": [
+     0.003623578173076923,
+     0.005792285961538461
+    ],
+    "usd_saved_share": 0.016525315937923255,
+    "directives": 49,
+    "useful_rate": 0.9795918367346939
+   },
+   "marshmallow": {
+    "sessions": 30,
+    "calls_saved_per_task": 0.9223118350267668,
+    "calls_saved_ci": [
+     0.6914916052717021,
+     1.1535704372362934
+    ],
+    "usd_saved_per_task": 0.004944501961063629,
+    "usd_saved_ci": [
+     0.003483941191832859,
+     0.006422109615384616
+    ],
+    "usd_saved_share": 0.021805163861167366,
+    "directives": 20,
+    "useful_rate": 0.9
+   },
+   "urfave-cli": {
+    "sessions": 16,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "directives": 0,
+    "useful_rate": 0.0
+   },
+   "vue-core": {
+    "sessions": 32,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "directives": 0,
+    "useful_rate": 0.0
+   }
+  }
+ },
+ "loro_post_pf05": {
+  "name": "cross-repo LORO day-0 loro_post_pf05",
+  "assumptions": {
+   "sat": "goal",
+   "p_follow": 0.5,
+   "misfire_calls": 2.0,
+   "hindsight": false
+  },
+  "summary": {
+   "sessions": 158,
+   "tasks": 38,
+   "calls": 5110,
+   "test_set_id": "6a795a362ccb",
+   "baseline": {
+    "usd_per_task": 0.26039232658227857,
+    "calls_per_task": 32.34177215189873
+   },
+   "calls_saved_per_task": 0.45803413136287774,
+   "calls_saved_ci": [
+    0.3232632302790239,
+    0.5996141315464943
+   ],
+   "calls_saved_share": 0.01416230777990894,
+   "calls_saved_share_ci": [
+    0.009791738057969838,
+    0.018921499955552673
+   ],
+   "usd_saved_per_task": 0.002430810025064012,
+   "usd_saved_ci": [
+    0.0017114870576468452,
+    0.0031778648287841193
+   ],
+   "usd_saved_share": 0.009335183017752742,
+   "usd_saved_share_ci": [
+    0.0063146712403703625,
+    0.012774776765065481
+   ],
+   "tokens_saved_per_task": 20594.0917721519,
+   "pass_rate_effect": {
+    "point": 0.0,
+    "worst_case": -0.0,
+    "worst_case_ci": [
+     -0.008417704193471817,
+     -0.0
+    ],
+    "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+   },
+   "s_hat_rust": 1.0181607136413588,
+   "s_hat_rust_ci95": [
+    0.6838051499527424,
+    1.372666082428399
+   ],
+   "directives": 99,
+   "useful": 92,
+   "harmful": 0,
+   "superseded": 5,
+   "useful_rate": 0.9292929292929293,
+   "useful_lb90": 0.8745330560268626,
+   "harmful_rate": 0.0,
+   "per_10_calls": 0.19373776908023482,
+   "gates": {
+    "useful_lb90>=0.8": true,
+    "harmful<=1%": true,
+    "per_10_calls<=1": true
+   },
+   "custom_classes": 0,
+   "uncalibrated_classes": [
+    "command"
+   ]
+  },
+  "by_route": {
+   "xfer:python -m pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 73,
+    "useful": 71,
+    "harmful": 0,
+    "saved": 142.0,
+    "cost": 1.5665536888555402
+   },
+   "xfer:source .venv/bin/activate && python -> .venv/bin/python": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.005284584670789947
+   },
+   "xfer:python3 -m pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 10,
+    "useful": 9,
+    "harmful": 0,
+    "saved": 18.0,
+    "cost": 0.27002139117442026
+   },
+   "xfer:.venv/bin/python -m pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 6,
+    "useful": 6,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.06991836061824296
+   },
+   "xfer:.venv/bin/python -> source .venv/bin/activate && python3": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.06059788029034874
+   },
+   "xfer:rm *.py && .venv/bin/python -m pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.009552976404135358
+   },
+   "xfer:.venv/bin/pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 5,
+    "useful": 4,
+    "harmful": 0,
+    "saved": 1.0,
+    "cost": 0.06765198516152796
+   },
+   "xfer:source .venv/bin/activate && pip install -e && python -> source .venv/bin/activate && python3": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 2.0,
+    "cost": 0.06038428986303634
+   },
+   "xfer:.venv/bin/* install -e && .venv/bin/python3 -> .venv/bin/python": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.0206420876272715
+   }
+  },
+  "by_slice": {
+   "attrs": {
+    "sessions": 40,
+    "usd_saved_per_task": 0.004727797166666667,
+    "usd_saved_ci": [
+     0.0030418661666666673,
+     0.006391180916666667
+    ],
+    "usd_saved_share": 0.025001086595354723,
+    "calls_saved_per_task": 0.9539173725417278,
+    "calls_saved_ci": [
+     0.6116089627469056,
+     1.290770955626368
+    ],
+    "s_hat_rust": 2.1289173725417276,
+    "directives": 33
+   },
+   "click": {
+    "sessions": 40,
+    "usd_saved_per_task": 0.002221209711538462,
+    "usd_saved_ci": [
+     0.0013958138461538463,
+     0.00306832125
+    ],
+    "usd_saved_share": 0.007806573109820702,
+    "calls_saved_per_task": 0.3635835700715641,
+    "calls_saved_ci": [
+     0.24994399149336224,
+     0.4753108997039715
+    ],
+    "s_hat_rust": 0.8010835700715642,
+    "directives": 46
+   },
+   "marshmallow": {
+    "sessions": 30,
+    "usd_saved_per_task": 0.003536923627730295,
+    "usd_saved_ci": [
+     0.002172097255460589,
+     0.004919515
+    ],
+    "usd_saved_share": 0.015597768971357305,
+    "calls_saved_per_task": 0.6556451683601003,
+    "calls_saved_ci": [
+     0.4581693584774623,
+     0.8531320647818319
+    ],
+    "s_hat_rust": 1.4556451683601002,
+    "directives": 20
+   },
+   "urfave-cli": {
+    "sessions": 16,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   },
+   "vue-core": {
+    "sessions": 32,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   }
+  },
+  "by_repo": {
+   "attrs": {
+    "sessions": 40,
+    "calls_saved_per_task": 0.9539173725417278,
+    "calls_saved_ci": [
+     0.6116089627469056,
+     1.290770955626368
+    ],
+    "usd_saved_per_task": 0.004727797166666667,
+    "usd_saved_ci": [
+     0.0030418661666666673,
+     0.006391180916666667
+    ],
+    "usd_saved_share": 0.025001086595354723,
+    "directives": 33,
+    "useful_rate": 0.8787878787878788
+   },
+   "click": {
+    "sessions": 40,
+    "calls_saved_per_task": 0.3635835700715641,
+    "calls_saved_ci": [
+     0.24994399149336224,
+     0.4753108997039715
+    ],
+    "usd_saved_per_task": 0.002221209711538462,
+    "usd_saved_ci": [
+     0.0013958138461538463,
+     0.00306832125
+    ],
+    "usd_saved_share": 0.007806573109820702,
+    "directives": 46,
+    "useful_rate": 0.9782608695652174
+   },
+   "marshmallow": {
+    "sessions": 30,
+    "calls_saved_per_task": 0.6556451683601003,
+    "calls_saved_ci": [
+     0.4581693584774623,
+     0.8531320647818319
+    ],
+    "usd_saved_per_task": 0.003536923627730295,
+    "usd_saved_ci": [
+     0.002172097255460589,
+     0.004919515
+    ],
+    "usd_saved_share": 0.015597768971357305,
+    "directives": 20,
+    "useful_rate": 0.9
+   },
+   "urfave-cli": {
+    "sessions": 16,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "directives": 0,
+    "useful_rate": 0.0
+   },
+   "vue-core": {
+    "sessions": 32,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "directives": 0,
+    "useful_rate": 0.0
+   }
+  }
+ },
+ "loro_pre_all_models": {
+  "name": "cross-repo LORO day-0 loro_pre_all_models",
+  "assumptions": {
+   "sat": "goal",
+   "p_follow": 1.0,
+   "misfire_calls": 2.0,
+   "hindsight": false
+  },
+  "summary": {
+   "sessions": 190,
+   "tasks": 54,
+   "calls": 6018,
+   "test_set_id": "731472b94a1f",
+   "baseline": {
+    "usd_per_task": 0.3121990989473684,
+    "calls_per_task": 31.673684210526314
+   },
+   "calls_saved_per_task": 1.3126017155676006,
+   "calls_saved_ci": [
+    0.9947692749061073,
+    1.6084761911340133
+   ],
+   "calls_saved_share": 0.04144139680256632,
+   "calls_saved_share_ci": [
+    0.03110468672136024,
+    0.051294841595362885
+   ],
+   "usd_saved_per_task": 0.007476035202279204,
+   "usd_saved_ci": [
+    0.005705651911649605,
+    0.009158314057794058
+   ],
+   "usd_saved_share": 0.023946370208901654,
+   "usd_saved_share_ci": [
+    0.017277399693659132,
+    0.03095127758944714
+   ],
+   "tokens_saved_per_task": 56954.231578947365,
+   "pass_rate_effect": {
+    "point": 0.0,
+    "worst_case": -0.0,
+    "worst_case_ci": [
+     -0.014039780099734927,
+     -0.0
+    ],
+    "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+   },
+   "s_hat_rust": 1.4073385576728636,
+   "s_hat_rust_ci95": [
+    0.9755895998218138,
+    1.8388447161065218
+   ],
+   "directives": 121,
+   "useful": 112,
+   "harmful": 0,
+   "superseded": 7,
+   "useful_rate": 0.9256198347107438,
+   "useful_lb90": 0.8764061735503333,
+   "harmful_rate": 0.0,
+   "per_10_calls": 0.20106347623795282,
+   "gates": {
+    "useful_lb90>=0.8": true,
+    "harmful<=1%": true,
+    "per_10_calls<=1": true
+   },
+   "custom_classes": 0,
+   "uncalibrated_classes": [
+    "command"
+   ]
+  },
+  "by_route": {
+   "xfer:python -m pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 84,
+    "useful": 81,
+    "harmful": 0,
+    "saved": 232.0,
+    "cost": 1.7001305107362417
+   },
+   "xfer:source .venv/bin/activate && python -> .venv/bin/python": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.007926877006184921
+   },
+   "xfer:python3 -m pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 14,
+    "useful": 13,
+    "harmful": 0,
+    "saved": 33.0,
+    "cost": 0.3468878691914111
+   },
+   "xfer:bin/pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 3,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.07321152988534144
+   },
+   "xfer:.venv/bin/python -m pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 7,
+    "useful": 7,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.0924269702089782
+   },
+   "xfer:.venv/bin/python -> source .venv/bin/activate && python3": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.06059788029034874
+   },
+   "xfer:rm *.py && .venv/bin/python -m pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.009552976404135358
+   },
+   "xfer:.venv/bin/pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 5,
+    "useful": 4,
+    "harmful": 0,
+    "saved": 1.0,
+    "cost": 0.06765198516152796
+   },
+   "xfer:bin/python -> source .venv/bin/activate && python3": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.023704026505377652
+   },
+   "xfer:pip install -e && python -> pip install -e && python3": {
+    "directives": 2,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 2.0,
+    "cost": 0.14255703927605015
+   },
+   "xfer:source .venv/bin/activate && pip install -e && python -> source .venv/bin/activate && python3": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 2.0,
+    "cost": 0.06038428986303634
+   },
+   "xfer:.venv/bin/* install -e && .venv/bin/python3 -> .venv/bin/python": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.0206420876272715
+   }
+  },
+  "by_slice": {
+   "attrs": {
+    "sessions": 40,
+    "usd_saved_per_task": 0.013203219333333339,
+    "usd_saved_ci": [
+     0.009045717666666666,
+     0.017168700500000002
+    ],
+    "usd_saved_share": 0.06982000670787272,
+    "calls_saved_per_task": 2.6784266263370005,
+    "calls_saved_ci": [
+     1.8301204601061811,
+     3.50060622420699
+    ],
+    "s_hat_rust": 2.878426626337,
+    "directives": 34
+   },
+   "click": {
+    "sessions": 40,
+    "usd_saved_per_task": 0.009899691923076926,
+    "usd_saved_ci": [
+     0.0077460157692307696,
+     0.012115685000000001
+    ],
+    "usd_saved_share": 0.03479305369535492,
+    "calls_saved_per_task": 1.6461356752000829,
+    "calls_saved_ci": [
+     1.3509219441767153,
+     1.9209449422401668
+    ],
+    "s_hat_rust": 1.696135675200083,
+    "directives": 49
+   },
+   "click-sonnet5": {
+    "sessions": 16,
+    "usd_saved_per_task": 0.012078063782051281,
+    "usd_saved_ci": [
+     0.0034614163461538475,
+     0.018781275
+    ],
+    "usd_saved_share": 0.03020323221278808,
+    "calls_saved_per_task": 1.2964049278473586,
+    "calls_saved_ci": [
+     0.6793272594389737,
+     1.8497838603956294
+    ],
+    "s_hat_rust": 1.5464049278473586,
+    "directives": 18
+   },
+   "marshmallow": {
+    "sessions": 30,
+    "usd_saved_per_task": 0.01010270725546059,
+    "usd_saved_ci": [
+     0.007188075716999052,
+     0.013071089230769233
+    ],
+    "usd_saved_share": 0.04455275554169971,
+    "calls_saved_per_task": 1.8556451683601003,
+    "calls_saved_ci": [
+     1.3914916052717021,
+     2.32023710390296
+    ],
+    "s_hat_rust": 1.9889785016934336,
+    "directives": 20
+   },
+   "urfave-cli": {
+    "sessions": 16,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   },
+   "vue-core": {
+    "sessions": 32,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   },
+   "vue-core-sonnet5": {
+    "sessions": 16,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   }
+  }
+ },
+ "curve_own_pre_n1": {
+  "name": "curve n=1",
+  "assumptions": {
+   "sat": "goal",
+   "p_follow": 1.0,
+   "misfire_calls": 2.0,
+   "hindsight": false
+  },
+  "summary": {
+   "sessions": 158,
+   "tasks": 38,
+   "calls": 5110,
+   "test_set_id": "6a795a362ccb",
+   "baseline": {
+    "usd_per_task": 0.26039232658227857,
+    "calls_per_task": 32.34177215189873
+   },
+   "calls_saved_per_task": 0.0,
+   "calls_saved_ci": [
+    0.0,
+    0.0
+   ],
+   "calls_saved_share": 0.0,
+   "calls_saved_share_ci": [
+    0.0,
+    0.0
+   ],
+   "usd_saved_per_task": 0.0,
+   "usd_saved_ci": [
+    0.0,
+    0.0
+   ],
+   "usd_saved_share": 0.0,
+   "usd_saved_share_ci": [
+    0.0,
+    0.0
+   ],
+   "tokens_saved_per_task": 0.0,
+   "pass_rate_effect": {
+    "point": 0.0,
+    "worst_case": -0.0,
+    "worst_case_ci": [
+     -0.016835408386943633,
+     -0.0
+    ],
+    "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+   },
+   "s_hat_rust": 0.0,
+   "s_hat_rust_ci95": [
+    0.0,
+    0.0
+   ],
+   "directives": 0,
+   "useful": 0,
+   "harmful": 0,
+   "superseded": 0,
+   "useful_rate": 0.0,
+   "useful_lb90": 0.0,
+   "harmful_rate": 0.0,
+   "per_10_calls": 0.0,
+   "gates": {
+    "useful_lb90>=0.8": null,
+    "harmful<=1%": null,
+    "per_10_calls<=1": true
+   },
+   "custom_classes": 0,
+   "uncalibrated_classes": []
+  },
+  "by_route": {},
+  "by_slice": {
+   "attrs": {
+    "sessions": 40,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   },
+   "click": {
+    "sessions": 40,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   },
+   "marshmallow": {
+    "sessions": 30,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   },
+   "urfave-cli": {
+    "sessions": 16,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   },
+   "vue-core": {
+    "sessions": 32,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   }
+  }
+ },
+ "curve_own_pre_n3": {
+  "name": "curve n=3",
+  "assumptions": {
+   "sat": "goal",
+   "p_follow": 1.0,
+   "misfire_calls": 2.0,
+   "hindsight": false
+  },
+  "summary": {
+   "sessions": 158,
+   "tasks": 38,
+   "calls": 5110,
+   "test_set_id": "6a795a362ccb",
+   "baseline": {
+    "usd_per_task": 0.26039232658227857,
+    "calls_per_task": 32.34177215189873
+   },
+   "calls_saved_per_task": 0.0,
+   "calls_saved_ci": [
+    0.0,
+    0.0
+   ],
+   "calls_saved_share": 0.0,
+   "calls_saved_share_ci": [
+    0.0,
+    0.0
+   ],
+   "usd_saved_per_task": 0.0,
+   "usd_saved_ci": [
+    0.0,
+    0.0
+   ],
+   "usd_saved_share": 0.0,
+   "usd_saved_share_ci": [
+    0.0,
+    0.0
+   ],
+   "tokens_saved_per_task": 0.0,
+   "pass_rate_effect": {
+    "point": 0.0,
+    "worst_case": -0.0,
+    "worst_case_ci": [
+     -0.016835408386943633,
+     -0.0
+    ],
+    "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+   },
+   "s_hat_rust": 0.0,
+   "s_hat_rust_ci95": [
+    0.0,
+    0.0
+   ],
+   "directives": 0,
+   "useful": 0,
+   "harmful": 0,
+   "superseded": 0,
+   "useful_rate": 0.0,
+   "useful_lb90": 0.0,
+   "harmful_rate": 0.0,
+   "per_10_calls": 0.0,
+   "gates": {
+    "useful_lb90>=0.8": null,
+    "harmful<=1%": null,
+    "per_10_calls<=1": true
+   },
+   "custom_classes": 0,
+   "uncalibrated_classes": []
+  },
+  "by_route": {},
+  "by_slice": {
+   "attrs": {
+    "sessions": 40,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   },
+   "click": {
+    "sessions": 40,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   },
+   "marshmallow": {
+    "sessions": 30,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   },
+   "urfave-cli": {
+    "sessions": 16,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   },
+   "vue-core": {
+    "sessions": 32,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   }
+  }
+ },
+ "curve_own_pre_n10": {
+  "name": "curve n=10",
+  "assumptions": {
+   "sat": "goal",
+   "p_follow": 1.0,
+   "misfire_calls": 2.0,
+   "hindsight": false
+  },
+  "summary": {
+   "sessions": 158,
+   "tasks": 38,
+   "calls": 5110,
+   "test_set_id": "6a795a362ccb",
+   "baseline": {
+    "usd_per_task": 0.26039232658227857,
+    "calls_per_task": 32.34177215189873
+   },
+   "calls_saved_per_task": 0.0,
+   "calls_saved_ci": [
+    0.0,
+    0.0
+   ],
+   "calls_saved_share": 0.0,
+   "calls_saved_share_ci": [
+    0.0,
+    0.0
+   ],
+   "usd_saved_per_task": 0.0,
+   "usd_saved_ci": [
+    0.0,
+    0.0
+   ],
+   "usd_saved_share": 0.0,
+   "usd_saved_share_ci": [
+    0.0,
+    0.0
+   ],
+   "tokens_saved_per_task": 0.0,
+   "pass_rate_effect": {
+    "point": 0.0,
+    "worst_case": -0.0,
+    "worst_case_ci": [
+     -0.016835408386943633,
+     -0.0
+    ],
+    "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+   },
+   "s_hat_rust": 0.0,
+   "s_hat_rust_ci95": [
+    0.0,
+    0.0
+   ],
+   "directives": 0,
+   "useful": 0,
+   "harmful": 0,
+   "superseded": 0,
+   "useful_rate": 0.0,
+   "useful_lb90": 0.0,
+   "harmful_rate": 0.0,
+   "per_10_calls": 0.0,
+   "gates": {
+    "useful_lb90>=0.8": null,
+    "harmful<=1%": null,
+    "per_10_calls<=1": true
+   },
+   "custom_classes": 0,
+   "uncalibrated_classes": []
+  },
+  "by_route": {},
+  "by_slice": {
+   "attrs": {
+    "sessions": 40,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   },
+   "click": {
+    "sessions": 40,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   },
+   "marshmallow": {
+    "sessions": 30,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   },
+   "urfave-cli": {
+    "sessions": 16,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   },
+   "vue-core": {
+    "sessions": 32,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   }
+  }
+ },
+ "curve_hier_pre_n1": {
+  "name": "cross-repo hier/pre n=1",
+  "assumptions": {
+   "sat": "goal",
+   "p_follow": 1.0,
+   "misfire_calls": 2.0,
+   "hindsight": false
+  },
+  "summary": {
+   "sessions": 158,
+   "tasks": 38,
+   "calls": 5110,
+   "test_set_id": "6a795a362ccb",
+   "baseline": {
+    "usd_per_task": 0.26039232658227857,
+    "calls_per_task": 32.34177215189873
+   },
+   "calls_saved_per_task": 1.623483620793917,
+   "calls_saved_ci": [
+    1.224407126110155,
+    2.011025967677826
+   ],
+   "calls_saved_share": 0.05019773230634813,
+   "calls_saved_share_ci": [
+    0.03701225314268382,
+    0.0639672442026234
+   ],
+   "usd_saved_per_task": 0.00889040794417397,
+   "usd_saved_ci": [
+    0.006706005569105692,
+    0.011063200344590369
+   ],
+   "usd_saved_share": 0.03414235765263532,
+   "usd_saved_share_ci": [
+    0.024606343158274886,
+    0.04445111742954097
+   ],
+   "tokens_saved_per_task": 70684.16455696203,
+   "pass_rate_effect": {
+    "point": 0.0,
+    "worst_case": -0.0,
+    "worst_case_ci": [
+     -0.016835408386943633,
+     -0.0
+    ],
+    "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+   },
+   "s_hat_rust": 1.7120912157306265,
+   "s_hat_rust_ci95": [
+    1.208147459709305,
+    2.2046310480470326
+   ],
+   "directives": 109,
+   "useful": 102,
+   "harmful": 0,
+   "superseded": 7,
+   "useful_rate": 0.9357798165137615,
+   "useful_lb90": 0.8856404348596113,
+   "harmful_rate": 0.0,
+   "per_10_calls": 0.21330724070450097,
+   "gates": {
+    "useful_lb90>=0.8": true,
+    "harmful<=1%": true,
+    "per_10_calls<=1": true
+   },
+   "custom_classes": 0,
+   "uncalibrated_classes": [
+    "command"
+   ]
+  },
+  "by_route": {
+   "xfer:python -m pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 72,
+    "useful": 70,
+    "harmful": 0,
+    "saved": 212.0,
+    "cost": 1.5487009145534059
+   },
+   "xfer:source .venv/bin/activate && python -> .venv/bin/python": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.007926877006184921
+   },
+   "xfer:python3 -m pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 19,
+    "useful": 18,
+    "harmful": 0,
+    "saved": 57.0,
+    "cost": 0.4463590290270182
+   },
+   "xfer:bin/pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 2,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.07321152988534144
+   },
+   "xfer:.venv/bin/python -m pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 6,
+    "useful": 6,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.06198077641920446
+   },
+   "xfer:.venv/bin/python -> source .venv/bin/activate && python3": {
+    "directives": 2,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.08548707986069307
+   },
+   "xfer:rm *.py && .venv/bin/python -m pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.009552976404135358
+   },
+   "xfer:.venv/bin/pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 2,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.03278531463877243
+   },
+   "xfer:pip install -e && python -> pip install -e && python3": {
+    "directives": 2,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 2.0,
+    "cost": 0.14255703927605015
+   },
+   "xfer:source .venv/bin/activate && pip install -e && python -> source .venv/bin/activate && python3": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 2.0,
+    "cost": 0.06038428986303634
+   },
+   "xfer:.venv/bin/* install -e && .venv/bin/python3 -> .venv/bin/python": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.0206420876272715
+   }
+  },
+  "by_slice": {
+   "attrs": {
+    "sessions": 40,
+    "usd_saved_per_task": 0.013203219333333339,
+    "usd_saved_ci": [
+     0.009045717666666666,
+     0.017168700500000002
+    ],
+    "usd_saved_share": 0.06982000670787272,
+    "calls_saved_per_task": 2.6784266263370005,
+    "calls_saved_ci": [
+     1.8301204601061811,
+     3.50060622420699
+    ],
+    "s_hat_rust": 2.878426626337,
+    "directives": 34
+   },
+   "click": {
+    "sessions": 40,
+    "usd_saved_per_task": 0.009054150123076924,
+    "usd_saved_ci": [
+     0.007304762169230769,
+     0.010373970700000002
+    ],
+    "usd_saved_share": 0.03182134695158351,
+    "calls_saved_per_task": 1.5708568905561187,
+    "calls_saved_ci": [
+     1.3199898847471982,
+     1.79782790987032
+    ],
+    "s_hat_rust": 1.6708568905561187,
+    "directives": 50
+   },
+   "marshmallow": {
+    "sessions": 30,
+    "usd_saved_per_task": 0.017146322564102565,
+    "usd_saved_ci": [
+     0.013624602564102565,
+     0.020547750000000007
+    ],
+    "usd_saved_share": 0.0756149711479256,
+    "calls_saved_per_task": 2.884635713657138,
+    "calls_saved_ci": [
+     2.3211165654238655,
+     3.4496000200003896
+    ],
+    "s_hat_rust": 2.9513023803238045,
+    "directives": 25
+   },
+   "urfave-cli": {
+    "sessions": 16,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   },
+   "vue-core": {
+    "sessions": 32,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   }
+  }
+ },
+ "curve_hier_pre_n3": {
+  "name": "cross-repo hier/pre n=3",
+  "assumptions": {
+   "sat": "goal",
+   "p_follow": 1.0,
+   "misfire_calls": 2.0,
+   "hindsight": false
+  },
+  "summary": {
+   "sessions": 158,
+   "tasks": 38,
+   "calls": 5110,
+   "test_set_id": "6a795a362ccb",
+   "baseline": {
+    "usd_per_task": 0.26039232658227857,
+    "calls_per_task": 32.34177215189873
+   },
+   "calls_saved_per_task": 1.597994621372394,
+   "calls_saved_ci": [
+    1.205642969814835,
+    1.984628956991656
+   ],
+   "calls_saved_share": 0.049409618429909624,
+   "calls_saved_share_ci": [
+    0.03664934341779719,
+    0.06285219263118531
+   ],
+   "usd_saved_per_task": 0.008629841450971907,
+   "usd_saved_ci": [
+    0.006484696694326524,
+    0.010733607774358975
+   ],
+   "usd_saved_share": 0.033141688790299516,
+   "usd_saved_share_ci": [
+    0.023642234562776063,
+    0.04346898183241561
+   ],
+   "tokens_saved_per_task": 70671.30379746835,
+   "pass_rate_effect": {
+    "point": 0.0,
+    "worst_case": -0.0,
+    "worst_case_ci": [
+     -0.016835408386943633,
+     -0.0
+    ],
+    "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+   },
+   "s_hat_rust": 1.7119186720053057,
+   "s_hat_rust_ci95": [
+    1.2079532765863434,
+    2.204482737105675
+   ],
+   "directives": 113,
+   "useful": 104,
+   "harmful": 0,
+   "superseded": 7,
+   "useful_rate": 0.9203539823008849,
+   "useful_lb90": 0.8679731621096405,
+   "harmful_rate": 0.0,
+   "per_10_calls": 0.22113502935420742,
+   "gates": {
+    "useful_lb90>=0.8": true,
+    "harmful<=1%": true,
+    "per_10_calls<=1": true
+   },
+   "custom_classes": 0,
+   "uncalibrated_classes": [
+    "command"
+   ]
+  },
+  "by_route": {
+   "xfer:python -m pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 72,
+    "useful": 70,
+    "harmful": 0,
+    "saved": 212.0,
+    "cost": 1.5487009145534059
+   },
+   "xfer:source .venv/bin/activate && python -> .venv/bin/python": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.005284584670789947
+   },
+   "xfer:.venv/bin/pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 5,
+    "useful": 3,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.04938046666543412
+   },
+   "xfer:python3 -m pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 19,
+    "useful": 18,
+    "harmful": 0,
+    "saved": 57.0,
+    "cost": 0.4463590290270182
+   },
+   "xfer:. .venv/bin/activate && python -m pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.01330904890942206
+   },
+   "xfer:bin/pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 2,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.07321152988534144
+   },
+   "xfer:.venv/bin/python -m pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 6,
+    "useful": 6,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.06198077641920446
+   },
+   "xfer:.venv/bin/python -> source .venv/bin/activate && python": {
+    "directives": 2,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.08548707986069307
+   },
+   "xfer:rm *.py && .venv/bin/python -m pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.009552976404135358
+   },
+   "xfer:pip install -e && python -> pip install -e && python3": {
+    "directives": 2,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 2.0,
+    "cost": 0.14255703927605015
+   },
+   "xfer:source .venv/bin/activate && pip install -e && python -> source .venv/bin/activate && python": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 2.0,
+    "cost": 0.06038428986303634
+   },
+   "xfer:.venv/bin/* install -e && .venv/bin/python3 -> .venv/bin/python": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.0206420876272715
+   }
+  },
+  "by_slice": {
+   "attrs": {
+    "sessions": 40,
+    "usd_saved_per_task": 0.012883833166666669,
+    "usd_saved_ci": [
+     0.008858466166666667,
+     0.016568764833333336
+    ],
+    "usd_saved_share": 0.06813105920680607,
+    "calls_saved_per_task": 2.62815995742265,
+    "calls_saved_ci": [
+     1.8090417339750076,
+     3.3990193251287364
+    ],
+    "s_hat_rust": 2.87815995742265,
+    "directives": 36
+   },
+   "click": {
+    "sessions": 40,
+    "usd_saved_per_task": 0.009054150123076924,
+    "usd_saved_ci": [
+     0.007304762169230769,
+     0.010373970700000002
+    ],
+    "usd_saved_share": 0.03182134695158351,
+    "calls_saved_per_task": 1.5708568905561187,
+    "calls_saved_ci": [
+     1.3199898847471982,
+     1.79782790987032
+    ],
+    "s_hat_rust": 1.6708568905561187,
+    "directives": 50
+   },
+   "marshmallow": {
+    "sessions": 30,
+    "usd_saved_per_task": 0.016199853922127257,
+    "usd_saved_ci": [
+     0.011911874691358026,
+     0.020248309230769236
+    ],
+    "usd_saved_share": 0.07144106162372175,
+    "calls_saved_per_task": 2.8174158752562497,
+    "calls_saved_ci": [
+     2.218982543656631,
+     3.417124957645079
+    ],
+    "s_hat_rust": 2.9507492085895826,
+    "directives": 27
+   },
+   "urfave-cli": {
+    "sessions": 16,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   },
+   "vue-core": {
+    "sessions": 32,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   }
+  }
+ },
+ "curve_hier_pre_n10": {
+  "name": "cross-repo hier/pre n=10",
+  "assumptions": {
+   "sat": "goal",
+   "p_follow": 1.0,
+   "misfire_calls": 2.0,
+   "hindsight": false
+  },
+  "summary": {
+   "sessions": 158,
+   "tasks": 38,
+   "calls": 5110,
+   "test_set_id": "6a795a362ccb",
+   "baseline": {
+    "usd_per_task": 0.26039232658227857,
+    "calls_per_task": 32.34177215189873
+   },
+   "calls_saved_per_task": 1.6114548267181785,
+   "calls_saved_ci": [
+    1.2194716030684922,
+    1.9932050987476773
+   ],
+   "calls_saved_share": 0.049825804818292005,
+   "calls_saved_share_ci": [
+    0.03692054057538203,
+    0.06340226316247041
+   ],
+   "usd_saved_per_task": 0.008824896543330086,
+   "usd_saved_ci": [
+    0.006709084721944722,
+    0.010987325184526458
+   ],
+   "usd_saved_share": 0.0338907703585559,
+   "usd_saved_share_ci": [
+    0.02434600461944066,
+    0.04422577901196559
+   ],
+   "tokens_saved_per_task": 70751.97468354431,
+   "pass_rate_effect": {
+    "point": 0.0,
+    "worst_case": -0.0,
+    "worst_case_ci": [
+     -0.016835408386943633,
+     -0.0
+    ],
+    "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+   },
+   "s_hat_rust": 1.712720649502989,
+   "s_hat_rust_ci95": [
+    1.2083608278243025,
+    2.2054474840760143
+   ],
+   "directives": 103,
+   "useful": 95,
+   "harmful": 0,
+   "superseded": 9,
+   "useful_rate": 0.9223300970873787,
+   "useful_lb90": 0.8673570689034292,
+   "harmful_rate": 0.0,
+   "per_10_calls": 0.20156555772994128,
+   "gates": {
+    "useful_lb90>=0.8": true,
+    "harmful<=1%": true,
+    "per_10_calls<=1": true
+   },
+   "custom_classes": 0,
+   "uncalibrated_classes": [
+    "command"
+   ]
+  },
+  "by_route": {
+   "xfer:python -m pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 72,
+    "useful": 70,
+    "harmful": 0,
+    "saved": 212.0,
+    "cost": 1.5487009145534059
+   },
+   "xfer:source .venv/bin/activate && python -> .venv/bin/python": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.005284584670789947
+   },
+   "xfer:.venv/bin/pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 3,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.019090974425174725
+   },
+   "xfer:python3 -m pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 19,
+    "useful": 18,
+    "harmful": 0,
+    "saved": 57.0,
+    "cost": 0.4463590290270182
+   },
+   "xfer:. .venv/bin/activate && python -m pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.01330904890942206
+   },
+   "xfer:bin/pytest -> source .venv/bin/activate && python -m pytest": {
+    "directives": 2,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.07321152988534144
+   },
+   "xfer:.venv/bin/python -> source .venv/bin/activate && python": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.06059788029034874
+   },
+   "xfer:pip install -e && python -> pip install -e && python3": {
+    "directives": 2,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 2.0,
+    "cost": 0.14255703927605015
+   },
+   "xfer:source .venv/bin/activate && pip install -e && python -> source .venv/bin/activate && python": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 2.0,
+    "cost": 0.06038428986303634
+   },
+   "xfer:.venv/bin/* install -e && .venv/bin/python3 -> .venv/bin/python": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.0206420876272715
+   }
+  },
+  "by_slice": {
+   "attrs": {
+    "sessions": 40,
+    "usd_saved_per_task": 0.012883833166666669,
+    "usd_saved_ci": [
+     0.008858466166666667,
+     0.016568764833333336
+    ],
+    "usd_saved_share": 0.06813105920680607,
+    "calls_saved_per_task": 2.62815995742265,
+    "calls_saved_ci": [
+     1.8090417339750076,
+     3.3990193251287364
+    ],
+    "s_hat_rust": 2.87815995742265,
+    "directives": 36
+   },
+   "click": {
+    "sessions": 40,
+    "usd_saved_per_task": 0.009122841256410259,
+    "usd_saved_ci": [
+     0.007369594435897436,
+     0.010433506166666665
+    ],
+    "usd_saved_share": 0.0320627660087655,
+    "calls_saved_per_task": 1.574061368538147,
+    "calls_saved_ci": [
+     1.3224366466921809,
+     1.800165019471112
+    ],
+    "s_hat_rust": 1.674061368538147,
+    "directives": 41
+   },
+   "marshmallow": {
+    "sessions": 30,
+    "usd_saved_per_task": 0.017135555897435897,
+    "usd_saved_ci": [
+     0.0136138358974359,
+     0.020547750000000007
+    ],
+    "usd_saved_share": 0.07556749034343732,
+    "calls_saved_per_task": 2.884033652768009,
+    "calls_saved_ci": [
+     2.3211165654238655,
+     3.4496000200003896
+    ],
+    "s_hat_rust": 2.950700319434676,
+    "directives": 26
+   },
+   "urfave-cli": {
+    "sessions": 16,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   },
+   "vue-core": {
+    "sessions": 32,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   }
+  }
+ },
+ "curve_logs": {
+  "n=1 attrs": {
+   "python -m pytest -> source .venv/bin/activate && python -m pytest": 24,
+   "source .venv/bin/activate && python -> .venv/bin/python": 1,
+   "python3 -m pytest -> source .venv/bin/activate && python -m pytest": 9,
+   "bin/pytest -> source .venv/bin/activate && python -m pytest": 2
+  },
+  "n=1 click": {
+   "python -m pytest -> source .venv/bin/activate && python -m pytest": 33,
+   "bin/pytest -> source .venv/bin/activate && python -m pytest": 2,
+   ".venv/bin/python -m pytest -> source .venv/bin/activate && python -m pytest": 6,
+   ".venv/bin/python -> source .venv/bin/activate && python3": 2,
+   "rm *.py && .venv/bin/python -m pytest -> source .venv/bin/activate && python -m pytest": 1,
+   ".venv/bin/pytest -> source .venv/bin/activate && python -m pytest": 2,
+   "python3 -m pytest -> source .venv/bin/activate && python -m pytest": 2,
+   "pip install -e && python -> pip install -e && python3": 2,
+   "source .venv/bin/activate && pip install -e && python -> source .venv/bin/activate && python3": 1,
+   "bin/python -> source .venv/bin/activate && python3": 1
+  },
+  "n=1 marshmallow": {
+   "python -m pytest -> source .venv/bin/activate && python -m pytest": 16,
+   "python3 -m pytest -> source .venv/bin/activate && python -m pytest": 8,
+   "source .venv/bin/activate && python3 -> .venv/bin/python": 1,
+   "bin/pytest -> source .venv/bin/activate && python -m pytest": 1,
+   ".venv/bin/pytest -> source .venv/bin/activate && python -m pytest": 1,
+   ".venv/bin/* install -e && .venv/bin/python3 -> .venv/bin/python": 1
+  },
+  "n=1 urfave-cli": {},
+  "n=1 vue-core": {},
+  "n=3 attrs": {
+   "python -m pytest -> source .venv/bin/activate && python -m pytest": 24,
+   "source .venv/bin/activate && python -> .venv/bin/python": 1,
+   ".venv/bin/pytest -> source .venv/bin/activate && python -m pytest": 1,
+   "python3 -m pytest -> source .venv/bin/activate && python -m pytest": 9,
+   "bin/pytest -> source .venv/bin/activate && python -m pytest": 2,
+   ". .venv/bin/activate && python -m pytest -> source .venv/bin/activate && python -m pytest": 1
+  },
+  "n=3 click": {
+   "python -m pytest -> source .venv/bin/activate && python -m pytest": 33,
+   "bin/pytest -> source .venv/bin/activate && python -m pytest": 2,
+   ".venv/bin/python -m pytest -> source .venv/bin/activate && python -m pytest": 6,
+   ".venv/bin/python -> source .venv/bin/activate && python": 2,
+   "rm *.py && .venv/bin/python -m pytest -> source .venv/bin/activate && python -m pytest": 1,
+   ".venv/bin/pytest -> source .venv/bin/activate && python -m pytest": 2,
+   "python3 -m pytest -> source .venv/bin/activate && python -m pytest": 2,
+   "pip install -e && python -> pip install -e && python3": 2,
+   "source .venv/bin/activate && pip install -e && python -> source .venv/bin/activate && python": 1,
+   "bin/python -> source .venv/bin/activate && python": 1
+  },
+  "n=3 marshmallow": {
+   ".venv/bin/pytest -> source .venv/bin/activate && python -m pytest": 3,
+   "python -m pytest -> source .venv/bin/activate && python -m pytest": 16,
+   "python3 -m pytest -> source .venv/bin/activate && python -m pytest": 8,
+   "source .venv/bin/activate && python3 -> .venv/bin/python": 1,
+   "bin/pytest -> source .venv/bin/activate && python -m pytest": 1,
+   ".venv/bin/* install -e && .venv/bin/python3 -> .venv/bin/python": 1
+  },
+  "n=3 urfave-cli": {},
+  "n=3 vue-core": {},
+  "n=10 attrs": {
+   "python -m pytest -> source .venv/bin/activate && python -m pytest": 24,
+   "source .venv/bin/activate && python -> .venv/bin/python": 1,
+   ".venv/bin/pytest -> source .venv/bin/activate && python -m pytest": 1,
+   "python3 -m pytest -> source .venv/bin/activate && python -m pytest": 9,
+   "bin/pytest -> source .venv/bin/activate && python -m pytest": 2,
+   "python3 -m -> python -m": 2,
+   ". .venv/bin/activate && python -m pytest -> source .venv/bin/activate && python -m pytest": 1
+  },
+  "n=10 click": {
+   "python -m pytest -> source .venv/bin/activate && python -m pytest": 33,
+   "bin/pytest -> source .venv/bin/activate && python -m pytest": 2,
+   ".venv/bin/python -> source .venv/bin/activate && python": 1,
+   ".venv/bin/pytest -> source .venv/bin/activate && python -m pytest": 1,
+   "python3 -m pytest -> source .venv/bin/activate && python -m pytest": 2,
+   "pip install -e && python -> pip install -e && python3": 2,
+   "source .venv/bin/activate && pip install -e && python -> source .venv/bin/activate && python": 1,
+   "bin/python -> source .venv/bin/activate && python": 1
+  },
+  "n=10 marshmallow": {
+   "python -m pytest -> source .venv/bin/activate && python -m pytest": 16,
+   "python3 -m pytest -> source .venv/bin/activate && python -m pytest": 8,
+   "source .venv/bin/activate && python3 -> .venv/bin/python": 1,
+   "bin/pytest -> source .venv/bin/activate && python -m pytest": 1,
+   ".venv/bin/pytest -> source .venv/bin/activate && python -m pytest": 2,
+   ".venv/bin/* install -e && .venv/bin/python3 -> .venv/bin/python": 1
+  },
+  "n=10 urfave-cli": {},
+  "n=10 vue-core": {}
+ }
+}

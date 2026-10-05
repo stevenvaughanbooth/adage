@@ -1,7 +1,7 @@
-//! Replay a recorded session through the real runtime, in the holdout arm.
+//! Replay a recorded session through the real runtime, in the control arm.
 //!
 //! Every hook event the session would have raised goes through `adage_runtime::decide` with the
-//! session state held in memory. The arm is `holdout`, so each decision records what Adage *would
+//! session state held in memory. The arm is `control`, so each decision records what Adage *would
 //! have said* without saying it — this is history, and nothing in it can change.
 
 use crate::transcript::{self, Transcript};
@@ -9,7 +9,6 @@ use adage_core::keys::{self, template_key};
 use adage_core::tools::normalize_tool;
 use adage_core::{repo, CanonicalAction, CommandTable, Effect};
 use adage_runtime::{decide, fast, Arm, Ctx, Directive, Event, Judgement, SessionState};
-use adage_tracks::Index;
 use serde::Serialize;
 use std::path::Path;
 
@@ -29,7 +28,6 @@ pub struct Action {
     /// Index of the tool call within its turn.
     pub call: usize,
     pub key: String,
-    pub head: String,
     pub argv: Option<Vec<String>>,
     pub effect: Effect,
     pub read: bool,
@@ -70,9 +68,10 @@ pub struct FastCheck {
     pub mismatches: Vec<String>,
 }
 
-/// The state later decisions read (not the `batches` and `history` counters).
+/// The state later decisions read (not the `batches` and `history` counters): with the context
+/// state, whose symbols context triggers match on (Track G §7.3).
 fn decision_state(st: &SessionState) -> serde_json::Value {
-    serde_json::json!([st.arm, st.emitted, st.pending, st.obligations, st.stop_requests, st.prompts > 0])
+    serde_json::json!([st.arm, st.emitted, st.pending, st.obligations, st.stop_requests, st.prompts > 0, st.ctx])
 }
 
 pub fn actions(t: &Transcript, root: &Path, table: &CommandTable) -> Vec<Action> {
@@ -81,7 +80,9 @@ pub fn actions(t: &Transcript, root: &Path, table: &CommandTable) -> Vec<Action>
     for (i, calls) in t.turns().enumerate() {
         for (ci, c) in calls.iter().enumerate() {
             let input = transcript::rebase_value(&c.input, &t.cwd, &root_s);
-            for mut n in keys::flatten(&normalize_tool(&c.tool, &input, &root_s, table)) {
+            let flat = keys::flatten(&normalize_tool(&c.tool, &input, &root_s, table));
+            let count = flat.len();
+            for (si, mut n) in flat.into_iter().enumerate() {
                 keys::canonicalise(&mut n, root);
                 let argv = match &n.action {
                     CanonicalAction::Exec { argv, .. } => Some(argv.clone()),
@@ -91,13 +92,13 @@ pub fn actions(t: &Transcript, root: &Path, table: &CommandTable) -> Vec<Action>
                     turn: i as u32 + 1,
                     call: ci,
                     key: template_key(&n.action),
-                    head: argv.as_deref().map(keys::command_head).unwrap_or_default(),
                     effect: n.effect,
                     read: matches!(n.action, CanonicalAction::Read { .. }),
                     author: keys::is_author(&n.action),
                     rel_path: keys::action_path(&n.action).map(|p| repo::relativize(root, p)),
                     argv,
-                    failed: c.failed,
+                    // As the learner attributes it: a failed chain failed at its last step.
+                    failed: keys::sub_action_failed(si, count, c.failed, keys::has_or_chain(&c.input)),
                     output: c.output.replace(&t.cwd, &root_s),
                 });
             }
@@ -106,17 +107,12 @@ pub fn actions(t: &Transcript, root: &Path, table: &CommandTable) -> Vec<Action>
     out
 }
 
-/// `stop`: replay the session's final Stop hook (see [`transcript::events`]).
-pub fn replay(
-    t: &Transcript,
-    index: &Index,
-    repo_key: &str,
-    root: &Path,
-    table: &CommandTable,
-    stop: bool,
-) -> Replayed {
-    let ctx = Ctx { index, repo: repo_key.to_string(), root, table, embed: None };
-    let mut st = SessionState { arm: Some(Arm::Holdout), repo: Some(repo_key.to_string()), ..Default::default() };
+/// Replay a transcript through the runtime as `ctx` decides (the hook's own: `params` and `policy`
+/// at their defaults, no embedder). `stop`: replay the session's final Stop hook (see
+/// [`transcript::events`]).
+pub fn replay(t: &Transcript, ctx: &Ctx<'_>, stop: bool) -> Replayed {
+    let (index, repo_key, root, table) = (ctx.index, ctx.repo.as_str(), ctx.root, ctx.table);
+    let mut st = SessionState { arm: Some(Arm::Control), repo: Some(repo_key.to_string()), ..Default::default() };
     let mut r = Replayed {
         id: t.id.clone(),
         prompt: t.prompt().unwrap_or_default().to_string(),
@@ -129,7 +125,7 @@ pub fn replay(
     for (n, step) in transcript::events(t, &root_s, stop).into_iter().enumerate() {
         let before: Vec<bool> = st.obligations.iter().map(|o| o.stop_requested).collect();
         let skip = fast::skip(&triggers, &step.event, &root_s, || Some(fast_st.clone()));
-        let d = decide(&ctx, &mut st, &step.event);
+        let d = decide(ctx, &mut st, &step.event);
         let name = transcript::hook_name(&step.event);
         r.fast.events += 1;
         r.skipped.push(skip);
@@ -140,7 +136,7 @@ pub fn replay(
                 differs("skipped, but the full path decided something");
             }
         } else {
-            let fd = decide(&ctx, &mut fast_st, &step.event);
+            let fd = decide(ctx, &mut fast_st, &step.event);
             if serde_json::to_value(&fd).ok() != serde_json::to_value(&d).ok() {
                 differs("different decisions");
             }
@@ -149,7 +145,7 @@ pub fn replay(
             differs("different state for later decisions");
             fast_st = st.clone();
         }
-        debug_assert!(d.directives.is_empty(), "the holdout arm never delivers");
+        debug_assert!(d.directives.is_empty(), "the control arm never delivers");
         for w in &d.would_have {
             r.fired.push(Fired { directive: w.clone(), event: name, turn: step.turn });
         }

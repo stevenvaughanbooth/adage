@@ -1,0 +1,309 @@
+{
+ "family": "ufo-util",
+ "repo": "unjs/ufo",
+ "base": "f06c800",
+ "variants": [
+  {
+   "task": "ufo-util--without-query",
+   "split": "train",
+   "ok": true,
+   "base_passed": false,
+   "base_checks": {
+    "lint": true,
+    "docs_readme": false,
+    "own_test": false,
+    "docs_generated": false,
+    "tests": false
+   },
+   "base_hidden_failed": 4,
+   "gold_passed": true,
+   "gold_checks": {
+    "lint": true,
+    "docs_readme": true,
+    "own_test": true,
+    "docs_generated": true,
+    "tests": true
+   },
+   "gold_n_tests": 496,
+   "gold_check_seconds": 14.15,
+   "wall_seconds": 36.1
+  },
+  {
+   "task": "ufo-util--with-port",
+   "split": "train",
+   "ok": true,
+   "base_passed": false,
+   "base_checks": {
+    "lint": true,
+    "docs_readme": false,
+    "own_test": false,
+    "docs_generated": false,
+    "tests": false
+   },
+   "base_hidden_failed": 4,
+   "gold_passed": true,
+   "gold_checks": {
+    "lint": true,
+    "docs_readme": true,
+    "own_test": true,
+    "docs_generated": true,
+    "tests": true
+   },
+   "gold_n_tests": 496,
+   "gold_check_seconds": 14.7,
+   "wall_seconds": 36.0
+  },
+  {
+   "task": "ufo-util--get-origin",
+   "split": "train",
+   "ok": true,
+   "base_passed": false,
+   "base_checks": {
+    "lint": true,
+    "docs_readme": false,
+    "own_test": false,
+    "docs_generated": false,
+    "tests": false
+   },
+   "base_hidden_failed": 4,
+   "gold_passed": true,
+   "gold_checks": {
+    "lint": true,
+    "docs_readme": true,
+    "own_test": true,
+    "docs_generated": true,
+    "tests": true
+   },
+   "gold_n_tests": 496,
+   "gold_check_seconds": 12.84,
+   "wall_seconds": 36.0
+  },
+  {
+   "task": "ufo-util--path-segments",
+   "split": "train",
+   "ok": true,
+   "base_passed": false,
+   "base_checks": {
+    "lint": true,
+    "docs_readme": false,
+    "own_test": false,
+    "docs_generated": false,
+    "tests": false
+   },
+   "base_hidden_failed": 4,
+   "gold_passed": true,
+   "gold_checks": {
+    "lint": true,
+    "docs_readme": true,
+    "own_test": true,
+    "docs_generated": true,
+    "tests": true
+   },
+   "gold_n_tests": 496,
+   "gold_check_seconds": 13.29,
+   "wall_seconds": 35.1
+  },
+  {
+   "task": "ufo-util--without-auth",
+   "split": "held-out",
+   "ok": true,
+   "base_passed": false,
+   "base_checks": {
+    "lint": true,
+    "docs_readme": false,
+    "own_test": false,
+    "docs_generated": false,
+    "tests": false
+   },
+   "base_hidden_failed": 4,
+   "gold_passed": true,
+   "gold_checks": {
+    "lint": true,
+    "docs_readme": true,
+    "own_test": true,
+    "docs_generated": true,
+    "tests": true
+   },
+   "gold_n_tests": 496,
+   "gold_check_seconds": 13.49,
+   "wall_seconds": 33.6
+  },
+  {
+   "task": "ufo-util--same-origin",
+   "split": "held-out",
+   "ok": true,
+   "base_passed": false,
+   "base_checks": {
+    "lint": true,
+    "docs_readme": false,
+    "own_test": false,
+    "docs_generated": false,
+    "tests": false
+   },
+   "base_hidden_failed": 5,
+   "gold_passed": true,
+   "gold_checks": {
+    "lint": true,
+    "docs_readme": true,
+    "own_test": true,
+    "docs_generated": true,
+    "tests": true
+   },
+   "gold_n_tests": 497,
+   "gold_check_seconds": 15.58,
+   "wall_seconds": 35.2
+  },
+  {
+   "task": "ufo-util--sort-query",
+   "split": "held-out",
+   "ok": true,
+   "base_passed": false,
+   "base_checks": {
+    "lint": true,
+    "docs_readme": false,
+    "own_test": false,
+    "docs_generated": false,
+    "tests": false
+   },
+   "base_hidden_failed": 4,
+   "gold_passed": true,
+   "gold_checks": {
+    "lint": true,
+    "docs_readme": true,
+    "own_test": true,
+    "docs_generated": true,
+    "tests": true
+   },
+   "gold_n_tests": 496,
+   "gold_check_seconds": 12.29,
+   "wall_seconds": 33.7
+  },
+  {
+   "task": "ufo-util--lowercase-host",
+   "split": "held-out",
+   "ok": true,
+   "base_passed": false,
+   "base_checks": {
+    "lint": true,
+    "docs_readme": false,
+    "own_test": false,
+    "docs_generated": false,
+    "tests": false
+   },
+   "base_hidden_failed": 4,
+   "gold_passed": true,
+   "gold_checks": {
+    "lint": true,
+    "docs_readme": true,
+    "own_test": true,
+    "docs_generated": true,
+    "tests": true
+   },
+   "gold_n_tests": 496,
+   "gold_check_seconds": 12.89,
+   "wall_seconds": 34.6
+  },
+  {
+   "task": "ufo-util--get-extension",
+   "split": "held-out",
+   "ok": true,
+   "base_passed": false,
+   "base_checks": {
+    "lint": true,
+    "docs_readme": false,
+    "own_test": false,
+    "docs_generated": false,
+    "tests": false
+   },
+   "base_hidden_failed": 5,
+   "gold_passed": true,
+   "gold_checks": {
+    "lint": true,
+    "docs_readme": true,
+    "own_test": true,
+    "docs_generated": true,
+    "tests": true
+   },
+   "gold_n_tests": 497,
+   "gold_check_seconds": 13.66,
+   "wall_seconds": 33.7
+  },
+  {
+   "task": "ufo-util--dot-segments",
+   "split": "held-out",
+   "ok": true,
+   "base_passed": false,
+   "base_checks": {
+    "lint": true,
+    "docs_readme": false,
+    "own_test": false,
+    "docs_generated": false,
+    "tests": false
+   },
+   "base_hidden_failed": 5,
+   "gold_passed": true,
+   "gold_checks": {
+    "lint": true,
+    "docs_readme": true,
+    "own_test": true,
+    "docs_generated": true,
+    "tests": true
+   },
+   "gold_n_tests": 497,
+   "gold_check_seconds": 13.73,
+   "wall_seconds": 35.3
+  },
+  {
+   "task": "ufo-util--query-param",
+   "split": "held-out",
+   "ok": true,
+   "base_passed": false,
+   "base_checks": {
+    "lint": true,
+    "docs_readme": false,
+    "own_test": false,
+    "docs_generated": false,
+    "tests": false
+   },
+   "base_hidden_failed": 5,
+   "gold_passed": true,
+   "gold_checks": {
+    "lint": true,
+    "docs_readme": true,
+    "own_test": true,
+    "docs_generated": true,
+    "tests": true
+   },
+   "gold_n_tests": 497,
+   "gold_check_seconds": 13.0,
+   "wall_seconds": 34.9
+  },
+  {
+   "task": "ufo-util--is-http",
+   "split": "held-out",
+   "ok": true,
+   "base_passed": false,
+   "base_checks": {
+    "lint": true,
+    "docs_readme": false,
+    "own_test": false,
+    "docs_generated": false,
+    "tests": false
+   },
+   "base_hidden_failed": 6,
+   "gold_passed": true,
+   "gold_checks": {
+    "lint": true,
+    "docs_readme": true,
+    "own_test": true,
+    "docs_generated": true,
+    "tests": true
+   },
+   "gold_n_tests": 498,
+   "gold_check_seconds": 13.39,
+   "wall_seconds": 33.4
+  }
+ ],
+ "valid": 12,
+ "of": 12
+}

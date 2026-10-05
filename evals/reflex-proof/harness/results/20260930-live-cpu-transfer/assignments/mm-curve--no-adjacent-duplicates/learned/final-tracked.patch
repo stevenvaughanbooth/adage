@@ -1,0 +1,102 @@
+diff --git a/CHANGELOG.rst b/CHANGELOG.rst
+index 802ce0d..1462ab9 100644
+--- a/CHANGELOG.rst
++++ b/CHANGELOG.rst
+@@ -6,6 +6,8 @@ Changelog
+ 
+ Features:
+ 
++- Add `marshmallow.validate.NoAdjacentDuplicates` validator for validating sequences
++  with no equal adjacent elements.
+ - Simplify `get_value` to match actual usage (:pr:`3024`).
+ 
+ Bug fixes:
+diff --git a/src/marshmallow/validate.py b/src/marshmallow/validate.py
+index 35c0e8b..b701ecf 100644
+--- a/src/marshmallow/validate.py
++++ b/src/marshmallow/validate.py
+@@ -706,3 +706,29 @@ class ContainsNoneOf(NoneOf):
+             if val in self.iterable:
+                 raise ValidationError(self._format_error(value))
+         return value
++
++
++class NoAdjacentDuplicates(Validator):
++    """Validator which succeeds if ``value`` is a sequence with no equal adjacent
++    elements. Nonadjacent repetition is allowed, as are empty and single-element
++    sequences.
++
++    :param error: Error message to raise in case of a validation error.
++        Can be interpolated with `{input}`.
++
++    .. versionadded:: 4.4.0
++    """
++
++    default_message = "Must satisfy NoAdjacentDuplicates."
++
++    def __init__(self, *, error: str | None = None):
++        self.error: str = error or self.default_message
++
++    def _format_error(self, value: typing.Any) -> str:
++        return self.error.format(input=value)
++
++    def __call__(self, value: typing.Sequence[typing.Any]) -> typing.Sequence[typing.Any]:
++        for i in range(len(value) - 1):
++            if value[i] == value[i + 1]:
++                raise ValidationError(self._format_error(value))
++        return value
+diff --git a/tests/test_validate.py b/tests/test_validate.py
+index 752e544..e08972f 100644
+--- a/tests/test_validate.py
++++ b/tests/test_validate.py
+@@ -1079,6 +1079,50 @@ def test_containsnoneof_mixing_types():
+         validate.ContainsNoneOf([1, 2, 3])((1,))
+ 
+ 
++def test_noadjacentduplicates_valid():
++    validator = validate.NoAdjacentDuplicates()
++    assert validator([]) == []
++    assert validator([1]) == [1]
++    assert validator([1, 2]) == [1, 2]
++    assert validator([1, 2, 1]) == [1, 2, 1]
++    assert validator([1, 2, 3, 2, 1]) == [1, 2, 3, 2, 1]
++    assert validator(()) == ()
++    assert validator((1,)) == (1,)
++    assert validator((1, 2, 1)) == (1, 2, 1)
++    assert validator("") == ""
++    assert validator("a") == "a"
++    assert validator("aba") == "aba"
++
++
++def test_noadjacentduplicates_invalid():
++    validator = validate.NoAdjacentDuplicates()
++    with pytest.raises(ValidationError):
++        validator([1, 1])
++    with pytest.raises(ValidationError):
++        validator([1, 2, 2, 1])
++    with pytest.raises(ValidationError):
++        validator((1, 1))
++    with pytest.raises(ValidationError):
++        validator("aa")
++    with pytest.raises(ValidationError):
++        validator("aba1aa")
++
++
++def test_noadjacentduplicates_custom_message():
++    validator = validate.NoAdjacentDuplicates(error="{input} has adjacent duplicates")
++    with pytest.raises(ValidationError, match="\\[1, 1\\] has adjacent duplicates"):
++        validator([1, 1])
++
++
++def test_noadjacentduplicates_repr():
++    assert repr(validate.NoAdjacentDuplicates(error=None)) == (
++        "<NoAdjacentDuplicates(error='Must satisfy NoAdjacentDuplicates.')>"
++    )
++    assert repr(validate.NoAdjacentDuplicates(error="custom")) == (
++        "<NoAdjacentDuplicates(error='custom')>"
++    )
++
++
+ def is_even(value):
+     if value % 2 != 0:
+         raise ValidationError("Not an even value.")

@@ -1,0 +1,130 @@
+{
+ "name": "repobench2-attrs",
+ "repo_key": "github.com/python-attrs/attrs",
+ "workdir": "repo",
+ "sandbox": [
+  "python3",
+  "{repo}/evals/repobench/sandbox.py",
+  "attrs",
+  "{task}",
+  "{dir}",
+  "--arm",
+  "{arm}",
+  "--context",
+  "{repo}/evals/repobench/context/attrs.md"
+ ],
+ "score": [
+  "python3",
+  "{repo}/evals/repobench/score.py",
+  "attrs",
+  "{task}",
+  "{dir}"
+ ],
+ "prompts": [
+  "Fix {id}."
+ ],
+ "task_prompts": {
+  "attrs-d9ed5937": "The `repr_ns` argument to attr.s() is a relic that doesn't really make sense in Python 3 and isn't offered by the newer attrs.define()/attr.s() equivalents. For example:\n\n```python\nimport attr\n\n@attr.s\nclass C:\n    @attr.s(repr_ns=\"C\")\n    class D:\n        pass\n```\n\nUsing `repr_ns` should still work for backwards compatibility, but since it's not a meaningful thing to keep supporting long-term, using it should now emit a deprecation warning so users know to move away from it. Please add that deprecation warning while keeping the existing behaviour intact.",
+  "attrs-88e2896c": "In slotted attrs classes that use `functools.cached_property`, if the cached property's implementation raises an `AttributeError` (e.g. because it accesses another `@property` that itself raises AttributeError), that original AttributeError gets swallowed/replaced instead of propagating to the caller. For example:\n\n```python\nimport functools\nimport attr\n\n@attr.s(slots=True)\nclass A:\n    x = attr.ib()\n\n    @functools.cached_property\n    def f(self):\n        return self.p\n\n    @property\n    def p(self):\n        raise AttributeError(\"I am a property\")\n\nA(1).f  # should raise AttributeError: I am a property, but the real error is lost\n```\n\nPlease fix the slotted class's attribute-lookup handling so the original AttributeError (with its message) is preserved and propagated correctly.",
+  "attrs-edcaf04a": "attr.make_class() doesn't populate __annotations__ on the class it generates, even when the attributes were created with a known `type=`. This means attr.resolve_types() can't do anything useful with classes built via make_class(). For example:\n\n```python\nimport attr\nC = attr.make_class(\"C\", {\"a\": attr.ib(type=bool)})\nprint(C.__annotations__)  # expected {\"a\": bool}, currently empty/missing\n```\n\nAttributes with a concrete `type=` should end up in `__annotations__` so tooling like resolve_types() works consistently with classes created by attr.s/attrs.define. Please fix this.",
+  "attrs-09161fc9": "Defining a class with `__attrs_pre_init__` that takes keyword-only arguments crashes when the corresponding attribute is kw_only and has a default value. For example:\n\n```python\nimport attr\n\n@attr.define\nclass C:\n    x: int = attr.field(kw_only=True, default=3)\n\n    def __attrs_pre_init__(self, *, x):\n        pass\n\nC()\n```\n\nInstantiating `C()` should work and call `__attrs_pre_init__` with the resolved default value, but instead it errors out. Please fix this crash.",
+  "attrs-fd7538f0": "The `in_` validator raises a TypeError when it's given an unhashable container of options (like a set) and the resulting attribute is later used with attrs' include/exclude filters, because the validator itself isn't hashable. For example:\n\n```python\nimport attr\n\n@attr.s\nclass C:\n    x: int = attr.ib(validator=attr.validators.in_({1, 2}))\n\ni = C(2)\nattr.asdict(i, filter=attr.filters.include(lambda val: True))\n```\n\nThis should work without error. Please make `in_` produce a hashable validator so attributes using it work fine with filters.",
+  "attrs-7373d88f": "On Python 3.14, basic attrs functionality is broken due to the new PEP 649/749 lazy-annotations behavior. Simple things like resolving forward-reference or self-referential string type annotations on non-slotted classes fail, for example:\n\n```python\nimport attr\n\n@attr.s(auto_attribs=True)\nclass A:\n    a: \"A\" = None\n\nattr.resolve_types(A)\n```\n\nThis and other basic attrs class definitions should keep working on Python 3.14 the same way they do on earlier versions (some edge cases can remain temporarily unsupported, but core functionality shouldn't be broken). Please investigate and restore compatibility.",
+  "attrs-6fda0a4e": "The `attr.Converter` class (used for converters that need access to `self` and/or the field, e.g. via `converters.pipe`) doesn't correctly act as a drop-in callable adapter: constructing a `Converter` and calling it doesn't reliably pass the right combination of value/instance/field arguments through to the wrapped function, and copies made via `evolve` don't preserve the wrapped callable's identity (e.g. `__call__.__name__`). This also causes converters using `on_setattr` piping with a `Converter` in the converter list to receive wrong arguments. For example:\n\n```python\nimport attr\n\ndef save_args(*args):\n    return args[0]\n\nc = attr.Converter(save_args, takes_self=True, takes_field=True)\nresult = c(42, \"instance\", \"field\")  # should call save_args(42, \"instance\", \"field\")\n```\n\nPlease fix `Converter` so it behaves as a correct adapter and works properly with `converters.pipe` and `on_setattr`.",
+  "attrs-5d6d21aa": "When a converter is wrapped in `attr.Converter` (e.g. to use `takes_self`/`takes_field`, or as part of `converters.pipe`), the return type annotation of the underlying wrapped callable is lost instead of being copied onto the adapter's `__call__`. For example:\n\n```python\nimport attr\nfrom attr import Converter\n\ndef wrapped(_, __, ___) -> float:\n    pass\n\nc = Converter(wrapped)\nprint(c.__call__.__annotations__.get(\"return\"))  # expected float, currently missing\n```\n\nThis also affects `converters.pipe`, where the return type of the last converter in the pipe should be inferable from the resulting field's converter. Please fix this so the wrapped converter's return annotation is properly propagated.",
+  "attrs-1921da6e": "For attrs classes decorated with `@attrs.define` (or `mutable`) that subclass `Exception`, mutating certain dunder attributes that Python itself sets on exceptions raises `FrozenInstanceError`, even though the class isn't meant to be frozen. Specifically `__suppress_context__` and `__notes__` can't be set or deleted. For example:\n\n```python\nimport attrs\n\n@attrs.define\nclass MyError(Exception):\n    pass\n\ntry:\n    raise MyError()\nexcept MyError as e:\n    e.__suppress_context__ = True  # raises FrozenInstanceError\n    e.__notes__ = []\n```\n\nThese assignments should succeed just like `__traceback__`, `__cause__`, and `__context__` already do. Please fix this.",
+  "attrs-e048efcb": "When a `field_transformer` reorders attributes (e.g. moving a mandatory attribute to come before one with a default), attrs still raises the \"No mandatory attributes allowed after an attribute with a default value\" error based on the *original* field order instead of the order produced by the hook. For example:\n\n```python\nimport attr\n\ndef hook(cls, attribs):\n    return sorted(attribs, key=lambda a: a.metadata[\"field_order\"])\n\n@attr.s(field_transformer=hook)\nclass C:\n    x: int = attr.ib(metadata={\"field_order\": 1}, default=0)\n    y: int = attr.ib(metadata={\"field_order\": 0})\n```\n\nAfter the hook reorders fields so `y` (no default) comes before `x` (has a default), this should be valid and not raise. Please make the mandatory-attribute-order check run after the field_transformer hook has had a chance to reorder fields.",
+  "attrs-cbaef3f8": "`attr.validators.deep_mapping()` currently requires both a `key_validator` and a `value_validator` to be passed, even though it should be possible to only validate one side of a mapping. Calling it with only one of the two (leaving the other as `None`) should work fine, and it should still be an error if neither is provided (raising a `ValueError` explaining that at least one must be given). Please make `key_validator` and `value_validator` independently optional in `deep_mapping`, while still requiring at least one of them.",
+  "attrs-5bab46de": "`attr.validators.deep_iterable()` and `attr.validators.deep_mapping()` only accept a single validator (or something produced by `and_`) for each validator argument, but it would be convenient to pass a list or tuple of validators directly and have them combined automatically, similar to how other validator-accepting APIs behave. For example:\n\n```python\nfrom attr.validators import deep_iterable, instance_of, min_len\n\nv = deep_iterable((instance_of(int),), (instance_of(list), min_len(1)))\n```\n\ncurrently doesn't combine the tuple elements with `and_` as expected. Please add support for passing lists/tuples of validators to `deep_iterable` and `deep_mapping`.",
+  "attrs-ce358ed0": "The type stubs for `attrs.field(converter=...)` are wrong when passing a tuple of converter functions. Given code like:\n\n```python\nimport attrs\n\ndef square(value: int) -> int: return value * value\ndef negate(value: int) -> int: return -value\n\n@attrs.define\nclass SomeClass:\n    value: int = attrs.field(converter=(square, negate))\n```\n\na type checker (Pyright) reports a false-positive type error, because the stub type for the tuple form only allows a tuple with exactly one converter instead of an arbitrary number of them. Please fix the type annotations so tuples of any length are accepted without spurious type errors.",
+  "attrs-ce89f5d1": "When attrs raises `FrozenInstanceError` for setting or deleting an attribute on a frozen instance, the exception doesn't behave like a normal Python exception with respect to its message. For example:\n\n```python\nimport attr\n\n@attr.s(frozen=True)\nclass C:\n    x = attr.ib()\n\nc = C(1)\ntry:\n    c.x = 2\nexcept attr.exceptions.FrozenInstanceError as e:\n    print(e.msg)  # AttributeError or doesn't match \"can't set attribute\"\n```\n\nThe exception should follow the normal exception workflow so that `str(e)`, `e.args[0]`, and `e.msg` are all consistently `\"can't set attribute\"` (and similarly for delete). Please fix this.",
+  "attrs-af9c5109": "`attr.validators.disabled()` is a context manager for temporarily disabling validators, but nesting it doesn't restore state correctly. If you enter `disabled()` twice (nested) and then exit the inner one, validators become re-enabled even though the outer context manager is still active:\n\n```python\nfrom attr import validators\nfrom attr import _config\n\nwith validators.disabled():\n    with validators.disabled():\n        pass\n    assert _config._run_validators is False  # currently fails, becomes True\n```\n\n`disabled()` should save and restore the previous enabled/disabled state on entry/exit so nested usage behaves correctly. Please fix this.",
+  "attrs-48b8611c": "`attrs.fields()` only accepts an attrs *class*, and raises `TypeError(\"Passed object must be a class.\")` if you pass an instance instead. It would be more convenient if it also accepted attrs instances directly, returning the same fields as for the class. For example:\n\n```python\nimport attrs\n\n@attrs.define\nclass C:\n    x: int\n\nattrs.fields(C())  # should work and return the same result as attrs.fields(C)\n```\n\nPassing a non-attrs object (instance or class) should still raise a clear `TypeError`. Please add support for instances to `attrs.fields()`.",
+  "attrs-97f8d175": "When using `attr.s(auto_attribs=True)`, a field annotated with `ClassVar` should be excluded from the generated `__init__` and from `attr.fields`. This works fine when `ClassVar` is imported and used directly, but if the annotation is written such that it ends up as an unresolved forward reference (e.g. the annotation is a string or otherwise not yet evaluated to the real `typing.ClassVar` object), attrs fails to recognize it as a `ClassVar` and treats it as a regular attribute instead. For example:\n\n```python\nimport attr\nfrom typing import ClassVar\n\n@attr.s(auto_attribs=True)\nclass C:\n    cls_var: ClassVar[str]\n    value: int = 1\n\nprint(\"cls_var\" in attr.fields_dict(C))  # should be False\n```\n\nThe class-variable detection needs to also recognize `ClassVar` when it appears as a forward reference, not just when it's already a resolved `typing.ClassVar`. Please fix this.",
+  "attrs-5aa76a44": "attrs.validators currently offers `lt`, `le`, `ge`, and `gt` for comparing an attribute's value against a bound, but there's no way to validate that a value is simply *not equal* to a given value. Right now the only way to express \"not equal to 0\" is a clunky workaround like combining `or_(le(-1), ge(1))`. Please add an `ne` validator to `attrs.validators` (exported alongside the others) that raises a `ValueError` when the field's value equals the given bound, consistent with how `lt`/`le`/`ge`/`gt` behave (including bound retrieval and repr support).\n\n```python\nimport attrs\n\n@attrs.define\nclass C:\n    x: int = attrs.field(validator=attrs.validators.ne(0))\n\nC(x=0)  # should raise ValueError\nC(x=1)  # should be fine\n```"
+ },
+ "train": {
+  "tasks": [
+   "attrs-d9ed5937",
+   "attrs-88e2896c",
+   "attrs-edcaf04a",
+   "attrs-09161fc9",
+   "attrs-fd7538f0",
+   "attrs-7373d88f",
+   "attrs-6fda0a4e",
+   "attrs-5d6d21aa",
+   "attrs-1921da6e",
+   "attrs-e048efcb"
+  ],
+  "repeats": 1
+ },
+ "eval": {
+  "tasks": [
+   "attrs-cbaef3f8",
+   "attrs-5bab46de",
+   "attrs-ce358ed0",
+   "attrs-ce89f5d1",
+   "attrs-af9c5109",
+   "attrs-48b8611c",
+   "attrs-97f8d175",
+   "attrs-5aa76a44"
+  ],
+  "repeats": 3,
+  "arms": [
+   "control",
+   "adage"
+  ]
+ },
+ "seed": 20260928,
+ "model": "claude-haiku-4-5-20251001",
+ "max_turns": 60,
+ "concurrency": 3,
+ "budget_usd": 17.92,
+ "host_auth": true,
+ "confine": true,
+ "learn_args": [],
+ "classify": {
+  "lookup": [],
+  "regen": [
+   "make generate",
+   "go generate",
+   "vitest -u",
+   "--update-snapshots"
+  ],
+  "verify": [
+   "pytest",
+   "vitest",
+   "go test",
+   "make test",
+   "npm test",
+   "npm run test",
+   "pnpm test",
+   "pnpm run test",
+   "pnpm vitest",
+   "tox",
+   "nox",
+   "node --test",
+   "unittest",
+   "go vet"
+  ],
+  "bash_edit": [
+   "sed -i",
+   "cat >",
+   "cat <<",
+   "tee ",
+   "write_text(",
+   "patch -p",
+   "git apply",
+   "perl -pi"
+  ],
+  "check_flags": []
+ },
+ "obligation": {
+  "paths": null
+ },
+ "labels": {
+  "lookup": "lookup",
+  "regen": "regenerate"
+ },
+ "split_digest": "48e41b37e15beb917e141e34df5850424e6f324f6e4452b9fa81cda07b7a96c6"
+}

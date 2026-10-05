@@ -6,16 +6,25 @@
 //! min_interval_secs = 120    # at most one automatic learn per repository per interval
 //! thresholds = "default"     # or "demo" (lower evidence bars, for demos and small histories)
 //! claude_projects = ""       # Claude Code history ("" = ~/.claude/projects)
-//! codex_sessions = ""        # Codex rollouts to learn from automatically ("" = none)
+//! codex_sessions = "auto"    # Codex rollouts: "auto" ($CODEX_HOME/sessions once Codex hooks are registered), a directory, or "" (none)
 //! opencode_exports = ""      # a directory of `opencode export` files ("" = none)
+//! repos = "all"              # repositories to learn from: all, or keys, e.g. ["github.com/acme/billing"]
 //! parse_cache = true         # keep parsed transcripts under cache/sessions (faster re-learning)
 //!
+//! [ui]
+//! notices = "daily"          # one-line notices at session start (Claude Code), at most daily; or "off"
+//!
 //! [runtime]
-//! holdout = 0.1              # share of sessions held out as the control arm
+//! control = 0.1              # share of sessions held out as the control arm
+//!
+//! [instincts]
+//! enabled = true             # bind Adage's built-in defaults from each repository's files
+//! packs = ["auto"]           # instinct packs to bind: auto (every one installed) or their names
+//! disabled = []              # packs or instinct ids never to bind, e.g. ["adage/lockfiles", "U3"]
 //! ```
 //!
 //! Every key has a default, so a missing file is the default configuration. Environment
-//! variables win over the file: `ADAGE_HOLDOUT` for `runtime.holdout` and `ADAGE_AUTO_LEARN`
+//! variables win over the file: `ADAGE_CONTROL` for `runtime.control` and `ADAGE_AUTO_LEARN`
 //! (`0`/`1`) for `learn.auto`. A file that cannot be parsed, an unknown key, or a value that fails
 //! validation is reported (`adage config`, `adage doctor`) and that key keeps its default: hooks
 //! never fail because of the configuration.
@@ -49,16 +58,43 @@ impl Thresholds {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Config {
     pub learn_auto: bool,
+    /// `learn.repos`: the repositories whose history Adage reads, by key; `None` is `all`.
+    /// Hooks still record sessions everywhere they are registered.
+    pub learn_repos: Option<Vec<String>>,
     pub learn_min_interval_secs: u64,
     pub learn_thresholds: Thresholds,
     /// `None` = the default location, `~/.claude/projects`.
     pub learn_claude_projects: Option<PathBuf>,
     pub learn_codex_sessions: Option<PathBuf>,
+    /// `learn.codex_sessions = "auto"` (the default): automatic learning reads
+    /// `$CODEX_HOME/sessions` (else `~/.codex/sessions`) once Codex hooks are registered.
+    pub learn_codex_auto: bool,
     pub learn_opencode_exports: Option<PathBuf>,
-    /// Keep parsed transcripts in `$ADAGE_HOME/cache/sessions` (`adage_learn::cache`).
+    /// Keep parsed transcripts in `$ADAGE_HOME/cache/sessions` (`adage_ingest::cache`).
     pub learn_parse_cache: bool,
-    /// The holdout share; as with `ADAGE_HOLDOUT`, 1 or more is shadow mode.
-    pub runtime_holdout: f64,
+    /// `ui.notices`: one-line notices at session start (`daily`, the default) or none (`off`).
+    pub ui_notices: bool,
+    /// The control share; as with `ADAGE_CONTROL`, 1 or more is shadow mode.
+    pub runtime_control: f64,
+    /// `runtime.rewrite`: `PreToolUse` rewrites to the project's environment (on by default).
+    pub runtime_rewrite: bool,
+    /// Bind instincts (prebuilt routes) from each repository's declared files when learning.
+    /// Learn procedure cards for families of similar tasks (`learn.cards`), and how similar a
+    /// prompt must be to a family for its card (`learn.card_threshold`).
+    pub learn_cards: bool,
+    pub learn_card_threshold: f64,
+    pub instincts_enabled: bool,
+    /// Instinct packs to bind.
+    pub instincts_packs: Vec<String>,
+    /// Instinct ids never to bind.
+    pub instincts_disabled: Vec<String>,
+}
+
+impl Config {
+    /// Does Adage read history for the repository with this key (`learn.repos`)?
+    pub fn learns(&self, repo: &str) -> bool {
+        self.learn_repos.as_ref().is_none_or(|keys| keys.iter().any(|k| k == repo))
+    }
 }
 
 /// Where a value came from.
@@ -89,6 +125,16 @@ enum Kind {
     Dir,
     /// A share between 0 and 1.
     Share,
+    /// A directory, `""` for none, or `auto`.
+    DirOrAuto,
+    /// `daily` or `off`.
+    Notices,
+    /// A list of short ids (`[A-Za-z0-9_-]`, at most 32 characters each, at most 64 of them),
+    /// given on the command line comma-separated; `""` for none.
+    Ids,
+    /// `all`, or a list of repository keys (`github.com/acme/billing`, `notes@1a2b3c4d5e6f`),
+    /// given on the command line comma-separated; `""` for none.
+    Repos,
 }
 
 /// One documented key.
@@ -99,6 +145,10 @@ pub struct Key {
     pub default: &'static str,
     pub env: Option<&'static str>,
     pub doc: &'static str,
+    /// A setting that changes what Adage learns from or how much evidence it needs (its sources,
+    /// thresholds, instinct packs): `adage config set` asks for a person at a terminal. Every
+    /// other key only tunes or turns something down, and can be set from a script or a sandbox.
+    pub guarded: bool,
 }
 
 /// Every key, in the order `adage config` prints them.
@@ -108,56 +158,128 @@ pub const KEYS: &[Key] = &[
         kind: Kind::Bool,
         default: "true",
         env: Some("ADAGE_AUTO_LEARN"),
-        doc: "learn automatically, in the background, when an agent session stops or ends",
+        doc: "condition automatically, in the background, when an agent session stops or ends",
+        guarded: false,
     },
     Key {
         name: "learn.min_interval_secs",
         kind: Kind::Secs,
         default: "120",
         env: None,
-        doc: "at most one automatic learn per repository in this many seconds (0 to 86400)",
+        doc: "at most one automatic conditioning run per repository in this many seconds (0 to 86400)",
+        guarded: false,
     },
     Key {
         name: "learn.thresholds",
         kind: Kind::Thresholds,
         default: "default",
         env: None,
-        doc: "evidence bars for `adage learn` and automatic learning: default, or demo (lower)",
+        doc: "evidence bars for `adage condition` and automatic conditioning: default, or demo (lower)",
+        guarded: true,
     },
     Key {
         name: "learn.claude_projects",
         kind: Kind::Dir,
         default: "",
         env: None,
-        doc: "Claude Code history for Survey and Learn (\"\" = $CLAUDE_CONFIG_DIR/projects, else ~/.claude/projects)",
+        doc: "Claude Code traces to condition on (\"\" = ~/.claude/projects)",
+        guarded: true,
     },
     Key {
         name: "learn.codex_sessions",
-        kind: Kind::Dir,
-        default: "",
+        kind: Kind::DirOrAuto,
+        default: "auto",
         env: None,
-        doc: "Codex history for Survey and Learn (\"\" = $CODEX_HOME/sessions, else ~/.codex/sessions)",
+        doc: "Codex rollouts to condition on: auto (once Codex hooks are registered), a directory, or \"\" (none)",
+        guarded: true,
     },
     Key {
         name: "learn.opencode_exports",
         kind: Kind::Dir,
         default: "",
         env: None,
-        doc: "OpenCode export JSON folder for Survey and Learn (\"\" = none; hooks do not capture history)",
+        doc: "a directory of `opencode export` files automatic conditioning reads (\"\" = none)",
+        guarded: true,
+    },
+    Key {
+        name: "learn.repos",
+        kind: Kind::Repos,
+        default: "all",
+        env: None,
+        doc: "repositories to condition on, comma-separated keys as `adage init` lists them, or all",
+        guarded: true,
     },
     Key {
         name: "learn.parse_cache",
         kind: Kind::Bool,
         default: "true",
         env: None,
-        doc: "keep parsed transcripts in cache/sessions so re-learning parses only what changed",
+        doc: "keep parsed traces in cache/sessions so conditioning again parses only what changed",
+        guarded: false,
     },
     Key {
-        name: "runtime.holdout",
+        name: "learn.cards",
+        kind: Kind::Bool,
+        default: "true",
+        env: None,
+        doc: "learn procedure cards for families of similar tasks (with the installed or bundled model)",
+        guarded: false,
+    },
+    Key {
+        name: "learn.card_threshold",
+        kind: Kind::Share,
+        default: "0.811",
+        env: None,
+        doc: "how similar a prompt must be to a family's prompts for its procedure card (0.5 to 0.99)",
+        guarded: true,
+    },
+    Key {
+        name: "instincts.enabled",
+        kind: Kind::Bool,
+        default: "true",
+        env: None,
+        doc: "bind Adage's built-in defaults (instincts) from each repository's declared files",
+        guarded: false,
+    },
+    Key {
+        name: "instincts.packs",
+        kind: Kind::Ids,
+        default: "auto",
+        env: None,
+        doc: "instinct packs to bind, comma-separated: auto (every installed instinct pack) or names, e.g. adage/python-env",
+        guarded: true,
+    },
+    Key {
+        name: "instincts.disabled",
+        kind: Kind::Ids,
+        default: "",
+        env: None,
+        doc: "instinct packs or ids never to bind, comma-separated, e.g. adage/lockfiles,U3 (see docs/instincts.md)",
+        guarded: false,
+    },
+    Key {
+        name: "ui.notices",
+        kind: Kind::Notices,
+        default: "daily",
+        env: None,
+        doc: "one-line notices at session start (Claude Code): daily, only when something is new; or off",
+        guarded: false,
+    },
+    Key {
+        name: "runtime.control",
         kind: Kind::Share,
         default: "0.1",
-        env: Some("ADAGE_HOLDOUT"),
+        env: Some("ADAGE_CONTROL"),
         doc: "share of sessions held out as the control arm (Adage decides but says nothing)",
+        guarded: false,
+    },
+    Key {
+        name: "runtime.rewrite",
+        kind: Kind::Bool,
+        default: "true",
+        env: None,
+        doc: "point Python test runs under the system Python at the project's verified environment before they run (Claude Code PreToolUse); false: leave every command as the agent wrote it",
+        guarded: false,
     },
 ];
 
@@ -202,7 +324,12 @@ fn from_text(kind: Kind, s: &str) -> Result<toml::Value, String> {
             "default" | "demo" => Ok(toml::Value::String(s.into())),
             _ => Err(format!("{s:?} is not default or demo")),
         },
-        Kind::Dir => {
+        Kind::DirOrAuto if s == "auto" => Ok(toml::Value::String(s.into())),
+        Kind::Notices => match s {
+            "daily" | "off" => Ok(toml::Value::String(s.into())),
+            _ => Err(format!("{s:?} is not daily or off")),
+        },
+        Kind::Dir | Kind::DirOrAuto => {
             if s.chars().any(char::is_control) || s.len() > 4096 {
                 return Err("not a usable path".into());
             }
@@ -215,7 +342,39 @@ fn from_text(kind: Kind, s: &str) -> Result<toml::Value, String> {
             Ok(x) if (0.0..=1.0).contains(&x) => Ok(toml::Value::Float(x)),
             _ => Err(format!("{s:?} is not a share between 0 and 1")),
         },
+        Kind::Ids => {
+            let ids = split_ids(s);
+            // An id (`U3`, `auto`) or a pack name (`adage/python-env`).
+            let ok = |i: &String| {
+                i.len() <= 64
+                    && i.split('/').count() <= 2
+                    && i.split('/').all(|p| {
+                        p.as_bytes().first().is_some_and(|c| c.is_ascii_alphanumeric())
+                            && p.bytes().all(|c| c.is_ascii_alphanumeric() || b"-_.".contains(&c))
+                    })
+            };
+            if ids.len() > 64 || !ids.iter().all(ok) {
+                return Err(format!("{s:?} is not a comma-separated list of ids"));
+            }
+            Ok(toml::Value::Array(ids.into_iter().map(toml::Value::String).collect()))
+        }
+        Kind::Repos if s == "all" => Ok(toml::Value::String(s.into())),
+        Kind::Repos => {
+            let keys = split_ids(s);
+            let ok = |k: &String| {
+                k != "all" && k.len() <= 512 && !k.chars().any(|c| c.is_whitespace() || c.is_control() || c == '"')
+            };
+            if keys.len() > 256 || !keys.iter().all(ok) {
+                return Err(format!("{s:?} is not all, or a comma-separated list of repository keys"));
+            }
+            Ok(toml::Value::Array(keys.into_iter().map(toml::Value::String).collect()))
+        }
     }
+}
+
+/// `"U3, N1"` → `["U3", "N1"]`; `""` → `[]`.
+fn split_ids(s: &str) -> Vec<String> {
+    s.split(',').map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect()
 }
 
 /// A value read from the file → its canonical text, validated.
@@ -225,7 +384,12 @@ fn from_toml(kind: Kind, v: &toml::Value) -> Result<String, String> {
         (Kind::Secs, toml::Value::Integer(n)) => n.to_string(),
         (Kind::Share, toml::Value::Float(x)) => x.to_string(),
         (Kind::Share, toml::Value::Integer(n)) => n.to_string(),
-        (Kind::Thresholds | Kind::Dir, toml::Value::String(s)) => s.clone(),
+        (Kind::Thresholds | Kind::Dir | Kind::DirOrAuto | Kind::Notices, toml::Value::String(s)) => s.clone(),
+        (Kind::Ids | Kind::Repos, toml::Value::String(s)) => s.clone(),
+        (Kind::Ids | Kind::Repos, toml::Value::Array(a)) => {
+            let ids: Option<Vec<&str>> = a.iter().map(|v| v.as_str()).collect();
+            ids.ok_or_else(|| format!("{v} is not a list of ids"))?.join(",")
+        }
         _ => return Err(format!("{v} has the wrong type")),
     };
     from_text(kind, &text).map(|_| text)
@@ -288,7 +452,7 @@ fn load_from(file: &Path, env: &dyn Fn(&str) -> Option<String>) -> Loaded {
         }
         if let Some(var) = k.env {
             if let Some(raw) = env(var) {
-                // ADAGE_HOLDOUT keeps its meaning from before the file: any number, where 1 or
+                // ADAGE_CONTROL keeps its meaning from before the file: any number, where 1 or
                 // more is shadow mode.
                 let ok = match k.kind {
                     Kind::Share => raw.trim().parse::<f64>().ok().filter(|x| x.is_finite()).map(|x| x.to_string()),
@@ -306,13 +470,24 @@ fn load_from(file: &Path, env: &dyn Fn(&str) -> Option<String>) -> Loaded {
     let text = |n: &str| values[n].0.clone();
     let config = Config {
         learn_auto: parse_bool(&text("learn.auto")).unwrap_or(true),
+        learn_repos: Some(text("learn.repos")).filter(|s| s != "all").map(|s| split_ids(&s)),
         learn_min_interval_secs: text("learn.min_interval_secs").parse().unwrap_or(120),
         learn_thresholds: if text("learn.thresholds") == "demo" { Thresholds::Demo } else { Thresholds::Default },
         learn_claude_projects: home_relative(&text("learn.claude_projects")),
-        learn_codex_sessions: home_relative(&text("learn.codex_sessions")),
+        learn_codex_sessions: Some(text("learn.codex_sessions"))
+            .filter(|s| s != "auto")
+            .and_then(|s| home_relative(&s)),
+        learn_codex_auto: text("learn.codex_sessions") == "auto",
+        ui_notices: text("ui.notices") != "off",
         learn_opencode_exports: home_relative(&text("learn.opencode_exports")),
         learn_parse_cache: parse_bool(&text("learn.parse_cache")).unwrap_or(true),
-        runtime_holdout: text("runtime.holdout").parse().unwrap_or(0.1),
+        runtime_control: text("runtime.control").parse().unwrap_or(0.1),
+        runtime_rewrite: parse_bool(&text("runtime.rewrite")).unwrap_or(true),
+        learn_cards: parse_bool(&text("learn.cards")).unwrap_or(true),
+        learn_card_threshold: text("learn.card_threshold").parse().unwrap_or(0.811),
+        instincts_enabled: parse_bool(&text("instincts.enabled")).unwrap_or(true),
+        instincts_packs: split_ids(&text("instincts.packs")),
+        instincts_disabled: split_ids(&text("instincts.disabled")),
     };
     Loaded { config, values, problems }
 }
@@ -375,8 +550,14 @@ mod tests {
         assert_eq!(c.learn_min_interval_secs, 120);
         assert_eq!(c.learn_thresholds, Thresholds::Default);
         assert_eq!((c.learn_claude_projects.clone(), c.learn_codex_sessions.clone()), (None, None));
+        assert!(c.learn_codex_auto && c.ui_notices);
         assert!(c.learn_parse_cache);
-        assert_eq!(c.runtime_holdout, 0.1);
+        assert_eq!(c.runtime_control, 0.1);
+        assert!(c.instincts_enabled);
+        assert_eq!(c.instincts_packs, vec!["auto".to_string()]);
+        assert!(c.instincts_disabled.is_empty());
+        assert_eq!(c.learn_repos, None, "every repository");
+        assert!(c.learns("github.com/acme/billing"));
         assert!(l.values.values().all(|(_, s)| *s == Source::Default));
         assert_eq!(l.values.len(), KEYS.len());
     }
@@ -385,27 +566,27 @@ mod tests {
     fn env_beats_file_beats_default() {
         let d = tempfile::tempdir().unwrap();
         let f = d.path().join(FILE);
-        std::fs::write(&f, "[learn]\nauto = false\nthresholds = \"demo\"\n[runtime]\nholdout = 0.25\n").unwrap();
+        std::fs::write(&f, "[learn]\nauto = false\nthresholds = \"demo\"\n[runtime]\ncontrol = 0.25\n").unwrap();
         let l = load_from(&f, &no_env);
         assert!(!l.config.learn_auto);
         assert_eq!(l.config.learn_thresholds, Thresholds::Demo);
-        assert_eq!(l.config.runtime_holdout, 0.25);
+        assert_eq!(l.config.runtime_control, 0.25);
         assert_eq!(l.get("learn.auto").unwrap().1, Source::File);
         assert_eq!(l.get("learn.min_interval_secs").unwrap(), &("120".to_string(), Source::Default));
         let env = |v: &str| match v {
-            "ADAGE_HOLDOUT" => Some("1".to_string()),
+            "ADAGE_CONTROL" => Some("1".to_string()),
             "ADAGE_AUTO_LEARN" => Some("1".to_string()),
             _ => None,
         };
         let l = load_from(&f, &env);
         assert!(l.config.learn_auto, "ADAGE_AUTO_LEARN wins over the file");
-        assert_eq!(l.config.runtime_holdout, 1.0, "ADAGE_HOLDOUT keeps shadow mode");
-        assert_eq!(l.get("runtime.holdout").unwrap().1, Source::Env("ADAGE_HOLDOUT"));
+        assert_eq!(l.config.runtime_control, 1.0, "ADAGE_CONTROL keeps shadow mode");
+        assert_eq!(l.get("runtime.control").unwrap().1, Source::Env("ADAGE_CONTROL"));
         // An invalid environment value is ignored, and reported.
-        let bad = |v: &str| (v == "ADAGE_HOLDOUT").then(|| "lots".to_string());
+        let bad = |v: &str| (v == "ADAGE_CONTROL").then(|| "lots".to_string());
         let l = load_from(&f, &bad);
-        assert_eq!(l.config.runtime_holdout, 0.25);
-        assert!(l.problems.iter().any(|p| p.contains("ADAGE_HOLDOUT")), "{:?}", l.problems);
+        assert_eq!(l.config.runtime_control, 0.25);
+        assert!(l.problems.iter().any(|p| p.contains("ADAGE_CONTROL")), "{:?}", l.problems);
     }
 
     #[test]
@@ -414,7 +595,7 @@ mod tests {
         let f = d.path().join(FILE);
         std::fs::write(
             &f,
-            "[learn]\nauto = \"yes please\"\nmin_interval_secs = -5\nthresholds = \"lax\"\ncodex_sessions = \"relative/dir\"\ntypo = 1\n[runtime]\nholdout = 3.0\n",
+            "[learn]\nauto = \"yes please\"\nmin_interval_secs = -5\nthresholds = \"lax\"\ncodex_sessions = \"relative/dir\"\ntypo = 1\n[runtime]\ncontrol = 3.0\n",
         )
         .unwrap();
         let l = load_from(&f, &no_env);
@@ -434,16 +615,29 @@ mod tests {
         std::fs::write(paths.config(), "[learn]\nauto = false\n[other]\nkept = 1\n").unwrap();
         assert_eq!(set(&paths, "learn.min_interval_secs", "30").unwrap(), "30");
         assert_eq!(set(&paths, "learn.thresholds", "demo").unwrap(), "demo");
-        assert_eq!(set(&paths, "runtime.holdout", "0.2").unwrap(), "0.2");
+        assert_eq!(set(&paths, "runtime.control", "0.2").unwrap(), "0.2");
         assert_eq!(set(&paths, "learn.codex_sessions", "~/.codex/sessions").unwrap(), "~/.codex/sessions");
+        assert_eq!(set(&paths, "instincts.disabled", "adage/lockfiles, U3").unwrap(), "adage/lockfiles,U3");
+        assert_eq!(set(&paths, "instincts.disabled", "U3, N1").unwrap(), "U3,N1");
+        assert_eq!(set(&paths, "instincts.enabled", "false").unwrap(), "false");
+        assert_eq!(
+            set(&paths, "learn.repos", "github.com/acme/billing, notes@1a2b3c4d5e6f").unwrap(),
+            "github.com/acme/billing,notes@1a2b3c4d5e6f"
+        );
         for (k, v) in [
             ("learn.min_interval_secs", "soon"),
             ("learn.min_interval_secs", "100000"),
             ("learn.thresholds", "lax"),
-            ("runtime.holdout", "1.5"),
+            ("runtime.control", "1.5"),
             ("learn.auto", "maybe"),
             ("learn.codex_sessions", "relative"),
             ("learn.nope", "1"),
+            ("instincts.disabled", "U3;rm -rf"),
+            ("instincts.packs", "a b"),
+            ("instincts.packs", "adage/python-env/x"),
+            ("instincts.disabled", "../lockfiles"),
+            ("learn.repos", "all, github.com/acme/billing"),
+            ("learn.repos", "github.com/acme/my billing"),
         ] {
             assert!(set(&paths, k, v).is_err(), "{k} = {v} must be refused");
         }
@@ -451,8 +645,14 @@ mod tests {
         assert!(!l.config.learn_auto, "untouched keys are kept");
         assert_eq!(l.config.learn_min_interval_secs, 30);
         assert_eq!(l.config.learn_thresholds, Thresholds::Demo);
-        assert_eq!(l.config.runtime_holdout, 0.2);
-        assert!(l.config.learn_codex_sessions.unwrap().ends_with(".codex/sessions"));
+        assert_eq!(l.config.runtime_control, 0.2);
+        assert!(l.config.learn_codex_sessions.as_ref().unwrap().ends_with(".codex/sessions"));
+        assert_eq!(l.config.instincts_disabled, vec!["U3".to_string(), "N1".to_string()]);
+        assert!(!l.config.instincts_enabled);
+        let repos = vec!["github.com/acme/billing".to_string(), "notes@1a2b3c4d5e6f".to_string()];
+        assert_eq!(l.config.learn_repos, Some(repos));
+        assert!(l.config.learns("notes@1a2b3c4d5e6f") && !l.config.learns("github.com/acme/other"));
+        assert_eq!(l.problems, vec!["unknown key other.kept (ignored)".to_string()], "the list reads back cleanly");
         let text = std::fs::read_to_string(paths.config()).unwrap();
         assert!(text.contains("kept = 1"), "{text}");
         // An unparseable file is never overwritten.

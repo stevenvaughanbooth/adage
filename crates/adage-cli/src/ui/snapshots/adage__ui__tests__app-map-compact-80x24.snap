@@ -1,0 +1,28 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+expression: text
+---
+ adage    1 Live   2 Reflexes (2)  3 Map   4 Health (2)  5 Settings   6 Home
+────────────────────────────────────────────────────────────────────────────────
+ focus off    zoom rows (min)    layout stimulus → reflex → response
+
+  STIMULUS                  REFLEX                    RESPONSE
+▌ names a ticket         ─▶ F ◠ lookup-incident    ─▶ bin/fetch-incident {i…
+  bin/fetch-incident {…  ─▶ F ◠ read-linked-files  ─▶ read ≤5 listed files …
+  npm test fails: HARB…  ─▶ I ◠ dead-end-npm-test  ─▶ npm run check (not np…
+  run the tests          ─▶ P ◠ start-with-npm-check ─▶ npm run check (not np…
+  registry/*.csv chang…  ─▶ P ◉ finish-line/regenerate ─▶ npm run codegen
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────
+ ▸ lookup-incident  fire · firm · 24/25 traces · 8 turns saved
+ o open in browser: adage map --focus lookup-incident   enter inspect in Reflexe
+────────────────────────────────────────────────────────────────────────────────
+ ? keys · : palette · enter inspect · f focus · +/- zoom · j/k move      q quit

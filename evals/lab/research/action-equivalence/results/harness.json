@@ -1,0 +1,3374 @@
+{
+ "taxonomy": {
+  "split": {
+   "name": "split",
+   "assumptions": {
+    "sat": "goal",
+    "p_follow": 1.0,
+    "misfire_calls": 2.0,
+    "hindsight": false
+   },
+   "summary": {
+    "sessions": 158,
+    "tasks": 38,
+    "calls": 5110,
+    "test_set_id": "6a795a362ccb",
+    "baseline": {
+     "usd_per_task": 0.26039232658227857,
+     "calls_per_task": 32.34177215189873
+    },
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "calls_saved_share": 0.0,
+    "calls_saved_share_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "usd_saved_share_ci": [
+     0.0,
+     0.0
+    ],
+    "tokens_saved_per_task": 0.0,
+    "pass_rate_effect": {
+     "point": 0.0,
+     "worst_case": -0.0,
+     "worst_case_ci": [
+      -0.016835408386943633,
+      -0.0
+     ],
+     "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+    },
+    "s_hat_rust": 0.0,
+    "s_hat_rust_ci95": [
+     0.0,
+     0.0
+    ],
+    "directives": 0,
+    "useful": 0,
+    "harmful": 0,
+    "superseded": 0,
+    "useful_rate": 0.0,
+    "useful_lb90": 0.0,
+    "harmful_rate": 0.0,
+    "per_10_calls": 0.0,
+    "gates": {
+     "useful_lb90>=0.8": null,
+     "harmful<=1%": null,
+     "per_10_calls<=1": true
+    },
+    "custom_classes": 0,
+    "uncalibrated_classes": []
+   },
+   "by_route": {},
+   "by_slice": {
+    "attrs": {
+     "sessions": 40,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    },
+    "click": {
+     "sessions": 40,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    },
+    "marshmallow": {
+     "sessions": 30,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    },
+    "urfave-cli": {
+     "sessions": 16,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    },
+    "vue-core": {
+     "sessions": 32,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    }
+   }
+  },
+  "loro": {
+   "name": "loro",
+   "assumptions": {
+    "sat": "goal",
+    "p_follow": 1.0,
+    "misfire_calls": 2.0,
+    "hindsight": false
+   },
+   "summary": {
+    "sessions": 158,
+    "tasks": 38,
+    "calls": 5110,
+    "test_set_id": "6a795a362ccb",
+    "baseline": {
+     "usd_per_task": 0.26039232658227857,
+     "calls_per_task": 32.34177215189873
+    },
+    "calls_saved_per_task": 0.6470401066286061,
+    "calls_saved_ci": [
+     0.35524977430828036,
+     0.9563035509014617
+    ],
+    "calls_saved_share": 0.020006328150160423,
+    "calls_saved_share_ci": [
+     0.010770550803434642,
+     0.02995453735439078
+    ],
+    "usd_saved_per_task": 0.001570466746116909,
+    "usd_saved_ci": [
+     -0.00018154452458751544,
+     0.00329288073613246
+    ],
+    "usd_saved_share": 0.006031156012658744,
+    "usd_saved_share_ci": [
+     -0.0007132963377698272,
+     0.012796035443229917
+    ],
+    "tokens_saved_per_task": 72671.12025316455,
+    "pass_rate_effect": {
+     "point": 0.0,
+     "worst_case": -0.0,
+     "worst_case_ci": [
+      -0.016835408386943633,
+      -0.0
+     ],
+     "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+    },
+    "s_hat_rust": 1.773622385109619,
+    "s_hat_rust_ci95": [
+     1.2517663336230336,
+     2.272266109527926
+    ],
+    "directives": 185,
+    "useful": 96,
+    "harmful": 0,
+    "superseded": 3,
+    "useful_rate": 0.518918918918919,
+    "useful_lb90": 0.4586599245343664,
+    "harmful_rate": 0.0,
+    "per_10_calls": 0.36203522504892366,
+    "gates": {
+     "useful_lb90>=0.8": false,
+     "harmful<=1%": true,
+     "per_10_calls<=1": true
+    },
+    "custom_classes": 0,
+    "uncalibrated_classes": [
+     "command"
+    ]
+   },
+   "by_route": {
+    "ae:test-run|pytest|system": {
+     "directives": 89,
+     "useful": 86,
+     "harmful": 0,
+     "saved": 267.0,
+     "cost": 1.6199439081285998
+    },
+    "ae:repro|python|system": {
+     "directives": 96,
+     "useful": 10,
+     "harmful": 0,
+     "saved": 19.0,
+     "cost": 4.147719244551646
+    }
+   },
+   "by_slice": {
+    "attrs": {
+     "sessions": 40,
+     "usd_saved_per_task": 0.0046999299160502255,
+     "usd_saved_ci": [
+      -0.0005723781490193214,
+      0.008898588003457393
+     ],
+     "usd_saved_share": 0.024853721655346665,
+     "calls_saved_per_task": 1.2963263382546586,
+     "calls_saved_ci": [
+      0.33251412877366204,
+      2.1001500978511265
+     ],
+     "s_hat_rust": 3.046326338254658,
+     "directives": 67
+    },
+    "click": {
+     "sessions": 40,
+     "usd_saved_per_task": -0.0009254969108758564,
+     "usd_saved_ci": [
+      -0.0046853581148504206,
+      0.0028313588572649573
+     ],
+     "usd_saved_share": -0.0032527137172749946,
+     "calls_saved_per_task": 0.2966553116915501,
+     "calls_saved_ci": [
+      -0.13951563423994878,
+      0.7798219899117376
+     ],
+     "s_hat_rust": 1.69665531169155,
+     "directives": 65
+    },
+    "marshmallow": {
+     "sessions": 30,
+     "usd_saved_per_task": 0.003238547522649894,
+     "usd_saved_ci": [
+      0.0005956893802596774,
+      0.00598978096431078
+     ],
+     "usd_saved_share": 0.014281935766159128,
+     "calls_saved_per_task": 1.283769028315714,
+     "calls_saved_ci": [
+      0.857198637849898,
+      1.711934479629109
+     ],
+     "s_hat_rust": 3.017102361649047,
+     "directives": 53
+    },
+    "urfave-cli": {
+     "sessions": 16,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    },
+    "vue-core": {
+     "sessions": 32,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    }
+   }
+  },
+  "leave_task_out": {
+   "name": "leave-task-out",
+   "assumptions": {
+    "sat": "goal",
+    "p_follow": 1.0,
+    "misfire_calls": 2.0,
+    "hindsight": false
+   },
+   "summary": {
+    "sessions": 158,
+    "tasks": 38,
+    "calls": 5110,
+    "test_set_id": "6a795a362ccb",
+    "baseline": {
+     "usd_per_task": 0.26039232658227857,
+     "calls_per_task": 32.34177215189873
+    },
+    "calls_saved_per_task": 0.07870226246562186,
+    "calls_saved_ci": [
+     -0.4385162659075356,
+     0.6047033931115475
+    ],
+    "calls_saved_share": 0.002433455473496718,
+    "calls_saved_share_ci": [
+     -0.013952772840662103,
+     0.01848899716276796
+    ],
+    "usd_saved_per_task": -0.0015240291772383391,
+    "usd_saved_ci": [
+     -0.004871718725456154,
+     0.001726386882342203
+    ],
+    "usd_saved_share": -0.005852819079738818,
+    "usd_saved_share_ci": [
+     -0.018654277508115193,
+     0.006669217452162204
+    ],
+    "tokens_saved_per_task": 33245.696202531646,
+    "pass_rate_effect": {
+     "point": 0.0,
+     "worst_case": -0.0,
+     "worst_case_ci": [
+      -0.016835408386943633,
+      -0.0
+     ],
+     "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+    },
+    "s_hat_rust": 0.8635123890479005,
+    "s_hat_rust_ci95": [
+     0.39960066147745954,
+     1.3610517784203997
+    ],
+    "directives": 108,
+    "useful": 46,
+    "harmful": 0,
+    "superseded": 0,
+    "useful_rate": 0.42592592592592593,
+    "useful_lb90": 0.35041252821345326,
+    "harmful_rate": 0.0,
+    "per_10_calls": 0.21135029354207435,
+    "gates": {
+     "useful_lb90>=0.8": false,
+     "harmful<=1%": true,
+     "per_10_calls<=1": true
+    },
+    "custom_classes": 0,
+    "uncalibrated_classes": [
+     "command"
+    ]
+   },
+   "by_route": {
+    "ae:test-run|pytest|system": {
+     "directives": 44,
+     "useful": 41,
+     "harmful": 0,
+     "saved": 130.0,
+     "cost": 0.9347003695716019
+    },
+    "ae:repro|python|system": {
+     "directives": 64,
+     "useful": 5,
+     "harmful": 0,
+     "saved": 9.0,
+     "cost": 1.6303421608601485
+    }
+   },
+   "by_slice": {
+    "attrs": {
+     "sessions": 40,
+     "usd_saved_per_task": 0.012942380518796998,
+     "usd_saved_ci": [
+      0.008251992704260653,
+      0.017344671833333332
+     ],
+     "usd_saved_share": 0.06844066373697906,
+     "calls_saved_per_task": 2.6050971452155705,
+     "calls_saved_ci": [
+      1.7866460516223654,
+      3.3529105596807733
+     ],
+     "s_hat_rust": 2.9550971452155705,
+     "directives": 37
+    },
+    "click": {
+     "sessions": 40,
+     "usd_saved_per_task": -0.008156659410875858,
+     "usd_saved_ci": [
+      -0.012314650404955652,
+      -0.004243453239774941
+     ],
+     "usd_saved_share": -0.028667062678564576,
+     "calls_saved_per_task": -1.0258252217620725,
+     "calls_saved_ci": [
+      -1.483330528362957,
+      -0.5772888952332469
+     ],
+     "s_hat_rust": 0.37417477823792766,
+     "directives": 41
+    },
+    "marshmallow": {
+     "sessions": 30,
+     "usd_saved_per_task": -0.014407515144016775,
+     "usd_saved_ci": [
+      -0.017196328729469593,
+      -0.01165028762033152
+     ],
+     "usd_saved_share": -0.06353688015930255,
+     "calls_saved_per_task": -1.6911973156190558,
+     "calls_saved_ci": [
+      -2.0256711792249025,
+      -1.3219258221963885
+     ],
+     "s_hat_rust": 0.10880268438094429,
+     "directives": 30
+    },
+    "urfave-cli": {
+     "sessions": 16,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    },
+    "vue-core": {
+     "sessions": 32,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    }
+   }
+  },
+  "leave_task_out_strict": {
+   "name": "leave-task-out",
+   "assumptions": {
+    "sat": "strict",
+    "p_follow": 1.0,
+    "misfire_calls": 2.0,
+    "hindsight": false
+   },
+   "summary": {
+    "sessions": 158,
+    "tasks": 38,
+    "calls": 5110,
+    "test_set_id": "6a795a362ccb",
+    "baseline": {
+     "usd_per_task": 0.26039232658227857,
+     "calls_per_task": 32.34177215189873
+    },
+    "calls_saved_per_task": -0.9149686236103276,
+    "calls_saved_ci": [
+     -1.2362922129257294,
+     -0.5962147569671495
+    ],
+    "calls_saved_share": -0.028290614976601125,
+    "calls_saved_share_ci": [
+     -0.03855233987916843,
+     -0.018240375033364956
+    ],
+    "usd_saved_per_task": -0.007275328225378065,
+    "usd_saved_ci": [
+     -0.009768067534600699,
+     -0.004945658851589252
+    ],
+    "usd_saved_share": -0.02793987181138848,
+    "usd_saved_share_ci": [
+     -0.03832898003183683,
+     -0.018321293665434103
+    ],
+    "tokens_saved_per_task": 8769.95569620253,
+    "pass_rate_effect": {
+     "point": 0.0,
+     "worst_case": -0.0,
+     "worst_case_ci": [
+      -0.016835408386943633,
+      -0.0
+     ],
+     "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+    },
+    "s_hat_rust": 0.2242718827187865,
+    "s_hat_rust_ci95": [
+     0.09430225214617102,
+     0.3562846396299409
+    ],
+    "directives": 108,
+    "useful": 18,
+    "harmful": 0,
+    "superseded": 0,
+    "useful_rate": 0.16666666666666666,
+    "useful_lb90": 0.11598546869506465,
+    "harmful_rate": 0.0,
+    "per_10_calls": 0.21135029354207435,
+    "gates": {
+     "useful_lb90>=0.8": false,
+     "harmful<=1%": true,
+     "per_10_calls<=1": true
+    },
+    "custom_classes": 0,
+    "uncalibrated_classes": [
+     "command"
+    ]
+   },
+   "by_route": {
+    "ae:test-run|pytest|system": {
+     "directives": 44,
+     "useful": 13,
+     "harmful": 0,
+     "saved": 29.0,
+     "cost": 0.9347003695716019
+    },
+    "ae:repro|python|system": {
+     "directives": 64,
+     "useful": 5,
+     "harmful": 0,
+     "saved": 9.0,
+     "cost": 1.6303421608601485
+    }
+   },
+   "by_slice": {
+    "attrs": {
+     "sessions": 40,
+     "usd_saved_per_task": -0.006184693713203908,
+     "usd_saved_ci": [
+      -0.01055186976294187,
+      -0.0016567489345684495
+     ],
+     "usd_saved_share": -0.032705308125258375,
+     "calls_saved_per_task": -0.8699028547844299,
+     "calls_saved_ci": [
+      -1.57350911073019,
+      -0.11694765038016139
+     ],
+     "s_hat_rust": 0.5300971452155703,
+     "directives": 37
+    },
+    "click": {
+     "sessions": 40,
+     "usd_saved_per_task": -0.011747216419026865,
+     "usd_saved_ci": [
+      -0.017159051158757998,
+      -0.007090750496314593
+     ],
+     "usd_saved_share": -0.041286287978860844,
+     "calls_saved_per_task": -1.4758252217620722,
+     "calls_saved_ci": [
+      -2.0562851188021893,
+      -0.9223411284286371
+     ],
+     "s_hat_rust": 0.2741747782379277,
+     "directives": 41
+    },
+    "marshmallow": {
+     "sessions": 30,
+     "usd_saved_per_task": -0.014407515144016775,
+     "usd_saved_ci": [
+      -0.017196328729469593,
+      -0.01165028762033152
+     ],
+     "usd_saved_share": -0.06353688015930255,
+     "calls_saved_per_task": -1.6911973156190558,
+     "calls_saved_ci": [
+      -2.0256711792249025,
+      -1.3219258221963885
+     ],
+     "s_hat_rust": 0.10880268438094429,
+     "directives": 30
+    },
+    "urfave-cli": {
+     "sessions": 16,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    },
+    "vue-core": {
+     "sessions": 32,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    }
+   }
+  },
+  "leave_task_out_pfollow05": {
+   "name": "leave-task-out",
+   "assumptions": {
+    "sat": "goal",
+    "p_follow": 0.5,
+    "misfire_calls": 2.0,
+    "hindsight": false
+   },
+   "summary": {
+    "sessions": 158,
+    "tasks": 38,
+    "calls": 5110,
+    "test_set_id": "6a795a362ccb",
+    "baseline": {
+     "usd_per_task": 0.26039232658227857,
+     "calls_per_task": 32.34177215189873
+    },
+    "calls_saved_per_task": 0.031233908035242123,
+    "calls_saved_ci": [
+     -0.22862676645088362,
+     0.29414257932097754
+    ],
+    "calls_saved_share": 0.0009657451016767614,
+    "calls_saved_share_ci": [
+     -0.0072386521722216084,
+     0.008988822235560356
+    ],
+    "usd_saved_per_task": -0.0008753740822900564,
+    "usd_saved_ci": [
+     -0.0025595177477811108,
+     0.0007613547658606193
+    ],
+    "usd_saved_share": -0.0033617506851280287,
+    "usd_saved_share_ci": [
+     -0.009880052918802368,
+     0.00292380797605179
+    ],
+    "tokens_saved_per_task": 16031.23417721519,
+    "pass_rate_effect": {
+     "point": 0.0,
+     "worst_case": -0.0,
+     "worst_case_ci": [
+      -0.008417704193471817,
+      -0.0
+     ],
+     "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+    },
+    "s_hat_rust": 0.8635123890479005,
+    "s_hat_rust_ci95": [
+     0.39960066147745954,
+     1.3610517784203997
+    ],
+    "directives": 108,
+    "useful": 46,
+    "harmful": 0,
+    "superseded": 0,
+    "useful_rate": 0.42592592592592593,
+    "useful_lb90": 0.35041252821345326,
+    "harmful_rate": 0.0,
+    "per_10_calls": 0.21135029354207435,
+    "gates": {
+     "useful_lb90>=0.8": false,
+     "harmful<=1%": true,
+     "per_10_calls<=1": true
+    },
+    "custom_classes": 0,
+    "uncalibrated_classes": [
+     "command"
+    ]
+   },
+   "by_route": {
+    "ae:test-run|pytest|system": {
+     "directives": 44,
+     "useful": 41,
+     "harmful": 0,
+     "saved": 130.0,
+     "cost": 0.9347003695716019
+    },
+    "ae:repro|python|system": {
+     "directives": 64,
+     "useful": 5,
+     "harmful": 0,
+     "saved": 9.0,
+     "cost": 1.6303421608601485
+    }
+   },
+   "by_slice": {
+    "attrs": {
+     "sessions": 40,
+     "usd_saved_per_task": 0.0063309465093985,
+     "usd_saved_ci": [
+      0.003999570102130327,
+      0.008522930250000001
+     ],
+     "usd_saved_share": 0.03347870822969891,
+     "calls_saved_per_task": 1.2925971452155705,
+     "calls_saved_ci": [
+      0.8866460516223651,
+      1.665410559680773
+     ],
+     "s_hat_rust": 2.9550971452155705,
+     "directives": 37
+    },
+    "click": {
+     "sessions": 40,
+     "usd_saved_per_task": -0.004253264705437928,
+     "usd_saved_ci": [
+      -0.006359102915386097,
+      -0.002297162927719211
+     ],
+     "usd_saved_share": -0.014948350759471393,
+     "calls_saved_per_task": -0.5258252217620722,
+     "calls_saved_ci": [
+      -0.7583305283629567,
+      -0.3022888952332468
+     ],
+     "s_hat_rust": 0.37417477823792766,
+     "directives": 41
+    },
+    "marshmallow": {
+     "sessions": 30,
+     "usd_saved_per_task": -0.0073805459053417205,
+     "usd_saved_ci": [
+      -0.00878270269806813,
+      -0.005971143810165761
+     ],
+     "usd_saved_share": -0.03254807341935507,
+     "calls_saved_per_task": -0.8578639822857225,
+     "calls_saved_ci": [
+      -1.0256711792249023,
+      -0.6719258221963885
+     ],
+     "s_hat_rust": 0.10880268438094429,
+     "directives": 30
+    },
+    "urfave-cli": {
+     "sessions": 16,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    },
+    "vue-core": {
+     "sessions": 32,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    }
+   }
+  }
+ },
+ "rrr-first": {
+  "split": {
+   "name": "split",
+   "assumptions": {
+    "sat": "goal",
+    "p_follow": 1.0,
+    "misfire_calls": 2.0,
+    "hindsight": false
+   },
+   "summary": {
+    "sessions": 158,
+    "tasks": 38,
+    "calls": 5110,
+    "test_set_id": "6a795a362ccb",
+    "baseline": {
+     "usd_per_task": 0.26039232658227857,
+     "calls_per_task": 32.34177215189873
+    },
+    "calls_saved_per_task": -0.07180249893272457,
+    "calls_saved_ci": [
+     -0.2567315988905265,
+     0.10962375987026128
+    ],
+    "calls_saved_share": -0.002220116405356258,
+    "calls_saved_share_ci": [
+     -0.00790886805751815,
+     0.003419792811346109
+    ],
+    "usd_saved_per_task": -0.0009741568469232272,
+    "usd_saved_ci": [
+     -0.0027155793196696155,
+     0.0007360263283984347
+    ],
+    "usd_saved_share": -0.003741111958671387,
+    "usd_saved_share_ci": [
+     -0.010288758478397596,
+     0.0027942678476416535
+    ],
+    "tokens_saved_per_task": 12381.196202531646,
+    "pass_rate_effect": {
+     "point": 0.0,
+     "worst_case": -0.0,
+     "worst_case_ci": [
+      -0.016835408386943633,
+      -0.0
+     ],
+     "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+    },
+    "s_hat_rust": 0.28262788081411094,
+    "s_hat_rust_ci95": [
+     0.14800881300678095,
+     0.41838259738143163
+    ],
+    "directives": 70,
+    "useful": 42,
+    "harmful": 0,
+    "superseded": 0,
+    "useful_rate": 0.6,
+    "useful_lb90": 0.5017017636932738,
+    "harmful_rate": 0.0,
+    "per_10_calls": 0.136986301369863,
+    "gates": {
+     "useful_lb90>=0.8": false,
+     "harmful<=1%": true,
+     "per_10_calls<=1": true
+    },
+    "custom_classes": 0,
+    "uncalibrated_classes": [
+     "command"
+    ]
+   },
+   "by_route": {
+    "ae:c7": {
+     "directives": 70,
+     "useful": 42,
+     "harmful": 0,
+     "saved": 46.0,
+     "cost": 1.3447948313704754
+    }
+   },
+   "by_slice": {
+    "attrs": {
+     "sessions": 40,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    },
+    "click": {
+     "sessions": 40,
+     "usd_saved_per_task": -0.0065043667980593575,
+     "usd_saved_ci": [
+      -0.01159268520057796,
+      -0.0015478226347065195
+     ],
+     "usd_saved_share": -0.022859982413354185,
+     "calls_saved_per_task": -0.5958661913809852,
+     "calls_saved_ci": [
+      -1.1197528994041233,
+      -0.047885407421998184
+     ],
+     "s_hat_rust": 0.5041338086190148,
+     "directives": 40
+    },
+    "marshmallow": {
+     "sessions": 30,
+     "usd_saved_per_task": 0.0035419296702834807,
+     "usd_saved_ci": [
+      -0.001328285122185605,
+      0.007333830444444444
+     ],
+     "usd_saved_share": 0.015619845528112216,
+     "calls_saved_per_task": 0.41632842746229765,
+     "calls_saved_ci": [
+      -0.014478460316282896,
+      0.8117391203893002
+     ],
+     "s_hat_rust": 0.8163284274622977,
+     "directives": 30
+    },
+    "urfave-cli": {
+     "sessions": 16,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    },
+    "vue-core": {
+     "sessions": 32,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    }
+   }
+  },
+  "loro": {
+   "name": "loro",
+   "assumptions": {
+    "sat": "goal",
+    "p_follow": 1.0,
+    "misfire_calls": 2.0,
+    "hindsight": false
+   },
+   "summary": {
+    "sessions": 158,
+    "tasks": 38,
+    "calls": 5110,
+    "test_set_id": "6a795a362ccb",
+    "baseline": {
+     "usd_per_task": 0.26039232658227857,
+     "calls_per_task": 32.34177215189873
+    },
+    "calls_saved_per_task": 1.405673462087788,
+    "calls_saved_ci": [
+     0.6083366334928477,
+     2.2350371455723996
+    ],
+    "calls_saved_share": 0.043463093348311214,
+    "calls_saved_share_ci": [
+     0.01844426683223908,
+     0.07039141973767832
+    ],
+    "usd_saved_per_task": 0.0070019603922709134,
+    "usd_saved_ci": [
+     0.0016562961262262157,
+     0.012696198274912
+    ],
+    "usd_saved_share": 0.02689004120886966,
+    "usd_saved_share_ci": [
+     0.006164005424755953,
+     0.05083373152949445
+    ],
+    "tokens_saved_per_task": 87126.12658227848,
+    "pass_rate_effect": {
+     "point": 0.0,
+     "worst_case": -0.0,
+     "worst_case_ci": [
+      -0.016835408386943633,
+      -0.0
+     ],
+     "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+    },
+    "s_hat_rust": 2.1145342215814584,
+    "s_hat_rust_ci95": [
+     1.335195082863547,
+     2.9344056518164403
+    ],
+    "directives": 137,
+    "useful": 81,
+    "harmful": 0,
+    "superseded": 0,
+    "useful_rate": 0.5912408759124088,
+    "useful_lb90": 0.5210384393872861,
+    "harmful_rate": 0.0,
+    "per_10_calls": 0.26810176125244617,
+    "gates": {
+     "useful_lb90>=0.8": false,
+     "harmful<=1%": true,
+     "per_10_calls<=1": true
+    },
+    "custom_classes": 0,
+    "uncalibrated_classes": [
+     "command"
+    ]
+   },
+   "by_route": {
+    "ae:c10": {
+     "directives": 56,
+     "useful": 32,
+     "harmful": 0,
+     "saved": 159.0,
+     "cost": 1.297822961441169
+    },
+    "ae:c5": {
+     "directives": 40,
+     "useful": 19,
+     "harmful": 0,
+     "saved": 22.0,
+     "cost": 0.8424825734932518
+    },
+    "ae:c9": {
+     "directives": 30,
+     "useful": 30,
+     "harmful": 0,
+     "saved": 156.0,
+     "cost": 0.651197325881184
+    },
+    "ae:c19": {
+     "directives": 11,
+     "useful": 0,
+     "harmful": 0,
+     "saved": 0.0,
+     "cost": 0.11209012931401413
+    }
+   },
+   "by_slice": {
+    "attrs": {
+     "sessions": 40,
+     "usd_saved_per_task": 0.018735083844129558,
+     "usd_saved_ci": [
+      0.009445748021592445,
+      0.026302953333333334
+     ],
+     "usd_saved_share": 0.09907308563505017,
+     "calls_saved_per_task": 3.548635371355328,
+     "calls_saved_ci": [
+      2.0285426115947924,
+      4.793992255247711
+     ],
+     "s_hat_rust": 3.9486353713553277,
+     "directives": 40
+    },
+    "click": {
+     "sessions": 40,
+     "usd_saved_per_task": -0.005855670964726026,
+     "usd_saved_ci": [
+      -0.011021815311882312,
+      -0.0010458064193831363
+     ],
+     "usd_saved_share": -0.020580102480069893,
+     "calls_saved_per_task": -0.5210620643373313,
+     "calls_saved_ci": [
+      -1.0442458381518602,
+      0.004448587464705178
+     ],
+     "s_hat_rust": 0.5289379356626686,
+     "directives": 40
+    },
+    "marshmallow": {
+     "sessions": 30,
+     "usd_saved_per_task": 0.03492867333333334,
+     "usd_saved_ci": [
+      0.029798373333333336,
+      0.03960261
+     ],
+     "usd_saved_share": 0.15403481513084175,
+     "calls_saved_per_task": 5.178293422470627,
+     "calls_saved_ci": [
+      4.546176654761308,
+      5.778690363568756
+     ],
+     "s_hat_rust": 5.178293422470627,
+     "directives": 30
+    },
+    "urfave-cli": {
+     "sessions": 16,
+     "usd_saved_per_task": -0.01075634317466267,
+     "usd_saved_ci": [
+      -0.013946033174662672,
+      -0.007407557083333334
+     ],
+     "usd_saved_share": -0.04800681952989839,
+     "calls_saved_per_task": -1.3820056330821258,
+     "calls_saved_ci": [
+      -1.7592710330414425,
+      -1.0035358911869598
+     ],
+     "s_hat_rust": -0.007005633082125883,
+     "directives": 11
+    },
+    "vue-core": {
+     "sessions": 32,
+     "usd_saved_per_task": -0.008894546325085443,
+     "usd_saved_ci": [
+      -0.0113891747363863,
+      -0.006049124773107328
+     ],
+     "usd_saved_share": -0.02410257265260852,
+     "calls_saved_per_task": -1.0076011817391965,
+     "calls_saved_ci": [
+      -1.2629755888283851,
+      -0.6922397736654496
+     ],
+     "s_hat_rust": -0.007601181739196433,
+     "directives": 16
+    }
+   }
+  },
+  "leave_task_out": {
+   "name": "leave-task-out",
+   "assumptions": {
+    "sat": "goal",
+    "p_follow": 1.0,
+    "misfire_calls": 2.0,
+    "hindsight": false
+   },
+   "summary": {
+    "sessions": 158,
+    "tasks": 38,
+    "calls": 5110,
+    "test_set_id": "6a795a362ccb",
+    "baseline": {
+     "usd_per_task": 0.26039232658227857,
+     "calls_per_task": 32.34177215189873
+    },
+    "calls_saved_per_task": 0.6493262902950119,
+    "calls_saved_ci": [
+     0.28235572809084236,
+     1.0412061012651794
+    ],
+    "calls_saved_share": 0.020077016412252815,
+    "calls_saved_share_ci": [
+     0.008798935526217327,
+     0.03178568139088816
+    ],
+    "usd_saved_per_task": 0.003993792832814996,
+    "usd_saved_ci": [
+     0.0016167937248348038,
+     0.006517239060363931
+    ],
+    "usd_saved_share": 0.015337598020781317,
+    "usd_saved_share_ci": [
+     0.006349386736080561,
+     0.024565689443534617
+    ],
+    "tokens_saved_per_task": 41857.46835443038,
+    "pass_rate_effect": {
+     "point": 0.0,
+     "worst_case": -0.0,
+     "worst_case_ci": [
+      -0.016835408386943633,
+      -0.0
+     ],
+     "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+    },
+    "s_hat_rust": 0.9784402143456445,
+    "s_hat_rust_ci95": [
+     0.6254254159768614,
+     1.3492536465091678
+    ],
+    "directives": 114,
+    "useful": 88,
+    "harmful": 0,
+    "superseded": 0,
+    "useful_rate": 0.7719298245614035,
+    "useful_lb90": 0.7014296434918282,
+    "harmful_rate": 0.0,
+    "per_10_calls": 0.22309197651663404,
+    "gates": {
+     "useful_lb90>=0.8": false,
+     "harmful<=1%": true,
+     "per_10_calls<=1": true
+    },
+    "custom_classes": 0,
+    "uncalibrated_classes": [
+     "command"
+    ]
+   },
+   "by_route": {
+    "ae:c7": {
+     "directives": 114,
+     "useful": 88,
+     "harmful": 0,
+     "saved": 157.0,
+     "cost": 2.4064461333881155
+    }
+   },
+   "by_slice": {
+    "attrs": {
+     "sessions": 40,
+     "usd_saved_per_task": -0.00243457139642671,
+     "usd_saved_ci": [
+      -0.00603906281889679,
+      0.000837716903726708
+     ],
+     "usd_saved_share": -0.012874268535414365,
+     "calls_saved_per_task": -0.2457162836549634,
+     "calls_saved_ci": [
+      -0.8167863017519457,
+      0.2758409509649343
+     ],
+     "s_hat_rust": 0.6542837163450368,
+     "directives": 40
+    },
+    "click": {
+     "sessions": 40,
+     "usd_saved_per_task": 0.015238103333333336,
+     "usd_saved_ci": [
+      0.0131637475,
+      0.017581698333333333
+     ],
+     "usd_saved_share": 0.053555216830146385,
+     "calls_saved_per_task": 2.448758422986202,
+     "calls_saved_ci": [
+      2.023448311522,
+      2.874696059131459
+     ],
+     "s_hat_rust": 2.548758422986202,
+     "directives": 40
+    },
+    "marshmallow": {
+     "sessions": 30,
+     "usd_saved_per_task": 0.0035419296702834807,
+     "usd_saved_ci": [
+      -0.001328285122185605,
+      0.007333830444444444
+     ],
+     "usd_saved_share": 0.015619845528112216,
+     "calls_saved_per_task": 0.41632842746229765,
+     "calls_saved_ci": [
+      -0.014478460316282896,
+      0.8117391203893002
+     ],
+     "s_hat_rust": 0.8163284274622977,
+     "directives": 30
+    },
+    "urfave-cli": {
+     "sessions": 16,
+     "usd_saved_per_task": 0.00078875625,
+     "usd_saved_ci": [
+      -3.4124999999999996e-05,
+      0.0024003937500000003
+     ],
+     "usd_saved_share": 0.003520311534502238,
+     "calls_saved_per_task": 0.1238759668433381,
+     "calls_saved_ci": [
+      -0.0004134666695438251,
+      0.37204952637789707
+     ],
+     "s_hat_rust": 0.1238759668433381,
+     "directives": 4
+    },
+    "vue-core": {
+     "sessions": 32,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    }
+   }
+  },
+  "leave_task_out_strict": {
+   "name": "leave-task-out",
+   "assumptions": {
+    "sat": "strict",
+    "p_follow": 1.0,
+    "misfire_calls": 2.0,
+    "hindsight": false
+   },
+   "summary": {
+    "sessions": 158,
+    "tasks": 38,
+    "calls": 5110,
+    "test_set_id": "6a795a362ccb",
+    "baseline": {
+     "usd_per_task": 0.26039232658227857,
+     "calls_per_task": 32.34177215189873
+    },
+    "calls_saved_per_task": 0.08603515105450557,
+    "calls_saved_ci": [
+     -0.20825129410680063,
+     0.41590611585651166
+    ],
+    "calls_saved_share": 0.002660186666655946,
+    "calls_saved_share_ci": [
+     -0.006724938854814357,
+     0.012648097057534717
+    ],
+    "usd_saved_per_task": -0.00031154544318911034,
+    "usd_saved_ci": [
+     -0.0026836083775827703,
+     0.0021055386185596502
+    ],
+    "usd_saved_share": -0.0011964463288078853,
+    "usd_saved_share_ci": [
+     -0.010160378320863443,
+     0.008104055658309123
+    ],
+    "tokens_saved_per_task": 28695.145569620254,
+    "pass_rate_effect": {
+     "point": 0.0,
+     "worst_case": -0.0,
+     "worst_case_ci": [
+      -0.016835408386943633,
+      -0.0
+     ],
+     "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+    },
+    "s_hat_rust": 0.680971859915265,
+    "s_hat_rust_ci95": [
+     0.4110287719140963,
+     0.9805738726159451
+    ],
+    "directives": 114,
+    "useful": 67,
+    "harmful": 0,
+    "superseded": 0,
+    "useful_rate": 0.5877192982456141,
+    "useful_lb90": 0.5107096413333831,
+    "harmful_rate": 0.0,
+    "per_10_calls": 0.22309197651663404,
+    "gates": {
+     "useful_lb90>=0.8": false,
+     "harmful<=1%": true,
+     "per_10_calls<=1": true
+    },
+    "custom_classes": 0,
+    "uncalibrated_classes": [
+     "command"
+    ]
+   },
+   "by_route": {
+    "ae:c7": {
+     "directives": 114,
+     "useful": 67,
+     "harmful": 0,
+     "saved": 110.0,
+     "cost": 2.4064461333881155
+    }
+   },
+   "by_slice": {
+    "attrs": {
+     "sessions": 40,
+     "usd_saved_per_task": -0.00243457139642671,
+     "usd_saved_ci": [
+      -0.00603906281889679,
+      0.000837716903726708
+     ],
+     "usd_saved_share": -0.012874268535414365,
+     "calls_saved_per_task": -0.2457162836549634,
+     "calls_saved_ci": [
+      -0.8167863017519457,
+      0.2758409509649343
+     ],
+     "s_hat_rust": 0.6542837163450368,
+     "directives": 40
+    },
+    "click": {
+     "sessions": 40,
+     "usd_saved_per_task": -0.0017679828568828878,
+     "usd_saved_ci": [
+      -0.00925194911182286,
+      0.00595614638743088
+     ],
+     "usd_saved_share": -0.006213680481167369,
+     "calls_saved_per_task": 0.2237584229862019,
+     "calls_saved_ci": [
+      -0.7205649799376331,
+      1.2462976060974345
+     ],
+     "s_hat_rust": 1.3737584229862019,
+     "directives": 40
+    },
+    "marshmallow": {
+     "sessions": 30,
+     "usd_saved_per_task": 0.0035419296702834807,
+     "usd_saved_ci": [
+      -0.001328285122185605,
+      0.007333830444444444
+     ],
+     "usd_saved_share": 0.015619845528112216,
+     "calls_saved_per_task": 0.41632842746229765,
+     "calls_saved_ci": [
+      -0.014478460316282896,
+      0.8117391203893002
+     ],
+     "s_hat_rust": 0.8163284274622977,
+     "directives": 30
+    },
+    "urfave-cli": {
+     "sessions": 16,
+     "usd_saved_per_task": 0.00078875625,
+     "usd_saved_ci": [
+      -3.4124999999999996e-05,
+      0.0024003937500000003
+     ],
+     "usd_saved_share": 0.003520311534502238,
+     "calls_saved_per_task": 0.1238759668433381,
+     "calls_saved_ci": [
+      -0.0004134666695438251,
+      0.37204952637789707
+     ],
+     "s_hat_rust": 0.1238759668433381,
+     "directives": 4
+    },
+    "vue-core": {
+     "sessions": 32,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    }
+   }
+  },
+  "leave_task_out_pfollow05": {
+   "name": "leave-task-out",
+   "assumptions": {
+    "sat": "goal",
+    "p_follow": 0.5,
+    "misfire_calls": 2.0,
+    "hindsight": false
+   },
+   "summary": {
+    "sessions": 158,
+    "tasks": 38,
+    "calls": 5110,
+    "test_set_id": "6a795a362ccb",
+    "baseline": {
+     "usd_per_task": 0.26039232658227857,
+     "calls_per_task": 32.34177215189873
+    },
+    "calls_saved_per_task": 0.3170478092823538,
+    "calls_saved_ci": [
+     0.13489685622697775,
+     0.5126711576648335
+    ],
+    "calls_saved_share": 0.00980304380951309,
+    "calls_saved_share_ci": [
+     0.004207950551259068,
+     0.01561164053277687
+    ],
+    "usd_saved_per_task": 0.001894193568306233,
+    "usd_saved_ci": [
+     0.000709372440020346,
+     0.003146948887765006
+    ],
+    "usd_saved_share": 0.007274383209244483,
+    "usd_saved_share_ci": [
+     0.002816523807308454,
+     0.011868920954051725
+    ],
+    "tokens_saved_per_task": 20372.79746835443,
+    "pass_rate_effect": {
+     "point": 0.0,
+     "worst_case": -0.0,
+     "worst_case_ci": [
+      -0.008417704193471817,
+      -0.0
+     ],
+     "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+    },
+    "s_hat_rust": 0.9784402143456445,
+    "s_hat_rust_ci95": [
+     0.6254254159768614,
+     1.3492536465091678
+    ],
+    "directives": 114,
+    "useful": 88,
+    "harmful": 0,
+    "superseded": 0,
+    "useful_rate": 0.7719298245614035,
+    "useful_lb90": 0.7014296434918282,
+    "harmful_rate": 0.0,
+    "per_10_calls": 0.22309197651663404,
+    "gates": {
+     "useful_lb90>=0.8": false,
+     "harmful<=1%": true,
+     "per_10_calls<=1": true
+    },
+    "custom_classes": 0,
+    "uncalibrated_classes": [
+     "command"
+    ]
+   },
+   "by_route": {
+    "ae:c7": {
+     "directives": 114,
+     "useful": 88,
+     "harmful": 0,
+     "saved": 157.0,
+     "cost": 2.4064461333881155
+    }
+   },
+   "by_slice": {
+    "attrs": {
+     "sessions": 40,
+     "usd_saved_per_task": -0.0013408444482133552,
+     "usd_saved_ci": [
+      -0.003125881453055716,
+      0.0002861315795739351
+     ],
+     "usd_saved_share": -0.0070905258789513165,
+     "calls_saved_per_task": -0.1332162836549634,
+     "calls_saved_ci": [
+      -0.4167863017519456,
+      0.12584095096493417
+     ],
+     "s_hat_rust": 0.6542837163450368,
+     "directives": 40
+    },
+    "click": {
+     "sessions": 40,
+     "usd_saved_per_task": 0.007441202916666669,
+     "usd_saved_ci": [
+      0.006389773749999999,
+      0.00861261875
+     ],
+     "usd_saved_share": 0.026152548447906196,
+     "calls_saved_per_task": 1.211258422986202,
+     "calls_saved_ci": [
+      0.9984483115219998,
+      1.424696059131459
+     ],
+     "s_hat_rust": 2.548758422986202,
+     "directives": 40
+    },
+    "marshmallow": {
+     "sessions": 30,
+     "usd_saved_per_task": 0.0016423398351417399,
+     "usd_saved_ci": [
+      -0.0007875175610928025,
+      0.0035276852222222224
+     ],
+     "usd_saved_share": 0.0072426888497551965,
+     "calls_saved_per_task": 0.19966176079563105,
+     "calls_saved_ci": [
+      -0.01447846031628297,
+      0.3950724537226336
+     ],
+     "s_hat_rust": 0.8163284274622977,
+     "directives": 30
+    },
+    "urfave-cli": {
+     "sessions": 16,
+     "usd_saved_per_task": 0.000374878125,
+     "usd_saved_ci": [
+      -3.4124999999999996e-05,
+      0.001158759375
+     ],
+     "usd_saved_share": 0.0016731249831238376,
+     "calls_saved_per_task": 0.06137596684333809,
+     "calls_saved_ci": [
+      -0.0004134666695438251,
+      0.1845495263778971
+     ],
+     "s_hat_rust": 0.1238759668433381,
+     "directives": 4
+    },
+    "vue-core": {
+     "sessions": 32,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    }
+   }
+  }
+ },
+ "hybrid-first": {
+  "split": {
+   "name": "split",
+   "assumptions": {
+    "sat": "goal",
+    "p_follow": 1.0,
+    "misfire_calls": 2.0,
+    "hindsight": false
+   },
+   "summary": {
+    "sessions": 158,
+    "tasks": 38,
+    "calls": 5110,
+    "test_set_id": "6a795a362ccb",
+    "baseline": {
+     "usd_per_task": 0.26039232658227857,
+     "calls_per_task": 32.34177215189873
+    },
+    "calls_saved_per_task": 0.01894624579570057,
+    "calls_saved_ci": [
+     -0.1810461169775957,
+     0.24629772471081285
+    ],
+    "calls_saved_share": 0.0005858134707868273,
+    "calls_saved_share_ci": [
+     -0.005726150167127508,
+     0.007624217710614155
+    ],
+    "usd_saved_per_task": -0.0004022590653621178,
+    "usd_saved_ci": [
+     -0.0017435021403434867,
+     0.0010698528338473827
+    ],
+    "usd_saved_share": -0.0015448191989444525,
+    "usd_saved_share_ci": [
+     -0.006793344844731512,
+     0.004021171411672381
+    ],
+    "tokens_saved_per_task": 13885.54430379747,
+    "pass_rate_effect": {
+     "point": 0.0,
+     "worst_case": -0.0,
+     "worst_case_ci": [
+      -0.016835408386943633,
+      -0.0
+     ],
+     "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+    },
+    "s_hat_rust": 0.34806016984633353,
+    "s_hat_rust_ci95": [
+     0.1750067455136778,
+     0.5514033513687605
+    ],
+    "directives": 63,
+    "useful": 37,
+    "harmful": 0,
+    "superseded": 0,
+    "useful_rate": 0.5873015873015873,
+    "useful_lb90": 0.4837403499789106,
+    "harmful_rate": 0.0,
+    "per_10_calls": 0.1232876712328767,
+    "gates": {
+     "useful_lb90>=0.8": false,
+     "harmful<=1%": true,
+     "per_10_calls<=1": true
+    },
+    "custom_classes": 0,
+    "uncalibrated_classes": [
+     "command"
+    ]
+   },
+   "by_route": {
+    "ae:c8": {
+     "directives": 36,
+     "useful": 16,
+     "harmful": 0,
+     "saved": 19.0,
+     "cost": 0.7007133105983445
+    },
+    "ae:c4": {
+     "directives": 27,
+     "useful": 21,
+     "harmful": 0,
+     "saved": 37.0,
+     "cost": 0.30577985368096894
+    }
+   },
+   "by_slice": {
+    "attrs": {
+     "sessions": 40,
+     "usd_saved_per_task": -0.003812256695951758,
+     "usd_saved_ci": [
+      -0.006750182185426802,
+      -0.0010045666514111365
+     ],
+     "usd_saved_share": -0.02015961269472343,
+     "calls_saved_per_task": -0.5425178327649586,
+     "calls_saved_ci": [
+      -0.9901013450772898,
+      -0.09807916461945063
+     ],
+     "s_hat_rust": 0.4574821672350414,
+     "directives": 36
+    },
+    "click": {
+     "sessions": 40,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    },
+    "marshmallow": {
+     "sessions": 30,
+     "usd_saved_per_task": 0.0029644445170285234,
+     "usd_saved_ci": [
+      -0.0025649642992762872,
+      0.007858548666666666
+     ],
+     "usd_saved_share": 0.013073146488800489,
+     "calls_saved_per_task": 0.8231406715439676,
+     "calls_saved_ci": [
+      0.09141614511200977,
+      1.488738823798123
+     ],
+     "s_hat_rust": 1.2231406715439677,
+     "directives": 27
+    },
+    "urfave-cli": {
+     "sessions": 16,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    },
+    "vue-core": {
+     "sessions": 32,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    }
+   }
+  },
+  "loro": {
+   "name": "loro",
+   "assumptions": {
+    "sat": "goal",
+    "p_follow": 1.0,
+    "misfire_calls": 2.0,
+    "hindsight": false
+   },
+   "summary": {
+    "sessions": 158,
+    "tasks": 38,
+    "calls": 5110,
+    "test_set_id": "6a795a362ccb",
+    "baseline": {
+     "usd_per_task": 0.26039232658227857,
+     "calls_per_task": 32.34177215189873
+    },
+    "calls_saved_per_task": 1.3996194377495126,
+    "calls_saved_ci": [
+     0.6196365608662773,
+     2.188498166757694
+    ],
+    "calls_saved_share": 0.04327590433746049,
+    "calls_saved_share_ci": [
+     0.018834724237027218,
+     0.0691107368327639
+    ],
+    "usd_saved_per_task": 0.007567524427347414,
+    "usd_saved_ci": [
+     0.002227562478510573,
+     0.012996027628621074
+    ],
+    "usd_saved_share": 0.029062010108643663,
+    "usd_saved_share_ci": [
+     0.008259077171341864,
+     0.051571764527222334
+    ],
+    "tokens_saved_per_task": 84287.15189873418,
+    "pass_rate_effect": {
+     "point": 0.0,
+     "worst_case": -0.0189873417721519,
+     "worst_case_ci": [
+      -0.04655763557201891,
+      -0.007613137053395218
+     ],
+     "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+    },
+    "s_hat_rust": 2.032530830154577,
+    "s_hat_rust_ci95": [
+     1.2725313129720206,
+     2.8535687338050195
+    ],
+    "directives": 141,
+    "useful": 91,
+    "harmful": 3,
+    "superseded": 40,
+    "useful_rate": 0.6453900709219859,
+    "useful_lb90": 0.5769544793606827,
+    "harmful_rate": 0.02127659574468085,
+    "per_10_calls": 0.2759295499021526,
+    "gates": {
+     "useful_lb90>=0.8": false,
+     "harmful<=1%": false,
+     "per_10_calls<=1": true
+    },
+    "custom_classes": 0,
+    "uncalibrated_classes": [
+     "command"
+    ]
+   },
+   "by_route": {
+    "ae:c10": {
+     "directives": 14,
+     "useful": 13,
+     "harmful": 0,
+     "saved": 39.0,
+     "cost": 0.2287588794750194
+    },
+    "ae:c9": {
+     "directives": 37,
+     "useful": 29,
+     "harmful": 0,
+     "saved": 107.0,
+     "cost": 0.776508837044199
+    },
+    "ae:c29": {
+     "directives": 40,
+     "useful": 19,
+     "harmful": 0,
+     "saved": 22.0,
+     "cost": 0.8435950207182258
+    },
+    "ae:c8": {
+     "directives": 30,
+     "useful": 30,
+     "harmful": 0,
+     "saved": 156.0,
+     "cost": 0.6640010863928189
+    },
+    "ae:c7": {
+     "directives": 10,
+     "useful": 0,
+     "harmful": 0,
+     "saved": 0.0,
+     "cost": 0.10585255084098655
+    },
+    "ae:c5": {
+     "directives": 10,
+     "useful": 0,
+     "harmful": 3,
+     "saved": 0.0,
+     "cost": 0.2414124611056516
+    }
+   },
+   "by_slice": {
+    "attrs": {
+     "sessions": 40,
+     "usd_saved_per_task": 0.017430799677462888,
+     "usd_saved_ci": [
+      0.008349807532388665,
+      0.02521455216666667
+     ],
+     "usd_saved_share": 0.09217589435415309,
+     "calls_saved_per_task": 3.175066707493711,
+     "calls_saved_ci": [
+      1.6571458682947715,
+      4.473110699899999
+     ],
+     "s_hat_rust": 3.6250667074937097,
+     "directives": 50
+    },
+    "click": {
+     "sessions": 40,
+     "usd_saved_per_task": -0.005855828464726026,
+     "usd_saved_ci": [
+      -0.011022130311882311,
+      -0.0010462789193831363
+     ],
+     "usd_saved_share": -0.02058065602314978,
+     "calls_saved_per_task": -0.5210898755179555,
+     "calls_saved_ci": [
+      -1.0442458381518602,
+      0.004448587464705178
+     ],
+     "s_hat_rust": 0.5289101244820443,
+     "directives": 40
+    },
+    "marshmallow": {
+     "sessions": 30,
+     "usd_saved_per_task": 0.03491228666666667,
+     "usd_saved_ci": [
+      0.02978166,
+      0.039585436666666675
+     ],
+     "usd_saved_share": 0.15396255022840694,
+     "calls_saved_per_task": 5.177602096577983,
+     "calls_saved_ci": [
+      4.545251209133676,
+      5.778157622657974
+     ],
+     "s_hat_rust": 5.177602096577983,
+     "directives": 31
+    },
+    "urfave-cli": {
+     "sessions": 16,
+     "usd_saved_per_task": -0.009482415257996004,
+     "usd_saved_ci": [
+      -0.012201095515992006,
+      -0.0066236725
+     ],
+     "usd_saved_share": -0.04232113001660949,
+     "calls_saved_per_task": -1.2566157844275616,
+     "calls_saved_ci": [
+      -1.6338811843868783,
+      -0.8789184202716831
+     ],
+     "s_hat_rust": -0.006615784427561659,
+     "directives": 10
+    },
+    "vue-core": {
+     "sessions": 32,
+     "usd_saved_per_task": -0.005093123276895207,
+     "usd_saved_ci": [
+      -0.0084122125317029,
+      -0.0023929214903846154
+     ],
+     "usd_saved_share": -0.013801420479855568,
+     "calls_saved_per_task": -0.6325441394095516,
+     "calls_saved_ci": [
+      -1.0756064608704017,
+      -0.25388301569428895
+     ],
+     "s_hat_rust": -0.007544139409551612,
+     "directives": 10
+    }
+   }
+  },
+  "leave_task_out": {
+   "name": "leave-task-out",
+   "assumptions": {
+    "sat": "goal",
+    "p_follow": 1.0,
+    "misfire_calls": 2.0,
+    "hindsight": false
+   },
+   "summary": {
+    "sessions": 158,
+    "tasks": 38,
+    "calls": 5110,
+    "test_set_id": "6a795a362ccb",
+    "baseline": {
+     "usd_per_task": 0.26039232658227857,
+     "calls_per_task": 32.34177215189873
+    },
+    "calls_saved_per_task": -0.367255987209249,
+    "calls_saved_ci": [
+     -0.7831257891235028,
+     0.07046936870690033
+    ],
+    "calls_saved_share": -0.011355468880442532,
+    "calls_saved_share_ci": [
+     -0.02463597436431981,
+     0.002184887603926862
+    ],
+    "usd_saved_per_task": -0.004045537892722267,
+    "usd_saved_ci": [
+     -0.007320939224614407,
+     -0.0006495213549048087
+    ],
+    "usd_saved_share": -0.015536317624336611,
+    "usd_saved_share_ci": [
+     -0.02811250616177505,
+     -0.0024788108201797853
+    ],
+    "tokens_saved_per_task": 29119.436708860758,
+    "pass_rate_effect": {
+     "point": 0.0,
+     "worst_case": -0.0,
+     "worst_case_ci": [
+      -0.016835408386943633,
+      -0.0
+     ],
+     "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+    },
+    "s_hat_rust": 0.7213516077274602,
+    "s_hat_rust_ci95": [
+     0.43544479325479496,
+     1.0316747648501543
+    ],
+    "directives": 180,
+    "useful": 94,
+    "harmful": 0,
+    "superseded": 5,
+    "useful_rate": 0.5222222222222223,
+    "useful_lb90": 0.4611078728834033,
+    "harmful_rate": 0.0,
+    "per_10_calls": 0.3522504892367906,
+    "gates": {
+     "useful_lb90>=0.8": false,
+     "harmful<=1%": true,
+     "per_10_calls<=1": true
+    },
+    "custom_classes": 0,
+    "uncalibrated_classes": [
+     "command"
+    ]
+   },
+   "by_route": {
+    "ae:c4": {
+     "directives": 81,
+     "useful": 40,
+     "harmful": 0,
+     "saved": 56.0,
+     "cost": 1.0780663771536394
+    },
+    "ae:c8": {
+     "directives": 99,
+     "useful": 54,
+     "harmful": 0,
+     "saved": 61.0,
+     "cost": 1.9483796019076813
+    }
+   },
+   "by_slice": {
+    "attrs": {
+     "sessions": 40,
+     "usd_saved_per_task": -0.006923427804157918,
+     "usd_saved_ci": [
+      -0.012438489877488084,
+      -0.0018303209132804876
+     ],
+     "usd_saved_share": -0.036611811371442156,
+     "calls_saved_per_task": -0.9046082506084913,
+     "calls_saved_ci": [
+      -1.7793197126444618,
+      -0.08321363681091548
+     ],
+     "s_hat_rust": 0.9453917493915085,
+     "directives": 67
+    },
+    "click": {
+     "sessions": 40,
+     "usd_saved_per_task": -0.013804890012579039,
+     "usd_saved_ci": [
+      -0.019702335008851476,
+      -0.007912981923741352
+     ],
+     "usd_saved_share": -0.0485181037145694,
+     "calls_saved_per_task": -1.4509306915894777,
+     "calls_saved_ci": [
+      -2.1267628380277808,
+      -0.8046370136038729
+     ],
+     "s_hat_rust": 0.399069308410522,
+     "directives": 57
+    },
+    "marshmallow": {
+     "sessions": 30,
+     "usd_saved_per_task": 0.006331257520645337,
+     "usd_saved_ci": [
+      -0.0033599030880082504,
+      0.014488867572649574
+     ],
+     "usd_saved_share": 0.02792073069685314,
+     "calls_saved_per_task": 1.2065037236285816,
+     "calls_saved_ci": [
+      0.07758897686066876,
+      2.1412046816881025
+     ],
+     "s_hat_rust": 2.0065037236285814,
+     "directives": 56
+    },
+    "urfave-cli": {
+     "sessions": 16,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    },
+    "vue-core": {
+     "sessions": 32,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    }
+   }
+  },
+  "leave_task_out_strict": {
+   "name": "leave-task-out",
+   "assumptions": {
+    "sat": "strict",
+    "p_follow": 1.0,
+    "misfire_calls": 2.0,
+    "hindsight": false
+   },
+   "summary": {
+    "sessions": 158,
+    "tasks": 38,
+    "calls": 5110,
+    "test_set_id": "6a795a362ccb",
+    "baseline": {
+     "usd_per_task": 0.26039232658227857,
+     "calls_per_task": 32.34177215189873
+    },
+    "calls_saved_per_task": -0.367255987209249,
+    "calls_saved_ci": [
+     -0.7831257891235028,
+     0.07046936870690033
+    ],
+    "calls_saved_share": -0.011355468880442532,
+    "calls_saved_share_ci": [
+     -0.02463597436431981,
+     0.002184887603926862
+    ],
+    "usd_saved_per_task": -0.004045537892722267,
+    "usd_saved_ci": [
+     -0.007320939224614407,
+     -0.0006495213549048087
+    ],
+    "usd_saved_share": -0.015536317624336611,
+    "usd_saved_share_ci": [
+     -0.02811250616177505,
+     -0.0024788108201797853
+    ],
+    "tokens_saved_per_task": 29119.436708860758,
+    "pass_rate_effect": {
+     "point": 0.0,
+     "worst_case": -0.0,
+     "worst_case_ci": [
+      -0.016835408386943633,
+      -0.0
+     ],
+     "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+    },
+    "s_hat_rust": 0.7213516077274602,
+    "s_hat_rust_ci95": [
+     0.43544479325479496,
+     1.0316747648501543
+    ],
+    "directives": 180,
+    "useful": 94,
+    "harmful": 0,
+    "superseded": 5,
+    "useful_rate": 0.5222222222222223,
+    "useful_lb90": 0.4611078728834033,
+    "harmful_rate": 0.0,
+    "per_10_calls": 0.3522504892367906,
+    "gates": {
+     "useful_lb90>=0.8": false,
+     "harmful<=1%": true,
+     "per_10_calls<=1": true
+    },
+    "custom_classes": 0,
+    "uncalibrated_classes": [
+     "command"
+    ]
+   },
+   "by_route": {
+    "ae:c4": {
+     "directives": 81,
+     "useful": 40,
+     "harmful": 0,
+     "saved": 56.0,
+     "cost": 1.0780663771536394
+    },
+    "ae:c8": {
+     "directives": 99,
+     "useful": 54,
+     "harmful": 0,
+     "saved": 61.0,
+     "cost": 1.9483796019076813
+    }
+   },
+   "by_slice": {
+    "attrs": {
+     "sessions": 40,
+     "usd_saved_per_task": -0.006923427804157918,
+     "usd_saved_ci": [
+      -0.012438489877488084,
+      -0.0018303209132804876
+     ],
+     "usd_saved_share": -0.036611811371442156,
+     "calls_saved_per_task": -0.9046082506084913,
+     "calls_saved_ci": [
+      -1.7793197126444618,
+      -0.08321363681091548
+     ],
+     "s_hat_rust": 0.9453917493915085,
+     "directives": 67
+    },
+    "click": {
+     "sessions": 40,
+     "usd_saved_per_task": -0.013804890012579039,
+     "usd_saved_ci": [
+      -0.019702335008851476,
+      -0.007912981923741352
+     ],
+     "usd_saved_share": -0.0485181037145694,
+     "calls_saved_per_task": -1.4509306915894777,
+     "calls_saved_ci": [
+      -2.1267628380277808,
+      -0.8046370136038729
+     ],
+     "s_hat_rust": 0.399069308410522,
+     "directives": 57
+    },
+    "marshmallow": {
+     "sessions": 30,
+     "usd_saved_per_task": 0.006331257520645337,
+     "usd_saved_ci": [
+      -0.0033599030880082504,
+      0.014488867572649574
+     ],
+     "usd_saved_share": 0.02792073069685314,
+     "calls_saved_per_task": 1.2065037236285816,
+     "calls_saved_ci": [
+      0.07758897686066876,
+      2.1412046816881025
+     ],
+     "s_hat_rust": 2.0065037236285814,
+     "directives": 56
+    },
+    "urfave-cli": {
+     "sessions": 16,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    },
+    "vue-core": {
+     "sessions": 32,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    }
+   }
+  },
+  "leave_task_out_pfollow05": {
+   "name": "leave-task-out",
+   "assumptions": {
+    "sat": "goal",
+    "p_follow": 0.5,
+    "misfire_calls": 2.0,
+    "hindsight": false
+   },
+   "summary": {
+    "sessions": 158,
+    "tasks": 38,
+    "calls": 5110,
+    "test_set_id": "6a795a362ccb",
+    "baseline": {
+     "usd_per_task": 0.26039232658227857,
+     "calls_per_task": 32.34177215189873
+    },
+    "calls_saved_per_task": -0.19320535429785646,
+    "calls_saved_ci": [
+     -0.40044467513864046,
+     0.02543711876168624
+    ],
+    "calls_saved_share": -0.005973864183769337,
+    "calls_saved_share_ci": [
+     -0.012603139484937631,
+     0.0007918736360112409
+    ],
+    "usd_saved_per_task": -0.0021613005919307537,
+    "usd_saved_ci": [
+     -0.0038044521162516167,
+     -0.000456572648492311
+    ],
+    "usd_saved_share": -0.00830017005607816,
+    "usd_saved_share_ci": [
+     -0.014623637172656224,
+     -0.001740715806261685
+    ],
+    "tokens_saved_per_task": 13857.860759493671,
+    "pass_rate_effect": {
+     "point": 0.0,
+     "worst_case": -0.0,
+     "worst_case_ci": [
+      -0.008417704193471817,
+      -0.0
+     ],
+     "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+    },
+    "s_hat_rust": 0.7213516077274602,
+    "s_hat_rust_ci95": [
+     0.43544479325479496,
+     1.0316747648501543
+    ],
+    "directives": 180,
+    "useful": 94,
+    "harmful": 0,
+    "superseded": 5,
+    "useful_rate": 0.5222222222222223,
+    "useful_lb90": 0.4611078728834033,
+    "harmful_rate": 0.0,
+    "per_10_calls": 0.3522504892367906,
+    "gates": {
+     "useful_lb90>=0.8": false,
+     "harmful<=1%": true,
+     "per_10_calls<=1": true
+    },
+    "custom_classes": 0,
+    "uncalibrated_classes": [
+     "command"
+    ]
+   },
+   "by_route": {
+    "ae:c4": {
+     "directives": 81,
+     "useful": 40,
+     "harmful": 0,
+     "saved": 56.0,
+     "cost": 1.0780663771536394
+    },
+    "ae:c8": {
+     "directives": 99,
+     "useful": 54,
+     "harmful": 0,
+     "saved": 61.0,
+     "cost": 1.9483796019076813
+    }
+   },
+   "by_slice": {
+    "attrs": {
+     "sessions": 40,
+     "usd_saved_per_task": -0.0036515801520789577,
+     "usd_saved_ci": [
+      -0.006407625020852932,
+      -0.0011281004566402433
+     ],
+     "usd_saved_share": -0.01930993830185212,
+     "calls_saved_per_task": -0.4671082506084911,
+     "calls_saved_ci": [
+      -0.904319712644462,
+      -0.058213636810915494
+     ],
+     "s_hat_rust": 0.9453917493915085,
+     "directives": 67
+    },
+    "click": {
+     "sessions": 40,
+     "usd_saved_per_task": -0.00709401000628952,
+     "usd_saved_ci": [
+      -0.010046958460001231,
+      -0.004145040961870677
+     ],
+     "usd_saved_share": -0.024932318397591254,
+     "calls_saved_per_task": -0.7384306915894779,
+     "calls_saved_ci": [
+      -1.0767628380277803,
+      -0.41713701360387273
+     ],
+     "s_hat_rust": 0.399069308410522,
+     "directives": 57
+    },
+    "marshmallow": {
+     "sessions": 30,
+     "usd_saved_per_task": 0.002944603760322668,
+     "usd_saved_ci": [
+      -0.0018840715440041251,
+      0.0070162687863247865
+     ],
+     "usd_saved_share": 0.012985649112015616,
+     "calls_saved_per_task": 0.5898370569619147,
+     "calls_saved_ci": [
+      0.027588976860668836,
+      1.0578713483547695
+     ],
+     "s_hat_rust": 2.0065037236285814,
+     "directives": 56
+    },
+    "urfave-cli": {
+     "sessions": 16,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    },
+    "vue-core": {
+     "sessions": 32,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    }
+   }
+  }
+ },
+ "lgg-loose": {
+  "split": {
+   "name": "split",
+   "assumptions": {
+    "sat": "goal",
+    "p_follow": 1.0,
+    "misfire_calls": 2.0,
+    "hindsight": false
+   },
+   "summary": {
+    "sessions": 158,
+    "tasks": 38,
+    "calls": 5110,
+    "test_set_id": "6a795a362ccb",
+    "baseline": {
+     "usd_per_task": 0.26039232658227857,
+     "calls_per_task": 32.34177215189873
+    },
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "calls_saved_share": 0.0,
+    "calls_saved_share_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "usd_saved_share_ci": [
+     0.0,
+     0.0
+    ],
+    "tokens_saved_per_task": 0.0,
+    "pass_rate_effect": {
+     "point": 0.0,
+     "worst_case": -0.0,
+     "worst_case_ci": [
+      -0.016835408386943633,
+      -0.0
+     ],
+     "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+    },
+    "s_hat_rust": 0.0,
+    "s_hat_rust_ci95": [
+     0.0,
+     0.0
+    ],
+    "directives": 0,
+    "useful": 0,
+    "harmful": 0,
+    "superseded": 0,
+    "useful_rate": 0.0,
+    "useful_lb90": 0.0,
+    "harmful_rate": 0.0,
+    "per_10_calls": 0.0,
+    "gates": {
+     "useful_lb90>=0.8": null,
+     "harmful<=1%": null,
+     "per_10_calls<=1": true
+    },
+    "custom_classes": 0,
+    "uncalibrated_classes": []
+   },
+   "by_route": {},
+   "by_slice": {
+    "attrs": {
+     "sessions": 40,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    },
+    "click": {
+     "sessions": 40,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    },
+    "marshmallow": {
+     "sessions": 30,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    },
+    "urfave-cli": {
+     "sessions": 16,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    },
+    "vue-core": {
+     "sessions": 32,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    }
+   }
+  },
+  "loro": {
+   "name": "loro",
+   "assumptions": {
+    "sat": "goal",
+    "p_follow": 1.0,
+    "misfire_calls": 2.0,
+    "hindsight": false
+   },
+   "summary": {
+    "sessions": 158,
+    "tasks": 38,
+    "calls": 5110,
+    "test_set_id": "6a795a362ccb",
+    "baseline": {
+     "usd_per_task": 0.26039232658227857,
+     "calls_per_task": 32.34177215189873
+    },
+    "calls_saved_per_task": 0.7089211268870529,
+    "calls_saved_ci": [
+     0.3752159771339159,
+     1.0766628574434964
+    ],
+    "calls_saved_share": 0.021919674764805153,
+    "calls_saved_share_ci": [
+     0.011420779006261974,
+     0.03402289413756348
+    ],
+    "usd_saved_per_task": 0.003412371717651196,
+    "usd_saved_ci": [
+     0.0016461684201388893,
+     0.0053389652596975675
+    ],
+    "usd_saved_share": 0.013104732241689,
+    "usd_saved_share_ci": [
+     0.005949700790343357,
+     0.021450547088846594
+    ],
+    "tokens_saved_per_task": 30014.518987341773,
+    "pass_rate_effect": {
+     "point": 0.0,
+     "worst_case": -0.0,
+     "worst_case_ci": [
+      -0.016835408386943633,
+      -0.0
+     ],
+     "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+    },
+    "s_hat_rust": 0.7975287218237618,
+    "s_hat_rust_ci95": [
+     0.40882361150375823,
+     1.2426497380086368
+    ],
+    "directives": 57,
+    "useful": 50,
+    "harmful": 0,
+    "superseded": 0,
+    "useful_rate": 0.8771929824561403,
+    "useful_lb90": 0.7881720895871346,
+    "harmful_rate": 0.0,
+    "per_10_calls": 0.11154598825831702,
+    "gates": {
+     "useful_lb90>=0.8": false,
+     "harmful<=1%": true,
+     "per_10_calls<=1": true
+    },
+    "custom_classes": 0,
+    "uncalibrated_classes": [
+     "command"
+    ]
+   },
+   "by_route": {
+    "ae:python pytest <T:test> -m -xvs": {
+     "directives": 52,
+     "useful": 45,
+     "harmful": 0,
+     "saved": 110.0,
+     "cost": 0.8793957885177379
+    },
+    "ae:python3 pytest <T:test> -m -xvs": {
+     "directives": 5,
+     "useful": 5,
+     "harmful": 0,
+     "saved": 17.0,
+     "cost": 0.1110661633279379
+    }
+   },
+   "by_slice": {
+    "attrs": {
+     "sessions": 40,
+     "usd_saved_per_task": 0.010853982166666666,
+     "usd_saved_ci": [
+      0.006573893833333333,
+      0.015000572166666667
+     ],
+     "usd_saved_share": 0.057396994517129964,
+     "calls_saved_per_task": 2.1364770483334903,
+     "calls_saved_ci": [
+      1.2411621688120553,
+      3.0109376136131702
+     ],
+     "s_hat_rust": 2.23647704833349,
+     "directives": 25
+    },
+    "click": {
+     "sessions": 40,
+     "usd_saved_per_task": -0.00020368138194444473,
+     "usd_saved_ci": [
+      -0.0028056636458333338,
+      0.0018418436666666669
+     ],
+     "usd_saved_share": -0.0007158502823928827,
+     "calls_saved_per_task": 0.14207026726705982,
+     "calls_saved_ci": [
+      -0.1820438920782684,
+      0.4402040354486849
+     ],
+     "s_hat_rust": 0.3920702672670598,
+     "directives": 20
+    },
+    "marshmallow": {
+     "sessions": 30,
+     "usd_saved_per_task": 0.0037714233333333343,
+     "usd_saved_ci": [
+      0.0012174766666666664,
+      0.006254006666666668
+     ],
+     "usd_saved_share": 0.01663190841479072,
+     "calls_saved_per_task": 0.6955881808044111,
+     "calls_saved_ci": [
+      0.197988385812836,
+      1.160530916603739
+     ],
+     "s_hat_rust": 0.6955881808044111,
+     "directives": 12
+    },
+    "urfave-cli": {
+     "sessions": 16,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    },
+    "vue-core": {
+     "sessions": 32,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    }
+   }
+  },
+  "leave_task_out": {
+   "name": "leave-task-out",
+   "assumptions": {
+    "sat": "goal",
+    "p_follow": 1.0,
+    "misfire_calls": 2.0,
+    "hindsight": false
+   },
+   "summary": {
+    "sessions": 158,
+    "tasks": 38,
+    "calls": 5110,
+    "test_set_id": "6a795a362ccb",
+    "baseline": {
+     "usd_per_task": 0.26039232658227857,
+     "calls_per_task": 32.34177215189873
+    },
+    "calls_saved_per_task": 0.15611675410700593,
+    "calls_saved_ci": [
+     0.004822198470297496,
+     0.41321757623695343
+    ],
+    "calls_saved_share": 0.004827093375519947,
+    "calls_saved_share_ci": [
+     0.00015239318962176042,
+     0.012845024123715663
+    ],
+    "usd_saved_per_task": 0.0007686971098894716,
+    "usd_saved_ci": [
+     -9.452367288378766e-05,
+     0.0022385446747967483
+    ],
+    "usd_saved_share": 0.0029520728201895747,
+    "usd_saved_share_ci": [
+     -0.0003601179127090059,
+     0.008598917886370018
+    ],
+    "tokens_saved_per_task": 8207.943037974683,
+    "pass_rate_effect": {
+     "point": 0.0,
+     "worst_case": -0.0,
+     "worst_case_ci": [
+      -0.016835408386943633,
+      -0.0
+     ],
+     "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+    },
+    "s_hat_rust": 0.206749665499411,
+    "s_hat_rust_ci95": [
+     0.025007731653209235,
+     0.5058283288661105
+    ],
+    "directives": 19,
+    "useful": 15,
+    "harmful": 0,
+    "superseded": 0,
+    "useful_rate": 0.7894736842105263,
+    "useful_lb90": 0.6050035729709646,
+    "harmful_rate": 0.0,
+    "per_10_calls": 0.03718199608610567,
+    "gates": {
+     "useful_lb90>=0.8": false,
+     "harmful<=1%": true,
+     "per_10_calls<=1": true
+    },
+    "custom_classes": 0,
+    "uncalibrated_classes": [
+     "command"
+    ]
+   },
+   "by_route": {
+    "ae:python pytest <T:test> -m -xvs": {
+     "directives": 16,
+     "useful": 12,
+     "harmful": 0,
+     "saved": 25.0,
+     "cost": 0.2958725993468239
+    },
+    "ae:python3 pytest <T:test> -m -xvs": {
+     "directives": 3,
+     "useful": 3,
+     "harmful": 0,
+     "saved": 8.0,
+     "cost": 0.037680251746243607
+    }
+   },
+   "by_slice": {
+    "attrs": {
+     "sessions": 40,
+     "usd_saved_per_task": -7.498141593658733e-05,
+     "usd_saved_ci": [
+      -0.0007918554747601166,
+      0.0005325133936170213
+     ],
+     "usd_saved_share": -0.00039650958084452457,
+     "calls_saved_per_task": 0.06953549056666598,
+     "calls_saved_ci": [
+      -0.030870429636607265,
+      0.2141311162316229
+     ],
+     "s_hat_rust": 0.2695354905666659,
+     "directives": 10
+    },
+    "click": {
+     "sessions": 40,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    },
+    "marshmallow": {
+     "sessions": 30,
+     "usd_saved_per_task": 0.004148446666666667,
+     "usd_saved_ci": [
+      -2.304e-05,
+      0.01184225
+     ],
+     "usd_saved_share": 0.018294574468430712,
+     "calls_saved_per_task": 0.7295009175413433,
+     "calls_saved_ci": [
+      -0.0011991851277604584,
+      2.0919442673376385
+     ],
+     "s_hat_rust": 0.7295009175413433,
+     "directives": 9
+    },
+    "urfave-cli": {
+     "sessions": 16,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    },
+    "vue-core": {
+     "sessions": 32,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    }
+   }
+  },
+  "leave_task_out_strict": {
+   "name": "leave-task-out",
+   "assumptions": {
+    "sat": "strict",
+    "p_follow": 1.0,
+    "misfire_calls": 2.0,
+    "hindsight": false
+   },
+   "summary": {
+    "sessions": 158,
+    "tasks": 38,
+    "calls": 5110,
+    "test_set_id": "6a795a362ccb",
+    "baseline": {
+     "usd_per_task": 0.26039232658227857,
+     "calls_per_task": 32.34177215189873
+    },
+    "calls_saved_per_task": 0.15611675410700593,
+    "calls_saved_ci": [
+     0.004822198470297496,
+     0.41321757623695343
+    ],
+    "calls_saved_share": 0.004827093375519947,
+    "calls_saved_share_ci": [
+     0.00015239318962176042,
+     0.012845024123715663
+    ],
+    "usd_saved_per_task": 0.0007686971098894716,
+    "usd_saved_ci": [
+     -9.452367288378766e-05,
+     0.0022385446747967483
+    ],
+    "usd_saved_share": 0.0029520728201895747,
+    "usd_saved_share_ci": [
+     -0.0003601179127090059,
+     0.008598917886370018
+    ],
+    "tokens_saved_per_task": 8207.943037974683,
+    "pass_rate_effect": {
+     "point": 0.0,
+     "worst_case": -0.0,
+     "worst_case_ci": [
+      -0.016835408386943633,
+      -0.0
+     ],
+     "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+    },
+    "s_hat_rust": 0.206749665499411,
+    "s_hat_rust_ci95": [
+     0.025007731653209235,
+     0.5058283288661105
+    ],
+    "directives": 19,
+    "useful": 15,
+    "harmful": 0,
+    "superseded": 0,
+    "useful_rate": 0.7894736842105263,
+    "useful_lb90": 0.6050035729709646,
+    "harmful_rate": 0.0,
+    "per_10_calls": 0.03718199608610567,
+    "gates": {
+     "useful_lb90>=0.8": false,
+     "harmful<=1%": true,
+     "per_10_calls<=1": true
+    },
+    "custom_classes": 0,
+    "uncalibrated_classes": [
+     "command"
+    ]
+   },
+   "by_route": {
+    "ae:python pytest <T:test> -m -xvs": {
+     "directives": 16,
+     "useful": 12,
+     "harmful": 0,
+     "saved": 25.0,
+     "cost": 0.2958725993468239
+    },
+    "ae:python3 pytest <T:test> -m -xvs": {
+     "directives": 3,
+     "useful": 3,
+     "harmful": 0,
+     "saved": 8.0,
+     "cost": 0.037680251746243607
+    }
+   },
+   "by_slice": {
+    "attrs": {
+     "sessions": 40,
+     "usd_saved_per_task": -7.498141593658733e-05,
+     "usd_saved_ci": [
+      -0.0007918554747601166,
+      0.0005325133936170213
+     ],
+     "usd_saved_share": -0.00039650958084452457,
+     "calls_saved_per_task": 0.06953549056666598,
+     "calls_saved_ci": [
+      -0.030870429636607265,
+      0.2141311162316229
+     ],
+     "s_hat_rust": 0.2695354905666659,
+     "directives": 10
+    },
+    "click": {
+     "sessions": 40,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    },
+    "marshmallow": {
+     "sessions": 30,
+     "usd_saved_per_task": 0.004148446666666667,
+     "usd_saved_ci": [
+      -2.304e-05,
+      0.01184225
+     ],
+     "usd_saved_share": 0.018294574468430712,
+     "calls_saved_per_task": 0.7295009175413433,
+     "calls_saved_ci": [
+      -0.0011991851277604584,
+      2.0919442673376385
+     ],
+     "s_hat_rust": 0.7295009175413433,
+     "directives": 9
+    },
+    "urfave-cli": {
+     "sessions": 16,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    },
+    "vue-core": {
+     "sessions": 32,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    }
+   }
+  },
+  "leave_task_out_pfollow05": {
+   "name": "leave-task-out",
+   "assumptions": {
+    "sat": "goal",
+    "p_follow": 0.5,
+    "misfire_calls": 2.0,
+    "hindsight": false
+   },
+   "summary": {
+    "sessions": 158,
+    "tasks": 38,
+    "calls": 5110,
+    "test_set_id": "6a795a362ccb",
+    "baseline": {
+     "usd_per_task": 0.26039232658227857,
+     "calls_per_task": 32.34177215189873
+    },
+    "calls_saved_per_task": 0.07700283005637298,
+    "calls_saved_ci": [
+     0.0017465818714866564,
+     0.2053744829319735
+    ],
+    "calls_saved_share": 0.00238090942248668,
+    "calls_saved_share_ci": [
+     5.248499311636631e-05,
+     0.006374995579472087
+    ],
+    "usd_saved_per_task": 0.00036833020051435603,
+    "usd_saved_ci": [
+     -5.78255759070095e-05,
+     0.0010959502965828497
+    ],
+    "usd_saved_share": 0.001414520179410784,
+    "usd_saved_share_ci": [
+     -0.00023016779732968227,
+     0.004201720572721489
+    ],
+    "tokens_saved_per_task": 4033.496835443038,
+    "pass_rate_effect": {
+     "point": 0.0,
+     "worst_case": -0.0,
+     "worst_case_ci": [
+      -0.008417704193471817,
+      -0.0
+     ],
+     "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+    },
+    "s_hat_rust": 0.206749665499411,
+    "s_hat_rust_ci95": [
+     0.025007731653209235,
+     0.5058283288661105
+    ],
+    "directives": 19,
+    "useful": 15,
+    "harmful": 0,
+    "superseded": 0,
+    "useful_rate": 0.7894736842105263,
+    "useful_lb90": 0.6050035729709646,
+    "harmful_rate": 0.0,
+    "per_10_calls": 0.03718199608610567,
+    "gates": {
+     "useful_lb90>=0.8": false,
+     "harmful<=1%": true,
+     "per_10_calls<=1": true
+    },
+    "custom_classes": 0,
+    "uncalibrated_classes": [
+     "command"
+    ]
+   },
+   "by_route": {
+    "ae:python pytest <T:test> -m -xvs": {
+     "directives": 16,
+     "useful": 12,
+     "harmful": 0,
+     "saved": 25.0,
+     "cost": 0.2958725993468239
+    },
+    "ae:python3 pytest <T:test> -m -xvs": {
+     "directives": 3,
+     "useful": 3,
+     "harmful": 0,
+     "saved": 8.0,
+     "cost": 0.037680251746243607
+    }
+   },
+   "by_slice": {
+    "attrs": {
+     "sessions": 40,
+     "usd_saved_per_task": -7.169070796829368e-05,
+     "usd_saved_ci": [
+      -0.00044038773738005836,
+      0.00021334569680851078
+     ],
+     "usd_saved_share": -0.0003791079724474073,
+     "calls_saved_per_task": 0.03203549056666597,
+     "calls_saved_ci": [
+      -0.018370429636607268,
+      0.10163111623162291
+     ],
+     "s_hat_rust": 0.2695354905666659,
+     "directives": 10
+    },
+    "click": {
+     "sessions": 40,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    },
+    "marshmallow": {
+     "sessions": 30,
+     "usd_saved_per_task": 0.0020354600000000007,
+     "usd_saved_ci": [
+      -2.304e-05,
+      0.005840835
+     ],
+     "usd_saved_share": 0.008976341638118036,
+     "calls_saved_per_task": 0.3628342508746764,
+     "calls_saved_ci": [
+      -0.0011991851277604584,
+      1.041944267337639
+     ],
+     "s_hat_rust": 0.7295009175413433,
+     "directives": 9
+    },
+    "urfave-cli": {
+     "sessions": 16,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    },
+    "vue-core": {
+     "sessions": 32,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    }
+   }
+  }
+ },
+ "test_set": {
+  "filter": "held_out(model='haiku')",
+  "sessions": 158
+ }
+}

@@ -1,0 +1,45 @@
+{
+ "haiku": {
+  "n": 176,
+  "sessions_with_green_after_last_edit": 138,
+  "requests_after_green": 7.615942028985507,
+  "ceiling_share_all_sessions": {
+   "mean": 0.17820052595231156,
+   "ci90": [
+    0.1607724099371958,
+    0.19693866117239134
+   ]
+  },
+  "pass_rate_green": 0.6376811594202898,
+  "pass_rate_no_green": 0.3157894736842105,
+  "pass_rate_green_long_tail": 0.6153846153846154,
+  "pass_rate_green_short_tail": 0.6575342465753424,
+  "per_repo_ceiling": {
+   "attrs": 0.187,
+   "click": 0.216,
+   "marshmallow": 0.232,
+   "urfave-cli": 0.117,
+   "vue-core": 0.094
+  }
+ },
+ "sonnet": {
+  "n": 32,
+  "sessions_with_green_after_last_edit": 21,
+  "requests_after_green": 1.4285714285714286,
+  "ceiling_share_all_sessions": {
+   "mean": 0.031348444206894366,
+   "ci90": [
+    0.018394789131952135,
+    0.0460143900644006
+   ]
+  },
+  "pass_rate_green": 0.7142857142857143,
+  "pass_rate_no_green": 0.09090909090909091,
+  "pass_rate_green_long_tail": 0.7,
+  "pass_rate_green_short_tail": 0.7272727272727273,
+  "per_repo_ceiling": {
+   "click-sonnet5": 0.034,
+   "vue-core-sonnet5": 0.028
+  }
+ }
+}

@@ -21,7 +21,7 @@ const client = { session: { prompt: async (req) => { calls.push(req); return {} 
 const mod = await import(pathToFileURL(process.env.PLUGIN).href)
 const hooks = await mod.Adage({ client, directory: repo, worktree: repo, project: {}, $: null })
 
-const routes = (text) => [...String(text).matchAll(/<adage-signal [^>]*route="([^"]+)"/g)].map((m) => m[1])
+const routes = (text) => [...String(text).matchAll(/<adage-reflex [^>]*route="([^"]+)"/g)].map((m) => m[1])
 function covers(got, want, what) {
   assert.equal(got.length, want.length, `${what}: got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`)
   for (const w of want) assert.ok(got.some((g) => g.startsWith(w)), `${what}: no ${w} in ${JSON.stringify(got)}`)

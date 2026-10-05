@@ -1,0 +1,1613 @@
+{
+ "primary_model": "claude-haiku-4-5",
+ "pooled": {
+  "arms": {
+   "adage": {
+    "sessions": 80,
+    "usd_per_task": 0.1971,
+    "calls": 28.86,
+    "wall_s": 116.4,
+    "turns": 29.86,
+    "pass": {
+     "k": 51,
+     "n": 80,
+     "rate": 0.6375,
+     "wilson90": [
+      0.5459,
+      0.7201
+     ]
+    },
+    "usd_per_resolved": 0.3092,
+    "censored": 0,
+    "card_delivered": 80,
+    "card_would_have": 80,
+    "check_failures": {
+     "documented": 0,
+     "readme": 0,
+     "own_test": 12,
+     "tests": 17,
+     "standard": 0
+    }
+   },
+   "control": {
+    "sessions": 80,
+    "usd_per_task": 0.2745,
+    "calls": 38.52,
+    "wall_s": 139.9,
+    "turns": 39.52,
+    "pass": {
+     "k": 59,
+     "n": 80,
+     "rate": 0.7375,
+     "wilson90": [
+      0.6498,
+      0.8097
+     ]
+    },
+    "usd_per_resolved": 0.3723,
+    "censored": 7,
+    "card_delivered": 0,
+    "card_would_have": 80,
+    "check_failures": {
+     "documented": 0,
+     "readme": 0,
+     "own_test": 2,
+     "tests": 19,
+     "standard": 0
+    }
+   }
+  },
+  "usd": {
+   "change": -0.282,
+   "ci90": [
+    -0.312,
+    -0.2502
+   ],
+   "pairs": 80,
+   "variants": 40,
+   "families": 5,
+   "adage_mean": 0.1971,
+   "control_mean": 0.2745
+  },
+  "calls": {
+   "change": -0.2508,
+   "ci90": [
+    -0.2838,
+    -0.2158
+   ],
+   "pairs": 80,
+   "variants": 40,
+   "families": 5,
+   "adage_mean": 28.8625,
+   "control_mean": 38.525
+  },
+  "wall": {
+   "change": -0.1684,
+   "ci90": [
+    -0.197,
+    -0.1374
+   ],
+   "pairs": 80,
+   "variants": 40,
+   "families": 5,
+   "adage_mean": 116.3564,
+   "control_mean": 139.9252
+  },
+  "pass_diff": {
+   "diff": -0.1,
+   "ci90": [
+    -0.1571,
+    -0.0429
+   ],
+   "pairs": 80,
+   "variants": 40
+  },
+  "pass_net": -8,
+  "card_delivery": {
+   "k": 80,
+   "n": 80,
+   "rate": 1.0,
+   "wilson90": [
+    0.9673,
+    1.0
+   ]
+  },
+  "sensitivity_uncensored_usd": {
+   "change": -0.2512,
+   "ci90": [
+    -0.2853,
+    -0.2159
+   ],
+   "pairs": 73,
+   "variants": 38,
+   "families": 5,
+   "adage_mean": 0.1956,
+   "control_mean": 0.2613
+  },
+  "per_variant_usd": {
+   "chi-middleware--allow-hosts": -0.0373,
+   "chi-middleware--api-key": -0.1731,
+   "chi-middleware--block-user-agents": -0.1155,
+   "chi-middleware--content-length-required": -0.134,
+   "chi-middleware--lowercase-path": -0.0957,
+   "chi-middleware--max-header-count": -0.3518,
+   "chi-middleware--method-override": -0.4399,
+   "chi-middleware--vary": -0.2593,
+   "click-type--byte-size": -0.2078,
+   "click-type--date": -0.29,
+   "click-type--host-port": -0.2291,
+   "click-type--log-level": -0.2805,
+   "click-type--percentage": -0.1912,
+   "click-type--semver": 0.027,
+   "click-type--slug": -0.1139,
+   "click-type--time": -0.1745,
+   "go-flag--bytesize": -0.4402,
+   "go-flag--cidr": -0.4316,
+   "go-flag--date": -0.5912,
+   "go-flag--hexcolor": -0.569,
+   "go-flag--hostport": -0.5912,
+   "go-flag--percent": -0.3296,
+   "go-flag--semver": -0.4647,
+   "go-flag--uuid": -0.2859,
+   "http-header--clear-site-data": -0.2372,
+   "http-header--coop": -0.0643,
+   "http-header--early-data": -0.0315,
+   "http-header--permissions-policy": -0.2346,
+   "http-header--repr-digest": -0.2719,
+   "http-header--sec-fetch-dest": -0.3458,
+   "http-header--timing-allow-origin": 0.1693,
+   "http-header--x-forwarded-for": -0.2384,
+   "mm-validator--alphanumeric": -0.2305,
+   "mm-validator--ascii": -0.4076,
+   "mm-validator--contains": -0.2901,
+   "mm-validator--ends-with": -0.2861,
+   "mm-validator--ip-address": -0.2366,
+   "mm-validator--lowercase": -0.3761,
+   "mm-validator--max-words": -0.4072,
+   "mm-validator--not-blank": -0.1816
+  },
+  "delivered_subset_usd": {
+   "change": -0.282,
+   "ci90": [
+    -0.312,
+    -0.2502
+   ],
+   "pairs": 80,
+   "variants": 40,
+   "families": 5,
+   "adage_mean": 0.1971,
+   "control_mean": 0.2745
+  }
+ },
+ "families": {
+  "click-type": {
+   "contrast": {
+    "arms": {
+     "adage": {
+      "sessions": 16,
+      "usd_per_task": 0.3087,
+      "calls": 42.88,
+      "wall_s": 127.0,
+      "turns": 43.88,
+      "pass": {
+       "k": 14,
+       "n": 16,
+       "rate": 0.875,
+       "wilson90": [
+        0.6838,
+        0.9577
+       ]
+      },
+      "usd_per_resolved": 0.3528,
+      "censored": 0,
+      "card_delivered": 16,
+      "card_would_have": 16,
+      "check_failures": {
+       "tests": 2
+      }
+     },
+     "control": {
+      "sessions": 16,
+      "usd_per_task": 0.3828,
+      "calls": 45.06,
+      "wall_s": 139.3,
+      "turns": 46.06,
+      "pass": {
+       "k": 13,
+       "n": 16,
+       "rate": 0.8125,
+       "wilson90": [
+        0.6121,
+        0.9225
+       ]
+      },
+      "usd_per_resolved": 0.4712,
+      "censored": 2,
+      "card_delivered": 0,
+      "card_would_have": 16,
+      "check_failures": {
+       "tests": 3
+      }
+     }
+    },
+    "usd": {
+     "change": -0.1935,
+     "ci90": [
+      -0.2414,
+      -0.1336
+     ],
+     "pairs": 16,
+     "variants": 8,
+     "families": 1,
+     "adage_mean": 0.3087,
+     "control_mean": 0.3828
+    },
+    "calls": {
+     "change": -0.0485,
+     "ci90": [
+      -0.0976,
+      0.0
+     ],
+     "pairs": 16,
+     "variants": 8,
+     "families": 1,
+     "adage_mean": 42.875,
+     "control_mean": 45.0625
+    },
+    "wall": {
+     "change": -0.0884,
+     "ci90": [
+      -0.1286,
+      -0.0475
+     ],
+     "pairs": 16,
+     "variants": 8,
+     "families": 1,
+     "adage_mean": 127.0237,
+     "control_mean": 139.3344
+    },
+    "pass_diff": {
+     "diff": 0.0625,
+     "ci90": [
+      0.0,
+      0.1429
+     ],
+     "pairs": 16,
+     "variants": 8
+    },
+    "pass_net": 1,
+    "card_delivery": {
+     "k": 16,
+     "n": 16,
+     "rate": 1.0,
+     "wilson90": [
+      0.8554,
+      1.0
+     ]
+    },
+    "sensitivity_uncensored_usd": {
+     "change": -0.1766,
+     "ci90": [
+      -0.2276,
+      -0.1109
+     ],
+     "pairs": 14,
+     "variants": 8,
+     "families": 1,
+     "adage_mean": 0.3095,
+     "control_mean": 0.3759
+    },
+    "per_variant_usd": {
+     "click-type--byte-size": -0.2078,
+     "click-type--date": -0.29,
+     "click-type--host-port": -0.2291,
+     "click-type--log-level": -0.2805,
+     "click-type--percentage": -0.1912,
+     "click-type--semver": 0.027,
+     "click-type--slug": -0.1139,
+     "click-type--time": -0.1745
+    }
+   },
+   "gate": {
+    "cards": 1,
+    "card_formed": true,
+    "held_out_delivered": [
+     8,
+     8
+    ],
+    "held_out_at_prompt": 8,
+    "held_out_at_edit": 0,
+    "delivered_tasks": [
+     "click-type--semver",
+     "click-type--percentage",
+     "click-type--byte-size",
+     "click-type--slug",
+     "click-type--date",
+     "click-type--host-port",
+     "click-type--time",
+     "click-type--log-level"
+    ],
+    "false_fires": [
+     0,
+     6
+    ],
+    "false_fire_ids": [],
+    "false_fires_at_prompt": 0,
+    "false_fires_at_edit_only": 0,
+    "false_fire_rate_wilson90_upper": 0.3108
+   },
+   "delivered_subset_usd": {
+    "change": -0.1935,
+    "ci90": [
+     -0.2414,
+     -0.1336
+    ],
+    "pairs": 16,
+    "variants": 8,
+    "families": 1,
+    "adage_mean": 0.3087,
+    "control_mean": 0.3828
+   },
+   "harness": {
+    "model": "claude-haiku-4-5-20251001",
+    "claude_code": "2.1.285 (Claude Code)",
+    "max_turns": 60
+   }
+  },
+  "mm-validator": {
+   "contrast": {
+    "arms": {
+     "adage": {
+      "sessions": 16,
+      "usd_per_task": 0.1661,
+      "calls": 25.06,
+      "wall_s": 76.8,
+      "turns": 26.06,
+      "pass": {
+       "k": 16,
+       "n": 16,
+       "rate": 1.0,
+       "wilson90": [
+        0.8554,
+        1.0
+       ]
+      },
+      "usd_per_resolved": 0.1661,
+      "censored": 0,
+      "card_delivered": 16,
+      "card_would_have": 16,
+      "check_failures": {
+       "tests": 0
+      }
+     },
+     "control": {
+      "sessions": 16,
+      "usd_per_task": 0.239,
+      "calls": 35.38,
+      "wall_s": 99.3,
+      "turns": 36.38,
+      "pass": {
+       "k": 16,
+       "n": 16,
+       "rate": 1.0,
+       "wilson90": [
+        0.8554,
+        1.0
+       ]
+      },
+      "usd_per_resolved": 0.239,
+      "censored": 0,
+      "card_delivered": 0,
+      "card_would_have": 16,
+      "check_failures": {
+       "tests": 0
+      }
+     }
+    },
+    "usd": {
+     "change": -0.3048,
+     "ci90": [
+      -0.3551,
+      -0.2538
+     ],
+     "pairs": 16,
+     "variants": 8,
+     "families": 1,
+     "adage_mean": 0.1661,
+     "control_mean": 0.239
+    },
+    "calls": {
+     "change": -0.2915,
+     "ci90": [
+      -0.3593,
+      -0.2158
+     ],
+     "pairs": 16,
+     "variants": 8,
+     "families": 1,
+     "adage_mean": 25.0625,
+     "control_mean": 35.375
+    },
+    "wall": {
+     "change": -0.2262,
+     "ci90": [
+      -0.274,
+      -0.1646
+     ],
+     "pairs": 16,
+     "variants": 8,
+     "families": 1,
+     "adage_mean": 76.8019,
+     "control_mean": 99.2575
+    },
+    "pass_diff": {
+     "diff": 0.0,
+     "ci90": [
+      0.0,
+      0.0
+     ],
+     "pairs": 16,
+     "variants": 8
+    },
+    "pass_net": 0,
+    "card_delivery": {
+     "k": 16,
+     "n": 16,
+     "rate": 1.0,
+     "wilson90": [
+      0.8554,
+      1.0
+     ]
+    },
+    "sensitivity_uncensored_usd": {
+     "change": -0.3048,
+     "ci90": [
+      -0.3551,
+      -0.2538
+     ],
+     "pairs": 16,
+     "variants": 8,
+     "families": 1,
+     "adage_mean": 0.1661,
+     "control_mean": 0.239
+    },
+    "per_variant_usd": {
+     "mm-validator--alphanumeric": -0.2305,
+     "mm-validator--ascii": -0.4076,
+     "mm-validator--contains": -0.2901,
+     "mm-validator--ends-with": -0.2861,
+     "mm-validator--ip-address": -0.2366,
+     "mm-validator--lowercase": -0.3761,
+     "mm-validator--max-words": -0.4072,
+     "mm-validator--not-blank": -0.1816
+    }
+   },
+   "gate": {
+    "cards": 1,
+    "card_formed": true,
+    "held_out_delivered": [
+     8,
+     8
+    ],
+    "held_out_at_prompt": 8,
+    "held_out_at_edit": 0,
+    "delivered_tasks": [
+     "mm-validator--ends-with",
+     "mm-validator--ip-address",
+     "mm-validator--not-blank",
+     "mm-validator--ascii",
+     "mm-validator--contains",
+     "mm-validator--lowercase",
+     "mm-validator--alphanumeric",
+     "mm-validator--max-words"
+    ],
+    "false_fires": [
+     2,
+     6
+    ],
+    "false_fire_ids": [
+     "marshmallow-65374df0",
+     "marshmallow-f07eadc8"
+    ],
+    "false_fires_at_prompt": 0,
+    "false_fires_at_edit_only": 2,
+    "false_fire_rate_wilson90_upper": 0.653
+   },
+   "delivered_subset_usd": {
+    "change": -0.3048,
+    "ci90": [
+     -0.3551,
+     -0.2538
+    ],
+    "pairs": 16,
+    "variants": 8,
+    "families": 1,
+    "adage_mean": 0.1661,
+    "control_mean": 0.239
+   },
+   "harness": {
+    "model": "claude-haiku-4-5-20251001",
+    "claude_code": "2.1.285 (Claude Code)",
+    "max_turns": 60
+   }
+  },
+  "go-flag": {
+   "contrast": {
+    "arms": {
+     "adage": {
+      "sessions": 16,
+      "usd_per_task": 0.1826,
+      "calls": 30.31,
+      "wall_s": 119.4,
+      "turns": 31.31,
+      "pass": {
+       "k": 1,
+       "n": 16,
+       "rate": 0.0625,
+       "wilson90": [
+        0.0141,
+        0.2375
+       ]
+      },
+      "usd_per_resolved": 2.9215,
+      "censored": 0,
+      "card_delivered": 16,
+      "card_would_have": 16,
+      "check_failures": {
+       "tests": 15
+      }
+     },
+     "control": {
+      "sessions": 16,
+      "usd_per_task": 0.347,
+      "calls": 50.31,
+      "wall_s": 156.5,
+      "turns": 51.31,
+      "pass": {
+       "k": 1,
+       "n": 16,
+       "rate": 0.0625,
+       "wilson90": [
+        0.0141,
+        0.2375
+       ]
+      },
+      "usd_per_resolved": 5.5513,
+      "censored": 5,
+      "card_delivered": 0,
+      "card_would_have": 16,
+      "check_failures": {
+       "tests": 15
+      }
+     }
+    },
+    "usd": {
+     "change": -0.4737,
+     "ci90": [
+      -0.5336,
+      -0.4056
+     ],
+     "pairs": 16,
+     "variants": 8,
+     "families": 1,
+     "adage_mean": 0.1826,
+     "control_mean": 0.347
+    },
+    "calls": {
+     "change": -0.3975,
+     "ci90": [
+      -0.4678,
+      -0.3138
+     ],
+     "pairs": 16,
+     "variants": 8,
+     "families": 1,
+     "adage_mean": 30.3125,
+     "control_mean": 50.3125
+    },
+    "wall": {
+     "change": -0.2374,
+     "ci90": [
+      -0.3201,
+      -0.1422
+     ],
+     "pairs": 16,
+     "variants": 8,
+     "families": 1,
+     "adage_mean": 119.3556,
+     "control_mean": 156.5025
+    },
+    "pass_diff": {
+     "diff": 0.0,
+     "ci90": [
+      -0.1429,
+      0.1429
+     ],
+     "pairs": 16,
+     "variants": 8
+    },
+    "pass_net": 0,
+    "card_delivery": {
+     "k": 16,
+     "n": 16,
+     "rate": 1.0,
+     "wilson90": [
+      0.8554,
+      1.0
+     ]
+    },
+    "sensitivity_uncensored_usd": {
+     "change": -0.421,
+     "ci90": [
+      -0.5026,
+      -0.3331
+     ],
+     "pairs": 11,
+     "variants": 6,
+     "families": 1,
+     "adage_mean": 0.1854,
+     "control_mean": 0.3202
+    },
+    "per_variant_usd": {
+     "go-flag--bytesize": -0.4402,
+     "go-flag--cidr": -0.4316,
+     "go-flag--date": -0.5912,
+     "go-flag--hexcolor": -0.569,
+     "go-flag--hostport": -0.5912,
+     "go-flag--percent": -0.3296,
+     "go-flag--semver": -0.4647,
+     "go-flag--uuid": -0.2859
+    }
+   },
+   "gate": {
+    "cards": 1,
+    "card_formed": true,
+    "held_out_delivered": [
+     8,
+     8
+    ],
+    "held_out_at_prompt": 8,
+    "held_out_at_edit": 0,
+    "delivered_tasks": [
+     "go-flag--percent",
+     "go-flag--bytesize",
+     "go-flag--date",
+     "go-flag--hexcolor",
+     "go-flag--cidr",
+     "go-flag--semver",
+     "go-flag--hostport",
+     "go-flag--uuid"
+    ],
+    "false_fires": [
+     0,
+     6
+    ],
+    "false_fire_ids": [],
+    "false_fires_at_prompt": 0,
+    "false_fires_at_edit_only": 0,
+    "false_fire_rate_wilson90_upper": 0.3108
+   },
+   "delivered_subset_usd": {
+    "change": -0.4737,
+    "ci90": [
+     -0.5336,
+     -0.4056
+    ],
+    "pairs": 16,
+    "variants": 8,
+    "families": 1,
+    "adage_mean": 0.1826,
+    "control_mean": 0.347
+   },
+   "harness": {
+    "model": "claude-haiku-4-5-20251001",
+    "claude_code": "2.1.285 (Claude Code)",
+    "max_turns": 60
+   }
+  },
+  "http-header": {
+   "contrast": {
+    "arms": {
+     "adage": {
+      "sessions": 16,
+      "usd_per_task": 0.1793,
+      "calls": 24.25,
+      "wall_s": 109.5,
+      "turns": 25.25,
+      "pass": {
+       "k": 4,
+       "n": 16,
+       "rate": 0.25,
+       "wilson90": [
+        0.1176,
+        0.4548
+       ]
+      },
+      "usd_per_resolved": 0.7173,
+      "censored": 0,
+      "card_delivered": 16,
+      "card_would_have": 16,
+      "check_failures": {
+       "standard": 0,
+       "own_test": 12,
+       "tests": 0
+      }
+     },
+     "control": {
+      "sessions": 16,
+      "usd_per_task": 0.2139,
+      "calls": 34.31,
+      "wall_s": 139.3,
+      "turns": 35.31,
+      "pass": {
+       "k": 14,
+       "n": 16,
+       "rate": 0.875,
+       "wilson90": [
+        0.6838,
+        0.9577
+       ]
+      },
+      "usd_per_resolved": 0.2445,
+      "censored": 0,
+      "card_delivered": 0,
+      "card_would_have": 16,
+      "check_failures": {
+       "standard": 0,
+       "own_test": 2,
+       "tests": 0
+      }
+     }
+    },
+    "usd": {
+     "change": -0.1618,
+     "ci90": [
+      -0.2509,
+      -0.0582
+     ],
+     "pairs": 16,
+     "variants": 8,
+     "families": 1,
+     "adage_mean": 0.1793,
+     "control_mean": 0.2139
+    },
+    "calls": {
+     "change": -0.2933,
+     "ci90": [
+      -0.37,
+      -0.2196
+     ],
+     "pairs": 16,
+     "variants": 8,
+     "families": 1,
+     "adage_mean": 24.25,
+     "control_mean": 34.3125
+    },
+    "wall": {
+     "change": -0.2139,
+     "ci90": [
+      -0.2726,
+      -0.1458
+     ],
+     "pairs": 16,
+     "variants": 8,
+     "families": 1,
+     "adage_mean": 109.5081,
+     "control_mean": 139.3025
+    },
+    "pass_diff": {
+     "diff": -0.625,
+     "ci90": [
+      -0.8571,
+      -0.4286
+     ],
+     "pairs": 16,
+     "variants": 8
+    },
+    "pass_net": -10,
+    "card_delivery": {
+     "k": 16,
+     "n": 16,
+     "rate": 1.0,
+     "wilson90": [
+      0.8554,
+      1.0
+     ]
+    },
+    "sensitivity_uncensored_usd": {
+     "change": -0.1618,
+     "ci90": [
+      -0.2509,
+      -0.0582
+     ],
+     "pairs": 16,
+     "variants": 8,
+     "families": 1,
+     "adage_mean": 0.1793,
+     "control_mean": 0.2139
+    },
+    "per_variant_usd": {
+     "http-header--clear-site-data": -0.2372,
+     "http-header--coop": -0.0643,
+     "http-header--early-data": -0.0315,
+     "http-header--permissions-policy": -0.2346,
+     "http-header--repr-digest": -0.2719,
+     "http-header--sec-fetch-dest": -0.3458,
+     "http-header--timing-allow-origin": 0.1693,
+     "http-header--x-forwarded-for": -0.2384
+    }
+   },
+   "gate": {
+    "cards": 1,
+    "card_formed": true,
+    "held_out_delivered": [
+     8,
+     8
+    ],
+    "held_out_at_prompt": 8,
+    "held_out_at_edit": 0,
+    "delivered_tasks": [
+     "http-header--coop",
+     "http-header--sec-fetch-dest",
+     "http-header--permissions-policy",
+     "http-header--x-forwarded-for",
+     "http-header--clear-site-data",
+     "http-header--timing-allow-origin",
+     "http-header--repr-digest",
+     "http-header--early-data"
+    ],
+    "false_fires": [
+     1,
+     6
+    ],
+    "false_fire_ids": [
+     "neg-http-doc-accept-ranges"
+    ],
+    "false_fires_at_prompt": 0,
+    "false_fires_at_edit_only": 1,
+    "false_fire_rate_wilson90_upper": 0.5024
+   },
+   "delivered_subset_usd": {
+    "change": -0.1618,
+    "ci90": [
+     -0.2509,
+     -0.0582
+    ],
+    "pairs": 16,
+    "variants": 8,
+    "families": 1,
+    "adage_mean": 0.1793,
+    "control_mean": 0.2139
+   },
+   "harness": {
+    "model": "claude-haiku-4-5-20251001",
+    "claude_code": "2.1.285 (Claude Code)",
+    "max_turns": 60
+   }
+  },
+  "chi-middleware": {
+   "contrast": {
+    "arms": {
+     "adage": {
+      "sessions": 16,
+      "usd_per_task": 0.1488,
+      "calls": 21.81,
+      "wall_s": 149.1,
+      "turns": 22.81,
+      "pass": {
+       "k": 16,
+       "n": 16,
+       "rate": 1.0,
+       "wilson90": [
+        0.8554,
+        1.0
+       ]
+      },
+      "usd_per_resolved": 0.1488,
+      "censored": 0,
+      "card_delivered": 16,
+      "card_would_have": 16,
+      "check_failures": {
+       "documented": 0,
+       "readme": 0,
+       "own_test": 0,
+       "tests": 0
+      }
+     },
+     "control": {
+      "sessions": 16,
+      "usd_per_task": 0.19,
+      "calls": 27.56,
+      "wall_s": 165.2,
+      "turns": 28.56,
+      "pass": {
+       "k": 15,
+       "n": 16,
+       "rate": 0.9375,
+       "wilson90": [
+        0.7625,
+        0.9859
+       ]
+      },
+      "usd_per_resolved": 0.2027,
+      "censored": 0,
+      "card_delivered": 0,
+      "card_would_have": 16,
+      "check_failures": {
+       "documented": 0,
+       "readme": 0,
+       "own_test": 0,
+       "tests": 1
+      }
+     }
+    },
+    "usd": {
+     "change": -0.2171,
+     "ci90": [
+      -0.2968,
+      -0.1335
+     ],
+     "pairs": 16,
+     "variants": 8,
+     "families": 1,
+     "adage_mean": 0.1488,
+     "control_mean": 0.19
+    },
+    "calls": {
+     "change": -0.2086,
+     "ci90": [
+      -0.2967,
+      -0.1084
+     ],
+     "pairs": 16,
+     "variants": 8,
+     "families": 1,
+     "adage_mean": 21.8125,
+     "control_mean": 27.5625
+    },
+    "wall": {
+     "change": -0.0977,
+     "ci90": [
+      -0.1554,
+      -0.0343
+     ],
+     "pairs": 16,
+     "variants": 8,
+     "families": 1,
+     "adage_mean": 149.0925,
+     "control_mean": 165.2294
+    },
+    "pass_diff": {
+     "diff": 0.0625,
+     "ci90": [
+      0.0,
+      0.1429
+     ],
+     "pairs": 16,
+     "variants": 8
+    },
+    "pass_net": 1,
+    "card_delivery": {
+     "k": 16,
+     "n": 16,
+     "rate": 1.0,
+     "wilson90": [
+      0.8554,
+      1.0
+     ]
+    },
+    "sensitivity_uncensored_usd": {
+     "change": -0.2171,
+     "ci90": [
+      -0.2968,
+      -0.1335
+     ],
+     "pairs": 16,
+     "variants": 8,
+     "families": 1,
+     "adage_mean": 0.1488,
+     "control_mean": 0.19
+    },
+    "per_variant_usd": {
+     "chi-middleware--allow-hosts": -0.0373,
+     "chi-middleware--api-key": -0.1731,
+     "chi-middleware--block-user-agents": -0.1155,
+     "chi-middleware--content-length-required": -0.134,
+     "chi-middleware--lowercase-path": -0.0957,
+     "chi-middleware--max-header-count": -0.3518,
+     "chi-middleware--method-override": -0.4399,
+     "chi-middleware--vary": -0.2593
+    }
+   },
+   "gate": {
+    "cards": 2,
+    "card_formed": true,
+    "held_out_delivered": [
+     8,
+     8
+    ],
+    "held_out_at_prompt": 7,
+    "held_out_at_edit": 1,
+    "delivered_tasks": [
+     "chi-middleware--method-override",
+     "chi-middleware--allow-hosts",
+     "chi-middleware--lowercase-path",
+     "chi-middleware--block-user-agents",
+     "chi-middleware--api-key",
+     "chi-middleware--vary",
+     "chi-middleware--content-length-required",
+     "chi-middleware--max-header-count"
+    ],
+    "false_fires": [
+     0,
+     6
+    ],
+    "false_fire_ids": [],
+    "false_fires_at_prompt": 0,
+    "false_fires_at_edit_only": 0,
+    "false_fire_rate_wilson90_upper": 0.3108
+   },
+   "delivered_subset_usd": {
+    "change": -0.2171,
+    "ci90": [
+     -0.2968,
+     -0.1335
+    ],
+    "pairs": 16,
+    "variants": 8,
+    "families": 1,
+    "adage_mean": 0.1488,
+    "control_mean": 0.19
+   },
+   "harness": {
+    "model": "claude-haiku-4-5-20251001",
+    "claude_code": "2.1.285 (Claude Code)",
+    "max_turns": 60
+   }
+  }
+ },
+ "sonnet": {
+  "mm-validator": {
+   "contrast": {
+    "arms": {
+     "adage": {
+      "sessions": 6,
+      "usd_per_task": 0.2602,
+      "calls": 15.5,
+      "wall_s": 62.7,
+      "turns": 16.5,
+      "pass": {
+       "k": 6,
+       "n": 6,
+       "rate": 1.0,
+       "wilson90": [
+        0.6892,
+        1.0
+       ]
+      },
+      "usd_per_resolved": 0.2602,
+      "censored": 0,
+      "card_delivered": 6,
+      "card_would_have": 6,
+      "check_failures": {
+       "tests": 0
+      }
+     },
+     "control": {
+      "sessions": 6,
+      "usd_per_task": 0.3345,
+      "calls": 22.33,
+      "wall_s": 105.2,
+      "turns": 23.33,
+      "pass": {
+       "k": 6,
+       "n": 6,
+       "rate": 1.0,
+       "wilson90": [
+        0.6892,
+        1.0
+       ]
+      },
+      "usd_per_resolved": 0.3345,
+      "censored": 0,
+      "card_delivered": 0,
+      "card_would_have": 6,
+      "check_failures": {
+       "tests": 0
+      }
+     }
+    },
+    "usd": {
+     "change": -0.2222,
+     "ci90": [
+      -0.3816,
+      -0.0071
+     ],
+     "pairs": 6,
+     "variants": 6,
+     "families": 1,
+     "adage_mean": 0.2602,
+     "control_mean": 0.3345
+    },
+    "calls": {
+     "change": -0.306,
+     "ci90": [
+      -0.4545,
+      -0.1452
+     ],
+     "pairs": 6,
+     "variants": 6,
+     "families": 1,
+     "adage_mean": 15.5,
+     "control_mean": 22.3333
+    },
+    "wall": {
+     "change": -0.4045,
+     "ci90": [
+      -0.5148,
+      -0.3169
+     ],
+     "pairs": 6,
+     "variants": 6,
+     "families": 1,
+     "adage_mean": 62.655,
+     "control_mean": 105.215
+    },
+    "pass_diff": {
+     "diff": 0.0,
+     "ci90": [
+      0.0,
+      0.0
+     ],
+     "pairs": 6,
+     "variants": 6
+    },
+    "pass_net": 0,
+    "card_delivery": {
+     "k": 6,
+     "n": 6,
+     "rate": 1.0,
+     "wilson90": [
+      0.6892,
+      1.0
+     ]
+    },
+    "sensitivity_uncensored_usd": {
+     "change": -0.2222,
+     "ci90": [
+      -0.3816,
+      -0.0071
+     ],
+     "pairs": 6,
+     "variants": 6,
+     "families": 1,
+     "adage_mean": 0.2602,
+     "control_mean": 0.3345
+    },
+    "per_variant_usd": {
+     "mm-validator--ascii": -0.4115,
+     "mm-validator--contains": -0.3405,
+     "mm-validator--ends-with": -0.4734,
+     "mm-validator--ip-address": 0.1065,
+     "mm-validator--lowercase": -0.2222,
+     "mm-validator--not-blank": 0.157
+    }
+   },
+   "harness": {
+    "model": "claude-sonnet-5",
+    "claude_code": "2.1.285 (Claude Code)",
+    "max_turns": 60
+   }
+  },
+  "chi-middleware": {
+   "contrast": {
+    "arms": {
+     "adage": {
+      "sessions": 6,
+      "usd_per_task": 0.1582,
+      "calls": 13.17,
+      "wall_s": 122.6,
+      "turns": 14.17,
+      "pass": {
+       "k": 6,
+       "n": 6,
+       "rate": 1.0,
+       "wilson90": [
+        0.6892,
+        1.0
+       ]
+      },
+      "usd_per_resolved": 0.1582,
+      "censored": 0,
+      "card_delivered": 6,
+      "card_would_have": 6,
+      "check_failures": {
+       "documented": 0,
+       "readme": 0,
+       "own_test": 0,
+       "tests": 0
+      }
+     },
+     "control": {
+      "sessions": 6,
+      "usd_per_task": 0.1697,
+      "calls": 13.67,
+      "wall_s": 116.5,
+      "turns": 14.67,
+      "pass": {
+       "k": 6,
+       "n": 6,
+       "rate": 1.0,
+       "wilson90": [
+        0.6892,
+        1.0
+       ]
+      },
+      "usd_per_resolved": 0.1697,
+      "censored": 0,
+      "card_delivered": 0,
+      "card_would_have": 6,
+      "check_failures": {
+       "documented": 0,
+       "readme": 0,
+       "own_test": 0,
+       "tests": 0
+      }
+     }
+    },
+    "usd": {
+     "change": -0.0681,
+     "ci90": [
+      -0.1986,
+      0.0736
+     ],
+     "pairs": 6,
+     "variants": 6,
+     "families": 1,
+     "adage_mean": 0.1582,
+     "control_mean": 0.1697
+    },
+    "calls": {
+     "change": -0.0366,
+     "ci90": [
+      -0.1791,
+      0.1333
+     ],
+     "pairs": 6,
+     "variants": 6,
+     "families": 1,
+     "adage_mean": 13.1667,
+     "control_mean": 13.6667
+    },
+    "wall": {
+     "change": 0.0524,
+     "ci90": [
+      -0.0764,
+      0.2377
+     ],
+     "pairs": 6,
+     "variants": 6,
+     "families": 1,
+     "adage_mean": 122.5567,
+     "control_mean": 116.4533
+    },
+    "pass_diff": {
+     "diff": 0.0,
+     "ci90": [
+      0.0,
+      0.0
+     ],
+     "pairs": 6,
+     "variants": 6
+    },
+    "pass_net": 0,
+    "card_delivery": {
+     "k": 6,
+     "n": 6,
+     "rate": 1.0,
+     "wilson90": [
+      0.6892,
+      1.0
+     ]
+    },
+    "sensitivity_uncensored_usd": {
+     "change": -0.0681,
+     "ci90": [
+      -0.1986,
+      0.0736
+     ],
+     "pairs": 6,
+     "variants": 6,
+     "families": 1,
+     "adage_mean": 0.1582,
+     "control_mean": 0.1697
+    },
+    "per_variant_usd": {
+     "chi-middleware--allow-hosts": 0.1867,
+     "chi-middleware--api-key": 0.0396,
+     "chi-middleware--block-user-agents": -0.3318,
+     "chi-middleware--lowercase-path": -0.1171,
+     "chi-middleware--method-override": -0.2306,
+     "chi-middleware--vary": 0.151
+    }
+   },
+   "harness": {
+    "model": "claude-sonnet-5",
+    "claude_code": "2.1.285 (Claude Code)",
+    "max_turns": 60
+   }
+  },
+  "pooled": {
+   "arms": {
+    "adage": {
+     "sessions": 12,
+     "usd_per_task": 0.2092,
+     "calls": 14.33,
+     "wall_s": 92.6,
+     "turns": 15.33,
+     "pass": {
+      "k": 12,
+      "n": 12,
+      "rate": 1.0,
+      "wilson90": [
+       0.816,
+       1.0
+      ]
+     },
+     "usd_per_resolved": 0.2092,
+     "censored": 0,
+     "card_delivered": 12,
+     "card_would_have": 12,
+     "check_failures": {
+      "tests": 0,
+      "documented": 0,
+      "readme": 0,
+      "own_test": 0
+     }
+    },
+    "control": {
+     "sessions": 12,
+     "usd_per_task": 0.2521,
+     "calls": 18.0,
+     "wall_s": 110.8,
+     "turns": 19.0,
+     "pass": {
+      "k": 12,
+      "n": 12,
+      "rate": 1.0,
+      "wilson90": [
+       0.816,
+       1.0
+      ]
+     },
+     "usd_per_resolved": 0.2521,
+     "censored": 0,
+     "card_delivered": 0,
+     "card_would_have": 12,
+     "check_failures": {
+      "tests": 0,
+      "documented": 0,
+      "readme": 0,
+      "own_test": 0
+     }
+    }
+   },
+   "usd": {
+    "change": -0.1703,
+    "ci90": [
+     -0.2866,
+     -0.0287
+    ],
+    "pairs": 12,
+    "variants": 12,
+    "families": 2,
+    "adage_mean": 0.2092,
+    "control_mean": 0.2521
+   },
+   "calls": {
+    "change": -0.2037,
+    "ci90": [
+     -0.3129,
+     -0.089
+    ],
+    "pairs": 12,
+    "variants": 12,
+    "families": 2,
+    "adage_mean": 14.3333,
+    "control_mean": 18.0
+   },
+   "wall": {
+    "change": -0.1645,
+    "ci90": [
+     -0.2451,
+     -0.0746
+    ],
+    "pairs": 12,
+    "variants": 12,
+    "families": 2,
+    "adage_mean": 92.6058,
+    "control_mean": 110.8342
+   },
+   "pass_diff": {
+    "diff": 0.0,
+    "ci90": [
+     0.0,
+     0.0
+    ],
+    "pairs": 12,
+    "variants": 12
+   },
+   "pass_net": 0,
+   "card_delivery": {
+    "k": 12,
+    "n": 12,
+    "rate": 1.0,
+    "wilson90": [
+     0.816,
+     1.0
+    ]
+   },
+   "sensitivity_uncensored_usd": {
+    "change": -0.1703,
+    "ci90": [
+     -0.2866,
+     -0.0287
+    ],
+    "pairs": 12,
+    "variants": 12,
+    "families": 2,
+    "adage_mean": 0.2092,
+    "control_mean": 0.2521
+   },
+   "per_variant_usd": {
+    "chi-middleware--allow-hosts": 0.1867,
+    "chi-middleware--api-key": 0.0396,
+    "chi-middleware--block-user-agents": -0.3318,
+    "chi-middleware--lowercase-path": -0.1171,
+    "chi-middleware--method-override": -0.2306,
+    "chi-middleware--vary": 0.151,
+    "mm-validator--ascii": -0.4115,
+    "mm-validator--contains": -0.3405,
+    "mm-validator--ends-with": -0.4734,
+    "mm-validator--ip-address": 0.1065,
+    "mm-validator--lowercase": -0.2222,
+    "mm-validator--not-blank": 0.157
+   }
+  }
+ },
+ "false_fires": {
+  "pooled": {
+   "k": 3,
+   "n": 30,
+   "rate": 0.1,
+   "wilson90": [
+    0.0407,
+    0.2255
+   ]
+  },
+  "at_prompt": {
+   "k": 0,
+   "n": 30,
+   "rate": 0.0,
+   "wilson90": [
+    0.0,
+    0.0827
+   ]
+  },
+  "at_edit_only": 3,
+  "per_family": {
+   "click-type": {
+    "false_fires": 0,
+    "negatives": 6,
+    "ids": [],
+    "at_prompt": 0,
+    "at_edit_only": 0
+   },
+   "mm-validator": {
+    "false_fires": 2,
+    "negatives": 6,
+    "ids": [
+     "marshmallow-65374df0",
+     "marshmallow-f07eadc8"
+    ],
+    "at_prompt": 0,
+    "at_edit_only": 2
+   },
+   "go-flag": {
+    "false_fires": 0,
+    "negatives": 6,
+    "ids": [],
+    "at_prompt": 0,
+    "at_edit_only": 0
+   },
+   "http-header": {
+    "false_fires": 1,
+    "negatives": 6,
+    "ids": [
+     "neg-http-doc-accept-ranges"
+    ],
+    "at_prompt": 0,
+    "at_edit_only": 1
+   },
+   "chi-middleware": {
+    "false_fires": 0,
+    "negatives": 6,
+    "ids": [],
+    "at_prompt": 0,
+    "at_edit_only": 0
+   }
+  },
+  "source": "sc_detect.py probe through the installed hook"
+ },
+ "spend": {
+  "click-type": {
+   "usd": 12.2003,
+   "sessions": 36,
+   "by_phase": {
+    "train": 1.1356,
+    "eval": 11.0647
+   }
+  },
+  "mm-validator": {
+   "usd": 7.1985,
+   "sessions": 36,
+   "by_phase": {
+    "train": 0.7164,
+    "eval": 6.4822
+   }
+  },
+  "go-flag": {
+   "usd": 9.8227,
+   "sessions": 36,
+   "by_phase": {
+    "train": 1.3499,
+    "eval": 8.4728
+   }
+  },
+  "http-header": {
+   "usd": 6.8829,
+   "sessions": 36,
+   "by_phase": {
+    "train": 0.5907,
+    "eval": 6.2922
+   }
+  },
+  "chi-middleware": {
+   "usd": 6.0006,
+   "sessions": 36,
+   "by_phase": {
+    "train": 0.5802,
+    "eval": 5.4204
+   }
+  },
+  "mm-validator-sonnet": {
+   "usd": 3.5683,
+   "sessions": 12,
+   "by_phase": {
+    "train": 0,
+    "eval": 3.5683
+   }
+  },
+  "chi-middleware-sonnet": {
+   "usd": 1.9672,
+   "sessions": 12,
+   "by_phase": {
+    "train": 0,
+    "eval": 1.9672
+   }
+  }
+ },
+ "spend_total_usd": 47.64,
+ "complete": {
+  "haiku_pairs": [
+   80,
+   80
+  ],
+  "sonnet_pairs": [
+   12,
+   12
+  ],
+  "haiku_complete": true,
+  "sonnet_complete": true
+ }
+}

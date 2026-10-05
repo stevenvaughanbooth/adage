@@ -1,0 +1,108 @@
+{
+  "run": "launch1",
+  "source": "/tmp/adage-train/acme/SKILL.md",
+  "source_sha256": "de7f8d61718dd313f150765ce3dcded1643a8522704278cea3e254b3a55021e6",
+  "provenance": "synthetic:skill:de7f8d61718dd313f150765ce3dcded1643a8522704278cea3e254b3a55021e6@launch1",
+  "harness": "claude-code",
+  "model": "claude-haiku-4-5",
+  "repo_key": "acme@6dbdc87c7578",
+  "sessions": {
+    "baseline": 2,
+    "explore": 24,
+    "reflex": 2,
+    "skill": 2
+  },
+  "skipped": 0,
+  "failed": 0,
+  "cost_usd": 0.8368731000000001,
+  "budget_usd": 5.0,
+  "claims": [
+    {
+      "id": "c1",
+      "claim": "verify: `python3 -m unittest`",
+      "at": "SKILL.md:8",
+      "verdict": "contradicted",
+      "route": "dead-end-d41b1e",
+      "instead": "make test",
+      "failed_sessions": 5,
+      "ran_sessions": 5,
+      "exercised": 6,
+      "followed": 0
+    },
+    {
+      "id": "c2",
+      "claim": "regenerate_after(schema/*.json): `make gen`",
+      "at": "SKILL.md:10",
+      "verdict": "compiled",
+      "route": "finish-line-e7e809",
+      "exercised": 6,
+      "followed": 6
+    },
+    {
+      "id": "c3",
+      "claim": "lookup: `python3 scripts/wi-lookup` (e.g. W-2042)",
+      "at": "SKILL.md:12",
+      "verdict": "not_compiled",
+      "reason": "followed in 1/6 exploration sessions; below the learning thresholds (default)",
+      "exercised": 6,
+      "followed": 1
+    },
+    {
+      "id": "c4",
+      "claim": "regenerate_after(proto/*.proto): `make gen`",
+      "at": "SKILL.md:14",
+      "verdict": "never_exercised",
+      "reason": "no file in the repository matches `proto/*.proto`",
+      "exercised": 0,
+      "followed": 0
+    },
+    {
+      "id": "c5",
+      "claim": "environment: `pip install -r requirements.txt`",
+      "at": "SKILL.md:16",
+      "verdict": "unsafe",
+      "reason": "`pip install -r requirements.txt` classifies as environment: above regenerate, never exercised",
+      "exercised": 0,
+      "followed": 0
+    }
+  ],
+  "staged_routes": [
+    "dead-end-d41b1e",
+    "finish-line-e7e809"
+  ],
+  "acceptance": [
+    {
+      "claim": "c1",
+      "route": "dead-end-d41b1e",
+      "arms": {
+        "baseline": {
+          "sessions": 1,
+          "applicable": 1,
+          "followed": 1,
+          "rate": 1.0,
+          "mean_turns": 5.0,
+          "mean_cost_usd": 0.022914800000000006
+        },
+        "reflex": {
+          "sessions": 1,
+          "applicable": 1,
+          "followed": 1,
+          "rate": 1.0,
+          "mean_turns": 2.0,
+          "mean_cost_usd": 0.01414
+        },
+        "skill": {
+          "sessions": 1,
+          "applicable": 1,
+          "followed": 0,
+          "rate": 0.0,
+          "mean_turns": 3.0,
+          "mean_cost_usd": 0.017939
+        }
+      },
+      "result": "accepted",
+      "reasons": []
+    }
+  ],
+  "staged": "/tmp/adage-train/adage-home/train/launch1/staged"
+}

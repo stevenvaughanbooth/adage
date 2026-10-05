@@ -28,7 +28,7 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::Instant;
 
-fn route(id: &str, trigger: Trigger, step: Step, slots: Vec<Slot>, effect: Effect, aspect: Aspect) -> Route {
+fn route(id: &str, trigger: Trigger, step: Step, slots: Vec<Slot>, effect: Effect, strength: Strength) -> Route {
     Route {
         id: id.into(),
         summary: String::new(),
@@ -36,8 +36,8 @@ fn route(id: &str, trigger: Trigger, step: Step, slots: Vec<Slot>, effect: Effec
         step,
         slots,
         effect,
-        aspect,
-        state: RouteState::Active,
+        strength,
+        state: RouteState::Firm,
         exit: vec![Exit::IntentChanges],
         evidence: Evidence { support: 5, ..Default::default() },
         authored: false,
@@ -57,7 +57,7 @@ fn index(home: &Path, repos: &[String]) {
                 contract: Contract::Pattern { regex: r"^W-\d{4}$".into() },
             }],
             Effect::Observe,
-            Aspect::Green,
+            Strength::Fire,
         ),
         route(
             "read-linked-files",
@@ -69,7 +69,7 @@ fn index(home: &Path, repos: &[String]) {
                 contract: Contract::RepoPath,
             }],
             Effect::Observe,
-            Aspect::Yellow,
+            Strength::Prime,
         ),
         route(
             "finish-line-1",
@@ -77,7 +77,7 @@ fn index(home: &Path, repos: &[String]) {
             Step::Run { command: "make gen".into() },
             vec![],
             Effect::Regenerate,
-            Aspect::Green,
+            Strength::Fire,
         ),
         route(
             "dead-end-1",
@@ -89,7 +89,7 @@ fn index(home: &Path, repos: &[String]) {
             },
             vec![],
             Effect::Verify,
-            Aspect::Red,
+            Strength::Inhibit,
         ),
     ];
     let tracks: Vec<Track> = repos

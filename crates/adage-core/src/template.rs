@@ -43,11 +43,24 @@ pub fn placeholder(token: &str) -> Option<&'static str> {
         return Some("{env}");
     }
     if PATH_RE.is_match(token) || token.contains('/') {
-        return Some("{path}");
+        // Words with spaces (a commit message that names a path) are text, not a path.
+        return Some(if token.contains(char::is_whitespace) { "{text}" } else { "{path}" });
     }
     None
 }
 
 pub fn template_argv(argv: &[String]) -> Vec<String> {
     argv.iter().map(|t| placeholder(t).map(|p| p.to_string()).unwrap_or_else(|| t.clone())).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::placeholder;
+
+    #[test]
+    fn a_message_that_names_a_path_is_text() {
+        assert_eq!(placeholder("fix: crates/adage-cli/src/main.rs help"), Some("{text}"));
+        assert_eq!(placeholder("crates/adage-cli/src/main.rs"), Some("{path}"));
+        assert_eq!(placeholder("W-2042"), Some("{id}"));
+    }
 }

@@ -1,9 +1,10 @@
 # Continuous integration (plan §6.1). Release builds are .github/workflows/release.yml (dist).
 name: CI
 
-# Minutes are billed (private repository; macOS at 10x): pushes and pull requests run the three
-# primary platforms; the weekly run and manual dispatches add macOS x64, Linux arm64 and the arm64
-# musl build.
+# Kept fast while iterating: pushes and pull requests run fmt, clippy and the Linux x64 tests, plus
+# the cheap dco, deny and plugin checks. The full suite (macOS, Windows, Linux arm64, the musl
+# builds, NOTICE, the design and site e2e suites, the release-profile startup test) runs weekly and
+# on manual dispatch: `gh workflow run CI --ref <branch>`.
 on:
   push:
     branches: [main]
@@ -23,6 +24,9 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
   RUST_BACKTRACE: 1
+  # Full debug info filled the Linux runner's disk while linking the workspace's test binaries
+  # (ld died with a bus error at 41 MB free). Backtraces still carry file and line.
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
 
 jobs:
   # Decision D2: every commit in a pull request carries a DCO sign-off (CONTRIBUTING.md).
@@ -61,15 +65,24 @@ jobs:
 
   test:
     name: test (${{ matrix.name }})
+    # A hung test fails the job instead of billing hours of runner time.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && '[{"name":"macos-arm64","os":"macos-14"},{"name":"macos-x64","os":"macos-15-intel"},{"name":"linux-x64","os":"ubuntu-24.04"},{"name":"linux-arm64","os":"ubuntu-24.04-arm"},{"name":"windows-x64","os":"windows-2022"}]' || '[{"name":"macos-arm64","os":"macos-14"},{"name":"linux-x64","os":"ubuntu-24.04"},{"name":"windows-x64","os":"windows-2022"}]') }}
+        include: ${{ fromJSON((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && '[{"name":"macos-arm64","os":"macos-14"},{"name":"macos-x64","os":"macos-15-intel"},{"name":"linux-x64","os":"ubuntu-24.04"},{"name":"linux-arm64","os":"ubuntu-24.04-arm"},{"name":"windows-x64","os":"windows-2022"}]' || '[{"name":"linux-x64","os":"ubuntu-24.04"}]') }}
     runs-on: ${{ matrix.os }}
     steps:
+      - name: free disk space (the workspace's test build outgrows the Linux runner)
+        if: runner.os == 'Linux'
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
+          # Pull requests test only the packages they can affect, found from the merge base.
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '1' }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
@@ -82,10 +95,43 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: test (adage-store, the Windows-ported store, on every platform)
         run: cargo test --locked -p adage-store
+      # A pull request tests the packages its changes can affect: those it changed, those whose
+      # tests read a changed fixture, and every package that depends on one of them
+      # (`cargo xtask affected`, xtask/src/affected.rs). A change outside every package (the
+      # lockfile, this workflow, an undeclared directory) tests everything; pushes to main, the
+      # weekly run and dispatches always test everything.
+      - name: affected packages
+        id: affected
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            out=$(cargo xtask affected --base "origin/${{ github.base_ref }}")
+          else
+            out=all
+          fi
+          echo "$out"
+          if [ "$out" = "all" ]; then
+            echo "args=--workspace --exclude adage-eval" >> "$GITHUB_OUTPUT"
+          elif [ "$out" = "none" ]; then
+            echo "args=" >> "$GITHUB_OUTPUT"
+          else
+            echo "args=$(echo "$out" | { grep -vx adage-eval || true; } | sed 's/^/-p /' | tr '\n' ' ')" >> "$GITHUB_OUTPUT"
+          fi
+          case "$out" in all|*adage-cli*) echo "cli=true" >> "$GITHUB_OUTPUT";; *) echo "cli=false" >> "$GITHUB_OUTPUT";; esac
+      # Always: the layering rules, the affected-path declarations, and the no-spawn scan of every
+      # crate's sources. They guard the selection above, and take seconds.
+      - name: architecture guards
+        run: |
+          cargo test --locked -p xtask
+          cargo test --locked -p adage-exec --test no_spawn
       - name: test
+        if: steps.affected.outputs.args != ''
         env:
           ADAGE_PROP_TRACE: ${{ runner.temp }}/prop_shell_last.json
-        run: cargo test --workspace --locked --no-fail-fast
+        # adage-eval's gates, bench and parity suites take hours in a debug build; they run in
+        # evals.yml (weekly and on dispatch).
+        run: cargo test ${{ steps.affected.outputs.args }} --locked --no-fail-fast
       - name: last property-test input (if the process crashed)
         if: failure()
         shell: bash
@@ -93,7 +139,7 @@ jobs:
           f="${{ runner.temp }}/prop_shell_last.json"
           if [ -f "$f" ]; then echo "bytes: $(wc -c < "$f")"; head -c 4000 "$f"; echo; fi
       - name: OpenCode plugin test ran under node (not skipped)
-        if: runner.os != 'Windows'
+        if: runner.os != 'Windows' && steps.affected.outputs.cli == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -107,15 +153,23 @@ jobs:
       - name: Claude Code session-start hook
         if: runner.os != 'Windows'
         run: plugin/test/session-start.test.sh
+      - name: release plugin startup and real background bootstrap
+        if: runner.os != 'Windows' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+        # Product latency budgets are checked on the shipped profile. Debug-only spawn
+        # instrumentation is deliberately absent: the registered hooks must learn for real.
+        run: cargo test --release --locked -p adage-cli --test zero_config_plugin release_plugin_startup -- --nocapture
 
   # Release targets without a native CI test runner: the static musl builds dist ships for Linux,
   # each built natively (x64, and arm64 on GitHub's arm64 runner) with the distribution's musl-gcc.
   musl:
     name: musl (${{ matrix.target }})
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && '[{"target":"x86_64-unknown-linux-musl","os":"ubuntu-24.04"},{"target":"aarch64-unknown-linux-musl","os":"ubuntu-24.04-arm"}]' || '[{"target":"x86_64-unknown-linux-musl","os":"ubuntu-24.04"}]') }}
+        include:
+          - { target: x86_64-unknown-linux-musl, os: ubuntu-24.04 }
+          - { target: aarch64-unknown-linux-musl, os: ubuntu-24.04-arm }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
@@ -133,12 +187,33 @@ jobs:
         # for `aarch64-linux-musl-gcc` on arm64 unless told.
         env:
           CC_aarch64_unknown_linux_musl: musl-gcc
-        run: cargo build --locked --release -p adage-cli --target ${{ matrix.target }}
+        run: cargo build --locked --release -p adage-cli -p adage-exec -p adage-train --target ${{ matrix.target }}
       - name: static and runnable
         run: |
-          b=target/${{ matrix.target }}/release/adage
-          file "$b" | grep -Eq "statically linked|static-pie linked"
-          "$b" version
+          d=target/${{ matrix.target }}/release
+          for b in adage adage-exec adage-train; do
+            file "$d/$b" | grep -Eq "statically linked|static-pie linked"
+          done
+          "$d/adage" version
+          "$d/adage-exec" --help >/dev/null
+          "$d/adage-train" --help >/dev/null
+
+  # NOTICE lists every third-party crate the shipped binaries link (scripts/notice.sh, which
+  # also checks that adage-exec and adage-train link nothing adage does not).
+  notice:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo install --locked cargo-about --features cli
+      - name: NOTICE is current
+        run: |
+          scripts/notice.sh "$RUNNER_TEMP/NOTICE"
+          diff -u --strip-trailing-cr NOTICE "$RUNNER_TEMP/NOTICE" || { echo "::error::NOTICE is stale: run scripts/notice.sh and commit it"; exit 1; }
 
   deny:
     runs-on: ubuntu-24.04
@@ -161,9 +236,81 @@ jobs:
           node-version: 22
       - name: structure and versions
         run: node scripts/check-plugin.mjs
+      - name: release archive checksum enforcement
+        run: node scripts/test-stage-plugin.mjs
       - name: install the Claude Code CLI (validation only; no agent runs)
         run: npm install -g @anthropic-ai/claude-code
       - name: claude plugin validate
         run: |
           claude plugin validate --strict plugin/claude-code
+          claude plugin validate --strict plugin/claude-code-exec
           claude plugin validate --strict .
+
+  design:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    # The design tokens and the embedded web map are generated files: fail when either is stale.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - name: tokens are current and pass contrast
+        run: cargo xtask tokens --check
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/map/package.json
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/map/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: web/map
+      - run: pnpm typecheck
+        working-directory: web/map
+      - name: unit tests (vitest)
+        run: pnpm test
+        working-directory: web/map
+      - name: embedded map matches web/map
+        run: pnpm drift
+        working-directory: web/map
+      - name: browser for the e2e suite
+        run: pnpm exec playwright install --with-deps chromium
+        working-directory: web/map
+      - name: map e2e and axe (builds and starts the adage binary itself)
+        run: pnpm test:e2e
+        working-directory: web/map
+
+  site:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    # The public website (web/site): types, the build, and Playwright with axe in both themes.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/site/package.json
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/site/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: web/site
+      - run: pnpm typecheck
+        working-directory: web/site
+      - name: registration API contract
+        run: pnpm test:api
+        working-directory: web/site
+      - name: held-out evidence converter
+        run: pnpm test:evidence
+        working-directory: web/site
+      - name: browser for the e2e suite
+        run: pnpm exec playwright install --with-deps chromium
+        working-directory: web/site
+      - name: site e2e and axe (builds and serves the site itself)
+        run: pnpm test:e2e
+        working-directory: web/site

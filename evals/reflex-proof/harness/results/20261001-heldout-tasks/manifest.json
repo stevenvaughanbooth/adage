@@ -1,0 +1,163 @@
+{
+  "base_commit": "7f0792bd7a06f72e393ec866ac1e89e1502ccfe1",
+  "evaluation": [
+    "mm-curve--has-keys",
+    "mm-curve--iso-date",
+    "mm-curve--json-object",
+    "mm-curve--lat-long"
+  ],
+  "expectation": {
+    "basis": "same prompt template and deliverables as the 31 earlier unguided Marshmallow sessions, of which 27 produced the context and all 31 edited validate.py, then tests, then CHANGELOG.rst",
+    "context": "edit tests/*.py, then CHANGELOG.rst within 8 events (run-175d85)",
+    "expected": {
+      "has-keys": "fires in most sessions",
+      "iso-date": "fires in most sessions",
+      "json-object": "fires in most sessions",
+      "lat-long": "fires in most sessions",
+      "max-sum": "fires in most sessions"
+    },
+    "family_specific_risk": {
+      "has-keys": "none known",
+      "iso-date": "more own-test iteration (calendar cases) may separate the tests and changelog edits",
+      "json-object": "more own-test iteration (whitespace and non-object cases) may separate the edits",
+      "lat-long": "none known",
+      "max-sum": "withdrawn"
+    }
+  },
+  "frozen_at_utc": "2026-10-01T06:09:16Z",
+  "paid_calls": 0,
+  "protocol": "heldout-tasks-1",
+  "python": "Python 3.12.14",
+  "realism_line": "Do not create git commits.",
+  "source_sha256": {
+    "evals/lab/research/recurring-workflows/families.py": "0592230842e8f6cf0f7f8696464027da464cd41bbe997be1950a2deec49c41d1",
+    "evals/reflex-proof/harness/curve_tasks.py": "9be77f97b2d3b7de606b11a03b73df7cab0f55cdc83251f1a7863a1ef5aba229",
+    "evals/reflex-proof/harness/heldout_tasks.py": "76e807771256f04ee91aef2cc7bcc80783b59db785a8db47fc7f218fa64ddc0a",
+    "evals/reflex-proof/harness/real_repo_gate.py": "e47a835e349312e103ed565c8d7b9d9408f3020a89cea0aa5ef58743059b7347",
+    "evals/reflex-proof/harness/real_repo_pairs.py": "352d375d6ee5d5a38ce2cf47e1532186500393ef3ded0a61e615c96345eee3a0",
+    "evals/showcase/fam_python.py": "9a7e2c5137e90b7ff1f07a9f1518baa15fba791560dc234c2fad366871d227c9",
+    "evals/showcase/sc_score.py": "338307033ea3c76df0c0ec965ba1290991862b02f752b0a6985a25a94bf13e61"
+  },
+  "tasks": {
+    "mm-curve--has-keys": {
+      "broken": [
+        "any-key",
+        "no-mapping-check",
+        "truthy-values"
+      ],
+      "files": {
+        "broken-any-key.patch": "97e295c4e5c4c60a737ad631beb21389860e6b6e043b5a3bab8370459259c26a",
+        "broken-no-mapping-check.patch": "6311083308a49c9ede5218382b876295fb63dfc30beaf4273fca1b3ab3a5ada1",
+        "broken-truthy-values.patch": "7c49c1e342e4e7b3f6aad65c89d3f05ab94e361f94a1c2634a543b47373f62af",
+        "gold.patch": "0499b1e98c5aec18179c46b96b1ba6a620ed43ab9c489ecbb704602fc4a6ee2b",
+        "hidden.py": "4d11270bef852239a3868388bb41abfc4ebc92ca34bb0ce5bacd1a4f9da62ac1",
+        "prompt.txt": "5daff605e6cb02a72b372187dd806493916f27af341d60dbf5f31cc8cd9dce0c"
+      },
+      "gold_files_sha256": {
+        "CHANGELOG.rst": "755722c2e9bbebbc62af10a9a602344ca8553fb5788c531525ea0722c8f3f35d",
+        "src/marshmallow/validate.py": "9d26fea077b33b24c73d50f490ea6f930bfb5d00de175123992a921e3229c7cd",
+        "tests/test_gold_has_keys.py": "8657532be61c739ef070a9cba068cf93d5ab49fe89f896e676ec121731d49d8c"
+      },
+      "group": "mapping-keys",
+      "split": "evaluation",
+      "valid": true
+    },
+    "mm-curve--iso-date": {
+      "broken": [
+        "fromisoformat-only",
+        "pattern-only",
+        "strptime"
+      ],
+      "files": {
+        "broken-fromisoformat-only.patch": "b91d5e885ab62d02836824290b332acb8ef0f5f528410da2c8f48c70e5b32b45",
+        "broken-pattern-only.patch": "4cf1980a379c5bb8f3eeff429b02854d0d14f6945f8d63eca19b75153c56c61e",
+        "broken-strptime.patch": "7d186ff6cb453c0b132ff4eca29a6d00848f7d9317168a0367a16bd02e1e81f8",
+        "gold.patch": "4e2b1de63676cd2987adb9d739395869b010fa49740a6add905371e7617ab0be",
+        "hidden.py": "13ab2ae5e1e45cc659333b4283b49b8d4107755b7958248d3981a1fe84e1f67d",
+        "prompt.txt": "5f29842fb16f8038f58bf47a6496393a0b87e7ff1c974903cecf2c47e9bb1971"
+      },
+      "gold_files_sha256": {
+        "CHANGELOG.rst": "085cd14ab8b7096b224407f47e6c4094f4efe294373307557f97c9f8d496f6da",
+        "src/marshmallow/validate.py": "9564061a38224a2d46d7ba47604f52a86ec759fac4c1cf50f5a511e935feb999",
+        "tests/test_gold_iso_date.py": "cb124c87edd10de85405fa01ef8ec35a390dea610c63d184ee192b54e2064d7d"
+      },
+      "group": "temporal-format",
+      "split": "evaluation",
+      "valid": true
+    },
+    "mm-curve--json-object": {
+      "broken": [
+        "any-json",
+        "brace-sniffing",
+        "no-leading-whitespace"
+      ],
+      "files": {
+        "broken-any-json.patch": "cb491283733206a3e9ea96f5466df99827dc3bd2ec39f7e10dcdc912cd1edafc",
+        "broken-brace-sniffing.patch": "37c6258de1a03e4caa99436af440789499593e07258d7d0264eee55a762705cf",
+        "broken-no-leading-whitespace.patch": "096f40e7f0f80156370d73c845435a0deff080e5fded4d868764f594b80188cb",
+        "gold.patch": "9a19e415a190ffd7399ede876c901c158df0ce46d7589742055420f768d5aa98",
+        "hidden.py": "1f812a5c9fafcf192145caa8f4769803c146f3c01c513c035507694b85f16193",
+        "prompt.txt": "423da26b12014cf8316ae0eee73ef9f97ef4d9301d435f34ab655f12e784fc84"
+      },
+      "gold_files_sha256": {
+        "CHANGELOG.rst": "8b22fdc1d7aae0ddc004b1739230630660257aa0b20718c617ccd1fb7b617f97",
+        "src/marshmallow/validate.py": "d78b6a212adede13bc4be9a0955791b9ecfe022f08a8e5df497817d45cd4dfe2",
+        "tests/test_gold_json_object.py": "7396b4b585acc9c336023b7ffada038ee07f7a9ab48107ac949ae309ef5e0fea"
+      },
+      "group": "structured-text",
+      "split": "evaluation",
+      "valid": true
+    },
+    "mm-curve--lat-long": {
+      "broken": [
+        "exclusive-bounds",
+        "no-length-check",
+        "swapped"
+      ],
+      "files": {
+        "broken-exclusive-bounds.patch": "845386f311769b6854940a79bbf836bef37aa9d251daa59f90ca94b57fa18fe5",
+        "broken-no-length-check.patch": "e49b19cfa0efde52bd74cd2c0eaba82a248d700206063a8ed793abf4dd2ad667",
+        "broken-swapped.patch": "cac6cd72d272442c6db950a1127bca8aa3f8a4a2c502e420d7c839d273087788",
+        "gold.patch": "3a046e61fa79ddfb359633463c872c5915782f252e1877324424e3e66c32c009",
+        "hidden.py": "d28a3dbc79998c99c57d5293a545591659716aeb614774ccc319bf722c2da16e",
+        "prompt.txt": "346a29513eb0bd2b4fa0d322008a7c9341e2b385c8181c411f469688c27b62b9"
+      },
+      "gold_files_sha256": {
+        "CHANGELOG.rst": "4d370244e720c64e90aa4b8527548155e132b92db1c6ff9a8d4d266ff5fe5be5",
+        "src/marshmallow/validate.py": "c6bba88912e907d0b873604007f12ee63b2e25c316044d0faa211c88cb87f188",
+        "tests/test_gold_lat_long.py": "871cd40529a5c83dd80341d37d5953486b302c0672fdd4c1eb23a833be71a5ed"
+      },
+      "group": "geo-coordinate",
+      "split": "evaluation",
+      "valid": true
+    },
+    "mm-curve--max-sum": {
+      "broken": [
+        "count",
+        "per-element",
+        "strict"
+      ],
+      "files": {
+        "broken-count.patch": "29fd69f261815dd2ab78e56f0923afb3c42ef2d111e54539606d546d61faaad4",
+        "broken-per-element.patch": "9b941e22aef425ecd65c67fe1457f9e4ebcda1c6d665ee1ce0a2f27cbed1d08c",
+        "broken-strict.patch": "698eb1070d29d997491bf5a60861dae94cae76ec9980ab58d30e2771ccb2442e",
+        "gold.patch": "fb50db01152369c41c562c328f2b9d03468ad3a25bc8a704f1a94564c416a94c",
+        "hidden.py": "c538d97894255085cfb8d9a77c2facf4c377340ec598dabbe824b6c434ffde3e",
+        "prompt.txt": "ffb8afa1cd96d8ea9db0285b42dfad4195ba0ce8e3e5a15abb57731720fada4a"
+      },
+      "gold_files_sha256": {
+        "CHANGELOG.rst": "cf78b5df69d979eba3086389c2c825dd5a8b0e9d12cc338a0ba5e02c35e9ebf5",
+        "src/marshmallow/validate.py": "509f73de4db6bf7e5a5a3f88fd8b5fbaad8e2f5c828c1b8aa6cf7d5aa250f02e",
+        "tests/test_gold_max_sum.py": "3f4e25e76107659e39c24862382630881324edb1808f5cd93da0732e3fa802fa"
+      },
+      "group": "size-limit",
+      "split": "withdrawn",
+      "valid": true
+    }
+  },
+  "validation_root": "/private/tmp/claude-501/-Users-stevenbooth-Documents-skill-compile--claude-worktrees-pr-review-handoff-6eeea9/5765f504-183e-43c1-aa0d-48a0dd1731b8/scratchpad/heldout/validation-r1",
+  "validation_sha256": "18f5a3fd49e9e3cb632803b2b5c3983517a9179257ba3b6c1a5247ad2e9c21bf",
+  "withdrawn": {
+    "max-sum": "near-duplicate of the size-limit training group (max-words, max-utf8-bytes): the same `(max, *, error=None)` interface and a one-line measure-at-most-max predicate; replaced by lat-long"
+  }
+}
