@@ -1,8 +1,9 @@
 # Claude mod verification, 2026-10-06
 
 The commercial-evidence branch was rebased onto merged main `7aaeedd2` (PR #27).
-These are free local checks of the real merged plugin and binaries. No live model session,
-learned Coder treatment, held-out comparison, request saving or billed-cost result is claimed.
+These cover local checks of the real merged plugin and binaries, followed by one operator-run
+cold-mod Coder cost scout. No learned Coder treatment, held-out comparison, request saving or
+billed-cost result is claimed.
 
 Machines: macOS arm64 and Docker Linux aarch64 on the same Mac; Rust 1.98.1, Claude Code
 2.1.288 on both platforms, Node 22.15.0 in the Coder container. Hosted CI was unavailable.
@@ -65,15 +66,57 @@ Its plan and input manifests pin the code, plugin, binaries, runtime, task and g
 The earlier baseline-only preparation is retained at
 `/Users/stevenbooth/Documents/adage-studies/2026-10-06-coder-cost-calibration-01/`.
 
-## Paid sections: not run
+## First Coder cost scout: completed, task failed
 
-Proposed next dispatch: one exposed Coder database-development task, cold `mod` arm, the same
-pinned Haiku model, $2 CLI cap, 60 turns, 1,800 seconds, no retry or expansion. No reflexes or
-execution grants are preinstalled. The operator reviews and invokes the sealed command outside
-an agent session; refusing inside an agent is intentional. The independent parent grader runs
-after the model container stops. CLI cost remains distinct from billed cost.
+The operator ran the sealed scout at commit `bc9428bf16952e870d5659beeb7c3b4f1b2ef7f5`.
+One exposed database-development task used Claude Code 2.1.288 and
+`claude-haiku-4-5-20251001`, with the actual mod, no learned reflexes and no execution grants.
+It stopped at the 60-turn limit (`error_max_turns`) after 169,770 ms. The terminal's turn
+counter is 61; this is not the number of model requests.
 
-The mod's plugin, settings, stores and grants must be frozen explicitly before a learned
-comparison. The existing E0-only frozen coordinator cannot certify that treatment. Training,
-operator review, frozen validation and untouched confirmation remain required before any
-website or documentation savings claim.
+| Observation | Result |
+| --- | --- |
+| CLI cost estimate | $0.3157685, against the $2 admission cap |
+| Billed cost | Unknown: no billing evidence |
+| Model requests | 60; debug dispatches, stream IDs and native history reconcile |
+| Input tokens, including both cache categories | 1,839,936 |
+| Uncached / cache creation / cache read input tokens | 482 / 39,019 / 1,800,435 |
+| Output tokens | 11,441 |
+| Independent candidate grade | Task failed; 6 of 9 scoped database checks passed |
+| Mod activation | One module load, 60 observed turn.step callbacks, one startup record |
+| Learned directives / predictions / receipt substitutions | 0 / 0 / 0 |
+
+The migration, uniqueness constraint, downgrade and selected SQLC parity checks passed.
+First-organization insertion failed through the source query, generated query and compiled Go
+Store. The parent grader observed both inserted organizations with `is_default=false`. The
+candidate put default selection in an application caller while adding a required boolean to
+the database query; the task required the existing query itself to make the first organization
+default. Generation output included a passing gentest; that does not establish feature correctness.
+The nine checks are not nine independent task samples, and no overall correctness rate is inferred.
+
+The initial private summary incorrectly fed `{t,line}` envelopes to the debug-request checker,
+reporting zero stream request IDs. The derived audit instead uses the canonical native parser's
+request identities and checks the native history too: all three counts are 60, with reconciled
+terminal usage. Original summaries, streams, histories, failed attempts and the frozen preparation
+are unchanged. The collector's placeholder `scorer_error` also remains in the original state;
+external grading is the quality authority. Its `reference` key names the submitted candidate
+when `--candidate` is used, not the earlier positive control.
+
+Reproduce the free audit (no dispatch):
+
+```sh
+python3 /Users/stevenbooth/Documents/adage-studies/2026-10-06-coder-mod-cost-01/analysis-01/audit.py
+```
+
+Retained artifacts in that scout directory: `analysis-01/audit.json` (source hashes and corrected
+accounting), `grade-01/result.json` (independent checks), `REPORT.json` and
+`cost-observation.json` (original summaries), and `attempt-01/` (native streams/debug/history,
+plugin spools and final checkout). No new training or held-out evaluation occurred: this cost
+belongs entirely to development. Prior synthetic training remains a separate study.
+
+No further paid run is admitted. Before expansion, future collectors must use decoded/canonical
+request identities and report native termination separately from an external-grade placeholder.
+The next learning experiment needs untreated independent training groups, production learning,
+operator review and an explicitly frozen mod/plugin/settings/grants treatment before held-out
+validation and untouched confirmation. Do not replace this unfavorable run or extrapolate its
+cost into a cost per successful task. There is no savings estimate to publish.
