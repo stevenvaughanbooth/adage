@@ -50,8 +50,17 @@ rules live below it in `adage-app` and the engines. Front-end map: `../../docs/a
   `ADAGE_HOME` and `HOME`, built with the kit in `tests/common/mod.rs` (`scrub`, `hermetic`,
   `adage`, `TempWorld`, `text`); a new suite starts with `mod common;` and calls `common::scrub`
   before setting its own variables. `tests/hooks.rs` cannot use it: `adage-exec`'s `parity` test
-  compiles that file by path. See `../../docs/claude-mod/impl/structure-cli.md`. Goldens: `tests/golden/*.txt`, re-blessed with `ADAGE_BLESS=1`; a changed
-  Claude Code golden is a behaviour change, and `adage-exec`'s `parity` test runs the same goldens.
+  compiles that file by path. See `../../docs/claude-mod/impl/structure-cli.md`.
+- Routes, tracks, indexes and learned homes come from the workspace test kit,
+  `adage_tracks::testkit` (the `testkit` feature, a dev-dependency here): `route`, `track`,
+  `IndexBuilder`, `kinds::*`, `TempWorld`, `LearnedHome`. A suite builds its world from it
+  rather than writing a `Route { … }` literal; `tests/hooks.rs` uses it directly. See
+  `../../docs/claude-mod/impl/testkit.md`.
+- A suite that waits on `adage watch --follow` sets `ADAGE_TEST_FOLLOW_POLL_MS=<1..=250>`
+  (`ui/follow.rs`): a debug build polls that often instead of every 250 ms, so the test is not
+  paced by the poll. A release build never reads it.
+- Goldens: `tests/golden/*.txt`, re-blessed with `ADAGE_BLESS=1`; a changed Claude Code golden is
+  a behaviour change, and `adage-exec`'s `parity` test runs the same goldens.
   Snapshots: `src/snapshots/`, `src/ui/snapshots/` (`cargo insta review`).
 - Preconditions: `/fixture/acme-billing` must not exist (`adage_sim::assume_no_checkout_at_cwd`);
   tests tagged `ADAGE_TEST_NO_SPAWN` are ignored in release builds; the OpenCode plugin session

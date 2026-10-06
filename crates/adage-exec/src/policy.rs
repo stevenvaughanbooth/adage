@@ -247,7 +247,7 @@ pub fn load(adage_home: &Path) -> Result<Policy> {
 
 /// The policy as it would be with the personal file raised to E2 the way `set_max_level` raises
 /// it (automatic approval off, the sandbox required), for staging a first E2 grant on a machine
-/// still at E1 (architecture §3.12: the trial store only, nothing written). `None` when the
+/// still at E1 (mod architecture §3.12: the trial store only, nothing written). `None` when the
 /// managed file caps execution at E1, so no person here can raise it.
 pub fn trial_e2(adage_home: &Path) -> Result<Option<Policy>> {
     let personal_path = personal_path(adage_home);

@@ -58,7 +58,7 @@
 //! timeout; an action's own wall limit is 20 s.
 //!
 //! Every command here that turns something on refuses inside an agent session and needs a
-//! terminal, or a press from the Claude Code session (architecture §3.12: `delegate on`, `delegate
+//! terminal, or a press from the Claude Code session (mod architecture §3.12: `delegate on`, `delegate
 //! policy --max-level e2`, `delegate predict on`, `review delegate`, `review revoke`). Under a
 //! press `delegate on` writes the plugin's marker only. `review delegate … --stage --json` answers
 //! what a grant would be and do, recording nothing; `--confirm` stages again and records it only if
@@ -327,7 +327,7 @@ fn switch(on: bool, args: &[String], paths: &Paths) -> Result<()> {
     Ok(())
 }
 
-/// `adage delegate on` with a press (architecture §3.12): the marker only, which the Claude Code
+/// `adage delegate on` with a press (mod architecture §3.12): the marker only, which the Claude Code
 /// plugin's shim reads at the next session start. Rewriting a settings file, Codex's `hooks.json`
 /// or the OpenCode plugin is `install`'s work and stays a terminal's: each one found is named.
 fn switch_pressed(args: &[String], paths: &Paths) -> Result<()> {
@@ -1181,7 +1181,7 @@ struct Staged {
 
 /// `review delegate … --stage --json` (the first act: answer what the grant would be and do, record
 /// nothing) and `--confirm` (the second: plan and stage again, and record the grant only if the
-/// key and terms are what the first act answered). Architecture §3.12, "Stage, then confirm":
+/// key and terms are what the first act answered). Mod architecture §3.12, "Stage, then confirm":
 /// nothing is kept between the two acts but the digest the caller hands back on stdin.
 fn staged(s: Staging<'_>) -> Result<()> {
     let table = CommandTable::load();
@@ -1257,7 +1257,7 @@ fn staged(s: Staging<'_>) -> Result<()> {
         return Err(crate::hint(format!("{why}; nothing was recorded"), "fix what it needs, then stage it again"));
     }
     // The first execution grant on this machine turns execution on with it: the policy, the
-    // marker and the grant are one decision (architecture §3.12).
+    // marker and the grant are one decision (mod architecture §3.12).
     let mut wrote = Vec::new();
     if raise {
         adage_exec::policy::set_max_level(&s.paths.root, Level::E2)?;

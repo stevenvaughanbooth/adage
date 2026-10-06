@@ -190,7 +190,7 @@ impl Repo {
     /// The bytes of the file at `rel` (a repository-relative path, `/`-separated) in `HEAD`'s
     /// tree: `None` when it is not committed there, or is larger than `max`. Read to tell a file
     /// committed in the repository from one that only sits in the work tree (`adage add --trust`
-    /// accepts a press only for a pack committed in the repository, architecture §3.12).
+    /// accepts a press only for a pack committed in the repository, mod architecture §3.12).
     pub fn committed(&mut self, rel: &str, max: usize) -> Option<Vec<u8>> {
         let head = self.head()?;
         let (kind, body) = self.object(&head, MAX_COMMIT)?;

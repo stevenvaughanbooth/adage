@@ -247,7 +247,7 @@ pub fn current(v: &Verified) -> Option<bool> {
     (crate::digest::sha256_hex(&bytes) == v.skill.sha256).then(|| inert(&String::from_utf8_lossy(&bytes)))
 }
 
-/// Whether invoking a skill whose `SKILL.md` is `text` runs nothing by itself (architecture
+/// Whether invoking a skill whose `SKILL.md` is `text` runs nothing by itself (mod architecture
 /// §3.11): it holds no dynamic-context block (`` !`command` ``, which the harness runs when the
 /// skill expands) and its front matter does not say `context: fork` (the skill runs as a subagent).
 /// Anything that might be either is not inert.

@@ -673,7 +673,7 @@ fn status(paths: &Paths, json: bool) -> Result<()> {
         let mut v = serde_json::json!({ "intent_model": model, "tracks": tracks });
         // Patterns counted that are not reflexes yet (plan D1).
         v["candidates"] = candidates::status_json(paths, &installed);
-        // Team packs committed in this repository that wait for a person's trust (architecture
+        // Team packs committed in this repository that wait for a person's trust (mod architecture
         // §3.12): said only when there are some.
         let here = std::env::current_dir().ok().and_then(|d| adage_core::repo::find_root(&d));
         let awaiting = here.map(|r| adage_app::trust::awaiting(&r, &paths.tracks())).unwrap_or_default();

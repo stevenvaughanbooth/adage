@@ -29,7 +29,23 @@ mod-structure.md.
 | C6 the dead end that never runs | `9f6eceb` | [../poc/P5-notes.md](../poc/P5-notes.md) |
 | D1 candidates in the learner and the index; D3 the `skill` response kind; D4 `verified.json` and `SkillPrompt` | `ecd4e03` | [D1-notes.md](D1-notes.md), [D3-D4-notes.md](D3-D4-notes.md) |
 | E1 arms and the requests metric in the demo runner | `13b2495` | [../poc/P4a-notes.md](../poc/P4a-notes.md) |
-| The mod's structure: `register.ts` as registrations only, modules over a capability object, one test file per module | (uncommitted) | [mod-structure.md](mod-structure.md) |
+
+## Structure and shared contracts
+
+The maintainability pass that followed the chunks: where each crate's and the mod's code now
+lives, and the files both sides of a boundary read. Each page says where a new piece of each kind
+goes.
+
+| Page | Commit | What it holds |
+| --- | --- | --- |
+| [mod-structure.md](mod-structure.md) | `6aac114` | The mod: `register.ts` as registrations only, modules over a capability object, one test file per module, and the rules `scripts/check-plugin.mjs` holds it to |
+| [structure-hook.md](structure-hook.md) | `6b35675`, `25f4c0d` | adage-hook in one module per job; the one event table (adage-trace's `Harness::events`), the one record builder, the one answer type |
+| [structure-exec.md](structure-exec.md) | `f965695` | adage-exec's hook in one module per job |
+| [structure-runtime.md](structure-runtime.md) | `11a7c90` | adage-runtime: the decision in one module per event, the state and policy in their own |
+| [structure-cli.md](structure-cli.md) | `3dbd40d`, `b4fe3f4` | adage-cli, adage-store, adage-app: one copy of each helper, the switch markers on `Paths`, typed doctor fixes, the person verbs as an enum, the follower's test poll (`ADAGE_TEST_FOLLOW_POLL_MS`) |
+| [testkit.md](testkit.md) | `487cbd6` | The workspace test kit in adage-tracks (`features = ["testkit"]`): the routes, tracks, indexes and learned homes tests build their worlds from |
+| [wire.md](wire.md) | `25f4c0d` | The answers the binary sends the mod, one JSON file per shape in `crates/adage-hook/tests/wire/`, mirrored into the plugin's `hooks/fixtures/wire.ts` |
+| [../../spool.md](../../spool.md) | `25f4c0d` | The session spool: every record kind a hook writes, its fields, and who reads it |
 
 ## What is not on this branch
 

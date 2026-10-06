@@ -4,7 +4,7 @@
 //! (the CLI, the TUI, a future HTTP API) can reach them without making the check.
 //!
 //! A person reaches Adage two ways: at a terminal ([`require`]), or, at the call sites the design
-//! lists (architecture §3.12), with a **press** from the Claude Code session ([`require_or_press`]):
+//! lists (mod architecture §3.12), with a **press** from the Claude Code session ([`require_or_press`]):
 //! a single-use token the binary issued to the mod before the agent's first act, read from stdin.
 //! A press is not a boundary against an agent with a shell; it is a record that a person decided
 //! (`via: press`) and a guard against the model being steered into deciding.
@@ -145,7 +145,7 @@ pub fn parse_stdin(bytes: &[u8]) -> Stdin {
     Stdin { press, expect: nonempty(raw.expect) }
 }
 
-/// Every command a press can authorise: the sites architecture §3.12 lists, and nothing else
+/// Every command a press can authorise: the sites mod architecture §3.12 lists, and nothing else
 /// (docs/claude-mod/impl/A7-A8-notes.md, "Every press site"). [`require_or_press`] takes one, so a
 /// press cannot reach a command this list does not name; adding a press site is one variant here
 /// and its arm in [`PersonVerb::cmd`]. Every other person-only command calls [`require`], which
@@ -209,7 +209,7 @@ impl PersonVerb {
     }
 }
 
-/// [`require`], or a valid press, for one of the [`PersonVerb`]s (architecture §3.12's sites).
+/// [`require`], or a valid press, for one of the [`PersonVerb`]s (mod architecture §3.12's sites).
 /// Without a press it is exactly [`require`]. With one, the agent-session and
 /// terminal checks are lifted when the press is valid for this repository's live session
 /// (`adage_hook::press::spend`), the chain moves on, and the [`Person`] carries the next token.

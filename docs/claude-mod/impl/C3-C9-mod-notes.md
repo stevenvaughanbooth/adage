@@ -25,7 +25,7 @@ declaration file; nothing here ran in a live session. The module map stays as
 
 ## What each branch does
 
-### The Bash call (C3, C6; architecture §3.3, §3.4)
+### The Bash call (C3, C6; mod architecture §3.3, §3.4)
 
 `on('tool.call', { tool: 'Bash' })` → `bashCall`. Inert, or no session context: `next(e)`. Else one
 dry run (`PreToolUse` with `dry_run: true`, `via: 'mod'`, `agent_id` in a subagent, `observe` in
@@ -148,7 +148,7 @@ as `tool_use` with its `usage` kept (T-C8-02).
 4. **Routing is read from the card, not asked of the binary**: the binary is told only that a
    model is set (A1-A2-C5-notes); the name never leaves the mod. A headless session reads the
    card once, at its first main-loop step, so the first step of such a session is never routed.
-5. **`agent.spawn` does not route a subagent's model** (architecture §3.5 "the same rewrite for
+5. **`agent.spawn` does not route a subagent's model** (mod architecture §3.5 "the same rewrite for
    subagents"): the binary's `Standing` with `agent` answers no `routine`, and a subagent's steps
    are not asked about (`turn.step` stays on the main loop, §3.8).
 6. **Compaction removes nothing on 2.1.288** (Q5): `SessionMessage` has no origin, so

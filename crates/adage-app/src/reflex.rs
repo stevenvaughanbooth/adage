@@ -156,7 +156,7 @@ pub struct Decisions {
     pub reasons: Vec<Reason>,
     /// The command for its next step when it is more than a verb (an execution-only reflex's grant).
     pub next: Option<String>,
-    /// A grant Adage could ask the person for (architecture §3.12, "How Adage asks"): set where
+    /// A grant Adage could ask the person for (mod architecture §3.12, "How Adage asks"): set where
     /// the grants and the policy are known (`graph --json`), empty elsewhere.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub offers: Vec<Offer>,

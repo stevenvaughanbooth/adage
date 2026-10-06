@@ -208,7 +208,7 @@ pub enum Step (tag = "do", mirror = StepRepr) {
     /// A procedure card for a family of similar tasks ([`crate::card`]): learned from this
     /// repository's traces, triggered by an intent (the family's prompts), delivered once, prime.
     Card { card: crate::card::Card },
-    /// Use a skill the harness offers (architecture §3.11): `skill` is its name as the harness
+    /// Use a skill the harness offers (mod architecture §3.11): `skill` is its name as the harness
     /// lists it ([`SKILL_NAME_MAX`] bytes of `[A-Za-z0-9_-]`), `args` a plain argument string the
     /// Skill tool is invoked with. Followed when the agent uses that skill (the canonical key
     /// `control Skill <skill>`). The text a skill loads can carry commands of its own, so the step
@@ -619,7 +619,7 @@ pub fn delivered_strength(r: &Route) -> Strength {
 
 /// The strongest strength a [`Step::Skill`] may ever be given, whatever its effect: the text a
 /// skill loads can carry commands, so its use is suggested, never said as an instruction
-/// (architecture §3.11).
+/// (mod architecture §3.11).
 pub const SKILL_CEILING: Strength = Strength::Prime;
 
 /// The strongest strength a route may be given: its effect's [`ceiling`], and never above

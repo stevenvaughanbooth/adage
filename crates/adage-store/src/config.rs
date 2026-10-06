@@ -86,7 +86,7 @@ pub struct Config {
     /// nothing. The binary never sees it: the mod reads it from `adage --json`.
     pub runtime_routine_model: String,
     /// `runtime.predict_cap`: at most this many steps a session's model does not take, predicted
-    /// by Adage under a person's `predict` grant (architecture §3.2). 6 by default; 0 predicts none.
+    /// by Adage under a person's `predict` grant (mod architecture §3.2). 6 by default; 0 predicts none.
     pub runtime_predict_cap: u32,
     /// `skills.invoke`: a `skill` reflex with a person's `predict` grant may invoke its skill at
     /// its step (the Claude Code mod's `turn.step`), when `adage train` recorded the skill as inert

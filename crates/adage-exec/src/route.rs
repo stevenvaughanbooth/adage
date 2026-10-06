@@ -872,7 +872,7 @@ pub fn lapses(planned: &[Planned<'_>], store: &crate::approvals::Store) -> Vec<L
 const CACHE_DIRS: &[&str] =
     &["__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".cache", ".hypothesis", ".tox", ".nox"];
 
-/// The E2 terms the binary proposes for a route a person has declared none for (architecture
+/// The E2 terms the binary proposes for a route a person has declared none for (mod architecture
 /// §3.12, "stage, then confirm"): what a trial stage with no declared outputs changed, which it
 /// refused (`changed`, repository-relative paths). A path under a cache directory proposes that
 /// directory's glob as a cache; any other proposes its directory's glob as an output, or the file

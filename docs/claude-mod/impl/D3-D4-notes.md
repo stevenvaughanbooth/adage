@@ -1,7 +1,7 @@
 # D3 · D4 · The `skill` response kind, `verified.json` and `SkillPrompt`
 
 What was built for chunks D3 and D4 of [the implementation plan](../implementation-plan.md)
-(§2.2.7, §2.3, §2.4; architecture §3.11), the exact contracts D5 (drawing) and the mod's
+(§2.2.7, §2.3, §2.4; mod architecture §3.11), the exact contracts D5 (drawing) and the mod's
 `skill.prompt` addendum build on, what departs from the plan, and what is still open.
 
 ## The contracts

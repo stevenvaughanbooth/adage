@@ -123,7 +123,7 @@ pub struct Approval {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub terms: Option<crate::route::Terms>,
     /// How the person approved it: at a terminal, or with a press in the Claude Code session
-    /// (architecture §3.12). Set by the binary; `--by` stays the person's own name for it.
+    /// (mod architecture §3.12). Set by the binary; `--by` stays the person's own name for it.
     /// `None` for an automatic approval and for every approval recorded before presses existed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub via: Option<adage_tracks::review::Via>,

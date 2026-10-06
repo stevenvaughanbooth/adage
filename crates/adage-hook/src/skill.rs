@@ -1,4 +1,4 @@
-//! `SkillPrompt` (plan §2.2.7, architecture §3.11 "verify in place"): the Claude Code mod's
+//! `SkillPrompt` (plan §2.2.7, mod architecture §3.11 "verify in place"): the Claude Code mod's
 //! `skill.prompt` asks, as the engine expands a skill's text for the model, whether Adage has
 //! anything to add. For a skill `adage train` compiled and replayed in this repository, and whose
 //! pack a person accepted, it answers the text with one plain line per step the replay verified or
@@ -84,7 +84,7 @@ pub fn annotation(v: &Verified) -> Option<(String, usize, usize)> {
     (works + stale > 0).then_some((text, works, stale))
 }
 
-/// The skills a `skill` step may invoke in this repository at a `TurnStep` (architecture §3.11,
+/// The skills a `skill` step may invoke in this repository at a `TurnStep` (mod architecture §3.11,
 /// level 2): none unless the person turned `skills.invoke` on; then each skill whose replay record
 /// a person accepted here and which runs nothing when it expands (`inert`). The predict grant on
 /// the route is still required (`Policy::predict_grants`).

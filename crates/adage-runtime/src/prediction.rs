@@ -144,7 +144,7 @@ fn predict_step(
     }
 }
 
-/// The Skill tool call that invokes `skill` (architecture §3.11): only a skill the policy lets a
+/// The Skill tool call that invokes `skill` (mod architecture §3.11): only a skill the policy lets a
 /// step invoke ([`crate::Policy::invoke_skills`]: inert, accepted, `skills.invoke` on), with its
 /// arguments when the step has them.
 fn skill_call(ctx: &Ctx, skill: &str, args: Option<&str>) -> Option<PredictedCall> {

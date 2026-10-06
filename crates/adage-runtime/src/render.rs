@@ -1005,7 +1005,7 @@ pub fn route_text(r: &Route, bound: &[(String, String)]) -> Option<String> {
             }
             Some(text)
         }
-        // A skill (architecture §3.11): one fixed sentence around a name validated with the track
+        // A skill (mod architecture §3.11): one fixed sentence around a name validated with the track
         // and checked again here; `named` reads the name back from the same sentence.
         (Step::Skill { skill, args }, _) => {
             if !adage_tracks::safe_skill_name(skill) {

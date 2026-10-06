@@ -315,7 +315,7 @@ reload itself.
 ### 4.10 Headless, the VS Code panel, a cloud session
 
 Hooks run; nothing draws; nothing is asked. `/adage` answers as plain text (the card's rows). What
-the grants allow still runs (architecture §7), so an eval that wants today's session runs without
+the grants allow still runs (mod architecture §7), so an eval that wants today's session runs without
 the mod or with the mod in observe mode.
 
 ### 4.11 A narrow terminal
@@ -357,7 +357,7 @@ row.
 The binary answers nothing; the band returns `next(e)`; `/adage` prints the card, which says
 `not in a repository`.
 
-### 4.17 Adage asks (architecture §3.12)
+### 4.17 Adage asks (mod architecture §3.12)
 
 When the learner's line lands and a reflex waits for a decision, Adage asks at the end of the
 turn, in the dialog Claude Code itself uses to ask a question (`$.ui.ask`): the question above
@@ -572,7 +572,7 @@ Two rows. Everything else is a `config.toml` key for people who go digging with 
 `runtime.predict_cap`. Not a setting anywhere: execution policy, grants and trust (decisions
 made by a press, §4.17, or at a terminal), a switch for asking (a decision is never hidden
 behind a setting: dismiss it and it waits in the pane), and a hold on known dead ends (an open
-question, architecture §10).
+question, mod architecture §10).
 
 ## 9. Degraded and error states
 

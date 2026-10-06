@@ -58,7 +58,7 @@ their probes).
 | --- | --- |
 | `ask.enable` | `Adage learned: {summary}. Tell the agent?` · `enable` / `not this one` / `why` |
 | `ask.allow` (an execution offer, `offers[].kind = execute`) | `Adage can {summary}, instead of asking the agent to. Allow it?` · `see what it would do` / `not now` |
-| a prediction offer (`offers[].kind = predict`) | the same question · `allow` / `not now` / `why` (architecture §3.12's row; one act) |
+| a prediction offer (`offers[].kind = predict`) | the same question · `allow` / `not now` / `why` (mod architecture §3.12's row; one act) |
 | `ask.trust` | `Reflexes from {signer} are in this repository. Use them?` · `use them` / `not now` / `why` (the count is not in `status --json`'s `packs_awaiting_trust`, so the question names the pack) |
 | `/adage on` | `Adage is off in this repository. Turn it on?` · `turn it on` / `leave it off` |
 | `ask.enable.done` | toast `on: {summary}` |

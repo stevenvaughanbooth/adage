@@ -59,7 +59,7 @@ pub struct Policy {
     pub predict_grants: Vec<(String, String)>,
     /// At most this many predicted steps per session.
     pub predict_cap: u32,
-    /// Skills a `skill` step may invoke at a `TurnStep`, by name (architecture §3.11): each one
+    /// Skills a `skill` step may invoke at a `TurnStep`, by name (mod architecture §3.11): each one
     /// `adage train` recorded as inert in a pack a person accepted here, and only while the person
     /// turned `skills.invoke` on. The hook fills it (`adage_hook::skill::invocable`); empty, no
     /// skill is ever invoked, whatever the grants.

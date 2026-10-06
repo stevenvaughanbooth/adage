@@ -380,6 +380,11 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   nothing. `adage-exec status` lists prediction grants apart, and `adage-exec revoke` revokes
   execution grants unless `--mode predict` is given (before, both). A session resumed a second
   time no longer warns that something else claimed its press.
+- **An apply is no longer refused as busy because another process was starting.** A lock (the
+  execution journal's, a worktree's, the learner's) is released explicitly when its holder lets
+  go. Before, closing the file alone left it held while any process the same program was starting
+  still had a copy of the descriptor, so the next apply in that worktree could be refused with
+  "another action is applying in this worktree" although nothing was.
 - **Press records carry `duration_us`, as every other spool record does.** `press_issued` and
   `tripwire` record the hook's own time and `press_spent` the spend's; before, they were the only
   spool records without it.

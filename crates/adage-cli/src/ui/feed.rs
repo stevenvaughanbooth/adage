@@ -1,14 +1,15 @@
 //! Hook activity as feed items: one per spool record (one hook call), with what Adage did.
 //!
-//! A record is `{ts, event, kind, arm, repo, generation, decision, harness?}` (`hook.rs`);
-//! records written by older versions may lack `kind`, `repo` or `harness`, which are then
-//! inferred or left blank. A PreToolUse record (`kind: "pretool"`) has no decision: it says
+//! A record is `{ts, event, kind, arm, repo, generation, decision, harness?}` (adage-hook's
+//! `record.rs`, `docs/spool.md`); records written by older versions may lack `kind`, `repo` or
+//! `harness`, which are then inferred or left blank. A PreToolUse record (`kind: "pretool"`) has no decision: it says
 //! what Adage did to the command instead (`pretool: {rewrite|advise, interpreter}`).
 //!
 //! Older spellings are read too: arm `holdout` (now `control`), directive `aspect` (now
 //! `strength`), judgements `derailed` and `followed_failed` (now `ignored` and `misfired`).
 
 use super::theme::parse_strength;
+use adage_trace::{EventKind, Harness};
 use adage_tracks::Strength;
 use serde_json::Value;
 
@@ -173,27 +174,45 @@ pub fn harness_name(h: &str) -> &str {
     adage_trace::Harness::parse(h).map_or(h, |h| h.hook_name())
 }
 
-/// The normalised event name (`adage_runtime::Event::name`) as shown.
-fn event_label(kind: Option<&str>, native: &str) -> String {
-    let k = kind.unwrap_or(match native {
-        "UserPromptSubmit" | "chat.message" => "prompt",
-        "PostToolBatch" | "PostToolUse" | "tool.execute.after" => "batch",
-        "PostToolUseFailure" => "failure",
-        "Stop" | "session.idle" => "stop",
-        "SessionStart" | "session.created" => "session_start",
-        "PreToolUse" | "tool.execute.before" => "pretool",
-        "SessionEnd" => "session_end",
-        "TurnStep" => "turn_step",
-        other => other,
-    });
-    match k {
-        "batch" => "tools",
-        "session_start" => "start",
-        "session_end" => "end",
-        "turn_step" => "step",
-        other => other,
+/// How a row names an event. Exhaustive, so a new [`EventKind`] does not compile until it has a
+/// label; which native names mean it is the one event table's ([`Harness::events`]).
+const fn kind_label(kind: EventKind) -> &'static str {
+    match kind {
+        EventKind::SessionStart => "start",
+        EventKind::Prompt => "prompt",
+        EventKind::ToolBatch | EventKind::ToolUse => "tools",
+        EventKind::Failure => "failure",
+        EventKind::Stop => "stop",
+        EventKind::SessionEnd => "end",
+        EventKind::TurnStep => "step",
+        // The asks the hook answers itself. Their records carry a kind no event decides
+        // (`pretool`, `skill_prompt`, `press_issued`: adage-hook's `RecordKind`), which a row
+        // shows as written; these name the ask for a record that has no kind.
+        EventKind::PreToolUse => "pretool",
+        EventKind::Press => "press",
+        EventKind::Standing => "standing",
+        EventKind::SkillPrompt => "skill_prompt",
     }
-    .to_string()
+}
+
+/// Every event in the table, with its native name, whichever harness sends it.
+fn table() -> impl Iterator<Item = (&'static str, EventKind)> {
+    Harness::ALL.into_iter().flat_map(|h| h.events().iter().copied())
+}
+
+/// The event a record is about, as a row shows it. A record's `kind` is the runtime event's name
+/// for a decided event (`adage_runtime::Event::name`, [`EventKind::decided`]); a record written
+/// before records carried one is read by what its native name means in the table. A kind no event
+/// decides (`pretool`, `stop_gate`) or a name the table lacks shows as written.
+fn event_label(kind: Option<&str>, native: &str) -> String {
+    let event = match kind {
+        Some(k) => table().map(|(_, e)| e).find(|e| e.decided() == Some(k)),
+        None => table().find(|(name, _)| *name == native).map(|(_, e)| e),
+    };
+    match event {
+        Some(e) => kind_label(e).to_string(),
+        None => kind.unwrap_or(native).to_string(),
+    }
 }
 
 /// The one line of a directive's body that says what to do: the indented command of a run
@@ -400,4 +419,26 @@ pub fn from_record(session: &str, rec: &Value) -> FeedItem {
 pub fn short_session(s: &str, n: usize) -> String {
     let chars: Vec<char> = s.chars().collect();
     chars[chars.len().saturating_sub(n)..].iter().collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{event_label, kind_label, table};
+
+    /// Every event in the one table has a label, and a record's `kind` and its native name agree
+    /// on it: a kind-less record reads as the same row as one that carries its decided kind.
+    #[test]
+    fn every_event_in_the_table_has_a_label() {
+        for (native, kind) in table() {
+            let label = kind_label(kind);
+            assert!(!label.is_empty(), "{native}");
+            assert_eq!(event_label(None, native), label, "{native}");
+            if let Some(decided) = kind.decided() {
+                assert_eq!(event_label(Some(decided), native), label, "{native} as {decided}");
+            }
+        }
+        assert_eq!(event_label(Some("pretool"), "PreToolUse"), "pretool");
+        assert_eq!(event_label(Some("stop_gate"), "Stop"), "stop_gate");
+        assert_eq!(event_label(None, "Unheard"), "Unheard");
+    }
 }

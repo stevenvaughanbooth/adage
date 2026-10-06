@@ -33,7 +33,7 @@
 //! directory under the tracks directory, e.g. `@imported/acme/work-items`.
 //!
 //! Decisions change trust, so they refuse to run inside an agent session (review finding F11),
-//! unless a person made them in the session with a press (architecture §3.12): a verb run by the
+//! unless a person made them in the session with a press (mod architecture §3.12): a verb run by the
 //! Claude Code mod reads `{ "press", "session" }` on stdin, and on success prints `{ "next":
 //! <token> }` as its first line, before anything else ([`person_or_press`]).
 //! They are recorded in the track's `review.yaml` (see [`adage_tracks::review`]); every decision
@@ -537,7 +537,7 @@ pub(crate) fn waiting_words(needs: usize, look: usize) -> Option<String> {
     (!parts.is_empty()).then(|| parts.join(" · "))
 }
 
-/// The person check at the sites that take a press (architecture §3.12; the list is
+/// The person check at the sites that take a press (mod architecture §3.12; the list is
 /// [`PersonVerb`]): stdin is read once, a valid press stands in for the
 /// terminal, and the next token of the chain is printed at once, as the first line on stdout,
 /// since the one just spent is refused from now on, whatever the verb goes on to do. Every other
