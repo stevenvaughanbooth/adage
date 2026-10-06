@@ -261,6 +261,44 @@ Main's new `crates/adage-store/AGENT.md` lists `Paths`' methods; after the merge
 becomes `Paths::rewrite_off`. `crates/adage-cli/AGENT.md` could name `helpers.rs` and
 `tests/common/mod.rs`.
 
+## Merging main (`350ab0b`, #32)
+
+Main's #32 ("setup, review and trace exploration from the app") changed `doctor.rs`, `review.rs`,
+the TUI and the map server. On this branch:
+
+- **Doctor.** Main's `tracks` wording ("reflex collection") is kept, with this branch's typed
+  `Fix::manual` (recompiling alone does not mend a collection). Main's new
+  `hook_delivery_checks` (`hook activity: <harness>`, one per registered harness, from
+  `adage_hook::receipt`) passes when a delivery was seen and warns otherwise; both of its fixes are
+  `Fix::manual` (start a session and send a prompt; for Codex, accept the hooks in `/hooks`): no
+  `adage` command makes a hook fire, so `--json`'s `action` is `manual` and the card names
+  `adage doctor`. `status_card::brief` gains the check's plain line ("no <harness> hook has
+  reached Adage in this repository yet"), per step 3 of "How to add a doctor check". The Health
+  tab's new viewer (Enter on a check with no one-key fix) shows `Fix::prose()`.
+- **Review.** Main's `decide_reviewed_within` (refuse unless the route and its proposal still hash
+  to the revision the person was shown) replaces `decide_within` in `review::decide_quietly`,
+  `adage ui`'s decision. That is the same site, not a new one: it still goes through
+  `PersonVerb::Review(verb)` with no press (`adage ui` owns the terminal), and
+  `decide_reviewed_within` records the person's `via` like `decide` and `decide_within`.
+  `PersonVerb::ALL` and the press suite are unchanged. Main's other person-only operations (the
+  palette's `config set history`, `add --expected-digest` run as a child) call `require`, which
+  never reads a press.
+- **The map and the graph.** `/api/v1/graph` now reads the spools through
+  `adage_app::graph::measurements` (attribution by installed reflex and version). This branch's
+  additions moved with it: the mod's fields (`predicted`, `would_predict`, `substituted`,
+  `would_substitute`, `noticed`, `answered`) are on every recorded event and keep an event in the
+  recent window, and a route's `arms.<arm>.substituted` counts sessions where its dead end was
+  replaced (a `substituted` judgement) or would have been (`would_substitute`, matched to the
+  session's one exposure of that route, as a judgement is). `graph::event`, the live stream's row,
+  carries both main's `directives`/`would_have` and the mod's fields. The web map reads only
+  `/api/v1/graph`, `/api/v1/trace`, `/api/v1/health` and `/api/v1/events`; it calls no CLI
+  surface (`adage --json`, `adage doctor --json`, `adage review`, the card), and the health
+  check's `fix` stays the prose string its `HealthCheck` type declares (`action` is extra).
+- **Tests.** `tests/review.rs`'s `session` writes main's exposure record before the judgements
+  through the kit (`LearnedHome::seed`/`spool`). The palette snapshot was re-accepted: main's
+  layout with this branch's two settings (`runtime.routine_model`, `runtime.predict_cap`), 33
+  matches.
+
 ## Commands and results
 
 | Command | Result |

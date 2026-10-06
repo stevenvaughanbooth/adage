@@ -9,6 +9,7 @@
 //! - [`graph`]: the map's read model, Adage's live state as one graph (`/api/v1/graph`).
 //! - [`savings`]: the savings estimate against the control arm.
 //! - [`harness_ledger`]: what a session cost as its harness reported it (`adage ledger note`).
+//! - [`history`]: where a harness's local history is read from, and a bounded OpenCode export.
 //! - [`evidence`], [`words`]: a reflex's evidence and the lexicon, as a person reads them.
 //! - [`error`]: errors that say what to do instead.
 
@@ -16,6 +17,7 @@ pub mod error;
 pub mod evidence;
 pub mod graph;
 pub mod harness_ledger;
+pub mod history;
 pub mod person;
 pub mod proposal;
 pub mod reflex;

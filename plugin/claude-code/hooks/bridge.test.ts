@@ -4,6 +4,7 @@ import { describe, expect, test } from 'claude-code/testing'
 
 import { ALLOWED_VERBS, NOTE_TIMEOUT_MS, ask, cliBinary, dataDirFromRoot, exeSuffix, guard, guardSpawn, headOf, hookBinary, isAllowed, note, probe, read, say } from './bridge'
 import type { Run } from './bridge'
+import { WIRE_NAMES, wire, wireLine } from './fixtures/kit'
 
 type Seen = { argv: readonly string[]; init: ProcessRunInit | undefined }
 
@@ -32,9 +33,11 @@ const BIN = '/data/bin/hook'
 const PAYLOAD = { session_id: 's', cwd: '/w', hook_event_name: 'TurnStep', turn_id: 't', index: 1, model: 'm', ending: false }
 
 describe('T-B1-01 · ask', () => {
-  test('exit 0 with a JSON object is the answer', async () => {
-    const { run } = fake(() => exited(0, '{"predict":{"kind":"run"}}\n'))
-    expect(await ask(run, BIN, 'TurnStep', PAYLOAD, 250)).toEqual({ ok: true, answer: { predict: { kind: 'run' } } })
+  test('exit 0 with a JSON object is the answer: every answer on the wire, as the binary prints it', async () => {
+    for (const name of WIRE_NAMES) {
+      const { run } = fake(() => exited(0, wireLine(name)))
+      expect(await ask(run, BIN, 'TurnStep', PAYLOAD, 250), name).toEqual({ ok: true, answer: wire(name) })
+    }
   })
 
   test('exit 0 with empty stdout is nothing to do', async () => {
@@ -43,7 +46,7 @@ describe('T-B1-01 · ask', () => {
   })
 
   test('a non-zero exit is a failure, whatever it printed', async () => {
-    const { run } = fake(() => exited(1, '{"predict":{}}'))
+    const { run } = fake(() => exited(1, wireLine('predict')))
     expect(await ask(run, BIN, 'TurnStep', PAYLOAD, 250)).toEqual({ ok: false })
   })
 

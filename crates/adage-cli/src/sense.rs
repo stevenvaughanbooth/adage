@@ -405,7 +405,7 @@ fn percentile(sorted: &[u32], p: f64) -> Option<u32> {
 }
 
 /// Session files, as `adage condition` finds them, and a description of where they came from.
-fn discover(o: &Options, paths: &Paths) -> (Vec<PathBuf>, String) {
+pub(crate) fn discover(o: &Options, paths: &Paths) -> (Vec<PathBuf>, String) {
     let mut files = o.transcripts.clone();
     let cfg = adage_store::config::load(paths).config;
     let explicit =
@@ -442,6 +442,9 @@ fn discover(o: &Options, paths: &Paths) -> (Vec<PathBuf>, String) {
         if let Some(d) = &cfg.learn_opencode_exports {
             source.push(format!("OpenCode exports in {}", place(d)));
             files.extend(mine(crate::history::opencode_exports(d)));
+        }
+        if let Some(root) = o.root.as_deref() {
+            files.extend(crate::history::remembered(paths, root));
         }
     }
     files.sort();

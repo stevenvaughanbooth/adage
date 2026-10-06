@@ -1,11 +1,23 @@
 // The dead end that never runs, as the binary words it (substitute.ts; plan C6, T-C6-03's reader):
-// a learned replacement with its command, route and one line, or none. call.test.ts takes the call
-// through the engine.
+// a learned replacement with its command, route and one line, or none. The answers are the wire's
+// substitute.json and plan.json (docs/claude-mod/impl/wire.md). call.test.ts takes the call through
+// the engine.
 import { expect, test } from 'claude-code/testing'
 
-import { substituteOf } from './substitute'
+import { wire, wireWith } from './fixtures/kit'
+import { substituteAnswerOf, substituteOf } from './substitute'
 
-const SUB = { command: 'make test', route: 'dead-end-pytest', track: 'acme/billing@1', context: 'adage ran make test in place of python3 -m pytest tests.' }
+const SUB = wire('substitute').substitute as Record<string, unknown>
+
+test('T-C6-03 · substituteAnswerOf reads substitute.json: the command, the route, the track and the line, each there', () => {
+  const read = substituteAnswerOf(wire('substitute'))
+  expect(read).toEqual({ command: SUB.command, route: SUB.route, track: SUB.track, context: SUB.context })
+  for (const v of Object.values(read ?? {})) expect(v).not.toBe('')
+  // The dry run names the same replacement in its plan.
+  expect(substituteOf((wire('plan').plan as Record<string, unknown>).substitute)).toEqual(read)
+  expect(substituteAnswerOf(wireWith('substitute', null))).toBeUndefined()
+  expect(substituteAnswerOf(undefined)).toBeUndefined()
+})
 
 test('T-C6-03 · a malformed substitute is none', () => {
   expect(substituteOf(SUB)).toEqual(SUB)

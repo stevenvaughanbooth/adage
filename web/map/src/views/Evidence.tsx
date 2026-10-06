@@ -7,6 +7,7 @@ import { KindGlyph, StateMark } from "../components/glyphs";
 import { SavingsPanel } from "../components/Savings";
 import { Segmented, cx, day } from "../components/ui";
 import { armTraces, kpis, pct, perDay, share } from "../lib/evidence";
+import { traceInventory } from "../lib/traces";
 import { routeKey } from "../lib/graph";
 import { CONTROL_NOTE, LIVE_SOURCE, evidenceShort, evidenceShortWhy, isCard, isInstinct, isQuiet, lifecycle, plural, strength } from "../lib/words";
 import { type Window, useUrl, windowStart } from "../state/url";
@@ -94,7 +95,8 @@ export function Evidence({ graph }: { graph: Graph }) {
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: "saved", desc: true });
   const now = Math.max(Date.now(), ...graph.events.map((e) => e.ts));
   const routes = graph.routes.filter((r) => (!url.repo || r.repo === url.repo) && lifecycle(r.state) !== "extinguished");
-  const events = graph.events.filter((e) => (!url.repo || e.repo === url.repo) && e.ts >= windowStart(url.window, now));
+  const history = graph.trace_sessions ? traceInventory(graph).map((s) => ({ ...s, ts: s.start_ts ?? s.end_ts ?? 0 })) : graph.events;
+  const events = history.filter((e) => (!url.repo || e.repo === url.repo) && e.ts >= windowStart(url.window, now));
   const ks = kpis(routes);
   const arms = armTraces(graph, events);
   const days = perDay(events);
@@ -163,13 +165,13 @@ export function Evidence({ graph }: { graph: Graph }) {
           <h1 className="display m-0 text-[32px] leading-[1.05] font-semibold sm:text-[44px]">
             {tShare !== null && cShare !== null ? (
               <>
-                With reflexes, agents took the known path in <span className="text-accent-soft">{pct(path!.treated)}</span> of traces
+                With reflexes, agents took the known path in <span className="text-accent-soft">{pct(path!.treated)}</span> of reflex–trace pairs
                 <span className="text-ink-3"> ({path!.treated.k}/{path!.treated.n})</span>; control {pct(path!.control)}
                 <span className="text-ink-3"> ({path!.control.k}/{path!.control.n})</span>.
               </>
             ) : tShare !== null ? (
               <>
-                With reflexes, agents took the known path in <span className="text-accent-soft">{pct(path!.treated)}</span> of traces
+                With reflexes, agents took the known path in <span className="text-accent-soft">{pct(path!.treated)}</span> of reflex–trace pairs
                 <span className="text-ink-3"> ({path!.treated.k}/{path!.treated.n})</span>.
               </>
             ) : (
@@ -188,7 +190,7 @@ export function Evidence({ graph }: { graph: Graph }) {
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <span className="font-mono text-xs text-ink-3" title={CONTROL_NOTE}>
-            {LIVE_SOURCE.toLowerCase()} · distinct traces · control: reflexes withheld on purpose
+            {LIVE_SOURCE.toLowerCase()} · current versions, all time · control: reflexes withheld on purpose
           </span>
           <Segmented<Window>
             label="Window"
@@ -229,6 +231,7 @@ export function Evidence({ graph }: { graph: Graph }) {
                 ? `${k.treated.k}/${k.treated.n} · control ${k.control.k}/${k.control.n} · ${k.note}`
                 : `too few traces to compare · ${k.note}`}
             </span>
+            <button type="button" className="mt-1 text-left text-xs text-accent-soft underline underline-offset-4" onClick={() => document.getElementById("evidence-reflexes")?.scrollIntoView({ block: "start" })}>Explore contributing reflexes →</button>
           </div>
         ))}
         <div className="flex flex-col gap-2 rounded-lg border border-line-strong bg-panel px-5 py-[18px]">
@@ -241,6 +244,10 @@ export function Evidence({ graph }: { graph: Graph }) {
         </div>
       </div>
 
+      <p className="m-0 text-xs leading-relaxed text-ink-3">
+        Per-reflex counts compare the installed versions. A session can contribute to several reflexes. Open a reflex to explore historical versions; ambiguous and unidentified legacy records are not assigned to a current reflex.
+        {graph.totals && !url.repo && <> Across all repositories, {graph.totals.emitted} recorded directives and {graph.totals.would_have} control exposures are counted once each.</>}
+      </p>
       <SavingsPanel graph={graph} repo={url.repo} />
 
       <div className="grid min-h-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
@@ -261,7 +268,7 @@ export function Evidence({ graph }: { graph: Graph }) {
           <Chart data={days} markers={markers} />
         </section>
 
-        <section aria-label="Reflexes by turns saved" className="flex flex-col overflow-hidden rounded-lg border border-line-strong bg-panel px-2 pt-2">
+        <section id="evidence-reflexes" aria-label="Reflexes by turns saved" className="flex flex-col overflow-hidden rounded-lg border border-line-strong bg-panel px-2 pt-2">
           <div className="flex flex-col gap-1 px-3 pt-2.5 pb-1">
             <span className="lbl">Reflexes by {sort.key === "saved" ? "turns saved" : sort.key === "lb" ? "lower bound" : sort.key}</span>
             <p className="m-0 text-[11.5px] leading-snug text-ink-3">
@@ -323,7 +330,7 @@ export function Evidence({ graph }: { graph: Graph }) {
                       <td className="border-b border-line px-3 py-[11px] font-mono text-[12.5px] text-ink-2">{r.evidence.lower_bound.toFixed(2)}</td>
                       <td className="border-b border-line px-3 py-[11px] font-mono text-[12.5px] text-ink-1">{r.evidence.turns_saved.toFixed(1)}</td>
                       <td className={cx("border-b border-line px-3 py-[11px] font-mono text-[12px] whitespace-nowrap", "text-ink-2")} title={avoid ? "hit the dead end" : "took its path"}>
-                        {k(t)}/{t?.applied ?? 0} · {k(c)}/{c?.applied ?? 0}
+                        <button type="button" className="text-accent-soft underline underline-offset-4" onClick={() => setUrl({ view: "traces", reflex: routeKey(r), version: r.version, session: r.measurement_sessions?.[0]?.session ?? null, traceRepo: r.measurement_sessions?.[0]?.repo ?? null, sequence: r.measurement_sessions?.[0]?.applied[0] ?? null, window: "all" }, true)}>{k(t) ?? "—"}/{t?.applied ?? 0} · {k(c) ?? "—"}/{c?.applied ?? 0}</button>
                       </td>
                     </tr>
                   );

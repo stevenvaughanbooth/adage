@@ -2,7 +2,7 @@
 source: crates/adage-cli/src/ui/tests.rs
 expression: text
 ---
- adage    1 Live   2 Reflexes (2)  3 Map   4 Health (2)  5 Settings                                                            harbor-dispatch · LIVE
+ adage    1 Live   2 Reflexes (2)  3 Map   4 Health (2)  5 Settings   6 Home                                                   harbor-dispatch · LIVE
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
  config  /home/me/.local/share/adage/config.toml
  the same settings as adage config; environment variables win over the file

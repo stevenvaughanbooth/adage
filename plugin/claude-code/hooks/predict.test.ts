@@ -1,21 +1,40 @@
 // A `TurnStep` answer read into the calls it predicts, and those calls as `turn.step` chunks
 // (predict.ts; plan C4, C7; T-C4-01, T-C4-03, T-C7-03): one branch per kind, ids with provenance.
+// The answers are the wire's (docs/claude-mod/impl/wire.md): its two files read as they are, every
+// other kind and every malformed case made from predict.json.
 import { describe, expect, test } from 'claude-code/testing'
 
+import { wire, wireWith } from './fixtures/kit'
 import { callChunks, predictedResult, predictionOf, toolUseId } from './predict'
 
-const make = (kind: string, calls: unknown[], extra: Record<string, unknown> = {}) => ({
-  predict: { kind, route: 'codegen-after-schema', track: 'acme/billing@1', calls, ...extra },
-})
+const P = wire('predict').predict as { route: string; track: string }
+const make = (kind: string, calls: unknown, extra: Record<string, unknown> = {}) => wireWith('predict', { kind, calls, ...extra })
 const bash = (command: string) => ({ tool: 'Bash', input: { command } })
+
+describe('T-C4-01, T-C7-03 · predictionOf reads the wire', () => {
+  test('predict.json: an obligation, one Bash call, its route and track', () => {
+    const answer = wire('predict')
+    const p = answer.predict as Record<string, unknown>
+    expect(predictionOf(answer)).toEqual({ kind: 'obligation', route: p.route, track: p.track, calls: p.calls })
+    expect(predictionOf(answer)?.calls.map(c => c.tool)).toEqual(['Bash'])
+    expect([P.route, P.track].includes('')).toBe(false)
+  })
+
+  test('predict-chain.json: a chain, its calls in order', () => {
+    const answer = wire('predict-chain')
+    const p = answer.predict as Record<string, unknown>
+    expect(predictionOf(answer)).toEqual({ kind: 'chain', route: p.route, track: p.track, calls: p.calls })
+    expect(predictionOf(answer)?.calls.length).toBeGreaterThan(1)
+  })
+})
 
 describe('T-C4-01, T-C4-03, T-C7-03 · predictionOf: one branch per kind', () => {
   test('run, obligation and sequence take exactly one call', () => {
     for (const kind of ['run', 'obligation', 'sequence']) {
       expect(predictionOf(make(kind, [bash('make gen')]))).toEqual({
         kind,
-        route: 'codegen-after-schema',
-        track: 'acme/billing@1',
+        route: P.route,
+        track: P.track,
         calls: [bash('make gen')],
       })
       expect(predictionOf(make(kind, [bash('a'), bash('b')]))).toBeUndefined()
@@ -41,22 +60,22 @@ describe('T-C4-01, T-C4-03, T-C7-03 · predictionOf: one branch per kind', () =>
     for (const answer of [
       undefined,
       {},
-      { predict: null },
+      wireWith('predict', null),
       make('teleport', [bash('x')]),
       make('run', [bash('x')], { route: '' }),
       make('run', [bash('x')], { route: 7 }),
       make('run', [{ tool: '', input: {} }]),
       make('run', [{ tool: 'Bash', input: 'make gen' }]),
       make('run', [{ tool: 'Bash' }]),
-      { predict: { kind: 'run', route: 'r', calls: 'x' } },
-      { predict: { kind: 'toString', route: 'r', calls: [bash('x')] } },
+      make('run', 'x', { route: 'r' }),
+      make('toString', [bash('x')], { route: 'r' }),
     ]) {
       expect(predictionOf(answer), JSON.stringify(answer)).toBeUndefined()
     }
   })
 
   test('a missing track reads as empty', () => {
-    expect(predictionOf({ predict: { kind: 'run', route: 'r', calls: [bash('x')] } })?.track).toBe('')
+    expect(predictionOf(make('run', [bash('x')], { track: undefined }))?.track).toBe('')
   })
 })
 
@@ -69,9 +88,9 @@ describe('T-C4-01, T-C7-03 · chunks and ids', () => {
   test('one tool and one whole input chunk per call, block indexes from the first given', () => {
     const p = predictionOf(make('chain', [bash('a'), { tool: 'Read', input: { file_path: '/f' } }]))!
     expect(callChunks(p, 't', 2, 1)).toEqual([
-      { kind: 'tool', index: 1, id: 'adage_codegen-after-schema_t_2_0', name: 'Bash' },
+      { kind: 'tool', index: 1, id: `adage_${P.route}_t_2_0`, name: 'Bash' },
       { kind: 'input', index: 1, json: '{"command":"a"}' },
-      { kind: 'tool', index: 2, id: 'adage_codegen-after-schema_t_2_1', name: 'Read' },
+      { kind: 'tool', index: 2, id: `adage_${P.route}_t_2_1`, name: 'Read' },
       { kind: 'input', index: 2, json: '{"file_path":"/f"}' },
     ])
     expect(predictedResult(p, 't', 2)).toEqual({

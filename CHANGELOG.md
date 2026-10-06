@@ -430,14 +430,22 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 - The local map retries failed snapshots with bounded backoff, times out stalled requests, and
   labels stale data with a manual retry. Continuous events no longer starve snapshot refreshes.
   First-run hook checks can recover and be rechecked; demo data is explicitly labeled.
+- **Follow the evidence:** complete trace inventories and individual session views extend beyond
+  the recent activity window, retain URL selections and browser navigation, and distinguish
+  current-version outcomes from historical or unattributed events.
 - In the TUI's Reflexes tab, Escape resets both the search and filter chips, including an empty
   result caused solely by strength/lifecycle filters. Reverse map navigation starts at the last item.
 - The Reflexes TUI separates evidence from execution authority and shows current grant state,
   declared effects and the latest staged-action outcome. Execution approval remains person-gated.
-- **A fresh install is healthy.** Before the first session, doctor passes (no tracks or index yet
-  is not a problem), the card counts the repository's past traces, and `adage status` and
-  `adage watch` show the bundled embedding model. Switching models (`models fetch|install|use`)
-  says which prompt-matching reflexes stop matching and conditions their repository again.
+- **Guided terminal Home and one palette:** choose a repository, connect a harness, configure or
+  import local history, preview conditioning, run reports, manage models and signed packs, and open
+  the browser map through forms. Demo data and real repository operations stay separate.
+- **A fresh install is healthy.** Once its first hook reaches Adage, before anything is learned,
+  doctor passes (no tracks or index yet is not a problem; until that first delivery it says the
+  hooks are registered and waits), the card counts the repository's past traces, and `adage
+  status` and `adage watch` show the bundled embedding model. Switching models (`models
+  fetch|install|use`) says which prompt-matching reflexes stop matching and conditions their
+  repository again.
 - **Bare `adage` is a status card** everywhere (terminal, pipe, `!adage` in Claude Code):
   reflexes, learning, counts, savings, health and what waits for you. `adage ui` opens the app.
 - **Savings, honestly.** A ledger per repository (`ledger/<slug>.jsonl`: turns, tool calls,
@@ -517,6 +525,9 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   a decision can no longer race an automatic learner writing the same track. While a learn run
   holds the lock, `adage ui` waits at most two seconds and then says to try again, with nothing
   recorded, instead of freezing.
+- **Review the exact change:** proposal and pack confirmations bind to the previewed content;
+  stale previews fail before trust or installation changes. Hook registration is shown separately
+  from confirmed delivery, including Codex's manual acceptance step.
 - `adage review` lists reflexes that need a person's decision with their evidence and the exact
   directive text; `approve`, `strengthen`, `weaken`, `extinguish`, `pin` and `dismiss` are
   recorded in `review.yaml` and survive re-conditioning. A pinned reflex is never overwritten:

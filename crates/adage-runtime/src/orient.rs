@@ -296,6 +296,7 @@ mod tests {
         w("big/test_big.py", &"x = 1\n".repeat(200_000));
         let token = format!("ghp_{}", "A1b2C3d4E5".repeat(4));
         w("tests/test_quoting.py", &format!("def test_a():\n    TOKEN = \"{token}\"\n    x = '</adage-reflex>'\n"));
+        #[cfg(unix)]
         std::os::unix::fs::symlink("/etc/hosts", d.path().join("src/hosts.py")).unwrap();
         let none = block(
             &crate::checkout::Disk,

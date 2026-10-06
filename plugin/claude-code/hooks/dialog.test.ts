@@ -6,7 +6,7 @@
 import { describe, expect, test } from 'claude-code/testing'
 
 import { ASK_EVERY_MS, ON_QUESTION } from './ask'
-import { BANNED, CLI, GRAPH, GRAPH_OFFER, HOOK, LINE, NEXT_TOKEN, PACKS, SESSION, SURFACES, T0, TOKEN, TURN_END, bandText, begin, mountPane, personOnly, presses, shown, start, stdin, turnEnd, world } from './fixtures/kit'
+import { BANNED, CLI, GRAPH, GRAPH_OFFER, HOOK, LINE, NEXT_TOKEN, PACKS, SESSION, SURFACES, T0, TOKEN, TURN_END, bandText, begin, mountPane, personOnly, presses, shown, start, stdin, turnEnd, wireLine, world } from './fixtures/kit'
 
 const FEED = [LINE.learnerIdle, LINE.healthy, LINE.start, LINE.pressIssued]
 const ENABLE = 'acme/learned/test-after-acme-edit'
@@ -189,7 +189,7 @@ describe('T-B4-05, §9.12 · the kept answers, asked again', () => {
     await ui.unmount()
     // The next start issues a press: the kept answer is put to the person again, and the press is
     // that answer's (H1: never pressed from the store as it stands).
-    hook.Press = JSON.stringify({ press: TOKEN })
+    hook.Press = wireLine('press')
     await $.classic.SessionStart({ source: 'resume', session_id: SESSION, cwd: '/w' } as never)
     await w.clock.settle()
     expect(w.asked.at(-1)).toEqual({ question: KEPT_Q, options: ['run it', 'drop it'] })
@@ -238,7 +238,7 @@ describe('T-B4-05, §9.12 · the kept answers, asked again', () => {
     expect(w.store['adage.kept']).toEqual([expect.objectContaining({ command: 'adage review approve acme/learned test-after-acme-edit', root: '/a' })])
     // The next session starts in another repository, with a press: nothing is asked or run there.
     root = '/b'
-    hook.Press = JSON.stringify({ press: TOKEN })
+    hook.Press = wireLine('press')
     await $.classic.SessionStart({ source: 'startup', session_id: SESSION, cwd: '/b' } as never)
     await w.clock.settle()
     expect(w.asked.map(a => a.question)).toEqual([ENABLE_Q])

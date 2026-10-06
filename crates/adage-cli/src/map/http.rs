@@ -30,6 +30,7 @@ pub(crate) const CSP: &str = "default-src 'none'; script-src 'self'; style-src '
 pub(crate) struct Request {
     pub(crate) method: String,
     pub(crate) path: String,
+    query: String,
     pub(crate) host: Option<String>,
     pub(crate) accept_encoding: Option<String>,
     pub(crate) last_event_id: Option<u64>,
@@ -42,7 +43,9 @@ impl Request {
         let method = first.next().unwrap_or("").to_string();
         let target = first.next().unwrap_or("");
         let path = target.split(['?', '#']).next().unwrap_or("").to_string();
-        let mut r = Request { method, path, ..Default::default() };
+        let query =
+            target.split_once('?').map(|(_, q)| q.split('#').next().unwrap_or("").to_owned()).unwrap_or_default();
+        let mut r = Request { method, path, query, ..Default::default() };
         for (k, v) in lines.filter_map(|l| l.split_once(':')) {
             let v = v.trim();
             match k.trim().to_ascii_lowercase().as_str() {
@@ -197,6 +200,25 @@ pub(crate) fn route(req: &Request, shared: &Shared) -> Reply {
             // The page shows "offline" and retries.
             Err(e) => text("503 Service Unavailable", &format!("{e:#}")),
         },
+        "/api/v1/trace" => {
+            let value = |key: &str| {
+                req.query
+                    .split('&')
+                    .filter_map(|p| p.split_once('='))
+                    .find(|(k, _)| *k == key)
+                    .map(|(_, v)| decode_component(&v.replace('+', " ")))
+            };
+            match (value("session"), value("repo")) {
+                (Some(session), Some(repo)) if !session.is_empty() && !repo.is_empty() => {
+                    match adage_app::graph::trace(&shared.paths, &session, &repo) {
+                        Ok(Some(trace)) => json_response(&trace),
+                        Ok(None) => text("404 Not Found", "this recorded session is not available"),
+                        Err(e) => text("400 Bad Request", &format!("{e:#}")),
+                    }
+                }
+                _ => text("400 Bad Request", "session and repo are required"),
+            }
+        }
         "/api/v1/health" => {
             let checks = crate::doctor::checks(&shared.paths, shared.repo_root.as_deref());
             let count = |s: &str| checks.iter().filter(|c| json!(c.status) == s).count();
@@ -484,6 +506,39 @@ mod tests {
         assert_eq!(req("GET / HTTP/1.1\r\nHost: localhost:8765\r\n\r\n", &s).status, "200 OK");
         assert_eq!(req("GET / HTTP/1.1\r\nHost: 127.0.0.1:9999\r\n\r\n", &s).status, "403 Forbidden");
         assert_eq!(req("GET / HTTP/1.1\r\n\r\n", &s).status, "403 Forbidden");
+    }
+
+    #[test]
+    fn trace_endpoint_loads_a_whole_session_outside_the_recent_window() {
+        let d = tempfile::tempdir().unwrap();
+        let s = shared(d.path());
+        for i in 1..=620 {
+            adage_store::spool::append(
+                &s.paths.sessions().join("older-session.spool"),
+                &json!({
+                    "ts": i, "repo": "repo/a+b", "arm": "treated", "event": "PostToolBatch",
+                    "decision": { "directives": [] },
+                }),
+            )
+            .unwrap();
+        }
+        let ok = |path: &str| format!("GET {path} HTTP/1.1\r\nHost: 127.0.0.1:8765\r\n\r\n");
+        let response = req(&ok("/api/v1/trace?session=older-session&repo=repo%2Fa%2Bb"), &s);
+        assert_eq!(response.status, "200 OK");
+        assert_eq!(response.get("Cache-Control"), Some("no-store"));
+        let v: Value = serde_json::from_slice(&response.body).unwrap();
+        assert_eq!(v["repo"], "repo/a+b");
+        assert_eq!(v["complete"], true);
+        assert_eq!(v["events_total"], 620);
+        assert_eq!(v["events"].as_array().unwrap().len(), 620);
+        assert_eq!(v["events"][619]["sequence"], 620);
+        assert_eq!(req(&ok("/api/v1/trace?session=older-session&repo=wrong"), &s).status, "404 Not Found");
+        assert_eq!(req(&ok("/api/v1/trace?session=older-session"), &s).status, "400 Bad Request");
+        assert_ne!(req(&ok("/api/v1/trace?session=..%2Fsecret&repo=repo%2Fa%2Bb"), &s).status, "200 OK");
+        assert_eq!(
+            req("POST /api/v1/trace HTTP/1.1\r\nHost: 127.0.0.1:8765\r\n\r\n", &s).status,
+            "405 Method Not Allowed"
+        );
     }
 
     #[test]

@@ -21,4 +21,4 @@ expression: text
  + hooks claude    + 4 reflexes    + auto-condition
  ! no model · adage models fetch
 ────────────────────────────────────────────────────────────
- p pause · f scope · / filter · enter inspect        q quit
+ : palette · p pause · f scope · / filter            q quit

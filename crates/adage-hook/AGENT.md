@@ -24,7 +24,8 @@ open, always.
 
 - `lib.rs`: `main(harness, event, opts) -> !` (panic hook, big stack, `catch_unwind`, always
   exit 0); `run` (stdin, `ADAGE_DISABLE`); `handle` (one event with its payload and `Paths`: the
-  press first, then the `.adage/disabled` switch, then one exhaustive `match` over the adapter's
+  press first, then the `.adage/disabled` switch, then the delivery receipt for a shell call, a
+  session start or a decided event in a repository, then one exhaustive `match` over the adapter's
   `HookEvent`: `PreToolUse` to `pretool`, `Standing` to `standing`, `SkillPrompt` to `skill`, a
   session start to `session_start`, every decided event to `respond`, then the Stop gate and
   autolearn); `Options { learner, extension }`; `on_big_stack`; the re-exports (the extension
@@ -72,6 +73,11 @@ open, always.
   `plugin/opencode/adage.js` with `include_str!`).
 - `autolearn.rs`: `on_turn_end`, `Queue` (request, lock, spawned, state, notice, shown files),
   `RunState`, `Notice`, `Shown`, `take_notice`, `TEST_SPAWN_ENV`.
+- `receipt.rs` (public): the delivery receipt, the first and latest time a harness's hooks
+  reached Adage in a repository (`$ADAGE_HOME/hook-receipts/<repo hash>-<harness>.json`, no
+  prompt, path, command or session id; rewritten at most once a minute, atomically). `record` is
+  best effort and its failure is ignored; `read` is what `adage doctor`'s `hook activity:
+  <harness>` check shows. It is not the mod's test-run receipt (`ReceiptCard`).
 - `failopen.rs`: `Failure`, `record` (one JSON line in `$ADAGE_HOME/fail-open.log`, rotated at
   `ROTATE_BYTES`), `install_panic_hook`, `panic_failure`.
 

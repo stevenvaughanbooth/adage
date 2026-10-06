@@ -9,10 +9,19 @@
 use std::path::{Path, PathBuf};
 
 /// Crates behind the `adage` binary and its hooks.
-const CRATES: &[&str] = &["adage-cli", "adage-hook", "adage-runtime", "adage-store", "adage-tracks", "adage-learn"];
+const CRATES: &[&str] =
+    &["adage-cli", "adage-app", "adage-hook", "adage-runtime", "adage-store", "adage-tracks", "adage-learn"];
 
 /// (file relative to `crates/`, occurrences, why it is allowed).
 const ALLOWED: &[(&str, usize, &str)] = &[
+    // Explicit palette actions run Adage's own commands with bounded captured output.
+    ("adage-cli/src/ui/tools.rs", 1, "person-requested Adage reports and configuration from the palette"),
+    // An explicit, Person-authorized import lists and exports local OpenCode history. Never
+    // called from a hook or learner; no command from a transcript is executed.
+    ("adage-app/src/history.rs", 2, "person-requested local OpenCode session list/export"),
+    // Test-only: `trust.rs`'s unit tests build a git repository and commit a pack with `git`. The
+    // module itself reads git's object store (`adage_core::gitobj`) and starts nothing.
+    ("adage-app/src/trust.rs", 3, "git in its #[cfg(test)] module only, to commit a fixture pack"),
     // Live learning: at the end of a turn the hook (`adage-hook` → `autolearn::on_turn_end`) may
     // start `adage condition --auto`, re-executing the adage binary itself, detached. It runs Adage's
     // own learner over transcripts, never a repository or agent command.

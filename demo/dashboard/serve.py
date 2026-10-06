@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""Serve the live demo dashboard: http://127.0.0.1:8765  (reads $DEMO_ROOT/state.json), and the
-map at /brain, which draws `adage graph --json` for $ADAGE_HOME (default
-$DEMO_ROOT/adage-home) and refreshes it live. $ADAGE_BIN overrides the binary. The map page
-lives with the binary (crates/adage-cli/assets/brain.html), which also serves it on its own:
-`adage map`."""
+"""Serve the live demo dashboard and its map through the current Adage binary.
+
+/state.json reads $DEMO_ROOT/state.json. /brain redirects to an owned, read-only
+`adage map` server on an ephemeral loopback port, with the same $ADAGE_HOME.
+The binary supplies the React assets, trace API and event stream together.
+"""
 import functools
 import http.server
 import os
 import subprocess
+from urllib.parse import urlsplit
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -15,8 +17,7 @@ ROOT = Path(os.environ.get("DEMO_ROOT", "/tmp/adage-demo"))
 PORT = int(os.environ.get("DEMO_PORT", "8765"))
 ADAGE_HOME = os.environ.get("ADAGE_HOME", str(ROOT / "adage-home"))
 ADAGE_BIN = os.environ.get("ADAGE_BIN", str(HERE.parent.parent / "target" / "release" / "adage"))
-BRAIN = HERE.parent.parent / "crates" / "adage-cli" / "assets" / "brain.html"
-PAGE_HEAD = b'<!doctype html>\n<html lang="en"><meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n'
+MAP_URL = None
 
 
 def graph_json():
@@ -47,12 +48,15 @@ class H(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
-        if self.path in ("/brain", "/brain.html"):
-            body = PAGE_HEAD + BRAIN.read_bytes()
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
+        if urlsplit(self.path).path in ("/brain", "/brain.html"):
+            if not MAP_URL:
+                self.send_error(503, "The local map server is unavailable")
+                return
+            query = urlsplit(self.path).query
+            self.send_response(302)
+            self.send_header("Location", MAP_URL + ("?" + query if query else ""))
+            self.send_header("Cache-Control", "no-store")
             self.end_headers()
-            self.wfile.write(body)
             return
         if self.path == "/snapshot.html" and (HERE / "snapshot.html").exists():
             body = (HERE / "snapshot.html").read_bytes()
@@ -74,9 +78,46 @@ class H(http.server.SimpleHTTPRequestHandler):
         pass
 
 
+def start_map():
+    """The map owns its API and assets; no duplicate web server implementation."""
+    proc = subprocess.Popen(
+        [ADAGE_BIN, "map", "--no-open", "--port", "0"],
+        env={**os.environ, "ADAGE_HOME": ADAGE_HOME},
+        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+        text=True, bufsize=1,
+    )
+    try:
+        first = proc.stdout.readline()
+        url = next((word for word in first.split() if word.startswith("http://127.0.0.1:")), None)
+        if not url:
+            raise RuntimeError("The Adage map server did not report its loopback address")
+        return proc, url
+    except BaseException:
+        stop_map(proc)
+        raise
+
+
+def stop_map(proc):
+    proc.terminate()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
+    if proc.stdout:
+        proc.stdout.close()
+
+
 if __name__ == "__main__":
-    print(f"Adage dashboard: http://127.0.0.1:{PORT}  (state: {ROOT / 'state.json'})")
-    print(f"Map:             http://127.0.0.1:{PORT}/brain  (ADAGE_HOME={ADAGE_HOME})")
-    # An explicit directory avoids os.getcwd(), which fails when the cwd is not readable.
-    handler = functools.partial(H, directory=str(HERE))
-    http.server.ThreadingHTTPServer(("127.0.0.1", PORT), handler).serve_forever()
+    map_process, MAP_URL = start_map()
+    try:
+        print(f"Adage dashboard: http://127.0.0.1:{PORT}  (state: {ROOT / 'state.json'})")
+        print(f"Map:             {MAP_URL}  (ADAGE_HOME={ADAGE_HOME})")
+        # An explicit directory avoids os.getcwd(), which fails when the cwd is not readable.
+        handler = functools.partial(H, directory=str(HERE))
+        with http.server.ThreadingHTTPServer(("127.0.0.1", PORT), handler) as server:
+            server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        stop_map(map_process)

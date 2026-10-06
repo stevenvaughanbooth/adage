@@ -41,12 +41,12 @@ export function kpis(routes: Route[]): Kpi[] {
       treated: { k: sum(paths, t((a) => a.followed)), n: sum(paths, t((a) => a.applied)) },
       control: { k: sum(paths, c((a) => a.followed)), n: sum(paths, c((a) => a.applied)) },
       lowerIsBetter: false,
-      note: "traces where a reflex applied",
+      note: "reflex–trace pairs · current versions",
     },
     {
       label: "Ran into a known dead end",
-      treated: { k: sum(dead, t((a) => a.hit_avoided)), n: sum(dead, t((a) => a.applied)) },
-      control: { k: sum(dead, c((a) => a.hit_avoided)), n: sum(dead, c((a) => a.applied)) },
+      treated: { k: sum(dead, t((a) => (a.hit_avoided ?? 0))), n: sum(dead, t((a) => a.applied)) },
+      control: { k: sum(dead, c((a) => (a.hit_avoided ?? 0))), n: sum(dead, c((a) => a.applied)) },
       lowerIsBetter: true,
       note: "inhibit reflexes · lower is better",
     },
@@ -61,14 +61,14 @@ export function kpis(routes: Route[]): Kpi[] {
 }
 
 /** Distinct traces per day, by arm, for the chart. */
-export function perDay(events: TraceEvent[]): { day: number; treated: number; control: number }[] {
+export function perDay(events: Pick<TraceEvent, "ts" | "repo" | "session" | "arm">[]): { day: number; treated: number; control: number }[] {
   const days = new Map<number, { t: Set<string>; c: Set<string> }>();
   for (const e of events) {
     const d = new Date(e.ts);
     d.setHours(0, 0, 0, 0);
     const k = d.getTime();
     const b = days.get(k) ?? { t: new Set<string>(), c: new Set<string>() };
-    (e.arm === "control" ? b.c : b.t).add(e.session);
+    (e.arm === "control" ? b.c : b.t).add(JSON.stringify([e.repo, e.session]));
     days.set(k, b);
   }
   return [...days.entries()]
@@ -77,10 +77,10 @@ export function perDay(events: TraceEvent[]): { day: number; treated: number; co
 }
 
 /** The traces in each arm, from the events in view. */
-export function armTraces(g: Graph, events: TraceEvent[]): { treated: number; control: number } {
+export function armTraces(g: Graph, events: Pick<TraceEvent, "repo" | "session" | "arm">[]): { treated: number; control: number } {
   const t = new Set<string>();
   const c = new Set<string>();
-  for (const e of events) (e.arm === "control" ? c : t).add(e.session);
-  if (!events.length) return { treated: g.sessions.treated, control: g.sessions.control };
+  for (const e of events) (e.arm === "control" ? c : t).add(JSON.stringify([e.repo, e.session]));
+  void g;
   return { treated: t.size, control: c.size };
 }

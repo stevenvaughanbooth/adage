@@ -70,6 +70,9 @@ function route(o) {
       sessions: o.live?.[7] ?? 0,
     },
     arms: arms(o.t ?? [0, 0], o.c ?? [0, 0]),
+    measurement_sessions: [],
+    measurement_history: [],
+    measurement_info: { status: "current", description: "Illustrative test-fixture measurements for this collection and version." },
     shape: o.shape ?? (o.step.kind === "avoid" ? "avoid" : o.step.kind === "read_batch" ? "read-batch" : o.step.kind),
     quiet: o.quiet ?? false,
     obligation: o.obligation ?? null,
@@ -376,6 +379,48 @@ const observed = [
   { key: "exec python3 -m unittest !failed", count: 14, sessions: 14, route: "dead-end-d41b1e", how: "avoids" },
 ];
 
+// Detailed recorded-event shape and the complete session inventory, including quiet boundaries.
+const sequences = new Map();
+const exposures = new Map();
+for (const event of events) {
+  event.sequence = (sequences.get(event.session) ?? 0) + 1;
+  sequences.set(event.session, event.sequence);
+  event.harness = "claude";
+  const directive = (id) => {
+    const r = routes.find((r) => r.id === id);
+    return { route: id, track: r.track, version: r.version, strength: r.strength, text: r.directive,
+      route_key: JSON.stringify([r.repo, r.reference, r.id]), attribution: "current" };
+  };
+  event.directives = event.directed.map(directive);
+  event.would_have = event.would.map(directive);
+  for (const d of event.arm === "control" ? event.would_have : event.directives) {
+    exposures.set(`${event.session}:${d.route}`, { ...d, exposure_sequence: event.sequence });
+  }
+  event.judgements = event.judged.map(([kind, id]) => ({
+    ...exposures.get(`${event.session}:${id}`), route: id, kind,
+  }));
+}
+
+const traceInventory = (rows) => [...Map.groupBy(rows, (e) => `${e.repo}:${e.session}`).values()].map((items) => ({
+  session: items[0].session, repo: items[0].repo, arm: items[0].arm, harnesses: ["claude"],
+  start_ts: Math.min(...items.map((e) => e.ts)), end_ts: Math.max(...items.map((e) => e.ts)),
+  events_total: items.length, events_visible: items.length, truncated: false,
+  observed_count: items.reduce((n, e) => n + e.observed.length, 0),
+  directed_count: items.reduce((n, e) => n + e.directed.length, 0),
+  would_count: items.reduce((n, e) => n + (e.arm === "control" ? e.would.length : 0), 0),
+}));
+const rawTotals = (rows) => {
+  const count = (kind, arm) => rows.filter((e) => e.arm === arm).reduce((n, e) => n + e.judged.filter(([k]) => k === kind).length, 0);
+  return {
+    emitted: rows.reduce((n, e) => n + e.directed.length, 0),
+    would_have: rows.filter((e) => e.arm === "control").reduce((n, e) => n + e.would.length, 0),
+    followed: count("followed", "treated"), ignored: count("ignored", "treated"), misfired: count("misfired", "treated"),
+    obligation_met: count("obligation_met", "treated"),
+    control: { unaided: count("followed", "control"), not_reached: count("ignored", "control"), obligation_met: count("obligation_met", "control") },
+    sessions: new Set(rows.filter((e) => e.directed.length).map((e) => e.session)).size,
+  };
+};
+
 const graph = (o) => ({
   generation: "8dd5ec01a3f2b7c4",
   home: "~/.adage",
@@ -384,6 +429,14 @@ const graph = (o) => ({
   routes: o.routes,
   observed: o.observed ?? [],
   events: o.events ?? [],
+  totals: rawTotals(o.events ?? []),
+  attribution: { exposures: {}, judgements: {}, description: "Illustrative fixture. Raw totals count each event once." },
+  trace_events: o.events ?? [],
+  trace_sessions: traceInventory(o.events ?? []),
+  trace_info: { source: "recorded_hook_decisions", events_total: (o.events ?? []).length,
+    events_visible: (o.events ?? []).length, truncated: false, limit: 400,
+    complete_session_inventory: true, session_endpoint: "/api/v1/trace",
+    description: "Illustrative recorded hook decisions for browser tests." },
   learning: o.learning ?? [],
   bars: { min_support: 3, fire_lower_bound: 0.5, uplift_min: 0.1 },
   savings: o.savings ?? [],

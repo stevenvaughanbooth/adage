@@ -32,6 +32,7 @@ Each module names the entry point `handle` (or another module) calls.
 | `press.rs` | The press token; what it does at each invocation is decided from the event table (`act_of`) | `press::gate`, `press::before_kill_switch` |
 | `skill.rs` | `SkillPrompt`, and the skills a `TurnStep` may invoke | `skill::prompt`, `skill::invocable` |
 | `harness/` | The adapters: payload in, `HookEvent` out (`Adapter::classify`, from the event table and `translate`), rendering back; `dispatch_tests.rs` is the dispatch's characterization | `harness::adapter` |
+| `receipt.rs` (public) | The delivery receipt (from main's #32): the first and the latest time a harness's hooks reached Adage in a repository, rewritten at most once a minute, in `$ADAGE_HOME/hook-receipts/`; `adage doctor`'s `hook activity: <harness>` reads it. Not the mod's test-run receipt (`ReceiptCard`, `identity::answered_key`) | `receipt::record` (from `handle`), `receipt::read` |
 | `autolearn.rs`, `failopen.rs` | Live learning at a turn's end; the fail-open log | unchanged |
 | `testkit.rs` | Test-only: `ObligationWorld` and the other worlds, the stand-in extensions, `bash_call`, `spooled` | `#[cfg(test)]` |
 
@@ -227,3 +228,17 @@ Within 0.15 ms at p50 on every fast-path scenario, in either direction: noise. N
 before `names_python` or `fast::skip` that did not before; the reads W6 saves (a second and
 third index and configuration read on a `PreToolUse` that names Python, a second configuration
 read in `respond`) are off these paths.
+
+## Merging main (`350ab0b`, #32)
+
+Main's #32 added `receipt.rs` and one hunk in the old monolithic `handle`: after the
+`.adage/disabled` switch, in a repository, record a delivery receipt when the event translated
+(`adapter.translate(…).is_some()`) or was `PreToolUse`. On this branch `handle` is still where
+that happens (it is the dispatch), so the hunk stays in `lib.rs`, expressed over the classified
+event: `HookEvent::PreToolUse | SessionStart | Decide(_)`, which is exactly what translated
+before plus the mod's `TurnStep` (a decided event). The press is answered before the switch, and
+the mod's asks for the standing text and a skill's text answer the mod rather than an agent's
+event, so none of them writes a receipt. The receipt is a file beside the spools, never a spool
+record: no golden, wire file or record snapshot changes. `receipt::tests` (main's) runs
+`handle` on a Codex prompt with an empty index and checks the receipt, the one `unrouted`
+record and that `.adage/disabled` writes none.

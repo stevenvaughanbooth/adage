@@ -1,18 +1,20 @@
 // Where Adage's standing text is attached, through the module as the engine loads it (plan C5, C9;
 // T-C5-02, T-C5-03, T-C5-05's offline half, T-C9-03): the binary's `Standing` answered beneath the
 // plugin by the kit's world, and the engine's own composition, tool description and subagent spawn
-// by its hooks beneath. The pure placement is checked alone.
+// by its hooks beneath. The pure placement is checked alone. The answers are the wire's
+// (docs/claude-mod/impl/wire.md): standing.json for the session, standing-subagent.json for a spawn.
 import type { On, SessionMessage } from 'claude-code'
 import { describe, expect, test } from 'claude-code/testing'
 
-import { BASH_TOOL, SECTIONS, start, world } from './fixtures/kit'
+import { BASH_TOOL, SECTIONS, start, wire, wireWith, world } from './fixtures/kit'
 import { SECTION_ID, isAdageAttachment, standingOf, subagentOf, withInstruction, withNote, withPreamble, withSection, withoutAttachments } from './attach'
 
-const STANDING = '<adage-reflex track="acme/learned@1" route="dead-end-unittest" strength="inhibit" kind="avoid">\nDo not run python3 -m unittest here; run make test.\n</adage-reflex>'
-const ENVIRONMENT = "In this repository, Python runs in the project's environment, .venv/bin/python. Tests run with .venv/bin/python -m pytest."
-const COMPACT = 'Keep the repository procedures this session followed: how tests run here, and what was run after which edits.'
-const SUBAGENT = '<adage-reflex track="acme/learned@1" route="lookup-work-item" strength="fire" kind="run">\nIn this repository, work item details are looked up with:\n  ./scripts/wi-lookup W-2045 --json\n</adage-reflex>'
-const ANSWER = { standing: STANDING, environment: ENVIRONMENT, compact: COMPACT }
+const ANSWER = wire('standing')
+const STANDING = String(ANSWER.standing)
+const ENVIRONMENT = String(ANSWER.environment)
+const COMPACT = String(ANSWER.compact)
+const SPAWNED = wire('standing-subagent')
+const SUBAGENT = String(SPAWNED.subagent)
 const ENGINE = SECTIONS
 const BASH = BASH_TOOL
 /** A render of the system prompt, as the engine raises it. */
@@ -51,7 +53,7 @@ describe('T-C5-02 · the section', () => {
   })
 
   test('empty standing text: the engine\'s sections, unchanged', async ($, on) => {
-    const w = standingWorld(on, { standing: () => ({ ...ANSWER, standing: '' }) })
+    const w = standingWorld(on, { standing: () => wireWith('standing', { standing: '' }) })
     await start($, w.w, null, false)
     expect((await $.prompt.compose(COMPOSE)).sections).toEqual(ENGINE)
   })
@@ -111,13 +113,13 @@ describe('T-C9-03 · the Bash tool\'s description and the subagent\'s prompt', (
   })
 
   test('no environment bound: the description as the engine computed it', async ($, on) => {
-    const w = standingWorld(on, { standing: () => ({ ...ANSWER, environment: '' }) })
+    const w = standingWorld(on, { standing: () => wireWith('standing', { environment: '' }) })
     await start($, w.w, null, false)
     expect(await $.tool.describe(BASH)).toEqual({ description: BASH.description })
   })
 
   test('agent.spawn asks Standing with the subagent, after the session\'s own, and prepends what it answers', async ($, on) => {
-    const w = standingWorld(on, { standing: p => (p.agent === undefined ? ANSWER : { ...ANSWER, subagent: SUBAGENT }) })
+    const w = standingWorld(on, { standing: p => (p.agent === undefined ? ANSWER : SPAWNED) })
     await start($, w.w, null, false)
     await $.agent.spawn({ prompt: 'Find what W-2045 asks for', description: 'Look up the work item', subagentType: 'Explore' } as never)
     expect(w.spawned).toEqual([{ prompt: `${SUBAGENT}\n\nFind what W-2045 asks for`, description: 'Look up the work item', subagentType: 'Explore' }])
@@ -193,13 +195,25 @@ describe('T-C5-02, T-C9-03 · the placement, alone', () => {
     expect(withPreamble('p', '')).toBe('p')
   })
 
-  test('standingOf and subagentOf: the binary\'s words, or nothing', () => {
+  test('standingOf reads standing.json: its three session parts (the whole answer), each there', () => {
     expect(standingOf(ANSWER)).toEqual(ANSWER)
-    expect(standingOf({ standing: 7, compact: COMPACT })).toEqual({ standing: '', environment: '', compact: COMPACT })
-    expect(standingOf(undefined)).toEqual({ standing: '', environment: '', compact: '' })
-    expect(standingOf([])).toEqual({ standing: '', environment: '', compact: '' })
-    expect(subagentOf({ ...ANSWER, subagent: SUBAGENT })).toBe(SUBAGENT)
+    for (const v of Object.values(standingOf(ANSWER))) expect(v).not.toBe('')
     expect(subagentOf(ANSWER)).toBe('')
+  })
+
+  test('subagentOf reads standing-subagent.json: what the subagent is told; the control arm\'s empty session parts are nothing', () => {
+    expect(subagentOf(SPAWNED)).toBe(SPAWNED.subagent)
+    expect(SUBAGENT).not.toBe('')
+    const none = standingOf(undefined)
+    expect(Object.values(none)).toEqual(['', '', ''])
+    expect(standingOf(SPAWNED)).toEqual({ ...none, compact: SPAWNED.compact })
+  })
+
+  test('standingOf and subagentOf: the binary\'s words, or nothing', () => {
+    const none = standingOf(undefined)
+    expect(standingOf(wireWith('standing', { standing: 7, environment: undefined }))).toEqual({ ...none, compact: COMPACT })
+    expect(standingOf([])).toEqual(none)
+    expect(subagentOf(wireWith('standing', { subagent: 7 }))).toBe('')
     expect(subagentOf('x')).toBe('')
   })
 })

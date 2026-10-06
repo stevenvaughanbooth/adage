@@ -10,7 +10,7 @@ expression: text
                               ✓ followed bin/fetch-incident INC-2045
  12:04:03 000b0b cc  tools    · 1 call, nothing to say
  12:04:04 000b0b cc  failure  → ◠ INHIBIT    npm run check
- 12:04:05 000b0b cc  tools    ✗ ignored lookup-incident
+ 12:04:05 000b0b cc  tools    ✗ not observed lookup-incident
  12:04:06 00c4a1 cc  tools    ○ found bin/fetch-incident INC-2045 unaided
  12:04:07 000b0b cc  stop     ■ finish line: asked the agent to continue
  12:04:08 00a11c cc  tools    ✓ finish line met: codegen-after-registry
@@ -25,4 +25,4 @@ expression: text
  + hooks claude    + 4 reflexes    + auto-condition
  ! no model · adage models fetch
 ────────────────────────────────────────────────────────────────────────────────
- p pause · f scope · / filter · enter inspect · m open map · ? keys      q quit
+ : palette · p pause · f scope · / filter · enter inspect · m open map   q quit

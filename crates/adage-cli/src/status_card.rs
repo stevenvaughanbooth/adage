@@ -132,6 +132,10 @@ fn brief(c: &doctor::Check) -> (String, String) {
         };
         return (line, c.command().unwrap_or("adage doctor").to_string());
     }
+    if let Some(harness) = c.check.strip_prefix("hook activity: ") {
+        let line = format!("no {harness} hook has reached Adage in this repository yet");
+        return (line, c.command().unwrap_or("adage doctor").to_string());
+    }
     let line = match c.check.as_str() {
         "cloud files" => "some files are only in the cloud, so Adage sees less of this repository",
         "auto-learn lock" => "learning is taking far longer than it usually does",

@@ -15,3 +15,8 @@ export function substituteOf(v: unknown): Substitute | undefined {
   if (typeof route !== 'string' || route === '' || typeof context !== 'string' || context === '') return undefined
   return { command, route, track: typeof track === 'string' ? track : '', context }
 }
+
+/** The final answer to a `same` verdict naming the replacement (`{ substitute }`), or undefined: withheld, or malformed. */
+export function substituteAnswerOf(answer: unknown): Substitute | undefined {
+  return isRecord(answer) ? substituteOf(answer.substitute) : undefined
+}

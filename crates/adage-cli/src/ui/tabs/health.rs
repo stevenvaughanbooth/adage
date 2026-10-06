@@ -34,14 +34,15 @@ pub fn key(s: &mut AppState, code: KeyCode) -> Option<Cmd> {
             let h = s.health.as_ref()?;
             let found = h.fixes.get(s.check_sel).cloned().flatten();
             if found.is_none() {
-                // Say why nothing happened, rather than nothing.
                 let c = h.checks.get(s.check_sel)?;
-                let why = match (c.status, &c.fix) {
-                    (Status::Pass, _) => format!("{}: passes, nothing to fix", c.label),
-                    (_, Some(fx)) => format!("{}: no one-key fix; run {fx}", c.label),
-                    (_, None) => format!("{}: no one-key fix", c.label),
-                };
-                s.toast(why, c.status == Status::Pass);
+                let mut lines = vec![c.detail.clone()];
+                if let Some(fix) = &c.fix {
+                    lines.extend([String::new(), "Next steps".into(), fix.prose()]);
+                } else if c.status == Status::Pass {
+                    lines.push("This check passes. No action is needed.".into());
+                }
+                s.modal =
+                    Some(crate::ui::app::Modal::Viewer { title: c.label.clone(), source: None, lines, scroll: 0 });
                 return None;
             }
             found

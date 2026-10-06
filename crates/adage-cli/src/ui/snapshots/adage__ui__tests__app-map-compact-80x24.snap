@@ -2,7 +2,7 @@
 source: crates/adage-cli/src/ui/tests.rs
 expression: text
 ---
- adage    1 Live   2 Reflexes (2)  3 Map   4 Health (2)  5 Settings
+ adage    1 Live   2 Reflexes (2)  3 Map   4 Health (2)  5 Settings   6 Home
 ────────────────────────────────────────────────────────────────────────────────
  focus off    zoom rows (min)    layout stimulus → reflex → response
 

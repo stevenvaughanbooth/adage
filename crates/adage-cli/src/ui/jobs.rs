@@ -100,6 +100,7 @@ pub struct Job {
     pub rx: Receiver<JobMsg>,
     pub ratio: f64,
     pub status: String,
+    pub cancelable: bool,
 }
 
 impl Job {
@@ -114,7 +115,7 @@ impl Job {
             };
             let _ = tx.send(JobMsg::Done(msg));
         });
-        Job { title: title.to_string(), rx, ratio: 0.0, status: "starting…".into() }
+        Job { title: title.to_string(), rx, ratio: 0.0, status: "starting…".into(), cancelable: false }
     }
 
     /// Drain progress; `Some` once the job is done.
