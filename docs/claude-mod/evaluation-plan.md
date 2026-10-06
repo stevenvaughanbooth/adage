@@ -66,9 +66,17 @@ claude plugin test plugin/claude-code
 cargo xtask test python demo
 ```
 
-Expected: everything green. On the build machine the workspace run was 124 test suites and 1,284
-tests at `e4609ad`, and `claude plugin test plugin/claude-code` ran 339 tests; a count that
-differs on your machine names the suites to look at, it is not itself a failure.
+Expected: everything green. On the build machine the final workspace run was 134 test suites and 1,401
+tests, and `claude plugin test plugin/claude-code` ran 351 tests; a count that differs on
+your machine names the suites to look at, it is not itself a failure.
+
+The `VALIDATE.txt` diff and any regeneration of that file must use the CLI version CI pins
+(`.github/workflows/ci.yml`, 2.1.288 at the time of writing): a newer validator adds lines of
+its own (2.1.292 adds thirteen "gating hook without .catch" notes for the same, unchanged
+`register.ts`), so a diff against a newer CLI is noise, not a finding. Install the pinned version
+beside your own for that one check (`npm install --prefix /tmp/cli288 @anthropic-ai/claude-code@2.1.288`
+and run `/tmp/cli288/node_modules/.bin/claude plugin validate …`). The live sections (§2 onward)
+run with whichever 2.1.288-or-later CLI you have.
 
 Two things these checks hold that a reviewer may not expect. The binary's answers to the mod are
 pinned by one JSON file per answer shape, `crates/adage-hook/tests/wire/*.json`
