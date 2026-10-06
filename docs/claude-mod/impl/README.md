@@ -47,6 +47,12 @@ goes.
 | [wire.md](wire.md) | `25f4c0d` | The answers the binary sends the mod, one JSON file per shape in `crates/adage-hook/tests/wire/`, mirrored into the plugin's `hooks/fixtures/wire.ts` |
 | [../../spool.md](../../spool.md) | `25f4c0d` | The session spool: every record kind a hook writes, its fields, and who reads it |
 
+## Onboarding (`../onboarding-plan.md`)
+
+| Chunk | Commit | Notes |
+| --- | --- | --- |
+| O1 one plugin, three binaries, no retired alias; O2 release tooling (`cargo xtask bump`, `release-check`), Homebrew off the first release | `cdf7c84` | [O1-O2-notes.md](O1-O2-notes.md), [../../release.md](../../release.md) |
+
 ## What is not on this branch
 
 - Anything that needs a live Claude Code session or a model: every "Live-only" section in the
