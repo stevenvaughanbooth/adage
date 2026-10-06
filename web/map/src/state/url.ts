@@ -5,13 +5,17 @@ import type { Direction, Mode } from "../lib/graph";
 import { HIDDEN_BY_DEFAULT } from "../lib/graph";
 import { SHOWABLE, type Showable, STRENGTHS, type Strength } from "../lib/words";
 
-export type View = "map" | "traces" | "evidence" | "health" | "how";
-export const VIEWS: View[] = ["map", "traces", "evidence", "health", "how"];
+export type View = "map" | "traces" | "evidence" | "health" | "how" | "setup";
+export const VIEWS: View[] = ["map", "traces", "evidence", "health", "how", "setup"];
 export type Window = "24h" | "7d" | "30d" | "all";
 export const WINDOWS: Window[] = ["24h", "7d", "30d", "all"];
 
 export interface UrlState {
   view: View;
+  session: string | null;
+  traceRepo: string | null;
+  sequence: number | null;
+  version: string | null;
   repo: string | null;
   reflex: string | null;
   mode: Mode;
@@ -44,6 +48,10 @@ export function parse(search: string): UrlState {
   return {
     view: VIEWS.includes(view as View) ? (view as View) : "map",
     repo: p.get("repo") || null,
+    session: p.get("session") || null,
+    traceRepo: p.get("traceRepo") || p.get("repo") || null,
+    sequence: p.has("seq") && Number.isSafeInteger(Number(p.get("seq"))) && Number(p.get("seq")) >= 0 ? Number(p.get("seq")) : null,
+    version: p.get("version") || null,
     reflex: p.get("reflex") || null,
     mode: mode === "expanded" ? "expanded" : "aggregated",
     focus: Math.max(0, Math.min(3, Number(p.get("focus")) || 0)),
@@ -63,6 +71,10 @@ export function serialize(s: UrlState): string {
   const p = new URLSearchParams();
   if (s.view !== "map") p.set("view", s.view);
   if (s.repo) p.set("repo", s.repo);
+  if (s.session) p.set("session", s.session);
+  if (s.traceRepo && s.session) p.set("traceRepo", s.traceRepo);
+  if (s.sequence !== null && s.session) p.set("seq", String(s.sequence));
+  if (s.version && s.reflex) p.set("version", s.version);
   if (s.reflex) p.set("reflex", s.reflex);
   if (s.mode !== "aggregated") p.set("mode", s.mode);
   if (s.focus) p.set("focus", String(s.focus));

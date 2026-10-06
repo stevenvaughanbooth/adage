@@ -211,8 +211,8 @@ fn move_by(s: &mut AppState, delta: isize) {
 }
 
 /// The traces (in the live feed) where a reflex fired or was judged.
-fn traces<'a>(s: &'a AppState, id: &str) -> Vec<&'a feed::FeedItem> {
-    s.live.feed.iter().filter(|i| i.reflexes().any(|r| r == id)).collect()
+fn traces<'a>(s: &'a AppState, id: &str, repo: &str) -> Vec<&'a feed::FeedItem> {
+    s.live.feed.iter().filter(|i| i.repo == repo && i.reflexes().any(|r| r == id)).collect()
 }
 
 fn last_fired(s: &AppState, id: &str) -> Option<u64> {
@@ -287,7 +287,7 @@ pub fn key(s: &mut AppState, code: KeyCode) -> Option<Cmd> {
         }
         KeyCode::Char('t') => {
             let r = s.selected_route()?.clone();
-            let lines: Vec<String> = traces(s, &r.id)
+            let lines: Vec<String> = traces(s, &r.id, &r.repo)
                 .iter()
                 .map(|i| {
                     let what: Vec<String> = i
@@ -299,7 +299,7 @@ pub fn key(s: &mut AppState, code: KeyCode) -> Option<Cmd> {
                             }
                             Act::Withheld { route, .. } if *route == r.id => Some("withheld (control)".into()),
                             Act::Followed(x) if *x == r.id => Some("followed".into()),
-                            Act::Ignored(x) if *x == r.id => Some("ignored".into()),
+                            Act::Ignored(x) if *x == r.id => Some("not observed within 3 batches".into()),
                             Act::Misfired(x) if *x == r.id => Some("misfired".into()),
                             Act::Met(x) if *x == r.id => Some("finish line met".into()),
                             Act::Unaided(x) if *x == r.id => Some("found unaided (control)".into()),
@@ -317,36 +317,24 @@ pub fn key(s: &mut AppState, code: KeyCode) -> Option<Cmd> {
                     )
                 })
                 .collect();
-            let lines = if lines.is_empty() {
+            let mut lines = if lines.is_empty() {
                 vec![format!("{} has not fired in the traces this screen has seen.", r.id)]
             } else {
                 lines
             };
-            s.modal = Some(Modal::Viewer { title: format!("traces · {}", r.id), source: None, lines, scroll: 0 });
+            lines.insert(0,"Recent feed only, matched by reflex ID in this repository. Historical and duplicate collection versions may appear; use Explore complete traces in browser for attributed evidence.".into());
+            s.modal =
+                Some(Modal::Viewer { title: format!("recent traces · {}", r.id), source: None, lines, scroll: 0 });
         }
         KeyCode::Char('o') => {
             let r = s.selected_route()?;
-            let cmd = format!("adage map --focus {}", r.id);
-            s.message(
-                "Open in the map",
-                vec!["The same reflex in the web map, from any shell:".into(), String::new(), format!("  {cmd}")],
-                false,
-            );
+            return Some(Cmd::OpenWeb {
+                focus: Some(serde_json::json!([r.repo, r.reference, r.id]).to_string()),
+                traces: false,
+            });
         }
         KeyCode::Char('d') => {
-            let r = s.selected_route()?;
-            s.message(
-                "Delegate",
-                vec![
-                    format!("Delegating lets {} act on its own (prefetch, level e1).", r.id),
-                    "It needs a level and the fields it may pass, so it is granted from a shell:".into(),
-                    String::new(),
-                    format!("  adage review delegate {} {} --level e1", r.reference, r.id),
-                    String::new(),
-                    format!("Take it back with: adage review undelegate {} {}", r.reference, r.id),
-                ],
-                false,
-            );
+            return s.run_entry(crate::ui::palette::Run::Form(crate::ui::forms::Kind::Delegate));
         }
         KeyCode::Char(c) => {
             let (_, verb) = *ACTIONS.iter().find(|(k, _)| *k == c)?;
@@ -367,7 +355,7 @@ pub fn key(s: &mut AppState, code: KeyCode) -> Option<Cmd> {
             let t = Theme::from_env();
             let mut title = word.to_string();
             title[..1].make_ascii_uppercase();
-            let lines = vec![
+            let mut lines = vec![
                 Line::from(vec![
                     Span::raw(format!("{title} ")),
                     Span::styled(r.id.clone(), t.bold()),
@@ -389,7 +377,38 @@ pub fn key(s: &mut AppState, code: KeyCode) -> Option<Cmd> {
                     Span::styled(" cancel", t.dim()),
                 ]),
             ];
-            s.confirm(&title, lines, Action::Review { verb, reference: r.reference.clone(), route: r.id.clone() });
+            let Some(preview) = &r.review_preview else {
+                s.message(
+                    "Review unavailable",
+                    vec!["The proposal could not be read safely. Recheck health and reload before reviewing.".into()],
+                    true,
+                );
+                return None;
+            };
+            lines.push(Line::raw(""));
+            lines.push(Line::raw("Current response"));
+            lines.extend(preview.current_directive.lines().map(|l| Line::raw(l.to_string())));
+            if let Some(proposal) = &preview.proposal {
+                lines.push(Line::raw(format!("Proposed on {}: {}", proposal.on, proposal.reason)));
+                for (field, before, after) in &proposal.diff {
+                    lines.push(Line::raw(format!("{field}: {before} → {after}")));
+                }
+                lines.push(Line::raw("Proposed response (approve applies this; dismiss keeps the current response)"));
+                lines.extend(proposal.directive.lines().map(|l| Line::raw(l.to_string())));
+            }
+            lines.push(Line::raw(
+                "Confirmation applies only to this exact reviewed version. Enter/y confirms; Esc/n cancels.",
+            ));
+            s.confirm(
+                &title,
+                lines,
+                Action::Review {
+                    verb,
+                    reference: r.reference.clone(),
+                    route: r.id.clone(),
+                    expected_revision: preview.revision.clone(),
+                },
+            );
         }
         _ => {}
     }
@@ -646,7 +665,7 @@ pub fn detail(r: &RouteRow, s: &AppState, ctx: &Ctx) -> Vec<Line<'static>> {
     v.push(sourced(
         "live since installed",
         format!(
-            "fired {}{sep}followed {}{sep}ignored {}{sep}finish line met {}",
+            "fired {}{sep}followed {}{sep}not observed within 3 batches {}{sep}finish line met {}",
             l.emitted,
             l.followed,
             l.ignored,
@@ -730,7 +749,7 @@ pub fn detail(r: &RouteRow, s: &AppState, ctx: &Ctx) -> Vec<Line<'static>> {
         acts.push(Span::styled(format!(" {}   ", words::verb(verb)), if open { t.ink2() } else { t.dim() }));
     }
     v.push(Line::from(acts));
-    let n = traces(s, &r.id).len();
+    let n = traces(s, &r.id, &r.repo).len();
     v.push(Line::from(vec![
         Span::raw("  "),
         Span::styled("d", t.key()),

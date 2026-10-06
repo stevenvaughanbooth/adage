@@ -15,12 +15,13 @@ import { useUrl } from "./state/url";
 import { Evidence } from "./views/Evidence";
 import { FirstRun } from "./views/FirstRun";
 import { Health } from "./views/Health";
+import { Setup } from "./views/Setup";
 import { Traces } from "./views/Traces";
 
 // The 3D walkthrough (three.js) loads only when its tab opens.
 const HowItWorks = lazy(() => import("./views/HowItWorks"));
 
-const TITLES = { map: "Map", traces: "Traces", evidence: "Evidence", health: "Health", how: "How it works" } as const;
+const TITLES = { map: "Map", traces: "Traces", evidence: "Evidence", health: "Health", how: "How it works", setup: "Setup" } as const;
 
 export function App() {
   const { graph, error, connection } = useStore();
@@ -148,6 +149,8 @@ export function App() {
           <Suspense fallback={<Loading error={null} />}>
             <HowItWorks graph={graph} />
           </Suspense>
+        ) : url.view === "setup" ? (
+          <Setup graph={graph} />
         ) : !graph ? (
           <Loading error={error} />
         ) : url.view === "map" ? (

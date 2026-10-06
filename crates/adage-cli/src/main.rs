@@ -403,6 +403,9 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
         if let Some(dir) = &settings.learn_opencode_exports {
             transcripts.extend(history::opencode_exports(dir));
         }
+        if let Some((root, _)) = &scope {
+            transcripts.extend(history::remembered(paths, root));
+        }
     }
     if let Some(prefix) = flag(args, "--cwd-prefix") {
         transcripts = adage_learn::scope::recorded_inside(transcripts, &[PathBuf::from(prefix)]);

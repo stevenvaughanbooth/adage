@@ -26,6 +26,7 @@ pub enum Fix {
     OpenFailOpen,
     EnableAutoLearn,
     OpenSettings,
+    History(String),
 }
 
 impl Fix {
@@ -37,6 +38,7 @@ impl Fix {
             Fix::OpenFailOpen => "open the fail-open log".into(),
             Fix::EnableAutoLearn => "turn auto-condition on".into(),
             Fix::OpenSettings => "open the settings".into(),
+            Fix::History(h) => format!("configure {h} history"),
         }
     }
 }
@@ -140,6 +142,9 @@ fn fix_for(c: &Check) -> Option<Fix> {
     if c.check == "auto-learn" && c.detail.starts_with("off") {
         return Some(Fix::EnableAutoLearn);
     }
+    if let Some(h) = c.check.strip_prefix("history: ") {
+        return Some(Fix::History(h.to_string()));
+    }
     if c.status == Status::Pass {
         return None;
     }
@@ -194,8 +199,14 @@ pub fn gather(paths: &Paths, root: Option<&Path>) -> Health {
     if broken {
         lights.push(Light::new("hooks broken", Lamp::Fail).hint("adage doctor"));
     }
-    for n in &names {
-        lights.push(Light::new(format!("hooks {n}"), Lamp::Ok));
+    for harness in working.iter().copied().collect::<std::collections::BTreeSet<_>>() {
+        let name = super::feed::harness_name(harness);
+        let activity = by(&format!("hook activity: {harness}"));
+        let received = activity.is_some_and(|c| c.status == Status::Pass);
+        lights.push(Light::new(
+            if received { format!("{name} hook received") } else { format!("{name} registered; awaiting hook") },
+            if received { Lamp::Ok } else { Lamp::Warn },
+        ));
     }
     if names.is_empty() && !broken {
         lights.push(if installed {

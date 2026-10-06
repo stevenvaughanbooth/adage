@@ -158,16 +158,8 @@ pub fn key(s: &mut AppState, code: KeyCode) -> Option<Cmd> {
             s.tab = Tab::Reflexes;
         }
         KeyCode::Char('o') => {
-            let id = selected(s)?.id.clone();
-            s.message(
-                "Open in the map",
-                vec![
-                    "The same node in the web map, from any shell:".into(),
-                    String::new(),
-                    format!("  adage map --focus {id}"),
-                ],
-                false,
-            );
+            let focus = selected(s).map(|r| serde_json::json!([r.repo, r.reference, r.id]).to_string());
+            return Some(Cmd::OpenWeb { focus, traces: false });
         }
         _ => {}
     }

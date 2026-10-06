@@ -6,7 +6,8 @@ import type { Connection } from "../api/client";
 import { loadHealth } from "../api/client";
 import type { Graph, Health } from "../api/types";
 import { InstinctGlyph, Icons } from "../components/glyphs";
-import { StrengthChip, copyCommand, cx } from "../components/ui";
+import { StrengthChip, cx } from "../components/ui";
+import { useUrl } from "../state/url";
 import { isInstinct, plural, strength } from "../lib/words";
 
 function Step({ done, label, detail, last }: { done: boolean; label: string; detail: string; last?: boolean }) {
@@ -29,26 +30,8 @@ function Step({ done, label, detail, last }: { done: boolean; label: string; det
   );
 }
 
-function CommandLine({ command }: { command: string }) {
-  return (
-    <div className="flex h-11 items-center justify-between rounded-[10px] border border-accent/45 bg-panel pr-2 pl-3.5">
-      <code className="font-mono text-sm">
-        <span className="text-ink-3">$ </span>
-        {command}
-      </code>
-      <button
-        type="button"
-        onClick={() => void copyCommand(command)}
-        aria-label={`Copy ${command}`}
-        className="h-[30px] rounded-[7px] bg-accent px-3 text-[13px] font-semibold text-base"
-      >
-        Copy
-      </button>
-    </div>
-  );
-}
-
 export function FirstRun({ graph, connection }: { graph: Graph; connection: Connection }) {
+  const [, setUrl] = useUrl();
   const [health, setHealth] = useState<Health | null>(null);
   const [healthError, setHealthError] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -65,8 +48,9 @@ export function FirstRun({ graph, connection }: { graph: Graph; connection: Conn
   }, [attempt, connection]);
   const hooks = health?.checks.filter((c) => c.check.toLowerCase().startsWith("hooks")) ?? [];
   // A harness that is not installed passes with "nothing to check": that is not a hook.
-  const installed = hooks.filter((c) => c.status === "pass" && !/nothing to check/i.test(c.detail));
+  const installed = hooks.filter((c) => c.status === "pass" && !/nothing to check|not set up|not installed|not registered/i.test(c.detail));
   const hooksOk = installed.length > 0 && hooks.every((c) => c.status === "pass");
+  const receipts = health?.checks.filter((c) => c.check.startsWith("hook activity:") && c.status === "pass") ?? [];
   const instincts = graph.routes.filter(isInstinct);
   const tracks = [...new Set(instincts.map((r) => `${r.track}@${r.version}`))];
   const port = typeof location !== "undefined" ? location.host : "127.0.0.1:8765";
@@ -108,15 +92,16 @@ export function FirstRun({ graph, connection }: { graph: Graph; connection: Conn
           <ol className="m-0 flex list-none flex-col rounded-lg border border-line-strong bg-panel p-0">
             <Step
               done={hooksOk && !checking && !healthError}
-              label={hooksOk && !checking && !healthError ? "Hooks installed" : "Hooks"}
+              label={hooksOk && !checking && !healthError ? "Hooks registered" : "Hooks"}
               detail={
                 checking ? "checking…" : healthError ? "check unavailable" : health
                   ? hooksOk
                     ? installed.map((h) => h.check.replace(/^hooks\s*:?\s*\(?/i, "").replace(/\)$/, "")).join(" · ") || "installed"
-                    : installed.length ? "some hooks need attention: adage doctor" : "not set up: run adage init"
+                    : installed.length ? "some hooks need attention: open Health" : "not set up: open Setup"
                   : "checking…"
               }
             />
+            <Step done={receipts.length > 0} label="Agent connection" detail={receipts.length ? "Hook received" : hooksOk ? "Awaiting first hook" : "Connect a harness first"} />
             <Step
               done={instincts.length > 0}
               label={instincts.length ? `${plural(instincts.length, "instinct")} already active` : "Instincts"}
@@ -131,22 +116,10 @@ export function FirstRun({ graph, connection }: { graph: Graph; connection: Conn
                 {checking ? "Checking setup…" : "Recheck setup"}
               </button>
             </div>
-            {health && !hooksOk && (
-              <>
-                <span className="text-sm text-ink-2">Not set up here yet? In the repository, run:</span>
-                <CommandLine command="adage init" />
-              </>
-            )}
-            <span className="text-sm text-ink-2">
-              Adage conditions on this repository's agent sessions by itself, in the background. To do it now, earlier sessions included:
-            </span>
-            <CommandLine command="adage condition" />
-            <span className="text-[13.5px] text-ink-2">
-              Or try the map with sample traces:{" "}
-              <button type="button" className="font-mono text-accent-soft hover:text-ink-1" onClick={() => void copyCommand("adage map --demo")}>
-                adage map --demo
-              </button>
-            </span>
+            <button type="button" onClick={() => setUrl({ view: "setup" }, true)} className="rounded-lg border border-accent/45 bg-panel px-4 py-3 text-left text-accent-soft">
+              Set up my repository →
+            </button>
+            <span className="text-sm text-ink-2">Connect your agent, check history sources, and preview conditioning from the terminal palette. OpenCode history is imported explicitly.</span>
           </div>
         </div>
 

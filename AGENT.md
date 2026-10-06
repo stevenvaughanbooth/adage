@@ -72,8 +72,9 @@ layers):
   `Err`, and the caller prints nothing in either case, recording the error in `$ADAGE_HOME/fail-open.log`
   (`crates/adage-hook/src/lib.rs`, `failopen.rs`). CONTRIBUTING.md: anything on the hook path exits 0
   and prints nothing on any error. `crates/adage-exec/tests/no_spawn.rs` scans the `src/` of
-  `adage-cli`, `adage-hook`, `adage-runtime`, `adage-store`, `adage-tracks` and `adage-learn` for
-  `Command::new`; every use must be in its `ALLOWED` list with a reason (the hook's one is
+  `adage-cli`, `adage-app`, `adage-hook`, `adage-runtime`, `adage-store`, `adage-tracks` and
+  `adage-learn` for `Command::new` (`#[cfg(test)]` modules included); every use must be in its
+  `ALLOWED` list with a reason (the hook's one is
   `autolearn.rs` starting `adage condition` in the background). No hook or learner uses the
   network (README, "Safe by default").
 - **Learning is deterministic.** `adage_graph::learn(sessions, params)` is pure: the same sessions

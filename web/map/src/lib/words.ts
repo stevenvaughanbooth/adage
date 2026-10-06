@@ -149,7 +149,7 @@ export function judgement(kind: string): string {
       return "followed";
     case "ignored":
     case "derailed":
-      return "ignored";
+      return "not observed within the window";
     case "obligation_met":
       return "met";
     case "misfired":

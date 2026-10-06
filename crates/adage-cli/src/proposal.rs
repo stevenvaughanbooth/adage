@@ -74,8 +74,6 @@ pub(crate) fn diff(pinned: &Route, proposed: &Route) -> Vec<(&'static str, Strin
         .collect()
 }
 
-pub(crate) use adage_app::proposal::applied;
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -42,7 +42,7 @@ export default defineConfig({
     viewport: { width: 1440, height: 900 },
     contextOptions: { reducedMotion: "reduce" },
     // How it works draws with WebGL: software rendering, so it runs without a GPU.
-    launchOptions: { args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] },
+    launchOptions: { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH, args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] },
   },
   webServer: [server(DEMO_PORT, "--demo"), server(EMPTY_PORT, "")],
 });

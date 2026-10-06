@@ -179,7 +179,14 @@ fn contexts_fire_in_replay_and_the_fast_path_stays_exact_on_newkinds() {
             expected_in += usize::from(want.is_some());
             if let Some(f) = r.fired.iter().find(|f| f.directive.route == "context-check-after-gen") {
                 assert_eq!(f.event, "PostToolBatch");
-                assert!(f.directive.text.contains("\n  make check "), "{}", f.directive.text);
+                assert_eq!(f.directive.track, format!("{repo}/contexts"));
+                assert_eq!(f.directive.version, "0.1.0");
+                assert_eq!(f.directive.strength, Strength::Prime);
+                // The command occupies its own line; the exit clause must not become arguments.
+                assert_eq!(
+                    f.directive.text,
+                    "A known next step here is:\n  make check\nIgnore this if the user is asking for something else."
+                );
             }
         }
         eprintln!("{name}: the context route fired in {fired_in} traces ({expected_in} expected); fast path skipped {skipped} of {events} events, no mismatch");

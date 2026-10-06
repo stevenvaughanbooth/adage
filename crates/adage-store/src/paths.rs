@@ -23,6 +23,16 @@ pub fn home_dir() -> Option<PathBuf> {
 }
 
 impl Paths {
+    /// First hook-delivery proof keyed by a caller's repository hash and harness.
+    pub fn hook_receipt(&self, key: &str) -> PathBuf {
+        self.root.join("hook-receipts").join(format!("{}.json", sanitise(key)))
+    }
+
+    /// Private local exports produced by an explicit history import.
+    pub fn opencode_exports(&self) -> PathBuf {
+        self.root.join("history/opencode")
+    }
+
     pub fn from_env() -> Paths {
         if let Some(h) = env_path("ADAGE_HOME") {
             return Paths { root: h };

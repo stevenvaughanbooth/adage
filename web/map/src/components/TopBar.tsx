@@ -14,6 +14,7 @@ const NAV: { view: View; label: string; key: string }[] = [
   { view: "evidence", label: "Evidence", key: "g e" },
   { view: "health", label: "Health", key: "g h" },
   { view: "how", label: "How it works", key: "g w" },
+  { view: "setup", label: "Setup", key: "" },
 ];
 
 const THEME_ICON: Record<ThemeMode, () => ReactNode> = {
@@ -51,7 +52,7 @@ export function LivePill({ connection, graph, firstRun, stale = false }: { conne
       : connection === "connecting"
         ? ["Connecting", ""]
         : firstRun
-          ? ["Ready", "· waiting for the first trace"]
+          ? ["Map online", "· waiting for the first trace"]
           : ["Live", `· ${n} trace${n === 1 ? "" : "s"} today`];
   return (
     <div
@@ -129,7 +130,7 @@ export function TopBar({
               setUrl({ view: n.view }, true);
             }}
             className={cx(
-              "border-b-2 px-3 py-2 text-sm transition-colors duration-100",
+              "shrink-0 whitespace-nowrap border-b-2 px-3 py-2 text-sm transition-colors duration-100",
               url.view === n.view ? "border-accent font-medium text-ink-1" : "border-transparent text-ink-2 hover:text-ink-1",
             )}
           >

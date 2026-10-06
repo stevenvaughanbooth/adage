@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import type { Graph, TraceEvent } from "../api/types";
 import { useStore } from "../api/client";
 import { Lamp, RewriteGlyph } from "../components/glyphs";
+import { SessionTrace } from "../components/SessionTrace";
+import { measurement, relates, traceInventory, traceKey } from "../lib/traces";
 import { Replay } from "../components/Replay";
 import { Segmented, clock, cx, day } from "../components/ui";
 import { findRoute, routeKey } from "../lib/graph";
@@ -50,13 +52,15 @@ function Row({ e, graph, fresh }: { e: TraceEvent; graph: Graph; fresh: boolean 
   const [, setUrl] = useUrl();
   const control = e.arm === "control";
   const chip = (id: string, would: boolean) => {
-    const r = graph.routes.find((x) => x.id === id && x.repo === e.repo);
+    const recording = [...(e.directives ?? []), ...(e.would_have ?? [])].find((d) => d.route === id);
+    const r = recording?.route_key ? findRoute(graph, recording.route_key) : undefined;
     const s = strength(r?.strength);
     return (
       <button
         key={`${would ? "w" : "d"}${id}`}
         type="button"
         onClick={() => r && setUrl({ reflex: routeKey(r), view: "map" }, true)}
+        disabled={!r}
         title={would ? "Would have been directed (control arm: nothing was said)" : "Directed"}
         className={cx(
           "inline-flex h-6 items-center gap-1.5 rounded-full border px-2 font-mono text-[11.5px] text-ink-1 hover:border-accent/45",
@@ -77,7 +81,7 @@ function Row({ e, graph, fresh }: { e: TraceEvent; graph: Graph; fresh: boolean 
       </span>
       <span className="flex flex-col gap-0.5 pt-0.5">
         <span className={cx("text-xs", control ? "text-ink-3" : "text-ink-1")}>{arm(e.arm)}</span>
-        <span className="font-mono text-[11px] text-ink-3">{shortSession(e.session)}</span>
+        <button type="button" className="text-left font-mono text-[11px] text-accent-soft underline underline-offset-2" onClick={() => setUrl({ session: e.session, traceRepo: e.repo, sequence: e.sequence ?? null }, true)} aria-label={`Open complete session ${e.session}`}>{shortSession(e.session)}</button>
       </span>
       <div className="col-span-2 flex min-w-0 flex-col gap-1.5 sm:col-span-1">
         {e.kind === "pretool" && <PretoolLine e={e} />}
@@ -114,8 +118,16 @@ export function Traces({ graph }: { graph: Graph }) {
   const [at, setAt] = useState<number | null>(null);
   const [armFilter, setArm] = useState<"all" | "treated" | "control">("all");
   const [loadedWith] = useState(streamed);
+  const [search, setSearch] = useState("");
   const now = Math.max(Date.now(), ...graph.events.map((e) => e.ts));
   const selected = findRoute(graph, url.reflex);
+  const inventory = traceInventory(graph);
+  const selectedMeasurement = selected ? measurement(selected, url.version) : null;
+  const contributing = selectedMeasurement?.measurement_sessions;
+  const choices = inventory.filter((s) => (!url.repo || s.repo === url.repo) && (!s.end_ts || s.end_ts >= windowStart(url.window, now)) &&
+    (armFilter === "all" || s.arm === armFilter) && `${s.repo} ${s.session}`.toLowerCase().includes(search.toLowerCase()) &&
+    (!selected || (contributing ? contributing.some((c) => traceKey(c) === traceKey(s)) : (graph.trace_events ?? graph.events).some((e) => traceKey(e) === traceKey(s) && relates(e, selected, url.version)))));
+  const activeSession = url.session ? inventory.find((s) => s.session === url.session && s.repo === url.traceRepo) ?? { session: url.session, repo: url.traceRepo ?? url.repo ?? "", arm: null, events_total: 0 } : null;
   const events = useMemo(() => {
     const from = windowStart(url.window, now);
     return graph.events.filter(
@@ -123,22 +135,21 @@ export function Traces({ graph }: { graph: Graph }) {
         (!url.repo || e.repo === url.repo) &&
         e.ts >= from &&
         (armFilter === "all" || e.arm === armFilter) &&
-        (!selected || (e.repo === selected.repo && (e.directed.includes(selected.id) || e.would.includes(selected.id) || e.judged.some(([, id]) => id === selected.id)))),
+        (!selected || relates(e, selected, url.version)),
     );
-  }, [graph.events, url.repo, url.window, armFilter, selected, now]);
+  }, [graph.events, url.repo, url.window, armFilter, selected, url.version, now]);
   const shown = (at == null ? events : events.filter((e) => e.ts <= at)).slice().reverse();
-  const sessions = new Set(events.map((e) => e.session)).size;
   const freshFrom = graph.events.length - Math.max(0, streamed - loadedWith);
   const fresh = new Set(graph.events.slice(freshFrom));
   const byDay = new Map<string, TraceEvent[]>();
   for (const e of shown.slice(0, 500)) byDay.set(day(e.ts), [...(byDay.get(day(e.ts)) ?? []), e]);
 
   return (
-    <main aria-label="Traces" className="flex min-h-0 grow flex-col">
+    <main aria-label="Traces" className="scroll-thin flex min-h-0 grow flex-col overflow-y-auto lg:overflow-hidden">
       <div className="flex flex-wrap items-end justify-between gap-4 px-4 pt-7 pb-5 sm:px-10">
         <div className="flex flex-col gap-1.5">
           <span className="lbl">
-            Traces · {plural(sessions, "trace")} · {plural(events.length, "decision")}
+            Traces · {plural(choices.length, "recorded session")} · {plural(events.length, "recent decision")}
           </span>
           <h1 className="display m-0 text-[32px] leading-[1.05] font-semibold sm:text-[40px]">
             {selected ? (
@@ -154,7 +165,7 @@ export function Traces({ graph }: { graph: Graph }) {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {selected && (
-            <button type="button" onClick={() => setUrl({ reflex: null })} className="h-8 rounded-md border border-line-strong px-3 text-[12.5px] text-ink-2 hover:text-ink-1">
+            <button type="button" onClick={() => setUrl({ reflex: null, version: null })} className="h-8 rounded-md border border-line-strong px-3 text-[12.5px] text-ink-2 hover:text-ink-1">
               All reflexes
             </button>
           )}
@@ -178,6 +189,18 @@ export function Traces({ graph }: { graph: Graph }) {
           />
         </div>
       </div>
+      <div className="flex flex-wrap items-end gap-3 border-t border-line px-4 py-3 sm:px-10">
+        <label className="flex min-w-0 flex-col gap-1 text-xs text-ink-2">Find a session<input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Session or repository" className="h-9 rounded-md border border-line-strong bg-panel px-3 text-ink-1" /></label>
+        <label className="flex min-w-0 grow flex-col gap-1 text-xs text-ink-2">Recorded session<select value={activeSession ? traceKey(activeSession) : ""} onChange={(e) => { const s = inventory.find((s) => traceKey(s) === e.target.value); setUrl({ session: s?.session ?? null, traceRepo: s?.repo ?? null, sequence: null }, true); }} className="h-9 min-w-0 max-w-full rounded-md border border-line-strong bg-panel px-3 text-ink-1">
+          <option value="">Recent activity across sessions</option>
+          {activeSession && !choices.some((s) => traceKey(s) === traceKey(activeSession)) && <option value={traceKey(activeSession)}>{activeSession.session} · selection outside these filters</option>}
+          {choices.map((s) => <option key={traceKey(s)} value={traceKey(s)}>{s.session} · {s.repo} · {s.events_total} events</option>)}
+        </select></label>
+        {activeSession && <button type="button" onClick={() => setUrl({ session: null, sequence: null, traceRepo: null }, true)} className="h-9 rounded-md border border-line-strong px-3 text-xs">Recent activity</button>}
+        {selected && <p className="m-0 w-full text-xs text-ink-2">Contributing sessions for {selected.id} · {selectedMeasurement?.version}. Select a session to read its recorded response and follow the outcome. {selectedMeasurement?.measurement_info?.description}</p>}
+        {!choices.length && <p role="status" className="m-0 w-full text-xs text-ink-3">No recorded sessions match these filters. Your selected session stays open.</p>}
+      </div>
+      {activeSession ? <SessionTrace key={traceKey(activeSession)} graph={graph} session={activeSession} /> : <>
       <div className="border-t border-line">
         <Replay events={events} learning={graph.learning ?? []} at={at} onAt={setAt} compact />
       </div>
@@ -197,6 +220,7 @@ export function Traces({ graph }: { graph: Graph }) {
           ))
         )}
       </div>
+      </>}
     </main>
   );
 }

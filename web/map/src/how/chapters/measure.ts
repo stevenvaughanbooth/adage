@@ -643,7 +643,7 @@ interface RepoRow {
 /** One reflex's treated and control counts, as the Evidence view reads them. */
 function repoRow(r: Route): RepoRow {
   const avoid = r.step.kind === "avoid";
-  const ratio = (a: Route["arms"]["treated"]) => ({ k: a ? (avoid ? a.hit_avoided : a.followed) : 0, n: a?.applied ?? 0 });
+  const ratio = (a: Route["arms"]["treated"]) => ({ k: a ? (avoid ? a.hit_avoided ?? 0 : a.followed) : 0, n: a?.hit_avoided === null && avoid ? 0 : a?.applied ?? 0 });
   const t = ratio(r.arms.treated);
   const c = ratio(r.arms.control);
   return { r, word: avoid ? "hit the dead end" : "took the path", t, c, enough: t.n >= MIN_TREATED && c.n >= MIN_CONTROL && share(t) !== null };

@@ -2,7 +2,7 @@
 source: crates/adage-cli/src/ui/tests.rs
 expression: text
 ---
- adage    1 Live   2 Reflexes (2)  3 Map   4 Health (2)  5 Settings                                                            harbor-dispatch · LIVE
+ adage    1 Live   2 Reflexes (2)  3 Map   4 Health (2)  5 Settings   6 Home                                                   harbor-dispatch · LIVE
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
  5 passed · 2 warnings · 0 failures   same checks as adage doctor
  savings saved ~$0.029 per trace, API-list equivalent (95% CI $0.028–$0.030) · 40 vs 12 control traces

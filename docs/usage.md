@@ -299,16 +299,30 @@ opens a command palette over every action and reflex; `?` lists the keys. Its ta
 
 | Tab | What it does |
 | --- | --- |
+| **Home** | setup progress, repository selection, history sources, conditioning, and the next useful action |
 | **Live** | the watch view, larger |
 | **Reflexes** | every instinct and reflex by track, with a fuzzy `/` filter: strength, stage, trigger and step, evidence (traces, Wilson lower bound), live counts, and the exact directive text. Review decisions (`a`pprove, `e`xtinguish, `w`eaken, `s`trengthen, pi`n`, dismiss `x`) ask first, then run exactly what `adage review` runs, with the same ceilings, and show the equivalent command |
 | **Map** | stimulus → reflex → response as a layered graph in the terminal; `adage map` opens the same in the browser |
-| **Health** | every doctor check, live, including live conditioning's. `Enter` fixes the selected one where a key can: register hooks (confirming the exact file and diff), fetch the model (with progress), condition this repository now (what a background learner runs: `adage condition --auto --repo-root`), turn live conditioning on, open the settings, or open the fail-open log |
+| **Health** | every doctor check, live, including live conditioning's. `Enter` fixes the selected one where a key can: register hooks (confirming the exact file and diff), fetch the model (with progress), condition this repository now (after a source preview; uses `adage condition --repo-root` without changing the background allowlist), turn live conditioning on, open the settings, or open the fail-open log |
 | **Settings** | every `adage config` key with its value and where it came from (default, file, or environment); `Enter` edits, `Space` toggles, and `adage config set`'s validation and agent-session refusal apply |
 
 `adage watch --demo` and `adage ui --demo` replay a small scripted scenario (three sessions of the
 harbor-dispatch demo, through real hook calls) into a temporary data directory, so you can see it
 all without an agent running. `adage watch --once [--size 80x24]` prints a single frame as text.
 Decisions, installs and settings refuse inside an agent session, as their commands do.
+
+The palette also opens guided forms for local OpenCode history import, history directories,
+reports, model management, and signed-pack import/export. Pack import and reflex review confirm
+exactly the content previewed; a changed file requires a new review. The browser action starts
+a local server owned by the TUI and opens its map, evidence, traces, or setup view. Trace links
+open the complete recorded session beyond the recent activity window, with historical versions
+identified separately. Closing the TUI stops its server.
+
+Health distinguishes hooks registered from hooks actually received in the selected repository.
+Codex's `/hooks` acceptance happens inside Codex; its guidance stays visible until a hook arrives.
+History preview and conditioning use the same repository-scoped sources. With no usable history,
+conditioning can still bind enabled instincts from repository files.
+
 
 ## Claude Code
 

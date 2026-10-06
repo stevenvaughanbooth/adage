@@ -29,10 +29,19 @@ rules live below it in `adage-app` and the engines. Front-end map: `../../docs/a
   `savings`, `graph`, `map`, `share`/`share_pack`/`add`/`packs`/`reimport`, `packs_cmd`,
   `marketplace_cmd`, `models`, `config`, `train` (execs the `adage-train` binary; `accept` installs
   the staged pack here), `update`, `status_card`.
-- `map/`: `mod.rs` (options, listener), `http.rs` (`/api/v1/graph`, `/graph.json`, `/api/v1/events`,
-  `/api/v1/health`, `/api/v1/reflex/<id>`, CSP), `events.rs` (SSE hub), `assets.rs` and the generated
+- `map/`: `mod.rs` (options, listener, and `Server`, a map `adage ui` starts on a free port and
+  closes with the terminal), `http.rs` (`/api/v1/graph`, `/graph.json`, `/api/v1/events`,
+  `/api/v1/health`, `/api/v1/trace?session=&repo=` (one whole recorded session),
+  `/api/v1/reflex/<id>`, CSP), `events.rs` (SSE hub), `assets.rs` and the generated
   `assets_list.rs` (the embedded page).
-- `ui/`: ratatui app, watch pane, wizard, tabs, tailers; snapshots under `ui/snapshots/`.
+- `ui/`: ratatui app, watch pane, wizard, tabs (Home among them), tailers; `forms.rs` and
+  `tools.rs` are the palette's actions, most run as this binary in a child process: one only a
+  person may take (`Tool::person_command`) checks for a person first and lifts only the child's
+  terminal check (`ADAGE_ALLOW_NONINTERACTIVE=1`; the child keeps every agent-session check);
+  snapshots under `ui/snapshots/`.
+- `doctor/`: every check, each `warn`/`fail` with a typed `Fix` (`Fix::run` for one whole `adage`
+  command, `Fix::manual` for the person's own step); `hook activity: <harness>` reads
+  `adage_hook::receipt`. See `../../docs/claude-mod/impl/structure-cli.md`.
 - `assets/map/`: the built web map, precompressed (`.br`, `.gz`), listed in `hygiene::ALLOWED`.
 
 ## How it connects

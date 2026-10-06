@@ -21,4 +21,4 @@ expression: text
  [green]✓ [/][d]hooks claude[/]    [green]✓ [/][d]4 reflexes[/]    [green]✓ [/][d]auto-condition[/]
  [yellow]! [/][d]no model[/][darkgray] · [/][lightmagenta]adage models fetch[/]
 [darkgray]────────────────────────────────────────────────────────────[/]
- [lightmagenta b]p[/][darkgray] pause · [/][lightmagenta b]f[/][darkgray] scope · [/][lightmagenta b]/[/][darkgray] filter · [/][lightmagenta b]enter[/][darkgray] inspect[/]        [lightmagenta b]q[/][darkgray] quit [/]
+ [lightmagenta b]:[/][darkgray] palette · [/][lightmagenta b]p[/][darkgray] pause · [/][lightmagenta b]f[/][darkgray] scope · [/][lightmagenta b]/[/][darkgray] filter[/]            [lightmagenta b]q[/][darkgray] quit [/]

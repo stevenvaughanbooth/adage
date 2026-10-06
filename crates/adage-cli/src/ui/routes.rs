@@ -83,6 +83,7 @@ pub struct RouteRow {
     pub with: Arm,
     pub control: Arm,
     pub directive: String,
+    pub review_preview: Option<adage_app::review::ReviewPreview>,
     /// Decisions that apply (`crate::review`'s verbs).
     pub verbs: Vec<&'static str>,
     /// Why it awaits review; empty if it does not.
@@ -268,6 +269,7 @@ pub fn from_graph(
                 with: arm(&r["arms"]["treated"]),
                 control: arm(&either(&r["arms"], ["control", "holdout"])),
                 directive: r["directive"].as_str().unwrap_or("").to_string(),
+                review_preview: st.and_then(|s| s.preview.clone()),
                 verbs: st.map(|s| s.verbs.clone()).unwrap_or_default(),
                 reasons: st
                     .map(|s| s.reasons.iter().map(|(k, d)| (k.to_string(), d.clone())).collect())

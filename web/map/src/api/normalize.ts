@@ -64,7 +64,7 @@ const RUN_KIND: Record<string, string> = { learn: "condition", learn_error: "con
 function armStats(v: unknown): ArmStats | undefined {
   if (!v || typeof v !== "object") return undefined;
   const a = obj(v);
-  return { sessions: num(a.sessions), applied: num(a.applied), followed: num(a.followed), met: num(a.met), hit_avoided: num(a.hit_avoided) };
+  return { sessions: num(a.sessions), applied: num(a.applied), followed: num(a.followed), met: num(a.met), hit_avoided: a.hit_avoided === null ? null : num(a.hit_avoided) };
 }
 
 function live(v: unknown): Live {
@@ -137,6 +137,7 @@ export function normalizeEvent(raw: unknown): TraceEvent {
     directed: e.directed ?? [],
     would: e.would ?? [],
     judged: (e.judged ?? []).map(([k, id]) => [judgementWord(k), id] as [string, string]),
+    judgements: e.judgements?.map((j) => ({ ...j, kind: judgementWord(j.kind) })),
     observed: e.observed ?? [],
     continue: Boolean(e.continue),
   };
@@ -191,6 +192,7 @@ export function normalizeGraph(raw: unknown): Graph {
     routes: (g.routes ?? []).map(normalizeRoute),
     observed: g.observed ?? [],
     events: (g.events ?? []).map(normalizeEvent),
+    trace_events: g.trace_events?.map(normalizeEvent),
     learning: g.learning?.map(normalizeLearnRun),
     // Older binaries sent neither.
     savings: Array.isArray(g.savings) ? g.savings.map(savings) : [],

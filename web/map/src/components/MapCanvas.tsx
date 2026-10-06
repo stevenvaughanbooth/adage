@@ -34,16 +34,22 @@ function usePulses(graph: Graph) {
   const byId = useRef(new Map<string, string[]>());
   byId.current = useMemo(() => {
     const m = new Map<string, string[]>();
-    for (const r of graph.routes) m.set(`${r.repo}::${r.id}`, [...(m.get(`${r.repo}::${r.id}`) ?? []), routeKey(r)]);
+    for (const r of graph.routes) {
+      const key = JSON.stringify([r.repo, r.track, r.version, r.id]);
+      m.set(key, [...(m.get(key) ?? []), routeKey(r)]);
+    }
     return m;
   }, [graph.routes]);
   const fire = useCallback((e: TraceEvent) => {
     const control = e.arm === "control";
-    const ids = control ? e.would : e.directed;
-    if (!ids.length) return;
+    const recordings = control ? e.would_have ?? [] : e.directives ?? [];
+    if (!recordings.length) return;
     setPulses((prev) => {
       const next = new Map(prev);
-      for (const id of ids) for (const k of byId.current.get(`${e.repo}::${id}`) ?? []) next.set(k, { n: ++seq.current, control });
+      for (const d of recordings) {
+        const keys = byId.current.get(JSON.stringify([e.repo, d.track, d.version, d.route])) ?? [];
+        if (keys.length === 1) next.set(keys[0]!, { n: ++seq.current, control });
+      }
       return next;
     });
     const n = seq.current;
@@ -177,6 +183,11 @@ function Canvas({ graph, onFilter }: { graph: Graph; onFilter?: () => void }) {
     const n = map.nodes.find((x) => x.id === id);
     const key = n?.routes[0] ?? null;
     setUrl({ reflex: key === selKey ? null : key }, true);
+    if (key && key !== selKey) requestAnimationFrame(() => {
+      const inspector = document.getElementById("reflex-inspector");
+      inspector?.focus({ preventScroll: true });
+      inspector?.scrollTo({ top: 0 });
+    });
   };
 
   const heads = url.dir === "RIGHT" ? columnHeads(map, placed) : [];

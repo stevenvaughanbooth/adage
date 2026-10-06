@@ -2,7 +2,7 @@
 source: crates/adage-cli/src/ui/tests.rs
 expression: text
 ---
- adage    1 Live   2 Reflexes (2)  3 Map   4 Health (2)  5 Settings                                                            harbor-dispatch · LIVE
+ adage    1 Live   2 Reflexes (2)  3 Map   4 Health (2)  5 Settings   6 Home                                                   harbor-dispatch · LIVE
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
  / filter reflexes, commands, files                     │  ◠ lookup-incident
  FIRE 2  PRIME 3  INHIBIT 1  all states ▾               │  mode     Suggest · No execution grant
@@ -13,7 +13,7 @@ expression: text
    I ◠ dead-end-npm-test       firm    │           ?  this list                                              │
                                        │           :  command palette (also ctrl-k): every action and reflex │
  ▾ harbor-dispatch/intents@0.3.0       │         tab  next tab (shift-tab: previous)                         │0" reflex="lookup-incident"
-   P ◠ start-with-npm-check    forming │         1-5  Live, Reflexes, Map, Health, Settings                  │
+   P ◠ start-with-npm-check    forming │         1-6  Live, Reflexes, Map, Health, Settings, Home            │
                                        │           q  quit                                                   │ next step here is:
  ▾ nascent · waits for review          │                                                                     │ser is asking for something else.
    ○ ◠ regen-openapi-client    nascent │ REFLEXES                                                            │nt sessions; not requested by the user.
@@ -21,22 +21,22 @@ expression: text
  ▾ instincts · adage/finish-line@0.1.0 │         j/k  move through the tree                                  │
    P ◉ finish-line/regenerate  firm    │       enter  open or close a group                                  │
                                        │         tab  next tab                                               │ound 0.80 · 8 turns saved per trace
- ▸ extinguished · 1                    │           s  strengthen: prime → fire (adage review strengthen)     │red 1 · finish line met 0
+ ▸ extinguished · 1                    │           s  strengthen: prime → fire (adage review strengthen)     │observed within 3 batches 1 · finish
                                        │           w  weaken: fire → prime (adage review weaken)             │
                                        │           x  extinguish the reflex (adage review extinguish)        │
-                                       │           a  approve it as it is (adage review approve)             │ the step
-                                       │           n  pin it: conditioning proposes instead of overwriting   │
+                                       │           a  approve it as it is (adage review approve)             │
+                                       │           n  pin it: conditioning proposes instead of overwriting   │ the step
                                        │           m  dismiss a pinned reflex's proposed change              │
-                                       │           d  let the reflex act (shows adage review delegate)       │
+                                       │           d  review execution authority in a guided form            │
                                        │           t  the traces it fired in                                 │
                                        │           o  the same reflex in the web map (adage map --focus)     │
                                        │       F P I  show or hide fire, prime, inhibit                      │
                                        │           S  cycle the lifecycle filter                             │
                                        │         esc  reset the search, strength and lifecycle filters       │
-                                       │   PgUp PgDn  scroll the detail                                      │e   n pin   m dismiss
-                                       │           R  reload the reflexes                                    │
-                                       ╰─────────────────────────────────────────────────────────────────────╯ents lookup-incident from any shell
-                                                        │
+                                       │   PgUp PgDn  scroll the detail                                      │
+                                       │           R  reload the reflexes                                    │e   n pin   m dismiss
+                                       ╰─────────────────────────────────────────────────────────────────────╯
+                                                        │    same as adage review weaken harbor-dispatch/incidents lookup-incident from any shell
                                                         │
                                                         │
                                                         │

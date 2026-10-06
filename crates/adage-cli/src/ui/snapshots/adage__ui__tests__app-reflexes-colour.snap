@@ -2,7 +2,7 @@
 source: crates/adage-cli/src/ui/tests.rs
 expression: text
 ---
-[magenta b] adage[/]   [darkgray] 1 [/][d]Live [/] [magenta b r] 2 Reflexes [/][yellow](2)[/] [darkgray] 3 [/][d]Map [/] [darkgray] 4 [/][d]Health [/][yellow](2)[/] [darkgray] 5 [/][d]Settings [/]                                                         [d]harbor-dispatch · [/][green]● [/]live
+[magenta b] adage[/]   [darkgray] 1 [/][d]Live [/] [magenta b r] 2 Reflexes [/][yellow](2)[/] [darkgray] 3 [/][d]Map [/] [darkgray] 4 [/][d]Health [/][yellow](2)[/] [darkgray] 5 [/][d]Settings [/] [darkgray] 6 [/][d]Home [/]                                                [d]harbor-dispatch · [/][green]● [/]live
 [darkgray]──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[/]
 [lightmagenta b] / [/][darkgray]filter reflexes, commands, files[/]                     [darkgray]│[/]  [magenta]◠ [/][b]lookup-incident[/]
  [green]● [/][d]fire 2  [/][yellow]● [/][d]prime 3  [/][red]● [/][d]inhibit 1  [/][darkgray]all states ▾[/]         [darkgray]│[/]  [darkgray]mode     [/]Suggest · No execution grant
@@ -21,7 +21,8 @@ expression: text
  [darkgray]▾ [/]instincts[darkgray] · adage/finish-line@0.1.0[/]                  [darkgray]│[/]
    [yellow]● [/][magenta]◉ [/]finish-line/regenerate  [d]firm     [/][darkgray]–[/]               [darkgray]│[/]  [darkgray b]EVIDENCE[/]
                                                         [darkgray]│[/]    [darkgray]from conditioning: [/]24/25 traces took it · lower bound 0.80 · 8 turns saved per trace
- [darkgray]▸ extinguished · 1[/]                                     [darkgray]│[/]    [darkgray]live since installed: [/]fired 3 · followed 2 · ignored 1 · finish line met 0
+ [darkgray]▸ extinguished · 1[/]                                     [darkgray]│[/]    [darkgray]live since installed: [/]fired 3 · followed 2 · not observed within 3 batches 1 · finish
+                                                        [darkgray]│[/]    line met 0
                                                         [darkgray]│[/]
                                                         [darkgray]│[/]  [darkgray b]WITH THE REFLEX vs CONTROL[/]
                                                         [darkgray]│[/]    [darkgray]live since installed: [/]traces where the agent took the step
@@ -34,6 +35,5 @@ expression: text
                                                         [darkgray]│[/]
                                                         [darkgray]│[/]  [darkgray b]ACTIONS[/]
                                                         [darkgray]│[/]    [darkgray]s strengthen   [/][lightmagenta b]w[/][d] weaken   [/][lightmagenta b]x[/][d] extinguish   [/][lightmagenta b]a[/][d] approve   [/][lightmagenta b]n[/][d] pin   [/][darkgray]m dismiss   [/]
-                                                        [darkgray]│[/]    [lightmagenta b]d[/][d] delegate   [/][lightmagenta b]t[/][d] traces (5)   [/][lightmagenta b]o[/][d] open in map[/]
 [darkgray]──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[/]
  [lightmagenta b]?[/][darkgray] keys · [/][lightmagenta b]:[/][darkgray] palette · [/][lightmagenta b]/[/][darkgray] filter · [/][lightmagenta b]j/k[/][darkgray] move · [/][lightmagenta b]enter[/][darkgray] expand · [/][lightmagenta b]tab[/][darkgray] next tab[/]                                                                        [lightmagenta b]q[/][darkgray] quit [/]

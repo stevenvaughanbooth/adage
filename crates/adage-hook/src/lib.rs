@@ -35,6 +35,7 @@ pub mod failopen;
 pub mod harness;
 pub mod phase;
 pub mod press;
+pub mod receipt;
 pub mod skill;
 
 mod ctx;
@@ -206,7 +207,16 @@ pub fn handle(
     // One path per kind of event (the event table, `adage_trace::Harness::events`). Each reads the
     // index and the configuration through `ctx`, on first use: `SkillPrompt` and `PreToolUse`
     // never read the index before they know they need it.
-    let ev = match adapter.classify(event, &p, &cwd_text) {
+    let class = adapter.classify(event, &p, &cwd_text);
+    // Registration alone cannot prove delivery: a shell call, a session start or an event the
+    // runtime decides, in a repository, is recorded ([`receipt`]) without changing output or
+    // opening the session state or spool; a receipt failure never interrupts the agent. The mod's
+    // asks for the standing text or a skill's text answer the mod, not an agent's event, and the
+    // press returned above, so none of them counts.
+    if in_repo && matches!(class, HookEvent::PreToolUse | HookEvent::SessionStart | HookEvent::Decide(_)) {
+        let _ = receipt::record(paths, &root, adapter.harness().id());
+    }
+    let ev = match class {
         // Answered by the press gate above.
         HookEvent::Press | HookEvent::Ignored => return Ok(None),
         HookEvent::SkillPrompt => return skill::prompt(adapter, &p, &session, &root, paths, started),

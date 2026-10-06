@@ -87,6 +87,12 @@ binaries are in [docs/usage.md](docs/usage.md#other-ways-to-install).
 
 ## Quickstart
 
+For a guided interface, run `adage ui` after building Adage. Home explains the next step;
+`Ctrl-K` opens the palette for connecting a harness, selecting history, conditioning a repository,
+reviewing reflexes, and opening the browser map. Forms and confirmations keep these actions in the
+app. `adage ui --demo` lets you explore with isolated sample data.
+
+
 Start a session in a repository. The first time, you see one line (the agent never sees it):
 
 ```text

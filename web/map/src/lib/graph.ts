@@ -1,3 +1,4 @@
+import { exactRouteKey, traceKey } from "./traces";
 // Graph JSON → the map: stimulus → reflex → response, filtered, aggregated or expanded, focused.
 // Pure functions, unit-tested in graph.test.ts.
 
@@ -73,7 +74,10 @@ export function routeKey(r: Pick<Route, "reference" | "id">): string {
 
 export function findRoute(g: Graph | null | undefined, key: string | null): Route | undefined {
   if (!g || !key) return undefined;
-  return g.routes.find((r) => routeKey(r) === key) ?? g.routes.find((r) => r.id === key);
+  const exact = g.routes.filter((r) => JSON.stringify([r.repo, r.reference, r.id]) === key || routeKey(r) === key);
+  if (exact.length === 1) return exact[0];
+  const legacy = g.routes.filter((r) => r.id === key);
+  return legacy.length === 1 ? legacy[0] : undefined;
 }
 
 export function repos(g: Graph): string[] {
@@ -140,8 +144,9 @@ function strip(s: string): string {
 export function firstFired(events: TraceEvent[]): Map<string, number> {
   const m = new Map<string, number>();
   for (const e of events) {
-    for (const id of [...e.directed, ...e.would]) {
-      const k = `${e.repo}::${id}`;
+    for (const d of [...(e.directives ?? []), ...(e.arm === "control" ? e.would_have ?? [] : [])]) {
+      if (!d.route_key || !d.version) continue;
+      const k = JSON.stringify([d.route_key, d.version]);
       const at = m.get(k);
       if (at === undefined || e.ts < at) m.set(k, e.ts);
     }
@@ -162,14 +167,15 @@ export function buildMap(g: Graph, o: BuildOptions): { nodes: MapNode[]; edges: 
   const fired = o.at != null ? firstFired(g.events) : null;
   const nodes = new Map<string, MapNode>();
   const edges: MapEdge[] = [];
-  const sessionsOf = new Map<string, number>();
+  const sessionsOf = new Map<string, Set<string>>();
+  const incompleteSessions = new Set<string>();
 
   for (const r of routes) {
     const key = routeKey(r);
     const s = strength(r.strength);
     const l = lifecycle(r.state);
     const inst = isInstinct(r);
-    const firstAt = fired?.get(`${r.repo}::${r.id}`);
+    const firstAt = fired?.get(JSON.stringify([exactRouteKey(r), r.version]));
     const unformed = o.at != null && !inst && (firstAt === undefined || firstAt > o.at);
     const rid = `r:${key}`;
     nodes.set(rid, {
@@ -189,7 +195,10 @@ export function buildMap(g: Graph, o: BuildOptions): { nodes: MapNode[]; edges: 
     const agg = o.mode === "aggregated";
     const sid = agg ? `s:${r.repo}:${r.trigger.kind}:${r.trigger.label}` : `s:${key}`;
     const st = nodes.get(sid);
-    sessionsOf.set(sid, (sessionsOf.get(sid) ?? 0) + (r.live?.sessions ?? 0));
+    const sessions = sessionsOf.get(sid) ?? new Set<string>();
+    for (const session of r.measurement_sessions ?? []) if (session.applied.length) sessions.add(traceKey(session));
+    sessionsOf.set(sid, sessions);
+    if (!r.measurement_sessions) incompleteSessions.add(sid);
     if (st) {
       st.routes.push(key);
     } else {
@@ -226,9 +235,9 @@ export function buildMap(g: Graph, o: BuildOptions): { nodes: MapNode[]; edges: 
   // Subtitles that depend on everything the node gathers.
   for (const n of nodes.values()) {
     if (n.kind === "stimulus") {
-      const k = sessionsOf.get(n.id) ?? 0;
+      const k = sessionsOf.get(n.id)?.size ?? 0;
       const reflexes = n.routes.length;
-      n.sub = [reflexes > 1 ? `starts ${reflexes} reflexes` : "", k ? `in ${k} trace${k === 1 ? "" : "s"}` : "not seen live yet"]
+      n.sub = [reflexes > 1 ? `starts ${reflexes} reflexes` : "", incompleteSessions.has(n.id) ? "trace links unavailable" : k ? `in ${k} trace${k === 1 ? "" : "s"}` : "not seen live yet"]
         .filter(Boolean)
         .join(" · ");
     } else if (n.kind === "response" && !n.strike) {

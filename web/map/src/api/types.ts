@@ -96,7 +96,7 @@ export interface ArmStats {
   applied: number;
   followed: number;
   met: number;
-  hit_avoided: number;
+  hit_avoided: number | null;
 }
 
 export interface Evidence {
@@ -182,6 +182,54 @@ export interface Route {
   evidence: Evidence;
   live: Live;
   arms: { treated?: ArmStats; control?: ArmStats };
+  measurement_info?: { status: string; description: string };
+  measurement_sessions?: MeasurementSession[];
+  measurement_history?: Measurement[];
+}
+
+export interface MeasurementSession {
+  session: string;
+  repo: string;
+  arm: string;
+  applied: number[];
+  followed: number[];
+  met: number[];
+  hit_avoided: number[];
+}
+export interface Measurement {
+  version: string;
+  live: Live;
+  arms: Route["arms"];
+  measurement_sessions?: MeasurementSession[];
+  measurement_info?: { status: string; description: string };
+}
+export interface RecordedDirective {
+  route: string;
+  track?: string;
+  version?: string;
+  text?: string;
+  route_key?: string | null;
+  attribution?: string;
+}
+export interface TraceJudgement extends RecordedDirective {
+  kind: string;
+  exposure_sequence?: number | null;
+}
+export interface TraceSession {
+  session: string;
+  repo: string;
+  arm: string | null;
+  events_total: number;
+  events_visible?: number;
+  start_ts?: number;
+  end_ts?: number;
+}
+export interface CompleteTrace {
+  session: string;
+  repo: string;
+  events: TraceEvent[];
+  events_total: number;
+  complete: boolean;
 }
 
 /** What the PreToolUse hook did before a command ran (only the kind and the interpreter are kept). */
@@ -197,6 +245,11 @@ export interface TraceEvent {
   kind?: "pretool" | string;
   pretool?: Pretool;
   withheld?: boolean;
+  sequence?: number;
+  directives?: RecordedDirective[];
+  would_have?: RecordedDirective[];
+  judgements?: TraceJudgement[];
+  response?: string | null;
   ts: number;
   session: string;
   arm: Arm | null;
@@ -304,6 +357,10 @@ export interface Graph {
   routes: Route[];
   observed: Observed[];
   events: TraceEvent[];
+  trace_events?: TraceEvent[];
+  trace_sessions?: TraceSession[];
+  totals?: Live;
+  attribution?: Record<string, unknown>;
   learning?: LearnRun[];
   bars?: { min_support: number; fire_lower_bound: number; uplift_min?: number };
   savings: Savings[];

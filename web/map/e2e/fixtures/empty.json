@@ -92,6 +92,12 @@
      "hit_avoided": 0
     }
    },
+   "measurement_sessions": [],
+   "measurement_history": [],
+   "measurement_info": {
+    "status": "current",
+    "description": "Illustrative test-fixture measurements for this collection and version."
+   },
    "shape": "run",
    "quiet": false,
    "obligation": null
@@ -99,6 +105,37 @@
  ],
  "observed": [],
  "events": [],
+ "totals": {
+  "emitted": 0,
+  "would_have": 0,
+  "followed": 0,
+  "ignored": 0,
+  "misfired": 0,
+  "obligation_met": 0,
+  "control": {
+   "unaided": 0,
+   "not_reached": 0,
+   "obligation_met": 0
+  },
+  "sessions": 0
+ },
+ "attribution": {
+  "exposures": {},
+  "judgements": {},
+  "description": "Illustrative fixture. Raw totals count each event once."
+ },
+ "trace_events": [],
+ "trace_sessions": [],
+ "trace_info": {
+  "source": "recorded_hook_decisions",
+  "events_total": 0,
+  "events_visible": 0,
+  "truncated": false,
+  "limit": 400,
+  "complete_session_inventory": true,
+  "session_endpoint": "/api/v1/trace",
+  "description": "Illustrative recorded hook decisions for browser tests."
+ },
  "learning": [],
  "bars": {
   "min_support": 3,

@@ -79,6 +79,63 @@ pub(crate) struct Shared {
     pub(crate) connections: AtomicUsize,
 }
 
+/// A live map owned by a terminal session. Dropping it closes the listener and event streams.
+/// It never changes process signal handlers and never prints into the alternate screen.
+pub(crate) struct Server {
+    address: std::net::SocketAddr,
+    shared: Arc<Shared>,
+    acceptor: Option<std::thread::JoinHandle<()>>,
+    tailer: Option<std::thread::JoinHandle<()>>,
+}
+impl Server {
+    pub(crate) fn start(paths: Paths, repo_root: Option<PathBuf>, demo: bool) -> Result<Self> {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).context("Starting the local web map")?;
+        let address = listener.local_addr()?;
+        listener.set_nonblocking(true)?;
+        let shared = Arc::new(Shared {
+            paths,
+            repo_root,
+            demo,
+            port: address.port(),
+            hub: events::Hub::new(),
+            connections: AtomicUsize::new(0),
+        });
+        let listener_shared = shared.clone();
+        let acceptor = std::thread::Builder::new().name("adage-ui-map".into()).spawn(move || {
+            while !listener_shared.hub.closed() {
+                match listener.accept() {
+                    Ok((stream, _)) => accept(stream, &listener_shared),
+                    Err(_) => std::thread::sleep(Duration::from_millis(40)),
+                }
+            }
+        })?;
+        let tailer = events::spawn_tailer(shared.clone());
+        Ok(Self { address, shared, acceptor: Some(acceptor), tailer: Some(tailer) })
+    }
+    pub(crate) fn url(&self, focus: Option<&str>, traces: bool) -> String {
+        let mut url = format!("http://{}/?view={}", self.address, if traces { "traces" } else { "map" });
+        if let Some(focus) = focus {
+            url.push_str("&reflex=");
+            url.push_str(&http::encode_component(focus));
+        }
+        url
+    }
+    pub(crate) fn open(&self, url: &str) -> Result<()> {
+        try_open_browser(url)
+    }
+}
+impl Drop for Server {
+    fn drop(&mut self) {
+        self.shared.hub.close();
+        if let Some(thread) = self.acceptor.take() {
+            let _ = thread.join();
+        }
+        if let Some(thread) = self.tailer.take() {
+            let _ = thread.join();
+        }
+    }
+}
+
 static STOP: AtomicBool = AtomicBool::new(false);
 
 #[cfg(unix)]
@@ -220,6 +277,10 @@ fn accept(stream: TcpStream, shared: &Arc<Shared>) {
 
 /// The browser, when asked for; never an error if there is none.
 fn open_browser(url: &str) {
+    let _ = try_open_browser(url);
+}
+
+fn try_open_browser(url: &str) -> Result<()> {
     use std::process::{Command, Stdio};
     let mut c = if cfg!(target_os = "macos") {
         let mut c = Command::new("open");
@@ -234,7 +295,17 @@ fn open_browser(url: &str) {
         c.arg(url);
         c
     };
-    let _ = c.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn();
+    let mut child = c
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .context("Starting the browser opener")?;
+    // Reap the opener without holding the UI event loop while a browser starts.
+    std::thread::spawn(move || {
+        let _ = child.wait();
+    });
+    Ok(())
 }
 
 /// A one-line live status on a terminal (pages connected, events streamed), rewritten in place.
@@ -299,5 +370,31 @@ mod tests {
         assert!(options(&args(&["--port", "x"])).is_err());
         assert!(options(&args(&["--focus", "--demo"])).is_err());
         assert!(options(&args(&["--nope"])).is_err());
+    }
+}
+
+#[cfg(test)]
+mod ui_server_tests {
+    use super::*;
+    use std::io::{Read, Write};
+    #[test]
+    fn terminal_owned_map_serves_its_context_and_closes_with_the_terminal() {
+        let d = tempfile::tempdir().unwrap();
+        let server = Server::start(Paths::at(d.path()), None, true).unwrap();
+        let address = server.address;
+        let url = server.url(Some("[\"repo\",\"pack\",\"reflex id\"]"), true);
+        assert!(url.contains("?view=traces&reflex=%5B%22repo%22"));
+        let mut stream = TcpStream::connect(address).unwrap();
+        stream.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+        write!(stream, "GET /api/v1/graph HTTP/1.1\r\nHost: {address}\r\nConnection: close\r\n\r\n").unwrap();
+        let mut text = String::new();
+        stream.read_to_string(&mut text).unwrap();
+        assert!(text.starts_with("HTTP/1.1 200"), "{text}");
+        assert!(text.contains("\"demo\":true"), "the server must retain the isolated demo context: {text}");
+        drop(server);
+        assert!(
+            TcpStream::connect_timeout(&address, Duration::from_millis(200)).is_err(),
+            "the listener must not outlive its terminal owner"
+        );
     }
 }

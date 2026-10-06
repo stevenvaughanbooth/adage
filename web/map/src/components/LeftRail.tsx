@@ -35,7 +35,7 @@ export function tree(rs: Route[]): Group[] {
   const packs = rest.filter((r) => !isInstinct(r) && r.imported);
   const instincts = rest.filter(isInstinct);
   const out: Group[] = [];
-  out.push(...groupBy(learned, "Tracks", (r) => `@${r.version}`));
+  out.push(...groupBy(learned, "Learned reflexes", (r) => `@${r.version}`));
   if (nascent.length) out.push({ section: "Nascent · wait for review", items: nascent });
   if (quiet.length) out.push({ section: "Quiet · agents already do this", items: quiet });
   out.push(...groupBy(instincts, "Instincts", (r) => `@${r.version}`));
