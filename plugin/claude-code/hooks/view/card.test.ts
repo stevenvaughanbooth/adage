@@ -29,7 +29,7 @@ describe('T-D5-03 · /adage why after a verified skill (cmd.why.step)', () => {
   test('the skill\'s steps after the last directive; the directive before it; the one sentence with neither', () => {
     const s = skillOf('acme-work-item', SKILL_ANNOTATED, 7)
     if (s === undefined) throw new Error('skill')
-    expect(whySkill(s, false)).toBe('◈ adage verified 2 of 3 steps of the acme-work-item skill here\n\ns1 scripts/wi-lookup {id} · works · 2026-10-03\ns2 pytest · stale: exit 1: command not found · 2026-10-03\ns3 make test · works · 2026-10-03')
+    expect(whySkill(s, false)).toBe('◈ adage verified 1 of 2 steps of the acme-work-item skill here\n\ns1 make test · works · 2026-10-03\ns2 make lint · stale: exit 2: no rule · 2026-10-03')
     expect(whyText(rows(LINE.firedGen), reflexesOf({ routes: [] }), false, { ...s, at: T0 + 5000 })).toContain('acme-work-item skill here')
     expect(whyText(rows(LINE.firedGen), reflexesOf({ routes: [] }), false, { ...s, at: 0 })).toStartWith('◠ codegen-after-schema')
     expect(whyText([], [], false, s)).toContain('acme-work-item skill here')

@@ -3,13 +3,13 @@
 import { describe, expect, test } from 'claude-code/testing'
 
 import { UNANSWERING, askBinary } from './binary'
-import { exited, fake } from './fixtures/kit'
+import { exited, fake, wire, wireLine } from './fixtures/kit'
 
 describe('T-X-02 · askBinary', () => {
   test('the answer, tagged; the run is `<bin> hook claude <Event>` with the payload on stdin', async () => {
-    const f = fake({ run: () => exited(0, '{"predict":null}') })
+    const f = fake({ run: () => exited(0, wireLine('predict')) })
     f.m.rt.bin = '/data/bin/hook'
-    expect(await askBinary(f.m, 'TurnStep', { cwd: '/w' }, 250)).toEqual({ ok: true, answer: { predict: null } })
+    expect(await askBinary(f.m, 'TurnStep', { cwd: '/w' }, 250)).toEqual({ ok: true, answer: wire('predict') })
     expect(f.ran[0]?.argv).toEqual(['/data/bin/hook', 'hook', 'claude', 'TurnStep'])
     expect(f.ran[0]?.init).toMatchObject({ stdin: '{"cwd":"/w"}', timeoutMs: 250, cwd: '/w' })
   })

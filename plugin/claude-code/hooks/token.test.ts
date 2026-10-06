@@ -3,9 +3,9 @@
 // by a `press_issued` record the mod did not cause. Through the engine, and over the fake.
 import { describe, expect, test } from 'claude-code/testing'
 
-import { CLI, HOOK, LINE, NEXT_TOKEN, SESSION, T0, TOKEN, bandText, begin, exited, fake, mountPane, personOnly, rowsOf, stdin, turnEnd, world } from './fixtures/kit'
+import { CLI, HOOK, LINE, NEXT_TOKEN, SESSION, T0, TOKEN, bandText, begin, exited, fake, mountPane, personOnly, rowsOf, stdin, turnEnd, wire, wireLine, wireWith, world } from './fixtures/kit'
 import { ANSWER } from './press'
-import { checkTamper, held, issue, pressCommand } from './token'
+import { checkTamper, held, issue, pressCommand, pressOf } from './token'
 
 const FEED = [LINE.learnerIdle, LINE.healthy, LINE.start, LINE.pressIssued]
 const ENABLE = 'acme/learned/test-after-acme-edit'
@@ -57,11 +57,18 @@ describe('T-B4-05 · the token\'s life', () => {
 })
 
 describe('T-B4-05 · the token over the fake', () => {
-  const answering = (press: string) => (argv: readonly string[]) =>
-    argv[1] === 'hook' ? exited(0, press === '' ? '' : JSON.stringify({ press })) : exited(0, `${JSON.stringify({ next: NEXT_TOKEN })}\nadage is on for this repository.\n`)
+  /** The binary: the wire's press at a session start, and the next token after a spend. */
+  const answering = (argv: readonly string[]) =>
+    argv[1] === 'hook' ? exited(0, wireLine('press')) : exited(0, `${JSON.stringify({ next: NEXT_TOKEN })}\nadage is on for this repository.\n`)
+
+  test('pressOf reads press.json: the token the binary issued; anything but 64 lowercase hex is none', () => {
+    expect(pressOf(wire('press'))).toBe(wire('press').press)
+    expect(pressOf(wire('press'))).toBe(TOKEN)
+    expect([pressOf(wireWith('press', TOKEN.toUpperCase())), pressOf(wireWith('press', TOKEN.slice(1))), pressOf(wireWith('press', 7)), pressOf(undefined)]).toEqual(['', '', '', ''])
+  })
 
   test('issue: the token held for the session the command hooks named; a compaction asks nothing; a resume counts two issues', async () => {
-    const f = fake({ run: answering(TOKEN) })
+    const f = fake({ run: answering })
     f.m.rt.bin = HOOK
     expect(await issue(f.m, { source: 'compact' })).toBe(false)
     expect(f.ran).toEqual([])
@@ -83,7 +90,7 @@ describe('T-B4-05 · the token over the fake', () => {
   })
 
   test('pressCommand: with a press held the verb runs and the next token is held; with none the answer is kept and nothing runs', async () => {
-    const f = fake({ run: answering(TOKEN), state: { press: { session: SESSION, token: TOKEN, state: 'held', issued: 1, chain: 0 } } })
+    const f = fake({ run: answering, state: { press: { session: SESSION, token: TOKEN, state: 'held', issued: 1, chain: 0 } } })
     f.m.rt.cli = CLI
     f.m.rt.interactive = true
     const p = await pressCommand(f.m, ANSWER, 'adage on', 'adage', 'on', 'on')

@@ -6,12 +6,13 @@ import type { TurnStepChunk, TurnStepInput, TurnStepResult } from 'claude-code'
 import { describe, expect, test } from 'claude-code/testing'
 
 import type { Asked } from './bridge'
-import { USAGE, drain, start, world } from './fixtures/kit'
+import { PREDICT, USAGE, drain, start, wire, wireLine, wireWith, world } from './fixtures/kit'
 import type { Predicted } from './plugin'
-import { turnStep } from './step'
-
-const PREDICT = { predict: { kind: 'obligation', route: 'codegen-after-schema', track: 'acme/billing@1', calls: [{ tool: 'Bash', input: { command: 'make gen' } }] } }
+import { isRoutine, turnStep } from './step'
 import type { StepDeps, StepNext, TurnStepPayload } from './step'
+
+/** The route of the wire's prediction (predict.json), which every predicted id here carries. */
+const ROUTE = String((wire('predict').predict as Record<string, unknown>).route)
 
 const STEP: TurnStepInput = { turnId: 'turn-1', index: 2, model: 'claude-x', messageCount: 5 }
 
@@ -54,12 +55,9 @@ function stub(answer: (p: TurnStepPayload) => Asked | Error, over: Partial<StepD
   return { deps, asked, recorded }
 }
 
-const predict = (kind: string, calls: unknown[]): Asked => ({
-  ok: true,
-  answer: { predict: { kind, route: 'codegen-after-schema', track: 'acme/billing@1', calls } },
-})
+const predict = (kind: string, calls: unknown[]): Asked => ({ ok: true, answer: wireWith('predict', { kind, calls }) })
 const MAKE_GEN = { tool: 'Bash', input: { command: 'make gen' } }
-const ID = (k: number) => `adage_codegen-after-schema_turn-1_2_${k}`
+const ID = (k: number) => `adage_${ROUTE}_turn-1_2_${k}`
 
 describe('T-C4-01, T-C7-03 · a prediction before the request', () => {
   const cases: [string, unknown[]][] = [
@@ -101,7 +99,7 @@ describe('T-C4-01, T-C7-03 · a prediction before the request', () => {
         { session_id: 'sess-1', cwd: '/w', hook_event_name: 'TurnStep', turn_id: 'turn-1', index: 2, model: 'claude-x', ending: false, via: 'mod' },
       ])
       expect(recorded).toEqual([
-        { turnId: 'turn-1', index: 2, route: 'codegen-after-schema', kind, ids: typed.map((_, k) => ID(k)), isEnding: false },
+        { turnId: 'turn-1', index: 2, route: ROUTE, kind, ids: typed.map((_, k) => ID(k)), isEnding: false },
       ])
     })
   }
@@ -130,7 +128,7 @@ describe('T-C4-02 · forwarding', () => {
   })
 
   test('a failed or throwing ask, or a malformed answer, forwards', async () => {
-    for (const answer of [(): Asked => ({ ok: false }), () => new Error('boom'), (): Asked => ({ ok: true, answer: { predict: { kind: 'nope' } } })]) {
+    for (const answer of [(): Asked => ({ ok: false }), () => new Error('boom'), (): Asked => ({ ok: true, answer: wireWith('predict', { kind: 'nope' }) })]) {
       const m = TOOL_STEP()
       const { deps } = stub(answer)
       const { chunks } = await drain(turnStep(STEP, m.next, deps))
@@ -188,7 +186,7 @@ describe('T-C8-02 · the finish line (ending)', () => {
       usage: USAGE,
     })
     expect(recorded).toEqual([
-      { turnId: 'turn-1', index: 2, route: 'codegen-after-schema', kind: 'obligation', ids: [ID(0)], isEnding: true },
+      { turnId: 'turn-1', index: 2, route: ROUTE, kind: 'obligation', ids: [ID(0)], isEnding: true },
     ])
   })
 
@@ -212,7 +210,13 @@ describe('T-C8-02 · the finish line (ending)', () => {
 })
 
 describe('T-C5-04 · routing a step (C5)', () => {
-  const ROUTINE: Asked = { ok: true, answer: { routine: true } }
+  const ROUTINE: Asked = { ok: true, answer: wire('routine') }
+
+  test('isRoutine reads routine.json; only true itself marks a step routine', () => {
+    expect(isRoutine(wire('routine'))).toBe(true)
+    expect([isRoutine(wireWith('routine', 'yes')), isRoutine(wireWith('routine', undefined)), isRoutine(undefined), isRoutine(wire('predict'))]).toEqual([false, false, false, false])
+  })
+
   const ENDS = () => model([{ kind: 'text', index: 0, text: 'Done.' }, { kind: 'stop', stopReason: 'end_turn', usage: USAGE }], { turnId: 'turn-1', index: 2, answer: 'Done.', toolUses: [], stopReason: 'end_turn', usage: USAGE })
 
   test('routine, with a model set: the request goes out on it at low effort; the binary is told only that one is set', async () => {
@@ -250,7 +254,7 @@ describe('T-C5-04 · routing a step (C5)', () => {
 
   test('predicted or routed, never both: a prediction beside routine is the response, and no request goes out', async () => {
     const m = ENDS()
-    const { deps } = stub(() => ({ ok: true, answer: { predict: { kind: 'run', route: 'codegen-after-schema', track: 'acme/billing@1', calls: [MAKE_GEN] }, routine: true } }), { routineModel: 'haiku' })
+    const { deps } = stub(() => ({ ok: true, answer: { ...wireWith('predict', { kind: 'run', calls: [MAKE_GEN] }), ...wire('routine') } }), { routineModel: 'haiku' })
     const { chunks } = await drain(turnStep(STEP, m.next, deps))
     expect(m.requests).toHaveLength(0)
     expect(chunks.map(c => c.kind)).toEqual(['tool', 'input', 'stop'])
@@ -311,11 +315,11 @@ describe('T-B1-04, T-C4-03 · observe mode and the skill check', () => {
 
 describe('T-C4-01 … T-C4-03 · onStep through the engine', () => {
   test('active: a TurnStep prediction is yielded in place of the request', async ($, on) => {
-    const w = world(on, { hook: { TurnStep: JSON.stringify(PREDICT) }, model: 'read' })
+    const w = world(on, { hook: { TurnStep: PREDICT }, model: 'read' })
     await start($, w, null, false)
     const { chunks, result } = await drain($.turn.step(STEP))
     expect(chunks).toEqual([
-      { kind: 'tool', index: 0, id: 'adage_codegen-after-schema_turn-1_2_0', name: 'Bash' },
+      { kind: 'tool', index: 0, id: ID(0), name: 'Bash' },
       { kind: 'input', index: 0, json: '{"command":"make gen"}' },
       { kind: 'stop', stopReason: 'tool_use', usage: null },
     ])
@@ -349,7 +353,7 @@ describe('T-C4-01 … T-C4-03 · onStep through the engine', () => {
   })
 
   test('step 0 and a subagent step are forwarded without asking', async ($, on) => {
-    const w = world(on, { hook: { TurnStep: JSON.stringify(PREDICT) }, model: 'read' })
+    const w = world(on, { hook: { TurnStep: PREDICT }, model: 'read' })
     await start($, w, null, false)
     await drain($.turn.step({ ...STEP, index: 0 }))
     await drain($.turn.step({ ...STEP, agentId: 'agent-7' }))
@@ -358,7 +362,7 @@ describe('T-C4-01 … T-C4-03 · onStep through the engine', () => {
   })
 
   test('T-C5-04 · a headless session reads its routine model from the card at its first step, and routes from the next', async ($, on) => {
-    const w = world(on, { hook: { TurnStep: JSON.stringify({ routine: true }) }, card: { runtime: { routine_model: 'haiku' }, ui: {} }, model: 'read' })
+    const w = world(on, { hook: { TurnStep: wireLine('routine') }, card: { runtime: { routine_model: 'haiku' }, ui: {} }, model: 'read' })
     await start($, w, null, false)
     await drain($.turn.step(STEP))
     await drain($.turn.step({ ...STEP, index: 3 }))
@@ -374,7 +378,7 @@ describe('T-C4-01 … T-C4-03 · onStep through the engine', () => {
   })
 
   test('no routine model on the card: a routine answer changes nothing', async ($, on) => {
-    const w = world(on, { hook: { TurnStep: JSON.stringify({ routine: true }) }, card: { runtime: { routine_model: '' } }, model: 'read' })
+    const w = world(on, { hook: { TurnStep: wireLine('routine') }, card: { runtime: { routine_model: '' } }, model: 'read' })
     await start($, w, null, false)
     await drain($.turn.step(STEP))
     await drain($.turn.step({ ...STEP, index: 3 }))
@@ -382,7 +386,7 @@ describe('T-C4-01 … T-C4-03 · onStep through the engine', () => {
   })
 
   test('a Skill prediction is yielded only for a skill `$.command.list()` lists', async ($, on) => {
-    const skill = { predict: { kind: 'skill', route: 'notes', track: 'acme/billing@1', calls: [{ tool: 'Skill', input: { skill: 'release-notes' } }] } }
+    const skill = wireWith('predict', { kind: 'skill', route: 'notes', calls: [{ tool: 'Skill', input: { skill: 'release-notes' } }] })
     const w = world(on, { hook: { TurnStep: JSON.stringify(skill) }, model: 'read' })
     let listed = [{ name: 'review', description: '', source: 'plugin' as const }]
     on('command.list', () => ({ value: listed }))

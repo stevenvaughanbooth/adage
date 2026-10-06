@@ -22,6 +22,11 @@ const ISSUE_TIMEOUT_MS = 2000
 /** What a session start's command hooks were handed: its id, how it started, its directory. */
 export type Started = { session_id?: string; source?: string; cwd?: string }
 
+/** The token in a `Press` answer (`{ press }`, docs/claude-mod/impl/wire.md), or '' for none or a malformed one. */
+export function pressOf(answer: unknown): string {
+  return isRecord(answer) && isToken(answer.press) ? answer.press : ''
+}
+
 /**
  * Asks the binary for the session's press once the command hooks' session start has run (the
  * window is open until the agent's first act), and holds the token in `$.state` only. A start
@@ -37,7 +42,7 @@ export async function issue(m: Mod, e: Started): Promise<boolean> {
   const hook = m.rt.bin ?? hookBinary(await m.env.pluginData(), m.plugin.root(), exeSuffix(await m.env.os()))
   const cwd = typeof e.cwd === 'string' && e.cwd !== '' ? e.cwd : await m.session.cwd()
   const asked = await ask(m.run, hook, 'Press', { session_id: session, cwd, hook_event_name: 'Press', source, via: 'mod' }, ISSUE_TIMEOUT_MS)
-  const token = asked.ok && isRecord(asked.answer) && isToken(asked.answer.press) ? asked.answer.press : ''
+  const token = asked.ok ? pressOf(asked.answer) : ''
   // A resume reissues once for the same id: the spool then holds two issues at most. A resume
   // this process got nothing for (a second resume, after the binary's one reissue) counts the
   // same two, so the spool's own two issues are not taken for tampering.

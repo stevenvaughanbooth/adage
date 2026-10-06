@@ -16,6 +16,14 @@ const SKILL_PROMPT_TIMEOUT_MS = 2000
 const HEADING = /^Adage verified these steps in this repository on (\d{4}-\d{2}-\d{2}):$/m
 
 /**
+ * The skill's text in a `SkillPrompt` answer (`{ text }`, docs/claude-mod/impl/wire.md), or
+ * undefined: nothing verified here, or a malformed or blank text.
+ */
+export function skillTextOf(answer: unknown): string | undefined {
+  return isRecord(answer) && typeof answer.text === 'string' && answer.text.trim() !== '' ? answer.text : undefined
+}
+
+/**
  * The steps a `SkillPrompt` answer lists (plan D4): one line per step the replay verified
  * (`- make test: works`) or found stale (`- make suite: stale (exit 2: …)`), after the heading.
  * Undefined when the text carries no heading.
@@ -67,7 +75,7 @@ async function verifiedSkill(m: Mod, skill: string, text: string): Promise<strin
     ...(m.rt.observing ? { observe: true as const } : {}),
   }
   const asked = await askBinary(m, 'SkillPrompt', payload, SKILL_PROMPT_TIMEOUT_MS)
-  const answered = asked.ok && isRecord(asked.answer) && typeof asked.answer.text === 'string' && asked.answer.text.trim() !== '' ? asked.answer.text : undefined
+  const answered = asked.ok ? skillTextOf(asked.answer) : undefined
   if (answered === undefined) return undefined
   const s = skillOf(skill, answered, await m.clock.now())
   if (s !== undefined) {

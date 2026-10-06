@@ -21,9 +21,10 @@ import type { Asked } from './bridge'
 import { mark } from './marks'
 import type { AnswerAt, EventAt, Mod, NextAt } from './mod'
 import { answeredMark, receiptAnswerOf, receiptPlanOf, shortId } from './receipt'
-import type { ReceiptAnswer } from './receipt'
+import type { ReceiptAnswer, ReceiptPlan } from './receipt'
 import { isRecord } from './shape'
-import { substituteOf } from './substitute'
+import { substituteAnswerOf, substituteOf } from './substitute'
+import type { Substitute } from './substitute'
 import { markText, receiptOf, rewriteOf } from './view/lines'
 
 /** What the mod tells the binary it found out (A1's `verdict`), exactly one decision per call. */
@@ -83,6 +84,20 @@ export type CallDeps = {
 /** Both phases run before the call does, so each has the budget a command hook would. */
 const PRE_TOOL_TIMEOUT_MS = 2000
 
+/** The parts of a dry run's plan the mod acts on; a missing or malformed part is undefined. */
+export type Plan = { receipt: ReceiptPlan | undefined; substitute: Substitute | undefined; rewrite: { command: string; kind: string } | undefined }
+
+/**
+ * The dry run's answer (`{ plan }`, docs/claude-mod/impl/wire.md), each part read by its own
+ * reader; undefined when there is no plan at all. The plan's `advice` is not read: the command
+ * hook that follows the call delivers it.
+ */
+export function planOf(answer: unknown): Plan | undefined {
+  if (!isRecord(answer) || !isRecord(answer.plan)) return undefined
+  const p = answer.plan
+  return { receipt: receiptPlanOf(p.receipt), substitute: substituteOf(p.substitute), rewrite: rewritePlanOf(p.rewrite) }
+}
+
 /** The plan's `rewrite`: the command the call would run as, when U11 bound an environment here. */
 export function rewritePlanOf(v: unknown): { command: string; kind: string } | undefined {
   if (!isRecord(v) || typeof v.command !== 'string' || v.command.trim() === '') return undefined
@@ -137,7 +152,7 @@ export async function bashCall<E extends BashCall>(e: E, next: (e: E) => Promise
   const quiet = (work: Promise<void> | undefined) => (work ?? Promise.resolve()).catch(() => undefined)
 
   const planned = await ask({ ...base, dry_run: true })
-  const plan = planned.ok && isRecord(planned.answer) && isRecord(planned.answer.plan) ? planned.answer.plan : undefined
+  const plan = planned.ok ? planOf(planned.answer) : undefined
   if (plan === undefined) return next(e)
 
   // The rules on the call as written, asked at most once whichever branches need it; a check that
@@ -152,7 +167,7 @@ export async function bashCall<E extends BashCall>(e: E, next: (e: E) => Promise
   // §3.3 The receipt as the result: no dialog appears for an answered call, so only a call the
   // rules would have let run unasked is answered. A receipt that is not fresh, or a call the rules
   // ask about, runs: the binary says nothing more than it would have.
-  const receipt = receiptPlanOf(plan.receipt)
+  const receipt = plan.receipt
   if (receipt?.fresh === true && receipt.result !== '' && !deps.isObserving && (await asWritten()) === 'allow') {
     const final = await ask({ ...base, verdict: { answered: 'receipt' } })
     const answer = final.ok ? receiptAnswerOf(final.answer) : undefined
@@ -166,10 +181,10 @@ export async function bashCall<E extends BashCall>(e: E, next: (e: E) => Promise
   if (receipt !== undefined && receipt.operation !== '' && !deps.isObserving) await quiet(deps.beside?.(id, receipt.operation))
 
   // §3.4 The dead end that never runs: the learned command, only on the same verdict.
-  const sub = substituteOf(plan.substitute)
+  const sub = plan.substitute
   if (sub !== undefined && (await alike(sub.command)) === true) {
     const final = await ask({ ...base, verdict: { engine: 'same', substitute: sub.route } })
-    const made = final.ok && isRecord(final.answer) ? substituteOf(final.answer.substitute) : undefined
+    const made = final.ok ? substituteAnswerOf(final.answer) : undefined
     if (made !== undefined && !deps.isObserving) {
       await quiet(deps.made?.(id, made.command))
       try {
@@ -186,7 +201,7 @@ export async function bashCall<E extends BashCall>(e: E, next: (e: E) => Promise
 
   // §3.4 Rewrites checked by the engine: the engine's comparison replaces the planner's own reading
   // of the settings files. Advice alone, or nothing, is the command hook's to deliver as before.
-  const rewrite = rewritePlanOf(plan.rewrite)
+  const rewrite = plan.rewrite
   if (rewrite === undefined || deps.isObserving) return next(e)
   const same = await alike(rewrite.command)
   if (same === undefined) return next(e)

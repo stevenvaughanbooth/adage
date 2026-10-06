@@ -5,8 +5,9 @@
 // fixture feed lines, the session's nouns, the model, and the engine's own drawing of each site. Every `$.process.run` and `$.process.spawn` is recorded (the argv recorder, T-X-04),
 // and so is every ask (`$.ui.ask` is a `tool.call` of `AskUserQuestion`, answered here). The lines
 // and objects below are shaped as the binary prints them (copied from real runs of `adage watch
-// --follow --json`, `graph --json`, `doctor --json`, `--json --for-session`, `status --json`,
-// `review delegate … --stage --json` and `hook claude SkillPrompt`).
+// --follow --json`, `graph --json`, `doctor --json`, `--json --for-session`, `status --json` and
+// `review delegate … --stage --json`). The binary's answers to the mod (`hook claude <Event>`) are
+// never written here: they are the Rust side's wire files (`wire`, `wireLine`, `wireWith` below).
 import type { On, ProcessRunInit, ProcessRunResult, ProcessSpawnChunk, RenderElement, RenderPropsOf, TurnStepChunk, TurnStepResult } from 'claude-code'
 import { mock } from 'claude-code/testing'
 import type { Engine, MockClock } from 'claude-code/testing'
@@ -17,6 +18,9 @@ import type { Cell, Mod } from '../mod'
 import { runtime } from '../mod'
 import type { AdageState, Row } from '../plugin'
 import { STATE0, STORE_KEYS } from '../plugin'
+import { toolUseId } from '../predict'
+import { isRecord, str } from '../shape'
+import { WIRE } from './wire'
 
 export const T0 = 1_791_008_381_000
 export const SESSION = 'sess-1'
@@ -27,8 +31,75 @@ export const HOOK = `${DATA}/bin/hook`
 
 const REPO = 'acme@315465905b6b'
 
-/** The press tokens the binary issues and chains (64 lowercase hex each). */
-export const TOKEN = 'a'.repeat(64)
+// ------------------------------------------------------------------------ the binary's answers
+
+/**
+ * The answers the binary sends the mod are pinned by one file per shape, crates/adage-hook/tests/
+ * wire/<key>[-<case>].json, which the Rust side writes from its typed answer and compares
+ * (docs/claude-mod/impl/wire.md). The test runner reads nothing outside the plugin's folder, so the
+ * files' bytes are mirrored in `./wire.ts`, which `node scripts/check-plugin.mjs --wire` writes and
+ * every other run of it holds to the files. A test takes an answer from here and nowhere else
+ * (check-plugin refuses a literal one), so a change on either side fails a test on both.
+ */
+const WIRE_DIR = 'crates/adage-hook/tests/wire'
+
+/** A wire file, by its name without `.json`. */
+export type WireName = keyof typeof WIRE
+
+/** An answer as `JSON.parse` reads the binary's stdout. */
+export type WireAnswer = Record<string, unknown>
+
+const WIRE_FILES: Readonly<Record<string, string>> = WIRE
+
+/** Every wire file's name. */
+export const WIRE_NAMES = Object.keys(WIRE) as WireName[]
+
+/** The answer a wire file holds, parsed afresh (a test may change its copy); a name with no file throws, naming the files there are. */
+export function wire(name: WireName): WireAnswer {
+  const text = WIRE_FILES[name]
+  if (text === undefined) throw new Error(`no answer file ${WIRE_DIR}/${name}.json (there are ${Object.keys(WIRE_FILES).join(', ')}): bless it on the Rust side, then run node scripts/check-plugin.mjs --wire`)
+  const v: unknown = JSON.parse(text)
+  if (!isRecord(v)) throw new Error(`${WIRE_DIR}/${name}.json holds no answer object`)
+  return v
+}
+
+/** The answer as the binary prints it: one line, keys sorted (the files' order), and a newline. */
+export const wireLine = (name: WireName): string => `${JSON.stringify(wire(name))}\n`
+
+/** The key an answer is under: the name before its first `-` (`standing`'s four parts are the answer itself). */
+const wireKey = (name: WireName): string => name.split('-')[0] ?? name
+
+/** `over` laid on `base`: objects field by field (an `undefined` field removed), anything else replaced. */
+function overlaid(base: unknown, over: unknown): unknown {
+  if (!isRecord(base) || !isRecord(over)) return over
+  const out: Record<string, unknown> = { ...base }
+  for (const [k, v] of Object.entries(over)) {
+    if (v === undefined) delete out[k]
+    else out[k] = overlaid(base[k], v)
+  }
+  return out
+}
+
+/**
+ * A case the files do not hold, made from one that they do: `over` laid on the answer's body (the
+ * value under its key, `{ predict: <body> }`; the whole answer for `standing`), field by field, an
+ * `undefined` field removed and a value that is not an object replacing the body. So a test changes
+ * only what it is about, and a field the Rust side renames still fails it.
+ */
+export function wireWith(name: WireName, over: unknown): WireAnswer {
+  const a = wire(name)
+  const key = wireKey(name)
+  if (key !== 'standing') return { ...a, [key]: overlaid(a[key], over) }
+  const v = overlaid(a, over)
+  if (!isRecord(v)) throw new Error(`wireWith('${name}', …): a standing answer is an object`)
+  return v
+}
+
+/** A part of an answer by its path, or undefined. */
+const part = (v: unknown, ...path: string[]): unknown => path.reduce<unknown>((x, k) => (isRecord(x) ? x[k] : undefined), v)
+
+/** The press tokens the binary issues (the wire's) and chains (64 lowercase hex each). */
+export const TOKEN = str(wire('press').press)
 export const NEXT_TOKEN = 'b'.repeat(64)
 export const THIRD_TOKEN = 'c'.repeat(64)
 
@@ -202,22 +273,13 @@ export const CONFIRMED = { ...STAGE, recorded: true, wrote: ['policy', 'marker',
 
 // ------------------------------------------------------------------------- a test run's receipt
 
-/** A test run and the same run on the project's interpreter (U11's rewrite). */
-export const PYTEST = 'python -m pytest tests/test_x.py -q'
-export const VENV = '.venv/bin/python -m pytest tests/test_x.py -q'
-/** What `hook claude PreToolUse` says of a receipt (plan C3): the note the model reads, the result, the card. */
-export const RECEIPT_NOTE = '<adage-receipt operation="3f9c1a2b7d4e">\nAdage\'s run of `' + VENV + '` in this session passed on files identical to the current ones.\n</adage-receipt>'
-export const RECEIPT_RESULT = 'Adage answered this test run from its own run of `' + VENV + '` in this session (2026-10-03T09:00:00Z, operation 3f9c1a2b7d4e): it passed on files identical to the current ones.'
-export const RECEIPT_CARD = { operation: '3f9c1a2b7d4e', ran_at: '2026-10-03T09:00:00Z', ago: '4 min ago', summary: 'passed on files identical to the current ones · 2 tests this command selects', tests: ['tests/test_x.py::test_zeta', 'tests/test_x.py::test_alpha'], more: 0 }
-/** The dry run's `receipt`: fresh (it can answer the call), or stale. */
-export const FRESH = { fresh: true, covering: VENV, operation: '3f9c1a2b7d4e', note: RECEIPT_NOTE, result: RECEIPT_RESULT }
-export const STALE = { fresh: false, covering: VENV, operation: '3f9c1a2b7d4e' }
-/** The final answer to `verdict: { answered: "receipt" }`. */
-export const ANSWERED = { receipt: { result: RECEIPT_RESULT, note: RECEIPT_NOTE, covering: VENV, card: RECEIPT_CARD } }
+/** A test run as the model wrote it, and as the plan rewrites it onto the project's interpreter (U11; the wire's `plan.rewrite`). */
+export const PYTEST = 'python -m pytest tests -q'
+export const VENV = str(part(wire('plan'), 'plan', 'rewrite', 'command'))
 
-/** What `hook claude SkillPrompt` answers for a skill `adage train` verified here (plan D4). */
-export const SKILL_TEXT = 'Look the work item up, then run the tests.'
-export const SKILL_ANNOTATED = `${SKILL_TEXT}\n\nAdage verified these steps in this repository on 2026-10-03:\n- scripts/wi-lookup {id}: works\n- pytest: stale (exit 1: command not found)\n- make test: works`
+/** What `hook claude SkillPrompt` answers for a skill `adage train` verified here (plan D4; the wire's `text`), and the skill's own text before it. */
+export const SKILL_ANNOTATED = str(wire('text').text)
+export const SKILL_TEXT = SKILL_ANNOTATED.slice(0, Math.max(0, SKILL_ANNOTATED.indexOf('\n\nAdage verified')))
 
 // ----------------------------------------------------------------------------------- the world
 
@@ -392,7 +454,7 @@ export function world(on: On, o: WorldOptions = {}): World {
       return exited(0, said === undefined ? '' : typeof said === 'string' ? said : json(said))
     }
     if (head === 'hook' && e.argv[3] === 'Press') {
-      const out = o.hook?.Press ?? (o.press === false ? '' : json({ press: TOKEN }) + '\n')
+      const out = o.hook?.Press ?? (o.press === false ? '' : wireLine('press'))
       return { value: { exitCode: 0, stdout: out, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
     }
     if (PERSON_ONLY.has(head) && !(head === 'delegate' && e.argv[2] === 'status')) {
@@ -599,13 +661,14 @@ export const OUTPUT = (args: string, text: string): RenderPropsOf['CommandOutput
 export const block = (route: string, strength = 'fire') =>
   `<adage-reflex track="acme/learned@1" route="${route}" strength="${strength}" kind="run">\nDo it.\n</adage-reflex>`
 
-/** A predicted step, as `hook claude TurnStep` answers it. */
-export const PREDICT = JSON.stringify({ predict: { kind: 'obligation', route: 'codegen-after-schema', track: 'acme/learned@1', calls: [{ tool: 'Bash', input: { command: 'make gen' } }] } })
-export const PREDICTED_ID = 'adage_codegen-after-schema_turn-1_2_0'
+/** A predicted step, as `hook claude TurnStep` answers it (the wire's `predict`: an obligation, one Bash call). */
+export const PREDICT = wireLine('predict')
 /** A predicted skill (plan D3): the Skill tool in the model's place. */
-export const PREDICT_SKILL = JSON.stringify({ predict: { kind: 'skill', route: 'release-after-bump', track: 'acme/learned@1', calls: [{ tool: 'Skill', input: { skill: 'acme-work-item' } }] } })
+export const PREDICT_SKILL = JSON.stringify(wireWith('predict', { kind: 'skill', route: 'release-after-bump', calls: [{ tool: 'Skill', input: { skill: 'acme-work-item' } }] }))
 export const PREDICTED_SKILL_ID = 'adage_release-after-bump_turn-1_2_0'
 export const STEP = { turnId: 'turn-1', index: 2, model: 'm', messageCount: 4 }
+/** The tool_use id of `PREDICT`'s call at `STEP`. */
+export const PREDICTED_ID = toolUseId(str(part(wire('predict'), 'predict', 'route')), STEP.turnId, STEP.index, 0)
 
 /** The words a default surface never carries (ux-design §10, T-B2-10). */
 export const BANNED = /\b(fire|prime|inhibit|forming|firm|dormant|approval|saved)\b/i

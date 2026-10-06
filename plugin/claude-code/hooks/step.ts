@@ -56,6 +56,12 @@ export type StepDeps = {
   routineModel?: string
 }
 
+/**
+ * Whether a `TurnStep` answer marks the step routine (`{ routine: true }`, docs/claude-mod/impl/
+ * wire.md): only `true` itself does.
+ */
+export const isRoutine = (answer: unknown): boolean => isRecord(answer) && answer.routine === true
+
 /** The per-step budget for the binary (§2 rule 1): it runs before every model request. */
 const TURN_STEP_TIMEOUT_MS = 250
 
@@ -95,7 +101,7 @@ export async function* turnStep(
   const predicted = async (ending: boolean) => {
     const asked = await deps.ask(payload(ending)).catch((): Asked => ({ ok: false }))
     // A step is predicted or routed, never both; routing only changes a request that goes out.
-    routed = !ending && asked.ok && isRecord(asked.answer) && asked.answer.routine === true
+    routed = !ending && asked.ok && isRoutine(asked.answer)
     const p = asked.ok && !deps.isObserving ? predictionOf(asked.answer) : undefined
     if (p?.kind !== 'skill') return p
     const skill = String(p.calls[0]?.input.skill)
