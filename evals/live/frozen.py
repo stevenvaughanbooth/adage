@@ -532,7 +532,7 @@ def preflight(frozen, objects, root, adage):
             error = confinement_probe()
             if error:
                 block("confinement", error)
-        if os.environ.get("CLAUDECODE"):
+        if any(os.environ.get(key) for key in runner.AGENT_MARKERS):
             block("agent_session", "Refusing paid execution inside an agent session; run --execute from an operator terminal")
         version = runner.harness_version()
         if any(version != spec["harness_version"] for spec in specs.values()):
@@ -601,6 +601,9 @@ def execute(frozen_path, frozen, objects, root, adage, *, live_factory=runner.Li
     require_ready(preflight(frozen, objects, root, adage))
     specs = bindings(frozen, objects, adage)
     with execution_lock(root):
+        # Another collector may have finished after the first preflight read its receipts.
+        # Revalidate while holding the dispatch lock before admitting untouched jobs.
+        require_ready(preflight(frozen, objects, root, adage))
         bind_root(frozen, root)
         stopped = []
         for job in frozen["jobs"]:

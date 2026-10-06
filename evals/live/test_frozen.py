@@ -97,6 +97,10 @@ class FrozenFlow(unittest.TestCase):
             probe = patch.object(owner, name, return_value=result)
             probe.start()
             self.addCleanup(probe.stop)
+        # Model-free fixtures simulate an operator; production code never clears these markers.
+        env = patch.dict(os.environ, {key: "" for key in runner.AGENT_MARKERS})
+        env.start()
+        self.addCleanup(env.stop)
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
@@ -314,10 +318,44 @@ class FrozenFlow(unittest.TestCase):
             self.assertEqual(frozen.main(args), 0)
         self.assertIs(json.loads(output.getvalue())["execute"], False)
         self.assertFalse(self.run_root.exists())
-        with patch.dict(os.environ, {"CLAUDECODE": "fixture"}):
-            with self.assertRaisesRegex(ValueError, "inside an agent"):
-                frozen.main(args + ["--execute"])
-        self.assertFalse(self.run_root.exists())
+        real_execute = frozen.execute
+
+        def no_models(*args, **kwargs):
+            def refuse_live(*args, **kwargs):
+                self.fail("must not dispatch from an agent session")
+            return real_execute(*args, **kwargs, live_factory=refuse_live)
+
+        for marker in runner.AGENT_MARKERS:
+            with self.subTest(marker=marker), patch.dict(os.environ, {marker: "fixture"}), \
+                    patch.object(frozen, "execute", side_effect=no_models):
+                with self.assertRaisesRegex(ValueError, "inside an agent"):
+                    frozen.main(args + ["--execute"])
+                self.assertFalse(self.run_root.exists())
+
+    def test_evidence_completed_between_preflight_and_lock_stops_untouched_jobs(self):
+        real_lock = frozen.execution_lock
+        preserved = {}
+
+        @contextlib.contextmanager
+        def concurrent_finish(root):
+            # A first invocation settles a known-cost run with an unknown grade just after
+            # this invocation's initial read-only preflight, before it acquires the lock.
+            with patch.object(frozen, "execution_lock", real_lock):
+                FakeLive.mode = "grader-error"
+                self.assertEqual(self.execute().returncode, 2)
+            preserved.update({str(p): p.read_bytes() for name in ("receipts", "started")
+                              for p in (root / name).glob("*.json")})
+            preserved[str(root / "state.json")] = (root / "state.json").read_bytes()
+            FakeLive.mode = "complete"
+            with real_lock(root):
+                yield
+
+        with patch.object(frozen, "execution_lock", concurrent_finish):
+            with self.assertRaisesRegex(ValueError, "unknown independent grade"):
+                self.execute()
+        self.assertEqual(len(FakeLive.runs), 1, "no untouched job may dispatch after incomplete evidence")
+        for path, before in preserved.items():
+            self.assertEqual(Path(path).read_bytes(), before)
 
     def test_preflight_reports_missing_runtime_prerequisites_without_writes_or_dispatch(self):
         with patch.object(frozen, "confinement_probe", return_value="Bubblewrap confinement is unavailable; enable namespaces"), \

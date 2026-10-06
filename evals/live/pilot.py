@@ -28,7 +28,7 @@ from budget import Budget, execution_lock
 
 PACK = HERE / "sandboxes" / "pilot"
 STAGES = ("train", "validation", "test")
-AGENT_MARKERS = ("CLAUDECODE", "OPENCODE", "CODEX_SANDBOX", "CODEX_SANDBOX_NETWORK_DISABLED")
+AGENT_MARKERS = runner.AGENT_MARKERS
 
 
 def micros(value):
@@ -322,6 +322,10 @@ def train(root, *, execute=False, live_factory=runner.Live):
         raise ValueError("pilot is not ready: " + "; ".join(readiness["blockers"]))
     manifest, objects = load(root), frozen.Objects(root / "objects")
     with execution_lock(root):
+        # Preflight is a snapshot: another invocation may finish before this lock is acquired.
+        readiness = plan(root)
+        if readiness["blockers"]:
+            raise ValueError("pilot is not ready: " + "; ".join(readiness["blockers"]))
         jobs, receipts, _ = training_journal(manifest, root, objects)
         for job in jobs:
             if job["id"] in receipts:
@@ -466,21 +470,25 @@ def run(root, split, *, execute=False):
         return readiness
     if readiness["blockers"]:
         raise ValueError("pilot is not ready: " + "; ".join(readiness["blockers"]))
-    if not all((root / f"{stage}-frozen.json").exists() for stage in STAGES[1:]):
-        raise ValueError("freeze both held-out cohorts before any evaluation dispatch")
-    if split == "test":
-        validation = readiness["stages"]["validation"]
-        if validation["pending_runs"]:
-            raise ValueError("collect the full validation cohort before starting the untouched test cohort")
-        validation_path = root / "validation-frozen.json"
-        objects = frozen.Objects(root / "objects")
-        validation_study = frozen.adage_json(manifest["adage"], "validate", validation_path, "--objects", objects.root)
-        with execution_lock(root / "validation"):
-            collected = frozen.report(validation_path, validation_study, objects, root / "validation", Path(manifest["adage"]))
-        if collected.returncode or not json.loads(collected.stdout)["evidence_complete"]:
-            raise ValueError("validation evidence is incomplete; diagnose its original usage/grades before spending on the untouched test cohort")
-    path, objects = root / f"{split}-frozen.json", frozen.Objects(root / "objects")
     with execution_lock(root):
+        # Hold the pilot lock across cross-stage checks and the validation release gate.
+        readiness = plan(root)
+        if readiness["blockers"]:
+            raise ValueError("pilot is not ready: " + "; ".join(readiness["blockers"]))
+        if not all((root / f"{stage}-frozen.json").exists() for stage in STAGES[1:]):
+            raise ValueError("freeze both held-out cohorts before any evaluation dispatch")
+        if split == "test":
+            validation = readiness["stages"]["validation"]
+            if validation["pending_runs"]:
+                raise ValueError("collect the full validation cohort before starting the untouched test cohort")
+            validation_path = root / "validation-frozen.json"
+            objects = frozen.Objects(root / "objects")
+            validation_study = frozen.adage_json(manifest["adage"], "validate", validation_path, "--objects", objects.root)
+            with execution_lock(root / "validation"):
+                collected = frozen.report(validation_path, validation_study, objects, root / "validation", Path(manifest["adage"]))
+            if collected.returncode or not json.loads(collected.stdout)["evidence_complete"]:
+                raise ValueError("validation evidence is incomplete; diagnose its original usage/grades before spending on the untouched test cohort")
+        path, objects = root / f"{split}-frozen.json", frozen.Objects(root / "objects")
         study = frozen.adage_json(manifest["adage"], "validate", path, "--objects", objects.root)
         result = frozen.execute(path, study, objects, root / split, Path(manifest["adage"]))
     return {"returncode": result.returncode, "report": json.loads(result.stdout), "stderr": result.stderr}

@@ -18,6 +18,11 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### Fixes from the architecture work
 
+- **Keep paid dispatch behind current operator and evidence checks.** The pilot, frozen-study
+  and live-runner entrypoints consistently refuse Claude Code, Codex and OpenCode agent sessions.
+  Collectors recheck evidence under their dispatch lock, including cross-stage validation gates,
+  so a concurrent incomplete result cannot admit another paid job from a stale readiness plan.
+
 - **Stop paid collection when evidence is incomplete.** Held-out runs now retain the first
   bad receipt and stop on unknown grades, incomplete usage, unplanned models or model-call
   overruns. A final-session cost overrun also blocks later stages. Training pins original

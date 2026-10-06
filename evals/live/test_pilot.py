@@ -1,4 +1,5 @@
 """Paid-pilot coordination using actual checkouts, graders and Rust learning, with no models."""
+import contextlib
 import copy
 import json
 import os
@@ -237,6 +238,62 @@ class PilotFlow(unittest.TestCase):
             self.assertTrue(report["evidence_complete"], report)
             self.assertFalse(report["paired"]["token_target_accepted"], "scripted equal usage proves no savings")
             self.assertTrue(result["usage"][stage]["request_usage_complete"])
+
+    def test_training_rechecks_evidence_completed_before_lock_acquisition(self):
+        real_lock = pilot.execution_lock
+        preserved = {}
+
+        @contextlib.contextmanager
+        def concurrent_finish(root):
+            with patch.object(pilot, "execution_lock", real_lock):
+                TrainingLive.mode = "unknown-grade"
+                self.assertEqual(pilot.train(root, execute=True, live_factory=TrainingLive)["returncode"], 2)
+            preserved.update({str(p): p.read_bytes() for name in ("receipts", "started")
+                              for p in (root / "train" / name).glob("*.json")})
+            ledger = root / "train" / "state.json"
+            preserved[str(ledger)] = ledger.read_bytes()
+            TrainingLive.mode = "complete"
+            with real_lock(root):
+                yield
+
+        with patch.object(pilot, "execution_lock", concurrent_finish):
+            with self.assertRaisesRegex(ValueError, "unknown independent grade"):
+                pilot.train(self.root, execute=True, live_factory=TrainingLive)
+        self.assertEqual(len(TrainingLive.runs), 1)
+        for path, before in preserved.items():
+            self.assertEqual(Path(path).read_bytes(), before)
+
+    def test_heldout_dispatch_rechecks_other_stage_evidence_under_the_pilot_lock(self):
+        real_lock = pilot.execution_lock
+        for split in ("validation", "test"):
+            with self.subTest(split=split):
+                root = self.root.parent / ("concurrent-" + split)
+                pilot.initialize(root, ADAGE, "fixture-model-v1", "30", "1")
+                for stage in pilot.STAGES[1:]:
+                    (root / f"{stage}-frozen.json").write_text("{}")
+                TrainingLive.runs, TrainingLive.mode = [], "unknown-grade"
+
+                @contextlib.contextmanager
+                def concurrent_finish(locked):
+                    if locked == root:
+                        with patch.object(pilot, "execution_lock", real_lock):
+                            result = pilot.train(root, execute=True, live_factory=TrainingLive)
+                            self.assertEqual(result["returncode"], 2)
+                    with real_lock(locked):
+                        yield
+
+                with patch.object(pilot, "execution_lock", concurrent_finish), \
+                        patch.object(frozen, "adage_json", return_value={}), \
+                        patch.object(frozen, "preflight", return_value={"blockers": [], "pending_runs": 0}), \
+                        patch.object(frozen, "report", return_value=subprocess.CompletedProcess(
+                            [], 0, '{"evidence_complete":true}', "")), \
+                        patch.object(frozen, "execute", return_value=subprocess.CompletedProcess(
+                            [], 0, '{"evidence_complete":true}', "")) as execute:
+                    with self.assertRaisesRegex(ValueError, "unknown independent grade"):
+                        pilot.run(root, split, execute=True)
+                    execute.assert_not_called()
+                self.assertEqual(len(TrainingLive.runs), 1)
+                self.assertFalse((root / split / "started").exists())
 
     def test_interruption_preserves_reservation_and_never_redispatches(self):
         TrainingLive.mode = "interrupted"

@@ -40,7 +40,7 @@ turns a live run into an offline `adage eval` dataset. The live dashboard reads 
 Options:
   --config PATH        the config (or give it as the first positional argument)
   --dry-run            print the plan and exit (the default without --execute)
-  --execute            run for real (spends tokens); refused inside an agent session (CLAUDECODE)
+  --execute            run for real (spends tokens); refused inside an agent session
   --root DIR           output root
   --model ID           override the config's model
   --round N            run only this learning round (default: every round in the config)
@@ -128,6 +128,9 @@ DEFAULTS = {
 PASS_ENV = ("PATH", "LANG", "LANGUAGE", "LC_ALL", "LC_CTYPE", "TERM", "SHELL", "USER", "LOGNAME", "TZ",
             "HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "https_proxy", "http_proxy", "no_proxy",
             "SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS", "REQUESTS_CA_BUNDLE")
+# Paid entrypoints share the same operator-only boundary across supported agent sessions.
+AGENT_MARKERS = ("CLAUDECODE", "OPENCODE", "CODEX_SANDBOX", "CODEX_SANDBOX_NETWORK_DISABLED")
+
 # How Claude Code authenticates without the operator's config directory: one of these variables
 # (an API key, or a token from `claude setup-token`), else a copy of the operator's
 # ~/.claude/.credentials.json (Linux; macOS keeps it in the Keychain, so set a variable there).
@@ -1313,8 +1316,8 @@ def main(argv):
             print_plan(p)
         return 0
     # Executing spends real tokens: refuse inside an agent session, and check the tools exist.
-    if os.environ.get("CLAUDECODE"):
-        raise SystemExit("refusing to run live agents from inside an agent session (CLAUDECODE is set)")
+    if any(os.environ.get(key) for key in AGENT_MARKERS):
+        raise SystemExit("refusing to run live agents from inside an agent session; use an operator terminal")
     if not shutil.which("claude"):
         raise SystemExit("`claude` is not on PATH")
     if not adage.exists():
