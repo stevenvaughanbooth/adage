@@ -8,7 +8,8 @@ Turn repository-scoped agent traces into reproducible, independently supported r
 collection and processing without mixing repository evidence, inflating confidence with retries,
 or interpreting repeated behavior as demonstrated benefit. The business target is 20–30% lower
 token spend at preserved task quality; it is a prospective evaluation target, not a measured
-claim. Cheaper-model predictability requires a separate model-transfer comparison.
+claim. Cheaper-model predictability requires a separate model-transfer comparison. The
+[commercial acceptance plan](commercial-evidence.md) defines the evidence still required for launch.
 
 ## Milestones and acceptance
 

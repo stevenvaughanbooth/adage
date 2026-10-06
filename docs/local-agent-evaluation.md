@@ -8,7 +8,9 @@ access alone does not supply independent tasks, a grader, or proof that a featur
 For the packaged first run, use [the paid-pilot launch guide](paid-pilot.md). Its coordinator
 provides the task pack, disjoint split registry, training export, production learning, review
 handoff, frozen validation/test cohorts and one bounded program allocation. The larger study
-outlined below remains the expansion plan after that mechanism pilot.
+outlined below remains the expansion plan after that mechanism pilot. The
+[commercial acceptance plan](commercial-evidence.md) fixes the launch criteria, workload and
+sample-size decisions, and the budget gates for that expansion.
 
 ## Instruction to the receiving agent
 
