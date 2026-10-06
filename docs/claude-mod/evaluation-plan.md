@@ -13,14 +13,16 @@ Work the sections in order. Each stops on a failure; a failure is a defect to fi
 not a reason to skip the section (`test-plan.md` §9: flakes are not re-run to green). Record the
 outcome of every section in `docs/claude-mod/evaluation-results.md` in the format of §9.
 
-The branch is `claude/mods-poc-m98u3o` on `stevenvaughanbooth/adage`. The implementation notes
+The branch is `claude/mods-spike-doc-m98u3o` on `stevenvaughanbooth/adage` (PR #27; it carries the
+implementation branch `claude/mods-poc-m98u3o` and the latest `main`). For configuring one
+machine rather than running the whole evaluation, `local-setup.md` is the shorter path. The implementation notes
 per chunk are under `docs/claude-mod/impl/`; each has a "Live-only" section that this plan
 collects in §4.
 
 ## 0. Setup (once)
 
 ```sh
-git fetch origin claude/mods-poc-m98u3o && git checkout claude/mods-poc-m98u3o
+git fetch origin claude/mods-spike-doc-m98u3o && git checkout claude/mods-spike-doc-m98u3o
 rustup show                      # current stable: the repository pins no toolchain, and CI builds with stable
 claude --version                 # 2.1.288 or later; the mod API is the one in plugin/claude-code/types/index.d.ts
 node --version                   # 22 or later (the plugin scripts and tests)

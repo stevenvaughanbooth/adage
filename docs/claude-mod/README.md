@@ -3,8 +3,10 @@
 Four documents, one proposal (2026-10-02, against Claude Code 2.1.287, the release that turned
 mods on by default), its implementation ([impl/README.md](impl/README.md): every chunk of the
 plan, built against 2.1.288 on the branch `claude/mods-poc-m98u3o`, with the proof of concept
-that preceded it under [poc/](poc/README.md)), and the brief for evaluating it live
-([evaluation-plan.md](evaluation-plan.md)). Nothing has run in a live Claude Code session yet;
+that preceded it under [poc/](poc/README.md)), the brief for evaluating it live
+([evaluation-plan.md](evaluation-plan.md)), and the shorter path for configuring one machine
+([local-setup.md](local-setup.md): pull, build, install the plugin, wire the hooks once, learn,
+grant, verify). Nothing has run in a live Claude Code session yet;
 [spike S9](../../spikes/S9-claude-mods/SPIKE.md)'s questions are answered by that evaluation. Each document was reviewed once against the code by
 two independent readers before this revision; the header of each says what the review changed.
 
