@@ -13,7 +13,7 @@ You need stable Rust (`rustup`) and, for the plugin and npm tests, Node.js 18 or
 ```bash
 cargo build --workspace --locked
 cargo build --release -p adage-cli     # target/release/adage
-plugin/build.sh                        # release build staged into the Claude Code plugin, with SHA256SUMS
+plugin/build.sh                        # release build of adage, adage-exec, adage-train staged into the Claude Code plugin, with SHA256SUMS
 ```
 
 `Cargo.lock` is committed; build and test with `--locked`.
@@ -28,9 +28,11 @@ cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked        # includes the normaliser's table-driven cases and, with node, the OpenCode plugin test
 node npm/test/launcher.test.mjs        # the npm launcher, against target/debug/adage
-plugin/test/session-start.test.sh      # how the Claude Code plugin finds its binary
+plugin/test/session-start.test.sh      # how the Claude Code plugin finds its three binaries (build adage-exec and adage-train too)
 node scripts/check-plugin.mjs          # plugin and marketplace versions and hook paths
-node scripts/test-stage-plugin.mjs     # reject missing/mismatched release archive checksums (Unix)
+node scripts/test-check-plugin.mjs     # check-plugin refuses a second plugin or an on-PATH description
+node scripts/test-stage-plugin.mjs     # release staging: three binaries per target; bad archive checksums refused (Unix)
+cargo xtask release-check              # every version file agrees; release.yml is what dist generates (needs dist for that half)
 claude plugin validate --strict plugin/claude-code && claude plugin validate --strict .
 cargo deny check                       # licenses, advisories, bans, sources (deny.toml)
 scripts/cross-check.sh                 # clippy for every release target, including Windows, from any host
@@ -104,20 +106,23 @@ the sign-off.
 
 ## Releasing (maintainers)
 
-Releases are built by [dist](https://github.com/axodotdev/cargo-dist) from `dist-workspace.toml`.
+Releases are built by [dist](https://github.com/axodotdev/cargo-dist) from `dist-workspace.toml`;
+[docs/release.md](docs/release.md) is the whole procedure and the first release's checklist.
 
-1. Bump `version` in `[workspace.package]` of `Cargo.toml`, and the versions in
-   `plugin/claude-code/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`
-   (`scripts/check-plugin.mjs` fails CI until they agree). In CHANGELOG.md, move "Unreleased" under
-   a `## <version> - <date>` heading: its text becomes the GitHub Release notes.
-2. After editing `dist-workspace.toml`, run `dist generate` and commit `.github/workflows/release.yml`.
-3. Tag and push: `git tag v0.1.0 && git push origin v0.1.0`. The release workflow builds every
-   target, attests each archive (Sigstore), attaches checksums and a CycloneDX SBOM, creates the
-   GitHub Release, and runs the publish jobs.
+1. `cargo xtask bump <version>`: writes the version into `Cargo.toml`, `Cargo.lock`, the plugin and
+   marketplace manifests and the npm templates, renames CHANGELOG.md's Unreleased heading to
+   `## <version> - <date>` (its text becomes the GitHub Release notes), and runs the checks. Commit
+   it with `git commit -s`.
+2. `git tag v<version>`.
+3. `git push origin HEAD v<version>`. The release workflow builds every target, attests each
+   archive (Sigstore), attaches checksums and a CycloneDX SBOM, creates the GitHub Release, writes
+   the `marketplace` branch, and publishes npm when it is switched on.
 
-Publishing needs, in the repository settings: the `HOMEBREW_TAP_TOKEN` secret (push access to
-`stevenvaughanbooth/homebrew-tap`), and for npm the `NPM_TOKEN` secret plus the variable
-`ADAGE_NPM_PUBLISH=true`. The npm package is `@adage-sh/cli` (decision D3), in the `adage-sh` npm org;
-`npm/config.mjs` is the one place the name lives. The `NPM_TOKEN` must be an automation token of
-an account that can publish to that org. macOS signing (decision D4) is off until the Apple
-Developer ID secrets exist; see the note in `dist-workspace.toml`.
+`cargo xtask release-check` (CI runs it with dist installed) fails while the version files
+disagree or `.github/workflows/release.yml` is not what dist generates from `dist-workspace.toml`
+plus the one documented SBOM patch; after editing `dist-workspace.toml`, regenerate as its header
+says. npm publishing needs the `NPM_TOKEN` secret plus the variable `ADAGE_NPM_PUBLISH=true`. The
+npm package is `@adage-sh/cli` (decision D3), in the `adage-sh` npm org; `npm/config.mjs` is the
+one place the name lives. The `NPM_TOKEN` must be an automation token of an account that can
+publish to that org. Homebrew is off the release until macOS signing (decision D4) exists; see the
+notes in `dist-workspace.toml`.

@@ -16,20 +16,7 @@
         "path": "plugin/claude-code",
         "ref": "marketplace"
       },
-      "description": "Agent traces become reflexes: Adage learns the paths your agents take in each repository and tells them, deterministically, what to do next, and, once you allow a step, does it for them. Works from the first session: binaries for macOS, Linux and Windows are bundled and verified, execution included; nothing is downloaded.",
-      "version": "0.1.0",
-      "repository": "https://github.com/stevenvaughanbooth/adage",
-      "homepage": "https://github.com/stevenvaughanbooth/adage"
-    },
-    {
-      "name": "adage-exec",
-      "source": {
-        "source": "git-subdir",
-        "url": "stevenvaughanbooth/adage",
-        "path": "plugin/claude-code-exec",
-        "ref": "marketplace"
-      },
-      "description": "Retired: the adage plugin now includes execution. This alias quiets what an earlier version of this plugin left behind; uninstall it.",
+      "description": "Agent traces become reflexes: Adage learns the paths your agents take in each repository and tells them, deterministically, what to do next, and, once you allow a step, does it for them. Three binaries (adage, adage-exec, adage-train) are bundled for macOS and Linux and checked against their checksums before they run; nothing is downloaded. Windows hooks are untested and execute nothing.",
       "version": "0.1.0",
       "repository": "https://github.com/stevenvaughanbooth/adage",
       "homepage": "https://github.com/stevenvaughanbooth/adage"

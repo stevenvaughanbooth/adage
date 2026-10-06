@@ -634,7 +634,7 @@ workstream are ordered.
   of the design) becomes a presence probe and T-X-10/T-X-11 are retired; `release_plugin_startup`
   thresholds hold with two binaries staged.
 - **Estimate.** 2.5 days. **Depends on.** A7 (the press makes the marker the consent).
-- **Built.** `efcb365`: one plugin with both binaries, the shim, `claude-code-exec` kept as an alias that bundles nothing, CI on one plugin.
+- **Built.** `efcb365`: one plugin with both binaries, the shim, `claude-code-exec` kept as an alias that bundles nothing, CI on one plugin. Onboarding plan O1 then deleted the alias before any release (nothing was published, so nothing needed quieting) and added `adage-train` as the plugin's third binary ([O1-O2-notes.md](impl/O1-O2-notes.md)).
 
 ### Workstream B · The mod: see it (Layer 1 of the design)
 

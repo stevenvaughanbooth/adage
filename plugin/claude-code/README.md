@@ -1,17 +1,20 @@
 # The adage plugin for Claude Code
 
 The plugin Claude Code installs from the marketplace: the command hooks (`hooks/hooks.json`, run
-through the session-start shim `scripts/session-start`, which links `bin/hook` to `adage` or
-`adage-exec`) and the mod, a hooks module of function hooks (`hooks/register.ts`) that bridges
+through the session-start shim `scripts/session-start`, which links `bin/adage`, `bin/adage-exec`
+and `bin/adage-train`, and `bin/hook` to `adage` or `adage-exec`) and the mod, a hooks module of function hooks (`hooks/register.ts`) that bridges
 Claude Code to the binary and draws what the binary says. The binary decides; the mod never does
 ([architecture.md](../../docs/claude-mod/architecture.md)). Built and tested against Claude Code
 2.1.288, CI's pin (`hooks/plugin.ts` `TESTED`).
 
 ## Where it sits
 
-- One plugin ships both binaries (plan A8); `plugin/claude-code-exec` is a retired alias with no
-  module. `scripts/stage-plugin.mjs` stages this folder, with the binaries, onto the marketplace
-  branch; `scripts/test-stage-plugin.mjs` checks every module file is staged.
+- One plugin ships three binaries for each release target (plan A8, onboarding plan O1): `adage`
+  (it decides; the mod runs its verbs), `adage-exec` (it acts once execution is on; not on
+  Windows) and `adage-train` (`adage train` hands over to it). The marketplace lists this plugin
+  alone. `plugin/build.sh` stages this machine's three into `dist/`; `scripts/stage-plugin.mjs`
+  stages every target's, with this folder, onto the marketplace branch, and
+  `scripts/test-stage-plugin.mjs` checks every binary and module file is staged.
 - The mod reaches the binary only by a short list of exact argument vectors (`hooks/bridge.ts`
   `ALLOWED_VERBS`) and the person-only verbs only through a press (`hooks/press.ts`); every hook
   fails open (it answers what `next(e)` answered).
@@ -85,10 +88,12 @@ Tests, from the repository root:
 
 ```bash
 claude plugin test plugin/claude-code                     # every hooks/**/*.test.ts, each file in its own child
-claude plugin validate --strict plugin/claude-code        # and plugin/claude-code-exec, and . (the marketplace)
+claude plugin validate --strict plugin/claude-code        # and . (the marketplace)
 claude plugin validate --strict plugin/claude-code 2>&1 | sed "s#$PWD/##g" | diff plugin/claude-code/VALIDATE.txt -
 node scripts/check-plugin.mjs                             # the tables, the hooks' order, the allow-lists, the layout
-node scripts/test-stage-plugin.mjs
+node scripts/test-check-plugin.mjs                        # check-plugin refuses a second plugin, an on-PATH description
+node scripts/test-stage-plugin.mjs                        # the release staging: three binaries per target, checksums
+plugin/test/session-start.test.sh                         # the shim (needs target/debug/{adage,adage-exec,adage-train})
 ```
 
 A test sits beside its module as `<module>.test.ts`, names its test-plan id in its `describe` (or

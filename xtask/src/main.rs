@@ -5,6 +5,11 @@
 //!
 //! `test python [<suite>...]`: every Python test suite, each from its own import root (`suites.rs`).
 //!
+//! `bump <version> [--date <YYYY-MM-DD>] [--no-changelog]`: write a release's version into every
+//! file that keeps it and date CHANGELOG.md's Unreleased section; `release-check [--require-dist]
+//! [--dist <path>]`: fail while those files disagree or release.yml is not what dist generates
+//! (`release.rs`, docs/release.md).
+//!
 //! `tokens [--check]`: reads `design/tokens/adage.tokens.json` (W3C DTCG 2025.10) and writes
 //!
 //! * `crates/adage-term/src/tokens.rs`: every colour with its night and day values, the nearest
@@ -24,6 +29,7 @@ mod affected;
 mod hygiene;
 #[cfg(test)]
 mod layers;
+mod release;
 mod suites;
 
 use anyhow::{anyhow, bail, Context, Result};
@@ -62,8 +68,10 @@ fn main() -> Result<()> {
         Some("tokens") => tokens(args.iter().any(|a| a == "--check")),
         Some("affected") => affected::run(&root(), &args[1..]),
         Some("test") => suites::run(&root(), &args[1..]),
+        Some("bump") => release::run_bump(&root(), &args[1..]),
+        Some("release-check") => release::run_check(&root(), &args[1..]),
         _ => bail!(
-            "usage: cargo xtask tokens [--check] | cargo xtask affected [--base <ref>] [--files <path>...] [--json]"
+            "usage: cargo xtask tokens [--check] | cargo xtask affected [--base <ref>] [--files <path>...] [--json] | cargo xtask test python [<suite>...] | cargo xtask bump <version> [--date <YYYY-MM-DD>] [--no-changelog] | cargo xtask release-check [--require-dist] [--dist <path>]"
         ),
     }
 }

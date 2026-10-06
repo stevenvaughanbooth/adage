@@ -273,12 +273,54 @@ the Then itself.
   `session_start` record whose `bin` is `adage-exec`, and the reverse without it.
 - **T-A8-03 · L7 · one mod.** The activation probe is a presence probe: with the binaries present
   the mod is active, with none it is inert; the two-copy logic and its tests are removed.
-- **T-A8-04 · L2 · the alias.** The retired exec plugin's `hooks.json` registers `SessionStart`
-  alone; its shim prints its one line, relinks a seeded stale `bin/adage-exec` to `scripts/quiet`
-  and exits 0; with both plugins installed no event produces two records.
+- **T-A8-04 · L2 · the alias.** *Retired by onboarding plan O1, which deleted the alias before any
+  release; T-O1-04 checks it stays gone.* The retired exec plugin's `hooks.json` registered
+  `SessionStart` alone; its shim printed its one line, relinked a seeded stale `bin/adage-exec` to
+  `scripts/quiet` and exited 0; with both plugins installed no event produced two records.
 - **T-A8-05 · L2 + L5 · timeouts and startup.** `hooks.json` carries 30 s on `PostToolBatch` and
   `Stop`; an E2 action that takes 8 s completes under the one plugin; `release_plugin_startup`'s
   thresholds hold with two binaries staged.
+
+### O1 · One plugin, three binaries (onboarding plan)
+
+- **T-O1-01 · L2 · staging needs adage-train.** `scripts/test-stage-plugin.mjs`: `stage-plugin.mjs
+  --bins` with every target's binaries but no `adage-train` for one target fails, naming it; the
+  complete set passes `check-plugin.mjs --staged`, which fails once that file is removed.
+- **T-O1-02 · L2 · the third binary.** `plugin/test/session-start.test.sh`: bundled
+  `adage-train` is verified and linked as `bin/adage-train -> adage-train-<sha>`; tampered with, or
+  absent with nothing on `PATH`, only `bin/adage-train` goes (a seeded stale link included),
+  `adage` serves and nothing is said; on `PATH`, beside a `PATH` adage, beside npm's platform
+  binary, and as a Windows copy, it is found. `plugin/build.sh --no-build` stages the fixture,
+  one `SHA256SUMS` line per binary, and refuses (writing nothing) without `adage-train`.
+- **T-O1-03 · L2 · `adage train` from the plugin.** `zero_config_plugin.rs`
+  `train_runs_from_the_plugin` (unix): a staged plugin's `bin/adage train --help` execs the
+  plugin's `bin/adage-train` with its arguments, not one on `PATH`.
+- **T-O1-04 · L2 · one plugin.** `scripts/test-check-plugin.mjs`: `check-plugin.mjs` passes as
+  committed and fails when `marketplace.json` lists a second plugin, when the description says
+  `on PATH` or names Homebrew, when `plugin/claude-code-exec/` exists, and when the shim stops
+  placing `adage-train`.
+- **T-O1-05 · L2 · the validator.** CI: `claude plugin validate --strict .` passes with one entry;
+  `VALIDATE.txt` is regenerated when a hook moves (unchanged by O1).
+
+### O2 · Release tooling (onboarding plan)
+
+- **T-O2-01 · L1 · bump round-trips.** `xtask/src/release.rs`
+  `bump_round_trips_touching_the_named_files_only`: on a scratch copy, `bump` to the next patch
+  changes exactly `Cargo.toml`, `Cargo.lock`, the plugin and marketplace manifests, the npm
+  templates and the CHANGELOG heading, only their version strings; bumping back with
+  `--no-changelog` restores every version file byte for byte. `bump_refuses_without_writing`:
+  a malformed version, no Unreleased section, or a version already released writes nothing.
+- **T-O2-02 · L1 · drift fails the check.** `release_check_fails_on_a_drifted_version`: a drifted
+  `plugin.json`, marketplace plugin entry, npm template or lockfile member is named with both
+  versions; an unlisted `"version"` key is named too. `the_release_versions_agree` holds on the
+  repository itself.
+- **T-O2-03 · L1 · a pull request plans, no Homebrew.**
+  `the_release_workflow_plans_on_a_pull_request_with_no_homebrew`: `release.yml` names no
+  Homebrew, its jobs are plan, build, host, the two custom publish jobs and announce, a pull
+  request runs `dist plan`, the SBOM patch is applied; `cargo xtask release-check --require-dist`
+  (CI) regenerates it with the pinned dist and plans no `.rb`.
+- **T-O2-04 · L2 · the publisher's smoke.** `scripts/test-stage-plugin.mjs`: the archive route
+  accepts a verified set of three archives and refuses a missing or wrong `.sha256` for each.
 
 ### C1 · `TurnStep`
 
@@ -910,7 +952,7 @@ before the question's result is committed.
 | --- | --- | --- |
 | `cargo fmt`, `clippy -D warnings`, `cargo xtask affected` (the changed packages, the readers of changed fixtures, and every dependent; a change outside every package tests everything; pushes to `main` test everything on every platform), the architecture guards `cargo test -p xtask` always (`layers`, `affected`, `hygiene`, `suites`) | every PR | merge |
 | Every new test that reads outside its crate (the sim's fixtures, `evals/sandboxes/acme-billing`, `plugin/claude-code/hooks/fixtures/`) is declared in `READS` in `xtask/src/affected.rs`; every new Python suite in `xtask/src/suites.rs`; no raw run output committed (the hygiene guard) | every PR | merge |
-| `node scripts/check-plugin.mjs` (modules, types, allow-list, pin), `test-stage-plugin.mjs`, `claude plugin validate --strict` ×2 diffed against `VALIDATE.txt`, `claude plugin test` ×2 (CLI pinned at 2.1.288) | every PR | merge |
+| `node scripts/check-plugin.mjs` (modules, types, allow-list, pin, one plugin), `test-check-plugin.mjs`, `test-stage-plugin.mjs`, `cargo xtask release-check --require-dist`, `claude plugin validate --strict` on the plugin (diffed against `VALIDATE.txt`) and the marketplace, `claude plugin test` (CLI pinned at 2.1.288) | every PR | merge |
 | `plugin/test/session-start.test.sh`, `npm/test/launcher.test.mjs` | every PR | merge |
 | `cargo test -p adage-eval --test gates` and `--test predict_gate` | weekly; required before merging C1, D1, D2, D3 | merge of those chunks |
 | `cargo build -p adage-exec` before `cargo test -p adage-cli` (`harness_sim.rs` tests the built `adage-exec` and skips when it is missing, so a stale binary would test old code) | every PR | merge |

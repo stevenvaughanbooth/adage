@@ -720,6 +720,23 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   `ADAGE_COLOR`, `ADAGE_THEME` and `ADAGE_ASCII` override it) and provides the output grammar
   every command prints through. Terminal frames and printed output are pinned by insta snapshots.
 
+### Installing and updating
+
+- **One plugin carries all three binaries.** The Claude Code plugin bundles `adage`, `adage-exec`
+  and `adage-train` for every release target, each verified against `dist/SHA256SUMS`, and its
+  session-start shim links all three beside `bin/hook`, so `adage train` works for a person who
+  installed nothing but the plugin; a missing or mismatched `adage-train` only removes its own
+  link, and `adage` keeps serving. The retired `adage-exec` alias plugin is gone (nothing had been
+  published, so there was nothing to quiet): the marketplace lists `adage` alone, and its
+  description says what is bundled and that Windows is untested. When no binary can serve, the
+  shim names channels that exist: `/plugin install adage@adage`, or `npm i -g @adage-sh/cli`.
+- **One command sets a release's version.** `cargo xtask bump <version>` writes it into
+  `Cargo.toml`, the lockfile, the plugin and marketplace manifests and the npm templates, and dates
+  CHANGELOG.md's Unreleased section (the GitHub Release's notes); `cargo xtask release-check`, run
+  in CI with the pinned dist, fails while those disagree or `release.yml` is not what dist
+  generates. Homebrew is off the release until macOS signing exists, so a missing tap token can
+  never fail a tag. `docs/release.md` is the procedure and the first release's checklist.
+
 ### Platforms and distribution
 
 - The teaser opens with sound by default, with an explicit play button when the browser blocks
@@ -734,28 +751,28 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   The approved 45-second dark/day teaser replaces the older duration and posters. The interactive
   walkthrough gives visitors a way to explore while early-access signup is unavailable; source
   installation clearly requires repository access before the public release.
-- The execution plugin installs its checksummed `adage` learner companion beside `adage-exec`,
-  preserving background learning when the plugin is the only installation. Release staging
-  rejects archives with missing checksums. Plugin startup latency is verified on the release
-  binary with real background learning; debug-only spawn-recorder tests remain separate.
-- **The marketplace plugin carries its binaries** (not published yet: the workflow has not run on
-  a tag, and the `marketplace` branch does not exist). The release workflow stages both Claude Code
-  plugins with checksummed binaries for all five targets (`scripts/stage-plugin.mjs`, archives
-  checked against dist's `.sha256`, binaries against `dist/SHA256SUMS`) and publishes them to the
-  `marketplace` branch (`.github/workflows/publish-marketplace.yml`); `marketplace.json` installs
-  from it (`git-subdir`, `ref: marketplace`). No `adage` on `PATH` is needed and nothing is
+- The plugin installs its checksummed binaries side by side, preserving background learning when
+  the plugin is the only installation. Release staging rejects archives with missing checksums.
+  Plugin startup latency is verified on the release binary with real background learning;
+  debug-only spawn-recorder tests remain separate.
+- **The marketplace plugin carries its binaries** (not published yet: the workflow has not run on a
+  tag, and the `marketplace` branch does not exist). The release workflow stages the Claude Code
+  plugin with its three checksummed binaries for all five targets (`scripts/stage-plugin.mjs`,
+  archives checked against dist's `.sha256`, binaries against `dist/SHA256SUMS`) and publishes it to
+  the `marketplace` branch (`.github/workflows/publish-marketplace.yml`); `marketplace.json`
+  installs from it (`git-subdir`, `ref: marketplace`). No `adage` on `PATH` is needed and nothing is
   downloaded. When no binary can serve, the session-start shim says so in one line the person sees
-  (a JSON `systemMessage`, verified against Claude Code 2.1.283: shown in the UI, never sent to
-  the model), records it in `$DATA/status`, and points the other hooks at `scripts/quiet`.
+  (a JSON `systemMessage`, verified against Claude Code 2.1.283: shown in the UI, never sent to the
+  model), records it in `$DATA/status`, and points the other hooks at `scripts/quiet`.
 - Build targets: macOS (arm64, x64), Linux (x64, arm64; static musl) and Windows (x64; execution
   is unavailable there). Pushes and pull requests run rustfmt, clippy, the Linux x64 tests and the
   DCO, cargo-deny and plugin checks; the full matrix (macOS, Windows, Linux arm64, the musl builds,
   NOTICE, the design and site suites) and the slow eval gates run weekly and on dispatch. Native
   Linux and Windows runs remain unverified for this preview.
 - A release workflow (dist) set up for every target: `adage`, `adage-exec` and `adage-train`, each
-  with shell, PowerShell and Homebrew installers, Sigstore build-provenance attestations and a
-  CycloneDX SBOM. The npm package's launcher runs the binaries from a per-platform package chosen
-  by `os`/`cpu` (all three binaries in it); nothing is downloaded at install time. None of this
-  is published yet: the workflow has not run on a tag, and the tap and npm package do not exist.
+  with shell and PowerShell installers, Sigstore build-provenance attestations and a CycloneDX
+  SBOM. The npm package's launcher runs the binaries from a per-platform package chosen by
+  `os`/`cpu` (all three binaries in it); nothing is downloaded at install time. None of this is
+  published yet: the workflow has not run on a tag, and the npm package does not exist.
 - The website (`web/site`).
 - Apache-2.0, with a generated NOTICE of third-party licenses; `SECURITY.md`, `CONTRIBUTING.md`.

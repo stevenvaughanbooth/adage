@@ -307,9 +307,11 @@ replaced at every use. A decision made that way is recorded `via: press` (a term
 terminal`), and a grant for an action is two presses, stage then confirm, with what the action
 would change shown between. The press is a record and a guard against the model being steered,
 not a boundary against an agent with a shell; installing, settings that change what Adage learns
-from, sharing and every `adage-exec` verb stay a terminal's. One Claude Code plugin ships both
-binaries: its hooks run `adage-exec` while the execution marker exists (written by `delegate on`,
-or by the first confirmed action), else `adage`, from the next session; they are registered once.
+from, sharing and every `adage-exec` verb stay a terminal's. One Claude Code plugin ships all three
+binaries, verified against its checksums before they run: its hooks run `adage-exec` while the
+execution marker exists (written by `delegate on`, or by the first confirmed action), else
+`adage`, from the next session; they are registered once. `adage-train` sits beside `adage` in the
+plugin's data directory, so `adage train` works with nothing else installed.
 
 The script closure is not a complete dependency graph. An approved `make gen` can invoke
 repository code that is not individually pinned in its grant. The staged input snapshot catches

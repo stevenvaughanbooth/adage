@@ -24,6 +24,13 @@ tables live; `../docs/architecture.md` and `../docs/testing.md` describe them.
   `all`, `none` or one package per line.
 - `suites.rs`: `cargo xtask test python [<suite>...]`. `PYTHON` lists every suite with its import
   root; `FIXTURE_DIRS` names `test_*.py` files that are fixtures, not Adage's tests.
+- `release.rs`: `cargo xtask bump <version> [--date <YYYY-MM-DD>] [--no-changelog]` writes the
+  version into `Cargo.toml`, the lockfile's members, the plugin and marketplace manifests and the
+  npm templates (`VERSIONED`), dates CHANGELOG.md's Unreleased heading, then runs the version check
+  and `node scripts/check-plugin.mjs`; `cargo xtask release-check [--require-dist] [--dist <path>]`
+  fails while those versions disagree, while `release.yml` names Homebrew or lacks a custom publish
+  job or the SBOM patch, and (with dist) while `release.yml` is not what dist generates in a
+  scratch tree of links to this one. The release checklist is `docs/release.md`.
 - `layers.rs` (test only): `LAYERS`, `FORBIDDEN`, `EXCEPTIONS`, `violations`.
 - `hygiene.rs` (test only): `MAX_BYTES` (1 MiB), `RAW_EXTENSIONS`, `ALLOWED`, `violations` over `git ls-files`.
 
@@ -31,7 +38,9 @@ tables live; `../docs/architecture.md` and `../docs/testing.md` describe them.
 
 - CI (`.github/workflows/ci.yml`): on a pull request the test job runs `cargo xtask affected` and
   tests those packages (`adage-eval` excluded; it runs in `evals.yml`); `cargo test -p xtask` and
-  `adage-exec`'s `no_spawn` test always run; the scheduled `design` job runs `cargo xtask tokens --check`.
+  `adage-exec`'s `no_spawn` test always run; the scheduled `design` job runs `cargo xtask tokens --check`;
+  the `plugin` job installs the dist version `dist-workspace.toml` pins and runs
+  `cargo xtask release-check --require-dist`.
 - `evals.yml` runs `cargo xtask test python` for every suite.
 - Every crate that reads a file outside its directory is named in `READS`; the test
   `every_path_a_crate_reads_is_declared` scans all crate sources for such paths and fails on an
@@ -51,6 +60,8 @@ tables live; `../docs/architecture.md` and `../docs/testing.md` describe them.
 - `EXCEPTIONS` is empty and may only shrink; a listed violation that no longer exists fails the test.
 - Changing a design token: edit `design/tokens/adage.tokens.json`, run `cargo xtask tokens`, commit
   both generated files; `the_committed_tokens_are_current` fails otherwise.
-- Fixtures read (`READS`): `design/`.
+- Fixtures read (`READS`): `design/`; `plugin/` and `.claude-plugin/` (the release versions). The
+  release tests also read `Cargo.toml`, `Cargo.lock`, `npm/`, `dist-workspace.toml`,
+  `.github/workflows/` and every member manifest, which affect everything already.
 - Pitfall: the paths `affected` sees are `/`-separated and relative to the workspace root; a
   `READS` prefix ending in `/` matches a directory, any other prefix matches one file exactly.

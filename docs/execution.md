@@ -104,19 +104,19 @@ automatically (it runs a script).
 `adage delegate on` rewrites the registrations `adage install` wrote (Claude Code settings, Codex
 `hooks.json`, the OpenCode plugin, project and user scope), swapping only the binary:
 `adage-exec hook <harness> <event>` takes `adage hook`'s arguments. For the Claude Code plugin it
-writes `$ADAGE_HOME/exec/enabled`. **One plugin** ships both binaries (`/plugin install
+writes `$ADAGE_HOME/exec/enabled`. **One plugin** ships all three binaries (`/plugin install
 adage@adage` is the only install step): its session-start shim links
-`${CLAUDE_PLUGIN_DATA}/bin/adage` (the CLI, always) and `bin/adage-exec`, each bundled and verified
-against `dist/SHA256SUMS` (else found on `PATH`, or beside the `adage` on `PATH`), and links
+`${CLAUDE_PLUGIN_DATA}/bin/adage` (the CLI, always), `bin/adage-exec` and `bin/adage-train`, each
+bundled and verified against `dist/SHA256SUMS` (else found on `PATH`, or beside the `adage` on
+`PATH`; a missing or mismatched `adage-train` only removes its link), and links
 `bin/hook`, which every other hook runs, to `adage-exec` while the marker exists and to `adage`
 otherwise (copies on Windows, made again when the marker changes). The hooks are registered once,
 so they never fire twice; the edit and Stop hooks have 30 s, for an action. With the marker and no
 `adage-exec` for the machine, `adage` serves and the session start says why. Changes take effect
-in new sessions. The `adage-exec` plugin of earlier versions is retired: for one release
-`plugin/claude-code-exec` stays as an alias that registers its `SessionStart` alone, points any
-`bin/adage-exec` it left behind at a no-op, and asks to be uninstalled. Track C chose a second
-plugin as the consent (its D2); with decisions made by a press in the session, the marker is the
-explicit act, and the second plugin was a second install step with no purpose.
+in new sessions. There is no separate `adage-exec` plugin: Track C chose a second plugin as the
+consent (its D2); with decisions made by a press in the session, the marker is the explicit act,
+and the second plugin was a second install step with no purpose. Its alias was deleted before any
+release (nothing had been published, so nothing was left to quiet; onboarding plan O1).
 
 **What `adage-exec hook` does.** The pipeline is `adage hook`'s, shared as the `adage-hook` library
 (adapters, the no-match fast path, the state lock, `decide()`, spool, render). After `decide()`,
