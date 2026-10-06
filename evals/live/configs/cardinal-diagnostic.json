@@ -1,0 +1,31 @@
+{
+  "name": "cardinal-diagnostic",
+  "description": "Three synthetic mechanism checks; no independent savings or reliability claim",
+  "repo_key": "github.com/adage-evals/cardinal",
+  "workdir": "cardinal",
+  "sandbox": ["python3", "{repo}/evals/live/sandboxes/cardinal/generate.py", "--out", "{dir}", "--task", "{task}"],
+  "score": ["python3", "{repo}/evals/live/sandboxes/cardinal/grade.py", "--workdir", "{dir}", "--task", "{task}"],
+  "prompts": ["Read TASK.md and complete that task. Report what you changed and what you verified."],
+  "train": {"tasks": ["dev-manifest-01", "dev-layout-01", "dev-control-01"], "repeats": 1},
+  "eval": {"tasks": [], "repeats": 1, "arms": ["off", "adage"]},
+  "model": "claude-haiku-4-5-20251001",
+  "seed": 42,
+  "rounds": 1,
+  "max_turns": 20,
+  "timeout_seconds": 300,
+  "concurrency": 1,
+  "learn_args": [],
+  "capture_usage": true,
+  "setting_sources": "",
+  "confine": true,
+  "budget_usd": 3.0,
+  "session_budget_usd": 1.0,
+  "classify": {
+    "lookup": [],
+    "regen": ["make generate", "tools/catalog.py"],
+    "verify": ["make check", "tools/check.py", "--check", "unittest"],
+    "check_flags": ["--check"]
+  },
+  "obligation": {"paths": "catalog/*.json"},
+  "labels": {"lookup": "repository context", "regen": "make generate"}
+}

@@ -152,7 +152,7 @@ pub fn events(a: &input::Annotated, s: &Session) -> crate::events::EventSession 
     };
     let meta = crate::events::Meta {
         day: Some(a.day.clone()),
-        task: None,
+        task: s.evidence_group().map(|g| g.key),
         outcome: s.outcome,
         turns: Some(a.meta.iter().map(|m| m.turn).collect()),
         effects: Some(a.meta.iter().map(|m| effect(&m.effect)).collect()),
@@ -277,6 +277,7 @@ mod tests {
                 PromptObs { text: "second".into(), at_step: 2 },
                 PromptObs { text: "after".into(), at_step: 4 },
             ],
+            identity: Default::default(),
             ending: Default::default(),
         };
         let a = annotate(&s);
@@ -320,6 +321,7 @@ mod tests {
             outcome: None,
             harness: CLAUDE_CODE.into(),
             prompts: vec![PromptObs { text: "p".into(), at_step: 0 }],
+            identity: Default::default(),
             ending: Default::default(),
         };
         assert!(s.exposed_to(&["make test"], false) && s.exposed_to(&["python3 -m pytest tests"], false));

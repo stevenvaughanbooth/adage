@@ -92,17 +92,22 @@ impl Extension for Prefetch {
         // A grant that could run under this policy but no longer matches: said, never silent.
         let lapsed: Vec<route::Lapse> =
             route::lapses(&planned, &store).into_iter().filter(|l| l.level <= pol.max_level).collect();
-        let notice = lapsed.first().map(|l| match lapsed.len() {
+        let mut notice = lapsed.first().map(|l| match lapsed.len() {
             1 => l.notice(),
             n => format!("{} ({} more no longer match.)", l.notice(), n - 1),
         });
+        let required =
+            crate::completion::Requirements::load(&paths.root).map(|r| r.routes(repo_key).to_vec()).unwrap_or_default();
         if pol.max_level < Level::E2 {
+            if !required.is_empty() {
+                notice = Some("adage: completion checks are configured, but execution policy disables E2. Completion remains unverified until current approved checks can run.".into());
+            }
             return SessionTexts { context: None, notice };
         }
         // Only a grant whose key still equals the route's current one, derived as act() derives
         // it: a lapsed grant would be refused, so it promises no receipt. A short factual
         // description of what Adage runs, when, and where results appear (not instructions).
-        let lines: Vec<String> = current_verifications(&planned, &store)
+        let mut lines: Vec<String> = current_verifications(&planned, &store)
             .into_iter()
             .take(2)
             .map(|(ir, command, _)| {
@@ -111,6 +116,9 @@ impl Extension for Prefetch {
                 format!("In this repository Adage runs `{}` (approved by a person, sandboxed) {when}, and again when you finish if files changed since.", render::sanitise(&command))
             })
             .collect();
+        if !required.is_empty() {
+            lines.push(format!("A person explicitly requires {} verification route(s) at completion. Adage checks their current execution evidence and attempts missing checks, even if you never started them. A missing or failed result is reported as unverified; retries and Stop continuations are bounded.", required.len()));
+        }
         let context = (!lines.is_empty()).then(|| format!("<adage-reflex track=\"adage/execution@1\" route=\"session-contract\" strength=\"prime\" kind=\"execution-contract\">\n{}\nIts results appear with your tool results, with the tests it ran; a failure comes back to you with the failing tests.\n</adage-reflex>", lines.join("\n")));
         SessionTexts { context, notice }
     }
@@ -428,8 +436,32 @@ fn stop_gate(call: &StopCall<'_>) -> Option<StopGate> {
     if !call.harness.capabilities().actions {
         return None;
     }
-    let state = adage_store::state::try_read::<adage_runtime::SessionState>(&call.paths.state(call.session)).ok()??;
-    if state.arm != Some(adage_runtime::Arm::Treated) || state.stop_gates >= MAX_STOP_GATES {
+    let state = match adage_store::state::try_read::<adage_runtime::SessionState>(&call.paths.state(call.session)) {
+        Ok(Some(state)) => state,
+        _ => return match crate::completion::Requirements::load(&call.paths.root) {
+            Ok(requirements) if requirements.routes(call.repo_key).is_empty() => None,
+            _ => Some(StopGate::Notice("adage: completion is unverified because session state is unavailable; no required check was automatically run.".into())),
+        },
+    };
+    if state.arm != Some(adage_runtime::Arm::Treated) {
+        return None;
+    }
+    match crate::completion::Requirements::load(&call.paths.root) {
+        Ok(requirements) if !requirements.routes(call.repo_key).is_empty() => {
+            return Some(required_completion(call).unwrap_or_else(|e| StopGate::Notice(format!(
+                "adage: completion is unverified: {}. Inspect `adage-exec readiness --repo <dir>` before treating this work as checked.",
+                crate::reason_text(&format!("{e:#}"))
+            ))));
+        }
+        Err(e) => {
+            return Some(StopGate::Notice(format!(
+                "adage: completion requirements are unreadable; completion is unverified: {}",
+                crate::reason_text(&e.to_string())
+            )))
+        }
+        _ => {}
+    }
+    if state.stop_gates >= MAX_STOP_GATES {
         return None;
     }
     let home = &call.paths.root;
@@ -513,6 +545,123 @@ fn stop_gate(call: &StopCall<'_>) -> Option<StopGate> {
         },
     );
     Some(gate_answer(&completed.outcome, &command, &staged, &state.new_tests, may_block, call.stop_hook_active))
+}
+
+/// Explicit completion requirements also cover a check the model never started. This remains a
+/// bounded hook continuation, not a universal publication or harness termination interlock.
+fn required_completion(call: &StopCall<'_>) -> anyhow::Result<StopGate> {
+    use crate::completion::{self, AttemptGuard};
+    use crate::verification::Status;
+    let _planning_budget = crate::project_python::budget(
+        call.deadline.saturating_duration_since(Instant::now()).as_millis().min(u128::from(u64::MAX)) as u64,
+    );
+    let home = &call.paths.root;
+    let mut guard = AttemptGuard::open(home, call.root)?;
+    let before =
+        completion::inspect(call.repo_key, call.root, call.index, call.paths, Some(call.session), Some(call.deadline))?;
+    let pol = policy::load(home)?;
+    let store = Store::load(&approvals::path(home))?;
+    let cap = sandbox::detect();
+    let table = CommandTable::load();
+    let ctx = Context {
+        inherited_env: std::env::vars().collect(),
+        policy: &pol,
+        store: &store,
+        capability: &cap,
+        table,
+        repo_key: call.repo_key.to_string(),
+        cas: Some(home.join("cas")).filter(|p| p.is_dir()),
+        home: adage_store::home_dir(),
+        canaries: Vec::new(),
+    };
+    if !guard.attempts.pending() && crate::journal::pending(home, call.root)?.is_none() {
+        for check in &before.checks {
+            if check.readiness.status == Status::Passed
+                || guard.attempts.count(call.session, &check.route) >= completion::MAX_ATTEMPTS
+            {
+                continue;
+            }
+            let Ok(prepared) =
+                completion::prepare(&check.route, call.repo_key, call.root, call.index, call.paths, &pol, &store)
+            else {
+                continue;
+            };
+            let req = &prepared.request;
+            let needed = std::time::Duration::from_millis(req.profile.limits.wall_ms.saturating_add(GATE_OVERHEAD_MS));
+            if call.deadline.saturating_duration_since(Instant::now()) < needed {
+                break;
+            }
+            let inputs = crate::stage::input_snapshot_until(
+                &call.root.canonicalize()?,
+                req.action.as_ref().unwrap(),
+                Some(call.deadline),
+            )
+            .map_err(|e| anyhow::anyhow!(e.reason))?;
+            let digest = crate::sha256_hex(crate::canonical_json(&inputs).as_bytes());
+            // Bind invalidation to the latest receipt across sessions, even though this Stop
+            // requires a result from its own session. An acknowledgement cannot revive it.
+            let rows = crate::journal::list(home)?;
+            let worktree = call.root.canonicalize()?.to_string_lossy().into_owned();
+            let prior =
+                rows.iter().rev().find(|r| r.repo == call.repo_key && r.worktree == worktree && r.route == check.route);
+            let id = guard.begin(call.session, &check.route, prior.map(|r| r.id.as_str()))?;
+            let occurrence = format!("completion:{id}:{digest}");
+            let commit = crate::journal::Commit {
+                home,
+                repo: call.repo_key,
+                session: call.session,
+                occurrence: &occurrence,
+                approved_on: &prepared.approved_on,
+                request: req,
+                origin: crate::journal::RunOrigin::StopGate,
+            };
+            match crate::stage::stage(req, &ctx) {
+                Err(refusal) => {
+                    let receipt = crate::journal::withheld_verification(&commit, &digest, &refusal)?;
+                    guard.finish(id, &receipt.id)?;
+                }
+                Ok(staged) => {
+                    let finished = crate::journal::finish(&staged, &commit);
+                    // A completion whose persistence failed is still an unfinished attempt.
+                    // Do not reset this reservation just because a process returned.
+                    let durable = crate::journal::list(home)?.into_iter().find(|r| {
+                        finished.id.as_deref() == Some(r.id.as_str()) && r.phase == crate::journal::Phase::Completed
+                    });
+                    let Some(receipt) = durable else {
+                        anyhow::bail!("completion result was not durably recorded; inspect the worktree before acknowledging recovery")
+                    };
+                    guard.finish(id, &receipt.id)?;
+                }
+            }
+            if crate::journal::pending(home, call.root)?.is_some() {
+                break;
+            }
+        }
+    }
+    let after =
+        completion::inspect(call.repo_key, call.root, call.index, call.paths, Some(call.session), Some(call.deadline))?;
+    if after.ready {
+        return Ok(StopGate::Notice(format!("adage: all {} required verification command(s) passed on current inputs. This establishes command completion; test coverage and external state require separate validation.", after.checks.len())));
+    }
+    let unmet: Vec<_> = after.checks.iter().filter(|c| c.readiness.status != Status::Passed).collect();
+    let details = unmet
+        .iter()
+        .take(2)
+        .map(|c| format!("{}: {}", render::sanitise(&c.route), crate::reason_text(&c.readiness.reason)))
+        .collect::<Vec<_>>()
+        .join("; ");
+    let recovery = guard.attempts.pending() || crate::journal::pending(home, call.root)?.is_some();
+    let body = if recovery {
+        format!("Completion is unverified ({details}). Do not retry automatically. Ask the person to inspect the worktree and acknowledge interrupted execution.")
+    } else {
+        format!("Completion is unverified for {} required check(s): {details}. Fix any failing checks before finishing; do not describe these checks as passed without current evidence. Automatic checks have a bounded retry budget.", unmet.len())
+    };
+    if !call.stop_hook_active && !guard.attempts.continued(call.session) {
+        guard.continue_once(call.session)?;
+        Ok(StopGate::Block(render::finish_line(&body)))
+    } else {
+        Ok(StopGate::Notice(format!("adage: {body}")))
+    }
 }
 
 /// What a gate run's outcome tells the agent (a `Block`) or only the person (a `Notice`).
@@ -1481,6 +1630,7 @@ mod prediction_tests {
     /// A completed, applied receipt for the fixture's route in `session`, on `digest`.
     fn record_receipt(f: &Fixture, session: &str, digest: &str) {
         let r = crate::journal::Receipt {
+            verification: None,
             origin: Some(crate::journal::RunOrigin::Context),
             id: String::new(),
             ts: "fixture".into(),
@@ -1649,6 +1799,7 @@ mod prediction_tests {
             outputs
                 .insert(PYTEST_NODEIDS.to_string(), crate::stage::FileState::File { sha256: sha.into(), exec: false });
             let r = crate::journal::Receipt {
+                verification: None,
                 origin: None,
                 id: String::new(),
                 ts: "fixture".into(),
@@ -1735,6 +1886,257 @@ mod prediction_tests {
             .unwrap();
     }
 
+    const REQUIRED_CHECK: &str = "fixture/context/predict-check";
+
+    fn require_completion(f: &Fixture) {
+        let mut requirements = crate::completion::Requirements::default();
+        requirements.repositories.insert("fixture".into(), vec![REQUIRED_CHECK.into()]);
+        requirements.save(&f.paths.root).unwrap();
+        f.index.write_atomic(&f.paths.index()).unwrap();
+        std::fs::write(f.paths.root.join("config.toml"), "[learn]\nauto = false\n").unwrap();
+        treated(f, Arm::Treated);
+    }
+
+    fn completion_status(f: &Fixture) -> crate::completion::Report {
+        crate::completion::inspect("fixture", &f.root, &f.index, &f.paths, Some("fixture-session"), None).unwrap()
+    }
+
+    fn completion_staging() -> bool {
+        let available = staging();
+        assert!(
+            available || std::env::var_os("ADAGE_REQUIRE_COMPLETION_STAGING").is_none(),
+            "completion integration proof requires a working OS staging sandbox"
+        );
+        if !available {
+            eprintln!("completion execution not exercised: no staging sandbox; ADAGE_REQUIRE_COMPLETION_STAGING=1 makes this a failure");
+        }
+        available
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn required_completion_runs_a_never_started_check_and_records_current_evidence() {
+        if !completion_staging() {
+            return;
+        }
+        let f = Fixture::new();
+        f.approve();
+        require_completion(&f);
+        assert!(crate::journal::list(&f.paths.root).unwrap().is_empty());
+        let before = completion_status(&f);
+        assert!(!before.ready);
+        assert_eq!(before.checks[0].readiness.status, crate::verification::Status::Missing);
+        match stop(&f, false) {
+            Some(StopGate::Notice(n)) => {
+                assert!(n.contains("required verification command(s) passed on current inputs"), "{n}")
+            }
+            other => panic!("never-started check must really run: {other:?}"),
+        }
+        let rows = crate::journal::list(&f.paths.root).unwrap();
+        assert_eq!(rows.len(), 1);
+        let receipt = &rows[0];
+        assert_eq!(receipt.phase, crate::journal::Phase::Completed);
+        assert_eq!(receipt.origin, Some(crate::journal::RunOrigin::StopGate));
+        assert!(matches!(receipt.outcome, crate::stage::Outcome::Applied { .. }));
+        assert_eq!(receipt.verification.as_ref().unwrap().exit, Some(0));
+        let after = completion_status(&f);
+        assert!(after.ready);
+        assert_eq!(after.checks[0].readiness.receipt.as_deref(), Some(receipt.id.as_str()));
+        assert!(after.evidence_scope.contains("test coverage") && after.evidence_scope.contains("not established"));
+        assert!(matches!(stop(&f, false), Some(StopGate::Notice(_))));
+        assert_eq!(crate::journal::list(&f.paths.root).unwrap().len(), 1, "fresh evidence avoids a duplicate run");
+        std::fs::write(f.root.join("src/feature.rs"), "an uncommitted later edit\n").unwrap();
+        assert_eq!(completion_status(&f).checks[0].readiness.status, crate::verification::Status::Stale);
+        assert!(matches!(stop(&f, false), Some(StopGate::Notice(_))));
+        assert!(completion_status(&f).ready, "the changed inputs were actually checked again");
+        assert_eq!(crate::journal::list(&f.paths.root).unwrap().len(), 2);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn required_completion_does_not_resurrect_a_pass_after_a_newer_failure() {
+        if !completion_staging() {
+            return;
+        }
+        let f = Fixture::new();
+        f.approve();
+        require_completion(&f);
+        assert!(matches!(stop(&f, false), Some(StopGate::Notice(_))));
+        let passing = crate::journal::list(&f.paths.root).unwrap()[0].id.clone();
+        std::fs::remove_file(f.root.join("src/feature.rs")).unwrap();
+        assert!(matches!(stop(&f, false), Some(StopGate::Block(_))));
+        let failed = completion_status(&f);
+        assert!(!failed.ready);
+        assert_eq!(failed.checks[0].readiness.status, crate::verification::Status::Failed);
+        let latest = failed.checks[0].readiness.receipt.clone();
+        assert_ne!(latest.as_deref(), Some(passing.as_str()));
+        // Restoring the old passing input bytes must not select the older passing operation.
+        std::fs::write(f.root.join("src/feature.rs"), "fixture\n").unwrap();
+        let restored = completion_status(&f);
+        assert!(!restored.ready);
+        assert_eq!(restored.checks[0].readiness.status, crate::verification::Status::Stale);
+        assert_eq!(restored.checks[0].readiness.receipt, latest);
+        match stop(&f, false) {
+            Some(StopGate::Notice(n)) => assert!(n.contains("unverified"), "{n}"),
+            other => panic!("exhausted budget must not report a pass or repeat its continuation: {other:?}"),
+        }
+        assert_eq!(crate::journal::list(&f.paths.root).unwrap().len(), 2);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn required_completion_retry_budget_and_continuation_survive_corrupt_session_state() {
+        if !completion_staging() {
+            return;
+        }
+        let f = Fixture::new();
+        f.approve();
+        require_completion(&f);
+        // A real pipeline event records the treated assignment for session-state reconstruction.
+        hook(
+            &f,
+            "PostToolUse",
+            json!({"tool_name":"Bash","tool_input":{"command":"git status --short"},"tool_response":""}),
+        );
+        std::fs::remove_file(f.root.join("src/feature.rs")).unwrap();
+        let first = hook(&f, "Stop", json!({"stop_hook_active":false})).expect("first failed required check");
+        assert_eq!(first["decision"], "block");
+        assert!(first["reason"].as_str().unwrap().contains("unverified"));
+        assert!(adage_hook::harness::is_own_text(first["reason"].as_str().unwrap()));
+        for attempt in 0..3 {
+            std::fs::write(f.paths.state("fixture-session"), b"both state slots are corrupt").unwrap();
+            let next = hook(&f, "Stop", json!({"stop_hook_active":false})).expect("unverified status remains visible");
+            assert!(next.get("decision").is_none(), "a lost state file must not reset the continuation: {next}");
+            assert!(next["systemMessage"].as_str().unwrap().contains("unverified"), "{next}");
+            assert_eq!(
+                crate::journal::list(&f.paths.root).unwrap().len(),
+                2,
+                "iteration {attempt}: bounded actual execution"
+            );
+        }
+        let guard = crate::completion::AttemptGuard::open(&f.paths.root, &f.root).unwrap();
+        assert_eq!(guard.attempts.count("fixture-session", REQUIRED_CHECK), 2);
+        assert!(guard.attempts.continued("fixture-session"));
+        assert!(!completion_status(&f).ready);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn required_completion_needs_current_approval_and_never_changes_default_or_control_behavior() {
+        let default = Fixture::new();
+        default.approve();
+        treated(&default, Arm::Treated);
+        assert!(stop(&default, false).is_none(), "an approved prediction alone does not make a check mandatory");
+        assert!(crate::journal::list(&default.paths.root).unwrap().is_empty());
+        let missing = Fixture::new();
+        require_completion(&missing);
+        assert!(matches!(stop(&missing, false), Some(StopGate::Block(_))));
+        assert!(!completion_status(&missing).ready);
+        assert!(
+            crate::journal::list(&missing.paths.root).unwrap().is_empty(),
+            "requirements never authorize execution"
+        );
+        let lapsed = Fixture::new();
+        lapsed.approve();
+        require_completion(&lapsed);
+        std::fs::write(lapsed.root.join("tools/check.sh"), "#!/bin/sh\necho changed approval\n").unwrap();
+        assert!(matches!(stop(&lapsed, false), Some(StopGate::Block(_))));
+        assert!(!completion_status(&lapsed).ready);
+        assert!(crate::journal::list(&lapsed.paths.root).unwrap().is_empty(), "changed script must be approved again");
+        let control = Fixture::new();
+        control.approve();
+        require_completion(&control);
+        treated(&control, Arm::Control);
+        assert!(stop(&control, false).is_none());
+        assert!(crate::journal::list(&control.paths.root).unwrap().is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn required_completion_interruption_acknowledgement_is_not_a_pass() {
+        if !completion_staging() {
+            return;
+        }
+        let f = Fixture::new();
+        f.approve();
+        require_completion(&f);
+        assert!(matches!(stop(&f, false), Some(StopGate::Notice(_))));
+        let prior = crate::journal::list(&f.paths.root).unwrap()[0].id.clone();
+        // Simulate a reserved second attempt whose hook died before a durable action receipt.
+        let mut guard = crate::completion::AttemptGuard::open(&f.paths.root, &f.root).unwrap();
+        guard.begin("fixture-session", REQUIRED_CHECK, Some(&prior)).unwrap();
+        drop(guard);
+        assert_eq!(completion_status(&f).checks[0].readiness.status, crate::verification::Status::Unknown);
+        match stop(&f, false) {
+            Some(StopGate::Block(reason)) => assert!(reason.contains("Do not retry automatically"), "{reason}"),
+            other => panic!("interruption must remain unverified: {other:?}"),
+        }
+        assert_eq!(crate::journal::list(&f.paths.root).unwrap().len(), 1, "no interrupted work is blindly retried");
+        let mut guard = crate::completion::AttemptGuard::open(&f.paths.root, &f.root).unwrap();
+        assert_eq!(guard.acknowledge().unwrap(), 1);
+        assert_eq!(guard.attempts.count("fixture-session", REQUIRED_CHECK), 2, "acknowledgement never resets budget");
+        drop(guard);
+        let acknowledged = completion_status(&f);
+        assert!(!acknowledged.ready);
+        assert_eq!(acknowledged.checks[0].readiness.status, crate::verification::Status::Unknown);
+        assert!(acknowledged.checks[0].readiness.reason.contains("acknowledgement is not a pass"));
+        assert!(matches!(stop(&f, false), Some(StopGate::Notice(_))));
+        assert!(!completion_status(&f).ready);
+        assert_eq!(crate::journal::list(&f.paths.root).unwrap().len(), 1);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn required_completion_acknowledged_prepared_receipt_is_not_completed_verification() {
+        if !completion_staging() {
+            return;
+        }
+        let f = Fixture::new();
+        f.approve();
+        require_completion(&f);
+        assert!(matches!(stop(&f, false), Some(StopGate::Notice(_))));
+        let mut interrupted = crate::journal::list(&f.paths.root).unwrap()[0].clone();
+        let mut guard = crate::completion::AttemptGuard::open(&f.paths.root, &f.root).unwrap();
+        guard.begin("fixture-session", REQUIRED_CHECK, Some(&interrupted.id)).unwrap();
+        drop(guard);
+        interrupted.id = "abcdef0123456789".repeat(4);
+        interrupted.phase = crate::journal::Phase::Prepared;
+        interrupted.outcome = crate::stage::Outcome::Unknown { reason: "hook killed before durable completion".into() };
+        // Even a process result captured before apply is not a durably completed verification.
+        assert_eq!(interrupted.verification.as_ref().unwrap().exit, Some(0));
+        adage_store::spool::append_durable(&crate::stage::spool_path(&f.paths.root), &interrupted).unwrap();
+        assert_eq!(completion_status(&f).checks[0].readiness.status, crate::verification::Status::Unknown);
+        assert!(matches!(stop(&f, false), Some(StopGate::Block(_))));
+        crate::journal::acknowledge(&f.paths.root, &interrupted.id).unwrap();
+        assert!(!completion_status(&f).ready, "journal recovery alone does not clear an unfinished reservation");
+        let mut guard = crate::completion::AttemptGuard::open(&f.paths.root, &f.root).unwrap();
+        assert_eq!(guard.acknowledge().unwrap(), 1);
+        drop(guard);
+        let report = completion_status(&f);
+        assert!(!report.ready);
+        assert_eq!(report.checks[0].readiness.status, crate::verification::Status::Unknown);
+        assert_eq!(report.checks[0].readiness.receipt.as_deref(), Some(interrupted.id.as_str()));
+        assert!(matches!(stop(&f, false), Some(StopGate::Notice(_))));
+        assert_eq!(
+            crate::journal::list(&f.paths.root).unwrap().len(),
+            2,
+            "acknowledgement neither retries nor creates a pass"
+        );
+    }
+
+    #[test]
+    fn required_completion_deadline_exhaustion_does_not_spend_an_attempt() {
+        let f = Fixture::new();
+        f.approve();
+        require_completion(&f);
+        let short = Instant::now() + std::time::Duration::from_secs(1);
+        assert!(matches!(stop_by(&f, false, short), Some(StopGate::Block(_))));
+        assert!(!completion_status(&f).ready);
+        assert!(crate::journal::list(&f.paths.root).unwrap().is_empty());
+        let guard = crate::completion::AttemptGuard::open(&f.paths.root, &f.root).unwrap();
+        assert_eq!(guard.attempts.count("fixture-session", REQUIRED_CHECK), 0);
+    }
+
     #[test]
     fn stop_gate_needs_a_grant_a_treated_session_and_this_sessions_context_run() {
         let f = Fixture::new();
@@ -1809,6 +2211,7 @@ mod prediction_tests {
             crate::stage::Outcome::Refused { stage: "verify".into(), reason: "x".into(), counts: true },
         ] {
             let r = crate::journal::Receipt {
+                verification: None,
                 origin: None,
                 id: String::new(),
                 ts: "fixture".into(),
@@ -1978,6 +2381,7 @@ mod prediction_tests {
             transcripts.push(path);
         }
         let inputs = adage_learn::Inputs {
+            identities: Default::default(),
             transcripts,
             outcomes: BTreeMap::new(),
             repo_override: Some("fixture".into()),
@@ -2193,6 +2597,7 @@ mod prediction_tests {
         f.approve();
         let id = "0123456789abcdef".repeat(4);
         let prepared = crate::journal::Receipt {
+            verification: None,
             origin: None,
             id: id.clone(),
             ts: "fixture".into(),

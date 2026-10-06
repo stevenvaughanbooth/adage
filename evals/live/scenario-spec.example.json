@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "checkout_root": "/absolute/path/to/the/observed/checkout",
+  "relevant_paths": ["src/*.py", "catalog/*.json", "tests/*.py"],
+  "verification_commands": ["make check", "python3 tools/check.py"],
+  "publication_commands": ["gh pr create --fill"],
+  "lookup_commands": ["git show external:item", "gh api repos/acme/api/issues/42"]
+}

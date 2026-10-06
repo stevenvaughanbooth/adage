@@ -63,10 +63,8 @@ fn known_digests(pack: &Pack) -> Result<BTreeSet<String>> {
     d.extend(pack.scripts.keys().cloned());
     d.extend(pack.manifest.requires.repo_files.iter().map(|f| f.sha256.clone()));
     for a in pack.attestations.values() {
-        for k in ["params_hash"] {
-            if let Some(h) = a.get(k).and_then(|v| v.as_str()) {
-                d.insert(h.to_string());
-            }
+        if let Some(h) = a.get("params_hash").and_then(|v| v.as_str()) {
+            d.insert(h.to_string());
         }
         if let Some(h) = a.get("dataset").and_then(|v| v.get("content_sha256")).and_then(|v| v.as_str()) {
             d.insert(h.to_string());

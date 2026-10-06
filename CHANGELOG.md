@@ -18,6 +18,92 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### Fixes from the architecture work
 
+- **Keep paid dispatch behind current operator and evidence checks.** The pilot, frozen-study
+  and live-runner entrypoints consistently refuse Claude Code, Codex and OpenCode agent sessions.
+  Collectors recheck evidence under their dispatch lock, including cross-stage validation gates,
+  so a concurrent incomplete result cannot admit another paid job from a stale readiness plan.
+
+- **Stop paid collection when evidence is incomplete.** Held-out runs now retain the first
+  bad receipt and stop on unknown grades, incomplete usage, unplanned models or model-call
+  overruns. A final-session cost overrun also blocks later stages. Training pins original
+  native histories and request streams, stopping on missing or altered evidence before
+  another session can spend. A documented Docker Desktop setup supports the Linux pilot on Macs.
+  Free executor checks also retain their inherited-lock test on macOS through portable pipes.
+
+- **A bounded paid-pilot launch path.** A local coordinator connects real model training traces,
+  production learning, explicit review and frozen held-out evaluation. The included programming
+  task pack has honest semantic groups, unrelated controls and an independent grader. No model
+  calls are made by its free checks; synthetic pilot results do not establish customer savings.
+
+- **Explicit, durable completion readiness.** Optional required verification reflexes run even
+  when the agent never started them, under existing E2 grants and sandbox gates. Current-input
+  execution evidence distinguishes passed, missing, stale, failed and unknown checks; durable
+  attempt limits survive restart. Ordinary advisory obligations also preserve later-edit
+  invalidation during recovery. Command completion remains distinct from coverage or task quality.
+
+- **A reproducible handoff for local model evaluations.** Train-only live archives can be
+  exported into canonical learning with explicit task/group identities, independent outcomes
+  and source provenance. Diagnostic workflow fixtures and a conservative native-action audit
+  separate correct final state from evidence that tests were actually run. The local-agent
+  runbook provides staged budgets, capability gaps, controls and frozen claim criteria.
+
+- **A complete learning-to-delivery proof.** A deterministic CLI fixture turns native traces
+  into reviewed reflexes, delivers the learned continuation through the real hook, and verifies
+  a fresh task's corrected output. It checks review, disable, unrelated-task and repeated-delivery
+  controls without calling a model. The README links the one-command reproduction.
+
+- **Studies fail before paying for an inert intervention.** Frozen experiments require an
+  actual compiled index with enabled reflexes for the selected repository. `adage eval experiment
+  artifact` checks its generation, directive safety, derived caches and checkout routing.
+  Live plans report readiness blockers, progress, budget reservations and output paths; execution
+  checks prerequisites and interrupted accounting before creating a new attempt.
+
+- **Frozen live collection.** `evals/live/frozen.py` prepares, plans, executes and reports a fixed
+  Claude Code study on Linux. It pins inputs and the compiled reflex set, enforces workflow
+  deadlines, preserves terminal results on resume and refuses to rerun interrupted attempts.
+  Immutable receipts retain independent grades and reconciled native usage with checksummed
+  source evidence. Simulated-agent contracts run against the real offline validator in CI.
+
+- **Native request accounting for learning studies.** The live-evaluation adapter reconciles
+  completed Claude usage events against terminal and per-model totals, deduplicates assistant
+  chunks by provider request, includes cache creation/read tokens once, and rejects incomplete
+  logs. Independent graders must exit successfully with a boolean result. CLI list-price
+  estimates remain separate from billed costs.
+
+- **Frozen learning experiments.** `adage eval experiment object|freeze|validate|report` binds a declared
+  test cohort to its training audit, model settings, compiled reflex set, budgets and grader.
+  Every scheduled task remains in the report, including missing results and timeouts. Whole
+  workflow accounting includes retries; changed artifacts, reused billing requests and incomplete
+  evidence cannot qualify a savings claim. The commands are offline; live harness adapters supply
+  independent grades and provider usage. New fixtures run in the fast PR checks.
+
+- **Auditable outcomes and paired savings evidence.** A passing check before later edits or a
+  new task no longer labels the final trace successful. Canonical exports accept independent
+  outcome labels; corpus audits distinguish recorded, proxy and unknown outcomes and expose
+  training groups and the exact learned generation. `adage eval paired` checks held-out task
+  pairs, quality noninferiority, token use and billed cost separately, rejecting repeated tasks,
+  train/test overlap, missing evidence and mismatched experimental conditions. Deterministic
+  fixtures cover stale checks, contamination, quality regressions and misleading token savings.
+
+- **Reusable mining checkpoints.** Repeated learning reuses unchanged repository mining while
+  rerunning qualification, current review decisions and compilation. Content, parameter and build
+  fingerprints invalidate stale calculations; corrupt caches trigger recomputation. `--no-cache`
+  forces a full run, and reports identify mining cache hits.
+
+- **Canonical trace corpora.** `adage corpus export`, `import`, `inspect` and `learn` normalize
+  portable traces, publish repository-scoped evidence snapshots and feed them into the existing
+  learner. Imports bound record size, report malformed evidence, deduplicate delivery and reject
+  conflicts atomically. Explicit snapshot replacement supports corrections and removals; stored
+  objects are content-verified and private on Unix.
+
+- **Task-aware learning evidence.** Canonical sessions preserve declared task, group and attempt
+  ids; `condition --identities <file>` imports them and evaluation manifests pass their task ids
+  through the production learner. Retries stay together, unknown identities cannot establish task
+  diversity, and prompt fallback uses the complete recorded prompt. Calibration now refits
+  prototypes and candidates inside held-out folds on at most 400 independent task representatives,
+  including for large corpora. Learning reports declared, inferred and unknown identity counts.
+  Identical session copies count once; conflicting records with the same repository/session id
+  reject learning before tracks are written.
 - **A learn run reads earlier results through its store.** It reads earlier tracks, a person's
   review decisions, proposals, route explanations, instinct bindings and installed packs through
   the same `Store` it writes through, so a store other than `$ADAGE_HOME` (a team service) can

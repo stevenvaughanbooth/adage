@@ -1,5 +1,17 @@
 # Live evals
 
+For the packaged first paid run, use [the paid-pilot launch guide](../../docs/paid-pilot.md).
+`pilot.py` supplies a disjoint synthetic task pack, real-trace training bridge, production
+learning, human review checkpoint and frozen learned-E0 comparison under one explicit program
+allocation. Its free plan and checks make no model calls; paid training and evaluation require
+`--execute` on the operator's model-enabled Linux host.
+
+For a model-enabled local agent, start with the
+[evaluation handoff](../../docs/local-agent-evaluation.md). It audits supported capabilities,
+provides free diagnostic fixtures, bridges train-only native archives into canonical learning,
+and separates a bounded pilot from a prospective savings claim. The shipped cardinal config is
+a three-session baseline smoke, not an independent training/test dataset.
+
 `runner.py` runs real headless Claude Code agents on a sandbox repository, with and without
 Adage. It generalises `demo/run.py`: the sandbox, tasks, prompts, arms, model and budget all come
 from a config file. It covers the with/without comparison of Design §12 (the eval loop) and
@@ -24,6 +36,123 @@ python3 evals/live/runner.py evals/live/configs/acme-billing.json --execute --ro
 The dry run prints the number of agent runs as the product that makes it, e.g. `train 6 tasks x
 2 repeats = 12; eval 6 tasks x 3 repeats x 2 arms (control, adage) x 2 rounds = 72; total 84
 agent runs`.
+
+## Frozen studies
+
+Use `frozen.py` for a prospective savings study after training, candidate review and compilation
+have finished. It reuses the execution and budget machinery below, with a fixed paired cohort
+and the stricter [experiment contract](../../docs/learning-experiments.md). The exploratory
+rounds and summaries in `runner.py` remain useful for development; they are not this contract.
+
+This collector requires Linux, Bubblewrap, a pinned Claude Code version and a current Adage
+build. Supply an existing live config with `confine: true`, the standard hidden directories
+(no `confine_hide`/`confine_expose` overrides), a resolved model revision, held-out evaluation task
+ids and enough total budget to reserve both arms for every task. The collector fixes one round,
+one attempt per arm/task, sequential execution and no learning. Each job gets a fresh checkout
+and private home; the baseline disables reflexes and the intervention uses the exact frozen
+index. Project/local settings are disabled in favor of the explicit runner settings.
+Preparation validates that this is a loadable compiled index with live directive reflexes for
+the selected repository. It also verifies that each generated checkout resolves to that same
+repository through the runtime's actual identity rules; a mismatched origin or checkout name
+must be fixed before freezing. The runtime copy is checked again before intervention dispatch.
+
+```sh
+# Build this revision before preparing: the executable digest is part of the protocol.
+cargo build --release --locked -p adage-cli
+target/release/adage corpus inspect --repo github.com/acme/api --evidence > training-evidence.json
+
+# Preparation runs sandbox generators and version probes, but calls no model.
+python3 evals/live/frozen.py prepare config.json \
+  --training-audit training-evidence.json --reflex-set frozen-index.json \
+  --learner-revision 'actual-training-build-and-parameters' \
+  --input /absolute/path/to/grade.py --input /absolute/path/to/task-data.json \
+  --objects study/objects --out study/frozen.json
+
+# Read-only plan and readiness checks: no run directory is created.
+python3 evals/live/frozen.py run study/frozen.json \
+  --objects study/objects --root study/run
+
+# Paid execution requires configured authentication and an explicit --execute.
+python3 evals/live/frozen.py run study/frozen.json \
+  --objects study/objects --root study/run --execute
+
+# Recompute qualification offline from all immutable receipts.
+python3 evals/live/frozen.py report study/frozen.json \
+  --objects study/objects --root study/run --require-token-target
+```
+
+Use the same `--adage /absolute/path/to/adage` on every command when overriding the default
+`target/release/adage`. `--learner-revision` must describe the build and parameters that actually
+produced the reflex set; the collector cannot infer that provenance from its own build. The audit
+must describe that training snapshot. Use the same repository key in the corpus and live config,
+matching the checkout's runtime identity: an origin of `https://github.com/acme/api.git` resolves
+to `github.com/acme/api`. `--identities identities.json` supplies canonical identities
+keyed by execution task id; each `task_id` must equal that key. Related tasks belong in the same
+group across training and evaluation. A frozen cohort has one representative per independent
+group. `--policy policy.json` and `--timeout-seconds 600` set predeclared thresholds and budgets;
+`--intervention-model` prepares a fixed model-transfer comparison.
+
+The plan returns `ready_to_execute`, actionable `blockers`, completed/pending job counts,
+the remaining reservation requirement, compiled reflex-set summary and output paths. It checks pinned inputs, existing
+receipts and interrupted jobs, the accounting ledger, private directory placement, Claude Code
+version and authentication availability. A local Bubblewrap no-op checks that the host permits
+the required namespaces. These probes make no model calls and write no study files. Missing
+authentication is reported as a blocker while the plan still exits successfully; `--execute`
+requires all readiness checks to pass before it creates a run or start marker. A fully collected
+study can be resumed for reporting without authentication or Bubblewrap. Readiness is a current
+host check, so execution also checks actual checkout inputs and repository routing in both arms
+before each dispatch. Authentication is checked locally for configuration only; these probes do
+not contact the provider to verify that a credential is valid or unexpired.
+
+Declare the complete grader/data dependency closure with repeated `--input` arguments, including
+local imports, test data and environment lockfiles. Keep these private files under the standard
+hidden roots (`/workspace`, `/tmp`, `/var/tmp`, `/home`, `/root` or `/mnt`) and outside mounted tool
+or authentication directories. The collector pins their contents, its own source, executable
+file arguments, initial checkout files and executable bits, effective prompts, working directory,
+harness version and Adage binary. It rejects checkout symlinks. Unlisted external dependencies
+are not made hermetic by these hashes; pin the installed environment separately. Inputs are
+checked before dispatch and after collection. Do not change them while the study is running.
+The run root and object directory must also stay under these hidden roots, outside mounted
+tool/authentication directories, so agents cannot read the other jobs' evidence.
+
+The workflow deadline covers preparation, agent execution and grading. The harness enforces
+`--max-turns` and `--max-budget-usd`; receipt validation also checks actual request counts and
+known billed costs against the frozen budget. A turn cap is not an independent provider request
+interceptor. The shared ledger reserves each session cap and blocks further dispatch when spend
+is unknown. Its admission accounting uses the CLI's cost estimate; actual billed cost remains
+unknown until an invoice/provider integration supplies it. A token claim can qualify separately
+from a cost claim. Unsupported helper/subagent or fallback-model accounting cannot silently
+qualify as complete usage.
+
+Completed, failed and timed-out receipts are immutable. Running the same command again skips
+terminal jobs, including bad or unknown grades. A started job without a terminal receipt stops
+resume: reconcile that original attempt without running a replacement. Never delete journal
+entries to improve results. Every scheduled job remains in the denominator, including jobs not
+run because the budget blocked. Incomplete collection exits unsuccessfully; a complete study
+with a negative quality/savings result still completes normally. Use `--require-token-target`
+on `report` when acceptance itself must control the exit status.
+If start markers or receipts exist, a missing `state.json` accounting ledger blocks resume;
+restore and reconcile the original ledger. Deleting it cannot reset the study's spend allowance.
+Each journaled job must retain exactly one original reservation at the frozen cap. Duplicate,
+missing or unrelated attempts and nonterminal accounting for a receipted job block dispatch.
+Settled CLI cost estimates must match the immutable native accounting source; these remain
+admission estimates, not billed-cost evidence. Explicitly authorized conservative cap charges
+retain their existing validation. The collector never repairs or refunds history automatically.
+The offline `report` command remains available from the immutable receipts.
+
+Private objects retain native accounting, independent grader output and execution observations;
+raw streams remain under `study/run/runs`. Keep the entire study outside git. SHA-256 objects
+establish integrity, not provider authenticity or an independent registration timestamp. Publish
+the frozen digest before running a claim study. These contracts and fixtures do not establish
+20–30% customer savings; that needs representative live evidence.
+
+Free contract checks, including the real Rust validator and simulated agents:
+
+```sh
+cargo build --locked -p adage-cli
+python3 -m unittest discover -s evals/live -p 'test_*.py'
+python3 evals/live/sandboxes/cardinal/selfcheck.py
+```
 
 ## Phases and rounds
 

@@ -47,6 +47,9 @@ pub const MAX_PROMPTS: usize = u16::MAX as usize;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Session {
     pub id: String,
+    /// Task, leakage group and attempt supplied by a corpus or dataset manifest.
+    #[serde(default, skip_serializing_if = "crate::EvidenceIdentity::is_empty")]
+    pub identity: crate::EvidenceIdentity,
     pub root: PathBuf,
     pub repo: String,
     pub model: Option<String>,
@@ -119,7 +122,8 @@ pub const FINISH_LINE_STOP: &str = "finish-line-stop";
 impl Session {
     /// The session's outcome as its transcript suggests it, for when none was recorded: failed if
     /// the agent ended by asking the person for help or was cut off, or if its last check failed;
-    /// succeeded if its last check passed; unknown otherwise (no check ran).
+    /// a check only applies if it followed the final mutation in a later model turn and served
+    /// the latest prompt. This is a completion proxy, never a substitute for a task evaluator.
     pub fn proxy_outcome(&self) -> Option<bool> {
         if self.ending.asked_for_help || self.ending.cut_off {
             return Some(false);
@@ -128,7 +132,37 @@ impl Session {
             s.norm.effect == adage_core::Effect::Verify
                 && matches!(s.norm.action, adage_core::CanonicalAction::Exec { .. })
         })?;
+        if self.steps.iter().any(|s| {
+            (s.norm.mutating
+                || matches!(
+                    s.norm.effect,
+                    adage_core::Effect::Author
+                        | adage_core::Effect::Regenerate
+                        | adage_core::Effect::Environment
+                        | adage_core::Effect::Publish
+                ))
+                && s.turn >= last_check.turn
+        }) || usize::from(last_check.prompt) != self.prompts.len().saturating_sub(1)
+        {
+            return None;
+        }
         Some(!last_check.call.failed)
+    }
+
+    /// Preserve whether an outcome was recorded or merely inferred from trace completion.
+    pub fn outcome_evidence(&self) -> OutcomeEvidence {
+        if let Some(value) = self.outcome {
+            return OutcomeEvidence { value: Some(value), basis: OutcomeBasis::Recorded };
+        }
+        let value = self.proxy_outcome();
+        let basis = if self.ending.asked_for_help || self.ending.cut_off {
+            OutcomeBasis::IncompleteEnding
+        } else if value.is_some() {
+            OutcomeBasis::FinalCheck
+        } else {
+            OutcomeBasis::Unknown
+        };
+        OutcomeEvidence { value, basis }
     }
 
     /// How many prompts the person typed.
@@ -144,4 +178,19 @@ impl Session {
     pub fn discovery(&self) -> &[StepObs] {
         &self.steps[..self.first_edit().unwrap_or(self.steps.len())]
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OutcomeBasis {
+    Recorded,
+    IncompleteEnding,
+    FinalCheck,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OutcomeEvidence {
+    pub value: Option<bool>,
+    pub basis: OutcomeBasis,
 }

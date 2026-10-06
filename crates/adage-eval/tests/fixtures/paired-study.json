@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "experiment": "synthetic-contract-fixture",
+  "kind": "same_model",
+  "training_generation": "0000000000000000000000000000000000000000000000000000000000000000",
+  "training_groups": [],
+  "training_inferred_identity": 0,
+  "training_unknown_identity": 0,
+  "pairs": [
+    {
+      "repo": "acme/api",
+      "identity": {"task_id":"TASK-0"},
+      "baseline": {
+        "id":"baseline-0", "model":"fixture-model", "task_revision":"task-v1",
+        "environment_revision":"checkout+harness+budget-v1", "evaluator_revision":"hidden-checks-v1",
+        "passed":true,
+        "usage":{"input_tokens":800,"output_tokens":200,"cached_input_tokens":400,"model_calls":4,"cost_microusd":2000}
+      },
+      "intervention": {
+        "id":"intervention-0", "model":"fixture-model", "task_revision":"task-v1",
+        "environment_revision":"checkout+harness+budget-v1", "evaluator_revision":"hidden-checks-v1",
+        "passed":true,
+        "usage":{"input_tokens":600,"output_tokens":150,"cached_input_tokens":300,"model_calls":3,"cost_microusd":1500}
+      }
+    }
+  ]
+}

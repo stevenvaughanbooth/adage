@@ -70,7 +70,9 @@ fn group(dirs: Vec<Workdir>, keys: &Path, skip: &[PathBuf]) -> Vec<Found> {
     for w in dirs {
         // A removed worktree's repository, else the repository around the directory, if it still
         // exists.
-        let Some(root) = repo::removed_worktree(&w.cwd).or_else(|| repo::find_root(&w.cwd)) else { continue };
+        let Some(root) = repo::removed_worktree(&w.cwd).or_else(|| repo::find_root(&w.cwd)) else {
+            continue;
+        };
         if !root.is_dir() || scope::inside(&root, skip) {
             continue;
         }

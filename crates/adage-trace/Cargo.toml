@@ -12,3 +12,4 @@ publish.workspace = true
 adage-core = { path = "../adage-core" }
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true

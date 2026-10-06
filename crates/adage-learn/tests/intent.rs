@@ -133,6 +133,7 @@ fn corpus(dir: &Path) -> Vec<PathBuf> {
 
 fn run(files: &[PathBuf], home: &Path, models: Option<PathBuf>) -> (Report, Index) {
     let inputs = Inputs {
+        identities: Default::default(),
         transcripts: files.to_vec(),
         outcomes: BTreeMap::new(),
         repo_override: Some("acme-docs".into()),

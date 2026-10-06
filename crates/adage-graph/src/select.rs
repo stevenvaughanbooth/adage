@@ -615,10 +615,7 @@ pub fn learn_split(train: &[EventSession], test: &[EventSession], p: &Params) ->
     // Score the closed advisory pool and execution prefixes within the shared cap.
     let closed = scoring_patterns(&db, &mined, p.max_closed);
     let mut scored = score::score_all(&db, &closed, &mined.patterns, &p.score);
-    // Execution prefixes must not change the calibration population used by existing advice.
-    let advisory_scored: Vec<_> =
-        closed.iter().zip(&scored).filter(|(m, _)| m.closed).map(|(_, sc)| sc.clone()).collect();
-    let calibration = fit_calibration(&corpus.labels, &tr, &db, &advisory_scored, &p);
+    let calibration = fit_calibration(train, &p);
     for sc in scored.iter_mut() {
         calibration.calibrate(sc, p.score.quantile);
     }
@@ -690,33 +687,46 @@ pub fn learn_split(train: &[EventSession], test: &[EventSession], p: &Params) ->
 /// Inner folds of the calibration fit.
 const CAL_FOLDS: usize = 3;
 
-/// At most this many training sessions get the exact calibration fit (re-mining per inner
-/// fold); larger corpora use [`Calibration::fit`].
+/// Calibration re-mines at most this many independent task representatives. The bounded sample
+/// applies at every corpus size: no optimistic switch to candidates selected on the held-out fold.
 pub const CAL_REMINE_MAX: usize = 400;
 
-/// Fit the posterior calibration on the training sessions (Track G §5): on task-grouped inner
-/// folds, mine and score candidates on the other folds and compare each candidate's posterior
-/// with whether its continuation follows its context in the fold's sessions.
-fn fit_calibration(
-    labels: &crate::events::LabelTable,
-    train: &[&crate::events::LSession],
-    db: &Db,
-    scored: &[Scored],
-    p: &Params,
-) -> Calibration {
-    if db.sessions.len() > CAL_REMINE_MAX {
-        return Calibration::fit(db, scored, p.score.kappa, CAL_FOLDS);
+/// One representative per known group, chosen without looking at its outcomes. SHA order avoids
+/// preferring a lexical task prefix; session-id order breaks ties between attempts. Unknown task
+/// identity cannot establish a held-out observation. Prompt-based groups remain an approximation.
+fn calibration_sample(train: &[EventSession]) -> Vec<EventSession> {
+    use sha2::{Digest, Sha256};
+    let mut groups: BTreeMap<&str, &EventSession> = BTreeMap::new();
+    for s in train {
+        if let Some(task) = s.task.as_deref().filter(|t| !t.is_empty()) {
+            let entry = groups.entry(task).or_insert(s);
+            if s.id < entry.id {
+                *entry = s;
+            }
+        }
     }
-    let fold = score::inner_folds(&db.sessions, CAL_FOLDS);
-    let fold_of: BTreeMap<&str, usize> = db.sessions.iter().zip(&fold).map(|(s, &f)| (s.id.as_str(), f)).collect();
+    let mut groups: Vec<_> = groups.into_iter().collect();
+    groups.sort_by_cached_key(|(task, _)| (Sha256::digest(task.as_bytes()).to_vec(), *task));
+    groups.into_iter().take(CAL_REMINE_MAX).map(|(_, s)| s.clone()).collect()
+}
+
+/// Fit all representation, mining and scoring stages inside each task-held-out fold. Held-out
+/// observations get labels from that fold's frozen epoch, never prototypes fitted on themselves.
+fn fit_calibration(train: &[EventSession], p: &Params) -> Calibration {
+    let sample = calibration_sample(train);
     let mut bins = Calibration::bins();
     for f in 0..CAL_FOLDS {
-        let (itr, ite): (Vec<&crate::events::LSession>, Vec<&crate::events::LSession>) =
-            train.iter().partition(|s| fold_of.get(s.id.as_str()) != Some(&f));
+        let (itr, ite): (Vec<_>, Vec<_>) = sample.iter().enumerate().partition(|(i, _)| i % CAL_FOLDS != f);
         if itr.is_empty() || ite.is_empty() {
             continue;
         }
-        let idb = Db::build(labels, &itr, &p.mine);
+        let train: Vec<_> = itr.into_iter().map(|(_, s)| s.clone()).collect();
+        let epoch = proto::build(&train, &p.proto);
+        let all: Vec<_> = train.iter().cloned().chain(ite.into_iter().map(|(_, s)| s.clone())).collect();
+        let corpus = epoch.label(&all);
+        let train_ids: std::collections::BTreeSet<_> = train.iter().map(|s| &s.id).collect();
+        let (itr, ite): (Vec<_>, Vec<_>) = corpus.sessions.iter().partition(|s| train_ids.contains(&s.id));
+        let idb = Db::build(&corpus.labels, &itr, &p.mine);
         let mined = mine::mine(&idb, &p.mine);
         let mut closed: Vec<_> = mined.closed().collect();
         closed.sort_by(|a, b| b.sessions.len().cmp(&a.sessions.len()).then(a.pattern.cmp(&b.pattern)));
@@ -837,6 +847,30 @@ pub fn matches_convention(r: &Reflex, kind: &str, command: &str, avoided: &[Stri
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn calibration_is_bounded_by_independent_groups_not_attempt_count() {
+        let session = |id: String, task: Option<String>| EventSession {
+            id,
+            task,
+            day: 0,
+            outcome: None,
+            events: vec![],
+            flows: vec![],
+            same_art: vec![],
+            exposed: vec![],
+        };
+        let mut sessions: Vec<_> = (0..405).map(|i| session(format!("a-{i}"), Some(format!("task-{i}")))).collect();
+        let expected = calibration_sample(&sessions);
+        assert_eq!(expected.len(), 400);
+        sessions.extend((0..405).map(|i| session(format!("retry-{i}"), Some(format!("task-{i}")))));
+        sessions.push(session("unknown".into(), None));
+        sessions.reverse();
+        assert_eq!(calibration_sample(&sessions), expected);
+        assert_eq!(calibration_sample(&[session("unknown".into(), None)]), vec![]);
+        let one_task = vec![session("a".into(), Some("same".into())), session("b".into(), Some("same".into()))];
+        assert_eq!(fit_calibration(&one_task, &Params::default()).pairs, 0);
+    }
 
     #[test]
     fn globs() {

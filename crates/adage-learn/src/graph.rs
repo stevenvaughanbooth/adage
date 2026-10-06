@@ -320,6 +320,7 @@ mod tests {
             outcome: None,
             harness: "claude-code".into(),
             prompts: vec![PromptObs { text: prompt.into(), at_step: 0 }],
+            identity: Default::default(),
             ending: Default::default(),
         }
     }

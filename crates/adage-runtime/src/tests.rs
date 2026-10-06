@@ -859,25 +859,11 @@ fn dead_ends_and_linked_files_state_their_exit_condition() {
     assert!(text.ends_with("one at a time. Ignore this if the user is asking for something else."), "{text}");
 }
 
-/// The fields a rebuild restores, as JSON (Obligation has no PartialEq).
+/// The fields a rebuild restores, as JSON. Pending follow judgements remain deliberately omitted.
 fn restored(st: &SessionState) -> serde_json::Value {
-    // `edited` and `fresh` describe the latest edit for an E2 action at that event; no later
-    // decision reads them, so a rebuild need not restore them.
-    let obligations: Vec<serde_json::Value> = st
-        .obligations
-        .iter()
-        .map(|o| {
-            let mut v = json!(o);
-            if let Some(m) = v.as_object_mut() {
-                m.remove("edited");
-                m.remove("fresh");
-            }
-            v
-        })
-        .collect();
     json!({
         "arm": st.arm, "repo": st.repo, "prompts": st.prompts, "batches": st.batches,
-        "emitted": st.emitted, "obligations": obligations, "history": st.history,
+        "emitted": st.emitted, "obligations": st.obligations, "history": st.history,
         "first_edit_at_batch": st.first_edit_at_batch, "stop_requests": st.stop_requests, "ctx": st.ctx,
     })
 }
@@ -941,9 +927,7 @@ fn state_rebuilt_from_the_spool_matches_the_live_state_after_every_event() {
 }
 
 #[test]
-fn a_rebuilt_state_never_requests_a_stop_the_live_one_would_not() {
-    // A re-arming edit after the obligation was met is invisible in the spool (it keeps call keys,
-    // not paths): the rebuilt obligation stays met, so it can miss a request, never add one.
+fn rearming_edits_survive_spool_rebuild_and_repeated_restarts() {
     let (dir, index, table) = fixture();
     let ctx = Ctx {
         checkout: &crate::checkout::Disk,
@@ -961,21 +945,115 @@ fn a_rebuilt_state_never_requests_a_stop_the_live_one_would_not() {
         output: String::new(),
         failed: false,
     };
-    let mut st = SessionState { arm: Some(Arm::Treated), ..Default::default() };
+    let mut st = SessionState { arm: Some(Arm::Treated), repo: Some("acme".into()), ..Default::default() };
+    let mut restarted = st.clone();
     let mut records = Vec::new();
     for ev in [
         Event::Batch { calls: vec![edit("schema/a.json")] },
         Event::Batch { calls: vec![bash("make gen", "ok")] },
+        Event::Batch { calls: vec![edit("README.md")] },
         Event::Batch { calls: vec![edit("schema/b.json")] },
+        Event::Stop { stop_hook_active: false },
+        Event::Batch { calls: vec![bash("make gen", "ok"), edit("schema/c.json")] },
     ] {
         let d = decide(&ctx, &mut st, &ev);
+        let resumed = decide(&ctx, &mut restarted, &ev);
+        assert_eq!(d.continue_reason, resumed.continue_reason);
         records.push(json!({ "kind": ev.name(), "arm": st.arm, "decision": d }));
+        restarted = rebuild::rebuild(&records, &index, "acme", table).unwrap();
+        assert_eq!(restored(&restarted), restored(&st), "{ev:?}");
     }
     let mut rebuilt = rebuild::rebuild(&records, &index, "acme", table).unwrap();
-    assert!(!st.obligations[0].met && rebuilt.obligations[0].met);
+    assert!(!st.obligations[0].met && !rebuilt.obligations[0].met);
     let live = decide(&ctx, &mut st, &Event::Stop { stop_hook_active: false });
-    let quiet = decide(&ctx, &mut rebuilt, &Event::Stop { stop_hook_active: false });
-    assert!(live.continue_reason.is_some() && quiet.continue_reason.is_none());
+    let replay = decide(&ctx, &mut rebuilt, &Event::Stop { stop_hook_active: false });
+    assert!(live.continue_reason.is_some());
+    assert_eq!(live.continue_reason, replay.continue_reason);
+    assert_eq!(restored(&rebuilt), restored(&st));
+}
+
+#[test]
+fn legacy_edits_invalidate_old_attempts_without_inventing_verification() {
+    let (dir, index, table) = fixture();
+    let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table,
+        embed: None,
+        params: Default::default(),
+        policy: Default::default(),
+    };
+    let edit = || Call {
+        tool: "Edit".into(),
+        input: json!({"file_path":dir.path().join("schema/a.json")}),
+        output: String::new(),
+        failed: false,
+    };
+    let mut st = SessionState { arm: Some(Arm::Treated), ..Default::default() };
+    let mut records = Vec::new();
+    for ev in [
+        Event::Batch { calls: vec![edit()] },
+        Event::Batch { calls: vec![bash("make gen", "ok")] },
+        Event::Batch { calls: vec![edit()] },
+    ] {
+        let mut d = json!(decide(&ctx, &mut st, &ev));
+        d.as_object_mut().unwrap().remove("obligation_state");
+        records.push(json!({"kind":ev.name(),"arm":"treated","decision":d}));
+    }
+    let attempted = rebuild::rebuild(&records[..2], &index, "acme", table).unwrap();
+    assert!(attempted.obligations[0].met, "legacy command-observed semantics are preserved");
+    for snapshot in
+        [serde_json::Value::Null, json!({"obligations":[]}), json!({"obligations":"broken","stop_requests":0})]
+    {
+        records.last_mut().unwrap()["decision"]["obligation_state"] = snapshot;
+        let mut rebuilt = rebuild::rebuild(&records, &index, "acme", table).unwrap();
+        assert!(!rebuilt.obligations[0].met, "a later incomplete edit invalidates the earlier attempt");
+        assert!(rebuilt.obligations[0].edited.is_empty() && !rebuilt.obligations[0].fresh);
+        assert!(decide(&ctx, &mut rebuilt, &Event::Stop { stop_hook_active: false }).continue_reason.is_some());
+    }
+}
+
+#[test]
+fn failed_observed_commands_remain_advisory_attempts_after_rebuild() {
+    let (dir, index, table) = fixture();
+    let ctx = Ctx {
+        checkout: &crate::checkout::Disk,
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table,
+        embed: None,
+        params: Default::default(),
+        policy: Default::default(),
+    };
+    let edit = Call {
+        tool: "Edit".into(),
+        input: json!({"file_path":dir.path().join("schema/a.json")}),
+        output: String::new(),
+        failed: false,
+    };
+    let failed = Call { failed: true, ..bash("make gen", "generation failed") };
+    let mut st = SessionState { arm: Some(Arm::Treated), repo: Some("acme".into()), ..Default::default() };
+    let mut records = Vec::new();
+    for ev in [
+        Event::Batch { calls: vec![edit] },
+        Event::Failure { call: failed.clone() },
+        Event::Batch { calls: vec![failed] },
+    ] {
+        let d = decide(&ctx, &mut st, &ev);
+        if matches!(ev, Event::Failure { .. }) {
+            assert!(!st.obligations[0].met, "a failure notification does not mark an obligation met");
+        }
+        records.push(json!({"kind":ev.name(),"arm":"treated","decision":d}));
+        let rebuilt = rebuild::rebuild(&records, &index, "acme", table).unwrap();
+        assert_eq!(restored(&rebuilt), restored(&st));
+    }
+    assert!(st.obligations[0].met, "the batch observed the requested command, not a successful outcome");
+    let decision = decide(&ctx, &mut st, &Event::Stop { stop_hook_active: false });
+    assert!(decision.continue_reason.is_none(), "E0 retains its bounded advisory semantics");
+    assert!(decision.directives.is_empty(), "an attempted command produces no passing-verification claim");
 }
 
 // ---------------------------------------------------------------- one command-pattern algebra

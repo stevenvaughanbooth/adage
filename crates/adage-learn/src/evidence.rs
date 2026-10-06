@@ -10,11 +10,76 @@ use adage_tracks::params::LearnParams;
 use adage_tracks::*;
 use std::collections::{BTreeMap, BTreeSet};
 
+/// One canonical record per repository/session id. Comparing complete records prevents an
+/// arbitrary input order from choosing among conflicting outcomes, identities or tool histories.
+pub(crate) fn unique_sessions(mut sessions: Vec<Session>) -> anyhow::Result<(Vec<Session>, usize)> {
+    sessions.sort_by(|a, b| (&a.repo, &a.id).cmp(&(&b.repo, &b.id)));
+    let mut unique: Vec<Session> = Vec::with_capacity(sessions.len());
+    let mut duplicates = 0;
+    for s in sessions {
+        if let Some(previous) = unique.last().filter(|p| p.repo == s.repo && p.id == s.id) {
+            anyhow::ensure!(
+                previous == &s,
+                "conflicting canonical records for repository {:?}, session {:?}",
+                s.repo,
+                s.id
+            );
+            duplicates += 1;
+        } else {
+            unique.push(s);
+        }
+    }
+    Ok((unique, duplicates))
+}
+
+#[cfg(test)]
+mod identity_tests {
+    use super::*;
+
+    fn session(id: &str, repo: &str) -> Session {
+        serde_json::from_value(serde_json::json!({
+            "id":id, "root":"/fixture", "repo":repo, "model":null, "day":"2026-10-01",
+            "prompt":"fix billing", "steps":[], "steered":false, "directed":[], "outcome":null,
+            "harness":"codex"
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn duplicate_deliveries_do_not_multiply_evidence_and_repositories_stay_separate() {
+        let (a, b) = (session("same-id", "a"), session("same-id", "b"));
+        let (sessions, duplicates) = unique_sessions(vec![b.clone(), a.clone(), a.clone()]).unwrap();
+        assert_eq!(sessions, vec![a.clone(), b.clone()]);
+        assert_eq!(duplicates, 1);
+        assert_eq!(unique_sessions(vec![a.clone(), b, a]).unwrap(), (sessions, duplicates));
+    }
+
+    #[test]
+    fn conflicting_history_outcome_identity_or_harness_is_not_chosen_by_input_order() {
+        let a = session("same-id", "repo");
+        for field in ["prompt", "outcome", "identity", "harness"] {
+            let mut b = a.clone();
+            match field {
+                "prompt" => b.prompt = "different work".into(),
+                "outcome" => b.outcome = Some(false),
+                "identity" => b.identity.task_id = Some("TASK-7".into()),
+                _ => b.harness = "claude-code".into(),
+            }
+            for pair in [vec![a.clone(), b.clone()], vec![b, a.clone()]] {
+                let err = unique_sessions(pair).unwrap_err().to_string();
+                assert!(err.contains("conflicting canonical records"), "{field}: {err}");
+            }
+        }
+    }
+}
+
 /// Learning thresholds. Build one from [`LearnParams`] with
 /// [`LearnConfig::from_params`]; [`LearnConfig::default`] and [`LearnConfig::demo`] are the two
 /// presets (`adage_tracks::params`).
 #[derive(Debug, Clone)]
 pub struct LearnConfig {
+    /// Reuse pure mining checkpoints when the store supports them. Never skips current judgment.
+    pub computation_cache: bool,
     /// Minimum distinct supporting sessions for any route.
     pub min_support: u32,
     /// Wilson lower bound required for fire.
@@ -105,6 +170,7 @@ impl LearnConfig {
     /// The configuration for a set of learn parameters.
     pub fn from_params(p: &LearnParams) -> Self {
         LearnConfig {
+            computation_cache: true,
             min_support: p.min_support,
             fire_lower_bound: p.fire_lower_bound,
             prime_rate: p.prime_rate,

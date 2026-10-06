@@ -4,7 +4,9 @@
 pub mod bridge;
 pub mod cards;
 pub mod cases;
+mod checkpoint;
 pub mod claims;
+pub mod corpus;
 pub mod diff;
 pub mod dormant;
 pub mod effects;
@@ -21,6 +23,7 @@ pub mod value;
 
 pub use adage_ingest::{cache, codex, opencode, scope};
 
+pub use adage_trace::EvidenceIdentity;
 use adage_tracks::proposals::Proposals;
 use adage_tracks::{io, Gauge, Manifest, Route, Scope, Track, TrackInfo, Trigger};
 use anyhow::Result;
@@ -34,10 +37,15 @@ use std::path::{Path, PathBuf};
 pub struct Report {
     pub sessions_read: usize,
     pub sessions_used: usize,
+    /// Identical copies removed before any evidence is counted. Conflicting ids are an error.
+    pub sessions_duplicates: usize,
     /// Sessions that received a directive: what it named is not their evidence.
     pub sessions_steered: usize,
     pub repos: BTreeMap<String, RepoReport>,
     pub index_generation: String,
+    /// Committed canonical snapshot actually read by `corpus::learn`, when applicable.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub corpus_generation: Option<String>,
     pub thresholds: String,
     /// The embedding model prompt-intent prototypes were learned with; `None` if none is
     /// installed (there are then none).
@@ -72,10 +80,13 @@ pub struct TrackReport {
     pub routes: Vec<String>,
 }
 
+#[derive(Default)]
 pub struct Inputs {
     pub transcripts: Vec<PathBuf>,
     /// Session id → task succeeded, where known.
     pub outcomes: BTreeMap<String, bool>,
+    /// Session id → declared evidence identity, applied after parsing/cache lookup.
+    pub identities: BTreeMap<String, adage_trace::EvidenceIdentity>,
     pub repo_override: Option<String>,
     /// The models directory (`$ADAGE_HOME/models`). No usable model there: no prompt-intent
     /// prototypes.
@@ -180,6 +191,9 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
     let mut batch = adage_ingest::batch::read(&inputs.transcripts, &opts);
     for s in &mut batch.sessions {
         s.outcome = inputs.outcomes.get(&s.id).copied();
+        if let Some(identity) = inputs.identities.get(&s.id) {
+            s.identity = identity.clone();
+        }
     }
     learn_sessions(batch, inputs.only_repo.as_deref(), inputs.models.as_deref(), tracks_root, index_path, cfg)
 }
@@ -208,6 +222,8 @@ pub fn learn_sessions_into(
     cfg: &LearnConfig,
 ) -> Result<Report> {
     let adage_ingest::batch::Batch { sessions, read, steered, cache_hits: hits, cache_misses: misses } = batch;
+    let sessions = sessions.into_iter().filter(|s| only.is_none_or(|repo| s.repo == repo)).collect();
+    let (sessions, duplicates) = evidence::unique_sessions(sessions)?;
     if let (Some(repo), true, Some(ic)) = (only, sessions.is_empty(), cfg.instincts.as_ref()) {
         // No session to learn from yet: bind the repository's instincts from its files (day 0),
         // when its root is known and they are not bound against it as its files are now.
@@ -240,8 +256,9 @@ pub fn learn_sessions_into(
         store.install_base_packs();
     }
     let weights = follow_weights(&sessions);
-    let (mut report, planned) = plan(sessions, models, store, cfg)?;
+    let (mut report, planned) = plan_repository(sessions, None, models, store, cfg, true)?;
     report.sessions_read = read;
+    report.sessions_duplicates = duplicates;
     report.sessions_steered = steered;
     (report.cache_hits, report.cache_misses) = (hits, misses);
     for p in &planned {
@@ -290,9 +307,23 @@ pub fn plan(
     store: &dyn store::Store,
     cfg: &LearnConfig,
 ) -> Result<(Report, Vec<Planned>)> {
+    plan_repository(sessions, None, models, store, cfg, false)
+}
+
+/// A committed corpus may explicitly remove every session of a repository. Include that empty
+/// repository in reconciliation so unsupported learned routes are not left live by a no-op.
+pub(crate) fn plan_repository(
+    sessions: Vec<Session>,
+    include_repo: Option<&str>,
+    models: Option<&Path>,
+    store: &dyn store::Store,
+    cfg: &LearnConfig,
+    cache: bool,
+) -> Result<(Report, Vec<Planned>)> {
     let mut report = Report { thresholds: thresholds(cfg), ..Default::default() };
-    let mut sessions: Vec<Session> = sessions.into_iter().filter(|s| !s.steps.is_empty()).collect();
-    sessions.sort_by(|a, b| a.id.cmp(&b.id));
+    let (sessions, duplicates) = evidence::unique_sessions(sessions)?;
+    report.sessions_duplicates = duplicates;
+    let sessions: Vec<Session> = sessions.into_iter().filter(|s| !s.steps.is_empty()).collect();
     report.sessions_used = sessions.len();
     // The installed model, else the one bundled in the binary (`model::resolve`, as the hook
     // chooses). Fail open: without one, intent families are skipped and everything else is
@@ -303,6 +334,9 @@ pub fn plan(
     let mut by_repo: BTreeMap<String, Vec<&Session>> = BTreeMap::new();
     for s in &sessions {
         by_repo.entry(s.repo.clone()).or_default().push(s);
+    }
+    if let Some(repo) = include_repo {
+        by_repo.entry(repo.into()).or_default();
     }
 
     let today = adage_tracks::review::today();
@@ -329,7 +363,11 @@ pub fn plan(
         cfg.existing.extend(prev.iter().flat_map(|t| t.routes.iter().map(|r| r.id.clone())));
         let cfg = &cfg;
         let priors: Vec<Route> = store.track(&instincts::track_name(repo)).map(|t| t.routes).unwrap_or_default();
-        let run = engine::run(ss, cfg, &priors, model.as_ref());
+        let run = if cache && cfg.computation_cache {
+            engine::run_cached(ss, cfg, &priors, model.as_ref(), store)
+        } else {
+            engine::run(ss, cfg, &priors, model.as_ref())
+        };
         rr.intent_families = run.report.intent_families;
         rr.engine = run.report.clone();
         let mut routes: Vec<Route> = run.routes.iter().map(|j| j.route.clone()).collect();
@@ -338,7 +376,7 @@ pub fn plan(
         value::assess(&mut routes, ss, repo, &judged, &cfg.priors, cfg.uplift_bar());
         // Without the embedding model, prompt intents cannot be learned or judged: the ones
         // already learned are kept as they are.
-        if model.is_none() {
+        if model.is_none() && !ss.is_empty() {
             for r in prev.iter().flat_map(|t| t.routes.iter()) {
                 if matches!(r.trigger, Trigger::Intent { .. }) && !routes.iter().any(|x| x.id == r.id) {
                     routes.push(r.clone());

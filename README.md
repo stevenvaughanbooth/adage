@@ -72,6 +72,11 @@ adage init                                   # inside your repository
 For a first session, expected results and the separate approval path for CPU actions, follow
 [Your first useful reflex](docs/first-reflex.md).
 
+To verify learning without a model account, run the
+[end-to-end learning proof](docs/learning-infrastructure.md#run-the-end-to-end-proof): native
+traces become a reviewed reflex that repairs a fresh task through the real hook. For prospective
+token-savings measurement, use the [frozen study workflow](docs/learning-experiments.md).
+
 **Not published yet:** the Claude Code plugin marketplace, Homebrew and npm. Until the first
 release is out, none of these exist; once they do:
 
