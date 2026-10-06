@@ -21,12 +21,12 @@ collects in §4.
 
 ```sh
 git fetch origin claude/mods-poc-m98u3o && git checkout claude/mods-poc-m98u3o
-rustup show                      # the toolchain pinned by rust-toolchain.toml
+rustup show                      # current stable: the repository pins no toolchain, and CI builds with stable
 claude --version                 # 2.1.288 or later; the mod API is the one in plugin/claude-code/types/index.d.ts
 node --version                   # 22 or later (the plugin scripts and tests)
 python3 --version                # 3.9 or later (the demo runner has no third-party dependencies)
-cargo build --release --locked -p adage-cli -p adage-exec
-plugin/build.sh                  # stages both binaries with checksums into plugin/claude-code/dist/<triple>/
+plugin/build.sh                  # builds adage and adage-exec (release, --locked) and stages both, with
+                                 # dist/SHA256SUMS, into plugin/claude-code/dist/<host triple>/
 export ADAGE_EVAL_ROOT=/tmp/adage-eval   # scratch root used by every section below
 mkdir -p $ADAGE_EVAL_ROOT
 ```
@@ -66,7 +66,17 @@ claude plugin test plugin/claude-code
 cargo xtask test python demo
 ```
 
-Expected: everything green. One known exception: `cargo test -p adage-eval --test g4`
+Expected: everything green. On the build machine the workspace run was 124 test suites and 1,284
+tests at `e4609ad`, and `claude plugin test plugin/claude-code` ran 339 tests; a count that
+differs on your machine names the suites to look at, it is not itself a failure.
+
+Two things these checks hold that a reviewer may not expect. The binary's answers to the mod are
+pinned by one JSON file per answer shape, `crates/adage-hook/tests/wire/*.json`
+(`impl/wire.md`); `node scripts/check-plugin.mjs` fails while their mirror in the plugin,
+`plugin/claude-code/hooks/fixtures/wire.ts`, differs from them (`--wire` rewrites it), so a change
+on either side fails a test on both. And the CLI suites that wait on `adage watch --follow` set
+`ADAGE_TEST_FOLLOW_POLL_MS` (a debug build polls that often instead of every 250 ms; a release
+build never reads it), so the follower's live pace is checked only in §2.2. One known exception: `cargo test -p adage-eval --test g4`
 `contexts_fire_in_replay_and_the_fast_path_stays_exact_on_newkinds` fails on `origin/main` too
 (a renderer trailing-space mismatch in the weekly suite); it is not this branch's.
 
@@ -204,7 +214,7 @@ cargo build --release -p adage-cli --examples
 B=$ADAGE_EVAL_ROOT/base/target/release
 target/release/examples/hook_latency $B/adage,target/release/adage - 500        # paired, both builds alternate
 target/release/examples/hook_latency $B/adage-exec,target/release/adage-exec - 500
-target/release/examples/learn_bench 300 2 5                                     # the learner (unchanged by this branch)
+target/release/examples/learn_bench target/release/adage 300 2                  # the learner (unchanged by this branch)
 cargo build --release -p adage-learn --examples && target/release/examples/candidates_bench 300 2 3
 ```
 
@@ -229,7 +239,11 @@ cargo test --release -p adage-cli --test zero_config_plugin release_plugin_start
 Each item is a probe with a yes/no answer and a number where stated. Use the sandbox with its
 learned reflexes, the plugin, `--debug --debug-file`, and `adage watch --follow --json` in a
 second terminal. The grant: `adage review delegate acme-billing/<track> <reflex> --predict`
-(a person's terminal, or the dialog of §2.4).
+(a person's terminal, or the dialog of §2.4); `adage-exec status --repo <sandbox>` lists it, and
+`adage-exec revoke --repo <sandbox> --track <track> --route <reflex> --mode predict` withdraws it
+alone. `adage delegate predict off` stops every predict grant on the machine at once (the grants
+are kept) and `adage delegate predict on` resumes them: one probe of §4.1 runs with it off and
+expects nothing predicted in the treated arm.
 
 ### 4.1 `turn.step` (C1, C4; Q2 Layer 2, Q9)
 
@@ -326,8 +340,8 @@ second terminal. The grant: `adage review delegate acme-billing/<track> <reflex>
 
 ## 5. The headless comparison (L10, T-E1, the design's own question)
 
-Five arms, interleaved per task and repeat, on the acme-billing sandbox. `SESSION_CAP_USD` 0.50
-per session.
+Five arms, interleaved per task and repeat, on the acme-billing sandbox. The demo runner sets no
+spend cap per session (`DEMO_MAX_TURNS` bounds a session's turns); watch the spend as it runs.
 
 ```sh
 export DEMO_ROOT=$ADAGE_EVAL_ROOT/demo          # the trained and learned home from §2.2
@@ -356,18 +370,28 @@ against `adage`: no difference in any outcome metric (the identity check, live).
 
 ## 6. The development gate (L11, T-E2) and the registered run (L12, T-E3)
 
-Only after §5 passes. The harness is `evals/reflex-proof/harness/dev_v9.py` with the `MOD` arm
-and its five realized controls; the human step (the predict grant) is shown in `dry-run` first.
+Only after §5 passes. The harness is `evals/reflex-proof/harness/dev_v9.py` with the MOD design
+(`--design dev-v9-mod`: arms A0, A4 and MOD in 16 paired blocks, MOD with its five realized
+controls). `freeze` refuses until the protocol revision naming `dev-v9-mod` is registered, and the
+study directory must sit inside its native-confinement cohort. Every command but `live` spends
+nothing; `dry-run` shows the order, the person's step (the predict grants) first.
 
 ```sh
 cd evals/reflex-proof/harness
-python3 dev_v9.py dry-run $ADAGE_EVAL_ROOT/dev --design v9 --plugin ../../../plugin/claude-code --predict-route <track>/<reflex>
-python3 dev_v9.py freeze  $ADAGE_EVAL_ROOT/dev ...        # then prepare, approval-script, verify-grants, run: as the harness prints
+python3 dev_v9.py freeze <cohort>/dev-mod --design dev-v9-mod --plugin ../../../plugin/claude-code \
+    --predict-route <track>/<reflex> --cohort <cohort> --cumulative <learned run> \
+    --controls <validated task controls> --binaries <release binaries>
+python3 dev_v9.py prepare <cohort>/dev-mod && python3 dev_v9.py dry-run <cohort>/dev-mod
+python3 dev_v9.py approval-script <cohort>/dev-mod   # a person reviews the script it writes and runs it
+python3 dev_v9.py verify-grants <cohort>/dev-mod
+python3 dev_v9.py live <cohort>/dev-mod              # the paid step
+python3 dev_v9.py collect <cohort>/dev-mod && python3 dev_v9.py report <cohort>/dev-mod
 ```
 
 Rule: `D1_requests_max_ratio_to_A0`, `D1_blocks_fewer_min`, `D4_sessions_with_repeat_attempts_max`
 from the frozen manifest's `dev_thresholds_v9`; the findings file states each as pass or fail. Two
-runs on fresh seeds must pass before E3 (`STUDY_CEILING_USD` 8.50 each). E3 is the registered
+runs on fresh seeds must pass before E3 (`STUDY_CEILING_USD` 8.50 each, `SESSION_CAP_USD` 0.50 a
+session). E3 is the registered
 protocol in `docs/launch-gate-protocol.md` (arms A0 / NOEXEC / BEST = MOD, 20 blocks); its outcome
 goes in `evals/reflex-proof/LAUNCH-STATUS.md` with the scripts that produced every number. Model
 requests are never presented as GPU savings.

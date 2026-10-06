@@ -140,7 +140,7 @@ pub fn run(harness: &str, event: &str, opts: Options) -> Result<Option<String>, 
     }
     if std::env::var("ADAGE_DISABLE").is_ok_and(|v| v == "1") {
         // The press runs before the kill switches, so a person can still be asked to turn Adage
-        // back on, and the agent's first act still closes its window (architecture §3.12).
+        // back on, and the agent's first act still closes its window (mod architecture §3.12).
         let paths = Paths::from_env();
         return Ok(payload.ok().and_then(|buf| press::before_kill_switch(harness, event, &buf, &paths, started)));
     }
@@ -181,7 +181,7 @@ pub fn handle(
     let root = found.unwrap_or_else(|| cwd.clone());
     let off = root.join(".adage/disabled").exists();
     // Before the kill switch and the fast path: the press answers a `Press`, and the agent's first
-    // act closes its window whatever else happens to the event (architecture §3.12).
+    // act closes its window whatever else happens to the event (mod architecture §3.12).
     if let press::Gate::Answer(out) = press::gate(harness, event, &p, &envelope, paths, off, started) {
         return Ok(out);
     }

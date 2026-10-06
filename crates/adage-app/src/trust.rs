@@ -1,5 +1,5 @@
 //! Team packs committed in a repository (docs/zero-config.md, persona (c): `.adage/packs/<name>/`),
-//! and whether one can be trusted with a press from the session (architecture §3.12): the same
+//! and whether one can be trusted with a press from the session (mod architecture §3.12): the same
 //! trust as the repository's `CLAUDE.md`, so only for a pack committed there, unchanged since.
 
 use serde::Serialize;

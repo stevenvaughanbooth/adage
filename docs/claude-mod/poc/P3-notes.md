@@ -20,7 +20,7 @@ and `claude plugin test`; nothing here ran in a live interactive session.
 | `.claude-plugin/plugin.json` | `"types": "./types/index.d.ts"` |
 | `hooks/*.test.ts` | 41 tests per plugin: bridge, predict, reflex, step (stubbed ask and stream), register (engine end to end) |
 | `plugin/claude-code/VALIDATE.txt` | `claude plugin validate --strict plugin/claude-code`, the repository path stripped |
-| `scripts/check-plugin.mjs` | hooks.json keys limited to `hooks` and `modules`; one module, `./…` inside hooks/, must exist; `plugin.json` `types` must exist; the `ALLOWED_VERBS` literal must hold only architecture §2's verbs; the CI install of the CLI must be pinned to an exact version; both plugins ship the same set of hooks/*.ts files. Every earlier rule kept |
+| `scripts/check-plugin.mjs` | hooks.json keys limited to `hooks` and `modules`; one module, `./…` inside hooks/, must exist; `plugin.json` `types` must exist; the `ALLOWED_VERBS` literal must hold only mod architecture §2's verbs; the CI install of the CLI must be pinned to an exact version; both plugins ship the same set of hooks/*.ts files. Every earlier rule kept |
 | `.github/workflows/ci.yml` (plugin job) | `npm install -g @anthropic-ai/claude-code@2.1.288`; a `VALIDATE.txt` diff step; `claude plugin test` for both plugins |
 
 ### Behaviour
@@ -89,7 +89,7 @@ restructuring, not by suppressing anything.
 
 ## Open issues
 
-1. **`adage-exec version` does not exist yet** (architecture §2, plan A6). The exec copy probes
+1. **`adage-exec version` does not exist yet** (mod architecture §2, plan A6). The exec copy probes
    `[adage-exec, 'version']`; until A6 lands, that copy is always inert (and its correctness, one
    active copy with both plugins installed, depends on that verb printing a line).
 2. **Order of `session.start` and the SessionStart command hook is unknown.** If the mod's

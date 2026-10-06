@@ -1,9 +1,10 @@
-//! Harness adapters (Architecture §4.11). The decision core (`respond`) knows only the normalised
-//! [`Event`] (prompt submitted, tool batch completed, tool failed, stop requested, session start and
-//! end, a step boundary) and the normalised [`Output`]. Each harness contributes two pure functions
-//! — translate a native payload into an event, and render an output as the native response — plus
-//! its limits. What each native event name is comes from one table, adage-trace's
-//! [`Harness::events`]; [`Adapter::classify`] turns it into the path `handle` takes ([`HookEvent`]).
+//! Harness adapters (Architecture §4.11). The decision core (`respond.rs`, and `pretool/` for a
+//! call about to run) knows only the normalised [`Event`] (prompt submitted, tool batch completed,
+//! tool failed, stop requested, session start and end, a step boundary) and the normalised
+//! [`Output`]. Each harness contributes two pure functions — translate a native payload into an
+//! event, and render an output as the native response — plus its limits. What each native event
+//! name is comes from one table, adage-trace's [`Harness::events`]; [`Adapter::classify`] turns it
+//! into the path `handle` takes ([`HookEvent`]).
 //!
 //! What each harness documents, and what is inferred, is recorded in `docs/harnesses.md`.
 

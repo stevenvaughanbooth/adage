@@ -132,7 +132,7 @@ and change nothing else.
    review|why|off|on|pause|map`). The brief's status, doctor and savings are there as `/adage
    status` (the card), `/adage doctor` (the Health tab, from `doctor --json` with its actions) and
    `/adage savings` (the card's own activity and savings rows, worded by the binary).
-2. **Two verbs beyond architecture §2's list**: `condition` (ux-design §6.3 and T-B3-06 need the
+2. **Two verbs beyond mod architecture §2's list**: `condition` (ux-design §6.3 and T-B3-06 need the
    Health tab to run it; T-X-04's set did not name it) and `delegate status --json` (the lapsed
    grants of §4.5 and the band's second line; nothing else reports them). Both read-only or
    allowed from a session; `check-plugin.mjs` holds the list.

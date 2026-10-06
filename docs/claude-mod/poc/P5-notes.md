@@ -1,6 +1,6 @@
 # P5 · The dead end that never runs (POC of chunk C6), observe mode, and the skill check
 
-A learned `avoid` pair is substituted before the dead end runs (architecture §3.4, plan C6): when
+A learned `avoid` pair is substituted before the dead end runs (mod architecture §3.4, plan C6): when
 a Bash call is a dead end this repository's sessions learned, the mod runs the learned command in
 its place, only when Claude Code's permission engine decides both commands alike. The failure, the
 model's reading of it and the recovery request do not happen. Two gaps in the P3 mod are closed

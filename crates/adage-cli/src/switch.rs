@@ -69,7 +69,7 @@ pub fn on() -> Result<()> {
     };
     let m = marker(&root);
     if m.exists() {
-        // A person's decision: at a terminal, or with a press from the session (architecture
+        // A person's decision: at a terminal, or with a press from the session (mod architecture
         // §3.12, `/adage on`).
         crate::review::person_or_press(adage_app::person::PersonVerb::On, &adage_store::Paths::from_env())?;
         std::fs::remove_file(&m).with_context(|| format!("removing {}", m.display()))?;

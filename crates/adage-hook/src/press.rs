@@ -1,4 +1,4 @@
-//! The press (architecture §3.12): a token that lets a person's decision, made from the Claude
+//! The press (mod architecture §3.12): a token that lets a person's decision, made from the Claude
 //! Code mod (an answer in the engine's own dialog, or a focused button), count as a person's, and
 //! that a model steered into running a person-only verb cannot obtain.
 //!

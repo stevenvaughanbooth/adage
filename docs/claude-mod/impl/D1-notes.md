@@ -1,7 +1,7 @@
 # D1 · Candidates in the learner and the index (and D3's learning half)
 
 What was built for chunk D1 of [the implementation plan](../implementation-plan.md) (§2.1.1,
-§2.3.2–3, §3 D1; architecture §3.10 "Noticed"), the exact index shape and read API D2 builds on,
+§2.3.2–3, §3 D1; mod architecture §3.10 "Noticed"), the exact index shape and read API D2 builds on,
 departures, and the commands run. The last section is D3's learning half (§2.1.2, T-D3-04/05/08),
 added to this chunk by the coordinator.
 

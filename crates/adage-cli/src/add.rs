@@ -224,7 +224,7 @@ pub fn add(args: &[String], paths: &Paths) -> Result<()> {
     };
     let cwd_root = at.and_then(|d| d.canonicalize().ok()).and_then(|d| find_root(&d));
     // A team's pack committed in this repository can be trusted with a press from the session
-    // (architecture §3.12: the same trust as the repository's CLAUDE.md), when it is older than
+    // (mod architecture §3.12: the same trust as the repository's CLAUDE.md), when it is older than
     // that session (review M8: committed before it opened, unchanged on disk since); anything
     // else, a pack from outside the repository, one changed since its commit, or one written or
     // committed during the press's session, needs a terminal.

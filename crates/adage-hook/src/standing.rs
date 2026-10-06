@@ -24,7 +24,7 @@ use std::path::Path;
 /// and nothing is kept. `compact` (what compaction is asked to keep) is said in both arms. Nothing
 /// at all outside a repository with reflexes.
 ///
-/// **A subagent** (the mod's `agent.spawn`, architecture §3.8): a payload carrying `agent:
+/// **A subagent** (the mod's `agent.spawn`, mod architecture §3.8): a payload carrying `agent:
 /// {type?, description?, prompt?}` is also answered `subagent`, the text the subagent is told
 /// before it starts ([`adage_runtime::delegation`]: the prompt reflexes its own prompt binds, then
 /// the standing reflexes), empty in the control arm. Read-only like the rest: what a subagent is

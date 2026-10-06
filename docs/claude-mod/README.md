@@ -24,6 +24,6 @@ Two things to hold in mind reading any of them: the Rust binary stays the only d
 learner and the sandbox, and the command hooks stay as the floor on every host; and the person-
 only decisions (review, delegation, trust) are made by a person's answer in the session, in the
 dialog Claude Code uses to ask a question, bound to the session by a single-use token the model
-cannot reach by being steered (architecture §3.12: a provenance record and a guard against
+cannot reach by being steered (mod architecture §3.12: a provenance record and a guard against
 steering, not a boundary against a same-user agent), or at a terminal, which stays an equal path. The goal that sets the bar is in ux-design §4.18: install the plugin and never run a
 command.

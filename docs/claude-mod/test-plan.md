@@ -78,7 +78,7 @@
 Every chunk's "Tests" line in the plan cites these ids; every id here belongs to one chunk or to
 the cross-cutting set.
 
-| Feature (architecture §) | Plan chunk | Cases |
+| Feature (mod architecture §) | Plan chunk | Cases |
 | --- | --- | --- |
 | Dedup per `tool_use_id`; `dry_run` / `verdict` (§2 rule 2, §3.3) | A1 | T-A1-01 … 07 |
 | Latency on record (§3.9) | A2 | T-A2-01 … 04 |
@@ -564,7 +564,7 @@ the Then itself.
 - **T-X-04 · L7 + L8 · authority.** An argv recorder around the stubbed `$.process.run` runs every
   hook and command over every fixture; outside `press()` the set of argv heads is exactly `{hook,
   version, watch, graph, doctor, status, ledger note, off, map}`; inside `press()` it is exactly
-  the person-only verbs of architecture §3.12, each with `{ press, session }` on stdin and nothing
+  the person-only verbs of mod architecture §3.12, each with `{ press, session }` on stdin and nothing
   on argv; `install` and `config` appear nowhere; `check-plugin.mjs` fails if the allow-list literal in `bridge.ts` changes
   without the test; the mod returns no `decision` from `tool.check`, no `deny` from `tool.call`,
   never calls `$.prompt.submit` or `env.set`; CI's fresh `validate --strict` equals
@@ -579,7 +579,7 @@ the Then itself.
   site's tree, the band, the pane's Live tab and `/adage why`'s output are byte-identical.
 - **T-X-07 · L7 · both surfaces.** Every `ui.render` hook mounts on `terminal` and `desktop`
   from the same fixture state without a refused tree (the kit reports validation).
-- **T-X-08 · L9 · hosts.** The host table (architecture §7) is filled by observation: hooks run
+- **T-X-08 · L9 · hosts.** The host table (mod architecture §7) is filled by observation: hooks run
   and nothing draws in `-p`, the VS Code panel and a cloud session; `$.process.run` on the
   Desktop app; the module on Windows; the pinned 2.1.221 loads a `hooks.json` carrying `modules`
   and still runs all seven command hooks.

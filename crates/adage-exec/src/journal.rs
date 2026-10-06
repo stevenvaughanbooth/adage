@@ -418,7 +418,7 @@ mod tests {
         let first = finish(&staged, &f.commit("one"));
         assert!(matches!(first.outcome, Outcome::Applied { .. }), "{first:?}");
         let duplicate = finish(&f.staged(), &f.commit("one"));
-        assert!(duplicate.replayed);
+        assert!(duplicate.replayed, "{duplicate:?}");
         assert_eq!(duplicate.id, first.id);
         assert_eq!(list(&f.home).unwrap().len(), 1);
         let later = finish(&f.staged(), &f.commit("two"));

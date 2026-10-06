@@ -1,6 +1,6 @@
 # P1 · `TurnStep` in the binary (POC of chunk C1, with C7's chain and C8's `ending`)
 
-The binary half of the mod's `turn.step` (architecture §3.2, plan §2.2 items 2 and 4, chunk C1):
+The binary half of the mod's `turn.step` (mod architecture §3.2, plan §2.2 items 2 and 4, chunk C1):
 `adage hook claude TurnStep` decides "make this call in the agent's place now, or nothing", on
 the CPU, from what Adage already directed. Nothing is ever predicted by `adage hook` alone (it
 has no extension, so no `predict` grants); the grant itself is chunk C2 (adage-exec).
@@ -210,7 +210,7 @@ for the model): `batch_no_match` p50 2.64 ms / p95 3.49 ms; `turn_step_nothing_p
    has no extension; a prediction needs adage-exec's `predict_grants` (C2: `GrantMode::Predict`,
    `review delegate --predict`). The in-process test above covers the behaviour, not the timing.
 2. **adage-exec does not implement `predict_grants` yet** (C2), so neither shipped binary predicts.
-3. **`Capabilities.predict_step` and friends** (architecture §1b.3) are not added; the event is
+3. **`Capabilities.predict_step` and friends** (mod architecture §1b.3) are not added; the event is
    simply not translated by the Codex and OpenCode adapters.
 4. **Spool `duration_us`** (plan §2.2 item 9, chunk A2) is not in this POC.
 5. **Ingest does not set `by`** from transcript ids, and the learner does not exclude `by: adage`

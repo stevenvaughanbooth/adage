@@ -465,7 +465,7 @@ pub fn validate(t: &Track) -> Result<()> {
 /// At most this many bytes in a [`Step::Skill`]'s `args`.
 pub const SKILL_ARGS_MAX: usize = 160;
 
-/// A skill step (architecture §3.11): a safe name ([`safe_skill_name`]), plain arguments if any,
+/// A skill step (mod architecture §3.11): a safe name ([`safe_skill_name`]), plain arguments if any,
 /// no slots (nothing is bound into a skill's use), prime at most and never a dead end, observe
 /// (using a skill runs nothing by itself; what its text says is judged when it is run), and a
 /// stimulus a skill can follow: a prompt, an intent family, an edit or a learned context.

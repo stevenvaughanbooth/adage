@@ -1,4 +1,4 @@
-//! Candidates: patterns the learner has counted that are not reflexes (plan D1, architecture
+//! Candidates: patterns the learner has counted that are not reflexes (plan D1, mod architecture
 //! §3.10). Two kinds:
 //!
 //! - a **border** pattern: a sequence (a context trigger of two or more events, never a single

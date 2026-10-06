@@ -194,7 +194,7 @@ fn after_edit(ctx: &Ctx, routes: &[&IndexedRoute], st: &mut SessionState, out: &
             }
             continue;
         }
-        // A skill after an edit (architecture §3.11): said once, judged on
+        // A skill after an edit (mod architecture §3.11): said once, judged on
         // the agent using it; never an obligation.
         if let (Trigger::AfterEdit { paths }, Step::Skill { skill, .. }) = (&ir.route.trigger, &ir.route.step) {
             if hits(paths) && emit_ok(ctx, st, out, &ir.route.id) {

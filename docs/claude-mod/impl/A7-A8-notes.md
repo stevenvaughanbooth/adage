@@ -370,7 +370,7 @@ id first, which clears the mid-turn mark; it can start a background process that
 turn has ended; it can name the transcript path any start needs; and it can read a press from a
 file or build the event name from a variable, which the tripwire does not see. A Codex or OpenCode
 session's turn is not marked at all (only Claude Code's hooks run the gate). All of these forge
-hook payloads or the session's own state, which architecture §3.12 already says the press does
+hook payloads or the session's own state, which mod architecture §3.12 already says the press does
 not stand against ("a boundary against an agent that runs as the same user … which can … forge a
 hook payload"). The cost on the person's side: a session started while another one is mid-turn
 cannot press for its whole life (its answers wait, as when the window was missed).

@@ -80,7 +80,7 @@ pub struct Review {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub by: Option<String>,
     pub basis: Basis,
-    /// How a person made it: at a terminal, or with a press in the session (architecture §3.12).
+    /// How a person made it: at a terminal, or with a press in the session (mod architecture §3.12).
     /// Set by the binary, never by a flag; `None` for a decision Adage made itself and for every
     /// decision recorded before presses existed.
     #[serde(default, skip_serializing_if = "Option::is_none")]

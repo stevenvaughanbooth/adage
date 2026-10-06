@@ -217,7 +217,7 @@ and `refusals_say_what_each_command_changes` are unchanged and green.
    in `what_it_changes(cmd)`, which `require` shares.
 3. At the verb, `crate::review::person_or_press(PersonVerb::X, paths)?` (or `person_from` when the
    verb has read stdin itself).
-4. The design first: architecture §3.12's list, `A7-A8-notes.md`'s table, the expected list in
+4. The design first: mod architecture §3.12's list, `A7-A8-notes.md`'s table, the expected list in
    `the_press_sites_are_the_listed_commands`, the TS `press.ts` allow-list, and the press suite's
    listed sites all change together.
 

@@ -1,4 +1,4 @@
-//! The press (architecture §3.12; plan A7): a token the binary issues to the Claude Code mod in
+//! The press (mod architecture §3.12; plan A7): a token the binary issues to the Claude Code mod in
 //! the window before the agent's first act, and that a person-only verb accepts on stdin, at the
 //! listed sites only. End to end through the `adage` binary (and `adage-exec` where built), with
 //! an isolated `ADAGE_HOME`. Test-plan cases T-A7-01 … T-A7-09 and T-X-13's L2 part.

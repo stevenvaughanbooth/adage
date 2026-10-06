@@ -40,7 +40,7 @@ landed, then the hardening commit) so a reader knows where the code is and how i
 - **The binary decides; the mod bridges and draws.** No reflex, grant, arm, bound or threshold is
   evaluated in TypeScript. Where this plan says "the mod asks", it means one `$.process.run` of
   `<bin> hook claude <Event>` with the payload on stdin and JSON on stdout, exactly as a command
-  hook would (architecture §2). The argv the mod may run is an allow-list (B1).
+  hook would (mod architecture §2). The argv the mod may run is an allow-list (B1).
 - **Words.** Person-facing text follows `docs/lexicon.md` and `docs/design/style.md`; the model's
   text stays plain and factual (`<adage-reflex>` blocks, fixed templates in
   `crates/adage-runtime/src/render.rs`, `render::sanitise` on anything that came from a sandbox).
@@ -271,7 +271,7 @@ What the design needs, against what the code has. Lines are from the tree named 
    does (`lib.rs:673-684`); in the control arm the text is unchanged and `would_annotate` is
    spooled (`kind: "skill_prompt"`).
 8. **`Standing`.** A read-only Claude-only event, `<bin> hook claude Standing`, answered
-   `{ standing, environment }` (architecture §3.6): the repository's applicable procedure cards'
+   `{ standing, environment }` (mod architecture §3.6): the repository's applicable procedure cards'
    titles and the instincts' one-liners in `render.rs`'s fixed templates, ≤ 2,000 characters,
    deterministic for the session; the U11 environment sentence when bound. It sets
    `SessionState.has_standing` so the per-event delivery of the same text is suppressed. Empty in
@@ -550,7 +550,7 @@ workstream are ordered.
 #### A7 · The press token, and `require_person_or_press` at specific sites
 
 - **Delivers.** A person's decision made from the mod, recorded as a person's (`via: press`),
-  with a token the model cannot obtain by being steered (architecture §3.12). Not a boundary
+  with a token the model cannot obtain by being steered (mod architecture §3.12). Not a boundary
   against a same-user agent with a shell, and not claimed as one.
 - **Files.** `crates/adage-hook/src/lib.rs` (a `Press` event, Claude-only, dispatched **before**
   the kill switches at `:318` and `:355-357`; it issues under the window rule and records
@@ -645,7 +645,7 @@ Needs S9 Q1, Q2 (Layer 1), Q3 and Q6 to have passed. Every chunk here ships behi
 
 - **Files.** `plugin/claude-code/hooks/hooks.json` (`"modules": ["./register.ts"]`),
   `hooks/register.ts` (the probe: `[hookBin, 'version']`; `active`; every registration wrapped;
-  `ADAGE_MOD_OBSERVE`), `hooks/bridge.ts` (`ask()` per architecture §2 rule 1; `hookBinary($)` =
+  `ADAGE_MOD_OBSERVE`), `hooks/bridge.ts` (`ask()` per mod architecture §2 rule 1; `hookBinary($)` =
   `$DATA/bin/<adage|adage-exec>`, `cliBinary($)` = `$DATA/bin/adage`; the allow-list; `env: {
   CLAUDECODE: '1' }`), `types/index.d.ts` (`PluginState`: `session`, `fired`, `rewrites`,
   `rows`, `noticed`, `standing`, `environment`, `hookMs`, `feed`), `.claude-plugin/plugin.json`
@@ -821,7 +821,7 @@ Needs S9 Q1, Q2 (Layer 1), Q3 and Q6 to have passed. Every chunk here ships behi
   payloads; `keeps_permissions` call at `:668`), `adage-exec/src/hook.rs:751-830`
   (`covering_receipt` fills `fresh`, `result`,
   `covering`; `answered: 'receipt'` marks the obligation met and the receipt used); the mod's
-  `hooks/decide.ts` (`tool.call { tool: 'Bash' }` per architecture §3.3 and §3.4: dry run →
+  `hooks/decide.ts` (`tool.call { tool: 'Bash' }` per mod architecture §3.3 and §3.4: dry run →
   `$.tool.check` on the original → receipt only on `allow` → final ask → result; or two checks →
   `verdict.engine` → final ask → `next({ ...e, command })` with `$.ui.notice`), `hooks/draw/
   rows.tsx` (`ToolResult` receipt card only when answered; the dim line beside a real run).
@@ -836,7 +836,7 @@ Needs S9 Q1, Q2 (Layer 1), Q3 and Q6 to have passed. Every chunk here ships behi
 
 #### C4 · The mod's `turn.step` and the simulator
 
-- **Files.** `hooks/decide.ts` (`turn.step` generator per architecture §3.2: main loop only,
+- **Files.** `hooks/decide.ts` (`turn.step` generator per mod architecture §3.2: main loop only,
   `index > 0`, ask `TurnStep` with a 250 ms timeout, yield `tool`/`input`/`stop`, return the
   result; a `Skill` prediction yields the `Skill` tool with `{ skill, args? }` and checks
   `$.command.list()` lists the skill first; `routine` → `next({ ...e, model, effort })` only when
@@ -873,7 +873,7 @@ Needs S9 Q1, Q2 (Layer 1), Q3 and Q6 to have passed. Every chunk here ships behi
 
 #### C6 · The dead end that never runs
 
-- **Delivers.** A learned `avoid` pair substituted before the dead end runs (architecture §3.4).
+- **Delivers.** A learned `avoid` pair substituted before the dead end runs (mod architecture §3.4).
 - **Files.** `crates/adage-hook/src/lib.rs` (`pretool()`'s `dry_run` plan gains `substitute` when
   the call's canonical key meets an `avoid` route at `fire` whose `instead` is a fixed command;
   the `verdict.engine` phase records `Judgement::Substituted` or `would_substitute`), the runtime's
@@ -894,7 +894,7 @@ Needs S9 Q1, Q2 (Layer 1), Q3 and Q6 to have passed. Every chunk here ships behi
 #### C7 · Chains and multi-call steps
 
 - **Delivers.** A lookup-then-read chain and a `ReadBatch` predicted as one response of several
-  calls (architecture §3.2).
+  calls (mod architecture §3.2).
 - **Files.** `crates/adage-runtime/src/lib.rs` (`Pending` binds a `ReadBatch`'s files from the
   preceding call's result when the directive names them; `Prediction.calls: Vec<{tool, input}>`;
   the "never two in a row per route" bound counts yielded responses), `harness/claude.rs`
@@ -910,7 +910,7 @@ Needs S9 Q1, Q2 (Layer 1), Q3 and Q6 to have passed. Every chunk here ships behi
 #### C8 · The finish line at the last step
 
 - **Delivers.** An armed, unmet, granted obligation run as the agent's own call at the turn's
-  end, instead of the Stop gate's block and extra request (architecture §3.2, Q15).
+  end, instead of the Stop gate's block and extra request (mod architecture §3.2, Q15).
 - **Files.** the mod's `turn.step` (on an `end_turn` stop with the binary answering
   `obligation`, keep the text chunks, yield the obligation's `tool`/`input` and a `tool_use`
   stop), `crates/adage-runtime/src/lib.rs` (`TurnStep` with `ending: true` answers an obligation
@@ -926,7 +926,7 @@ Needs S9 Q1, Q2 (Layer 1), Q3 and Q6 to have passed. Every chunk here ships behi
 #### C9 · Attachment: the tool description, the subagent prompt, and the mod capabilities
 
 - **Delivers.** Conventions attached to the Bash tool's description and to a subagent's prompt
-  (architecture §1b.3, §3.6, §3.8); the mod's capabilities as fields on the canonical harness.
+  (mod architecture §1b.3, §3.6, §3.8); the mod's capabilities as fields on the canonical harness.
 - **Files.** `crates/adage-trace/src/harness.rs` (`Capabilities` gains `predict_step`,
   `answer_call`, `substitute_call`, `tool_description`, `cached_section`, `subagent_prompt`,
   `compaction`; `Harness::ClaudeCode` keeps today's four; the live adapter reports the mod's set
