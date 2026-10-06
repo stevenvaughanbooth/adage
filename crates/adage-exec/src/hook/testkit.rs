@@ -1,15 +1,15 @@
 //! The hook's test world: one repository with one learned context verification
 //! (`fixture/context/predict-check`: after `git status` and an edit to `src/*.rs`, run
 //! `sh tools/check.sh`), a home beside it, and the grants, receipts and hook events the tests in
-//! each module seed.
+//! each module seed. The repository, the home and the index are built with the workspace test kit
+//! (docs/claude-mod/impl/testkit.md).
 
 use adage_core::{CommandTable, Effect};
 use adage_hook::{Extension, PreCall, PreNote, StopCall, StopGate, Turn};
 use adage_runtime::{Arm, Call, Ctx, Directive, Event, SessionState};
 use adage_store::Paths;
-use adage_tracks::{
-    CtxItem, Evidence, ExecutionEvidence, Index, IndexedRoute, Route, RouteState, Step, Strength, Trigger,
-};
+use adage_tracks::testkit::{kinds, IndexBuilder, LearnedHome, TempWorld};
+use adage_tracks::{ExecutionEvidence, Index, Step, Strength};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::time::Instant;
@@ -25,56 +25,35 @@ use crate::{route, sandbox};
 pub(super) const CHECK: &str = "fixture/context/predict-check";
 
 pub(super) struct Fixture {
-    pub(super) _tmp: tempfile::TempDir,
+    pub(super) _tmp: TempWorld,
     pub(super) root: std::path::PathBuf,
+    /// The data directory, which seeds the fixture's session state.
+    pub(super) home: LearnedHome,
+    /// `home.paths`, by the name the tests use.
     pub(super) paths: Paths,
+    /// The fixture's index, held in memory (written only by [`with_obligation`]).
     pub(super) index: Index,
 }
 
 impl Fixture {
     pub(super) fn new() -> Self {
-        let tmp = tempfile::tempdir().unwrap();
+        let tmp = TempWorld::new(&[]);
         // Named for its repository key: a hook resolves a checkout without a remote by its name.
-        let root = tmp.path().canonicalize().unwrap().join("fixture");
-        std::fs::create_dir_all(root.join("src")).unwrap();
-        std::fs::create_dir_all(root.join(".git")).unwrap();
-        std::fs::create_dir_all(root.join("tools")).unwrap();
-        std::fs::write(root.join("tools/check.sh"), "#!/bin/sh\ntest -f src/feature.rs\n").unwrap();
-        std::fs::write(root.join("src/feature.rs"), "fixture\n").unwrap();
-        let paths = Paths::at(tmp.path().join("adage"));
-        let index = Index {
-            generation: "fixture".into(),
-            routes: vec![IndexedRoute {
-                repo: "fixture".into(),
-                track: "fixture/context".into(),
-                version: "0.1.0".into(),
-                exec: None,
-                route: Route {
-                    id: "predict-check".into(),
-                    summary: "verify after inspection and source edit".into(),
-                    trigger: Trigger::Context {
-                        items: vec![
-                            CtxItem::Act { keys: vec!["exec git status".into()] },
-                            CtxItem::Edit { glob: "src/*.rs".into() },
-                        ],
-                        within: 3,
-                    },
-                    step: Step::Run { command: "sh tools/check.sh".into() },
-                    slots: vec![],
-                    effect: Effect::Verify,
-                    strength: Strength::Fire,
-                    state: RouteState::Firm,
-                    exit: vec![],
-                    authored: false,
-                    evidence: Evidence {
-                        execution: Some(ExecutionEvidence { opportunities: 5, successful: 5, sessions: 5 }),
-                        ..Default::default()
-                    },
-                },
-            }],
-            ..Default::default()
-        };
-        Self { _tmp: tmp, root, paths, index }
+        let root = tmp.repo("fixture");
+        tmp.write("fixture/tools/check.sh", "#!/bin/sh\ntest -f src/feature.rs\n");
+        tmp.write("fixture/src/feature.rs", "fixture\n");
+        let home = tmp.home("adage");
+        let check = kinds::context(
+            "predict-check",
+            vec![kinds::act("exec git status"), kinds::edit("src/*.rs")],
+            3,
+            "sh tools/check.sh",
+        )
+        .summary("verify after inspection and source edit")
+        .with(|r| r.evidence.execution = Some(ExecutionEvidence { opportunities: 5, successful: 5, sessions: 5 }));
+        let index = IndexBuilder::new("fixture").route("fixture", "fixture/context", check).build();
+        let paths = home.paths.clone();
+        Self { _tmp: tmp, root, home, paths, index }
     }
 
     pub(super) fn turn<'a>(&'a self, ev: &'a Event) -> Turn<'a> {
@@ -129,7 +108,7 @@ impl Fixture {
             );
         };
         assert!(state.obligations.is_empty(), "prediction creates no edit obligation");
-        adage_store::state::update::<SessionState, _>(&self.paths.state("fixture-session"), |s| *s = state).unwrap();
+        self.home.seed::<SessionState>("fixture-session", |s| *s = state);
         (events[2].clone(), dirs)
     }
 
@@ -301,7 +280,7 @@ pub(super) fn stop_by(f: &Fixture, active: bool, deadline: Instant) -> Option<St
 }
 
 pub(super) fn treated(f: &Fixture, arm: Arm) {
-    adage_store::state::update::<SessionState, _>(&f.paths.state("fixture-session"), |s| s.arm = Some(arm)).unwrap();
+    f.home.seed::<SessionState>("fixture-session", |s| s.arm = Some(arm));
 }
 
 /// Whether this machine can stage a run (tests that need one return early without it).
@@ -313,29 +292,12 @@ pub(super) fn staging() -> bool {
 /// learned finish-line obligation beside the learned verification (after an edit to
 /// `registry/*.csv`, run `make gen`; no grant for it), and no learner.
 pub(super) fn with_obligation(f: &mut Fixture) {
-    f.index.routes.push(IndexedRoute {
-        repo: "fixture".into(),
-        track: "fixture/finish".into(),
-        version: "0.1.0".into(),
-        exec: None,
-        route: Route {
-            id: "regenerate-registry".into(),
-            summary: String::new(),
-            trigger: Trigger::AfterEdit { paths: "registry/*.csv".into() },
-            step: Step::Run { command: "make gen".into() },
-            slots: vec![],
-            effect: Effect::Regenerate,
-            strength: Strength::Fire,
-            state: RouteState::Firm,
-            exit: vec![],
-            authored: false,
-            evidence: Evidence { support: 5, opportunities: 5, days: 3, ..Default::default() },
-        },
-    });
-    f.index.write_atomic(&f.paths.index()).unwrap();
-    std::fs::write(f.paths.root.join("config.toml"), "[learn]\nauto = false\n").unwrap();
-    std::fs::create_dir_all(f.root.join("registry")).unwrap();
-    std::fs::write(f.root.join("registry/currencies.csv"), "EUR\n").unwrap();
+    let gen = kinds::finish_line("regenerate-registry", "registry/*.csv", "make gen").support(5, 5).days(3);
+    f.index = IndexBuilder::from(std::mem::take(&mut f.index))
+        .route("fixture", "fixture/finish", gen)
+        .write(&f.paths.index());
+    f.home = LearnedHome::at(&f.paths.root).without_auto_learn();
+    f._tmp.write("fixture/registry/currencies.csv", "EUR\n");
 }
 
 /// One hook event for the fixture's session, through the whole pipeline.

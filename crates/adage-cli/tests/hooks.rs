@@ -11,6 +11,7 @@
 
 use adage_core::spans::SpanKind;
 use adage_core::{CommandTable, Effect};
+use adage_tracks::testkit::{self, IndexBuilder, LearnedHome, TempWorld};
 use adage_tracks::*;
 use serde_json::{json, Value};
 use std::io::Write;
@@ -32,42 +33,29 @@ fn exec_parity() -> bool {
 }
 
 struct World {
-    _dir: tempfile::TempDir,
+    _world: TempWorld,
     root: PathBuf,
 }
 
 fn route(id: &str, trigger: Trigger, step: Step, slots: Vec<Slot>, effect: Effect, strength: Strength) -> Route {
-    Route {
-        id: id.into(),
-        summary: format!("route {id}"),
-        trigger,
-        step,
-        slots,
-        effect,
-        strength,
-        state: RouteState::Firm,
-        exit: vec![Exit::IntentChanges],
-        evidence: Evidence { support: 7, opportunities: 8, provenance: "desire-path".into(), ..Default::default() },
-        authored: false,
-    }
+    testkit::route(id, trigger, step)
+        .summary(&format!("route {id}"))
+        .slots(slots)
+        .effect(effect)
+        .strength(strength)
+        .until_intent_changes()
+        .support(7, 8)
+        .provenance("desire-path")
+        .build()
 }
 
 fn track() -> Track {
     let table = CommandTable::load();
     let lookup_key = adage_runtime::command_key("./scripts/wi-lookup W-1 --json", table);
     let pytest_key = adage_runtime::command_key("python3 -m pytest tests", table);
-    Track {
-        manifest: Manifest {
-            track: TrackInfo {
-                name: "acme/work".into(),
-                version: "0.3.0".into(),
-                description: String::new(),
-                provenance: "desire-path".into(),
-            },
-            scope: Scope { repo: "acme".into() },
-            gauge: Gauge::default(),
-        },
-        routes: vec![
+    testkit::track("acme/work", "acme")
+        .version("0.3.0")
+        .routes([
             route(
                 "lookup",
                 Trigger::Prompt { span: SpanKind::Ticket },
@@ -133,20 +121,17 @@ fn track() -> Track {
                 Effect::Verify,
                 Strength::Inhibit,
             ),
-        ],
-    }
+        ])
+        .build()
 }
 
 impl World {
     fn new() -> World {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().canonicalize().unwrap();
-        for d in ["home", "adage", "acme/.git", "acme/acme", "acme/schema", "plain"] {
-            std::fs::create_dir_all(root.join(d)).unwrap();
-        }
-        std::fs::write(root.join("acme/acme/billing.py"), "x = 1\n").unwrap();
-        Index::compile(&[track()]).write_atomic(&root.join("adage/index.json")).unwrap();
-        World { _dir: dir, root }
+        let world = TempWorld::new(&["home", "acme/.git", "acme/acme", "acme/schema", "plain"]);
+        world.write("acme/acme/billing.py", "x = 1\n");
+        world.home("adage").compile(&[track()]);
+        let root = world.root.clone();
+        World { _world: world, root }
     }
     fn p(&self, rel: &str) -> PathBuf {
         self.root.join(rel)
@@ -384,18 +369,7 @@ fn bind_u11(w: &World) -> String {
         Strength::Prime,
     );
     u11.evidence.origin = Some(origin);
-    let index = Index {
-        generation: "u11".into(),
-        routes: vec![index::IndexedRoute {
-            repo: key.clone(),
-            track: "acme/instincts".into(),
-            version: "0.1.0".into(),
-            exec: None,
-            route: u11,
-        }],
-        ..Default::default()
-    };
-    index.write_atomic(&paths.index()).unwrap();
+    IndexBuilder::new("u11").route(&key, "acme/instincts", u11).write(&paths.index());
     std::fs::create_dir_all(root.join(".venv/bin")).unwrap();
     std::fs::write(root.join(".venv/bin/python"), "").unwrap();
     std::fs::write(root.join(".venv/pyvenv.cfg"), "version = 3.12.4\n").unwrap();
@@ -407,12 +381,7 @@ fn bind_u11(w: &World) -> String {
 }
 
 fn pretool_records(w: &World, session: &str) -> Vec<Value> {
-    let paths = adage_store::Paths::at(w.p("adage"));
-    adage_store::spool::read_all::<Value>(&paths.spool(session))
-        .unwrap_or_default()
-        .into_iter()
-        .filter(|r| r["kind"] == "pretool")
-        .collect()
+    LearnedHome::at(w.p("adage")).spooled_kind(session, "pretool")
 }
 
 /// T-A1-02 and T-A1-04 through the binary: the same `PreToolUse` delivered twice is decided once

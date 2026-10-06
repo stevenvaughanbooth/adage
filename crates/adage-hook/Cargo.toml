@@ -27,3 +27,5 @@ getrandom = "0.2"
 [dev-dependencies]
 insta = "1"
 tempfile = "3"
+# The workspace test kit (docs/claude-mod/impl/testkit.md): the worlds the unit tests run in.
+adage-tracks = { path = "../adage-tracks", features = ["testkit"] }
