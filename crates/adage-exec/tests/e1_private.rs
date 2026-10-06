@@ -172,6 +172,7 @@ impl World {
             basis: Value::Null,
             auto: false,
             terms: None,
+            via: None,
         });
         store.save(&path).unwrap();
     }

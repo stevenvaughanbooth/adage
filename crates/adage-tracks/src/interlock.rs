@@ -94,6 +94,8 @@ pub fn avoids(inhibit: &Route, other: &Route) -> bool {
         (Step::Avoid { avoid, .. }, Step::Sequence { commands }) => {
             commands.iter().any(|c| pattern::directs_avoided(avoid, c))
         }
+        // A skill step directs no command of its own (its use is a harness tool, never a runner a
+        // dead end names), so no avoid contradicts it; reviewed for `Step::Skill`.
         _ => false,
     }
 }
@@ -201,6 +203,7 @@ fn command_of(r: &Route) -> String {
         Step::Advise { template, .. } => format!("advise {template}"),
         Step::Sequence { commands } => commands.join(" then "),
         Step::Card { .. } => format!("card {}", r.id),
+        Step::Skill { skill, .. } => crate::model::skill_key(skill),
     }
 }
 

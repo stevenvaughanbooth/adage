@@ -143,6 +143,8 @@ pub fn describe_step(step: &Step) -> String {
             card.sessions,
             card.passed
         ),
+        Step::Skill { skill, args: Some(a) } => format!("use the `{skill}` skill with `{a}`"),
+        Step::Skill { skill, args: None } => format!("use the `{skill}` skill"),
     }
 }
 
@@ -174,8 +176,8 @@ const USAGE: &str = "usage: adage share <track-or-pack> --out <dir> [--key <path
 pub fn share(args: &[String], paths: &Paths) -> Result<()> {
     require_person("share")?;
     let name = args.first().filter(|a| !a.starts_with("--")).context(USAGE)?;
-    let out = PathBuf::from(crate::flag(args, "--out").context(USAGE)?);
-    let key = crate::flag(args, "--key").map(PathBuf::from);
+    let out = PathBuf::from(crate::helpers::flag(args, "--out").context(USAGE)?);
+    let key = crate::helpers::flag(args, "--key").map(PathBuf::from);
     if let Some(k) = key.as_deref().filter(|k| !k.is_file()) {
         return Err(crate::hint(
             format!("no signing key at {}", k.display()),

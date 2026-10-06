@@ -17,6 +17,16 @@ pub struct Lock {
     _file: File,
 }
 
+/// Released explicitly, not only by closing the file. `flock` belongs to the open file, and a
+/// process another thread is starting holds a copy of every descriptor from its fork until its exec
+/// closes them: closing ours alone leaves the lock held for that window and turns the next holder
+/// away (an ordinary apply refused as busy). Unlocking releases it for every copy at once.
+impl Drop for Lock {
+    fn drop(&mut self) {
+        let _ = self._file.unlock();
+    }
+}
+
 fn open(path: &Path) -> io::Result<File> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
@@ -92,6 +102,20 @@ mod tests {
         assert!(!is_held(&p).unwrap());
         let b = exclusive_within(&p, Duration::from_millis(60)).unwrap();
         assert!(b.is_some());
+    }
+
+    /// A copy of the descriptor (what a process being started holds until its exec) does not keep
+    /// a dropped lock held.
+    #[test]
+    fn a_dropped_lock_is_free_while_a_copy_of_its_descriptor_lives() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("x.lock");
+        let a = try_exclusive(&p).unwrap().unwrap();
+        let copy = a._file.try_clone().unwrap();
+        drop(a);
+        assert!(!is_held(&p).unwrap());
+        assert!(try_exclusive(&p).unwrap().is_some());
+        drop(copy);
     }
 
     #[test]

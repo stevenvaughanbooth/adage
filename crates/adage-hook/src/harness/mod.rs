@@ -1,7 +1,10 @@
-//! Harness adapters (Architecture §4.11). The decision core in `hook.rs` knows only the normalised
-//! [`Event`] (prompt submitted, tool batch completed, tool failed, stop requested, session start and
-//! end) and the normalised [`Output`]. Each harness contributes two pure functions — translate a
-//! native payload into an event, and render an output as the native response — plus its limits.
+//! Harness adapters (Architecture §4.11). The decision core (`respond.rs`, and `pretool/` for a
+//! call about to run) knows only the normalised [`Event`] (prompt submitted, tool batch completed,
+//! tool failed, stop requested, session start and end, a step boundary) and the normalised
+//! [`Output`]. Each harness contributes two pure functions — translate a native payload into an
+//! event, and render an output as the native response — plus its limits. What each native event
+//! name is comes from one table, adage-trace's [`Harness::events`]; [`Adapter::classify`] turns it
+//! into the path `handle` takes ([`HookEvent`]).
 //!
 //! What each harness documents, and what is inferred, is recorded in `docs/harnesses.md`.
 
@@ -9,8 +12,8 @@ pub mod claude;
 pub mod codex;
 pub mod opencode;
 
-use adage_runtime::Call;
-pub use adage_trace::Harness;
+use adage_runtime::{By, Call, Prediction};
+pub use adage_trace::{Capabilities, EventKind, Harness};
 
 /// The hook timeout, in seconds, of the events an E2 action runs at (the edit and Stop events)
 /// when the registration runs `adage-exec`: an action's wall limit (20 s) stays well under it.
@@ -50,6 +53,35 @@ pub enum Output {
     /// (`notice`). Harnesses that cannot rewrite a call render nothing (the post-hoc directive
     /// still follows the failure).
     Rewrite { input: Value, context: String, notice: String },
+    /// At a step boundary (`TurnStep`): the calls Adage makes in the model's place (the Claude
+    /// Code mod's `turn.step`). Harnesses without the event render nothing.
+    Predict(Prediction),
+    /// At a step boundary: the model is about to be asked to do what a delivered directive already
+    /// says, so the step may go to the person's routine model (the mod's `routine_model`).
+    /// Harnesses without the event render nothing.
+    Routine,
+}
+
+/// What `handle` does with one invocation: one path each, matched exhaustively there. The native
+/// name's [`EventKind`] comes from the event table ([`Harness::events`]); an event the runtime
+/// decides is translated by the adapter ([`Adapter::translate`]) and carried as that [`Event`].
+#[derive(Debug, Clone)]
+pub enum HookEvent {
+    /// The mod asks for a press token: answered by the press before anything else
+    /// (`press::gate`), so it never reaches the dispatch.
+    Press,
+    /// The mod asks about a skill's text (`skill::prompt`).
+    SkillPrompt,
+    /// A shell call is about to run: the command hook, or the mod's dry run or verdict.
+    PreToolUse,
+    /// The mod asks for the standing text.
+    Standing,
+    /// A session starts.
+    SessionStart,
+    /// An event the runtime decides (`decide`), as the adapter translated it.
+    Decide(Event),
+    /// A name this harness does not send, or a payload its translation refuses: nothing to do.
+    Ignored,
 }
 
 /// Who is calling: the session and working directory every native payload must carry.
@@ -65,6 +97,11 @@ pub trait Adapter: Sync {
     fn name(&self) -> &'static str {
         self.harness().hook_name()
     }
+    /// The `harness` a spool record names, or `None` for a record that names none (read as Claude
+    /// Code's, as every record was before there were other harnesses).
+    fn recorded_name(&self) -> Option<&'static str> {
+        Some(self.name())
+    }
     /// Session and cwd from the native payload. `None` → do nothing.
     fn envelope(&self, p: &Value) -> Option<Envelope> {
         Some(Envelope {
@@ -72,8 +109,39 @@ pub trait Adapter: Sync {
             cwd: PathBuf::from(p.get("cwd")?.as_str()?),
         })
     }
+    /// What the harness can do for this payload ([`Capabilities`]): its command hooks' set
+    /// ([`Harness::capabilities`]), unless its adapter knows a richer caller sent it (Claude Code's
+    /// mod, [`claude::Claude`]). Behaviour past the adapter reads this, never which plugin asked.
+    fn capabilities(&self, _event: &str, _p: &Value) -> Capabilities {
+        self.harness().capabilities()
+    }
     /// Native event name and payload → normalised event. `None` → do nothing.
     fn translate(&self, event: &str, p: &Value, cwd: &str) -> Option<Event>;
+    /// What `handle` does with this native event and payload ([`HookEvent`]): the event table
+    /// names it, and an event the runtime decides is translated.
+    fn classify(&self, event: &str, p: &Value, cwd: &str) -> HookEvent {
+        match self.harness().event_kind(event) {
+            None => HookEvent::Ignored,
+            Some(EventKind::Press) => HookEvent::Press,
+            Some(EventKind::SkillPrompt) => HookEvent::SkillPrompt,
+            Some(EventKind::PreToolUse) => HookEvent::PreToolUse,
+            Some(EventKind::Standing) => HookEvent::Standing,
+            Some(
+                EventKind::SessionStart
+                | EventKind::Prompt
+                | EventKind::ToolBatch
+                | EventKind::ToolUse
+                | EventKind::Failure
+                | EventKind::Stop
+                | EventKind::SessionEnd
+                | EventKind::TurnStep,
+            ) => match self.translate(event, p, cwd) {
+                Some(Event::SessionStart) => HookEvent::SessionStart,
+                Some(ev) => HookEvent::Decide(ev),
+                None => HookEvent::Ignored,
+            },
+        }
+    }
     /// Stable native occurrence identity, when the harness supplies one. Never derive this
     /// from tool input/output contents: a later legitimate call can have identical contents.
     fn event_identity(&self, _event: &str, _p: &Value) -> Option<String> {
@@ -88,7 +156,7 @@ pub trait Adapter: Sync {
     /// Does this native event end an agent turn or a session? Live learning is triggered there
     /// (`crate::autolearn`), whatever the decision.
     fn is_learn_point(&self, event: &str) -> bool {
-        matches!(event, "Stop" | "SessionEnd")
+        matches!(self.harness().event_kind(event), Some(EventKind::Stop | EventKind::SessionEnd))
     }
 }
 
@@ -139,10 +207,13 @@ pub fn calls(pairs: Vec<(String, Value)>, cwd: &str, output: &str, failed: bool)
                     input["file_path"] = Value::String(adage_core::shell::resolve_path(cwd, p));
                 }
             }
-            Call { tool, input, output: output.to_string(), failed }
+            Call { tool, input, output: output.to_string(), failed, by: By::Agent, tool_use_id: None, agent: None }
         })
         .collect()
 }
+
+#[cfg(test)]
+mod dispatch_tests;
 
 #[cfg(test)]
 mod own_text_tests {
@@ -200,5 +271,21 @@ mod identity_tests {
         assert!(a.event_identity("PostToolBatch", &batch(&[])).is_none());
         assert!(adapter("codex").unwrap().event_identity("PostToolUse", &json!({"tool_use_id": "one"})).is_some());
         assert!(adapter("codex").unwrap().event_identity("PostToolUse", &json!({"id": "invented"})).is_none());
+    }
+
+    /// T-A1-01: a Bash call about to run has an identity of its own (one decision per call, the
+    /// mod's and the command hook's alike); without a usable `tool_use_id` it has none.
+    #[test]
+    fn a_pretool_call_is_identified_by_its_tool_use_id() {
+        let a = adapter("claude").unwrap();
+        let one = a.event_identity("PreToolUse", &json!({"tool_use_id": "t1"}));
+        assert!(one.is_some());
+        assert_eq!(one, a.event_identity("PreToolUse", &json!({"tool_use_id": "t1", "dry_run": true})));
+        assert_ne!(one, a.event_identity("PostToolUse", &json!({"tool_use_id": "t1"})), "another event");
+        assert_ne!(one, a.event_identity("PreToolUse", &json!({"tool_use_id": "t2"})));
+        assert!(a.event_identity("PreToolUse", &json!({})).is_none());
+        assert!(a.event_identity("PreToolUse", &json!({"tool_use_id": ""})).is_none());
+        assert!(a.event_identity("PreToolUse", &json!({"tool_use_id": "x".repeat(257)})).is_none());
+        assert!(a.event_identity("PreToolUse", &json!({"tool_use_id": "x".repeat(256)})).is_some());
     }
 }

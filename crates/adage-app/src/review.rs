@@ -291,7 +291,12 @@ pub fn queue<'a>(
         store
             .approvals
             .iter()
-            .filter(|a| a.route == label && a.key.repo == ir.repo && a.key.level == adage_exec::Level::E2)
+            .filter(|a| {
+                a.route == label
+                    && a.key.repo == ir.repo
+                    && a.key.level == adage_exec::Level::E2
+                    && a.key.mode.is_execute()
+            })
             .any(|a| {
                 adage_exec::route::plan(
                     ir,
@@ -649,7 +654,7 @@ pub struct IndexSummary {
 /// the index. One writer of the tracks and index at a time: this takes the tracks lock, since an
 /// automatic learner may be running.
 pub fn decide(
-    _person: &Person,
+    person: &Person,
     verb: Verb,
     spec: &str,
     route_id: &str,
@@ -657,14 +662,14 @@ pub fn decide(
     paths: &Paths,
 ) -> Result<Outcome> {
     let _tracks = adage_store::lock::exclusive(&paths.tracks_lock())?;
-    apply(verb, spec, route_id, by, None, paths)
+    apply(verb, spec, route_id, by, person.via(), None, paths)
 }
 
 /// [`decide`], waiting at most `patience` for the tracks lock: for a front end that must not
 /// freeze while a learn run holds it (`adage ui`). A decision that cannot get the lock in time is
 /// refused, with nothing written, and can be made again in a moment.
 pub fn decide_within(
-    _person: &Person,
+    person: &Person,
     verb: Verb,
     spec: &str,
     route_id: &str,
@@ -675,12 +680,12 @@ pub fn decide_within(
     let Some(_tracks) = adage_store::lock::exclusive_within(&paths.tracks_lock(), patience)? else {
         anyhow::bail!("a learn run is writing the reflexes now; nothing was recorded, so try again in a moment");
     };
-    apply(verb, spec, route_id, by, None, paths)
+    apply(verb, spec, route_id, by, person.via(), None, paths)
 }
 
 /// Confirm exactly what a front end showed, rechecking the revision under the writer lock.
 pub fn decide_reviewed_within(
-    _person: &Person,
+    person: &Person,
     verb: Verb,
     spec: &str,
     route_id: &str,
@@ -691,7 +696,7 @@ pub fn decide_reviewed_within(
     let Some(_tracks) = adage_store::lock::exclusive_within(&paths.tracks_lock(), patience)? else {
         bail!("Conditioning is updating reflexes now; nothing was recorded. Reload and review again in a moment");
     };
-    apply(verb, spec, route_id, None, Some(expected_revision), paths)
+    apply(verb, spec, route_id, None, person.via(), Some(expected_revision), paths)
 }
 
 fn apply(
@@ -699,6 +704,7 @@ fn apply(
     spec: &str,
     route_id: &str,
     by: Option<String>,
+    via: crate::person::Via,
     expected_revision: Option<&str>,
     paths: &Paths,
 ) -> Result<Outcome> {
@@ -865,7 +871,7 @@ fn apply(
         basis.followed = 0;
         basis.ignored = 0;
     }
-    reviews.routes.insert(route_id.to_string(), Review { decision, on: review::today(), by, basis });
+    reviews.routes.insert(route_id.to_string(), Review { decision, on: review::today(), by, basis, via: Some(via) });
     io::validate(&track).context("the reviewed track fails validation; nothing was written")?;
     io::write(&inst.dir, &track)?;
     review::save(&inst.dir, &reviews)?;

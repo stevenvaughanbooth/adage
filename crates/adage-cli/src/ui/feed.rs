@@ -1,14 +1,15 @@
 //! Hook activity as feed items: one per spool record (one hook call), with what Adage did.
 //!
-//! A record is `{ts, event, kind, arm, repo, generation, decision, harness?}` (`hook.rs`);
-//! records written by older versions may lack `kind`, `repo` or `harness`, which are then
-//! inferred or left blank. A PreToolUse record (`kind: "pretool"`) has no decision: it says
+//! A record is `{ts, event, kind, arm, repo, generation, decision, harness?}` (adage-hook's
+//! `record.rs`, `docs/spool.md`); records written by older versions may lack `kind`, `repo` or
+//! `harness`, which are then inferred or left blank. A PreToolUse record (`kind: "pretool"`) has no decision: it says
 //! what Adage did to the command instead (`pretool: {rewrite|advise, interpreter}`).
 //!
 //! Older spellings are read too: arm `holdout` (now `control`), directive `aspect` (now
 //! `strength`), judgements `derailed` and `followed_failed` (now `ignored` and `misfired`).
 
 use super::theme::parse_strength;
+use adage_trace::{EventKind, Harness};
 use adage_tracks::Strength;
 use serde_json::Value;
 
@@ -48,6 +49,32 @@ pub enum Act {
         interpreter: String,
         withheld: bool,
     },
+    /// A candidate this event's context completed (plan D2): a sequence learning counted in
+    /// `support` earlier sessions where a reflex needs `s_min`, or a nascent reflex waiting for
+    /// `review`. Recorded and shown alike in both arms; never said to the agent.
+    Noticed {
+        candidate: String,
+        support: u32,
+        s_min: u32,
+        review: bool,
+    },
+    /// A call answered by a receipt (the Claude Code mod, plan C3): the command did not run, and
+    /// Adage's own earlier run of `command` was its result. The receipt card's data.
+    Answered {
+        operation: String,
+        command: String,
+        summary: String,
+        tests: Vec<String>,
+        more: u64,
+        ran_at: String,
+        ago: String,
+    },
+    /// An approved action was interrupted, and Adage pauses actions in this worktree until a
+    /// person inspects it and acknowledges `operation` (ux-design §9.9). `None` when the journal
+    /// itself could not be read.
+    Recovery {
+        operation: Option<String>,
+    },
     /// A judgement of a kind this version does not know: `(kind, reflex)`, shown as it is.
     Other(String, String),
 }
@@ -71,6 +98,9 @@ pub struct FeedItem {
     /// Each directive delivered (or withheld), exactly as the agent saw (or would have seen) it:
     /// `(reflex, text)`.
     pub texts: Vec<(String, String)>,
+    /// The harness's ids for the calls this record is about, where its payload carried them: the
+    /// one call of a `pretool` record, or a tool batch's calls in order.
+    pub tool_use_ids: Vec<String>,
 }
 
 impl FeedItem {
@@ -95,7 +125,12 @@ impl FeedItem {
             | Act::Unaided(r)
             | Act::NotReached(r)
             | Act::Other(_, r) => Some(r.as_str()),
-            Act::StopRequest | Act::StopWithheld | Act::Pretool { .. } => None,
+            Act::Noticed { candidate, .. } => Some(candidate.as_str()),
+            Act::StopRequest
+            | Act::StopWithheld
+            | Act::Pretool { .. }
+            | Act::Answered { .. }
+            | Act::Recovery { .. } => None,
         })
     }
 
@@ -115,6 +150,10 @@ impl FeedItem {
                 Act::Pretool { kind, interpreter, .. } => {
                     s.push_str(&format!(" {kind} {interpreter}"));
                 }
+                Act::Answered { command, .. } => {
+                    s.push_str(&format!(" receipt {command}"));
+                }
+                Act::Recovery { .. } => s.push_str(" recovery"),
                 _ => {}
             }
         }
@@ -135,25 +174,45 @@ pub fn harness_name(h: &str) -> &str {
     adage_trace::Harness::parse(h).map_or(h, |h| h.hook_name())
 }
 
-/// The normalised event name (`adage_runtime::Event::name`) as shown.
-fn event_label(kind: Option<&str>, native: &str) -> String {
-    let k = kind.unwrap_or(match native {
-        "UserPromptSubmit" | "chat.message" => "prompt",
-        "PostToolBatch" | "PostToolUse" | "tool.execute.after" => "batch",
-        "PostToolUseFailure" => "failure",
-        "Stop" | "session.idle" => "stop",
-        "SessionStart" | "session.created" => "session_start",
-        "PreToolUse" | "tool.execute.before" => "pretool",
-        "SessionEnd" => "session_end",
-        other => other,
-    });
-    match k {
-        "batch" => "tools",
-        "session_start" => "start",
-        "session_end" => "end",
-        other => other,
+/// How a row names an event. Exhaustive, so a new [`EventKind`] does not compile until it has a
+/// label; which native names mean it is the one event table's ([`Harness::events`]).
+const fn kind_label(kind: EventKind) -> &'static str {
+    match kind {
+        EventKind::SessionStart => "start",
+        EventKind::Prompt => "prompt",
+        EventKind::ToolBatch | EventKind::ToolUse => "tools",
+        EventKind::Failure => "failure",
+        EventKind::Stop => "stop",
+        EventKind::SessionEnd => "end",
+        EventKind::TurnStep => "step",
+        // The asks the hook answers itself. Their records carry a kind no event decides
+        // (`pretool`, `skill_prompt`, `press_issued`: adage-hook's `RecordKind`), which a row
+        // shows as written; these name the ask for a record that has no kind.
+        EventKind::PreToolUse => "pretool",
+        EventKind::Press => "press",
+        EventKind::Standing => "standing",
+        EventKind::SkillPrompt => "skill_prompt",
     }
-    .to_string()
+}
+
+/// Every event in the table, with its native name, whichever harness sends it.
+fn table() -> impl Iterator<Item = (&'static str, EventKind)> {
+    Harness::ALL.into_iter().flat_map(|h| h.events().iter().copied())
+}
+
+/// The event a record is about, as a row shows it. A record's `kind` is the runtime event's name
+/// for a decided event (`adage_runtime::Event::name`, [`EventKind::decided`]); a record written
+/// before records carried one is read by what its native name means in the table. A kind no event
+/// decides (`pretool`, `stop_gate`) or a name the table lacks shows as written.
+fn event_label(kind: Option<&str>, native: &str) -> String {
+    let event = match kind {
+        Some(k) => table().map(|(_, e)| e).find(|e| e.decided() == Some(k)),
+        None => table().find(|(name, _)| *name == native).map(|(_, e)| e),
+    };
+    match event {
+        Some(e) => kind_label(e).to_string(),
+        None => kind.unwrap_or(native).to_string(),
+    }
 }
 
 /// The one line of a directive's body that says what to do: the indented command of a run
@@ -248,6 +307,32 @@ pub fn from_record(session: &str, rec: &Value) -> FeedItem {
             withheld: control || rec["withheld"] == true,
         });
     }
+    // A call answered by a receipt (treated only: in control the answer is withheld, and the call
+    // ran).
+    if rec["answered"] == "receipt" && rec["decision"].is_object() {
+        let c = &rec["card"];
+        let text = |v: &Value| v.as_str().unwrap_or("").to_string();
+        acts.push(Act::Answered {
+            operation: text(&c["operation"]),
+            command: text(&rec["command"]),
+            summary: text(&c["summary"]),
+            tests: c["tests"].as_array().into_iter().flatten().filter_map(|t| t.as_str().map(String::from)).collect(),
+            more: c["more"].as_u64().unwrap_or(0),
+            ran_at: text(&c["ran_at"]),
+            ago: text(&c["ago"]),
+        });
+    }
+    if rec["recovery_required"] == true {
+        // The interrupted operation, when the journal named one (`exec` lists the event's actions).
+        let operation = rec["exec"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|x| x["outcome"] == "unknown")
+            .and_then(|x| x["operation_id"].as_str())
+            .map(String::from);
+        acts.push(Act::Recovery { operation });
+    }
     let event = event_label(rec["kind"].as_str(), rec["event"].as_str().unwrap_or("?"));
     for s in directives(d, "directives") {
         let detail = match (s.card, event.as_str()) {
@@ -281,6 +366,24 @@ pub fn from_record(session: &str, rec: &Value) -> FeedItem {
             (None, _) => continue,
         });
     }
+    // A step Adage made in the agent's place (`turn_step`), or would have (control, or past the
+    // session's cap).
+    if let Some(route) = d["predicted"]["route"].as_str() {
+        acts.push(Act::Other("chose".into(), route.to_string()));
+    } else if let Some(route) = d["would_predict"]["route"].as_str() {
+        acts.push(Act::Other("would choose".into(), route.to_string()));
+    }
+    // Candidates noticed (both arms alike).
+    for n in d["noticed"].as_array().into_iter().flatten() {
+        let Some(candidate) = n["candidate"].as_str() else { continue };
+        let count = |k: &str| n[k].as_u64().and_then(|x| u32::try_from(x).ok()).unwrap_or(0);
+        acts.push(Act::Noticed {
+            candidate: candidate.to_string(),
+            support: count("support"),
+            s_min: count("s_min"),
+            review: n["review"] == true,
+        });
+    }
     if d["continue_reason"].is_string() {
         acts.push(Act::StopRequest);
     } else if control && d["would_continue"].is_string() {
@@ -299,6 +402,15 @@ pub fn from_record(session: &str, rec: &Value) -> FeedItem {
         observed: d["observed"].as_array().map_or_else(|| rec["calls"].as_u64().unwrap_or(0) as usize, |a| a.len()),
         unrouted: rec["unrouted"] == true,
         texts,
+        tool_use_ids: match rec["tool_use_id"].as_str() {
+            Some(id) => vec![id.to_string()],
+            None => rec["tool_use_ids"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|x| x.as_str().map(String::from))
+                .collect(),
+        },
     }
 }
 
@@ -307,4 +419,26 @@ pub fn from_record(session: &str, rec: &Value) -> FeedItem {
 pub fn short_session(s: &str, n: usize) -> String {
     let chars: Vec<char> = s.chars().collect();
     chars[chars.len().saturating_sub(n)..].iter().collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{event_label, kind_label, table};
+
+    /// Every event in the one table has a label, and a record's `kind` and its native name agree
+    /// on it: a kind-less record reads as the same row as one that carries its decided kind.
+    #[test]
+    fn every_event_in_the_table_has_a_label() {
+        for (native, kind) in table() {
+            let label = kind_label(kind);
+            assert!(!label.is_empty(), "{native}");
+            assert_eq!(event_label(None, native), label, "{native}");
+            if let Some(decided) = kind.decided() {
+                assert_eq!(event_label(Some(decided), native), label, "{native} as {decided}");
+            }
+        }
+        assert_eq!(event_label(Some("pretool"), "PreToolUse"), "pretool");
+        assert_eq!(event_label(Some("stop_gate"), "Stop"), "stop_gate");
+        assert_eq!(event_label(None, "Unheard"), "Unheard");
+    }
 }

@@ -406,6 +406,7 @@ mod tests {
                     outputs: vec!["gen/**".into()],
                     cache: vec![],
                 }),
+                mode: Default::default(),
             };
             let mut store = Store::default();
             store.approve(Approval {
@@ -416,6 +417,7 @@ mod tests {
                 basis: serde_json::Value::Null,
                 auto: false,
                 terms: None,
+                via: None,
             });
             store.save(&approvals::path(&home)).unwrap();
             Self { _dir: dir, home, req }
@@ -482,6 +484,7 @@ mod tests {
                 basis: serde_json::Value::Null,
                 auto: false,
                 terms: None,
+                via: None,
             });
             store.save(&approvals::path(&fixture.home)).unwrap();
             fixture
@@ -504,7 +507,7 @@ mod tests {
         let first = finish(&staged, &f.commit("one"));
         assert!(matches!(first.outcome, Outcome::Applied { .. }), "{first:?}");
         let duplicate = finish(&f.staged(), &f.commit("one"));
-        assert!(duplicate.replayed);
+        assert!(duplicate.replayed, "{duplicate:?}");
         assert_eq!(duplicate.id, first.id);
         assert_eq!(list(&f.home).unwrap().len(), 1);
         let later = finish(&f.staged(), &f.commit("two"));

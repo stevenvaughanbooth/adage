@@ -434,6 +434,8 @@ struct Builder<'a> {
     out: Vec<Compiled>,
     dropped: Vec<Dropped>,
     avoids: Vec<AvoidCore<'a>>,
+    /// Compiling candidates ([`compile_candidates`]): no strength bar, and every output flagged.
+    candidates: bool,
 }
 
 impl<'a> Builder<'a> {
@@ -454,6 +456,8 @@ impl<'a> Builder<'a> {
             execution_candidate: r.execution_candidate,
             advisory_eligible,
             execution_only: r.execution_only,
+            candidate: self.candidates,
+            sessions: r.sessions.clone(),
         });
     }
 
@@ -801,34 +805,7 @@ impl<'a> Builder<'a> {
             }
             Trigger::AfterCommand { command: most_common(v) }
         } else if (2..=CONTEXT_MAX_ITEMS).contains(&informative.len()) {
-            let mut items = Vec::new();
-            for v in &informative {
-                let item = match v.ty {
-                    NodeType::Act if v.ok == Some(false) => {
-                        let keys = member_keys(v);
-                        let sig = keys
-                            .iter()
-                            .filter_map(|k| self.input.corpus.acts.get(k))
-                            .flat_map(|a| a.signatures.iter())
-                            .max_by(|a, b| a.1.cmp(b.1).then_with(|| b.0.cmp(a.0)))
-                            .map(|(s, _)| s.clone());
-                        sig.map(|signature| CtxItem::Fail { keys, signature })
-                    }
-                    NodeType::Act => Some(CtxItem::Act { keys: member_keys(v) }),
-                    NodeType::Edit => match edit_globs(v, self.input).as_slice() {
-                        [g] => Some(CtxItem::Edit { glob: g.clone() }),
-                        _ => None,
-                    },
-                    _ => None,
-                };
-                match item {
-                    Some(i) => items.push(i),
-                    None => {
-                        self.drop(r, format!("{} cannot be a context item", v.label));
-                        return false;
-                    }
-                }
-            }
+            let Some(items) = self.context_items(r, &informative) else { return false };
             Trigger::Context { items, within: self.input.params.within }
         } else {
             self.drop(r, "no compilable context");
@@ -836,7 +813,11 @@ impl<'a> Builder<'a> {
         };
         // A context route keeps the reflex's own posterior (nothing counts it again in G3); an
         // after-command route is counted again by the caller.
-        let asp = if matches!(trigger, Trigger::Context { .. }) {
+        // A candidate is never delivered: it is compiled for its id, trigger and step, at the
+        // ceiling's provisional strength, whatever its posterior.
+        let asp = if self.candidates {
+            provisional(effect, false)
+        } else if matches!(trigger, Trigger::Context { .. }) {
             strength(r, effect, false, None, self.input)
         } else {
             provisional(effect, false)
@@ -855,6 +836,97 @@ impl<'a> Builder<'a> {
         let ev = evidence(r, &self.input.params.provenance);
         let rt = route(id, summary, trigger, step, vec![], effect, asp, Exit::IntentChanges, ev);
         self.push(shape, false, r, rt, None);
+        true
+    }
+
+    /// The context items of `informative` (a reflex's context, its prompt-kind items left out):
+    /// a failed command with its signature, a command, an edit of one glob; `None` (and why,
+    /// dropped) when one cannot be an item.
+    fn context_items(&mut self, r: &Reflex, informative: &[&ItemView]) -> Option<Vec<CtxItem>> {
+        let mut items = Vec::new();
+        for v in informative {
+            let item = match v.ty {
+                NodeType::Act if v.ok == Some(false) => {
+                    let keys = member_keys(v);
+                    let sig = keys
+                        .iter()
+                        .filter_map(|k| self.input.corpus.acts.get(k))
+                        .flat_map(|a| a.signatures.iter())
+                        .max_by(|a, b| a.1.cmp(b.1).then_with(|| b.0.cmp(a.0)))
+                        .map(|(s, _)| s.clone());
+                    sig.map(|signature| CtxItem::Fail { keys, signature })
+                }
+                NodeType::Act => Some(CtxItem::Act { keys: member_keys(v) }),
+                NodeType::Edit => match edit_globs(v, self.input).as_slice() {
+                    [g] => Some(CtxItem::Edit { glob: g.clone() }),
+                    _ => None,
+                },
+                _ => None,
+            };
+            match item {
+                Some(i) => items.push(i),
+                None => {
+                    self.drop(r, format!("{} cannot be a context item", v.label));
+                    return None;
+                }
+            }
+        }
+        Some(items)
+    }
+
+    /// A skill used at this point (plan §2.1.2): the continuation is one skill, the context an
+    /// edit (`after_edit`, counted again by the caller as a run is) or, for a reflex the cover
+    /// selected, two or three events (`context`, on its own posterior). Never above
+    /// [`SKILL_CEILING`]: the text a skill loads can carry commands of its own.
+    fn skill(&mut self, r: &Reflex) -> bool {
+        let name = r.continuation[0].label.clone();
+        if !safe_skill_name(&name) {
+            self.drop(r, format!("{name:?} is not a skill name a directive may carry"));
+            return false;
+        }
+        let step = Step::Skill { skill: name, args: None };
+        let informative: Vec<&ItemView> =
+            r.context.iter().filter(|v| !(v.ty == NodeType::Prompt && v.level == crate::events::Level::Kind)).collect();
+        let edit = r.context.last().filter(|v| v.ty == NodeType::Edit);
+        let (triggers, by_edit): (Vec<Trigger>, bool) = if let Some(e) = edit {
+            let globs = edit_globs(e, self.input);
+            if globs.is_empty() {
+                self.drop(r, "no precise glob for the edited files");
+                return false;
+            }
+            (globs.into_iter().map(|paths| Trigger::AfterEdit { paths }).collect(), true)
+        } else if r.gain > 0.0 && (2..=CONTEXT_MAX_ITEMS).contains(&informative.len()) {
+            let Some(items) = self.context_items(r, &informative) else { return false };
+            (vec![Trigger::Context { items, within: self.input.params.within }], false)
+        } else {
+            self.drop(r, "a skill is learned after an edit, or after a context of two or three events");
+            return false;
+        };
+        let asp = if by_edit {
+            provisional(Effect::Observe, true)
+        } else {
+            strength(r, Effect::Observe, false, None, self.input)
+        };
+        let Some(asp) = asp.map(|s| s.max(SKILL_CEILING)) else {
+            self.drop(r, "below the bar");
+            return false;
+        };
+        for trigger in triggers {
+            let id = ids::route_id("skill", &trigger, &step, &[]);
+            let ev = evidence(r, &self.input.params.provenance);
+            let rt = route(
+                id,
+                "A skill this repository's sessions use at this point",
+                trigger,
+                step.clone(),
+                vec![],
+                Effect::Observe,
+                asp,
+                Exit::IntentChanges,
+                ev,
+            );
+            self.push("skill", false, r, rt, None);
+        }
         true
     }
 
@@ -1092,8 +1164,13 @@ fn fix_parts(mut c: Compiled) -> Compiled {
 
 /// Compile (see [`super::compile`]).
 pub fn compile(input: &Input) -> Output {
-    let mut b = Builder { input, out: Vec::new(), dropped: Vec::new(), avoids: Vec::new() };
+    let mut b = Builder { input, out: Vec::new(), dropped: Vec::new(), avoids: Vec::new(), candidates: false };
     for r in input.reflexes {
+        // A skill used after its context: the `skill` shape and nothing else.
+        if matches!(r.continuation.as_slice(), [v] if v.ty == NodeType::Skill) {
+            b.skill(r);
+            continue;
+        }
         let items: Vec<&ItemView> = r.context.iter().chain(r.continuation.iter()).collect();
         let cut = r.context.len();
         let mut any = false;
@@ -1210,4 +1287,65 @@ pub fn compile(input: &Input) -> Output {
 /// The order among compiled routes of one id (greater wins).
 fn rank(c: &Compiled) -> (bool, u32, std::cmp::Reverse<&str>) {
     (!c.execution_only, c.route.evidence.support, std::cmp::Reverse(c.why.pattern.as_str()))
+}
+
+/// Compile candidates (see [`super::compile_candidates`]).
+pub fn compile_candidates(input: &Input) -> Output {
+    let mut b = Builder { input, out: Vec::new(), dropped: Vec::new(), avoids: Vec::new(), candidates: true };
+    for r in input.reflexes {
+        let informative =
+            r.context.iter().filter(|v| !(v.ty == NodeType::Prompt && v.level == crate::events::Level::Kind)).count();
+        let last = r.context.last();
+        if !(2..=CONTEXT_MAX_ITEMS).contains(&informative) {
+            b.drop(r, "a candidate is a sequence: a context of two or three events");
+            continue;
+        }
+        // As a reflex, a context ending in a failure or an edit compiles to the avoid or the
+        // after-edit shapes, never to a context: it would not keep its id.
+        if matches!(last, Some(x) if (is_act(x) && x.ok == Some(false)) || x.ty == NodeType::Edit) {
+            b.drop(r, "a context ending in a failure or an edit is not a candidate's");
+            continue;
+        }
+        b.context(r);
+    }
+    // One candidate per habit: of the contexts seen in exactly the same traces before the same
+    // step, the one nearest the step (the fewest turns between them), then the shortest, the most
+    // specific (its rate), then the id. A miner finds every subsequence of a habit's context;
+    // a person should notice the habit once.
+    let lag: BTreeMap<&str, u32> = input.reflexes.iter().map(|r| (r.pattern.as_str(), r.lag)).collect();
+    let mut habits: BTreeMap<(Vec<String>, String), Compiled> = BTreeMap::new();
+    for c in std::mem::take(&mut b.out) {
+        let Trigger::Context { items, .. } = &c.route.trigger else { continue };
+        let rank = |c: &Compiled, n: usize| {
+            (
+                lag.get(c.why.pattern.as_str()).copied().unwrap_or(u32::MAX),
+                n,
+                std::cmp::Reverse((c.route.evidence.rate * 1e6) as u64),
+                c.route.id.clone(),
+            )
+        };
+        let key = (c.sessions.clone(), serde_json::to_string(&c.route.step).unwrap_or_default());
+        let better = |k: &Compiled| {
+            let kn = match &k.route.trigger {
+                Trigger::Context { items, .. } => items.len(),
+                _ => usize::MAX,
+            };
+            rank(&c, items.len()) < rank(k, kn)
+        };
+        if habits.get(&key).is_none_or(better) {
+            habits.insert(key, c);
+        }
+    }
+    // One per id: the most support, then the earlier pattern.
+    let mut kept: BTreeMap<String, Compiled> = BTreeMap::new();
+    for c in habits.into_values() {
+        let better = |k: &Compiled| {
+            (c.route.evidence.support, std::cmp::Reverse(c.why.pattern.as_str()))
+                > (k.route.evidence.support, std::cmp::Reverse(k.why.pattern.as_str()))
+        };
+        if kept.get(&c.route.id).is_none_or(better) {
+            kept.insert(c.route.id.clone(), c);
+        }
+    }
+    Output { routes: kept.into_values().collect(), dropped: b.dropped }
 }

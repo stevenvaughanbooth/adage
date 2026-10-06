@@ -66,14 +66,15 @@ layers):
   `Files` is `$ADAGE_HOME`, tests use an in-memory store. Runtime: `decide(ctx, state, event)` is
   the single entry point; everything it reads of the working tree goes through the `Checkout` port
   on `Ctx` (`crates/adage-runtime/src/checkout.rs`: `Disk` in the hook, `Unread` for replays), and
-  its switches are fields of `Policy` on `Ctx` (`crates/adage-runtime/src/lib.rs`), never hidden
+  its switches are fields of `Policy` on `Ctx` (`crates/adage-runtime/src/policy.rs`), never hidden
   globals. Add a new input to one of these traits rather than reaching for the filesystem.
 - **The live hook path fails open and spawns only what is listed.** `adage_hook::run` returns `Ok(None)` or
   `Err`, and the caller prints nothing in either case, recording the error in `$ADAGE_HOME/fail-open.log`
   (`crates/adage-hook/src/lib.rs`, `failopen.rs`). CONTRIBUTING.md: anything on the hook path exits 0
   and prints nothing on any error. `crates/adage-exec/tests/no_spawn.rs` scans the `src/` of
-  `adage-cli`, `adage-hook`, `adage-runtime`, `adage-store`, `adage-tracks` and `adage-learn` for
-  `Command::new`; every use must be in its `ALLOWED` list with a reason (the hook's one is
+  `adage-cli`, `adage-app`, `adage-hook`, `adage-runtime`, `adage-store`, `adage-tracks` and
+  `adage-learn` for `Command::new` (`#[cfg(test)]` modules included); every use must be in its
+  `ALLOWED` list with a reason (the hook's one is
   `autolearn.rs` starting `adage condition` in the background). No hook or learner uses the
   network (README, "Safe by default").
 - **Learning is deterministic.** `adage_graph::learn(sessions, params)` is pure: the same sessions
@@ -149,8 +150,9 @@ crate's sources and fails on an undeclared read into an inert directory. `adage-
 
 Where tests live (`docs/testing.md`):
 
-- Unit tests in `#[cfg(test)]` beside the module (large ones in `src/tests.rs`); integration tests
-  in `crates/<crate>/tests/*.rs`; shared helpers in `tests/common/mod.rs` of the crate that needs them.
+- Unit tests in `#[cfg(test)]` beside the module (large ones in `src/tests/`, one file per
+  topic); integration tests in `crates/<crate>/tests/*.rs`; shared helpers in `tests/common/mod.rs`
+  of the crate that needs them.
 - Inputs are fixtures: `crates/<crate>/tests/fixtures/` for one crate; shared inputs have one home
   each (`sim/fixtures/`, `evals/datasets/`, `evals/sandboxes/`). `cargo run -p adage-sim`
   regenerates `sim/fixtures/`, and `adage-sim`'s tests fail when they drift.
@@ -159,7 +161,7 @@ Where tests live (`docs/testing.md`):
   committed), or the `expect` of a table-driven case in `tests/cases/*.json`. "Golden" always means
   an expected output, never an input.
 - Each component is tested through its own crate: decoders from bytes (`adage-ingest`), `decide()`
-  as a function of index, state, event, policy and checkout (`adage-runtime/src/tests.rs`), the
+  as a function of index, state, event, policy and checkout (`adage-runtime/src/tests/`), the
   learner over fixtures through ingestion, `adage-app` against a temporary `ADAGE_HOME`, the binary
   end to end in `adage-cli/tests/`.
 - Python suites keep `test_*.py` beside the modules they test and use `unittest`; each suite is

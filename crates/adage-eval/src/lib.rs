@@ -226,6 +226,10 @@ fn step_text(s: &adage_tracks::Step) -> String {
         }
         adage_tracks::Step::Sequence { commands } => commands.join(" then "),
         adage_tracks::Step::Card { card } => format!("card of {} file(s)", card.files.len()),
+        adage_tracks::Step::Skill { skill, args } => match args {
+            Some(a) => format!("skill {skill} ({a})"),
+            None => format!("skill {skill}"),
+        },
     }
 }
 

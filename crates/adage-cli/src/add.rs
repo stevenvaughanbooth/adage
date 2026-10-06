@@ -214,7 +214,6 @@ fn decide(
 }
 
 pub fn add(args: &[String], paths: &Paths) -> Result<()> {
-    require_person("add")?;
     let usage = "usage: adage add <pack-dir> [--trust] [--repo-path <dir>]";
     let src = PathBuf::from(args.first().filter(|a| !a.starts_with("--")).context(usage)?);
     let trust = args.iter().any(|a| a == "--trust");
@@ -224,6 +223,22 @@ pub fn add(args: &[String], paths: &Paths) -> Result<()> {
         None => std::env::current_dir().ok(),
     };
     let cwd_root = at.and_then(|d| d.canonicalize().ok()).and_then(|d| find_root(&d));
+    // A team's pack committed in this repository can be trusted with a press from the session
+    // (mod architecture §3.12: the same trust as the repository's CLAUDE.md), when it is older than
+    // that session (review M8: committed before it opened, unchanged on disk since); anything
+    // else, a pack from outside the repository, one changed since its commit, or one written or
+    // committed during the press's session, needs a terminal.
+    if let Some(root) = cwd_root.as_deref().filter(|root| trust && adage_app::trust::committed_pack(&src, root)) {
+        let stdin = adage_app::person::read_press();
+        let since = stdin.press.as_ref().map(|p| adage_app::person::press_opened(paths, &p.session).unwrap_or(0));
+        if since.is_none_or(|t| adage_app::trust::committed_before(&src, root, t)) {
+            crate::review::person_from(adage_app::person::PersonVerb::AddTrust, paths, stdin)?;
+        } else {
+            require_person("add")?;
+        }
+    } else {
+        require_person("add")?;
+    }
     if src.join(adage_pack::validate::MANIFEST).is_file() {
         return add_pack(&src, paths, trust, cwd_root.as_deref(), crate::flag(args, "--expected-digest").as_deref());
     }

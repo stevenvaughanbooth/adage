@@ -8,7 +8,7 @@
 
 #![cfg(unix)]
 
-use adage_core::Effect;
+use adage_tracks::testkit::{self, kinds};
 use adage_tracks::*;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
@@ -16,6 +16,8 @@ use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
+
+mod common;
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap()
@@ -58,21 +60,14 @@ fn open_up(p: &Path) {
 }
 
 fn env_for(c: &mut Command, home: &Path) {
+    common::scrub(c);
     // Exercise Apple's system Python launcher even when the developer's PATH has another Python.
     #[cfg(target_os = "macos")]
     c.env("PATH", "/usr/bin:/bin:/usr/sbin:/sbin");
     c.env("ADAGE_HOME", home)
         .env("ADAGE_POLICY", home.join("no-managed-policy.toml"))
         .env("ADAGE_ALLOW_NONINTERACTIVE", "1")
-        .env("ADAGE_AUTO_LEARN", "0")
-        .env_remove("CLAUDECODE")
-        .env_remove("OPENCODE")
-        .env_remove("CODEX_SANDBOX")
-        .env_remove("CODEX_SANDBOX_NETWORK_DISABLED")
-        .env_remove("ADAGE_ARM")
-        .env_remove("SSH_AUTH_SOCK")
-        .env_remove("ADAGE_DISABLE")
-        .env_remove("ADAGE_EXEC_FORCE_BACKEND");
+        .env("ADAGE_AUTO_LEARN", "0");
 }
 
 fn adage(home: &Path, cwd: &Path, args: &[&str]) -> Output {
@@ -137,8 +132,7 @@ fn git(dir: &Path, args: &[&str]) -> String {
 }
 
 fn exec_records(home: &Path, session: &str) -> Vec<Value> {
-    let recs: Vec<Value> =
-        adage_store::spool::read_all(&adage_store::Paths::at(home).spool(session)).unwrap_or_default();
+    let recs = common::LearnedHome::at(home).spooled(session);
     recs.into_iter()
         .filter_map(|r| r.get("exec").cloned())
         .flat_map(|e| e.as_array().cloned().unwrap_or_default())
@@ -153,31 +147,11 @@ const REGEN: &str = "regenerate-registry";
 const TRACK: &str = "tallyhouse/finish-lines";
 
 fn finish_line_track(repo: &str) -> Track {
-    Track {
-        manifest: Manifest {
-            track: TrackInfo {
-                name: TRACK.into(),
-                version: "0.2.0".into(),
-                description: String::new(),
-                provenance: "desire-path".into(),
-            },
-            scope: Scope { repo: repo.into() },
-            gauge: Gauge::default(),
-        },
-        routes: vec![Route {
-            id: REGEN.into(),
-            summary: String::new(),
-            trigger: Trigger::AfterEdit { paths: "registry/*.csv".into() },
-            step: Step::Run { command: "make gen".into() },
-            slots: vec![],
-            effect: Effect::Regenerate,
-            strength: Strength::Fire,
-            state: RouteState::Firm,
-            exit: vec![Exit::ExploratoryChange],
-            evidence: Evidence { support: 7, opportunities: 8, days: 3, ..Default::default() },
-            authored: false,
-        }],
-    }
+    let regen = kinds::finish_line(REGEN, "registry/*.csv", "make gen")
+        .exit(vec![Exit::ExploratoryChange])
+        .support(7, 8)
+        .days(3);
+    testkit::track(TRACK, repo).version("0.2.0").route(regen).build()
 }
 
 fn add_row(csv: &Path, row: &str) {

@@ -48,6 +48,12 @@ fn step_parts(s: &Step, slots: &[Slot]) -> Vec<String> {
         }
         // A card's id comes from its family, never from its content (which grows).
         Step::Card { .. } => vec!["card".into()],
+        // A skill by its name; its arguments are part of what it says, so they name it too.
+        Step::Skill { skill, args } => {
+            let mut v = vec!["skill".to_string(), skill.clone()];
+            v.extend(args.iter().cloned());
+            v
+        }
     };
     for sl in slots {
         v.push(format!("slot:{}", sl.name));

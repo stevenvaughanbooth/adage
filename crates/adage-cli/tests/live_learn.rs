@@ -11,8 +11,10 @@ use std::path::PathBuf;
 use std::process::{Command, Output, Stdio};
 use std::time::{Duration, Instant};
 
+mod common;
+
 struct World {
-    _dir: tempfile::TempDir,
+    _w: common::TempWorld,
     root: PathBuf,
 }
 
@@ -20,15 +22,12 @@ impl World {
     /// A checkout named `acme-billing` with the files the scenario's routes name, and a Claude Code
     /// history of the scenario's twelve sessions in it, in `$HOME/.claude/projects`.
     fn new() -> World {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().canonicalize().unwrap();
-        for d in ["home", "adage", "acme-billing/.git", "acme-billing/acme", "acme-billing/schema"] {
-            std::fs::create_dir_all(root.join(d)).unwrap();
-        }
+        let w = common::TempWorld::new(&["home", "adage"]);
+        w.repo("acme-billing");
         for f in ["acme/billing.py", "acme/customers.py", "schema/invoice.json", "schema/customer.json", "Makefile"] {
-            std::fs::write(root.join("acme-billing").join(f), scenario::body(f)).unwrap();
+            w.write(&format!("acme-billing/{f}"), scenario::body(f));
         }
-        World { _dir: dir, root }
+        World { root: w.root.clone(), _w: w }
     }
     fn repo(&self) -> String {
         self.root.join("acme-billing").to_string_lossy().into_owned()
@@ -58,6 +57,7 @@ impl World {
     }
     fn cmd(&self, args: &[&str]) -> Command {
         let mut c = Command::new(env!("CARGO_BIN_EXE_adage"));
+        common::scrub(&mut c);
         c.args(args)
             .current_dir(&self.root)
             .env("ADAGE_HOME", self.home())
@@ -65,17 +65,6 @@ impl World {
             .env("ADAGE_ARM", "treated")
             .env("ADAGE_TEST_NO_SPAWN", "record")
             .env("ADAGE_ALLOW_NONINTERACTIVE", "1");
-        for v in [
-            "ADAGE_DISABLE",
-            "ADAGE_AUTO_LEARN",
-            "ADAGE_CONTROL",
-            "CLAUDECODE",
-            "OPENCODE",
-            "CODEX_SANDBOX",
-            "CODEX_SANDBOX_NETWORK_DISABLED",
-        ] {
-            c.env_remove(v);
-        }
         c
     }
     fn run(&self, mut c: Command, stdin: &str) -> Output {
@@ -279,6 +268,11 @@ fn learn_auto_logs_what_changed() {
         // An instinct the traces confirm gives way to the learned reflex in the same learn.
         if c["change"] == "extinguished" && c["track"].as_str().is_some_and(|t| t.ends_with("/instincts")) {
             assert!(c["summary"].as_str().unwrap().contains("confirmed by traces"), "{c}");
+            continue;
+        }
+        // A sequence counted below a reflex's support (plan D1): a candidate, with its counts.
+        if c["change"] == "candidate" {
+            assert!(c["support"].as_u64() < c["s_min"].as_u64() && c["to"].is_null(), "{c}");
             continue;
         }
         assert!(["new", "nascent"].contains(&c["change"].as_str().unwrap()), "first learn: every route is new: {c}");

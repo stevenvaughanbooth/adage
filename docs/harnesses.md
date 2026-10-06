@@ -41,6 +41,28 @@ documented at <https://code.claude.com/docs/en/hooks>. Adage's adapter is
 `crates/adage-hook/src/harness/claude.rs`; its output is pinned byte for byte by
 `crates/adage-cli/tests/golden/claude-code.txt`.
 
+### Capabilities, by caller
+
+Behaviour that differs between harnesses reads the harness's `Capabilities`
+(`adage_trace::harness`), never a name. Claude Code's command hooks have four; its mod (the plugin's
+module, `plugin/claude-code`) adds seven. The adapter reports the mod's set for a payload the mod
+sent: one carrying `via: "mod"`, one of the events only the mod sends (`TurnStep`, `Standing`,
+`SkillPrompt`), or a `PreToolUse` carrying `dry_run` or `verdict`. OpenCode and Codex have no mod.
+
+| Capability | What it lets Adage do | Claude Code, command hooks | Claude Code, mod | OpenCode | Codex |
+| --- | --- | --- | --- | --- | --- |
+| `pre_tool_rewrite` | Rewrite a Bash call's input before it runs | yes | yes | no | no |
+| `session_contract` | A context block for the model at session start | yes | yes | no | yes |
+| `actions` | Run approved actions inside a hook | yes | yes | no | yes |
+| `person_notices` | One line the person sees and the model does not | yes | yes | no | no |
+| `predict_step` | Make the directed call at a step boundary (`TurnStep`) | no | yes | no | no |
+| `answer_call` | Answer a call with a fresh receipt instead of running it | no | yes | no | no |
+| `substitute_call` | Run the learned command in a dead end's place | no | yes | no | no |
+| `tool_description` | Put the environment note in the Bash tool's description | no | yes | no | no |
+| `cached_section` | Put the standing reflexes in a cached system-prompt section | no | yes | no | no |
+| `subagent_prompt` | Tell a subagent the conventions before it starts | no | yes | no | no |
+| `compaction` | Tell compaction what to keep | no | yes | no | no |
+
 ## OpenCode
 
 ### Findings

@@ -11,6 +11,7 @@
 use crate::Planned;
 use adage_core::judge::Weights;
 use adage_pack::binding::Binding;
+use adage_tracks::candidates::CandidateFile;
 use adage_tracks::proposals::Proposals;
 use adage_tracks::review::Reviews;
 use adage_tracks::why::Why;
@@ -67,6 +68,8 @@ pub trait Store {
     fn tracks_under(&self, prefix: &str) -> Vec<Track>;
     /// The checkout `repo`'s instincts were last bound against.
     fn binding(&self, repo: &str) -> Option<Binding>;
+    /// The candidates the last learn recorded for `repo` (plan D1), when there are readable ones.
+    fn candidates(&self, repo: &str) -> Option<CandidateFile>;
     /// The instinct packs available to bind (built in, and installed into the store), and why any
     /// installed pack cannot be read (`who`, `why`).
     fn packs(&self) -> (Vec<adage_pack::Pack>, Vec<(String, String)>);
@@ -81,6 +84,10 @@ pub trait Store {
     fn write_binding(&self, repo: &str, binding: &Binding);
     /// Record the repository's learned follow-judge weights. Best effort, as a binding is.
     fn write_follow_weights(&self, repo: &str, weights: &Weights);
+    /// Record the repository's candidates (`adage_tracks::candidates`, plan D1), replacing what
+    /// the last learn recorded, before the index is compiled (which reads them). Nothing else
+    /// writes them.
+    fn write_candidates(&self, candidates: &CandidateFile) -> Result<()>;
     /// Compile the index from every track the store holds and publish it.
     fn compile_index(&self) -> Result<Compiled>;
     /// The generation of the index published now (empty when there is none).
@@ -296,6 +303,10 @@ impl Store for Files {
         adage_pack::binding::binding(&self.tracks_root, repo)
     }
 
+    fn candidates(&self, repo: &str) -> Option<CandidateFile> {
+        adage_tracks::candidates::load(&self.tracks_root, repo)
+    }
+
     fn packs(&self) -> (Vec<adage_pack::Pack>, Vec<(String, String)>) {
         let (available, problems) = adage_pack::instincts::available(&self.tracks_root);
         (available.into_iter().map(|(p, _)| p).collect(), problems)
@@ -315,6 +326,10 @@ impl Store for Files {
 
     fn write_follow_weights(&self, repo: &str, weights: &Weights) {
         write_json(&adage_tracks::layout::follow_weights_path(&self.tracks_root, repo), weights);
+    }
+
+    fn write_candidates(&self, candidates: &CandidateFile) -> Result<()> {
+        adage_tracks::candidates::write(&self.tracks_root, candidates)
     }
 
     fn compile_index(&self) -> Result<Compiled> {

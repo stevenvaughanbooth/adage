@@ -40,7 +40,8 @@ Output of python3 scripts/wi-lookup W-2042 --json, run by Adage in a read-only s
 </adage-data>
 ```
 
-**Turning it on** (a person, at a terminal; every step refuses inside an agent session):
+**Turning it on** (a person, at a terminal, or with a press from the Claude Code session, below
+in "Deciding from the session"; every step refuses an agent on its own):
 
 ```sh
 adage review delegate acme-billing/learned lookup-work-item --level e1 \
@@ -103,11 +104,19 @@ automatically (it runs a script).
 `adage delegate on` rewrites the registrations `adage install` wrote (Claude Code settings, Codex
 `hooks.json`, the OpenCode plugin, project and user scope), swapping only the binary:
 `adage-exec hook <harness> <event>` takes `adage hook`'s arguments. For the Claude Code plugin it
-writes `$ADAGE_HOME/exec/enabled`: with it, the Adage plugin's session-start shim points its hooks
-at a no-op and the `adage-exec` plugin (`plugin/claude-code-exec`, the second plugin in the
-marketplace: `/plugin install adage-exec@adage`, once the marketplace is published; it is not yet)
-serves; without it, the reverse. Exactly one
-plugin answers, so hooks never fire twice. Changes take effect in new sessions.
+writes `$ADAGE_HOME/exec/enabled`. **One plugin** ships both binaries (`/plugin install
+adage@adage` is the only install step): its session-start shim links
+`${CLAUDE_PLUGIN_DATA}/bin/adage` (the CLI, always) and `bin/adage-exec`, each bundled and verified
+against `dist/SHA256SUMS` (else found on `PATH`, or beside the `adage` on `PATH`), and links
+`bin/hook`, which every other hook runs, to `adage-exec` while the marker exists and to `adage`
+otherwise (copies on Windows, made again when the marker changes). The hooks are registered once,
+so they never fire twice; the edit and Stop hooks have 30 s, for an action. With the marker and no
+`adage-exec` for the machine, `adage` serves and the session start says why. Changes take effect
+in new sessions. The `adage-exec` plugin of earlier versions is retired: for one release
+`plugin/claude-code-exec` stays as an alias that registers its `SessionStart` alone, points any
+`bin/adage-exec` it left behind at a no-op, and asks to be uninstalled. Track C chose a second
+plugin as the consent (its D2); with decisions made by a press in the session, the marker is the
+explicit act, and the second plugin was a second install step with no purpose.
 
 **What `adage-exec hook` does.** The pipeline is `adage hook`'s, shared as the `adage-hook` library
 (adapters, the no-match fast path, the state lock, `decide()`, spool, render). After `decide()`,
@@ -225,6 +234,35 @@ traces the planner rewrote a command in 63 of 66 Haiku control sessions and refu
 counts are from the planner before the launch review; the narrower planner (shell-aware, advice
 instead of refusal) has not been re-counted.
 
+### The learned pair: a dead end replaced before it runs (the Claude Code mod)
+
+A second rewrite exists only where the Claude Code mod is installed, because only the mod can ask
+Claude Code's own permission engine about both commands. When a Bash call is a dead end this
+repository's sessions learned (`python3 -m pytest tests` fails here; `make test` works), the mod
+runs the learned command in its place, and the failure, the model's reading of it and the
+recovery request never happen.
+
+```text
+python3 -m pytest tests
+→ make test     (adage ran make test in place of python3 -m pytest tests: in this repository it fails ("No module named pytest").)
+```
+
+- **What is replaced**: one plain command (no list, pipe, redirection or substitution) whose
+  canonical key meets a learned, firm `avoid` route with a fixed `instead` (no slot), or a learned
+  run-after-failure route delivered at fire. An instinct, a forming or dormant route, a prime
+  pair and a slotted `instead` replace nothing (`adage_runtime::substitution`).
+- **How**: two phases of `adage hook claude PreToolUse` that a command hook never sends. A
+  `dry_run` answers the plan (`{"plan":{"substitute":{command, route, track, context}}}`) and
+  records nothing. The mod asks `$.tool.check` about the original and the replacement; only when
+  both get the same verdict does it send `verdict: {engine: "same", substitute: <route>}`, and only
+  when that answers `{"substitute":{…}}` does it run the call with the new command. The model reads
+  the one `context` line after the result; the person sees it under the permission dialog, if one
+  opens.
+- **Recorded**: one `pretool` record at the verdict, `substituted: true` with the judgement
+  `substituted` (never a follow; the dead end counts as headed off), or, in the control arm and in
+  the mod's observe mode, `would_substitute: true`, withheld, and nothing printed. `adage delegate
+  rewrites off` turns it off with the interpreter rewrites.
+
 ## E2 actions from hooks
 
 Track C milestone C5. A finish-line reflex (after editing files matching `registry/*.csv`, run
@@ -320,8 +358,10 @@ hook-latency claim has been established by the small regression fixtures.
 events a 30 s hook timeout; every other event keeps 5 s. OpenCode's plugin bridge waits one second
 for a hook, so actions never run under OpenCode: it gets the E0 directive and the reason.
 
-**Approving an action** (a person, at a terminal; E2 actions are an opt-in beta, so policy must
-allow them first: `adage delegate policy --max-level e2` sets `max_level = "E2"`):
+**Approving an action** (a person, at a terminal, or in the session in two presses, stage then
+confirm, below in "Deciding from the session", which folds the policy opt-in into the first
+action; E2 actions are an opt-in beta, so at a terminal policy must allow them first: `adage
+delegate policy --max-level e2` sets `max_level = "E2"`):
 
 ```sh
 adage review delegate tallyhouse/finish-lines regenerate-registry --level e2 \
@@ -357,12 +397,18 @@ its pin; only a script run by an interpreter named in argv (`python3`, `node`, `
 ```text
 adage-exec run     --repo <dir> --argv '<json array>' [request flags] [--dry-run] [--record]
 adage-exec approve --repo <dir> --argv '<json array>' [request flags] [--by <name>]
-adage-exec revoke  --repo <dir> [--track <t> --route <r>]
+adage-exec revoke  --repo <dir> [--track <t> --route <r>] [--mode execute|predict]
 adage-exec status  --repo <dir>
 adage-exec journal [--repo <dir>]
 adage-exec recover --id <operation-id> --acknowledge
 adage-exec doctor  [--json]
+adage-exec version
 ```
+
+`version` prints `adage-exec <version>` on one line and exits 0, reading nothing: it is the Claude
+Code mod's activation probe. `status` lists execution grants, then prediction grants (a step taken
+in the model's place, `adage review delegate --predict`) apart, when there are any; `revoke`
+revokes execution grants unless `--mode predict` names the others.
 
 Request flags: `--input k=v` and `--contract k=<anchored regex>` (one per `{slot}` in the argv
 template), `--effect observe`, `--level e1|e2`, `--output typed|raw`, `--fields '<json>'`,
@@ -398,7 +444,8 @@ git hazards, the sandbox profile and its id. `--record` prints the spool record
 `approve` and `revoke` are a person's decisions: they refuse inside an agent session (any of
 `CLAUDECODE`, `OPENCODE`, `CODEX_SANDBOX`, `CODEX_SANDBOX_NETWORK_DISABLED`, `ADAGE_ARM`,
 `ADAGE_TRAIN_SESSION`) and need a terminal (`ADAGE_ALLOW_NONINTERACTIVE=1` lifts only the
-terminal requirement, for CI). `run` may be called from an agent's shell: approvals still apply.
+terminal requirement, for CI). No `adage-exec` verb takes a press (below): `approve`, `revoke`
+and `recover` stay a terminal's. `run` may be called from an agent's shell: approvals still apply.
 
 C1/C3 build requests from packs through the library type `adage_exec::ExecRequest` (repository
 root, argv template, bound inputs and contracts, effect, level, output spec, scripts with SHA-256,
@@ -513,6 +560,148 @@ program-running flags (`rg --pre`, `rg -z`, `git --ext-diff`, `--textconv`, `--o
 git, a repository whose config sets none of the hazardous keys; no scripts; strict contracts for
 every slot; typed output; an enforced sandbox; a local reflex, or a pack from a trusted signer past
 forming; and policy `auto_approve = "inert-observe"`. It is **off by default** until gate G3.
+
+## Predicted calls
+
+Where the Claude Code mod is installed, Adage can make a reflex's call in the agent's place: at a
+step boundary (`adage-exec hook claude TurnStep`) it answers the call the reflex directs, and the
+mod hands it to Claude Code as if the model had made it. The call then runs in the agent's
+harness, under the harness's own permissions; adage-exec runs nothing. Only `adage-exec`
+predicts: `adage hook` has no grants to read.
+
+```sh
+adage review delegate acme-billing/work-items lookup-work-item --predict
+```
+
+- **A separate grant.** A predict grant sits beside a reflex's E1 or E2 grant, never in place of
+  one: the approval key gains `mode` (`execute`, the default and absent from older files, or
+  `predict`), and approving, revoking, an automatic revocation and a lapse each act on one mode.
+  `adage review revoke <track> <reflex>` withdraws the E1 and E2 grants; `--predict` withdraws the
+  predict grant.
+- **What it is keyed on.** What the call would run: the command template, the slot contracts,
+  the scripts it names (hashed at every step), the effect and, for a pack, its exec digest and
+  signer. Its `level` is `e2` and its `profile_id` the literal `harness`: no sandbox profile, output
+  contract or timeout applies, so none can lapse it. A change to any of the rest lapses it, and the
+  person is told as for any grant, with `adage review delegate <track> <reflex> --predict` to
+  approve it again.
+- **Refused** (nothing is written) inside an agent session or without a terminal, unless a
+  person grants it with a press from the session (below); below
+  `max_level = "E2"` (making a call from a hook is acting from a hook); for a step above
+  regenerate or an effect `[effects] deny` names; for a command the table classifies as changing
+  the environment (no script) without the managed `allow_environment_actions`; for a reflex only
+  adage-exec can carry out (a vendored script, a learned action); and for a reflex that already
+  holds an E1 or E2 grant, because adage-exec already runs it and a predicted call would run it a
+  second time. `--predict` takes no `--level`, `--effect` or other execution terms. There is no
+  preview: nothing is staged.
+- **When it predicts.** At each step, `predict_grants` lists the granted reflexes whose key still
+  equals the one planned now in the session's checkout, that the current policy permits, and
+  that hold no execute grant; the runtime then predicts only what it has already directed
+  (plan §2.2 items 2 and 2b). The checkout is the one the step's payload names (its `cwd`'s
+  repository), the same root every other hook decision uses; a grant's scripts are hashed there.
+- **Off for the machine.** `adage delegate predict off` (from anywhere, like `delegate rewrites
+  off`) writes `$ADAGE_HOME/exec/predict-off`, read at every step: nothing is predicted, grants are
+  kept. `adage delegate predict on` (a person, or a press) removes it.
+- **Shown in the terminal UI.** The routes view's execution column says `Predicted` for a reflex
+  whose predict grant holds in this checkout, `Paused` while predictions are off, and `Needs
+  review` when the grant no longer matches what the call would run.
+- **Shown.** `adage delegate status --json` gives each grant's `mode` and the switch as
+  `predict: "on" | "off"`; a lapsed predict grant carries `mode: "predict"`.
+- **Never run here.** Every path in `adage-exec hook` that runs something (E1 prefetch, the E2
+  action, the receipt, the finish-line gate, exec-only reflexes) reads execute grants only, and
+  `run` refuses a predict request outright.
+- **A read batch.** A reflex that reads the files a result names (`read-linked-files`) can be
+  granted too. Its key is the harness's read tool over its slot, `Read {files}`, under the
+  repository-path contract: no program runs, and its effect is observe. Granted with the lookup
+  that binds it, it is a chain: Adage makes the lookup at one step and reads the files it names
+  at the very next, one response of several reads. That is the only step that may follow a
+  predicted step at once; a third never does.
+
+## Deciding from the session: the press
+
+A person who never opens a terminal decides in the Claude Code session instead (the mod asks in
+the engine's own dialog, or offers a button in its pane; docs/claude-mod/architecture.md §3.12).
+What carries the decision is a **press**: a single-use token the binary issues to the mod, which
+a verb reads on stdin. It is not a boundary against an agent with a shell (nothing in Adage is: the
+approval store is unsigned by design). It is a record that a person decided, `via: "press"` on the
+approval and on the review decision (`via: "terminal"` otherwise; `--by` stays the person's own
+name), and a guard against the model being steered into deciding: the model can only call tools,
+and a token is issued only before its first act.
+
+- **Issued.** `adage hook claude Press`, with `{ session_id, cwd, source }`, answers `{ "press":
+  <64 hex> }` (32 random bytes) once per start, in the window between the command hooks'
+  `SessionStart` and the agent's first act: a `startup` or `clear` start opens it once per
+  session id, a `resume` once more (and the earlier token stops working), a `compact` never. Any
+  agent-side event (`UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `PostToolBatch`,
+  `PostToolUseFailure`, `Stop`, `TurnStep`) closes it, before the kill switches and the fast path,
+  whether or not anything is recorded. `Press` itself runs before the kill switches, so a
+  repository where Adage is off can still be asked to turn it on. Claude Code only. Only a start
+  that names the session's own transcript (`transcript_path` ending `<session_id>.jsonl`, as
+  every start Claude Code sends does) opens a window.
+- **Kept.** The binary keeps the token's SHA-256 only, in `sessions/<id>.press` (the window is the
+  file `sessions/<id>.press-open`); the spool gets a `press_issued` record (and `press_spent`,
+  `tripwire`), never the token.
+- **Spent.** A verb run by the mod reads `{ "press", "session" }` on stdin (never argv). It is
+  honoured when the hash matches (compared in constant time), the token is under 24 hours old,
+  the session has not ended (`SessionEnd` clears the hash), the verb runs in the session's
+  repository, and the session is not *contested*: its window did not open while another Claude
+  Code session on this machine was mid-turn (from a prompt or tool call to its `Stop`, an hour at
+  most since its last; marked by `sessions/<id>.press-turn`). A `SessionStart` written by hand
+  from a running session's Bash call is always written mid-turn, so its press is refused for good,
+  in that repository or any other, whatever acts in it later. A person who starts a second
+  session while another is mid-turn gets the same refusal there; that session's answers wait for
+  a later one, or a terminal. The verb then behaves exactly as at a
+  terminal and prints `{ "next": <token> }` as its **first line** on stdout: the token it spent is
+  refused from then on. Anything else (a wrong, spent, stale or foreign token, or a press beside
+  `ADAGE_ALLOW_NONINTERACTIVE=1`) behaves exactly as no press: the person-only refusal, nothing
+  written, nothing spent. Stdin is read (waiting up to 3 s for the writer) only inside an agent
+  session, where a press can be: with no agent variable set (a terminal, CI) a verb reads nothing
+  and waits for nothing, so a press piped there is neither honoured nor spent.
+- **Where.** Only `adage review approve|strengthen|weaken|extinguish|pin|dismiss`, `review revoke`,
+  `review delegate` (every level, and `--predict`), `delegate on` (under a press it writes the
+  plugin's marker only, and names the settings-file, Codex or OpenCode registrations that still
+  need a terminal), `delegate policy --max-level e2`, `delegate predict on`, `adage on`, and `adage
+  add <pack> --trust` for a pack directory committed in the repository and unchanged since its
+  commit (the same trust as the repository's `CLAUDE.md`), and older than the press's session: the
+  commit that brought the pack's content to `HEAD` was made before the session's window opened,
+  and no file or directory of the pack has changed on disk since then (its status-change time,
+  which only the system clock sets). A pack written or committed during the session, by the agent
+  or anyone, needs a terminal. `install`, a guarded `config set`,
+  `share`, `train accept`, `packs on`, `init`, `add` without `--trust` and every `adage-exec` verb
+  refuse a press. Turning something down (`delegate off`, `policy --max-level e1`, `predict off`,
+  `off`) needs no press, as before.
+- **Tripwire.** A Bash call that names `hook claude Press` (the shell's quotes and backslashes
+  taken out first, so `"Pr"ess` names it too), or carries `"press"` on its stdin heredoc, is
+  recorded and the person is warned once per session, by the command hook (the mod's own asks
+  for the call record nothing). It is never refused, and it does not see a press read from a file
+  or a name built from a variable.
+
+**Stage, then confirm.** An action is two acts, the facts between. `adage review delegate <track>
+<reflex> --level e1|e2 [terms] --stage --json` records nothing and answers, as one JSON object:
+the grant's terms (`proposed: true` when the person declared no outputs or caches for an action,
+and the binary proposes them from a trial stage: every path the action writes, its directory's
+glob as an output or, under a cache directory such as `__pycache__`, a cache glob), the facts
+(`argv`, `inputs` with their contracts, the approved and classified `effect`, the `output` mode
+and fields, `scripts` with their full text, `sandbox`, `profile_id`, `route_exec_digest`,
+`evidence`, `attestations`, the project Python's identity, and for an action the `staged` run: its
+backend, exit, and per changed output its `before_sha256`, `after_sha256` and line diff), `ok`
+(and `why` when the staged run cannot be granted), `first` (this grant would turn execution on for
+the machine) and a `digest`. A machine still at E1 stages its first action under the E2 policy a
+confirm would write, for the trial store only. `--confirm` reads `{ "expect": <digest> }` (and a
+press) on stdin, plans and stages again, and compares: when a term changed (`scripts`, `argv`,
+`effect`, the declared terms, …) it refuses, naming it; when only the repository moved (the input
+snapshot or the staged change set) it answers the fresh stage with `changed: "snapshot"` and
+records nothing until confirmed against the new digest; otherwise it records the grant and answers
+`recorded: true` with what it `wrote`. On a machine at E1 the first confirm writes `max_level =
+"E2"` to the personal policy, the `exec/enabled` marker and the grant together (`wrote: ["policy",
+"marker", "grant"]`); a later one writes the grant alone. Nothing is kept between the acts but the
+digest.
+
+`adage graph --json` gives each reflex's `review.offers`: a grant Adage could ask for (a fire
+reflex in service that runs one fixed verify or regenerate command, holding no grant, where policy
+would permit it), `execute` for a step after an edit (with its `--stage --json` and `--confirm`
+commands) or `predict` for a step due in a context. `adage status --json` lists
+`packs_awaiting_trust` when the repository has packs committed under `.adage/packs/` that this
+machine has not installed.
 
 ## Policy
 
@@ -766,6 +955,17 @@ anything but passive output commands (`tail`, `grep`, `echo`, …) beside pytest
 freshness check cannot finish within 1.5 s of the hook's 5 s. A note delivered alone is recorded
 in the session spool (`kind: "pretool"`, `receipt: true`), and learning reads it as Adage's own
 text.
+
+**The receipt as the result (the Claude Code mod).** The mod's dry run of a Bash call
+(`PreToolUse` with `dry_run: true`) is answered with the receipt's state: `fresh` with the note
+and the result the call would be answered with, or not fresh (a snapshotted file changed since,
+or the call is made from elsewhere) with only the command that ran. When it is fresh and Claude
+Code's own permission check would let the call run unasked, the mod answers the call with that
+result instead of running it, and its final ask (`verdict: {answered: "receipt"}`) records the
+call once (`answered: "receipt"`) as made and passed: a finish line it covers is met, so the
+Stop gate asks for no run whose result is already known. A receipt that is no longer fresh by
+then decides nothing, and the call runs. Command hooks are unchanged: they deliver the note
+beside the call, and only when the receipt is fresh.
 
 ## Explicit completion requirements
 

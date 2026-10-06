@@ -2,6 +2,27 @@
   "name": "adage",
   "version": "0.1.0",
   "description": "Agent traces become reflexes: Adage compiles the paths your agents take into reflexes and tells them, deterministically, what to do next.",
-  "author": { "name": "Adage" },
-  "repository": "https://github.com/stevenvaughanbooth/adage"
+  "author": {
+    "name": "Adage"
+  },
+  "repository": "https://github.com/stevenvaughanbooth/adage",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "band": {
+      "type": "boolean",
+      "title": "Band above the prompt",
+      "description": "One line: reflexes this session, steps without a model request, health, learning",
+      "default": true
+    },
+    "pane": {
+      "type": "string",
+      "title": "Watch pane",
+      "description": "Open the live pane unasked in a wide terminal",
+      "options": [
+        "auto",
+        "manual"
+      ],
+      "default": "manual"
+    }
+  }
 }

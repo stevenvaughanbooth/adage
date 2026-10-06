@@ -94,3 +94,67 @@ generated models are fresh.
 
 It also verifies the dead end (direct unittest fails with the guard message) and the obligation
 (schema change without gen → `make ci` fails with the stale message).
+
+## Arms and metrics (chunk E1)
+
+`demo/run.py` runs any of five arms (`docs/claude-mod/architecture.md` §9,
+`docs/claude-mod/test-plan.md` §7.2). The wiring of each is one row of `ARMS` in `run.py` and is
+unit-tested (`demo/test_run_arms.py`).
+
+| Arm | Hooks | Environment | Purpose |
+| --- | --- | --- | --- |
+| `a0` | none: no `--settings`, no plugin | no `ADAGE_*` variable at all | the registered protocol's no-hooks baseline |
+| `control` | `--settings` from `adage hooks-config` | `ADAGE_ARM=control` | computes what it would say and logs it, says nothing; the in-product savings baseline, not `a0` |
+| `adage` | the same | `ADAGE_ARM=treated` | today's product |
+| `mod-observe` | the plugin only: `--plugin-dir`, never `--settings` from `hooks-config` | `ADAGE_ARM=treated`, `ADAGE_MOD_OBSERVE=1` | proves the mod's observation changes nothing |
+| `mod` | the plugin only | `ADAGE_ARM=treated` | the design |
+
+Every arm also gets `ADAGE_HOME=$DEMO_ROOT/adage-home` and `ADAGE_AUTO_LEARN=0` (except `a0`),
+`--setting-sources project,local` (so no plugin or hook from the person's own settings loads),
+`--debug --debug-file runs/<id>/claude-debug.log` and `--include-partial-messages`. stderr goes to
+`runs/<id>/stderr.log`.
+
+**The plugin's binaries.** One plugin ships both binaries (plan A8). `plugin/build.sh` builds
+release binaries and stages `plugin/claude-code/dist/<host triple>/adage` and `adage-exec` with
+`dist/SHA256SUMS`; the plugin's `scripts/session-start` links `${CLAUDE_PLUGIN_DATA}/bin/adage`
+and `bin/adage-exec` to those copies after checking their digests (else to `adage` and
+`adage-exec` on `PATH`), and links `bin/hook`, which every other hook runs, to `adage-exec` while
+`$ADAGE_HOME/exec/enabled` exists and to `adage` otherwise. A predict grant answers a `TurnStep`
+only through `adage-exec`, so the `mod` arm predicts only with that marker in the shared
+`ADAGE_HOME`. The runner stages the same way without writing to `plugin/`: it copies the plugin
+(default `plugin/claude-code`, `--plugin-dir`) to `$DEMO_ROOT/plugins/<name>/`, leaving any
+`dist/` behind, and stages `adage` (default `ADAGE_BIN`, else `target/release/adage`;
+`--plugin-bin`) and `adage-exec` (default `ADAGE_EXEC_BIN`, else the `adage-exec` beside that
+`adage`, when there is one) as `dist/<target>/…` with their `SHA256SUMS` lines. `--no-stage` loads
+`--plugin-dir` as it is, for a plugin `plugin/build.sh` already staged. Nothing is downloaded.
+
+**Keys recorded per run** (`metrics` in `state.json`), beside the earlier ones:
+
+| Key | Meaning |
+| --- | --- |
+| `requests` | `[DEBUG] [API REQUEST]` dispatch lines in the debug log, counted with the regex of `evals/reflex-proof/harness/heldout_analysis.py` (retries count) |
+| `requests_verified` | the harness's cross-check: dispatch ids unique, and the stream's distinct explicit request ids (`request_id`/`requestId` fields, never message ids) equal the dispatches, or the surplus is explained by `[ERROR] API error (attempt …)` lines. `report.py` treats an unverified count as missing |
+| `requests_check` | `stream_request_ids`, `api_error_entries`, `cross_check` (exact equality) |
+| `passed`, `ci_passed`, `hidden_passed`, `hidden_tests_run`, `stale_generated`, `ci_tail`, `hidden_tail` | `score.py`'s keys, all recorded |
+| `dead_end_hits` | dead ends hit (a verification that failed), as before |
+| `dead_end` | `{"hit", "substituted"}`; `substituted` (also `dead_end_substituted`) counts spool records of a dead end replaced before it ran (a `substituted` judgement, or a `pretool` record saying so; never a withheld one) |
+| `predicted_steps` | spool `turn_step` records with `predicted`/`predict` set |
+| `receipts_as_results` | spool `pretool` records with `answered: receipt` |
+| `directives` | directives delivered, from the spool's decisions (`would_have` is not delivered); with no spool, the `<adage-reflex` blocks in the stream's hook responses (`directives_in_stream`) |
+| `subagent_tool_calls` | tool calls in assistant messages with a `parent_tool_use_id` |
+| `session_starts`, `spool_exists`, `hooks_wired_once` | T-E1-02: `a0` writes no spool; every hook arm exactly one `session_start` record |
+
+Spool metrics fail soft: a record of an unknown shape counts as nothing. `demo/report.py`
+compares any two arms (`--a mod --b a0`; `compare(runs, a="mod", b="a0")`) with the task-stratified
+permutation p and the task bootstrap interval; `requests` joins the Holm family, the mechanism
+counts (`predicted_steps`, `receipts_as_results`, `dead_end_substituted`, `directives`,
+`subagent_tool_calls`) are reported unadjusted.
+
+**The identity check** (T-E1-03): `demo/replay_hooks.py` feeds a recorded stream of hook payloads
+(`demo/fixtures/hook-stream.jsonl`) to `adage hook claude <event>` with and without
+`ADAGE_MOD_OBSERVE=1`, records each event's stdout and spool records, and diffs them
+(`--identity`, or `--compare` for two recordings).
+
+**Live runs need an API key** (`ANTHROPIC_API_KEY` or a logged-in `claude`) and cost money; none of
+the arms above has been run live from this change. Everything else is unit-tested offline:
+`cargo xtask test python demo`.

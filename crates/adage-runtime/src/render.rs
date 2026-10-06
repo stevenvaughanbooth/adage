@@ -1005,6 +1005,21 @@ pub fn route_text(r: &Route, bound: &[(String, String)]) -> Option<String> {
             }
             Some(text)
         }
+        // A skill (mod architecture §3.11): one fixed sentence around a name validated with the track
+        // and checked again here; `named` reads the name back from the same sentence.
+        (Step::Skill { skill, args }, _) => {
+            if !adage_tracks::safe_skill_name(skill) {
+                return None;
+            }
+            let mut text = adage_trace::wire::skill_sentence(skill);
+            match args {
+                Some(a) if sanitise(a) != *a || a.is_empty() => return None,
+                Some(a) => text.push_str(&format!(", with the arguments {a}.")),
+                None => text.push('.'),
+            }
+            text.push_str(&exit);
+            Some(text)
+        }
         (Step::Avoid { avoid, instead, signature }, _) => {
             let mut text = format!(
                 "In this repository, running {} fails (\"{}\"). Use this instead:\n  {}",
@@ -1031,6 +1046,50 @@ pub fn stop_reason(paths: &str, command: &str) -> String {
         sanitise(command)
     )
 }
+
+/// The most a session's standing text may hold, in bytes ([`crate::standing`]): it sits in every
+/// request's cached system prompt.
+pub const MAX_STANDING: usize = 2_000;
+
+/// A procedure card's line in the standing text: which files a known procedure is for (at most
+/// three, a varying part of a name as `*`) and how many sessions it was learned from. The card
+/// itself is still given at the prompt of such a task.
+pub fn card_line(card: &adage_tracks::card::Card) -> Option<String> {
+    let files: Vec<String> = card
+        .files
+        .iter()
+        .take(3)
+        .map(|f| sanitise(&f.path.replace(adage_tracks::card::VARYING, "*")))
+        .filter(|f| !f.is_empty())
+        .collect();
+    if files.is_empty() || card.sessions == 0 {
+        return None;
+    }
+    Some(format!(
+        "In this repository, changes that touch {} follow a known procedure, learned from {} earlier session{}. It is given when such a task starts.",
+        files.join(", "),
+        card.sessions,
+        if card.sessions == 1 { "" } else { "s" }
+    ))
+}
+
+/// The sentence on the project's environment (the U11 instinct's binding) for the standing text
+/// and the Bash tool's description: `interpreter` as a person reads it (`.venv/bin/python`).
+pub fn environment_note(interpreter: &str, pytest: bool) -> Option<String> {
+    let shown = sanitise(interpreter);
+    if shown.is_empty() {
+        return None;
+    }
+    let tests = if pytest { format!(" Tests run with {shown} -m pytest.") } else { String::new() };
+    Some(format!(
+        "In this repository, Python runs in the project's environment, {shown}: the system Python lacks the project and its test dependencies.{tests}"
+    ))
+}
+
+/// What compaction is asked to keep (the Claude Code mod's `session.compact`): in both arms, since
+/// it names no reflex.
+pub const COMPACT_INSTRUCTION: &str =
+    "Keep the repository procedures this session followed: how tests run here, and what was run after which edits.";
 
 #[cfg(test)]
 mod e1_tests {

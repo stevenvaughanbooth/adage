@@ -17,19 +17,22 @@
 //! | `stop_requests`, `stop_requested` | each recorded stop request, applied as the runtime does |
 //! | `stop_gates` | each `stop_gate` record (`adage-exec`'s finish-line gate ran), so the cap survives |
 //! | `intent` | the family of the last intent route emitted |
+//! | `predictions`, `last_step_predicted`, `predicted_routes` | each `turn_step` decision whose prediction counted (`predicted_at`) |
 //! | `ctx` | the last context state recorded (a decision records it when its event changed it), if it belongs to the index's alphabet for the repository |
+//! | `cand_ctx`, `noticed` | the same for the candidates' own alphabet (`Index::candidate_contexts`); every candidate any decision noticed, in order |
 //!
 //! Every event that changes the context state reaches the runtime and is recorded (the no-match
 //! fast path skips only events outside the alphabet), so the last recorded state is the state. A
 //! state recorded under another alphabet (the index was relearned since) is dropped: its symbol
 //! ids mean other items now.
 //!
-//! An in-flight follow judgement (`pending`, at most three batches long) is not reconstructed.
-//! Current records preserve every change to advisory obligations, including a later edit that
-//! re-arms one after its command was observed. Older records lack exact edited paths: a recorded
-//! edit conservatively invalidates earlier met obligations rather than inventing freshness.
-//! Advisory `met` means the requested command was observed, never that a check passed. Stop
-//! requests remain bounded by the recorded session count and ordinary runtime policy.
+//! An in-flight follow judgement (`pending`, at most three batches long) and a bound read batch
+//! (`reads`) are not reconstructed (so nothing is predicted from them). Current records preserve
+//! every change to advisory obligations, including a later edit that re-arms one after its
+//! command was observed. Older records lack exact edited paths: a recorded edit conservatively
+//! invalidates earlier met obligations rather than inventing freshness. Advisory `met` means the
+//! requested command was observed, never that a check passed. Stop requests remain bounded by the
+//! recorded session count and ordinary runtime policy.
 
 use crate::{command_key, push_history, Arm, Decision, Judgement, Obligation, SessionState};
 use adage_core::CommandTable;
@@ -43,20 +46,19 @@ pub const MAX_SPOOL_BYTES: u64 = 4 << 20;
 pub const MAX_RECORDS: usize = 10_000;
 
 /// The runtime event a record is for: its `kind`, or, in records written before `kind`, the
-/// harness event name (Claude Code, Codex, OpenCode) mapped to one.
+/// harness event name (Claude Code, Codex, OpenCode) mapped to one by the event table
+/// ([`adage_trace::Harness::events`]; a name means the same in every harness that sends it). An
+/// event the runtime does not decide (`PreToolUse`, the mod's asks) or an unknown name is `""`.
 pub fn kind_of(record: &Value) -> &str {
     if let Some(k) = record.get("kind").and_then(Value::as_str) {
         return k;
     }
-    match record.get("event").and_then(Value::as_str).unwrap_or("") {
-        "UserPromptSubmit" | "chat.message" => "prompt",
-        "PostToolBatch" | "PostToolUse" | "tool.execute.after" => "batch",
-        "PostToolUseFailure" | "tool.error" => "failure",
-        "Stop" | "session.idle" => "stop",
-        "SessionStart" | "session.created" => "session_start",
-        "SessionEnd" | "session.deleted" => "session_end",
-        _ => "",
-    }
+    let event = record.get("event").and_then(Value::as_str).unwrap_or("");
+    adage_trace::Harness::ALL
+        .into_iter()
+        .find_map(|h| h.event_kind(event))
+        .and_then(adage_trace::EventKind::decided)
+        .unwrap_or("")
 }
 
 /// The session state the recorded decisions imply, or `None` if there is nothing to replay.
@@ -92,6 +94,24 @@ pub fn rebuild(records: &[Value], index: &Index, repo: &str, table: &CommandTabl
         d.obligation_state = snapshot.and_then(|s| serde_json::from_value(s).ok());
         if let Some(c) = d.ctx {
             st.ctx = c;
+        }
+        if let Some(c) = d.cand_ctx {
+            st.cand_ctx = c;
+        }
+        for n in &d.noticed {
+            if st.noticed.len() < crate::MAX_NOTICED && !st.noticed.contains(&n.candidate) {
+                st.noticed.push(n.candidate.clone());
+            }
+        }
+        // A step whose prediction counted against the bounds (both arms record it).
+        if let Some(at) = d.predicted_at {
+            st.predictions = st.predictions.saturating_add(1);
+            st.last_step_predicted = Some(at);
+            if let Some(p) = &d.would_predict {
+                if !st.predicted_routes.contains(&p.route) {
+                    st.predicted_routes.push(p.route.clone());
+                }
+            }
         }
         let legacy_edit = d.obligation_state.is_none()
             && kind == "batch"
@@ -205,6 +225,9 @@ pub fn rebuild(records: &[Value], index: &Index, repo: &str, table: &CommandTabl
     if st.ctx.alphabet != index.contexts(repo).digest {
         st.ctx = Default::default();
     }
+    if st.cand_ctx.alphabet != index.candidate_contexts(repo).digest {
+        st.cand_ctx = Default::default();
+    }
     st.repo.get_or_insert_with(|| repo.to_string());
     Some(st)
 }
@@ -223,6 +246,9 @@ mod tests {
             ("tool.execute.after", "batch"),
             ("PostToolUseFailure", "failure"),
             ("session.idle", "stop"),
+            ("TurnStep", "turn_step"),
+            ("PreToolUse", ""),
+            ("Standing", ""),
             ("Mystery", ""),
         ] {
             assert_eq!(kind_of(&json!({ "event": event })), kind, "{event}");

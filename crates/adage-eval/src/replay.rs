@@ -69,9 +69,20 @@ pub struct FastCheck {
 }
 
 /// The state later decisions read (not the `batches` and `history` counters): with the context
-/// state, whose symbols context triggers match on (Track G §7.3).
+/// state, whose symbols context triggers match on (Track G §7.3), and the candidates' own ring and
+/// what was noticed (plan D2).
 fn decision_state(st: &SessionState) -> serde_json::Value {
-    serde_json::json!([st.arm, st.emitted, st.pending, st.obligations, st.stop_requests, st.prompts > 0, st.ctx])
+    serde_json::json!([
+        st.arm,
+        st.emitted,
+        st.pending,
+        st.obligations,
+        st.stop_requests,
+        st.prompts > 0,
+        st.ctx,
+        st.cand_ctx,
+        st.noticed
+    ])
 }
 
 pub fn actions(t: &Transcript, root: &Path, table: &CommandTable) -> Vec<Action> {
@@ -132,7 +143,11 @@ pub fn replay(t: &Transcript, ctx: &Ctx<'_>, stop: bool) -> Replayed {
         let mut differs = |what: &str| r.fast.mismatches.push(format!("{} event {n} ({name}): {what}", t.id));
         if skip {
             r.fast.skipped += 1;
-            if !d.would_have.is_empty() || !d.judgements.is_empty() || d.would_continue.is_some() {
+            if !d.would_have.is_empty()
+                || !d.judgements.is_empty()
+                || d.would_continue.is_some()
+                || !d.noticed.is_empty()
+            {
                 differs("skipped, but the full path decided something");
             }
         } else {

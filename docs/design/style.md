@@ -14,9 +14,15 @@ modes `night` and `day`). `cargo xtask tokens` generates:
 - `crates/adage-term/src/tokens.rs`: the terminal half. Each colour has night and day values,
   the nearest xterm-256 index for each (computed, never hand-picked) and its role in a
   16-colour theme;
-- `design/build/tokens.css`: CSS variables for the web map.
+- `design/build/tokens.css`: CSS variables for the web map;
+- `plugin/claude-code/hooks/tokens.ts`: the Claude Code mod's half. `GLYPHS` holds every glyph
+  with its ASCII twin (`ADAGE_ASCII=1` picks the twin), and `ROLES` maps each role (`ink`,
+  `ink2`, `ink3`, `accent`, `command`, `fire`, `prime`, `inhibit`, `cost`) to a Claude Code theme
+  key (`text`, `inactive`, `subtle`, `suggestion`, `permission`, `success`, `warning`, `error`,
+  `claude`): a mod colours text by theme key, so the person's Claude Code theme wins, as the
+  terminal's own colours do. The mapping is `ROLES` in `xtask/src/main.rs`.
 
-Both outputs are committed, so building Adage never needs Node. `cargo test --workspace` fails
+All three outputs are committed, so building Adage never needs Node. `cargo test --workspace` fails
 when they are stale, and when any text colour falls below 4.5:1 contrast on any ground in
 either mode. Never edit a generated file; never write a colour anywhere else.
 

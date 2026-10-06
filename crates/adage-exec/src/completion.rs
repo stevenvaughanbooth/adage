@@ -151,9 +151,10 @@ pub fn prepare(
         bail!("completion requires a fixed verification command");
     }
     let table = CommandTable::load();
-    for approval in
-        store.approvals.iter().filter(|a| a.key.repo == repo && a.route == label && a.key.level == Level::E2)
-    {
+    for approval in store.approvals.iter().filter(|a| {
+        // A `predict` grant only lets the agent's own step be predicted: it never runs a check.
+        a.key.repo == repo && a.route == label && a.key.level == Level::E2 && a.key.mode.is_execute()
+    }) {
         let Ok(plan) = route::plan(ir, index, root, &paths.tracks(), Level::E2, approval.terms.as_ref(), table) else {
             continue;
         };

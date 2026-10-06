@@ -27,7 +27,7 @@ use crate::signals::{call_steps, Prompts, Signals};
 use adage_core::tools::{from_codex, normalize_tool};
 use adage_core::CommandTable;
 use adage_trace::session::CODEX;
-use adage_trace::{wire, Call, Session};
+use adage_trace::{wire, By, Call, Session};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serde_json::{json, Value};
@@ -379,7 +379,15 @@ pub fn decode(lines: &[Value], cx: &Decode<'_>) -> Option<Session> {
                     input["file_path"] = Value::String(adage_core::shell::resolve_path(&run_in, p));
                 }
             }
-            let call = Call { tool: tool.clone(), input: input.clone(), output: output.clone(), failed };
+            let call = Call {
+                tool: tool.clone(),
+                input: input.clone(),
+                output: output.clone(),
+                failed,
+                by: By::Agent,
+                tool_use_id: None,
+                agent: None,
+            };
             let at = if tool == "Bash" { run_in.as_str() } else { root_str.as_str() };
             let prompt = if by_event { rec.prompt.0 } else { rec.prompt.1 };
             steps.extend(call_steps(rec.turn, prompt, &call, normalize_tool(&tool, &input, at, table), &root));

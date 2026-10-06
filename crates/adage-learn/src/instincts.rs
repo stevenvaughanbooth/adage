@@ -394,6 +394,7 @@ pub fn plan_repo(
                     on: today.to_string(),
                     by: Some(by),
                     basis: review::basis(p, j.followed, j.ignored),
+                    via: None,
                 },
             );
             extinguished_now.insert(p.id.clone(), why);

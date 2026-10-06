@@ -89,6 +89,10 @@ pub struct Compiled {
     pub text: BTreeMap<String, Vec<String>>,
     /// Per step, why a command was dropped by replay.
     pub stale: BTreeMap<String, Vec<String>>,
+    /// The candidates a replay found stale, with their [`Verified::Stale`]: out of the pack, and
+    /// kept so that `verified.json` names every compiled step and what its replay found.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub dropped: Vec<Candidate>,
     pub advice: Vec<Advice>,
     pub types: BTreeMap<String, TypeDef>,
     pub repo_files: BTreeMap<String, RepoFile>,
@@ -689,6 +693,7 @@ pub fn compile(graph: Graph, root: &Path, table: &CommandTable) -> Compiled {
             candidates: Vec::new(),
             text: BTreeMap::new(),
             stale: BTreeMap::new(),
+            dropped: Vec::new(),
             advice: Vec::new(),
             types: BTreeMap::new(),
             repo_files: BTreeMap::new(),

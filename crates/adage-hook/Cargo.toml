@@ -19,6 +19,13 @@ adage-ingest = { path = "../adage-ingest" }
 adage-pack = { path = "../adage-pack" }
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
+# The press token (src/press.rs): 32 bytes from the operating system. Already in the tree
+# through adage-sign.
+getrandom = "0.2"
 
 [dev-dependencies]
+insta = "1"
 tempfile = "3"
+# The workspace test kit (docs/claude-mod/impl/testkit.md): the worlds the unit tests run in.
+adage-tracks = { path = "../adage-tracks", features = ["testkit"] }

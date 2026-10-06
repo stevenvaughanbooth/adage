@@ -13,7 +13,7 @@
 use adage_core::spans::SpanKind;
 use adage_core::{CommandTable, Effect};
 use adage_eval::safety;
-use adage_runtime::{decide, Arm, Call, Ctx, Event, SessionState};
+use adage_runtime::{decide, Arm, By, Call, Ctx, Event, SessionState};
 use adage_tracks::*;
 use proptest::prelude::*;
 use proptest::test_runner::{Config, RngAlgorithm, TestRng, TestRunner};
@@ -437,11 +437,11 @@ fn event() -> impl Strategy<Value = Event> {
     ];
     prop_oneof![
         2 => prompt,
-        3 => (cmd.clone(), output.clone()).prop_map(|(c, o)| Event::Batch { calls: vec![Call { tool: "Bash".into(), input: json!({"command": c}), output: o, failed: false }] }),
+        3 => (cmd.clone(), output.clone()).prop_map(|(c, o)| Event::Batch { calls: vec![Call { tool: "Bash".into(), input: json!({"command": c}), output: o, failed: false, by: By::Agent, tool_use_id: None, agent: None }] }),
         2 => prop::sample::select(vec!["schema/invoice.json", "acme/billing.py", "../x.json", "/etc/a.json", "acme/generated/models.py", "pnpm-lock.yaml"]).prop_map(|p| Event::Batch {
-            calls: vec![Call { tool: "Edit".into(), input: json!({"file_path": format!("{{root}}/{p}")}), output: String::new(), failed: false }]
+            calls: vec![Call { tool: "Edit".into(), input: json!({"file_path": format!("{{root}}/{p}")}), output: String::new(), failed: false, by: By::Agent, tool_use_id: None, agent: None }]
         }),
-        1 => (cmd, output).prop_map(|(c, o)| Event::Failure { call: Call { tool: "Bash".into(), input: json!({"command": c}), output: o, failed: true } }),
+        1 => (cmd, output).prop_map(|(c, o)| Event::Failure { call: Call { tool: "Bash".into(), input: json!({"command": c}), output: o, failed: true, by: By::Agent, tool_use_id: None, agent: None } }),
         1 => Just(Event::Stop { stop_hook_active: false }),
     ]
 }
@@ -659,12 +659,15 @@ fn colliding_event() -> impl Strategy<Value = Event> {
         input: json!({ "command": c }),
         output: out.into(),
         failed,
+        by: By::Agent,
+        tool_use_id: None,
+        agent: None,
     };
     prop_oneof![
         3 => prop::sample::select(vec!["run the tests for W-1234", "W-1234 please", "the tests fail", "tidy up"])
             .prop_map(|t| Event::Prompt { text: t.into() }),
         2 => Just(Event::Batch {
-            calls: vec![Call { tool: "Edit".into(), input: json!({"file_path": "{root}/schema/invoice.json"}), output: String::new(), failed: false }]
+            calls: vec![Call { tool: "Edit".into(), input: json!({"file_path": "{root}/schema/invoice.json"}), output: String::new(), failed: false, by: By::Agent, tool_use_id: None, agent: None }]
         }),
         2 => prop::sample::select(COMMANDS.to_vec()).prop_map(move |c| Event::Batch { calls: vec![bash(c, "ok", false)] }),
         2 => Just(Event::Failure { call: bash("make lint", "boom", true) }),

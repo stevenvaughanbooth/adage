@@ -6,6 +6,8 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+mod common;
+
 fn fixtures() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../sim/fixtures")
 }
@@ -37,14 +39,13 @@ fn walk(d: &Path) -> Vec<PathBuf> {
 }
 
 fn adage(home: &Path, args: &[&str]) -> (String, String, bool) {
-    let o = Command::new(env!("CARGO_BIN_EXE_adage"))
+    let o = common::scrub(&mut Command::new(env!("CARGO_BIN_EXE_adage")))
         .args(args)
         .current_dir(home)
         .env("HOME", home)
         .env("USERPROFILE", home)
         .env("ADAGE_HOME", home.join("adage"))
         .env("CODEX_HOME", home.join(".codex"))
-        .env_remove("CLAUDE_CONFIG_DIR")
         .output()
         .unwrap();
     (String::from_utf8_lossy(&o.stdout).into(), String::from_utf8_lossy(&o.stderr).into(), o.status.success())
@@ -54,6 +55,7 @@ fn adage(home: &Path, args: &[&str]) -> (String, String, bool) {
 /// only then is Codex history read by default.
 fn register_codex(home: &Path) {
     let mut c = Command::new(env!("CARGO_BIN_EXE_adage"));
+    common::scrub(&mut c);
     c.args(["install", "codex", "--scope", "user", "--write"])
         .current_dir(home)
         .env("HOME", home)
@@ -61,9 +63,6 @@ fn register_codex(home: &Path) {
         .env("ADAGE_HOME", home.join("adage"))
         .env("CODEX_HOME", home.join(".codex"))
         .env("ADAGE_ALLOW_NONINTERACTIVE", "1");
-    for v in ["CLAUDECODE", "OPENCODE", "CODEX_SANDBOX", "CODEX_SANDBOX_NETWORK_DISABLED"] {
-        c.env_remove(v);
-    }
     let o = c.output().unwrap();
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
 }

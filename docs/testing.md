@@ -9,13 +9,13 @@ the machine it runs on.
 
 | Suite | Where | Run | Update expected output | CI |
 | --- | --- | --- | --- | --- |
-| Rust unit | `#[cfg(test)]` in the module (large ones in `src/tests.rs`) | `cargo test -p <crate>` | — | `ci.yml` (affected packages) |
+| Rust unit | `#[cfg(test)]` in the module (large ones in `src/tests/`) | `cargo test -p <crate>` | — | `ci.yml` (affected packages) |
 | Rust integration | `crates/<crate>/tests/*.rs` | `cargo test -p <crate> --test <name>` | — | `ci.yml` (affected packages) |
 | Golden files | `crates/<crate>/tests/golden/*.txt` | with the integration test | `ADAGE_BLESS=1` | `ci.yml` |
 | Snapshots | `crates/<crate>/src/**/snapshots/*.snap` (insta) | with the unit test | `cargo insta review`, or `INSTA_UPDATE=always` | `ci.yml` |
 | Table-driven cases | `crates/<crate>/tests/cases/*.json` (input and expected together) | with the integration test | edit the case | `ci.yml` |
 | Property tests | `adage-eval/tests/prop_*.rs`, `adage-graph/tests/{agreement,border}.rs`, `adage-pack/tests/digests.rs` | `cargo test -p <crate> --features slow` where gated | — | `evals.yml` |
-| Eval gates | `adage-eval/tests/{gates,bench,parity,g4}.rs` over `evals/datasets/` | `cargo test -p adage-eval` | `ADAGE_BLESS=1` (generated datasets); `adage eval bench … --out evals/baselines/…` | `evals.yml` |
+| Eval gates | `adage-eval/tests/{gates,bench,parity,g4,predict_gate}.rs` over `evals/datasets/` | `cargo test -p adage-eval` (`--test predict_gate` alone: the prediction gate; how long it takes depends on the datasets present under `evals/datasets/` that it replays, `demo-haiku45` round 2 and `synthetic`) | `ADAGE_BLESS=1` (generated datasets); `adage eval bench … --out evals/baselines/…` | `evals.yml` |
 | Learning experiment contracts | `adage-eval/tests/{paired,experiment,experiment_sources}.rs` and evaluation unit tests | `cargo test --locked -p adage-eval --lib --test paired --test experiment --test experiment_sources` | reviewed assertions | `ci.yml`, always |
 | Live collector contracts (free) | `evals/live/test_*.py` | build `adage-cli`, then `python3 -m unittest discover -s evals/live -p 'test_*.py'` | handwritten provider fixtures and reviewed assertions | `ci.yml`; full suite on Linux, native evidence/action order on all platforms |
 | Cardinal workflow diagnostics (free) | `evals/live/sandboxes/cardinal/` | `python3 evals/live/sandboxes/cardinal/selfcheck.py` | explicit final-state and tamper assertions | `ci.yml`, Linux |
@@ -26,6 +26,7 @@ the machine it runs on.
 | Web end to end | `web/{map,site}/e2e/*.spec.ts` (Playwright, axe) | `pnpm test:e2e` | fixtures: `e2e/fixtures/make.mjs`, `e2e/fixtures/heldout/make.py` | `ci.yml` |
 | Node scripts | `web/site/scripts/*.test.mjs`, `npm/test/*.test.mjs`, `plugin/opencode/test/*.test.mjs` (run from `adage-cli`'s tests) | `pnpm test:api`, `pnpm test:evidence`, `node …` | — | `ci.yml` |
 | Shell | `plugin/test/session-start.test.sh` | run it | — | `ci.yml` |
+| Claude Code mod | `plugin/claude-code/hooks/**/*.test.ts`, one beside each module, over `hooks/fixtures/kit.ts` | `claude plugin test plugin/claude-code` (339 tests) | — | `ci.yml`; `node scripts/check-plugin.mjs` fails a module with no test file or a test that names no test-plan id |
 | Live evals (paid) | `demo/`, `evals/live/`, `evals/reflex-proof/harness/` runners | see each README | — | never: run by hand, results reported in the pull request |
 
 ## Layout conventions
@@ -44,6 +45,15 @@ the machine it runs on.
 - **One variable re-blesses goldens**: `ADAGE_BLESS=1`. Insta snapshots use insta's own
   review flow. Pending snapshots (`*.snap.new`) are never committed.
 - **Shared test helpers** live in `tests/common/mod.rs` of the crate that needs them.
+- **Fixtures of the reflex model** come from one kit: `adage_tracks::testkit`, behind
+  `adage-tracks`' `testkit` feature, which a crate turns on from its `[dev-dependencies]`
+  (`adage-tracks = { path = "../adage-tracks", features = ["testkit"] }`). It builds routes
+  (`route(…)`, and `kinds::lookup`, `finish_line`, `dead_end`, `context`, `sequence`, `intent`),
+  tracks (`track(…)`, `.validated()`), hand-written indexes (`IndexBuilder`), temporary worlds
+  (`TempWorld`) and learned homes (`LearnedHome`: the index, the tracks, a session's state file
+  and its spool). Write a fixture with it rather than a `Route { … }` literal or another `World`
+  that creates directories by hand; see
+  [claude-mod/impl/testkit.md](claude-mod/impl/testkit.md).
 - **Python suites** keep `test_*.py` beside the modules they test and use `unittest`. Each suite
   is declared once in `xtask/src/suites.rs` with its import root, so it runs the same from
   anywhere; a test file in no suite fails `cargo test -p xtask`.
@@ -71,10 +81,10 @@ Each component is tested through its own crate, without the others:
 | Canonical model | `adage-trace` | unit tests |
 | Ingestion | `adage-ingest` | decoders fed bytes from memory (`source.rs`), the format registry against each format's reader (`format.rs`) |
 | Learning engine | `adage-graph`, `adage-learn` | sessions built in memory (`adage-graph/tests/common`), end to end over transcripts (`adage-learn/tests/end_to_end.rs`) |
-| Live interaction | `adage-runtime`, `adage-hook` | `decide()` as a function of index, state, event, policy and checkout (`adage-runtime/src/tests.rs`) |
+| Live interaction | `adage-runtime`, `adage-hook` | `decide()` as a function of index, state, event, policy and checkout (`adage-runtime/src/tests/`) |
 | Application | `adage-app` | decisions against a temporary `ADAGE_HOME` (`review.rs` tests), without the binary |
 | Harnesses | `adage-hook::harness`, `adage-sim` | each adapter's translation; one scenario rendered in every harness's formats |
-| Front ends | `adage-cli` | the binary end to end (`tests/`), frames as snapshots (`ui/tests.rs`) |
+| Front ends | `adage-cli` | the binary end to end (`tests/`, through `tests/common/mod.rs`: one environment scrub, a hermetic `Command`, and the test kit's temporary world and learned home), frames as snapshots (`ui/tests.rs`) |
 
 ## Learning evidence contracts
 
@@ -94,8 +104,8 @@ expected outcomes and route support are explicit assertions, not generated by th
 | Export → import → audit → learn and evaluation command exit status | `adage-cli/tests/corpus.rs` |
 | Object publication → freeze → report, required targets and protocol tampering | `adage-cli/tests/experiment.rs` |
 | Native traces → canonical corpus → default learning → review → real hook → independently repaired held-out task | `adage-cli/tests/learning_delivery.rs` |
-| Advisory obligations survive later edits, extension delivery and corrupt session state | `adage-runtime::tests`, `adage-hook::tests` |
-| Exact verification evidence, failure precedence, interrupted attempts and explicit completion checks | `adage-exec::{verification,journal,completion,hook}::tests` and hook prediction tests |
+| Advisory obligations survive later edits, extension delivery and corrupt session state | `adage-runtime::tests::intent`, `adage-hook::stop::tests` |
+| Exact verification evidence, failure precedence, interrupted attempts and explicit completion checks | `adage-exec::{verification,journal,completion}::tests`, `adage-exec::hook::stop_gate::tests` |
 
 ```sh
 cargo test --locked -p adage-trace -p adage-ingest -p adage-learn
@@ -111,6 +121,13 @@ runs can support savings claims. The paired integration suite and evaluation uni
 every PR; the long replay/benchmark suites remain in the weekly/manual evaluation workflow.
 
 ## Known gaps
+
+- The test kit is not used everywhere yet. adage-hook's `src/testkit.rs` (`ObligationWorld`) and
+  adage-exec's `src/hook/testkit.rs` (`Fixture`) still write their routes and indexes by hand
+  (the plan's wave B moves them), and so does `adage-cli/tests/hooks.rs`: adage-exec's `parity`
+  test compiles that file by path, so it can use the kit only once adage-exec's
+  dev-dependencies turn the feature on. `adage-runtime`'s `src/tests/` and adage-hook's unit tests
+  keep their `Route { … }` literals too.
 
 - `adage-pack/tests/fixtures/tracks` holds tracks learned from `sim/fixtures` output, committed
   rather than learned in the test (the pack crate does not link the learner).

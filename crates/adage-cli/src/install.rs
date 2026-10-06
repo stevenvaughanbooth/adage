@@ -31,6 +31,7 @@
 //! one rename away.
 
 use crate::harness::{claude, codex, opencode};
+use crate::helpers::flag;
 use adage_core::repo;
 use adage_trace::Harness;
 use anyhow::{bail, Context, Result};
@@ -46,10 +47,6 @@ pub(crate) const BACKUP_SUFFIX: &str = ".adage-bak";
 /// Environment variables that mark a shell run by an agent. Only `CLAUDECODE` is documented; the
 /// others are observed conventions (docs/harnesses.md). A guard against steering, not a sandbox.
 pub(crate) use adage_app::person::AGENT_ENV;
-
-fn flag(args: &[String], name: &str) -> Option<String> {
-    args.iter().position(|a| a == name).and_then(|i| args.get(i + 1).cloned())
-}
 
 /// A harness's registration for one binary: what to write, and where each scope puts it
 /// ([`crate::placement`]).

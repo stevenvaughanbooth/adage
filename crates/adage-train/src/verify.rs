@@ -166,8 +166,15 @@ fn run(rp: &Replay, argv: &[String], report: &mut Report) -> Ran {
 }
 
 /// Replay one candidate in a fresh checkout. Returns the candidates it becomes (an avoid route
-/// may split by signature; a stale one becomes none) and, for a stale one, why.
-fn replay_one(c: Candidate, root: &Path, o: &Options, report: &mut Report) -> (Vec<Candidate>, Option<String>) {
+/// may split by signature; a stale one becomes none, and is put in `dropped` with its
+/// `verified` set) and, for a stale one, why.
+fn replay_one(
+    c: Candidate,
+    root: &Path,
+    o: &Options,
+    report: &mut Report,
+    dropped: &mut Vec<Candidate>,
+) -> (Vec<Candidate>, Option<String>) {
     let mut c = c;
     if c.checks.is_empty() {
         c.verified = Verified::NotReplayed(match c.route.shape {
@@ -333,10 +340,17 @@ fn replay_one(c: Candidate, root: &Path, o: &Options, report: &mut Report) -> (V
         }
     }
     if c.route.shape == Shape::Avoid {
-        return split_avoid(c, kept, not_replayed);
+        let (made, stale) = split_avoid(c.clone(), kept, not_replayed);
+        if let Some(why) = &stale {
+            let mut c = c;
+            c.verified = Verified::Stale(why.clone());
+            dropped.push(c);
+        }
+        return (made, stale);
     }
     if let Some(why) = stale {
         c.verified = Verified::Stale(why.clone());
+        dropped.push(c);
         return (Vec::new(), Some(why));
     }
     c.verified = match not_replayed {
@@ -416,7 +430,7 @@ pub fn verify(compiled: &mut Compiled, root: &Path, o: &Options) -> Report {
         } else {
             for c in candidates {
                 let steps = c.steps.clone();
-                let (made, stale) = replay_one(c, root, o, &mut report);
+                let (made, stale) = replay_one(c, root, o, &mut report, &mut compiled.dropped);
                 if let Some(why) = stale {
                     for s in steps {
                         compiled.stale.entry(s).or_default().push(why.clone());

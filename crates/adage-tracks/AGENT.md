@@ -9,8 +9,8 @@ crate's types.
 
 - Layer 2 in `xtask/src/layers.rs`: "the reflex model (tracks, the index) and the matching
   primitives over traces that the learner and the live runtime share".
-- Links (normal dependencies): `adage-core`, `adage-trace`, `adage-intent`. Nothing else in the
-  workspace.
+- Links (normal dependencies): `adage-core`, `adage-trace`, `adage-intent`; with the `testkit`
+  feature only, `adage-store` (layer 0) for the kit's learned home. Nothing else in the workspace.
 - Depended on by: `adage-graph`, `adage-instincts`, `adage-runtime`, `adage-safety`, `adage-pack`,
   `adage-learn`, `adage-hook`, `adage-eval`, `adage-exec`, `adage-app`, `adage-cli`, `adage-train`.
 - `adage-ingest` must never link this crate (`FORBIDDEN`: "ingestion produces sessions, not
@@ -44,6 +44,11 @@ crate's types.
   `check`, `text`, size bounds), `lift` (`OutcomeLift`, `diff_lower_bound`), `layout` (`slug`,
   `follow_weights_path`, `read_follow_weights`, `INSTINCTS_TRACK`), `params` (`EngineParams`,
   `RuntimeParams`, `LearnParams`; presets `default` and `demo`).
+- `testkit` (feature `testkit`, and this crate's own tests): the workspace's fixture kit.
+  `route`/`RouteBuilder`, `track`/`TrackBuilder`, `IndexBuilder` (a hand-written index),
+  `kinds` (a lookup, a finish line, a dead end, a context route, a sequence, an intent route,
+  `every_kind`), `TempWorld` and `LearnedHome` (index, tracks, session state, spools). Other
+  crates enable it from `[dev-dependencies]`; see `docs/claude-mod/impl/testkit.md`.
 
 ## How it connects
 
@@ -74,7 +79,10 @@ crate's types.
   oracle accepts exactly these sentences. Changing a template changes what is accepted downstream.
 - Changing the route model changes the bytes of `routes/<id>.yaml` and `index.json`:
   `adage-learn`'s goldens (`tests/golden/`) and its version bumps (`adage_learn::bump`) move.
-- Tests: `cargo test -p adage-tracks` (unit tests in `src/`, `tests/hostile.rs`,
-  `tests/index_roundtrip.rs`). No fixtures outside the crate (`READS` in `xtask/src/affected.rs`
+- Tests: `cargo test -p adage-tracks` (unit tests in `src/`, the kit's in `src/testkit/tests.rs`,
+  `tests/hostile.rs`, `tests/index_roundtrip.rs`). The kit is test-only: never enable `testkit`
+  from a normal dependency, and keep it free of `Command::new` (`no_spawn` scans `src/`). A
+  change to its defaults changes every fixture built with it; adage-cli's suites and goldens are
+  the first to run. No fixtures outside the crate (`READS` in `xtask/src/affected.rs`
   has no entry for it). Then run at least `cargo test -p adage-runtime -p adage-learn
   -p adage-instincts -p adage-graph`; `cargo xtask affected` lists the full set.

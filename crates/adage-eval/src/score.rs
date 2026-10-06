@@ -375,8 +375,8 @@ pub fn score_session(
         }
         let k = point(route);
         let (correct, matched, saved) = match &route.step {
-            // Advice and cards direct no command: checked for safety, and not scored.
-            Step::Advise { .. } | Step::Card { .. } => {
+            // Advice, cards and skills direct no command: checked for safety, and not scored.
+            Step::Advise { .. } | Step::Card { .. } | Step::Skill { .. } => {
                 tally.instincts.advice += u32::from(route.is_instinct());
                 continue;
             }
@@ -572,7 +572,7 @@ fn recall(
                     named.push((f.turn, Expect::of(c, table), by_edit));
                 }
             }
-            Step::ReadBatch { .. } | Step::Advise { .. } | Step::Card { .. } => {}
+            Step::ReadBatch { .. } | Step::Advise { .. } | Step::Card { .. } | Step::Skill { .. } => {}
         }
     }
     let covered_cmd = |a: &Action| named.iter().any(|(t, e, _)| *t < a.turn && e.matches(a));

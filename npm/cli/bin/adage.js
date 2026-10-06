@@ -38,7 +38,8 @@ if (!bin) {
 }
 
 // The Claude Code plugin asks which binary this launcher runs, so its hooks can call that binary
-// directly instead of starting node on every event.
+// directly instead of starting node on every event, and links the adage-exec beside it (the
+// platform package ships it there) for when execution is on.
 if (process.env.ADAGE_NPM_WHICH === "1") {
   console.log(bin)
   process.exit(0)

@@ -1,81 +1,18 @@
 #!/bin/sh
-# adage-exec plugin SessionStart (Track C §3.2, D2). This plugin's hooks run
-# ${CLAUDE_PLUGIN_DATA}/bin/adage-exec, which this script points at:
-#   - execution on ($ADAGE_HOME/exec/enabled, written only by `adage delegate on` at a terminal):
-#     the adage-exec binary (bundled dist/<target>/adage-exec verified against dist/SHA256SUMS,
-#     else adage-exec on PATH, else beside adage on PATH, or beside the platform binary npm's
-#     launcher runs). The Adage plugin reads the same marker
-#     and goes quiet, so hooks never fire twice. With no adage-exec found, the adage binary
-#     serves instead (`adage-exec hook` takes `adage hook`'s arguments), so the session still
-#     gets E0 directives;
-#   - execution off: scripts/quiet, which answers nothing; the Adage plugin serves.
-# Nothing is ever downloaded. Every path exits 0 (fail open). When nothing can serve, bin/adage-exec
-# points at scripts/quiet and one line goes to the person as a JSON `systemMessage` on stdout.
-# At every start it touches $ADAGE_HOME/exec/plugin-seen, so the Adage plugin knows this one is
-# installed and goes quiet only then (never leaving a session with no hooks at all).
+# The retired adage-exec plugin, kept for one release as an alias (plan A8): the adage plugin now
+# ships adage-exec beside adage and runs it itself while execution is on, so this plugin registers
+# this SessionStart and nothing else. It points a stale ${CLAUDE_PLUGIN_DATA}/bin/adage-exec (left
+# by an earlier version, whose hooks ran it) at scripts/quiet, so nothing an earlier version
+# registered can answer an event twice, and says once per session start, as a JSON
+# `systemMessage` on stdout, that the person can uninstall it. It runs no binary and records
+# nothing. Every path exits 0.
 ROOT="$1"; DATA="$2"
-skip() { cat >/dev/null; exit 0; }
-fail() {
+cat >/dev/null
+[ -n "$ROOT" ] && [ -n "$DATA" ] || exit 0
+if mkdir -p "$DATA/bin" 2>/dev/null; then
   ln -sfn "$ROOT/scripts/quiet" "$DATA/bin/adage-exec" 2>/dev/null
-  t=$(printf '%s' "adage-exec: $1" | sed 's/\\/\\\\/g; s/"/\\"/g')
-  printf '{"systemMessage":"%s"}\n' "$t"
-  cat >/dev/null; exit 0
-}
-[ -n "$ROOT" ] && [ -n "$DATA" ] || skip
-case "$(uname -s)" in
-  Darwin) AH="${ADAGE_HOME:-$HOME/Library/Application Support/Adage}" ;;
-  *) AH="${ADAGE_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/adage}" ;;
-esac
-[ -d "$AH" ] && mkdir -p "$AH/exec" 2>/dev/null && : >"$AH/exec/plugin-seen" 2>/dev/null
-mkdir -p "$DATA/bin" || fail "cannot create $DATA/bin"
-if [ ! -f "$AH/exec/enabled" ]; then
-  ln -sfn "$ROOT/scripts/quiet" "$DATA/bin/adage-exec"
-  skip
+  # Windows copies were made under .exe names; none of them may answer anything any more.
+  rm -f "$DATA/bin/adage-exec.exe" "$DATA/bin/adage.exe" 2>/dev/null
 fi
-case "$(uname -s)-$(uname -m)" in
-  Darwin-arm64) T=aarch64-apple-darwin ;; Darwin-x86_64) T=x86_64-apple-darwin ;;
-  Linux-x86_64) T=x86_64-unknown-linux-musl ;; Linux-aarch64) T=aarch64-unknown-linux-musl ;;
-  *) T="" ;;
-esac
-case "$T" in *-linux-musl) [ -f "$ROOT/dist/$T/adage-exec" ] || T="${T%-musl}-gnu" ;; esac
-# Prefer native digest providers: the Perl helper is noticeably slower for large debug builds.
-# All paths verify the same SHA-256; missing providers fall back without weakening verification.
-sha256() { { sha256sum "$1" || openssl dgst -sha256 -r "$1" || shasum -a 256 "$1"; } 2>/dev/null | cut -d' ' -f1; }
-LINKED=""
-install_bundled() {
-  NAME="$1"; SRC="$ROOT/dist/$T/$NAME"
-  [ -n "$T" ] && [ -f "$SRC" ] || return 1
-  WANT=$(grep " $T/$NAME\$" "$ROOT/dist/SHA256SUMS" 2>/dev/null | cut -d' ' -f1)
-  if [ -n "$WANT" ] && [ -x "$DATA/bin/$NAME-$WANT" ]; then GOT="$WANT"; else GOT=$(sha256 "$SRC"); fi
-  [ -n "$WANT" ] && [ "$WANT" = "$GOT" ] || return 1
-  if [ ! -x "$DATA/bin/$NAME-$GOT" ]; then
-    cp "$SRC" "$DATA/bin/.$NAME-$GOT.tmp" && chmod 755 "$DATA/bin/.$NAME-$GOT.tmp" \
-      && mv "$DATA/bin/.$NAME-$GOT.tmp" "$DATA/bin/$NAME-$GOT" || return 1
-  fi
-  ln -sfn "$NAME-$GOT" "$DATA/bin/$NAME"
-}
-if install_bundled adage-exec; then
-  # The installed executor locates its learner beside itself, not in dist/. Both binaries must
-  # be verified and installed together; otherwise delegation would silently disable learning.
-  install_bundled adage || fail "the bundled learner is missing or does not match its checksum; reinstall the plugin"
-  LINKED=1
-fi
-if [ -z "$LINKED" ] && P=$(command -v adage-exec 2>/dev/null) && [ -n "$P" ] && [ -f "$P" ]; then
-  ln -sfn "$P" "$DATA/bin/adage-exec" && LINKED=1
-fi
-if [ -z "$LINKED" ] && P=$(command -v adage 2>/dev/null) && [ -n "$P" ]; then
-  # npm's node launcher names the platform binary it runs; adage-exec sits beside that one.
-  OUT=$(ADAGE_NPM_WHICH=1 "$P" version 2>/dev/null)
-  case "$OUT" in
-    "adage "*|"") ;;
-    *) [ -f "$OUT" ] && P="$OUT" ;;
-  esac
-  D=$(dirname "$P")
-  if [ -x "$D/adage-exec" ]; then
-    ln -sfn "$D/adage-exec" "$DATA/bin/adage-exec" && LINKED=1
-  else
-    ln -sfn "$P" "$DATA/bin/adage-exec" && LINKED=1
-  fi
-fi
-[ -n "$LINKED" ] || fail "no binary for $(uname -s)-$(uname -m); install with brew install stevenvaughanbooth/tap/adage or npm i -g @adage-sh/cli"
-exec "$DATA/bin/adage-exec" hook claude SessionStart
+printf '{"systemMessage":"%s"}\n' "adage-exec: the adage plugin now includes execution; uninstall this one (/plugin uninstall adage-exec@adage)."
+exit 0

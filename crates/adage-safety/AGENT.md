@@ -11,8 +11,8 @@ checks made in `adage-tracks` and `adage-runtime`, so that the eval, the propert
 - Links: `adage-core` (`repo::is_safe_relative`) and `adage-tracks` (`Route`, `Step`, `Trigger`,
   `Contract`, `Strength`, `ceiling`, `interlock`, `card`, `advice`) only.
 - Linked by: `adage-eval` (re-exported as `adage_eval::safety`, used in `score.rs` and
-  `tests/prop_tracks.rs`), `adage-exec` (`check_data_block` and `DataType` in `hook.rs` and its
-  tests).
+  `tests/prop_tracks.rs`), `adage-exec` (`check_data_block` and `DataType` in `hook/prefetch.rs` and
+  its tests).
 - Must never link `adage-runtime` or anything that renders what it checks (its `Cargo.toml`
   says so; siblings at layer 3 cannot link each other). `adage-runtime` is a dev-dependency
   only: the tests render with the runtime and hold the result to the oracle.

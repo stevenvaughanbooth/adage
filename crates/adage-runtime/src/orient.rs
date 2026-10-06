@@ -83,7 +83,7 @@ pub fn readable(base: &Path, rel: &str, ignore: &Ignore) -> Option<String> {
     String::from_utf8(std::fs::read(&path).ok()?).ok()
 }
 
-/// A source line as data: tabs as spaces, cut to [`LINE`] characters; `None` (withheld) if it is
+/// A source line as data: tabs as spaces, cut to `LINE` (150) characters; `None` (withheld) if it is
 /// not printable card text or looks like a secret.
 pub fn shown(l: &str) -> Option<String> {
     let l = l.trim_end_matches('\r').replace('\t', "    ");

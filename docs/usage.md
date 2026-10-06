@@ -145,7 +145,7 @@ To stop, `adage delegate off --repo .` (approvals are kept), or `adage review re
 sessions with it and the orientation card used fewer model requests than sessions without Adage;
 on held-out tasks it saved more calls still but missed the registered quality rule, so it stays
 experimental ([README](../README.md#evidence-so-far)). The full
-mechanics are in [execution](execution.md#the-finish-line-check-stop-gate).
+mechanics are in [execution](execution.md#the-learned-finish-line-check-stop-gate).
 
 ## Other ways to install
 
@@ -344,6 +344,75 @@ target/release/adage status
 claude --plugin-dir plugin/claude-code
 ```
 
+### What the plugin shows in the session
+
+The plugin carries a module that acts where the command hooks cannot, and draws beside the
+conversation, never in it (the model reads nothing it draws). What it does: a test run a fresh
+receipt already covers is answered with the receipt instead of running, only when Claude Code's
+own permission rules would have let the call run unasked (the receipt card then stands in for
+pytest's output); a rewrite to the project's interpreter, or a learned replacement for a dead end,
+runs only when the rules treat both commands alike, and the binary's advice reaches the model
+otherwise; the repository's standing reflexes sit once in the cached system prompt, the project's
+environment note on the Bash tool's description, and a subagent is told the conventions its task
+binds before its first request; a step the binary marks routine goes to the model
+`runtime.routine_model` names, at low effort, when you set one. What it draws:
+
+- the opening line, with Adage's glyph: `◠ adage · 3 reflexes and 4 instincts active in this repo; …`;
+- under a prompt a reflex fired at, one dim line per reflex, worded as what it tells the agent;
+- under a tool row, a marker when Adage pointed a test run at the project's interpreter, took the
+  step without a model request, ran a learned replacement, or the agent headed off a dead end; a
+  receipt that covered a run says so under its output;
+- one band above the prompt while there is something to say: reflexes this session, steps without
+  a model request, the health lamp and its word, learning; a second line only when something
+  needs you (a grant that lapsed, a problem, reflexes waiting for review, a newer Claude Code);
+- a toast when learning changed a reflex, and a status-line warning only when something is wrong
+  (no binary for this machine, hooks not answering);
+- with `ui.noticed` on, under the tool batch that completed a sequence Adage has counted in
+  earlier sessions, `○ adage noticed · make test after editing acme/** · seen in 3 earlier
+  sessions` (or `· waits for your review · /adage review`), once per sequence per session, never
+  for a single call; the band counts them (`1 pattern noticed`) while the pane is closed;
+- under a Skill tool row, `◈ adage loaded the release-checklist skill · no model request` when
+  Adage made the call in the model's place, and `◈ adage verified 3 of 5 steps here · step 2
+  stale · /adage why` when `adage train` verified the skill here: the skill's text reaches the
+  model with those steps listed under a fixed heading, and `/adage why` lists each step.
+
+**Adage asks.** When a reflex waits for a decision, Adage asks at the end of the turn, in the
+dialog Claude Code uses to ask a question: `Adage learned: after editing acme/**, run make test.
+Tell the agent?` with `enable` / `not this one` / `why`; `Adage can run make gen for you after a
+schema edit, instead of asking the agent to. Allow it?` with `see what it would do` / `not now`;
+`6 reflexes from alice@acme.com are in this repository. Use them?` with `use them` / `not now` /
+`why`. `see what it would do` opens a pane with three plain lines (`it runs`, `it changes` with
+the diff, `it never touches anything else, or the network`) and `a: allow`, `n: not now`,
+`d: details`; `allow` confirms against the digest the stage produced, and if the repository moved
+meanwhile the pane shows the fresh diff and asks again. At most one ask per turn end, one per
+reflex per day; dismissing the dialog brings it back once, a day later; `not this one` records a
+dismiss. Every answer runs through the press: a single-use token the binary issues once at the
+session's start (`adage hook claude Press`, before the agent's first act) and the mod holds in
+memory; the verb reads `{ press, session }` on stdin, records the decision as a person's (`via:
+press`), and prints the next token. The model cannot press (it can only call tools) and a Bash
+command it is talked into running gets no token. With no token held (the window was missed, the
+mod reloaded mid-session), the dialog still asks and the answer is kept for the next session start
+in the same repository; the band says `» kept for your next session · /adage review`. That start
+asks again, naming the exact command (`Kept from your last session: … Run it now?`, `run it` /
+`drop it`), and only that answer runs it.
+
+`/adage` prints the status card and opens the pane: **Live** (`l`, the feed of `adage watch`, a
+filter, `enter` to read a directive as the agent read it, `p` pause, `v` quiet rows, `n` newest),
+**Reflexes** (`r`, a **waiting for you** group first, each item with its two answers as buttons,
+then every reflex with its strength, stage and evidence; an expanded row has `e enable`, `n not
+this one` and `d details`, where the four more verbs and the equivalent `adage review` command,
+with `c Copy`, wait) and **Health** (`t`, every doctor check; `enter` conditions the repository
+when a check asks for it, any other fix is a command to copy). Every tab ends with **Explore in
+browser**, which starts `adage map` once and links to it. `/adage why` shows the last directive
+of this session (or the verified skill's steps), `/adage off` turns Adage off in this repository,
+`/adage on` opens the ask `Adage is off in this repository. Turn it on?`, `/adage pause` pauses the
+feed and the band, and `/adage watch`, `reflexes`, `review` and `health` open the pane on that
+tab. In `/config` the plugin has two rows: **Band above the prompt** (on) and **Watch pane**
+(`manual`; `auto` opens the pane unasked in a terminal 144 columns wide); there is no switch for
+asking: a decision is never hidden behind a setting. Nothing is drawn or asked in `claude -p`, the
+SDK or the VS Code panel, where `/adage` answers as text. `ADAGE_ASCII=1` draws every glyph as
+its ASCII twin.
+
 ## OpenCode and Codex
 
 ```bash
@@ -368,7 +437,9 @@ failed command stay silent there; learned dead ends are announced at the first p
 directives emitted, followed, and ignored. Data lives in `~/Library/Application Support/Adage`
 (macOS), `~/.local/share/adage` (Linux) or `%APPDATA%\Adage` (Windows); `ADAGE_HOME` overrides it.
 
-**Kill switches:** `ADAGE_DISABLE=1`, or a `.adage/disabled` file in a repository.
+**Kill switches:** `ADAGE_DISABLE=1`, or a `.adage/disabled` file in a repository: `adage off`
+writes it (allowed anywhere, inside an agent session too) and `adage on` removes it (a person's
+decision, at a terminal).
 
 **Live conditioning:** you do not have to run `adage condition` again. When an agent's session stops or
 ends, the hook starts a background learner for that repository (detached; the hook never waits,

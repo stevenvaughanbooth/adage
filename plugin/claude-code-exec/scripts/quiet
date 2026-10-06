@@ -1,4 +1,4 @@
 #!/bin/sh
-# The hook binary while this plugin is not the one serving: read the payload, say nothing.
+# What a stale bin/adage-exec runs now that this plugin is retired: read the payload, say nothing.
 cat >/dev/null
 exit 0

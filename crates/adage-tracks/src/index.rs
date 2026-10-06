@@ -4,6 +4,7 @@
 //! installed tracks into `index.json`, written atomically (temp file + rename). The same inputs
 //! always produce the same bytes, and `generation` identifies exactly which inputs decided.
 
+use crate::candidates::Candidate;
 use crate::context::CtxNet;
 use crate::interlock;
 use crate::io;
@@ -16,8 +17,23 @@ use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
+/// The index format this binary writes, and the newest it reads (plan §2.3.4). Older binaries
+/// ignore the field; a newer one sets it when the index may hold what an older one cannot parse,
+/// so a failed parse of a newer index is reported as "newer than this binary" ([`Unloaded::Newer`])
+/// rather than as damage to rebuild, and two binaries on one machine do not take turns
+/// recompiling it.
+///
+/// | Format | Since | May hold |
+/// | --- | --- | --- |
+/// | 0 (absent) | | every step before skills |
+/// | 1 | D3 | [`Step::Skill`] |
+pub const INDEX_FORMAT: u32 = 1;
+
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Index {
+    /// [`INDEX_FORMAT`] of the binary that compiled it; 0 when written before the field existed.
+    #[serde(default)]
+    pub format: u32,
     pub generation: String,
     pub routes: Vec<IndexedRoute>,
     /// Per repository, what can make its routes act ([`Triggers`]), for the hook's no-match fast
@@ -30,6 +46,19 @@ pub struct Index {
     /// it existed has none, and [`Index::contexts`] derives it on the fly.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub contexts: BTreeMap<String, CtxNet>,
+    /// Per repository, the patterns learning counted that are not reflexes ([`Candidate`]: a
+    /// sequence seen in fewer traces than a reflex needs, or a nascent reflex with a context),
+    /// sorted by id, never a route's id. Read by [`Index::compile_root`] from each repository's
+    /// `candidates.json`, since they are not in any track; not part of `generation` (they change
+    /// at nearly every learn, and nothing is granted against them). An index written before them
+    /// has none.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub candidates: BTreeMap<String, Vec<Candidate>>,
+    /// Per repository with candidates, their own alphabet and net ([`CtxNet::of_candidates`]),
+    /// walked apart from `contexts` so a learn that changes only candidates never resets a
+    /// session's route context state.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub candidate_contexts: BTreeMap<String, CtxNet>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -207,7 +236,7 @@ impl Index {
                 contexts.insert(repo.to_string(), net);
             }
         }
-        (Index { generation, routes, triggers, contexts }, conflicts)
+        (Index { format: INDEX_FORMAT, generation, routes, triggers, contexts, ..Default::default() }, conflicts)
     }
 
     /// [`Index::compile_with_conflicts`], then the exec bindings of pack-sourced routes read from
@@ -219,7 +248,51 @@ impl Index {
         if !bindings.is_empty() {
             index.attach_exec(&bindings);
         }
+        index.attach_candidates(crate::candidates::read_all(tracks_root));
         (index, conflicts)
+    }
+
+    /// Add each repository's candidates (by repository key), leaving out any whose id is one of
+    /// the repository's routes, with their net and their words in the repository's triggers (so
+    /// the fast path never skips an event that could notice one). The generation is unchanged.
+    pub fn attach_candidates(&mut self, by_repo: BTreeMap<String, Vec<Candidate>>) {
+        for (repo, mut cs) in by_repo {
+            let routes: BTreeSet<&str> = self.for_repo(&repo).map(|r| r.route.id.as_str()).collect();
+            cs.retain(|c| !routes.contains(c.id.as_str()));
+            cs.sort_by(|a, b| a.id.cmp(&b.id));
+            cs.dedup_by(|a, b| a.id == b.id);
+            if cs.is_empty() {
+                continue;
+            }
+            let triggers = self.triggers(&repo).into_owned().with_candidates(&cs);
+            self.triggers.insert(repo.clone(), triggers);
+            let net = CtxNet::of_candidates(&cs);
+            if !net.is_empty() {
+                self.candidate_contexts.insert(repo.clone(), net);
+            }
+            self.candidates.insert(repo, cs);
+        }
+    }
+
+    /// `repo`'s candidates, sorted by id (empty when it has none): what the hook notices
+    /// (plan D2). Never a route of the repository.
+    pub fn candidates(&self, repo: &str) -> &[Candidate] {
+        self.candidates.get(repo).map(Vec::as_slice).unwrap_or(&[])
+    }
+
+    /// `repo`'s candidate with this id (the ids the candidate net's walk returns).
+    pub fn candidate(&self, repo: &str, id: &str) -> Option<&Candidate> {
+        let cs = self.candidates(repo);
+        cs.binary_search_by(|c| c.id.as_str().cmp(id)).ok().map(|i| &cs[i])
+    }
+
+    /// `repo`'s candidate alphabet and net (empty when it has none): walked with the session's
+    /// candidate symbols, apart from [`Index::contexts`].
+    pub fn candidate_contexts(&self, repo: &str) -> Cow<'_, CtxNet> {
+        match self.candidate_contexts.get(repo) {
+            Some(n) => Cow::Borrowed(n),
+            None => Cow::Owned(CtxNet::default()),
+        }
     }
 
     /// Set each route's [`IndexedRoute::exec`] from `bindings` and recompute the generation (which
@@ -284,8 +357,25 @@ impl Index {
             }
             Err(_) => return Err(Unloaded::Damaged),
         };
-        serde_json::from_slice(&bytes).map_err(|_| Unloaded::Damaged)
+        serde_json::from_slice(&bytes).map_err(|_| match newer_format(&bytes) {
+            Some(format) => Unloaded::Newer(format),
+            None => Unloaded::Damaged,
+        })
     }
+}
+
+/// The format of an index this binary could not parse, when it is newer than [`INDEX_FORMAT`]: a
+/// newer Adage wrote it, so it is not damaged. Read from the top-level `format` field alone.
+pub fn newer_format(bytes: &[u8]) -> Option<u32> {
+    #[derive(Deserialize)]
+    struct Head {
+        #[serde(default)]
+        format: u32,
+    }
+    // Only the field is read: every other field is skipped unparsed, so a step this binary does
+    // not know cannot fail it.
+    let head: Head = serde_json::from_slice(bytes).ok()?;
+    (head.format > INDEX_FORMAT).then_some(head.format)
 }
 
 /// Why [`Index::try_load`] found no index.
@@ -293,4 +383,42 @@ impl Index {
 pub enum Unloaded {
     Missing,
     Damaged,
+    /// Written by a newer Adage, in this format, and not readable here: served as empty, never
+    /// rebuilt by this binary (that would undo the newer one's work).
+    Newer(u32),
+}
+
+#[cfg(test)]
+mod format_tests {
+    use super::*;
+
+    /// T-D3-08: an index from a newer binary, holding a step this one does not know, is reported
+    /// as newer, not damaged; an index this binary wrote round-trips with its format.
+    #[test]
+    fn an_index_from_a_newer_binary_is_newer_not_damaged() {
+        let dir = std::env::temp_dir().join(format!("adage-index-format-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("index.json");
+        let unknown = serde_json::json!({
+            "format": INDEX_FORMAT + 1,
+            "generation": "0123456789abcdef",
+            "routes": [{ "repo": "r", "track": "t", "version": "0.1.0", "route": { "step": { "do": "teleport" } } }],
+        });
+        std::fs::write(&path, serde_json::to_vec(&unknown).unwrap()).unwrap();
+        assert_eq!(Index::try_load(&path), Err(Unloaded::Newer(INDEX_FORMAT + 1)));
+        assert!(Index::load(&path).routes.is_empty(), "served as empty");
+        // The same bytes at this binary's own format are damage (a truncated or edited file).
+        let mut same = unknown.clone();
+        same["format"] = INDEX_FORMAT.into();
+        std::fs::write(&path, serde_json::to_vec(&same).unwrap()).unwrap();
+        assert_eq!(Index::try_load(&path), Err(Unloaded::Damaged));
+        std::fs::write(&path, b"{\"format\": 9, \"gener").unwrap();
+        assert_eq!(Index::try_load(&path), Err(Unloaded::Damaged), "not JSON at all");
+        assert_eq!(newer_format(br#"{"routes": 3}"#), None, "an index from before the field");
+        let written = Index::compile(&[]);
+        assert_eq!(written.format, INDEX_FORMAT);
+        written.write_atomic(&path).unwrap();
+        assert_eq!(Index::try_load(&path).unwrap().format, INDEX_FORMAT);
+        std::fs::remove_dir_all(&dir).ok();
+    }
 }

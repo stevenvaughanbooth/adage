@@ -52,6 +52,9 @@ pub struct Params {
     pub max_closed: usize,
     /// Worker threads everywhere. Never changes the result.
     pub threads: usize,
+    /// Also mine the candidates ([`Learned::candidates`], plan D1): a second pass after the
+    /// reflexes', which it never changes. Off unless the caller keeps candidates (the learner).
+    pub candidates: bool,
 }
 
 impl Default for Params {
@@ -63,6 +66,7 @@ impl Default for Params {
             max_reflexes: 256,
             max_closed: 20_000,
             threads: 1,
+            candidates: false,
         }
     }
 }
@@ -162,6 +166,14 @@ pub struct Reflex {
     pub why: String,
     #[serde(skip)]
     pub raw: Option<Pattern>,
+    /// Every supporting session id, sorted: which traces a candidate was seen in, and which tipped
+    /// it into a reflex (plan D1).
+    #[serde(skip)]
+    pub sessions: Vec<String>,
+    /// For a candidate: the median number of turns from the end of its context to its
+    /// continuation in the supporting sessions (how near the trigger is to the step).
+    #[serde(skip)]
+    pub lag: u32,
 }
 
 /// Wall-clock times of a run, milliseconds (reported, never part of the result).
@@ -171,6 +183,9 @@ pub struct Timings {
     pub mine_ms: u64,
     pub score_ms: u64,
     pub select_ms: u64,
+    /// The candidate pass ([`candidate_reflexes`]), when it ran.
+    #[serde(default)]
+    pub candidates_ms: u64,
 }
 
 /// The result of a G2 learn.
@@ -203,6 +218,11 @@ pub struct Learned {
     /// `dormant::verdict` reads for a reflex that was not selected again (Track G §6.3).
     #[serde(skip)]
     pub counts: BTreeMap<String, Counts>,
+    /// The candidates ([`candidate_reflexes`]), with [`Params::candidates`]: border patterns with a
+    /// context of two or more items, never selected, most support first. The compiler reads them
+    /// apart from the reflexes (`compile::compile_candidates`).
+    #[serde(skip)]
+    pub candidates: Vec<Reflex>,
     #[serde(skip)]
     pub timings: Timings,
 }
@@ -409,12 +429,12 @@ fn content_identity(ty: NodeType, level: Level, content: &str) -> Option<String>
     Shape::of_key(content).map(|s| s.identity.join(" "))
 }
 
-fn views(db: &Db, sc: &Scored) -> Vec<ItemView> {
-    let items = &sc.pattern.items;
+fn views(db: &Db, pattern: &Pattern, sessions: &[u32]) -> Vec<ItemView> {
+    let items = &pattern.items;
     let mut members: Vec<BTreeMap<String, u32>> = vec![BTreeMap::new(); items.len()];
-    for &si in sc.sessions.iter().take(64) {
+    for &si in sessions.iter().take(64) {
         let s = &db.sessions[si as usize];
-        let r = db.reach(s, items, sc.pattern.cut, None);
+        let r = db.reach(s, items, pattern.cut, None);
         for (i, ps) in r.iter().enumerate() {
             for &q in ps {
                 *members[i].entry(db.labels.content(s.ev[q as usize].lab[0]).to_string()).or_default() += 1;
@@ -457,6 +477,8 @@ pub fn shape(db: &Db, p: &Pattern) -> &'static str {
     let cont = p.continuation();
     if ctx.last().is_some_and(|i| i.pol == Pol::Fail) {
         "avoid"
+    } else if cont.first().is_some_and(|i| db.ty(i.label) == NodeType::Skill) {
+        "skill"
     } else if cont.first().is_some_and(|i| db.ty(i.label) == NodeType::Read) {
         "read-batch"
     } else if ctx.last().is_some_and(|i| i.last && db.ty(i.label) == NodeType::Edit) {
@@ -469,7 +491,7 @@ pub fn shape(db: &Db, p: &Pattern) -> &'static str {
 }
 
 fn reflex(db: &Db, sc: &Scored, gain: f64) -> Reflex {
-    let mut all = views(db, sc);
+    let mut all = views(db, &sc.pattern, &sc.sessions);
     let continuation = all.split_off(sc.pattern.cut);
     let mut constraints = Vec::new();
     for (i, it) in sc.pattern.items.iter().enumerate() {
@@ -527,6 +549,113 @@ fn reflex(db: &Db, sc: &Scored, gain: f64) -> Reflex {
         examples,
         why,
         raw: Some(sc.pattern.clone()),
+        sessions: session_ids(db, &sc.sessions),
+        lag: 0,
+    }
+}
+
+/// The ids of sessions (indices into `db.sessions`), sorted.
+fn session_ids(db: &Db, sessions: &[u32]) -> Vec<String> {
+    let mut ids: Vec<String> = sessions.iter().map(|&i| db.sessions[i as usize].id.clone()).collect();
+    ids.sort();
+    ids.dedup();
+    ids
+}
+
+/// At most this many candidates leave the candidate pass, most support first.
+pub const MAX_CANDIDATES: usize = 512;
+
+/// The candidate pass (plan D1): [`mine::mine_candidates`] over the training sessions, each closed
+/// border pattern as a [`Reflex`] the compiler can read: its items with their members, its
+/// support (distinct unsteered traces), days, the traces where its context occurs, and its
+/// posterior as counted (no prior, no calibration, no gate, no compression gain: a candidate is
+/// counted, never selected or delivered). Most support first, then the canonical string; at most
+/// [`MAX_CANDIDATES`].
+pub fn candidate_reflexes(
+    labels: &crate::events::LabelTable,
+    train: &[&crate::events::LSession],
+    p: &MineParams,
+) -> Vec<Reflex> {
+    let (db, mined) = mine::mine_candidates(labels, train, p);
+    let mut out: Vec<Reflex> = mined.closed().map(|m| candidate_reflex(&db, m)).collect();
+    out.sort_by(|a, b| b.support.cmp(&a.support).then_with(|| a.pattern.cmp(&b.pattern)));
+    out.truncate(MAX_CANDIDATES);
+    out
+}
+
+fn candidate_reflex(db: &Db, m: &mine::MinedPattern) -> Reflex {
+    let pat = &m.pattern;
+    let mut all = views(db, pat, &m.sessions);
+    let continuation = all.split_off(pat.cut);
+    let mut constraints = Vec::new();
+    for (i, it) in pat.items.iter().enumerate() {
+        if it.flow {
+            constraints.push(format!("flow({}→{i})", i - 1));
+        }
+        if it.same_art {
+            constraints.push(format!("same_art({}→{i})", i - 1));
+        }
+        if it.last {
+            constraints.push(format!("last({i})"));
+        }
+    }
+    // The traces where its context occurs: the rate it would be judged on.
+    let mut ctx: Vec<Item> = pat.items[..pat.cut].to_vec();
+    ctx[0] = ctx[0].first();
+    let opportunities =
+        (db.sessions.iter().filter(|s| db.occurs(s, &ctx, pat.cut)).count() as u32).max(m.sessions.len() as u32);
+    let support = m.sessions.len() as u32;
+    let days =
+        m.sessions.iter().map(|&i| db.sessions[i as usize].day).collect::<std::collections::BTreeSet<_>>().len() as u32;
+    let conf = support as f64 / opportunities.max(1) as f64;
+    let conf_lb = adage_tracks::wilson_lower(support, opportunities);
+    // How near the context's end is to the continuation, in turns: per supporting session the
+    // nearest anchor's, then the median.
+    let mut lags: Vec<f64> = m
+        .sessions
+        .iter()
+        .filter_map(|&si| {
+            let s = &db.sessions[si as usize];
+            let ends = db.reach(s, &ctx, pat.cut, None).pop().unwrap_or_default();
+            ends.iter()
+                .filter_map(|&p| db.follows(s, p as usize, &pat.items[pat.cut - 1], &pat.items[pat.cut..], true))
+                .min()
+        })
+        .map(f64::from)
+        .collect();
+    let lag = crate::stats::median(&mut lags).round() as u32;
+    let sessions = session_ids(db, &m.sessions);
+    let pattern = pat.render(&db.labels);
+    let why = format!(
+        "{pattern}: a candidate, {support} sessions over {days} days of {opportunities} where its context occurs"
+    );
+    Reflex {
+        shape: shape(db, pat).to_string(),
+        pattern,
+        context: all,
+        continuation,
+        constraints,
+        support,
+        opportunities,
+        days,
+        conf,
+        conf_lb,
+        conf_cal: conf,
+        conf_lb_cal: conf_lb,
+        lift: 0.0,
+        contrast: 0.0,
+        consistency: None,
+        value: 0.0,
+        execution_candidate: false,
+        execution_only: false,
+        gain: 0.0,
+        exposed: 0,
+        target: None,
+        examples: sessions.iter().take(3).cloned().collect(),
+        why,
+        raw: Some(pat.clone()),
+        sessions,
+        lag,
     }
 }
 
@@ -636,6 +765,9 @@ pub fn learn_split(train: &[EventSession], test: &[EventSession], p: &Params) ->
     rest.truncate(MAX_UNSELECTED);
     let unselected: Vec<Reflex> = rest.iter().map(|&(i, _)| reflex(&db, &scored[i], 0.0)).collect();
     let t4 = Instant::now();
+    // The candidates: a pass of its own, after everything above, which it never reads or changes.
+    let candidates = if p.candidates { candidate_reflexes(&corpus.labels, &tr, &p.mine) } else { Vec::new() };
+    let t5 = Instant::now();
     let ms = |a: Instant, b: Instant| (b - a).as_millis() as u64;
     let learned = Learned {
         sessions: db.sessions.len(),
@@ -660,7 +792,14 @@ pub fn learn_split(train: &[EventSession], test: &[EventSession], p: &Params) ->
                 (sc.pattern.render(&db.labels), c)
             })
             .collect(),
-        timings: Timings { proto_ms: ms(t0, t1), mine_ms: ms(t1, t2), score_ms: ms(t2, t3), select_ms: ms(t3, t4) },
+        candidates,
+        timings: Timings {
+            proto_ms: ms(t0, t1),
+            mine_ms: ms(t1, t2),
+            score_ms: ms(t2, t3),
+            select_ms: ms(t3, t4),
+            candidates_ms: ms(t4, t5),
+        },
     };
     let held_out = (!te.is_empty()).then(|| {
         // Every candidate is a calibration pair source; the selected ones are also reported apart.

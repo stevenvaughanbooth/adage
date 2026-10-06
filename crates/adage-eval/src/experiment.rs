@@ -67,6 +67,19 @@ pub fn sources(root: &Path) -> Result<Sources> {
         read_bounded(path)?;
         Ok(())
     }
+    // The learner's candidates (plan D1) sit beside its learned track, `<slug>/learned/
+    // candidates.json`, also when no route was learned there. They are never delivered, but the
+    // compiled index carries them (`Index::compile_root`), so they are held to a route's rules.
+    fn candidates(dir: &Path) -> Result<bool> {
+        let path = dir.join(adage_tracks::candidates::FILE);
+        if dir.file_name().is_none_or(|n| n != adage_tracks::candidates::LEARNED_TRACK) || !path.try_exists()? {
+            return Ok(false);
+        }
+        regular(&path)?;
+        adage_tracks::candidates::read(&path)
+            .with_context(|| format!("invalid experiment candidates {}", path.display()))?;
+        Ok(true)
+    }
     let mut pending = vec![root.to_path_buf()];
     let mut tracks = Vec::new();
     while let Some(dir) = pending.pop() {
@@ -76,6 +89,7 @@ pub fn sources(root: &Path) -> Result<Sources> {
             dir.display()
         );
         let manifest = dir.join("track.toml");
+        let has_candidates = candidates(&dir)?;
         if manifest.try_exists()? {
             regular(&manifest)?;
             let routes = dir.join("routes");
@@ -113,7 +127,9 @@ pub fn sources(root: &Path) -> Result<Sources> {
         } else {
             for entry in std::fs::read_dir(&dir)? {
                 let entry = entry?;
-                if entry.file_name().to_string_lossy().starts_with('.') {
+                if entry.file_name().to_string_lossy().starts_with('.')
+                    || (has_candidates && entry.file_name() == adage_tracks::candidates::FILE)
+                {
                     continue;
                 }
                 ensure!(

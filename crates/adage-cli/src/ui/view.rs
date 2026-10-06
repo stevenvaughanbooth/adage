@@ -449,6 +449,38 @@ fn act_spans(a: &Act, t: &Theme, fit_: Fit, room: usize, hot: u8, name: &dyn Fn(
                 ]
             }
         }
+        Act::Noticed { candidate, support, review, .. } => {
+            let seen =
+                if *support == 1 { "1 earlier session".to_string() } else { format!("{support} earlier sessions") };
+            let mut v = vec![
+                Span::styled(format!("{} ", t.ch("○", "o")), t.dim()),
+                Span::styled(verb("noticed"), t.ink2()),
+                Span::raw(name(candidate)),
+                Span::styled(format!(" · seen in {seen}"), t.dim()),
+            ];
+            if *review {
+                v.push(Span::styled(" · waits for your review".to_string(), t.dim()));
+            }
+            v
+        }
+        Act::Answered { command, ago, .. } => {
+            let when = if ago.is_empty() { String::new() } else { format!(" · ran {ago}") };
+            vec![
+                Span::styled(format!("{} ", t.glyph(Glyph::Ok)), t.green()),
+                Span::styled(verb("answered from its run of"), t.ink2()),
+                Span::raw(command.clone()),
+                Span::styled(when, t.dim()),
+            ]
+        }
+        Act::Recovery { operation } => {
+            let text = match operation {
+                Some(id) => format!(
+                    "an action was interrupted; inspect the worktree, then run adage-exec recover --id {id} --acknowledge in a terminal"
+                ),
+                None => "the execution journal cannot be read; inspect the worktree and repair the journal".to_string(),
+            };
+            vec![Span::styled(format!("{} ", t.ch("⚠", "!")), t.yellow().patch(t.bold())), Span::raw(text)]
+        }
         Act::Other(kind, r) => vec![
             Span::styled(format!("{} ", t.glyph(Glyph::Sep)), t.dim()),
             Span::styled(format!("{kind} "), t.ink2()),

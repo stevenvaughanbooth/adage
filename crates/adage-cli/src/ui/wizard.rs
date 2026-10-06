@@ -661,7 +661,7 @@ fn body(w: &Wizard, t: &Theme, width: usize) -> Vec<Line<'static>> {
                         Span::styled(c.detail.clone(), t.dim()),
                     ]));
                     if let Some(fx) = &c.fix {
-                        found.push(Line::from(vec![Span::styled("  fix ", t.dim()), Span::styled(fx.clone(), t.dim())]));
+                        found.push(Line::from(vec![Span::styled("  fix ", t.dim()), Span::styled(fx.prose(), t.dim())]));
                     }
                 }
                 out.extend(super::view::wrap_hanging(t.lines(found), width as u16, true));
@@ -840,7 +840,7 @@ pub fn finish_card(w: &Wizard, t: &Theme, completed: bool, cols: usize) -> Vec<L
                 Span::styled(c.detail.clone(), t.dim()),
             ]));
             if let Some(fx) = &c.fix {
-                out.push(Line::from(vec![Span::styled("       fix ", t.dim()), Span::styled(fx.clone(), t.dim())]));
+                out.push(Line::from(vec![Span::styled("       fix ", t.dim()), Span::styled(fx.prose(), t.dim())]));
             }
         }
     }

@@ -156,6 +156,58 @@ pub struct Decisions {
     pub reasons: Vec<Reason>,
     /// The command for its next step when it is more than a verb (an execution-only reflex's grant).
     pub next: Option<String>,
+    /// A grant Adage could ask the person for (mod architecture §3.12, "How Adage asks"): set where
+    /// the grants and the policy are known (`graph --json`), empty elsewhere.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub offers: Vec<Offer>,
+}
+
+/// A grant that would let a reflex act for the agent, and the command a press runs for it. The
+/// binary picks the kind: a finish-line step (after an edit) runs as an action in the sandbox; a
+/// step due in a context is made as the agent's own call without a model request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Offer {
+    /// `execute` (an E2 action, staged then confirmed) or `predict`.
+    pub kind: &'static str,
+    /// The first act: `review delegate … --level e2 --stage --json`, or the predict grant itself.
+    pub command: String,
+    /// The second act, for an action: `review delegate … --level e2 --confirm`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub confirm: Option<String>,
+}
+
+impl Offer {
+    /// The offer for `r` (in the track installed as `reference`), if it qualifies: a fire reflex
+    /// in service that runs one fixed command with a verify or regenerate effect, after an edit
+    /// or in a context, with no execution evidence of its own (an execution-only reflex has its
+    /// own grant path), holding no grant (`granted`), where policy would permit it (`permitted`).
+    pub fn of(reference: &str, r: &Route, granted: bool, permitted: bool) -> Option<Offer> {
+        use adage_core::Effect;
+        use adage_tracks::{RouteState, Step, Strength, Trigger};
+        let qualifies = r.strength == Strength::Fire
+            && matches!(r.state, RouteState::Firm | RouteState::Forming)
+            && matches!(r.effect, Effect::Verify | Effect::Regenerate)
+            && matches!(r.step, Step::Run { .. })
+            && r.slots.is_empty()
+            && r.evidence.execution.is_none()
+            && !granted
+            && permitted;
+        if !qualifies {
+            return None;
+        }
+        let base = format!("adage review delegate {reference} {}", r.id);
+        match r.trigger {
+            Trigger::AfterEdit { .. } => Some(Offer {
+                kind: "execute",
+                command: format!("{base} --level e2 --stage --json"),
+                confirm: Some(format!("{base} --level e2 --confirm")),
+            }),
+            Trigger::Context { .. } => {
+                Some(Offer { kind: "predict", command: format!("{base} --predict"), confirm: None })
+            }
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -174,6 +226,7 @@ impl Decisions {
                 .execution
                 .as_ref()
                 .map(|_| format!("adage review delegate {reference} {} --level e2", r.id)),
+            offers: Vec::new(),
         }
     }
 }
@@ -298,5 +351,70 @@ fn step(s: &Step) -> Value {
                 crate::words::count(card.sessions as usize, "trace")
             ),
         }),
+        Step::Skill { skill, args } => {
+            let mut v = json!({ "kind": "skill", "label": format!("use the {skill} skill"), "skill": skill });
+            if let Some(a) = args {
+                v["args"] = json!(a);
+            }
+            v
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Offer;
+    use adage_core::Effect;
+    use adage_tracks::*;
+
+    fn route(trigger: Trigger, effect: Effect) -> Route {
+        Route {
+            id: "regenerate".into(),
+            summary: String::new(),
+            trigger,
+            step: Step::Run { command: "make gen".into() },
+            slots: vec![],
+            effect,
+            strength: Strength::Fire,
+            state: RouteState::Firm,
+            exit: vec![],
+            evidence: Evidence::default(),
+            authored: false,
+        }
+    }
+
+    /// The binary picks the kind of grant an ask offers, and offers none where it would not hold.
+    #[test]
+    fn offers_name_the_grant_the_binary_would_ask_for() {
+        let edit = route(Trigger::AfterEdit { paths: "schema/*.toml".into() }, Effect::Regenerate);
+        let o = Offer::of("acme/finish", &edit, false, true).unwrap();
+        assert_eq!(o.kind, "execute");
+        assert_eq!(o.command, "adage review delegate acme/finish regenerate --level e2 --stage --json");
+        assert_eq!(o.confirm.as_deref(), Some("adage review delegate acme/finish regenerate --level e2 --confirm"));
+        let ctx = route(Trigger::Context { items: vec![], within: 3 }, Effect::Verify);
+        let o = Offer::of("acme/finish", &ctx, false, true).unwrap();
+        assert_eq!((o.kind, o.command.as_str()), ("predict", "adage review delegate acme/finish regenerate --predict"));
+        // Granted, not permitted, not fire, observe, or execution-only: nothing to offer.
+        assert_eq!(Offer::of("t", &edit, true, true), None);
+        assert_eq!(Offer::of("t", &edit, false, false), None);
+        let mut prime = edit.clone();
+        prime.strength = Strength::Prime;
+        assert_eq!(Offer::of("t", &prime, false, true), None);
+        assert_eq!(
+            Offer::of("t", &route(Trigger::AfterEdit { paths: "x".into() }, Effect::Observe), false, true),
+            None
+        );
+        let mut exec_only = edit.clone();
+        exec_only.evidence.execution = Some(ExecutionEvidence { opportunities: 3, successful: 3, sessions: 3 });
+        assert_eq!(Offer::of("t", &exec_only, false, true), None);
+        assert_eq!(
+            Offer::of(
+                "t",
+                &route(Trigger::Prompt { span: adage_core::spans::SpanKind::Ticket }, Effect::Verify),
+                false,
+                true
+            ),
+            None
+        );
     }
 }

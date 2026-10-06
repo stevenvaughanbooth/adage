@@ -194,6 +194,7 @@ mod tests {
             origin: Origin::Local,
             route_exec_digest: None,
             action: Some(ActionSpec { kind: ActionKind::Verify, outputs: vec![], cache: vec![] }),
+            mode: Default::default(),
         }
     }
 

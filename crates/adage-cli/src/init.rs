@@ -44,7 +44,7 @@ pub fn init(args: &[String], paths: &Paths) -> Result<()> {
     // A person at a terminal gets the guided wizard; `--print`, `--yes`, a pipe, or an agent's
     // shell get the plain report below.
     if !yes && !print && agent.is_none() && crate::ui::interactive() {
-        let repo = crate::flag(args, "--repo").map(PathBuf::from);
+        let repo = crate::helpers::flag(args, "--repo").map(PathBuf::from);
         return crate::ui::wizard(repo, paths);
     }
     if yes {
@@ -56,7 +56,7 @@ pub fn init(args: &[String], paths: &Paths) -> Result<()> {
         }
         crate::share::require_person("init --yes")?;
     }
-    let repo_arg = crate::flag(args, "--repo").map(PathBuf::from);
+    let repo_arg = crate::helpers::flag(args, "--repo").map(PathBuf::from);
     let start = match &repo_arg {
         Some(p) => p.canonicalize().with_context(|| format!("--repo {} does not exist", p.display()))?,
         None => std::env::current_dir()?,

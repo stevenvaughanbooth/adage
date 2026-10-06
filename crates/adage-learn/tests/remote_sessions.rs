@@ -83,6 +83,7 @@ struct Rows {
     reviews: Mutex<BTreeMap<String, Reviews>>,
     proposals: Mutex<BTreeMap<String, Proposals>>,
     why: Mutex<BTreeMap<String, BTreeMap<String, Why>>>,
+    candidates: Mutex<BTreeMap<String, adage_tracks::candidates::CandidateFile>>,
     log: Mutex<Vec<String>>,
 }
 
@@ -121,6 +122,9 @@ impl Store for Rows {
     fn binding(&self, _: &str) -> Option<adage_pack::binding::Binding> {
         None
     }
+    fn candidates(&self, repo: &str) -> Option<adage_tracks::candidates::CandidateFile> {
+        self.candidates.lock().unwrap().get(repo).cloned()
+    }
     fn packs(&self) -> (Vec<adage_pack::Pack>, Vec<(String, String)>) {
         (Vec::new(), Vec::new())
     }
@@ -144,6 +148,11 @@ impl Store for Rows {
     }
     fn write_follow_weights(&self, repo: &str, _: &adage_core::judge::Weights) {
         self.push(format!("follow weights {repo}"));
+    }
+    fn write_candidates(&self, c: &adage_tracks::candidates::CandidateFile) -> anyhow::Result<()> {
+        self.candidates.lock().unwrap().insert(c.repo.clone(), c.clone());
+        self.push(format!("candidates {} ({})", c.repo, c.candidates.len()));
+        Ok(())
     }
     fn compile_index(&self) -> anyhow::Result<adage_learn::store::Compiled> {
         self.push("index".into());
@@ -182,6 +191,8 @@ fn a_learn_run_materializes_only_through_its_store() {
     let log = rows.log();
     assert!(log.iter().any(|r| r.starts_with(&format!("track {TRACK}"))), "{log:?}");
     assert!(log.contains(&"follow weights github.com/acme/app".to_string()), "{log:?}");
+    // Candidates too (plan D1): nothing writes `candidates.json` but the store.
+    assert!(log.iter().any(|r| r.starts_with("candidates github.com/acme/app")), "{log:?}");
     assert_eq!(log.iter().filter(|r| *r == "index").count(), 1, "{log:?}");
     assert_eq!(log.last().map(String::as_str), Some("index"), "compiled after every row: {log:?}");
     assert_eq!(std::fs::read_dir(d.path()).unwrap().count(), 0, "nothing on disk");
@@ -209,6 +220,7 @@ fn a_learn_run_reads_what_earlier_runs_left_from_its_store() {
         on: "2026-10-02".into(),
         by: None,
         basis: adage_tracks::review::basis(&route, 0, 0),
+        via: None,
     };
     rows.reviews.lock().unwrap().entry(TRACK.into()).or_default().routes.insert(route.id.clone(), decision);
     adage_learn::learn_sessions_into(dead_ends(), None, None, &rows, &cfg).unwrap();

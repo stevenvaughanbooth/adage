@@ -3,18 +3,25 @@
 //!
 //! Each check is pass, warn, or fail, with a fix for anything short of pass. The command exits
 //! non-zero only when a check fails. Read-only, apart from one probe file created and removed to
-//! prove the data directory is writable; agents may run it.
+//! prove the data directory is writable, and the hook latency measurement it keeps for a few
+//! seconds in `cache/` once spools exist ([`latency`]); agents may run it.
+//!
+//! `--json` gives each check with a fix a structured `action` beside the prose: `{"kind": "run",
+//! "command": "adage …"}` when the fix is one `adage` command a surface may offer to run, else
+//! `{"kind": "manual"}` (a fix the person makes themselves).
 //!
 //! Checks: the binary; the data directory; the compiled index (present, intact, current); the
 //! installed tracks; the embedding model and its checksums; each harness's hook registrations
 //! (and that they run an adage binary that exists); the Claude Code plugin's staged binary; kill
-//! switches and experiment settings; the size of the session spools; fail-open errors, if any
+//! switches and experiment settings; the size of the session spools; the hooks' p95 latency on this
+//! machine, from the spools' `duration_us` ([`latency`]); fail-open errors, if any
 //! are recorded in `$ADAGE_HOME/fail-open.log` (one JSON object per line, newest last); the
 //! configuration file; installed packs and their inert routes; and live learning (`crate::autolearn`): whether it is on, each repository's
 //! last automatic learn and its outcome, a learner that has held its lock too long, and requests
 //! still waiting.
 
 use crate::detect;
+use crate::helpers::ago_short as ago;
 use adage_core::repo;
 use adage_store::Paths;
 use adage_tracks::{index, io, proposals, review, Index, Trigger};
@@ -23,6 +30,8 @@ use serde::Serialize;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
+
+pub mod latency;
 
 /// Session spools above this total size get a warning.
 const SPOOL_WARN_BYTES: u64 = 256 << 20;
@@ -38,7 +47,7 @@ pub enum Status {
     Fail,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct Check {
     /// A stable identifier (the UI and tools match on it); `label` is what people read.
     pub check: String,
@@ -46,8 +55,120 @@ pub struct Check {
     pub label: String,
     pub status: Status,
     pub detail: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub fix: Option<String>,
+    pub fix: Option<Fix>,
+}
+
+/// How a check is fixed, typed where the check is made: one `adage` command a surface may offer
+/// to run, or something the person does themselves. Everything that says the fix derives from it:
+/// doctor's `fix` line ([`Fix::prose`]), its `next`, `--json`'s `action`, the status card's
+/// command and the TUI's one-key fixes. Nothing reads a command back out of the prose.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Fix {
+    /// Running `command` (an `adage` command, whole and runnable) fixes it. `how` is the sentence
+    /// doctor says it in, `{}` standing for the command in backticks; empty, the fix is the
+    /// command alone.
+    Run { command: String, how: String },
+    /// A fix the person makes themselves (a terminal, a file, a setting, a choice), in prose.
+    Manual(String),
+}
+
+impl Fix {
+    /// The fix is `command` and nothing else.
+    pub fn run(command: impl Into<String>) -> Fix {
+        let command = command.into();
+        debug_assert!(command.starts_with("adage "), "{command:?} is an adage command");
+        Fix::Run { command, how: String::new() }
+    }
+
+    /// The fix is `command`, said as `how` (`"run {} to recompile it"`).
+    pub fn run_in(how: impl Into<String>, command: impl Into<String>) -> Fix {
+        let (how, command) = (how.into(), command.into());
+        debug_assert!(how.matches("{}").count() == 1, "{how:?} names the command once");
+        debug_assert!(command.starts_with("adage "), "{command:?} is an adage command");
+        Fix::Run { command, how }
+    }
+
+    pub fn manual(text: impl Into<String>) -> Fix {
+        Fix::Manual(text.into())
+    }
+
+    /// The command to run, for a fix that is one.
+    pub fn command(&self) -> Option<&str> {
+        match self {
+            Fix::Run { command, .. } => Some(command),
+            Fix::Manual(_) => None,
+        }
+    }
+
+    /// The fix as doctor says it.
+    pub fn prose(&self) -> String {
+        match self {
+            Fix::Run { command, how } if how.is_empty() => command.clone(),
+            Fix::Run { command, how } => how.replacen("{}", &format!("`{command}`"), 1),
+            Fix::Manual(text) => text.clone(),
+        }
+    }
+
+    /// What a surface acting on it reads (`adage doctor --json`'s `action`).
+    pub fn action(&self) -> Action {
+        match self {
+            Fix::Run { command, .. } => Action::Run { command: command.clone() },
+            Fix::Manual(_) => Action::Manual,
+        }
+    }
+
+    /// What doctor's `next` names: the command, or the person's own fix as said.
+    pub fn next(&self) -> String {
+        self.command().map_or_else(|| self.prose(), str::to_string)
+    }
+
+    /// The words around the command in the lexicon's (`crate::words::prose`); the command is
+    /// never touched.
+    fn in_words(self) -> Fix {
+        match self {
+            Fix::Run { command, how } => Fix::Run { command, how: crate::words::prose(&how) },
+            Fix::Manual(text) => Fix::Manual(crate::words::prose(&text)),
+        }
+    }
+}
+
+impl std::fmt::Display for Fix {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.prose())
+    }
+}
+
+/// What a check's fix asks for, for a surface that can act on it (the Claude Code mod's pane): one
+/// `adage` command to run, or something the person does themselves. [`Fix`] as JSON.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum Action {
+    Run { command: String },
+    Manual,
+}
+
+impl Check {
+    /// The command that fixes it, if one does: what the status card names and a pane may run.
+    pub fn command(&self) -> Option<&str> {
+        self.fix.as_ref().and_then(Fix::command)
+    }
+}
+
+/// `{check, label, status, detail, fix?, action?}`.
+impl Serialize for Check {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> std::result::Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        let mut m = s.serialize_map(None)?;
+        m.serialize_entry("check", &self.check)?;
+        m.serialize_entry("label", &self.label)?;
+        m.serialize_entry("status", &self.status)?;
+        m.serialize_entry("detail", &self.detail)?;
+        if let Some(fix) = &self.fix {
+            m.serialize_entry("fix", &fix.prose())?;
+            m.serialize_entry("action", &fix.action())?;
+        }
+        m.end()
+    }
 }
 
 /// A check's name as people read it.
@@ -65,23 +186,11 @@ pub fn label(check: &str) -> String {
 fn pass(check: &str, detail: impl Into<String>) -> Check {
     Check { check: check.into(), label: label(check), status: Status::Pass, detail: detail.into(), fix: None }
 }
-fn warn(check: &str, detail: impl Into<String>, fix: impl Into<String>) -> Check {
-    Check {
-        check: check.into(),
-        label: label(check),
-        status: Status::Warn,
-        detail: detail.into(),
-        fix: Some(fix.into()),
-    }
+fn warn(check: &str, detail: impl Into<String>, fix: Fix) -> Check {
+    Check { check: check.into(), label: label(check), status: Status::Warn, detail: detail.into(), fix: Some(fix) }
 }
-fn fail(check: &str, detail: impl Into<String>, fix: impl Into<String>) -> Check {
-    Check {
-        check: check.into(),
-        label: label(check),
-        status: Status::Fail,
-        detail: detail.into(),
-        fix: Some(fix.into()),
-    }
+fn fail(check: &str, detail: impl Into<String>, fix: Fix) -> Check {
+    Check { check: check.into(), label: label(check), status: Status::Fail, detail: detail.into(), fix: Some(fix) }
 }
 
 fn sha256_file(p: &Path) -> Option<String> {
@@ -118,7 +227,7 @@ fn data_dir(paths: &Paths) -> Check {
             _ => fail(
                 name,
                 format!("{} does not exist and cannot be created", detect::tilde(root)),
-                "set ADAGE_HOME to a writable directory",
+                Fix::manual("set ADAGE_HOME to a writable directory"),
             ),
         };
     }
@@ -126,7 +235,7 @@ fn data_dir(paths: &Paths) -> Check {
         return fail(
             name,
             format!("{} is not a directory", detect::tilde(root)),
-            "remove it, or set ADAGE_HOME elsewhere",
+            Fix::manual("remove it, or set ADAGE_HOME elsewhere"),
         );
     }
     if probe(root) {
@@ -135,7 +244,7 @@ fn data_dir(paths: &Paths) -> Check {
         fail(
             name,
             format!("{} is not writable", detect::tilde(root)),
-            format!("fix the permissions of {}, or set ADAGE_HOME", root.display()),
+            Fix::manual(format!("fix the permissions of {}, or set ADAGE_HOME", root.display())),
         )
     }
 }
@@ -191,7 +300,10 @@ fn tracks_check(scan: &TrackScan) -> Check {
         return fail(
             "tracks",
             format!("{} invalid reflex collection(s), which hooks ignore: {}", scan.invalid.len(), shown.join("; ")),
-            "fix or remove the named reflex collection directories, then run `adage condition` to recompile",
+            // Recompiling alone does not mend a collection: the person fixes it first.
+            Fix::manual(
+                "fix or remove the named reflex collection directories, then run `adage condition` to recompile",
+            ),
         );
     }
     if scan.valid.is_empty() {
@@ -225,26 +337,47 @@ fn index_check(paths: &Paths, scan: &TrackScan) -> (Check, Index) {
                 warn(
                     "index",
                     "no index yet, although tracks are installed: hooks have nothing to direct",
-                    "run `adage condition`",
+                    Fix::run_in("run {}", "adage condition"),
                 ),
                 Index::default(),
             )
         }
         Err(e) => {
             return (
-                fail("index", format!("{} cannot be read: {e}", detect::tilde(&p)), "check its permissions"),
+                fail(
+                    "index",
+                    format!("{} cannot be read: {e}", detect::tilde(&p)),
+                    Fix::manual("check its permissions"),
+                ),
                 Index::default(),
             )
         }
     };
     let idx: Index = match serde_json::from_slice(&bytes) {
         Ok(i) => i,
+        // A newer Adage wrote it (another binary on this machine): not damage, and recompiling
+        // it here would undo that binary's work (docs/live-learning.md).
+        Err(_) if index::newer_format(&bytes).is_some() => {
+            let format = index::newer_format(&bytes).unwrap_or_default();
+            return (
+                fail(
+                    "index",
+                    format!(
+                        "{} is newer than this binary (format {format}; this adage reads up to {}): hooks run by this binary say nothing",
+                        detect::tilde(&p),
+                        index::INDEX_FORMAT
+                    ),
+                    Fix::manual("update this adage to the version that wrote it (an adage on PATH and the Claude Code plugin's must match)"),
+                ),
+                Index::default(),
+            );
+        }
         Err(e) => {
             return (
                 fail(
                     "index",
                     format!("{} is not a valid index ({e}); hooks fail open and say nothing", detect::tilde(&p)),
-                    "run `adage condition` to recompile it",
+                    Fix::run_in("run {} to recompile it", "adage condition"),
                 ),
                 Index::default(),
             )
@@ -260,7 +393,7 @@ fn index_check(paths: &Paths, scan: &TrackScan) -> (Check, Index) {
                     "generation {} does not match its reflexes ({gen}): it was built by a different Adage version, or edited",
                     idx.generation
                 ),
-                "run `adage condition` to recompile it",
+                Fix::run_in("run {} to recompile it", "adage condition"),
             ),
             idx,
         );
@@ -283,7 +416,7 @@ fn index_check(paths: &Paths, scan: &TrackScan) -> (Check, Index) {
             warn(
                 "index",
                 format!("{detail}; stale: the installed tracks compile to {}", current.generation),
-                "run `adage condition` (or any `adage review` decision) to recompile",
+                Fix::run_in("run {} (or any `adage review` decision) to recompile", "adage condition"),
             ),
             idx,
         );
@@ -372,7 +505,9 @@ fn packs_check(paths: &Paths) -> Check {
     warn(
         "packs",
         format!("{detail}; {}{more}", shown.join("; ")),
-        "inert reflexes are never delivered; `adage review` lists them. Restore what they need (a script, a tool), then run `adage add` again",
+        Fix::manual(
+            "inert reflexes are never delivered; `adage review` lists them. Restore what they need (a script, a tool), then run `adage add` again",
+        ),
     )
 }
 
@@ -388,7 +523,7 @@ fn marketplace_check(paths: &Paths) -> Check {
             return fail(
                 "marketplace",
                 format!("the marketplace built into Adage cannot be read: {e}"),
-                "reinstall Adage: this build's base instincts are damaged",
+                Fix::manual("reinstall Adage: this build's base instincts are damaged"),
             )
         }
     };
@@ -432,7 +567,7 @@ fn model_check(paths: &Paths, idx: &Index) -> Check {
                 return fail(
                     "embedding model",
                     format!("{} is installed but unusable: {e:#}", spec.key),
-                    format!("run `adage models fetch {}` to reinstall it", spec.key),
+                    Fix::run_in("run {} to reinstall it", format!("adage models fetch {}", spec.key)),
                 );
             }
         }
@@ -446,7 +581,11 @@ fn model_check(paths: &Paths, idx: &Index) -> Check {
                 "embedding model",
                 format!("{} bundled in this binary (int8, SHA-256 verified){failed}", r.embedder.id()),
             ),
-            Err(e) => fail("embedding model", format!("{e:#}"), "reinstall adage, or `adage models fetch`"),
+            // The binary itself is damaged: reinstalling it is the fix; a download only works around
+            // it, so it is not offered as the one command to run (nor as the TUI's one-key fetch).
+            Err(e) => {
+                fail("embedding model", format!("{e:#}"), Fix::manual("reinstall adage, or `adage models fetch`"))
+            }
         },
         Source::Hashed { why } if r.selected == "hashed" => {
             pass("embedding model", format!("hashed fallback, as selected ({why}); intent reflexes cannot fire"))
@@ -454,9 +593,17 @@ fn model_check(paths: &Paths, idx: &Index) -> Check {
         Source::Hashed { why } => {
             let detail = format!("no embedding model, so the hashed fallback is in use: {why}{failed}");
             if wants {
-                warn("embedding model", format!("{detail}; intent reflexes cannot fire"), "run `adage models fetch`")
+                warn(
+                    "embedding model",
+                    format!("{detail}; intent reflexes cannot fire"),
+                    Fix::run_in("run {}", "adage models fetch"),
+                )
             } else {
-                warn("embedding model", detail, "run `adage models fetch` (or `adage models use hashed` to choose it)")
+                warn(
+                    "embedding model",
+                    detail,
+                    Fix::run_in("run {} (or `adage models use hashed` to choose it)", "adage models fetch"),
+                )
             }
         }
     }
@@ -490,7 +637,10 @@ fn hooks_checks(repo_root: Option<&Path>, exe: Option<&Path>) -> Vec<Check> {
                 (true, false) => warn(
                     &name,
                     format!("{} is installed, but Adage's hooks are not registered with it", d.harness),
-                    format!("`adage install {} --write` (this repository) or add `--scope user`", d.harness),
+                    Fix::run_in(
+                        "{} (this repository) or add `--scope user`",
+                        format!("adage install {} --write", d.harness),
+                    ),
                 ),
                 (false, false) => pass(&name, "harness not installed; nothing to check"),
             });
@@ -509,8 +659,10 @@ fn hooks_checks(repo_root: Option<&Path>, exe: Option<&Path>) -> Vec<Check> {
             } else {
                 format!("registered in {at}: every hook runs twice, and each notice appears twice")
             };
+            // Which copy to keep is the person's choice, and removing one edits their settings:
+            // never one command to run for them.
             let fix = if dup.plugin { format!("{}; or uninstall the plugin", dup.fix) } else { dup.fix };
-            out.push(warn(&format!("{name} (twice)"), detail, fix));
+            out.push(warn(&format!("{name} (twice)"), detail, Fix::manual(fix)));
         }
         // Out of date: an event this version uses that no registration has. Registrations add up
         // (the harness runs every settings file's hooks), so only what all of them lack is missing.
@@ -525,7 +677,10 @@ fn hooks_checks(repo_root: Option<&Path>, exe: Option<&Path>) -> Vec<Check> {
             out.push(warn(
                 &format!("{name} (out of date)"),
                 format!("the registered hooks lack {}, which this version of Adage uses", missing.join(", ")),
-                format!("`adage install {}{} --write` adds {them}", d.harness, if user { " --scope user" } else { "" }),
+                Fix::run_in(
+                    format!("{{}} adds {them}"),
+                    format!("adage install {}{} --write", d.harness, if user { " --scope user" } else { "" }),
+                ),
             ));
         }
         for r in mine {
@@ -534,7 +689,7 @@ fn hooks_checks(repo_root: Option<&Path>, exe: Option<&Path>) -> Vec<Check> {
                 None => out.push(fail(
                     &name,
                     format!("{at} names no adage binary"),
-                    format!("`adage install {} --write` rewrites it", d.harness),
+                    Fix::run_in("{} rewrites it", format!("adage install {} --write", d.harness)),
                 )),
                 Some(b) if !detect::executable(b) => out.push(fail(
                     &name,
@@ -542,7 +697,11 @@ fn hooks_checks(repo_root: Option<&Path>, exe: Option<&Path>) -> Vec<Check> {
                         "{at} runs {}, which does not exist or is not executable, so its hooks do nothing",
                         detect::tilde(b)
                     ),
-                    format!("re-run `adage install {} --write` with this binary (or --bin <path>)", d.harness),
+                    // Run by this binary, the install names this binary: the command is the fix.
+                    Fix::run_in(
+                        "re-run {} with this binary (or --bin <path>)",
+                        format!("adage install {} --write", d.harness),
+                    ),
                 )),
                 Some(b) => {
                     let same = exe.is_some_and(|e| b.canonicalize().ok().as_deref() == Some(e));
@@ -638,7 +797,9 @@ fn cloud_check_with(root: &Path, offloaded: &dyn Fn(&Path) -> bool) -> Option<Ch
             what.join(" and "),
             detect::tilde(repository)
         ),
-        "move the repository out of the synced folder (for example to ~/code), or in Finder Control-click its folder and choose Keep Downloaded",
+        Fix::manual(
+            "move the repository out of the synced folder (for example to ~/code), or in Finder Control-click its folder and choose Keep Downloaded",
+        ),
     ))
 }
 
@@ -651,7 +812,7 @@ fn plugin_check(repo_root: Option<&Path>, exe: Option<&Path>) -> Option<Check> {
         return Some(fail(
             name,
             format!("{} is a broken link", detect::tilde(bin)),
-            "start a new Claude Code session so the plugin restages it, or rebuild with plugin/build.sh",
+            Fix::manual("start a new Claude Code session so the plugin restages it, or rebuild with plugin/build.sh"),
         ));
     };
     let ours = exe.and_then(sha256_file);
@@ -661,7 +822,7 @@ fn plugin_check(repo_root: Option<&Path>, exe: Option<&Path>) -> Option<Check> {
         warn(
             name,
             format!("{} is a different build (sha256 {}) from this binary", detect::tilde(bin), &theirs[..12]),
-            "rebuild and restage with plugin/build.sh, then start a new Claude Code session",
+            Fix::manual("rebuild and restage with plugin/build.sh, then start a new Claude Code session"),
         )
     })
 }
@@ -671,8 +832,9 @@ fn kill_switches(repo_root: Option<&Path>) -> Check {
     if std::env::var("ADAGE_DISABLE").as_deref() == Ok("1") {
         on.push("ADAGE_DISABLE=1: every hook does nothing".to_string());
     }
-    if let Some(r) = repo_root.filter(|r| r.join(".adage/disabled").exists()) {
-        on.push(format!("{}: Adage is off in this repository", detect::tilde(&r.join(".adage/disabled"))));
+    let off_here = repo_root.is_some_and(|r| crate::switch::marker(r).exists());
+    if let Some(r) = repo_root.filter(|_| off_here) {
+        on.push(format!("{}: Adage is off in this repository", detect::tilde(&crate::switch::marker(r))));
     }
     if let Ok(v) = std::env::var("ADAGE_CONTROL") {
         match v.parse::<f64>() {
@@ -687,7 +849,14 @@ fn kill_switches(repo_root: Option<&Path>) -> Check {
     if on.is_empty() {
         pass("kill switches", "none set")
     } else {
-        warn("kill switches", on.join("; "), "unset them (or remove the .adage/disabled file) when you want Adage on")
+        // `adage on` turns a repository's switch back (a person's decision); the variables are the
+        // shell's own.
+        let fix = match (off_here, on.len()) {
+            (true, 1) => Fix::run("adage on"),
+            (true, _) => Fix::manual("unset the variables, and run `adage on` here, when you want Adage on"),
+            (false, _) => Fix::manual("unset them when you want Adage on"),
+        };
+        warn("kill switches", on.join("; "), fix)
     }
 }
 
@@ -713,7 +882,7 @@ fn spools(paths: &Paths) -> Check {
         warn(
             "session spools",
             detail,
-            "delete old *.spool and *.state files you no longer need to measure; hooks only append",
+            Fix::manual("delete old *.spool and *.state files you no longer need to measure; hooks only append"),
         )
     } else {
         pass("session spools", detail)
@@ -723,8 +892,7 @@ fn spools(paths: &Paths) -> Check {
 fn fail_open(paths: &Paths) -> Check {
     let p = paths.root.join(FAIL_OPEN_LOG);
     let Ok(text) = std::fs::read_to_string(&p) else { return pass("fail-open errors", "none recorded") };
-    let now =
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0);
+    let now = adage_core::time::now_ms();
     let recent: Vec<serde_json::Value> = text
         .lines()
         .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
@@ -737,7 +905,7 @@ fn fail_open(paths: &Paths) -> Check {
             warn(
                 "fail-open errors",
                 format!("{} in the last {RECENT_DAYS} days (hooks said nothing then); latest: {what}", recent.len()),
-                format!("report it with the lines from {}", detect::tilde(&p)),
+                Fix::manual(format!("report it with the lines from {}", detect::tilde(&p))),
             )
         }
     }
@@ -758,16 +926,6 @@ fn chosen(keys: &[String]) -> String {
     }
 }
 
-fn ago(now: u64, ts: u64) -> String {
-    let s = now.saturating_sub(ts) / 1000;
-    match s {
-        0..=59 => format!("{s}s ago"),
-        60..=3599 => format!("{}m ago", s / 60),
-        3600..=172_799 => format!("{}h ago", s / 3600),
-        _ => format!("{}d ago", s / 86_400),
-    }
-}
-
 /// Live learning: the configuration, then per repository in the learn queue its last automatic
 /// learn, a stuck learner, and waiting requests.
 fn live_learning(paths: &Paths) -> Vec<Check> {
@@ -782,7 +940,10 @@ fn live_learning(paths: &Paths) -> Vec<Check> {
         warn(
             "config",
             format!("{}: {}", detect::tilde(&paths.config()), loaded.problems.join("; ")),
-            "fix it with `adage config set <key> <value>`, or edit the file; `adage config` shows every key",
+            // `<key> <value>` are the person's to fill in: not a command to run as it stands.
+            Fix::manual(
+                "fix it with `adage config set <key> <value>`, or edit the file; `adage config` shows every key",
+            ),
         )
     });
     let source = &loaded.values["learn.auto"].1;
@@ -903,14 +1064,19 @@ fn live_learning(paths: &Paths) -> Vec<Check> {
         warn(
             "auto-learn runs",
             format!("last automatic conditioning failed for {}", shown(&failed)),
-            "run `adage condition` in a terminal to see the error; `adage doctor` passes once conditioning succeeds",
+            // Run to read its error, not to fix it: the error says what the fix is.
+            Fix::manual(
+                "run `adage condition` in a terminal to see the error; `adage doctor` passes once conditioning succeeds",
+            ),
         )
     });
     if !stuck.is_empty() {
         out.push(warn(
             "auto-learn lock",
             format!("learning is taking far longer than it usually does: {}", shown(&stuck)),
-            "stop that learner (kill <pid>); the next session that ends starts a new one. A learner usually stalls reading files only in the cloud (see cloud files)",
+            Fix::manual(
+                "stop that learner (kill <pid>); the next session that ends starts a new one. A learner usually stalls reading files only in the cloud (see cloud files)",
+            ),
         ));
     } else {
         out.push(pass("auto-learn lock", "no learner stuck"));
@@ -924,7 +1090,10 @@ fn live_learning(paths: &Paths) -> Vec<Check> {
         warn(
             "auto-learn queue",
             format!("{} request(s) not conditioned yet: {}", backlog.len(), shown(&backlog)),
-            "`adage condition` conditions everything now; if requests keep waiting, check `fail-open.log` (class condition)",
+            Fix::run_in(
+                "{} conditions everything now; if requests keep waiting, check `fail-open.log` (class condition)",
+                "adage condition",
+            ),
         )
     });
     out
@@ -935,7 +1104,7 @@ fn live_learning(paths: &Paths) -> Vec<Check> {
 /// the switch the other way.
 pub fn rewrites_check(paths: &Paths) -> Check {
     let on = adage_store::config::load(paths).config.runtime_rewrite;
-    let marker = adage_hook::rewrite_off(paths).exists();
+    let marker = paths.rewrite_off().exists();
     let (detail, fix) = match (on, marker) {
         (true, false) => ("python tests → .venv (on)".to_string(), "adage delegate rewrites off"),
         (false, _) => (
@@ -947,9 +1116,11 @@ pub fn rewrites_check(paths: &Paths) -> Check {
             "adage delegate rewrites on",
         ),
     };
-    Check { fix: Some(fix.into()), ..pass("rewrites", detail) }
+    Check { fix: Some(Fix::run(fix)), ..pass("rewrites", detail) }
 }
 
+/// Whether each registered harness's hooks have reached Adage in this repository: the receipt the
+/// hook writes on delivery (`adage_hook::receipt`). Registration alone does not prove it.
 fn hook_delivery_checks(paths: &Paths, root: Option<&Path>) -> Vec<Check> {
     let Some(root) = root else { return Vec::new() };
     let registered = detect::registrations(Some(root));
@@ -960,12 +1131,24 @@ fn hook_delivery_checks(paths: &Paths, root: Option<&Path>) -> Vec<Check> {
         }
         let name = format!("hook activity: {harness}");
         match adage_hook::receipt::read(paths, root, harness) {
-            Some(receipt) => checks.push(pass(&name, format!("Hook delivery observed here: last received {} (refreshed about once per minute); first received {} UTC. Registration and receipt do not prove a reflex fired.", ago(crate::learnlog::now_ms(), receipt.last_seen()), review::civil_date((receipt.first_seen_ms / 86_400_000) as i64)))),
-            None => checks.push(warn(&name, "Registered; no hook has been observed in this repository yet.", if harness == "codex" {
-                "Open Codex in this repository, use /hooks to review and accept Adage's hooks, then send a prompt. This acceptance happens inside Codex; Adage cannot do it for you."
-            } else {
-                "Start a new agent session in this repository and send a prompt, then refresh Health."
-            })),
+            Some(receipt) => checks.push(pass(
+                &name,
+                format!(
+                    "Hook delivery observed here: last received {} (refreshed about once per minute); first received {} UTC. Registration and receipt do not prove a reflex fired.",
+                    ago(crate::learnlog::now_ms(), receipt.last_seen()),
+                    review::civil_date((receipt.first_seen_ms / 86_400_000) as i64)
+                ),
+            )),
+            // Only the person can make a hook fire: no adage command delivers one.
+            None => checks.push(warn(
+                &name,
+                "Registered; no hook has been observed in this repository yet.",
+                Fix::manual(if harness == "codex" {
+                    "Open Codex in this repository, use /hooks to review and accept Adage's hooks, then send a prompt. This acceptance happens inside Codex; Adage cannot do it for you."
+                } else {
+                    "Start a new agent session in this repository and send a prompt, then refresh Health."
+                }),
+            )),
         }
     }
     checks
@@ -994,12 +1177,13 @@ pub fn checks(paths: &Paths, repo_root: Option<&Path>) -> Vec<Check> {
     checks.push(kill_switches(repo_root));
     checks.push(rewrites_check(paths));
     checks.push(spools(paths));
+    checks.push(latency::check(&latency::measured(paths, crate::learnlog::now_ms())));
     checks.push(fail_open(paths));
     checks.extend(live_learning(paths));
     // What people read is in the lexicon's words; the check ids stay as they are.
     for c in &mut checks {
         c.detail = crate::words::prose(&c.detail);
-        c.fix = c.fix.as_deref().map(crate::words::prose);
+        c.fix = c.fix.take().map(Fix::in_words);
     }
     checks
 }
@@ -1033,7 +1217,7 @@ pub fn render<W: std::io::Write>(o: &mut adage_term::Out<W>, checks: &[Check]) -
         // A passing check has nothing to fix; one with a switch (rewrites) says how to flip it.
         if let Some(fix) = &c.fix {
             let lead = if c.status == Status::Pass { "switch " } else { "fix " };
-            o.line(&Line::new().pad_to(10 + name_w).faint(lead).push(Role::Command, fix.clone()))?;
+            o.line(&Line::new().pad_to(10 + name_w).faint(lead).push(Role::Command, fix.prose()))?;
         }
     }
     o.blank()?;
@@ -1041,10 +1225,7 @@ pub fn render<W: std::io::Write>(o: &mut adage_term::Out<W>, checks: &[Check]) -
     let first =
         checks.iter().find(|c| c.status == Status::Fail).or_else(|| checks.iter().find(|c| c.status == Status::Warn));
     match first.and_then(|c| c.fix.as_ref().map(|fx| (c, fx))) {
-        Some((c, fx)) => {
-            let cmd = fx.split('`').nth(1).filter(|s| s.starts_with("adage ")).unwrap_or(fx);
-            o.next(cmd, &format!("fixes {}", c.label))?
-        }
+        Some((c, fx)) => o.next(&fx.next(), &format!("fixes {}", c.label))?,
         None => o.next("adage status", "everything checks out; see the reflexes in effect")?,
     }
     Ok(())
@@ -1100,7 +1281,7 @@ mod tests {
         assert!(c.detail.contains(&at), "{}", c.detail);
         assert!(c.detail.contains("only in the cloud (such as .github/workflows/ci.yml);"), "{}", c.detail);
         assert!(c.detail.contains("instead of waiting for a download"), "{}", c.detail);
-        assert!(c.fix.as_deref().unwrap().contains("Keep Downloaded"));
+        assert!(matches!(c.fix.as_ref().unwrap(), Fix::Manual(t) if t.contains("Keep Downloaded")), "{c:?}");
 
         // In a linked worktree, the objects are the main checkout's, and that is the folder to move.
         let wt = root.join(".claude/worktrees/wt");
@@ -1115,22 +1296,154 @@ mod tests {
         );
     }
 
+    /// T-A2-03's structure: a fix that is one `adage` command is an action a pane may run; any
+    /// other fix is the person's to make; a check without a fix has no action. The fix is typed
+    /// where it is made, and its prose, `next` and action all come from that one value.
+    #[test]
+    fn a_fix_that_is_one_adage_command_is_an_action() {
+        let with = |fix: Fix| Check { fix: Some(fix), ..pass("x", "") };
+        let run = |c: &str| Some(Action::Run { command: c.into() });
+        let cases = [
+            (Fix::run_in("run {}", "adage condition"), "run `adage condition`", run("adage condition")),
+            (
+                Fix::run_in("run {} (or any `adage review` decision) to recompile", "adage condition"),
+                "run `adage condition` (or any `adage review` decision) to recompile",
+                run("adage condition"),
+            ),
+            (
+                Fix::manual("run `adage condition` in a terminal to see the error"),
+                "run `adage condition` in a terminal to see the error",
+                Some(Action::Manual),
+            ),
+            (
+                Fix::run_in("{} recompiles it", "adage condition"),
+                "`adage condition` recompiles it",
+                run("adage condition"),
+            ),
+            (
+                Fix::run("adage delegate rewrites off"),
+                "adage delegate rewrites off",
+                run("adage delegate rewrites off"),
+            ),
+            (
+                Fix::manual("set ADAGE_HOME to a writable directory"),
+                "set ADAGE_HOME to a writable directory",
+                Some(Action::Manual),
+            ),
+            (
+                Fix::manual("unset them (when you want Adage on)"),
+                "unset them (when you want Adage on)",
+                Some(Action::Manual),
+            ),
+        ];
+        for (fix, prose, action) in cases {
+            let c = with(fix.clone());
+            assert_eq!((fix.prose(), c.fix.as_ref().map(Fix::action)), (prose.to_string(), action.clone()), "{fix:?}");
+            // `next` is the command to run, else the person's fix as said.
+            let next = match &action {
+                Some(Action::Run { command }) => command.clone(),
+                _ => prose.to_string(),
+            };
+            assert_eq!(fix.next(), next);
+            let v = serde_json::to_value(&c).unwrap();
+            assert_eq!((v["fix"].as_str(), &v["action"]), (Some(prose), &serde_json::to_value(action).unwrap()));
+        }
+        // The lexicon's words reach the prose around a command, never the command.
+        let f = Fix::run_in("run {} once learned", "adage condition").in_words();
+        assert_eq!(
+            (f.prose().as_str(), f.command()),
+            ("run `adage condition` once conditioned", Some("adage condition"))
+        );
+        assert_eq!(pass("x", "").fix.as_ref().map(Fix::action), None);
+        let v = serde_json::to_value(with(Fix::run_in("{} recompiles it", "adage condition"))).unwrap();
+        assert_eq!(v["action"], json!({ "kind": "run", "command": "adage condition" }));
+        let v = serde_json::to_value(pass("x", "d")).unwrap();
+        assert_eq!(v, json!({ "check": "x", "label": "x", "status": "pass", "detail": "d" }));
+    }
+
+    /// Every fix doctor makes on a broken home is typed: a command to run is a whole `adage`
+    /// command that its prose names, in backticks unless it is the whole fix.
+    #[test]
+    fn every_fix_names_its_command_once() {
+        let d = tempfile::tempdir().unwrap();
+        let paths = Paths::at(d.path());
+        std::fs::write(paths.index(), "not an index").unwrap();
+        let line = json!({ "ts": adage_core::time::now_ms(), "error": "boom" });
+        std::fs::write(paths.root.join(FAIL_OPEN_LOG), format!("{line}\n")).unwrap();
+        let checks = checks(&paths, Some(d.path()));
+        let fixes: Vec<&Fix> = checks.iter().filter_map(|c| c.fix.as_ref()).collect();
+        assert!(fixes.iter().any(|f| f.command() == Some("adage condition")), "{checks:?}");
+        assert!(fixes.iter().any(|f| matches!(f, Fix::Manual(_))), "{checks:?}");
+        for f in fixes {
+            if let Some(cmd) = f.command() {
+                assert!(cmd.starts_with("adage ") && !cmd.contains('`'), "{f:?}");
+                let p = f.prose();
+                assert!(p == cmd || p.matches(&format!("`{cmd}`")).count() == 1, "{f:?}");
+            }
+        }
+    }
+
+    /// A repository turned off is turned back on with `adage on`, a command a pane may offer.
+    #[test]
+    fn a_repository_turned_off_is_fixed_with_adage_on() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(d.path().join(".adage")).unwrap();
+        std::fs::write(d.path().join(".adage/disabled"), "").unwrap();
+        let c = kill_switches(Some(d.path()));
+        if std::env::var_os("ADAGE_DISABLE").is_some()
+            || std::env::var_os("ADAGE_CONTROL").is_some()
+            || std::env::var_os("ADAGE_ARM").is_some()
+        {
+            return; // the shell's own switches change the fix; covered without them
+        }
+        assert_eq!((c.status, c.fix.clone()), (Status::Warn, Some(Fix::run("adage on"))));
+        assert_eq!(c.fix.as_ref().map(Fix::action), Some(Action::Run { command: "adage on".into() }));
+    }
+
     #[test]
     fn rewrites_say_their_state_and_the_switch_the_other_way() {
         let d = tempfile::tempdir().unwrap();
         let paths = Paths::at(d.path());
         let c = rewrites_check(&paths);
         assert_eq!((c.status, c.detail.as_str()), (Status::Pass, "python tests → .venv (on)"));
-        assert_eq!(c.fix.as_deref(), Some("adage delegate rewrites off"));
-        // The older marker turns them off whatever the setting says.
+        assert_eq!(c.fix, Some(Fix::run("adage delegate rewrites off")));
+        // The older marker turns them off whatever the setting says. Written where the hook reads
+        // it; doctor reads it through `Paths`, the one definition.
         let marker = adage_hook::rewrite_off(&paths);
+        assert_eq!(marker, paths.rewrite_off());
         std::fs::create_dir_all(marker.parent().unwrap()).unwrap();
         std::fs::write(&marker, "").unwrap();
         let c = rewrites_check(&paths);
         assert!(c.detail.starts_with("off (the exec/rewrite-off marker)"), "{}", c.detail);
-        assert_eq!(c.fix.as_deref(), Some("adage delegate rewrites on"));
+        assert_eq!(c.fix, Some(Fix::run("adage delegate rewrites on")));
         std::fs::remove_file(&marker).unwrap();
         std::fs::write(paths.config(), "[runtime]\nrewrite = false\n").unwrap();
         assert!(rewrites_check(&paths).detail.starts_with("off (runtime.rewrite = false)"));
+    }
+
+    /// T-D3-08: an index a newer Adage wrote (a step this binary cannot read, a newer `format`) is
+    /// reported as newer than this binary, with what to do, not as damage to recompile.
+    #[test]
+    fn an_index_from_a_newer_binary_is_reported_as_newer() {
+        let d = tempfile::tempdir().unwrap();
+        let paths = Paths::at(d.path());
+        let scan = TrackScan { valid: vec![], imported: 0, invalid: vec![] };
+        let newer = json!({ "format": index::INDEX_FORMAT + 1, "generation": "x",
+                            "routes": [{ "repo": "r", "track": "t", "version": "1.0.0", "route": { "step": { "do": "teleport" } } }] });
+        std::fs::write(paths.index(), serde_json::to_vec(&newer).unwrap()).unwrap();
+        let (c, idx) = index_check(&paths, &scan);
+        assert_eq!(c.status, Status::Fail);
+        assert!(c.detail.contains("is newer than this binary"), "{}", c.detail);
+        assert!(
+            c.fix.as_ref().is_some_and(|f| f.command().is_none() && f.prose().contains("update this adage")),
+            "{c:?}"
+        );
+        assert!(idx.routes.is_empty());
+        // The same bytes at this binary's own format are a damaged index, recompiled as before.
+        let mut same = newer.clone();
+        same["format"] = json!(index::INDEX_FORMAT);
+        std::fs::write(paths.index(), serde_json::to_vec(&same).unwrap()).unwrap();
+        let (c, _) = index_check(&paths, &scan);
+        assert!(c.detail.contains("is not a valid index"), "{}", c.detail);
     }
 }

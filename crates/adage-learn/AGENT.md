@@ -19,14 +19,23 @@ instincts, and compiles the index, reading earlier results and writing everythin
 
 ## What's inside
 
-- `lib.rs`: `Inputs`, `Report`, `RepoReport`, `TrackReport`, `Planned`, `TRACK` (`"learned"`),
+- `lib.rs`: `Inputs` (with `identities`, declared task identities by session), `Report`, `RepoReport`, `TrackReport`, `Planned`, `TRACK` (`"learned"`),
   `LEGACY_TRACKS`; entry points `learn` (transcript paths in), `learn_sessions` (a `Batch` in,
   `store::Files`), `learn_sessions_into` (any `Store`), `plan` (the dry run: everything a run
   would write, nothing written), `route_line`, and the crate-private `bump` (semver rule).
-- `store`: the `Store` trait, `Files` (`$ADAGE_HOME` layout), `Compiled`.
+- `store`: the `Store` trait, `Files` (`$ADAGE_HOME` layout), `Compiled`; also the build's
+  `computation_stamp`, one mining checkpoint per repository, and canonical corpus objects and
+  manifests.
 - `engine`: the one learner, which knows no route kinds. `run(sessions, cfg, priors, model) ->
-  EngineRun`: mine (`adage_graph::select::learn`), compile (`adage_graph::compile`), then judge
-  each route on the traces; `exposed`, `verdict`, `EngineReport`.
+  EngineRun` (`run_cached` with a `Store`): mine (`adage_graph::select::learn`, reused from
+  `checkpoint` when the sessions, parameters and build are unchanged), compile
+  (`adage_graph::compile`, routes and candidates), then judge each route on the traces;
+  `exposed`, `verdict`, `EngineReport` (with the cache hit and the identity counts).
+- `checkpoint`: pure mining only (`mining`): the `Learned` result with every field its reports
+  skip (unselected reflexes, candidates, counts, each reflex's raw pattern, supporting sessions
+  and lag), keyed by a digest of the sessions, the parameters and the build. `corpus`: canonical
+  evidence snapshots (`import` publishes one manifest only after every record passes; `load`,
+  `audit`, `export`, `learn`).
 - `evidence`: `LearnConfig` (`min_support`, `fire_lower_bound`, `prime_rate`, `retain_rate`,
   `material_lower_bound`, `dormant_exposure`, `instincts: Option<instincts::Config>`, `priors`,
   `uplift_min`, and more; `demo()`, `from_params`, `for_thresholds`).
@@ -51,8 +60,9 @@ instincts, and compiles the index, reading earlier results and writing everythin
   directory picks the embedding model with `adage_intent::model::resolve_static`; without one,
   intent routes are not learned and the existing ones are kept.
 - The `Store` port (`src/store.rs`): reads earlier `Track`s, `Reviews`, `Proposals`, `Why`,
-  instinct `Binding`s and packs, by track name; writes `Planned` tracks, bindings and follow-judge
-  weights; `compile_index` once, after every write. `Files` is the production implementation;
+  instinct `Binding`s and packs, by track name, and the last learn's candidates by repository;
+  writes `Planned` tracks, bindings, follow-judge weights and candidates (`candidates.json`, plan
+  D1); `compile_index` once, after every write. `Files` is the production implementation;
   `tests/remote_sessions.rs` has `Rows`, a store held entirely in memory.
 - Instincts: `instincts::plan_repo` calls `adage_pack::instincts::bind`, which runs
   `adage_instincts::bind_with` and keeps the routes a turned-on pack's templates admit; the result

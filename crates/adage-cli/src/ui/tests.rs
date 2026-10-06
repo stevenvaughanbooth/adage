@@ -166,12 +166,13 @@ fn fixture(dir: &Path) -> Paths {
 }
 
 fn health() -> Health {
-    let check = |name: &str, status, detail: &str, fix: Option<&str>| Check {
+    use crate::doctor::Fix as DoctorFix;
+    let check = |name: &str, status, detail: &str, fix: Option<DoctorFix>| Check {
         check: name.into(),
         label: crate::doctor::label(name),
         status,
         detail: detail.into(),
-        fix: fix.map(String::from),
+        fix,
     };
     Health {
         checks: vec![
@@ -181,7 +182,7 @@ fn health() -> Health {
                 "embedding model",
                 Status::Warn,
                 "no embedding model, so the hashed fallback is in use; intent reflexes cannot fire",
-                Some("run `adage models fetch`"),
+                Some(DoctorFix::run_in("run {}", "adage models fetch")),
             ),
             check(
                 "hooks: claude-code",
@@ -193,7 +194,7 @@ fn health() -> Health {
                 "hooks: codex",
                 Status::Warn,
                 "codex is installed, but Adage's hooks are not registered with it",
-                Some("`adage install codex --write`"),
+                Some(DoctorFix::run_in("{}", "adage install codex --write")),
             ),
             check("fail-open errors", Status::Pass, "none in the last 7 days", None),
         ],
@@ -2324,7 +2325,7 @@ fn savings_rewrites_and_notices_on_the_live_and_health_screens() {
         label: "rewrites".into(),
         status: Status::Pass,
         detail: "python tests → .venv (on)".into(),
-        fix: Some("adage delegate rewrites off".into()),
+        fix: Some(crate::doctor::Fix::run("adage delegate rewrites off")),
     });
     h.fixes.push(None);
     s.health = Some(h);
@@ -2503,7 +2504,7 @@ fn unreadable_review_fails_closed_and_manual_health_steps_do_not_disappear() {
     let h = s.health.as_mut().unwrap();
     h.fixes[0] = None;
     h.checks[0].detail = "Registered; waiting for first delivery".into();
-    h.checks[0].fix = Some("Open /hooks inside Codex and accept Adage".into());
+    h.checks[0].fix = Some(crate::doctor::Fix::manual("Open /hooks inside Codex and accept Adage"));
     s.key(KeyCode::Enter, NONE);
     assert!(matches!(&s.modal,Some(Modal::Viewer{lines,..}) if lines.iter().any(|l|l.contains("/hooks"))));
 }

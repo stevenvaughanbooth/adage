@@ -1,5 +1,5 @@
 //! Attribution and complete recorded traces shared by the map, review and terminal surfaces.
-use super::{arm_word, judgement_word, ArmSets, Pretool, Tally};
+use super::{arm_word, judgement_word, mod_fields, ArmSets, Pretool, Tally, MOD_FIELDS};
 use crate::review::{discover, Installed};
 use adage_core::pattern;
 use adage_runtime::SessionState;
@@ -202,6 +202,9 @@ fn recorded_events(path: &Path, catalog: &Catalog) -> Result<Vec<Value>> {
             "would_have": would, "judgements": judgements,
             "continue_reason": d["continue_reason"], "would_continue": d["would_continue"],
         }));
+        if let Some(event) = events.last_mut().and_then(Value::as_object_mut) {
+            event.extend(mod_fields(record));
+        }
     }
     Ok(events)
 }
@@ -325,14 +328,17 @@ fn measurement_json(
         .map(|arm| {
             let sets = metrics.and_then(|metrics| metrics.arms.get(*arm));
             let n = |f: fn(&ArmSets) -> &BTreeSet<String>| sets.map_or(0, |sets| f(sets).len());
-            (
-                (*arm).into(),
-                json!({
-                    "sessions": arm_sessions.get(&(repo.into(), (*arm).into())).map_or(0, BTreeSet::len),
-                    "applied": n(|s| &s.applied), "followed": n(|s| &s.followed), "met": n(|s| &s.met),
-                    "hit_avoided": sets.map_or(0, |s| s.hit_avoided.intersection(&s.applied).count()),
-                }),
-            )
+            let mut json = json!({
+                "sessions": arm_sessions.get(&(repo.into(), (*arm).into())).map_or(0, BTreeSet::len),
+                "applied": n(|s| &s.applied), "followed": n(|s| &s.followed), "met": n(|s| &s.met),
+                "hit_avoided": sets.map_or(0, |s| s.hit_avoided.intersection(&s.applied).count()),
+            });
+            // A dead end replaced before it ran is avoided, not hit, and not a follow. Said only
+            // where it happened, so a map without the mod reads as before.
+            if n(|s| &s.substituted) > 0 {
+                json["substituted"] = json!(n(|s| &s.substituted));
+            }
+            ((*arm).into(), json)
         })
         .collect();
     let sessions: Vec<Value> = metrics
@@ -421,6 +427,10 @@ pub(super) fn read(paths: &Paths, installed: &[Installed], max_events: usize, wa
             _ => {}
         }
         let mut session_traces = BTreeMap::<String, TraceSummary>::new();
+        // The reflexes each route id was exposed as in this session, by repository and arm: a
+        // would-be substitution names only its route, so it is counted as a judgement is, against
+        // one unambiguous exposure.
+        let mut exposed = BTreeMap::<(String, String, String), BTreeSet<Option<MetricKey>>>::new();
         for event in records {
             let repo = event["repo"].as_str().unwrap_or("").to_string();
             let sid = event["session"].as_str().unwrap_or("").to_string();
@@ -449,6 +459,9 @@ pub(super) fn read(paths: &Paths, installed: &[Installed], max_events: usize, wa
             for exposure in exposures {
                 *attribution_counts.entry(exposure["attribution"].as_str().unwrap_or("legacy").into()).or_default() +=
                     1;
+                if let Some(id) = exposure["route"].as_str() {
+                    exposed.entry((repo.clone(), id.into(), arm.clone())).or_default().insert(metric_key(exposure));
+                }
                 let Some(key) = metric_key(exposure) else {
                     continue;
                 };
@@ -484,8 +497,24 @@ pub(super) fn read(paths: &Paths, installed: &[Installed], max_events: usize, wa
                         sets.met.insert(sid.clone());
                         session.met.push(sequence);
                     }
+                    "substituted" => {
+                        sets.substituted.insert(sid.clone());
+                    }
                     _ => {}
                 }
+            }
+            // The control arm (and observe mode) records only the replacement it would make.
+            let replaced = event["would_substitute"].as_str();
+            let keys = replaced.and_then(|id| exposed.get(&(repo.clone(), id.into(), arm.clone())));
+            if let Some(Some(key)) = keys.filter(|keys| keys.len() == 1).and_then(|keys| keys.first()) {
+                metrics
+                    .entry(key.clone())
+                    .or_default()
+                    .arms
+                    .entry(arm.clone())
+                    .or_default()
+                    .substituted
+                    .insert(sid.clone());
             }
             let keys = event["observed"].as_array().unwrap();
             for key in keys.iter().filter_map(Value::as_str) {
@@ -534,6 +563,7 @@ pub(super) fn read(paths: &Paths, installed: &[Installed], max_events: usize, wa
                 || !event["judged"].as_array().unwrap().is_empty()
                 || !keys.is_empty()
                 || cont
+                || MOD_FIELDS.iter().any(|field| event.get(*field).is_some())
             {
                 recent(&mut events, event, max_events);
             }
@@ -812,6 +842,38 @@ mod tests {
         assert_eq!(g["events"][0]["arm"], "control");
         assert_eq!(g["pretool"][0]["withheld"], 1);
         assert_eq!(g["totals"]["emitted"], 0);
+    }
+
+    #[test]
+    fn a_substitution_counts_for_the_reflex_the_session_was_exposed_to() {
+        let (_dir, paths) = home();
+        let sub = json!({ "route": "verify", "track": "acme/work", "command": "make check", "context": "c" });
+        append(&paths, "treated", 1, json!({ "directives": [directive("0.2.0")] }));
+        append(
+            &paths,
+            "treated",
+            2,
+            json!({ "judgements": [{ "kind": "substituted", "route": "verify" }], "substituted": sub, "would_substitute": sub }),
+        );
+        let control = |sid: &str, ts: u64, decision: Value| {
+            let record = json!({ "ts": ts, "repo": "acme", "arm": "control", "event": "PreToolUse", "kind": "pretool", "decision": decision });
+            spool::append(&paths.sessions().join(format!("{sid}.spool")), &record).unwrap();
+        };
+        control("control", 3, json!({ "would_have": [directive("0.2.0")] }));
+        control("control", 4, json!({ "would_substitute": sub }));
+        // Never exposed in its session: nothing ties it to the installed reflex.
+        control("unexposed", 5, json!({ "would_substitute": sub }));
+        let g = graph(&paths, 400);
+        let r = &g["routes"][0];
+        assert_eq!(
+            (r["arms"]["treated"]["substituted"].clone(), r["arms"]["control"]["substituted"].clone()),
+            (json!(1), json!(1))
+        );
+        assert_eq!(r["arms"]["treated"]["followed"], 0, "a substitution is not a follow");
+        let events = g["events"].as_array().unwrap();
+        let named = |field: &str, arm: &str| events.iter().filter(|e| e[field] == "verify" && e["arm"] == arm).count();
+        assert_eq!((named("substituted", "treated"), named("would_substitute", "treated")), (1, 0));
+        assert_eq!(named("would_substitute", "control"), 2, "both would-be substitutions stay in the trace");
     }
 
     #[cfg(unix)]

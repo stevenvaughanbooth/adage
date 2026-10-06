@@ -301,6 +301,9 @@ impl Cx {
             ),
             // Never the step's contents: a card quotes traces (review N1).
             Step::Card { .. } => return Err("a procedure card is first-hand only".into()),
+            // Packs carry no skill step until the format revision that adds one (plan D3): a
+            // skill route is learned and delivered locally.
+            Step::Skill { .. } => return Err("a skill step has no form in adage-pack/1".into()),
             #[allow(unreachable_patterns)]
             _ => return Err("this kind of step has no v2 form".into()),
         };

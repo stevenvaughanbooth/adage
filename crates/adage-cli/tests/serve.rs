@@ -6,6 +6,8 @@ use std::net::TcpStream;
 use std::process::{Child, Command, Stdio};
 use std::time::Duration;
 
+mod common;
+
 /// The server process, and its stdout kept open for its lifetime (a closed pipe must not matter,
 /// but the test should not depend on that).
 struct Server(Child, #[allow(dead_code)] Option<BufReader<std::process::ChildStdout>>);
@@ -31,16 +33,12 @@ fn get(addr: &str, path: &str, host: &str) -> (String, String) {
 #[test]
 fn serves_the_map_and_its_api_from_the_binary() {
     let d = tempfile::tempdir().unwrap();
-    let mut child = Command::new(env!("CARGO_BIN_EXE_adage"))
+    let mut child = common::scrub(&mut Command::new(env!("CARGO_BIN_EXE_adage")))
         .args(["map", "--port", "0", "--no-open"])
         // This empty-home fixture must not inherit the developer checkout's repository identity.
         .current_dir(d.path())
         .env("ADAGE_HOME", d.path().join("data"))
         .env("HOME", d.path())
-        .env_remove("CLAUDECODE")
-        .env_remove("OPENCODE")
-        .env_remove("CODEX_SANDBOX")
-        .env_remove("CODEX_SANDBOX_NETWORK_DISABLED")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())

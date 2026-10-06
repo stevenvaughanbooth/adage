@@ -13,10 +13,19 @@ PROTOCOL = json.loads(v9.canary.GATE.read_text())
 T = PROTOCOL[v9.THRESHOLDS]
 
 
-def frozen(root):
+MOD_ROUTES = ["github-com-marshmallow-code-marshmallow/learned/run-finish"]
+
+
+def frozen(root, design=v9.DESIGN):
     bins = {"adage": str(root / "bin/adage"), "adage-exec": str(root / "bin/adage-exec")}
-    m = dict(protocol=v9.PROTOCOL, source_sha256=v9.sources(), frozen_inputs={}, matrix=v9.matrix(),
-             route=v9.canary.ROUTE, command=v9.canary.COMMAND, caches=list(v9.canary.CACHES), binaries=bins)
+    mod = design == "dev-v9-mod"
+    m = dict(protocol=v9.DESIGNS[design]["protocol"], design=design, source_sha256=v9.sources(), frozen_inputs={},
+             matrix=v9.matrix(design), route=v9.canary.ROUTE, command=v9.canary.COMMAND,
+             caches=list(v9.canary.CACHES), binaries=bins, predict_routes=MOD_ROUTES if mod else [],
+             plugin=str(root / "plugin") if mod else None, model="m", thresholds=T,
+             primary=v9.DESIGNS[design]["primary"])
+    for row in m["matrix"]:
+        row["prompt"] = "p"
     v9.pairs.write(root / "manifest.json", m)
     (root / "manifest.sha256").write_text(v9.pairs.sha(root / "manifest.json") + "\n")
     return m
@@ -31,7 +40,8 @@ class Design(unittest.TestCase):
         for block in range(1, 17):
             self.assertEqual(sorted(r["arm"] for r in positives if r["block"] == block), ["A0", "A2f", "A4"])
         firsts = [next(r["arm"] for r in positives if r["block"] == b) for b in range(1, 17)]
-        self.assertEqual({a: firsts.count(a) for a in v9.ARMS}, {"A0": 6, "A2f": 5, "A4": 5}, "no arm always goes first")
+        self.assertEqual({a: firsts.count(a) for a in v9.DESIGNS["dev-v9"]["arms"]}, {"A0": 6, "A2f": 5, "A4": 5},
+                         "no arm always goes first")
         self.assertEqual({r["task"] for r in rows}, {"mm-curve--finite"})
         self.assertEqual([r["order"] for r in rows], list(range(len(rows))))
         self.assertEqual(len({v9.session_dir(Path("/r"), r) for r in rows}), len(rows))
@@ -196,6 +206,141 @@ class Rule(unittest.TestCase):
             out = v9.summarize(rows, T)
             self.assertFalse(out["valid"], out["problems"])
             self.assertIsNone(out["best"])
+
+
+def mod_study(mod, a4=None, a0=18):
+    """A dev-v9-mod study: MOD's five controls, then A0, A4 and MOD in each of the 16 blocks."""
+    out = [row("MOD", None, 15, condition=c) for c in v9.CONTROLS]
+    for b in range(1, 17):
+        out += [row("A0", b, a0), row("A4", b, (a4 or [16] * 16)[b - 1]), row("MOD", b, mod[b - 1])]
+    for order, r in enumerate(out):
+        r["order"] = order
+    return out
+
+
+class Mod(unittest.TestCase):
+    """E2's MOD arm (plan E2, T-E2-01 and T-E2-02): its design, the person's predict grant and the
+    registered rule."""
+
+    def test_the_mod_design_runs_mods_five_controls_then_sixteen_blocks_of_a0_a4_and_mod(self):
+        rows = v9.matrix("dev-v9-mod")
+        self.assertEqual(len(rows), 5 + 16 * 3, "the dev-v9 budget's 53 sessions")
+        self.assertEqual([(r["arm"], r["condition"]) for r in rows[:5]], [("MOD", c) for c in v9.CONTROLS])
+        for block in range(1, 17):
+            self.assertEqual(sorted(r["arm"] for r in rows[5:] if r["block"] == block), ["A0", "A4", "MOD"])
+        self.assertEqual(v9.DESIGNS["dev-v9-mod"]["control_arms"], ("MOD",))
+        self.assertEqual(v9.DESIGNS["dev-v9-mod"]["protocol"], "dev-arms-3")
+        mod = v9.ARMS["MOD"]
+        self.assertTrue(mod["hooks"] and mod["mod"] and mod["card_orientation"], "MOD is A4's hooks plus the mod")
+        self.assertEqual(v9.matrix(), v9.matrix("dev-v9"), "the registered design is unchanged")
+        self.assertEqual(v9.PROTOCOL, "dev-arms-2")
+
+    def test_the_dry_run_shows_the_persons_predict_grant_before_any_positive_block(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            frozen(root, "dev-v9-mod")
+            out = v9.dry_run(root)
+            self.assertEqual((out["design"], out["protocol"], out["paid_calls"]), ("dev-v9-mod", "dev-arms-3", 0))
+            self.assertEqual(out["steps"][0]["step"], "person")
+            self.assertTrue(out["person_before_positives"])
+            grants = out["steps"][0]["predict_grants"]
+            self.assertEqual(len(grants), 5 + 16, "every MOD home: its controls and its blocks")
+            self.assertTrue(all(g["routes"] == MOD_ROUTES for g in grants))
+            dispatches = [s for s in out["steps"] if s["step"] == "dispatch"]
+            self.assertEqual(len(dispatches), 53)
+            self.assertEqual([s["condition"] for s in dispatches[:5]], list(v9.CONTROLS))
+            for s in dispatches:
+                if s["arm"] == "MOD":
+                    self.assertEqual(s["plugin_dir"], str(root / "plugin"))
+                    self.assertEqual(s["grants"], ["e2 " + v9.canary.ROUTE, "predict " + MOD_ROUTES[0]])
+                else:
+                    self.assertIsNone(s["plugin_dir"])
+                    self.assertNotIn("predict " + MOD_ROUTES[0], s["grants"])
+            self.assertEqual(out["thresholds"], T, "the frozen registered rule")
+            self.assertEqual(out["primary"], "MOD")
+            self.assertEqual(sorted(p.name for p in root.iterdir()), ["manifest.json", "manifest.sha256"],
+                             "the dry run writes nothing")
+
+    def test_the_mod_homes_get_a_person_issued_predict_grant_in_the_reviewed_script(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            m = frozen(root, "dev-v9-mod")
+            text = Path(v9.approval_script(root)["path"]).read_text()
+            self.assertEqual(text.count("review delegate"), 16 * 2 + 5 + (16 + 5), "E2 for A4 and MOD, predict for MOD")
+            self.assertEqual(text.count("--predict "), 16 + 5)
+            self.assertIn("review delegate github-com-marshmallow-code-marshmallow/learned run-finish --predict --repo ", text)
+            self.assertNotIn("-A0-", text)
+            for line in (x for x in text.splitlines() if "--predict" in x):
+                self.assertIn("-MOD-", line)
+                self.assertIn("--by launch-evaluation-human", line)
+            for row in m["matrix"]:
+                home = v9.session_dir(root, row) / "adage-home"
+                home.mkdir(parents=True)
+                if not v9.ARMS[row["arm"]]["hooks"]:
+                    continue
+                (home / "policy.toml").write_text(v9.POLICY)
+                grants = [dict(route=v9.canary.ROUTE, by="launch-evaluation-human", auto=False,
+                               key=dict(level="e2", effect="verify", argv_templates=[shlex.split(v9.canary.COMMAND)]),
+                               terms=dict(cache=list(v9.canary.CACHES), timeout_ms=v9.TIMEOUT_MS))]
+                if v9.ARMS[row["arm"]].get("mod"):
+                    grants.append(dict(route=MOD_ROUTES[0], by="launch-evaluation-human", auto=False,
+                                       key=dict(level="e2", mode="predict")))
+                v9.pairs.write(home / "approvals.json", dict(approvals=grants))
+            self.assertTrue(v9.verify_grants(root)["passed"], v9.verify_grants(root))
+            # A predict grant in an A4 home, or none in a MOD home, is not the reviewed script.
+            a4 = next(r for r in m["matrix"] if r["arm"] == "A4")
+            store = v9.pairs.read(v9.session_dir(root, a4) / "adage-home/approvals.json")
+            store["approvals"].append(dict(route=MOD_ROUTES[0], by="launch-evaluation-human", auto=False,
+                                           key=dict(level="e2", mode="predict")))
+            v9.pairs.write(v9.session_dir(root, a4) / "adage-home/approvals.json", store)
+            self.assertFalse(v9.verify_grants(root)["passed"])
+
+    def test_the_argv_loads_the_frozen_mod_for_mod_sessions_only(self):
+        m = dict(model="m", plugin="/study/plugin")
+        mod = v9.session_argv(m, dict(arm="MOD", prompt="p"), Path("/s"))
+        self.assertEqual(mod[-3:], ["--plugin-dir", "/study/plugin", "p"])
+        self.assertNotIn("--plugin-dir", v9.session_argv(m, dict(arm="A4", prompt="p"), Path("/s")))
+
+    def test_the_staged_mod_carries_no_command_hook(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src, dst = Path(tmp) / "plugin", Path(tmp) / "staged"
+            (src / "hooks").mkdir(parents=True)
+            (src / "hooks/hooks.json").write_text(json.dumps(dict(hooks=dict(Stop=[]), modules=["./register.ts"])))
+            (src / "hooks/register.ts").write_text("export {}\n")
+            (src / "hooks/register.test.ts").write_text("test\n")
+            digests = v9.stage_mod_plugin(src, dst)
+            self.assertEqual(json.loads((dst / "hooks/hooks.json").read_text()), dict(modules=["./register.ts"]))
+            self.assertEqual(sorted(digests), ["hooks/hooks.json", "hooks/register.ts"])
+        self.assertTrue((v9.PLUGIN / "hooks/hooks.json").is_file(), "the repository's plugin is the default")
+
+    def test_the_mod_revision_must_be_registered_before_a_mod_study_freezes(self):
+        protocol = json.loads(v9.canary.GATE.read_text())
+        self.assertFalse(v9.registered_mod_revision(protocol), "no MOD revision is registered yet: no MOD run")
+        self.assertTrue(v9.registered_mod_revision(dict(revisions=["r13 ... development canary dev-v9-mod ..."])))
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(ValueError):
+                v9.freeze(Path(tmp) / "study", Path(tmp), Path(tmp), Path(tmp), Path(tmp), [], "dev-v9-mod", ())
+            with self.assertRaises(ValueError):
+                v9.freeze(Path(tmp) / "study", Path(tmp), Path(tmp), Path(tmp), Path(tmp), [], "dev-v9-mod",
+                          (v9.canary.ROUTE,))
+
+    def test_mod_is_judged_by_the_registered_rule_and_is_the_only_candidate(self):
+        out = v9.summarize(mod_study([14] * 16), T, "dev-v9-mod")
+        self.assertTrue(out["valid"], out["problems"])
+        self.assertTrue(out["verdict"]["MOD"]["passed"], out["verdict"])
+        self.assertEqual(out["best"], "MOD")
+        self.assertEqual(out["candidates"], ["MOD"])
+        self.assertFalse(out["verdict"]["A4"]["eligible"], "A4 has no controls here: reported, never BEST")
+        self.assertNotIn("A2f", out["verdict"])
+        self.assertEqual(out["rule"], dict(D1_requests_max_ratio_to_A0=0.8, D1_blocks_fewer_min=10,
+                                           D4_sessions_with_repeat_attempts_max=5, registered="dev_thresholds_v9"))
+        self.assertFalse(v9.summarize(mod_study([15] * 16), T, "dev-v9-mod")["verdict"]["MOD"]["D1_requests"])
+        # The thresholds are read, never written: a stricter registered ratio fails the same study.
+        stricter = dict(T, D1_requests_max_ratio_to_A0=0.7)
+        self.assertFalse(v9.summarize(mod_study([14] * 16), stricter, "dev-v9-mod")["verdict"]["MOD"]["passed"])
+        rows = mod_study([14] * 16)
+        rows[2]["timeline"]["final_digest"] = "a"  # MOD's config-change control was not realized
+        self.assertFalse(v9.summarize(rows, T, "dev-v9-mod")["valid"])
 
 
 if __name__ == "__main__":

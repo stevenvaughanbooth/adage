@@ -8,6 +8,11 @@
           canary-v8 report, built from the final pre-freeze commit (which includes generic
           correctness fixes made before any held-out run), with one person-issued E2 grant.
 
+BEST may be MOD (plan E3), when the selection input is a valid dev-v9-mod report (protocol
+dev-arms-3) whose rule MOD passed: its sessions then load the frozen mod (`--plugin-dir`, the
+module alone) and its homes hold the person-issued `predict` grants the development study named,
+beside the E2 grant; NOEXEC stays hooks only, with neither grant.
+
 The matrix is `heldout_analysis.matrix`: five safety controls (BEST, development task, the validated
 canary suffixes) and then 20 paired blocks (four held-out tasks x five repetitions, seeded arm
 order). Prompts are the frozen task material of `heldout_tasks` (results/20261001-heldout-tasks).
@@ -82,22 +87,29 @@ def session_dir(root, row):
 
 def design(dev_report_path):
     """BEST from the development report by the registered rule; None stops the held-out study. A
-    dev-arms-2 (dev-v9) report must also be valid: its BEST is its arm with controls (A4)."""
+    dev-v9 report (dev-arms-2, or dev-arms-3 for its MOD design) must also be valid: its BEST is
+    its design's arm with controls (A4, or MOD). A MOD BEST carries the mod and its predict routes."""
     report = pairs.read(dev_report_path)
+    v9_designs = {d["protocol"]: name for name, d in dev_v9.DESIGNS.items()}
     if report.get("protocol") == dev_arms.PROTOCOL:
         best = analysis.select_best(report)
         arms, card_orientation = dev_arms.ARMS, None
-    elif report.get("protocol") == dev_v9.PROTOCOL:
+    elif report.get("protocol") in v9_designs:
         if report.get("valid") is not True:
             raise ValueError("the dev-v9 report is invalid; the held-out comparison is not run")
-        best = analysis.select_best(report, candidates=dev_v9.CONTROL_ARMS)
+        name = v9_designs[report["protocol"]]
+        best = analysis.select_best(report, candidates=dev_v9.DESIGNS[name]["control_arms"])
         arms = dev_v9.ARMS
         card_orientation = arms[best]["card_orientation"] if best else None
     else:
-        raise ValueError("the selection input must be a dev-arms-1 or dev-arms-2 report")
+        raise ValueError("the selection input must be a dev-arms-1, dev-arms-2 or dev-arms-3 report")
     if best is None:
         raise ValueError("no development arm passed D1-D4; the held-out comparison is not run")
+    mod = bool(arms[best].get("mod"))
+    if mod and not report.get("predict_routes"):
+        raise ValueError("a MOD BEST must name the routes its predict grants cover")
     return dict(arm=best, card_checks=arms[best].get("card_checks"), card_orientation=card_orientation,
+                mod=mod, predict_routes=list(report.get("predict_routes") or []) if mod else [],
                 label=arms[best]["label"], dev_protocol=report["protocol"],
                 report=str(Path(dev_report_path).resolve()), report_sha256=pairs.sha(Path(dev_report_path)),
                 rule="the arm passing D1-D4 with the lowest mean requests (ties: lower mean cost, then name)")
@@ -235,6 +247,8 @@ def freeze(root, cohort, cumulative, dev_controls, heldout_controls, dev_report,
               dev_controls / "manifest.json", dev_controls / "validation.json", heldout_controls / "manifest.json",
               heldout_controls / "validation.json", TASK_MANIFEST, Path(best["report"]), *identities,
               *(home / n for n in record["artifact_sha256"]), *map(Path, bins.values())]
+    staged = dev_v9.stage_mod_plugin(dev_v9.PLUGIN, root / "plugin") if best.get("mod") else {}
+    inputs += [root / "plugin" / n for n in staged]
     budget = analysis.budget(len(rows))
     if not budget["fits"]:
         raise ValueError("worst case exceeds the held-out ceiling")
@@ -243,6 +257,7 @@ def freeze(root, cohort, cumulative, dev_controls, heldout_controls, dev_report,
              budget_allocation_sha256=parent.get("budget_allocation_sha256") or pairs.sha(authority / "evaluation-allocation.json"),
              preparation_python=guided["preparation_python"], python_requested=guided["python_requested"],
              model=guided["model"], families=[plan], matrix=rows, best=best, arms=dict(HOOKS),
+             plugin=str(root / "plugin") if best.get("mod") else None, plugin_sha256=staged,
              route=canary.ROUTE, command=canary.COMMAND, caches=list(canary.CACHES), learned_home=str(home),
              learned_files=record["artifact_sha256"],
              learned_provenance="explicitly guided demonstrations (cumulative-launch-10); fixed route, not new learning",
@@ -289,6 +304,8 @@ def assignment(m, row, session, checkout, local, settings_base, hidden, review):
             "--disable-slash-commands", "--setting-sources", "", "--settings", str(session / "settings.json"),
             "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}', "--tools", "Read,Edit,Write,Glob,Grep,Bash",
             "--permission-mode", "dontAsk", "--permission-prompts", "none", row["prompt"]]
+    if arm == "BEST" and m["best"].get("mod"):
+        argv[-1:-1] = ["--plugin-dir", m["plugin"]]
     value = dict(protocol=PROTOCOL, root=str(session), study_root=m["root"], cohort_root=m["cohort_root"],
                  experiment_root=m["budget_authority"], execution_root=str(checkout), home=str(local),
                  arm=RUNTIME_ARM[arm], heldout_arm=arm, card_checks=m["best"]["card_checks"] if HOOKS[arm] else None,
@@ -366,6 +383,8 @@ def approval_script(root):
                   "else printf '%%s' %s > %s; fi" % (p, shlex.quote(POLICY), p, shlex.quote(POLICY), p),
                   "ADAGE_HOME=%s %s review delegate %s %s --level e2 --effect verify %s --timeout-ms 30000 --repo %s --by launch-evaluation-human" % (
                       shlex.quote(str(home)), shlex.quote(m["binaries"]["adage"]), track, reflex, caches, shlex.quote(str(checkout)))]
+        # BEST = MOD: the person's predict grants too (NOEXEC and A0 never hold one).
+        lines += dev_v9.predict_lines(dict(m, predict_routes=m["best"].get("predict_routes") or []), home, checkout)
     text = "\n".join(lines) + "\n"
     path = root / "approve-heldout.sh"
     if path.exists() and path.read_text() != text:
@@ -390,7 +409,13 @@ def verify_grants(root):
         except OSError as error:
             problems.append(dict(order=row["order"], problem=str(error)))
             continue
-        grants = store.get("approvals", [])
+        everything = store.get("approvals", [])
+        grants = [g for g in everything if (g.get("key") or {}).get("mode") != "predict"]
+        predicted = sorted(g.get("route") for g in everything if (g.get("key") or {}).get("mode") == "predict"
+                           and g.get("by") == "launch-evaluation-human" and g.get("auto") is False)
+        if predicted != sorted(m["best"].get("predict_routes") or []) or len(everything) != len(grants) + len(predicted):
+            problems.append(dict(order=row["order"], problem="predict grants differ from the reviewed script"))
+            continue
         g = grants[0] if len(grants) == 1 else {}
         if (len(grants) != 1 or g.get("route") != m["route"] or g.get("by") != "launch-evaluation-human"
                 or g.get("auto") is not False or g.get("key", {}).get("level") != "e2"

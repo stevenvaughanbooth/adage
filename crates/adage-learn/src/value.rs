@@ -727,7 +727,8 @@ pub fn advantage_uplift(
 }
 
 /// The command a route directs, as a follow judgement reads it (slots dropped): its first step
-/// command, or the command a session-start advice names.
+/// command, or the command a session-start advice names. Reviewed for `Step::Skill` (D3): a
+/// skill directs no command, so it has none and no trace-side uplift is estimated for it.
 fn directed_command(r: &Route) -> Option<String> {
     let c = match &r.step {
         Step::Advise { slots, .. } => ["command", "interpreter", "manager"].iter().find_map(|k| slots.get(*k).cloned()),

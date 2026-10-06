@@ -96,6 +96,10 @@ try {
     const which = run(process.execPath, [launcher, "version"], { env: { ...env, ADAGE_NPM_WHICH: "1" } })
     assert.equal(which.status, 0, which.stderr)
     assert.equal(realpathSync(which.stdout.trim()), realpathSync(path.join(nm, plat.name, "bin", host.exe)))
+    // The plugin's shim takes adage-exec from beside the binary named (one plugin, both binaries).
+    if (companions.includes(`adage-exec${ext}`)) {
+      assert.ok(existsSync(path.join(path.dirname(which.stdout.trim()), `adage-exec${ext}`)), "adage-exec beside the named binary")
+    }
 
     // Without the platform package the launcher says so and fails; it never downloads.
     rmSync(path.join(nm, plat.name), { recursive: true })

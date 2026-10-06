@@ -265,6 +265,8 @@ pub fn probe(r: &Route, unsteered: &[&Session], cfg: &LearnConfig, emb: &mut Emb
                 p.support += u32::from(took);
             }
         }
+        // Reviewed for `Step::Skill` (D3): no probe counts a skill's use yet, so a skill route not
+        // re-found is not kept dormant on its last evidence.
         _ => return None,
     }
     Some(p)

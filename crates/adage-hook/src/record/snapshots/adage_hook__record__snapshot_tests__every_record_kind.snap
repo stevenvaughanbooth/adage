@@ -1,0 +1,68 @@
+---
+source: crates/adage-hook/src/record/snapshot_tests.rs
+expression: out
+---
+## session_start, batch, stop, stop_gate (Claude Code)
+{"arm":"treated","bin":"[bin]","duration_us":[n],"event":"SessionStart","generation":"obligation-world","kind":"session_start","propensity":null,"repo":"acme","ts":[n]}
+{"arm":"treated","decision":{"continue_reason":null,"directives":[{"kind":"obligation","route":"regenerate-registry","strength":"fire","text":"In this repository, changes to files matching registry/*.csv must be followed by running:\n  make gen\nAgents in this repository run it after such changes.","track":"acme/finish-lines","version":"0.1.0"}],"judgements":[],"obligation_state":{"obligations":[{"command":"make gen","edited":"registry/currencies.csv","expect_key":"exec make gen","fresh":true,"met":false,"paths":"registry/*.csv","route":"regenerate-registry","stop_requested":false}],"stop_requests":0},"observed":["edit {path}"],"would_continue":null,"would_have":[{"kind":"obligation","route":"regenerate-registry","strength":"fire","text":"In this repository, changes to files matching registry/*.csv must be followed by running:\n  make gen\nAgents in this repository run it after such changes.","track":"acme/finish-lines","version":"0.1.0"}]},"duration_us":[n],"event":"PostToolBatch","generation":"obligation-world","kind":"batch","propensity":0.9,"repo":"acme","tool_use_ids":["t1"],"ts":[n]}
+{"arm":"treated","decision":{"continue_reason":"Adage finish-line check: this session changed files matching registry/*.csv, and this repository requires running `make gen` after such changes; it has not been run yet. Run it (and re-run the tests) before finishing. This reminder is from Adage, not from the user.","directives":[],"judgements":[],"obligation_state":{"obligations":[{"command":"make gen","edited":"registry/currencies.csv","expect_key":"exec make gen","fresh":true,"met":false,"paths":"registry/*.csv","route":"regenerate-registry","stop_requested":true}],"stop_requests":1},"observed":[],"would_continue":"Adage finish-line check: this session changed files matching registry/*.csv, and this repository requires running `make gen` after such changes; it has not been run yet. Run it (and re-run the tests) before finishing. This reminder is from Adage, not from the user.","would_have":[]},"duration_us":[n],"event":"Stop","generation":"obligation-world","kind":"stop","propensity":0.9,"repo":"acme","ts":[n]}
+{"blocked":true,"duration_us":[n],"event":"Stop","kind":"stop_gate","ts":[n]}
+
+## session_start, batch (Codex)
+{"arm":"control","bin":"[bin]","duration_us":[n],"event":"SessionStart","generation":"obligation-world","harness":"codex","kind":"session_start","propensity":0.1,"repo":"acme","ts":[n]}
+{"arm":"control","decision":{"continue_reason":null,"directives":[],"judgements":[],"obligation_state":{"obligations":[{"command":"make gen","edited":"registry/currencies.csv","expect_key":"exec make gen","fresh":true,"met":false,"paths":"registry/*.csv","route":"regenerate-registry","stop_requested":false}],"stop_requests":0},"observed":["edit {path}"],"would_continue":null,"would_have":[{"kind":"obligation","route":"regenerate-registry","strength":"fire","text":"In this repository, changes to files matching registry/*.csv must be followed by running:\n  make gen\nAgents in this repository run it after such changes.","track":"acme/finish-lines","version":"0.1.0"}]},"duration_us":[n],"event":"PostToolUse","generation":"obligation-world","harness":"codex","kind":"batch","propensity":0.1,"repo":"acme","ts":[n]}
+
+## batch with exec and recovery_required
+{"arm":"treated","decision":{"continue_reason":null,"directives":[{"kind":"obligation","route":"regenerate-registry","strength":"fire","text":"In this repository, changes to files matching registry/*.csv must be followed by running:\n  make gen\nAgents in this repository run it after such changes.","track":"acme/finish-lines","version":"0.1.0"}],"judgements":[],"obligation_state":{"obligations":[{"command":"make gen","edited":"registry/currencies.csv","expect_key":"exec make gen","fresh":true,"met":false,"paths":"registry/*.csv","route":"regenerate-registry","stop_requested":false}],"stop_requests":0},"observed":["edit {path}"],"would_continue":null,"would_have":[{"kind":"obligation","route":"regenerate-registry","strength":"fire","text":"In this repository, changes to files matching registry/*.csv must be followed by running:\n  make gen\nAgents in this repository run it after such changes.","track":"acme/finish-lines","version":"0.1.0"}]},"duration_us":[n],"event":"PostToolBatch","exec":[{"level":"E2","route":"regenerate-registry","withheld":"no sandbox"}],"generation":"obligation-world","kind":"batch","propensity":0.9,"recovery_required":true,"repo":"acme","tool_use_ids":["e1"],"ts":[n]}
+
+## prompt
+{"arm":"treated","decision":{"continue_reason":null,"directives":[{"kind":"avoid","route":"dead-end-pytest","strength":"inhibit","text":"In this repository, running python3 -m pytest / python -m pytest fails (\"No module named pytest\"). Use this instead:\n  make test","track":"acme/dead-ends","version":"0.1.0"}],"judgements":[],"observed":[],"would_continue":null,"would_have":[{"kind":"avoid","route":"dead-end-pytest","strength":"inhibit","text":"In this repository, running python3 -m pytest / python -m pytest fails (\"No module named pytest\"). Use this instead:\n  make test","track":"acme/dead-ends","version":"0.1.0"}]},"duration_us":[n],"event":"UserPromptSubmit","generation":"dead-end-world","kind":"prompt","propensity":0.9,"repo":"acme","ts":[n]}
+
+## turn_step
+{"arm":"treated","decision":{"continue_reason":null,"directives":[],"judgements":[],"observed":[],"routine":{"route":"regenerate-registry","track":"acme/finish-lines"},"would_continue":null,"would_have":[],"would_route":{"route":"regenerate-registry","track":"acme/finish-lines"}},"duration_us":[n],"event":"TurnStep","generation":"obligation-world","kind":"turn_step","propensity":0.9,"repo":"acme","ts":[n]}
+
+## unrouted (claude)
+{"bin":"[bin]","duration_us":[n],"event":"SessionStart","kind":"session_start","repo":"[key]","ts":[n],"unrouted":true}
+{"duration_us":[n],"event":"UserPromptSubmit","kind":"prompt","repo":"[key]","ts":[n],"unrouted":true}
+{"calls":2,"duration_us":[n],"event":"PostToolBatch","kind":"batch","repo":"[key]","ts":[n],"unrouted":true}
+{"calls":1,"duration_us":[n],"event":"PostToolUseFailure","kind":"failure","repo":"[key]","ts":[n],"unrouted":true}
+{"duration_us":[n],"event":"SessionEnd","kind":"session_end","repo":"[key]","ts":[n],"unrouted":true}
+
+## unrouted (codex)
+{"bin":"[bin]","duration_us":[n],"event":"SessionStart","harness":"codex","kind":"session_start","repo":"[key]","ts":[n],"unrouted":true}
+{"duration_us":[n],"event":"UserPromptSubmit","harness":"codex","kind":"prompt","repo":"[key]","ts":[n],"unrouted":true}
+{"calls":1,"duration_us":[n],"event":"PostToolUse","harness":"codex","kind":"batch","repo":"[key]","ts":[n],"unrouted":true}
+{"calls":1,"duration_us":[n],"event":"PostToolUseFailure","harness":"codex","kind":"failure","repo":"[key]","ts":[n],"unrouted":true}
+{"duration_us":[n],"event":"SessionEnd","harness":"codex","kind":"session_end","repo":"[key]","ts":[n],"unrouted":true}
+
+## failure, then pretool: rewrite, rewrite checked by the engine, advice
+{"arm":"treated","decision":{"continue_reason":null,"directives":[{"kind":"avoid","origin":{"instinct":"U11","kind":"instinct","pack":"core","version":"0.1.0"},"route":"python-env","strength":"prime","text":"That failed. In this repository, run this instead:\n  .venv/bin/python -m pytest\n","track":"acme/instincts","version":"0.1.0"}],"judgements":[],"observed":["exec python -m pytest !failed"],"would_continue":null,"would_have":[{"kind":"avoid","origin":{"instinct":"U11","kind":"instinct","pack":"core","version":"0.1.0"},"route":"python-env","strength":"prime","text":"That failed. In this repository, run this instead:\n  .venv/bin/python -m pytest\n","track":"acme/instincts","version":"0.1.0"}]},"duration_us":[n],"event":"PostToolUseFailure","generation":"u11-world","kind":"failure","propensity":0.9,"repo":"[key]","tool_use_ids":["f1"],"ts":[n]}
+{"arm":"treated","checked_by":"planner","duration_us":[n],"event":"PreToolUse","kind":"pretool","pretool":{"interpreter":".venv/bin/python","rewrite":"test"},"propensity":null,"receipt":false,"repo":"[key]","ts":[n]}
+{"arm":"treated","checked_by":"engine","duration_us":[n],"event":"PreToolUse","kind":"pretool","pretool":{"interpreter":".venv/bin/python","rewrite":"test"},"propensity":null,"receipt":false,"repo":"[key]","tool_use_id":"toolu_1","ts":[n]}
+{"arm":"treated","checked_by":"engine","duration_us":[n],"event":"PreToolUse","kind":"pretool","pretool":{"advise":"permissions","interpreter":".venv/bin/python"},"propensity":null,"receipt":false,"repo":"[key]","tool_use_id":"toolu_2","ts":[n]}
+
+## pretool: withheld
+{"arm":"control","checked_by":"planner","duration_us":[n],"event":"PreToolUse","kind":"pretool","pretool":{"interpreter":".venv/bin/python","rewrite":"test"},"propensity":null,"receipt":false,"repo":"[key]","tool_use_id":"toolu_1","ts":[n],"withheld":true}
+
+## pretool: a receipt alone
+{"arm":"treated","duration_us":[n],"event":"PreToolUse","kind":"pretool","propensity":null,"receipt":true,"repo":"[key]","tool_use_id":"toolu_1","ts":[n]}
+
+## pretool: substitution (Treated)
+{"arm":"treated","checked_by":"engine","decision":{"continue_reason":null,"directives":[],"judgements":[{"kind":"substituted","route":"dead-end-pytest"}],"observed":[],"substituted":{"command":"make test","context":"adage ran make test in place of python3 -m pytest tests: in this repository it fails (\"No module named pytest\").","route":"dead-end-pytest","track":"acme/dead-ends"},"would_continue":null,"would_have":[],"would_substitute":{"command":"make test","context":"adage ran make test in place of python3 -m pytest tests: in this repository it fails (\"No module named pytest\").","route":"dead-end-pytest","track":"acme/dead-ends"}},"duration_us":[n],"event":"PreToolUse","kind":"pretool","propensity":null,"repo":"acme","substituted":true,"tool_use_id":"toolu_1","ts":[n]}
+
+## pretool: substitution (Control)
+{"arm":"control","checked_by":"engine","decision":{"continue_reason":null,"directives":[],"judgements":[],"observed":[],"would_continue":null,"would_have":[],"would_substitute":{"command":"make test","context":"adage ran make test in place of python3 -m pytest tests: in this repository it fails (\"No module named pytest\").","route":"dead-end-pytest","track":"acme/dead-ends"}},"duration_us":[n],"event":"PreToolUse","kind":"pretool","propensity":null,"repo":"acme","tool_use_id":"toolu_1","ts":[n],"withheld":true,"would_substitute":true}
+
+## batch, then pretool: answered by a receipt
+{"arm":"treated","decision":{"continue_reason":null,"directives":[{"kind":"run","route":"tests-after-edit","strength":"fire","text":"In this repository, changes to files matching tests/*.py must be followed by running:\n  python -m pytest tests -q\nAgents in this repository run it after such changes.","track":"acme/finish-lines","version":"0.1.0"}],"judgements":[],"obligation_state":{"obligations":[{"command":"python -m pytest tests -q","edited":"tests/test_a.py","expect_key":"exec python -m pytest tests -q","fresh":true,"met":false,"paths":"tests/*.py","route":"tests-after-edit","stop_requested":false}],"stop_requests":0},"observed":["edit {path}"],"would_continue":null,"would_have":[{"kind":"run","route":"tests-after-edit","strength":"fire","text":"In this repository, changes to files matching tests/*.py must be followed by running:\n  python -m pytest tests -q\nAgents in this repository run it after such changes.","track":"acme/finish-lines","version":"0.1.0"}]},"duration_us":[n],"event":"PostToolBatch","generation":"receipt-world","kind":"batch","propensity":0.9,"repo":"acme","tool_use_ids":["e1"],"ts":[n]}
+{"answered":"receipt","arm":"treated","card":{"ago":"4 min ago","more":0,"operation":"op","ran_at":"2026-10-03T10:00:00Z","summary":"passed on files identical to the current ones","tests":["tests/test_x.py::t"]},"checked_by":"engine","command":"python -m pytest tests -q","decision":{"continue_reason":null,"directives":[],"judgements":[{"kind":"obligation_met","route":"tests-after-edit"}],"observed":["exec python -m pytest tests -q"],"would_continue":null,"would_have":[]},"duration_us":[n],"event":"PreToolUse","kind":"pretool","propensity":null,"receipt":true,"repo":"acme","tool_use_id":"toolu_1","ts":[n]}
+
+## skill_prompt
+{"annotated":{"bytes":100,"skill":"release-checklist","stale":1,"verified":1},"arm":"treated","duration_us":[n],"event":"SkillPrompt","kind":"skill_prompt","propensity":null,"repo":"[key]","ts":[n],"would_annotate":{"bytes":100,"skill":"release-checklist","stale":1,"verified":1}}
+{"arm":"treated","duration_us":[n],"event":"SkillPrompt","kind":"skill_prompt","observe":true,"propensity":null,"repo":"[key]","ts":[n],"would_annotate":{"bytes":100,"skill":"release-checklist","stale":1,"verified":1}}
+
+## session_start, press_issued, press_spent, tripwire
+{"arm":"treated","bin":"[bin]","duration_us":[n],"event":"SessionStart","generation":"obligation-world","kind":"session_start","propensity":null,"repo":"acme","ts":[n]}
+{"chain":0,"duration_us":[n],"event":"Press","kind":"press_issued","source":"startup","ts":[n]}
+{"chain":1,"duration_us":[n],"event":"Press","kind":"press_spent","ts":[n],"verb":"review approve"}
+{"duration_us":[n],"event":"PreToolUse","kind":"tripwire","ts":[n],"warned":true}

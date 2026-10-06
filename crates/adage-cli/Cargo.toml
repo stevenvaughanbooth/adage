@@ -66,3 +66,5 @@ adage-sim = { path = "../adage-sim" }
 adage-train = { path = "../adage-train" }
 ssh-key = { version = "=0.6.7", features = ["std", "crypto", "rand_core"] }
 rand_core = { version = "0.6", features = ["getrandom"] }
+# The workspace test kit (route, track and index builders, a learned home): tests and examples only.
+adage-tracks = { path = "../adage-tracks", features = ["testkit"] }

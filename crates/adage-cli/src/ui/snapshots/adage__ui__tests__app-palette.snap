@@ -7,7 +7,7 @@ expression: text
  4 passed · 2 warnings · 0 failures   same checks as adage doctor
 
 ▌ + binary               adage 0.╭─ palette ────────────────────────────────────────────────────────────────────────╮
-  + index                generati│ : str▌                                                                29 matches │
+  + index                generati│ : str▌                                                                33 matches │
   ! embedding model    ⏎ no embed├──────────────────────────────────────────────────────────────────────────────────┤
   + hooks: claude-co…    ~/work/h│ ACTIONS                                                                          │
   ! hooks: codex       ⏎ codex is│ › Strengthen reflex…                   adage review strengthen                 s │
@@ -18,12 +18,12 @@ expression: text
                                  │ GO TO                                                                            │
                                  │   Settings · runtime.control           adage config set runtime.control          │
                                  │   Settings · runtime.rewrite           adage config set runtime.rewrite          │
+                                 │   Settings · runtime.routine_model     adage config set runtime.routine_model    │
+                                 │   Settings · runtime.predict_cap       adage config set runtime.predict_cap      │
                                  │   Settings · learn.repos               adage config set learn.repos              │
                                  │                                                                                  │
                                  │ ACTIONS                                                                          │
                                  │   Installed reflexes and evidence      Status report                             │
-                                 │                                                                                  │
-                                 │ GO TO                                                                            │
                                  ├──────────────────────────────────────────────────────────────────────────────────┤
                                  │ ↑↓ move · enter run · tab complete · esc close                                   │
                                  │ Choose an action here; no terminal command copying needed                        │

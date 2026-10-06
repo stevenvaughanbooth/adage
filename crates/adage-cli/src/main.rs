@@ -16,6 +16,7 @@
 
 mod add;
 mod autolearn;
+mod candidates;
 mod cli;
 mod condition_out;
 mod config;
@@ -26,6 +27,7 @@ mod exec;
 use adage_app::{evidence, words};
 use adage_hook::failopen;
 mod graph;
+mod helpers;
 mod history;
 use adage_hook::harness;
 mod hook;
@@ -34,6 +36,7 @@ mod install;
 mod jsonedit;
 mod learning;
 mod learnlog;
+mod ledger;
 mod map;
 mod marketplace_cmd;
 mod models;
@@ -50,6 +53,7 @@ mod sense;
 mod share;
 mod share_pack;
 mod status_card;
+mod switch;
 mod train;
 mod tty;
 mod ui;
@@ -61,6 +65,7 @@ use adage_learn::{Inputs, LearnConfig};
 use adage_store::Paths;
 use adage_tracks::io;
 use anyhow::{bail, Result};
+use helpers::flag;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
@@ -162,10 +167,6 @@ fn io_reason(e: &std::io::Error) -> String {
     s.split(" (os error").next().unwrap_or(&s).to_lowercase()
 }
 
-fn flag(args: &[String], name: &str) -> Option<String> {
-    args.iter().position(|a| a == name).and_then(|i| args.get(i + 1).cloned())
-}
-
 fn run(args: &[String]) -> Result<()> {
     // `--plain` anywhere: no colour and ASCII glyphs, for screen readers and logs. It is read here
     // and removed, so command modules never see it.
@@ -260,13 +261,16 @@ fn run(args: &[String]) -> Result<()> {
             Ok(())
         }
         Some("update") => update::run(rest),
+        Some("off") => switch::off(),
+        Some("on") => switch::on(),
+        Some("ledger") => ledger::run(rest, &paths),
         Some("version") => {
             println!("adage {}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
         // Bare `adage` prints the status card, wherever it runs (a terminal, a pipe, `!adage` in
         // Claude Code); `adage ui` opens the app and `--help` shows the usage.
-        None => status_card::run(&paths),
+        None => status_card::run(&args, &paths),
         Some(other) => bail!("unknown command `{other}`: `adage --help` lists them"),
     }
 }
@@ -677,7 +681,17 @@ fn status(paths: &Paths, json: bool) -> Result<()> {
                 })
             })
             .collect();
-        println!("{}", serde_json::to_string_pretty(&serde_json::json!({ "intent_model": model, "tracks": tracks }))?);
+        let mut v = serde_json::json!({ "intent_model": model, "tracks": tracks });
+        // Patterns counted that are not reflexes yet (plan D1).
+        v["candidates"] = candidates::status_json(paths, &installed);
+        // Team packs committed in this repository that wait for a person's trust (mod architecture
+        // §3.12): said only when there are some.
+        let here = std::env::current_dir().ok().and_then(|d| adage_core::repo::find_root(&d));
+        let awaiting = here.map(|r| adage_app::trust::awaiting(&r, &paths.tracks())).unwrap_or_default();
+        if !awaiting.is_empty() {
+            v["packs_awaiting_trust"] = serde_json::json!(awaiting);
+        }
+        println!("{}", serde_json::to_string_pretty(&v)?);
         return Ok(());
     }
     let mut o = Out::stdout();

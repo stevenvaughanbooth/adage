@@ -32,12 +32,16 @@
 //! `<track>` is a track name (a learned track wins over an import of the same name) or its
 //! directory under the tracks directory, e.g. `@imported/acme/work-items`.
 //!
-//! Decisions change trust, so they refuse to run inside an agent session (review finding F11).
+//! Decisions change trust, so they refuse to run inside an agent session (review finding F11),
+//! unless a person made them in the session with a press (mod architecture §3.12): a verb run by the
+//! Claude Code mod reads `{ "press", "session" }` on stdin, and on success prints `{ "next":
+//! <token> }` as its first line, before anything else ([`person_or_press`]).
 //! They are recorded in the track's `review.yaml` (see [`adage_tracks::review`]); every decision
 //! re-validates the track and recompiles the index atomically, as `adage condition` and `adage add` do.
 
 use crate::share::describe_step;
 use crate::words;
+use adage_app::person::PersonVerb;
 use adage_app::reflex::{Decisions, Reflex};
 pub(crate) use adage_app::review::{
     ceiling_str, first_hand, needs_person, origin_label, preview, waiting_counts, waits, Installed, Standing,
@@ -539,8 +543,37 @@ pub(crate) fn waiting_words(needs: usize, look: usize) -> Option<String> {
     (!parts.is_empty()).then(|| parts.join(" · "))
 }
 
+/// The person check at the sites that take a press (mod architecture §3.12; the list is
+/// [`PersonVerb`]): stdin is read once, a valid press stands in for the
+/// terminal, and the next token of the chain is printed at once, as the first line on stdout,
+/// since the one just spent is refused from now on, whatever the verb goes on to do. Every other
+/// person-only command keeps [`crate::share::require_person`], which never reads a press.
+pub(crate) fn person_or_press(
+    verb: PersonVerb,
+    paths: &Paths,
+) -> Result<(adage_app::Person, adage_app::person::Stdin)> {
+    person_from(verb, paths, adage_app::person::read_press())
+}
+
+/// [`person_or_press`] over a stdin already read.
+pub(crate) fn person_from(
+    verb: PersonVerb,
+    paths: &Paths,
+    stdin: adage_app::person::Stdin,
+) -> Result<(adage_app::Person, adage_app::person::Stdin)> {
+    let person = adage_app::person::require_or_press(verb, stdin.press.as_ref(), paths)?;
+    if let Some(next) = person.next() {
+        use std::io::Write;
+        let mut out = std::io::stdout().lock();
+        writeln!(out, "{}", json!({ "next": next }))?;
+        out.flush()?;
+    }
+    Ok((person, stdin))
+}
+
 fn decide(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
-    let person = adage_app::person::require(&format!("review {verb}"))?;
+    let Some(verb) = Verb::parse(verb) else { bail!("{USAGE}") };
+    let (person, _) = person_or_press(PersonVerb::Review(verb), paths)?;
     let pos: Vec<&String> = {
         let mut v = Vec::new();
         let mut i = 0;
@@ -555,8 +588,7 @@ fn decide(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
         v
     };
     let (Some(spec), Some(route_id), None) = (pos.first(), pos.get(1), pos.get(2)) else { bail!("{USAGE}") };
-    let by = crate::flag(args, "--by");
-    let Some(verb) = Verb::parse(verb) else { bail!("{USAGE}") };
+    let by = crate::helpers::flag(args, "--by");
     let d = report(adage_app::review::decide(&person, verb, spec, route_id, by, paths)?);
     let mut o = Out::stdout();
     let facts: Vec<&str> = d.facts.iter().map(String::as_str).collect();
@@ -590,8 +622,9 @@ pub(crate) fn decide_quietly(
     expected_revision: &str,
     paths: &Paths,
 ) -> Result<Decided> {
-    let person = adage_app::person::require(&format!("review {verb}"))?;
+    // `adage ui` owns the terminal, so no press can reach it on stdin: the check is the terminal's.
     let Some(verb) = Verb::parse(verb) else { bail!("{USAGE}") };
+    let person = adage_app::person::require_or_press(PersonVerb::Review(verb), None, paths)?;
     // `adage ui` decides on its event loop: it waits a moment for a running learner, never longer.
     let wait = std::time::Duration::from_secs(2);
     Ok(report(adage_app::review::decide_reviewed_within(

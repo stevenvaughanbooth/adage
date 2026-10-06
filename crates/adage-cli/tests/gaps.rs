@@ -6,55 +6,43 @@
 use adage_core::spans::SpanKind;
 use adage_core::Effect;
 use adage_tracks::review::{Decision, Reviews};
+use adage_tracks::testkit::{self, kinds};
 use adage_tracks::*;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
+mod common;
+
 const NAME: &str = "github.com-acme-billing/work-items";
 const REPO: &str = "github.com/acme/billing";
 
 struct World {
-    _dir: tempfile::TempDir,
-    root: PathBuf,
+    w: common::TempWorld,
 }
 
 impl World {
     fn new() -> World {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().canonicalize().unwrap();
-        for d in ["sender", "recipient", "home", "keys", "elsewhere", "repo/.git", "repo/scripts", "bin"] {
-            std::fs::create_dir_all(root.join(d)).unwrap();
-        }
+        let w =
+            common::TempWorld::new(&["sender", "recipient", "home", "keys", "elsewhere", "repo/.git", "repo/scripts"]);
         // The recipient's checkout of the repository: `add` runs here, so the lookup's script is
         // pinned (L-ref) when the track is converted to a pack.
-        std::fs::write(root.join("repo/.git/config"), "[remote \"origin\"]\n\turl = git@github.com:acme/billing.git\n")
-            .unwrap();
-        std::fs::write(root.join("repo/scripts/wi-lookup"), "#!/bin/sh\necho '{}'\n").unwrap();
+        w.write("repo/.git/config", "[remote \"origin\"]\n\turl = git@github.com:acme/billing.git\n");
+        w.write("repo/scripts/wi-lookup", "#!/bin/sh\necho '{}'\n");
         // Tools the routes name, found by PATH lookup at bind (never run).
-        std::fs::write(root.join("bin/make"), "#!/bin/sh\nexit 1\n").unwrap();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(root.join("bin/make"), std::fs::Permissions::from_mode(0o755)).unwrap();
-        }
-        World { _dir: dir, root }
+        w.executable("bin/make", "#!/bin/sh\nexit 1\n");
+        World { w }
     }
     fn p(&self, rel: &str) -> PathBuf {
-        self.root.join(rel)
+        self.w.p(rel)
     }
     fn run(&self, adage_home: &str, args: &[&str]) -> Output {
-        Command::new(env!("CARGO_BIN_EXE_adage"))
+        common::scrub(&mut Command::new(env!("CARGO_BIN_EXE_adage")))
             .args(args)
             .current_dir(self.p("repo"))
             .env("PATH", self.p("bin"))
             .env("ADAGE_HOME", self.p(adage_home))
             .env("HOME", self.p("home"))
-            .env_remove("CLAUDECODE")
-            .env_remove("OPENCODE")
-            .env_remove("CODEX_SANDBOX")
-            .env_remove("CODEX_SANDBOX_NETWORK_DISABLED")
-            .env_remove("SSH_AUTH_SOCK")
             .env("ADAGE_ALLOW_NONINTERACTIVE", "1")
             .stdin(Stdio::null())
             .output()
@@ -106,34 +94,19 @@ fn keygen(w: &World) -> ssh_key::PrivateKey {
 
 fn route(id: &str, trigger: Trigger, step: Step, effect: Effect, strength: Strength) -> Route {
     let slots = match &step {
-        Step::Run { command } if command.contains("{item}") => vec![Slot {
-            name: "item".into(),
-            source: SlotSource::Prompt { span: SpanKind::Ticket },
-            contract: Contract::Pattern { regex: r"^W-\d{4}$".into() },
-        }],
+        Step::Run { command } if command.contains("{item}") => vec![kinds::ticket_slot("item")],
         _ => vec![],
     };
-    Route {
-        id: id.into(),
-        summary: format!("route {id}"),
-        trigger,
-        step,
-        slots,
-        effect,
-        strength,
-        state: RouteState::Firm,
-        exit: vec![Exit::IntentChanges],
-        evidence: Evidence {
-            support: 7,
-            opportunities: 8,
-            days: 3,
-            rate: 0.875,
-            lower_bound: wilson_lower(7, 8),
-            provenance: "desire-path".into(),
-            ..Default::default()
-        },
-        authored: false,
-    }
+    testkit::route(id, trigger, step)
+        .summary(&format!("route {id}"))
+        .slots(slots)
+        .effect(effect)
+        .strength(strength)
+        .until_intent_changes()
+        .measured(7, 8)
+        .days(3)
+        .provenance("desire-path")
+        .build()
 }
 
 /// The sender's track at `version`, with the lookup directing `lookup`.
@@ -174,19 +147,7 @@ fn track(version: &str, lookup: &str, extra: bool) -> Track {
             Strength::Prime,
         ));
     }
-    Track {
-        manifest: Manifest {
-            track: TrackInfo {
-                name: NAME.into(),
-                version: version.into(),
-                description: "work items".into(),
-                provenance: "desire-path".into(),
-            },
-            scope: Scope { repo: REPO.into() },
-            gauge: Gauge::default(),
-        },
-        routes,
-    }
+    testkit::track(NAME, REPO).version(version).description("work items").routes(routes).build()
 }
 
 fn reasons(q: &[Value], route: &str) -> Vec<String> {

@@ -19,7 +19,11 @@ uses to find them.
 - `paths`: `Paths { root }` with `from_env()` (`ADAGE_HOME`, else the platform data directory),
   `at(root)`, and one method per file or directory: `sessions`, `state(session)`,
   `spool(session)`, `index`, `tracks`, `models`, `repo_keys`, `learn_log`, `config`,
-  `learn_queue`, `ledger`, `cache`, `tracks_lock`. `home_dir()`; `sanitise(session_id)`.
+  `learn_queue`, `ledger`, `cache`, `tracks_lock`. The switch markers have one definition each
+  here too: `Paths::repo_disabled(root)` (`<root>/.adage/disabled`; `REPO_DISABLED` is the
+  relative text), `delegate_marker` (`exec/enabled`), `rewrite_off` (`exec/rewrite-off`) and
+  `predict_off` (`exec/predict-off`); `paths::tests::switch_markers_keep_their_paths` pins the
+  strings. `home_dir()`; `sanitise(session_id)`.
 - `state`: `SLOT` (64 KiB), `update`, `update_or_rebuild`, `try_read`, `read`. Each slot is
   `magic | seq | len | crc | payload`; the newest slot with a valid CRC wins.
 - `spool`: `MAX_RECORD` (1 MiB), `append`, `append_durable`, `read_all`, `read_all_strict`,
@@ -28,12 +32,15 @@ uses to find them.
   `exclusive`, `is_held`.
 - `config`: `FILE`, `Config`, `Thresholds`, `Source`, `Key`/`KEYS`/`key(name)`, `Loaded
   { config, values, problems }`, `load(&Paths)`, `set(&Paths, name, value)`, `write_atomic`.
+  Each default is written once, in `KEYS`; `Config::default()` and a missing file read the same.
 - `crc`: private `crc32`.
 
 ## How it connects
 
 - No traits: this crate is the file formats and the directory layout. Everything that reads or
-  writes `$ADAGE_HOME` goes through `Paths` rather than joining strings.
+  writes `$ADAGE_HOME` goes through `Paths` rather than joining strings, the switch markers
+  included (`adage_hook::rewrite_off` and `adage_exec::hook::predict_off` keep their public
+  paths; tests assert they name the same files as `Paths`).
 - On the hook path, `adage-hook` updates a session's `.state` with `state::update` and appends a
   decision record to its `.spool` with `spool::append`; `adage ui` and `adage watch` tail spools
   with `spool::read_from`. Spool records carry no prompt text.

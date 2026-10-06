@@ -115,6 +115,7 @@ fn warm_mining_still_reconciles_human_decisions_and_dry_plans_write_no_checkpoin
                 on: "2026-10-03".into(),
                 by: None,
                 basis: adage_tracks::review::basis(route, 0, 0),
+                via: None,
             },
         )]),
         ..Default::default()

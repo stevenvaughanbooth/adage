@@ -170,9 +170,12 @@ jobs:
       - name: npm launcher
         shell: bash
         run: node npm/test/launcher.test.mjs
+      # The one plugin's shim links both binaries (plan A8): build them, whatever was affected.
       - name: Claude Code session-start hook
         if: runner.os != 'Windows'
-        run: plugin/test/session-start.test.sh
+        run: |
+          cargo build --locked -p adage-cli -p adage-exec
+          plugin/test/session-start.test.sh
       - name: release plugin startup and real background bootstrap
         if: runner.os != 'Windows' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
         # Product latency budgets are checked on the shipped profile. Debug-only spawn
@@ -258,13 +261,23 @@ jobs:
         run: node scripts/check-plugin.mjs
       - name: release archive checksum enforcement
         run: node scripts/test-stage-plugin.mjs
-      - name: install the Claude Code CLI (validation only; no agent runs)
-        run: npm install -g @anthropic-ai/claude-code
+      # Pinned: the mod's API is early access and moves between releases (docs/claude-mod
+      # architecture §6 invariant 10); bump it together with plugin/claude-code/VALIDATE.txt.
+      - name: install the Claude Code CLI (validation and plugin tests only; no agent runs)
+        run: npm install -g @anthropic-ai/claude-code@2.1.288
       - name: claude plugin validate
         run: |
           claude plugin validate --strict plugin/claude-code
           claude plugin validate --strict plugin/claude-code-exec
           claude plugin validate --strict .
+      - name: validate output matches the committed VALIDATE.txt
+        run: |
+          claude plugin validate --strict plugin/claude-code 2>&1 | sed "s#$PWD/##g" > /tmp/validate.txt
+          diff -u plugin/claude-code/VALIDATE.txt /tmp/validate.txt
+      # One plugin carries the mod (plan A8); the retired adage-exec alias loads no module, and
+      # its one SessionStart is exercised by plugin/test/session-start.test.sh.
+      - name: claude plugin test
+        run: claude plugin test plugin/claude-code
 
   design:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'

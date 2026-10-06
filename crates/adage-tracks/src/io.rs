@@ -242,7 +242,7 @@ pub fn validate(t: &Track) -> Result<()> {
         }
         let ctx = || format!("route {} in {}", r.id, t.manifest.track.name);
         let by_edit = matches!(r.trigger, Trigger::AfterEdit { .. });
-        match ceiling(r.effect, by_edit) {
+        match step_ceiling(&r.step, r.effect, by_edit) {
             None => bail!("{}: effect {:?} may never be directed", ctx(), r.effect),
             Some(max) if r.strength == Strength::Fire && max != Strength::Fire => {
                 bail!("{}: strength fire exceeds the ceiling for {:?}", ctx(), r.effect)
@@ -377,6 +377,9 @@ pub fn validate(t: &Track) -> Result<()> {
                     bail!("{}: the card's prompts and its trigger differ in dimension", ctx());
                 }
             }
+            Step::Skill { skill, args } => {
+                validate_skill(r, skill, args.as_deref()).map_err(|e| anyhow::anyhow!("{}: {e}", ctx()))?
+            }
             Step::Advise { template, slots } => {
                 crate::advice::check(template, slots, table).map_err(|e| anyhow::anyhow!("{}: {e}", ctx()))?;
                 // Advice directs nothing: prime, observe, no route slots, and a reactive trigger.
@@ -425,16 +428,18 @@ pub fn validate(t: &Track) -> Result<()> {
                 validate_intent(family, model, centroid, *threshold).map_err(|e| anyhow::anyhow!("{}: {e}", ctx()))?;
                 // An intent route directs one fixed command: no slots, so nothing from the prompt
                 // (or the track) is interpolated into what the agent reads.
-                if !matches!(r.step, Step::Run { .. } | Step::Card { .. }) || !r.slots.is_empty() {
-                    bail!("{}: an intent route must be a run step or a card, with no slots", ctx());
+                if !matches!(r.step, Step::Run { .. } | Step::Card { .. } | Step::Skill { .. }) || !r.slots.is_empty() {
+                    bail!("{}: an intent route must be a run step, a card or a skill, with no slots", ctx());
                 }
             }
             Trigger::Context { items, within } => {
                 validate_context(items, *within).map_err(|e| anyhow::anyhow!("{}: {e}", ctx()))?;
                 // A context binds no slot (its items are matched symbolically, and no value of
                 // theirs is kept), so its step directs fixed commands only.
-                if !r.slots.is_empty() || !matches!(r.step, Step::Run { .. } | Step::Sequence { .. }) {
-                    bail!("{}: a context route is a run or sequence step with no slots", ctx());
+                if !r.slots.is_empty()
+                    || !matches!(r.step, Step::Run { .. } | Step::Sequence { .. } | Step::Skill { .. })
+                {
+                    bail!("{}: a context route is a run, sequence or skill step with no slots", ctx());
                 }
             }
             _ => {}
@@ -453,6 +458,46 @@ pub fn validate(t: &Track) -> Result<()> {
     let intents = t.routes.iter().filter(|r| matches!(r.trigger, Trigger::Intent { .. })).count();
     if intents > MAX_INTENT_ROUTES {
         bail!("track {} has {intents} intent routes; at most {MAX_INTENT_ROUTES} are allowed", t.manifest.track.name);
+    }
+    Ok(())
+}
+
+/// At most this many bytes in a [`Step::Skill`]'s `args`.
+pub const SKILL_ARGS_MAX: usize = 160;
+
+/// A skill step (mod architecture §3.11): a safe name ([`safe_skill_name`]), plain arguments if any,
+/// no slots (nothing is bound into a skill's use), prime at most and never a dead end, observe
+/// (using a skill runs nothing by itself; what its text says is judged when it is run), and a
+/// stimulus a skill can follow: a prompt, an intent family, an edit or a learned context.
+fn validate_skill(r: &Route, skill: &str, args: Option<&str>) -> Result<()> {
+    if !safe_skill_name(skill) {
+        bail!("skill name {skill:?} is not allowed");
+    }
+    if let Some(a) = args {
+        if a.is_empty() || a.len() > SKILL_ARGS_MAX || !safe_text(a) || a.trim() != a {
+            bail!("skill arguments {a:?} are not allowed");
+        }
+    }
+    if !r.slots.is_empty() {
+        bail!("a skill step has no slots");
+    }
+    if r.strength == Strength::Inhibit {
+        bail!("a skill step is never a dead end (inhibit)");
+    }
+    if r.strength == Strength::Fire {
+        bail!("a skill step is prime at most");
+    }
+    if r.effect != Effect::Observe {
+        bail!("a skill step is observe, not {:?}", r.effect);
+    }
+    if !matches!(
+        r.trigger,
+        Trigger::Prompt { .. } | Trigger::Intent { .. } | Trigger::AfterEdit { .. } | Trigger::Context { .. }
+    ) {
+        bail!("a skill step follows a prompt, an intent, an edit or a context");
+    }
+    if r.evidence.execution.is_some() {
+        bail!("a skill step carries no routine execution evidence");
     }
     Ok(())
 }

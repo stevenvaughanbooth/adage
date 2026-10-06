@@ -186,6 +186,119 @@ impl Repo {
     }
 }
 
+impl Repo {
+    /// The bytes of the file at `rel` (a repository-relative path, `/`-separated) in `HEAD`'s
+    /// tree: `None` when it is not committed there, or is larger than `max`. Read to tell a file
+    /// committed in the repository from one that only sits in the work tree (`adage add --trust`
+    /// accepts a press only for a pack committed in the repository, mod architecture §3.12).
+    pub fn committed(&mut self, rel: &str, max: usize) -> Option<Vec<u8>> {
+        let head = self.head()?;
+        let (kind, body) = self.object(&head, MAX_COMMIT)?;
+        if kind != OBJ_COMMIT {
+            return None;
+        }
+        let first = body.split(|&b| b == b'\n').next()?;
+        let mut id = parse_hex(std::str::from_utf8(first.strip_prefix(b"tree ")?).ok()?)?;
+        let parts: Vec<&str> = rel.split('/').filter(|p| !p.is_empty() && *p != ".").collect();
+        for (i, part) in parts.iter().enumerate() {
+            let (kind, tree) = self.object(&id, MAX_COMMIT)?;
+            if kind != OBJ_TREE {
+                return None;
+            }
+            let (mode, entry) = tree_entry(&tree, part)?;
+            let last = i + 1 == parts.len();
+            // A file is `100644` or `100755`; a directory `40000`; nothing else is followed.
+            if last != mode.starts_with("100") || (!last && mode != "40000") {
+                return None;
+            }
+            id = entry;
+        }
+        let (kind, blob) = self.object(&id, max)?;
+        (kind == OBJ_BLOB && blob.len() <= max).then_some(blob)
+    }
+}
+
+impl Repo {
+    /// The id of the tree or blob at `rel` in `commit`'s tree (`None` when absent).
+    fn entry_at(&mut self, commit: &Oid, rel: &str) -> Option<Oid> {
+        let (kind, body) = self.object(commit, MAX_COMMIT)?;
+        if kind != OBJ_COMMIT {
+            return None;
+        }
+        let first = body.split(|&b| b == b'\n').next()?;
+        let mut id = parse_hex(std::str::from_utf8(first.strip_prefix(b"tree ")?).ok()?)?;
+        for part in rel.split('/').filter(|p| !p.is_empty() && *p != ".") {
+            let (kind, tree) = self.object(&id, MAX_COMMIT)?;
+            if kind != OBJ_TREE {
+                return None;
+            }
+            id = tree_entry(&tree, part)?.1;
+        }
+        Some(id)
+    }
+
+    /// When the content at `rel` (a file or a directory) in `HEAD`'s tree was committed: the
+    /// committer time, in seconds since the epoch, of the oldest commit on `HEAD`'s first-parent
+    /// history that already held exactly this content, the walk stopping at [`MAX_WALK`]. `None`
+    /// when `HEAD` does not hold `rel`. The time is what the commit says, which whoever made the
+    /// commit chose.
+    pub fn committed_at(&mut self, rel: &str) -> Option<u64> {
+        let mut cur = self.head()?;
+        let want = self.entry_at(&cur, rel)?;
+        let mut at = None;
+        for _ in 0..MAX_WALK {
+            let (kind, body) = self.object(&cur, MAX_COMMIT)?;
+            if kind != OBJ_COMMIT {
+                return None;
+            }
+            at = committer_time(&body).or(at);
+            match first_parent(&body) {
+                Some(p) if self.entry_at(&p, rel) == Some(want) => cur = p,
+                _ => break,
+            }
+        }
+        at
+    }
+}
+
+/// The committer time of a commit (`committer <who> <secs> <zone>`, among the headers).
+fn committer_time(body: &[u8]) -> Option<u64> {
+    for line in body.split(|&b| b == b'\n') {
+        if line.is_empty() {
+            break;
+        }
+        if let Some(c) = line.strip_prefix(b"committer ") {
+            let c = std::str::from_utf8(c).ok()?;
+            return c.rsplit(' ').nth(1)?.parse().ok();
+        }
+    }
+    None
+}
+
+const OBJ_TREE: u8 = 2;
+const OBJ_BLOB: u8 = 3;
+
+/// The mode and id of `name` in a tree object (`<mode> <name>\0<20-byte id>`, repeated).
+fn tree_entry(tree: &[u8], name: &str) -> Option<(String, Oid)> {
+    let mut rest = tree;
+    while !rest.is_empty() {
+        let sp = rest.iter().position(|&b| b == b' ')?;
+        let nul = rest.iter().position(|&b| b == 0)?;
+        if nul < sp || rest.len() < nul + 21 {
+            return None;
+        }
+        let mode = std::str::from_utf8(&rest[..sp]).ok()?;
+        let entry = &rest[sp + 1..nul];
+        let mut id = [0u8; 20];
+        id.copy_from_slice(&rest[nul + 1..nul + 21]);
+        if entry == name.as_bytes() {
+            return Some((mode.to_string(), id));
+        }
+        rest = &rest[nul + 21..];
+    }
+    None
+}
+
 /// A commit's first `parent` header, if any (headers end at the first blank line).
 fn first_parent(body: &[u8]) -> Option<Oid> {
     for line in body.split(|&b| b == b'\n') {
@@ -431,6 +544,27 @@ mod tests {
         assert!(apply_delta(base, &[11, 1, 1, b'x'], 64).is_none(), "wrong base size");
         assert!(apply_delta(base, &[12, 1, 0], 64).is_none(), "reserved opcode");
         assert!(apply_delta(base, &[12, 4, 0x80 | 0x01 | 0x10, 10, 4], 64).is_none(), "copy past the base");
+    }
+
+    #[test]
+    fn tree_entries_are_found_by_exact_name() {
+        let mut tree = Vec::new();
+        for (mode, name, b) in [("40000", "pack", 1u8), ("100644", "pack.toml", 2), ("100755", "run", 3)] {
+            tree.extend_from_slice(format!("{mode} {name}\0").as_bytes());
+            tree.extend_from_slice(&[b; 20]);
+        }
+        assert_eq!(tree_entry(&tree, "pack"), Some(("40000".into(), [1; 20])));
+        assert_eq!(tree_entry(&tree, "pack.toml"), Some(("100644".into(), [2; 20])));
+        assert_eq!(tree_entry(&tree, "run"), Some(("100755".into(), [3; 20])));
+        assert_eq!(tree_entry(&tree, "pac"), None);
+        assert_eq!(tree_entry(&tree[..30], "run"), None, "a truncated tree");
+    }
+
+    #[test]
+    fn the_committer_time_is_read_from_the_headers() {
+        let body = "tree 1111111111111111111111111111111111111111\nauthor A <a@b> 100 +0000\ncommitter C D <c@d> 1700000000 +0200\n\ncommitter x <y> 5 +0000\n";
+        assert_eq!(committer_time(body.as_bytes()), Some(1_700_000_000));
+        assert_eq!(committer_time(b"tree 1\n\ncommitter C <c> 5 +0000\n"), None);
     }
 
     #[test]

@@ -83,6 +83,9 @@ pub fn render<W: std::io::Write>(o: &mut adage_term::Out<W>, s: &Summary) -> std
     if c.rewritten > 0 {
         counts = counts.sep().text(n(c.rewritten, "rewrite", "rewrites"));
     }
+    if c.predicted_steps > 0 {
+        counts = counts.sep().text(n(c.predicted_steps, "step", "steps") + " without a model request");
+    }
     o.kv("recent", counts.faint(format!(" (last {} days)", c.days)))?;
     o.blank()?;
     match s.verdict {
@@ -94,7 +97,7 @@ pub fn render<W: std::io::Write>(o: &mut adage_term::Out<W>, s: &Summary) -> std
 
 /// `adage savings [--repo <path>] [--json]`: the estimate for this repository, computed now.
 pub fn run(args: &[String], paths: &Paths) -> anyhow::Result<()> {
-    let dir = match crate::flag(args, "--repo") {
+    let dir = match crate::helpers::flag(args, "--repo") {
         Some(d) => std::path::PathBuf::from(d),
         None => std::env::current_dir()?,
     };
@@ -143,6 +146,7 @@ mod tests {
             finish_lines_met: 3,
             rewritten: 2,
             since: 0,
+            predicted_steps: 0,
         }
     }
 

@@ -1,72 +1,53 @@
 //! `adage graph` through the binary: counts come from real hook decisions, split by arm, so a
 //! control session (nothing delivered) is never counted as an ignore.
 
-use adage_core::spans::SpanKind;
 use adage_core::Effect;
 use adage_tracks::card;
+use adage_tracks::testkit::{self, kinds};
 use adage_tracks::*;
 use serde_json::{json, Value};
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
+mod common;
+
 fn track() -> Track {
-    Track {
-        manifest: Manifest {
-            track: TrackInfo {
-                name: "acme/work".into(),
-                version: "0.1.0".into(),
-                description: String::new(),
-                provenance: "desire-path".into(),
-            },
-            scope: Scope { repo: "acme".into() },
-            gauge: Gauge::default(),
-        },
-        routes: vec![Route {
-            id: "lookup".into(),
-            summary: "lookup".into(),
-            trigger: Trigger::Prompt { span: SpanKind::Ticket },
-            step: Step::Run { command: "./scripts/wi-lookup {item}".into() },
-            slots: vec![Slot {
-                name: "item".into(),
-                source: SlotSource::Prompt { span: SpanKind::Ticket },
-                contract: Contract::Pattern { regex: r"^W-\d{4}$".into() },
-            }],
-            effect: Effect::Observe,
-            strength: Strength::Fire,
-            state: RouteState::Firm,
-            exit: vec![Exit::IntentChanges],
-            evidence: Evidence { support: 7, opportunities: 8, provenance: "desire-path".into(), ..Default::default() },
-            authored: false,
-        }],
-    }
+    let lookup = kinds::lookup("lookup", "./scripts/wi-lookup {item}")
+        .summary("lookup")
+        .until_intent_changes()
+        .support(7, 8)
+        .provenance("desire-path");
+    testkit::track("acme/work", "acme").route(lookup).build()
 }
 
 struct World {
-    _dir: tempfile::TempDir,
+    _w: common::TempWorld,
     root: PathBuf,
+    home: common::LearnedHome,
 }
 
 impl World {
     fn new() -> World {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().canonicalize().unwrap();
-        for d in ["home", "adage/tracks", "acme/.git"] {
-            std::fs::create_dir_all(root.join(d)).unwrap();
-        }
-        io::write(&root.join("adage/tracks/acme/work"), &track()).unwrap();
-        Index::compile(&[track()]).write_atomic(&root.join("adage/index.json")).unwrap();
-        World { _dir: dir, root }
+        let w = common::TempWorld::new(&["home", "acme/.git"]);
+        let world = World { root: w.root.clone(), home: w.home("adage"), _w: w };
+        world.install(&track());
+        world
+    }
+    /// `t` as the learned track `acme/work`, and the index compiled from it alone.
+    fn install(&self, t: &Track) {
+        self.home.install("acme/work", t);
+        self.home.compile(std::slice::from_ref(t));
     }
     fn run(&self, args: &[&str], stdin: &Value, arm: &str) -> String {
         let mut c = Command::new(env!("CARGO_BIN_EXE_adage"));
+        common::scrub(&mut c);
         c.args(args)
             .current_dir(&self.root)
             .env("ADAGE_HOME", self.root.join("adage"))
             .env("ADAGE_AUTO_LEARN", "0")
             .env("HOME", self.root.join("home"))
             .env("ADAGE_ARM", arm)
-            .env_remove("ADAGE_DISABLE")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
@@ -218,9 +199,8 @@ fn graph_carries_quiet_cards_sequences_savings_and_rewrites() {
         effect: Effect::Regenerate,
         ..base.clone()
     });
-    io::write(&w.root.join("adage/tracks/acme/work"), &t).unwrap();
+    w.install(&t);
     io::read(&w.root.join("adage/tracks/acme/work")).expect("the track reads back");
-    Index::compile(&[t]).write_atomic(&w.root.join("adage/index.json")).unwrap();
     w.session("s-treated", "treated", true);
     // A PreToolUse rewrite, and one withheld in a control session.
     let spool = w.root.join("adage/sessions/s-treated.spool");
@@ -316,8 +296,7 @@ fn graph_exposes_cpu_candidate_evidence_without_an_advisory_preview() {
     r.strength = Strength::Prime;
     r.evidence.execution = Some(ExecutionEvidence { opportunities: 5, successful: 5, sessions: 5 });
     t.routes.push(r);
-    io::write(&w.root.join("adage/tracks/acme/work"), &t).unwrap();
-    Index::compile(&[t]).write_atomic(&w.root.join("adage/index.json")).unwrap();
+    w.install(&t);
     let g: Value = serde_json::from_str(&w.run(&["graph", "--json"], &json!({}), "treated")).unwrap();
     let candidate = g["routes"].as_array().unwrap().iter().find(|r| r["id"] == "routine-test").unwrap();
     assert_eq!(candidate["execution_only"], true);
@@ -341,8 +320,7 @@ fn every_surface_renders_a_reflex_the_same_way() {
     // Waiting for a person, so the review queue lists it too.
     let mut t = track();
     t.routes[0].state = RouteState::Nascent;
-    io::write(&w.root.join("adage/tracks/acme/work"), &t).unwrap();
-    Index::compile(&[t]).write_atomic(&w.root.join("adage/index.json")).unwrap();
+    w.install(&t);
     w.session("s-treated", "treated", true);
     let json = |args: &[&str]| -> Value { serde_json::from_str(&w.run(args, &json!({}), "treated")).unwrap() };
     let map = json(&["graph", "--json"])["routes"][0].clone();

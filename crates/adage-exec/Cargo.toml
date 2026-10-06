@@ -48,6 +48,9 @@ seccompiler = "0.5"
 [dev-dependencies]
 tempfile = "3"
 adage-learn = { path = "../adage-learn" }
+# The workspace test kit (docs/claude-mod/impl/testkit.md): the worlds the unit tests run in, and
+# `tests/hooks.rs`, which adage-cli shares with the parity test.
+adage-tracks = { path = "../adage-tracks", features = ["testkit"] }
 
 [[test]]
 name = "escape"

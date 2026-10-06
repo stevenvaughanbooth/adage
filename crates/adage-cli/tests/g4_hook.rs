@@ -21,8 +21,8 @@
 //! Skipped without python3; `ADAGE_GEN_NEWKINDS=<dir>` reuses a rehearsed suite.
 #![cfg(unix)]
 
-use adage_core::Effect;
 use adage_runtime::Event;
+use adage_tracks::testkit::{self, kinds};
 use adage_tracks::*;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
@@ -30,13 +30,16 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+mod common;
+
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
 fn adage(home: &Path) -> Command {
     let mut c = Command::new(env!("CARGO_BIN_EXE_adage"));
-    c.env("ADAGE_HOME", home).env("HOME", home).env("ADAGE_AUTO_LEARN", "0").env_remove("ADAGE_DISABLE");
+    common::scrub(&mut c);
+    c.env("ADAGE_HOME", home).env("HOME", home).env("ADAGE_AUTO_LEARN", "0");
     c
 }
 
@@ -67,37 +70,22 @@ fn suite(tmp: &Path) -> Option<PathBuf> {
 }
 
 fn context_track(repo: &str) -> Track {
-    Track {
-        manifest: Manifest {
-            track: TrackInfo {
-                name: format!("{repo}/contexts"),
-                version: "0.1.0".into(),
-                description: "a context route for the G4 end-to-end test".into(),
-                provenance: "authored".into(),
-            },
-            scope: Scope { repo: repo.into() },
-            gauge: Gauge::default(),
-        },
-        routes: vec![Route {
-            id: "context-check-after-gen".into(),
-            summary: "make check after a registry edit and make gen".into(),
-            trigger: Trigger::Context {
-                items: vec![
-                    CtxItem::Edit { glob: "registry/*.csv".into() },
-                    CtxItem::Act { keys: vec!["exec make gen".into()] },
-                ],
-                within: 8,
-            },
-            step: Step::Run { command: "make check".into() },
-            slots: vec![],
-            effect: Effect::Verify,
-            strength: Strength::Prime,
-            state: RouteState::Firm,
-            exit: vec![Exit::IntentChanges],
-            evidence: Evidence { support: 4, ..Default::default() },
-            authored: true,
-        }],
-    }
+    let check = kinds::context(
+        "context-check-after-gen",
+        vec![kinds::edit("registry/*.csv"), kinds::act("exec make gen")],
+        8,
+        "make check",
+    )
+    .summary("make check after a registry edit and make gen")
+    .strength(Strength::Prime)
+    .until_intent_changes()
+    .support(4, 0)
+    .authored(true);
+    testkit::track(&format!("{repo}/contexts"), repo)
+        .description("a context route for the G4 end-to-end test")
+        .provenance("authored")
+        .route(check)
+        .build()
 }
 
 fn copy_dir(from: &Path, to: &Path) {
@@ -135,6 +123,10 @@ fn hook(home: &Path, cwd: &Path, session: &str, ev: &Event) -> Option<Heard> {
         }
         Event::Stop { .. } => ("Stop", json!({ "stop_hook_active": false })),
         Event::SessionEnd => ("SessionEnd", json!({})),
+        Event::TurnStep { turn_id, index, model, agent, ending } => (
+            "TurnStep",
+            json!({ "turn_id": turn_id, "index": index, "model": model, "agent_id": agent, "ending": ending }),
+        ),
     };
     let mut payload = json!({ "session_id": session, "cwd": cwd });
     payload.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());

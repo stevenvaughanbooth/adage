@@ -8,6 +8,9 @@
 //!    became of it) and the skill's hash in `[provenance] skill`, written to
 //!    `$ADAGE_HOME/train/skills/<name>/` with the review. Nothing is installed: the person reads
 //!    the review and runs `adage train accept <name>` (docs/training.md).
+//! 4. **Record** ([`verified`]): beside the pack, `verified.json` (`adage_pack::verified`): each
+//!    compiled step's command and what its replay found, dated, and whether the skill is inert.
+//!    The hook reads it once the person has accepted the pack.
 
 use crate::compile::{Compiled, Verified};
 use crate::procedure::{self, Graph};
@@ -85,6 +88,12 @@ pub struct Outcome {
     pub pack_name: String,
     pub digest: Option<String>,
     pub dir: PathBuf,
+    /// The skill runs nothing when it is invoked ([`adage_pack::verified::inert`]).
+    pub inert: bool,
+    /// The skill file compiled, absolute: `verified.json` names it, and the hook reads it again
+    /// at every use.
+    #[serde(skip)]
+    pub skill_file: PathBuf,
 }
 
 /// The repository a skill is compiled for.
@@ -287,14 +296,28 @@ pub fn run(o: &Options) -> Result<Outcome> {
     let pack = pack(&compiled, &root, table)?;
     let dir = skills_dir(&o.home).join(&compiled.prefix);
     let pack_name = pack.as_ref().map(|p| p.manifest.pack.name.clone()).unwrap_or_default();
-    let mut out =
-        Outcome { compiled, report, repo_key, root: root.clone(), digest: None, pack, pack_name, dir: dir.clone() };
+    let inert = adage_pack::verified::inert(&String::from_utf8_lossy(&bytes));
+    let mut out = Outcome {
+        compiled,
+        report,
+        repo_key,
+        root: root.clone(),
+        digest: None,
+        pack,
+        pack_name,
+        dir: dir.clone(),
+        inert,
+        skill_file: o.skill.canonicalize().unwrap_or_else(|_| std::path::absolute(&o.skill).unwrap_or_default()),
+    };
     stage(&mut out)?;
     Ok(out)
 }
 
-/// Write the staged pack and its review under the outcome's directory, replacing any earlier.
+/// Write the staged pack, its review and `verified.json` under the outcome's directory, replacing
+/// any earlier. A record a person accepted stays accepted when the pack staged now is the very
+/// pack accepted (same skill, repository and digest); a changed skill is staged unaccepted.
 fn stage(out: &mut Outcome) -> Result<()> {
+    let before = adage_pack::verified::read(&out.dir).ok();
     let _ = std::fs::remove_dir_all(&out.dir);
     std::fs::create_dir_all(&out.dir).with_context(|| format!("creating {}", out.dir.display()))?;
     if let Some(p) = &out.pack {
@@ -330,7 +353,86 @@ fn stage(out: &mut Outcome) -> Result<()> {
     };
     std::fs::write(out.dir.join(REVIEW_FILE), serde_json::to_vec_pretty(&review)?)?;
     std::fs::write(out.dir.join("procedure.graph.json"), serde_json::to_vec_pretty(&out.compiled.graph)?)?;
+    let mut record = verified(out, &adage_tracks::review::today());
+    if let Some(b) = before.filter(|b| {
+        b.skill.sha256 == record.skill.sha256
+            && b.repo == record.repo
+            && !b.digest.is_empty()
+            && b.digest == record.digest
+    }) {
+        record.accepted_at = b.accepted_at;
+    }
+    adage_pack::verified::write(&out.dir, &record)?;
     Ok(())
+}
+
+/// The command a candidate runs, as the skill writes it: its run steps' argv, in order (a
+/// sequence's `make test, then make ci`). Empty for one that runs nothing of its own (a read of
+/// what a lookup lists, fixed advice, a prohibition).
+fn command_of(c: &crate::compile::Candidate) -> String {
+    let runs: Vec<String> = c.route.steps.iter().filter_map(|s| s.run.as_ref()).map(|r| r.argv.join(" ")).collect();
+    match c.route.shape {
+        Shape::Avoid | Shape::Read | Shape::Advise => String::new(),
+        _ => runs.join(", then "),
+    }
+}
+
+/// The failure a stale replay saw, from its reason (`` `make suite` fails on a clean checkout
+/// (exit 2: suite is broken) `` → `exit 2: suite is broken`).
+fn signature_of(why: &str) -> String {
+    let inner =
+        why.strip_suffix(')').and_then(|w| w.rfind(" (").map(|i| &w[i + 2..])).filter(|s| !s.is_empty()).unwrap_or(why);
+    clean_text(&inner.replace('`', ""))
+}
+
+/// `verified.json` for an outcome, dated `date`: one step per candidate that runs a command, kept
+/// or dropped as stale, with what its replay found (plan §2.4).
+pub fn verified(out: &Outcome, date: &str) -> adage_pack::verified::Verified {
+    use adage_pack::verified::{Outcome as Result_, Skill, Step, Verified as Record, SCHEMA};
+    let c = &out.compiled;
+    let sandbox = clean_text(&out.report.sandbox);
+    let steps = c
+        .candidates
+        .iter()
+        .chain(&c.dropped)
+        .filter_map(|x| {
+            let command = command_of(x);
+            if command.is_empty() {
+                return None;
+            }
+            let (result, signature) = match &x.verified {
+                Verified::Works => (Result_::Works, None),
+                Verified::Stale(why) => (Result_::Stale, Some(signature_of(why))),
+                Verified::NotReplayed(_) => (Result_::NotReplayed, None),
+            };
+            Some(Step {
+                id: x.steps.join("+"),
+                // A stale candidate's route is not in the pack.
+                route: if matches!(x.verified, Verified::Stale(_)) { String::new() } else { x.route.id.clone() },
+                command: clean_text(&command),
+                result,
+                signature,
+                date: date.to_string(),
+                sandbox: sandbox.clone(),
+            })
+        })
+        .take(adage_pack::verified::MAX_STEPS)
+        .collect();
+    Record {
+        schema: SCHEMA.into(),
+        // The name as the harness lists it is short; a longer one is cut to what the record holds.
+        skill: Skill {
+            name: clean_text(&c.graph.skill.name).chars().take(64).collect(),
+            sha256: c.graph.skill.sha256.clone(),
+            inert: out.inert,
+            path: out.skill_file.to_string_lossy().into_owned(),
+        },
+        repo: out.repo_key.clone(),
+        pack: out.pack_name.clone(),
+        digest: out.digest.clone().unwrap_or_default(),
+        steps,
+        accepted_at: None,
+    }
 }
 
 /// One line for a route: what triggers it and what it says.

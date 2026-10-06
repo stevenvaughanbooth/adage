@@ -19,16 +19,30 @@ rules live below it in `adage-app` and the engines. Front-end map: `../../docs/a
 
 - `main.rs`: dispatches `adage hook` first (fail open, before clap), then every command.
 - `cli.rs`: the whole clap grammar; tests check every flag a module reads is declared.
+- `helpers.rs`: the one copy of each small helper the commands share: `flag`, `flags`, `ago` (a
+  card sentence), `ago_short` (doctor's terse form), `plural`. Use these rather than writing
+  another; switch markers come from `Paths` (`delegate_marker`, `rewrite_off`, `predict_off`,
+  `Paths::repo_disabled`), never a joined string.
 - Commands, one module each: `init`, `doctor`, `install` (with `placement.rs`, one table per
   `Harness` for install and detection, and `detect.rs`), `condition` (`main.rs`, `autolearn`,
   `history`, `condition_out`), `sense`, `review` and `proposal`, `exec` (`delegate`, `review delegate|revoke`),
   `savings`, `graph`, `map`, `share`/`share_pack`/`add`/`packs`/`reimport`, `packs_cmd`,
   `marketplace_cmd`, `models`, `config`, `train` (execs the `adage-train` binary; `accept` installs
-  the staged pack here), `update`, `status_card`.
-- `map/`: `mod.rs` (options, listener), `http.rs` (`/api/v1/graph`, `/graph.json`, `/api/v1/events`,
-  `/api/v1/health`, `/api/v1/reflex/<id>`, CSP), `events.rs` (SSE hub), `assets.rs` and the generated
+  the staged pack here), `update`, `status_card`, `corpus_cmd` (`adage corpus export|import|inspect|
+  learn`, canonical trace corpora through `adage_learn::corpus`).
+- `map/`: `mod.rs` (options, listener, and `Server`, a map `adage ui` starts on a free port and
+  closes with the terminal), `http.rs` (`/api/v1/graph`, `/graph.json`, `/api/v1/events`,
+  `/api/v1/health`, `/api/v1/trace?session=&repo=` (one whole recorded session),
+  `/api/v1/reflex/<id>`, CSP), `events.rs` (SSE hub), `assets.rs` and the generated
   `assets_list.rs` (the embedded page).
-- `ui/`: ratatui app, watch pane, wizard, tabs, tailers; snapshots under `ui/snapshots/`.
+- `ui/`: ratatui app, watch pane, wizard, tabs (Home among them), tailers; `forms.rs` and
+  `tools.rs` are the palette's actions, most run as this binary in a child process: one only a
+  person may take (`Tool::person_command`) checks for a person first and lifts only the child's
+  terminal check (`ADAGE_ALLOW_NONINTERACTIVE=1`; the child keeps every agent-session check);
+  snapshots under `ui/snapshots/`.
+- `doctor/`: every check, each `warn`/`fail` with a typed `Fix` (`Fix::run` for one whole `adage`
+  command, `Fix::manual` for the person's own step); `hook activity: <harness>` reads
+  `adage_hook::receipt`. See `../../docs/claude-mod/impl/structure-cli.md`.
 - `assets/map/`: the built web map, precompressed (`.br`, `.gz`), listed in `hygiene::ALLOWED`.
 
 ## How it connects
@@ -43,8 +57,20 @@ rules live below it in `adage-app` and the engines. Front-end map: `../../docs/a
 ## Changing it
 
 - Tests: `cargo test -p adage-cli`. Most are end to end through the binary with an isolated
-  `ADAGE_HOME` and `HOME`. Goldens: `tests/golden/*.txt`, re-blessed with `ADAGE_BLESS=1`; a changed
-  Claude Code golden is a behaviour change, and `adage-exec`'s `parity` test runs the same goldens.
+  `ADAGE_HOME` and `HOME`, built with the kit in `tests/common/mod.rs` (`scrub`, `hermetic`,
+  `adage`, `TempWorld`, `text`); a new suite starts with `mod common;` and calls `common::scrub`
+  before setting its own variables. `tests/hooks.rs` cannot use it: `adage-exec`'s `parity` test
+  compiles that file by path. See `../../docs/claude-mod/impl/structure-cli.md`.
+- Routes, tracks, indexes and learned homes come from the workspace test kit,
+  `adage_tracks::testkit` (the `testkit` feature, a dev-dependency here): `route`, `track`,
+  `IndexBuilder`, `kinds::*`, `TempWorld`, `LearnedHome`. A suite builds its world from it
+  rather than writing a `Route { … }` literal; `tests/hooks.rs` uses it directly. See
+  `../../docs/claude-mod/impl/testkit.md`.
+- A suite that waits on `adage watch --follow` sets `ADAGE_TEST_FOLLOW_POLL_MS=<1..=250>`
+  (`ui/follow.rs`): a debug build polls that often instead of every 250 ms, so the test is not
+  paced by the poll. A release build never reads it.
+- Goldens: `tests/golden/*.txt`, re-blessed with `ADAGE_BLESS=1`; a changed Claude Code golden is
+  a behaviour change, and `adage-exec`'s `parity` test runs the same goldens.
   Snapshots: `src/snapshots/`, `src/ui/snapshots/` (`cargo insta review`).
 - Preconditions: `/fixture/acme-billing` must not exist (`adage_sim::assume_no_checkout_at_cwd`);
   tests tagged `ADAGE_TEST_NO_SPAWN` are ignored in release builds; the OpenCode plugin session

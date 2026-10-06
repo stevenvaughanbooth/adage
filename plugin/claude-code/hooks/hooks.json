@@ -1,11 +1,12 @@
 {
+  "modules": ["./register.ts"],
   "hooks": {
     "SessionStart": [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/scripts/session-start", "args": ["${CLAUDE_PLUGIN_ROOT}", "${CLAUDE_PLUGIN_DATA}"], "timeout": 10 }] }],
-    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_DATA}/bin/adage", "args": ["hook", "claude", "UserPromptSubmit"], "timeout": 5 }] }],
-    "PostToolBatch": [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_DATA}/bin/adage", "args": ["hook", "claude", "PostToolBatch"], "timeout": 5 }] }],
-    "PostToolUseFailure": [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_DATA}/bin/adage", "args": ["hook", "claude", "PostToolUseFailure"], "timeout": 5 }] }],
-    "PreToolUse": [{ "matcher": "Bash", "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_DATA}/bin/adage", "args": ["hook", "claude", "PreToolUse"], "timeout": 5 }] }],
-    "Stop": [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_DATA}/bin/adage", "args": ["hook", "claude", "Stop"], "timeout": 5 }] }],
-    "SessionEnd": [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_DATA}/bin/adage", "args": ["hook", "claude", "SessionEnd"], "timeout": 5 }] }]
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_DATA}/bin/hook", "args": ["hook", "claude", "UserPromptSubmit"], "timeout": 5 }] }],
+    "PostToolBatch": [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_DATA}/bin/hook", "args": ["hook", "claude", "PostToolBatch"], "timeout": 30 }] }],
+    "PostToolUseFailure": [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_DATA}/bin/hook", "args": ["hook", "claude", "PostToolUseFailure"], "timeout": 5 }] }],
+    "PreToolUse": [{ "matcher": "Bash", "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_DATA}/bin/hook", "args": ["hook", "claude", "PreToolUse"], "timeout": 5 }] }],
+    "Stop": [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_DATA}/bin/hook", "args": ["hook", "claude", "Stop"], "timeout": 30 }] }],
+    "SessionEnd": [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_DATA}/bin/hook", "args": ["hook", "claude", "SessionEnd"], "timeout": 5 }] }]
   }
 }

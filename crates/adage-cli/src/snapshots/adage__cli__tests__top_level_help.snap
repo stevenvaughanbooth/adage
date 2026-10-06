@@ -13,6 +13,7 @@ Every day:
 
 When something is off:
   doctor       what is wrong, and the fix for each problem
+  off          turn Adage off in this repository (`adage on` turns it back on)
 
 Set up:
   init         set Adage up: harnesses, hooks, past traces
@@ -38,6 +39,7 @@ More:
   ui           the full-screen app: live, reflexes, map, health, settings
   status       reflexes and instincts in effect, with evidence
   savings      what Adage saves here
+  ledger       record what a session cost, as its harness reported it
   delegate     let hooks run delegated reflexes, and rewrites
   models       the optional embedding model
   completions  shell completions
@@ -46,6 +48,7 @@ More:
 
 Options:
       --plain    Plain output for screen readers and logs: no colour, no glyphs beyond ASCII
+      --json     The status card as JSON (bare `adage` only)
   -h, --help     Print help
   -V, --version  Print version
 

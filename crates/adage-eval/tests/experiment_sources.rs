@@ -1,4 +1,5 @@
-//! Experiment lineage uses canonical production route types, including unreviewed candidates.
+//! Experiment lineage uses canonical production route types, including unreviewed candidates
+//! and the learner's candidates file.
 use adage_core::{spans::SpanKind, Effect};
 use adage_eval::experiment::sources;
 use adage_tracks::*;
@@ -123,4 +124,47 @@ fn source_symlinks_are_rejected_without_following_them() {
     let alias = dir.path().join("alias");
     std::os::unix::fs::symlink(&track, &alias).unwrap();
     assert!(sources(&alias).is_err());
+}
+
+/// The learner writes its candidates (plan D1) to `<slug>/learned/candidates.json`, also when it
+/// learned no route there. They are lineage, through the compiled index, never a stray file; a
+/// corrupt one fails, and the same name anywhere else is still unexpected.
+#[test]
+fn the_learners_candidates_are_lineage_not_a_stray_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = "github.com/adage-evals/pilot";
+    let mut file = candidates::CandidateFile::new(repo, 5);
+    file.candidates.push(candidates::Entry {
+        id: "lint-after-tests".into(),
+        trigger: Trigger::Context {
+            items: vec![
+                CtxItem::Edit { glob: "acme/*.py".into() },
+                CtxItem::Act { keys: vec!["exec make test".into()] },
+            ],
+            within: 8,
+        },
+        step: Step::Run { command: "make lint".into() },
+        support: 3,
+        days: 3,
+        last_seen: Some("2026-09-09".into()),
+        review: false,
+        sessions: vec!["a".into(), "b".into(), "c".into()],
+    });
+    candidates::write(dir.path(), &file).unwrap();
+    let alone = sources(dir.path()).unwrap();
+    assert!(alone.tracks.is_empty(), "no route was learned");
+    assert_eq!(alone.index.candidates(repo).len(), 1);
+
+    let path = candidates::path(dir.path(), repo);
+    io::write(path.parent().unwrap(), &fixture("pilot/learned")).unwrap();
+    candidates::write(dir.path(), &file).unwrap();
+    let beside = sources(dir.path()).unwrap();
+    assert_eq!(beside.tracks.len(), 1);
+    assert_eq!(beside.index.candidates(repo).len(), 1);
+
+    std::fs::write(&path, "{broken").unwrap();
+    assert!(sources(dir.path()).unwrap_err().to_string().contains("invalid experiment candidates"));
+    std::fs::remove_file(&path).unwrap();
+    std::fs::write(dir.path().join(candidates::FILE), "{}").unwrap();
+    assert!(sources(dir.path()).unwrap_err().to_string().contains("unexpected file outside a source track"));
 }

@@ -91,6 +91,7 @@ fn setup(root: &Path) {
         basis: Value::Null,
         auto: false,
         terms: Some(terms),
+        via: None,
     });
     store.save(&approvals::path(&home)).unwrap();
 }

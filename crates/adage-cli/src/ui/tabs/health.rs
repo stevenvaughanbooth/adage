@@ -37,7 +37,7 @@ pub fn key(s: &mut AppState, code: KeyCode) -> Option<Cmd> {
                 let c = h.checks.get(s.check_sel)?;
                 let mut lines = vec![c.detail.clone()];
                 if let Some(fix) = &c.fix {
-                    lines.extend([String::new(), "Next steps".into(), fix.clone()]);
+                    lines.extend([String::new(), "Next steps".into(), fix.prose()]);
                 } else if c.status == Status::Pass {
                     lines.push("This check passes. No action is needed.".into());
                 }
@@ -130,7 +130,7 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
             Span::styled(format!("  {}", c.detail), t.ink2()),
         ]));
         if let Some(fx) = &c.fix {
-            d.push(Line::from(vec![Span::styled(" fix  ", t.dim()), Span::styled(fx.clone(), t.command())]));
+            d.push(Line::from(vec![Span::styled(" fix  ", t.dim()), Span::styled(fx.prose(), t.command())]));
         }
         if let Some(Some(fix)) = h.fixes.get(s.check_sel) {
             d.push(Line::from(vec![Span::styled(" enter", t.key()), Span::raw(format!(" {}", fix.label()))]));

@@ -237,6 +237,18 @@ fn raw_mode_needs_policy_and_its_own_approval() {
     args.clear();
 }
 
+/// The Claude Code mod's activation probe: one line naming the binary and its version, exit 0,
+/// and nothing read, so even a data directory that cannot be read leaves it answering.
+#[test]
+fn version_is_one_line_and_reads_nothing() {
+    let e = setup("{}");
+    std::fs::write(e.home.path().join("policy.toml"), "not toml").unwrap();
+    let o = exec(&e, &["version"], &[]);
+    assert_eq!(o.status.code(), Some(0));
+    assert_eq!(String::from_utf8_lossy(&o.stdout), format!("adage-exec {}\n", env!("CARGO_PKG_VERSION")));
+    assert!(o.stderr.is_empty());
+}
+
 #[test]
 fn doctor_reports_the_sandbox() {
     let e = setup("{}");
@@ -284,4 +296,48 @@ fn repository_scripts_are_hash_checked_at_execution() {
     // A path in argv with no script entry is a dangling reference.
     let dangling = with("run", run_args(repo, r#"["./scripts/wi-lookup"]"#, FIELDS));
     assert_eq!(exec(&e, &s(&dangling), &[]).status.code(), Some(3));
+}
+
+/// Review L3: `status` lists execution and prediction grants apart, and `revoke` takes one mode
+/// at a time (execution unless `--mode predict`), so a prediction grant is never revoked, or
+/// listed, as an execution grant.
+#[test]
+fn status_and_revoke_keep_grant_modes_apart() {
+    let e = setup(r#"{"files":[],"state":"Active"}"#);
+    let repo = e.repo.path().to_str().unwrap();
+    let person = [("ADAGE_ALLOW_NONINTERACTIVE", "1")];
+    let approve = with("approve", run_args(repo, r#"["cat","data.json"]"#, FIELDS));
+    assert!(exec(&e, &s(&approve), &person).status.success());
+    // The same grant as a prediction grant beside it, as `adage review delegate --predict` records.
+    let file = approvals_file(e.home.path());
+    let mut store: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    let mut predict = store["approvals"][0].clone();
+    predict["key"]["mode"] = "predict".into();
+    store["approvals"].as_array_mut().unwrap().push(predict);
+    std::fs::write(&file, store.to_string()).unwrap();
+    let modes = || -> Vec<String> {
+        let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+        v["approvals"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|a| a["key"]["mode"].as_str().unwrap_or("execute").to_string())
+            .collect()
+    };
+    let status = || String::from_utf8(exec(&e, &["status", "--repo", repo], &[]).stdout).unwrap();
+    let out = status();
+    assert!(out.contains(": 1\n  acme/work-items/work-item-context"), "{out}");
+    assert!(out.contains("Prediction grants for "), "{out}");
+    assert_eq!(out.lines().filter(|l| l.contains("grants for")).count(), 2, "{out}");
+    let revoke = ["revoke", "--repo", repo];
+    assert!(exec(&e, &revoke, &person).status.success());
+    assert_eq!(modes(), ["predict"], "execution only, by default");
+    let out = status();
+    assert!(out.contains("Execution grants for ") && out.contains(": 0\n"), "{out}");
+    assert!(out.contains("Prediction grants for "), "{out}");
+    assert_eq!(exec(&e, &["revoke", "--repo", repo, "--mode", "all"], &person).status.code(), Some(2));
+    let o = exec(&e, &["revoke", "--repo", repo, "--mode", "predict"], &person);
+    assert!(String::from_utf8_lossy(&o.stdout).contains("Revoked 1 prediction grant(s)"), "{o:?}");
+    assert!(modes().is_empty());
+    assert!(!status().contains("Prediction grants"));
 }

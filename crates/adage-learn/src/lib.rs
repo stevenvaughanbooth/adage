@@ -70,6 +70,10 @@ pub struct RepoReport {
     pub instincts: Option<instincts::InstinctReport>,
     /// What learning mined, compiled and judged.
     pub engine: engine::EngineReport,
+    /// The repository's candidates as this run would record them (`candidates.json`, plan D1);
+    /// `None` when candidates are off. Written through [`store::Store::write_candidates`].
+    #[serde(skip)]
+    pub candidates: Option<adage_tracks::candidates::CandidateFile>,
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -263,6 +267,11 @@ pub fn learn_sessions_into(
     (report.cache_hits, report.cache_misses) = (hits, misses);
     for p in &planned {
         store.write_track(p)?;
+    }
+    for rr in report.repos.values() {
+        if let Some(c) = &rr.candidates {
+            store.write_candidates(c)?;
+        }
     }
     for (repo, rr) in &report.repos {
         if let (Some(root), Some(ic)) = (rr.instincts.as_ref().and_then(|i| i.root.as_deref()), cfg.instincts.as_ref())
@@ -488,6 +497,16 @@ pub(crate) fn plan_repository(
                 planned.push(Planned { name: name.clone(), track, proposals, reviews: None, why: Some(why), replaces });
             }
         }
+        // Candidates (plan D1): what was counted below a reflex's support, and the nascent context
+        // reflexes, never a route of the track this run planned.
+        if cfg.candidates {
+            let learned: &[Route] = planned[first_planned..]
+                .iter()
+                .find(|p| p.name == name)
+                .map(|p| p.track.routes.as_slice())
+                .unwrap_or(&[]);
+            rr.candidates = Some(candidates_of(repo, ss, &run, learned, prev.as_ref(), store, cfg));
+        }
         // Instincts, after learning and review: bound from the repository's own files, with
         // every route from another source taking precedence (docs/instincts.md).
         if let Some(ic) = &cfg.instincts {
@@ -510,6 +529,90 @@ pub(crate) fn plan_repository(
         report.repos.insert(repo.clone(), rr);
     }
     Ok((report, planned))
+}
+
+/// The support a reflex needs among `n` traces under `cfg` (the miner's `s_min`, as
+/// [`engine::run`] mines).
+pub fn s_min(cfg: &LearnConfig, n: usize) -> u32 {
+    adage_graph::mine::MineParams { min_support: cfg.min_support, ..Default::default() }.s_min(n)
+}
+
+/// A repository's candidates after a learn (plan D1, `adage_tracks::candidates`): the engine's
+/// border candidates that are not routes of its learned track (in any state), and the track's
+/// nascent reflexes with a context trigger (`review: true`), each with its supporting traces; and,
+/// for each candidate of the previous learn that is a reflex in service now, the traces that
+/// tipped it (its supporting traces the candidate did not have).
+fn candidates_of(
+    repo: &str,
+    ss: &[&Session],
+    run: &engine::EngineRun,
+    learned: &[Route],
+    prev: Option<&Track>,
+    store: &dyn store::Store,
+    cfg: &LearnConfig,
+) -> adage_tracks::candidates::CandidateFile {
+    use adage_tracks::candidates::{CandidateFile, Entry, Formed};
+    let day: BTreeMap<&str, &str> = ss.iter().map(|s| (s.id.as_str(), s.day.get(..10).unwrap_or(""))).collect();
+    let last_seen = |sessions: &[String]| {
+        sessions
+            .iter()
+            .filter_map(|id| day.get(id.as_str()).copied())
+            .filter(|d| adage_graph::events::day_number(d) > 0)
+            .max()
+            .map(str::to_string)
+    };
+    let mut file = CandidateFile::new(repo, s_min(cfg, ss.len()));
+    let routes: BTreeSet<&str> = learned.iter().map(|r| r.id.as_str()).collect();
+    for c in run.candidates.iter().filter(|c| !routes.contains(c.route.id.as_str())) {
+        let e = &c.route.evidence;
+        file.candidates.push(Entry {
+            id: c.route.id.clone(),
+            trigger: c.route.trigger.clone(),
+            step: c.route.step.clone(),
+            support: e.support,
+            days: e.days,
+            last_seen: last_seen(&c.sessions),
+            review: false,
+            sessions: c.sessions.clone(),
+        });
+    }
+    for r in learned.iter().filter(|r| r.state == adage_tracks::RouteState::Nascent && is_context(r)) {
+        let sessions = run.sessions.get(&r.id).cloned().unwrap_or_default();
+        file.candidates.push(Entry {
+            id: r.id.clone(),
+            trigger: r.trigger.clone(),
+            step: r.step.clone(),
+            support: r.evidence.support,
+            days: r.evidence.days,
+            last_seen: last_seen(&sessions),
+            review: true,
+            sessions,
+        });
+    }
+    // Which of the last learn's candidates formed now, and what tipped them.
+    if let Some(before) = store.candidates(repo) {
+        let was_live: BTreeSet<&str> =
+            prev.iter().flat_map(|t| t.routes.iter()).filter(|r| r.state.is_live()).map(|r| r.id.as_str()).collect();
+        for r in learned.iter().filter(|r| r.state.is_live() && !was_live.contains(r.id.as_str())) {
+            let Some(old) = before.get(&r.id).filter(|e| !e.review) else { continue };
+            let had: BTreeSet<&str> = old.sessions.iter().map(String::as_str).collect();
+            let tipped: Vec<String> = run
+                .sessions
+                .get(&r.id)
+                .into_iter()
+                .flatten()
+                .filter(|id| !had.contains(id.as_str()))
+                .cloned()
+                .collect();
+            file.formed.push(Formed { id: r.id.clone(), sessions: tipped });
+        }
+    }
+    file.normalize();
+    file
+}
+
+fn is_context(r: &Route) -> bool {
+    matches!(r.trigger, Trigger::Context { .. })
 }
 
 /// One route in `adage condition`'s summary: its id and strength, and, for a reflex that is not
@@ -621,6 +724,75 @@ mod tests {
             assert_eq!(name, slug(&repo), "deterministic directory identity");
         }
         assert_eq!(slug(&"x".repeat(118)), "x".repeat(118), "largest already-valid slug stays unchanged");
+    }
+
+    /// T-D1-04: a nascent reflex with a context trigger is a candidate that waits for review, and
+    /// never a route of the index; a nascent reflex with an after-edit trigger is not a candidate.
+    #[test]
+    fn nascent_context_reflexes_are_candidates_for_review() {
+        use adage_tracks::{CtxItem, Exit, Index};
+        let route = |id: &str, trigger: Trigger| Route {
+            id: id.into(),
+            summary: String::new(),
+            trigger,
+            step: Step::Run { command: "make deps".into() },
+            slots: vec![],
+            effect: adage_core::Effect::Environment,
+            strength: Strength::Prime,
+            state: RouteState::Nascent,
+            exit: vec![Exit::IntentChanges],
+            evidence: Evidence { support: 6, opportunities: 6, days: 3, ..Default::default() },
+            authored: false,
+        };
+        let ctx = Trigger::Context {
+            items: vec![
+                CtxItem::Act { keys: vec!["exec git pull".into()] },
+                CtxItem::Act { keys: vec!["exec make test".into()] },
+            ],
+            within: 8,
+        };
+        let learned = vec![
+            route("run-c0ffee", ctx),
+            route("run-ed17ed", Trigger::AfterEdit { paths: "requirements.txt".into() }),
+        ];
+        let d = tempfile::tempdir().unwrap();
+        let mut run = engine::EngineRun::default();
+        run.sessions.insert("run-c0ffee".into(), vec!["s2".into(), "s1".into()]);
+        let f = candidates_of(
+            "acme",
+            &[],
+            &run,
+            &learned,
+            None,
+            &store::Files::new(d.path(), &d.path().join("index.json")),
+            &LearnConfig::default(),
+        );
+        assert_eq!(f.candidates.len(), 1, "{:#?}", f.candidates);
+        let e = &f.candidates[0];
+        assert_eq!((e.id.as_str(), e.review, e.support), ("run-c0ffee", true, 6));
+        assert_eq!(e.sessions, ["s1", "s2"]);
+
+        // In the index: a candidate for review, and not a route (a nascent reflex is never live).
+        let tracks = d.path().join("tracks");
+        let track = Track {
+            manifest: Manifest {
+                track: TrackInfo {
+                    name: "acme/learned".into(),
+                    version: "0.1.0".into(),
+                    description: String::new(),
+                    provenance: "desire-path".into(),
+                },
+                scope: Scope { repo: "acme".into() },
+                gauge: Gauge::default(),
+            },
+            routes: learned,
+        };
+        io::write(&tracks.join("acme/learned"), &track).unwrap();
+        store::Store::write_candidates(&store::Files::new(&tracks, &d.path().join("index.json")), &f).unwrap();
+        let (index, _) = Index::compile_root(&tracks, &io::read_all(&tracks).unwrap());
+        assert!(index.routes.is_empty());
+        let c = index.candidate("acme", "run-c0ffee").expect("a candidate in the index");
+        assert!(c.review);
     }
 
     #[test]

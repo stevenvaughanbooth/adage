@@ -4,6 +4,8 @@
 use std::path::Path;
 use std::process::{Command, Output, Stdio};
 
+mod common;
+
 const SKILL: &str = "---
 name: widget-work
 ---
@@ -46,15 +48,10 @@ fn repo(d: &Path) {
 }
 
 fn accept(home: &Path, cwd: &Path, name: &str) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_adage"))
+    common::scrub(&mut Command::new(env!("CARGO_BIN_EXE_adage")))
         .args(["train", "accept", name])
         .current_dir(cwd)
         .env("ADAGE_HOME", home)
-        .env_remove("CLAUDECODE")
-        .env_remove("OPENCODE")
-        .env_remove("CODEX_SANDBOX")
-        .env_remove("CODEX_SANDBOX_NETWORK_DISABLED")
-        .env_remove("SSH_AUTH_SOCK")
         .env("ADAGE_ALLOW_NONINTERACTIVE", "1")
         .stdin(Stdio::null())
         .output()

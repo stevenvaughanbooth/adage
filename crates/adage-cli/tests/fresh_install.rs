@@ -5,7 +5,7 @@
 //! `CODEX_HOME` and `TMPDIR`, no agent-session variables, and `ADAGE_TEST_NO_SPAWN=record`: a hook
 //! records the learner it would start instead of starting it.
 
-use adage_core::Effect;
+use adage_tracks::testkit;
 use adage_tracks::why::Why;
 use adage_tracks::*;
 use serde_json::{json, Value};
@@ -13,8 +13,10 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
+mod common;
+
 struct World {
-    _dir: tempfile::TempDir,
+    w: common::TempWorld,
     root: PathBuf,
     /// `ADAGE_HOME`.
     data: PathBuf,
@@ -22,25 +24,19 @@ struct World {
 
 impl World {
     fn new() -> World {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().canonicalize().unwrap();
-        for d in ["home/.claude/projects", "xdg", "codex", "tmp", "bin"] {
-            std::fs::create_dir_all(root.join(d)).unwrap();
-        }
-        let data = root.join("data");
-        World { _dir: dir, root, data }
+        let w = common::TempWorld::new(&["home/.claude/projects", "xdg", "codex", "tmp", "bin"]);
+        World { root: w.root.clone(), data: w.p("data"), w }
     }
     fn p(&self, rel: &str) -> PathBuf {
-        self.root.join(rel)
+        self.w.p(rel)
     }
     /// A repository (a directory with `.git`) at `rel`.
     fn repo(&self, rel: &str) -> PathBuf {
-        let at = self.p(rel);
-        std::fs::create_dir_all(at.join(".git")).unwrap();
-        at
+        self.w.repo(rel)
     }
     fn cmd(&self, args: &[&str], cwd: &Path) -> Command {
         let mut c = Command::new(env!("CARGO_BIN_EXE_adage"));
+        common::scrub(&mut c);
         c.args(args)
             .current_dir(cwd)
             .env("HOME", self.p("home"))
@@ -59,21 +55,7 @@ impl World {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
-        for v in [
-            "ADAGE_DISABLE",
-            "ADAGE_AUTO_LEARN",
-            "ADAGE_CONTROL",
-            "ADAGE_MODEL",
-            "ADAGE_ALLOW_NONINTERACTIVE",
-            "CLAUDECODE",
-            "OPENCODE",
-            "CODEX_SANDBOX",
-            "CODEX_SANDBOX_NETWORK_DISABLED",
-            "CLAUDE_CONFIG_DIR",
-            "XDG_DATA_HOME",
-        ] {
-            c.env_remove(v);
-        }
+        c.env_remove("XDG_DATA_HOME");
         c
     }
     fn run_in(&self, cwd: &Path, args: &[&str], stdin: &str, env: &[(&str, &str)]) -> Output {
@@ -131,43 +113,20 @@ fn warnings(doctor: &Value) -> Vec<String> {
 }
 
 fn route(id: &str, trigger: Trigger, step: Step, strength: Strength, support: u32, opportunities: u32) -> Route {
-    Route {
-        id: id.into(),
-        summary: "s".into(),
-        trigger,
-        step,
-        slots: vec![],
-        effect: Effect::Verify,
-        strength,
-        state: RouteState::Firm,
-        exit: vec![Exit::IntentChanges],
-        evidence: Evidence {
-            support,
-            opportunities,
-            rate: if opportunities > 0 { support as f64 / opportunities as f64 } else { 0.0 },
-            lower_bound: -0.0004,
-            provenance: "desire-path".into(),
-            origin: Some(Origin::Learned),
-            ..Default::default()
-        },
-        authored: false,
-    }
+    testkit::route(id, trigger, step)
+        .summary("s")
+        .strength(strength)
+        .until_intent_changes()
+        .measured(support, opportunities)
+        .provenance("desire-path")
+        .origin(Origin::Learned)
+        // This suite's fixed bound, not the Wilson bound of the counts.
+        .with(|r| r.evidence.lower_bound = -0.0004)
+        .build()
 }
 
 fn track(repo: &str, routes: Vec<Route>) -> Track {
-    Track {
-        manifest: Manifest {
-            track: TrackInfo {
-                name: format!("{repo}/learned"),
-                version: "0.1.0".into(),
-                description: String::new(),
-                provenance: "desire-path".into(),
-            },
-            scope: Scope { repo: repo.into() },
-            gauge: Gauge::default(),
-        },
-        routes,
-    }
+    testkit::track(&format!("{repo}/learned"), repo).routes(routes).build()
 }
 
 /// B2: a session opened outside a repository (`~`, `/`, a directory since deleted) says nothing,

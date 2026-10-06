@@ -463,13 +463,14 @@ pub fn item_label(t: &LabelTable, l: u32) -> bool {
 }
 
 /// Whether a label can be a target (something a reflex could direct): an act whose effect is at
-/// most `Environment`, or a read.
+/// most `Environment`, a read, or a skill used (a continuation only: a skill is never a context
+/// item, `seq`).
 pub fn target_label(t: &LabelTable, l: u32) -> bool {
     match t.ty[l as usize] {
         NodeType::Act => {
             t.level[l as usize] != Level::Kind && t.effect[l as usize].is_none_or(|e| e <= Effect::Environment)
         }
-        NodeType::Read => true,
+        NodeType::Read | NodeType::Skill => true,
         _ => false,
     }
 }
@@ -521,4 +522,55 @@ pub fn mine(db: &Db, p: &MineParams) -> Mined {
         expansions: run.expansions,
         truncated: run.truncated,
     }
+}
+
+/// The lowest support a candidate may have (plan D1): `s_min − border`, never below 2. A sequence
+/// seen in a single trace is not a pattern seen before, and a floor of 1 would make every event
+/// of every trace an alphabet label.
+pub fn candidate_floor(s_min: u32, border: u32) -> u32 {
+    s_min.saturating_sub(border).max(2)
+}
+
+/// The candidate pass (plan D1; Track G §9): the negative border of the reflexes' mining, mined
+/// in a pass of its own so the reflexes' alphabet, result and `truncated` flag are never touched
+/// (lowering their floor would insert events between the items of today's patterns, since `gap`
+/// counts alphabet events, and change reflexes in service).
+///
+/// A second [`Db`] is built over the same sessions with the floor at [`candidate_floor`] (its
+/// alphabet and targets are the labels seen in that many traces) and mined with the same
+/// parameters otherwise; only the patterns whose support is in `[floor, s_min)` and whose context
+/// holds two or more items are kept, then marked closed among themselves. `s_min` is the
+/// reflexes' own (`p.s_min(sessions)`), returned as [`Mined::s_min`]; the returned [`Db`] is the
+/// second one, which the patterns' label ids and session indices refer to. With no room below
+/// `s_min` (`floor ≥ s_min`) nothing is mined.
+pub fn mine_candidates(labels: &LabelTable, sessions: &[&LSession], p: &MineParams) -> (Db, Mined) {
+    let s_min = p.s_min(sessions.len());
+    let floor = candidate_floor(s_min, p.border);
+    // The floor is the second alphabet's own `s_min`: everything at or above it is frequent there,
+    // so its whole search is the border's (nothing above it needs recording separately).
+    let q = MineParams { min_support: floor, min_support_share: 0.0, border: 0, ..p.clone() };
+    let db = Db::build(labels, if floor < s_min { sessions } else { &[] }, &q);
+    if floor >= s_min {
+        let mined = Mined { s_min, sessions: 0, targets: 0, patterns: vec![], expansions: 0, truncated: false };
+        return (db, mined);
+    }
+    let run = seq::mine(&db, &q, false);
+    let mut patterns: Vec<MinedPattern> = run
+        .found
+        .into_iter()
+        .filter(|f| f.frequent && f.kept && (f.sessions.len() as u32) < s_min && f.pattern.cut >= 2)
+        .map(|f| MinedPattern { pattern: f.pattern, sessions: f.sessions, closed: false })
+        .collect();
+    patterns.sort_by(|a, b| a.pattern.cmp(&b.pattern));
+    patterns.dedup_by(|a, b| a.pattern == b.pattern);
+    closed::mark(&db, &mut patterns);
+    let mined = Mined {
+        s_min,
+        sessions: db.sessions.len(),
+        targets: run.targets,
+        patterns,
+        expansions: run.expansions,
+        truncated: run.truncated,
+    };
+    (db, mined)
 }

@@ -17,11 +17,13 @@ use adage_sim::scenario::{self, Rng, Turn};
 use adage_sim::{claude, codex, opencode};
 use serde_json::{json, Value};
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+mod common;
+
 struct Sandbox {
-    _dir: tempfile::TempDir,
+    _w: common::TempWorld,
     root: PathBuf,
 }
 
@@ -30,13 +32,10 @@ impl Sandbox {
     /// files the linked-files route may name.
     fn new() -> Sandbox {
         adage_sim::assume_no_checkout_at_cwd();
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().canonicalize().unwrap();
-        for d in
-            ["home", "adage", "acme-billing/.git", "acme-billing/acme", "acme-billing/schema", "acme-billing/tests"]
-        {
-            std::fs::create_dir_all(root.join(d)).unwrap();
-        }
+        let w = common::TempWorld::new(&["home", "adage", "acme-billing/tests"]);
+        w.repo("acme-billing");
+        // The tracker's lookup script: a `predict` grant on the lookup hashes it.
+        w.write("acme-billing/scripts/wi-lookup", "#!/usr/bin/env python3\n");
         for f in [
             "acme/billing.py",
             "acme/customers.py",
@@ -45,15 +44,16 @@ impl Sandbox {
             "README.md",
             "Makefile",
         ] {
-            std::fs::write(root.join("acme-billing").join(f), scenario::body(f)).unwrap();
+            w.write(&format!("acme-billing/{f}"), scenario::body(f));
         }
-        Sandbox { _dir: dir, root }
+        Sandbox { root: w.root.clone(), _w: w }
     }
     fn repo(&self) -> String {
         self.root.join("acme-billing").to_string_lossy().to_string()
     }
-    fn command(&self, args: &[&str], arm: &str) -> Command {
-        let mut c = Command::new(env!("CARGO_BIN_EXE_adage"));
+    fn command_of(&self, bin: &Path, args: &[&str], arm: &str) -> Command {
+        let mut c = Command::new(bin);
+        common::scrub(&mut c);
         c.args(args)
             .current_dir(&self.root)
             .env("ADAGE_HOME", self.root.join("adage"))
@@ -62,16 +62,16 @@ impl Sandbox {
             .env("XDG_CONFIG_HOME", self.root.join("home/.config"))
             .env("CODEX_HOME", self.root.join("home/.codex"))
             .env("ADAGE_ARM", arm)
-            .env_remove("ADAGE_DISABLE")
-            .env_remove("CLAUDECODE")
-            .env_remove("OPENCODE")
-            .env_remove("CODEX_SANDBOX")
-            .env_remove("CODEX_SANDBOX_NETWORK_DISABLED");
+            // The managed policy file, absent unless a test writes it.
+            .env("ADAGE_POLICY", self.root.join("managed-policy.toml"));
         c
     }
     fn run(&self, args: &[&str], stdin: &[u8], arm: &str) -> (String, String, i32) {
+        self.run_of(Path::new(env!("CARGO_BIN_EXE_adage")), args, stdin, arm)
+    }
+    fn run_of(&self, bin: &Path, args: &[&str], stdin: &[u8], arm: &str) -> (String, String, i32) {
         let mut child = self
-            .command(args, arm)
+            .command_of(bin, args, arm)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -99,7 +99,32 @@ impl Sandbox {
         self.learn(&a)
     }
     fn hook(&self, harness: &str, event: &str, payload: &Value, arm: &str) -> String {
-        let (out, err, code) = self.run(&["hook", harness, event], payload.to_string().as_bytes(), arm);
+        self.hook_of(Path::new(env!("CARGO_BIN_EXE_adage")), harness, event, payload, arm)
+    }
+    fn hook_of(&self, bin: &Path, harness: &str, event: &str, payload: &Value, arm: &str) -> String {
+        let (out, err, code) = self.run_of(bin, &["hook", harness, event], payload.to_string().as_bytes(), arm);
+        self.hooked(out, err, code)
+    }
+    /// A hook run in the session's checkout, as a harness runs it: adage-exec checks a `predict`
+    /// grant against the checkout it is asked from.
+    fn hook_in_repo(&self, bin: &Path, harness: &str, event: &str, payload: &Value, arm: &str) -> String {
+        let mut child = self
+            .command_of(bin, &["hook", harness, event], arm)
+            .current_dir(self.repo())
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let _ = child.stdin.take().unwrap().write_all(payload.to_string().as_bytes());
+        let o = child.wait_with_output().unwrap();
+        self.hooked(
+            String::from_utf8_lossy(&o.stdout).to_string(),
+            String::from_utf8_lossy(&o.stderr).to_string(),
+            o.status.code().unwrap_or(-1),
+        )
+    }
+    fn hooked(&self, out: String, err: String, code: i32) -> String {
         assert_eq!(code, 0, "hooks always exit 0");
         assert!(err.is_empty(), "hooks never write to stderr: {err}");
         out
@@ -189,15 +214,65 @@ fn silent_or(treated: bool, v: &[&'static str]) -> Vec<&'static str> {
 // ---------------------------------------------------------------------------------------------
 // Replays, one per harness, in native payloads
 
+/// The hook binary a Claude replay runs, and the routes (by id prefix) holding a `predict` grant
+/// there. Only adage-exec reads grants, so `adage hook` never predicts.
+#[derive(Clone, Copy)]
+enum Hook<'a> {
+    Adage,
+    Exec { bin: &'a Path, granted: &'a [&'a str] },
+}
+
+impl Hook<'_> {
+    fn granted(&self, route: &str) -> bool {
+        matches!(self, Hook::Exec { granted, .. } if granted.iter().any(|g| route.starts_with(g)))
+    }
+}
+
 /// Claude Code: `PostToolBatch` per turn, `PostToolUseFailure` per failed call, Stop `block`.
 fn replay_claude(sb: &Sandbox, sid: &str, arm: &str) {
+    replay_claude_with(sb, sid, arm, Hook::Adage);
+}
+
+/// The JSON calls a prediction yields for these acts, as the binary renders them.
+fn predicted_calls(acts: &[scenario::Act], cwd: &str) -> Value {
+    acts.iter()
+        .map(|a| match a {
+            scenario::Act::Shell { cmd, .. } => json!({ "tool": "Bash", "input": { "command": cmd } }),
+            scenario::Act::Read { path, .. } => {
+                json!({ "tool": "Read", "input": { "file_path": format!("{cwd}/{path}") } })
+            }
+            scenario::Act::Edit { .. } => panic!("an edit is never predicted"),
+        })
+        .collect()
+}
+
+/// [`replay_claude`] with the mod loaded: its `Press` after the session starts, its `TurnStep`
+/// at every step boundary of the turn (0 after the prompt, `k` after the k-th tool batch, and
+/// `ending` after the response that ends the turn), and its two-phase `PreToolUse` before every
+/// Bash call. Under `hook` with grants, the treated arm gets each granted step of
+/// [`scenario::Replay::predict`] in the model's place: the mod's calls come back with `adage_`
+/// ids, the agent's own turn of them is not replayed, and with the finish line granted no Stop
+/// request follows. The control arm prints nothing and spools `would_predict`. Without a grant, or
+/// under `adage`, every step is silent and spools nothing. Both arms notice the `make lint`
+/// candidate once ([`scenario::Replay::noticed`]).
+fn replay_claude_with(sb: &Sandbox, sid: &str, arm: &str, hook: Hook) {
     let r = replay_for(sb);
     let cwd = sb.repo();
     let treated = arm == "treated";
+    let predictions: Vec<&scenario::Predict> = r.predict.iter().filter(|p| hook.granted(p.route)).collect();
     let mut rng = Rng::new(7);
-    let h = |ev: &str, extra: Value| sb.hook("claude", ev, &claude::hook(sid, &cwd, ev, extra), arm);
+    let turn_id = scenario::uuid4(&mut Rng::new(13));
+    let send = |ev: &str, p: &Value| match hook {
+        Hook::Adage => sb.hook("claude", ev, p, arm),
+        Hook::Exec { bin, .. } => sb.hook_in_repo(bin, "claude", ev, p, arm),
+    };
+    let h = |ev: &str, extra: Value| send(ev, &claude::hook(sid, &cwd, ev, extra));
     assert_eq!(h("SessionStart", json!({ "source": "startup" })), "");
+    // The mod asks for the session's press token before the agent acts: one, in either arm.
+    let press: Value = serde_json::from_str(&send("Press", &claude::press_hook(sid, &cwd, "startup"))).unwrap();
+    assert!(press["press"].as_str().is_some_and(|t| t.len() == 64), "{press}");
     let out = h("UserPromptSubmit", json!({ "prompt": r.prompt }));
+    assert_eq!(send("Press", &claude::press_hook(sid, &cwd, "startup")), "", "the agent acted: no token now");
     expect_routes(&out, &silent_or(treated, &r.prompt_expect), "claude prompt");
     if treated {
         let v: Value = serde_json::from_str(&out).unwrap();
@@ -207,32 +282,273 @@ fn replay_claude(sb: &Sandbox, sid: &str, arm: &str) {
             "the prompt's work item is bound into the command"
         );
     }
-    let turns = |turns: &[Turn], rng: &mut Rng| {
-        for t in turns {
-            for (ev, p, want) in claude::turn_hooks(t, sid, &cwd, rng) {
-                let out = sb.hook("claude", ev, &p, arm);
-                expect_turn(sb, &p, &out, &silent_or(treated, &want), &format!("claude {ev}"));
-                if !out.is_empty() {
-                    assert_eq!(serde_json::from_str::<Value>(&out).unwrap()["hookSpecificOutput"]["hookEventName"], ev);
-                }
+    // One step boundary: what the binary answers, checked against the expectations. Returns the
+    // prediction the treated arm made, with the route it names.
+    let step = |index: u32, ending: bool| -> Option<(&scenario::Predict, String)> {
+        let out = send("TurnStep", &claude::turn_step_hook(sid, &cwd, &turn_id, index, ending));
+        let want = predictions.iter().copied().find(|p| p.index == index && p.ending == ending);
+        let what = format!("claude TurnStep {index}{}", if ending { " ending" } else { "" });
+        match want.filter(|_| treated) {
+            None => {
+                assert_eq!(out, "", "{what}: nothing in the model's place");
+                None
+            }
+            Some(p) => {
+                let v: Value = serde_json::from_str(&out).unwrap_or_else(|e| panic!("{what}: {e}: {out:?}"));
+                let pr = &v["predict"];
+                assert_eq!(pr["kind"], p.kind, "{what}: {out}");
+                assert!(pr["route"].as_str().unwrap().starts_with(p.route), "{what}: {out}");
+                assert_eq!(pr["track"].as_str().map(|t| t.is_empty()), Some(false), "{what}: {out}");
+                assert_eq!(pr["calls"], predicted_calls(&p.acts, &cwd), "{what}");
+                Some((p, pr["route"].as_str().unwrap().to_string()))
             }
         }
     };
-    turns(&r.work, &mut rng);
-    let stop = h("Stop", json!({ "stop_hook_active": false }));
-    if treated {
-        let v: Value = serde_json::from_str(&stop).unwrap();
-        assert_eq!(v["decision"], "block");
-        assert!(
-            v["reason"].as_str().unwrap().starts_with("Adage finish-line check:")
-                && v["reason"].as_str().unwrap().contains("make gen")
-        );
-    } else {
-        assert_eq!(stop, "", "control: no stop request");
+    // The mod asks before a Bash call runs, whoever made it: the plan, then the decision.
+    let substitutes = scenario::substitutions(&r);
+    let mut pretools = r.pretool.iter();
+    let pretool = |pretools: &mut std::slice::Iter<scenario::Pretool>, act: &scenario::Act, id: &str| {
+        let scenario::Act::Shell { cmd, .. } = act else { return };
+        let want = pretools.next().unwrap_or_else(|| panic!("no pretool expectation for {cmd}"));
+        assert_eq!(&want.command, cmd, "pretool expectations follow the calls");
+        let plan = send("PreToolUse", &claude::pretool_hook(sid, &cwd, cmd, id, true));
+        let decision = send("PreToolUse", &claude::pretool_hook(sid, &cwd, cmd, id, false));
+        match substitutes.iter().find(|s| &s.command == cmd) {
+            // C6, T-C6-03/04: the dead end's plan names the learned command, and the mod's verdict
+            // (the same permission decision for both) makes it in the treated arm only.
+            Some(s) => check_substitute(sb, sid, arm, s, &plan, |route| {
+                send(
+                    "PreToolUse",
+                    &claude::verdict_hook(sid, &cwd, cmd, id, json!({ "engine": "same", "substitute": route })),
+                )
+            }),
+            None => assert_eq!(plan, decision, "PreToolUse {cmd}: the dry run answers what the call will"),
+        }
+        assert_eq!(decision, want.answer.unwrap_or(""), "PreToolUse {cmd}");
+    };
+    // The agent's own turn: its Bash calls checked before they run, then its batch.
+    let agent_turn = |t: &Turn, rng: &mut Rng, pretools: &mut std::slice::Iter<scenario::Pretool>| {
+        // The ids the batch below carries.
+        let mut ids = rng.clone();
+        for c in &t.calls {
+            pretool(pretools, &c.act, &claude::tool_use_id(&mut ids));
+        }
+        // The treated arm ran the learned command in the dead end's place: no failure.
+        let ran = substituted(t, &substitutes, treated);
+        for (ev, p, want) in claude::turn_hooks(&ran, sid, &cwd, rng) {
+            let out = send(ev, &p);
+            expect_turn(sb, &p, &out, &silent_or(treated, &want), &format!("claude {ev}"));
+            if !out.is_empty() {
+                assert_eq!(serde_json::from_str::<Value>(&out).unwrap()["hookSpecificOutput"]["hookEventName"], ev);
+            }
+        }
+    };
+    // Adage's step: the mod yields the calls in the model's place, the harness runs them (each
+    // Bash call through the same checks) and reports them with the mod's ids, drawing what the
+    // agent's own turn would have drawn. Returns whether it was the finish line.
+    let adage_step =
+        |p: &scenario::Predict, route: &str, index: u32, pretools: &mut std::slice::Iter<scenario::Pretool>| {
+            let ids: Vec<(String, scenario::Act)> = p
+                .acts
+                .iter()
+                .enumerate()
+                .map(|(k, a)| (claude::predicted_tool_use_id(route, &turn_id, index, k), a.clone()))
+                .collect();
+            for (id, act) in &ids {
+                pretool(pretools, act, id);
+            }
+            let batch = claude::predicted_batch(sid, &cwd, &ids);
+            let replaced = r.work.iter().find(|t| t.calls.iter().map(|c| &c.act).eq(p.acts.iter()));
+            let want: Vec<&str> =
+                replaced.map(|t| t.calls.iter().flat_map(|c| c.expect.clone()).collect()).unwrap_or_default();
+            expect_turn(sb, &batch, &send("PostToolBatch", &batch), &want, "claude predicted batch");
+        };
+    let mut index = 0u32;
+    assert!(step(index, false).is_none(), "never at the prompt's own request");
+    let mut work: std::collections::VecDeque<Turn> = r.work.iter().cloned().collect();
+    while let Some(t) = work.pop_front() {
+        agent_turn(&t, &mut rng, &mut pretools);
+        index += 1;
+        // Steps Adage makes before the model's next request: each replaces the agent's next turn.
+        while let Some((p, route)) = step(index, false) {
+            let next = work.pop_front().expect("a predicted step stands for an agent's turn");
+            assert!(next.calls.iter().map(|c| &c.act).eq(p.acts.iter()), "Adage makes the step the agent made");
+            adage_step(p, &route, index, &mut pretools);
+            index += 1;
+        }
     }
-    turns(&r.finish, &mut rng);
-    assert_eq!(h("Stop", json!({ "stop_hook_active": treated })), "", "obligation met: nothing more");
+    // The model's response to request `index` ends the turn.
+    let finish: Vec<Turn> = match step(index, true) {
+        Some((p, route)) => {
+            // The mod yields the call in the model's place: Adage's call meets the obligation, so
+            // the Stop gate has nothing to ask, and the agent does not run it again.
+            adage_step(p, &route, index, &mut pretools);
+            index += 1;
+            assert!(step(index, false).is_none(), "claude: not twice in a row");
+            r.finish
+                .iter()
+                .map(|t| Turn {
+                    say: t.say.clone(),
+                    calls: t.calls.iter().filter(|c| !p.acts.contains(&c.act)).cloned().collect(),
+                })
+                .filter(|t| !t.calls.is_empty())
+                .collect()
+        }
+        None => {
+            let stop = h("Stop", json!({ "stop_hook_active": false }));
+            if treated {
+                let v: Value = serde_json::from_str(&stop).unwrap();
+                assert_eq!(v["decision"], "block");
+                assert!(
+                    v["reason"].as_str().unwrap().starts_with("Adage finish-line check:")
+                        && v["reason"].as_str().unwrap().contains("make gen")
+                );
+            } else {
+                assert_eq!(stop, "", "control: no stop request");
+            }
+            // The request the Stop request made.
+            index += 1;
+            assert!(step(index, false).is_none());
+            r.finish.clone()
+        }
+    };
+    for t in &finish {
+        agent_turn(t, &mut rng, &mut pretools);
+        index += 1;
+        assert!(step(index, false).is_none(), "nothing left to predict");
+    }
+    assert_eq!(pretools.next(), None, "every Bash call was checked before it ran");
+    assert!(step(index, true).is_none(), "obligation met: nothing at the turn's end");
+    let finish_predicted = treated && predictions.iter().any(|p| p.ending);
+    assert_eq!(
+        h("Stop", json!({ "stop_hook_active": treated && !finish_predicted })),
+        "",
+        "obligation met: nothing more"
+    );
     assert_eq!(h("SessionEnd", json!({ "reason": "other" })), "");
+    check_turn_steps(sb, sid, arm, &predictions, &turn_id);
+    check_noticed(sb, sid, arm, &r);
+}
+
+/// The dead end's two phases (C6): the dry run plans the learned command with its one line of
+/// context, in either arm and recording nothing; the verdict substitutes in the treated arm,
+/// judged `substituted`, and in the control arm prints nothing and spools `would_substitute`, as
+/// `demo/adage_metrics.py` reads them.
+fn check_substitute(
+    sb: &Sandbox,
+    sid: &str,
+    arm: &str,
+    s: &scenario::Substitute,
+    plan: &str,
+    verdict: impl Fn(&str) -> String,
+) {
+    let what = format!("PreToolUse {} (dead end)", s.command);
+    let v: Value = serde_json::from_str(plan).unwrap_or_else(|e| panic!("{what}: {e}: {plan:?}"));
+    let sub = &v["plan"]["substitute"];
+    let scenario::Act::Shell { cmd, .. } = &s.instead else { panic!("a Bash substitute") };
+    assert_eq!(sub["command"].as_str(), Some(cmd.as_str()), "{what}: {plan}");
+    let route = sub["route"].as_str().unwrap_or_default().to_string();
+    assert!(route.starts_with(s.route), "{what}: {plan}");
+    assert!(sub["context"].as_str().is_some_and(|c| c.starts_with(&s.context) && !c.contains('\n')), "{what}: {plan}");
+    let spool = adage_store::Paths::at(sb.root.join("adage")).spool(sid);
+    let before = adage_store::spool::read_all::<Value>(&spool).unwrap_or_default().len();
+    let out = verdict(&route);
+    let records: Vec<Value> = adage_store::spool::read_all(&spool).unwrap_or_default();
+    assert_eq!(records.len(), before + 1, "{what}: one record, at the verdict");
+    let rec = &records[before];
+    assert_eq!(rec["kind"], "pretool", "{what}: {rec}");
+    if arm == "treated" {
+        assert_eq!(serde_json::from_str::<Value>(&out).unwrap()["substitute"], *sub, "{what}");
+        assert_eq!(rec["substituted"], true, "{what}: {rec}");
+        assert_eq!(rec["decision"]["judgements"], json!([{ "kind": "substituted", "route": route }]), "{what}");
+    } else {
+        assert_eq!(out, "", "{what}: control: never substituted");
+        assert_eq!((rec["would_substitute"].clone(), rec["withheld"].clone()), (json!(true), json!(true)), "{what}");
+        assert_eq!(rec["decision"]["judgements"], json!([]), "{what}");
+    }
+}
+
+/// `t` as it ran: in the treated arm, each call the mod substituted is the learned command.
+fn substituted(t: &Turn, subs: &[scenario::Substitute], treated: bool) -> Turn {
+    let mut t = t.clone();
+    for c in t.calls.iter_mut().filter(|_| treated) {
+        if let Some(s) = subs.iter().find(|s| matches!(&c.act, scenario::Act::Shell { cmd, .. } if cmd == &s.command)) {
+            c.act = s.instead.clone();
+        }
+    }
+    t
+}
+
+/// The session's `turn_step` spool records, as `demo/adage_metrics.py` reads them (`kind:
+/// "turn_step"`, `decision.predicted`): one per step Adage made or would have made, none for an
+/// empty step, in both arms at the same steps.
+fn check_turn_steps(sb: &Sandbox, sid: &str, arm: &str, predictions: &[&scenario::Predict], turn_id: &str) {
+    let spool = adage_store::Paths::at(sb.root.join("adage")).spool(sid);
+    let records: Vec<Value> = adage_store::spool::read_all(&spool).unwrap_or_default();
+    let steps: Vec<&Value> = records.iter().filter(|r| r["kind"] == "turn_step").collect();
+    assert_eq!(steps.len(), predictions.len(), "{arm}: one turn_step record per prediction: {steps:#?}");
+    for (rec, p) in steps.iter().zip(predictions) {
+        let d = &rec["decision"];
+        assert_eq!(rec["event"], "TurnStep");
+        assert_eq!(d["would_predict"]["kind"], p.kind, "{arm}: {rec}");
+        assert_eq!(d["predicted_at"], json!([turn_id, p.index]), "{arm}: {rec}");
+        if arm == "treated" {
+            assert_eq!(d["predicted"], d["would_predict"], "{arm}: {rec}");
+        } else {
+            assert!(d.get("predicted").is_none(), "control: never predicted: {rec}");
+        }
+    }
+    // Each call the mod made is Adage's step, judged `predicted` once per response (never a
+    // follow); the finish line is met once, whoever ran `make gen`.
+    let judged = |kind: &str, route: &str| {
+        records
+            .iter()
+            .filter(|r| r["kind"] != "turn_step")
+            .flat_map(|r| r["decision"]["judgements"].as_array().cloned().unwrap_or_default())
+            .filter(|j| j["kind"] == kind && j["route"].as_str().is_some_and(|x| x.starts_with(route)))
+            .count()
+    };
+    for p in predictions {
+        let want = usize::from(arm == "treated");
+        assert_eq!(judged("predicted", p.route), want, "{arm}: Adage's {} judged predicted", p.route);
+    }
+    assert_eq!(judged("obligation_met", "finish-line-"), 1, "{arm}: make gen ran once, whoever ran it");
+}
+
+/// T-D2-05: the session notices the `make lint` candidate once, in both arms alike, at the batch
+/// of the first `make test` after the code edit (a turn earlier in the treated arm, whose dead end
+/// ran `make test` in its place); nothing about it reaches the agent.
+fn check_noticed(sb: &Sandbox, sid: &str, arm: &str, r: &scenario::Replay) {
+    let records: Vec<Value> =
+        adage_store::spool::read_all(&adage_store::Paths::at(sb.root.join("adage")).spool(sid)).unwrap_or_default();
+    let noticing: Vec<&Value> = records.iter().filter(|x| x["decision"]["noticed"].is_array()).collect();
+    assert_eq!(noticing.len(), r.noticed.len(), "{arm}: {noticing:#?}");
+    let candidates = sim_candidates(sb);
+    for (rec, want) in noticing.iter().zip(&r.noticed) {
+        let n = &rec["decision"]["noticed"];
+        assert_eq!(n.as_array().unwrap().len(), 1, "{arm}: {rec}");
+        let c = candidates.iter().find(|c| c["id"] == n[0]["candidate"]).unwrap_or_else(|| panic!("{arm}: {rec}"));
+        assert_eq!(c["step"]["command"], want.step, "{arm}: {c}");
+        assert_eq!(
+            (n[0]["support"].as_u64(), n[0]["s_min"].as_u64(), n[0]["review"].as_bool()),
+            (Some(2), Some(3), Some(false))
+        );
+        assert_eq!(rec["kind"], "batch", "{arm}: noticed at a tool batch");
+        let at = format!("exec {}", want.at);
+        assert!(rec["decision"]["observed"].as_array().unwrap().iter().any(|k| *k == at), "{arm}: {rec}");
+        // The first such batch.
+        let first = records
+            .iter()
+            .position(|x| x["decision"]["observed"].as_array().is_some_and(|o| o.iter().any(|k| *k == at)));
+        assert_eq!(first, records.iter().position(|x| std::ptr::eq(x, *rec)), "{arm}: at the first {}", want.at);
+        assert!(rec["decision"]["would_have"].as_array().unwrap().iter().all(|w| w["route"] != n[0]["candidate"]));
+    }
+}
+
+/// The candidates learning counted for the sandbox's repository (`candidates.json`).
+fn sim_candidates(sb: &Sandbox) -> Vec<Value> {
+    let index: Value = serde_json::from_slice(&std::fs::read(sb.root.join("adage/index.json")).unwrap()).unwrap();
+    index["candidates"]["acme-billing"].as_array().cloned().unwrap_or_default()
 }
 
 /// OpenCode: the payloads `plugin/opencode/adage.js` builds, one `tool.execute.after` per call;
@@ -329,6 +645,10 @@ fn replay_for(sb: &Sandbox) -> scenario::Replay {
     let n = dead_ends(&sb.graph()).len();
     assert!(n >= 1, "no dead end learned");
     r.prompt_expect = std::iter::once("lookup-work-item").chain(std::iter::repeat_n("dead-end-", n)).collect();
+    // A habit is noticed only while it is a candidate: learned from several histories at once,
+    // `make lint` after `make test` has the support of a reflex.
+    let candidates = sim_candidates(sb);
+    r.noticed.retain(|n| candidates.iter().any(|c| c["step"]["command"] == n.step));
     r
 }
 
@@ -344,6 +664,13 @@ fn route<'a>(g: &'a Value, prefix: &str) -> &'a Value {
 /// One treated and one control replay of the same session: every route applied once per arm,
 /// delivered only in the treated arm.
 fn check_graph(sb: &Sandbox, harness: &str) {
+    check_graph_predicting(sb, harness, &[]);
+}
+
+/// [`check_graph`] where routes held `predict` grants (`predicted`, by id prefix): the treated
+/// arm's step of each was Adage's (judged `predicted`, never followed), the control arm's would
+/// have been, and with the finish line among them no stop request was made.
+fn check_graph_predicting(sb: &Sandbox, harness: &str, predicted: &[&str]) {
     let g = sb.graph();
     assert_eq!(
         g["sessions"],
@@ -363,10 +690,12 @@ fn check_graph(sb: &Sandbox, harness: &str) {
         assert_eq!(r["live"]["emitted"], 1, "{harness} {id}: delivered once, in the treated arm only");
         assert_eq!(r["live"]["ignored"], 0, "{harness} {id}");
     }
+    let made = |prefix: &str| predicted.contains(&prefix);
     let lookup = route(&g, "lookup-work-item");
-    assert_eq!(lookup["arms"]["treated"]["followed"], 1, "{harness}");
+    let followed = u8::from(!made("lookup-work-item"));
+    assert_eq!(lookup["arms"]["treated"]["followed"], followed, "{harness}: Adage's lookup is not a follow");
     assert_eq!(lookup["arms"]["control"]["followed"], 1, "{harness}: the control session looked it up unaided");
-    assert_eq!(lookup["live"]["followed"], 1);
+    assert_eq!(lookup["live"]["followed"], followed);
     assert_eq!(lookup["live"]["control"]["unaided"], 1);
     let fin = route(&g, "finish-line-");
     assert_eq!(
@@ -375,13 +704,46 @@ fn check_graph(sb: &Sandbox, harness: &str) {
         "{harness}: make gen ran in both"
     );
     let dead = dead_end(&g, "python3 -m unittest");
+    // Claude Code's replay has the mod's two-phase PreToolUse: the treated arm's dead end was
+    // replaced before it ran (C6, T-C6-04), avoided and never a follow; the control arm ran it
+    // and would have replaced it.
+    let replaced = harness.starts_with("claude");
     assert_eq!(
         (dead["arms"]["treated"]["hit_avoided"].clone(), dead["arms"]["control"]["hit_avoided"].clone()),
-        (json!(1), json!(1)),
-        "{harness}: both replays ran unittest"
+        (json!(u8::from(!replaced)), json!(1)),
+        "{harness}: unittest ran in the control replay, and in the treated one unless replaced"
     );
-    let stops = g["events"].as_array().unwrap().iter().filter(|e| e["continue"] == true).count();
-    assert_eq!(stops, 1, "{harness}: one stop request, in the treated arm");
+    let n = |arm: &str| dead["arms"][arm]["substituted"].as_u64().unwrap_or(0);
+    assert_eq!((n("treated"), n("control")), (u64::from(replaced), u64::from(replaced)), "{harness}: substituted");
+    assert_eq!(dead["arms"]["treated"]["followed"], 0, "{harness}: a substitution is not a follow");
+    let events = g["events"].as_array().unwrap();
+    let stops = events.iter().filter(|e| e["continue"] == true).count();
+    let count = |key: &str, arm: &str| events.iter().filter(|e| e[key].is_string() && e["arm"] == arm).count();
+    let n = predicted.len();
+    assert_eq!(
+        stops,
+        1 - usize::from(made("finish-line-")),
+        "{harness}: one stop request in the treated arm, unless Adage made the step"
+    );
+    assert_eq!(
+        (count("predicted", "treated"), count("predicted", "control")),
+        (n, 0),
+        "{harness}: steps made in the model's place"
+    );
+    assert_eq!(
+        (count("would_predict", "treated"), count("would_predict", "control")),
+        (n, n),
+        "{harness}: steps Adage would make, in both arms"
+    );
+    let judged_predicted =
+        events.iter().filter(|e| e["judged"].as_array().is_some_and(|j| j.iter().any(|x| x[0] == "predicted"))).count();
+    assert_eq!(judged_predicted, n, "{harness}: Adage's calls judged predicted, never followed");
+    // T-D2-05: the `make lint` candidate is noticed once in each arm. Codex's own history learns
+    // it after the failed test run (its candidate starts with that failure), and Codex's hooks
+    // report no failure (no exit code), so a Codex replay never completes it.
+    let noticed = |arm: &str| events.iter().filter(|e| e["noticed"].is_array() && e["arm"] == arm).count();
+    let want = usize::from(harness != "codex");
+    assert_eq!((noticed("treated"), noticed("control")), (want, want), "{harness}: noticed once per session");
 }
 
 /// All four route kinds, with `dead` dead ends: one per failure signature with enough support.
@@ -429,6 +791,137 @@ fn claude_code_learn_then_replay() {
     replay_claude(&sb, &a, "treated");
     replay_claude(&sb, &b, "control");
     check_graph(&sb, "claude");
+    // T-D2-05: `adage watch --once` shows the noticed candidate's row.
+    let repo = sb.repo();
+    let mut c = sb.command_of(
+        Path::new(env!("CARGO_BIN_EXE_adage")),
+        &["watch", "--once", "--size", "160x60", "--repo", &repo],
+        "treated",
+    );
+    let o = c.env("NO_COLOR", "1").stdin(Stdio::null()).output().unwrap();
+    let frame = String::from_utf8_lossy(&o.stdout);
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    assert!(frame.contains("noticed") && frame.contains("seen in 2 earlier sessions"), "{frame}");
+}
+
+/// `adage-exec`, built beside `adage` by a workspace build (`cargo build -p adage-exec`): a test
+/// of one package does not build another's binaries.
+fn adage_exec() -> Option<PathBuf> {
+    let p = Path::new(env!("CARGO_BIN_EXE_adage")).with_file_name("adage-exec");
+    p.is_file().then_some(p)
+}
+
+/// The person's `predict` grant on the learned route whose id begins `prefix`, as `adage review
+/// delegate --predict` writes it (the key's digests are the route's own, so the file is not
+/// written by hand), under the policy opt-in a call made from a hook needs.
+fn grant_predict(sb: &Sandbox, prefix: &str) {
+    std::fs::write(sb.root.join("adage/policy.toml"), "[exec]\nmax_level = \"E2\"\n").unwrap();
+    let index: Value = serde_json::from_slice(&std::fs::read(sb.root.join("adage/index.json")).unwrap()).unwrap();
+    let ir = index["routes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["route"]["id"].as_str().is_some_and(|id| id.starts_with(prefix)))
+        .unwrap_or_else(|| panic!("no learned {prefix}"));
+    let track = ir["track"].as_str().unwrap().split('@').next().unwrap();
+    let id = ir["route"]["id"].as_str().unwrap();
+    let repo = sb.repo();
+    let mut c = sb.command_of(
+        Path::new(env!("CARGO_BIN_EXE_adage")),
+        &["review", "delegate", track, id, "--predict", "--repo", &repo],
+        "treated",
+    );
+    let o = c.env("ADAGE_ALLOW_NONINTERACTIVE", "1").stdin(Stdio::null()).output().unwrap();
+    assert!(o.status.success(), "{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
+    let store: Value = serde_json::from_slice(&std::fs::read(sb.root.join("adage/approvals.json")).unwrap()).unwrap();
+    let mine =
+        store["approvals"].as_array().unwrap().iter().find(|x| x["route"].as_str().is_some_and(|r| r.ends_with(id)));
+    assert_eq!(mine.map(|x| x["key"]["mode"].clone()), Some(json!("predict")), "{store}");
+}
+
+/// T-C4-04, T-C7-04, T-C8-04 (the sim's half): the mod's `turn.step` through `adage-exec hook`.
+/// With a `predict` grant on the finish line, the treated arm's `make gen` is Adage's step at the
+/// work turn's end (no Stop request); with grants on the lookup and the reads it names too, Adage
+/// looks the item up after the look around and reads its linked files at the very next step, one
+/// response of two calls (two model requests not made), then a model step. The control arm prints
+/// nothing and spools `would_predict` at the same steps; without a grant, both arms are exactly
+/// the `adage` replay with every step silent. Under `adage hook` the same steps are silent too
+/// ([`claude_code_learn_then_replay`]).
+#[test]
+fn claude_code_predicts_under_adage_exec() {
+    let Some(exec) = adage_exec() else {
+        eprintln!("adage-exec is not built beside adage: skipping (cargo build -p adage-exec)");
+        return;
+    };
+    let projects = adage_sim::fixtures_dir().join("claude/projects");
+    let (a, b) = ids("claude");
+    let sets: [&[&str]; 3] = [&[], &["finish-line-"], &["lookup-work-item", "read-linked-files", "finish-line-"]];
+    for granted in sets {
+        let sb = Sandbox::new();
+        assert_all_four(&sb.learn(&["--claude-projects", projects.to_str().unwrap()]), "claude", 2);
+        for prefix in granted {
+            grant_predict(&sb, prefix);
+        }
+        let hook = Hook::Exec { bin: &exec, granted };
+        replay_claude_with(&sb, &a, "treated", hook);
+        replay_claude_with(&sb, &b, "control", hook);
+        check_graph_predicting(&sb, &format!("claude under adage-exec, granted {granted:?}"), granted);
+    }
+}
+
+/// The mod's attachment payloads through the binary (C5, C9, T-C9-04's binary half), both arms:
+/// `Standing` after the start answers the standing dead ends for the cached section (so the first
+/// prompt says only the lookup), a subagent spawned for the work item is told the lookup its own
+/// prompt binds and the dead ends before it starts, and its tool batch (with its `agent_id`) is
+/// decided like any other; `SkillPrompt` for a skill no person accepted answers nothing. The
+/// control arm is told nothing anywhere. That a told subagent then makes no lookup of its own is
+/// the live half.
+#[test]
+fn claude_code_standing_and_a_subagent_told_at_spawn() {
+    let sb = Sandbox::new();
+    let projects = adage_sim::fixtures_dir().join("claude/projects");
+    assert_all_four(&sb.learn(&["--claude-projects", projects.to_str().unwrap()]), "claude", 2);
+    let r = replay_for(&sb);
+    let cwd = sb.repo();
+    let (a, b) = ids("claude");
+    for (sid, arm) in [(a, "treated"), (b, "control")] {
+        let treated = arm == "treated";
+        let send = |ev: &str, p: &Value| sb.hook("claude", ev, p, arm);
+        let h = |ev: &str, extra: Value| send(ev, &claude::hook(&sid, &cwd, ev, extra));
+        assert_eq!(h("SessionStart", json!({ "source": "startup" })), "");
+        let standing: Value =
+            serde_json::from_str(&send("Standing", &claude::standing_hook(&sid, &cwd, None))).unwrap();
+        let text = standing["standing"].as_str().unwrap();
+        assert_eq!(
+            routes_in(text).iter().filter(|r| r.starts_with("dead-end-")).count(),
+            if treated { 2 } else { 0 },
+            "{arm}: {text}"
+        );
+        assert_eq!(standing["environment"], "", "{arm}: no environment is bound here");
+        assert!(standing["compact"].as_str().is_some_and(|c| !c.is_empty()), "{arm}: compaction is told in both arms");
+        assert!(standing.get("subagent").is_none());
+        // The dead ends sit in the cached section: the first prompt says only the lookup.
+        let out = h("UserPromptSubmit", json!({ "prompt": r.prompt }));
+        expect_routes(&out, &silent_or(treated, &["lookup-work-item"]), &format!("{arm}: prompt after Standing"));
+        let agent = json!({ "type": "Explore", "description": "Look up the work item",
+                            "prompt": format!("Find what {} asks for and list the files it names.", r.item.id) });
+        let spawn: Value =
+            serde_json::from_str(&send("Standing", &claude::standing_hook(&sid, &cwd, Some(agent)))).unwrap();
+        let told = spawn["subagent"].as_str().unwrap();
+        if treated {
+            assert!(told.contains(&format!("python3 scripts/wi-lookup {}", r.item.id)), "{told}");
+            assert_eq!(routes_in(told).iter().filter(|r| r.starts_with("dead-end-")).count(), 2, "{told}");
+        } else {
+            assert_eq!(told, "", "control: the subagent is told nothing");
+        }
+        assert_eq!(spawn["standing"], standing["standing"], "{arm}: the session's own answer is unchanged");
+        // The subagent reads what the item links: decided as any batch, and it says nothing.
+        let reads: Vec<(String, scenario::Act)> =
+            r.item.linked.iter().enumerate().map(|(k, p)| (format!("toolu_sub{k}"), scenario::Act::read(p))).collect();
+        assert_eq!(send("PostToolBatch", &claude::subagent_batch(&sid, &cwd, "explore-1", &reads)), "");
+        let skill = claude::skill_prompt_hook(&sid, &cwd, "release-checklist", "1. Bump the version.");
+        assert_eq!(send("SkillPrompt", &skill), "", "{arm}: no accepted pack here");
+    }
 }
 
 #[test]

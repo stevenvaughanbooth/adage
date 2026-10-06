@@ -40,7 +40,7 @@ fn dump_learned(args: &[String], paths: &Paths) -> Result<()> {
     if let Some(i) = args.iter().position(|a| a == "--transcripts") {
         files.extend(args[i + 1..].iter().take_while(|a| !a.starts_with("--")).map(PathBuf::from));
     } else {
-        let dir = crate::flag(args, "--claude-projects")
+        let dir = crate::helpers::flag(args, "--claude-projects")
             .map(PathBuf::from)
             .or_else(|| adage_store::home_dir().map(|h| h.join(".claude").join("projects")));
         if let Some(d) = dir {
@@ -198,7 +198,7 @@ pub fn graph(args: &[String], paths: &Paths) -> Result<()> {
             ),
         }
     }
-    let max_events: usize = crate::flag(args, "--events").and_then(|n| n.parse().ok()).unwrap_or(80).min(1000);
+    let max_events: usize = crate::helpers::flag(args, "--events").and_then(|n| n.parse().ok()).unwrap_or(80).min(1000);
     let out = build(paths, max_events)?;
     if args.iter().any(|a| a == "--json") {
         println!("{out}");

@@ -36,7 +36,9 @@ bytes, and decode it into the canonical `adage_trace::Session`. Day 0 (`adage in
 - `batch`: `Options { repo_override, only_repo, cache, locator }`, `Batch { sessions, read,
   steered, cache_hits, cache_misses }`, `read(traces, &opts)`.
 - `cache`: the per-transcript parse cache (`Cache::open/read/save`, `Read::{Session, Nothing,
-  Elsewhere}`, `SESSION_FORMAT`). `scope`: picking one repository's local traces before anything
+  Elsewhere}`, `SESSION_FORMAT`). `corpus`: streaming, versioned canonical JSONL (`Record`,
+  `Limits`, `read`, `write`, `ReadReport`): a record is bounded before it is parsed, and a bad one
+  is counted with its line and reason, never read as evidence. `scope`: picking one repository's local traces before anything
   is parsed (`checkouts`, `claude_slug`, `recorded_cwd`, `claude_transcripts`, `inside`).
 
 ## How it connects

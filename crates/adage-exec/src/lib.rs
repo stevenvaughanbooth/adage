@@ -11,7 +11,7 @@
 //! 4. an approval matches on every field of the key, or the request is in the inert-observe class
 //!    and policy turns automatic approval on ([`approvals`]);
 //! 5. a sandbox is available and enforced ([`sandbox`]); otherwise nothing runs (fail closed);
-//! 6. the run is bounded ([`limits`]) with an environment built from nothing ([`env`]) and git
+//! 6. the run is bounded ([`limits`]) with an environment built from nothing ([`env`](mod@env)) and git
 //!    hardening ([`git`]);
 //! 7. the output is projected to its declared typed fields, or, in raw mode, stripped and scanned
 //!    ([`project`], [`scan`]); any failure withholds the whole block;

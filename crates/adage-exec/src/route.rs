@@ -27,7 +27,8 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use crate::request::{
-    ActionKind, ActionSpec, ExecRequest, FieldSpec, FieldType, Labels, Level, Origin, OutputMode, OutputSpec, ScriptRef,
+    ActionKind, ActionSpec, ExecRequest, FieldSpec, FieldType, GrantMode, Labels, Level, Origin, OutputMode,
+    OutputSpec, ScriptRef,
 };
 use crate::sandbox::Profile;
 
@@ -329,54 +330,7 @@ pub fn plan(
             }
         }
     }
-    let from_pack = ir.exec.as_ref().map(|_| pack_terms(tracks, ir));
-    let (scripts, origin, digest, pack) = match (&ir.exec, from_pack) {
-        (Some(b), Some(Some(t))) => {
-            if b.max_level < adage_tracks::index::Level::E1 {
-                return Err("the pack binds this route at E0 only".into());
-            }
-            let mut scripts: Vec<ScriptRef> = Vec::new();
-            for (p, h) in &b.scripts {
-                if let Some(hex) = p.strip_prefix("cas/") {
-                    // L-vendor: argv names `scripts/sha256-<hex>`; the bytes run from the CAS.
-                    let token = adage_pack::vendor::script_path(hex);
-                    if argv.iter().skip(1).any(|a| a == &token) {
-                        scripts.push(ScriptRef { path: format!("cas:{hex}"), sha256: h.clone() });
-                    }
-                } else if argv.iter().any(|a| a.trim_start_matches("./") == p.trim_start_matches("./")) {
-                    scripts.push(ScriptRef { path: p.clone(), sha256: h.clone() });
-                }
-            }
-            let origin = Origin::Pack { signer: None, trusted: false, forming_passed: false };
-            (scripts, origin, Some(b.route_exec_digest.clone()), Some(t))
-        }
-        (Some(_), _) => return Err("the route's pack cannot be read".into()),
-        (None, _) => {
-            let mut scripts = Vec::new();
-            let python_pytest = project_python.is_some()
-                && argv.get(1).is_some_and(|a| a == "-m")
-                && argv.get(2).is_some_and(|a| a == "pytest");
-            for (position, a) in argv.iter().enumerate() {
-                // pytest selection paths are mutable staged source inputs, not standalone
-                // scripts. Hashing/shadowing them would lapse a grant on every test edit and
-                // change pytest's configuration/conftest discovery root.
-                if python_pytest || project_python.as_ref().is_some_and(|p| &p.program == a) {
-                    continue;
-                }
-                let python_entrypoint = project_python.is_some()
-                    && position == 1
-                    && a.ends_with(".py")
-                    && adage_core::repo::is_safe_relative(a)
-                    && std::fs::symlink_metadata(root.join(a)).is_ok_and(|m| m.is_file());
-                if let Some(p) = python_entrypoint.then(|| a.clone()).or_else(|| is_script_path(a, root)) {
-                    let h =
-                        hash_file(&root.join(p.trim_start_matches("./"))).ok_or(format!("script {p} is unreadable"))?;
-                    scripts.push(ScriptRef { path: p, sha256: h });
-                }
-            }
-            (scripts, Origin::Local, None, None)
-        }
-    };
+    let (scripts, origin, digest, pack) = sources(ir, &argv, root, tracks, project_python.as_ref())?;
     // The effect a person approved a scripted step at is theirs to give, for a pack route too.
     let approved_effect = terms.and_then(|t| t.effect);
     let terms = pack.as_ref().or(terms);
@@ -437,20 +391,199 @@ pub fn plan(
             output: OutputSpec { mode, fields },
             scripts,
             profile,
-            labels: Labels {
-                track: format!("{}@{}", ir.track, ir.version),
-                route: ir.route.id.clone(),
-                step: STEP.into(),
-            },
+            labels: labels(ir),
             origin,
             route_exec_digest: digest,
             action,
+            mode: GrantMode::Execute,
         },
         exit_when,
         repo_paths,
     };
     crate::project_python::validate_command(&plan.request)?;
     Ok(plan)
+}
+
+fn labels(ir: &IndexedRoute) -> Labels {
+    Labels { track: format!("{}@{}", ir.track, ir.version), route: ir.route.id.clone(), step: STEP.into() }
+}
+
+/// What a route's command runs besides its program, and where the route came from: the scripts
+/// (a pack's pinned ones, or the repository files argv names, hashed now), the origin, a pack's
+/// exec digest, and a pack's declared terms. `project_python`: argv runs the project's own
+/// interpreter, whose pytest selection paths are sources, not scripts.
+#[allow(clippy::type_complexity)]
+fn sources(
+    ir: &IndexedRoute,
+    argv: &[String],
+    root: &Path,
+    tracks: &Path,
+    project_python: Option<&crate::project_python::ProjectPython>,
+) -> Result<(Vec<ScriptRef>, Origin, Option<String>, Option<Terms>), String> {
+    let from_pack = ir.exec.as_ref().map(|_| pack_terms(tracks, ir));
+    Ok(match (&ir.exec, from_pack) {
+        (Some(b), Some(Some(t))) => {
+            if b.max_level < adage_tracks::index::Level::E1 {
+                return Err("the pack binds this route at E0 only".into());
+            }
+            let mut scripts: Vec<ScriptRef> = Vec::new();
+            for (p, h) in &b.scripts {
+                if let Some(hex) = p.strip_prefix("cas/") {
+                    // L-vendor: argv names `scripts/sha256-<hex>`; the bytes run from the CAS.
+                    let token = adage_pack::vendor::script_path(hex);
+                    if argv.iter().skip(1).any(|a| a == &token) {
+                        scripts.push(ScriptRef { path: format!("cas:{hex}"), sha256: h.clone() });
+                    }
+                } else if argv.iter().any(|a| a.trim_start_matches("./") == p.trim_start_matches("./")) {
+                    scripts.push(ScriptRef { path: p.clone(), sha256: h.clone() });
+                }
+            }
+            let origin = Origin::Pack { signer: None, trusted: false, forming_passed: false };
+            (scripts, origin, Some(b.route_exec_digest.clone()), Some(t))
+        }
+        (Some(_), _) => return Err("the route's pack cannot be read".into()),
+        (None, _) => {
+            let mut scripts = Vec::new();
+            let python_pytest = project_python.is_some()
+                && argv.get(1).is_some_and(|a| a == "-m")
+                && argv.get(2).is_some_and(|a| a == "pytest");
+            for (position, a) in argv.iter().enumerate() {
+                // pytest selection paths are mutable staged source inputs, not standalone
+                // scripts. Hashing/shadowing them would lapse a grant on every test edit and
+                // change pytest's configuration/conftest discovery root.
+                if python_pytest || project_python.as_ref().is_some_and(|p| &p.program == a) {
+                    continue;
+                }
+                let python_entrypoint = project_python.is_some()
+                    && position == 1
+                    && a.ends_with(".py")
+                    && adage_core::repo::is_safe_relative(a)
+                    && std::fs::symlink_metadata(root.join(a)).is_ok_and(|m| m.is_file());
+                if let Some(p) = python_entrypoint.then(|| a.clone()).or_else(|| is_script_path(a, root)) {
+                    let h =
+                        hash_file(&root.join(p.trim_start_matches("./"))).ok_or(format!("script {p} is unreadable"))?;
+                    scripts.push(ScriptRef { path: p, sha256: h });
+                }
+            }
+            (scripts, Origin::Local, None, None)
+        }
+    })
+}
+
+/// Derive the request a `predict` grant is keyed on (plan §2.2 item 3): the route's command
+/// template, its slot contracts, the scripts it runs (hashed now, as for [`plan`]), its effect,
+/// and its origin; no output fields, no action spec, and no sandbox profile, because nothing of
+/// it runs here. The agent's harness makes the call, under its own permissions, with the command
+/// the runtime bound. So a predict grant lapses when what the call would run changes, and never
+/// on a profile, an output contract or a timeout it does not use. Refused for a route only
+/// adage-exec can carry out (a vendored script, a learned context action): the agent has nothing
+/// it could run, and the CPU path already acts for it.
+///
+/// A read batch (the files a lookup's result names, read in one response: a chain's second step,
+/// plan C7) is keyed as the harness's read tool over its slot, [`READ_TOOL`] `{files}`: no
+/// program runs, the slot's repository-path contract is what the person approves, and its effect
+/// is observe ([`predict_classified`]).
+pub fn plan_predict(ir: &IndexedRoute, root: &Path, tracks: &Path) -> Result<Plan, String> {
+    if let Step::ReadBatch { slot, .. } = &ir.route.step {
+        return plan_predict_reads(ir, slot, root);
+    }
+    let Step::Run { command } = &ir.route.step else {
+        return Err("only a route that runs a command or reads the files a result names can be predicted".into());
+    };
+    if ir.exec_only() {
+        return Err("this reflex runs only in adage-exec's sandbox (a vendored script or a learned action), so it is never predicted".into());
+    }
+    let argv: Vec<String> = command.split_whitespace().map(String::from).collect();
+    let project_python = match argv.first() {
+        Some(program) => crate::project_python::identify(root, program)?,
+        None => return Err("the route's command is empty".into()),
+    };
+    let mut contracts = BTreeMap::new();
+    let mut repo_paths = std::collections::BTreeSet::new();
+    for name in crate::request::slots(&argv) {
+        let s = ir.route.slots.iter().find(|s| s.name == name).ok_or(format!("slot {{{name}}} is not declared"))?;
+        // The runtime binds and checks the value before it predicts; the contract is part of
+        // what the person approved, so a changed contract lapses the grant.
+        let regex = match &s.contract {
+            Contract::Pattern { regex } => regex.clone(),
+            Contract::RepoPath => {
+                repo_paths.insert(name.clone());
+                REPO_PATH_CONTRACT.to_string()
+            }
+        };
+        contracts.insert(name, regex);
+    }
+    let (scripts, origin, digest, _) = sources(ir, &argv, root, tracks, project_python.as_ref())?;
+    Ok(Plan {
+        request: ExecRequest {
+            repo_root: root.to_path_buf(),
+            // The agent's own environment runs it; an approved interpreter snapshot is a sandbox
+            // matter.
+            project_python: None,
+            argv,
+            inputs: BTreeMap::new(),
+            contracts,
+            effect: ir.route.effect,
+            level: Level::E2,
+            output: OutputSpec { mode: OutputMode::Typed, fields: BTreeMap::new() },
+            scripts,
+            profile: Profile::for_level(Level::E2),
+            labels: labels(ir),
+            origin,
+            route_exec_digest: digest,
+            action: None,
+            mode: GrantMode::Predict,
+        },
+        exit_when: BTreeMap::new(),
+        repo_paths,
+    })
+}
+
+/// The program word a read batch's predict request is keyed with: the harness's read tool, never
+/// a command that runs.
+pub const READ_TOOL: &str = "Read";
+
+/// [`plan_predict`] for a read batch: `Read {slot}`, the slot under the repository-path contract.
+fn plan_predict_reads(ir: &IndexedRoute, slot: &str, root: &Path) -> Result<Plan, String> {
+    if ir.exec_only() {
+        return Err("this reflex runs only in adage-exec's sandbox, so it is never predicted".into());
+    }
+    let s = ir.route.slots.iter().find(|s| s.name == slot).ok_or(format!("slot {{{slot}}} is not declared"))?;
+    if s.contract != Contract::RepoPath {
+        return Err("a read batch's files must be repository paths".into());
+    }
+    let argv = vec![READ_TOOL.to_string(), format!("{{{slot}}}")];
+    Ok(Plan {
+        request: ExecRequest {
+            repo_root: root.to_path_buf(),
+            project_python: None,
+            argv,
+            inputs: BTreeMap::new(),
+            contracts: [(slot.to_string(), REPO_PATH_CONTRACT.to_string())].into_iter().collect(),
+            effect: ir.route.effect,
+            level: Level::E2,
+            output: OutputSpec { mode: OutputMode::Typed, fields: BTreeMap::new() },
+            scripts: Vec::new(),
+            profile: Profile::for_level(Level::E2),
+            labels: labels(ir),
+            origin: Origin::Local,
+            route_exec_digest: None,
+            action: None,
+            mode: GrantMode::Predict,
+        },
+        exit_when: BTreeMap::new(),
+        repo_paths: [slot.to_string()].into_iter().collect(),
+    })
+}
+
+/// The effect a predict request's call is classified with, for policy: a read batch
+/// ([`READ_TOOL`]) only reads files in the repository, so it observes; any other is the command's
+/// own classification ([`crate::classify::effect`]).
+pub fn predict_classified(req: &ExecRequest, table: &CommandTable) -> Effect {
+    match req.argv.first() {
+        Some(p) if p == READ_TOOL && req.scripts.is_empty() => Effect::Observe,
+        _ => crate::classify::effect(&req.argv, table),
+    }
 }
 
 /// The values a directive bound, read back from its text: the indented command line, aligned
@@ -566,7 +699,9 @@ impl Planned<'_> {
     }
 }
 
-/// Every grant for `repo_key` whose route is in the index, each planned once against `root`.
+/// Every grant for `repo_key` whose route is in the index, each planned once against `root`: an
+/// execute grant at its level with its own terms, a predict grant on its own path
+/// ([`plan_predict`]).
 pub fn plan_grants<'a>(
     repo_key: &str,
     root: &Path,
@@ -582,7 +717,10 @@ pub fn plan_grants<'a>(
         .filter_map(|a| {
             let (track, id) = a.route.rsplit_once('/')?;
             let route = find(index, repo_key, track, id)?;
-            let plan = plan(route, index, root, tracks, a.key.level, a.terms.as_ref(), table);
+            let plan = match a.key.mode {
+                GrantMode::Execute => plan(route, index, root, tracks, a.key.level, a.terms.as_ref(), table),
+                GrantMode::Predict => plan_predict(route, root, tracks),
+            };
             Some(Planned { approval: a, route, plan })
         })
         .collect()
@@ -595,6 +733,8 @@ pub struct Lapse {
     /// `track/route`.
     pub route: String,
     pub level: Level,
+    #[serde(skip_serializing_if = "GrantMode::is_execute")]
+    pub mode: GrantMode,
     /// The approval-key fields that changed, or why the route can no longer be planned.
     pub changed: Vec<String>,
     /// The command that approves it again, with the terms it was approved with.
@@ -618,6 +758,7 @@ impl Lapse {
                 "output_mode" => "its output mode",
                 "signer" => "its pack's signer",
                 "repo" => "its repository",
+                "mode" => "what it grants",
                 _ => {
                     words.push(f.clone());
                     continue;
@@ -632,12 +773,24 @@ impl Lapse {
         }
     }
 
+    /// The grant in a person's words: `E1`, `E2`, or `predict`.
+    pub fn grant(&self) -> String {
+        match self.mode {
+            GrantMode::Execute => self.level.as_str().to_uppercase(),
+            GrantMode::Predict => "predict".into(),
+        }
+    }
+
     /// One line for the person: which grant stopped matching, what changed, and how to approve it
     /// again.
     pub fn notice(&self) -> String {
+        let stops = match self.mode {
+            GrantMode::Execute => "it does not run",
+            GrantMode::Predict => "Adage does not make its call in the agent's place",
+        };
         format!(
-            "adage: the {} approval for {} no longer matches ({}), so it does not run. Check the change, then run `{}` yourself; `adage delegate status` lists every grant.",
-            self.level.as_str().to_uppercase(),
+            "adage: the {} approval for {} no longer matches ({}), so {stops}. Check the change, then run `{}` yourself; `adage delegate status` lists every grant.",
+            self.grant(),
             self.route,
             self.what(),
             self.reapprove
@@ -646,9 +799,13 @@ impl Lapse {
 }
 
 /// The command that approves `a` again with the terms it was approved with (E1 output fields are
-/// left to the person: `--fields` is long, and shown by `adage delegate status --json`).
+/// left to the person: `--fields` is long, and shown by `adage delegate status --json`). A
+/// predict grant has no terms, and `--predict` excludes `--level`.
 pub fn reapprove_command(a: &crate::approvals::Approval) -> String {
     let (track, id) = a.route.rsplit_once('/').unwrap_or((a.route.as_str(), ""));
+    if a.key.mode == GrantMode::Predict {
+        return format!("adage review delegate {track} {id} --predict");
+    }
     let mut cmd = format!("adage review delegate {track} {id} --level {}", a.key.level.as_str());
     if let Some(t) = &a.terms {
         if let Some(e) = t.effect {
@@ -676,16 +833,18 @@ pub fn reapprove_command(a: &crate::approvals::Approval) -> String {
     cmd
 }
 
-/// The lapsed grants among `planned` (one per route and level; none when another grant for that
-/// route and level still matches).
+/// The lapsed grants among `planned` (one per route, level and mode; none when another grant for
+/// that route, level and mode still matches).
 pub fn lapses(planned: &[Planned<'_>], store: &crate::approvals::Store) -> Vec<Lapse> {
     let mut out: Vec<Lapse> = Vec::new();
     // An automatic approval is granted again while its route stays in the automatic class.
     for p in planned.iter().filter(|p| !p.approval.auto) {
         let a = p.approval;
-        let same = |q: &&Planned<'_>| q.approval.route == a.route && q.approval.key.level == a.key.level;
+        let same = |q: &&Planned<'_>| {
+            q.approval.route == a.route && q.approval.key.level == a.key.level && q.approval.key.mode == a.key.mode
+        };
         if planned.iter().filter(same).any(|q| q.current(store))
-            || out.iter().any(|l| l.route == a.route && l.level == a.key.level)
+            || out.iter().any(|l| l.route == a.route && l.level == a.key.level && l.mode == a.key.mode)
         {
             continue;
         }
@@ -697,13 +856,163 @@ pub fn lapses(planned: &[Planned<'_>], store: &crate::approvals::Store) -> Vec<L
         if changed.is_empty() {
             continue;
         }
-        out.push(Lapse { route: a.route.clone(), level: a.key.level, changed, reapprove: reapprove_command(a) });
+        out.push(Lapse {
+            route: a.route.clone(),
+            level: a.key.level,
+            mode: a.key.mode,
+            changed,
+            reapprove: reapprove_command(a),
+        });
     }
     out
 }
 
+/// Path components whose files are caches, never sources: a staged run that writes under one of
+/// them proposes a cache glob, not an output.
+const CACHE_DIRS: &[&str] =
+    &["__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".cache", ".hypothesis", ".tox", ".nox"];
+
+/// The E2 terms the binary proposes for a route a person has declared none for (mod architecture
+/// §3.12, "stage, then confirm"): what a trial stage with no declared outputs changed, which it
+/// refused (`changed`, repository-relative paths). A path under a cache directory proposes that
+/// directory's glob as a cache; any other proposes its directory's glob as an output, or the file
+/// itself at the repository's top level (never a root wildcard). A verify step declares no
+/// outputs, so its proposed outputs are what its stage then refuses.
+pub fn propose_outputs(changed: &[String]) -> (Vec<String>, Vec<String>) {
+    let (mut outputs, mut cache) = (Vec::new(), Vec::new());
+    for path in changed {
+        let parts: Vec<&str> = path.split('/').filter(|p| !p.is_empty()).collect();
+        if let Some(at) = parts.iter().position(|p| CACHE_DIRS.contains(p)) {
+            cache.push(format!("{}/**", parts[..=at].join("/")));
+        } else if parts.len() > 1 {
+            outputs.push(format!("{}/**", parts[..parts.len() - 1].join("/")));
+        } else if let Some(file) = parts.first() {
+            outputs.push((*file).to_string());
+        }
+    }
+    for v in [&mut outputs, &mut cache] {
+        v.sort();
+        v.dedup();
+    }
+    (outputs, cache)
+}
+
+/// The fields of a grant a `--confirm` checks against what was staged, in the order a refusal
+/// names them: everything the approval key holds, then the declared terms.
+const DIGEST_FIELDS: &[&str] = &[
+    "scripts",
+    "argv_templates",
+    "effect",
+    "level",
+    "output_mode",
+    "profile_id",
+    "signer",
+    "mode",
+    "repo",
+    "terms",
+    "route_exec_digest",
+];
+
+fn short_hash(v: &serde_json::Value) -> String {
+    crate::sha256_hex(serde_json::to_string(v).unwrap_or_default().as_bytes())[..16].to_string()
+}
+
+/// What `review delegate --stage` answers and `--confirm` checks: `<snapshot>.<field>…`, the
+/// SHA-256 of the staged input snapshot and the staged change set (`snapshot`), then 16 hex of
+/// each field of the key and the terms (`DIGEST_FIELDS`), so a confirm can say which term
+/// changed between the two acts, and tell that from the repository merely moving on. Nothing is
+/// kept between the acts: the digest is all a confirm compares.
+pub fn grant_digest(key: &crate::approvals::ApprovalKey, terms: &Terms, snapshot: &serde_json::Value) -> String {
+    let k = serde_json::to_value(key).unwrap_or_default();
+    let t = serde_json::to_value(terms).unwrap_or_default();
+    let mut out = crate::sha256_hex(serde_json::to_string(snapshot).unwrap_or_default().as_bytes());
+    for f in DIGEST_FIELDS {
+        let v = if *f == "terms" { t.clone() } else { k.get(*f).cloned().unwrap_or(serde_json::Value::Null) };
+        out.push('.');
+        out.push_str(&short_hash(&v));
+    }
+    out
+}
+
+/// How a confirm's digest differs from the one it expected.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DigestChange {
+    Same,
+    /// Only the repository moved on (the snapshot): show the fresh stage again.
+    Snapshot,
+    /// These fields of the grant changed: refuse, naming them.
+    Terms(Vec<&'static str>),
+    /// `expect` is not a digest a stage answered.
+    Malformed,
+}
+
+/// Compare a confirm's fresh digest with the one the stage answered. `route_exec_digest` is
+/// named only when nothing that explains it (scripts, argv, effect, output) changed.
+pub fn digest_change(expect: &str, now: &str) -> DigestChange {
+    let (a, b): (Vec<&str>, Vec<&str>) = (expect.trim().split('.').collect(), now.split('.').collect());
+    if a.len() != b.len() || a.len() != DIGEST_FIELDS.len() + 1 {
+        return DigestChange::Malformed;
+    }
+    let mut changed: Vec<&'static str> =
+        DIGEST_FIELDS.iter().zip(a[1..].iter().zip(&b[1..])).filter(|(_, (x, y))| x != y).map(|(f, _)| *f).collect();
+    if changed.len() > 1 {
+        changed.retain(|f| *f != "route_exec_digest");
+    }
+    match (changed.is_empty(), a[0] == b[0]) {
+        (false, _) => DigestChange::Terms(changed),
+        (true, true) => DigestChange::Same,
+        (true, false) => DigestChange::Snapshot,
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn proposed_outputs_follow_what_a_trial_stage_changed() {
+        let changed = vec![
+            "acme/generated/models.py".to_string(),
+            "acme/generated/__init__.py".to_string(),
+            "acme/__pycache__/models.cpython-312.pyc".to_string(),
+            "VERSION".to_string(),
+        ];
+        let (outputs, cache) = propose_outputs(&changed);
+        assert_eq!(outputs, vec!["VERSION".to_string(), "acme/generated/**".to_string()]);
+        assert_eq!(cache, vec!["acme/__pycache__/**".to_string()]);
+        let (outputs, cache) = propose_outputs(&[".pytest_cache/v/cache/lastfailed".to_string()]);
+        assert!(outputs.is_empty());
+        assert_eq!(cache, vec![".pytest_cache/**".to_string()]);
+    }
+
+    /// T-A7-06's digest: a term change is named, a moved repository is a snapshot change only.
+    #[test]
+    fn a_digest_names_what_changed_between_stage_and_confirm() {
+        let key = crate::approvals::ApprovalKey {
+            repo: "r".into(),
+            route_exec_digest: "d1".into(),
+            argv_templates: vec![vec!["make".into(), "gen".into()]],
+            scripts: vec![("scripts/gen".into(), "aa".into())],
+            effect: Effect::Regenerate,
+            level: Level::E2,
+            output_mode: OutputMode::Typed,
+            profile_id: "p".into(),
+            signer: None,
+            mode: GrantMode::Execute,
+        };
+        let terms = Terms { outputs: vec!["gen/**".into()], ..Terms::default() };
+        let snap = serde_json::json!({ "inputs": { "schema.toml": "11" } });
+        let d = grant_digest(&key, &terms, &snap);
+        assert_eq!(digest_change(&d, &d), DigestChange::Same);
+        let moved = grant_digest(&key, &terms, &serde_json::json!({ "inputs": { "schema.toml": "22" } }));
+        assert_eq!(digest_change(&d, &moved), DigestChange::Snapshot);
+        let mut rescripted = key.clone();
+        rescripted.scripts = vec![("scripts/gen".into(), "bb".into())];
+        rescripted.route_exec_digest = "d2".into();
+        assert_eq!(digest_change(&d, &grant_digest(&rescripted, &terms, &snap)), DigestChange::Terms(vec!["scripts"]));
+        let widened = Terms { outputs: vec!["**".into()], ..Terms::default() };
+        assert_eq!(digest_change(&d, &grant_digest(&key, &widened, &snap)), DigestChange::Terms(vec!["terms"]));
+        assert_eq!(digest_change("nonsense", &d), DigestChange::Malformed);
+    }
+
     use super::*;
 
     fn v(xs: &[&str]) -> Vec<String> {
@@ -812,6 +1121,57 @@ mod tests {
         let index = learned_lookup(slot(SlotSource::OutputValue { field: None, vtype }));
         let e = plan(&index.routes[0], &index, d.path(), d.path(), Level::E1, None, table).unwrap_err();
         assert!(e.contains("bound from a command's output") && !e.contains("no E1 form"), "{e}");
+    }
+
+    /// A predict grant is keyed on what the call would run (no profile, no output, no action),
+    /// lapses when a script it runs changes, says so with a reapproval that ends in `--predict`,
+    /// and is never planned for a reflex only adage-exec can carry out.
+    #[test]
+    fn a_predict_grant_plans_on_its_own_path_and_lapses_on_a_script_change() {
+        let slot = adage_tracks::Slot {
+            name: "item".into(),
+            source: SlotSource::Prompt { span: adage_core::spans::SpanKind::Ticket },
+            contract: Contract::Pattern { regex: r"^W-\d{4}$".into() },
+        };
+        let d = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(d.path().join("scripts")).unwrap();
+        std::fs::write(d.path().join("scripts/wi-lookup"), "print('x')\n").unwrap();
+        let index = learned_lookup(slot);
+        let ir = &index.routes[0];
+        let p = plan_predict(ir, d.path(), d.path()).expect("plans");
+        let req = &p.request;
+        assert_eq!(req.mode, GrantMode::Predict);
+        assert!(req.action.is_none() && req.output.fields.is_empty());
+        assert_eq!(req.scripts[0].path, "scripts/wi-lookup");
+        let key = crate::approvals::ApprovalKey::for_request(req, "acme-billing");
+        assert_eq!((key.profile_id.as_str(), key.level, key.mode), ("harness", Level::E2, GrantMode::Predict));
+        let mut store = crate::approvals::Store::default();
+        store.approve(crate::approvals::Approval {
+            key,
+            route: "acme-billing/learned/lookup-work-item".into(),
+            approved_on: "x".into(),
+            by: None,
+            basis: serde_json::Value::Null,
+            auto: false,
+            terms: None,
+            via: None,
+        });
+        let table = CommandTable::load();
+        let planned = plan_grants("acme-billing", d.path(), &index, d.path(), &store, table);
+        assert!(planned[0].current(&store) && lapses(&planned, &store).is_empty());
+        std::fs::write(d.path().join("scripts/wi-lookup"), "print('y')\n").unwrap();
+        let planned = plan_grants("acme-billing", d.path(), &index, d.path(), &store, table);
+        let l = lapses(&planned, &store);
+        assert_eq!(l.len(), 1);
+        assert_eq!((l[0].mode, l[0].grant().as_str()), (GrantMode::Predict, "predict"));
+        assert_eq!(l[0].reapprove, "adage review delegate acme-billing/learned lookup-work-item --predict");
+        assert!(l[0].what().contains("a script it runs"), "{}", l[0].what());
+        let notice = l[0].notice();
+        assert!(notice.contains("the predict approval for") && notice.contains("in the agent's place"), "{notice}");
+        let mut only_exec = index.clone();
+        only_exec.routes[0].route.evidence.execution =
+            Some(adage_tracks::ExecutionEvidence { opportunities: 5, successful: 5, sessions: 5 });
+        assert!(plan_predict(&only_exec.routes[0], d.path(), d.path()).unwrap_err().contains("never predicted"));
     }
 
     #[test]

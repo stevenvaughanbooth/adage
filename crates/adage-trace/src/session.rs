@@ -96,7 +96,7 @@ pub const OPENCODE: &str = crate::Harness::OpenCode.id();
 pub const CODEX: &str = crate::Harness::Codex.id();
 
 /// A directive a session received (Track G §3.2, steering by influence): delivered before step
-/// `at_step`, it named these commands, avoided runners and files
+/// `at_step`, it named these commands, avoided runners, files and skills
 /// ([`crate::wire::named`]). `all`: it named nothing readable (a wrapper cut short, a
 /// data block without its directive, a template the reader does not know) or Adage ran it itself
 /// (an `exec` attribute: from there on the agent's actions are not its own), so it counts as
@@ -112,6 +112,9 @@ pub struct Directed {
     pub avoided: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub files: Vec<String>,
+    /// Skills it said to use (a `skill` directive): the session's use of one of them is steered.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub skills: Vec<String>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub all: bool,
 }

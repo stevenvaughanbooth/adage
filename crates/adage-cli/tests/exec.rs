@@ -2,15 +2,17 @@
 //! §3.2, §4.4): a person's decisions, refused inside agent sessions; approvals written through
 //! adage-exec's API; hook registrations swapped between `adage hook` and `adage-exec hook`.
 
-use adage_core::spans::SpanKind;
 use adage_core::Effect;
+use adage_tracks::testkit::{kinds, track};
 use adage_tracks::*;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+mod common;
+
 struct World {
-    _dir: tempfile::TempDir,
+    _w: common::TempWorld,
     root: PathBuf,
 }
 
@@ -20,62 +22,31 @@ impl World {
     }
     /// A world whose one route is changed by `f` before the index is compiled.
     fn with(f: impl Fn(&mut Route)) -> World {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().canonicalize().unwrap();
-        for d in ["home", "adage", "acme-billing/.git", "acme-billing/scripts", "bin"] {
-            std::fs::create_dir_all(root.join(d)).unwrap();
-        }
-        std::fs::write(root.join("acme-billing/scripts/wi-lookup"), "#!/usr/bin/env python3\nprint('{}')\n").unwrap();
-        std::fs::create_dir_all(root.join("acme-billing/tools")).unwrap();
-        std::fs::write(root.join("acme-billing/tools/case"), "#!/usr/bin/env python3\nprint('{}')\n").unwrap();
-        std::fs::write(root.join("bin/adage-exec"), "#!/bin/sh\n").unwrap();
-        let mut t = Track {
-            manifest: Manifest {
-                track: TrackInfo {
-                    name: "acme-billing/work-items".into(),
-                    version: "0.4.0".into(),
-                    description: String::new(),
-                    provenance: "desire-path".into(),
-                },
-                scope: Scope { repo: "acme-billing".into() },
-                gauge: Gauge::default(),
-            },
-            routes: vec![Route {
-                id: "lookup-work-item".into(),
-                summary: String::new(),
-                trigger: Trigger::Prompt { span: SpanKind::Ticket },
-                step: Step::Run { command: "python3 scripts/wi-lookup {id} --json".into() },
-                slots: vec![Slot {
-                    name: "id".into(),
-                    source: SlotSource::Prompt { span: SpanKind::Ticket },
-                    contract: Contract::Pattern { regex: r"^W-\d{4}$".into() },
-                }],
-                effect: Effect::Observe,
-                strength: Strength::Fire,
-                state: RouteState::Firm,
-                exit: vec![Exit::IntentChanges],
-                evidence: Evidence { support: 9, opportunities: 10, days: 3, ..Default::default() },
-                authored: false,
-            }],
-        };
+        let w = common::TempWorld::new(&["home", "adage", "acme-billing/.git", "acme-billing/scripts", "bin"]);
+        w.write("acme-billing/scripts/wi-lookup", "#!/usr/bin/env python3\nprint('{}')\n");
+        w.write("acme-billing/tools/case", "#!/usr/bin/env python3\nprint('{}')\n");
+        w.write("bin/adage-exec", "#!/bin/sh\n");
+        let lookup = kinds::lookup("lookup-work-item", "python3 scripts/wi-lookup {id} --json")
+            .until_intent_changes()
+            .support(9, 10)
+            .days(3);
+        let mut t = track("acme-billing/work-items", "acme-billing").version("0.4.0").route(lookup).build();
         f(&mut t.routes[0]);
-        Index::compile(&[t]).write_atomic(&root.join("adage/index.json")).unwrap();
-        World { _dir: dir, root }
+        w.home("adage").compile(&[t]);
+        World { root: w.root.clone(), _w: w }
     }
     fn p(&self, rel: &str) -> PathBuf {
         self.root.join(rel)
     }
     fn run(&self, args: &[&str], env: &[(&str, &str)]) -> (String, String, i32) {
         let mut c = Command::new(env!("CARGO_BIN_EXE_adage"));
+        common::scrub(&mut c);
         c.args(args)
             .current_dir(self.p("acme-billing"))
             .env("ADAGE_HOME", self.p("adage"))
             .env("ADAGE_POLICY", self.p("adage/managed.toml"))
             .env("HOME", self.p("home"))
             .env("ADAGE_ALLOW_NONINTERACTIVE", "1");
-        for v in ["CLAUDECODE", "OPENCODE", "CODEX_SANDBOX", "CODEX_SANDBOX_NETWORK_DISABLED", "ADAGE_ARM"] {
-            c.env_remove(v);
-        }
         for (k, v) in env {
             c.env(k, v);
         }
@@ -372,4 +343,131 @@ fn a_script_inferred_observe_from_traces_can_be_delegated_at_e1_with_its_evidenc
     ] {
         assert!(out.contains(want), "missing {want:?} in:\n{out}");
     }
+}
+
+fn predict<'a>() -> Vec<&'a str> {
+    vec!["review", "delegate", "acme-billing/work-items", "lookup-work-item", "--predict"]
+}
+
+/// Calls made in the agent's place are acting from a hook: the policy opt-in E2 actions need.
+fn e2(w: &World) {
+    std::fs::write(w.p("adage/policy.toml"), "[exec]\nmax_level = \"E2\"\n").unwrap();
+}
+
+/// T-C2-04: `--predict` is a person's decision, refused under every harness's agent marker and
+/// writing nothing; at a terminal it records a predict key (no sandbox profile, no terms) with the
+/// evidence it was granted on, and stages nothing.
+#[test]
+fn a_predict_grant_is_a_persons_decision() {
+    let w = World::new();
+    e2(&w);
+    let store = w.p("adage/approvals.json");
+    for var in adage_app::person::AGENT_ENV {
+        let (_, err, code) = w.run(&predict(), &[(var, "1")]);
+        assert_eq!(code, 1, "{var}: {err}");
+        assert!(err.contains(var), "{var}: {err}");
+        assert!(!store.exists(), "{var}");
+    }
+    let (out, err, code) = w.run(&predict(), &[]);
+    assert_eq!(code, 0, "{err}");
+    assert!(out.contains("predict") && out.contains("in the agent's harness, under its own permissions"), "{out}");
+    assert!(!out.contains("Staged once"), "nothing runs, so nothing is previewed: {out}");
+    let v: Value = serde_json::from_str(&std::fs::read_to_string(&store).unwrap()).unwrap();
+    let a = &v["approvals"][0];
+    assert_eq!((a["key"]["mode"].as_str(), a["key"]["profile_id"].as_str()), (Some("predict"), Some("harness")));
+    assert_eq!(a["key"]["level"], "e2");
+    assert_eq!(a["key"]["scripts"][0][0], "scripts/wi-lookup");
+    assert_eq!(a["basis"]["support"], 9);
+    assert!(a.get("terms").is_none(), "{a}");
+}
+
+/// T-C2-05: the grant round-trips through `delegate status`, a lapse notice whose reapproval
+/// ends in `--predict`, and `revoke --predict`, which withdraws it alone.
+#[test]
+fn a_predict_grant_round_trips_through_status_lapse_and_revoke() {
+    let w = World::new();
+    e2(&w);
+    let (_, err, code) = w.run(&predict(), &[]);
+    assert_eq!(code, 0, "{err}");
+    let (out, _, _) = w.run(&["delegate", "status", "--json"], &[]);
+    let v: Value = serde_json::from_str(&out).unwrap();
+    let g = &v["grants"]["acme-billing"][0];
+    assert_eq!(
+        (g["route"].as_str(), g["mode"].as_str()),
+        (Some("acme-billing/work-items/lookup-work-item"), Some("predict"))
+    );
+    assert_eq!((v["predict"].as_str(), v["lapsed"].clone()), (Some("on"), serde_json::json!([])));
+    let (out, _, _) = w.run(&["delegate", "status"], &[]);
+    assert!(out.contains("predict · in the agent's place"), "{out}");
+    std::fs::write(w.p("acme-billing/scripts/wi-lookup"), "#!/usr/bin/env python3\nprint('{\"x\": 1}')\n").unwrap();
+    let (out, _, _) = w.run(&["delegate", "status", "--json"], &[]);
+    let v: Value = serde_json::from_str(&out).unwrap();
+    let l = &v["lapsed"][0];
+    assert_eq!(l["mode"], "predict", "{v}");
+    assert!(l["changed"].as_array().unwrap().iter().any(|c| c == "scripts"), "{l}");
+    assert_eq!(l["reapprove"], "adage review delegate acme-billing/work-items lookup-work-item --predict");
+    let (out, _, _) = w.run(&["delegate", "status"], &[]);
+    assert!(out.contains("1 delegation no longer matches") && out.contains("a script it runs"), "{out}");
+    let revoke = ["review", "revoke", "acme-billing/work-items", "lookup-work-item"];
+    let (out, _, code) = w.run(&revoke, &[]);
+    assert_eq!((code, out.contains("withdrawn   0 delegations")), (0, true), "the execute grants only: {out}");
+    let (out, _, code) = w.run(&[&revoke[..], &["--predict"]].concat(), &[]);
+    assert_eq!((code, out.contains("withdrawn   1 delegation")), (0, true), "{out}");
+    let v: Value = serde_json::from_str(&std::fs::read_to_string(w.p("adage/approvals.json")).unwrap()).unwrap();
+    assert_eq!(v["approvals"], serde_json::json!([]));
+}
+
+/// T-C2-06: `--predict` excludes `--effect` and `--level` (usage errors), and is refused, writing
+/// nothing, below E2, for a reflex that already holds an execute grant (two paths would run it),
+/// for one only adage-exec can carry out, and for an effect above regenerate.
+#[test]
+fn predict_is_exclusive_and_refused_where_it_would_not_hold() {
+    let w = World::new();
+    for extra in [["--effect", "verify"], ["--level", "e2"]] {
+        let (_, err, code) = w.run(&[&predict()[..], &extra].concat(), &[]);
+        assert_eq!(code, 2, "{extra:?} is a usage error: {err}");
+    }
+    let (_, err, code) = w.run(&predict(), &[]);
+    assert_eq!(code, 1);
+    assert!(err.contains("caps execution at E1") && err.contains("delegate policy --max-level e2"), "{err}");
+    e2(&w);
+    let (_, err, code) = w.run(&allow(), &[]);
+    assert_eq!(code, 0, "{err}");
+    let (_, err, code) = w.run(&predict(), &[]);
+    assert_eq!(code, 1);
+    assert!(err.contains("already holds an E1 grant") && err.contains("run it twice"), "{err}");
+    let v: Value = serde_json::from_str(&std::fs::read_to_string(w.p("adage/approvals.json")).unwrap()).unwrap();
+    assert_eq!(v["approvals"].as_array().unwrap().len(), 1, "nothing written");
+    let exec_only = World::with(|r| {
+        r.evidence.execution = Some(ExecutionEvidence { opportunities: 5, successful: 5, sessions: 5 })
+    });
+    e2(&exec_only);
+    let (_, err, code) = exec_only.run(&predict(), &[]);
+    assert_eq!(code, 1);
+    assert!(err.contains("never predicted"), "{err}");
+    let environment = World::with(|r| r.effect = Effect::Environment);
+    e2(&environment);
+    let (_, err, code) = environment.run(&predict(), &[]);
+    assert_eq!(code, 1);
+    assert!(err.contains("at most regenerate"), "{err}");
+    assert!(!environment.p("adage/approvals.json").exists());
+}
+
+/// T-C2-08: `adage delegate predict off` works from anywhere (it only turns something down) and
+/// is what adage-exec reads at every step; `on` is a person's decision.
+#[test]
+fn the_predict_switch_is_off_from_anywhere_and_on_by_a_person() {
+    let w = World::new();
+    let marker = w.p("adage/exec/predict-off");
+    let (out, err, code) = w.run(&["delegate", "predict", "off"], &[("CLAUDECODE", "1")]);
+    assert_eq!(code, 0, "{err}");
+    assert!(out.contains("off, from the next step") && marker.is_file(), "{out}");
+    let (out, _, _) = w.run(&["delegate", "status", "--json"], &[]);
+    assert_eq!(serde_json::from_str::<Value>(&out).unwrap()["predict"], "off");
+    let (_, err, code) = w.run(&["delegate", "predict", "on"], &[("CLAUDECODE", "1")]);
+    assert_eq!(code, 1, "{err}");
+    assert!(marker.is_file());
+    let (_, err, code) = w.run(&["delegate", "predict", "on"], &[]);
+    assert_eq!(code, 0, "{err}");
+    assert!(!marker.exists());
 }

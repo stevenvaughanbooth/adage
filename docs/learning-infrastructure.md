@@ -103,7 +103,9 @@ siblings share an identity and entire groups stay in one split. Unknown accounti
 blocks further spend. Original receipts and failed attempts survive resume.
 
 `adage eval experiment sources <tracks-dir>` exports full typed learned candidates and a
-recompiled index without writing files. The pilot checks that enabled behavior came from its
+recompiled index without writing files. The learner's sub-support candidates
+(`<repo>/learned/candidates.json`, never delivered) are validated like a route and travel in that
+index; any other stray file fails the export. The pilot checks that enabled behavior came from its
 original production learning output, allowing only reviewed lifecycle/strength changes. This
 does not turn a synthetic task pack into representative customer evidence. Small-group quality
 bounds remain strict; a first paid pilot can produce a useful negative or inconclusive result.

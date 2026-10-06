@@ -42,6 +42,39 @@ impl Level {
     }
 }
 
+/// What a grant lets Adage do with a route (plan §2.2 item 3). `Execute`: adage-exec runs it in
+/// the sandbox (E1 prefetch, E2 action). `Predict`: the hook may make the route's call in the
+/// agent's place at a `TurnStep`, and the agent's harness runs it under its own permissions;
+/// adage-exec runs nothing. Not an [`Effect`]: the effect order gates what a sandbox may change,
+/// and a predicted call changes nothing through Adage. The two are separate grants, so a route
+/// may hold both, and each is approved, revoked and lapses on its own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum GrantMode {
+    #[default]
+    Execute,
+    Predict,
+}
+
+impl GrantMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            GrantMode::Execute => "execute",
+            GrantMode::Predict => "predict",
+        }
+    }
+
+    /// For `skip_serializing_if`: approvals written before the mode existed are all `Execute`,
+    /// and leaving the default out keeps their bytes, and every older reader, unchanged.
+    pub fn is_execute(&self) -> bool {
+        *self == GrantMode::Execute
+    }
+}
+
+/// The sandbox profile id a predict key carries in place of a profile's hash: a predicted call
+/// runs in the agent's harness, never in a sandbox, so no profile describes it.
+pub const HARNESS_PROFILE: &str = "harness";
+
 /// How output reaches the agent (Track C §3.4). Typed is the default and the only mode that can be
 /// approved automatically; raw needs its own approval and policy's `allow_raw_output`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
@@ -277,6 +310,10 @@ pub struct ExecRequest {
     /// E2 only: what the action may change.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub action: Option<ActionSpec>,
+    /// `Predict`: a request that is only ever keyed and checked against policy, never run
+    /// (`crate::route::plan_predict`).
+    #[serde(default, skip_serializing_if = "GrantMode::is_execute")]
+    pub mode: GrantMode,
 }
 
 /// A slot placeholder: `{name}` with a safe id inside.
@@ -484,6 +521,7 @@ pub(crate) mod tests {
             origin: Origin::Local,
             route_exec_digest: None,
             action: None,
+            mode: GrantMode::Execute,
         }
     }
 

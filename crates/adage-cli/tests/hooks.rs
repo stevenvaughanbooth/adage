@@ -11,6 +11,7 @@
 
 use adage_core::spans::SpanKind;
 use adage_core::{CommandTable, Effect};
+use adage_tracks::testkit::{self, IndexBuilder, LearnedHome, TempWorld};
 use adage_tracks::*;
 use serde_json::{json, Value};
 use std::io::Write;
@@ -32,42 +33,29 @@ fn exec_parity() -> bool {
 }
 
 struct World {
-    _dir: tempfile::TempDir,
+    _world: TempWorld,
     root: PathBuf,
 }
 
 fn route(id: &str, trigger: Trigger, step: Step, slots: Vec<Slot>, effect: Effect, strength: Strength) -> Route {
-    Route {
-        id: id.into(),
-        summary: format!("route {id}"),
-        trigger,
-        step,
-        slots,
-        effect,
-        strength,
-        state: RouteState::Firm,
-        exit: vec![Exit::IntentChanges],
-        evidence: Evidence { support: 7, opportunities: 8, provenance: "desire-path".into(), ..Default::default() },
-        authored: false,
-    }
+    testkit::route(id, trigger, step)
+        .summary(&format!("route {id}"))
+        .slots(slots)
+        .effect(effect)
+        .strength(strength)
+        .until_intent_changes()
+        .support(7, 8)
+        .provenance("desire-path")
+        .build()
 }
 
 fn track() -> Track {
     let table = CommandTable::load();
     let lookup_key = adage_runtime::command_key("./scripts/wi-lookup W-1 --json", table);
     let pytest_key = adage_runtime::command_key("python3 -m pytest tests", table);
-    Track {
-        manifest: Manifest {
-            track: TrackInfo {
-                name: "acme/work".into(),
-                version: "0.3.0".into(),
-                description: String::new(),
-                provenance: "desire-path".into(),
-            },
-            scope: Scope { repo: "acme".into() },
-            gauge: Gauge::default(),
-        },
-        routes: vec![
+    testkit::track("acme/work", "acme")
+        .version("0.3.0")
+        .routes([
             route(
                 "lookup",
                 Trigger::Prompt { span: SpanKind::Ticket },
@@ -112,6 +100,15 @@ fn track() -> Track {
                 Effect::Verify,
                 Strength::Inhibit,
             ),
+            // A skill at a prompt that names a commit (D3): no other scenario's prompt names one.
+            route(
+                "commit-review",
+                Trigger::Prompt { span: SpanKind::Sha },
+                Step::Skill { skill: "commit-review".into(), args: None },
+                vec![],
+                Effect::Observe,
+                Strength::Prime,
+            ),
             route(
                 "dead-pytest",
                 Trigger::AfterFailure { command: pytest_key, signature: "ACME_ENV is not set".into() },
@@ -124,20 +121,17 @@ fn track() -> Track {
                 Effect::Verify,
                 Strength::Inhibit,
             ),
-        ],
-    }
+        ])
+        .build()
 }
 
 impl World {
     fn new() -> World {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().canonicalize().unwrap();
-        for d in ["home", "adage", "acme/.git", "acme/acme", "acme/schema", "plain"] {
-            std::fs::create_dir_all(root.join(d)).unwrap();
-        }
-        std::fs::write(root.join("acme/acme/billing.py"), "x = 1\n").unwrap();
-        Index::compile(&[track()]).write_atomic(&root.join("adage/index.json")).unwrap();
-        World { _dir: dir, root }
+        let world = TempWorld::new(&["home", "acme/.git", "acme/acme", "acme/schema", "plain"]);
+        world.write("acme/acme/billing.py", "x = 1\n");
+        world.home("adage").compile(&[track()]);
+        let root = world.root.clone();
+        World { _world: world, root }
     }
     fn p(&self, rel: &str) -> PathBuf {
         self.root.join(rel)
@@ -243,6 +237,15 @@ fn claude_scenario(w: &World) -> Vec<(&'static str, Value)> {
                 json!({ "tool_calls": [{ "tool_name": "Bash", "tool_input": { "command": "./scripts/wi-lookup W-2042 --json" }, "tool_response": { "stdout": lookup_out, "stderr": "" } }] }),
             ),
         ),
+        // The same call about to run (one decision per `tool_use_id`): no environment is bound
+        // here, so nothing is rewritten and nothing is said.
+        (
+            "PreToolUse",
+            with(
+                "PreToolUse",
+                json!({ "tool_name": "Bash", "tool_use_id": "toolu_pytest_1", "tool_input": { "command": "python3 -m pytest tests" } }),
+            ),
+        ),
         (
             "PostToolUseFailure",
             with(
@@ -257,8 +260,37 @@ fn claude_scenario(w: &World) -> Vec<(&'static str, Value)> {
                 json!({ "tool_calls": [{ "tool_name": "Edit", "tool_input": { "file_path": format!("{cwd}/schema/invoice.json"), "old_string": "a", "new_string": "b" }, "tool_response": "ok" }] }),
             ),
         ),
+        // The mod's step boundary with a finish line armed: nothing is granted `predict`, so
+        // neither binary predicts, and the Stop request below is unchanged.
+        (
+            "TurnStep",
+            with("TurnStep", json!({ "turn_id": "turn-1", "index": 2, "model": "claude-test", "ending": true })),
+        ),
         ("Stop", with("Stop", json!({ "stop_hook_active": false }))),
         ("Stop", with("Stop", json!({ "stop_hook_active": false }))),
+        // A prompt naming a commit: the `skill` reflex says which skill this repository uses here.
+        (
+            "UserPromptSubmit",
+            with("UserPromptSubmit", json!({ "prompt": "Now review commit 3f2a9c1 before the release." })),
+        ),
+        // The mod's dry run of a Bash call (`via: mod`): the plan, recorded nowhere. No receipt and
+        // no environment here, so only what a learned dead end plans.
+        (
+            "PreToolUse",
+            with(
+                "PreToolUse",
+                json!({ "tool_name": "Bash", "tool_use_id": "toolu_pytest_2", "tool_input": { "command": "python3 -m pytest tests" }, "dry_run": true, "via": "mod" }),
+            ),
+        ),
+        // The mod's `agent.spawn` asks what a subagent is told before it starts: the lookup its
+        // prompt binds, and the standing dead end.
+        (
+            "Standing",
+            with(
+                "Standing",
+                json!({ "via": "mod", "agent": { "type": "Explore", "description": "Look up the item", "prompt": format!("Find what W-2042 asks for. {INJECTION}") } }),
+            ),
+        ),
         ("SessionEnd", with("SessionEnd", json!({ "reason": "other" }))),
     ]
 }
@@ -313,6 +345,134 @@ fn claude_code_golden() {
     assert!(t.contains("./scripts/wi-lookup W-2042 --json"));
     assert!(t.contains("\"decision\":\"block\""));
     assert_no_injection(&t);
+}
+
+/// The world's checkout with U11 in service and the project's environment bound
+/// (`.venv/bin/python`, pytest installed): what a `PreToolUse` rewrite needs.
+fn bind_u11(w: &World) -> String {
+    let paths = adage_store::Paths::at(w.p("adage"));
+    let root = w.p("acme");
+    let key = adage_core::repo::repo_key_cached(&root, &paths.repo_keys());
+    let origin = Origin::Instinct {
+        pack: "core".into(),
+        version: "0.1.0".into(),
+        instinct: "U11".into(),
+        ecosystem: None,
+        declared: None,
+    };
+    let mut u11 = route(
+        "python-env",
+        Trigger::AfterFailure { command: "exec python -m pytest".into(), signature: "No module".into() },
+        Step::Run { command: ".venv/bin/python -m pytest".into() },
+        vec![],
+        Effect::Verify,
+        Strength::Prime,
+    );
+    u11.evidence.origin = Some(origin);
+    IndexBuilder::new("u11").route(&key, "acme/instincts", u11).write(&paths.index());
+    std::fs::create_dir_all(root.join(".venv/bin")).unwrap();
+    std::fs::write(root.join(".venv/bin/python"), "").unwrap();
+    std::fs::write(root.join(".venv/pyvenv.cfg"), "version = 3.12.4\n").unwrap();
+    let binding = adage_pack::binding::binding_path(&paths.tracks(), &key);
+    std::fs::create_dir_all(binding.parent().unwrap()).unwrap();
+    let b = json!({ "root": root, "declared": "", "env": { "interpreter": ".venv/bin/python", "pytest": true, "modules": [] }, "packs": "" });
+    std::fs::write(binding, b.to_string()).unwrap();
+    key
+}
+
+fn pretool_records(w: &World, session: &str) -> Vec<Value> {
+    LearnedHome::at(w.p("adage")).spooled_kind(session, "pretool")
+}
+
+/// T-A1-02 and T-A1-04 through the binary: the same `PreToolUse` delivered twice is decided once
+/// (the rewrite, then nothing) with one spool record; a payload with no `tool_use_id` is decided
+/// every time, as before.
+#[test]
+fn a_bash_call_is_decided_once_per_tool_use_id() {
+    let w = World::new();
+    bind_u11(&w);
+    let call = |id: Option<&str>| {
+        let mut p = json!({ "session_id": "s-pre", "cwd": w.repo(), "hook_event_name": "PreToolUse", "tool_name": "Bash",
+                            "tool_input": { "command": "python -m pytest tests -q" } });
+        if let Some(id) = id {
+            p["tool_use_id"] = json!(id);
+        }
+        w.hook("claude", "PreToolUse", &p)
+    };
+    let first: Value = serde_json::from_str(&call(Some("t1"))).expect("the rewrite");
+    assert_eq!(first["hookSpecificOutput"]["updatedInput"]["command"], ".venv/bin/python -m pytest tests -q");
+    assert_eq!(call(Some("t1")), "", "decided already");
+    let recs = pretool_records(&w, "s-pre");
+    assert_eq!(recs.len(), 1, "{recs:#?}");
+    assert_eq!(recs[0]["checked_by"], "planner");
+    assert!(recs[0]["duration_us"].is_u64());
+    assert!(!call(None).is_empty() && !call(None).is_empty(), "no id: decided each time");
+    assert_eq!(pretool_records(&w, "s-pre").len(), 3);
+}
+
+/// T-C5-01 through both binaries: `Standing` answers the same text for the session, records
+/// nothing in the spool, and the first prompt then leaves out the reflex it carries; a control
+/// session's text is empty.
+#[test]
+fn standing_is_answered_once_per_session_and_spools_nothing() {
+    let w = World::new();
+    let ask = |session: &str, env: &[(&str, &str)]| {
+        let p = json!({ "session_id": session, "cwd": w.repo(), "hook_event_name": "Standing" });
+        let (out, err, code) = w.run(&["hook", "claude", "Standing"], p.to_string().as_bytes(), env);
+        assert_eq!((err.as_str(), code), ("", 0));
+        serde_json::from_str::<Value>(&out).unwrap()
+    };
+    let first = ask("s-standing", &[]);
+    let text = first["standing"].as_str().unwrap();
+    assert!(text.contains("route=\"dead-unittest\"") && text.len() <= 2_000, "{text}");
+    assert_eq!(ask("s-standing", &[]), first);
+    let paths = adage_store::Paths::at(w.p("adage"));
+    assert!(!paths.spool("s-standing").exists(), "Standing records nothing");
+    let prompt = json!({ "session_id": "s-standing", "cwd": w.repo(), "hook_event_name": "UserPromptSubmit", "prompt": "Pick up W-2042" });
+    let out = w.hook("claude", "UserPromptSubmit", &prompt);
+    assert!(out.contains("wi-lookup W-2042") && !out.contains("dead-unittest"), "{out}");
+    let control = ask("s-control", &[("ADAGE_ARM", "control")]);
+    assert_eq!((control["standing"].as_str(), control["environment"].as_str()), (Some(""), Some("")));
+    assert!(control["compact"].as_str().is_some_and(|c| !c.is_empty()));
+}
+
+/// T-A2-03: `adage doctor --json` reports the hooks' p95 from the spools' `duration_us`, with the
+/// structured `action` beside the fix; the measurement is reused for a few seconds.
+#[test]
+fn doctor_reports_the_hook_latency_p95() {
+    if exec_parity() {
+        return; // `doctor` is adage's
+    }
+    let w = World::new();
+    let paths = adage_store::Paths::at(w.p("adage"));
+    let seed = |session: &str, us: u64, n: usize| {
+        for _ in 0..n {
+            let r = json!({ "ts": 1, "event": "PostToolBatch", "kind": "batch", "arm": "treated", "repo": "acme",
+                            "decision": { "directives": [], "would_have": [], "judgements": [], "observed": [] }, "duration_us": us });
+            adage_store::spool::append(&paths.spool(session), &r).unwrap();
+        }
+    };
+    let latency = || {
+        let (out, _, _) = w.run(&["doctor", "--json"], b"", &[]);
+        let v: Value = serde_json::from_str(&out).unwrap();
+        v["checks"].as_array().unwrap().iter().find(|c| c["check"] == "hook latency").cloned().expect("a latency check")
+    };
+    let c = latency();
+    assert_eq!((c["status"].as_str(), c["detail"].as_str()), (Some("pass"), Some("too few hooks to measure")));
+    let cache = paths.cache().join("hook-latency.json");
+    std::fs::remove_file(&cache).ok();
+    seed("s-slow", 12_000, 25);
+    let c = latency();
+    assert_eq!(c["status"], "warn", "{c}");
+    assert!(c["detail"].as_str().unwrap().starts_with("p95 12.0 ms over the last 25 tool batches"), "{c}");
+    assert!(c["fix"].is_string() && c["action"] == json!({ "kind": "manual" }), "{c}");
+    // Within the cache's lifetime the spools are not read again.
+    let at = std::fs::metadata(&cache).unwrap().modified().unwrap();
+    seed("s-slower", 30_000, 200);
+    assert_eq!(latency()["status"], "warn");
+    assert_eq!(std::fs::metadata(&cache).unwrap().modified().unwrap(), at, "the cached measurement");
+    std::fs::remove_file(&cache).unwrap();
+    assert_eq!(latency()["status"], "fail");
 }
 
 /// Text from tool output or prompts must never reach the agent except through validated slots.
@@ -508,6 +668,45 @@ fn a_panic_in_the_hook_is_recorded_without_the_payload_and_doctor_warns() {
     assert_eq!(fo["status"], "warn", "{fo}");
     assert!(fo["detail"].as_str().unwrap().contains("3 in the last 7 days"), "{fo}");
     assert!(fo["detail"].as_str().unwrap().contains("panic at adage-hook/src/lib.rs"), "{fo}");
+}
+
+/// T-X-01 for the events only the mod sends and the mod's two `PreToolUse` phases: a panic, an
+/// oversized payload and a payload without a session id each exit 0 with nothing printed.
+#[test]
+fn the_mods_events_fail_open() {
+    let w = World::new();
+    let events: [(&str, Value); 5] = [
+        ("TurnStep", json!({ "turn_id": "t1", "index": 2, "ending": false, "via": "mod" })),
+        ("Standing", json!({ "via": "mod" })),
+        ("SkillPrompt", json!({ "skill": "release-notes", "text": "x", "via": "mod" })),
+        (
+            "PreToolUse",
+            json!({ "tool_name": "Bash", "tool_input": { "command": "python -m pytest" }, "tool_use_id": "toolu_1", "dry_run": true, "via": "mod" }),
+        ),
+        (
+            "PreToolUse",
+            json!({ "tool_name": "Bash", "tool_input": { "command": "python -m pytest" }, "tool_use_id": "toolu_2", "verdict": { "engine": "same" }, "via": "mod" }),
+        ),
+    ];
+    for (ev, fields) in &events {
+        let mut whole = fields.clone();
+        whole["session_id"] = json!("s-mod-fault");
+        whole["cwd"] = json!(w.repo());
+        whole["hook_event_name"] = json!(ev);
+        if cfg!(debug_assertions) {
+            let (out, err, code) =
+                w.run(&["hook", "claude", ev], whole.to_string().as_bytes(), &[("ADAGE_TEST_FAULT", "panic")]);
+            assert_eq!((out.as_str(), err.as_str(), code), ("", "", 0), "{ev}: a panic stays silent and exits 0");
+        }
+        let mut big = whole.clone();
+        big["padding"] = json!("x".repeat(9 << 20));
+        let (out, err, code) = w.run(&["hook", "claude", ev], big.to_string().as_bytes(), &[]);
+        assert_eq!((out.as_str(), err.as_str(), code), ("", "", 0), "{ev}: a 9 MiB payload");
+        let mut unnamed = whole.clone();
+        unnamed.as_object_mut().unwrap().remove("session_id");
+        let (out, err, code) = w.run(&["hook", "claude", ev], unnamed.to_string().as_bytes(), &[]);
+        assert_eq!((out.as_str(), err.as_str(), code), ("", "", 0), "{ev}: no session id");
+    }
 }
 
 #[test]

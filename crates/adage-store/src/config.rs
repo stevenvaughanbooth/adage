@@ -17,6 +17,9 @@
 //! [runtime]
 //! control = 0.1              # share of sessions held out as the control arm
 //!
+//! [skills]
+//! invoke = false             # Claude Code mod: invoke an accepted, inert skill at its step
+//!
 //! [instincts]
 //! enabled = true             # bind Adage's built-in defaults from each repository's files
 //! packs = ["auto"]           # instinct packs to bind: auto (every one installed) or their names
@@ -78,6 +81,23 @@ pub struct Config {
     pub runtime_control: f64,
     /// `runtime.rewrite`: `PreToolUse` rewrites to the project's environment (on by default).
     pub runtime_rewrite: bool,
+    /// `runtime.routine_model`: the model the Claude Code mod sends a routine step to (a step the
+    /// model takes only to do what a delivered directive says), at low effort. `""` routes
+    /// nothing. The binary never sees it: the mod reads it from `adage --json`.
+    pub runtime_routine_model: String,
+    /// `runtime.predict_cap`: at most this many steps a session's model does not take, predicted
+    /// by Adage under a person's `predict` grant (mod architecture §3.2). 6 by default; 0 predicts none.
+    pub runtime_predict_cap: u32,
+    /// `skills.invoke`: a `skill` reflex with a person's `predict` grant may invoke its skill at
+    /// its step (the Claude Code mod's `turn.step`), when `adage train` recorded the skill as inert
+    /// in a pack the person accepted. Off by default.
+    pub skills_invoke: bool,
+    /// `ui.spinner`, `ui.turn_line`, `ui.noticed`: what the Claude Code mod draws beside Claude
+    /// Code's own lines (a spinner suffix while a reflex was delivered this turn, a turn summary,
+    /// the noticed line under a batch). Off by default; read by the mod from `adage --json`.
+    pub ui_spinner: bool,
+    pub ui_turn_line: bool,
+    pub ui_noticed: bool,
     /// Bind instincts (prebuilt routes) from each repository's declared files when learning.
     /// Learn procedure cards for families of similar tasks (`learn.cards`), and how similar a
     /// prompt must be to a family for its card (`learn.card_threshold`).
@@ -135,7 +155,15 @@ enum Kind {
     /// `all`, or a list of repository keys (`github.com/acme/billing`, `notes@1a2b3c4d5e6f`),
     /// given on the command line comma-separated; `""` for none.
     Repos,
+    /// A model name or alias as the harness takes it (`haiku`, `claude-haiku-4-5`, a provider's
+    /// `us.anthropic.…:0`): one word of `[A-Za-z0-9._:/@-]`, at most 128 characters; `""` for none.
+    Model,
+    /// A whole number from 0 to [`MAX_PREDICT_CAP`].
+    Cap,
 }
+
+/// The highest `runtime.predict_cap` a person can set.
+pub const MAX_PREDICT_CAP: u32 = 50;
 
 /// One documented key.
 #[derive(Debug)]
@@ -266,6 +294,30 @@ pub const KEYS: &[Key] = &[
         guarded: false,
     },
     Key {
+        name: "ui.spinner",
+        kind: Kind::Bool,
+        default: "false",
+        env: None,
+        doc: "Claude Code mod: add an adage suffix to the spinner while a reflex was delivered this turn",
+        guarded: false,
+    },
+    Key {
+        name: "ui.turn_line",
+        kind: Kind::Bool,
+        default: "false",
+        env: None,
+        doc: "Claude Code mod: a one-line adage summary beside the turn's duration, for turns with Adage activity",
+        guarded: false,
+    },
+    Key {
+        name: "ui.noticed",
+        kind: Kind::Bool,
+        default: "false",
+        env: None,
+        doc: "Claude Code mod: a line under a tool batch when Adage notices a habit it is still counting",
+        guarded: false,
+    },
+    Key {
         name: "runtime.control",
         kind: Kind::Share,
         default: "0.1",
@@ -280,6 +332,30 @@ pub const KEYS: &[Key] = &[
         env: None,
         doc: "point Python test runs under the system Python at the project's verified environment before they run (Claude Code PreToolUse); false: leave every command as the agent wrote it",
         guarded: false,
+    },
+    Key {
+        name: "runtime.routine_model",
+        kind: Kind::Model,
+        default: "",
+        env: None,
+        doc: "Claude Code mod: the model a step goes to, at low effort, when it only does what a delivered directive says; \"\" sends every step to the session's model",
+        guarded: false,
+    },
+    Key {
+        name: "runtime.predict_cap",
+        kind: Kind::Cap,
+        default: "6",
+        env: None,
+        doc: "Claude Code mod: at most this many steps per session that Adage takes in the model's place under a predict grant (0 to 50; 0: none)",
+        guarded: true,
+    },
+    Key {
+        name: "skills.invoke",
+        kind: Kind::Bool,
+        default: "false",
+        env: None,
+        doc: "Claude Code mod: invoke a skill at the step a skill reflex names, when it holds a predict grant and adage train recorded the skill inert in a pack you accepted",
+        guarded: true,
     },
 ];
 
@@ -338,10 +414,22 @@ fn from_text(kind: Kind, s: &str) -> Result<toml::Value, String> {
             }
             Ok(toml::Value::String(s.into()))
         }
+        Kind::Cap => match s.parse::<u32>() {
+            Ok(n) if n <= MAX_PREDICT_CAP => Ok(toml::Value::Integer(i64::from(n))),
+            _ => Err(format!("{s:?} is not a whole number between 0 and {MAX_PREDICT_CAP}")),
+        },
         Kind::Share => match s.parse::<f64>() {
             Ok(x) if (0.0..=1.0).contains(&x) => Ok(toml::Value::Float(x)),
             _ => Err(format!("{s:?} is not a share between 0 and 1")),
         },
+        Kind::Model => {
+            let ok = s.len() <= 128 && s.bytes().all(|c| c.is_ascii_alphanumeric() || b"._:/@-".contains(&c));
+            if ok {
+                Ok(toml::Value::String(s.into()))
+            } else {
+                Err(format!("{s:?} is not a model name (letters, digits, . _ : / @ -)"))
+            }
+        }
         Kind::Ids => {
             let ids = split_ids(s);
             // An id (`U3`, `auto`) or a pack name (`adage/python-env`).
@@ -381,10 +469,12 @@ fn split_ids(s: &str) -> Vec<String> {
 fn from_toml(kind: Kind, v: &toml::Value) -> Result<String, String> {
     let text = match (kind, v) {
         (Kind::Bool, toml::Value::Boolean(b)) => b.to_string(),
-        (Kind::Secs, toml::Value::Integer(n)) => n.to_string(),
+        (Kind::Secs | Kind::Cap, toml::Value::Integer(n)) => n.to_string(),
         (Kind::Share, toml::Value::Float(x)) => x.to_string(),
         (Kind::Share, toml::Value::Integer(n)) => n.to_string(),
-        (Kind::Thresholds | Kind::Dir | Kind::DirOrAuto | Kind::Notices, toml::Value::String(s)) => s.clone(),
+        (Kind::Thresholds | Kind::Dir | Kind::DirOrAuto | Kind::Notices | Kind::Model, toml::Value::String(s)) => {
+            s.clone()
+        }
         (Kind::Ids | Kind::Repos, toml::Value::String(s)) => s.clone(),
         (Kind::Ids | Kind::Repos, toml::Value::Array(a)) => {
             let ids: Option<Vec<&str>> = a.iter().map(|v| v.as_str()).collect();
@@ -467,29 +557,60 @@ fn load_from(file: &Path, env: &dyn Fn(&str) -> Option<String>) -> Loaded {
         }
         values.insert(k.name, value);
     }
-    let text = |n: &str| values[n].0.clone();
-    let config = Config {
-        learn_auto: parse_bool(&text("learn.auto")).unwrap_or(true),
-        learn_repos: Some(text("learn.repos")).filter(|s| s != "all").map(|s| split_ids(&s)),
-        learn_min_interval_secs: text("learn.min_interval_secs").parse().unwrap_or(120),
+    let config = from_values(&|n| values[n].0.as_str());
+    Loaded { config, values, problems }
+}
+
+impl Default for Config {
+    /// Every key at its default in [`KEYS`]: what a missing file, with no environment, gives.
+    fn default() -> Config {
+        from_values(&|n| default_of(n))
+    }
+}
+
+/// A documented key's default: [`KEYS`] is the only place one is written.
+fn default_of(name: &str) -> &'static str {
+    key(name).map_or("", |k| k.default)
+}
+
+/// A boolean key's value. Every value reaching here was validated, so the default is the
+/// fallback only in name: it keeps a second literal from ever being written.
+fn bool_of<'v>(text: &dyn Fn(&str) -> &'v str, name: &str) -> bool {
+    parse_bool(text(name)).or_else(|| parse_bool(default_of(name))).unwrap_or_default()
+}
+
+/// A number key's value, with the same fallback as [`bool_of`].
+fn number_of<'v, T: std::str::FromStr + Default>(text: &dyn Fn(&str) -> &'v str, name: &str) -> T {
+    text(name).parse().ok().or_else(|| default_of(name).parse().ok()).unwrap_or_default()
+}
+
+/// The configuration from each key's validated value as text.
+fn from_values<'v>(text: &dyn Fn(&str) -> &'v str) -> Config {
+    Config {
+        learn_auto: bool_of(text, "learn.auto"),
+        learn_repos: Some(text("learn.repos")).filter(|s| *s != "all").map(split_ids),
+        learn_min_interval_secs: number_of(text, "learn.min_interval_secs"),
         learn_thresholds: if text("learn.thresholds") == "demo" { Thresholds::Demo } else { Thresholds::Default },
-        learn_claude_projects: home_relative(&text("learn.claude_projects")),
-        learn_codex_sessions: Some(text("learn.codex_sessions"))
-            .filter(|s| s != "auto")
-            .and_then(|s| home_relative(&s)),
+        learn_claude_projects: home_relative(text("learn.claude_projects")),
+        learn_codex_sessions: Some(text("learn.codex_sessions")).filter(|s| *s != "auto").and_then(home_relative),
         learn_codex_auto: text("learn.codex_sessions") == "auto",
         ui_notices: text("ui.notices") != "off",
-        learn_opencode_exports: home_relative(&text("learn.opencode_exports")),
-        learn_parse_cache: parse_bool(&text("learn.parse_cache")).unwrap_or(true),
-        runtime_control: text("runtime.control").parse().unwrap_or(0.1),
-        runtime_rewrite: parse_bool(&text("runtime.rewrite")).unwrap_or(true),
-        learn_cards: parse_bool(&text("learn.cards")).unwrap_or(true),
-        learn_card_threshold: text("learn.card_threshold").parse().unwrap_or(0.811),
-        instincts_enabled: parse_bool(&text("instincts.enabled")).unwrap_or(true),
-        instincts_packs: split_ids(&text("instincts.packs")),
-        instincts_disabled: split_ids(&text("instincts.disabled")),
-    };
-    Loaded { config, values, problems }
+        learn_opencode_exports: home_relative(text("learn.opencode_exports")),
+        learn_parse_cache: bool_of(text, "learn.parse_cache"),
+        runtime_control: number_of(text, "runtime.control"),
+        runtime_rewrite: bool_of(text, "runtime.rewrite"),
+        runtime_routine_model: text("runtime.routine_model").to_string(),
+        runtime_predict_cap: number_of(text, "runtime.predict_cap"),
+        skills_invoke: bool_of(text, "skills.invoke"),
+        ui_spinner: bool_of(text, "ui.spinner"),
+        ui_turn_line: bool_of(text, "ui.turn_line"),
+        ui_noticed: bool_of(text, "ui.noticed"),
+        learn_cards: bool_of(text, "learn.cards"),
+        learn_card_threshold: number_of(text, "learn.card_threshold"),
+        instincts_enabled: bool_of(text, "instincts.enabled"),
+        instincts_packs: split_ids(text("instincts.packs")),
+        instincts_disabled: split_ids(text("instincts.disabled")),
+    }
 }
 
 /// Set `name` to `value` in the file, validated, keeping every other key. Returns the value as
@@ -562,6 +683,20 @@ mod tests {
         assert_eq!(l.values.len(), KEYS.len());
     }
 
+    /// Each default is written once, in `KEYS`: every one passes its own key's validation, and
+    /// `Config::default()` (built from them) is what a missing file gives.
+    #[test]
+    fn every_default_is_valid_and_is_the_default_config() {
+        for k in KEYS {
+            assert!(from_text(k.kind, k.default).is_ok(), "{}: default {:?} is invalid", k.name, k.default);
+        }
+        let d = tempfile::tempdir().unwrap();
+        assert_eq!(load_from(&d.path().join(FILE), &no_env).config, Config::default());
+        let c = Config::default();
+        assert_eq!((c.runtime_predict_cap, c.learn_card_threshold), (6, 0.811));
+        assert!(c.runtime_rewrite && c.learn_cards && !c.skills_invoke && !c.ui_spinner);
+    }
+
     #[test]
     fn env_beats_file_beats_default() {
         let d = tempfile::tempdir().unwrap();
@@ -616,6 +751,7 @@ mod tests {
         assert_eq!(set(&paths, "learn.min_interval_secs", "30").unwrap(), "30");
         assert_eq!(set(&paths, "learn.thresholds", "demo").unwrap(), "demo");
         assert_eq!(set(&paths, "runtime.control", "0.2").unwrap(), "0.2");
+        assert_eq!(set(&paths, "runtime.predict_cap", "2").unwrap(), "2");
         assert_eq!(set(&paths, "learn.codex_sessions", "~/.codex/sessions").unwrap(), "~/.codex/sessions");
         assert_eq!(set(&paths, "instincts.disabled", "adage/lockfiles, U3").unwrap(), "adage/lockfiles,U3");
         assert_eq!(set(&paths, "instincts.disabled", "U3, N1").unwrap(), "U3,N1");
@@ -629,6 +765,9 @@ mod tests {
             ("learn.min_interval_secs", "100000"),
             ("learn.thresholds", "lax"),
             ("runtime.control", "1.5"),
+            ("runtime.predict_cap", "51"),
+            ("runtime.predict_cap", "-1"),
+            ("runtime.predict_cap", "two"),
             ("learn.auto", "maybe"),
             ("learn.codex_sessions", "relative"),
             ("learn.nope", "1"),
@@ -646,6 +785,7 @@ mod tests {
         assert_eq!(l.config.learn_min_interval_secs, 30);
         assert_eq!(l.config.learn_thresholds, Thresholds::Demo);
         assert_eq!(l.config.runtime_control, 0.2);
+        assert_eq!(l.config.runtime_predict_cap, 2);
         assert!(l.config.learn_codex_sessions.as_ref().unwrap().ends_with(".codex/sessions"));
         assert_eq!(l.config.instincts_disabled, vec!["U3".to_string(), "N1".to_string()]);
         assert!(!l.config.instincts_enabled);

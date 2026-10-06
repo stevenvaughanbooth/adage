@@ -1,0 +1,15 @@
+Validating plugin manifest: plugin/claude-code/.claude-plugin/plugin.json
+
+  > types ./types/index.d.ts declares on $: nothing (no EngineInterface member)
+  > types ./types/index.d.ts declares state: adage.fired, adage.predicted, adage.marks, adage.batches, adage.feed, adage.rows, adage.ticks, adage.health, adage.learner, adage.reflexes, adage.checks, adage.lapsed, adage.packs, adage.mode, adage.view, adage.map, adage.turn, adage.press, adage.asked, adage.allow, adage.skills, adage.candidates
+
+Validating hooks: plugin/claude-code/hooks/hooks.json
+
+  > ./register.ts hooks: session.start, classic.SessionStart, classic.UserPromptSubmit, classic.PostToolBatch, classic.PostToolUseFailure, classic.Stop, classic.PreToolUse, turn.step, turn.complete, tool.call{tool=Bash}, prompt.compose, tool.describe{tool=Bash}, session.compact, agent.spawn, command.run{command=adage}, ui.render{component=InfoNotice}, ui.render{component=UserMessage}, ui.render{component=ToolUse}, ui.render{component=ToolResult}, ui.render{component=Spinner}, ui.render{component=TurnDuration}, ui.render{component=AbovePrompt}, ui.render{component=Pane, requestId=adage}, ui.render{component=Pane, requestId=adage-inspect}, ui.render{component=CommandOutput, props has {command=adage}}, session.start{isInteractive=true|false}, classic.SessionStart{hook_event_name=SessionStart}, turn.complete{reason=answer}, skill.prompt, ui.render{component=ToolGroup}, ui.render{component=ToolUse, props has {tool=Skill}}, ui.render{component=Pane, requestId=adage-allow}, ui.open{id=adage}, ui.… [+15 chars]
+  > ./register.ts calls: $.clock.after (via mod), $.clock.every (via mod), $.clock.now (via mod), $.command.list (via mod), $.command.register (via mod), $.env.get (via mod), $.fs.read (via mod), $.process.run (via mod), $.process.spawn (via mod), $.session.cwd (via mod), $.session.id (via mod), $.session.repo (via mod), $.session.usage (via mod), $.session.version (via mod), $.state.get, $.state.set, $.store.get (via mod), $.store.set (via mod), $.tool.check (via mod), $.ui.ask (via mod), $.ui.close (via mod), $.ui.copy (via mod), $.ui.invalidate (via mod), $.ui.notice (via mod), $.ui.open (via mod), $.ui.resolve (via mod), $.ui.scroll (via mod), $.ui.status (via mod), $.ui.toast (via mod)
+  > ./register.ts env writes: nothing
+  > ./register.ts env reads: ADAGE_ASCII, ADAGE_MOD_OBSERVE, ADAGE_REDUCED_MOTION, CLAUDE_PLUGIN_DATA, OS
+  > ./register.ts state writes: adage.allow, adage.asked, adage.batches, adage.candidates, adage.checks, adage.feed, adage.fired, adage.health, adage.lapsed, adage.learner, adage.map, adage.marks, adage.mode, adage.packs, adage.predicted, adage.press, adage.reflexes, adage.rows, adage.skills, adage.ticks, adage.turn, adage.view
+  > ./register.ts state reads: adage.allow, adage.asked, adage.batches, adage.candidates, adage.checks, adage.feed, adage.fired, adage.health, adage.lapsed, adage.learner, adage.map, adage.marks, adage.mode, adage.packs, adage.predicted, adage.press, adage.reflexes, adage.rows, adage.skills, adage.ticks, adage.turn, adage.view
+
+√ Validation passed

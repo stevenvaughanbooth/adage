@@ -45,7 +45,7 @@ for source overrides and the distinction between manual and automatic Codex disc
 | Each `Stop` | Auto-learn runs as it does today. |
 | Next day's first `SessionStart` | At most one line, and only when something changed, e.g. `adage: 3 new reflexes; 41 directives followed this week. 1 install step waits for you: run adage review in a terminal.` |
 
-Persona (a) cannot approve nascent reflexes, because decisions require a person at a terminal. That is acceptable: environment steps are a small share of reflexes, and everything else just works.
+Persona (a) can approve nascent reflexes, grant a step to run for them and turn Adage back on without a terminal: the Claude Code mod asks in the session, and the answer is a **press**, a single-use token the binary issued to the mod before the agent's first act, which the person-only verb accepts in place of a terminal and records as `via: press` (docs/execution.md, "Deciding from the session"; docs/claude-mod/architecture.md §3.12). The model cannot obtain one by being steered: the window closes at its first act. Without the mod, decisions require a person at a terminal, as before.
 
 ### (b) CLI user (brew, npm or curl)
 
@@ -74,7 +74,7 @@ Persona (a) cannot approve nascent reflexes, because decisions require a person 
 
 ### Must never happen silently
 
-- **Execution**: needs `delegate on` plus a per-reflex `review delegate`, at a terminal. This is unchanged.
+- **Execution**: needs `delegate on` plus a per-reflex `review delegate`, made by a person: at a terminal, or with a press in the Claude Code session (a press is a person; the binary records `via: press`). The Claude Code plugin ships both binaries; the marker `delegate on` writes is what makes its hooks run `adage-exec`, from the next session.
 - **Network**: no hook and no learner ever touches the network. Model fetch happens only in response to a person's explicit action.
 - **Other repos' traces**: the bootstrap and learner read only transcripts whose recorded cwd is inside this repo's root or its worktrees. The filter uses the Claude project-dir slug and the first-line cwd (P0-5). Other repos' files are not opened at all. Today the parse-cache pass may open them.
 - **Environment-changing reflexes**: always nascent until approved.
@@ -111,7 +111,7 @@ fire/prime/inhibit, nascent/forming/firm/dormant/extinguished, 6 review verbs pl
 | S6 | **Nascent reflexes are logged, not surfaced.** Auto-learn writes `nascent` only to `learn.log` (live-learning.md, `changes[].change`). | learnlog |
 | S7 | **Missing or blocked model.** Doctor reports *pass* "optional" (`doctor.rs:340-357`). The fetch uses `curl` against huggingface.co (`models.rs:82`; `adage-intent/src/model.rs:57`) with no mirror override. A proxy 403 is shown only in init/wizard. | models |
 | S8 | **Fail-open errors are visible only in `doctor`/`watch`.** A hook that fails on every call looks exactly like "Adage has nothing to say". | failopen |
-| S9 | **`delegate on` with the exec plugin not installed.** The base plugin goes quiet (`session-start:20`) whenever `exec/enabled` exists. `exec.rs:161-163` only *prints* "enable the adage-exec plugin". If the user forgets, **all** Adage hooks go silent. | exec marker |
+| S9 | **`delegate on` with the exec plugin not installed.** The base plugin goes quiet (`session-start:20`) whenever `exec/enabled` exists. `exec.rs:161-163` only *prints* "enable the adage-exec plugin". If the user forgets, **all** Adage hooks go silent. *Resolved by plan A8: one plugin ships both binaries, and its shim runs adage-exec with the marker, else adage.* | exec marker |
 | S10 | **Bare `adage` outside a TTY prints usage** (`main.rs:140`). `!adage` inside Claude Code tells you nothing about status. | main |
 | S11 | **Auto-learn is off via env.** `ADAGE_AUTO_LEARN=0` in a dotfile shows up only in doctor. | config |
 
@@ -296,7 +296,7 @@ The learner writes `ledger/<slug>.summary.json` (estimate, gate status and count
 | Conflicting reflexes | Existing interlocking in the learner. Precedence: first-hand over team pack over instinct. Extinguished shadows imports. | Map only; never a notice. |
 | Worktrees and subdirectories | Key via the common dir's `origin` (S3). | None. |
 | Learner repeatedly erroring | The existing `condition_error` lines. After 3 consecutive errors, back off (double the interval). | `adage: learning failed 3× here (lock); run adage doctor`. |
-| `delegate on` without the exec plugin | The base shim checks `CLAUDE_PLUGIN_ROOT/../adage-exec` (or a marker the exec shim writes on each start); if absent, it keeps serving. | `adage: delegation is on but the adage-exec plugin isn't installed; serving without execution.` |
+| `delegate on` without an adage-exec binary | One plugin ships both (plan A8); when the machine has no adage-exec (Windows, a tampered bundle, a PATH install without it), the shim keeps adage serving. | `adage: execution is on, but no adage-exec binary was found for this machine; serving without execution (adage delegate off turns it off).` |
 | Model download blocked (e.g. this container's proxy) | **Rarely matters: the binary bundles potion-base-8M (int8, SHA-256 pinned), so embeddings work with no download.** `models fetch` tries the pinned Hugging Face revision (or `ADAGE_MODEL_BASE_URL`), then the model's pinned npm tarball (`registry.npmjs.org`, byte-identical files). **Never retried automatically.** It classifies the curl exit code (6/7 no network; 22 with 403/407 is a proxy or policy block; 35/60 is TLS interception, advise `CURL_CA_BUNDLE`/`SSL_CERT_FILE`) and writes `models/.fetch-failed.json {class, host, at, detail, fallback}`. `models install <dir>` (upstream files or an unpacked npm package) stays. | Doctor: *pass* `potion-base-8m-i8@b9c0e329a2ce bundled in this binary (int8, SHA-256 verified); the last download failed: huggingface.co blocked by proxy (403). …`. The card's footer says `embeddings: potion-base-8m-i8 (bundled)`; only with no model at all does it say `(no embedding model: hashed fallback)` in grey, and doctor warns. It is **never** a notice. |
 
 ---
@@ -309,7 +309,7 @@ The learner writes `ledger/<slug>.summary.json` (estimate, gate status and count
    - `release.yml` gains a job that, after dist builds, assembles `plugin/claude-code/dist/<5 targets>/adage` plus `SHA256SUMS` and pushes it to a `marketplace` branch, or a separate `adage-marketplace` repo.
    - `marketplace.json` sources that ref, and its description drops "Needs the adage binary on PATH".
    - The shim change is small: target detection already exists. The shim also prints JSON `systemMessage` on stdout on failure (`plugin/claude-code/scripts/session-start:77`), and hook commands tolerate a missing binary.
-   - Same for `claude-code-exec`.
+   - Same for `adage-exec`, which ships in the same plugin (plan A8: `dist/<target>/adage-exec` beside `adage`, both in `SHA256SUMS`).
 2. **Bootstrap at `SessionStart`** (§3.2).
    - `adage-hook/src/lib.rs` (the learn-point branch at `:210`, the early return at `:241`), `harness/mod.rs:68`.
    - `Request.bootstrap` in `adage-hook/src/autolearn.rs`; two-phase learner in `adage-cli/src/autolearn.rs::learn_once`.
