@@ -87,7 +87,8 @@ import report as demo_report  # noqa: E402 - demo/report.py: statuses, statistic
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 EXPLORE_TOOLS = {"Read", "Glob", "Grep", "LS"}
 EXPLORE_COMMANDS = ("ls", "find", "cat", "grep", "rg", "head", "tail", "tree", "sed -n", "wc")
-ARMS = ("adage", "control", "off", "instincts", "e1", "agents-md")
+ARMS = ("adage", "control", "off", "instincts", "e1", "agents-md", "mod", "mod-observe")
+PLUGIN_ARMS = ("mod", "mod-observe")
 SPOOL_MAGIC = bytes([0xAD, 0xA6, 0xE5, 0x01])
 DEFAULTS = {
     "model": "claude-haiku-4-5-20251001",
@@ -174,6 +175,10 @@ def load_config(path, overrides):
     for arm in cfg["eval"].get("arms", ["control", "adage"]):
         if arm not in ARMS:
             raise SystemExit(f"config {path}: unknown arm {arm!r} (one of {', '.join(ARMS)})")
+    if set(cfg["eval"].get("arms", [])) & set(PLUGIN_ARMS):
+        plugin = cfg.get("plugin_dir")
+        if not isinstance(plugin, str) or not Path(plugin).is_absolute():
+            raise SystemExit("mod arms require an absolute plugin_dir with both pinned binaries staged")
     if not isinstance(cfg["rounds"], int) or cfg["rounds"] < 1:
         raise SystemExit(f"config {path}: rounds must be a positive integer")
     for key in ("budget_usd", "session_budget_usd"):
@@ -272,7 +277,7 @@ def plan(cfg, phases, round_):
     return out
 
 
-def claude_command(cfg, prompt, settings):
+def claude_command(cfg, prompt, settings, *, arm=None, debug_file=None):
     argv = [
         "claude", "-p", prompt,
         "--model", cfg["model"],
@@ -281,7 +286,6 @@ def claude_command(cfg, prompt, settings):
         "--output-format", "stream-json", "--verbose", "--include-hook-events",
         "--setting-sources", cfg.get("setting_sources", "project,local"),
         "--strict-mcp-config",
-        "--settings", str(settings),
         # The tool set itself, not only what is pre-approved: newer harnesses offer more built-in
         # tools (TaskGet/TaskList, Cron*, ToolSearch, ...), and an agent asked to "pick up W-1042"
         # looked for it with TaskGet, found no such task and asked what to do. `tools` (default:
@@ -290,6 +294,12 @@ def claude_command(cfg, prompt, settings):
         "--allowedTools", *cfg["allowed_tools"],
         "--disallowedTools", *cfg["disallowed_tools"],
     ]
+    if arm in PLUGIN_ARMS:
+        argv += ["--plugin-dir", cfg["plugin_dir"]]
+    else:
+        argv += ["--settings", str(settings)]
+    if debug_file is not None and cfg.get("capture_debug"):
+        argv += ["--debug", "--debug-file", str(debug_file)]
     if cfg.get("capture_usage"):
         argv.append("--include-partial-messages")
     return argv
@@ -310,6 +320,8 @@ def e1_home(home):
 
 def settings_kind(arm):
     """Which settings file a session loads: no hooks, Adage's hooks, or adage-exec's (E1)."""
+    if arm in PLUGIN_ARMS:
+        return "none"
     return "exec" if arm == "e1" else "hooks" if env_for(arm, "/x") else "none"
 
 
@@ -320,6 +332,8 @@ def env_for(arm, home):
     round."""
     if arm in ("train", "off"):
         return {}
+    if arm == "mod-observe":
+        return {"ADAGE_HOME": str(home), "ADAGE_ARM": "treated", "ADAGE_AUTO_LEARN": "0", "ADAGE_MOD_OBSERVE": "1"}
     if arm == "instincts":
         return {"ADAGE_HOME": str(instincts_home(home)), "ADAGE_ARM": "treated", "ADAGE_AUTO_LEARN": "0"}
     if arm == "e1":
@@ -469,7 +483,8 @@ def describe(cfg, phases, rounds, root, adage, isolate=True):
                 "cwd": str(workdir),
                 "home": str(root / "runs" / run_id / "home") if isolate else None,
                 "sandbox": expand(cfg["sandbox"], dir=str(workdir), task=task, arm=arm),
-                "command": claude_command(cfg, text, private / f"settings-{settings_kind(arm)}.json"),
+                "command": claude_command(cfg, text, private / f"settings-{settings_kind(arm)}.json", arm=arm,
+                                          debug_file=root / "runs" / run_id / "claude-debug.log"),
                 "env": env_for(arm, private / "adage-home"),
                 "score": expand(cfg["score"], dir=str(workdir), task=task),
             })
@@ -989,10 +1004,16 @@ class Live:
             self.observer.prepared(self, run_id, task, arm, workdir, settings, env)
         if deadline is not None and time.monotonic() >= deadline:
             raise TimeoutError("task preparation exhausted the workflow deadline")
-        cmd = claude_command(self.cfg, prompt, settings)
+        plugin = Path(self.cfg["plugin_dir"]) if arm in PLUGIN_ARMS else None
+        if plugin is not None:
+            if not (plugin / "hooks/hooks.json").is_file():
+                raise ValueError("staged mod plugin is missing hooks/hooks.json")
+            # A cold mod session still needs a writable private store inside confinement.
+            Path(env["ADAGE_HOME"]).mkdir(parents=True, exist_ok=True)
+        cmd = claude_command(self.cfg, prompt, settings, arm=arm, debug_file=run_dir / "claude-debug.log")
         if self.cfg.get("confine"):
             rw = [env["ADAGE_HOME"]] if env.get("ADAGE_HOME") else []
-            cmd = confine_argv(self.cfg, run_dir, env, ro=[settings, self.adage, self.adage_exec], rw=rw) + cmd
+            cmd = confine_argv(self.cfg, run_dir, env, ro=[settings, self.adage, self.adage_exec, *([plugin] if plugin else [])], rw=rw) + cmd
         t0 = time.time()
         events, directives, uses_by_id, sid, result, turns, version = [], [], {}, None, {}, 0, None
         proc = None

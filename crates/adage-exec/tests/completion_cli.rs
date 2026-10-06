@@ -23,6 +23,8 @@ impl World {
         let tmp = tempfile::tempdir().unwrap();
         let repo = tmp.path().join("fixture");
         std::fs::create_dir_all(repo.join(".git")).unwrap();
+        // The CLI resolves --repo before deriving its path-based fallback key.
+        let repo = repo.canonicalize().unwrap();
         let key = adage_core::repo::repo_key(&repo);
         let paths = Paths::at(tmp.path().join("adage"));
         std::fs::create_dir_all(&paths.root).unwrap();

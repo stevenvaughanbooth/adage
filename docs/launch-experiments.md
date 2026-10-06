@@ -198,3 +198,18 @@ Coder has five proposed training groups and one exposed development group; TypeS
 exposed candidate groups; cert-manager's introduction/follow-up form one exposed group; dbt has
 zero real groups. There are zero untouched confirmation groups. These counts describe curation,
 not admitted runnable tasks. Raw sources, outputs and reproduction scripts remain private.
+
+## Claude mod integration after PR #27
+
+The Coder development scout must load the merged Claude Code mod itself, with Claude Code
+2.1.288 and both Adage binaries pinned. Its proposed allocation remains one session at a $2 CLI
+cap, 60 turns and 1,800 seconds; no automatic retries or expansion. This is an exposed task and
+an initially empty learned store, so its results are cost/activation diagnostics, not savings or
+confirmation evidence. The earlier baseline-only preparation is retained as superseded.
+
+Before training or comparing learned mod treatment, register its complete plugin source, binary
+hashes, model, runtime settings and operator grants. Keep the same model in both arms and disable
+model routing. Use the independent semantic grader and verify native model requests, module
+activation, reflex delivery, prediction/receipt provenance and duplicate-hook absence. The old
+E0 frozen collector does not freeze these extra treatment inputs; do not label its output a mod
+comparison. Failure or incomplete accounting stops paid expansion.

@@ -18,6 +18,11 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### The runtime and hooks
 
+- Plugin session records resolve the serving binary through symlinks on macOS, so the record
+  identifies Adage or Adage Exec instead of the shared `hook` entry.
+- The bounded live collector can load the Claude Code mod directly and retain debug evidence;
+  the existing frozen E0 protocol remains unchanged.
+
 - **The orientation card.** A delivered procedure card no longer quotes the exemplar lines; it says
   where its files stand in the checkout instead (line counts, a Python source's last definitions,
   a test file's last lines, a changelog's first headings), read locally with no command run and

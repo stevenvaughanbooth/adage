@@ -521,3 +521,22 @@ checks:
 - `tasks_by_round`: per-round pools, refused overlaps, the leaky warning, and that a round never
   learns from its own tasks;
 - that nothing under `demo/results/` names a home directory.
+
+### Claude Code mod cost scouts
+
+The `mod` and `mod-observe` arms load `plugin_dir` (an absolute path to a privately staged
+`plugin/claude-code` with both matching binaries and its `dist/SHA256SUMS`). They pass
+`--plugin-dir` without a second hook registration through `--settings`. Automatic learning stays
+off; enabling execution and approving predictions remain operator decisions. `mod-observe` sets
+`ADAGE_MOD_OBSERVE=1`; it is an identity check, not an untreated baseline.
+
+Pin the CLI to the version tested by the plugin (currently 2.1.288). Set `capture_usage: true`
+and `capture_debug: true` for every compared arm; debug evidence is retained in each run's
+`claude-debug.log`. Retain native histories, independent grades and the complete plugin source
+alongside the existing binary/configuration pins. Loading a plugin is not proof of an intervention:
+inspect actual module activation, the bridge's decisions, delivered context and native calls.
+
+This runner support does not extend `frozen.py`'s E0-only treatment contract. A mod savings study
+needs a separately reviewed and frozen plugin, settings, stores and operator grants, plus verified
+request accounting and delivery evidence. A single cold-start Coder scout with an empty Adage home
+measures initial task cost and activation only; it cannot establish learned-reflex savings.

@@ -224,7 +224,12 @@ fn record_start(s: &HookCtx<'_>, repo_key: &str) -> Result<(), Failure> {
 /// Which binary served a session's start, by its file name: the Claude Code plugin's shim links
 /// `adage` or `adage-exec` at every start (plan A8), and exactly one of them answers its hooks.
 fn serving_bin() -> Option<String> {
-    std::env::current_exe().ok().and_then(|p| p.file_stem().map(|s| s.to_string_lossy().into_owned()))
+    // macOS may report the shim's `bin/hook` symlink; resolve it so the record identifies
+    // the verified adage or adage-exec binary, as it already does on Linux.
+    std::env::current_exe()
+        .ok()
+        .and_then(|p| p.canonicalize().ok())
+        .and_then(|p| p.file_stem().map(|s| s.to_string_lossy().into_owned()))
 }
 
 /// One record that a session event happened in a repository with no reflexes yet: the event, the
