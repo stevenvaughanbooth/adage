@@ -430,6 +430,22 @@ def validate_admission_journal(frozen, objects, journaled, receipts, ledger):
             raise ValueError(f"native accounting exceeds the conservative cap charge for job {run}; reconcile the overrun")
 
 
+def receipt_evidence_issues(receipt, objects):
+    """Evidence failures stop admission; an independently graded task failure does not."""
+    accounting = objects.get(receipt["evidence"]["accounting"])
+    grade = objects.get(receipt["evidence"]["grade"])
+    issues = []
+    if not receipt["usage_complete"] or not accounting["complete"]:
+        issues.append("incomplete request usage")
+    if any(call["model"] != receipt["observed"]["model"] for call in accounting["calls"]):
+        issues.append("unplanned model call")
+    if len(accounting["calls"]) > receipt["observed"]["budget"]["max_model_calls"]:
+        issues.append("model-call budget exceeded")
+    if evidence.independent_grade(grade["stdout"], grade["returncode"], grade["timed_out"]) is None:
+        issues.append("unknown independent grade")
+    return issues
+
+
 def preflight(frozen, objects, root, adage):
     """Read-only readiness: source checks, existing journal and local execution prerequisites."""
     root = Path(root).resolve()
@@ -466,6 +482,10 @@ def preflight(frozen, objects, root, adage):
                 raise ValueError("a terminal receipt does not match its scheduled job")
             for sha in value.get("evidence", {}).values():
                 objects.body(sha)
+            issues = receipt_evidence_issues(value, objects)
+            if issues:
+                block("receipt_evidence", f"Job {path.stem} has " + "; ".join(issues)
+                      + "; retain and diagnose its original evidence before further paid dispatch")
             completed.append(path.stem)
             receipts[path.stem] = value
             journaled.add(path.stem)
@@ -499,7 +519,7 @@ def preflight(frozen, objects, root, adage):
             validate_admission_journal(frozen, objects, journaled, receipts, ledger)
             admission = {"cap_usd": ledger.total, "accounted_usd": ledger.spent,
                          "remaining_reservation_usd": len(pending) * ledger.per_session}
-            if pending and ledger.data["blocked_reason"]:
+            if ledger.data["blocked_reason"]:
                 block("accounting", f"Dispatch is blocked: {ledger.data['blocked_reason']}; reconcile the original accounting ledger")
             elif pending and ledger.spent + len(pending) * ledger.per_session > ledger.total + 1e-9:
                 block("budget", "The remaining budget cannot reserve every unfinished job; inspect the original ledger before starting a new study")
@@ -582,6 +602,7 @@ def execute(frozen_path, frozen, objects, root, adage, *, live_factory=runner.Li
     specs = bindings(frozen, objects, adage)
     with execution_lock(root):
         bind_root(frozen, root)
+        stopped = []
         for job in frozen["jobs"]:
             terminal = root / "receipts" / f"{job['id']}.json"
             started = root / "started" / f"{job['id']}.json"
@@ -619,10 +640,16 @@ def execute(frozen_path, frozen, objects, root, adage, *, live_factory=runner.Li
                 report(frozen_path, frozen, objects, root, adage)
                 raise
             publish(root / "submission.json", submission(frozen, root), replace=True)
+            stopped = receipt_evidence_issues(value, objects)
+            if live.budget.data["blocked_reason"]:
+                stopped.append(live.budget.data["blocked_reason"])
+            if stopped:
+                break
         result = report(frozen_path, frozen, objects, root, adage)
-        if result.returncode == 0 and not json.loads(result.stdout)["evidence_complete"]:
+        if result.returncode == 0 and (stopped or not json.loads(result.stdout)["evidence_complete"]):
             result.returncode = 2
-            result.stderr = "frozen collection is incomplete; inspect report.json and the accounting ledger\n"
+            detail = ": " + "; ".join(stopped) if stopped else ""
+            result.stderr = "frozen collection is incomplete" + detail + "; inspect report.json and the accounting ledger\n"
         return result
 
 

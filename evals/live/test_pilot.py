@@ -112,7 +112,9 @@ class TrainingLive:
                 {"type": "user", "sessionId": run_id, "cwd": str(work), "message": {"role": "user", "content": [
                     {"type": "tool_result", "tool_use_id": f"gold-{i}", "content": output, "is_error": failed}]}}
             ]
-        (archive / f"{run_id}.jsonl").write_text("\n".join(json.dumps(row) for row in native) + "\n")
+        if self.mode != "missing-history":
+            body = "malformed native history\n" if self.mode == "malformed-history" else "\n".join(json.dumps(row) for row in native) + "\n"
+            (archive / f"{run_id}.jsonl").write_text(body)
         self.state["runs"][run_id] = {"phase": phase, "arm": arm, "task": task,
             "status": "passed" if json.loads(grade.stdout)["passed"] else "failed",
             "run_status": "scorer_error" if self.mode == "unknown-grade" else "ok",
@@ -262,6 +264,60 @@ class PilotFlow(unittest.TestCase):
                 self.assertFalse(result["ready_for_paid_dispatch"])
                 with self.assertRaisesRegex(ValueError, "not ready"):
                     pilot.train(root, execute=True, live_factory=TrainingLive)
+
+    def test_missing_or_invalid_native_history_retains_receipt_and_stops_spending(self):
+        for mode in ("missing-history", "malformed-history"):
+            with self.subTest(mode=mode):
+                root = self.root.parent / mode
+                pilot.initialize(root, ADAGE, "fixture-model-v1", "30", "1")
+                TrainingLive.runs, TrainingLive.mode = [], mode
+                result = pilot.train(root, execute=True, live_factory=TrainingLive)
+                self.assertEqual(result["returncode"], 2)
+                self.assertEqual(len(TrainingLive.runs), 1)
+                self.assertTrue(any("incomplete native histories" in reason for reason in result["blockers"]))
+                pointers = list((root / "train" / "receipts").glob("*.json"))
+                self.assertEqual(len(pointers), 1, "preserve the failed original evidence receipt")
+                objects = frozen.Objects(root / "objects")
+                receipt = objects.get(frozen.read_json(pointers[0])["sha256"])
+                sources = objects.get(receipt["evidence"]["sources"])
+                self.assertFalse(sources["complete"])
+                before = pointers[0].read_bytes()
+                TrainingLive.mode = "complete"
+                with self.assertRaisesRegex(ValueError, "incomplete native histories"):
+                    pilot.train(root, execute=True, live_factory=TrainingLive)
+                self.assertEqual(len(TrainingLive.runs), 1)
+                self.assertEqual(pointers[0].read_bytes(), before)
+
+    def test_native_history_and_stream_are_pinned_and_must_survive_resume(self):
+        self.collect_one()
+        objects = frozen.Objects(self.root / "objects")
+        pointer = next((self.root / "train" / "receipts").glob("*.json"))
+        receipt = objects.get(frozen.read_json(pointer)["sha256"])
+        sources = objects.get(receipt["evidence"]["sources"])
+        self.assertTrue(sources["complete"])
+        self.assertEqual(len(sources["sources"]), 2)
+        original_receipt = pointer.read_bytes()
+        for name, sha in sources["sources"].items():
+            path = Path(name)
+            original = path.read_bytes()
+            self.assertEqual(frozen.file_digest(path), sha)
+            for mutation in ("change", "remove"):
+                with self.subTest(path=path.name, mutation=mutation):
+                    if mutation == "change":
+                        path.write_bytes(original + b"\n")
+                    else:
+                        path.unlink()
+                    try:
+                        readiness = pilot.plan(self.root)
+                        self.assertFalse(readiness["ready_for_paid_dispatch"])
+                        self.assertTrue(any("immutable receipt" in reason for reason in readiness["blockers"]))
+                        with self.assertRaisesRegex(ValueError, "immutable receipt"):
+                            pilot.train(self.root, execute=True, live_factory=TrainingLive)
+                        self.assertEqual(len(TrainingLive.runs), 1)
+                        self.assertEqual(pointer.read_bytes(), original_receipt)
+                    finally:
+                        path.write_bytes(original)
+            self.assertTrue(pilot.plan(self.root)["ready_for_paid_dispatch"])
 
     def test_journal_rejects_budget_rollback_and_forged_zero_cost(self):
         self.collect_one()

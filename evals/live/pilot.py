@@ -155,6 +155,34 @@ def train_jobs(manifest):
             for run_id, _, _, task, prompt in runner.plan(manifest["configs"]["train"], ["train"], 1)]
 
 
+def training_sources(root, run_id, run, stream_sha256):
+    """Pin original native evidence before admitting another training session."""
+    archive = root / "train" / "private" / "transcripts"
+    stream = root / "train" / "runs" / run_id / "stream.jsonl"
+    sources, reasons = {}, []
+    sid = (run.get("metrics") or {}).get("session_id")
+    valid_sid = isinstance(sid, str) and bool(sid) and "/" not in sid and "\\" not in sid
+    paths = sorted(path for path in archive.glob("*/*.jsonl") if valid_sid and path.name == f"{sid}.jsonl")
+    if not valid_sid:
+        reasons.append("missing or invalid native session identity")
+    if len(paths) != 1:
+        reasons.append("training run needs exactly one archived native history")
+    for path in [stream, *paths]:
+        boundary = archive if path != stream else stream.parent
+        if path.is_symlink() or not path.resolve().is_relative_to(boundary.resolve()):
+            reasons.append("native evidence must not link outside its archive")
+            continue
+        try:
+            sources[str(path)] = frozen.file_digest(path)
+            if path != stream:
+                training.check_native_session(path, sid)
+        except (OSError, ValueError) as exc:
+            reasons.append(f"native evidence is unavailable or invalid: {exc}")
+    if sources.get(str(stream)) != stream_sha256:
+        reasons.append("native request stream changed or could not be fully captured")
+    return {"complete": not reasons, "session_id": sid, "sources": sources, "reasons": reasons}
+
+
 def training_journal(manifest, root, objects):
     jobs = train_jobs(manifest)
     expected, receipt_map, started = {job["id"] for job in jobs}, {}, set()
@@ -184,6 +212,10 @@ def training_journal(manifest, root, objects):
             raise ValueError("training run/grade differs from its immutable receipt")
         for sha in receipt["evidence"].values():
             objects.body(sha)
+        accounting = objects.get(receipt["evidence"]["accounting"])
+        sources = objects.get(receipt["evidence"]["sources"])
+        if training_sources(root, run, receipt["run"], accounting["stream_sha256"]) != sources:
+            raise ValueError("training native history or request stream differs from its immutable receipt; restore the original evidence")
     if started - receipt_map.keys():
         raise ValueError("training job started without a receipt; reconcile the original attempt without rerunning")
     return jobs, receipt_map, ledger
@@ -225,6 +257,10 @@ def plan(root, *, runtime=True):
         for run_id, receipt in receipts.items():
             accounting = objects.get(receipt["evidence"]["accounting"])
             grade = objects.get(receipt["evidence"]["grade"])
+            sources = objects.get(receipt["evidence"]["sources"])
+            if not sources["complete"]:
+                blockers.append(f"training {run_id} has incomplete native histories: " + "; ".join(sources["reasons"])
+                                + "; retain the original attempt and diagnose before spending again")
             if (not accounting["complete"] or any(call["model"] != manifest["configs"]["train"]["model"] for call in accounting["calls"])
                     or evidence.independent_grade(grade["stdout"], grade["returncode"], grade["timed_out"]) is None):
                 blockers.append(f"training {run_id} has incomplete usage, a different model or an unknown independent grade; retain the attempt and diagnose before spending again")
@@ -302,13 +338,15 @@ def train(root, *, execute=False, live_factory=runner.Live):
             if observer.version != manifest["harness_version"].split()[0]:
                 raise ValueError("actual training harness version was not observed")
             accounting = evidence.read_stream(root / "train" / "runs" / job["id"] / "stream.jsonl")
+            sources = training_sources(root, job["id"], live.state["runs"][job["id"]], accounting.stream_sha256)
             receipt = {"pilot_sha256": pilot_sha(manifest), "job_id": job["id"], "run": live.state["runs"][job["id"]],
                        "evidence": {"accounting": objects.put({"complete": accounting.complete, "calls": accounting.calls,
                            "reasons": accounting.reasons, "terminal": accounting.terminal, "stream_sha256": accounting.stream_sha256}),
-                           "grade": objects.put(observer.grade)}}
+                           "grade": objects.put(observer.grade), "sources": objects.put(sources)}}
             frozen.publish(root / "train" / "receipts" / f"{job['id']}.json",
                            {"pilot_sha256": pilot_sha(manifest), "sha256": objects.put(receipt)})
-            if (not accounting.complete or any(call["model"] != manifest["configs"]["train"]["model"] for call in accounting.calls)
+            if (not sources["complete"] or not accounting.complete
+                    or any(call["model"] != manifest["configs"]["train"]["model"] for call in accounting.calls)
                     or evidence.independent_grade(observer.grade["stdout"], observer.grade["returncode"], observer.grade["timed_out"]) is None):
                 break
     result = plan(root, runtime=False)

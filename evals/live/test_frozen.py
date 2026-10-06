@@ -58,14 +58,17 @@ class FakeLive:
             row["session_id"] = run_id
             if self.mode == "unknown-cost" and row.get("type") == "result":
                 row.pop("total_cost_usd", None)
+            if self.mode == "last-overrun" and len(self.runs) == 4 and row.get("type") == "result":
+                row["total_cost_usd"] = 1.01
             message = row.get("message") or row.get("event", {}).get("message")
             if message:
                 message["id"] += "-" + run_id
-                message["model"] = self.cfg["model"]
+                message["model"] = "unplanned-model" if self.mode == "wrong-model" else self.cfg["model"]
             if "request_id" in row:
                 row["request_id"] += "-" + run_id
             if "modelUsage" in row:
-                row["modelUsage"] = {self.cfg["model"]: next(iter(row["modelUsage"].values()))}
+                model = "unplanned-model" if self.mode == "wrong-model" else self.cfg["model"]
+                row["modelUsage"] = {model: next(iter(row["modelUsage"].values()))}
             if arm == "adage":
                 usages = [row.get("usage"), (message or {}).get("usage"), row.get("event", {}).get("usage")]
                 usages += list(row.get("modelUsage", {}).values())
@@ -74,8 +77,11 @@ class FakeLive:
                         if key in usage:
                             usage[key] = usage[key] * 3 // 4
             self.observer.event(row)
+        if self.mode == "unknown-usage":
+            events = [row for row in events if row.get("type") in ("system", "result")]
         (directory / "stream.jsonl").write_text("\n".join(json.dumps(r) for r in events) + "\n")
-        self.observer.graded('{"passed":true}', 1 if self.mode == "grader-error" else 0, False)
+        self.observer.graded('{"passed":false}' if self.mode == "task-failure" else '{"passed":true}',
+                             1 if self.mode == "grader-error" else 0, False)
         self.state["runs"][run_id] = {"metrics": {"exit_code": 0, "timed_out": False}}
         self.budget.settle(attempt, events[-1])
         self.save()
@@ -186,17 +192,55 @@ class FrozenFlow(unittest.TestCase):
             self.assertEqual(set(receipt["evidence"]), {"accounting", "grade", "execution"})
             self.assertIs(self.objects.get(receipt["evidence"]["grade"])["returncode"], 0)
 
-    def test_grader_errors_are_unknown_and_are_never_replaced_by_a_better_retry(self):
-        FakeLive.mode = "grader-error"
+    def test_incomplete_evidence_stops_dispatch_and_blocks_resume_without_replacing_it(self):
+        for mode, reason in (("grader-error", "unknown independent grade"),
+                             ("unknown-usage", "incomplete request usage"),
+                             ("wrong-model", "unplanned model call")):
+            with self.subTest(mode=mode):
+                self.run_root = self.root / mode
+                FakeLive.runs, FakeLive.mode = [], mode
+                result = self.execute()
+                self.assertEqual(result.returncode, 2)
+                self.assertIn(reason, result.stderr)
+                self.assertEqual(len(FakeLive.runs), 1, "stop before buying the remaining jobs")
+                report = json.loads(result.stdout)
+                self.assertEqual(report["submitted_receipts"], 1)
+                self.assertEqual(len(report["missing_jobs"]), 3)
+                self.assertFalse(report["evidence_complete"])
+                evidence_before = {p: p.read_bytes() for p in self.run_root.rglob("*") if p.is_file()}
+                FakeLive.mode = "complete"
+                plan = frozen.preflight(self.frozen, self.objects, self.run_root, ADAGE)
+                self.assertFalse(plan["ready_to_execute"])
+                self.assertTrue(any(item["code"] == "receipt_evidence" for item in plan["blockers"]))
+                with self.assertRaisesRegex(ValueError, reason):
+                    self.execute()
+                self.assertEqual(len(FakeLive.runs), 1, "resume must not replace or skip past invalid evidence")
+                self.assertEqual(evidence_before, {p: p.read_bytes() for p in self.run_root.rglob("*") if p.is_file()})
+
+    def test_independently_graded_task_failures_remain_valid_evidence(self):
+        FakeLive.mode = "task-failure"
         result = self.execute()
-        self.assertEqual(result.returncode, 2)
-        report = json.loads(result.stdout)
-        self.assertEqual(report["paired"]["unknown_outcomes"], 2)
-        self.assertFalse(report["paired"]["token_target_accepted"])
-        FakeLive.mode = "complete"
-        self.execute()
+        self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(len(FakeLive.runs), 4)
-        self.assertEqual(frozen.read_json(self.run_root / "report.json")["paired"]["unknown_outcomes"], 2)
+        report = json.loads(result.stdout)
+        self.assertTrue(report["evidence_complete"])
+        self.assertFalse(report["paired"]["token_target_accepted"])
+
+    def test_final_job_overrun_blocks_completed_cohort_readiness(self):
+        FakeLive.mode = "last-overrun"
+        result = self.execute()
+        self.assertEqual(len(FakeLive.runs), 4)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("exceeded its reserved cap", result.stderr)
+        plan = frozen.preflight(self.frozen, self.objects, self.run_root, ADAGE)
+        self.assertEqual(plan["pending_runs"], 0)
+        self.assertFalse(plan["ready_to_execute"], "a completed cohort must still stop later paid stages")
+        self.assertTrue(any(item["code"] == "accounting" for item in plan["blockers"]))
+        original = frozen.read_json(self.run_root / "state.json")
+        with self.assertRaisesRegex(ValueError, "exceeded its reserved cap"):
+            self.execute()
+        self.assertEqual(len(FakeLive.runs), 4)
+        self.assertEqual(frozen.read_json(self.run_root / "state.json"), original)
 
     def test_interrupted_dispatch_is_journaled_and_cannot_spend_again_on_resume(self):
         FakeLive.mode = "interrupted"

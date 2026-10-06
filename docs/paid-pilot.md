@@ -18,6 +18,9 @@ must be able to create its namespaces. The dry plan checks configured authentica
 it cannot establish whether a credential is valid or expired. An authenticated paid session
 can still fail, and its original evidence and reservation remain retained.
 
+On macOS, use [the Docker Desktop setup](paid-pilot-docker.md) to run this same Linux
+collector locally. It retains Bubblewrap confinement and operator-only paid dispatch.
+
 From the Adage checkout:
 
 ```bash
@@ -116,7 +119,10 @@ the frozen report's `evidence_complete` separately from `paired.token_target_acc
 collected negative or statistically underpowered result is a completed pilot.
 
 An interrupted started job without a receipt, deleted accounting, changed source, unknown
-usage or grader error blocks further paid work. Restore/reconcile the original evidence;
+usage or grader error blocks further paid work. Training receipts also pin the original native
+history and request stream; missing, malformed or later-altered histories stop admission.
+Held-out collection stops immediately after retaining a receipt with incomplete evidence;
+even a cost overrun in the final cohort job blocks later paid stages. Restore/reconcile the original evidence;
 never delete the ledger or retry the same job to manufacture a clean outcome. Completed
 reports can be regenerated offline. This small cohort checks collection, learned applicability
 and failure modes; a customer savings claim needs substantially more independent tasks from

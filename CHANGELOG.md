@@ -18,6 +18,13 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### Fixes from the architecture work
 
+- **Stop paid collection when evidence is incomplete.** Held-out runs now retain the first
+  bad receipt and stop on unknown grades, incomplete usage, unplanned models or model-call
+  overruns. A final-session cost overrun also blocks later stages. Training pins original
+  native histories and request streams, stopping on missing or altered evidence before
+  another session can spend. A documented Docker Desktop setup supports the Linux pilot on Macs.
+  Free executor checks also retain their inherited-lock test on macOS through portable pipes.
+
 - **A bounded paid-pilot launch path.** A local coordinator connects real model training traces,
   production learning, explicit review and frozen held-out evaluation. The included programming
   task pack has honest semantic groups, unrelated controls and an independent grader. No model

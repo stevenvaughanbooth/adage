@@ -549,17 +549,22 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn a_short_lived_sandbox_child_may_outlive_the_parent_lock_guard() {
         use std::io::Write;
-        use std::os::fd::FromRawFd;
+        use std::os::fd::AsRawFd;
 
         let home = tempfile::tempdir().unwrap();
         let root = tempfile::tempdir().unwrap();
         let guard = AttemptGuard::open(home.path(), root.path()).unwrap();
-        let mut pipe = [0; 2];
-        // SAFETY: pipe points to two valid integers; the child below uses only syscalls on
-        // inherited descriptors and exits without touching Rust's multithreaded runtime.
-        assert_eq!(unsafe { libc::pipe2(pipe.as_mut_ptr(), libc::O_CLOEXEC) }, 0);
+        let (reader, mut writer) = std::io::pipe().unwrap();
+        let pipe = [reader.as_raw_fd(), writer.as_raw_fd()];
+        // Preserve the close-on-exec property on every Unix platform, including macOS.
+        for fd in pipe {
+            assert_eq!(unsafe { libc::fcntl(fd, libc::F_GETFD) }, libc::FD_CLOEXEC);
+        }
+        // SAFETY: the child below uses only syscalls on inherited descriptors and exits
+        // without touching Rust's multithreaded runtime.
         let pid = unsafe { libc::fork() };
         assert!(pid >= 0);
         if pid == 0 {
@@ -570,14 +575,11 @@ mod tests {
                 libc::_exit(0);
             }
         }
-        unsafe {
-            libc::close(pipe[0]);
-        }
+        drop(reader);
         // The inherited descriptor keeps the lock held until this child exits. Release it
         // shortly after acquisition starts, reproducing the sandbox probe's transient hold.
         drop(guard);
         let release = std::thread::spawn(move || {
-            let mut writer = unsafe { std::fs::File::from_raw_fd(pipe[1]) };
             std::thread::sleep(std::time::Duration::from_millis(75));
             writer.write_all(&[1]).unwrap();
         });
