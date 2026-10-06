@@ -237,6 +237,13 @@ proxy cleanup and downgrade, and detect UTC timestamp shifts when migration sess
 America/Los_Angeles. Fresh schemas, old rows, defaults, offset timestamps and downgrade behavior
 are checked separately. These are ten grader controls, not ten independent agent tasks.
 
+Additional offline controls ran the historical proxy constraint-enum generator: its output
+matched the reference Go constants and differed from stale base constants. SQLC 1.17.2 and
+1.20.0, acquired from their official releases and pinned by local artifact hashes, reproduced
+the committed model files byte for byte for both base and reference of their respective tasks
+(four generation controls). These component checks do not cover the complete generator pipeline
+or compilation and behavior of the full Coder database package.
+
 ```sh
 python3 evals/live/postgres_grade.py \
   --base /absolute/private/pinned-clean-base \
