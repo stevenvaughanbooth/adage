@@ -92,7 +92,7 @@ task), and the held-out comparison (four new tasks, 2026-10-01) found execution 
 agent alone's model requests but with hidden tests 17/20 against 19/20, so it did not pass the
 registered quality rule and stays experimental. See the
 [launch evidence index](../evals/reflex-proof/LAUNCH-STATUS.md) and the exact mechanics in
-[execution](execution.md#the-finish-line-check-stop-gate).
+[execution](execution.md#the-learned-finish-line-check-stop-gate).
 
 ### The orientation in delivered procedure cards
 
@@ -111,7 +111,7 @@ each from the test's own source, read from the bytes the run used: which paramet
 names, with its value, and the test's one check. When this session added the test, the receipt
 says so and asks the agent to check it against the request before changing the implementation.
 pytest's own messages are output and are not passed on
-([execution](execution.md#the-finish-line-check-stop-gate)).
+([execution](execution.md#the-learned-finish-line-check-stop-gate)).
 
 The launch evaluation must measure accumulated learning on chronological histories and
 prediction on later unseen sessions: avoided failures, eliminated agent actions, task quality,

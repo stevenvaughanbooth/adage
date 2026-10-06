@@ -11,14 +11,14 @@ this change.
 | Module | What it holds |
 | --- | --- |
 | `lib.rs` | The module list, every public re-export, the `RuntimeParams` defaults (`MAX_DIRECTIVES_PER_*`, `MAX_STOP_REQUESTS`) and `span_kind_label`. |
-| `decide/mod.rs` | `decide`: the prologue (routes in play, context nets), one `match` over `Event` that calls one function per arm, the epilogue (approach locking, `emitted`, context deltas, arms); plus what the arms share: `Walk`, `emit_ok`, `fire_contexts`, `approach_lock`, `pending_for`, `pending_skill`. |
+| `decide/mod.rs` | `decide`: the prologue (routes in play, context nets, the obligations before), one `match` over `Event` that calls one function per arm, the epilogue (approach locking, `emitted`, context deltas, arms, the `obligation_state` snapshot); plus what the arms share: `Walk`, `emit_ok`, `fire_contexts`, `approach_lock`, `pending_for`, `pending_skill`. |
 | `decide/prompt.rs` | `on_prompt`: inhibits chosen first, prompt routes, cards, intent routes, prompt context items, first-prompt announcements; `match_intent`, `match_card`, `card_text`. |
 | `decide/batch.rs` | `on_batch`: per call, follow judgements, piped failures, obligations met, `after_edit`, `after_command`, `alphabet_items` for both context nets; `retire_reads`; the follow window closing. |
 | `decide/failure.rs` | `on_failure` and `fire_after_failure` (also used by a piped failure in a batch). |
 | `decide/stop.rs` | `on_stop`: the Stop request for the first unmet obligation. |
 | `prediction.rs` | The `TurnStep` arm: `on_turn_step`, `predict_step`, `route_step`, `skill_call`, `told_inhibits`. |
 | `state.rs` | `SessionState`, `Pending`, `PendingReads`, `Obligation`, `Arm`, `assign`, `assign_arm`, `identity_hash`, the identity rings (`see_pretool`, `see_answered`), history. |
-| `decision.rs` | What is recorded: `Decision`, `Directive`, `Judgement`, `Prediction`, `PredictionKind`, `PredictedCall`, `Routing`, `Substitution`; `directive()`. |
+| `decision.rs` | What is recorded: `Decision`, `Directive`, `Judgement`, `Prediction`, `PredictionKind`, `PredictedCall`, `Routing`, `Substitution`, `ObligationState`; `directive()`. |
 | `policy.rs` | `Ctx`, `Policy`, `PREDICT_CAP`, `Embed`; the policy-dependent matching rules `follows`, `meets`, `in_play`, `follows_call`, `follows_learned`, `failure_matches`. |
 | `observe.rs` | How a call is read: `command_key`, `call_keys`, `exec_segments`, `call_command`, `cap`, `added_tests`. |
 | `binding.rs` | Slot binding and contracts: `bind_prompt_route`, `bind_output_route`, `bind_edit_slots`, `bind_result_route`, `contract_ok_typed`. |
@@ -135,3 +135,29 @@ code; the paired run puts old and new within 0.25 ms at p50 on every fast-path s
 path (`fast::skip`) is untouched, and `decide`'s prologue is the same code; the arms are now
 function calls. The "new" binary also carries whatever the other agents had in the tree at the
 time.
+
+## Merging main (`63cbc77`, #31)
+
+Main's #31 makes a session's advisory obligations survive a rebuild exactly. Its four hunks in
+the old monolithic `lib.rs` went to the modules that hold that code (this branch's `lib.rs` keeps
+only the module list and the re-exports, now with `ObligationState`):
+
+- `Obligation` derives `PartialEq, Eq`, and `met` says it is advisory (`state.rs`);
+  `Judgement::ObligationMet` says the same (`decision.rs`).
+- `ObligationState` (`capture`) and `Decision::obligation_state` are in `decision.rs`.
+- `decide` captures the obligations before the event and, in its epilogue, records the snapshot
+  when they or `stop_requests` changed or an edit was observed (`decide/mod.rs`). Every arm,
+  `TurnStep` included, goes through that epilogue.
+- `rebuild.rs`, by hand: its doc keeps this branch's sentence on bound read batches inside main's
+  paragraph; its loop restores this branch's candidate context, noticed candidates and counted
+  predictions, then applies main's `legacy_edit` and the recorded snapshot.
+- `tests.rs` (deleted here): main's new `restored` (whole obligations, no fields dropped), its
+  rename of `a_rebuilt_state_never_requests_a_stop_the_live_one_would_not` to
+  `rearming_edits_survive_spool_rebuild_and_repeated_restarts` with the new body, and
+  `legacy_edits_invalidate_old_attempts_without_inventing_verification` and
+  `failed_observed_commands_remain_advisory_attempts_after_rebuild` are in `tests/intent.rs`,
+  beside the other rebuild tests; their `Call` literals carry this branch's `by`, `tool_use_id`
+  and `agent`.
+
+adage-hook's `respond.rs` records the snapshot again after an extension marked obligations met,
+so a rebuild keeps an action's `met` and a withdrawn Stop request (structure-hook.md).

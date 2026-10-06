@@ -82,12 +82,14 @@ pub struct PendingReads {
     pub after_adage: bool,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Obligation {
     pub route: String,
     pub expect_key: String,
     pub command: String,
     pub paths: String,
+    /// The requested command was observed (or an approved action completed). This advisory
+    /// bookkeeping is not evidence that tests passed or that the current checkout is verified.
     pub met: bool,
     pub stop_requested: bool,
     /// The repository-relative path whose edit last armed it (what an E2 action reports).

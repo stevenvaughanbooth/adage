@@ -17,7 +17,9 @@ from them. Instincts are innate responses that ship with Adage.
 | Trigger → response path, in docs | **reflex arc** | route (in explanations) |
 | What starts a reflex | **stimulus** (docs), **trigger** (CLI) | trigger |
 | What a reflex does when it matches | **response**; **directive** for advice, **action** for execution | directive used for every behavior |
-| Files on disk | **tracks** | (unchanged) |
+| A versioned collection of reflexes | **reflex set** | track (product explanations) |
+| An unqualified behavior proposed by learning | **candidate** | |
+| Internal files and storage identifiers | **tracks** | (unchanged implementation term) |
 | Signed, shareable artefact | **pack** | shared track |
 | An instinct's route, with blanks its detector fills from a repository's files | **template** | |
 | The instinct packs Adage ships (`adage/python-env`, …) | **base instincts**, **base packs** | core instincts, built-in routes |

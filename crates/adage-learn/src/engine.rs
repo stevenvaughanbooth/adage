@@ -48,6 +48,13 @@ use std::collections::{BTreeMap, BTreeSet};
 pub struct EngineReport {
     /// Traces mined.
     pub sessions: usize,
+    /// Pure mining was reused; compilation and qualification still read current evidence/state.
+    pub mining_cache_hit: bool,
+    /// Distinct known evidence groups; prompt fingerprints are inferred, not declared task ids.
+    pub evidence_groups: usize,
+    pub sessions_with_declared_identity: usize,
+    pub sessions_with_inferred_identity: usize,
+    pub sessions_with_unknown_identity: usize,
     pub reflexes: usize,
     pub compiled: usize,
     /// Routes that passed judgement.
@@ -557,25 +564,13 @@ fn wilson_upper(k: u32, n: u32, z: f64) -> f64 {
 /// At least this many distinct tasks must support a directing route.
 const MIN_TASKS: usize = 2;
 
-/// The task a trace worked on, as far as the trace shows it: its first prompt, normalised (case
-/// and spacing). Repeats of one task (arms, retries, reruns) share it; a trace with no prompt is a
-/// task of its own.
-fn task_of(s: &Session) -> String {
-    let p: String =
-        s.prompt.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase().chars().take(240).collect();
-    if p.is_empty() {
-        format!("\u{0}{}", s.id)
-    } else {
-        p
-    }
-}
-
 /// Support must span distinct tasks (`MIN_TASKS`): steps repeated by reruns of one task (its
 /// scratch script, run after each edit in every attempt at it) are that task's, not the
 /// repository's. It applies to the steps a trigger directs (after an edit or a command); an
 /// avoid is a failure of the environment (`No module named pytest`), the same whatever the task.
 fn one_task(ss: &[&Session], support: &BTreeSet<String>) -> Result<(), String> {
-    let tasks: BTreeSet<String> = ss.iter().filter(|s| support.contains(&s.id)).map(|s| task_of(s)).collect();
+    let tasks: BTreeSet<String> =
+        ss.iter().filter(|s| support.contains(&s.id)).filter_map(|s| s.evidence_group().map(|g| g.key)).collect();
     if tasks.len() < MIN_TASKS {
         return Err(format!(
             "its {} supporting traces worked on {} task(s), fewer than {MIN_TASKS}",
@@ -584,6 +579,32 @@ fn one_task(ss: &[&Session], support: &BTreeSet<String>) -> Result<(), String> {
         ));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod identity_tests {
+    use super::*;
+
+    #[test]
+    fn empty_prompts_do_not_establish_task_diversity_but_declared_tasks_can() {
+        let mut sessions: Vec<Session> = (0..5)
+            .map(|i| {
+                serde_json::from_value(serde_json::json!({
+                    "id":format!("s{i}"), "root":"/fixture", "repo":"repo", "model":null, "day":"2026-10-01",
+                    "prompt":"", "steps":[], "steered":false, "directed":[], "outcome":null, "harness":"codex"
+                }))
+                .unwrap()
+            })
+            .collect();
+        let support = sessions.iter().map(|s| s.id.clone()).collect();
+        assert!(one_task(&sessions.iter().collect::<Vec<_>>(), &support).unwrap_err().contains("0 task(s)"));
+        for s in &mut sessions {
+            s.identity.task_id = Some("one-task".into());
+        }
+        assert!(one_task(&sessions.iter().collect::<Vec<_>>(), &support).unwrap_err().contains("1 task(s)"));
+        sessions[0].identity.task_id = Some("second-task".into());
+        assert!(one_task(&sessions.iter().collect::<Vec<_>>(), &support).is_ok());
+    }
 }
 
 /// Recount the executable prediction using the same generalized context matcher as the runtime.
@@ -953,6 +974,26 @@ fn explain_away(routes: &mut Vec<Judged>, ss: &[&Session], cfg: &LearnConfig, re
 /// Learn, compile and judge the routes for one repository's traces. `model` is the pinned
 /// embedding model (prompt-intent prototypes need it; without one there are none).
 pub fn run(ss: &[&Session], cfg: &LearnConfig, priors: &[Route], model: Option<&StaticModel>) -> EngineRun {
+    run_inner(ss, cfg, priors, model, None)
+}
+
+pub(crate) fn run_cached(
+    ss: &[&Session],
+    cfg: &LearnConfig,
+    priors: &[Route],
+    model: Option<&StaticModel>,
+    store: &dyn crate::store::Store,
+) -> EngineRun {
+    run_inner(ss, cfg, priors, model, Some(store))
+}
+
+fn run_inner(
+    ss: &[&Session],
+    cfg: &LearnConfig,
+    priors: &[Route],
+    model: Option<&StaticModel>,
+    store: Option<&dyn crate::store::Store>,
+) -> EngineRun {
     // Every trace is mined; what its directives named is exposed, not evidence. Evidence for
     // what is delivered is counted again below on the traces not exposed to the route.
     let annotated: Vec<adage_graph::input::Annotated> = ss.iter().map(|s| bridge::annotate(s)).collect();
@@ -964,11 +1005,14 @@ pub fn run(ss: &[&Session], cfg: &LearnConfig, priors: &[Route], model: Option<&
     let (num, den) = cfg.dead_end_consistency;
     p.score.consistency = num as f64 / den.max(1) as f64;
     p.candidates = cfg.candidates;
-    let learned = select::learn(&events, &p);
-    // G1's value slots, learned in the discovery window as the lookup is judged there.
-    let prefix: Vec<adage_graph::input::Session> =
-        ss.iter().map(|s| bridge::annotate_prefix(s, s.discovery().len()).session).collect();
-    let values = adage_graph::learn(&prefix, &adage_graph::Params { threads: threads(), ..Default::default() });
+    let (learned, values, mining_cache_hit) = crate::checkpoint::mining(ss, &p, store, || {
+        let learned = select::learn(&events, &p);
+        // G1's value slots, learned in the discovery window as the lookup is judged there.
+        let prefix: Vec<adage_graph::input::Session> =
+            ss.iter().map(|s| bridge::annotate_prefix(s, s.discovery().len()).session).collect();
+        let values = adage_graph::learn(&prefix, &adage_graph::Params { threads: threads(), ..Default::default() });
+        (learned, values)
+    });
     // The glob lattice's tree is what the traces touched: a pure function of the traces, whatever
     // is on this machine (see `adage_graph::compile::glob`).
     let corpus = Corpus::of(&annotated, &[]);
@@ -1007,6 +1051,17 @@ pub fn run(ss: &[&Session], cfg: &LearnConfig, priors: &[Route], model: Option<&
     let lookup = crate::graph::lookup_routes(ss, cfg);
     let mut report = EngineReport {
         sessions: ss.len(),
+        mining_cache_hit,
+        evidence_groups: ss.iter().filter_map(|s| s.evidence_group().map(|g| g.key)).collect::<BTreeSet<_>>().len(),
+        sessions_with_declared_identity: ss
+            .iter()
+            .filter(|s| s.evidence_group().is_some_and(|g| g.basis != adage_trace::GroupBasis::PromptFingerprint))
+            .count(),
+        sessions_with_inferred_identity: ss
+            .iter()
+            .filter(|s| s.evidence_group().is_some_and(|g| g.basis == adage_trace::GroupBasis::PromptFingerprint))
+            .count(),
+        sessions_with_unknown_identity: ss.iter().filter(|s| s.evidence_group().is_none()).count(),
         reflexes: learned.reflexes.len(),
         compiled: out.routes.len(),
         dropped: out.dropped.clone(),
@@ -1360,6 +1415,7 @@ mod execution_equivalence_tests {
             transcripts.push(path);
         }
         let inputs = crate::Inputs {
+            identities: Default::default(),
             transcripts,
             repo_override: Some("equivalent".into()),
             outcomes: BTreeMap::new(),

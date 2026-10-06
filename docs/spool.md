@@ -13,8 +13,10 @@ A spool is append-only. Each record is one frame, `magic | len | crc | payload`,
 JSON object. Its keys serialise in sorted order, so a record's bytes do not depend on the order in
 which its fields were set.
 
-Records never hold prompt text, file contents or tool output. The one command a record names is
-the covering run of a call answered by a receipt (`pretool`, `command`).
+Records never hold prompt text, file contents or tool output. Beside the reflexes' own text, the
+commands a record names are the covering run of a call answered by a receipt (`pretool`,
+`command`) and each advisory obligation's bound command, with the repository-relative path whose
+edit last armed it (`decision.obligation_state`).
 
 One writer builds every record: `adage_hook::record::Record`, one `RecordKind` per kind below
 (`crates/adage-hook/src/record.rs`). A record's `kind` is never renamed, because every reader
@@ -52,7 +54,7 @@ Codex or OpenCode call that reports a failure is a `failure`.
 
 | Field | What |
 | --- | --- |
-| `decision` | The `adage_runtime::Decision`: `directives`, `would_have` (both arms), `judgements`, `observed` call keys, `continue_reason` / `would_continue` (a Stop request), `predicted` / `would_predict` and `predicted_at` (`turn_step`), `routine` / `would_route`, `noticed`, the context states `ctx` / `cand_ctx` |
+| `decision` | The `adage_runtime::Decision`: `directives`, `would_have` (both arms), `judgements`, `observed` call keys, `continue_reason` / `would_continue` (a Stop request), `predicted` / `would_predict` and `predicted_at` (`turn_step`), `routine` / `would_route`, `noticed`, the context states `ctx` / `cand_ctx`, and `obligation_state` (the session's advisory obligations and Stop-request count after the event, when they changed or an edit was observed, and after an extension's action met one; never a claim that a check passed) |
 | `exec` | adage-exec's entry per attempted route (`route`, `level`, `exit`, `bytes`, `sha256`, `truncated`, `duration_ms`, `auto`; or `withheld` and why) |
 | `recovery_required` | `true` when an action's outcome could not be confirmed |
 
@@ -112,7 +114,7 @@ The press (`adage_hook::press`). Facts, never the token:
 
 | Reader | Kinds | Fields it uses |
 | --- | --- | --- |
-| `adage_runtime::rebuild` (a session state that cannot be read) | decided kinds, `stop_gate` | `arm`, `propensity`, `repo`, `kind` (or `event`), `decision` (`observed`, `would_have`, `judgements`, `would_continue`, `predicted_at`, `would_predict`, `ctx`, `cand_ctx`, `noticed`) |
+| `adage_runtime::rebuild` (a session state that cannot be read) | decided kinds, `stop_gate` | `arm`, `propensity`, `repo`, `kind` (or `event`), `decision` (`observed`, `would_have`, `judgements`, `would_continue`, `predicted_at`, `would_predict`, `ctx`, `cand_ctx`, `noticed`, `obligation_state`: the obligations as recorded, in place of those the emitted routes and judgements imply; an older batch record with an edit and no `obligation_state` un-meets every met obligation) |
 | `adage watch` and `--follow --json` (`adage-cli` `ui/feed.rs`, `ui/follow.rs`); the mod's feed reads that JSON | every kind | `kind`, `event`, `ts`, `arm`, `repo`, `harness`, `unrouted`, `calls`, `decision`, `pretool`, `answered`, `card`, `command`, `exec`, `recovery_required`, `tool_use_id(s)`, `withheld`; the mod counts `press_issued` rows against the tokens it holds |
 | `adage doctor`, hook latency (`doctor/latency.rs`) | `batch` | `duration_us`, `decision.would_have` (only batches with nothing to say count) |
 | `adage savings` (`adage_app::savings`) | every kind with an arm | `ts`, `arm`, `propensity`, `kind` (`session_start`, `pretool` rewrites, `stop` / `session_end`, predicted `turn_step`), `decision.directives`, `decision.judgements` |

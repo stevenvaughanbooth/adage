@@ -257,6 +257,7 @@ pub fn decode(reader: impl BufRead, cx: &Decode<'_>) -> Option<Session> {
         outcome: None,
         harness: CLAUDE_CODE.into(),
         prompts,
+        identity: Default::default(),
         ending,
     })
 }

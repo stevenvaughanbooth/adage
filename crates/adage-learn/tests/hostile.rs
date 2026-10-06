@@ -30,6 +30,7 @@ fn session(dir: &Path, sid: &str, calls: &[(&str, &str, bool)]) -> PathBuf {
 fn learn_all(dir: &Path, files: Vec<PathBuf>) -> anyhow::Result<Index> {
     let home = dir.join("home");
     let inputs = Inputs {
+        identities: Default::default(),
         transcripts: files,
         outcomes: BTreeMap::new(),
         repo_override: Some("acme-billing".into()),

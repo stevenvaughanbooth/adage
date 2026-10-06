@@ -758,6 +758,7 @@ pub fn run_bundle(dir: &Path) -> Result<RoutesReport> {
     let cfg = adage_learn::LearnConfig::demo();
     let home = tempfile::tempdir()?;
     let inputs = adage_learn::Inputs {
+        identities: Default::default(),
         transcripts,
         outcomes,
         repo_override: Some(conv.sandbox.clone()),

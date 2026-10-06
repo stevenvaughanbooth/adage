@@ -34,8 +34,9 @@
 //!
 //! This file is the [`Extension`] impl and the dispatch between the jobs, one module each:
 //! `grants` (which grants hold here: the session contract, exec-only reflexes, predictions),
-//! `prefetch` (E1), `act` (E2), `stop_gate` (the finish-line run), `receipt` (a `PreToolUse` test
-//! run already covered), and `pytest` (reading pytest's command lines and cache records).
+//! `prefetch` (E1), `act` (E2), `stop_gate` (the finish-line run and a person's required
+//! completion checks), `receipt` (a `PreToolUse` test run already covered), and `pytest` (reading
+//! pytest's command lines and cache records).
 
 use adage_core::CommandTable;
 use adage_hook::{Delivery, Extension, PreCall, PreNote, SessionTexts, Site, StopCall, StopGate, Turn};

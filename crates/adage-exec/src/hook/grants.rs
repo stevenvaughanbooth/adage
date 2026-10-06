@@ -27,17 +27,22 @@ pub(super) fn session_texts(
     // A grant that could run under this policy but no longer matches: said, never silent.
     let lapsed: Vec<route::Lapse> =
         route::lapses(&planned, &store).into_iter().filter(|l| l.level <= pol.max_level).collect();
-    let notice = lapsed.first().map(|l| match lapsed.len() {
+    let mut notice = lapsed.first().map(|l| match lapsed.len() {
         1 => l.notice(),
         n => format!("{} ({} more no longer match.)", l.notice(), n - 1),
     });
+    let required =
+        crate::completion::Requirements::load(&paths.root).map(|r| r.routes(repo_key).to_vec()).unwrap_or_default();
     if pol.max_level < Level::E2 {
+        if !required.is_empty() {
+            notice = Some("adage: completion checks are configured, but execution policy disables E2. Completion remains unverified until current approved checks can run.".into());
+        }
         return SessionTexts { context: None, notice };
     }
     // Only a grant whose key still equals the route's current one, derived as act() derives
     // it: a lapsed grant would be refused, so it promises no receipt. A short factual
     // description of what Adage runs, when, and where results appear (not instructions).
-    let lines: Vec<String> = current_verifications(&planned, &store)
+    let mut lines: Vec<String> = current_verifications(&planned, &store)
         .into_iter()
         .take(2)
         .map(|(ir, command, _)| {
@@ -46,6 +51,9 @@ pub(super) fn session_texts(
             format!("In this repository Adage runs `{}` (approved by a person, sandboxed) {when}, and again when you finish if files changed since.", render::sanitise(&command))
         })
         .collect();
+    if !required.is_empty() {
+        lines.push(format!("A person explicitly requires {} verification route(s) at completion. Adage checks their current execution evidence and attempts missing checks, even if you never started them. A missing or failed result is reported as unverified; retries and Stop continuations are bounded.", required.len()));
+    }
     let context = (!lines.is_empty()).then(|| execution_contract(&lines));
     SessionTexts { context, notice }
 }

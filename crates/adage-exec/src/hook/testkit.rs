@@ -196,6 +196,7 @@ pub(super) fn batch(tool: &str, input: Value, output: &str) -> Event {
 /// A completed journal row for the fixture's route in `session`, on `digest`.
 pub(super) fn completed(session: &str, outcome: Outcome, digest: &str) -> Receipt {
     Receipt {
+        verification: None,
         origin: None,
         id: String::new(),
         ts: "fixture".into(),

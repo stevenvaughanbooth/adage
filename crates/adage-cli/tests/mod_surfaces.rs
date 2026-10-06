@@ -694,6 +694,7 @@ fn the_card_as_json() {
     // worktree is inspected.
     assert_eq!(on["recovery"], Value::Null);
     let receipt = adage_exec::journal::Receipt {
+        verification: None,
         id: "op-7".into(),
         ts: "2026-10-03T09:00:00Z".into(),
         session: "S".into(),

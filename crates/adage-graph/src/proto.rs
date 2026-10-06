@@ -220,8 +220,8 @@ fn event_embedding(e: &Event) -> Vec<f32> {
     }
 }
 
-fn session_in_fit(id: &str) -> bool {
-    Sha256::digest(id.as_bytes())[0] & 1 == 0
+fn session_in_fit(session: &EventSession) -> bool {
+    Sha256::digest(session.task.as_deref().unwrap_or("").as_bytes())[0] & 1 == 0
 }
 
 /// Distinct nodes per family, sorted by key; the first embedding seen (in session-id order) wins.
@@ -496,7 +496,7 @@ fn successor_ll(family: &str, sessions: &[&EventSession], fe: &FamilyEpoch) -> O
             .map(|w| (l1(&w[0].key), format!("{}:{}", w[1].ty.name(), w[1].key)))
             .collect()
     };
-    for s in sessions.iter().filter(|s| session_in_fit(&s.id)) {
+    for s in sessions.iter().filter(|s| session_in_fit(s)) {
         for (a, b) in pairs(s) {
             vocab.insert(b.clone());
             *counts.entry(a).or_default().entry(b).or_default() += 1;
@@ -506,7 +506,7 @@ fn successor_ll(family: &str, sessions: &[&EventSession], fe: &FamilyEpoch) -> O
     let alpha = 0.1;
     let mut ll = 0.0;
     let mut n = 0u32;
-    for s in sessions.iter().filter(|s| !session_in_fit(&s.id)) {
+    for s in sessions.iter().filter(|s| !session_in_fit(s)) {
         for (a, b) in pairs(s) {
             let row = counts.get(&a);
             let c = row.and_then(|r| r.get(&b)).copied().unwrap_or(0) as f64;
@@ -671,6 +671,18 @@ mod tests {
             same_art: vec![],
             exposed: vec![],
         }
+    }
+
+    #[test]
+    fn prototype_validation_splits_tasks_not_attempt_ids() {
+        let mut original = sess("attempt-a", vec![]);
+        original.task = Some("one-work-item".into());
+        let mut retry = sess("attempt-b", vec![]);
+        retry.task = original.task.clone();
+        assert_eq!(session_in_fit(&original), session_in_fit(&retry));
+        original.task = None;
+        retry.task = None;
+        assert_eq!(session_in_fit(&original), session_in_fit(&retry));
     }
 
     #[test]

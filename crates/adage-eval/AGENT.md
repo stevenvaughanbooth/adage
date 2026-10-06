@@ -26,6 +26,9 @@ same bytes. Long form: `../../docs/evals.md`.
 - `score`: `Metrics`, `Recall`, `DeadEnds`, `FinishLine`, `Safety`, `Tally`, `score_session`.
 - `fidelity`, `conventions`, `generate` (synthetic and adversarial datasets), `graph_mine`,
   `value_types`, `value_types_e2e`, `exec_e1`, `savings_replay`, `embed_eval`.
+- `paired`: held-out task quality/token/cost qualification. `experiment`: frozen protocols,
+  content-addressed objects, scheduled jobs and complete workflow receipts. Both are offline;
+  the live harness supplies independent grades and provider accounting.
 - `bench/`: the L0 bench (`run`, `sweep`, `space`, `report`), JSON Lines to `evals/bench/result.schema.json`.
 
 ## How it connects
@@ -46,6 +49,8 @@ same bytes. Long form: `../../docs/evals.md`.
   build; `ci.yml` excludes `adage-eval` from the affected set and `evals.yml` runs them weekly or
   on dispatch. `g4` needs `python3` (skips without it). `cargo test -p adage-eval --features slow`
   raises the proptest case counts (`prop_render`, `prop_shell`, `prop_store`, `prop_tracks`).
+- Fast evidence contracts run on every PR: `cargo test --locked -p adage-eval --lib --test paired
+  --test experiment`. Keep those suites independent of paid APIs and long replay gates.
 - Re-blessing: `ADAGE_BLESS=1 cargo test -p adage-eval --test gates` rewrites the generated
   datasets; `adage eval bench run --suite core --deterministic --out evals/baselines/…` the baseline
   (`bench.rs` must reproduce `evals/baselines/l0-core.jsonl` exactly).

@@ -20,7 +20,9 @@ layering: `../../docs/architecture.md`.
 ## What's inside
 
 - `main.rs`: the binary. `hook <harness> <event>` is dispatched before anything else; then `run`,
-  `approve`, `revoke`, `status`, `doctor`, `journal`, `recover`. Exit 0 delivered, 2 usage, 3 refused.
+  `approve`, `revoke`, `status`, `doctor`, `journal`, `recover`, `completion` (a person's required
+  checks for a repository) and `readiness` (their current evidence, as JSON). Exit 0 delivered, 2
+  usage, 3 refused; `readiness` exits 0 ready, 3 unconfigured or not ready, 2 unreadable inputs.
 - `request`: `ExecRequest`, `Level` (E1/E2), `OutputMode`, `FieldSpec`, `ActionSpec`, slot binding (`bind`).
 - `classify`: `effect` and `inert` from the command table; `policy`: `Policy`, `load`, `merge`
   (personal `$ADAGE_HOME/policy.toml`, managed file wins).
@@ -31,8 +33,18 @@ layering: `../../docs/architecture.md`.
 - `project`, `scan`, `render`: typed or raw projection, secret and injection scan, the one
   `<adage-data>` template (`data_block_checked`).
 - `route`: a compiled route as a request (`plan`, `plan_grants`, `lapses`), shared by approval and the hook.
-- `hook`: `Prefetch`, the `adage_hook::Extension` that adds E1 prefetch and E2 actions.
-- `stage` and `journal`: E2 staging (`stage`, `judge`, `apply`), the apply journal (`Receipt`, `finish`, `acknowledge`).
+- `hook`: `Prefetch`, the `adage_hook::Extension` that adds E1 prefetch and E2 actions; one module
+  per job under `hook/` (`grants`, `prefetch`, `act`, `stop_gate`, `receipt`, `pytest`; see
+  `docs/claude-mod/impl/structure-exec.md`). `stop_gate` also runs a person's required completion
+  checks (`required_completion`).
+- `stage` and `journal`: E2 staging (`stage`, `judge`, `apply`), the apply journal (`Receipt` with
+  its `verification` evidence, `finish`, `withheld_verification`, `acknowledge`).
+- `completion`: explicit completion requirements (`Requirements`, `$ADAGE_HOME/completion.json`),
+  `prepare` (a required route through the existing route, approval and policy gates; execute
+  grants only), `inspect` (a `Report` per repository) and the durable attempt budget
+  (`Attempts`, `AttemptGuard`, `MAX_ATTEMPTS`). `verification`: a receipt's `Evidence`, and
+  `Readiness` and `Status` (passed, missing, stale, failed, unknown) evaluated from journal
+  receipts against the current inputs (`evaluate`, `Expectation`).
 - `replay`: `Replay`, a sandboxed disposable checkout for `adage train`.
 - `person`: `require_person`; `lib.rs`: `last_withheld`, `canonical_json`, `sha256_hex`.
 

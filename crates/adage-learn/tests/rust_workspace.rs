@@ -64,6 +64,7 @@ fn the_rust_workspace_reflexes_form() {
     let root = d.path().join("tracks");
     let index = d.path().join("index.json");
     let inputs = Inputs {
+        identities: Default::default(),
         transcripts: files,
         outcomes: Default::default(),
         repo_override: Some("ledger".into()),

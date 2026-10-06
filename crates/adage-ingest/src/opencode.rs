@@ -219,6 +219,7 @@ pub fn decode(v: &Value, cx: &Decode<'_>) -> Option<Session> {
         outcome: None,
         harness: OPENCODE.into(),
         prompts,
+        identity: Default::default(),
         ending: Default::default(),
     })
 }

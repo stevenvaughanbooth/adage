@@ -242,3 +242,25 @@ event, so none of them writes a receipt. The receipt is a file beside the spools
 record: no golden, wire file or record snapshot changes. `receipt::tests` (main's) runs
 `handle` on a Codex prompt with an empty index and checks the receipt, the one `unrouted`
 record and that `.adage/disabled` writes none.
+
+## Merging main (`63cbc77`, #31)
+
+Main's #31 changed one hunk of the old monolithic `respond` in `lib.rs`: after an extension's
+delivery marks obligations met (or withdraws a Stop request), the state update returns
+`adage_runtime::ObligationState::capture(st)`, and the decision carries it as
+`decision.obligation_state`. On this branch that code is `respond.rs`, so the hunk is there; the
+record still goes through `record::Record` (`.with("decision", &decision)`), with no new
+`RecordKind`. Main's new test `a_rearmed_advisory_obligation_survives_corrupt_state_files` and the
+four lines it added to the F4 test (`an_action_at_stop_leaves_the_gate_for_the_next_stop`) are in
+`stop.rs`'s tests, beside the other Stop tests. `lib.rs` keeps this branch's dispatch unchanged.
+
+Main adds no hook event, no mod answer and no record kind, so the event table, the dispatch
+characterization (`harness/dispatch_tests.rs`), the wire files and `RecordKind` are unchanged.
+Main did change a record: a decided record's `decision` gains `obligation_state` when the
+obligations or the Stop-request count changed or an edit was observed (docs/spool.md). The spool
+snapshot (`record/snapshot_tests.rs`) drives real events through `handle`, so it was re-accepted:
+five lines change (four decided `batch` records with an edit: Claude Code's, Codex's in the
+control arm, the one with `exec` and `recovery_required`, the one before a call answered by a
+receipt; and the `stop` that requested the finish line), and each differs from its old bytes only
+by the added `"obligation_state":{…}` key. Nothing else in the snapshot, the wire files or the
+goldens changed.

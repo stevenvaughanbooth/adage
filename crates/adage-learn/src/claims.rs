@@ -317,6 +317,7 @@ mod tests {
             outcome: None,
             harness: "claude-code".into(),
             prompts: vec![crate::import::PromptObs { text: "p".into(), at_step: 0 }],
+            identity: Default::default(),
             ending: Default::default(),
         }
     }

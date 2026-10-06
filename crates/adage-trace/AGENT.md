@@ -7,8 +7,9 @@ format of Adage's own text inside a trace. Types only; it does no I/O.
 ## Where it sits
 
 - Layer 1 in `xtask/src/layers.rs` ("the canonical trace model; the intent model").
-- Depends on `adage-core` only (plus serde, serde_json). It may link layer 0 crates and nothing
-  else; its `Cargo.toml` and `lib.rs` say it stays on `adage-core` alone with no I/O.
+- Depends on `adage-core` only (plus serde, serde_json, and sha2 for `identity`'s group digests).
+  It may link layer 0 crates and nothing else; its `Cargo.toml` and `lib.rs` say it stays on
+  `adage-core` alone with no I/O.
 - Linked (`[dependencies]`) by `adage-cli`, `adage-graph`, `adage-hook`, `adage-ingest`,
   `adage-learn`, `adage-runtime`, `adage-tracks`.
 - No `FORBIDDEN` edge names it, but it must never depend on ingestion, the learner or the
@@ -25,11 +26,15 @@ format of Adage's own text inside a trace. Types only; it does no I/O.
   `mod_only_events()`, with `EventKind` (`decided()`: the runtime event and record `kind`;
   `mod_only()`). The hook's dispatch, adapters and press, and `adage_runtime::rebuild::kind_of`,
   read it; a native name means the same in every harness that sends it.
-- `session`: `Session` (id, root, repo, model, day, prompt, steps, steered, directed, influence,
-  outcome, harness, prompts, ending), `StepObs` (turn, key, norm, call, rel_path, prompt,
-  project_pytest_root_cwd), `PromptObs`, `Ending`, `Directed`, `MAX_PROMPT_BYTES`, `MAX_PROMPTS`,
-  `FINISH_LINE_STOP`, the `CLAUDE_CODE`/`CODEX`/`OPENCODE` id constants, and
-  `Session::{proxy_outcome, prompt_count, first_edit, discovery}`.
+- `session`: `Session` (id, identity, root, repo, model, day, prompt, steps, steered, directed,
+  influence, outcome, harness, prompts, ending), `StepObs` (turn, key, norm, call, rel_path,
+  prompt, project_pytest_root_cwd), `PromptObs`, `Ending`, `Directed`, `OutcomeEvidence` and
+  `OutcomeBasis` (recorded, incomplete ending, final check, unknown), `MAX_PROMPT_BYTES`,
+  `MAX_PROMPTS`, `FINISH_LINE_STOP`, the `CLAUDE_CODE`/`CODEX`/`OPENCODE` id constants, and
+  `Session::{proxy_outcome, outcome_evidence, prompt_count, first_edit, discovery}`.
+- `identity`: `EvidenceIdentity` (a corpus's or dataset's declared task, group and attempt ids),
+  `EvidenceGroup` and `GroupBasis` (declared group, declared task, or a prompt fingerprint as the
+  fallback), which calibration, qualification and corpus import share.
 - `wire`: `FINISH_LINE`, `NOT_FROM_USER`, `finish_line`, `is_finish_line`, `stop_gate_failed`,
   `Named { commands, avoided, files }` and `named(body)`.
 
@@ -49,9 +54,10 @@ format of Adage's own text inside a trace. Types only; it does no I/O.
 
 ## Changing it
 
-- Run `cargo test -p adage-trace` (unit tests only, in `harness.rs`). Then run the crates that
-  observe the change: `cargo test -p adage-ingest -p adage-runtime -p adage-graph -p adage-learn
-  -p adage-tracks -p adage-hook`, or `cargo xtask affected`. It reads no fixtures.
+- Run `cargo test -p adage-trace` (unit tests in `harness.rs`; `tests/identity.rs` and
+  `tests/outcomes.rs` over `tests/fixtures/`). Then run the crates that observe the change:
+  `cargo test -p adage-ingest -p adage-runtime -p adage-graph -p adage-learn -p adage-tracks -p
+  adage-hook`, or `cargo xtask affected`. It reads no fixture outside the crate.
 - Adding a harness is adding a `Harness` variant: the compiler then lists every exhaustive
   match to update (`capabilities`, `events`, the adapters, install placement).
 - Adding a hook event is a row in the harness's table in `harness.rs` (and an `EventKind`
