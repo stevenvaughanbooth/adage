@@ -2,8 +2,10 @@
 
 **Current decision: BLOCKED. No launch savings claim is supported.** The four scenarios below
 are hypotheses about useful learned guidance, not demonstrated agent difficulty or measured
-savings. The experiment measures whether production-learned E0 advice reduces complete workflow
-usage while preserving independently graded quality. It may establish no benefit.
+savings. The next Coder experiment will test the actual Claude mod with production-learned
+reflexes, the same pinned model in both arms, and independently graded quality. Complete mod
+treatment freezing is still required; the existing E0-only collector is a separate protocol.
+The experiment may establish no benefit.
 
 Use the [commercial acceptance plan](commercial-evidence.md), the existing
 [claim policy](../evals/live/policies/claim.json), and the
@@ -187,7 +189,7 @@ remain blocked for paid admission and launch claims. No new model calls were mad
 
 | Scenario | Observed control result | Remaining limitation |
 | --- | --- | --- |
-| Coder default organization | Base fails 5/5 feature checks; reference passes 5/5 against PostgreSQL; both pass 3/3 artifact checks | Generated Go not compiled/invoked; full generator and five proposed training graders incomplete |
+| Coder default organization | Independent base 3/9, reference 9/9; includes compiled Go Store behavior and artifact parity. Later cold-mod candidate 6/9, task failed | Broader API/UI checks and complete training admission remain incomplete; no savings comparison |
 | TypeScript generic decorators | Reference passes 222/222 named-tree checks; base/stale parser 212/222; single-dialect fixes 217/222; six false-success/protocol controls rejected | Fields, unnamed tokens and spans omitted; strict generated metadata differs; other task graders incomplete |
 | cert-manager OtherNames | Reference accepted; base and four stale artifacts rejected | Structural controls only; source/build closure and issuance/renewal semantic grader incomplete |
 | dbt historical corrections | All nine dbt invocations exit zero; parent accepts gold and rejects base/forged-base in all three data phases | Synthetic fixture only; no real customer task cohort |
@@ -201,11 +203,13 @@ not admitted runnable tasks. Raw sources, outputs and reproduction scripts remai
 
 ## Claude mod integration after PR #27
 
-The Coder development scout must load the merged Claude Code mod itself, with Claude Code
-2.1.288 and both Adage binaries pinned. Its proposed allocation remains one session at a $2 CLI
-cap, 60 turns and 1,800 seconds; no automatic retries or expansion. This is an exposed task and
-an initially empty learned store, so its results are cost/activation diagnostics, not savings or
-confirmation evidence. The earlier baseline-only preparation is retained as superseded.
+The completed Coder development scout loaded the merged Claude Code mod itself, with Claude
+Code 2.1.288 and both Adage binaries pinned. Its one authorized session used a $2 CLI cap,
+60 turns and 1,800 seconds. It stopped at the turn cap, failed the task (6/9 checks), and cost
+a CLI-estimated $0.3157685; billed cost remains unknown. No retry or expansion is authorized.
+This exposed task began with an empty learned store, so the result is a cost/activation
+diagnostic. The earlier baseline-only preparation is retained as superseded. See the
+[complete scout audit](claude-mod/evaluation-results.md).
 
 Before training or comparing learned mod treatment, register its complete plugin source, binary
 hashes, model, runtime settings and operator grants. Keep the same model in both arms and disable
@@ -213,3 +217,36 @@ model routing. Use the independent semantic grader and verify native model reque
 activation, reflex delivery, prediction/receipt provenance and duplicate-hook absence. The old
 E0 frozen collector does not freeze these extra treatment inputs; do not label its output a mod
 comparison. Failure or incomplete accounting stops paid expansion.
+
+## Coder migration controls
+
+`evals/live/postgres_grade.py` supplies one external-parent database component for real Coder
+training tasks. A private contract pins the clean predecessor commit, old-data fixtures,
+upgrade/fresh-schema/downgrade probes and expected JSON or SQLSTATE. The grader captures the
+executed SQL bytes and hashes, rejects modified historical migrations and linked inputs, and
+preserves commands, observations and errors in a new private output directory. It does not read
+candidate-authored grade reports or execute candidate programs on the host. Candidate SQL runs
+as a non-superuser inside an offline, bounded PostgreSQL container with no host bind mounts.
+The parent alone supplies privileged fixture setup and decides whether observations pass.
+
+On 2026-10-06, free controls for Coder PRs #7202 and #9699 accepted both historical reference
+implementations and rejected all eight negative controls: unchanged base, plausible partial
+fix, stale schema dump and forged success reports for each task. The checks distinguish active
+case-insensitive uniqueness from soft-deleted duplicates, cover the historical experimental
+proxy cleanup and downgrade, and detect UTC timestamp shifts when migration sessions use
+America/Los_Angeles. Fresh schemas, old rows, defaults, offset timestamps and downgrade behavior
+are checked separately. These are ten grader controls, not ten independent agent tasks.
+
+```sh
+python3 evals/live/postgres_grade.py \
+  --base /absolute/private/pinned-clean-base \
+  --candidate /absolute/private/candidate \
+  --contract /absolute/private/contract.json \
+  --out /absolute/private/new-control-output
+```
+
+The current component reports `database_behavior_only`. Historical generator reproduction,
+Go integration and complete requirement review remain necessary before paid admission. The
+pinned PostgreSQL 16.14 results do not certify historical PostgreSQL 13 compatibility. Neither
+these controls nor the cold-mod cost scout establish learned-mod savings. See
+[the scout results](claude-mod/evaluation-results.md) for the independently failed paid attempt.

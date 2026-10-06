@@ -11,6 +11,9 @@ under `docs/tracks/`).
 
 ## 0.1.0 - Unreleased
 
+External-parent PostgreSQL migration controls now support private Coder learning experiments,
+with pinned SQL inputs and separate upgrade, fresh-schema and downgrade observations.
+
 **Agent traces become reflexes.** Adage reads the traces coding agents leave behind, finds the
 paths that get work done, and compiles them into reflexes: small, typed, deterministic responses
 with their evidence attached. At each decision point the matching reflex tells the agent what to

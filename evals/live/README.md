@@ -1,5 +1,10 @@
 # Live evals
 
+`postgres_grade.py` runs private external-parent migration contracts in offline PostgreSQL.
+It preserves actual SQL observations and rejects candidate-authored success reports; it is a
+database-behavior component, not complete task coverage or paid-study admission. See the
+[Coder migration controls](../../docs/launch-experiments.md#coder-migration-controls).
+
 For the four proposed launch workflows, use [launch experiments](../../docs/launch-experiments.md).
 `study.py` audits and seals private preparation inventories, including related groups, prior
 exposure and grader controls. It cannot dispatch models or authorize a savings claim.
