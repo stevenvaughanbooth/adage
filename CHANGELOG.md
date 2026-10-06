@@ -122,6 +122,20 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   prediction read that file again first: unless it still hashes to the record, nothing is added and
   nothing is invoked, and whether it is inert is read from the file, not the record. A record from
   an earlier build has no path and is not used until the skill is trained again.
+- **Reject inert frozen treatments before paid evaluation.** Frozen Claude studies require
+  intent/card triggers to match the pinned binary's bundled embedding model and dimensions.
+  Fresh per-job homes reject unsupported runtime settings and model assets before dispatch and
+  after collection.
+
+- **Learn procedure cards from imported traces.** `adage corpus learn` now honors the same
+  procedure-card settings as ordinary conditioning, including disabling cards. Canonical imports
+  can produce learned guidance for recurring tasks with the installed or bundled embedding model.
+  Production evidence thresholds and review decisions remain in force.
+
+- **Keep paid dispatch behind current operator and evidence checks.** The pilot, frozen-study
+  and live-runner entrypoints consistently refuse Claude Code, Codex and OpenCode agent sessions.
+  Collectors recheck evidence under their dispatch lock, including cross-stage validation gates,
+  so a concurrent incomplete result cannot admit another paid job from a stale readiness plan.
 
 ### Conditioning (learning from traces)
 

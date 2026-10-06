@@ -357,6 +357,45 @@ fn frozen_interventions_require_an_enabled_runtime_artifact_for_the_selected_rep
 }
 
 #[test]
+fn artifact_reports_direct_and_context_embedding_requirements() {
+    use adage_tracks::{CtxItem, Index, Trigger};
+    let mut index: Index = serde_json::from_value(fixture()["reflex_set"].clone()).unwrap();
+    let direct = Trigger::Intent {
+        family: "fixture-intent".into(),
+        model: "fixture@000000000000".into(),
+        centroid: vec![5000, 5000, 5000, 5000, 0, 0, 0, 0],
+        threshold: 0.8,
+    };
+    let context = Trigger::Context {
+        items: vec![
+            CtxItem::Intent {
+                family: "fixture-intent".into(),
+                model: "fixture@000000000000".into(),
+                centroid: vec![5000, 5000, 5000, 5000, 0, 0, 0, 0],
+                threshold: 0.8,
+            },
+            CtxItem::Edit { glob: "src/*.py".into() },
+        ],
+        within: 1,
+    };
+    for trigger in [direct, context] {
+        index.routes[0].route.trigger = trigger;
+        index.generation = experiment::digest(&serde_json::to_vec(&index.routes).unwrap())[..16].into();
+        // Legacy indexes rebuild their derived caches when decoded.
+        let mut value = serde_json::to_value(&index).unwrap();
+        value.as_object_mut().unwrap().remove("triggers");
+        value.as_object_mut().unwrap().remove("contexts");
+        let report = experiment::artifact(&serde_json::to_vec(&value).unwrap(), "acme/api", None).unwrap();
+        let requirements: Vec<_> = report.directive_embeddings.into_iter().collect();
+        assert_eq!(
+            requirements,
+            vec![experiment::EmbeddingRequirement { model: "fixture@000000000000".into(), dimensions: 8 }]
+        );
+        assert_eq!(report.bundled_embedding.map(|m| m.model), adage_intent::model::bundled_id());
+    }
+}
+
+#[test]
 fn artifact_validation_rejects_stale_generation_and_suppressed_runtime_caches() {
     let index: adage_tracks::Index = serde_json::from_value(fixture()["reflex_set"].clone()).unwrap();
     let mut stale = index.clone();

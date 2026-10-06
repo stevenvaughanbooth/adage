@@ -85,6 +85,55 @@ class FakeLive:
         self.state["runs"][run_id] = {"metrics": {"exit_code": 0, "timed_out": False}}
         self.budget.settle(attempt, events[-1])
         self.save()
+        if self.mode == "runtime-mutation":
+            (self.home / "config.toml").write_text("[runtime]\norientation = false\n")
+
+
+class RuntimeProfile(unittest.TestCase):
+    def test_only_the_bundled_model_and_matching_dimensions_can_be_delivered(self):
+        bundled = {"model": "pinned-bundle", "dimensions": 256}
+        for required, accepted in (([], True), ([bundled], True),
+                                   ([{"model": "installed-model", "dimensions": 256}], False),
+                                   ([{"model": "pinned-bundle", "dimensions": 8}], False)):
+            with self.subTest(required=required), patch.object(frozen, "adage_json", return_value={
+                    "directive_reflexes": 1, "directive_embeddings": required, "bundled_embedding": bundled}):
+                if accepted:
+                    frozen.artifact("fixture", "index", "repo")
+                else:
+                    with self.assertRaisesRegex(ValueError, "bundled embedding model"):
+                        frozen.artifact("fixture", "index", "repo")
+        with patch.object(frozen, "adage_json", return_value={"directive_reflexes": 1,
+                "directive_embeddings": [bundled], "bundled_embedding": None}):
+            with self.assertRaisesRegex(ValueError, "bundled embedding model"):
+                frozen.artifact("fixture", "index", "repo")
+
+    def test_older_inspector_is_refused_before_preparation(self):
+        with patch.object(frozen, "adage_json", return_value={"directive_reflexes": 1}):
+            with self.assertRaisesRegex(ValueError, "rebuild the pinned binary"):
+                frozen.artifact("fixture", "index", "repo")
+
+    def test_runtime_home_keeps_binary_defaults_and_rejects_symlink_assets(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / "index.json").write_text("fixture")
+            frozen.check_runtime_home(home, initial=True, intervention=True)
+            for name in ("config.toml", "models", "tracks", "exec"):
+                with self.subTest(name=name):
+                    asset = home / name
+                    asset.symlink_to(home / "absent")
+                    with self.assertRaisesRegex(ValueError, "unsupported settings"):
+                        frozen.check_runtime_home(home)
+                    asset.unlink()
+            (home / "sessions").mkdir()
+            with self.assertRaisesRegex(ValueError, "must be fresh"):
+                frozen.check_runtime_home(home, initial=True, intervention=True)
+            frozen.check_runtime_home(home)
+
+    def test_operator_embedding_override_does_not_enter_isolated_runtime(self):
+        env = runner.session_env("adage", "/fixture/session", "/fixture/reflexes", True,
+                                 {"ADAGE_EMBED_MODEL": "none", "ADAGE_CARD_ORIENTATION": "0"})
+        self.assertNotIn("ADAGE_EMBED_MODEL", env)
+        self.assertNotIn("ADAGE_CARD_ORIENTATION", env)
 
 
 @unittest.skipUnless(sys.platform == "linux", "frozen execution uses the Linux confinement profile")
@@ -382,6 +431,27 @@ class FrozenFlow(unittest.TestCase):
                 self.execute()
         self.assertFalse(self.run_root.exists())
         self.assertFalse(FakeLive.runs)
+
+    def test_preexisting_runtime_settings_stop_before_paid_dispatch(self):
+        frozen.bind_root(self.frozen, self.run_root)
+        job = self.frozen["jobs"][0]
+        home = self.run_root / "private" / "reflexes" / job["id"]
+        home.mkdir(parents=True)
+        (home / "config.toml").write_text("[runtime]\norientation = false\n")
+        with patch.object(Budget, "dispatch", side_effect=AssertionError("must not dispatch")) as dispatch:
+            with self.assertRaisesRegex(ValueError, "unsupported settings"):
+                self.execute()
+        dispatch.assert_not_called()
+        self.assertTrue((home / "config.toml").is_file(), "retain evidence of the rejected home")
+
+    def test_runtime_mutation_retains_attempt_and_stops_the_remaining_cohort(self):
+        FakeLive.mode = "runtime-mutation"
+        with self.assertRaisesRegex(ValueError, "unsupported settings"):
+            self.execute()
+        self.assertEqual(len(FakeLive.runs), 1)
+        self.assertEqual(len(list((self.run_root / "started").glob("*.json"))), 1)
+        self.assertEqual(len(list((self.run_root / "errors").glob("*.json"))), 1)
+        self.assertFalse(list((self.run_root / "receipts").glob("*.json")))
 
     def test_preflight_reads_journal_counts_and_completed_study_needs_no_auth(self):
         self.execute()

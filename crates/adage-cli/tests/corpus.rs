@@ -3,10 +3,14 @@ use std::path::Path;
 use std::process::{Command, Output};
 
 fn run(home: &Path, args: &[&str]) -> Output {
+    run_with_model(home, args, "none")
+}
+
+fn run_with_model(home: &Path, args: &[&str], model: &str) -> Output {
     Command::new(env!("CARGO_BIN_EXE_adage"))
         .env("ADAGE_HOME", home)
         .env("ADAGE_COLOR", "never")
-        .env("ADAGE_EMBED_MODEL", "none")
+        .env("ADAGE_EMBED_MODEL", model)
         .args(args)
         .output()
         .unwrap()
@@ -79,6 +83,108 @@ fn export_import_inspect_and_learn_share_the_canonical_contract() {
     let report: Value = serde_json::from_slice(&rejected.stdout).unwrap();
     assert_eq!(report["committed"], false);
     assert_eq!(ok_json(run(&home, &["corpus", "inspect", "--repo", "acme/repo"])), inspected);
+}
+
+/// Canonical import must feed the same production card compiler as `condition`: no demo
+/// thresholds, authored routes, or review decisions are supplied by this fixture.
+#[test]
+fn canonical_learning_respects_production_card_settings() {
+    use adage_intent::model;
+    use adage_tracks::{io, RouteState, Step, Strength, Trigger};
+
+    let d = tempfile::tempdir().unwrap();
+    let mut transcripts = Vec::new();
+    let mut outcomes = serde_json::Map::new();
+    let mut identities = serde_json::Map::new();
+    for name in ["Even", "Odd", "Prime"] {
+        let sid = format!("validator-{name}");
+        let raw = d.path().join(format!("{sid}.jsonl"));
+        let lines = [
+            json!({"type":"user","sessionId":sid,"cwd":"/recorded/validators","message":{"role":"user","content":format!("Add a new {name} validator")}}),
+            json!({"type":"assistant","sessionId":sid,"cwd":"/recorded/validators","message":{"id":"edit","content":[
+                {"type":"tool_use","id":"source","name":"Edit","input":{"file_path":"/recorded/validators/src/validate.py","old_string":"","new_string":format!("class {name}(Validator):\n    pass")}},
+                {"type":"tool_use","id":"test","name":"Edit","input":{"file_path":"/recorded/validators/tests/test_validate.py","old_string":"","new_string":format!("def test_{}():\n    assert True", name.to_lowercase())}}
+            ]}}),
+            json!({"type":"user","sessionId":sid,"cwd":"/recorded/validators","message":{"content":[
+                {"type":"tool_result","tool_use_id":"source","content":"updated","is_error":false},
+                {"type":"tool_result","tool_use_id":"test","content":"updated","is_error":false}
+            ]}}),
+            json!({"type":"assistant","sessionId":sid,"cwd":"/recorded/validators","message":{"id":"check","content":[{"type":"tool_use","id":"check","name":"Bash","input":{"command":"make check"}}]}}),
+            json!({"type":"user","sessionId":sid,"cwd":"/recorded/validators","message":{"content":[{"type":"tool_result","tool_use_id":"check","content":"passed","is_error":false}]}}),
+        ];
+        std::fs::write(&raw, lines.iter().map(|v| format!("{v}\n")).collect::<String>()).unwrap();
+        transcripts.push(raw);
+        outcomes.insert(sid.clone(), json!(true));
+        identities.insert(sid, json!({"task_id":name,"group_id":format!("fixture/{name}")}));
+    }
+    let outcomes_path = d.path().join("outcomes.json");
+    let identities_path = d.path().join("identities.json");
+    std::fs::write(&outcomes_path, serde_json::to_vec(&outcomes).unwrap()).unwrap();
+    std::fs::write(&identities_path, serde_json::to_vec(&identities).unwrap()).unwrap();
+    let mut args = vec!["corpus", "export"];
+    args.extend(transcripts.iter().map(|p| p.to_str().unwrap()));
+    args.extend([
+        "--repo",
+        "fixture/validators",
+        "--outcomes",
+        outcomes_path.to_str().unwrap(),
+        "--identities",
+        identities_path.to_str().unwrap(),
+    ]);
+    let exported = run(&d.path().join("export-home"), &args);
+    assert!(exported.status.success(), "{}", String::from_utf8_lossy(&exported.stderr));
+    let corpus = d.path().join("corpus.jsonl");
+    std::fs::write(&corpus, exported.stdout).unwrap();
+
+    for (name, config, expected) in [("defaults", "", 1), ("disabled", "[learn]\ncards = false\n", 0)] {
+        let home = d.path().join(name);
+        let words = ["[UNK]", "add", "a", "new", "validator", "even", "odd", "prime"];
+        let rows: Vec<_> = words
+            .iter()
+            .map(|w| if *w == "[UNK]" { vec![0.0; 8] } else { vec![1.0, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] })
+            .collect();
+        model::write_installed(
+            &model::dir_in(&home.join("models")),
+            "fixture@000000000000",
+            8,
+            0,
+            100,
+            &words.join("\n"),
+            &model::safetensors_bytes(&rows),
+        )
+        .unwrap();
+        std::fs::write(home.join("config.toml"), config).unwrap();
+        let imported =
+            ok_json(run(&home, &["corpus", "import", corpus.to_str().unwrap(), "--repo", "fixture/validators"]));
+        assert_eq!(imported["added"], 3);
+        let learned = ok_json(run_with_model(&home, &["corpus", "learn", "--repo", "fixture/validators"], "auto"));
+        assert_eq!(learned["intent_model"], "fixture@000000000000");
+        assert_eq!(learned["corpus_generation"], imported["generation"]);
+        assert_eq!(learned["thresholds"], "min_support=5 fire_lower_bound=0.8 prime_rate=0.5");
+        assert_eq!(
+            learned["repos"]["fixture/validators"]["engine"]["cards"].as_u64().unwrap_or_default(),
+            expected as u64,
+            "{learned}"
+        );
+        let cards: Vec<_> = io::read_all(&home.join("tracks"))
+            .unwrap()
+            .into_iter()
+            .flat_map(|t| t.routes)
+            .filter(|r| matches!(r.step, Step::Card { .. }))
+            .collect();
+        assert_eq!(cards.len(), expected);
+        for route in cards {
+            let Step::Card { card } = route.step else { unreachable!() };
+            assert_eq!((card.sessions, card.passed), (3, 3));
+            assert_eq!(route.state, RouteState::Forming, "normal learned advice state; no approval fabricated");
+            assert_eq!(route.strength, Strength::Prime);
+            assert!(!route.authored);
+            assert!(route.evidence.execution.is_none());
+            let Trigger::Intent { threshold, .. } = route.trigger else { panic!("card needs its learned intent") };
+            assert_eq!(threshold, adage_learn::cards::THRESHOLD);
+        }
+        assert!(!home.join("approvals.json").exists());
+    }
 }
 
 #[test]

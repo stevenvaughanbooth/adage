@@ -23,7 +23,8 @@ import evidence
 import runner
 from budget import Budget, cap_charge_valid, execution_lock, known_cost
 
-ADAPTER = "claude-code-frozen/v1"
+ADAPTER = "claude-code-frozen/v2"
+RUNTIME_PROFILE = "fresh-home-bundled-defaults/v1"
 MAX_JSON = 64 * 1024 * 1024
 
 
@@ -127,7 +128,29 @@ def artifact(adage, index, repo, checkout=None):
     result = adage_json(adage, *args)
     if not result["directive_reflexes"]:
         raise ValueError("the frozen Claude Code adapter requires at least one live directive reflex for this repository")
+    # This collector copies only the index, not an installed model or custom home settings.
+    # A syntactically valid intent/card route can otherwise remain inert for every paid run.
+    if not isinstance(result.get("directive_embeddings"), list) or "bundled_embedding" not in result:
+        raise ValueError("Adage build cannot inspect frozen embedding requirements; rebuild the pinned binary")
+    required = result["directive_embeddings"]
+    bundled = result["bundled_embedding"]
+    if any(requirement != bundled for requirement in required):
+        raise ValueError("frozen intent/card directives require the pinned binary's bundled embedding model; "
+                         "installed model assets are not supported by this collector")
     return result
+
+
+def check_runtime_home(home, *, initial=False, intervention=False):
+    """Frozen v2 evaluates binary defaults in a fresh home; external policy/model assets are absent."""
+    home = Path(home)
+    if home.is_symlink():
+        raise ValueError("frozen runtime home must not be a symlink")
+    forbidden = ("config.toml", "models", "tracks", "exec")
+    if any((home / name).exists() or (home / name).is_symlink() for name in forbidden):
+        raise ValueError("frozen runtime home contains unsupported settings, model or learned assets")
+    allowed = {"index.json"} if intervention else set()
+    if initial and home.exists() and any(p.name not in allowed or p.is_symlink() for p in home.iterdir()):
+        raise ValueError("frozen runtime home must be fresh before dispatch")
 
 
 def group_key(repo, identity):
@@ -164,7 +187,7 @@ def task_revision(identity, prompt, checkout):
 
 
 def environment_revision(spec):
-    return digest(encoded({k: spec[k] for k in ("adapter", "inputs", "private_inputs", "harness_version", "adage_sha256")}))
+    return digest(encoded({k: spec[k] for k in ("adapter", "runtime_profile", "inputs", "private_inputs", "harness_version", "adage_sha256")}))
 
 
 def evaluator_revision(spec):
@@ -172,7 +195,8 @@ def evaluator_revision(spec):
 
 
 def check_inputs(spec, adage):
-    if spec.get("adapter") != ADAPTER or file_digest(adage) != spec["adage_sha256"]:
+    if (spec.get("adapter") != ADAPTER or spec.get("runtime_profile") != RUNTIME_PROFILE
+            or file_digest(adage) != spec["adage_sha256"]):
         raise ValueError("runner or Adage build differs from the frozen experiment")
     for path, sha in spec["inputs"].items():
         if file_digest(path) != sha:
@@ -192,7 +216,7 @@ def prepared_spec(cfg, adage, input_paths, version):
         for arg in runner.expand(cfg[key], dir="__future_checkout__", task="__future_task__", arm="off"):
             if Path(arg).is_file():
                 paths.add(Path(arg).resolve())
-    return {"adapter": ADAPTER, "config": cfg, "harness_version": version,
+    return {"adapter": ADAPTER, "runtime_profile": RUNTIME_PROFILE, "config": cfg, "harness_version": version,
             "adage_sha256": file_digest(adage), "private_inputs": private,
             "inputs": {str(p): file_digest(p) for p in sorted(paths)}}
 
@@ -290,6 +314,7 @@ class Observer:
 
     def prepared(self, live, run_id, task, arm, workdir, settings, env):
         check_inputs(self.spec, self.adage)
+        check_runtime_home(live.home, initial=True, intervention=arm == "adage")
         if live.cfg != self.spec["config"] or not live.isolate:
             raise ValueError("actual execution configuration changed")
         if exposed_private_inputs(self.spec, live.root.resolve(), self.objects, env):
@@ -318,6 +343,9 @@ class Observer:
             raise ValueError("model, settings or reflex set changed before execution")
         if arm == "adage" and (env.get("ADAGE_AUTO_LEARN") != "0" or env.get("ADAGE_ARM") != "treated"):
             raise ValueError("frozen intervention must disable learning and deliver the treated arm")
+        if any(key.startswith("ADAGE_") and key not in
+               ("ADAGE_HOME", "ADAGE_ARM", "ADAGE_AUTO_LEARN", "ADAGE_DISABLE") for key in env):
+            raise ValueError("frozen runtime environment contains unsupported Adage overrides")
         env["ADAGE_DISABLE"] = "1" if arm == "off" else "0"
         env["ADAGE_AUTO_LEARN"] = "0"
 
@@ -332,6 +360,7 @@ class Observer:
 
     def finish(self, live):
         check_inputs(self.spec, self.adage)
+        check_runtime_home(live.home)
         if self.observed is None or self.version != self.spec["harness_version"].split()[0]:
             raise ValueError("actual harness version or execution observations are missing/mismatched")
         if self.job["side"] == "intervention" and file_digest(live.home / "index.json") != self.observed["reflex_set_sha256"]:
