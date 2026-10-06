@@ -1,5 +1,9 @@
 # Live evals
 
+For the four proposed launch workflows, use [launch experiments](../../docs/launch-experiments.md).
+`study.py` audits and seals private preparation inventories, including related groups, prior
+exposure and grader controls. It cannot dispatch models or authorize a savings claim.
+
 For the packaged first paid run, use [the paid-pilot launch guide](../../docs/paid-pilot.md).
 `pilot.py` supplies a disjoint synthetic task pack, real-trace training bridge, production
 learning, human review checkpoint and frozen learned-E0 comparison under one explicit program

@@ -122,6 +122,11 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   prediction read that file again first: unless it still hashes to the record, nothing is added and
   nothing is invoked, and whether it is inert is read from the file, not the record. A record from
   an earlier build has no path and is not used until the skill is trained again.
+- **Register launch experiment inputs before spending.** A free inventory auditor checks related
+  groups, prior exposure, semantic grader controls, phase budgets and readiness evidence, then
+  preserves declared inputs in a private registration. The four scenario plans retain the
+  commercial thresholds and cannot authorize paid execution or unsupported savings claims.
+
 - **Reject inert frozen treatments before paid evaluation.** Frozen Claude studies require
   intent/card triggers to match the pinned binary's bundled embedding model and dimensions.
   Fresh per-job homes reject unsupported runtime settings and model assets before dispatch and

@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "name": "launch-scenario-preparation-v1",
+  "scenario": "replace-with-one-named-workflow",
+  "repo": "github.com/owner/repository",
+  "population": "Replace with a bounded, representative eligible issue population before selecting tasks.",
+  "sampling_rule": "Record the full sampling frame, exclusions and outcome-independent selection rule.",
+  "treatment": "production_learned_e0",
+  "policy": {"min_groups": 200, "max_quality_loss": 0.02, "min_savings": 0.2, "min_baseline_success": 0.8},
+  "model_revision": null,
+  "harness_version": null,
+  "inputs": {},
+  "tasks": [],
+  "prior_exposure_keys": [],
+  "targets": {"train": null, "development": null, "confirmation": null},
+  "session_cap_microusd": null,
+  "allocations_microusd": {"train": null, "development": null, "confirmation": null},
+  "readiness": {}
+}
