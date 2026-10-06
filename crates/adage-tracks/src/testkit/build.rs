@@ -243,6 +243,14 @@ impl IndexBuilder {
     }
 }
 
+/// Go on from an index already built: a fixture that adds a route to its world's index (a second
+/// reflex beside the first) keeps the routes it has, in order, and its generation.
+impl From<Index> for IndexBuilder {
+    fn from(index: Index) -> IndexBuilder {
+        IndexBuilder(index)
+    }
+}
+
 impl From<IndexBuilder> for Index {
     fn from(b: IndexBuilder) -> Index {
         b.0

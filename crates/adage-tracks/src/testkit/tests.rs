@@ -75,6 +75,17 @@ fn a_hand_written_index_keeps_its_order_and_generation() {
 }
 
 #[test]
+fn a_built_index_takes_more_routes_after_its_own() {
+    let first = IndexBuilder::new("g").route("acme", "acme/a", kinds::finish_line("b", "src/*.rs", "make gen")).build();
+    let i = IndexBuilder::from(first)
+        .route("acme", "acme/c", kinds::dead_end("d", "python3 -m pytest", "make test", "No module named pytest"))
+        .build();
+    assert_eq!(i.generation, "g");
+    let ids: Vec<_> = i.routes.iter().map(|r| (r.track.as_str(), r.route.id.as_str())).collect();
+    assert_eq!(ids, [("acme/a", "b"), ("acme/c", "d")]);
+}
+
+#[test]
 fn a_track_carries_its_manifest() {
     let t = track("acme/work", "acme").version("1.2.0").description("d").provenance("authored").build();
     assert_eq!(
@@ -118,6 +129,7 @@ fn a_learned_home_holds_its_index_tracks_state_and_spools() {
 fn a_temp_world_writes_repositories_files_and_tools() {
     let w = TempWorld::new(&["a/b"]);
     assert!(w.p("a/b").is_dir() && w.root.is_absolute());
+    assert_eq!(w.path(), w.root.as_path());
     assert!(w.repo("acme").join(".git").is_dir());
     assert_eq!(std::fs::read_to_string(w.write("x/y/z.txt", "hi")).unwrap(), "hi");
     let tool = w.executable("bin/make", "#!/bin/sh\nexit 1\n");

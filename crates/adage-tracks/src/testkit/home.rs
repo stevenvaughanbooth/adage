@@ -26,6 +26,12 @@ impl TempWorld {
         TempWorld { _dir: dir, root }
     }
 
+    /// The world's root, by the name `tempfile::TempDir` gives it, so a fixture that held a
+    /// `TempDir` keeps its callers when it holds a world instead.
+    pub fn path(&self) -> &Path {
+        &self.root
+    }
+
     pub fn p(&self, rel: &str) -> PathBuf {
         self.root.join(rel)
     }
