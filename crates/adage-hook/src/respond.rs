@@ -231,9 +231,20 @@ pub(crate) fn respond(ctx: &HookCtx<'_>, ev: Event) -> Result<Responded, Failure
                     st.stop_requests = st.stop_requests.saturating_sub(1);
                 }
             }
+            adage_runtime::ObligationState::capture(st)
         });
-        if let Err(e) = marked {
-            failopen::record(&paths.root, adapter.name(), event, &Failure::io("state", "marking obligations met", &e));
+        match marked {
+            // The record carries the obligations as the extension left them, so a rebuild from
+            // the spool keeps an action's `met` and a withdrawn Stop request.
+            Ok(snapshot) => decision.obligation_state = Some(snapshot),
+            Err(e) => {
+                failopen::record(
+                    &paths.root,
+                    adapter.name(),
+                    event,
+                    &Failure::io("state", "marking obligations met", &e),
+                );
+            }
         }
     }
     match delivery.stop.take() {

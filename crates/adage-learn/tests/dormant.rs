@@ -95,6 +95,7 @@ impl World {
     }
     fn learn(&self, files: &[PathBuf]) -> Index {
         let inputs = Inputs {
+            identities: Default::default(),
             transcripts: files.to_vec(),
             outcomes: BTreeMap::new(),
             repo_override: Some(REPO.into()),

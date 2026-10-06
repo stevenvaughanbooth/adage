@@ -44,6 +44,19 @@ fn learn_routine(root: &Path, count: usize, mode: &str) -> Index {
     }).collect();
     let home = root.join("home");
     let inputs = Inputs {
+        identities: (0..count)
+            .filter(|_| mode == "declared-one-task")
+            .map(|i| {
+                (
+                    format!("routine-{i}"),
+                    adage_learn::EvidenceIdentity {
+                        task_id: Some("same-work-item".into()),
+                        attempt_id: Some(i.to_string()),
+                        ..Default::default()
+                    },
+                )
+            })
+            .collect(),
         transcripts: files,
         outcomes: BTreeMap::new(),
         repo_override: Some("routine".into()),
@@ -127,6 +140,7 @@ fn execution_preserves_independent_support_failure_and_mutation_gates() {
         (5, "exposed"),
         (5, "partly-exposed"),
         (5, "one-task"),
+        (5, "declared-one-task"),
         (6, "one-negative"),
         (5, "new-task"),
     ] {

@@ -43,6 +43,7 @@ fn corpus(dir: &Path) -> Vec<PathBuf> {
 
 fn run(home: &Path, transcripts: &[PathBuf], cache: bool, only: Option<&str>) -> adage_learn::Report {
     let inputs = Inputs {
+        identities: Default::default(),
         transcripts: transcripts.to_vec(),
         outcomes: BTreeMap::new(),
         repo_override: None,

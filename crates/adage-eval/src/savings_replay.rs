@@ -1276,6 +1276,7 @@ pub fn learned_index_with(
     let mut cfg = crate::config(thresholds)?;
     cfg.instincts = Some(instincts_cfg(repo, root));
     let inputs = adage_learn::Inputs {
+        identities: Default::default(),
         transcripts: train.to_vec(),
         outcomes: BTreeMap::new(),
         repo_override: Some(repo.to_string()),

@@ -66,7 +66,13 @@ fn traces(dir: &Path, n: usize, lint: usize) -> Vec<PathBuf> {
 }
 
 fn condition(files: &[PathBuf], home: &Path, cfg: &LearnConfig) -> Index {
+    learn_into(files, home, cfg);
+    Index::load(&home.join("index.json"))
+}
+
+fn learn_into(files: &[PathBuf], home: &Path, cfg: &LearnConfig) -> adage_learn::Report {
     let inputs = Inputs {
+        identities: Default::default(),
         transcripts: files.to_vec(),
         outcomes: BTreeMap::new(),
         repo_override: Some(REPO.into()),
@@ -74,8 +80,7 @@ fn condition(files: &[PathBuf], home: &Path, cfg: &LearnConfig) -> Index {
         cache: None,
         only_repo: None,
     };
-    learn(&inputs, &home.join("tracks"), &home.join("index.json"), cfg).unwrap();
-    Index::load(&home.join("index.json"))
+    learn(&inputs, &home.join("tracks"), &home.join("index.json"), cfg).unwrap()
 }
 
 fn cfg() -> LearnConfig {
@@ -276,4 +281,23 @@ fn the_sims_routes_are_the_same_with_candidates_on_or_off() {
     assert_eq!(a.routes, b.routes);
     assert_eq!(a.generation, b.generation);
     assert_eq!(a.contexts, b.contexts, "the routes' context net");
+}
+
+/// A learn whose mining comes from the checkpoint (`adage_learn::checkpoint`) writes the same
+/// candidates and index as one that mines again: the checkpoint keeps the candidates and every
+/// reflex's supporting sessions and lag, which `serde` leaves out of `Learned`.
+#[test]
+fn a_warm_learn_keeps_the_candidates() {
+    let d = tempfile::tempdir().unwrap();
+    let files = traces(d.path(), 10, 3);
+    let (warm, full) = (d.path().join("warm"), d.path().join("full"));
+    let cold = LearnConfig { computation_cache: false, ..cfg() };
+    assert!(!learn_into(&files, &warm, &cfg()).repos[REPO].engine.mining_cache_hit);
+    assert!(learn_into(&files, &warm, &cfg()).repos[REPO].engine.mining_cache_hit, "the second learn reuses it");
+    learn_into(&files, &full, &cold);
+    learn_into(&files, &full, &cold);
+    assert!(!lint_candidates(&file(&warm)).is_empty());
+    let candidates = |home: &Path| std::fs::read(candidates::path(&home.join("tracks"), REPO)).unwrap();
+    assert_eq!(candidates(&warm), candidates(&full));
+    assert_eq!(std::fs::read(warm.join("index.json")).unwrap(), std::fs::read(full.join("index.json")).unwrap());
 }

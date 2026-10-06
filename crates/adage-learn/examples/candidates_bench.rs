@@ -60,6 +60,7 @@ fn write_history(root: &Path, per_repo: usize, repos: usize) -> Corpus {
 
 fn inputs(files: &[PathBuf], cache: &Path, only: Option<&str>) -> Inputs {
     Inputs {
+        identities: Default::default(),
         transcripts: files.to_vec(),
         outcomes: BTreeMap::new(),
         repo_override: None,

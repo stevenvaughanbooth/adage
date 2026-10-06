@@ -3,7 +3,7 @@
 //! arms, and read back by [`crate::rebuild`], the eval and the app, so a field is only ever added
 //! (`#[serde(default)]`) and a `kind` is never renamed.
 
-use crate::{CtxState, Noticed};
+use crate::{CtxState, Noticed, Obligation, SessionState};
 use adage_tracks::{IndexedRoute, Strength};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -34,6 +34,8 @@ pub enum Judgement {
     Ignored {
         route: String,
     },
+    /// The requested command was observed, regardless of its result. Verified completion is
+    /// established separately by execution receipts, never by this advisory judgement.
     ObligationMet {
         route: String,
     },
@@ -128,6 +130,10 @@ pub struct Decision {
     /// rebuilt from the spool takes it from ([`crate::rebuild`]).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ctx: Option<CtxState>,
+    /// Present when advisory obligations changed or an edit was observed. The latter distinguishes
+    /// a known unrelated edit from an older spool's incomplete edit record ([`crate::rebuild`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub obligation_state: Option<ObligationState>,
     /// The step Adage makes in the agent's place (`TurnStep`; empty in the control arm).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub predicted: Option<Prediction>,
@@ -160,6 +166,21 @@ pub struct Decision {
     /// state rebuilt from the spool takes it from, as [`Decision::ctx`] is for routes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cand_ctx: Option<CtxState>,
+}
+
+/// The bounded advisory obligation state after a decision or extension update. Keeping this
+/// exact state in the spool preserves later edits, bound commands and withdrawn Stop requests
+/// when the session's state files are lost. It carries no verification-success claim.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ObligationState {
+    pub obligations: Vec<Obligation>,
+    pub stop_requests: u32,
+}
+
+impl ObligationState {
+    pub fn capture(st: &SessionState) -> Self {
+        Self { obligations: st.obligations.clone(), stop_requests: st.stop_requests }
+    }
 }
 
 /// The directive an index entry's text becomes.

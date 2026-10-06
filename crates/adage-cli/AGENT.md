@@ -28,7 +28,8 @@ rules live below it in `adage-app` and the engines. Front-end map: `../../docs/a
   `history`, `condition_out`), `sense`, `review` and `proposal`, `exec` (`delegate`, `review delegate|revoke`),
   `savings`, `graph`, `map`, `share`/`share_pack`/`add`/`packs`/`reimport`, `packs_cmd`,
   `marketplace_cmd`, `models`, `config`, `train` (execs the `adage-train` binary; `accept` installs
-  the staged pack here), `update`, `status_card`.
+  the staged pack here), `update`, `status_card`, `corpus_cmd` (`adage corpus export|import|inspect|
+  learn`, canonical trace corpora through `adage_learn::corpus`).
 - `map/`: `mod.rs` (options, listener, and `Server`, a map `adage ui` starts on a free port and
   closes with the terminal), `http.rs` (`/api/v1/graph`, `/graph.json`, `/api/v1/events`,
   `/api/v1/health`, `/api/v1/trace?session=&repo=` (one whole recorded session),

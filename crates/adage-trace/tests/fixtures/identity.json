@@ -1,0 +1,12 @@
+[
+  {"name":"original", "repo":"acme/api", "prompt":"Fix the retry bug", "identity":{"task_id":"BUG-7","attempt_id":"1"}, "expect":"bug-7", "basis":"declared_task"},
+  {"name":"paraphrased retry", "repo":"acme/api", "prompt":"Repair retry handling", "identity":{"task_id":"BUG-7","attempt_id":"2"}, "expect":"bug-7", "basis":"declared_task"},
+  {"name":"different task", "repo":"acme/api", "prompt":"Fix the retry bug", "identity":{"task_id":"BUG-8"}, "expect":"bug-8", "basis":"declared_task"},
+  {"name":"related variant", "repo":"acme/api", "prompt":"Add JSON output", "identity":{"task_id":"FEATURE-1","group_id":"output-variants"}, "expect":"variants", "basis":"declared_group"},
+  {"name":"group overrides task", "repo":"acme/api", "prompt":"Add YAML output", "identity":{"task_id":"FEATURE-2","group_id":"output-variants"}, "expect":"variants", "basis":"declared_group"},
+  {"name":"repository boundary", "repo":"acme/other", "prompt":"Fix the retry bug", "identity":{"task_id":"BUG-7"}, "expect":"other-repo", "basis":"declared_task"},
+  {"name":"prompt fallback", "repo":"acme/api", "prompt":"Fix the retry bug", "identity":{}, "expect":"inferred", "basis":"prompt_fingerprint"},
+  {"name":"normalized fallback", "repo":"acme/api", "prompt":"  FIX\n the\t retry BUG  ", "identity":{"task_id":" "}, "expect":"inferred", "basis":"prompt_fingerprint"},
+  {"name":"unknown", "repo":"acme/api", "prompt":"", "identity":{}, "expect":null, "basis":null},
+  {"name":"attempt is not task", "repo":"acme/api", "prompt":" \n ", "identity":{"attempt_id":"unique-id"}, "expect":null, "basis":null}
+]

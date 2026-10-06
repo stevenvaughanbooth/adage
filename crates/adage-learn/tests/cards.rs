@@ -135,6 +135,7 @@ fn corpus(dir: &Path) -> (Vec<PathBuf>, BTreeMap<String, bool>) {
 
 fn run(files: &[PathBuf], outcomes: &BTreeMap<String, bool>, home: &Path, models: &Path) -> (Report, Index) {
     let inputs = Inputs {
+        identities: Default::default(),
         transcripts: files.to_vec(),
         outcomes: outcomes.clone(),
         repo_override: Some("acme-lib".into()),
@@ -326,6 +327,7 @@ fn no_passing_trace_no_card_and_cards_are_off_without_the_setting() {
     assert!(cards(&index).is_empty());
     // The default configuration learns no cards (the eval baselines stay as they were).
     let inputs = Inputs {
+        identities: Default::default(),
         transcripts: files.clone(),
         outcomes,
         repo_override: Some("acme-lib".into()),

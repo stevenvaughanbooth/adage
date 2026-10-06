@@ -83,6 +83,8 @@ pub enum Command {
         after_help = "With no source named, reads configured Claude/Codex history and OpenCode exports. Explicit sources replace these defaults. With no default history, binds applicable instincts in the current repository."
     )]
     Condition(ConditionArgs),
+    /// Import, inspect and learn from versioned canonical trace corpora.
+    Corpus(CorpusArgs),
     /// What Adage told agents, and whether they followed it.
     Report(JsonArgs),
     /// Adage's live state as a graph (JSON for tools; the map draws it).
@@ -403,13 +405,16 @@ pub struct ConditionArgs {
     /// Session outcomes, as a JSON file of {session: bool}.
     #[arg(long, value_name = "FILE")]
     pub outcomes: Option<PathBuf>,
+    /// Evidence identity JSON: {session: {task_id, group_id, attempt_id}}.
+    #[arg(long, value_name = "FILE")]
+    pub identities: Option<PathBuf>,
     /// Force every trace into this repository key (with --instincts-only: the key to bind under).
     #[arg(long, value_name = "KEY")]
     pub repo: Option<String>,
     /// Low thresholds, for the sample scenario.
     #[arg(long)]
     pub demo: bool,
-    /// Re-parse every trace instead of using the parse cache.
+    /// Re-parse traces and recompute mining instead of using caches.
     #[arg(long)]
     pub no_cache: bool,
     /// Do not bind instincts.
@@ -439,6 +444,56 @@ pub struct ConditionArgs {
     /// Machine-readable output.
     #[arg(long)]
     pub json: bool,
+}
+
+#[derive(Args, Debug)]
+pub struct CorpusArgs {
+    #[command(subcommand)]
+    pub action: CorpusAction,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum CorpusAction {
+    /// Normalize native trace files to canonical JSONL on stdout.
+    Export {
+        #[arg(required = true, num_args = 1..)]
+        transcripts: Vec<PathBuf>,
+        #[arg(long)]
+        repo: Option<String>,
+        #[arg(long, value_name = "FILE")]
+        identities: Option<PathBuf>,
+        /// Independently graded task outcomes as {session: bool}.
+        #[arg(long, value_name = "FILE")]
+        outcomes: Option<PathBuf>,
+    },
+    /// Atomically import one repository's canonical JSONL; print the audit report as JSON.
+    Import {
+        input: PathBuf,
+        #[arg(long)]
+        repo: String,
+        /// Replace the snapshot, including corrections and removals; default merges new ids.
+        #[arg(long)]
+        replace: bool,
+    },
+    /// Show the repository's committed evidence manifest as JSON.
+    Inspect {
+        #[arg(long)]
+        repo: String,
+        /// Audit identities and outcome provenance for a held-out evaluation.
+        #[arg(long)]
+        evidence: bool,
+    },
+    /// Learn the committed snapshot and compile its reflexes; print the report as JSON.
+    Learn {
+        #[arg(long)]
+        repo: String,
+        /// Low thresholds for synthetic fixtures.
+        #[arg(long)]
+        demo: bool,
+        /// Recompute mining, ignoring reusable checkpoints.
+        #[arg(long)]
+        no_cache: bool,
+    },
 }
 
 #[derive(Args, Debug)]
@@ -897,6 +952,7 @@ fn overview(t: &Theme) -> StyledStr {
             &[
                 ("sense", "what your agents actually do (read-only)"),
                 ("condition", "condition reflexes from traces now"),
+                ("corpus", "import, inspect and learn canonical trace collections"),
                 ("report", "what Adage said, and what agents did"),
                 ("graph", "Adage's state as a graph"),
                 ("train", "compile a skill into reflexes"),

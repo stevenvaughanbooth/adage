@@ -67,6 +67,10 @@ pub struct Receipt {
     /// What started it; `None` in a journal written before origins were recorded.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub origin: Option<RunOrigin>,
+    /// Facts from a staged verification, immutable through preparation/completion/recovery.
+    /// Legacy receipts and non-verification actions have no authoritative verification facts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verification: Option<crate::verification::Evidence>,
 }
 
 impl Receipt {
@@ -113,7 +117,8 @@ fn read_unlocked(home: &Path) -> io::Result<Vec<Receipt>> {
                 && before.route == r.route
                 && before.approved_on == r.approved_on
                 && before.level == r.level
-                && before.input_digest == r.input_digest;
+                && before.input_digest == r.input_digest
+                && before.verification == r.verification;
             let transition = (before.phase == Phase::Prepared && r.phase == Phase::Completed)
                 || (before.needs_recovery() && r.phase == Phase::Acknowledged && before.outcome == r.outcome);
             if !same || !transition {
@@ -178,6 +183,74 @@ fn refused(reason: String) -> Completion {
     }
 }
 
+fn operation_id(c: &Commit<'_>, worktree: &str, key: &ApprovalKey, route: &str) -> String {
+    crate::sha256_hex(
+        crate::canonical_json(&serde_json::json!({
+            "worktree": worktree, "repo": c.repo, "session": c.session, "route": route,
+            "key": key, "inputs": c.request.inputs, "occurrence": c.occurrence,
+        }))
+        .as_bytes(),
+    )
+}
+
+/// Durably retain an opt-in verification attempt that staging refused, including a timeout.
+/// There is no staged exit or duration to assert. The caller reserves its attempt before
+/// staging; this terminal negative record prevents an earlier pass from becoming current again.
+/// Failure to write either transition leaves the caller's attempt unresolved, never ready.
+pub fn withheld_verification(c: &Commit<'_>, input_digest: &str, refusal: &crate::run::Refusal) -> io::Result<Receipt> {
+    if c.request.level != crate::request::Level::E2
+        || c.request.effect != adage_core::Effect::Verify
+        || !c.request.action.as_ref().is_some_and(|a| a.kind == crate::request::ActionKind::Verify)
+    {
+        return Err(io::Error::other("only an E2 verification refusal can be recorded"));
+    }
+    let worktree = c.request.repo_root.canonicalize()?.to_string_lossy().into_owned();
+    let _worktree_lock = worktree_lock(c.home, &worktree)?;
+    let _journal_lock = journal_lock(c.home)?;
+    let key = ApprovalKey::for_request(c.request, c.repo);
+    let route = approvals::route_label(c.request);
+    let id = operation_id(c, &worktree, &key, &route);
+    let rows = read_unlocked(c.home)?;
+    if rows.iter().any(|r| r.worktree == worktree && r.needs_recovery()) {
+        return Err(io::Error::other("worktree has unresolved execution; inspect recovery first"));
+    }
+    if let Some(row) = rows.into_iter().find(|r| r.id == id) {
+        if row.input_digest != input_digest {
+            return Err(io::Error::other("this occurrence has another input identity"));
+        }
+        if row.verification.is_some()
+            || !matches!(row.outcome, Outcome::Refused { ref stage, ref reason, counts: false }
+                if stage == refusal.stage && *reason == crate::reason_text(&refusal.reason))
+        {
+            return Err(io::Error::other("this occurrence already records a different verification result"));
+        }
+        return Ok(row);
+    }
+    let mut row = Receipt {
+        id,
+        ts: crate::time::now(),
+        session: c.session.into(),
+        repo: c.repo.into(),
+        worktree,
+        route,
+        approved_on: c.approved_on.into(),
+        level: "e2".into(),
+        phase: Phase::Prepared,
+        outcome: Outcome::Unknown { reason: "verification refusal has no durable completion".into() },
+        input_digest: input_digest.into(),
+        outputs: BTreeMap::new(),
+        origin: Some(c.origin),
+        verification: None,
+    };
+    spool::append_durable(&stage::spool_path(c.home), &row)?;
+    row.phase = Phase::Completed;
+    row.outcome =
+        Outcome::Refused { stage: refusal.stage.into(), reason: crate::reason_text(&refusal.reason), counts: false };
+    row.ts = crate::time::now();
+    spool::append_durable(&stage::spool_path(c.home), &row)?;
+    Ok(row)
+}
+
 /// Apply only after a durable reservation and a current matching grant. A lost final receipt
 /// returns Unknown and leaves the durable reservation for recovery; it never claims rollback.
 pub fn finish(staged: &Staged, c: &Commit<'_>) -> Completion {
@@ -192,13 +265,7 @@ fn finish_inner(staged: &Staged, c: &Commit<'_>, after_apply: impl FnOnce() -> i
     };
     let key = ApprovalKey::for_request(c.request, c.repo);
     let route = approvals::route_label(c.request);
-    let id = crate::sha256_hex(
-        crate::canonical_json(&serde_json::json!({
-            "worktree": worktree, "repo": c.repo, "session": c.session, "route": route,
-            "key": key, "inputs": c.request.inputs, "occurrence": c.occurrence,
-        }))
-        .as_bytes(),
-    );
+    let id = operation_id(c, &worktree, &key, &route);
     let mut receipt = Receipt {
         id: id.clone(), ts: crate::time::now(), session: c.session.into(), repo: c.repo.into(),
         worktree, route, approved_on: c.approved_on.into(), level: "e2".into(), phase: Phase::Prepared,
@@ -206,6 +273,7 @@ fn finish_inner(staged: &Staged, c: &Commit<'_>, after_apply: impl FnOnce() -> i
         input_digest: crate::sha256_hex(crate::canonical_json(&staged.inputs).as_bytes()),
         outputs: BTreeMap::new(),
         origin: Some(c.origin),
+        verification: crate::verification::Evidence::from_staged(staged, c.request, c.repo),
     };
     {
         let _journal_lock = match journal_lock(c.home) {
@@ -359,16 +427,17 @@ mod tests {
             let action = self.req.action.clone().unwrap();
             let pre = PreState::take(&self.req.repo_root, &action).unwrap();
             let inputs = stage::input_snapshot(&self.req.repo_root, &action).unwrap();
-            let plan = stage::judge(
+            let changes = if action.kind == ActionKind::Verify {
+                vec![]
+            } else {
                 vec![Change {
                     path: "gen/out".into(),
                     kind: ChangeKind::Modified,
                     after: After::File { bytes: b"after".to_vec(), exec: false },
                     before_file: true,
-                }],
-                &action,
-                1024,
-            );
+                }]
+            };
+            let plan = stage::judge(changes, &action, 1024);
             Staged {
                 repo: self.req.repo_root.clone(),
                 action,
@@ -399,6 +468,26 @@ mod tests {
 
         fn output(&self) -> String {
             std::fs::read_to_string(self.req.repo_root.join("gen/out")).unwrap()
+        }
+
+        fn verification() -> Self {
+            let mut fixture = Self::new();
+            fixture.req.argv = vec!["make".into(), "check".into()];
+            fixture.req.effect = Effect::Verify;
+            fixture.req.action = Some(ActionSpec { kind: ActionKind::Verify, outputs: vec![], cache: vec![] });
+            let mut store = Store::default();
+            store.approve(Approval {
+                key: ApprovalKey::for_request(&fixture.req, "repo"),
+                route: approvals::route_label(&fixture.req),
+                approved_on: "approved".into(),
+                by: None,
+                basis: serde_json::Value::Null,
+                auto: false,
+                terms: None,
+                via: None,
+            });
+            store.save(&approvals::path(&fixture.home)).unwrap();
+            fixture
         }
     }
 
@@ -572,5 +661,87 @@ mod tests {
         let file = std::fs::File::create(f.req.repo_root.join("oversized")).unwrap();
         file.set_len(stage::MAX_APPLY_BYTES + 1).unwrap();
         assert!(stage::input_snapshot(&f.req.repo_root, action).is_err());
+    }
+
+    #[test]
+    fn durable_verification_binds_working_inputs_without_relying_on_head() {
+        use crate::verification::{evaluate, Expectation, Status};
+        let f = Fixture::verification();
+        let staged = f.staged();
+        assert!(matches!(finish(&staged, &f.commit("one")).outcome, Outcome::Applied { .. }));
+        let rows = list(&f.home).unwrap();
+        let evidence = rows[0].verification.as_ref().unwrap();
+        assert_eq!(evidence.exit, Some(0));
+        assert_eq!(evidence.duration_ms, staged.duration_ms);
+        let worktree = f.req.repo_root.to_string_lossy();
+        let label = approvals::route_label(&f.req);
+        let mut expected = Expectation {
+            repo: "repo",
+            worktree: &worktree,
+            route: &label,
+            session: Some("session"),
+            approved_on: "approved",
+            request: &f.req,
+            input_digest: &rows[0].input_digest,
+        };
+        assert_eq!(evaluate(&rows, &expected).status, Status::Passed);
+        std::fs::write(f.req.repo_root.join("source"), "uncommitted change").unwrap();
+        let now = stage::input_snapshot(&f.req.repo_root, f.req.action.as_ref().unwrap()).unwrap();
+        let changed = crate::sha256_hex(crate::canonical_json(&now).as_bytes());
+        expected.input_digest = &changed;
+        assert_eq!(evaluate(&rows, &expected).status, Status::Stale);
+        // Receipts from before this field existed remain readable, but cannot be passed off as
+        // verification facts. A regeneration still receives no verification evidence.
+        let mut old = serde_json::to_value(&rows[0]).unwrap();
+        old.as_object_mut().unwrap().remove("verification");
+        assert!(serde_json::from_value::<Receipt>(old).unwrap().verification.is_none());
+        let regeneration = Fixture::new();
+        finish(&regeneration.staged(), &regeneration.commit("one"));
+        assert!(list(&regeneration.home).unwrap()[0].verification.is_none());
+    }
+
+    #[test]
+    fn verification_facts_cannot_change_during_journal_completion() {
+        let f = Fixture::verification();
+        finish_inner(&f.staged(), &f.commit("one"), || Err(io::Error::other("lost completion")));
+        let mut row = list(&f.home).unwrap().pop().unwrap();
+        assert_eq!(row.phase, Phase::Prepared);
+        row.verification.as_mut().unwrap().binding_digest = "forged binding".into();
+        row.phase = Phase::Completed;
+        row.outcome = Outcome::Applied { changed: vec![], discarded: 0 };
+        spool::append_durable(&stage::spool_path(&f.home), &row).unwrap();
+        assert!(list(&f.home).is_err());
+    }
+
+    #[test]
+    fn staging_timeout_supersedes_prior_pass_without_inventing_a_process_result() {
+        use crate::verification::{evaluate, Expectation, Status};
+        let f = Fixture::verification();
+        finish(&f.staged(), &f.commit("one"));
+        let before = list(&f.home).unwrap().pop().unwrap();
+        let refusal = crate::run::Refusal { stage: "limits", reason: "timed out".into() };
+        let row = withheld_verification(&f.commit("two"), &before.input_digest, &refusal).unwrap();
+        assert_eq!(row.phase, Phase::Completed);
+        assert!(row.verification.is_none());
+        assert!(matches!(row.outcome, Outcome::Refused { counts: false, .. }));
+        let rows = list(&f.home).unwrap();
+        assert_eq!(rows.len(), 2);
+        let label = approvals::route_label(&f.req);
+        let worktree = f.req.repo_root.to_string_lossy();
+        let expected = Expectation {
+            repo: "repo",
+            worktree: &worktree,
+            route: &label,
+            session: None,
+            approved_on: "approved",
+            request: &f.req,
+            input_digest: &before.input_digest,
+        };
+        assert_eq!(evaluate(&rows, &expected).status, Status::Failed);
+        let replay = withheld_verification(&f.commit("two"), &before.input_digest, &refusal).unwrap();
+        assert_eq!(replay.id, row.id);
+        assert_eq!(list(&f.home).unwrap().len(), 2);
+        assert!(withheld_verification(&f.commit("two"), "different inputs", &refusal).is_err());
+        assert!(withheld_verification(&f.commit("one"), &before.input_digest, &refusal).is_err());
     }
 }

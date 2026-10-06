@@ -20,6 +20,7 @@ mod candidates;
 mod cli;
 mod condition_out;
 mod config;
+mod corpus_cmd;
 mod detect;
 mod doctor;
 mod exec;
@@ -213,6 +214,7 @@ fn run(args: &[String]) -> Result<()> {
         Some("condition") if has("--auto") => autolearn::run_auto(rest, &paths),
         Some("condition") if has("--instincts-only") => instincts_only(rest, &paths),
         Some("condition") => condition(rest, &paths),
+        Some("corpus") => corpus_cmd::run(sub.expect("corpus subcommand").1, &paths),
         Some("train") => train::train(rest, &paths),
         Some("savings") => savings::run(rest, &paths),
         Some("config") => config::run(rest, &paths),
@@ -455,6 +457,10 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
         Some(p) => serde_json::from_str(&std::fs::read_to_string(p)?)?,
         None => BTreeMap::new(),
     };
+    let identities = match flag(args, "--identities") {
+        Some(p) => serde_json::from_str(&std::fs::read_to_string(p)?)?,
+        None => BTreeMap::new(),
+    };
     let cfg = if args.iter().any(|a| a == "--demo") {
         LearnConfig::demo()
     } else {
@@ -482,9 +488,11 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
     cfg.cards = autolearn::card_params(&settings, paths);
     let cache =
         (settings.learn_parse_cache && !args.iter().any(|a| a == "--no-cache")).then(|| paths.cache().join("sessions"));
+    cfg.computation_cache = !args.iter().any(|a| a == "--no-cache");
     transcripts.sort();
     transcripts.dedup();
     let inputs = Inputs {
+        identities,
         transcripts,
         outcomes,
         repo_override: flag(args, "--repo"),

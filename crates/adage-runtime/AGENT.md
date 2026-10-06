@@ -36,7 +36,9 @@ I/O around it.
   `assign_arm`; `identity_hash` and the identity rings (`see_pretool`, `see_answered`;
   `SEEN_PRETOOL`, `MAX_NEW_TESTS`); history.
 - `decision.rs`: `Decision`, `Directive`, `Judgement`, `Prediction`, `PredictionKind`,
-  `PredictedCall`, `Routing`, `Substitution`: what is recorded in the spool.
+  `PredictedCall`, `Routing`, `Substitution`, `ObligationState` (the advisory obligations and
+  Stop-request count a decision records when they changed or an edit was observed): what is
+  recorded in the spool.
 - `policy.rs`: `Ctx` (index, repo, root, checkout, table, embed, params, policy), `Policy`
   (`Default` is what plain `adage hook` uses), `PREDICT_CAP`, `Embed`, and the matching rules that
   depend on the policy (`follows`, `meets`, `in_play`, `failure_matches`).
@@ -57,7 +59,9 @@ I/O around it.
 - `pretool.rs`: `Env`, `Pre`, `plan`, `keeps_permissions`, `permission_advice`, `rule_allows`,
   `shell_word`, `rewrite_note` (the `PreToolUse` interpreter rewrite for U11).
 - `pytest_case.rs`: `facts`, `TestSource`, `CaseFacts` (what a failing test's source says).
-- `rebuild.rs`: `rebuild`, `kind_of`, `MAX_SPOOL_BYTES`, `MAX_RECORDS` (state from the spool).
+- `rebuild.rs`: `rebuild`, `kind_of`, `MAX_SPOOL_BYTES`, `MAX_RECORDS` (state from the spool;
+  obligations from each record's `obligation_state`, or, in older records, from the emitted
+  routes and judgements).
 - `render.rs`: `route_text`, `bind`, `wrap_directive`, `footer`, `stop_reason`,
   `oriented_card_text`, `card_checks_line`, `stop_gate_failed`/`_unknown`/`_notice`,
   `join_finish_lines`, and the E1/E2 renderers `adage-exec` uses (`wrap_directive_e1`,

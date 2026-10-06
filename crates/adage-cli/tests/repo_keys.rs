@@ -64,6 +64,8 @@ fn adage(home: &Path, args: &[&str], stdin: &str) -> String {
 fn adage_with(home: &Path, args: &[&str], stdin: &str, env: &[(&str, &str)]) -> String {
     let mut c = common::scrub(&mut Command::new(env!("CARGO_BIN_EXE_adage")))
         .args(args)
+        // Keep the developer checkout's identity out of this fixture's repository-key cache.
+        .current_dir(home.parent().expect("fixture home has a temporary parent"))
         .env("ADAGE_HOME", home)
         .env("ADAGE_AUTO_LEARN", "0")
         .env("ADAGE_ARM", "treated")

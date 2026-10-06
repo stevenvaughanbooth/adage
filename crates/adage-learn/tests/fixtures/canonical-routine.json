@@ -1,0 +1,32 @@
+{
+  "id": "routine-0",
+  "identity": {"task_id": "FEATURE-0", "attempt_id": "1"},
+  "root": "/fixture/canonical-routine",
+  "repo": "canonical-routine",
+  "model": "fixture-model",
+  "day": "2026-10-01",
+  "prompt": "Implement the billing feature and its regression test",
+  "steps": [
+    {
+      "turn": 0, "key": "read {path}", "rel_path": "src/lib.py", "prompt": 0,
+      "norm": {"action":{"op":"read","path":"src/lib.py","range":null},"effect":"observe","mutating":false,"confidence":1.0,"note":""},
+      "call": {"tool":"Read","input":{"file_path":"/fixture/canonical-routine/src/lib.py"},"output":"source code","failed":false}
+    },
+    {
+      "turn": 1, "key": "write {path}", "rel_path": "tests/test_feature.py", "prompt": 0,
+      "norm": {"action":{"op":"write","path":"tests/test_feature.py"},"effect":"author","mutating":true,"confidence":1.0,"note":""},
+      "call": {"tool":"Write","input":{"file_path":"/fixture/canonical-routine/tests/test_feature.py","content":"def test_feature(): assert True"},"output":"written","failed":false}
+    },
+    {
+      "turn": 2, "key": "exec python -m pytest {path}", "rel_path": null, "prompt": 0,
+      "norm": {"action":{"op":"exec","argv":["python","-m","pytest","tests/test_feature.py"],"cwd":"."},"effect":"verify","mutating":false,"confidence":1.0,"note":""},
+      "call": {"tool":"Bash","input":{"command":"python -m pytest tests/test_feature.py"},"output":"1 passed","failed":false}
+    }
+  ],
+  "steered": false,
+  "directed": [],
+  "outcome": true,
+  "harness": "claude-code",
+  "prompts": [{"text":"Implement the billing feature and its regression test","at_step":0}],
+  "ending": {"asked_for_help":false,"cut_off":false}
+}

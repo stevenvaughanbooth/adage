@@ -166,6 +166,7 @@ fn learns_all_four_route_kinds_from_opencode_exports() {
     }
     let home = d.path().join("home");
     let inputs = Inputs {
+        identities: Default::default(),
         transcripts: files,
         outcomes: BTreeMap::new(),
         repo_override: Some("acme-billing".into()),

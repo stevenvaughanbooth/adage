@@ -13,10 +13,10 @@ that do exactly what each copy did. Line references below are at the working tre
 | Module | What it holds |
 | --- | --- |
 | `hook.rs` (224 lines) | `Prefetch`, `PREFETCH`, `main`, `adage_beside`; `impl Extension for Prefetch` (every method one call into a job, `deliver` composing E1 and E2); three shared helpers: `label` (`track/route`), `executes_at` (an execute grant for this repository at a level), `run_context` (the executor's `run::Context` for a run the hook starts). Re-exports `predict_grants`, `predict_off`, `data_type` at their old paths. |
-| `hook/grants.rs` | Which grants hold here: `session_texts` (the session contract and the lapse notice), `execution_contract` (the contract's reflex block), `exec_only`, `predict_off`, `predict_grants`, `verifications` / `current_verifications` (learned context checks under a current E2 grant), `edit_pattern`, and the person's lapse lines (`key_lapse_notice`, `unplanned_notice`). |
+| `hook/grants.rs` | Which grants hold here: `session_texts` (the session contract, its line for a person's required completion checks, and the lapse notice, or the notice that E2 is off while checks are required), `execution_contract` (the contract's reflex block), `exec_only`, `predict_off`, `predict_grants`, `verifications` / `current_verifications` (learned context checks under a current E2 grant), `edit_pattern`, and the person's lapse lines (`key_lapse_notice`, `unplanned_notice`). |
 | `hook/prefetch.rs` | E1: `prefetch`, `data_type`, `withheld` (the E1 spool record), `payload`. |
 | `hook/act.rs` | E2: `Acted` (with `place`: a text in its directive's slot or after the directives), `Candidate`, `candidates`, `directive_for`, `act`. |
-| `hook/stop_gate.rs` | The finish-line gate: `stop_gate`, `gate_answer`, `MAX_STOP_GATES`, `GATE_OVERHEAD_MS`. |
+| `hook/stop_gate.rs` | The finish-line gate: `stop_gate`, `gate_answer`, `MAX_STOP_GATES`, `GATE_OVERHEAD_MS`; and, where a person requires completion checks (`crate::completion`), `required_completion` in its place. |
 | `hook/receipt.rs` | The `PreToolUse` receipt: `covering_receipt`, `receipt_result`, `RECEIPT_CHECK_MS`, `MAX_RESULT_BYTES`. |
 | `hook/pytest.rs` | pytest, read from command lines and cache records only: `pytest_calls`, `pytest_command`, `pytest_call`, `covers`, `PytestCall`, `pytest_nodeids`, `test_evidence`, `failure_record`, `failing_cases`, `run_source`, the id checks (`valid_nodeid`, `valid_file_id`, `in_targets`, `test_function`), `read_record`, the cache paths and bounds. |
 | `hook/testkit.rs` (`#[cfg(test)]`) | The tests' world: `Fixture` (a repository with the learned `fixture/context/predict-check` check and a home beside it), `pytest_fixture`, journal rows (`completed`, `applied`, `journal`, `record_receipt`), the Stop call (`stop`, `stop_by`), the pipeline (`hook`, `edit`), grants (`grant_predict`, `grant_finish_line`, `predict_key_by_hand`, `seed`), `failed_run`, `check_directive`. |
@@ -65,9 +65,10 @@ touches:
 ## How to add an execution path, as it stands
 
 An execution path is a moment at which the hook itself runs an approved route. Today there are
-four: E1 `prefetch` (from `deliver`), E2 `act` (from `deliver`), `stop_gate` (from
-`Extension::stop_gate`) and, reading only, `covering_receipt` (from `Extension::pretool_context`).
-A new one:
+five: E1 `prefetch` (from `deliver`), E2 `act` (from `deliver`), `stop_gate` and
+`required_completion` (both from `Extension::stop_gate`; the second when a person requires
+completion checks for the repository) and, reading only, `covering_receipt` (from
+`Extension::pretool_context`). A new one:
 
 1. Gets its own module under `hook/` and one line in the `Extension` impl in `hook.rs` (or a new
    `Extension` method in adage-hook, if no event reaches it yet).
@@ -156,6 +157,27 @@ this change edits (the doc fixes in `route.rs` and `project_python.rs` are outsi
 Main's new `crates/adage-exec/AGENT.md` says "`hook.rs`'s unit tests learn tracks into a fixture
 home" and lists `hook` as `Prefetch`; after the merge the first should read "`hook::act`'s unit
 tests", and the `hook` line can name the modules above.
+
+## Merging main (`63cbc77`, #31)
+
+Main's #31 added explicit completion requirements (`completion.rs`, `verification.rs`, the
+`completion` and `readiness` verbs, a receipt's `verification` evidence in `journal.rs`) and
+four hunks to the old monolithic `hook.rs`. Each went to the module that holds that code;
+`hook.rs` itself keeps this branch's text (one doc line now names the completion checks):
+
+| Main's hunk (line in `350ab0b`'s `hook.rs`) | Now in |
+| --- | --- |
+| `session_texts`: the required checks' contract line, and the notice when policy disables E2 (92, 111) | `grants.rs` `session_texts` |
+| `stop_gate`: state unreadable, required checks first, unreadable requirements (428) | `stop_gate.rs` `stop_gate` |
+| `required_completion` (515) | `stop_gate.rs`, building its executor context with `run_context` (main's literal `Context { … }` is the same nine fields) |
+| tests: `verification: None` on journal rows (1481, 1649, 1809, 2193) | `testkit.rs` `completed` (which `record_receipt` and the pytest and receipt tests share), `stop_gate.rs` `an_interrupted_run_pauses_…` |
+| tests: `identities: Default::default()` on `adage_learn::Inputs` (1978) | `act.rs` `prior_sessions_…` |
+| tests: `required_completion_*` (seven) with `require_completion`, `completion_status`, `completion_staging` (1735) | `stop_gate.rs`'s tests, beside the gate's own (13 there now, 36 under `hook::`); `REQUIRED_CHECK` is `testkit::CHECK` |
+
+Silent conflicts, resolved in the same change: `completion::prepare` takes only an execute grant
+(`a.key.mode.is_execute()`, as `executes_at` does; a `predict` grant's key never matched the
+planned request anyway), and main's test literals gain this branch's fields (`Approval::via` in
+`journal.rs`, `ExecRequest::mode` in `verification.rs`).
 
 ## Commands and results
 

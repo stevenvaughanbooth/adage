@@ -233,6 +233,7 @@ mod tests {
             outcome: None,
             harness: "claude-code".into(),
             prompts: vec![PromptObs { text: "Fix CARE-1".into(), at_step: 0 }],
+            identity: Default::default(),
             ending: Ending::default(),
         }
     }

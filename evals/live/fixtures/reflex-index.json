@@ -1,0 +1,52 @@
+{
+  "generation": "e969977ae749fadb",
+  "routes": [
+    {
+      "repo": "fixture/repo",
+      "track": "fixture/checks",
+      "version": "0.1.0",
+      "route": {
+        "id": "check-after-edit",
+        "summary": "Check edited source",
+        "trigger": {
+          "on": "after_edit",
+          "paths": "src/*.py"
+        },
+        "step": {
+          "do": "run",
+          "command": "make check"
+        },
+        "slots": [],
+        "effect": "verify",
+        "strength": "fire",
+        "state": "firm",
+        "exit": [
+          {
+            "when": "intent_changes"
+          }
+        ],
+        "evidence": {
+          "opportunities": 8,
+          "support": 8,
+          "days": 3,
+          "successes": 0,
+          "deviations_failed": 0,
+          "rate": 0.0,
+          "lower_bound": 0.0,
+          "median_position": 0.0,
+          "turns_saved": 0.0,
+          "provenance": "",
+          "models": []
+        },
+        "authored": false
+      }
+    }
+  ],
+  "triggers": {
+    "fixture/repo": {
+      "edit_globs": [
+        "src/*.py"
+      ]
+    }
+  }
+}

@@ -13,6 +13,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -72,17 +73,13 @@ class DryRun(unittest.TestCase):
         self.assertIsNone(p["learn"])
 
     def test_execute_is_refused_inside_an_agent_session(self):
-        old = os.environ.get("CLAUDECODE")
-        os.environ["CLAUDECODE"] = "1"
-        try:
-            with self.assertRaises(SystemExit):
-                runner.main([CONFIG, "--execute", "--root", str(self.root)])
-        finally:
-            if old is None:
-                del os.environ["CLAUDECODE"]
-            else:
-                os.environ["CLAUDECODE"] = old
-        self.assertFalse(self.root.exists())
+        for marker in runner.AGENT_MARKERS:
+            with self.subTest(marker=marker), patch.dict(os.environ, {key: "" for key in runner.AGENT_MARKERS}):
+                os.environ[marker] = "fixture"
+                with self.assertRaisesRegex(SystemExit, "inside an agent session"), \
+                        patch.object(runner, "execute_plan", side_effect=AssertionError("must not dispatch")):
+                    runner.main([CONFIG, "--execute", "--root", str(self.root)])
+                self.assertFalse(self.root.exists())
 
     def test_the_second_demo_plan(self):
         p = json.loads(dry_with(HARBOR, "--json", "--root", str(self.root)))

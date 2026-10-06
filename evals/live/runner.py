@@ -40,7 +40,7 @@ turns a live run into an offline `adage eval` dataset. The live dashboard reads 
 Options:
   --config PATH        the config (or give it as the first positional argument)
   --dry-run            print the plan and exit (the default without --execute)
-  --execute            run for real (spends tokens); refused inside an agent session (CLAUDECODE)
+  --execute            run for real (spends tokens); refused inside an agent session
   --root DIR           output root
   --model ID           override the config's model
   --round N            run only this learning round (default: every round in the config)
@@ -72,12 +72,14 @@ import sys
 import threading
 import time
 import signal
+import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 from budget import Budget, known_cost, execution_lock  # noqa: E402
+from evidence import independent_grade  # noqa: E402
 REPO = HERE.parent.parent
 sys.path.insert(0, str(REPO / "demo"))
 import report as demo_report  # noqa: E402 - demo/report.py: statuses, statistics, results page
@@ -126,6 +128,9 @@ DEFAULTS = {
 PASS_ENV = ("PATH", "LANG", "LANGUAGE", "LC_ALL", "LC_CTYPE", "TERM", "SHELL", "USER", "LOGNAME", "TZ",
             "HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "https_proxy", "http_proxy", "no_proxy",
             "SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS", "REQUESTS_CA_BUNDLE")
+# Paid entrypoints share the same operator-only boundary across supported agent sessions.
+AGENT_MARKERS = ("CLAUDECODE", "OPENCODE", "CODEX_SANDBOX", "CODEX_SANDBOX_NETWORK_DISABLED")
+
 # How Claude Code authenticates without the operator's config directory: one of these variables
 # (an API key, or a token from `claude setup-token`), else a copy of the operator's
 # ~/.claude/.credentials.json (Linux; macOS keeps it in the Keychain, so set a variable there).
@@ -268,13 +273,13 @@ def plan(cfg, phases, round_):
 
 
 def claude_command(cfg, prompt, settings):
-    return [
+    argv = [
         "claude", "-p", prompt,
         "--model", cfg["model"],
         "--max-turns", str(cfg["max_turns"]),
         "--max-budget-usd", str(cfg["session_budget_usd"]),
         "--output-format", "stream-json", "--verbose", "--include-hook-events",
-        "--setting-sources", "project,local",
+        "--setting-sources", cfg.get("setting_sources", "project,local"),
         "--strict-mcp-config",
         "--settings", str(settings),
         # The tool set itself, not only what is pre-approved: newer harnesses offer more built-in
@@ -285,6 +290,9 @@ def claude_command(cfg, prompt, settings):
         "--allowedTools", *cfg["allowed_tools"],
         "--disallowedTools", *cfg["disallowed_tools"],
     ]
+    if cfg.get("capture_usage"):
+        argv.append("--include-partial-messages")
+    return argv
 
 
 def instincts_home(home):
@@ -805,8 +813,9 @@ def harness_version(env=None):
 
 
 class Live:
-    def __init__(self, cfg, root, adage, round_, isolate=True, resume=True):
+    def __init__(self, cfg, root, adage, round_, isolate=True, resume=True, observer=None):
         self.cfg, self.root, self.adage, self.round, self.isolate = cfg, root, adage, round_, isolate
+        self.observer = observer
         # Re-running a phase skips its sessions that already finished (`pending`).
         self.resume = resume
         self.private = root / "private"
@@ -906,15 +915,42 @@ class Live:
             return dest
         return None
 
-    def score(self, workdir, task):
+    def score(self, workdir, task, timeout=None):
         """The scorer's verdict, and whether it produced one."""
+        stdout, code, timed_out = "", None, False
         try:
-            out = subprocess.run(expand(self.cfg["score"], dir=str(workdir), task=task), capture_output=True, text=True)
-            score = json.loads(out.stdout or "{}")
-        except (OSError, ValueError):
-            return {}, False
-        ok = isinstance(score, dict) and "passed" in score
-        return (score if isinstance(score, dict) else {}), ok
+            with tempfile.TemporaryFile() as capture:
+                proc = subprocess.Popen(expand(self.cfg["score"], dir=str(workdir), task=task),
+                                        stdout=capture, stderr=subprocess.DEVNULL, start_new_session=True,
+                                        cwd=self.cfg.get("execution_cwd"))
+                try:
+                    code = proc.wait(timeout=timeout)
+                except subprocess.TimeoutExpired:
+                    timed_out = True
+                    try:
+                        if os.name == "posix":
+                            os.killpg(proc.pid, signal.SIGKILL)
+                        else:
+                            proc.kill()
+                    except ProcessLookupError:
+                        pass
+                    code = proc.wait()
+                capture.seek(0)
+                stdout = capture.read(1024 * 1024 + 1).decode("utf-8", errors="replace")
+        except OSError:
+            pass
+        grade = independent_grade(stdout, code, timed_out)
+        try:
+            score = json.loads(stdout or "{}")
+        except ValueError:
+            score = {}
+        if not isinstance(score, dict):
+            score = {}
+        if grade is None:
+            score.pop("passed", None)
+        if self.observer:
+            self.observer.graded(stdout, code, timed_out)
+        return score, grade is not None
 
     def run_one(self, run_id, phase, arm, task, prompt_t):
         attempt, reason = self.budget.reserve(run_id)
@@ -930,6 +966,9 @@ class Live:
             self.budget.settle(attempt)
 
     def run_reserved(self, attempt, run_id, phase, arm, task, prompt_t):
+        timeout = self.cfg.get("timeout_seconds")
+        deadline = time.monotonic() + timeout if timeout is not None else None
+        remaining = lambda: max(0.001, deadline - time.monotonic()) if deadline is not None else None
         run_dir = self.root / "runs" / run_id
         shutil.rmtree(run_dir, ignore_errors=True)
         workdir = run_dir / self.cfg["workdir"]
@@ -937,15 +976,19 @@ class Live:
         run_home = run_dir / "home"
         self.update(run_id, id=run_id, phase=phase, arm=arm, task=task, prompt=prompt_t.format(id=task), round=self.round,
                     seed=self.cfg.get("seed"), status="running", t0=time.time(), events=[], directives=[])
-        subprocess.run(expand(self.cfg["sandbox"], dir=str(workdir), task=task, arm=arm), check=True, capture_output=True)
+        subprocess.run(expand(self.cfg["sandbox"], dir=str(workdir), task=task, arm=arm), check=True,
+                       capture_output=True, timeout=remaining(), cwd=self.cfg.get("execution_cwd"))
         prompt = prompt_t.format(id=task)
         env = session_env(arm, run_home, self.home, self.isolate, self.base_env, self.forward)
         if self.isolate:
-            self.prepare_home(run_home)
             config_dir = Path(env["CLAUDE_CONFIG_DIR"])
         else:
             config_dir = operator_config_dir(self.base_env)
         settings = self.settings(settings_kind(arm))
+        if self.observer:
+            self.observer.prepared(self, run_id, task, arm, workdir, settings, env)
+        if deadline is not None and time.monotonic() >= deadline:
+            raise TimeoutError("task preparation exhausted the workflow deadline")
         cmd = claude_command(self.cfg, prompt, settings)
         if self.cfg.get("confine"):
             rw = [env["ADAGE_HOME"]] if env.get("ADAGE_HOME") else []
@@ -953,12 +996,30 @@ class Live:
         t0 = time.time()
         events, directives, uses_by_id, sid, result, turns, version = [], [], {}, None, {}, 0, None
         proc = None
+        timer, timed_out = None, threading.Event()
         try:
+            if self.isolate:
+                self.prepare_home(run_home)
             with open(run_dir / "stream.jsonl", "w") as raw:
                 if not self.budget.dispatch(attempt):
                     raise RuntimeError("dispatch stopped: another session has unresolved accounting")
                 proc = subprocess.Popen(cmd, cwd=workdir, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                                         text=True, env=env, start_new_session=True)
+                if deadline is not None:
+                    def expire():
+                        # A child can keep stdout open after the harness parent exits.
+                        # Terminate the whole group even when the parent has already ended.
+                        timed_out.set()
+                        try:
+                            if os.name == "posix":
+                                os.killpg(proc.pid, signal.SIGKILL)
+                            else:
+                                proc.kill()
+                        except ProcessLookupError:
+                            pass
+                    timer = threading.Timer(remaining(), expire)
+                    timer.daemon = True
+                    timer.start()
                 for line in proc.stdout:
                     t = round(time.time() - t0, 2)
                     raw.write(json.dumps({"t": t, "line": line.rstrip("\n")}) + "\n")
@@ -967,6 +1028,8 @@ class Live:
                     except ValueError:
                         continue
                     typ = m.get("type")
+                    if self.observer:
+                        self.observer.event(m)
                     if typ == "system" and m.get("subtype") == "init":
                         sid = m.get("session_id")
                         version = m.get("claude_code_version")
@@ -999,6 +1062,8 @@ class Live:
                         result = m
                 proc.wait()
         finally:
+            if timer is not None:
+                timer.cancel()
             if proc is not None and proc.poll() is None:
                 try:
                     os.killpg(proc.pid, signal.SIGTERM)
@@ -1012,10 +1077,12 @@ class Live:
                     except ProcessLookupError:
                         pass
                     proc.wait()
+            if proc is not None and proc.stdout is not None:
+                proc.stdout.close()
             self.budget.settle(attempt, result)
             if self.isolate:  # the copied credentials never outlive the session
                 (config_dir / ".credentials.json").unlink(missing_ok=True)
-        score, scorer_ok = self.score(workdir, task)
+        score, scorer_ok = self.score(workdir, task, timeout=remaining())
         cost = known_cost(result.get("total_cost_usd"))
         if sid:
             self.archive_transcript(sid, config_dir)
@@ -1024,7 +1091,8 @@ class Live:
         metrics = run_metrics(self.cfg, events, result, score, workdir, round(time.time() - t0, 2), sid, spool, t0)
         status, reason = demo_report.classify_status(result, len(events), metrics["turns"], score, scorer_ok,
                                                      self.cfg["max_turns"])
-        metrics.update(status=status, status_reason=reason, exit_code=proc.returncode, harness_version=version)
+        metrics.update(status=status, status_reason=reason, exit_code=proc.returncode, harness_version=version,
+                       timed_out=timed_out.is_set() or (deadline is not None and time.monotonic() >= deadline))
         # `status` at the top stays passed/failed for the dashboard; the run's classification is
         # metrics.status (and run_status).
         self.update(run_id, status="passed" if metrics["passed"] else "failed", run_status=status, metrics=metrics,
@@ -1248,8 +1316,8 @@ def main(argv):
             print_plan(p)
         return 0
     # Executing spends real tokens: refuse inside an agent session, and check the tools exist.
-    if os.environ.get("CLAUDECODE"):
-        raise SystemExit("refusing to run live agents from inside an agent session (CLAUDECODE is set)")
+    if any(os.environ.get(key) for key in AGENT_MARKERS):
+        raise SystemExit("refusing to run live agents from inside an agent session; use an operator terminal")
     if not shutil.which("claude"):
         raise SystemExit("`claude` is not on PATH")
     if not adage.exists():

@@ -967,7 +967,66 @@ Stop gate asks for no run whose result is already known. A receipt that is no lo
 then decides nothing, and the call runs. Command hooks are unchanged: they deliver the note
 beside the call, and only when the receipt is fresh.
 
-## The finish-line check (Stop gate)
+## Explicit completion requirements
+
+A person can require existing E2 verification reflexes at completion, including a check the
+agent never started. This is separate from learning: repeated behavior proposes a reflex;
+an explicit requirement makes its verification result part of completion readiness.
+
+After reviewing the learned route and its exact execution grant, run from a normal terminal:
+
+```sh
+adage delegate policy --max-level e2
+adage review delegate <track> <route> --level e2 --effect verify --repo /path/to/repo
+adage delegate on
+adage-exec completion --repo /path/to/repo --require <track>/<route>
+adage-exec readiness --repo /path/to/repo
+```
+
+Replace the placeholders with an actual reviewed route. Declare its needed cache globs and
+timeout in the delegation command as for other E2 actions. Requirements accept fixed commands
+with a current verification grant; parameterized commands and regeneration actions are rejected.
+Repeat `--require` to set up to eight checks. The command replaces that repository's complete
+required list in `$ADAGE_HOME/completion.json`; it never creates or enlarges an execution grant.
+`adage-exec completion --repo /path/to/repo` lists it, and `--clear` removes it. Configuration
+changes use the same person-at-terminal guard as execution approvals.
+
+`readiness` returns JSON and exits 0 only when a nonempty requirement set has current passing
+evidence; it exits 3 for an unconfigured or unready repository and 2 for unreadable inputs.
+`--session <id>` restricts evidence to one session. Each check reports `missing`, `stale`,
+`failed`, `unknown`, or `passed`, with a reason and available execution receipt id.
+
+Passing evidence comes from the existing durable action journal: exact approval identity,
+bound command inputs, canonical worktree, repository input digest, sandbox profile, approved
+project-Python descriptor when present, process exit/signal and duration. A later edit, changed
+grant, newer failed result, unfinished operation or legacy receipt cannot count as a current
+pass. Input snapshots include dirty and untracked files, with the action's declared cache
+exclusions; they are not a Git HEAD attestation. General ambient toolchains, external services,
+test discovery/counts and behavioral coverage are not certified. An exit-zero command remains
+an exit-zero command; use a suitable reviewed check and an independent task grader.
+
+On supported treated Claude Code/Codex Stop hooks, missing checks run through the same sandbox,
+policy and journal gates as existing E2 actions. The automatic budget is two attempts per
+required route, session and worktree, with at most one Stop continuation. It survives loss of
+ordinary session state. Hook deadlines still apply. Exhausted time or attempts, missing grants
+and failures remain visibly **unverified**; the hook eventually lets the turn end with that
+status. This is not an unbypassable harness stop or a PR-publication gate. E0 advice and control
+sessions retain their behavior, and OpenCode does not gain E2 action support.
+
+A separate bounded attempt log records admission before staging; it contains no substitute
+execution results. An interruption leaves readiness unknown until inspected. Resolve any
+pending action with `adage-exec recover --id <id> --acknowledge`, then acknowledge the interrupted
+completion attempt with `adage-exec completion --repo /path/to/repo --acknowledge`. Both commands
+require a person. Acknowledgement does not mark a check passed or reset its attempt budget.
+
+These local receipts inherit the approval store's trust boundary. A process that can rewrite
+`ADAGE_HOME` can fabricate records or requirements. They are operational evidence, not a
+tamper-proof independent grade. The paid E0 pilot deliberately retains a separate host grader
+and does not enable this completion policy as an undeclared treatment.
+
+## The learned finish-line check (Stop gate)
+
+Without explicit completion requirements, the existing learned Stop behavior remains:
 
 In a treated session whose policy allows E2, a learned `context` verification with a current E2
 grant that already ran in this session is run again when the agent finishes (Claude Code and

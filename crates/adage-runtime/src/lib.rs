@@ -35,7 +35,9 @@ pub use adage_core::json::extract_json;
 pub use adage_trace::{By, Call, Event};
 pub use context::CtxState;
 pub use decide::decide;
-pub use decision::{Decision, Directive, Judgement, PredictedCall, Prediction, PredictionKind, Routing, Substitution};
+pub use decision::{
+    Decision, Directive, Judgement, ObligationState, PredictedCall, Prediction, PredictionKind, Routing, Substitution,
+};
 pub use noticed::{Noticed, MAX_NOTICED};
 pub use observe::command_key;
 pub use policy::{Ctx, Embed, Policy, PREDICT_CAP};

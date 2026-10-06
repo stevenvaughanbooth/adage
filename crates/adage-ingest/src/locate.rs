@@ -103,6 +103,8 @@ mod tests {
         std::fs::create_dir_all(root.join("src/deep")).unwrap();
         let l = LocalCheckout.locate(&root.join("src/deep"), Some("acme"));
         assert_eq!(l, Located { root: root.clone(), repo: "acme".into() });
+        std::fs::remove_dir_all(root.join("src")).unwrap();
+        assert_eq!(LocalCheckout.locate(&root.join("src/deep"), Some("acme")).root, root);
         // No checkout above it: the directory itself.
         let bare = d.path().join("loose");
         assert_eq!(LocalCheckout.locate(&bare, Some("k")).root, bare);

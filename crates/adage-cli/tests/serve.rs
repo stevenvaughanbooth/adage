@@ -35,6 +35,8 @@ fn serves_the_map_and_its_api_from_the_binary() {
     let d = tempfile::tempdir().unwrap();
     let mut child = common::scrub(&mut Command::new(env!("CARGO_BIN_EXE_adage")))
         .args(["map", "--port", "0", "--no-open"])
+        // This empty-home fixture must not inherit the developer checkout's repository identity.
+        .current_dir(d.path())
         .env("ADAGE_HOME", d.path().join("data"))
         .env("HOME", d.path())
         .stdin(Stdio::null())
@@ -93,6 +95,8 @@ fn keeps_serving_after_its_stdout_is_closed() {
     let d = tempfile::tempdir().unwrap();
     let mut child = Command::new(env!("CARGO_BIN_EXE_adage"))
         .args(["map", "--port", "0", "--no-open"])
+        // This empty-home fixture must not inherit the developer checkout's repository identity.
+        .current_dir(d.path())
         .env("ADAGE_HOME", d.path().join("data"))
         .env("HOME", d.path())
         .stdin(Stdio::null())

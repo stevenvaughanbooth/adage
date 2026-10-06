@@ -13,6 +13,8 @@
 //! adage eval generate <synthetic|adversarial> <out-dir>
 //! adage eval replay-savings <manifest.json> …   (the §5.2 savings metric: `crate::savings_replay`)
 //! adage eval embeddings <manifest.json>… --models <dir>   (embedding ablation: `crate::embed_eval`)
+//! adage eval paired <study.json>   (held-out task quality, token and billed-cost qualification)
+//! adage eval experiment object|freeze|report … (frozen protocol and complete scheduled cohort)
 //!
 //! <split>: <name> | hash:<share>[:<seed>] | group:task:<k>:<fold> | temporal[:<share>] | all
 //! ```
@@ -64,6 +66,10 @@ usage: adage eval <dataset-dir> [--split <split>] [--thresholds demo|default] [-
          list the reflexes conditioned on the train traces, checked against the dataset's conventions
        adage eval bench run|sweep|report|bless … (adage eval bench --help)
          the parameter bench
+       adage eval paired <study.json>
+         paired held-out task quality, token and billed-cost qualification (JSON)
+       adage eval experiment object|freeze|report …
+         frozen protocol, content-addressed receipts and complete cohort qualification (JSON)
        adage eval fidelity <dataset-dir> --round <round1|round2> [--exact-keys] [--learned] [--json]
          replay recorded traces and compare with the hook's live decisions (treated and control arms)
        adage eval types <gen-dir|dataset-dir> [--end-to-end] [--json]
@@ -90,6 +96,8 @@ pub fn run(args: &[String]) -> Result<()> {
             Ok(())
         }
         Some("bench") => crate::bench::cli::run(&args[1..]),
+        Some("paired") => crate::paired::cli(&args[1..]),
+        Some("experiment") => crate::experiment::cli(&args[1..]),
         Some("replay-savings") => crate::savings_replay::cli(&args[1..]),
         Some("embeddings") => crate::embed_eval::cli(&args[1..]),
         Some("routes") => {

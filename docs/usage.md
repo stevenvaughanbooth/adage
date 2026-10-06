@@ -145,7 +145,7 @@ To stop, `adage delegate off --repo .` (approvals are kept), or `adage review re
 sessions with it and the orientation card used fewer model requests than sessions without Adage;
 on held-out tasks it saved more calls still but missed the registered quality rule, so it stays
 experimental ([README](../README.md#evidence-so-far)). The full
-mechanics are in [execution](execution.md#the-finish-line-check-stop-gate).
+mechanics are in [execution](execution.md#the-learned-finish-line-check-stop-gate).
 
 ## Other ways to install
 

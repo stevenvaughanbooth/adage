@@ -13,7 +13,9 @@ mod stop;
 use crate::context::{self, Symbols};
 use crate::decision::directive;
 use crate::policy::in_play;
-use crate::{command_key, prediction, render, Arm, Ctx, Decision, Directive, Event, Pending, SessionState};
+use crate::{
+    command_key, prediction, render, Arm, Ctx, Decision, Directive, Event, ObligationState, Pending, SessionState,
+};
 use adage_core::keys;
 use adage_tracks::context::CtxNet;
 use adage_tracks::{interlock, IndexedRoute, Route, Step, Trigger};
@@ -31,6 +33,7 @@ struct Walk<'w, 'n> {
 
 pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
     let mut d = Decision::default();
+    let obligations_before = ObligationState::capture(st);
     // Exec-only routes (vendored scripts) are carried out by adage-exec, never directed on their
     // own ([`Policy::exec_only`](crate::Policy::exec_only)).
     let routes: Vec<&IndexedRoute> = ctx.index.for_repo(&ctx.repo).filter(|r| in_play(&ctx.policy, r)).collect();
@@ -73,6 +76,12 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
     d.would_have = out.clone();
     if st.arm != Some(Arm::Control) {
         d.directives = out;
+    }
+    if obligations_before.obligations != st.obligations
+        || obligations_before.stop_requests != st.stop_requests
+        || d.observed.iter().any(|key| key.starts_with("edit ") || key.starts_with("write "))
+    {
+        d.obligation_state = Some(ObligationState::capture(st));
     }
     d
 }
