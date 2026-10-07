@@ -293,3 +293,12 @@ rejections. New output directories with larger bounded scratch space completed t
 assertions and task code were unchanged. These are component checks, not paid agent results.
 A composed candidate grader, complete requirement scope (including broader OAuth behavior),
 and frozen mod treatment support remain unfinished. No additional paid model calls were made.
+
+
+The OAuth task's broader configuration check subsequently failed on its pinned historical
+reference: extra-token storage worked when keys were supplied directly, but configured and
+provider-default keys did not reach the runtime. A separately labeled corrected control
+passed the identical offline probe. Both results and the original reference are preserved;
+the corrected control is neither an agent trace nor a learned reflex. The historical reference
+is therefore unsuitable as a full-scope positive oracle without resolving this gap. Database
+passes do not justify narrowing the task or waiving the missing configuration behavior.
