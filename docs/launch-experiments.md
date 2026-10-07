@@ -216,9 +216,10 @@ diagnostic. The earlier baseline-only preparation is retained as superseded. See
 Before training or comparing learned mod treatment, register its complete plugin source, binary
 hashes, model, runtime settings and operator grants. Keep the same model in both arms and disable
 model routing. Use the independent semantic grader and verify native model requests, module
-activation, reflex delivery, prediction/receipt provenance and duplicate-hook absence. The old
-E0 frozen collector does not freeze these extra treatment inputs; do not label its output a mod
-comparison. Failure or incomplete accounting stops paid expansion.
+activation, reflex delivery, prediction/receipt provenance and duplicate-hook absence. Use the
+explicit native E0 profile for advice through the mod; the default legacy E0 profile does not
+certify a mod comparison. Execution and prediction remain separate treatments. Failure or
+incomplete accounting stops paid expansion.
 
 ## Coder migration controls
 
@@ -293,8 +294,9 @@ Four initial Go controls for the theme and provisioner cases ran out of bounded 
 scratch space. Their outputs remain preserved as infrastructure failures, not quality
 rejections. New output directories with larger bounded scratch space completed the controls;
 assertions and task code were unchanged. These are component checks, not paid agent results.
-A composed candidate grader, complete requirement scope (including broader OAuth behavior),
-and frozen mod treatment support remain unfinished. No additional paid model calls were made.
+These initial component checks left composed candidate grading, broader OAuth coverage and
+native treatment freezing unfinished. The subsequent preparation below does not admit paid
+work or turn those reference controls into agent results.
 
 
 The OAuth task's broader configuration check subsequently failed on its pinned historical
@@ -304,3 +306,25 @@ passed the identical offline probe. Both results and the original reference are 
 the corrected control is neither an agent trace nor a learned reflex. The historical reference
 is therefore unsuitable as a full-scope positive oracle without resolving this gap. Database
 passes do not justify narrowing the task or waiving the missing configuration behavior.
+
+
+## Current free preparation checkpoint
+
+The explicit native E0 collector now pins and checks the actual mod and standalone harness,
+reconciles native accounting, and preserves incomplete attempts. The complete local PR Rust
+suite passed 1,402 tests with five existing ignored tests. The Linux live Python suite passed
+214 tests before the final native environment checks; the final 28 native tests and 17 pilot
+checks passed separately. These model-free fixtures establish engineering behavior, not savings.
+
+Private composed graders now accept the timestamp, theme and provisioner-version references
+across database semantics, the actual Go Store and six generated artifacts. Their negative
+controls reject an incorrect timezone conversion, a user-row conversion that drops the theme,
+and a provisioner update that fails to persist the requested API version. The timezone negative
+still reproduces its generated files, and the theme negative still passes database and generation
+checks: those passes alone would miss real quality failures. The expanded theme probe also
+accepts the unchanged historical reference.
+
+The broader OAuth HTTP controls and final task-coverage/source reviews remain in progress.
+No new paid dispatch is authorized, no production-learned Coder treatment has been approved,
+and no held-out savings result exists. Keep the incomplete registration and every failed
+fixture attempt; do not infer admission from the number of free checks that passed.
