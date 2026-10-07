@@ -333,6 +333,10 @@ def run_one(run_id, phase, arm, task, prompt_template):
         "--output-format", "stream-json", "--verbose", "--include-hook-events", "--include-partial-messages",
         "--setting-sources", "project,local",
         "--strict-mcp-config",
+        # Pinned: a predicted call is yielded only when the person's permissions allow it unasked
+        # (the mod's gate), and a host whose sessions start in auto mode would hold every predicted
+        # Bash step back. The evaluation compares the arms under the default mode.
+        "--permission-mode", "default",
         *arm_flags,
         "--allowedTools", "Bash", "Read", "Edit", "Write", "Glob", "Grep", "LS", "MultiEdit",
         "--disallowedTools", "WebFetch", "WebSearch", "Agent", "Task",
