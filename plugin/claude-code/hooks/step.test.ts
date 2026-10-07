@@ -6,8 +6,10 @@ import type { TurnStepChunk, TurnStepInput, TurnStepResult } from 'claude-code'
 import { describe, expect, test } from 'claude-code/testing'
 
 import type { Asked } from './bridge'
-import { PREDICT, USAGE, drain, start, wire, wireLine, wireWith, world } from './fixtures/kit'
+import { PREDICT, USAGE, drain, engineThread, madeUpResponse, start, wire, wireLine, wireWith, world } from './fixtures/kit'
+import type { ThreadMessage } from './fixtures/kit'
 import type { Predicted } from './plugin'
+import { PREDICTED_STOP } from './predict'
 import { isRoutine, turnStep } from './step'
 import type { StepDeps, StepNext, TurnStepPayload } from './step'
 
@@ -74,7 +76,7 @@ describe('T-C4-01, T-C7-03 · a prediction before the request', () => {
     ],
   ]
   for (const [kind, calls] of cases) {
-    test(`${kind}: yields the calls and a tool_use stop, returns the result, sends no request`, async () => {
+    test(`${kind}: yields the calls and a stop with no reason, returns the result, sends no request`, async () => {
       const { next, requests } = model([], { turnId: 'turn-1', index: 2, answer: 'unused', toolUses: [], stopReason: 'end_turn', usage: USAGE })
       const { deps, asked, recorded } = stub(() => predict(kind, calls))
       const { chunks, result } = await drain(turnStep(STEP, next, deps))
@@ -84,14 +86,14 @@ describe('T-C4-01, T-C7-03 · a prediction before the request', () => {
           { kind: 'tool', index: k, id: ID(k), name: c.tool },
           { kind: 'input', index: k, json: JSON.stringify(c.input) },
         ]),
-        { kind: 'stop', stopReason: 'tool_use', usage: null },
+        { kind: 'stop', stopReason: null, usage: null },
       ])
       expect(result).toEqual({
         turnId: 'turn-1',
         index: 2,
         answer: '',
         toolUses: typed.map(c => ({ name: c.tool, input: c.input })),
-        stopReason: 'tool_use',
+        stopReason: null,
         usage: null,
       })
       expect(requests).toHaveLength(0)
@@ -103,6 +105,42 @@ describe('T-C4-01, T-C7-03 · a prediction before the request', () => {
       ])
     })
   }
+})
+
+describe('T-C4-01 · a predicted step keeps the server thread whole (live run 2: a 404 after 12 of 12)', () => {
+  // The conversation up to the step: the prompt, the model's own lookup (a real response, made by
+  // a request), its result; then what the mod yields in the model's place, and the read's result.
+  const before: ThreadMessage[] = [
+    { role: 'user' },
+    { role: 'assistant', id: 'msg_01lookup', requestId: 'req_01', model: 'claude-x', stopReason: 'tool_use' },
+    { role: 'user' },
+  ]
+  const READ = [{ tool: 'Read', input: { file_path: '/w/acme/billing.py' } }]
+
+  test('the request after it starts the thread afresh instead of naming an id the server never issued', async () => {
+    const { next } = model([], { turnId: 'turn-1', index: 2, answer: '', toolUses: [], stopReason: 'end_turn', usage: USAGE })
+    const { chunks } = await drain(turnStep(STEP, next, stub(() => predict('chain', READ)).deps))
+    expect(chunks.at(-1)).toEqual(PREDICTED_STOP)
+    const after: ThreadMessage[] = [...before, madeUpResponse(chunks, STEP.model), { role: 'user' }]
+    expect(engineThread(after)).toEqual({ type: 'create', reason: 'anchor_incomplete' })
+  })
+
+  test('a stop that states tool_use (the mod before this fix) continued from the made-up id: the 404', () => {
+    const chunks: TurnStepChunk[] = [{ kind: 'stop', stopReason: 'tool_use', usage: null }]
+    const after: ThreadMessage[] = [...before, madeUpResponse(chunks, STEP.model, 'u1'), { role: 'user' }]
+    expect(engineThread(after)).toEqual({ type: 'continue', previousMessageId: 'msg_hook_u1' })
+  })
+
+  test('the next real response is a sound anchor again: the request after it continues', () => {
+    const after: ThreadMessage[] = [
+      ...before,
+      madeUpResponse([PREDICTED_STOP], STEP.model),
+      { role: 'user' },
+      { role: 'assistant', id: 'msg_01edit', requestId: 'req_02', model: 'claude-x', stopReason: 'tool_use' },
+      { role: 'user' },
+    ]
+    expect(engineThread(after)).toEqual({ type: 'continue', previousMessageId: 'msg_01edit' })
+  })
 })
 
 describe('T-C4-02 · forwarding', () => {
@@ -321,9 +359,9 @@ describe('T-C4-01 … T-C4-03 · onStep through the engine', () => {
     expect(chunks).toEqual([
       { kind: 'tool', index: 0, id: ID(0), name: 'Bash' },
       { kind: 'input', index: 0, json: '{"command":"make gen"}' },
-      { kind: 'stop', stopReason: 'tool_use', usage: null },
+      PREDICTED_STOP,
     ])
-    expect(result).toMatchObject({ stopReason: 'tool_use', toolUses: [{ name: 'Bash', input: { command: 'make gen' } }], usage: null })
+    expect(result).toMatchObject({ stopReason: null, toolUses: [{ name: 'Bash', input: { command: 'make gen' } }], usage: null })
     expect(w.models.map(x => x.index)).toEqual([])
     const asked = w.ran.find(r => r.argv[3] === 'TurnStep')
     expect(asked?.argv).toEqual(['/data/bin/hook', 'hook', 'claude', 'TurnStep'])

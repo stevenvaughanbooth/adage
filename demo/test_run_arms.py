@@ -411,6 +411,42 @@ class SpoolMetricsTest(unittest.TestCase):
         self.assertIsNone(run.derived_metrics("train", [], [], [], "", [], False)["hooks_wired_once"])
 
 
+class DeadEndTest(unittest.TestCase):
+    """Dead ends piped through `| tail` exit 0 (live run 2: fixtures/dead-end-piped-live2.jsonl, the
+    pytest attempt and the `make test` after it, verbatim from eval-W-2043-r1-mod's stream)."""
+
+    STREAM = [json.loads(line) for line in (HERE / "fixtures/dead-end-piped-live2.jsonl").read_text().splitlines()]
+
+    def test_counted_by_command_and_failure_text_not_exit_status(self):
+        result = next(c for m in self.STREAM if m["type"] == "user" for c in m["message"]["content"])
+        self.assertFalse(result["is_error"], "the excerpt is the case: a dead end that exited 0")
+        self.assertEqual(am.dead_end_hits(self.STREAM), [{
+            "id": "toolu_01GFB4GaE5dBfgfe1fuWnYYr",
+            "command": "ls; ls tests 2>/dev/null; python3 -m pytest -q 2>&1 | tail -5",
+            "failure": "No module named pytest",
+        }])
+        # The timeline saw no failure; the run's metric does.
+        events = [{"id": "toolu_01GFB4GaE5dBfgfe1fuWnYYr", "cat": "verify"}, {"id": "toolu_018gJw2te27rK7DegZqJoU7C", "cat": "verify"}]
+        m = run.derived_metrics("mod", events, self.STREAM, [], "", [], False)
+        self.assertEqual((m["dead_end_hits"], m["dead_end"]["hit"]), (1, 1))
+
+    def test_what_counts(self):
+        def call(cmd, out, is_error=False, tid="t1"):
+            return [{"type": "assistant", "message": {"content": [{"type": "tool_use", "id": tid, "name": "Bash", "input": {"command": cmd}}]}},
+                    {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": tid, "content": out, "is_error": is_error}]}}]
+        hits = lambda s: [h["failure"] for h in am.dead_end_hits(s)]
+        self.assertEqual(hits(call("make test 2>&1 | tail -3", "Ran 3 tests in 0.000s\n\nFAILED (errors=1)")), ["FAILED"])
+        self.assertEqual(hits(call("make ci", "make: *** No rule to make target 'ci'.  Stop.")), ["make: *** "])
+        self.assertEqual(hits(call("python3 -m pytest", "", is_error=True)), ["is_error"])
+        self.assertEqual(hits(call("python3 -m pytest -q | tail -1", [{"type": "text", "text": "2 failed, 3 passed"}])), ["2 failed"])
+        # Passing, or not a verification: nothing.
+        self.assertEqual(hits(call("make test 2>&1 | tail -3", "Ran 3 tests in 0.000s\n\nOK")), [])
+        self.assertEqual(hits(call("cat notes.txt", "No module named pytest")), [])
+        # The timeline's own verify-fail and the stream's hit are one dead end, counted once.
+        m = run.derived_metrics("adage", [{"id": "t1", "cat": "verify-fail"}], call("make test", "", is_error=True), [], "", [], False)
+        self.assertEqual(m["dead_end_hits"], 1)
+
+
 class ReportTest(unittest.TestCase):
     def runs(self):
         out = []

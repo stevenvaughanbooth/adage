@@ -20,6 +20,7 @@ import { askBinary } from './binary'
 import type { Asked } from './bridge'
 import { mark } from './marks'
 import type { AnswerAt, EventAt, Mod, NextAt } from './mod'
+import { madeForAgentLine } from './predict'
 import { answeredMark, receiptAnswerOf, receiptPlanOf, shortId } from './receipt'
 import type { ReceiptAnswer, ReceiptPlan } from './receipt'
 import { isRecord } from './shape'
@@ -127,8 +128,31 @@ function withContext(ran: ToolCallResult, context: readonly string[]): ToolCallR
 
 type BashCall = { command: string; tool_use_id: string; agentId?: string }
 
-/** The hook's body: `on('tool.call', { tool: 'Bash' }, ($, e, next) => bashCall(e, next, deps))`. */
+/**
+ * The hook's body: `on('tool.call', { tool: 'Bash' }, ($, e, next) => bashCall(e, next, deps))`.
+ * A call Adage made in the model's place (`adage_` id) is decided like any other, and its result
+ * carries the line that says whose call it was (`madeForAgentLine`).
+ */
 export async function bashCall<E extends BashCall>(e: E, next: (e: E) => Promise<ToolCallResult>, deps: CallDeps): Promise<ToolCallResult> {
+  const ran = await decided(e, next, deps)
+  const line = deps.isActive ? madeForAgentLine(e.tool_use_id) : undefined
+  return line === undefined ? ran : withContext(ran, [line])
+}
+
+/**
+ * Any other tool's call (`on('tool.call', …)`, every tool but Bash, which `bashCall` answers): a
+ * call Adage made in the model's place (the chain's reads, a skill) runs as it is, and its result
+ * carries the line that says whose call it was; every other call passes untouched.
+ */
+export async function onPredictedCall(m: Mod, e: EventAt<'tool.call'>, next: NextAt<'tool.call'>): AnswerAt<'tool.call'> {
+  void m // the line is read from the call's id alone
+  const line = e.tool === 'Bash' ? undefined : madeForAgentLine(e.tool_use_id)
+  if (line === undefined) return next(e)
+  const ran = await next(e)
+  return ran.deny !== undefined ? ran : { ...ran, context: [...(ran.context ?? []), line] }
+}
+
+async function decided<E extends BashCall>(e: E, next: (e: E) => Promise<ToolCallResult>, deps: CallDeps): Promise<ToolCallResult> {
   if (!deps.isActive || typeof e.command !== 'string') return next(e)
   let ctx: { sessionId: string; cwd: string }
   try {

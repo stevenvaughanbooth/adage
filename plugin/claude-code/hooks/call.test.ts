@@ -12,6 +12,7 @@ import { bashCall, planOf, rewritePlanOf, verdictAnswerOf } from './call'
 import type { CallDeps, PreToolPayload } from './call'
 import { FAIL, PYTEST, RESULT, SURFACES, VENV, start, wire, wireWith, world } from './fixtures/kit'
 import type { WireAnswer } from './fixtures/kit'
+import { madeForAgentLine, predictedRoute, toolUseId } from './predict'
 import { receiptAnswerOf, shortId } from './receipt'
 import { substituteAnswerOf } from './substitute'
 
@@ -450,5 +451,36 @@ describe("T-C3-05 · the binary's rewrite, read", () => {
     expect(verdictAnswerOf({ hookSpecificOutput: { updatedInput: { command: ' ' } } })).toBeUndefined()
     expect(verdictAnswerOf({ systemMessage: 'x' })).toBeUndefined()
     expect(verdictAnswerOf(undefined)).toBeUndefined()
+  })
+})
+
+describe('T-C4-01 · a call Adage made in the model\'s place says so in its result', () => {
+  // §3.1–3.2: Adage's act is never counted as the agent's. Live, after a predicted `make gen`, the
+  // model apologised for having run it: the result now carries one plain line saying whose call it was.
+  const GEN = toolUseId('finish-line-e7e809', 'turn-1', 2, 0)
+  const READ = toolUseId('read-linked-files', 'turn-1', 1, 0)
+  const LINE = (route: string) =>
+    `Adage made this call in your place (learned reflex ${route}); the result above is its output. You did not make it, and it does not need repeating.`
+
+  test('a predicted Bash call runs as decided, and the line follows its result', async ($, on) => {
+    const w = callWorld(on, {})
+    await start($, w.w, null, false)
+    const r = await $.tool.call({ tool: 'Bash', command: 'make gen', tool_use_id: GEN })
+    expect(w.ran).toEqual(['make gen'])
+    expect(r.context).toEqual([LINE('finish-line-e7e809')])
+  })
+
+  test('a predicted Read (the chain) carries it too; the model\'s own calls carry nothing', async ($, on) => {
+    const w = callWorld(on, {})
+    await start($, w.w, null, false)
+    expect((await $.tool.call({ tool: 'Read', file_path: '/w/acme/billing.py', tool_use_id: READ })).context).toEqual([LINE('read-linked-files')])
+    expect((await $.tool.call({ tool: 'Read', file_path: '/w/acme/billing.py', tool_use_id: 'toolu_01abc' })).context).toBeUndefined()
+    expect((await $.tool.call({ tool: 'Bash', command: 'make gen', tool_use_id: 'toolu_01def' })).context).toBeUndefined()
+  })
+
+  test('the line is read from the id alone: only toolUseId\'s exact shape names a route', () => {
+    expect(predictedRoute(GEN)).toBe('finish-line-e7e809')
+    expect(madeForAgentLine(READ)).toBe(LINE('read-linked-files'))
+    for (const id of ['toolu_01abc', 'adage_x', 'adage_a_b_c_0', 'xadage_a_b_1_0', `${GEN}_9`]) expect(madeForAgentLine(id)).toBeUndefined()
   })
 })

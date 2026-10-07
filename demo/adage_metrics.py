@@ -224,3 +224,62 @@ def stream_metrics(stream_lines):
             text = m.get("stdout") if isinstance(m.get("stdout"), str) else json.dumps(m)
             reflex += text.count("<adage-reflex")
     return {"subagent_tool_calls": sub, "directives_in_stream": reflex}
+
+
+# ------------------------------------------------------------------------------------- dead ends
+#
+# A dead end is hit when a verification runs and fails. Its exit status cannot say so: agents pipe
+# test runs through `tail` (`ls; python3 -m pytest -q 2>&1 | tail -5`), and a pipeline exits with
+# its last command's status, so the tool result is not an error (live run 2: every pytest attempt,
+# 11 of them, exited 0 and was never counted). So a hit is read from the command and what it
+# printed: a command that runs a verification, whose result is an error or carries failure text.
+
+# The verifications, as run.py's `classify` names them.
+VERIFY_COMMAND = re.compile(r"pytest|unittest|make test|make ci")
+# What a verification prints when it could not run or did not pass: the runner missing, the
+# target missing, a test failing.
+FAILURE_TEXT = re.compile(
+    r"No module named \S+"
+    r"|command not found"
+    r"|No rule to make target"
+    r"|make: \*\*\* "
+    r"|Traceback \(most recent call last\)"
+    r"|^FAILED\b|\bFAILED \("
+    r"|\b\d+ failed\b",
+    re.MULTILINE,
+)
+
+
+def _result_text(content):
+    """A tool result's text: a string, or the text blocks of a list."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "\n".join(c.get("text", "") for c in content if isinstance(c, dict) and isinstance(c.get("text"), str))
+    return ""
+
+
+def dead_end_hits(stream_lines):
+    """Each failed verification in parsed stream-json lines, as {"id", "command", "failure"}:
+    a Bash call whose command runs a verification (`VERIFY_COMMAND`) and whose result is an error
+    or carries failure text (`FAILURE_TEXT`; `failure` is the text matched, or "is_error")."""
+    commands, hits = {}, []
+    for m in stream_lines:
+        if not isinstance(m, dict):
+            continue
+        content = (m.get("message") or {}).get("content") or []
+        if not isinstance(content, list):
+            continue
+        for c in content:
+            if not isinstance(c, dict):
+                continue
+            if m.get("type") == "assistant" and c.get("type") == "tool_use" and c.get("name") == "Bash":
+                cmd = (c.get("input") or {}).get("command")
+                if isinstance(cmd, str) and VERIFY_COMMAND.search(cmd):
+                    commands[c.get("id")] = cmd
+            elif m.get("type") == "user" and c.get("type") == "tool_result" and c.get("tool_use_id") in commands:
+                found = FAILURE_TEXT.search(_result_text(c.get("content")))
+                if found or c.get("is_error"):
+                    tid = c.get("tool_use_id")
+                    hits.append({"id": tid, "command": commands.pop(tid), "failure": found[0] if found else "is_error"})
+    return hits

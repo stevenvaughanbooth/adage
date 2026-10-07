@@ -15,7 +15,7 @@ import { record } from './marks'
 import type { Mod } from './mod'
 import { quietly } from './mod'
 import type { Predicted } from './plugin'
-import { callChunks, predictedResult, predictionOf } from './predict'
+import { PREDICTED_STOP, callChunks, predictedResult, predictionOf } from './predict'
 import { settings } from './refresh'
 import { isRecord } from './shape'
 
@@ -114,11 +114,12 @@ export async function* turnStep(
       .catch(() => undefined)
   }
 
-  // Before the request: a prediction is the whole response; no request is made.
+  // Before the request: a prediction is the whole response; no request is made, so its stop
+  // states no reason (PREDICTED_STOP: the next request then starts the thread afresh).
   const before = await predicted(false)
   if (before !== undefined) {
     yield* callChunks(before, e.turnId, e.index, 0)
-    yield { kind: 'stop', stopReason: 'tool_use', usage: null }
+    yield PREDICTED_STOP
     await note(before, false, 0)
     return predictedResult(before, e.turnId, e.index)
   }

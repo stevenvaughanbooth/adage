@@ -101,7 +101,8 @@ describe('T-C4-01, T-C7-03 · chunks and ids', () => {
         { name: 'Bash', input: { command: 'a' } },
         { name: 'Read', input: { file_path: '/f' } },
       ],
-      stopReason: 'tool_use',
+      // No request was made: no reason, as TurnStepResult defines it (and the thread, PREDICTED_STOP).
+      stopReason: null,
       usage: null,
     })
   })

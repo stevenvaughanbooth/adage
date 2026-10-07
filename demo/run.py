@@ -445,7 +445,10 @@ def derived_metrics(arm, events, stream, observations, debug_text, spool_records
 
     requests, requests_verified   heldout_analysis.requests(): debug-log dispatches, cross-checked
                                   against the stream's distinct explicit request ids (unique)
-    dead_end_hits                 dead ends hit: a verification that failed (as before)
+    dead_end_hits                 dead ends hit: a verification that failed, by its exit status
+                                  (the timeline's verify-fail) or by its command and what it
+                                  printed (adage_metrics.dead_end_hits: a run piped through
+                                  `| tail` exits 0), each tool call once
     dead_end                      {"hit", "substituted"}: substituted = dead ends the spool says
                                   were replaced before they ran
     predicted_steps               spool turn_step records with predicted/predict set
@@ -458,7 +461,8 @@ def derived_metrics(arm, events, stream, observations, debug_text, spool_records
     rq = adage_metrics.requests(debug_text, observations)
     sp = adage_metrics.spool_metrics(spool_records)
     st = adage_metrics.stream_metrics(stream)
-    hit = sum(1 for e in events if e.get("cat") == "verify-fail")
+    failed = {e.get("id") or f"event-{i}" for i, e in enumerate(events) if e.get("cat") == "verify-fail"}
+    hit = len(failed | {h["id"] for h in adage_metrics.dead_end_hits(stream)})
     if arm == "a0":
         wired = not spool_exists
     elif ARMS.get(arm, {}).get("hooks") in ("settings", "plugin"):

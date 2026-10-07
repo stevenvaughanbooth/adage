@@ -555,8 +555,28 @@ fn indexed<'a>(
     let keys: std::collections::BTreeSet<&str> = index.routes.iter().map(|r| r.repo.as_str()).collect();
     let key = repo::lookup_key(root, Some(&paths.repo_keys()), &keys)
         .with_context(|| format!("no reflexes are installed for {} (see `adage status`)", root.display()))?;
-    route::find(index, &key, track, route_id)
-        .with_context(|| format!("no reflex {route_id} in track {track} for {key} (see `adage status`)"))
+    if let Some(found) = route::find(index, &key, track, route_id) {
+        return Ok(found);
+    }
+    // A nascent reflex is formed in its track but never indexed until a person decides, so "no
+    // reflex" would send them looking for one that is there, one review step from eligible.
+    if nascent(paths, track, route_id) {
+        return Err(crate::hint(
+            format!("reflex {route_id} in track {track} is nascent: it waits for a person's review, and only a reviewed reflex can be delegated"),
+            format!("`adage review approve {track} {route_id}` makes it eligible"),
+        ));
+    }
+    bail!("no reflex {route_id} in track {track} for {key} (see `adage status`)")
+}
+
+/// Whether `<track> <route>` is installed and nascent.
+fn nascent(paths: &Paths, track: &str, route_id: &str) -> bool {
+    let Ok((installed, _)) = adage_app::review::discover(&paths.tracks()) else { return false };
+    installed
+        .iter()
+        .filter(|t| t.reference == track)
+        .flat_map(|t| &t.track.routes)
+        .any(|r| r.id == route_id && r.state == adage_tracks::RouteState::Nascent)
 }
 
 /// When an action runs, in words: its reflex's stimulus.

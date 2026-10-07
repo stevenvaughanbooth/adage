@@ -10,13 +10,21 @@
 //! - it is a repository script the table does not know, run as a plain command, whose name says
 //!   nothing of changing, building or sending anything (`adage_core::shell::unlisted_repo_script`);
 //! - at least [`MIN_TRACES`] traces ran it successfully;
-//! - no run was followed by file changes it caused: its output never reports writing, creating or
-//!   updating anything, and a `git status` or `git diff` after it, before the agent's own first
-//!   edit, never lists a change;
+//! - no run was followed by file changes it caused: a `git status` or `git diff` after it, before
+//!   anything else that could have made the change (the agent's own edit, or a command not
+//!   classified observe: a heredoc that rewrites a schema, `make gen`), never lists a change, and, where no trace shows the script's own
+//!   text, its output never reports writing, creating or updating anything on a line of its own
+//!   ([`reports_change`]);
 //! - what it printed was used: in at least two thirds of the traces, the paths it printed were
 //!   read next (the linked-files pattern), or it was followed by reads within three steps;
 //! - wherever the traces show the script's own text (the agent read it), that text uses no
 //!   network or process library and writes no file.
+//!
+//! What a script prints is mostly what it was asked about, not what it did: a lookup prints a work
+//! item, and a work item says things like "generated models include it". So the evidence is the
+//! command and the script: once a trace shows the script's text and the text writes nothing, what
+//! it printed is not read for change words at all; without the text, only a line that opens with
+//! one (`Wrote cache.json`, `Updated 3 files`) counts as the script saying it changed something.
 //!
 //! The route records why, in `evidence.effect_evidence`; track validation accepts an observe
 //! declaration over the table's `environment` only for such a script with that note.
@@ -63,7 +71,7 @@ const UNSAFE_TEXT: [&str; 30] = [
     "mkdir",
 ];
 
-/// Words in a script's output that say it changed something.
+/// Words that open a line of a script's output when it says it changed something.
 const CHANGED: [&str; 9] =
     ["wrote ", "written", "created ", "updated ", "saved ", "deleted ", "modified ", "generated ", "removed "];
 
@@ -80,11 +88,18 @@ pub fn effect_of(effect: Effect, command: &str, sessions: &[&Session]) -> (Effec
     }
 }
 
-/// Whether a step runs the script at `rel` (under an interpreter or directly).
+/// Whether a step runs the script at `rel` (directly, or under an interpreter past its flags:
+/// `python3 -I scripts/wi-lookup W-1042`).
 fn runs(st: &crate::import::StepObs, rel: &str) -> bool {
     let Some(av) = crate::evidence::argv(st) else { return false };
-    let first = |i: usize| av.get(i).map(|a| a.trim_start_matches("./"));
-    first(0) == Some(rel) || (adage_core::shell::SCRIPT_INTERPRETERS.contains(&av[0].as_str()) && first(1) == Some(rel))
+    let is = |a: &String| a.trim_start_matches("./") == rel;
+    match av.first() {
+        Some(a) if is(a) => true,
+        Some(a) if adage_core::shell::SCRIPT_INTERPRETERS.contains(&a.as_str()) => {
+            av.iter().skip(1).find(|a| !a.starts_with('-')).is_some_and(is)
+        }
+        _ => false,
+    }
 }
 
 fn is_read(st: &crate::import::StepObs) -> bool {
@@ -92,9 +107,30 @@ fn is_read(st: &crate::import::StepObs) -> bool {
         || (matches!(st.norm.action, CanonicalAction::Exec { .. }) && st.norm.effect == Effect::Observe)
 }
 
+/// Whether a line of `output` opens with a word that says the script changed something (past any
+/// indent, list marker or `[tag]`); a change word inside a sentence is what the script printed
+/// about something else, a work item's text say.
 fn reports_change(output: &str) -> bool {
-    let lower = output.to_ascii_lowercase();
-    CHANGED.iter().any(|w| lower.contains(w))
+    output.lines().any(|line| {
+        let mut l = line.trim_start().trim_start_matches(['-', '*', '>', ' ']);
+        if l.starts_with('[') {
+            l = l.split_once(']').map_or(l, |(_, rest)| rest.trim_start());
+        }
+        let l = format!("{} ", l.to_ascii_lowercase());
+        CHANGED.iter().any(|w| l.starts_with(w))
+    })
+}
+
+/// Whether the step shows the script's own text: the agent read it, or ran a pager over it.
+fn shows_text(st: &crate::import::StepObs, rel: &str) -> bool {
+    match &st.norm.action {
+        CanonicalAction::Read { .. } => st.rel_path.as_deref() == Some(rel),
+        CanonicalAction::Exec { argv, .. } => {
+            matches!(argv.first().map(String::as_str), Some("cat" | "head" | "sed" | "less"))
+                && argv.iter().skip(1).any(|a| a.trim_start_matches("./") == rel)
+        }
+        _ => false,
+    }
 }
 
 fn status_shows_change(st: &crate::import::StepObs) -> bool {
@@ -113,40 +149,42 @@ fn status_shows_change(st: &crate::import::StepObs) -> bool {
 pub fn infer(command: &str, sessions: &[&Session]) -> Option<String> {
     let table = CommandTable::load();
     let rel = adage_core::shell::unlisted_repo_script(command, table)?;
+    // The script's own text, wherever a trace shows it: one unsafe sight of it settles the effect,
+    // and a safe one makes its output's wording moot.
+    let mut inspected = false;
+    for st in sessions.iter().flat_map(|s| &s.steps) {
+        if shows_text(st, &rel) && !st.call.failed {
+            inspected = true;
+            let lower = st.call.output.to_ascii_lowercase();
+            if UNSAFE_TEXT.iter().any(|w| lower.contains(w)) || open_for_writing(&lower) {
+                return None;
+            }
+        }
+    }
     let mut ran: BTreeSet<&str> = BTreeSet::new();
     let mut used: BTreeSet<&str> = BTreeSet::new();
-    let mut inspected = false;
+    // A step that could have changed files itself, so a change listed after it is not the script's.
+    let could_change = |st: &crate::import::StepObs| {
+        adage_core::keys::is_author(&st.norm.action)
+            || (matches!(st.norm.action, CanonicalAction::Exec { .. })
+                && st.norm.effect != Effect::Observe
+                && !runs(st, &rel))
+    };
     for s in sessions {
         let mut edited = false;
         for (i, st) in s.steps.iter().enumerate() {
-            if adage_core::keys::is_author(&st.norm.action) {
+            if could_change(st) {
                 edited = true;
-            }
-            // The script's own text, where the trace shows it.
-            let shows_text = match &st.norm.action {
-                CanonicalAction::Read { .. } => st.rel_path.as_deref() == Some(rel.as_str()),
-                CanonicalAction::Exec { argv, .. } => {
-                    matches!(argv.first().map(String::as_str), Some("cat" | "head" | "sed" | "less"))
-                        && argv.iter().skip(1).any(|a| a.trim_start_matches("./") == rel)
-                }
-                _ => false,
-            };
-            if shows_text && !st.call.failed {
-                inspected = true;
-                let lower = st.call.output.to_ascii_lowercase();
-                if UNSAFE_TEXT.iter().any(|w| lower.contains(w)) || open_for_writing(&lower) {
-                    return None;
-                }
             }
             if !runs(st, &rel) || st.call.failed {
                 continue;
             }
-            if reports_change(&st.call.output) {
+            if !inspected && reports_change(&st.call.output) {
                 return None;
             }
             let after = &s.steps[i + 1..];
             if !edited {
-                let before_edit = after.iter().take_while(|x| !adage_core::keys::is_author(&x.norm.action));
+                let before_edit = after.iter().take_while(|x| !could_change(x));
                 if before_edit.into_iter().any(status_shows_change) {
                     return None;
                 }
@@ -258,9 +296,33 @@ mod tests {
     }
 
     #[test]
+    fn a_change_word_in_what_it_looked_up_is_not_a_change() {
+        // A work item's text, as a lookup prints it: prose about the work, not about the script.
+        let out =
+            "CARE-1: files clinic/intake.py\nAcceptance: generated forms include the field; records updated nightly";
+        let ss: Vec<Session> = (0..3).map(|i| lookup_then_read(&format!("s{i}"), out)).collect();
+        let refs: Vec<&Session> = ss.iter().collect();
+        assert_eq!(effect_of(Effect::Environment, "python3 tools/case {item}", &refs).0, Effect::Observe);
+        // Its text, read once and writing nothing, makes even a leading change word moot.
+        let mut ss: Vec<Session> = (0..3).map(|i| lookup_then_read(&format!("s{i}"), "Updated 3 records")).collect();
+        assert!(infer("python3 tools/case {item}", &ss.iter().collect::<Vec<_>>()).is_none());
+        ss[2].steps.insert(
+            0,
+            exec(0, "cat tools/case", Effect::Observe, "import json\nprint(json.load(open('cases.json')))\n"),
+        );
+        let note = infer("python3 tools/case {item}", &ss.iter().collect::<Vec<_>>()).expect("observe");
+        assert!(note.contains("its text uses no network or process library"), "{note}");
+    }
+
+    #[test]
     fn writes_network_and_unused_output_keep_it_environment() {
         // It reports writing a file.
         let ss: Vec<Session> = (0..3).map(|i| lookup_then_read(&format!("s{i}"), "wrote clinic/cache.json")).collect();
+        let refs: Vec<&Session> = ss.iter().collect();
+        assert!(infer("python3 tools/case {item}", &refs).is_none());
+        // It says so on a line of its own, past a tag.
+        let ss: Vec<Session> =
+            (0..3).map(|i| lookup_then_read(&format!("s{i}"), "CARE-1\n[cache] Updated clinic/cache.json")).collect();
         let refs: Vec<&Session> = ss.iter().collect();
         assert!(infer("python3 tools/case {item}", &refs).is_none());
         // A git status right after it shows a change the agent did not make.
@@ -268,6 +330,12 @@ mod tests {
         ss[1].steps.insert(1, exec(1, "git status", Effect::Observe, "\tmodified:   clinic/db.json"));
         let refs: Vec<&Session> = ss.iter().collect();
         assert!(infer("python3 tools/case {item}", &refs).is_none());
+        // A change listed after the agent's own command that writes is not the script's.
+        let mut ss: Vec<Session> = (0..3).map(|i| lookup_then_read(&format!("s{i}"), "ok")).collect();
+        ss[1].steps.insert(1, exec(1, "python3 -c <stdin>", Effect::Environment, ""));
+        ss[1].steps.insert(2, exec(2, "git status", Effect::Observe, "\tmodified:   clinic/db.json"));
+        let refs: Vec<&Session> = ss.iter().collect();
+        assert!(infer("python3 tools/case {item}", &refs).is_some());
         // Its text, where a trace shows it, uses the network.
         let mut ss: Vec<Session> = (0..3).map(|i| lookup_then_read(&format!("s{i}"), "ok")).collect();
         ss[0].steps.insert(0, exec(0, "cat tools/case", Effect::Observe, "import urllib.request\n"));

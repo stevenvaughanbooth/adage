@@ -68,6 +68,23 @@ export function toolUseId(route: string, turnId: string, index: number, k: numbe
   return `adage_${idPart(route)}_${idPart(turnId)}_${index}_${k}`
 }
 
+/** The route a predicted call's id names (`toolUseId`'s shape exactly), or undefined for any other id. */
+export function predictedRoute(toolUseId: string): string | undefined {
+  return /^adage_([A-Za-z0-9-]+)_[A-Za-z0-9-]+_\d+_\d+$/.exec(toolUseId)?.[1]
+}
+
+/**
+ * The one line the model reads after the result of a call Adage made in its place (§3.1–3.2:
+ * Adage's act is never counted as the agent's, and the model is told so plainly). Without it the
+ * model reads a call in its own turn it does not remember making: live, after a predicted
+ * `make gen`, it apologised for having run it. Undefined for a call the model made.
+ */
+export function madeForAgentLine(toolUseId: string): string | undefined {
+  const route = predictedRoute(toolUseId)
+  if (route === undefined) return undefined
+  return `Adage made this call in your place (learned reflex ${route}); the result above is its output. You did not make it, and it does not need repeating.`
+}
+
 /**
  * The chunks of a predicted response: per call a `tool` chunk then its whole `input`, at content
  * block `firstBlock + k`. The caller yields its own stop.
@@ -79,6 +96,19 @@ export function callChunks(p: Prediction, turnId: string, index: number, firstBl
   ])
 }
 
+/**
+ * The stop of a response made wholly of predicted calls: no request was made, so no model stopped
+ * and nothing was spent, and the stop says so as `TurnStepResult` defines it (a null reason "when
+ * no request was made"). It also keeps the conversation's server-side thread whole. The engine
+ * records a made-up response under an id it mints (`msg_hook_…`) and continues the thread from the
+ * last assistant message whose id starts `msg_` (2.1.292), so a response that stated a reason was
+ * taken as the thread's tip and the next request named an id the server never issued: a 404
+ * (`thread_not_found`) and a replayed dispatch after every predicted step (live run 2, 12 of 12).
+ * A message with no stop reason is incomplete to the engine, which then sends the next request
+ * whole, as the replay did, without the failed dispatch (docs/claude-mod/impl/live-fixes-2-notes.md).
+ */
+export const PREDICTED_STOP: TurnStepChunk = { kind: 'stop', stopReason: null, usage: null }
+
 /** The step's result for a response made wholly of the predicted calls (no request was made). */
 export function predictedResult(p: Prediction, turnId: string, index: number): TurnStepResult {
   return {
@@ -86,7 +116,7 @@ export function predictedResult(p: Prediction, turnId: string, index: number): T
     index,
     answer: '',
     toolUses: p.calls.map(c => ({ name: c.tool, input: c.input })),
-    stopReason: 'tool_use',
+    stopReason: null,
     usage: null,
   }
 }
