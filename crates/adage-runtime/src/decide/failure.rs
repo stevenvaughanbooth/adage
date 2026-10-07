@@ -2,7 +2,7 @@
 //! judgements, the after-failure triggers it meets, and its failure item in the context
 //! alphabets.
 
-use super::{emit_ok, fire_contexts, pending_for, Walk};
+use super::{emit_ok, fire_contexts, pending_for, MainThread, Walk};
 use crate::decision::directive;
 use crate::noticed::notice;
 use crate::observe::{call_keys, exec_segments};
@@ -20,6 +20,26 @@ pub(super) fn on_failure(
     out: &mut Vec<Directive>,
     call: &Call,
 ) {
+    // A subagent's failure changes nothing the main loop is predicted from (`MainThread`): it is
+    // observed, and a dead end it meets is said to the subagent, but it judges no directive the
+    // main loop was given.
+    let main = call.agent.is_none();
+    let kept = (!main).then(|| MainThread::keep(st));
+    on_failed_call(ctx, w, st, d, out, call, main);
+    if let Some(kept) = kept {
+        kept.restore(st);
+    }
+}
+
+fn on_failed_call(
+    ctx: &Ctx,
+    w: &Walk,
+    st: &mut SessionState,
+    d: &mut Decision,
+    out: &mut Vec<Directive>,
+    call: &Call,
+    main: bool,
+) {
     let keyed = call_keys(call, ctx);
     let segs = exec_segments(&keyed);
     for (key, _) in keyed {
@@ -29,9 +49,10 @@ pub(super) fn on_failure(
         // it is a test run that ran and reported failing tests (followed; the tests
         // failing is the task, not the directive).
         st.pending.retain(|p| {
-            if ctx.policy.follows(&p.expect_key, &key)
-                || follows_call(&ctx.policy, &p.expect_key, &segs)
-                || follows_learned(&ctx.policy, &p.expect_key, call)
+            if main
+                && (ctx.policy.follows(&p.expect_key, &key)
+                    || follows_call(&ctx.policy, &p.expect_key, &segs)
+                    || follows_learned(&ctx.policy, &p.expect_key, call))
             {
                 let route = p.route.clone();
                 d.judgements.push(if call.by == By::Adage {

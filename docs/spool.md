@@ -42,6 +42,7 @@ Fields several kinds share:
 | `generation` | The index generation the decision was made under | decided kinds, `session_start` |
 | `tool_use_id` | The harness's id of the one call the record is about | `pretool` |
 | `tool_use_ids` | The harness's ids of the calls an event judged, in order | decided `batch` and `failure` |
+| `agent` | The subagent that made the call(s) (Claude Code's `agent_id`, the canonical `Call::agent`), so a delegation's calls can be counted on their own. Absent for the main loop's calls, and on records from before it | decided `batch` and `failure`, `pretool` |
 
 ## Kinds
 
@@ -54,7 +55,7 @@ Codex or OpenCode call that reports a failure is a `failure`.
 
 | Field | What |
 | --- | --- |
-| `decision` | The `adage_runtime::Decision`: `directives`, `would_have` (both arms), `judgements`, `observed` call keys, `continue_reason` / `would_continue` (a Stop request), `predicted` / `would_predict` and `predicted_at` (`turn_step`), `routine` / `would_route`, `noticed`, the context states `ctx` / `cand_ctx`, and `obligation_state` (the session's advisory obligations and Stop-request count after the event, when they changed or an edit was observed, and after an extension's action met one; never a claim that a check passed) |
+| `decision` | The `adage_runtime::Decision`: `directives`, `would_have` (both arms), `judgements` (`followed`, `ignored`, `misfired`, `obligation_met`, `predicted`, `substituted`, and `refused`: a step Adage made in the agent's place that the harness refused before it ran, which is never `predicted` and meets no obligation), `observed` call keys (a failed call's key ends ` !failed`, a call the harness refused ` !refused`), `continue_reason` / `would_continue` (a Stop request), `predicted` / `would_predict` and `predicted_at` (`turn_step`), `routine` / `would_route`, `noticed`, the context states `ctx` / `cand_ctx`, and `obligation_state` (the session's advisory obligations and Stop-request count after the event, when they changed or an edit was observed, and after an extension's action met one; never a claim that a check passed) |
 | `exec` | adage-exec's entry per attempted route (`route`, `level`, `exit`, `bytes`, `sha256`, `truncated`, `duration_ms`, `auto`; or `withheld` and why) |
 | `recovery_required` | `true` when an action's outcome could not be confirmed |
 

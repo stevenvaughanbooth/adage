@@ -10,8 +10,8 @@
 //! the ledger, by `adage savings`, by the note itself) each repository's lines are merged into its
 //! ledger by session id, under the ledger's lock: the harness's figures win over the transcript's
 //! (tokens, model turns, models, times, and the cost when the engine reported one), so a later
-//! transcript pass never replaces them for good; what only a transcript holds (tool calls, the
-//! first edit, how the agent ended) is kept.
+//! transcript pass never replaces them for good; what only a transcript holds (the first edit, how
+//! the agent ended) is kept, and so are its tool calls unless the note counts them.
 //!
 //! A step Adage took in the model's place (`predicted`) made no model request: `model_turns`
 //! counts only the steps the model answered, and the savings estimate reads the rest as turns not
@@ -78,6 +78,11 @@ pub struct Note {
     /// The hook layer's wall time per hook call, milliseconds.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub hook_ms: Vec<u32>,
+    /// The tool calls the session's main loop made, as the harness counted them (the steps Adage
+    /// took in the model's place included, as a transcript lists them). `None` when the note
+    /// carries no count: the transcript's figure is kept then.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_calls: Option<u32>,
     /// When the line was recorded.
     #[serde(default)]
     pub noted_at: u64,
@@ -164,7 +169,7 @@ impl Note {
             started_at: pick(self.started_at, base.map(|b| b.started_at)),
             ended_at: self.ended_at.max(base.map_or(0, |b| b.ended_at)),
             model_turns: self.model_turns(),
-            tool_calls: base.map_or(0, |b| b.tool_calls),
+            tool_calls: self.tool_calls.or(base.map(|b| b.tool_calls)).unwrap_or(0),
             first_edit_turn: base.and_then(|b| b.first_edit_turn),
             tokens: self.tokens(),
             cost: self.cost(),
@@ -304,12 +309,31 @@ pub fn parse(input: &str) -> Result<Note, Refused> {
         }
         _ => return refuse("`hook_ms` is not a list of milliseconds"),
     };
+    let tool_calls = match &v["tool_calls"] {
+        Value::Null => None,
+        c => match c.as_u64().and_then(|n| u32::try_from(n).ok()) {
+            Some(n) => Some(n),
+            None => return refuse("`tool_calls` is not a count"),
+        },
+    };
     let started_at = time(&v["started_at"], "started_at")?;
     let ended_at = time(&v["ended_at"], "ended_at")?;
     if ended_at > 0 && started_at > ended_at {
         return refuse("`ended_at` is before `started_at`");
     }
-    Ok(Note { session_id, repo, harness, harness_version, started_at, ended_at, steps, cost_usd, hook_ms, noted_at: 0 })
+    Ok(Note {
+        session_id,
+        repo,
+        harness,
+        harness_version,
+        started_at,
+        ended_at,
+        steps,
+        cost_usd,
+        hook_ms,
+        tool_calls,
+        noted_at: 0,
+    })
 }
 
 /// The spool must hold a `session_start` for this session in this repository.
@@ -463,6 +487,28 @@ mod tests {
         let s = n.over(None);
         assert_eq!(s.model_turns, 4);
         assert!(s.cost.source.starts_with("priced@"), "no engine figure: priced from the table, {:?}", s.cost);
+    }
+
+    /// O0 live notes, defect 10: with no transcript pass (`learn.auto` off) every session's line
+    /// read `tool_calls: 0`, because the note carried no count. A note that counts them is
+    /// recorded with its count, over a transcript's; one that does not keeps the transcript's, and
+    /// a count that is not one is refused.
+    #[test]
+    fn a_notes_tool_calls_are_kept() {
+        let mut v = line("s", "r", &[false, true], None);
+        let n = parse(&v.to_string()).unwrap();
+        assert_eq!((n.tool_calls, n.over(None).tool_calls), (None, 0));
+        assert_eq!(n.over(Some(&transcript_line("s"))).tool_calls, 7, "the transcript's, without a count");
+        v["tool_calls"] = json!(5);
+        let n = parse(&v.to_string()).unwrap();
+        assert_eq!(n.tool_calls, Some(5));
+        assert_eq!((n.over(None).tool_calls, n.over(Some(&transcript_line("s"))).tool_calls), (5, 5));
+        let text = serde_json::to_string(&n).unwrap();
+        assert!(text.contains("\"tool_calls\":5"), "{text}");
+        for bad in [json!(-1), json!("5"), json!(1.5), json!(u64::from(u32::MAX) + 1)] {
+            v["tool_calls"] = bad.clone();
+            assert!(parse(&v.to_string()).is_err(), "{bad}");
+        }
     }
 
     /// T-A4-01: a note is merged under the ledger's lock; a later transcript pass does not keep its

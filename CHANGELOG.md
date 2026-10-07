@@ -338,6 +338,23 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### Execution (opt-in)
 
+- **A finish line's verification says whether the tests passed.** The result of a learned
+  verification adage-exec ran after an edit used the regeneration's template ("what it generates
+  was already up to date. Nothing changed."); it now says "it passed (exit 0, 4.0 s; receipt …)"
+  with the tests the run's pytest record shows, or "it failed (exit 1; …)" with the tests that
+  failed, in place of the directive. A regeneration's result is unchanged.
+- **`.pytest_cache/**` covers the `.gitignore` pytest writes in its cache.** A wildcard still never
+  matches a leading dot, except inside a directory the glob names with its dot, so a verify grant
+  declaring the cache directory is no longer refused for the cache's own `.gitignore`; `**` still
+  matches no `.env`, `.git/…` or repository `.gitignore`.
+- **A session start no longer hashes a project Python's runtime every time.** Identifying a
+  project Python read and hashed its interpreter (28 MB) and its runtime's `lib` tree (66 MB, 1,600
+  files) at every session start, action and step that planned such a grant; one live start took
+  5.75 s of its 10 s budget. The hook keeps each file's digest in
+  `$ADAGE_HOME/cache/python-digests.json` by path, inode, size, modification and change time, and
+  reads only what changed (a debug build: 2.0 s, then 65 ms with a cold page cache). The staged run
+  still hashes the environment and its private copies in full.
+
 - **`adage-exec` reads grants under the key they were written under.** `status`, `revoke`,
   `approve`, `run`, `completion`, `readiness` and `journal` key a checkout as the index holds its
   reflexes (the key `adage review delegate` writes a grant under and the hooks read it by), so
@@ -586,6 +603,30 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   installs its reflexes at forming (docs/packs.md).
 
 ### The Claude Code mod
+
+- **A subagent's calls no longer arm a prediction in the main loop.** An Explore subagent's lookup
+  bound the read batch, and the main loop's turn end then read the files in the main thread (live
+  O0, SUB). A subagent's calls are observed and recorded, and a directive they trigger is said to
+  the subagent, but they bind no read batch, pending command or obligation, judge none of the main
+  loop's directives, meet none of its obligations and count none of its follow windows down.
+- **A predicted call the person's permission rules refuse is recorded as refused.** Claude Code
+  reports such a call only in the batch, as `<tool_use_error>`; the batch took it as made, so a
+  denied `Read` was judged `predicted` and a denied `make gen` would have met its finish line. It
+  is now a failed call, judged `refused` (never `predicted`, never `obligation_met`), observed as
+  `… !refused`, and the Stop request asks for the finish line as without the mod.
+- **Spool records name the subagent that made the calls.** Decided `batch` and `failure` records
+  and `pretool` records carry `agent` (Claude Code's `agent_id`) when a subagent made the call,
+  through the record builder, so a delegation's calls can be counted on their own
+  (`docs/spool.md`).
+- **The Bash tool's description can carry the repository's lookup conventions.** `Standing`
+  answers `conventions` (one sentence per learned prompt lookup at full strength, with its slot as
+  written: "work item details are looked up with ./scripts/wi-lookup {item} --json, …") when the
+  mod's ask carries `conventions: true`, fixed for the session and empty in control and observe
+  mode; an ask without it is answered as before. The prompt that names an item is still told the
+  bound command.
+- **A session's ledger line keeps the tool calls its note counts.** `adage ledger note` reads an
+  optional `tool_calls` and records it over a transcript's count; without it (and with no
+  transcript pass, `learn.auto` off) the line read `tool_calls: 0` for every session.
 
 - **The mod finds its binary without `CLAUDE_PLUGIN_DATA`.** Claude Code gives that variable to
   command hooks only, so under `--plugin-dir` and after `adage init`'s local-marketplace install the

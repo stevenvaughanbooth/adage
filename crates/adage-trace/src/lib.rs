@@ -71,6 +71,25 @@ pub struct Call {
     pub agent: Option<String>,
 }
 
+/// How a harness marks a call it refused before running it, at the start of the call's result:
+/// Claude Code's `<tool_use_error>` (a permission rule denied it, or its input was invalid). Such
+/// a call reaches no failure hook, only the batch after it.
+pub const TOOL_USE_ERROR: &str = "<tool_use_error>";
+
+/// Whether a call's result says the harness refused it before it ran ([`TOOL_USE_ERROR`]).
+pub fn is_tool_use_error(output: &str) -> bool {
+    output.trim_start().starts_with(TOOL_USE_ERROR)
+}
+
+impl Call {
+    /// The harness refused the call before it ran: it failed, and its result is the harness's
+    /// refusal ([`is_tool_use_error`]), not the tool's output. Nothing ran, so a refused call
+    /// follows no directive and meets no obligation, and one Adage made is not its step taken.
+    pub fn refused(&self) -> bool {
+        self.failed && is_tool_use_error(&self.output)
+    }
+}
+
 /// One live event, as every harness adapter translates its native hook payload.
 #[derive(Debug, Clone)]
 pub enum Event {
@@ -131,5 +150,27 @@ mod tests {
         let text = serde_json::to_string(&sub).unwrap();
         assert!(text.ends_with(r#","agent":"explore-1"}"#), "{text}");
         assert_eq!(serde_json::from_str::<Call>(&text).unwrap(), sub);
+    }
+
+    /// A call the harness refused before it ran is a failed call whose result is the refusal; a
+    /// failed run, or a result that only mentions the marker, is not one.
+    #[test]
+    fn a_refused_call_is_a_failure_whose_result_is_the_refusal() {
+        let call = |failed: bool, output: &str| Call {
+            tool: "Read".into(),
+            input: Value::Null,
+            output: output.into(),
+            failed,
+            by: By::Adage,
+            tool_use_id: None,
+            agent: None,
+        };
+        let denied =
+            "<tool_use_error>File is in a directory that is denied by your permission settings.</tool_use_error>";
+        assert!(call(true, denied).refused());
+        assert!(call(true, &format!("\n {denied}")).refused());
+        assert!(!call(false, denied).refused(), "only a failed call");
+        assert!(!call(true, "make: *** [gen] Error 1").refused(), "a run that failed is not a refusal");
+        assert!(!call(true, &format!("grep found {denied}")).refused(), "the marker leads the result");
     }
 }

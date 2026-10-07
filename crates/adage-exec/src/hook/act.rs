@@ -165,9 +165,9 @@ pub(super) fn act(turn: &Turn<'_>, directives: &[Directive], candidates: &[Candi
                                  "reason": "the action's directive could not be rendered" }));
         return out;
     };
+    let withheld = |stage: &str, reason: &str| json!({ "route": name, "level": "e2", "withheld": stage, "reason": crate::reason_text(reason), "context": s.context });
     let not_run = |out: &mut Acted, stage: &str, reason: &str| {
-        out.records
-            .push(json!({ "route": name, "level": "e2", "withheld": stage, "reason": crate::reason_text(reason), "context": s.context }));
+        out.records.push(withheld(stage, reason));
         if s.context.is_some() {
             // The spool records the reason; an unexecuted prediction supplies no agent advice.
             out.replace.insert(dir.route.clone(), String::new());
@@ -328,6 +328,7 @@ pub(super) fn act(turn: &Turn<'_>, directives: &[Directive], candidates: &[Candi
                         test_evidence(turn, &req, s.command, completed.id.as_deref(), nodeids_before.as_ref(), edited)
                     })
                     .flatten();
+                let verify = ir.route.effect == adage_core::Effect::Verify;
                 let text = if s.context.is_some() {
                     render::action_predicted(
                         &dir,
@@ -341,6 +342,16 @@ pub(super) fn act(turn: &Turn<'_>, directives: &[Directive], candidates: &[Candi
                             exit: staged.exit,
                             duration_ms: staged.duration_ms,
                         },
+                    )
+                } else if verify {
+                    // A verification changes nothing: its result is that it passed, with the tests
+                    // the run collected, never "what it generates was already up to date".
+                    render::action_verified(
+                        &dir,
+                        s.edited,
+                        s.command,
+                        render::Verified::Passed { tests: tests.as_ref(), duration_ms: staged.duration_ms },
+                        completed.id.as_deref().unwrap_or_default(),
                     )
                 } else {
                     render::action_applied(&dir, s.edited, s.command, &paths)
@@ -370,15 +381,37 @@ pub(super) fn act(turn: &Turn<'_>, directives: &[Directive], candidates: &[Candi
                 ),
             );
         }
+        crate::stage::Outcome::Failed { exit, .. }
+            if s.context.is_none() && !s.at_stop && ir.route.effect == adage_core::Effect::Verify =>
+        {
+            // A finish line's verification ran and failed: the agent is told it failed and what
+            // failed in this run, in place of the directive. The obligation stays unmet (the Stop
+            // request still asks for it), and the record says nothing was applied, as before.
+            let record = failure_record(&staged, s.command, &state.new_tests);
+            out.records.push(withheld("failed", &failed_reason(*exit)));
+            out.records.push(rec);
+            let text = render::action_verified(
+                &dir,
+                s.edited,
+                s.command,
+                render::Verified::Failed { exit: *exit, record: record.as_ref() },
+                completed.id.as_deref().unwrap_or_default(),
+            );
+            out.place(directives, &dir.route, text);
+        }
         crate::stage::Outcome::Failed { exit, .. } => {
-            let reason = match exit {
-                Some(e) => format!("it exited {e} in the staged copy, and nothing was applied"),
-                None => "it was stopped in the staged copy, and nothing was applied".to_string(),
-            };
-            not_applied(&mut out, "failed", &reason, rec);
+            not_applied(&mut out, "failed", &failed_reason(*exit), rec);
         }
     }
     out
+}
+
+/// Why an action that failed in the staged copy was not applied.
+fn failed_reason(exit: Option<i32>) -> String {
+    match exit {
+        Some(e) => format!("it exited {e} in the staged copy, and nothing was applied"),
+        None => "it was stopped in the staged copy, and nothing was applied".to_string(),
+    }
 }
 
 #[cfg(test)]
@@ -576,5 +609,55 @@ mod tests {
             "{notice}"
         );
         assert!(crate::journal::list(&f.paths.root).unwrap().is_empty(), "nothing ran");
+    }
+
+    /// O0 live notes, defect 3 (RV2): a finish line's learned verification, run by adage-exec
+    /// after the edit that armed it, says it passed (with its exit and time) or that it failed,
+    /// never "what it generates was already up to date". Failed, nothing is applied, the
+    /// obligation stays unmet and the record says `withheld: failed`, as before.
+    #[test]
+    fn a_finish_line_verification_says_it_passed_or_failed() {
+        use adage_tracks::testkit::{kinds, IndexBuilder, LearnedHome};
+        if !staging() {
+            return;
+        }
+        for (script, said, met) in
+            [("exit 0\n", "it passed (exit 0, ", true), ("echo no >&2\nexit 3\n", "it failed (exit 3; receipt ", false)]
+        {
+            let mut f = Fixture::new();
+            let check = kinds::finish_line("check-after-edit", "registry/*.csv", "sh tools/verify.sh")
+                .effect(adage_core::Effect::Verify)
+                .support(5, 5)
+                .days(3);
+            f.index = IndexBuilder::from(std::mem::take(&mut f.index))
+                .route("fixture", "fixture/finish", check)
+                .write(&f.paths.index());
+            f.home = LearnedHome::at(&f.paths.root).without_auto_learn();
+            f._tmp.write("fixture/registry/currencies.csv", "EUR\n");
+            f._tmp.write("fixture/tools/verify.sh", script);
+            let terms = route::Terms { effect: Some(adage_core::Effect::Verify), ..Default::default() };
+            let ir = f.index.routes.iter().find(|r| r.route.id == "check-after-edit").unwrap();
+            let req =
+                route::plan(ir, &f.index, &f.root, &f.paths.tracks(), Level::E2, Some(&terms), CommandTable::load())
+                    .unwrap()
+                    .request;
+            let key = approvals::ApprovalKey::for_request(&req, "fixture");
+            seed(&f, "fixture/finish/check-after-edit", key, Some(terms));
+            treated(&f, Arm::Treated);
+            let edited = edit(f.root.join("registry/currencies.csv"));
+            let out = hook(&f, "PostToolBatch", json!({ "tool_calls": [edited] })).expect("the action's result");
+            let text = out["hookSpecificOutput"]["additionalContext"].as_str().unwrap().to_string();
+            assert!(
+                text.contains("Adage ran `sh tools/verify.sh` after your edit to registry/currencies.csv: "),
+                "{text}"
+            );
+            assert!(text.contains(said), "{text}");
+            assert!(!text.contains("up to date") && !text.contains("Adage did not run it"), "{text}");
+            let st = adage_store::state::try_read::<SessionState>(&f.paths.state("fixture-session")).unwrap().unwrap();
+            assert_eq!(st.obligations.iter().find(|o| o.route == "check-after-edit").map(|o| o.met), Some(met));
+            let rec = f.home.spooled_kind("fixture-session", "batch").pop().unwrap();
+            let withheld = rec["exec"].as_array().unwrap().iter().any(|x| x["withheld"] == "failed");
+            assert_eq!(withheld, !met, "{rec}");
+        }
     }
 }

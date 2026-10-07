@@ -276,6 +276,28 @@ fn every_record_kind_as_the_spool_holds_it() {
     bash_call_in(&pw, "p", "adage hook claude Press < p.json");
     section(&mut out, "session_start, press_issued, press_spent, tripwire", lines(&pw.paths, "p", &pw.root));
 
+    // A subagent's calls (Claude Code's `agent_id`): its failure, the batch that lists the call
+    // again, and its Bash call's `pretool` name it (`agent`).
+    let sa = u11_world(Arm::Treated);
+    let agent = json!({ "agent_id": "af2d43c8c64650e89", "agent_type": "Explore" });
+    let call =
+        json!({ "tool_name": "Bash", "tool_use_id": "toolu_s1", "tool_input": { "command": "python -m pytest" } });
+    let mut failed = agent.clone();
+    for (k, v) in call.as_object().unwrap() {
+        failed[k] = v.clone();
+    }
+    failed["error"] = json!("No module named pytest");
+    sa.event(&NO_EXTENSION, "PostToolUseFailure", failed);
+    let mut listed = call;
+    listed["tool_response"] = json!("No module named pytest");
+    let mut batch = agent.clone();
+    batch["tool_calls"] = json!([listed]);
+    sa.event(&NO_EXTENSION, "PostToolBatch", batch);
+    let mut verdict = agent;
+    verdict["verdict"] = json!({ "engine": "same" });
+    bash_call(&sa, &NO_EXTENSION, "toolu_s2", PYTEST, verdict);
+    section(&mut out, "failure, batch, pretool: a subagent's calls", lines(&sa.paths, "s", &sa.root));
+
     insta::assert_snapshot!("every_record_kind", out);
 }
 

@@ -67,8 +67,11 @@ pub struct Prefetch;
 /// What `adage-exec hook` passes to the pipeline.
 pub static PREFETCH: Prefetch = Prefetch;
 
-/// The whole `hook` subcommand. Live learning starts the `adage` binary beside this one.
+/// The whole `hook` subcommand. Live learning starts the `adage` binary beside this one. A
+/// project Python's file digests are kept in `$ADAGE_HOME/cache` between hooks
+/// ([`crate::project_python::keep_digests_in`]): a session start does not hash its runtime again.
 pub fn main(harness: String, event: String) -> ! {
+    crate::project_python::keep_digests_in(&adage_store::Paths::from_env().cache());
     adage_hook::main(harness, event, adage_hook::Options { learner: Some(adage_beside), extension: Some(&PREFETCH) })
 }
 

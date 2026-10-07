@@ -203,6 +203,58 @@ pub fn action_applied(d: &crate::Directive, edited: &str, command: &str, changed
     wrap_exec(&d.track, &d.version, &d.route, &d.kind, d.strength, &body, d.origin.as_ref(), "e2")
 }
 
+/// How a learned verification Adage ran after an edit ended ([`action_verified`]).
+#[derive(Debug, Clone, Copy)]
+pub enum Verified<'a> {
+    /// It exited 0: the tests its declared pytest record shows it collected, when known.
+    Passed { tests: Option<&'a TestEvidence>, duration_ms: u64 },
+    /// It failed: its exit status (none when it was stopped) and what its declared failure record
+    /// shows failed in this run.
+    Failed { exit: Option<i32>, record: Option<&'a FailureRecord> },
+}
+
+/// The result of a learned verification (an E2 `verify` action) Adage ran from a hook to carry
+/// out a finish line (Track C §3.6): which edit it followed, the command, and whether it passed
+/// or failed, with what the run's declared record shows (the tests it collected, or the tests
+/// that failed), never its output. A verification changes no file, so there is no change list.
+/// In the directive's wrapper with `exec="e2"`, as [`action_applied`]; `edited` is empty when the
+/// action ran at Stop.
+pub fn action_verified(
+    d: &crate::Directive,
+    edited: &str,
+    command: &str,
+    verified: Verified<'_>,
+    operation: &str,
+) -> String {
+    let after = match plain_path(edited) {
+        Some(p) => format!("after your edit to {p}"),
+        None => "after the edits in this session".to_string(),
+    };
+    let mut body = match verified {
+        Verified::Passed { duration_ms, .. } => format!(
+            "Adage ran `{}` {after}: it passed (exit 0, {:.1} s; receipt {}). Nothing changed.",
+            sanitise(command),
+            duration_ms as f64 / 1000.0,
+            short_id(operation)
+        ),
+        Verified::Failed { exit, .. } => format!(
+            "Adage ran `{}` {after}: it failed (exit {}; receipt {}). Nothing was changed.",
+            sanitise(command),
+            exit.map_or("unknown".into(), |e| e.to_string()),
+            short_id(operation)
+        ),
+    };
+    let lines = match verified {
+        Verified::Passed { tests, .. } => tests.map(tests_line).into_iter().collect(),
+        Verified::Failed { record, .. } => record.map(failure_sentences).unwrap_or_default(),
+    };
+    for line in lines {
+        body.push('\n');
+        body.push_str(&line);
+    }
+    wrap_exec(&d.track, &d.version, &d.route, &d.kind, d.strength, &body, d.origin.as_ref(), "e2")
+}
+
 /// A completed CPU action nominated by a learned context, with no edit obligation.
 pub struct CpuReceipt<'a> {
     /// Tests the run collected, from the action's declared pytest cache (never stdout).
@@ -351,6 +403,59 @@ mod result_text_tests {
                    "Tests in these sessions ran with: `.venv/bin/python -m pytest tests/t.py -q`. Python here is `.venv/bin/python`.");
         assert_eq!(card_checks_line(&["make test"]).unwrap(), "Tests in these sessions ran with: `make test`.");
         assert!(card_checks_line(&[]).is_none());
+    }
+
+    /// The live run's RV2 (O0 live notes, defect 3): the verification Adage ran after an edit read
+    /// "what it generates was already up to date". A verification's result says it passed, with
+    /// the tests the receipt shows, or that it failed, with what failed; a regeneration's result
+    /// is as before.
+    #[test]
+    fn a_verification_after_an_edit_says_it_passed_or_failed() {
+        let t = TestEvidence { collected: Some(3), new: vec!["test_add".into()], more_new: 0, yours: true };
+        let cmd = ".venv/bin/python -m pytest -q tests";
+        let passed = action_verified(
+            &d(),
+            "tests/test_calc.py",
+            cmd,
+            Verified::Passed { tests: Some(&t), duration_ms: 3_966 },
+            "392a79fe8781aa",
+        );
+        assert!(passed.contains(" exec=\"e2\">"), "{passed}");
+        assert!(
+            passed.contains(&format!(
+                "Adage ran `{cmd}` after your edit to tests/test_calc.py: it passed (exit 0, 4.0 s; receipt 392a79fe8781). Nothing changed.\nTests: 3 collected; exit 0; the tests added in this session: test_add."
+            )),
+            "{passed}"
+        );
+        assert!(!passed.contains("up to date") && !passed.contains("generates"), "{passed}");
+        let bare = action_verified(&d(), "", cmd, Verified::Passed { tests: None, duration_ms: 100 }, "op");
+        assert!(
+            bare.contains("after the edits in this session: it passed (exit 0, 0.1 s; receipt op). Nothing changed.\n")
+        );
+        assert!(!bare.contains("Tests:"), "{bare}");
+        let record = FailureRecord {
+            refreshed: true,
+            failing: Listed { names: vec!["tests/test_calc.py::test_add".into()], more: 0 },
+            ..Default::default()
+        };
+        let failed = action_verified(
+            &d(),
+            "tests/test_calc.py",
+            cmd,
+            Verified::Failed { exit: Some(1), record: Some(&record) },
+            "392a79fe8781aa",
+        );
+        assert!(
+            failed.contains("after your edit to tests/test_calc.py: it failed (exit 1; receipt 392a79fe8781). Nothing was changed.\nFailing tests: tests/test_calc.py::test_add."),
+            "{failed}"
+        );
+        assert_eq!(
+            action_applied(&d(), "schema/invoice.json", "make gen", &[]),
+            wrap_exec("repo/learned", "0.1.0", "run-1", "run", Strength::Prime,
+                "Adage ran `make gen` after your edit to schema/invoice.json: what it generates was already up to date. Nothing changed.",
+                None, "e2"),
+            "the regeneration's template is unchanged"
+        );
     }
 
     /// The passing receipt is exactly as before the failure detail: same sentences, same order.
@@ -1084,6 +1189,29 @@ pub fn environment_note(interpreter: &str, pytest: bool) -> Option<String> {
     Some(format!(
         "In this repository, Python runs in the project's environment, {shown}: the system Python lacks the project and its test dependencies.{tests}"
     ))
+}
+
+/// A lookup convention as the shell tool's description carries it (the Claude Code mod's
+/// architecture §1b.3: "the Bash tool says how things are done here before the model's first
+/// call"): a prompt route's command with its slot left as written, from one fixed template:
+/// "In this repository, work item details are looked up with ./scripts/wi-lookup {item} --json,
+/// where {item} is the work item the request names." `None` for any other route, or one whose
+/// command or slot does not render safely.
+pub fn lookup_convention(r: &Route) -> Option<String> {
+    let (Step::Run { command }, Trigger::Prompt { span }) = (&r.step, &r.trigger) else { return None };
+    let [slot] = r.slots.as_slice() else { return None };
+    let kind = match slot.source {
+        SlotSource::Prompt { span } => span,
+        _ => *span,
+    };
+    let placeholder = format!("{{{}}}", slot.name);
+    let shown = sanitise(command);
+    let name = sanitise(&slot.name);
+    if shown.is_empty() || name != slot.name || !shown.contains(&placeholder) {
+        return None;
+    }
+    let label = span_kind_label(kind);
+    Some(format!("In this repository, {label} details are looked up with {shown}, where {placeholder} is the {label} the request names."))
 }
 
 /// What compaction is asked to keep (the Claude Code mod's `session.compact`): in both arms, since

@@ -710,9 +710,11 @@ E2 needs both the policy opt-in below and a local per-reflex grant; enabling the
 does not supply either. `adage delegate policy` shows the effective policy and the personal file's
 path; `adage delegate policy --max-level e2` (a person, at a terminal) writes the opt-in with
 `auto_approve = "off"` and `require_sandbox = true`, keeping the file's other settings, and
-`--max-level e1` turns actions off again. For pytest, declare `.pytest_cache/**` and `.pytest_cache/.gitignore`
-as caches separately: wildcards do not implicitly cover hidden files. Neither declaration
-authorizes the repository's own `.gitignore` or other hidden source outputs.
+`--max-level e1` turns actions off again. For pytest, declare `.pytest_cache/**` as a cache: a wildcard
+never matches a leading dot, except inside a directory the glob names with its dot, so this one
+covers the `.gitignore` pytest writes into its cache (declaring `.pytest_cache/.gitignore` as well,
+as earlier grants did, changes nothing). Neither authorizes the repository's own `.gitignore` or
+other hidden source outputs: `**` still matches no `.env` or `.git/…`.
 
 `$ADAGE_HOME/policy.toml` (personal) and a managed file (`/etc/adage/policy.toml`; macOS
 `/Library/Application Support/Adage/policy.toml`; or the path in `ADAGE_POLICY`):

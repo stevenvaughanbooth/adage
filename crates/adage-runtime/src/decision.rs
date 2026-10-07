@@ -55,6 +55,13 @@ pub enum Judgement {
     Substituted {
         route: String,
     },
+    /// The step Adage made in the agent's place (`By::Adage`) was refused by the harness before
+    /// it ran ([`adage_trace::Call::refused`]: the person's permission rules, as for the model's
+    /// own calls): nothing ran, so it is never `Predicted`, never a follow, and meets no
+    /// obligation.
+    Refused {
+        route: String,
+    },
 }
 
 /// What a predicted step is ([`Prediction::kind`]).

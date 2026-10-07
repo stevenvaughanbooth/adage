@@ -488,6 +488,35 @@ mod tests {
         assert!(w.event(granted, "TurnStep", again).is_some(), "armed again: predicted again");
     }
 
+    /// §4.1.2 (O0 live notes, defect 2): the finish line Adage made was refused by the person's
+    /// permission rules. The engine reports it in the batch only, as `<tool_use_error>` (the live
+    /// DENY run's payload shape): the call is failed, judged `refused` in the spool (never
+    /// `predicted`, never `obligation_met`), observed as refused, and the Stop request asks for
+    /// the step as without the mod.
+    #[test]
+    fn a_finish_line_the_engine_refused_is_recorded_as_refused_and_never_met() {
+        let w = ObligationWorld::new();
+        let granted: &'static Predicts =
+            Box::leak(Box::new(Predicts(vec![("acme/finish-lines".into(), "regenerate-registry".into())])));
+        w.edit(granted).expect("the edit arms the obligation");
+        assert!(turn_step(&w, granted, 2, true).is_some(), "the finish line, in the model's place");
+        let denied = json!({ "tool_name": "Bash", "tool_use_id": "adage_regenerate-registry_t1_2_0",
+                             "tool_input": { "command": "make gen" },
+                             "tool_response": "<tool_use_error>Permission to use Bash with command make gen has been denied.</tool_use_error>" });
+        w.event(granted, "PostToolBatch", json!({ "tool_calls": [denied] }));
+        assert!(!w.state().obligations[0].met);
+        let rec = spooled(&w).pop().unwrap();
+        assert_eq!(rec["kind"], "batch");
+        let kinds: Vec<&str> =
+            rec["decision"]["judgements"].as_array().unwrap().iter().filter_map(|j| j["kind"].as_str()).collect();
+        assert_eq!(kinds, vec!["refused"], "{rec}");
+        assert_eq!(rec["decision"]["judgements"][0]["route"], "regenerate-registry");
+        let observed = rec["decision"]["observed"].as_array().unwrap();
+        assert!(!observed.is_empty() && observed.iter().all(|k| k.as_str().unwrap().ends_with(" !refused")), "{rec}");
+        let stop = w.stop(granted, false).expect("the Stop request, as without the mod");
+        assert!(stop["reason"].as_str().unwrap().contains("make gen"), "{stop}");
+    }
+
     /// The control arm: nothing printed, `would_predict` spooled.
     #[test]
     fn turn_step_in_the_control_arm_prints_nothing() {

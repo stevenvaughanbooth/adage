@@ -146,7 +146,7 @@ pub fn backend(cap: &Capability) -> StageBackend {
 // ---------------------------------------------------------------------------------------------
 
 /// A glob over repository paths: `*` stays within a segment, `**` crosses them, and a leading
-/// dot is matched only literally.
+/// dot is matched only literally ([`matches`]).
 fn pattern(g: &str) -> Option<glob::Pattern> {
     glob::Pattern::new(g).ok()
 }
@@ -154,9 +154,28 @@ fn pattern(g: &str) -> Option<glob::Pattern> {
 const MATCH: glob::MatchOptions =
     glob::MatchOptions { case_sensitive: true, require_literal_separator: true, require_literal_leading_dot: true };
 
-/// Whether `rel` matches any of `globs`.
+/// [`MATCH`] with wildcards that match a leading dot ([`matches`]).
+const INSIDE_DOT_DIR: glob::MatchOptions = glob::MatchOptions { require_literal_leading_dot: false, ..MATCH };
+
+/// Whether `rel` matches the glob `g` (`p`, compiled). A name with a leading dot is matched only
+/// literally: `**` and `*` never match `.git` or `gen/.env`. Inside a directory the glob names
+/// literally with its dot, they match whatever is there: `.pytest_cache/**` declares the whole
+/// cache directory, `.pytest_cache/.gitignore` included (pytest writes that file in every cache it
+/// creates, and a verify action declaring the cache was refused for it). The first dotted segment
+/// of `rel` must be a directory and a segment of `g` as written, so the rule widens no other
+/// glob.
+fn matches(g: &str, p: &glob::Pattern, rel: &str) -> bool {
+    if p.matches_with(rel, MATCH) {
+        return true;
+    }
+    let segments: Vec<&str> = rel.split('/').collect();
+    let Some(first) = segments.iter().position(|s| s.starts_with('.')) else { return false };
+    first + 1 < segments.len() && g.split('/').any(|s| s == segments[first]) && p.matches_with(rel, INSIDE_DOT_DIR)
+}
+
+/// Whether `rel` matches any of `globs` ([`matches`]).
 pub fn matches_any(globs: &[String], rel: &str) -> bool {
-    globs.iter().filter_map(|g| pattern(g)).any(|p| p.matches_with(rel, MATCH))
+    globs.iter().any(|g| pattern(g).is_some_and(|p| matches(g, &p, rel)))
 }
 
 /// A path as a person or agent may see it: plain characters only.
@@ -1244,6 +1263,47 @@ mod tests {
         assert!(!matches_any(&["*".to_string()], ".git"));
     }
 
+    /// O0 live notes, defect 12: a verify action declaring `.pytest_cache/**` was refused for the
+    /// `.gitignore` pytest writes in its cache ("a verify action may not change sources"). A
+    /// directory the glob names with its dot holds dotfiles; no other glob is widened.
+    #[test]
+    fn a_dot_directory_the_glob_names_covers_its_dotfiles_and_nothing_else_widens() {
+        let cache = vec![".pytest_cache/**".to_string()];
+        for rel in [".pytest_cache/.gitignore", ".pytest_cache/v/cache/lastfailed", ".pytest_cache/v/.x/y"] {
+            assert!(matches_any(&cache, rel), "{rel}");
+        }
+        let nested = vec!["**/.pytest_cache/**".to_string()];
+        assert!(matches_any(&nested, "pkg/.pytest_cache/.gitignore"));
+        assert!(!matches_any(&nested, "pkg/.git/config"));
+        assert!(!matches_any(&nested, ".pytest_cache"), "the directory itself is not inside it");
+        // Elsewhere a leading dot is still matched only literally.
+        for (g, rel) in [
+            ("**", ".git/config"),
+            ("**", ".env"),
+            ("gen/**", "gen/.env"),
+            ("gen/*", "gen/.hidden"),
+            (".pytest_cache/**", ".git/config"),
+            (".pytest_cache/**", ".pytest_cache2/.gitignore"),
+            ("*/**", ".venv/lib/x.py"),
+        ] {
+            assert!(!matches_any(&[g.to_string()], rel), "{g} must not match {rel}");
+        }
+        assert!(matches_any(&[".env".to_string()], ".env"), "a dotfile named literally");
+        // The staged verify run that wrote the cache's `.gitignore` is no longer refused.
+        let a = spec(ActionKind::Verify, &[], &[".pytest_cache/**"]);
+        let p = judge(
+            vec![
+                file(".pytest_cache/.gitignore", ChangeKind::Created),
+                file(".pytest_cache/v/cache/lastfailed", ChangeKind::Created),
+            ],
+            &a,
+            1 << 20,
+        );
+        assert!(p.refused.is_empty(), "{:?}", p.refused);
+        let p = judge(vec![file(".env", ChangeKind::Created)], &a, 1 << 20);
+        assert!(!p.refused.is_empty(), "a dotfile outside the cache is still a source change");
+    }
+
     #[test]
     fn regenerate_applies_only_declared_outputs() {
         let a = spec(ActionKind::Regenerate, &["gen/*.py"], &["build/**"]);
@@ -1296,12 +1356,17 @@ mod tests {
         assert_eq!(p.refused[0].1, "a verify action may not change sources");
     }
 
+    /// pytest's hidden cache metadata is covered by the cache directory's own glob (defect 12 of
+    /// the O0 live notes), and still by its explicit declaration (grants made before); neither
+    /// covers the repository's own `.gitignore`.
     #[test]
-    fn pytest_hidden_cache_metadata_needs_its_explicit_contract() {
+    fn pytest_hidden_cache_metadata_is_covered_by_its_directory_or_its_explicit_contract() {
         let broad = spec(ActionKind::Verify, &[], &[".pytest_cache/**"]);
         broad.validate().unwrap();
-        let missing = judge(vec![file(".pytest_cache/.gitignore", ChangeKind::Created)], &broad, 1 << 20);
-        assert_eq!(missing.refused.len(), 1);
+        let covered = judge(vec![file(".pytest_cache/.gitignore", ChangeKind::Created)], &broad, 1 << 20);
+        assert!(covered.refused.is_empty());
+        let source = judge(vec![file(".gitignore", ChangeKind::Modified)], &broad, 1 << 20);
+        assert_eq!(source.refused.len(), 1);
         let exact = spec(ActionKind::Verify, &[], &[".pytest_cache/**", ".pytest_cache/.gitignore"]);
         exact.validate().unwrap();
         let covered = judge(vec![file(".pytest_cache/.gitignore", ChangeKind::Created)], &exact, 1 << 20);
