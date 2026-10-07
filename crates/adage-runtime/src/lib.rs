@@ -32,7 +32,7 @@ mod state;
 use adage_core::spans::SpanKind;
 
 pub use adage_core::json::extract_json;
-pub use adage_trace::{By, Call, Event};
+pub use adage_trace::{is_tool_use_error, By, Call, Event};
 pub use context::CtxState;
 pub use decide::decide;
 pub use decision::{

@@ -272,7 +272,8 @@ pub struct Step {
 /// The hook events Claude Code would have sent for this session, in order, with paths rebased
 /// from the recorded working directory to `root`. Mirrors the Claude Code adapter: each failed
 /// call first raises `PostToolUseFailure`, then the whole turn arrives as one `PostToolBatch`
-/// whose calls are all marked not failed (the adapter does not carry failure into a batch).
+/// whose calls are marked not failed, except a call the engine refused (`<tool_use_error>`),
+/// which the adapter marks failed so it is never judged as made.
 /// `stop`: the session ended with a Stop hook (not when the harness cut the agent off).
 pub fn events(t: &Transcript, root: &str, stop: bool) -> Vec<Step> {
     let mut out = vec![Step { turn: 0, event: Event::SessionStart }];
@@ -305,7 +306,9 @@ pub fn events(t: &Transcript, root: &str, stop: bool) -> Vec<Step> {
                         tool: c.tool,
                         input,
                         output: c.hook_output.replace(&t.cwd, root),
-                        failed: false,
+                        // The adapter carries one failure into a batch: a refusal, whose result is
+                        // the engine's error, not the tool's output.
+                        failed: c.failed && adage_runtime::is_tool_use_error(&c.output),
                         by: By::Agent,
                         tool_use_id: None,
                         agent: None,
