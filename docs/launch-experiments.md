@@ -257,3 +257,18 @@ Go integration and complete requirement review remain necessary before paid admi
 pinned PostgreSQL 16.14 results do not certify historical PostgreSQL 13 compatibility. Neither
 these controls nor the cold-mod cost scout establish learned-mod savings. See
 [the scout results](claude-mod/evaluation-results.md) for the independently failed paid attempt.
+
+
+A further free replay used complete, clean source-only reference snapshots with Go 1.20.14,
+PostgreSQL/pg_dump 13.11, the historical SQLC versions above, and pinned goimports 0.19.0.
+For both tasks, forced migration-to-schema generation and the complete historical
+`coderd/database/generate.sh` succeeded with no tracked output differences. The proxy reference
+passed 1,067 Go test/subtest events across `./coderd/database/...`. The timestamp reference
+passed 1,034 events, with one failure: `TestPubsub_Disconnect` requires a Docker daemon unavailable
+in this environment. Nothing was skipped or replaced to remove that failure. These event counts
+include subtests and are not independent task counts.
+
+The first replay's incompatible modern dump-client output and the remaining Docker-dependent
+failure are retained. Successful generation does not replace the external behavioral grader.
+Complete training admission, the other three task graders, and frozen mod treatment support
+remain unfinished. No additional paid model calls were made.
