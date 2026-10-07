@@ -21,6 +21,9 @@ Pilots can explicitly select that native profile at initialization; untreated tr
 check native request evidence before further spending, and both held-out cohorts retain the
 selected profile after operator review.
 
+Plugin checks recognize both recorded Claude validator markers and verify the remaining
+hook-list length when the validator truncates its report.
+
 External-parent PostgreSQL migration controls now support private Coder learning experiments,
 with pinned SQL inputs and separate upgrade, fresh-schema and downgrade observations, using
 explicit PostgreSQL 13.11 or 16.14 profiles.

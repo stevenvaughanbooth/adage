@@ -22,6 +22,7 @@ import { createHash } from "node:crypto"
 import { accessSync, constants, existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { PLATFORMS } from "../npm/config.mjs"
 import path from "node:path"
+import { validatedHooks, matchesValidatedHooks } from "./plugin-validation.mjs"
 import { fileURLToPath } from "node:url"
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
@@ -356,13 +357,14 @@ function checkModStructure(pluginDir) {
     return `{${Object.entries(o).map(([k, v]) => (k === "props" ? `props has {${Object.entries(v).map(([a, b]) => part(a, b)).join(", ")}}` : part(k, v))).join(", ")}}`
   }
   const listed = ons.map((m) => `${m[1]}${matcherText(m[2])}`).join(", ")
-  const validated = (src(path.join(repo, pluginDir, "VALIDATE.txt")).match(/> \.\/register\.ts hooks: (.*)$/m)?.[1] ?? "").replace(/… \[\+\d+ chars\]$/, "")
-  if (validated === "" || !listed.startsWith(validated)) {
+  const report = validatedHooks(src(path.join(repo, pluginDir, "VALIDATE.txt")))
+  const validated = report?.prefix ?? ""
+  if (!matchesValidatedHooks(listed, report)) {
     let k = 0
     while (k < validated.length && listed[k] === validated[k]) k++
     const comma = listed.lastIndexOf(", ", k)
     const at = comma < 0 ? 0 : comma + 2
-    problems.push(`${pluginDir}/hooks/register.ts: the hooks in order differ from VALIDATE.txt's at \`${listed.slice(at, at + 60)}\` (VALIDATE.txt: \`${validated.slice(at, at + 60)}\`); a hook added or moved needs VALIDATE.txt regenerated`)
+    problems.push(`${pluginDir}/hooks/register.ts: the hook order or length differs from VALIDATE.txt's at \`${listed.slice(at, at + 60)}\` (VALIDATE.txt: \`${validated.slice(at, at + 60)}\`); a hook added or moved needs VALIDATE.txt regenerated`)
   }
   for (const m of ons) {
     const mod = imports.get(m[3])
