@@ -1,33 +1,14 @@
 import type { Graph } from "../api/types";
 import { findRoute } from "../lib/graph";
+import { isPlugin, setupCopy } from "../lib/setup";
 import { useUrl } from "../state/url";
 
-/** A contextual handoff to the terminal's single palette; the map remains a read-only observer. */
+/** Where to act, worded for the surface the person uses (`adage.channel`): `/adage` in Claude Code
+ * for a plugin user, the `adage` commands otherwise. The map stays a read-only observer. */
 export function Setup({ graph }: { graph: Graph | null }) {
   const [url, setUrl] = useUrl();
   const selected = findRoute(graph, url.reflex);
-  const steps = [
-    [
-      "Choose your repository",
-      "Open repository",
-      "Choose the checkout you want Adage to learn from. The terminal shows the selected repository before changes.",
-    ],
-    [
-      "Connect your agent",
-      "Connect Claude Code / Codex / OpenCode",
-      "Choose your harness and review the hook installation. For Codex, accept the registered hooks in /hooks. Registered hooks and a received hook are separate states in Health.",
-    ],
-    [
-      "Check earlier sessions",
-      "History sources",
-      "See detected Claude Code and Codex histories, or configure a history directory. For OpenCode, choose Import OpenCode history to copy local exports; repeat the import when you want newer sessions.",
-    ],
-    [
-      "Learn, then review",
-      "Condition now",
-      "Preview which sources and sessions will be read. Review proposed reflexes and their exact before-and-after responses in the terminal before accepting a change.",
-    ],
-  ];
+  const copy = setupCopy(graph);
   return (
     <main
       aria-label="Setup"
@@ -40,43 +21,27 @@ export function Setup({ graph }: { graph: Graph | null }) {
         <h1 className="display my-3 text-4xl font-semibold">
           Connect once. <span className="text-accent-soft">Work as usual.</span>
         </h1>
-        <p className="text-ink-2">
-          Use the Adage terminal palette to set up and change your workspace.
-          This browser explains the evidence and shows live traces.
+        <p className="font-mono text-sm text-ink-1" data-testid="setup-lead">
+          {copy.lead}
         </p>
         <div className="rounded-lg border border-accent/40 bg-panel p-4 text-sm leading-relaxed">
           {graph?.demo ? (
             <p className="m-0">
-              You are exploring sample data. Return to the Adage terminal and
-              choose <strong>Open repository</strong> before connecting your
-              real repository.
+              You are exploring sample data. In the Adage terminal app (adage ui), choose{" "}
+              <strong>Open repository</strong> before connecting your real repository.
             </p>
           ) : (
-            <p className="m-0">
-              Return to the Adage terminal, open its command palette, and search
-              for the action below. Each action guides you through the details
-              and confirmation.
-            </p>
+            <p className="m-0">{copy.intro}</p>
           )}
-          <p className="mb-0 text-ink-2">
-            If you launched this browser directly, start{" "}
-            <code className="font-mono text-ink-1">adage ui</code> once in your
-            terminal. All setup actions are then available in its palette; no
-            command copying is needed between steps.
-          </p>
         </div>
         {selected && (
           <p className="rounded-lg border border-prime/35 bg-panel p-4 text-sm">
-            To review{" "}
-            <strong className="font-mono break-all">{selected.id}</strong>,
-            select it in the terminal's Reflexes view and choose Review. The
-            confirmation shows the exact proposed change for this installed
-            version.
+            {copy.review(selected.id)}
           </p>
         )}
       </div>
       <ol className="m-0 grid max-w-5xl list-none gap-4 p-0 md:grid-cols-2">
-        {steps.map(([title, action, detail], i) => (
+        {copy.steps.map(({ title, action, detail }, i) => (
           <li
             key={title}
             className="rounded-lg border border-line-strong bg-panel p-5"
@@ -85,16 +50,17 @@ export function Setup({ graph }: { graph: Graph | null }) {
             <h2 className="display my-2 text-xl font-semibold">{title}</h2>
             <p className="text-sm leading-relaxed text-ink-2">{detail}</p>
             <p className="mb-0 text-sm">
-              <span className="text-ink-3">Palette: </span>
-              <strong>{action}</strong>
+              <span className="text-ink-3">{isPlugin(graph) ? "In Claude Code: " : "In a terminal: "}</span>
+              <code className="font-mono text-ink-1">{action}</code>
             </p>
           </li>
         ))}
       </ol>
       <p className="m-0 max-w-3xl text-sm text-ink-2">
-        To make review decisions, select a reflex in the terminal and choose the
-        matching review action. Execution grants have a separate Delegate reflex
-        action and confirmation. Rewrites are controlled in Settings. Instincts
+        Decide on reflexes with{" "}
+        {isPlugin(graph) ? "/adage review in Claude Code" : "adage review, or in adage ui's Reflexes view"}.
+        Execution grants have their own confirmation. Rewrites are controlled in
+        Settings. Instincts
         come from installed packs and can work before conditioning. Reflexes
         form from repeated behavior in your traces. A healthy connection can
         receive hooks without an applicable reflex or a recorded decision yet.

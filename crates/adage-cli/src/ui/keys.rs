@@ -53,6 +53,7 @@ pub const LIVE: &[Key] = &[
     k("enter", "inspect", "what the agent saw at the newest event shown", true),
     k("j/k ↑↓", "scroll", "scroll the feed (G: back to the newest)", false),
     k("v", "quiet", "hide or show events where Adage said nothing", false),
+    k("m", "open map", "open the live web map in your browser (as adage watch does)", false),
 ];
 
 pub const REFLEXES: &[Key] = &[

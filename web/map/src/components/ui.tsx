@@ -1,6 +1,8 @@
 // Small shared pieces: chips, segmented controls, copy buttons, the toast, dialogs.
 
 import { type KeyboardEvent, type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useStore } from "../api/client";
+import { actionWords } from "../lib/setup";
 import { useUrl } from "../state/url";
 import { Icons, Lamp } from "./glyphs";
 import { type Lifecycle, type Strength, prose } from "../lib/words";
@@ -186,6 +188,8 @@ export async function copyCommand(cmd: string) {
 /** A command the reader can run, with a copy button: the map itself never changes anything. */
 export function CommandButton({ command, primary = false, why }: { command: string; primary?: boolean; why?: string }) {
   const [, setUrl] = useUrl();
+  // Worded for the surface the person acts from (`adage.channel`): Claude Code or a terminal.
+  const words = actionWords(useStore().graph);
   const [done, setDone] = useState(false);
   useEffect(() => {
     if (!done) return;
@@ -195,10 +199,10 @@ export function CommandButton({ command, primary = false, why }: { command: stri
   return (
     <div className="flex flex-col gap-1.5">
       <button type="button" onClick={() => setUrl({ view: "setup" }, true)} className={cx("rounded-md border px-3 py-2 text-left text-sm", primary ? "border-accent/45 bg-[var(--sel)]" : "border-line-strong")}>
-        <span className="block text-accent-soft">{why || "Manage this in the terminal"}</span>
-        <span className="text-xs text-ink-3">Open terminal action guide →</span>
+        <span className="block text-accent-soft">{why || words.manage}</span>
+        <span className="text-xs text-ink-3">{words.guide}</span>
       </button>
-      <details><summary className="cursor-pointer text-xs text-ink-3">CLI alternative</summary>
+      <details><summary className="cursor-pointer text-xs text-ink-3">{words.alternative}</summary>
     <button
       type="button"
       title={why ? `${why} · copies the command` : "Copies the command"}

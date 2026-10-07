@@ -1771,15 +1771,26 @@ fn wizard_walks_every_step() {
     ];
     let mut w = Wizard::new(detected, vec![], true);
     let titles: Vec<String> = w.steps.iter().map(|s| format!("{:?}", s.kind)).collect();
-    assert_eq!(titles, ["Harnesses", "Hooks(\"claude-code\")", "Model", "Repos", "Learn", "AutoLearn", "Finish"]);
+    assert_eq!(
+        titles,
+        ["Harnesses", "Binaries", "Hooks(\"claude-code\")", "Model", "Repos", "Learn", "AutoLearn", "Finish"]
+    );
     let app =
         crate::repos::Found { key: "github.com/acme/app".into(), root: std::env::temp_dir(), sessions: 12, last_ms: 0 };
     w.here = Some(app.key.clone());
     w.set_repos(vec![app], &["github.com/acme/app".into()]);
-    assert!(matches!(w.key(KeyCode::Enter, NONE), Some(wizard::Cmd::Replan)));
-    assert!(matches!(w.key(KeyCode::Tab, NONE), Some(wizard::Cmd::Replan)));
+    assert!(w.key(KeyCode::Enter, NONE).is_none(), "on to the binaries");
+    assert_eq!(*w.current(), wizard::Kind::Binaries);
+    assert!(
+        matches!(w.key(KeyCode::Enter, NONE), Some(wizard::Cmd::Replan)),
+        "all three beside adage: on to the hooks"
+    );
+    // The plugin first (here typed in Claude Code: no `claude` on PATH), then the settings file.
+    assert!(w.choices()[0].starts_with("The Adage plugin (recommended)"), "{:?}", w.choices());
+    assert!(w.key(KeyCode::Down, NONE).is_none(), "this repository's settings file, already planned");
+    assert!(matches!(w.key(KeyCode::Down, NONE), Some(wizard::Cmd::Replan)));
     assert_eq!(w.scope, "user");
-    assert!(w.key(KeyCode::Char('y'), NONE).is_none(), "nothing to install until planned");
+    assert!(w.key(KeyCode::Enter, NONE).is_none(), "nothing to install until planned");
     assert!(w.key(KeyCode::Char('n'), NONE).is_none());
     assert_eq!(*w.current(), wizard::Kind::Model);
     assert!(matches!(w.key(KeyCode::Char('y'), NONE), Some(wizard::Cmd::FetchModel)));
@@ -1812,8 +1823,102 @@ fn wizard_walks_every_step() {
             && report.contains("◇  Condition from past traces · 12 sessions read"),
         "{report}"
     );
-    assert!(report.contains("adage watch"));
+    assert!(report.contains("Later: `adage update` updates Adage, its hooks and the plugin together"), "{report}");
     assert!(matches!(w.key(KeyCode::Enter, NONE), Some(wizard::Cmd::Quit)));
+}
+
+/// T-O4-05: the Claude Code step offers the Adage plugin first when it is not installed (installed
+/// by adage with `claude plugin`, or typed in Claude Code without `claude` on PATH), the settings
+/// file second; with the plugin installed, no second registration, and a settings file beside it
+/// is offered for removal; the closing screen has at most two `next` lines.
+#[test]
+fn wizard_offers_the_plugin_first() {
+    use crate::detect::{Detected, Registration};
+    let detected = vec![Detected { harness: "claude-code", evidence: vec!["`claude` on PATH".into()] }];
+    let to_hooks = |w: &mut Wizard| {
+        while !matches!(w.current(), wizard::Kind::Hooks(_)) {
+            w.advance(wizard::StepStatus::Done(String::new()));
+        }
+    };
+    let d = tempfile::tempdir().unwrap();
+    let c = ctx(Paths::at(d.path()), true);
+    // Not installed, `claude` on PATH: adage installs it.
+    let mut w = Wizard::new(detected.clone(), vec![], true);
+    w.claude_on_path = true;
+    w.plugin_root = "~/.local/share/adage/plugin".into();
+    to_hooks(&mut w);
+    assert_eq!(
+        w.choices(),
+        [
+            "The Adage plugin (recommended) · adage installs it with claude plugin",
+            "The settings file · this repository",
+            "The settings file · every repository you open with claude-code",
+            "Skip claude-code",
+        ]
+    );
+    let (text, _) = render(100, 18, |f| wizard::draw(f, &w, &c));
+    snap("wizard-plugin-route", &text);
+    assert!(matches!(w.key(KeyCode::Enter, NONE), Some(wizard::Cmd::Connect)));
+    // No `claude` on PATH: the two commands to type, and nothing written.
+    let mut w = Wizard::new(detected.clone(), vec![], true);
+    to_hooks(&mut w);
+    let (text, _) = render(100, 18, |f| wizard::draw(f, &w, &c));
+    assert!(
+        text.contains("/plugin marketplace add stevenvaughanbooth/adage")
+            && text.contains("/plugin install adage@adage"),
+        "{text}"
+    );
+    assert!(w.key(KeyCode::Enter, NONE).is_none());
+    assert_eq!(
+        w.steps[2].status,
+        wizard::StepStatus::Done(
+            "in Claude Code: /plugin marketplace add stevenvaughanbooth/adage, then /plugin install adage@adage".into()
+        )
+    );
+    // Installed: kept, never a second registration.
+    let plugin = Registration {
+        harness: "claude-code",
+        location: "/h/.claude/plugins/data/adage-adage-local".into(),
+        binary: None,
+        kind: "plugin-data",
+        events: vec![],
+    };
+    let mut w = Wizard::new(detected.clone(), vec![plugin.clone()], true);
+    w.claude_on_path = true;
+    to_hooks(&mut w);
+    assert_eq!(w.choices(), ["Keep it · the Adage plugin is installed", "Skip claude-code"]);
+    assert!(w.key(KeyCode::Enter, NONE).is_none());
+    assert_eq!(
+        w.steps[2].status,
+        wizard::StepStatus::Done("already registered by the Adage plugin · nothing written".into())
+    );
+    // Installed, and a settings file registers the hooks too: taking it out comes first.
+    let settings = Registration {
+        harness: "claude-code",
+        location: "/h/.claude/settings.json".into(),
+        binary: Some("/opt/adage".into()),
+        kind: "settings",
+        events: vec![],
+    };
+    let mut w = Wizard::new(detected, vec![plugin, settings], true);
+    to_hooks(&mut w);
+    w.removal = Some(Ok(crate::install::Plan {
+        harness: "claude-code".into(),
+        target: "/h/.claude/settings.json".into(),
+        before: Some("{\n  \"hooks\": {},\n  \"model\": \"x\"\n}\n".into()),
+        after: "{\n  \"model\": \"x\"\n}\n".into(),
+    }));
+    assert_eq!(w.choices()[0], "Take Adage's hooks out of /h/.claude/settings.json · the plugin runs each one already");
+    let (text, _) = render(100, 18, |f| wizard::draw(f, &w, &c));
+    assert!(text.contains("-   \"hooks\": {},") && text.contains("Change /h/.claude/settings.json"), "{text}");
+    assert!(matches!(w.key(KeyCode::Enter, NONE), Some(wizard::Cmd::Remove(_))));
+    // The closing screen: two `next` lines, and how to update later.
+    let t = Theme::with_color(false);
+    w.health = Some(health());
+    let card: Vec<String> = wizard::finish_card(&w, &t, true, 100).iter().map(|l| l.to_string()).collect();
+    let next: Vec<&String> = card.iter().skip_while(|l| !l.starts_with("   next")).collect();
+    assert!(next[0].starts_with("   next  adage init") && next[1].trim_start().starts_with("claude "), "{card:#?}");
+    assert!(next.len() == 3 && next[2].contains("Later: `adage update`"), "two next lines, then the note: {card:#?}");
 }
 
 /// docs/design/everyday-ux.md §5.5: the repositories Claude Code worked in, the current one first
@@ -1862,22 +1967,30 @@ fn wizard_asks_which_repositories_and_a_long_list_scrolls() {
 
 #[test]
 fn wizard_next_commands_keep_their_columns() {
-    let mut w = Wizard::new(vec![], vec![], true);
-    w.health = Some(health()); // codex's hooks are not registered: a long `next` command
+    let claude = crate::detect::Registration {
+        harness: "claude-code",
+        location: "/h/.claude/settings.json".into(),
+        binary: None,
+        kind: "settings",
+        events: vec![],
+    };
+    let mut w = Wizard::new(vec![], vec![claude], true);
+    w.health = Some(health()); // codex's hooks are not registered: `adage init` again, first
     let t = Theme::with_color(false);
     for cols in [100, 64, 44] {
         let card: Vec<String> = wizard::finish_card(&w, &t, true, cols).iter().map(|l| l.to_string()).collect();
-        let next: Vec<&String> = card.iter().skip_while(|l| !l.starts_with("   next")).collect();
-        assert!(next[0].starts_with("   next  adage install codex --write"), "{card:#?}");
+        let next: Vec<&String> =
+            card.iter().skip_while(|l| !l.starts_with("   next")).take_while(|l| !l.contains("Later:")).collect();
+        assert!(next[0].starts_with("   next  adage init"), "{card:#?}");
         if cols == 100 {
-            assert!(next[0].contains("--write  registers the hooks"), "room for both columns: {card:#?}");
+            assert!(next[0].contains("adage init      again, to connect codex"), "room for both columns: {card:#?}");
         }
         // Every description, and each continuation, starts in one column; a command too long for
         // the command column has a line to itself.
-        let desc = next.iter().find_map(|l| l.find("live pane")).unwrap();
+        let desc = next.iter().find_map(|l| l.find("start a session")).unwrap();
         for l in &next {
             assert!(l.chars().count() <= cols, "{l:?} is wider than {cols}");
-            if l[9..].starts_with("adage") && !l[9..].trim_end().contains("  ") {
+            if ["adage init", "claude"].contains(&l[9..].trim_end()) {
                 continue; // a command on its own line
             }
             let lead = &l[..desc];
@@ -1895,6 +2008,7 @@ fn wizard_choices_follow_the_arrows() {
     let detected = vec![Detected { harness: "codex", evidence: vec!["~/.codex exists".into()] }];
     let mut w = Wizard::new(detected, vec![], true);
     w.key(KeyCode::Enter, NONE);
+    w.key(KeyCode::Enter, NONE);
     assert_eq!(w.choices().len(), 3, "{:?}", w.choices());
     assert_eq!(w.scope, "project");
     // Down to "for this user" replans; down again to the skip does not.
@@ -1904,7 +2018,7 @@ fn wizard_choices_follow_the_arrows() {
     assert!(w.key(KeyCode::Down, NONE).is_none(), "the last choice stays selected");
     // Enter on the skip skips.
     w.key(KeyCode::Enter, NONE);
-    assert_eq!(w.steps[1].status, wizard::StepStatus::Skipped);
+    assert_eq!(w.steps[2].status, wizard::StepStatus::Skipped);
     assert_eq!(*w.current(), wizard::Kind::Model);
     assert_eq!(w.choice, 0, "each step starts on its first choice");
     let d = tempfile::tempdir().unwrap();
@@ -1920,15 +2034,16 @@ fn wizard_choices_follow_the_arrows() {
 #[test]
 fn wizard_keeps_an_existing_registration_and_never_adds_a_second() {
     use crate::detect::{Detected, Registration};
-    let detected = vec![Detected { harness: "claude-code", evidence: vec!["~/.claude exists".into()] }];
+    let detected = vec![Detected { harness: "codex", evidence: vec!["~/.codex exists".into()] }];
     let regs = vec![Registration {
-        harness: "claude-code",
-        location: "/nowhere/a/.claude/settings.json".into(),
+        harness: "codex",
+        location: "/nowhere/a/.codex/hooks.json".into(),
         binary: Some("/opt/adage".into()),
         kind: "settings",
         events: Vec::new(),
     }];
     let mut w = Wizard::new(detected, regs, true);
+    w.key(KeyCode::Enter, NONE);
     assert!(matches!(w.key(KeyCode::Enter, NONE), Some(wizard::Cmd::Replan)));
     let choices = w.choices();
     assert!(choices[0].starts_with("Keep it · already registered"), "{choices:?}");
@@ -1937,13 +2052,13 @@ fn wizard_keeps_an_existing_registration_and_never_adds_a_second() {
     let d = tempfile::tempdir().unwrap();
     let c = ctx(Paths::at(d.path()), true);
     let (text, _) = render(100, 18, |f| wizard::draw(f, &w, &c));
-    assert!(text.contains("Already registered in /nowhere/a/.claude/settings.json."), "{text}");
+    assert!(text.contains("Already registered in /nowhere/a/.codex/hooks.json."), "{text}");
     assert!(text.contains("Nothing to write: a second registration would run every hook twice"), "{text}");
     // Enter keeps it: nothing is installed, and the step says so.
     assert!(!matches!(w.key(KeyCode::Enter, NONE), Some(wizard::Cmd::Install(_))));
     assert_eq!(
-        w.steps[1].status,
-        wizard::StepStatus::Done("already registered in /nowhere/a/.claude/settings.json · nothing written".into())
+        w.steps[2].status,
+        wizard::StepStatus::Done("already registered in /nowhere/a/.codex/hooks.json · nothing written".into())
     );
     assert_eq!(*w.current(), wizard::Kind::Model);
 }

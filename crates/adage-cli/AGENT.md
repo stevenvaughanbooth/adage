@@ -30,6 +30,12 @@ rules live below it in `adage-app` and the engines. Front-end map: `../../docs/a
   `marketplace_cmd`, `models`, `config`, `train` (execs the `adage-train` binary; `accept` installs
   the staged pack here), `update`, `status_card`, `corpus_cmd` (`adage corpus export|import|inspect|
   learn`, canonical trace corpora through `adage_learn::corpus`).
+- `claude_plugin.rs`: the Claude Code plugin's own files, embedded at build time by `build.rs`
+  (`plugin/claude-code` minus `dist/`, the mod's tests and fixtures), staged with this binary and
+  its companions as the local marketplace `adage-local` under `$ADAGE_HOME/plugin/`, and installed
+  through `claude plugin …` behind the `ClaudeCli` trait (`adage init`, `adage update`).
+- `net.rs`: the one place `adage` reaches the network (curl, `https` only; `ADAGE_OFFLINE=1`), for
+  `models fetch`, `init`'s verified release companions and `update --check`.
 - `map/`: `mod.rs` (options, listener, and `Server`, a map `adage ui` starts on a free port and
   closes with the terminal), `http.rs` (`/api/v1/graph`, `/graph.json`, `/api/v1/events`,
   `/api/v1/health`, `/api/v1/trace?session=&repo=` (one whole recorded session),

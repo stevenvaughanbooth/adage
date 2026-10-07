@@ -15,13 +15,22 @@
 //! waiting     1 install step → adage review
 //! today       » adage: 2 new reflexes active.
 //! embeddings  potion-base-8m-i8 (bundled)
+//! update      0.2.0 is out (you have 0.1.0) → adage update
+//! codex       found · adage init connects it
 //!
-//! next  adage review · 1 install step waits for you
-//!       adage ui · review, health and settings
+//! next  adage update · 0.2.0 is out
+//!       adage review · 1 install step waits for you
 //! ```
 //!
+//! `next` is at most two lines (onboarding plan O10), each one command or one `/adage` verb:
+//! `adage update` first when a newer release is known, `adage on` where Adage is off, `adage
+//! review` when something waits for a person, else `adage ui` (`/adage …` inside a session). Before
+//! any agent is connected it names the plugin's two slash commands and `adage init`, which connects
+//! every harness found.
+//!
 //! Outside a repository it lists every repository with reflexes, one line each. It only reads:
-//! nothing is written, nothing runs, no network.
+//! nothing is written, nothing runs, no network (a newer release is read from the cache the
+//! release check keeps, `crate::update::newer`).
 
 use crate::autolearn::{read_json, Queue, RunState};
 use crate::doctor::{self, Status};
@@ -466,6 +475,7 @@ pub fn run(args: &[String], paths: &Paths) -> Result<()> {
         // tells the binary only that one is set.
         v["runtime"] = serde_json::json!({ "routine_model": cfg.runtime_routine_model });
         v["recovery"] = recovery_json(paths, std::env::current_dir().ok().as_deref());
+        v["update"] = crate::update::card_json(paths, for_session);
         println!("{}", serde_json::to_string_pretty(&v)?);
         return Ok(());
     }
@@ -597,32 +607,29 @@ pub fn card(paths: &Paths, cwd: Option<&Path>, for_session: bool) -> Card {
         let header = header(version).sep().push(Role::Prime, "not connected to any agent yet");
         let found: Vec<&str> =
             crate::detect::harnesses().into_iter().filter(|h| h.found()).map(|h| h.harness).collect();
-        let mut steps: Vec<(String, String)> = Vec::new();
         if found.contains(&"claude-code") {
             rows.push(Row::Kv(
                 "claude-code".into(),
                 Line::new()
                     .quiet("in Claude Code: ")
-                    .cmd("/plugin marketplace add stevenvaughanbooth/adage")
-                    .quiet(", then ")
-                    .cmd("/plugin install adage@adage"),
+                    .cmd(crate::claude_plugin::SLASH_ADD)
+                    .quiet(" then ")
+                    .cmd(crate::claude_plugin::SLASH_INSTALL),
             ));
-            rows.push(Row::Kv(
-                String::new(),
-                Line::new().quiet("or, from here: ").cmd("adage install claude-code --write --scope user"),
-            ));
+            rows.push(Row::Kv(String::new(), Line::new().quiet("or, from a terminal: ").cmd("adage init")));
         }
         for h in found.iter().filter(|h| **h != "claude-code") {
-            steps.push((format!("adage install {h} --write --scope user"), format!("connect {h}")));
-            rows.push(Row::Kv(h.to_string(), Line::new().quiet("found")));
+            rows.push(Row::Kv(h.to_string(), found_row()));
         }
         if found.is_empty() {
             rows.push(Row::Plain(
                 Line::new().quiet("No agent found: install Claude Code, Codex or OpenCode, then run adage again."),
             ));
         }
-        steps.push(("adage init".into(), "guided setup: hooks, model, first conditioning".into()));
-        steps.push(("adage doctor".into(), "check binary, data, hooks and model".into()));
+        let steps = vec![
+            ("adage init".into(), "connects every agent found: Claude Code through the Adage plugin".into()),
+            ("adage doctor".into(), "check binary, data, hooks and model".into()),
+        ];
         return Card { header, repo: None, connected: false, off, health: None, rows, next: steps };
     }
     let (lamp, dot, fix) = health(paths, root.as_deref());
@@ -685,25 +692,61 @@ pub fn card(paths: &Paths, cwd: Option<&Path>, for_session: bool) -> Card {
         e = e.faint("  (no embedding model: hashed fallback)");
     }
     rows.push(Row::Kv("embeddings".into(), e));
-    let mut next_rows: Vec<(String, String)> = Vec::new();
-    if off && root.is_some() {
-        let on = if for_session { "/adage on" } else { "adage on" };
-        next_rows.push((on.into(), format!("Adage is off in this repository ({})", crate::switch::MARKER)));
+    // A newer release (from the release check's cache): information, never a problem, so it is a
+    // row and the first `next`, never the lamp.
+    let update = crate::update::card_json(paths, for_session);
+    let update = update["latest"].as_str().zip(update["next"].as_str()).zip(update["text"].as_str());
+    if let Some(((_, cmd), text)) = update {
+        rows.push(Row::Kv("update".into(), arrow(Line::new().text(text), cmd)));
     }
-    if let Some(why) = review {
-        next_rows.push(("adage review".into(), why));
+    // A harness found and not connected yet: said once, here, with the one step that connects it.
+    let regs = crate::detect::registrations(root.as_deref());
+    for d in
+        crate::detect::harnesses().into_iter().filter(|d| d.found() && !regs.iter().any(|r| r.harness == d.harness))
+    {
+        rows.push(Row::Kv(d.harness.to_string(), found_row()));
     }
-    // `adage ui` refuses inside an agent session; the mod's pane is the same information.
-    next_rows.push(if for_session {
-        ("/adage watch".into(), "live rows, reflexes and health".into())
-    } else {
-        ("adage ui".into(), "review, health and settings".into())
-    });
-    next_rows.extend([
-        ("adage map".into(), "explore reflexes in the browser".into()),
-        ("adage doctor".into(), "check binary, data, hooks and model".into()),
-    ]);
-    Card { header, repo: repo_key, connected: true, off, health: Some(lamp), rows, next: next_rows }
+    Card {
+        header,
+        repo: repo_key,
+        connected: true,
+        off,
+        health: Some(lamp),
+        rows,
+        next: next_lines(update.map(|((v, c), _)| (v, c)), off && root.is_some(), review, for_session),
+    }
+}
+
+/// A harness found with no registration: the step that connects it.
+fn found_row() -> Line {
+    Line::new().quiet("found").sep().cmd("adage init").quiet(" connects it")
+}
+
+/// The card's `next`: at most two lines, each one command or one `/adage` verb; `adage update`
+/// first when a newer release is known, `adage on` where Adage is off, `adage review` when
+/// something waits for a person, else `adage ui` (`/adage watch` inside a session, where `adage
+/// ui` refuses and the mod's pane is the same information).
+fn next_lines(
+    update: Option<(&str, &str)>,
+    off: bool,
+    review: Option<String>,
+    for_session: bool,
+) -> Vec<(String, String)> {
+    let verb = |cmd: &str| if for_session { format!("/adage {cmd}") } else { format!("adage {cmd}") };
+    let mut out: Vec<(String, String)> = Vec::new();
+    if let Some((latest, cmd)) = update {
+        out.push((cmd.to_string(), format!("{latest} is out")));
+    }
+    if off {
+        out.push((verb("on"), format!("Adage is off in this repository ({})", crate::switch::MARKER)));
+    }
+    match review {
+        Some(why) => out.push((verb("review"), why)),
+        None if for_session => out.push(("/adage watch".into(), "live rows, reflexes and health".into())),
+        None => out.push(("adage ui".into(), "review, health and settings".into())),
+    }
+    out.truncate(2);
+    out
 }
 
 #[cfg(test)]

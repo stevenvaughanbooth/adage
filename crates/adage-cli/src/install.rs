@@ -69,13 +69,17 @@ fn registration(harness: &str, bin: &str) -> Result<Registration> {
     Ok(Registration { content, project_rel: p.project_install, user_path })
 }
 
-/// The adage binary hooks should run: `--bin`, else this one; absolute, in plain form.
+/// The adage binary hooks should run: `--bin`, else this one; absolute, in plain form. A binary
+/// the Claude Code plugin staged under its digest (`<data>/bin/adage-<sha256>`) is named by the
+/// plugin's stable link beside it (`<data>/bin/adage`), which the plugin re-points at each new
+/// verified copy, so a registration it writes keeps working when the plugin updates.
 fn hook_binary(bin: Option<PathBuf>) -> Result<String> {
     let bin = match bin {
         Some(b) => b,
         None => std::env::current_exe().context("cannot locate the adage binary; pass --bin")?,
     };
     let bin = bin.canonicalize().unwrap_or(bin);
+    let bin = crate::detect::stable_link(&bin).unwrap_or(bin);
     if !bin.is_absolute() {
         bail!("--bin must be an absolute path");
     }
@@ -180,7 +184,7 @@ fn confirmed(answer: &mut impl std::io::BufRead) -> bool {
 }
 
 /// The lines that differ, `+` added and `-` removed, under the file they belong to.
-fn print_diff<W: std::io::Write>(o: &mut adage_term::Out<W>, before: &str, after: &str) -> Result<()> {
+pub(crate) fn print_diff<W: std::io::Write>(o: &mut adage_term::Out<W>, before: &str, after: &str) -> Result<()> {
     use adage_term::{Line, Role};
     for l in line_diff(before, after).lines() {
         let role = if l.starts_with('+') {
@@ -244,7 +248,11 @@ pub(crate) fn scope_of(harness: &str, at: &Path, repo: Option<&Path>) -> Option<
 }
 
 /// Every place `harness`'s hooks are registered that applies to `repo`, other than `target`.
-fn registered_elsewhere(harness: &str, target: &Path, repo: Option<&Path>) -> Vec<crate::detect::Registration> {
+pub(crate) fn registered_elsewhere(
+    harness: &str,
+    target: &Path,
+    repo: Option<&Path>,
+) -> Vec<crate::detect::Registration> {
     let h = canonical(harness);
     let mut out: Vec<crate::detect::Registration> = Vec::new();
     for r in crate::detect::registrations(repo_root(repo).as_deref()) {
@@ -256,7 +264,7 @@ fn registered_elsewhere(harness: &str, target: &Path, repo: Option<&Path>) -> Ve
 }
 
 /// A registration's place as people read it.
-fn place(r: &crate::detect::Registration) -> String {
+pub(crate) fn place(r: &crate::detect::Registration) -> String {
     if r.kind == "plugin-data" {
         "the Adage plugin".into()
     } else {
@@ -318,25 +326,52 @@ pub(crate) fn duplicates(regs: &[crate::detect::Registration], repo: Option<&Pat
     out
 }
 
-/// `adage install <harness> --remove`: take Adage's hook entries out of the scope's file (the
-/// OpenCode plugin file is removed), showing the diff and keeping `<file>.adage-bak`.
-fn uninstall(harness: &str, scope: &str, repo: Option<&Path>, args: &[String]) -> Result<()> {
-    use adage_term::Line;
+/// The removal `adage install <harness> --remove --scope <scope>` would make: the file, what it
+/// holds now, and what it would hold (empty when the file goes: it is Adage's OpenCode plugin).
+/// `None` when the file holds no Adage hooks. Reads, never writes.
+pub(crate) fn plan_removal(harness: &str, scope: &str, repo: Option<&Path>) -> Result<Option<Plan>> {
     // Only the location matters; the binary is never written.
     let p = plan(harness, scope, repo, Some(PathBuf::from("/adage-remove/adage")))?;
-    let target = p.target.display().to_string();
-    let mut o = adage_term::Out::stdout();
     let after: Option<String> = match (harness, &p.before) {
         ("opencode", Some(b)) if b.starts_with("// Adage for OpenCode") => Some(String::new()),
         ("opencode", _) => None,
         _ => unmerge_hooks(&p.target, harness)?,
     };
-    let Some(after) = after else {
+    Ok(after.map(|after| Plan { after, ..p }))
+}
+
+/// Make a planned removal: keep the file's previous version in `<file>.adage-bak`, then write
+/// what is left (or remove the file when nothing is). Needs a person at a terminal, outside any
+/// agent session. Returns the backup's path.
+pub(crate) fn remove_backed_up(p: &Plan) -> Result<PathBuf> {
+    require_person()?;
+    let before = p.before.clone().unwrap_or_default();
+    let mut name = p.target.clone().into_os_string();
+    name.push(BACKUP_SUFFIX);
+    let backup = PathBuf::from(name);
+    std::fs::write(&backup, &before)
+        .with_context(|| format!("backing up {} to {}", p.target.display(), backup.display()))?;
+    if p.after.is_empty() {
+        std::fs::remove_file(&p.target).with_context(|| format!("cannot remove {}", p.target.display()))?;
+    } else {
+        write_atomic(&p.target, &p.after)?;
+    }
+    Ok(backup)
+}
+
+/// `adage install <harness> --remove`: take Adage's hook entries out of the scope's file (the
+/// OpenCode plugin file is removed), showing the diff and keeping `<file>.adage-bak`.
+fn uninstall(harness: &str, scope: &str, repo: Option<&Path>, args: &[String]) -> Result<()> {
+    use adage_term::Line;
+    let mut o = adage_term::Out::stdout();
+    let Some(p) = plan_removal(harness, scope, repo)? else {
+        let target = plan(harness, scope, repo, Some(PathBuf::from("/adage-remove/adage")))?.target;
+        let shown = target.display().to_string();
         o.header("install --remove", &[harness, scope, "not registered"])?;
         o.blank()?;
-        o.kv("checked", Line::new().text(target.clone()))?;
-        o.note(&format!("{target} holds no Adage hooks; nothing to remove."))?;
-        let other = registered_elsewhere(harness, &p.target, repo);
+        o.kv("checked", Line::new().text(shown.clone()))?;
+        o.note(&format!("{shown} holds no Adage hooks; nothing to remove."))?;
+        let other = registered_elsewhere(harness, &target, repo);
         for r in &other {
             o.kv("registered", Line::new().text(place(r)).quiet(runs(r)))?;
         }
@@ -350,28 +385,20 @@ fn uninstall(harness: &str, scope: &str, repo: Option<&Path>, args: &[String]) -
         }
         return Ok(());
     };
+    let target = p.target.display().to_string();
     o.header("install --remove", &[harness, scope])?;
     o.blank()?;
     let before = p.before.clone().unwrap_or_default();
-    if after.is_empty() {
+    if p.after.is_empty() {
         o.line(&Line::new().text(format!("{target} would be removed (it is Adage's plugin file).")))?;
     } else {
         o.line(&Line::new().text(format!("{target} would change:")))?;
-        print_diff(&mut o, &before, &after)?;
+        print_diff(&mut o, &before, &p.after)?;
     }
     if !confirm(&mut o, args, "Remove them? [y/N] ")? {
         return Ok(());
     }
-    let mut name = p.target.clone().into_os_string();
-    name.push(BACKUP_SUFFIX);
-    let backup = PathBuf::from(name);
-    std::fs::write(&backup, &before)
-        .with_context(|| format!("backing up {} to {}", p.target.display(), backup.display()))?;
-    if after.is_empty() {
-        std::fs::remove_file(&p.target).with_context(|| format!("cannot remove {target}"))?;
-    } else {
-        write_atomic(&p.target, &after)?;
-    }
+    let backup = remove_backed_up(&p)?;
     o.blank()?;
     o.kv("removed", Line::new().text(format!("Adage's hooks from {target}")))?;
     o.kv("backup", Line::new().quiet("the previous version is in ").text(backup.display().to_string()))?;

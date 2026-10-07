@@ -103,12 +103,12 @@ fn init_detects_harnesses_prints_snippets_and_writes_nothing() {
         "opencode     found:",
         "adage install claude-code --write",
         ".opencode/plugins/adage.js",
-        "3  Embedding model",
+        "4  Embedding model",
         "adage models fetch",
-        "4  Repositories to condition on",
+        "5  Repositories to condition on",
         "[x] ",
         "no Claude Code sessions yet · this repository",
-        "5  Sense this repository's traces",
+        "6  Sense this repository's traces",
         "No traces to sense in that source",
     ] {
         assert!(t.contains(s), "init output lacks {s:?}:\n{t}");
@@ -160,8 +160,9 @@ fn init_yes_fetches_the_model_and_survives_a_failed_download() {
     assert!(!w.p("data/models/potion-code-16m-v2").exists());
 }
 
-/// QA first-run #14: `init --yes` registers no hooks (`adage install … --write` does), and says
-/// so where a scripted run reads it last, rather than ending as if setup were complete.
+/// QA first-run #14: `init --yes` without `--hooks` registers no hooks (`--hooks user` does, or
+/// `adage install … --write`), and says so where a scripted run reads it last, rather than ending
+/// as if setup were complete.
 #[test]
 fn init_yes_says_whether_hooks_are_registered() {
     let w = World::new();
@@ -171,7 +172,7 @@ fn init_yes_says_whether_hooks_are_registered() {
     assert!(o.status.success(), "{t}");
     assert!(t.contains("--yes does not register them"), "{t}");
     assert!(t.contains("hooks       not registered: claude-code sessions will not hear from Adage"), "{t}");
-    assert!(t.contains("next  adage install claude-code --write"), "{t}");
+    assert!(t.contains("next  adage init --yes --hooks user"), "{t}");
     let o = w.run(&["install", "claude-code", "--write", "--scope", "user"]);
     assert!(o.status.success(), "{}", text(&o));
     let t = text(&w.run(&["init", "--yes"]));
@@ -195,7 +196,7 @@ fn an_empty_codex_home_is_not_codex() {
 fn init_scopes_the_sense_to_a_repository() {
     let w = World::new();
     let o = w.run(&["init", "--repo", w.p("work").to_str().unwrap()]);
-    assert!(o.status.success() && text(&o).contains("5. sense this repository's existing traces"), "{}", text(&o));
+    assert!(o.status.success() && text(&o).contains("6. sense this repository's existing traces"), "{}", text(&o));
     let o = w.run(&["init", "--repo", w.p("home").to_str().unwrap()]);
     assert!(!o.status.success() && text(&o).contains("not inside a git repository"), "{}", text(&o));
 }
@@ -311,7 +312,7 @@ fn doctor_checks_hooks_index_tracks_and_switches() {
     // Installed, but the user set Adage up with other harnesses only: not a problem to warn about.
     let oc = check(&v, "hooks: opencode");
     assert_eq!(oc["status"], "pass", "{oc}");
-    assert!(oc["detail"].as_str().unwrap().contains("optional: `adage install opencode --write`"), "{oc}");
+    assert!(oc["detail"].as_str().unwrap().contains("optional: `adage init` connects it"), "{oc}");
     assert_eq!(check(&v, "tracks")["status"], "fail");
     assert_eq!(check(&v, "data directory")["status"], "pass");
     assert_eq!(check(&v, "kill switches")["status"], "warn");

@@ -136,10 +136,11 @@ test("connect is discoverable in the palette and explains the terminal handoff",
     .click();
   await page.getByRole("combobox").fill("connect");
   await page.getByRole("option", { name: /Set up my repository/ }).click();
-  await expect(page.getByRole("main", { name: "Setup" })).toBeVisible();
-  await expect(
-    page.getByText("History sources", { exact: true }),
-  ).toBeVisible();
+  const setup = page.getByRole("main", { name: "Setup" });
+  await expect(setup).toBeVisible();
+  // The handoff names the one command that connects every agent found.
+  await expect(setup.getByText("adage init", { exact: true })).toBeVisible();
+  await expect(setup.getByText("Connect your agents", { exact: true })).toBeVisible();
 });
 
 test("an old complete trace reveals recorded responses, linked outcomes, and browser history beyond 400 events", async ({

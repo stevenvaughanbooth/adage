@@ -56,6 +56,40 @@ pub fn adage_command() -> String {
     command_for(&stable.unwrap_or(exe))
 }
 
+/// The plugin's stable link to the binary at `exe`: `<dir>/adage` when it is a symlink to `exe`'s
+/// own file name in the same directory (the Claude Code plugin's `<data>/bin/adage ->
+/// adage-<sha256>`, which the shim re-points at each new verified copy). A registration that names
+/// the link keeps working when the plugin updates; one naming the digest-named copy would not.
+pub fn stable_link(exe: &Path) -> Option<PathBuf> {
+    let name = exe.file_name()?;
+    let link = exe.parent()?.join(format!("adage{}", std::env::consts::EXE_SUFFIX));
+    if link.as_os_str() == exe.as_os_str() {
+        return None;
+    }
+    let target = std::fs::read_link(&link).ok()?;
+    let beside = match target.parent() {
+        None => true,
+        Some(p) => p.as_os_str().is_empty() || Some(p) == exe.parent(),
+    };
+    (beside && target.file_name() == Some(name)).then_some(link)
+}
+
+/// Is `exe` a binary the Claude Code plugin staged (under Claude Code's `plugins/data/` or
+/// `plugins/cache/`, wherever `CLAUDE_CONFIG_DIR` puts them)?
+pub fn in_plugin_path(exe: &Path) -> bool {
+    let parts: Vec<String> = exe.components().map(|c| c.as_os_str().to_string_lossy().to_lowercase()).collect();
+    parts.windows(2).any(|w| w[0] == "plugins" && (w[1] == "data" || w[1] == "cache"))
+}
+
+/// The companions the Claude Code plugin staged beside its `bin/adage` in its data directory
+/// (`adage-exec`, `adage-train`), by the links its session-start shim makes.
+pub fn plugin_companions(data: &Path) -> Vec<&'static str> {
+    ["adage-exec", "adage-train"]
+        .into_iter()
+        .filter(|n| data.join("bin").join(format!("{n}{}", std::env::consts::EXE_SUFFIX)).symlink_metadata().is_ok())
+        .collect()
+}
+
 /// A binary's path as a person types it: `~` for the home directory, quoted if it has a space.
 pub fn command_for(p: &Path) -> String {
     let t = tilde(p);
@@ -297,6 +331,7 @@ pub fn registrations(repo: Option<&Path>) -> Vec<Registration> {
     }
     // The Claude Code plugin stages its binary in its data directory (`${CLAUDE_PLUGIN_DATA}`,
     // under `plugins/data/<plugin id>/`); its hooks are registered by the plugin itself.
+    let before = out.len();
     if let Some(Ok(rd)) = claude_dir().map(|d| std::fs::read_dir(d.join("plugins/data"))) {
         let mut dirs: Vec<PathBuf> = rd
             .flatten()
@@ -315,6 +350,87 @@ pub fn registrations(repo: Option<&Path>) -> Vec<Registration> {
                     events: Vec::new(),
                 });
             }
+        }
+    }
+    // Installed and enabled, before its first session has staged a binary: registered all the
+    // same (Claude Code runs its hooks from the next session on).
+    if let Some(dir) = claude_dir() {
+        for p in claude_plugins(repo).into_iter().filter(|p| p.enabled) {
+            let data = dir.join("plugins/data").join(p.data_dir_name());
+            if !out[before..].iter().any(|r| r.location == data) {
+                out.push(Registration {
+                    harness: "claude-code",
+                    location: data,
+                    binary: None,
+                    kind: "plugin-data",
+                    events: Vec::new(),
+                });
+            }
+        }
+    }
+    out
+}
+
+/// An Adage plugin Claude Code has installed (from `plugins/installed_plugins.json`), read without
+/// running `claude`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClaudePlugin {
+    /// `adage@<marketplace>`.
+    pub id: String,
+    /// `user`, `project` or `local`.
+    pub scope: String,
+    /// Turned on in the settings file that decides for this repository (`enabledPlugins`).
+    pub enabled: bool,
+    pub version: String,
+}
+
+impl ClaudePlugin {
+    /// The data directory Claude Code gives it under `plugins/data/` (`adage@adage-local` →
+    /// `adage-adage-local`).
+    pub fn data_dir_name(&self) -> String {
+        self.id.replace('@', "-")
+    }
+}
+
+/// `enabledPlugins[id]` in a Claude Code settings file, if it says.
+fn enabled_in(p: &Path, id: &str) -> Option<bool> {
+    read_json(p)?.get("enabledPlugins")?.get(id)?.as_bool()
+}
+
+/// The Adage plugins Claude Code has installed that apply to `repo` (user scope everywhere; a
+/// project or local install only in its own repository), each with whether it is enabled there.
+pub fn claude_plugins(repo: Option<&Path>) -> Vec<ClaudePlugin> {
+    let Some(dir) = claude_dir() else { return Vec::new() };
+    let Some(doc) = read_json(&dir.join("plugins/installed_plugins.json")) else { return Vec::new() };
+    let same = |a: &Path, b: &Path| {
+        a == b || a.canonicalize().ok().is_some_and(|x| b.canonicalize().ok().is_some_and(|y| x == y))
+    };
+    let mut out = Vec::new();
+    for (id, entries) in doc.get("plugins").and_then(Value::as_object).into_iter().flatten() {
+        if id.split('@').next() != Some("adage") {
+            continue;
+        }
+        for e in entries.as_array().into_iter().flatten() {
+            let scope = e["scope"].as_str().unwrap_or("user").to_string();
+            let project = e["projectPath"].as_str().map(PathBuf::from);
+            if scope != "user" && !(repo.is_some_and(|r| project.as_deref().is_some_and(|p| same(p, r)))) {
+                continue;
+            }
+            // Local settings decide over the project's, which decide over the user's.
+            let mut files: Vec<PathBuf> = Vec::new();
+            if let Some(r) = repo {
+                files.push(r.join(".claude/settings.local.json"));
+                files.push(r.join(".claude/settings.json"));
+            }
+            files.push(dir.join("settings.local.json"));
+            files.push(dir.join("settings.json"));
+            let enabled = files.iter().find_map(|f| enabled_in(f, id)).unwrap_or(false);
+            out.push(ClaudePlugin {
+                id: id.clone(),
+                scope,
+                enabled,
+                version: e["version"].as_str().unwrap_or_default().to_string(),
+            });
         }
     }
     out

@@ -143,17 +143,24 @@ Two one-liners, whichever the person prefers; both end in `adage init`.
    `npm install -g @adage-sh/cli && adage init` (all three binaries in the platform package,
    `npm/config.mjs:15-18`; nothing downloaded at install time, `npm/cli/bin/adage.js:1-6`).
 2. `adage init` at a terminal is the wizard (`crates/adage-cli/src/ui/wizard.rs:1-26`). Its steps,
-   after O4: **Harnesses** (read-only); **Hooks**, per harness found, user scope preselected, the
-   exact file and diff first (`~/.claude/settings.json would be created:` + the lines, `Write it?
-   [y/N]`, `crates/adage-cli/src/install.rs:466-479`); when Claude Code is found and the plugin is
-   not installed, the first choice reads `the Claude Code plugin (recommended): in Claude Code,
-   /plugin marketplace add stevenvaughanbooth/adage then /plugin install adage@adage`, the second
-   the settings file; **Binaries** (new): `adage-exec and adage-train are not beside adage; fetch
-   them from release 0.1.0 (verified against the release's checksums)? y/n` (skipped when both are
-   there, as they are after npm); the embedding model (bundled, usually nothing); repositories; a
-   first `adage condition`; auto-condition; the doctor summary; and at most two `next` lines:
-   `claude · start a session; Adage says what it is doing on its first line` and the harness's own
-   remaining step (Codex: `open /hooks in Codex to approve the new hooks`).
+   after O4: **Harnesses** (read-only); **Binaries** (new, before the hooks so the plugin is staged
+   with all three): `adage-exec and adage-train are not beside adage` with `Fetch them · each
+   verified against the release's checksums` (skipped when both are there, as they are after npm;
+   a checkout build is pointed at `cargo build`); **Hooks**, per harness found. When Claude Code is
+   found and the plugin is not installed, the first choice is automatic (coordinator amendment,
+   proven 2026-10-06 on Claude Code 2.1.292): `The Adage plugin (recommended) · adage installs it
+   with claude plugin` stages the plugin from this binary as a local marketplace under
+   `$ADAGE_HOME/plugin/` and runs `claude plugin marketplace add <that path>` and `claude plugin
+   install adage@adage-local`, checked with `claude plugin list`; without `claude` on `PATH` the
+   first choice names the typed spellings instead (`in Claude Code: /plugin marketplace add
+   stevenvaughanbooth/adage, then /plugin install adage@adage`); the second is the settings file,
+   the exact file and diff first (`~/.claude/settings.json would be created:` + the lines,
+   `crates/adage-cli/src/install.rs:466-479`); a settings-file registration beside the plugin is
+   offered for removal (`install --remove`'s diff, `.adage-bak` kept). Then the embedding model
+   (bundled, usually nothing); repositories; a first `adage condition`; auto-condition; the doctor
+   summary; and at most two `next` lines: `claude · start a session; Adage says what it is doing on
+   its first line` and the harness's own remaining step (Codex: `open /hooks in Codex to approve
+   the new hooks`), with `Later: adage update …; adage doctor if anything looks wrong.` under them.
 3. Scripted: `adage init --yes --hooks user` does the same with no questions (a terminal or
    `ADAGE_ALLOW_NONINTERACTIVE=1`; refused inside an agent session as every write is,
    `crates/adage-cli/src/init.rs:50-58`), each file diffed in the output and backed up as
@@ -323,7 +330,10 @@ Nothing in this journey is a command, a copy or a terminal (ux-design §4.18,
   `current_exe()` is a digest-named copy beside it (the same test `detect::adage_command` makes,
   `detect.rs:49-57`); `pub(crate) fn repoint(bin) -> Vec<(harness, path)>` lifted from the loop at
   `exec.rs:272-281` and called by both `delegate on` and `update`.
-- `init.rs:15-21, 35-58, 77-80`: `--hooks user|project`; the Binaries step; the plugin route first.
+- `init.rs:15-21, 35-58, 77-80`: `--hooks user|project|none`; the Binaries step; the plugin route
+  first, automatic: `claude_plugin.rs` **(new)** stages the plugin (module files embedded at build
+  time by `crates/adage-cli/build.rs` **(new)**) as the local marketplace `adage-local` under
+  `$ADAGE_HOME/plugin/` and installs it through `claude plugin`, behind the `ClaudeCli` trait.
 - `ui/wizard.rs:18-26, 848-860`: the same steps in the wizard; two `next` lines.
 - `autolearn.rs:287, 351-430, 371-373`: `update::check_if_due(paths)` after `notice::update`; the
   fifth kind; `/adage review` for a plugin binary.
@@ -529,50 +539,109 @@ estimate in engineer-days, and what it depends on. Each is one pull request.
 
 #### O4 · `adage init` wires every harness: `--hooks`, the plugin route first, the Binaries step, stable paths
 
-- **Delivers.** One terminal step connects every harness (bar items 1 and 4; G3, G11): `adage init
-  --yes --hooks user|project` registers hooks non-interactively for every harness found (never
-  where one already applies, `install.rs:17-22`; refused inside an agent session, `init.rs:50-58`),
-  each file diffed and backed up; the wizard lists the Claude Code plugin route first when Claude
-  Code is found and the plugin is not installed; the Binaries step fetches `adage-exec` and
-  `adage-train` from the release of the running version into the directory `adage` lives in, each
-  archive verified against its `.sha256` as `stage-plugin.mjs:62-65` does, only on `y` or `--yes`
-  (a download is a person's act, `docs/zero-config.md:29`), and writes `$ADAGE_HOME/channel.json
-  { channel: "release", version, at }`; registrations written by the plugin's binary name the
-  stable link `<data>/bin/adage` so plugin updates carry them; the wizard ends with at most two
-  `next` lines.
-- **Files.** `crates/adage-cli/src/init.rs:1-21, 35-58, 77-80` and the harness step (`install::plan`
-  + `install::apply_backed_up`, `install.rs:101, 153`; the Codex `/hooks` note at `:480-483` once);
-  `crates/adage-cli/src/install.rs:72-88` (`hook_binary`: keep `<dir>/adage` when it is a symlink to
-  `current_exe()`'s file name), `:489-503` unchanged; `crates/adage-cli/src/ui/wizard.rs:18-26,
-  848-860`; `crates/adage-cli/src/net.rs` **(new)**: the curl runner lifted from `models.rs:330-367`
-  with `classify` (`:281-291`), `fetch_companion(name, version, into)`, the target triple from
-  `std::env::consts::{OS, ARCH}` mapped to `npm/config.mjs:20-26`'s five; `crates/adage-cli/src/models.rs`
-  (uses `net`); `crates/adage-cli/src/status_card.rs:596-626` (not-connected rows: `in Claude Code:
-  /plugin marketplace add … then /plugin install adage@adage`, `or, from a terminal: adage init`;
-  other harnesses `adage init connects it`); `crates/adage-cli/src/doctor/mod.rs:667-685` (the
-  unhooked fix becomes `adage init`); `crates/adage-cli/tests/first_run.rs:163-180`;
+> **Amended (coordinator, 2026-10-06; supersedes the text it replaces).** The plugin route first is
+> *automatic*: `claude plugin marketplace add <local path>` and `claude plugin install
+> adage@<marketplace>` were proven headless, exit 0, in a fresh `CLAUDE_CONFIG_DIR` on Claude Code
+> 2.1.292, so `adage init` installs the plugin itself from the binary that runs it, with no
+> published release. The typed `/plugin marketplace add stevenvaughanbooth/adage` + `/plugin install
+> adage@adage` spellings stay as the fallback when `claude` is not on `PATH` or refuses, and as the
+> published-release route. Built as described in `docs/claude-mod/impl/O4-O10-notes.md`.
+
+- **Delivers.** One terminal step connects every harness (bar items 1 and 4; G3, G11). For Claude
+  Code, when the plugin is not installed and `claude` is on `PATH`, `adage init` materializes a
+  local marketplace under `$ADAGE_HOME/plugin/` (`Paths::plugin()`): `.claude-plugin/marketplace.json`
+  naming one plugin, `adage`, with the relative source `./adage`; and the plugin directory itself
+  (`hooks/hooks.json`, the mod's module files, `scripts/session-start`, `.claude-plugin/plugin.json`,
+  `types/`, `README.md`, embedded into the `adage` binary at build time by `crates/adage-cli/build.rs`
+  from `plugin/claude-code` minus `dist/`, the mod's tests and their fixtures, so every install
+  channel carries its plugin; and `dist/<build target>/{adage,adage-exec,adage-train}` copied from
+  the running binary and its siblings, with `dist/SHA256SUMS`). It then runs `claude plugin
+  marketplace add <that path> --scope user` and `claude plugin install adage@adage-local --scope
+  user` (`local` with `--hooks project`), verifies with `claude plugin list --json` that
+  `adage@adage-local` is enabled and read from the staged directory, and reports. Every `claude`
+  call goes through `claude_plugin::ClaudeCli`, so tests stub it. Claude Code reads a directory
+  marketplace in place, so a re-run (and `adage update`, through `adage init --restage`) stages
+  the new binaries and modules for the next session. After the plugin is in place, every Claude
+  Code settings-file registration `adage install` wrote that applies here is taken out with
+  `install --remove`'s diff and `.adage-bak` (`--yes` accepts; the wizard asks), so every event is
+  wired once; a file `adage install` did not write is named for the person to edit. The settings
+  file is the second route: when `claude` is not on `PATH` or refuses, `--hooks user|project`
+  writes it (diffed, backed up) and names the two typed `/plugin` commands. `adage init --yes
+  --hooks user|project|none` registers hooks non-interactively for every harness found (never where
+  one already applies, `install.rs:17-22`; refused inside an agent session, `init.rs:50-58`), Codex
+  and OpenCode through their files, each diffed and backed up; the wizard lists the plugin route
+  first. The Binaries step (before the hooks, so the plugin is staged with all three) fetches
+  `adage-exec` and `adage-train` from the release of the running version into the directory `adage`
+  lives in, each archive verified against its `.sha256` as `stage-plugin.mjs:62-65` does, only on
+  `y` or `--yes` (a download is a person's act, `docs/zero-config.md:29`), and writes
+  `$ADAGE_HOME/channel.json { channel: "release", version, at, bin_dir }`; a checkout build is
+  pointed at `cargo build`. Registrations written by the plugin's binary name the stable link
+  `<data>/bin/adage` so plugin updates carry them. `init` ends with one screen (what is connected,
+  the binaries, what Adage learns from, the next session's first line) and at most two `next`
+  lines; with `--yes` and history, the first `adage condition` starts in the background.
+- **Files.** `crates/adage-cli/build.rs` **(new)**; `crates/adage-cli/src/claude_plugin.rs` **(new)**
+  (embedded files, `stage`, `ClaudeCli` + `System`, `list`, `connect`, `verify`, `refresh`);
+  `crates/adage-store/src/paths.rs` (`plugin()`); `crates/adage-cli/src/init.rs:1-21, 35-58, 77-80`
+  and the harness step (`install::plan` + `install::apply_backed_up`, `install.rs:101, 153`;
+  `install::plan_removal` + `remove_backed_up` lifted from `uninstall`; the Codex `/hooks` note at
+  `:480-483` once); `crates/adage-cli/src/install.rs:72-88` (`hook_binary`: keep `<dir>/adage` when
+  it is a symlink to `current_exe()`'s file name), `:489-503` unchanged;
+  `crates/adage-cli/src/detect.rs` (`stable_link`, `in_plugin_path`, `plugin_companions`,
+  `claude_plugins`: an installed, enabled plugin before its first session counts as registered);
+  `crates/adage-cli/src/ui/wizard.rs:18-26, 848-860`; `crates/adage-cli/src/net.rs` **(new)**: the
+  curl runner lifted from `models.rs:330-367` with `classify` (`:281-291`), `get`, `download`,
+  `fetch_companion(name, version, into, scratch)`, the target triple from `std::env::consts::{OS,
+  ARCH}` mapped to `npm/config.mjs:20-26`'s five; `crates/adage-cli/src/models.rs` (uses `net`);
+  `crates/adage-cli/src/status_card.rs:596-626` (not-connected rows: `in Claude Code: /plugin
+  marketplace add … then /plugin install adage@adage`, `or, from a terminal: adage init`; other
+  harnesses `adage init connects it`); `crates/adage-cli/src/doctor/mod.rs:667-685` (the unhooked
+  fix becomes `adage init`); `crates/adage-cli/src/cli.rs` (`--hooks`, hidden `--restage`);
+  `crates/adage-exec/tests/no_spawn.rs` (`net.rs`: curl and tar; `claude_plugin.rs`: `claude`);
+  `crates/adage-cli/tests/first_run.rs:163-180`; `crates/adage-cli/tests/onboarding.rs` **(new)**;
   `docs/zero-config.md:16-17, 50-60, 332` (`adage connect` is `adage init`'s hooks step);
   `docs/harnesses.md:123-140, 221-226`; `docs/usage.md:191-217`.
-- **Contract.** `init --yes --hooks user` at a terminal outside an agent session writes at most
-  one registration per detected harness, user scope, each preceded by its diff and followed by
-  `wrote` and `backup`; `init --yes` without `--hooks` still registers nothing and says so
-  (`first_run.rs:171-174`'s wording kept); `init --print` and `init` inside an agent session write
-  nothing. The Binaries step is skipped when both companions sit beside `adage`; a mismatch refuses
+- **Contract.** `init --yes --hooks user` at a terminal outside an agent session installs the
+  Claude Code plugin from the local marketplace when `claude` is on `PATH` (the calls, in order:
+  `plugin list --json`, `plugin marketplace add <$ADAGE_HOME/plugin> --scope user --json`, `plugin
+  install adage@adage-local --scope user --json`, `plugin list --json`) and writes at most one
+  registration per other detected harness, user scope, each preceded by its diff and followed by
+  `wrote` and its backup; a refused `claude` step names the step and Claude Code's own words, then
+  the settings file is written instead. `init --yes` without `--hooks` (or `--hooks none`) still
+  registers nothing and says so (`first_run.rs:171-174`'s wording kept); `init --print` and `init`
+  inside an agent session write nothing and run no `claude`. The local marketplace is idempotent:
+  a file already holding its bytes is not rewritten, a binary whose size and modification time
+  match `$ADAGE_HOME/plugin/.staged.json` is not hashed again, a file the new set lacks is
+  removed. The Binaries step is skipped when both companions sit beside `adage`; a mismatch refuses
   the file and says `mismatch`; `offline`/`blocked`/`tls` continue with one line. A registration
-  written by `<data>/bin/adage-<sha>` names `<data>/bin/adage`.
+  written by `<data>/bin/adage-<sha>` names `<data>/bin/adage`. `adage init --restage` stages the
+  local plugin again from the binary that runs it, refreshes the marketplace and verifies; with
+  none staged it says so and exits 0.
 - **Tests.** T-O4-01 `init --yes --hooks user` with `ADAGE_ALLOW_NONINTERACTIVE=1` in a World with
-  fake Claude Code, Codex and OpenCode homes writes the three user files with Adage's entries and a
-  `.adage-bak` for an existing one; T-O4-02 a second run writes nothing and says where each is
-  registered; T-O4-03 with a `plugin-data` registration present, Claude Code is not registered
-  again; T-O4-04 `init --yes --hooks user` with `CLAUDECODE=1` refuses; T-O4-05 wizard snapshot:
-  plugin route first when the plugin is absent, no Claude Code offer when present, two `next`
-  lines; T-O4-06 `fetch_companion` against `ADAGE_RELEASE_URL` serving a `file://` fixture verifies
-  the `.sha256` and refuses one altered byte; T-O4-07 the Binaries step is skipped with both
-  companions beside; T-O4-08 `hook_binary` under a staged plugin (`zero_config_plugin.rs`) writes
-  `<data>/bin/adage`, not the digest name; T-O4-09 status card snapshots of the not-connected rows.
-- **Acceptance.** `cargo test -p adage-cli --test first_run --test zero_config_plugin` green;
-  `adage doctor` is green for every harness after `init --yes --hooks user` in the World.
-- **Estimate.** 2.5 days. **Depends on.** O1 (three binaries to fetch), O3 for the live run only.
+  fake Claude Code, Codex and OpenCode homes and no `claude` on `PATH` writes the three user files
+  with Adage's entries and a `.adage-bak` for an existing one; doctor is green for each; T-O4-02 a
+  second run writes nothing and says where each is registered; T-O4-03 with a `plugin-data`
+  registration present, Claude Code is not registered again; T-O4-04 `init --yes --hooks user` with
+  `CLAUDECODE=1` refuses; T-O4-05 wizard snapshot: plugin route first when the plugin is absent
+  (installed by adage with `claude` on `PATH`, typed without), no Claude Code offer when present,
+  the settings file beside it offered for removal, two `next` lines; T-O4-06 `fetch_companion`
+  against `ADAGE_RELEASE_URL` serving a `file://` fixture verifies the `.sha256` and refuses one
+  altered byte; T-O4-07 the Binaries step is skipped with both companions beside; T-O4-08
+  `hook_binary` under a staged plugin writes `<data>/bin/adage`, not the digest name; T-O4-09
+  status card snapshots of the not-connected rows; T-O4-10 with a fake `claude` on `PATH` the
+  plugin route makes exactly the calls above, stages the marketplace (`marketplace.json`, the module
+  files, the binary and its `SHA256SUMS`), takes the earlier settings-file registration out with a
+  backup, and a re-run installs nothing and refreshes the marketplace; T-O4-11 a refusing `claude`
+  falls back to the settings file and names the `/plugin` commands; T-O4-12 `--print` runs no
+  `claude` and writes nothing; T-O4-13 (live, ignored unless asked: `--ignored live_`) the real
+  `claude` in a fresh `CLAUDE_CONFIG_DIR` lists `adage@adage-local` enabled, read from the staged
+  directory, the staged marketplace passes `claude plugin validate --strict`, and a headless
+  session runs each of the plugin's hooks once; the `claude_plugin` unit tests drive `connect`,
+  `refresh` and refusals through a stub `ClaudeCli`.
+- **Acceptance.** `cargo test -p adage-cli --test first_run --test onboarding --test
+  zero_config_plugin` green; `adage doctor` is green for every harness after `init --yes --hooks
+  user` in the World; T-O4-13 green on a machine with `claude`.
+- **Estimate.** 3 days. **Depends on.** O1 (three binaries to fetch), O3 for the release fetch to
+  find anything live (the code and tests do not wait).
 
 #### O5 · The update check: one daily read in the learner, one cache file, zero hook network
 

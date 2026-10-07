@@ -148,14 +148,26 @@ test("a dropped stream says offline, not connecting", async ({ page }) => {
   await expect(page.getByTestId("live-pill")).toContainText("Offline");
 });
 
-test("first run leads to the terminal palette setup guide", async ({ page }) => {
+test("first run leads to the setup guide, worded for a terminal install", async ({ page }) => {
   await page.goto(`${EMPTY}/`);
   await expect(page.getByRole("heading", { name: /Your first reflex forms/ })).toBeVisible();
   await page.getByRole("button", { name: "Set up my repository" }).click();
   await expect(page.getByRole("main", { name: "Setup" })).toBeVisible();
-  await expect(page.getByText("History sources", { exact: true })).toBeVisible();
-  await expect(page.getByText("Condition now", { exact: true })).toBeVisible();
+  // A checkout build serves the e2e page: the terminal's commands, never a plugin's `/adage`.
+  await expect(page.getByTestId("setup-lead")).toHaveText("In a terminal: adage ui, adage review, adage update.");
+  for (const cmd of ["adage init", "adage ui", "adage review", "adage update"]) {
+    await expect(page.getByRole("main", { name: "Setup" }).getByText(cmd, { exact: true })).toBeVisible();
+  }
   expect(await axe(page)).toEqual([]);
+});
+
+// T-O10-03: the page the binary serves carries its version, and the top bar shows it.
+test("the served graph names the binary's version, and the top bar shows it", async ({ page, request }) => {
+  const g = await (await request.get(`${EMPTY}/api/v1/graph`)).json();
+  expect(typeof g.adage?.version).toBe("string");
+  expect(g.adage.channel).toBe("checkout");
+  await page.goto(`${EMPTY}/`);
+  await expect(page.getByTestId("version")).toHaveText(`adage ${g.adage.version}`);
 });
 
 test.describe("phone", () => {

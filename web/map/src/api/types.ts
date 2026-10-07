@@ -366,6 +366,10 @@ export interface Graph {
   savings: Savings[];
   pretool: PretoolCounts[];
   runtime?: { rewrite: RewriteState; control?: number; card_threshold?: number };
+  /** The serving binary: its version, a newer release when the release check knows one, and how it
+   * was installed (`plugin` for the Claude Code plugin's; `npm`, `release`, `source`, `checkout`,
+   * `brew`). Absent from older binaries. */
+  adage?: { version: string; latest?: string | null; channel?: string | null };
 }
 
 export interface HealthCheck {

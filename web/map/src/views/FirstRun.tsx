@@ -8,6 +8,7 @@ import type { Graph, Health } from "../api/types";
 import { InstinctGlyph, Icons } from "../components/glyphs";
 import { StrengthChip, cx } from "../components/ui";
 import { useUrl } from "../state/url";
+import { firstRunHint } from "../lib/setup";
 import { isInstinct, plural, strength } from "../lib/words";
 
 function Step({ done, label, detail, last }: { done: boolean; label: string; detail: string; last?: boolean }) {
@@ -119,7 +120,7 @@ export function FirstRun({ graph, connection }: { graph: Graph; connection: Conn
             <button type="button" onClick={() => setUrl({ view: "setup" }, true)} className="rounded-lg border border-accent/45 bg-panel px-4 py-3 text-left text-accent-soft">
               Set up my repository →
             </button>
-            <span className="text-sm text-ink-2">Connect your agent, check history sources, and preview conditioning from the terminal palette. OpenCode history is imported explicitly.</span>
+            <span className="text-sm text-ink-2">{firstRunHint(graph)}</span>
           </div>
         </div>
 

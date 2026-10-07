@@ -471,3 +471,61 @@ fn the_predict_switch_is_off_from_anywhere_and_on_by_a_person() {
     assert_eq!(code, 0, "{err}");
     assert!(!marker.exists());
 }
+
+/// One key for a checkout's grants (the first live run's `adage-exec status --repo .` listed none):
+/// the predict grant `adage review delegate --predict --repo .` writes is the grant `adage-exec
+/// status` lists for the checkout and the grant a `TurnStep` under adage-exec's hook predicts with,
+/// where the checkout's own key (`acme-billing@path-…`) is not the name its reflexes were learned
+/// under.
+#[test]
+fn a_predict_grant_is_read_under_the_key_review_delegate_wrote_it() {
+    let w = common::TempWorld::new(&["home", "adage", "acme-billing/.git", "acme-billing/schema"]);
+    w.write("acme-billing/schema/invoice.json", "{}\n");
+    let home = w.home("adage");
+    let gen = kinds::finish_line("finish-line-gen", "schema/*.json", "make gen").support(5, 5).days(3);
+    home.compile(&[track("acme-billing/learned", "acme-billing").route(gen).build()]);
+    std::fs::write(w.p("adage/policy.toml"), "[exec]\nmax_level = \"E2\"\n").unwrap();
+    // The treated arm always (no control share), and no learner queued by a hook.
+    std::fs::write(home.paths.config(), "[runtime]\ncontrol = 0\n\n[learn]\nauto = false\n").unwrap();
+    let root = w.p("acme-billing");
+    assert_ne!(adage_core::repo::repo_key(&root), "acme-billing", "the checkout's own key is another");
+
+    let mut c = Command::new(env!("CARGO_BIN_EXE_adage"));
+    common::scrub(&mut c);
+    let o = c
+        .args(["review", "delegate", "acme-billing/learned", "finish-line-gen", "--predict", "--repo", "."])
+        .current_dir(&root)
+        .env("ADAGE_HOME", w.p("adage"))
+        .env("ADAGE_POLICY", w.p("adage/managed.toml"))
+        .env("HOME", w.p("home"))
+        .env("ADAGE_ALLOW_NONINTERACTIVE", "1")
+        .output()
+        .unwrap();
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    let store = adage_exec::approvals::Store::load(&adage_exec::approvals::path(&home.paths.root)).unwrap();
+    assert_eq!(store.approvals[0].key.repo, "acme-billing", "written under the reflex's key");
+
+    // `adage-exec status --repo .` reads it there.
+    let key = adage_exec::route::grant_key(&root, &home.paths);
+    let status = store.status_text(&key);
+    assert!(status.contains("Prediction grants for acme-billing: 1\n  acme-billing/learned/finish-line-gen"), "{status}");
+
+    // And a `TurnStep` under adage-exec's hook predicts with it, at the step that ends the turn.
+    let hook = |event: &str, extra: Value| -> Option<Value> {
+        let mut p = serde_json::json!({ "session_id": "grant-key", "cwd": root });
+        for (k, v) in extra.as_object().unwrap() {
+            p[k] = v.clone();
+        }
+        let opts = adage_hook::Options { learner: None, extension: Some(&adage_exec::hook::PREFETCH) };
+        let out = adage_hook::handle("claude", event, &p.to_string(), opts, &home.paths, std::time::Instant::now());
+        out.unwrap().map(|o| serde_json::from_str(&o).unwrap())
+    };
+    let file = root.join("schema/invoice.json");
+    let edit = serde_json::json!({ "tool_name": "Edit", "tool_use_id": "e1", "tool_response": "ok", "tool_input": { "file_path": file } });
+    let armed = hook("PostToolBatch", serde_json::json!({ "tool_calls": [edit] })).expect("the finish line's directive");
+    assert!(armed.to_string().contains("make gen"), "{armed}");
+    let step = serde_json::json!({ "hook_event_name": "TurnStep", "turn_id": "t1", "index": 2, "ending": true });
+    let out = hook("TurnStep", step).expect("the finish line, in the agent's place");
+    assert_eq!(out["predict"]["route"], "finish-line-gen", "{out}");
+    assert_eq!(out["predict"]["calls"][0]["input"]["command"], "make gen", "{out}");
+}

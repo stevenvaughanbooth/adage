@@ -275,8 +275,20 @@ fn routes_len(v: &Value) -> usize {
 }
 
 /// The graph as JSON (`adage_app::graph::build`) for the checkout the person is in, warning about
-/// each installed track skipped.
+/// each installed track skipped; with `adage`: this binary's version, a newer release when the
+/// release check's cache knows one, and how it was installed (`plugin` for the Claude Code plugin's
+/// binary), so the map words its next steps for the surface the person uses (onboarding plan O10).
 pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
     let here = std::env::current_dir().ok().and_then(|p| adage_core::repo::find_root(&p));
-    adage_app::graph::build(paths, here.as_deref(), max_events, &mut |w| crate::ui::warn(w))
+    let mut v = adage_app::graph::build(paths, here.as_deref(), max_events, &mut |w| crate::ui::warn(w))?;
+    let channel = std::env::current_exe()
+        .ok()
+        .map(|e| e.canonicalize().unwrap_or(e))
+        .map(|e| crate::update::channel::detect(&e, paths).name());
+    v["adage"] = serde_json::json!({
+        "version": env!("CARGO_PKG_VERSION"),
+        "latest": crate::update::newer(paths).map(|r| r.version),
+        "channel": channel,
+    });
+    Ok(v)
 }

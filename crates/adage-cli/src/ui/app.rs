@@ -365,6 +365,10 @@ impl AppState {
                 if code == KeyCode::Esc && !open {
                     return None;
                 }
+                // The map in the browser, as `adage watch`'s `m` opens it (onboarding plan O10).
+                if code == KeyCode::Char('m') && !open {
+                    return Some(Cmd::OpenWeb { focus: None, traces: false });
+                }
                 watch::live_key(&mut self.live, code, mods);
                 None
             }
