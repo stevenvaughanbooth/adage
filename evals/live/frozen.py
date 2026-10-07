@@ -211,14 +211,17 @@ def check_inputs(spec, adage):
             raise ValueError(f"frozen input changed: {path}")
 
 
+def collector_sources():
+    """Source closure shared by frozen comparisons and the training coordinator."""
+    paths = {HERE / name for name in ("frozen.py", "runner.py", "evidence.py", "budget.py",
+                                      "native_assets.py", "native_runtime.py")}
+    paths.update(runner.REPO / "demo" / name for name in ("report.py", "adage_metrics.py"))
+    return paths
+
+
 def prepared_spec(cfg, adage, input_paths, version, runtime_profile=RUNTIME_PROFILE):
-    # Pin the collector itself, its shared execution/accounting code and the supplied grader/data
-    # closure. Environment/container lockfiles can be declared as --input too.
-    paths = {HERE / name for name in ("frozen.py", "runner.py", "evidence.py", "budget.py")}
-    paths.add(runner.REPO / "demo" / "report.py")
-    # Both profiles import these modules; pin their source even when native dispatch is unused.
-    paths.update(HERE / name for name in ("native_assets.py", "native_runtime.py"))
-    paths.add(runner.REPO / "demo" / "adage_metrics.py")
+    # Pin the collector, its shared execution/accounting code and supplied grader/data closure.
+    paths = collector_sources()
     private = sorted(str(Path(p).resolve()) for p in input_paths)
     if any(not runner.under(p, runner.CONFINE_HIDE) for p in private):
         raise ValueError("grader/data inputs must live under the standard confinement's hidden directories")

@@ -3,9 +3,11 @@
 **Current decision: BLOCKED. No launch savings claim is supported.** The four scenarios below
 are hypotheses about useful learned guidance, not demonstrated agent difficulty or measured
 savings. The next Coder experiment will test the actual Claude mod with production-learned
-reflexes, the same pinned model in both arms, and independently graded quality. Complete mod
-treatment freezing is still required; the existing E0-only collector is a separate protocol.
-The experiment may establish no benefit.
+reflexes, the same pinned model in both arms, and independently graded quality. The explicit
+`native-mod-bundled-defaults-e0/v1` collector profile supports this advice-only comparison on
+the verified Linux harness; see the [runtime requirements](../evals/live/README.md). Its free
+fixture checks do not admit a paid study or establish savings. Optional execution or prediction
+treatments require separate protocols and approvals. The experiment may establish no benefit.
 
 Use the [commercial acceptance plan](commercial-evidence.md), the existing
 [claim policy](../evals/live/policies/claim.json), and the

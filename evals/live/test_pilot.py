@@ -143,6 +143,16 @@ class PilotFlow(unittest.TestCase):
         self.manifest = pilot.initialize(self.root, ADAGE, "fixture-model-v1", "30", "1")
         TrainingLive.runs, TrainingLive.mode = [], "complete"
 
+    def test_training_pins_transitively_imported_native_helpers(self):
+        helper = str(HERE / "native_runtime.py")
+        self.assertIn(helper, self.manifest["inputs"])
+        self.assertIn(str(runner.REPO / "demo/adage_metrics.py"), self.manifest["inputs"])
+        original = frozen.file_digest
+        with patch.object(frozen, "file_digest", side_effect=lambda path:
+                          "0" * 64 if str(path) == helper else original(path)):
+            with self.assertRaisesRegex(ValueError, "pilot input changed"):
+                pilot.load(self.root)
+
     def collect_one(self):
         def stop_between_jobs(*args, **kwargs):
             if TrainingLive.runs:

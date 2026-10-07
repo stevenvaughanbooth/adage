@@ -80,8 +80,7 @@ def initialize(root, adage, model, total_budget, session_budget, *, max_turns=30
     if sum(counts.values()) * cap > total:
         raise ValueError(f"the {sum(counts.values())} scheduled runs need at least {sum(counts.values()) * cap / 1_000_000:g} USD in reservations")
     closure = sorted(p for p in pack.rglob("*") if p.is_file() and "__pycache__" not in p.parts)
-    collector = [HERE / name for name in ("pilot.py", "training.py", "frozen.py", "runner.py", "evidence.py", "budget.py")]
-    collector += [runner.REPO / "demo" / "report.py"]
+    collector = list(frozen.collector_sources()) + [HERE / name for name in ("pilot.py", "training.py")]
     inputs = {str(path): frozen.file_digest(path) for path in sorted(set(closure + collector))}
     configs = {}
     for stage in STAGES:
