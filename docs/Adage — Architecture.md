@@ -966,7 +966,7 @@ changed; no prompt, command or path), and hooks append their swallowed errors to
 | --- | --- |
 | Build profile | `lto = true`, `codegen-units = 1`, `strip`, `panic = "unwind"` (`catch_unwind` needs it) (`Cargo.toml`) |
 | Targets | `aarch64`/`x86_64-apple-darwin`, `aarch64`/`x86_64-unknown-linux-musl` (static), `x86_64-pc-windows-msvc` |
-| Release | `dist` 0.32.0 generates `.github/workflows/release.yml`: archives, SHA-256 sums, shell/PowerShell/Homebrew installers, GitHub build-provenance attestations (Sigstore), a CycloneDX SBOM per archive. Pull requests run the plan only |
+| Release | `dist` 0.32.0 generates `.github/workflows/release.yml`: archives, SHA-256 sums, shell and PowerShell installers (Homebrew is deferred until macOS signing exists, `dist-workspace.toml`), GitHub build-provenance attestations (Sigstore), a CycloneDX SBOM per archive. Pull requests run the plan only |
 | npm | `.github/workflows/publish-npm.yml`, called by the release: stage the packages, smoke-test through the launcher, publish platform packages then the main package with `--provenance`. Off until `ADAGE_NPM_PUBLISH=true` |
 | CI | `.github/workflows/ci.yml`: rustfmt; clippy `-D warnings` and `cargo test --workspace --locked` on macOS arm64 and x64, Linux x64 and arm64, and Windows x64; the OpenCode plugin test under Node; the npm launcher test; the session-start shim test; a static musl build; `cargo deny` (advisories, bans, licenses, sources); plugin structure and `claude plugin validate --strict` |
 | Evals | `.github/workflows/evals.yml` (pushes, pull requests, weekly, Linux and macOS): gates, slow property tests, regression tests, reports and replay fidelity, the live runner's dry run |

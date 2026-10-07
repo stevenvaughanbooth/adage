@@ -4,8 +4,9 @@ What was built of `../implementation-plan.md` on the branch `claude/mods-poc-m98
 is historical: the branch began as the proof of concept and now carries the whole plan), against
 Claude Code 2.1.288. Each chunk's notes hold the exact contracts, the departures from the plan
 and why, what could only be checked live, and the commands run. `../evaluation-plan.md` is the
-brief for the live evaluation; nothing on this branch has run in a live Claude Code session,
-because the build machine had no key.
+brief for the live evaluation; the mod has since run live three times (the five-arm headless
+comparison, then with the study's grants, then with the fixes since), reported with the defects
+each run found in `../evaluation-results.md`.
 
 Line references in the implementation plan and the notes are at commit fff4fa7 (the plan) and the
 chunk's own commit (the notes); the module splits since then are mapped in structure-*.md and
@@ -55,10 +56,11 @@ goes.
 
 ## What is not on this branch
 
-- Anything that needs a live Claude Code session or a model: every "Live-only" section in the
-  notes, S9's questions, the paired release-build latency runs, `release_plugin_startup` with two
-  binaries, the headless comparison, the development gate (E2's runs) and the registered run (E3).
-  `../evaluation-plan.md` collects them in order.
+- The live runs other than the headless comparison (which ran three times, in
+  `../evaluation-results.md`): every remaining "Live-only" section in the notes, S9's questions,
+  the paired release-build latency runs, `release_plugin_startup` with two binaries, the
+  development gate (E2's runs) and the registered run (E3). `../evaluation-plan.md` collects them
+  in order.
 - The usability study (T-U-01).
 
 ## Reading order for a reviewer

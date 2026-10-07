@@ -855,7 +855,7 @@ describe('T-C4-08 · the two phases: a dry run commits nothing, the verdict comm
 })
 
 describe('T-C4-08 · onStep through the engine, the binary answering each phase', () => {
-  const stdins = (w: { ran: { argv: string[]; init?: { stdin?: string } }[] }) =>
+  const stdins = (w: { ran: { argv: readonly string[]; init?: { stdin?: string } }[] }) =>
     w.ran.filter(r => r.argv[3] === 'TurnStep').map(r => JSON.parse(r.init?.stdin ?? '{}') as Record<string, unknown>)
 
   test('default mode: the dry run, then an allow verdict; the prediction is yielded', async ($, on) => {
