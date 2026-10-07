@@ -39,6 +39,25 @@ class Inputs(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "regular file"):
                 pg.sql_file(root, "input.sql")
 
+    def test_pinned_postgres_profiles_keep_nonroot_offline_launches(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as temp:
+            for version, uid in (("13.11", 999), ("16.14", 70)):
+                grader = pg.Grader(Path(temp) / version, postgres_profile=version)
+                with patch.object(grader, "must") as launch, patch.object(grader, "sql", return_value=
+                        subprocess.CompletedProcess([], 0, "", "")), patch.object(grader, "call", return_value=
+                        subprocess.CompletedProcess([], 0, "postgres\n", "")):
+                    grader.start()
+                command = launch.call_args.args[0]
+                self.assertEqual(command[command.index("--user") + 1], f"{uid}:{uid}")
+                self.assertEqual(command[command.index("--network") + 1], "none")
+                self.assertIn("--read-only", command)
+                self.assertIn(pg.POSTGRES_PROFILES[version][0], command)
+                self.assertNotIn("--mount", command)
+            with self.assertRaisesRegex(ValueError, "pinned"):
+                pg.Grader(Path(temp) / "bad", postgres_profile="latest")
+            self.assertFalse((Path(temp) / "bad").exists())
+
     def test_exactly_one_authority_per_probe(self):
         contract = {"schema": 1, "task_id": "t", "base_commit": "a" * 40}
         for stage in ("upgrade", "fresh", "downgrade"):

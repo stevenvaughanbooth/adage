@@ -18,6 +18,10 @@ import time
 import uuid
 
 PG_IMAGE = "sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777"
+POSTGRES_PROFILES = {
+    "16.14": (PG_IMAGE, 70),
+    "13.11": ("sha256:5c265bf1fd307dfb3ff3894c2ff6d4c3d98c777142c6fa4e04519fe39f615b2d", 999),
+}
 MAX_SQL_BYTES = 120_000
 MIGRATIONS = Path("coderd/database/migrations")
 DUMP = Path("coderd/database/dump.sql")
@@ -84,7 +88,10 @@ def validate_contract(contract):
 
 
 class Grader:
-    def __init__(self, out):
+    def __init__(self, out, *, postgres_profile="16.14"):
+        if postgres_profile not in POSTGRES_PROFILES:
+            raise ValueError("unsupported pinned PostgreSQL profile")
+        self.image, self.uid = POSTGRES_PROFILES[postgres_profile]
         self.out = Path(out)
         self.out.mkdir(parents=True, exist_ok=False, mode=0o700)
         (self.out / "logs").mkdir(mode=0o700)
@@ -122,11 +129,11 @@ class Grader:
     def start(self):
         self.must(["docker", "run", "--detach", "--name", self.name, "--network", "none",
             "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
-            "--user", "70:70", "--memory", "768m", "--cpus", "2", "--pids-limit", "128",
-            "--tmpfs", "/var/lib/postgresql/data:rw,nosuid,nodev,mode=0700,uid=70,gid=70,size=512m",
-            "--tmpfs", "/var/run/postgresql:rw,nosuid,nodev,mode=0755,uid=70,gid=70",
+            "--user", f"{self.uid}:{self.uid}", "--memory", "768m", "--cpus", "2", "--pids-limit", "128",
+            "--tmpfs", f"/var/lib/postgresql/data:rw,nosuid,nodev,mode=0700,uid={self.uid},gid={self.uid},size=512m",
+            "--tmpfs", f"/var/run/postgresql:rw,nosuid,nodev,mode=0755,uid={self.uid},gid={self.uid}",
             "-e", "POSTGRES_HOST_AUTH_METHOD=trust", "-e", "PGDATA=/var/lib/postgresql/data/db",
-            "-e", "CODEX_SANDBOX=agent-preparation", PG_IMAGE,
+            "-e", "CODEX_SANDBOX=agent-preparation", self.image,
             "postgres", "-c", "listen_addresses=127.0.0.1"], "start")
         for _ in range(40):
             ready = self.call(["docker", "exec", self.name, "pg_isready", "-U", "postgres"], "ready")
@@ -206,7 +213,7 @@ class Grader:
         self.call(["docker", "rm", "--force", self.name], "cleanup")
 
 
-def run(base, candidate, contract_path, out):
+def run(base, candidate, contract_path, out, *, postgres_profile="16.14"):
     os.umask(0o077)
     contract_bytes = Path(contract_path).read_bytes()
     contract = validate_contract(json.loads(contract_bytes))
@@ -214,12 +221,12 @@ def run(base, candidate, contract_path, out):
     dirty = subprocess.run(["git", "-C", str(base), "status", "--porcelain"], capture_output=True, text=True, check=True)
     if head.stdout.strip() != contract["base_commit"] or dirty.stdout.strip():
         raise ValueError("trusted base must be clean and match the pinned commit")
-    grader = Grader(out)
+    grader = Grader(out, postgres_profile=postgres_profile)
     (grader.out / "contract.json").write_bytes(contract_bytes)
     (grader.out / "grader.py").write_bytes(Path(__file__).read_bytes())
     result = {"task_id": contract["task_id"], "base_commit": contract["base_commit"],
               "quality_authority": "external_parent", "kind": "semantic", "scope": "database_behavior_only",
-              "postgres_image": PG_IMAGE, "candidate": str(Path(candidate).absolute()), "accepted": False,
+              "postgres_image": grader.image, "postgres_profile": postgres_profile, "candidate": str(Path(candidate).absolute()), "accepted": False,
               "remaining_omissions": contract.get("remaining_omissions", ["Go and API behavior not graded"]),
               "paid_model_calls": 0}
     started = False
@@ -248,8 +255,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ("base", "candidate", "contract", "out"):
         parser.add_argument("--" + name, required=True, type=Path)
+    parser.add_argument("--postgres-profile", choices=sorted(POSTGRES_PROFILES), default="16.14")
     args = parser.parse_args()
-    result = run(args.base, args.candidate, args.contract, args.out)
+    result = run(args.base, args.candidate, args.contract, args.out, postgres_profile=args.postgres_profile)
     print(json.dumps({"accepted": result["accepted"], "status": result["status"], "out": str(args.out)}))
     return 0 if result["status"] == "completed" else 1
 

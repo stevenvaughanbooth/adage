@@ -249,13 +249,16 @@ python3 evals/live/postgres_grade.py \
   --base /absolute/private/pinned-clean-base \
   --candidate /absolute/private/candidate \
   --contract /absolute/private/contract.json \
+  --postgres-profile 13.11 \
   --out /absolute/private/new-control-output
 ```
 
-The current component reports `database_behavior_only`. Historical generator reproduction,
-Go integration and complete requirement review remain necessary before paid admission. The
-pinned PostgreSQL 16.14 results do not certify historical PostgreSQL 13 compatibility. Neither
-these controls nor the cold-mod cost scout establish learned-mod savings. See
+The current component reports `database_behavior_only`. The ten controls also passed their
+expected positive/negative outcomes with the explicit pinned PostgreSQL 13.11 profile. Separate
+private Go Store probes accepted both references and rejected both unchanged bases, with the
+parent observing actual rows after the compiled Store methods ran. Complete requirement review
+and one composed task grader remain necessary before paid admission. Neither these controls nor
+the cold-mod cost scout establish learned-mod savings. See
 [the scout results](claude-mod/evaluation-results.md) for the independently failed paid attempt.
 
 
@@ -270,5 +273,10 @@ include subtests and are not independent task counts.
 
 The first replay's incompatible modern dump-client output and the remaining Docker-dependent
 failure are retained. Successful generation does not replace the external behavioral grader.
-Complete training admission, the other three task graders, and frozen mod treatment support
-remain unfinished. No additional paid model calls were made.
+The remaining proposed training references (#10152, #11069 and #11204) also reproduced the
+forced schema and complete generated output without changes, using SQLC 1.20.0, 1.20.0 and
+1.24.0 respectively. They passed 1,039, 1,068 and 1,071 test/subtest events; each retained the
+same `TestPubsub_Disconnect` failure, with no skipped tests. These reference checks do not
+establish the missing task-specific semantics. Complete training admission, the other three
+semantic graders, and frozen mod treatment support remain unfinished. No additional paid
+model calls were made.

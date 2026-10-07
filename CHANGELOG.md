@@ -12,7 +12,8 @@ under `docs/tracks/`).
 ## 0.1.0 - Unreleased
 
 External-parent PostgreSQL migration controls now support private Coder learning experiments,
-with pinned SQL inputs and separate upgrade, fresh-schema and downgrade observations.
+with pinned SQL inputs and separate upgrade, fresh-schema and downgrade observations, using
+explicit PostgreSQL 13.11 or 16.14 profiles.
 
 **Agent traces become reflexes.** Adage reads the traces coding agents leave behind, finds the
 paths that get work done, and compiles them into reflexes: small, typed, deterministic responses
