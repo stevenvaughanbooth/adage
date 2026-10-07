@@ -570,7 +570,8 @@ async function rewrite($, e, next, base, plan) {
 }
 ```
 
-**The dead end that never runs.** The same discipline applies to a learned `avoid` pair. The
+**The dead end that never runs.** The same discipline applies to a learned `avoid` pair, and to
+a declared instinct's (below). The
 binary's `dry_run` plan may answer `substitute: { command: "make test", reason }` for a call
 whose canonical key meets an `avoid` reflex at `fire` with a learned `instead`; the mod checks
 both commands with `$.tool.check` and substitutes only on the same verdict, with one line of
@@ -586,6 +587,21 @@ first stage is replaced, its own `2>&1` and the filters are kept byte for byte, 
 `make test 2>&1 | tail -5`). The mod asks `$.tool.check` about both whole pipelines, and the
 context line names the stage replaced. Nothing else is rewritten: a list, any other redirection,
 a subshell or an expansion also runs or feeds something the replacement would change.
+
+A repository's declared instinct is replaced on the same terms. Its `avoid` (an `avoid` step, or a
+run step after the call's failure, as U1 and U3 bind `make test` after `python3 -m unittest`
+fails for want of what the Makefile's `test` target sets) qualifies in service: an instinct is
+always prime and stays forming (approval does not firm it), so where a learned route needs `firm`
+and, after a failure, delivery at `fire`, an instinct needs only that it is neither nascent, dormant
+nor extinguished. Its `instead` is fixed and slot-free as a learned one's must be, and it is never
+the call's own tool in another environment (`.venv/bin/python -m pytest` for `python -m pytest
+tests -q`, U11's: the U11 rewrite above keeps the call's arguments, a substitution would drop
+them; this holds for learned routes too). The double verdict, the pipeline rule, the judgement and
+the control arm are the same; the context line gives the instinct's declared reason instead of a
+failure (`adage ran make test for you; python3 -m unittest discover -s tests was replaced because
+this repository's Makefile declares make test in its place (a declared script runs this
+repository's test runner with the setup it needs). The output above is from make test.`). An
+instinct still never blocks Stop and never becomes an obligation.
 
 - **Binary:** with `verdict.engine` present, the engine's comparison replaces the planner's own
   settings reading for this decision; the planner's reading stays as the fallback for hosts

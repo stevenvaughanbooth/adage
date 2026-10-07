@@ -238,9 +238,10 @@ instead of refusal) has not been re-counted.
 
 A second rewrite exists only where the Claude Code mod is installed, because only the mod can ask
 Claude Code's own permission engine about both commands. When a Bash call is a dead end this
-repository's sessions learned (`python3 -m pytest tests` fails here; `make test` works), the mod
-runs the learned command in its place, and the failure, the model's reading of it and the
-recovery request never happen.
+repository's sessions learned (`python3 -m pytest tests` fails here; `make test` works), or one
+the repository's own files declare through an instinct (its Makefile's `test` target sets what
+the bare runner lacks), the mod runs the working command in its place, and the failure, the
+model's reading of it and the recovery request never happen.
 
 ```text
 python3 -m pytest tests
@@ -248,9 +249,27 @@ python3 -m pytest tests
 ```
 
 - **What is replaced**: one plain command (no list, pipe, redirection or substitution) whose
-  canonical key meets a learned, firm `avoid` route with a fixed `instead` (no slot), or a learned
-  run-after-failure route delivered at fire. An instinct, a forming or dormant route, a prime
-  pair and a slotted `instead` replace nothing (`adage_runtime::substitution`).
+  canonical key meets an `avoid` route (an `avoid` step, or a run step after that command's
+  failure) with a fixed `instead` (no slot) that is neither the call nor the call's own tool in
+  another environment (`.venv/bin/python -m pytest` for `python -m pytest tests -q` is the
+  interpreter rewrite's, above, which keeps the call's arguments), and that is either
+  - **learned**: firm, and a run after a failure also delivered at fire; a forming, dormant or
+    nascent route and a prime pair replace nothing; or
+  - **a declared instinct** in service. An instinct is always prime and is bound forming and kept
+    forming (approval does not firm it), so `firm` and "at fire" cannot apply to it: what stands
+    in for them is that the repository's own files declare `instead`, and the permission engine's
+    verdict on both commands guards the run either way. A nascent instinct (an environment step
+    not yet approved in `adage review`), a dormant or an extinguished one replaces nothing.
+
+  The line for an instinct gives its declared reason, not a failure, since none was seen:
+
+  ```text
+  python3 -m unittest discover -s tests
+  → make test     (adage ran make test for you; python3 -m unittest discover -s tests was replaced because this repository's Makefile declares make test in its place (a declared script runs this repository's test runner with the setup it needs). The output above is from make test.)
+  ```
+
+  Substituting is all an instinct gains here: it still never asks to continue at Stop and never
+  becomes a finish-line obligation (`adage_runtime::substitution`).
 - **In a pipeline**: the first stage of a pipeline whose later stages only filter its output
   (`tail`, `head`, `grep`, `wc`, `cat`, `tee`, `sort`, `uniq`, with their arguments) is replaced
   the same way. The stage's own `2>&1` and the filters are kept byte for byte, and the plan's

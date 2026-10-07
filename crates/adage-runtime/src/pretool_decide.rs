@@ -1,14 +1,14 @@
 //! Decisions the Claude Code mod asks for at `PreToolUse`, outside [`crate::decide`]: a Bash call
-//! answered by a fresh receipt instead of running (observed as made), and a learned dead end
-//! replaced before it runs. The shell-command rewrite for the project's environment is
-//! [`crate::pretool`].
+//! answered by a fresh receipt instead of running (observed as made), and a known dead end (a
+//! learned one, or a declared instinct) replaced before it runs. The shell-command rewrite for the
+//! project's environment is [`crate::pretool`].
 
 use crate::observe::{call_keys, cap, exec_segments};
 use crate::policy::{failure_matches, follows_call, follows_learned, in_play};
 use crate::state::push_history_capped;
 use crate::{command_key, render, Arm, By, Call, Ctx, Decision, Judgement, Policy, SessionState, Substitution};
 use adage_core::{keys, pattern, CommandTable};
-use adage_tracks::{Index, Step, Strength, Trigger};
+use adage_tracks::{Index, RouteState, Step, Strength, Trigger};
 
 /// A Bash call the mod answered with a fresh receipt instead of running it (the Claude Code mod's
 /// architecture §3.3; `PreToolUse` with `verdict: {answered: "receipt"}`): the run the receipt
@@ -59,15 +59,25 @@ pub fn answered_by_receipt(ctx: &Ctx, st: &mut SessionState, command: &str, cove
     d
 }
 
-/// The learned replacement for a Bash call about to run, if it is a known dead end here: the
-/// first route in index order, in play, learned (an instinct is advice, never a replacement),
-/// firm, with no slots, that is
+/// The replacement for a Bash call about to run, if it is a known dead end here: the first route
+/// in index order, in play, with no slots, that is
 ///
 /// - an `avoid` step whose runners the replaced command runs ([`pattern::directs_avoided`]), or
-/// - a run step after a failure of the replaced command's key (the after-failure trigger's own match)
-///   delivered at fire,
+/// - a run step after a failure of the replaced command's key (the after-failure trigger's own
+///   match),
 ///
-/// and whose `instead` is a fixed command that is not itself avoided and not the call.
+/// whose `instead` is a fixed command that is not itself avoided, not the call, and not the
+/// call's own tool in another environment ([`same_tool`]: the interpreter rewrite's to make), and
+/// that is either
+///
+/// - **learned** (or imported, or authored): firm, and a run after a failure also delivered at
+///   fire; a forming, dormant or nascent route is never a replacement, or
+/// - **an instinct** ([`adage_tracks::Route::is_instinct`]): in service, forming or firm. An
+///   instinct is bound forming and kept forming (approval does not firm it) and is always prime,
+///   so neither `firm` nor "at fire" can apply to it: its standing is that the repository's own
+///   files declare `instead` (the declared fact it was bound on), and the engine's verdict on
+///   both commands is the guard. A nascent instinct (an environment step not yet approved), a
+///   dormant or an extinguished one is never a replacement.
 ///
 /// What is replaced is one plain command, or the first stage of a pipeline whose other stages
 /// only filter its output ([`OUTPUT_FILTERS`]; `make test 2>&1 | tail -5` for
@@ -76,6 +86,10 @@ pub fn answered_by_receipt(ctx: &Ctx, st: &mut SessionState, command: &str, cove
 /// redirection, a subshell, an expansion, or a later stage that does more than read its input is
 /// never rewritten: it also runs what the replacement would drop, or changes what the
 /// replacement's output feeds.
+///
+/// The context line says why the call was replaced: for a learned route, that the command fails
+/// here, quoting the failure learning found; for an instinct, which file of the repository
+/// declares `instead` and the instinct's reason ([`instinct_reason`]).
 pub fn substitution(
     index: &Index,
     repo: &str,
@@ -94,7 +108,13 @@ pub fn substitution(
     }
     index.for_repo(repo).filter(|r| in_play(policy, r)).find_map(|ir| {
         let r = &ir.route;
-        if r.is_instinct() || r.state != adage_tracks::RouteState::Firm || !r.slots.is_empty() {
+        let instinct = r.is_instinct();
+        let in_service = if instinct {
+            matches!(r.state, RouteState::Forming | RouteState::Firm)
+        } else {
+            r.state == RouteState::Firm
+        };
+        if !in_service || !r.slots.is_empty() {
             return None;
         }
         let (instead, signature) = match (&r.trigger, &r.step) {
@@ -104,7 +124,7 @@ pub fn substitution(
                 (instead, signature)
             }
             (Trigger::AfterFailure { command: failing, signature }, Step::Run { command: instead })
-                if adage_tracks::delivered_strength(r) == Strength::Fire
+                if (instinct || adage_tracks::delivered_strength(r) == Strength::Fire)
                     && failure_matches(policy, r, failing, &key) =>
             {
                 (instead, signature)
@@ -112,7 +132,7 @@ pub fn substitution(
             _ => return None,
         };
         let instead = instead.trim();
-        if instead.is_empty() || instead.contains('{') || pattern::same_command(instead, dead) {
+        if instead.is_empty() || instead.contains('{') || pattern::same_command(instead, dead) || same_tool(instead, dead) {
             return None;
         }
         // The line names what ran, what it replaced, and which command fails, so it reads the
@@ -120,15 +140,52 @@ pub fn substitution(
         // filter was read as the replacement failing. A pipeline's filters ran as written and are
         // not quoted (sanitising would mangle `2>&1`).
         let through = if before.is_empty() && after.is_empty() { "" } else { ", through the rest of your pipeline as written" };
+        let instead_shown = render::sanitise(instead);
+        let because = if instinct {
+            instinct_reason(r, &instead_shown)
+        } else {
+            format!("that command fails in this repository (\"{}\")", render::sanitise(signature))
+        };
         let context = format!(
-            "adage ran {instead_shown} for you{through}; {dead_shown} was replaced because that command fails in this repository (\"{}\"). The output above is from {instead_shown}.",
-            render::sanitise(signature),
-            instead_shown = render::sanitise(instead),
-            dead_shown = render::sanitise(dead),
+            "adage ran {instead_shown} for you{through}; {} was replaced because {because}. The output above is from {instead_shown}.",
+            render::sanitise(dead),
         );
         let ran = format!("{before}{instead}{after}");
         Some(Substitution { route: r.id.clone(), track: ir.track.clone(), command: ran, context })
     })
+}
+
+/// Why an instinct replaced a call, in the repository's terms: the file that declares `instead`
+/// (`Makefile`), when the instinct names one, and the instinct's own reason, its summary without
+/// the `Instinct U1: ` label (the label is for people reading `adage routes`, not the agent). An
+/// instinct claims no failure seen here, so the line quotes none.
+fn instinct_reason(r: &adage_tracks::Route, instead_shown: &str) -> String {
+    let declarer = match r.origin() {
+        adage_tracks::Origin::Instinct { declared: Some(d), .. } if render::declared_ok(&d) => {
+            format!("this repository's {}", render::sanitise(&d))
+        }
+        _ => "this repository's build".to_string(),
+    };
+    let summary = r.summary.trim();
+    let reason = match summary.split_once(": ") {
+        Some((label, rest)) if label.starts_with("Instinct ") && !rest.trim().is_empty() => rest.trim(),
+        _ => summary,
+    };
+    if reason.is_empty() {
+        format!("{declarer} declares {instead_shown} in its place")
+    } else {
+        format!("{declarer} declares {instead_shown} in its place ({})", render::sanitise(reason))
+    }
+}
+
+/// Whether `instead` runs the same tool as the call, only in another environment
+/// (`.venv/bin/python -m pytest` or `uv run pytest` for `python -m pytest tests -q`): replacing
+/// the call would drop its arguments (which tests), and the interpreter rewrite
+/// ([`crate::pretool`]) is what points that run at the project's environment with them kept.
+fn same_tool(instead: &str, dead: &str) -> bool {
+    let argv = |c: &str| c.split_whitespace().map(str::to_string).collect::<Vec<_>>();
+    let (i, d) = (adage_core::action::classify_argv(&argv(instead)), adage_core::action::classify_argv(&argv(dead)));
+    !i.runner.is_empty() && i.runner == d.runner
 }
 
 /// The commands a pipeline may pass a replaced stage's output through: each only reads its input

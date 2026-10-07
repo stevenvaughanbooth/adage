@@ -9,6 +9,7 @@ mod chains;
 mod contexts;
 mod dead_end;
 mod finish_line;
+mod instinct_substitution;
 mod intent;
 mod interlocking;
 mod noticed;

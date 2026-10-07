@@ -97,7 +97,7 @@ the cross-cutting set.
 | Receipt as result, `$.tool.check` (§3.3, §3.4) | C3 | T-C3-01 … 07 |
 | The mod's `turn.step`, sim (§3.2) | C4 | T-C4-01 … 08 |
 | Standing, compaction, routing (§3.5–3.7) | C5 | T-C5-01 … 05 |
-| The dead end that never runs (§3.4, §1b.1) | C6 | T-C6-01 … 06 |
+| The dead end that never runs (§3.4, §1b.1) | C6 | T-C6-01 … 07 |
 | Chains and multi-call steps (§3.2, §1b.1) | C7 | T-C7-01 … 04 |
 | The finish line at the last step (§3.2, §1b.1) | C8 | T-C8-01 … 04 |
 | Attachment and the mod capabilities (§1b.3, §3.6, §3.8) | C9 | T-C9-01 … 05 |
@@ -453,9 +453,9 @@ the Then itself.
 
 ### C6 · The dead end that never runs
 
-- **T-C6-01 · L1 · the plan.** A `PreToolUse` dry run for a call meeting a `fire` `avoid` route with
-  a fixed `instead` answers `substitute`; a `prime` `avoid` route, a slotted `instead`, or no
-  `instead` answers none.
+- **T-C6-01 · L1 · the plan.** A `PreToolUse` dry run for a call meeting a learned `fire` `avoid`
+  route with a fixed `instead` answers `substitute`; a learned `prime` `avoid` route, a slotted
+  `instead`, or no `instead` answers none (a declared instinct: T-C6-07).
 - **T-C6-02 · L2 · recorded as a substitution.** `verdict: { engine: "same" }` spools one record
   with `Judgement::Substituted`; the feed, `graph --json` and the savings estimate count it as
   avoided, never as a follow; the control arm spools `would_substitute` and answers nothing.
@@ -474,6 +474,19 @@ the Then itself.
   output filter plans nothing. The verdict is recorded as T-C6-02 records a plain one; the mod reads
   the rules on both whole pipelines and runs the new one only on the same verdict, never in the
   control arm or observe mode.
+- **T-C6-07 · L1, L2, L4 · a declared instinct's dead end.** An instinct `avoid` (an `avoid` step,
+  or a run step after the call's failure, as U1 binds `make test` after `python3 -m unittest`
+  fails naming `ACME_ENV`) in service (forming or firm) with a fixed, slot-free `instead` plans
+  `substitute` for the plain call and, under T-C6-06's rule, for the call piped into filters; the
+  context line gives the declared reason (`this repository's Makefile declares make test in its
+  place (…)`, or `this repository's build` when no file is named) and quotes no failure. A
+  nascent, dormant or extinguished instinct, a slotted `instead`, an `instead` that is the call,
+  and an `instead` that runs the call's own tool in another environment (U11's
+  `.venv/bin/python -m pytest`, `uv run pytest`: the rewrite's) plan nothing. Treated, the verdict
+  substitutes and judges it `substituted`; control and observe mode spool `would_substitute`. The
+  sim binds the sandbox Makefile's instincts with nothing learned and its dead-end turn, plain and
+  as run 3 piped it, is substituted through the binary in both arms. The command hook's answers
+  are unchanged.
 
 ### C7 · Chains and multi-call steps
 

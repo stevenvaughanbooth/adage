@@ -90,7 +90,7 @@ pub fn footer(origin: Option<&Origin>) -> String {
 }
 
 /// A declared file named in an instinct's text: a plain repository-relative path.
-fn declared_ok(d: &str) -> bool {
+pub(crate) fn declared_ok(d: &str) -> bool {
     adage_tracks::advice::safe_glob(d) && !d.contains('*')
 }
 

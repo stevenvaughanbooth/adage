@@ -625,6 +625,18 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   -5`). The mod asks the permission check about both whole pipelines, the context line names the
   stage replaced, and the control arm and observe mode record `would_substitute` and change
   nothing. A list, any other redirection, a subshell or an expansion is still left as written.
+- **A dead end a repository's files declare is replaced before it runs, as a learned one is.**
+  Live, the two responses the index-0 lookup saved went to `python3 -m unittest … 2>&1 | tail -5`
+  and a retry, because that dead end was a declared instinct (U1/U3: the Makefile's `test` target
+  sets what the bare runner lacks) and only learned, firm routes were replaced. An instinct's
+  `avoid` in service (an instinct is always prime and stays forming; never nascent, dormant or
+  extinguished) with a fixed, slot-free `instead` is now replaced under the same permission
+  double-check and pipeline rule, and the line gives its declared reason ("this repository's
+  Makefile declares make test in its place (…)"). An `instead` that only runs the call's own tool
+  in another environment (U11's `.venv/bin/python -m pytest`) is left to the interpreter rewrite,
+  which keeps the call's arguments. Instincts still never block Stop and never become obligations.
+  Live on W-2041: 3 requests where it was 5, no dead-end hit; the control arm records
+  `would_substitute` and runs the dead end.
 - **A predicted call is made only where the person's permissions allow it unasked.** Before it
   yields a predicted step, the mod asks Claude Code's own permission check about each of its calls,
   as it already did before a substitution or a rewrite, and yields only when every verdict is

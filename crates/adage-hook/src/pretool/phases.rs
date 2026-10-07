@@ -18,8 +18,8 @@ use adage_tracks::Index;
 ///
 /// - **Dry run** answers `{"plan": {…}}`, or nothing when there is nothing to plan or the call
 ///   was decided already, in either arm; it changes no state and spools nothing. The plan holds
-///   whichever apply: `substitute: {command, route, track, context}` (a learned dead end,
-///   [`adage_runtime::substitution`]), `rewrite: {command, kind}` (the interpreter rewrite, not
+///   whichever apply: `substitute: {command, route, track, context}` (a known dead end, learned
+///   or a declared instinct: [`adage_runtime::substitution`]), `rewrite: {command, kind}` (the interpreter rewrite, not
 ///   yet checked against the person's permission rules: the mod asks the engine),
 ///   `advice: {kind, text}` (advice instead of a rewrite), and `receipt: {fresh, covering, note?,
 ///   result?}` (a covering receipt, treated sessions only; `note` and `result` only when fresh).
@@ -252,6 +252,49 @@ mod tests {
         assert_eq!(rec["checked_by"], "engine");
         assert_eq!(rec["decision"]["judgements"], json!([{ "kind": "substituted", "route": "dead-end-pytest" }]));
         assert!(rec.get("withheld").is_none() && rec.get("would_substitute").is_none());
+    }
+
+    /// T-C6-07, in process: a declared instinct's dead end, plain and piped into a filter, is
+    /// planned and substituted on the same verdict as a learned one, the line giving the
+    /// instinct's declared reason; the control arm spools `would_substitute`; the command hook's
+    /// payload is untouched.
+    #[test]
+    fn an_instinct_dead_end_is_planned_then_substituted_on_the_same_verdict() {
+        let because = "was replaced because this repository's Makefile declares make test in its place (a declared \
+                       script runs this repository's test runner with the setup it needs). The output above is from \
+                       make test.";
+        for (cmd, instead, through) in [
+            ("python3 -m unittest discover -s tests", "make test", ""),
+            (
+                "python3 -m unittest discover -s tests -t . 2>&1 | tail -5",
+                "make test 2>&1 | tail -5",
+                ", through the rest of your pipeline as written",
+            ),
+        ] {
+            let dead = cmd.split(" 2>&1").next().unwrap();
+            let sub = json!({ "command": instead, "route": "dead-end-d41b1e", "track": "acme/instincts",
+                "context": format!("adage ran make test for you{through}; {dead} {because}") });
+            let w = instinct_dead_end_world(Arm::Treated);
+            assert_eq!(
+                pre(&w, cmd, json!({ "dry_run": true })),
+                Some(json!({ "plan": { "substitute": sub } })),
+                "{cmd}"
+            );
+            assert!(pre(&w, cmd, json!({})).is_none(), "the command hook: as before");
+            assert!(spooled(&w).is_empty());
+            let same = json!({ "verdict": { "engine": "same", "substitute": "dead-end-d41b1e" } });
+            assert_eq!(pre(&w, cmd, same.clone()), Some(json!({ "substitute": sub })), "{cmd}");
+            let rec = spooled(&w).pop().unwrap();
+            assert_eq!(rec["substituted"].as_bool(), Some(true));
+            assert_eq!(rec["decision"]["judgements"], json!([{ "kind": "substituted", "route": "dead-end-d41b1e" }]));
+
+            let w = instinct_dead_end_world(Arm::Control);
+            assert!(pre(&w, cmd, json!({ "dry_run": true })).is_some(), "the plan, in either arm");
+            assert!(pre(&w, cmd, same).is_none());
+            let rec = spooled(&w).pop().unwrap();
+            assert_eq!((rec["would_substitute"].as_bool(), rec["withheld"].as_bool()), (Some(true), Some(true)));
+            assert_eq!(rec["decision"]["would_substitute"]["command"], instead);
+        }
     }
 
     /// T-C6-02's control half, and observe mode: `would_substitute` spooled, nothing printed.

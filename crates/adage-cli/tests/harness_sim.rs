@@ -930,6 +930,49 @@ fn claude_code_standing_and_a_subagent_told_at_spawn() {
     }
 }
 
+/// T-C6-07 (the sim's half): nothing learned, only the checkout's declared instincts bound, as
+/// `adage condition --instincts-only` binds them from the sandbox's Makefile. The replay's
+/// dead-end turn, and the same call as run 3's agents piped it, are planned and substituted on
+/// the mod's verdict as a learned dead end is ([`check_substitute`]), the line giving the
+/// instinct's declared reason; the control arm spools `would_substitute`. The command hook's own
+/// answer to each is what it was before instincts could be substituted.
+#[test]
+fn claude_code_substitutes_the_instinct_dead_end() {
+    let sb = Sandbox::new();
+    let repo = sb.repo();
+    let (out, err, code) =
+        sb.run(&["condition", "--instincts-only", "--repo", "acme-billing", "--repo-path", &repo], b"", "treated");
+    assert_eq!(code, 0, "{out}{err}");
+    let g = sb.graph();
+    let dead: Vec<&Value> = dead_ends(&g);
+    assert!(!dead.is_empty(), "the Makefile binds a dead end: {out}");
+    let instinct = |r: &&Value| r["evidence"]["provenance"].as_str().is_some_and(|p| p.starts_with("instinct:"));
+    assert!(dead.iter().all(instinct), "every dead end here is an instinct: {dead:?}");
+    let r = scenario::replay();
+    let subs = scenario::instinct_substitutions(&r);
+    let (a, b) = ids("claude");
+    for (sid, arm) in [(a, "treated"), (b, "control")] {
+        let send = |ev: &str, p: &Value| sb.hook("claude", ev, p, arm);
+        send("SessionStart", &claude::hook(&sid, &repo, "SessionStart", json!({ "source": "startup" })));
+        for (k, s) in subs.iter().enumerate() {
+            let id = format!("toolu_instinct{k}");
+            let plan = send("PreToolUse", &claude::pretool_hook(&sid, &repo, &s.command, &id, true));
+            check_substitute(&sb, &sid, arm, s, &plan, |route| {
+                send(
+                    "PreToolUse",
+                    &claude::verdict_hook(
+                        &sid,
+                        &repo,
+                        &s.command,
+                        &id,
+                        json!({ "engine": "same", "substitute": route }),
+                    ),
+                )
+            });
+        }
+    }
+}
+
 /// T-C6-06 (the sim's half): the learned dead end at the head of a pipeline of output filters,
 /// as run 3's agents wrote it, through the mod's two phases. The dry run plans the whole new
 /// pipeline, the filters and the stage's own `2>&1` kept and the line naming the stage replaced;

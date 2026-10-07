@@ -111,6 +111,31 @@ pub(crate) fn dead_end_world(arm: Arm) -> ObligationWorld {
     w
 }
 
+/// A treated (or control) session whose only dead end is a declared instinct, as
+/// `adage condition --instincts-only` binds it from a Makefile whose `test` target sets
+/// `ACME_ENV`: U1, after `python3 -m unittest` fails naming it, run `make test`; prime and
+/// forming, as every instinct is.
+pub(crate) fn instinct_dead_end_world(arm: Arm) -> ObligationWorld {
+    let w = ObligationWorld::new();
+    let origin = Origin::Instinct {
+        pack: "adage/test-wrapper".into(),
+        version: "0.1.0".into(),
+        instinct: "U1".into(),
+        ecosystem: Some("Python".into()),
+        declared: Some("Makefile".into()),
+    };
+    let trigger = Trigger::AfterFailure { command: "exec python3 -m unittest".into(), signature: "ACME_ENV".into() };
+    let route = testkit::route("dead-end-d41b1e", trigger, Step::Run { command: "make test".into() })
+        .summary("Instinct U1: a declared script runs this repository's test runner with the setup it needs")
+        .strength(Strength::Prime)
+        .state(adage_tracks::RouteState::Forming)
+        .provenance("instinct:adage/test-wrapper@0.1.0")
+        .origin(origin);
+    IndexBuilder::new("instinct-dead-end-world").route("acme", "acme/instincts", route).write(&w.paths.index());
+    w.arm(arm);
+    w
+}
+
 pub(crate) struct Plain;
 impl Extension for Plain {
     fn deliver(&self, _: &Turn<'_>, _: &[Directive]) -> Delivery {

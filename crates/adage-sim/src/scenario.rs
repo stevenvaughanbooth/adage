@@ -592,9 +592,10 @@ pub struct Substitute {
     pub command: String,
     /// What runs in its place, and what it prints.
     pub instead: Act,
-    /// The learned route's id prefix.
+    /// The route's id prefix (a learned dead end's, or a declared instinct's: both `dead-end-`).
     pub route: &'static str,
-    /// How the context line begins; the rest quotes the failure signature learning found.
+    /// How the context line begins; the rest quotes the failure signature learning found, or
+    /// gives a declared instinct's reason.
     pub context: String,
 }
 
@@ -616,6 +617,31 @@ pub fn substitutions(r: &Replay) -> Vec<Substitute> {
             ),
         })
         .collect()
+}
+
+/// The substitutions of [`replay`] in a checkout where nothing was learned but the repository's
+/// declared instincts were bound (`adage condition --instincts-only`): the sandbox's dead end is
+/// a declared instinct before it is anything learned (its Makefile's `test` target sets
+/// `ACME_ENV`, which the bare runner lacks), and the mod replaces it as it replaces a learned one,
+/// the line giving the declared reason instead of a failure. The dead-end turn, and the same call
+/// as run 3's agents piped it, become `make test`.
+pub fn instinct_substitutions(r: &Replay) -> Vec<Substitute> {
+    let (dead, ..) = DEAD_ENDS[0];
+    let declared = |shown: &str, through: &str| {
+        format!(
+            "adage ran make test for you{through}; {shown} was replaced because this repository's Makefile declares \
+             make test in its place ("
+        )
+    };
+    let mut out: Vec<Substitute> =
+        substitutions(r).into_iter().map(|s| Substitute { context: declared(&s.command, ""), ..s }).collect();
+    out.push(Substitute {
+        command: format!("{dead} -t . 2>&1 | tail -5"),
+        instead: Act::shell("make test 2>&1 | tail -5", MAKE_TEST_OK, 0),
+        route: "dead-end-",
+        context: declared(&format!("{dead} -t ."), ", through the rest of your pipeline as written"),
+    });
+    out
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -665,6 +691,19 @@ mod tests {
         assert_eq!(s.len(), 1);
         assert_eq!((s[0].command.as_str(), s[0].route), (DEAD_ENDS[0].0, "dead-end-"));
         assert!(matches!(&s[0].instead, Act::Shell { cmd, exit: 0, .. } if cmd == "make test"));
+    }
+
+    /// The same dead-end turn when only the declared instincts are bound: substituted too, with
+    /// the declared reason, and run 3's piped form of it beside it.
+    #[test]
+    fn the_instinct_dead_end_is_substituted_plain_and_piped() {
+        let s = instinct_substitutions(&replay());
+        assert_eq!(s.len(), 2);
+        assert_eq!(s[0].command, DEAD_ENDS[0].0);
+        assert!(s[0].context.ends_with("declares make test in its place ("), "{}", s[0].context);
+        assert!(s[1].command.ends_with("2>&1 | tail -5"));
+        assert!(matches!(&s[1].instead, Act::Shell { cmd, .. } if cmd == "make test 2>&1 | tail -5"));
+        assert!(s.iter().all(|s| !s.context.contains("fails in this repository")));
     }
 
     /// The plan's sub-support habit: in 2 of the 12 sessions (the first two work items) `make lint`

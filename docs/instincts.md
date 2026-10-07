@@ -53,16 +53,24 @@ the hook itself does not wait for binding, so a first event can arrive before th
 
 | Shipped behavior | Matching and delivery | What happens automatically |
 | --- | --- | --- |
-| U1 / P1: use the declared test wrapper | A known runner failure names the wrapper's required environment or loader | CPU match; the agent receives the replacement command as a suggestion |
-| U3: use the repository's test command | An undeclared runner fails with a specific signature and one unambiguous entry point exists | CPU match; suggested command |
+| U1 / P1: use the declared test wrapper | A known runner failure names the wrapper's required environment or loader | CPU match; the agent receives the replacement command as a suggestion. With the Claude Code mod, the runner's call is replaced by the wrapper before it runs, when the permission engine treats both alike |
+| U3: use the repository's test command | An undeclared runner fails with a specific signature and one unambiguous entry point exists | CPU match; suggested command. With the Claude Code mod, replaced before it runs as U1's is |
 | U4 / U6: generated files and lockfiles | An edit touches a declared generated file or root lockfile | CPU match; advice naming the owner or generator |
 | U5: regenerate after input changes | An edit matches declared generator prerequisites | CPU match; suggested regeneration command |
-| N1: use the declared package manager | A known package-manager mismatch fails with its specific signature | CPU match; suggestions; environment-changing suggestions await pack review |
+| N1: use the declared package manager | A known package-manager mismatch fails with its specific signature | CPU match; suggestions; environment-changing suggestions await pack review. With the Claude Code mod, replaced before it runs as U1's is, an install only once approved |
 | U11: use the project's Python environment | A supported Python command targets the project and its local environment was verified at bind time | On Claude Code, CPU rewrites the interpreter in `PreToolUse`; the harness executes the corrected pending tool call under its permissions |
 
 **Matching on the CPU is distinct from eliminating an agent action.** Most shipped instincts
 deliver suggestions and still require agent inference. U11 can prevent an environment-recovery
-turn by rewriting a tool call the agent already proposed. It does not itself launch a new script,
+turn by rewriting a tool call the agent already proposed. With the Claude Code mod, an instinct
+whose run step answers a call's failure with a fixed declared command (U1, P1, U3, N1) replaces
+that call before it runs, exactly as a learned firm dead end does: only while the instinct is in
+service (never nascent), only when Claude Code's permission engine decides both commands alike,
+never in the control arm, and with a context line naming the declaring file and the instinct's
+reason ([execution](execution.md#the-learned-pair-a-dead-end-replaced-before-it-runs-the-claude-code-mod)).
+U11's command is the same runner in the project's environment and stays the interpreter rewrite's,
+which keeps the call's arguments. Replacing a call is all an instinct gains: it is still prime,
+never a Stop block and never a finish-line obligation. It does not itself launch a new script,
 and its additional context is an explanation, not a request for the agent to perform the rewrite.
 Codex and OpenCode retain post-failure advice for this instinct. Automatic execution of learned
 actions is a separate mode with explicit human grants; `init` never grants arbitrary scripts.

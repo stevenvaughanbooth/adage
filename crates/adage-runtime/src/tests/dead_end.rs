@@ -31,8 +31,9 @@ fn after_failure_pair(strength: Strength) -> Route {
 }
 
 /// T-C6-01: a firm learned `avoid` route with a fixed `instead`, or a run after a failure at fire,
-/// answers a substitution; a prime pair, an instinct, a slotted or missing `instead`, a list, or
-/// the `instead` itself answer none.
+/// answers a substitution, and so does an instinct in service (T-C6-07); a prime or forming
+/// learned pair, a nascent instinct, a slotted or missing `instead`, a list, or the `instead`
+/// itself answer none.
 #[test]
 fn a_learned_dead_end_is_substituted_only_from_a_firm_fixed_pair() {
     let (_dir, index, table) = fixture();
@@ -83,9 +84,13 @@ fn a_learned_dead_end_is_substituted_only_from_a_firm_fixed_pair() {
         Strength::Inhibit,
     );
     assert!(sub(&one(empty), "npm test").is_none(), "no instead");
+    // An instinct is replaced in service (it is bound forming and never firms); never nascent.
     let mut instinct = npm_test_dead_end();
     instinct.evidence.provenance = "instinct:core@0.1.0".into();
-    assert!(sub(&one(instinct), "npm test").is_none(), "an instinct is advice only");
+    instinct.state = RouteState::Forming;
+    assert_eq!(sub(&one(instinct.clone()), "npm test").map(|s| s.command), Some("make test".into()), "an instinct");
+    instinct.state = RouteState::Nascent;
+    assert!(sub(&one(instinct), "npm test").is_none(), "a nascent instinct");
 }
 
 /// T-C6-02, the runtime half: treated substitutes and judges it `substituted`, never a follow;
