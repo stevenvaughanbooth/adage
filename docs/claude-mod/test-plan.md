@@ -472,7 +472,11 @@ the Then itself.
 - **T-C8-01 · L1 · the answer.** `TurnStep { ending: true }` with an armed, unmet obligation under
   a `predict` grant answers the obligation's call; without the grant, or with it met, nothing.
 - **T-C8-02 · L7 · the stop is replaced.** On an `end_turn` stop the hook keeps every text
-  chunk, yields the call and a `tool_use` stop; on `tool_use` stops it forwards unchanged.
+  chunk, yields the call after the model's last block, and ends the response with the model's
+  stop chunk with no reason (`stopReason: null`, its usage kept; the step's result says the
+  same). The server holds that response without the call, so the next request must start the
+  thread afresh, the call in it, never continue from the server's copy (the kit's
+  `engineThread` and `unseenResults`); on `tool_use` stops it forwards unchanged.
 - **T-C8-03 · L2 · met by the call.** The obligation is marked met when its call is observed in
   the next batch; the Stop gate then has nothing to ask; if the call failed, the gate asks as
   today.

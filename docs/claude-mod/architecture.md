@@ -466,7 +466,9 @@ for the same route, and the session cap counts every yielded response. **The fin
 last step** (Q15): when the model's response ends the turn (`stop` with `end_turn`) and the
 session holds an armed, unmet obligation whose route has a `predict` grant, the hook keeps the
 model's text, replaces the stop with the obligation's call, and the next request carries the
-result; the Stop gate's `block` and its extra request do not happen. If the obligation's call
+result; the Stop gate's `block` and its extra request do not happen. The response then ends with
+no stop reason: the server holds it as the model sent it, without the call, so the next request
+must start the server-side thread afresh rather than continue from that copy. If the obligation's call
 fails, the gate behaves as today.
 
 

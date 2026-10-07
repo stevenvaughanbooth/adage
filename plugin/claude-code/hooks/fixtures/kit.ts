@@ -694,15 +694,21 @@ export async function drain(stream: AsyncGenerator<TurnStepChunk, TurnStepResult
 // response it continues from (`thread: {type: 'continue', previous_message_id}`) and sends only the
 // messages after it, or starts afresh (`{type: 'create'}`) with them all. A response a `turn.step`
 // hook made up never reached the server, so a request that continues from it is refused (404
-// `thread_not_found`) and sent again whole: one dispatch spent for nothing. These two functions are
-// the engine's rule as 2.1.292 runs it (read from the CLI; docs/claude-mod/impl/live-fixes-2-notes.md
-// has the code it was read from and the live runs it was checked against), so a test can see which
-// thread the request after what the mod yields names.
+// `thread_not_found`) and sent again whole: one dispatch spent for nothing. A real response a hook
+// added calls to is held by the server as the model sent it, so a request that continues from it
+// carries results of calls the server never saw. These functions are the engine's rule as 2.1.292
+// runs it (read from the CLI; docs/claude-mod/impl/live-fixes-2-notes.md has the code it was read
+// from and the live runs it was checked against), so a test can see which thread the request after
+// what the mod yields names, and what the server then reads.
 
-/** A message of the conversation as the thread reads it; a user turn carries nothing it reads. */
+/**
+ * A message of the conversation as the thread reads it: an assistant message with the tool_use ids
+ * the transcript holds in it (`calls`), a user message with the tool_use ids it carries results of
+ * (`results`).
+ */
 export type ThreadMessage =
-  | { role: 'user' }
-  | { role: 'assistant'; id: string; requestId?: string; model: string; stopReason: TurnStepResult['stopReason'] }
+  | { role: 'user'; results?: readonly string[] }
+  | { role: 'assistant'; id: string; requestId?: string; model: string; stopReason: TurnStepResult['stopReason']; calls?: readonly string[] }
 
 /** The thread the next request names: continued from an id, or started afresh, and why. */
 export type ThreadPlan =
@@ -734,9 +740,50 @@ export function engineThread(messages: readonly ThreadMessage[]): ThreadPlan {
  * chunk (`end_turn`, the engine's own, when the hook yielded none).
  */
 export function madeUpResponse(chunks: readonly TurnStepChunk[], model: string, uuid = '00000000-0000-4000-8000-000000000000'): ThreadMessage {
+  return { role: 'assistant', id: `msg_hook_${uuid}`, model, ...recorded(chunks) }
+}
+
+/**
+ * The message the engine records for a response that came from a request and passed through the
+ * hooks: the id and request id the server gave it, and the calls and stop reason of the chunks that
+ * came out of the chain (what a hook added or rewrote included).
+ */
+export function forwardedResponse(chunks: readonly TurnStepChunk[], sent: { id: string; requestId: string; model: string }): ThreadMessage {
+  return { role: 'assistant', ...sent, ...recorded(chunks) }
+}
+
+/** The calls of a response's chunks and the reason of its last stop (`end_turn` when it has none). */
+function recorded(chunks: readonly TurnStepChunk[]): { stopReason: TurnStepResult['stopReason']; calls: string[] } {
   let stopReason: TurnStepResult['stopReason'] = 'end_turn'
-  for (const c of chunks) if (c.kind === 'stop') stopReason = c.stopReason
-  return { role: 'assistant', id: `msg_hook_${uuid}`, model, stopReason }
+  const calls: string[] = []
+  for (const c of chunks) {
+    if (c.kind === 'stop') stopReason = c.stopReason
+    if (c.kind === 'tool') calls.push(c.id)
+  }
+  return { stopReason, calls }
+}
+
+/**
+ * The tool results the next request carries whose call the server's thread does not hold. A request
+ * that continues reads the server's record up to its anchor (`held`: the calls of each real response
+ * as the model sent them; a response not listed is held as the transcript has it) and the messages
+ * after it; one that starts afresh reads the transcript whole. Empty when the thread is whole.
+ */
+export function unseenResults(messages: readonly ThreadMessage[], held: ReadonlyMap<string, readonly string[]>): string[] {
+  const plan = engineThread(messages)
+  const seen = new Set<string>()
+  let from = 0
+  if (plan.type === 'continue') {
+    const at = messages.findLastIndex(m => m.role === 'assistant' && m.id === plan.previousMessageId)
+    for (const m of messages.slice(0, at + 1)) if (m.role === 'assistant') for (const c of held.get(m.id) ?? m.calls ?? []) seen.add(c)
+    from = at + 1
+  }
+  const unseen: string[] = []
+  for (const m of messages.slice(from)) {
+    if (m.role === 'assistant') for (const c of m.calls ?? []) seen.add(c)
+    else for (const r of m.results ?? []) if (!seen.has(r)) unseen.push(r)
+  }
+  return unseen
 }
 
 /** A mounted drawing, as the tests read it. */

@@ -86,8 +86,8 @@ measured in every arm (6–22% per response). How many responses a session needs
 choice (3 to 5 here), so the claim is per session: the predicted step costs no dispatch at all,
 where before it cost one. All 8 sessions passed.
 
-**Open (live-unverified).** The finish line's *ending* prediction (`step.ts`, calls appended to
-a real response after an `end_turn` stop) still rewrites the stop to `tool_use`. That response
+**Open (live-unverified), since closed in §6.** The finish line's *ending* prediction (`step.ts`,
+calls appended to a real response after an `end_turn` stop) still rewrites the stop to `tool_use`. That response
 has a real `msg_` id, so the next request continues from it. But the server's copy of it has no
 appended calls, so the tool results that follow name a `tool_use` the server never saw. By the
 rule above this would also be refused and replayed. Run 2 never reached an ending prediction, so
@@ -313,3 +313,140 @@ no `pretool` record and `dead_end_substituted` is 0. The design:
 
 The results for each command are in the report that accompanies these notes. VALIDATE.txt was
 regenerated with the pinned CLI (2.1.288) right before reporting.
+
+## 6. The finish line's stop (the coordinator's decision: the thread stays whole there too)
+
+**What was wrong.** At the finish line the mod forwards the model's real response (text,
+`end_turn`), appends the obligation's call to it, and rewrote the stop to `tool_use`. The engine
+records that response under the id the server gave it, with its request id, so it is a sound
+anchor, and its stated reason makes the next request continue from it (`continue`,
+`previous_message_id` = that id) with only the call's result after it. The server holds the
+response as the model sent it: text and `end_turn`, no call. Live (below), the API refuses that
+request with a 400, `unexpected tool_use_id found in tool_result blocks: adage_regen-after-schema_…
+Each tool_result block must have a corresponding tool_use block in the previous message`. Claude
+Code then logs `[tether] forcing create for retry: replay_other_400` and sends it again whole. That
+is one dispatch spent for nothing at every finish line. Had the server accepted it, the thread
+would have diverged: the server's thread would carry a result of a call it never saw.
+
+**The three shapes, against the engine (2.1.292).**
+
+- *A null stop on the rewritten response.* `ctn` (the thread plan) starts afresh when the anchor's
+  `stop_reason` is null (`anchor_incomplete`). The next request is then sent whole, the
+  appended call with it, and the server's copy is never continued. The request after the next
+  real response continues from that response again. This is the shape `PREDICTED_STOP` already
+  uses, and the engine still runs the response's `tool_use` blocks.
+- *A hook-minted id.* A hook cannot set a forwarded response's id. The `message_start` envelope is
+  an opaque `engine` chunk, and the engine names the message from it. Dropping the envelope makes
+  the engine mint `msg_hook_…`, which the rule anchors exactly as before: with a stated reason
+  the next request continues from an id the server never issued (the 404 of §1). With a null
+  reason it is the first shape again, minus the response's real id and envelope.
+- *Something the API offers for appended calls.* There is nothing. The 2.1.292 declarations have
+  no chunk, field or result for it. The engine's own rewrite check (`anchor_rewritten`, from the
+  `tengu_tether_echo_audit` classes such as `added_tool_use_other`) compares the transcript with
+  the request's messages, not with what the server holds. Both carry the appended call, so it
+  never fires.
+
+**Fix (`hooks/predict.ts`, `hooks/step.ts`).** `predict.ts` has a new `appendedStop(stop)`,
+which returns the model's own stop chunk with `stopReason: null`. It keeps the chunk's `usage` and
+its `ref`, the engine's handle, so the usage the API reported still reaches the message. At the
+finish line `step.ts` yields `appendedStop(chunk)` in place of `{ ...chunk, stopReason:
+'tool_use' }`, and the step's result says `stopReason: null` as well. The text and the appended
+calls are unchanged.
+
+**T-C8-02's contract, changed.** On an `end_turn` stop the hook keeps every text chunk, yields
+the call after the model's last block, and ends the response with the model's stop chunk with no
+reason (`stopReason: null`, its usage kept; the result says the same). It used to be a `tool_use`
+stop. On `tool_use` stops it forwards unchanged, as before. The contract is restated in
+`test-plan.md` (T-C8-02), `C3-C9-mod-notes.md` (chains and the finish line, and live item 6),
+`C3-C7-C8-D2-C9-E-notes.md` (the `ending` rule and its live-only line), and `architecture.md`
+§3.2's finish-line paragraph.
+
+**Pinned by a kit test.** `fixtures/kit.ts` extends the thread model:
+
+- `ThreadMessage` carries the tool_use ids an assistant message holds (`calls`) and those a user
+  message carries results of (`results`).
+- `forwardedResponse(chunks, {id, requestId, model})` is the engine's record of a response that
+  came from a request and passed through the hooks.
+- `unseenResults(messages, held)` lists the results the next request carries whose call the
+  server's thread does not hold. `held` is the server's copy of each real response.
+
+`step.test.ts`, "T-C8-02 · the finish line keeps the server thread whole", mirrors §1's test:
+
+- what `turnStep` yields at the finish line leads to `create / anchor_incomplete` with nothing
+  unseen;
+- the old `tool_use` stop leads to `continue` from the server's copy, with the call's result
+  unseen (the 400);
+- the next real response is a sound anchor again.
+
+The first T-C8-02 test now expects the null stop on the chunk and the result.
+
+**Live proof (finish line, `mod` configuration).** `$S/fl/one.py` runs one session the way
+`demo/run.py one` does, in a directory of its own:
+
+- a copy of `$S/o0n/home-FL` as `ADAGE_HOME`. This is the O0 agent's home: the learned finish line
+  `acme-billing/finish-line/regen-after-schema` (`after_edit schema/*.json → make gen`) with a
+  `predict` grant made at a terminal as a person, and `exec/enabled`;
+- a fresh `CLAUDE_CONFIG_DIR`;
+- the plugin staged by `run.stage_plugin` with `target/release/adage` and
+  `target/release/adage-exec` and their `SHA256SUMS`;
+- `CLAUDE_PLUGIN_DATA` set by `run.arm_invocation`;
+- a generated sandbox;
+- `OTEL_LOG_RAW_API_BODIES`, to read each request's `thread`.
+
+The prompt is O0's FL prompt: add `po_number` to `schema/invoice.json` "with the Edit tool, then
+stop: do not run anything". *before* is the plugin with this change reverted in `step.ts` only
+(`$S/fl/src-before`), *after* is this tree (`$S/fl/src-after`). `$S/fl/count.py` counts. Nothing
+under `/tmp/adage-live*` was read or written.
+
+| run | `[API REQUEST]` | model responses | refused after the finish line | threads |
+| --- | --- | --- | --- | --- |
+| before | 5 | 4 | 1 (400, `replay_other_400`) | create, continue, continue, continue:finish-line id, create |
+| before2 | 5 | 4 | 1 (400, `replay_other_400`) | create, continue, continue, continue:finish-line id, create |
+| after | 4 | 4 | 0 | create, continue, continue, create |
+| after2 | 4 | 4 | 0 | create, continue, continue, create |
+
+In all four runs:
+
+- the transcript keeps the model's text and the `adage_regen-after-schema_…_2_0` call (`make
+  gen`) in one message, under its real `msg_` id and request id. Its stop is `tool_use` before
+  and null after;
+- `make gen` ran as that call (`is_error: false`, output `python3 tools/gen.py`);
+- the Stop hook answered nothing (exit 0, empty output; no `block` in any stream);
+- the session ended after one more model response.
+
+The request after the finish line was a `continue` from the server's copy before, with 2 messages
+(the call's result and a system line). After, it was a `create` with all 11, the call included.
+
+**Observed in passing, not changed.** The first *before* attempt (`$S/fl/runs/before-auto`) ran
+without `--permission-mode`. This host's session then starts in `auto` mode, and Claude Code denied
+the predicted `make gen`: "The server-side auto mode classifier gave no verdict for Bash: the
+request that produced this action did not ask for one". A hook-made Bash call has no classifier
+verdict in auto mode, whichever stop it carries. The four runs above pass `--permission-mode
+default`, as O0's FL2 ran. Whether a predicted call can ever run in auto mode is a question for
+the grant's design.
+
+**The model's reading is unchanged.** In all four runs the model's closing text says `make gen`
+ran though it did not run it. §5's line ("Adage made this call in your place …") is delivered.
+The model still flags it, because the prompt said "do not run anything". The design wants exactly
+that: the act is never counted as the agent's.
+
+**Files touched (this section).**
+
+- `plugin/claude-code/hooks/predict.ts`: `appendedStop`.
+- `plugin/claude-code/hooks/step.ts`: the finish line's stop and result, and the header comment.
+- `plugin/claude-code/hooks/step.test.ts`: the T-C8-02 expectations and the new describe.
+- `plugin/claude-code/hooks/fixtures/kit.ts`: `calls`/`results`, `forwardedResponse`,
+  `unseenResults`.
+- `plugin/claude-code/VALIDATE.txt`: regenerated with the pinned CLI as CI diffs it; identical, so
+  unchanged.
+- `docs/claude-mod/test-plan.md`, `docs/claude-mod/architecture.md`,
+  `docs/claude-mod/impl/C3-C9-mod-notes.md`, `docs/claude-mod/impl/C3-C7-C8-D2-C9-E-notes.md`, and
+  these notes.
+
+**Commands.**
+
+- `claude plugin test plugin/claude-code` with the pinned 2.1.288 CLI: 386 pass, 0 fail.
+- `claude plugin validate --strict plugin/claude-code`: passed.
+- `node scripts/check-plugin.mjs`: ok.
+- `tsc` strict (`noUncheckedIndexedAccess`) over `hooks/**/*.ts`, the fixtures included, against
+  both the 2.1.288 and 2.1.292 declarations: clean.

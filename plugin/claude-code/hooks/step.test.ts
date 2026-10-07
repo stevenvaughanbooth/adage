@@ -6,7 +6,7 @@ import type { TurnStepChunk, TurnStepInput, TurnStepResult } from 'claude-code'
 import { describe, expect, test } from 'claude-code/testing'
 
 import type { Asked } from './bridge'
-import { PREDICT, USAGE, drain, engineThread, madeUpResponse, start, wire, wireLine, wireWith, world } from './fixtures/kit'
+import { PREDICT, USAGE, drain, engineThread, forwardedResponse, madeUpResponse, start, unseenResults, wire, wireLine, wireWith, world } from './fixtures/kit'
 import type { ThreadMessage } from './fixtures/kit'
 import type { Predicted } from './plugin'
 import { PREDICTED_STOP } from './predict'
@@ -195,7 +195,7 @@ describe('T-C4-02 · forwarding', () => {
 })
 
 describe('T-C8-02 · the finish line (ending)', () => {
-  test("an end_turn stop asks with ending: true; a prediction keeps the model's text and replaces the stop", async () => {
+  test("an end_turn stop asks with ending: true; a prediction keeps the model's text, appends the call, and ends with no stop reason", async () => {
     const m = model(
       [
         { kind: 'text', index: 0, text: 'Done: ' },
@@ -213,14 +213,14 @@ describe('T-C8-02 · the finish line (ending)', () => {
       { kind: 'text', index: 0, text: 'schema edited.' },
       { kind: 'tool', index: 1, id: ID(0), name: 'Bash' },
       { kind: 'input', index: 1, json: '{"command":"make gen"}' },
-      { kind: 'stop', stopReason: 'tool_use', usage: USAGE },
+      { kind: 'stop', stopReason: null, usage: USAGE },
     ])
     expect(result).toEqual({
       turnId: 'turn-1',
       index: 2,
       answer: 'Done: schema edited.',
       toolUses: [{ name: 'Bash', input: { command: 'make gen' } }],
-      stopReason: 'tool_use',
+      stopReason: null,
       usage: USAGE,
     })
     expect(recorded).toEqual([
@@ -244,6 +244,57 @@ describe('T-C8-02 · the finish line (ending)', () => {
       { kind: 'stop', stopReason: 'end_turn', usage: USAGE },
     ])
     expect(result).toMatchObject({ stopReason: 'end_turn', toolUses: [] })
+  })
+})
+
+describe('T-C8-02 · the finish line keeps the server thread whole', () => {
+  // The conversation up to the last step: the prompt, the model's Edit (a real response) and its
+  // result. The model then answers with text and end_turn, which the server records as msg_01done
+  // with no call; the mod appends make gen to it, and the call's result follows.
+  const before: ThreadMessage[] = [
+    { role: 'user' },
+    { role: 'assistant', id: 'msg_01edit', requestId: 'req_01', model: 'claude-x', stopReason: 'tool_use', calls: ['toolu_edit'] },
+    { role: 'user', results: ['toolu_edit'] },
+  ]
+  const SENT = { id: 'msg_01done', requestId: 'req_02', model: 'claude-x' }
+  const HELD = new Map([['msg_01done', []]])
+  const ENDS = () =>
+    model(
+      [
+        { kind: 'text', index: 0, text: 'Done: schema edited.' },
+        { kind: 'stop', stopReason: 'end_turn', usage: USAGE },
+      ],
+      { turnId: 'turn-1', index: 2, answer: 'Done: schema edited.', toolUses: [], stopReason: 'end_turn', usage: USAGE },
+    )
+  const after = (chunks: TurnStepChunk[]): ThreadMessage[] => [...before, forwardedResponse(chunks, SENT), { role: 'user', results: [ID(0)] }]
+
+  test('the request after it starts the thread afresh and carries the call with its result', async () => {
+    const { chunks } = await drain(turnStep(STEP, ENDS().next, stub(p => (p.ending ? predict('obligation', [MAKE_GEN]) : { ok: true, answer: undefined })).deps))
+    expect(forwardedResponse(chunks, SENT)).toEqual({ role: 'assistant', ...SENT, stopReason: null, calls: [ID(0)] })
+    expect(engineThread(after(chunks))).toEqual({ type: 'create', reason: 'anchor_incomplete' })
+    expect(unseenResults(after(chunks), HELD)).toEqual([])
+  })
+
+  test("a stop that states tool_use (the mod before this fix) continued from the server's copy: a result of a call it never saw", () => {
+    const chunks: TurnStepChunk[] = [
+      { kind: 'text', index: 0, text: 'Done: schema edited.' },
+      { kind: 'tool', index: 1, id: ID(0), name: 'Bash' },
+      { kind: 'input', index: 1, json: '{"command":"make gen"}' },
+      { kind: 'stop', stopReason: 'tool_use', usage: USAGE },
+    ]
+    expect(engineThread(after(chunks))).toEqual({ type: 'continue', previousMessageId: 'msg_01done' })
+    expect(unseenResults(after(chunks), HELD)).toEqual([ID(0)])
+  })
+
+  test('the next real response is a sound anchor again: the request after it continues', async () => {
+    const { chunks } = await drain(turnStep(STEP, ENDS().next, stub(p => (p.ending ? predict('obligation', [MAKE_GEN]) : { ok: true, answer: undefined })).deps))
+    const later: ThreadMessage[] = [
+      ...after(chunks),
+      { role: 'assistant', id: 'msg_01closing', requestId: 'req_03', model: 'claude-x', stopReason: 'end_turn' },
+      { role: 'user' },
+    ]
+    expect(engineThread(later)).toEqual({ type: 'continue', previousMessageId: 'msg_01closing' })
+    expect(unseenResults(later, HELD)).toEqual([])
   })
 })
 

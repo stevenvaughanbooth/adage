@@ -95,7 +95,9 @@ As the POC built them (poc/P3-notes.md), now under the binary's `ending` rule: b
 block indexes `0..n-1` and one `tool_use` stop, and `toolUses` lists them all (T-C7-03). At an
 `end_turn` stop with no tool chunk, `{ index: n, ending: true }`; a prediction keeps the model's
 text chunks, yields the calls at block indexes after the model's last block, and the model's stop
-as `tool_use` with its `usage` kept (T-C8-02).
+with no reason (`stopReason: null`, `appendedStop`) with its `usage` kept; the step's result says
+`stopReason: null` too (T-C8-02; live-fixes-2-notes.md §6 has why: a `tool_use` stop made the
+next request continue from the server's copy, which has no call).
 
 ### `noticed` on the view seam (D2 → D5)
 
@@ -180,8 +182,8 @@ as `tool_use` with its `usage` kept (T-C8-02).
    effort (`--debug` shows the request's model); the spool's `turn_step` record has
    `decision.routine`; `ADAGE_ARM=control` never routes and records `would_route`.
 6. **C7, C8 (T-C7-03 live, T-C8-02/04, Q15).** As the binary's notes list them: several yielded
-   Read calls of one response run; the engine records the rewritten `tool_use` stop and the
-   `adage_` ids on disk; ten of ten runs keep the text, run the call, continue and end with no
+   Read calls of one response run; the engine records the finish line's null stop and the
+   `adage_` ids on disk, and the request after it starts the thread afresh (`create`); ten of ten runs keep the text, run the call, continue and end with no
    `block`.
 7. **Subagents (T-C9-03 live, T-C9-04).** An Explore subagent spawned for a work item: its
    transcript opens with the `<adage-reflex>` block and it makes no lookup of its own; its Bash

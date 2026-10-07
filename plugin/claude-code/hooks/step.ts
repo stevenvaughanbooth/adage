@@ -3,8 +3,8 @@
 // predicted calls as the response (one call, or a chain's several) and send no request. If not,
 // the request goes out, on the person's routine model when the binary marks the step routine and
 // the person set one; its response is forwarded, and at an end_turn stop the binary is asked once
-// more with `ending: true` (the finish line): a prediction then keeps the model's text and
-// replaces the stop with the calls. `turnStep` is the step itself over plain deps; `onStep` binds
+// more with `ending: true` (the finish line): a prediction then keeps the model's text, appends
+// the calls, and ends the response with no stop reason. `turnStep` is the step itself over plain deps; `onStep` binds
 // it to the mod and keeps the step's usage for the ledger note.
 import type { HookStream, TurnStepChunk, TurnStepInput, TurnStepResult } from 'claude-code'
 
@@ -15,7 +15,7 @@ import { record } from './marks'
 import type { Mod } from './mod'
 import { quietly } from './mod'
 import type { Predicted } from './plugin'
-import { PREDICTED_STOP, callChunks, predictedResult, predictionOf } from './predict'
+import { PREDICTED_STOP, appendedStop, callChunks, predictedResult, predictionOf } from './predict'
 import { settings } from './refresh'
 import { isRecord } from './shape'
 
@@ -127,7 +127,9 @@ export async function* turnStep(
   // The request goes out, on the routine model at low effort when the binary marked the step
   // routine and the person chose one (§3.5: the setting is the consent). Its chunks pass as they
   // come; the stop is held until it is known whether the response ends the turn (end_turn with no
-  // tool call of its own).
+  // tool call of its own). A finish-line prediction appends its calls to that response, which the
+  // server holds without them, so its stop states no reason (appendedStop: the next request then
+  // starts the thread afresh, the calls in it, instead of continuing from the server's copy).
   const stream = next(routed && routine !== '' && !deps.isObserving ? { ...e, model: routine, effort: 'low' } : e)
   let lastBlock = -1
   let hasToolCall = false
@@ -140,7 +142,7 @@ export async function* turnStep(
         if (ended !== undefined) {
           endedAt = lastBlock + 1
           yield* callChunks(ended, e.turnId, e.index, endedAt)
-          yield { ...chunk, stopReason: 'tool_use' }
+          yield appendedStop(chunk)
           continue
         }
       }
@@ -157,7 +159,7 @@ export async function* turnStep(
   return {
     ...result,
     toolUses: [...result.toolUses, ...ended.calls.map(c => ({ name: c.tool, input: c.input }))],
-    stopReason: 'tool_use',
+    stopReason: null,
   }
 }
 

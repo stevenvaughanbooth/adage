@@ -1,7 +1,7 @@
 // Pure: a `TurnStep` answer to the calls it predicts, and those calls to `turn.step` chunks. The
 // binary decides what to predict (§6 invariant 1); this file only checks the answer's shape, so a
 // malformed answer is "nothing" and the request goes out.
-import type { TurnStepChunk, TurnStepResult } from 'claude-code'
+import type { TurnStepChunk, TurnStepResult, TurnStepStopChunk } from 'claude-code'
 
 import { isRecord } from './shape'
 
@@ -108,6 +108,21 @@ export function callChunks(p: Prediction, turnId: string, index: number, firstBl
  * whole, as the replay did, without the failed dispatch (docs/claude-mod/impl/live-fixes-2-notes.md).
  */
 export const PREDICTED_STOP: TurnStepChunk = { kind: 'stop', stopReason: null, usage: null }
+
+/**
+ * The stop of a real response the finish line appended predicted calls to: the model's own stop
+ * chunk with no reason, its usage and the engine's handle on it kept. The server recorded that
+ * response under its real id as the model sent it, text and `end_turn`; the transcript holds it
+ * with the calls. A stated reason made it the thread's tip, so the next request continued from the
+ * server's copy with only the calls' results after it: results of calls the server never saw (the
+ * thread diverges, or the request is refused and replayed). With no reason the engine sends that
+ * request whole (`anchor_incomplete`), the calls included, and the server's copy is never
+ * continued. Nothing else marks it: the message id is the engine's to set, and a hook-made
+ * response is anchored by the same rule as this one.
+ */
+export function appendedStop(stop: TurnStepStopChunk): TurnStepStopChunk {
+  return { ...stop, stopReason: null }
+}
 
 /** The step's result for a response made wholly of the predicted calls (no request was made). */
 export function predictedResult(p: Prediction, turnId: string, index: number): TurnStepResult {
