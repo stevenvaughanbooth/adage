@@ -3,8 +3,10 @@
 A brief for the person or agent running the evaluation on a machine with a real Claude Code
 (2.1.288 or later), an Anthropic key or a logged-in `claude`, and a terminal. Everything on this
 page that could run offline has already run on the build machine and is green (§1 says what, and
-what was re-blessed); nothing here has run in a live Claude Code session, because the build
-machine had no key. The purpose of the evaluation is to answer the question the proposal asks
+what was re-blessed). Live, so far: §5's headless comparison has run twice (run 1 with the
+finish-line grant, run 2 with the study's grants), with one §4.3 finish-line probe and §2.3's
+identity check; the results, and the defects found on the way, are in
+[evaluation-results.md](evaluation-results.md). The other sections have not run live. The purpose of the evaluation is to answer the question the proposal asks
 (`architecture.md` §1b): does the mod make Adage better at its core job, measured as fewer model
 requests, fewer tool runs and fewer directives per task at unchanged hidden-test quality, and
 does it do so without changing what the command hooks already do.
@@ -27,11 +29,28 @@ rustup show                      # current stable: the repository pins no toolch
 claude --version                 # 2.1.288 or later; the mod API is the one in plugin/claude-code/types/index.d.ts
 node --version                   # 22 or later (the plugin scripts and tests)
 python3 --version                # 3.9 or later (the demo runner has no third-party dependencies)
-plugin/build.sh                  # builds adage and adage-exec (release, --locked) and stages both, with
-                                 # dist/SHA256SUMS, into plugin/claude-code/dist/<host triple>/
+cargo build --release --locked -p adage-cli -p adage-exec -p adage-train
 export ADAGE_EVAL_ROOT=/tmp/adage-eval   # scratch root used by every section below
 mkdir -p $ADAGE_EVAL_ROOT
+export CLAUDE_CONFIG_DIR=$ADAGE_EVAL_ROOT/claude-config   # fresh; sign in once with `claude` if needed
+target/release/adage init        # at a terminal, in the repository you will use: installs the plugin
+                                 # (adage@adage-local, staged from this build) into that config dir
 ```
+
+`adage init` is the setup a person runs: it stages the plugin, with all three binaries and
+`dist/SHA256SUMS`, as a local marketplace under `$ADAGE_HOME/plugin/`, installs it with
+`claude plugin install adage@adage-local`, offers to take any settings-file registration out so
+every hook runs once, and turns learning on for the repository. After a rebuild, run it again: it
+stages the new build for the next session. `plugin/build.sh` (the same build, staged into
+`plugin/claude-code/dist/` for `claude --plugin-dir plugin/claude-code`) is the developer's route
+and the demo runner's (§5); never load both, or every hook runs twice.
+
+Until a fix lands, the mod does not find its data directory by itself under either route (live,
+2026-10-07; the command hooks are unaffected): export `CLAUDE_PLUGIN_DATA` in the shell that starts
+`claude`, as `$CLAUDE_CONFIG_DIR/plugins/data/adage-adage-local` for the plugin `adage init`
+installed, or `$CLAUDE_CONFIG_DIR/plugins/data/adage-inline` under `--plugin-dir`
+([evaluation-results.md](evaluation-results.md), defect 4). Without it the band and `/adage` never
+appear, and the debug log has no `$.process.run (adage)` line.
 
 A base build is needed for the paired latency (§3) and the identity check (§2.3): build `origin/main`
 once into a second directory and keep its binaries:
@@ -41,12 +60,9 @@ git worktree add $ADAGE_EVAL_ROOT/base origin/main
 (cd $ADAGE_EVAL_ROOT/base && cargo build --release --locked -p adage-cli -p adage-exec --examples)
 ```
 
-Every live section runs Claude Code with an isolated configuration directory so nothing on the
-machine's own setup leaks in or is changed:
-
-```sh
-export CLAUDE_CONFIG_DIR=$ADAGE_EVAL_ROOT/claude-config   # fresh; sign in once with `claude` if needed
-```
+Every live section runs Claude Code with the isolated configuration directory exported above, so
+nothing on the machine's own setup leaks in or is changed; export it in every shell that starts
+`claude` or runs `adage doctor`.
 
 ## 1. What already ran, and what to re-run first (offline, no key)
 
@@ -103,14 +119,31 @@ since C7); its floors are the measured values.
 
 ### 2.1 Install and activation (T-B1, T-X-11, Q1, Q6)
 
+With the plugin §0's `adage init` installed (and `CLAUDE_PLUGIN_DATA` as §0 says):
+
 ```sh
-claude --plugin-dir plugin/claude-code --debug --debug-file $ADAGE_EVAL_ROOT/q1.log
+claude --debug --debug-file $ADAGE_EVAL_ROOT/q1.log
 ```
 
 In a repository with no Adage home: the opening line appears once; `/adage status` answers; the
 debug log shows one hook invocation per event (the plugin's; count `session_start` spool records,
-must be 1); nothing is drawn in a repository that is `adage off`. Then with `--plugin-dir` AND the
-same hooks in `--settings` (the misuse the plan forbids): the mod must still wire once.
+must be 1); nothing is drawn in a repository that is `adage off`. Then the developer's route,
+`claude --plugin-dir plugin/claude-code` after `plugin/build.sh`, with `adage@adage-local`
+disabled (`claude plugin disable adage@adage-local`); and with `--plugin-dir` AND the same hooks in
+`--settings` (the misuse the plan forbids): the mod must still wire once.
+
+What live runs have shown so far (headless, `claude -p`, 2.1.292; none of this is §2.1 run in
+full): the opening line reaches the engine as the SessionStart hook's `systemMessage`
+(`Hook SessionStart:startup (SessionStart) success: {"systemMessage":"adage: …"}` in the debug
+log); each of the plugin's hooks settles once per event (`hooks module adage@adage-local
+classic.SessionStart settled`, one `session_start` record per session over 60 of 60 sessions in
+each §5 run); the shim links `bin/adage`, `bin/adage-exec`, `bin/adage-train` and `bin/hook` in
+`plugins/data/adage-adage-local/` (`adage-inline` under `--plugin-dir`); and the mod runs its
+binary (`$.process.run (adage): …/bin/hook`) only with `CLAUDE_PLUGIN_DATA` exported, under either
+route. With it, under `--plugin-dir`, the spool held one `turn_step` record per `mod` session
+(`predicted {kind: chain, route: read-linked-files}`) and the transcript the `adage_…` tool_use
+ids ([evaluation-results.md](evaluation-results.md), run 2). Whether the opening line is redrawn at
+the `InfoNotice` site, and anything drawn, needs an interactive session: not yet seen.
 
 Record: Q1 (the mod loads and its `turn.step` is called), Q6 (the bridge's allow-list refuses an
 argv outside it; `adage hook claude TurnStep` is the only hook argv with `TurnStep`).
@@ -237,7 +270,7 @@ within 0.3 ms of `batch_no_match` (T-C1-12); `pretool_no_match` within 0.3 ms of
 orientation only: `batch_no_match` 4.85 ms median, 5.21 ms with candidates; `turn_step_predicts`
 40 ms p50 on a debug build under load.
 
-Startup (T-A8, `release_plugin_startup`): first start of the plugin with both binaries hashed and
+Startup (T-A8, `release_plugin_startup`): first start of the plugin with its three binaries hashed and
 installed < 1,500 ms, ten warm starts < 200 ms:
 
 ```sh
@@ -351,7 +384,17 @@ expects nothing predicted in the treated arm.
 ## 5. The headless comparison (L10, T-E1, the design's own question)
 
 Five arms, interleaved per task and repeat, on the acme-billing sandbox. The demo runner sets no
-spend cap per session (`DEMO_MAX_TURNS` bounds a session's turns); watch the spend as it runs.
+spend cap per session (`DEMO_MAX_TURNS` bounds a session's turns); watch the spend as it runs. The
+runner loads the plugin with `--plugin-dir` from its own staged copy (and sets `CLAUDE_PLUGIN_DATA`
+for the plugin arms), so this section does not use the plugin §0's `adage init` installed: disable
+it first (`claude plugin disable adage@adage-local`), or export another `CLAUDE_CONFIG_DIR` for
+the runner, as both runs below did (`$DEMO_ROOT/claude-config`).
+
+This section has run twice (2026-10-06 and 2026-10-07, `DEMO_REPEATS=2`, 60 sessions each), both in
+[evaluation-results.md](evaluation-results.md): run 1, with the finish-line grant alone, never
+predicted (no opportunity in the `mod` arm); run 2, with the study's grants, predicted in 12 of 12
+`mod` sessions, with fewer model responses than `adage` but not fewer `requests`. M4's exit
+criterion was not met in either.
 
 ```sh
 export DEMO_ROOT=$ADAGE_EVAL_ROOT/demo          # the trained and learned home from §2.2

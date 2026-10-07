@@ -15,9 +15,8 @@
 </p>
 
 > [!IMPORTANT]
-> **Unreleased developer preview.** Nothing is published yet: no release binaries, no installer
-> scripts, no Homebrew tap, no npm package and no Claude Code plugin marketplace. Build it from
-> source ([Install](#install)); the repository is private for now, so that requires access to it.
+> **Unreleased developer preview.** No release has been tagged yet, so Adage installs from source
+> ([Install](#install)); the repository is private for now, so that requires access to it.
 > Advisory instincts and reflexes work in Claude Code today. Opt-in CPU execution runs on macOS
 > and Linux; Windows execution is unsupported. The launch studies so far are small and used one
 > model (Claude Haiku 4.5) on one repository; see [Evidence so far](#evidence-so-far).
@@ -61,42 +60,57 @@ agent; the repeated part gets cheaper.
 
 ## Install
 
-Adage is an unreleased developer preview: build it from source. Until the repository is public,
-this requires access to it. You need Rust and a C compiler.
+One install step, then two commands: `adage init` once, `adage update` later.
+
+**1. Install.** No release has been tagged yet, so today Adage installs from source. You need Rust
+and a C compiler, and, until the repository is public, access to it.
 
 ```bash
-cargo install --locked --git https://github.com/stevenvaughanbooth/adage adage-cli
-adage init                                   # inside your repository
+cargo install --locked --git https://github.com/stevenvaughanbooth/adage adage-cli adage-exec adage-train
 ```
 
-For a first session, expected results and the separate approval path for CPU actions, follow
-[Your first useful reflex](docs/first-reflex.md).
+That puts `adage` in `~/.cargo/bin` with its two companions beside it: `adage-exec`, which runs
+only the reflexes you let act, and `adage-train`, which compiles skills.
 
-To verify learning without a model account, run the
-[end-to-end learning proof](docs/learning-infrastructure.md#run-the-end-to-end-proof): native
-traces become a reviewed reflex that repairs a fresh task through the real hook. For prospective
-token-savings measurement, use the [frozen study workflow](docs/learning-experiments.md).
-
-**Not published yet:** the Claude Code plugin marketplace, Homebrew and npm. Until the first
-release is out, none of these exist; once they do:
+Once v0.1.0 is tagged, no Rust is needed. In Claude Code:
 
 ```text
-/plugin marketplace add stevenvaughanbooth/adage      # in Claude Code (not published yet)
+/plugin marketplace add stevenvaughanbooth/adage
 /plugin install adage@adage
-brew install stevenvaughanbooth/tap/adage             # not published yet
-npm install -g @adage-sh/cli                          # not published yet
 ```
 
-Building from a checkout, the release channels and the separate `adage-exec` and `adage-train`
-binaries are in [docs/usage.md](docs/usage.md#other-ways-to-install).
+or in a terminal:
 
-## Quickstart
+```bash
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/stevenvaughanbooth/adage/releases/latest/download/adage-cli-installer.sh | sh
+adage init
+```
 
-For a guided interface, run `adage ui` after building Adage. Home explains the next step;
-`Ctrl-K` opens the palette for connecting a harness, selecting history, conditioning a repository,
-reviewing reflexes, and opening the browser map. Forms and confirmations keep these actions in the
-app. `adage ui --demo` lets you explore with isolated sample data.
+**2. `adage init`, once, in your repository.** It finds the coding agents on this machine and
+connects each one. For Claude Code it installs the Adage plugin for you, through Claude Code's own
+`claude plugin` command, and takes out any older Adage hook registration, so every event runs
+once. If Codex or OpenCode is installed, it writes their hook files too. Every file it changes is
+shown first, and the previous version is kept as `<file>.adage-bak`. Then it turns learning on for
+this repository, starts conditioning on the sessions you already have, and ends on one screen:
+what is connected, where the binaries are, and the line your next Claude Code session opens with.
+At a terminal it asks before each step; `adage init --yes --hooks user` takes every step without a
+question, and `adage init --print` only shows them.
 
+**3. `adage update`, later.** When a newer Adage is out, the status card says so
+(`0.2.0 is out (you have 0.1.0) → adage update`), and so do `adage ui` and the map. One command
+then updates everything the way you installed it: the binaries, their hook registrations, and the
+Claude Code plugin `adage init` installed. It prints its plan first, keeps the binaries it
+replaces, checks the new ones, and ends with a health check; `adage update --rollback` puts the
+previous ones back. Until v0.1.0 is tagged there is no release to compare against, so a source
+install updates with `adage update --branch main`.
+
+A first session, what to expect, and the separate approval for CPU actions:
+[Your first useful reflex](docs/first-reflex.md). Building from a checkout, connecting a harness by
+hand, and removing Adage: [docs/usage.md](docs/usage.md#installing-and-updating). To see learning
+work without a model account, run the
+[end-to-end learning proof](docs/learning-infrastructure.md#run-the-end-to-end-proof).
+
+## What you see
 
 Start a session in a repository. The first time, you see one line (the agent never sees it):
 
@@ -114,12 +128,17 @@ reflexes    14 active: 4 instincts, 9 learned, 1 from your team
 learning    after each session · last: 2 min ago, 1 change
 activity    last 30 days: 61 sessions · 188 directives · 152 followed · 7 dead ends headed off
 savings     ✓ ~$0.034 and 3.1 turns per session, API-list equivalent (95% CI $0.011–$0.058)
+update      0.2.0 is out (you have 0.1.0) → adage update
 
-next  adage review · adage ui · adage map · adage doctor
+next  adage update · 0.2.0 is out
+      adage review · 1 install step waits for you
 ```
 
 <sub>Illustrative numbers. Until a repository has enough sessions for a real comparison, the card
 shows counts, not dollars.</sub>
+
+`adage ui` is the full-screen app: review, health, settings and the map (`adage ui --demo` explores
+it with sample data).
 
 ## Evidence so far
 
@@ -185,10 +204,12 @@ interval and caveat.
   terminal (`adage delegate on`), and then only reflexes you approved, inside an OS sandbox, on
   macOS or Linux. On Windows it advises but executes nothing, and its hook invocation there is
   untested.
-- **No network** from any hook or learner. Transcripts are read locally, and background learning
-  reads only the current repository's.
-- Settings files change only when you install, and `adage install … --write` shows the diff and
-  keeps a backup.
+- **No hook touches the network.** Transcripts are read locally, and background learning reads
+  only the current repository's. The one request Adage makes on its own is the background
+  learner's check, at most once a day, for a newer version (`adage config set update.check off`
+  stops it).
+- Hook files change only through `adage init`, `adage install` or `adage update`, each showing the
+  change first and keeping the previous file as `<file>.adage-bak`.
 - Off switches: `ADAGE_DISABLE=1`, or a `.adage/disabled` file in a repository.
 
 [How Adage works](docs/how-it-works.md) has exactly what runs automatically, what needs your

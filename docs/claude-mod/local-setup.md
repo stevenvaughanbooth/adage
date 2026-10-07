@@ -2,7 +2,9 @@
 
 A guide for the repository's owner, on a macOS or Linux machine that has run Adage's command hooks before, from pulling the branch to the first prediction. Everything below is from the tree on `claude/mods-spike-doc-m98u3o`; where the five readers disagreed or left a question open, the guide says so in one line instead of guessing. The full evaluation protocol is `docs/claude-mod/evaluation-plan.md`; this is the shorter path to a working machine.
 
-One thing to hold in mind throughout: nothing on this branch has ever run in a live Claude Code session (the build machine had no key; `docs/claude-mod/evaluation-plan.md:3-7`). You are the first live run. Section 10 lists what that means and what to write down.
+The short path is two commands after the build: `target/release/adage init` once (it installs the plugin into your Claude Code, wires every hook once and turns learning on), and `adage update` later. Sections 1 to 3 are that path; loading the plugin straight from the checkout with `--plugin-dir` is the developer's route, at the end of section 2.
+
+What has run live so far (headless `claude -p`, Claude Code 2.1.292, in a container; `docs/claude-mod/evaluation-results.md`): the evaluation's §5 comparison twice and one finish-line probe, all under `--plugin-dir`, and one `adage init` install followed by a headless session. The opening line reaches the engine, every hook settles once, and the mod predicts; but the mod finds its binary only with `CLAUDE_PLUGIN_DATA` exported, under either route, until a fix lands (section 2). Nothing has been drawn in an interactive session yet. Section 10 lists what remains and what to write down.
 
 ## 0. Prerequisites and versions
 
@@ -33,56 +35,59 @@ git fetch origin claude/mods-spike-doc-m98u3o
 git checkout claude/mods-spike-doc-m98u3o
 ```
 
-2. Build and stage the three binaries the plugin ships. `plugin/build.sh` sources `~/.cargo/env` if present, `cd`s to the repository root, and runs `cargo build --release --locked -p adage-cli -p adage-exec -p adage-train` (`plugin/build.sh:30-34`). `--no-build` stages what `target/release` already holds; `--from`, `--dist` and `--target` are for its test (`plugin/build.sh:8-13`).
-
-```sh
-plugin/build.sh
-```
-
-What it stages (`plugin/build.sh:35-58`): it reads the host triple from `rustc -vV` (`aarch64-apple-darwin` on Apple Silicon, `x86_64-unknown-linux-gnu` on a Linux box), refuses (writing nothing) unless `adage`, `adage-exec` and `adage-train` are all in `target/release`, copies them into `plugin/claude-code/dist/<triple>/`, writes `plugin/claude-code/dist/SHA256SUMS` over every staged binary (`sha256sum` on Linux, `shasum -a 256` on macOS; lines are `<sha256>  <triple>/<name>`), checks it, copies `LICENSE` and `NOTICE` into `dist/`, and prints the sums at the end.
-
-3. Know that `dist/` and `target/` are gitignored (`.gitignore:3,17`). Pulling or switching branches never updates the staged binaries: re-run `plugin/build.sh` after any change to the Rust code, or the plugin keeps linking the old (still checksum-valid) copy.
-
-4. `--locked` means `Cargo.lock` must match `Cargo.toml`; a `Cargo.toml` edit without a lock update fails the build.
-
-5. Why release: the shim copies and SHA-256-hashes each staged binary at first start, inside SessionStart's 10 s hook timeout (`plugin/claude-code/hooks/hooks.json:4`); `[profile.release]` is opt-level 3, LTO, stripped (`Cargo.toml:30-39`), giving the ~10 MB binaries; debug builds are hundreds of MB and keep debug-only knobs live (`ADAGE_TEST_FOLLOW_POLL_MS`, `ADAGE_TEST_FAULT`).
-
-6. Your terminal `adage`. The plugin's hooks never need `adage` on `PATH` (section 2), but you do for `condition`, `review`, `delegate`, `doctor`. The documented route is the checkout's binary, `target/release/adage` (`docs/usage.md:340-341`); `target/release/adage-exec` sits beside it, which is what a terminal `adage delegate on` requires (`crates/adage-cli/src/exec.rs:252-266`). The rest of this guide writes `adage` and assumes one of:
-
-```sh
-# a) an alias for this shell
-alias adage="$PWD/target/release/adage"
-
-# b) or install both onto PATH (~/.cargo/bin); adage-exec must sit beside adage
-cargo install --locked --path crates/adage-cli
-cargo install --locked --path crates/adage-exec
-```
-
-If you go with (b), `adage doctor`'s `claude-code plugin binary` check compares the sha256 of the plugin's staged `bin/adage` with the `adage` you run and warns `is a different build` when they differ (`crates/adage-cli/src/doctor/mod.rs:806-828`); (a) avoids that.
-
-7. Only if you want `adage train`: it needs `adage-train` beside `adage` or on `PATH` (`crates/adage-cli/src/train.rs:27-29`).
+2. Build the three binaries. The plugin ships all three (`adage`, `adage-exec`, `adage-train`), and `adage init` stages them from beside the `adage` you run.
 
 ```sh
 cargo build --release --locked -p adage-cli -p adage-exec -p adage-train
 ```
 
+3. `--locked` means `Cargo.lock` must match `Cargo.toml`; a `Cargo.toml` edit without a lock update fails the build.
+
+4. Why release: the shim copies and SHA-256-hashes each staged binary at first start, inside SessionStart's 10 s hook timeout (`plugin/claude-code/hooks/hooks.json:4`); `[profile.release]` is opt-level 3, LTO, stripped (`Cargo.toml:30-39`), giving the ~10 MB binaries; debug builds are hundreds of MB and keep debug-only knobs live (`ADAGE_TEST_FOLLOW_POLL_MS`, `ADAGE_TEST_FAULT`).
+
+5. Your terminal `adage`. The plugin's hooks never need `adage` on `PATH` (section 2), but you do for `condition`, `review`, `delegate`, `doctor`. Use the checkout's binary, `target/release/adage`, with `adage-exec` and `adage-train` beside it (a terminal `adage delegate on` needs `adage-exec` there, `crates/adage-cli/src/exec.rs:252-266`; `adage train` needs `adage-train`). The rest of this guide writes `adage` and assumes one of:
+
+```sh
+# a) an alias for this shell
+alias adage="$PWD/target/release/adage"
+
+# b) or install all three onto PATH (~/.cargo/bin), side by side
+cargo install --locked --path crates/adage-cli
+cargo install --locked --path crates/adage-exec
+cargo install --locked --path crates/adage-train
+```
+
+`adage init` stages the plugin from whichever `adage` runs it, so run it, and later `adage update`, with the same one you use at the terminal; `adage doctor`'s `claude-code plugin binary` check warns when the plugin's staged `bin/adage` is another build (`crates/adage-cli/src/doctor/mod.rs`).
+
+6. Pulling or switching branches never updates what the plugin runs: after a rebuild, run `adage init` again (section 2), which stages the new build for the next session.
+
+7. `target/` is gitignored, and so is `plugin/claude-code/dist/` (`.gitignore`), which only the developer's route (section 2) writes.
+
 8. Remove or upgrade any older `adage` that shares your Adage home. The new binary writes index format 1; an older binary cannot read a format-1 index that holds a `skill` step, serves nothing, and its `adage doctor` fails with `is newer than this binary … an adage on PATH and the Claude Code plugin's must match` (`crates/adage-tracks/src/index.rs:20-36`; `crates/adage-cli/src/doctor/mod.rs:362-370`).
 
 ## 2. Install the plugin into your Claude Code
 
-There are two routes in the tree. Only one works today.
-
-**Dev mode (use this).** Load the plugin from the checkout:
+**The short path: `adage init`.** At a terminal (not inside Claude Code), in the repository you will use:
 
 ```sh
-claude --plugin-dir plugin/claude-code
+adage init
 ```
 
-This is what `docs/usage.md:327-345` recommends until the marketplace exists. The plugin is `plugin/claude-code`: manifest `plugin/claude-code/.claude-plugin/plugin.json` (name `adage`, version 0.1.0, two `userConfig` rows: `band` boolean default `true`, `pane` string `auto|manual` default `manual`), hooks in `plugin/claude-code/hooks/hooks.json`, mod module `plugin/claude-code/hooks/register.ts`.
+It finds Claude Code (and Codex or OpenCode, if installed) and, on a yes, installs the plugin for you: it stages it from the `adage` that runs it, the module files carried inside the binary and the three binaries beside it with their `dist/SHA256SUMS`, as a one-plugin local marketplace named `adage-local` under `$ADAGE_HOME/plugin/`, then runs `claude plugin marketplace add <that directory>` and `claude plugin install adage@adage-local` (user scope) and checks `claude plugin list`, which then shows `adage@adage-local` enabled and read from `$ADAGE_HOME/plugin/adage` (`crates/adage-cli/src/claude_plugin.rs`). Beside it, it offers to take the settings-file registration you made before out (section 3). Then it turns learning on for this repository, binds its instincts, offers a first conditioning of its history, and ends on one screen with the line your next session opens with. `adage init --print` shows every step without doing any; `adage init --yes --hooks user` takes them all without a question. Running it again is safe: it stages the plugin again from the binary that runs it and rewrites nothing else in place. Later, `adage update` (from a checkout: `git pull --ff-only`, the same `cargo build`, then the plugin staged again) keeps all of it current, with `adage update --rollback` to go back. The plugin's manifest is `plugin/claude-code/.claude-plugin/plugin.json` (name `adage`, version 0.1.0, two `userConfig` rows: `band` boolean default `true`, `pane` string `auto|manual` default `manual`), hooks in `plugin/claude-code/hooks/hooks.json`, mod module `plugin/claude-code/hooks/register.ts`.
 
-**Marketplace route (not usable yet).** `README.md:80-88` documents `/plugin marketplace add stevenvaughanbooth/adage` then `/plugin install adage@adage`, but `.claude-plugin/marketplace.json:10-23` points the `adage` plugin at ref `marketplace` of `stevenvaughanbooth/adage`, and that branch is created only by `.github/workflows/publish-marketplace.yml` after a tagged release. `git branch -r` shows `origin/main` and the two `claude/` branches only. Until a release runs, the marketplace install cannot resolve.
+**Known, until a fix lands** (live, 2026-10-07, Claude Code 2.1.292, a fresh `CLAUDE_CONFIG_DIR`): after `adage init`, a headless session ran every command hook once and carried the opening line, and the shim linked `bin/adage`, `bin/adage-exec`, `bin/adage-train` and `bin/hook` in `$CLAUDE_CONFIG_DIR/plugins/data/adage-adage-local/`; but the debug log had no `$.process.run (adage)` line: the mod never ran its binary, so it is inert (no band, no `/adage`, no questions, no predictions). Claude Code reads a local-marketplace plugin from its source directory, not from `plugins/cache/…`, so the mod's derivation of its data directory from the plugin root finds nothing, and the variable is not in the engine's environment (below). With `CLAUDE_PLUGIN_DATA=$CLAUDE_CONFIG_DIR/plugins/data/adage-adage-local` exported in the shell that starts `claude`, the same session ran `bin/hook` and `bin/adage` from the mod. Export it (with `~/.claude` for `$CLAUDE_CONFIG_DIR` when that is unset) until the mod finds the directory itself.
 
-**One plugin.** The retired `adage-exec` alias (`plugin/claude-code-exec`) is gone (onboarding plan O1): nothing was ever published, so there is nothing to uninstall, and the marketplace lists `adage` alone.
+**The developer's route: `--plugin-dir`.** To work on the plugin itself, load it straight from the checkout. `plugin/build.sh` runs the same `cargo build` (it sources `~/.cargo/env` if present; `--no-build` stages what `target/release` already holds; `--from`, `--dist` and `--target` are for its test) and stages the three binaries into `plugin/claude-code/dist/<triple>/`: it reads the host triple from `rustc -vV` (`aarch64-apple-darwin` on Apple Silicon, `x86_64-unknown-linux-gnu` on a Linux box), refuses (writing nothing) unless `adage`, `adage-exec` and `adage-train` are all in `target/release`, writes `plugin/claude-code/dist/SHA256SUMS` over every staged binary (`sha256sum` on Linux, `shasum -a 256` on macOS; lines are `<sha256>  <triple>/<name>`), checks it, copies `LICENSE` and `NOTICE` into `dist/`, and prints the sums. Re-run it after any change to the Rust code, or the plugin keeps linking the old (still checksum-valid) copy.
+
+```sh
+plugin/build.sh
+claude plugin disable adage@adage-local      # if adage init installed it: never both, or every hook runs twice
+CLAUDE_PLUGIN_DATA=${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/data/adage-inline claude --plugin-dir plugin/claude-code
+```
+
+Claude Code keys a `--plugin-dir` plugin `adage@inline`, so its data directory is `<config dir>/plugins/data/adage-inline` (seen live; `docs/claude-mod/evaluation-results.md`, defect 4, where the mod was inert without the variable). The mod's own lookup of that directory is in progress on this branch (`plugin/claude-code/hooks/binary.ts` `dataDir`); until it lands, export the variable as above.
+
+**The published marketplace, from v0.1.0.** `/plugin marketplace add stevenvaughanbooth/adage`, then `/plugin install adage@adage`, in Claude Code. `.claude-plugin/marketplace.json` points the `adage` plugin at ref `marketplace` of `stevenvaughanbooth/adage`, a branch only `.github/workflows/publish-marketplace.yml` writes, after a tagged release (`docs/release.md`); until then that install cannot resolve. The marketplace lists one plugin, `adage`, carrying the three binaries.
 
 What happens at every session start (`plugin/claude-code/scripts/session-start`):
 
@@ -95,13 +100,15 @@ What happens at every session start (`plugin/claude-code/scripts/session-start`)
 7. Every other hook runs `${CLAUDE_PLUGIN_DATA}/bin/hook hook claude <Event>` by absolute path (`hooks.json:5-10`): UserPromptSubmit 5 s, PostToolBatch 30 s, PostToolUseFailure 5 s, PreToolUse (matcher `Bash`) 5 s, Stop 30 s, SessionEnd 5 s. `PATH` is only the shim's fallback when nothing bundled matches.
 8. If nothing can serve, the shim links `bin/hook` and `bin/adage` to `scripts/quiet` (and removes `bin/adage-exec` and `bin/adage-train`), writes the reason to `$CLAUDE_PLUGIN_DATA/status`, prints one `{"systemMessage":"adage: …"}` line, and exits 0 (fail open; `session-start:25-45,115-118`).
 
-The mod finds the same binaries from `CLAUDE_PLUGIN_DATA` (`plugin/claude-code/hooks/register.ts:99`; `bridge.ts:138-153`). It has no `PATH` fallback. Every child the mod runs carries `CLAUDECODE=1` and an allow-listed argv, through one of two guards (`plugin/claude-code/hooks/register.ts:94-97`): the bridge guard (`plugin/claude-code/hooks/bridge.ts:57-110`) for read-only/turn-down verbs — `version`; `hook claude <Event>`; `watch --follow --json --stdin ignore --repo <dir> --session <id> [--since <cursor>]`; `graph --json`; `doctor --json`; `status --json`; `--json --for-session`; `ledger note`; `off`; `map --port 0`; `condition`; `delegate status --json` — and the press guard (`plugin/claude-code/hooks/press.ts:44-95`) for person-only verbs that run only from a dialog answer or pane Button press with the press token on stdin: `review <approve|dismiss|strengthen|weaken|extinguish|pin> <track> <id>`; `review delegate <track> <id> --level e2 (--stage --json | --confirm | --predict)`; `delegate on`; `on`; `add <dir> --trust`. For an installed marketplace plugin it can derive the data dir from the plugin root (`<config>/plugins/cache/<marketplace>/<plugin>/<version>` to `<config>/plugins/data/adage-adage`); for a `--plugin-dir` checkout it cannot (`bridge.ts:112-129`: "only CLAUDE_PLUGIN_DATA can say").
+The mod finds the same binaries from `CLAUDE_PLUGIN_DATA` (`plugin/claude-code/hooks/register.ts:99`; `bridge.ts:138-153`). It has no `PATH` fallback. Every child the mod runs carries `CLAUDECODE=1` and an allow-listed argv, through one of two guards (`plugin/claude-code/hooks/register.ts:94-97`): the bridge guard (`plugin/claude-code/hooks/bridge.ts:57-110`) for read-only/turn-down verbs — `version`; `hook claude <Event>`; `watch --follow --json --stdin ignore --repo <dir> --session <id> [--since <cursor>]`; `graph --json`; `doctor --json`; `status --json`; `--json --for-session`; `ledger note`; `off`; `map --port 0`; `condition`; `delegate status --json` — and the press guard (`plugin/claude-code/hooks/press.ts:44-95`) for person-only verbs that run only from a dialog answer or pane Button press with the press token on stdin: `review <approve|dismiss|strengthen|weaken|extinguish|pin> <track> <id>`; `review delegate <track> <id> --level e2 (--stage --json | --confirm | --predict)`; `delegate on`; `on`; `add <dir> --trust`. Without the variable it derives the data dir from the plugin root for a plugin Claude Code installed into its cache (`<config>/plugins/cache/<marketplace>/<plugin>/<version>` to `<config>/plugins/data/adage-adage`, `bridge.ts` `dataDirFromRoot`); for a `--plugin-dir` checkout the in-progress `bridge.ts` `inlineDataDirs` tries `<config>/plugins/data/adage-inline`; for the `adage@adage-local` plugin `adage init` installs, neither applies yet (above).
 
-Open question, all five readers: whether `CLAUDE_PLUGIN_DATA` reaches the engine process (what the mod reads via `$.env.get`, `plugin/claude-code/hooks/register.ts:99`) is unverified (`docs/claude-mod/poc/P3-notes.md:69,100-102`; `docs/claude-mod/implementation-plan.md:661`). The shim is not affected: it gets the path as its second argument by hook-command substitution (`hooks.json:4`, `session-start:30`), and S5 measured that substitution under `--plugin-dir` (`spikes/S5-plugin-packaging/FINDINGS.md:31-34`, resolves to `~/.claude/plugins/data/<id>/`). The implemented fallback when the variable is absent is deriving the data dir from `$.plugin.root` for an installed plugin (`bridge.ts:118-129`); that derivation yields nothing for a `--plugin-dir` checkout, so there the mod is inert unless `CLAUDE_PLUGIN_DATA` is set (`bridge.ts:116`; `P3-notes.md:69`). "The shim writing the path into `$ADAGE_HOME`" is only a hypothetical mentioned in `P3-notes.md:102` ("for instance"); it is not implemented. Section 4 is where you find out.
+Answered live (`docs/claude-mod/evaluation-results.md`, defect 4, and the `adage init` session above): `CLAUDE_PLUGIN_DATA` is substituted into the command hooks (the shim gets it as its second argument, `hooks.json:4`) but is not in the engine's process environment, so the mod reads nothing from `$.env.get('CLAUDE_PLUGIN_DATA')` unless the shell that starts `claude` exports it. Under `--plugin-dir` the data directory is `<config dir>/plugins/data/adage-inline`; for `adage@adage-local`, `<config dir>/plugins/data/adage-adage-local`.
 
 ## 3. Hooks: wire every event exactly once
 
-You have used `adage install claude-code --write` before, so a settings file on this machine registers Adage's hooks for the same seven events the plugin registers. Claude Code runs every registration, so plugin plus settings file means every hook runs twice and every notice appears twice (`crates/adage-cli/src/doctor/mod.rs:649-666`). The evaluation plan calls `--plugin-dir` together with the same hooks in `--settings` "the misuse the plan forbids" (`docs/claude-mod/evaluation-plan.md:110-111`).
+You have used `adage install claude-code --write` before, so a settings file on this machine registers Adage's hooks for the same seven events the plugin registers. Claude Code runs every registration, so plugin plus settings file means every hook runs twice and every notice appears twice (`crates/adage-cli/src/doctor/mod.rs:649-666`). The evaluation plan calls `--plugin-dir` together with the same hooks in `--settings` "the misuse the plan forbids" (`docs/claude-mod/evaluation-plan.md`, §2.1).
+
+`adage init` handles this: beside the plugin it offers to take Adage's entries out of each settings file that has them (the diff first, `<file>.adage-bak` kept; `--yes` accepts), so after it the steps below are a check. By hand, they are the same commands. Live, after `adage init` in a fresh config dir, each of the plugin's hooks settled once per event (`hooks module adage@adage-local classic.SessionStart settled`, one `SessionStart:startup` success, one `SessionEnd` completion), as on all 60 sessions of each `--plugin-dir` comparison run (`evaluation-results.md`).
 
 Where the old registrations can be (`crates/adage-cli/src/placement.rs:38-46`): user scope `~/.claude/settings.json` (or `$CLAUDE_CONFIG_DIR/settings.json`), project scope `<repo>/.claude/settings.local.json`; `adage` also detects, but never writes, `~/.claude/settings.local.json` and `<repo>/.claude/settings.json`.
 
@@ -128,29 +135,33 @@ Both refuse inside an agent session (`CLAUDECODE` set) and need a terminal on st
 
 5. Caveat for section 4: with a fresh `CLAUDE_CONFIG_DIR`, the user-scope `settings.json` is the fresh one and holds nothing; a project-scope `<repo>/.claude/settings.local.json` still applies, so step 2's `--scope project` matters even then. `detect.rs:25-27` honours `CLAUDE_CONFIG_DIR`, so export it in the terminal where you run `adage doctor` too, or doctor looks at `~/.claude`.
 
-6. One reader noted that whether a `--plugin-dir` plugin's data lands under `plugins/data/*adage*/` (what `detect.rs` scans) is not stated anywhere; if it does not, doctor will not list the plugin as a registration and `hooks: claude-code` will warn that nothing is registered even while the plugin works.
+6. A `--plugin-dir` plugin's data lands in `plugins/data/adage-inline/` and the `adage init` one's in `plugins/data/adage-adage-local/` (both seen live), and both match what `detect.rs` scans (`plugins/data/*adage*/`), so doctor lists either as the registration once its shim has run.
 
 ## 4. First run in a fresh config dir, and what you should see
 
 The evaluation plan isolates Claude Code's configuration so nothing in your daily setup leaks in or changes (`docs/claude-mod/evaluation-plan.md:42-47`). It does not isolate `ADAGE_HOME`: a first run writes to your real home (macOS `~/Library/Application Support/Adage`, Linux `${XDG_DATA_HOME:-~/.local/share}/adage`; `crates/adage-store/src/paths.rs:36-49`). Decide once: keep the real home (your existing reflexes are there; the first `adage condition` re-parses every transcript because the parse-cache stamp includes `SESSION_FORMAT`, now 6, and the executable's size and mtime, `crates/adage-ingest/src/cache.rs:68-83`), or export a throwaway `ADAGE_HOME` as the demo runner does (`demo/run.py:59-60`). Whichever you pick, export the same `ADAGE_HOME` in the terminal and in the shell that starts `claude`, or the shim and your terminal commands look at different `exec/enabled` markers (`session-start:57-61`).
 
-1. Set up the scratch root and the fresh config dir; sign in once with `claude` if asked:
+1. Set up the scratch root and the fresh config dir (sign in once with `claude` if asked), then install the plugin into it with `adage init` (section 2), at a terminal in the repository:
 
 ```sh
 export ADAGE_EVAL_ROOT=/tmp/adage-eval
 mkdir -p $ADAGE_EVAL_ROOT
 export CLAUDE_CONFIG_DIR=$ADAGE_EVAL_ROOT/claude-config
+adage init
+export CLAUDE_PLUGIN_DATA=$CLAUDE_CONFIG_DIR/plugins/data/adage-adage-local   # until the fix lands (section 2)
 ```
 
-2. From the repository root, start Claude Code with the plugin and a debug log (`evaluation-plan.md:105`):
+2. Start Claude Code with a debug log (`evaluation-plan.md` §2.1). The plugin is installed, so no `--plugin-dir`:
 
 ```sh
-claude --plugin-dir plugin/claude-code --debug --debug-file $ADAGE_EVAL_ROOT/q1.log
+claude --debug --debug-file $ADAGE_EVAL_ROOT/q1.log
 ```
+
+On the developer's route the same session is `claude --plugin-dir plugin/claude-code --debug --debug-file $ADAGE_EVAL_ROOT/q1.log`, with `CLAUDE_PLUGIN_DATA` set to `…/plugins/data/adage-inline` and the installed plugin disabled.
 
 3. What you should see, in a repository where Adage already has reflexes or history:
 
-- The opening line, once, redrawn by the mod at the `InfoNotice` site as `◠ adage · …` (`plugin/claude-code/hooks/draw/sites.ts:33-38`). The text is the binary's SessionStart `systemMessage`: `adage: N reflexes and M instincts active in this repo; it keeps learning as you work. Nothing runs without you.`, or in a repository with history but no reflexes yet `adage: learning from N past sessions in this repo; reflexes arrive within a minute. …` (`crates/adage-hook/src/session_start.rs:152-187`). Live-only, unverified: whether the hook's `systemMessage` reaches the `InfoNotice` site at all (`docs/claude-mod/impl/B2-B3-notes.md:183`). If it stays Claude Code's plain notice, that is finding number one.
+- The opening line, once, redrawn by the mod at the `InfoNotice` site as `◠ adage · …` (`plugin/claude-code/hooks/draw/sites.ts:33-38`). The text is the binary's SessionStart `systemMessage`: `adage: N reflexes and M instincts active in this repo; it keeps learning as you work. Nothing runs without you.`, or in a repository with history but no reflexes yet `adage: learning from N past sessions in this repo; reflexes arrive within a minute. …` (`crates/adage-hook/src/session_start.rs:152-187`). Seen live, headless: the line reaches the engine as the SessionStart hook's `systemMessage` (the debug log's `Hook SessionStart:startup (SessionStart) success: {"systemMessage":"adage: …"}`). Not yet seen, because it needs an interactive session: whether the mod redraws it at the `InfoNotice` site (`docs/claude-mod/impl/B2-B3-notes.md:183`). If it stays Claude Code's plain notice, that is finding number one.
 - The band under the conversation: `◠ adage  {n reflexes this session} · {n steps without a model request} · …` (`plugin/claude-code/hooks/view/band.ts:56-113`). If it reads `◠ adage ○ off · run adage doctor`, the mod is inert: see section 8.
 - Possibly, once per Claude Code version per machine, the second band line `» Claude Code {v} is newer than this plugin was tested with (2.1.288) · run adage doctor`; it clears at the first prompt and never returns for that version.
 
@@ -158,10 +169,11 @@ claude --plugin-dir plugin/claude-code --debug --debug-file $ADAGE_EVAL_ROOT/q1.
 
 5. Type `/adage watch`. The pane opens with tabs Live (`l`), Reflexes (`r`), Health (`t`), footer `esc: close`, and `Explore in browser` at the end of each tab (`plugin/claude-code/hooks/draw/pane.tsx:92-128`). Live shows `Nothing yet in this repository. Reflexes appear here as Adage uses them.` until something fires. Health lists every `adage doctor --json` check as a lamp row.
 
-6. In a second terminal, confirm the shim did its work. The data dir is whatever Claude Code passed as `CLAUDE_PLUGIN_DATA`; for an installed plugin it is `$CLAUDE_CONFIG_DIR/plugins/data/adage-adage`. Find it from the debug log if `--plugin-dir` puts it elsewhere.
+6. In a second terminal, confirm the shim did its work, and that the mod runs its binary. The data dir is whatever Claude Code passed the shim as `CLAUDE_PLUGIN_DATA`: `$CLAUDE_CONFIG_DIR/plugins/data/adage-adage-local` for the plugin `adage init` installed, `…/adage-inline` under `--plugin-dir`, `…/adage-adage` for the published plugin (all three spellings follow Claude Code's `<plugin>@<marketplace>` key). No `$.process.run (adage)` line in the debug log means the mod is inert: export `CLAUDE_PLUGIN_DATA` (section 2) and start a new session.
 
 ```sh
 grep -n 'CLAUDE_PLUGIN_DATA\|session-start' $ADAGE_EVAL_ROOT/q1.log | head
+grep -c '\$.process.run (adage)' $ADAGE_EVAL_ROOT/q1.log     # more than 0: the mod asked its binary
 ls -l $CLAUDE_CONFIG_DIR/plugins/data/*adage*/bin/
 ```
 
@@ -326,21 +338,21 @@ Start with `adage doctor`; it exits non-zero only on a FAIL, so read the WARN ro
 
 | what you see | meaning | fix |
 |---|---|---|
-| band `◠ adage ○ off · run adage doctor`; `/adage` missing or `adage is not answering here` | no binary could serve: the mod is inert, every hook answers nothing (fail open) | `cat $CLAUDE_PLUGIN_DATA/status`: `no binary for <os-arch>; …` means no stage for the host triple (re-run `plugin/build.sh`; on Linux check the `-gnu` fallback); `does not match its checksum` means a stale `SHA256SUMS` (re-run `plugin/build.sh`); `ls -l $CLAUDE_PLUGIN_DATA/bin` shows the links at `scripts/quiet`. Then a new session. If there is no `status` file and the band is left to the engine, `CLAUDE_PLUGIN_DATA` did not reach the module (section 2's open question): read the debug log. |
+| band `◠ adage ○ off · run adage doctor`; `/adage` missing or `adage is not answering here` | no binary could serve: the mod is inert, every hook answers nothing (fail open) | `cat $CLAUDE_PLUGIN_DATA/status`: `no binary for <os-arch>; …` means no stage for the host triple (run `adage init` again, or `plugin/build.sh` on the developer's route; on Linux check the `-gnu` fallback); `does not match its checksum` means a stale `SHA256SUMS` (the same); `ls -l $CLAUDE_PLUGIN_DATA/bin` shows the links at `scripts/quiet`. Then a new session. If there is no `status` file, the links are fine and the debug log has no `$.process.run (adage)` line, the mod did not find its data directory: export `CLAUDE_PLUGIN_DATA` (section 2) and start a new session. |
 | status line `hooks are not answering; run adage doctor` | three hook answers in a row failed or timed out (`plugin/claude-code/hooks/binary.ts:9-19`) | `adage doctor`; `fail-open errors` reads `$ADAGE_HOME/fail-open.log` |
 | `hooks: claude-code (twice)` | plugin and a settings file both register | section 3, step 2 |
-| `claude-code plugin binary … is a different build` / `is a broken link` | staged binary differs from the `adage` you run, or the link is dead | `plugin/build.sh`, then a new Claude Code session |
+| `claude-code plugin binary … is a different build` / `is a broken link` | staged binary differs from the `adage` you run, or the link is dead | `adage init` again with the `adage` you run (or `adage update`; `plugin/build.sh` on the developer's route), then a new Claude Code session |
 | `index … is newer than this binary` (FAIL) | an older `adage` shares the home | upgrade or remove it (section 1, step 8) |
 | `index` missing / stale / invalid | | `adage condition` |
 | `hook activity: claude-code` WARN | registered, no delivery receipt yet (refreshed at most once a minute) | send a prompt in a new session, refresh Health |
 | `kill switches` WARN | `.adage/disabled` (`adage on`), `ADAGE_DISABLE=1`, `ADAGE_CONTROL>=1`, `ADAGE_ARM=control` | unset them; `adage on` is the runnable fix for the repository marker |
-| `adage: execution is on, but no adage-exec binary was found for this machine; serving without execution` | marker set, no `adage-exec` staged | `plugin/build.sh` stages it; or `adage delegate off` |
+| `adage: execution is on, but no adage-exec binary was found for this machine; serving without execution` | marker set, no `adage-exec` staged | build it beside `adage` and run `adage init` again (`plugin/build.sh` on the developer's route); or `adage delegate off` |
 | band `○ off in this repository · /adage on` | `.adage/disabled` | `adage on` at a terminal (`/adage on` opens an ask only when a press is bound) |
 | Live tab `feed stopped · run adage doctor` | the follower child ended early three times (`plugin/claude-code/hooks/follower.ts:21-30`) | `/adage pause` twice (pause, resume) restarts it from the kept cursor with the count at 0; doctor has no check for the follower itself |
 | `» 1 grant lapsed · /adage health` | a granted command changed | the Health tab holds `adage review delegate … --predict` |
 | status `an action was interrupted; …` | an E2 action was interrupted | `adage-exec recover --id <op> --acknowledge` in a terminal |
 
-Two notes. `docs/zero-config.md:90-93` and `docs/Adage — Architecture.md:702,709` still describe an older shim (stderr hint, "needs the adage binary on PATH", marketplace source `./plugin/claude-code`); trust the shim script and `marketplace.json`. And nothing is drawn or asked in `claude -p` or the SDK (the engine reports `isInteractive: false` there); in the VS Code panel nothing is drawn (the band and pane draw only on the terminal and desktop surfaces) and `/adage` answers as text; absence of a warning there is not health (`docs/usage.md:412-413`).
+Two notes. `docs/Adage — Architecture.md:702,709` still describes an older shim (stderr hint, "needs the adage binary on PATH", marketplace source `./plugin/claude-code`); trust the shim script and `marketplace.json`. And nothing is drawn or asked in `claude -p` or the SDK (the engine reports `isInteractive: false` there); in the VS Code panel nothing is drawn (the band and pane draw only on the terminal and desktop surfaces) and `/adage` answers as text; absence of a warning there is not health (`docs/usage.md:412-413`).
 
 ## 9. Observe mode and the control arm, for a side-by-side
 
@@ -350,7 +362,7 @@ Three environment knobs, all read by the binary or the mod from the environment 
 - `ADAGE_ARM=treated|control`: forces the session's arm. In control Adage computes but says and predicts nothing, spooling `would_predict`; `adage doctor` warns `ADAGE_ARM=control: this shell's sessions receive nothing`.
 - `ADAGE_CONTROL=<share>` (config `runtime.control`, default `0.1`): the held-out share; `>= 1` is shadow mode.
 
-A by-hand side-by-side on one repository, same task, three sessions:
+A by-hand side-by-side on one repository, same task, three sessions (with the installed plugin drop `--plugin-dir plugin/claude-code`; either way with `CLAUDE_PLUGIN_DATA` exported, section 2):
 
 ```sh
 ADAGE_ARM=treated claude --plugin-dir plugin/claude-code --debug --debug-file $ADAGE_EVAL_ROOT/treated.log
@@ -360,17 +372,19 @@ ADAGE_ARM=control claude --plugin-dir plugin/claude-code --debug --debug-file $A
 
 Then section 7: `[API REQUEST]` counts per log, `predicted` versus `would_predict` in the follower (run without `--session`). The demo runner's arms are the packaged form: `control` (hooks via `--settings`, `ADAGE_ARM=control`), `mod-observe` (plugin, `ADAGE_MOD_OBSERVE=1`), `mod` (plugin), never the plugin and `--settings` together (`demo/run.py:16-20,179-189`).
 
-## 10. What has never run live before you
+## 10. What has run live, and what has not
 
-Nothing on this branch has run in a real Claude Code session. Everything offline is green: 134 suites / 1,401 tests in the workspace, 351 in `claude plugin test plugin/claude-code`; a different count on your machine is not itself a failure (`evaluation-plan.md:69-71`). The first live session answers, in roughly this order:
+Everything offline is green: 134 suites / 1,401 tests in the workspace, 351 in `claude plugin test plugin/claude-code`; a different count on your machine is not itself a failure (`evaluation-plan.md` §1). Live, headless only so far (`evaluation-results.md`; the `adage init` session in section 2):
 
-1. Whether `CLAUDE_PLUGIN_DATA` reaches the shim's args and the engine process under `--plugin-dir`, and what directory it is (`P3-notes.md:100-102`). If not, the mod is inert and the fallback (the shim writing the path into `$ADAGE_HOME`) needs building.
-2. Which fires first, the mod's `session.start` or the shim; the re-probe after `classic.SessionStart` covers either order at the cost of one extra `version` run (`P3-notes.md:95-99`). And whether `classic.SessionStart` reaches the mod before the first `UserPromptSubmit`, which is the press window (`B4-D5-notes.md:214-218`).
-3. The first-start budget with two binaries hashed: `< 1,500 ms` first start, `< 200 ms` for ten warm starts, measured by `cargo test --release -p adage-cli --test zero_config_plugin release_plugin_startup -- --nocapture` (release only; `evaluation-plan.md:238-243`). On macOS each new binary pays 119-350 ms on first spawn (`spikes/S1-hook-latency/FINDINGS.md:75-95`).
-4. Drawing (`B2-B3-notes.md:180-191`): the `systemMessage` at `InfoNotice`; `UserMessage` text equalling the prompt; `classic.PreToolUse` carrying `updatedInput`; the follower (`adage watch --follow --json --stdin ignore`) surviving `$.process.spawn`'s stdin, restarting across a module reload with `--since`, gone after `/clear` and exit (`ps aux | grep 'adage watch --follow'`); `$.ui.copy`, `$.ui.scroll`, the pane across a reload; the map opening the browser; `ToolGroup` rows carrying `calls[].tool_use_id`.
-5. Press and dialog (`B4-D5-notes.md:212-239`; `A7-A8-notes.md:304-308`): the `$.ui.ask` dialog drawing from a detached `turn.complete`; the press spent with `via: press` in `review.yaml`; whether `UserPromptSubmit` fires for `/adage …` commands (Q14, which decides whether `/adage on` typed first can ever be accepted); `see what it would do` against a real `--stage --json`; `$.store` surviving a restart.
-6. Acting (`C3-C7-C8-D2-C9-E-notes.md:121-128,217-221`; `evaluation-plan.md:256-347`): the yielded call recorded with an `adage_` id and no `[API REQUEST]` for that step, ten of ten; the finish line rewriting `end_turn` into `tool_use`; whether `PostToolBatch` follows a receipt-answered call; `$.tool.check` agreeing with `keeps_permissions`; `routine_model` visible in the request's model; subagent `agent_id` reaching the command hooks.
-7. Windows: whether Claude Code in Git Bash runs the exec-form SessionStart hook at all (`session-start:53`); not your machine, but it is on the list.
+- Answered. `CLAUDE_PLUGIN_DATA` reaches the shim's arguments but not the engine's process: the mod needs it exported until the fix lands (section 2). The data directories are `plugins/data/adage-inline` (`--plugin-dir`) and `plugins/data/adage-adage-local` (`adage init`). The opening line reaches the engine as the SessionStart `systemMessage`. Every hook settles once per event (one `session_start` record per session, 60 of 60 in each comparison run). The shim links all three binaries and `bin/hook`, and `bin/hook -> adage-exec` once `adage delegate on` has run (every plugin-arm session was served by `adage-exec`). The mod asks `TurnStep` at every step, and a granted step is yielded in the model's place: an `adage_` tool_use in the transcript, a `turn_step` record with `predicted`, no `[API REQUEST]` for that step (one finish-line probe; 12 of 12 `mod` sessions in run 2, `read-linked-files`). The request after a yielded step is answered by the server's `404 … No thread state was found` and replayed once (12 of 12 in run 2): an engine and API interaction recorded there, not changed.
+- Still open, in roughly this order:
+
+1. Which fires first, the mod's `session.start` or the shim; the re-probe after `classic.SessionStart` covers either order at the cost of one extra `version` run (`P3-notes.md:95-99`). And whether `classic.SessionStart` reaches the mod before the first `UserPromptSubmit`, which is the press window (`B4-D5-notes.md:214-218`).
+2. The first-start budget with three binaries hashed: `< 1,500 ms` first start, `< 200 ms` for ten warm starts, measured by `cargo test --release -p adage-cli --test zero_config_plugin release_plugin_startup -- --nocapture` (release only; `evaluation-plan.md` §3). On macOS each new binary pays 119-350 ms on first spawn (`spikes/S1-hook-latency/FINDINGS.md:75-95`).
+3. Drawing, which needs an interactive session (`B2-B3-notes.md:180-191`): the `systemMessage` redrawn at `InfoNotice`; `UserMessage` text equalling the prompt; `classic.PreToolUse` carrying `updatedInput`; the follower (`adage watch --follow --json --stdin ignore`) surviving `$.process.spawn`'s stdin, restarting across a module reload with `--since`, gone after `/clear` and exit (`ps aux | grep 'adage watch --follow'`); `$.ui.copy`, `$.ui.scroll`, the pane across a reload; the map opening the browser; `ToolGroup` rows carrying `calls[].tool_use_id`.
+4. Press and dialog (`B4-D5-notes.md:212-239`; `A7-A8-notes.md:304-308`): the `$.ui.ask` dialog drawing from a detached `turn.complete`; the press spent with `via: press` in `review.yaml`; whether `UserPromptSubmit` fires for `/adage …` commands (Q14, which decides whether `/adage on` typed first can ever be accepted); `see what it would do` against a real `--stage --json`; `$.store` surviving a restart.
+5. Acting beyond what run 2 showed (`C3-C7-C8-D2-C9-E-notes.md:121-128,217-221`; `evaluation-plan.md` §4): ten of ten yielded calls on one route; the finish line rewriting `end_turn` into `tool_use`; whether `PostToolBatch` follows a receipt-answered call; `$.tool.check` agreeing with `keeps_permissions`; `routine_model` visible in the request's model; subagent `agent_id` reaching the command hooks.
+6. Windows: whether Claude Code in Git Bash runs the exec-form SessionStart hook at all (`session-start:53`); not your machine, but it is on the list.
 
 What to report back, per section, in `docs/claude-mod/evaluation-results.md` in the format of `evaluation-plan.md:413-429`: machine (CPU, OS, Claude Code version, commit), the command as run, the result (a number or yes/no per probe), pass/fail; attach the debug logs' request counts; a number not produced is listed as not produced with the reason, never estimated. On a "no", the chunk's notes name the assumption that failed and, where seen, the fallback; record it, fix the mod or binary, re-run the section. Fail-open on hook paths is never relaxed to pass a test. Also record the exact dialog text seen, whether `adage review` history shows `via: press`, and the spool's `press_issued` / `press_spent` counts.
 
@@ -393,7 +407,7 @@ adage on             # removes it; a person's decision: terminal, or /adage on w
 
 4. The kill switch: `ADAGE_DISABLE=1` in the environment Claude Code inherits. Every hook event prints nothing and does no work (after draining stdin and checking the harness name), except that a pending `/adage` press is still answered so a person can turn Adage back on from the session (`crates/adage-hook/src/lib.rs:138-147`; `crates/adage-hook/src/press.rs:275`). It applies wherever the variable is set, and `adage on` cannot override it: `adage on` only removes the repository's `.adage/disabled` marker and reports that `ADAGE_DISABLE=1` still keeps every hook off (`crates/adage-cli/src/switch.rs:21-23,81-85`).
 
-5. The plugin. In dev mode, stop passing `--plugin-dir plugin/claude-code`; the data dir Claude Code gave the plugin (`$CLAUDE_CONFIG_DIR/plugins/data/*adage*/` for an installed plugin) can be deleted by hand. For a marketplace install, once one exists: `/plugin uninstall adage@adage` in Claude Code.
+5. The plugin. The one `adage init` installed: `claude plugin uninstall adage@adage-local` (it removes the plugin's data directory too), then `claude plugin marketplace remove adage-local`; the staged copy under `$ADAGE_HOME/plugin/` stays until you delete it. On the developer's route, stop passing `--plugin-dir plugin/claude-code`; its data directory (`$CLAUDE_CONFIG_DIR/plugins/data/adage-inline/`) can be deleted by hand. For the published plugin, from v0.1.0: `/plugin uninstall adage@adage` in Claude Code.
 
 6. If you go back to command hooks without the plugin, re-register them at a terminal: `adage install claude-code --write` (`--scope user` optional). `adage doctor` then confirms a single registration.
 
