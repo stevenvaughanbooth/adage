@@ -29,6 +29,9 @@ fn steps() -> Vec<(&'static str, &'static str, Run)> {
 }
 pub fn key(s: &mut AppState, code: KeyCode) -> Option<Cmd> {
     match code {
+        // `u: update` (the first row, while a newer Adage is out): `adage update` as a job, after
+        // its confirmation says what it will do.
+        KeyCode::Char('u') => return Some(Cmd::PrepareTool(Tool::Update)),
         KeyCode::Up | KeyCode::Char('k') => s.home_sel = s.home_sel.saturating_sub(1),
         KeyCode::Down | KeyCode::Char('j') => s.home_sel = (s.home_sel + 1).min(steps().len() - 1),
         KeyCode::Enter => {
@@ -56,14 +59,16 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
             t.yellow(),
         )));
     }
-    // A newer Adage, from the release check's cache: information, said where people look first.
+    // A newer Adage, from the release check's cache: information, said where people look first,
+    // in plain ink (never a warning colour), with the key that runs `adage update`.
     let update = crate::update::newer(&ctx.paths);
     if let Some(r) = &update {
         lines.push(Line::from(vec![
             Span::styled(format!(" adage {}", env!("CARGO_PKG_VERSION")), t.ink2()),
             Span::styled(format!(" · {} is out · ", r.version), t.ink2()),
-            Span::styled("adage update", t.command()),
-            Span::styled(" updates it, its hooks and the plugin", t.dim()),
+            Span::styled("u", t.accent()),
+            Span::styled(" update", t.ink2()),
+            Span::styled(" (adage update: Adage, its hooks and the plugin together)", t.dim()),
         ]));
     }
     lines.push(Line::from(Span::styled(format!(" Repository: {}", ctx.label), t.ink2())));

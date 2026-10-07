@@ -33,6 +33,16 @@
 //!
 //! This is the one command that replaces Adage's own binaries, and only when a person runs it: no
 //! hook or learner calls it (the learner only checks).
+//!
+//! **The press** (onboarding plan O9). Bare `adage update` is a press site
+//! (`PersonVerb::Update`): at a terminal, or with a person's press from the Claude Code session
+//! (`{ press, session }` on stdin), whose next token is the first line on stdout. Every flag keeps
+//! the terminal's check, so a press reaches this one argv and nothing else; `--check` and `--print`
+//! decide nothing and need no one. Under a press the update runs only a channel whose update is a
+//! fetch (the plugin, npm, the release installer), with the package manager's output on standard
+//! error; a source build, a checkout or Homebrew answers `manual` and runs nothing; no settings
+//! file, registration or config is written (re-pointing is said as one line, for a terminal); and
+//! the last line on stdout is one JSON object the mod reads ([`Tail`]).
 
 pub(crate) mod channel;
 pub(crate) mod keep;
@@ -43,6 +53,7 @@ pub(crate) mod repoint;
 use crate::claude_plugin::{self, ClaudeCli};
 use crate::detect;
 use crate::helpers::flag;
+use adage_app::person::PersonVerb;
 use adage_store::release::{Latest, Release, VERSION};
 use adage_store::Paths;
 use adage_term::{Line, Out, Role};
@@ -75,6 +86,70 @@ fn running() -> Result<PathBuf> {
     Ok(exe.canonicalize().unwrap_or(exe))
 }
 
+/// Who is updating (onboarding plan O9): a person at a terminal (or CI's override), or a person's
+/// press in the Claude Code session.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum By {
+    Terminal,
+    Press,
+}
+
+impl By {
+    /// `previous.json`'s `via`.
+    fn via(self) -> &'static str {
+        match self {
+            By::Terminal => "terminal",
+            By::Press => "press",
+        }
+    }
+}
+
+/// The person check for `adage update` (onboarding plan O9): bare, it is the press site
+/// `PersonVerb::Update` (a terminal, or a valid press, whose next token
+/// `crate::review::person_or_press` prints first); with any flag it is the terminal's check alone,
+/// which never reads a press.
+fn person(args: &[String], paths: &Paths) -> Result<By> {
+    if !args.is_empty() {
+        adage_app::person::require("update")?;
+        return Ok(By::Terminal);
+    }
+    let (p, _) = crate::review::person_or_press(PersonVerb::Update, paths)?;
+    Ok(if p.via() == adage_tracks::review::Via::Press { By::Press } else { By::Terminal })
+}
+
+/// What an update under a press came to: the last line on stdout, one JSON object the mod toasts
+/// and draws from (docs/claude-mod/impl/O6-O9-notes.md). Nothing is printed at a terminal.
+enum Tail<'a> {
+    /// `{"updated": {"from", "to", "effect": "next session"}}`.
+    Updated { from: &'a str, to: &'a str },
+    /// `{"latest": {"version"}}`: nothing newer, nothing run.
+    Latest(&'a str),
+    /// `{"manual": {"command", "say"}}`: this install updates elsewhere; nothing was run.
+    Manual { command: &'a str, say: String },
+}
+
+impl Tail<'_> {
+    fn json(&self) -> serde_json::Value {
+        use serde_json::json;
+        match self {
+            Tail::Updated { from, to } => json!({ "updated": { "from": from, "to": to, "effect": "next session" } }),
+            Tail::Latest(v) => json!({ "latest": { "version": v } }),
+            Tail::Manual { command, say } => json!({ "manual": { "command": command, "say": say } }),
+        }
+    }
+
+    /// Print it last, under a press.
+    fn say(&self, by: By) -> Result<()> {
+        if by == By::Press {
+            use std::io::Write;
+            let mut out = std::io::stdout().lock();
+            writeln!(out, "{}", self.json())?;
+            out.flush()?;
+        }
+        Ok(())
+    }
+}
+
 /// The newest release, when the cache says one is newer than this binary (no request is made):
 /// what every surface that says "a new Adage is out" reads.
 pub(crate) fn newer(paths: &Paths) -> Option<Release> {
@@ -98,6 +173,17 @@ pub(crate) fn card_json(paths: &Paths, for_session: bool) -> serde_json::Value {
         "url": r.url,
         "notes": r.notes,
     })
+}
+
+/// `adage version`: `adage 0.1.0`, and when the release check's cache knows a newer release, `adage
+/// 0.1.0 · 0.2.0 is out (adage update)` (onboarding plan O6). No request is made, and the first
+/// two words stay what every reader of a `version` answer takes (`probe::version_line`, the mod's
+/// probe, the plugin's shim).
+pub(crate) fn version_line(paths: &Paths) -> String {
+    match newer(paths) {
+        Some(r) => format!("adage {VERSION} · {} is out (adage update)", r.version),
+        None => format!("adage {VERSION}"),
+    }
 }
 
 /// `adage update --check [--now] [--json]`.
@@ -159,6 +245,8 @@ fn person_at_terminal() -> Option<bool> {
 fn update(args: &[String], paths: &Paths) -> Result<()> {
     let has = |f: &str| args.iter().any(|a| a == f);
     let print = has("--print");
+    // Before anything is printed: under a press, the next token is the first line on stdout.
+    let by = if print { By::Terminal } else { person(args, paths)? };
     let exe = running()?;
     let channel = match flag(args, "--from").as_deref() {
         Some(name @ ("source" | "npm" | "brew" | "release")) => Channel::parse(name).unwrap_or(Channel::Source),
@@ -192,13 +280,21 @@ fn update(args: &[String], paths: &Paths) -> Result<()> {
     if let Some(l) = &known {
         if target.is_none() && l.failure.is_none() && l.latest.is_some() {
             o.line(&Line::new().text(format!("adage {VERSION} is the latest · nothing to do")))?;
-            // The plugin `adage init` staged follows this install: one left behind (staged from
-            // an older build) is staged again, so the two never diverge (O8).
-            if !print && channel != Channel::Plugin && local_plugin_stale(paths, &exe) {
-                let root = std::env::current_dir().ok().and_then(|d| adage_core::repo::find_root(&d));
-                restage_plugin(&mut o, paths, &exe, root.as_deref())?;
+            let root = std::env::current_dir().ok().and_then(|d| adage_core::repo::find_root(&d));
+            if !print && channel != Channel::Plugin {
+                // Registrations an update under a press left as they were (it writes none): a
+                // terminal's `adage update` re-points them, as its finish would have.
+                let installed = keep::installed(&exe).into_iter().collect();
+                let found = repoint::plan(&installed, &exe, root.as_deref());
+                repoint_or_say(&mut o, &found, by, VERSION, has("--yes") || has("-y"))?;
+                // The plugin `adage init` staged follows this install: one left behind (staged
+                // from an older build) is staged again, so the two never diverge (O8).
+                if local_plugin_stale(paths, &exe) {
+                    restage_plugin(&mut o, paths, &exe, root.as_deref())?;
+                }
             }
-            return Ok(());
+            o.flush()?;
+            return Tail::Latest(VERSION).say(by);
         }
         if target.is_none() && channel.pins() {
             let f = l.failure.clone().unwrap_or_default();
@@ -220,7 +316,17 @@ fn update(args: &[String], paths: &Paths) -> Result<()> {
     o.kv("installed", Line::new().text(detect::tilde(&exe)))?;
 
     if channel == Channel::Plugin {
-        return plugin_update(&mut o, paths, print, to.as_deref());
+        return plugin_update(&mut o, paths, print, to.as_deref(), by);
+    }
+    // A press runs only an update that is a fetch: a build (source, checkout) takes minutes and a
+    // person watching it, and Homebrew upgrades on its own terms. Nothing runs; the terminal does.
+    if by == By::Press && !matches!(channel, Channel::Npm | Channel::Release) {
+        o.blank()?;
+        o.note(&format!("This adage was installed from {}; its update runs in a terminal.", channel.name()))?;
+        o.next("adage update", "in a terminal")?;
+        o.flush()?;
+        let say = format!("this adage was installed from {}: run adage update in a terminal", channel.name());
+        return Tail::Manual { command: "adage update", say }.say(by);
     }
 
     // (2) The plan.
@@ -268,12 +374,12 @@ fn update(args: &[String], paths: &Paths) -> Result<()> {
     o.flush()?;
 
     // (3) Keep.
-    let (kept_dir, mut prev) = keep::keep(paths, VERSION, channel.name(), "terminal", &exe, now)?;
+    let (kept_dir, mut prev) = keep::keep(paths, VERSION, channel.name(), by.via(), &exe, now)?;
     let back = format!("adage update --rollback restores {VERSION} from {}", detect::tilde(&kept_dir));
 
     // (4) Run.
     for s in &steps {
-        run_step(s, &exe, paths, &back)?;
+        run_step(s, &exe, paths, &back, by)?;
     }
 
     // (5) Verify.
@@ -328,13 +434,16 @@ fn update(args: &[String], paths: &Paths) -> Result<()> {
     // to this one.
     let extra: Vec<&str> = if has("--yes") || has("-y") { vec!["--yes"] } else { vec![] };
     match probe::hand_over(&new_bin, VERSION, &extra) {
-        Ok(s) if s.success() => Ok(()),
-        Ok(s) if s.code() != Some(2) => Err(crate::hint(
-            format!("adage {got} is installed, but finishing the update failed ({s})"),
-            format!("its output above says why; `adage doctor` checks the install; {back}"),
-        )),
-        _ => finish(VERSION, args, paths),
+        Ok(s) if s.success() => {}
+        Ok(s) if s.code() != Some(2) => {
+            return Err(crate::hint(
+                format!("adage {got} is installed, but finishing the update failed ({s})"),
+                format!("its output above says why; `adage doctor` checks the install; {back}"),
+            ))
+        }
+        _ => finish(VERSION, args, paths)?,
     }
+    Tail::Updated { from: VERSION, to: &got }.say(by)
 }
 
 fn same_file(a: &Path, b: &Path) -> bool {
@@ -354,8 +463,10 @@ fn installed_bin(channel: Channel, exe: &Path) -> PathBuf {
     }
 }
 
-/// Run one step with the terminal attached; a failure stops the update with the way back.
-fn run_step(s: &Step, exe: &Path, paths: &Paths, back: &str) -> Result<()> {
+/// Run one step with the terminal attached (under a press: its output on standard error, so the
+/// mod's stdout stays the next token, Adage's lines and the [`Tail`]); a failure stops the update
+/// with the way back.
+fn run_step(s: &Step, exe: &Path, paths: &Paths, back: &str, by: By) -> Result<()> {
     let shown = s.shown();
     let (program, argv): (String, Vec<String>) = match s {
         Step::Run { program, args } => (program.clone(), args.clone()),
@@ -412,7 +523,12 @@ fn run_step(s: &Step, exe: &Path, paths: &Paths, back: &str) -> Result<()> {
             };
         }
     };
-    let status = std::process::Command::new(&program).args(&argv).status();
+    let mut command = std::process::Command::new(&program);
+    command.args(&argv);
+    if by == By::Press {
+        command.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::from(std::io::stderr()));
+    }
+    let status = command.status();
     let _ = std::fs::remove_dir_all(paths.cache().join(format!("installer-{}", std::process::id())));
     let status = match status {
         Ok(s) => s,
@@ -518,13 +634,20 @@ fn claude_step(cli: &dyn ClaudeCli, args: &[&str]) -> std::result::Result<serde_
 /// marketplace update <marketplace>` and `claude plugin update <id>`; without it, the `/plugin`
 /// steps and nothing run. The running session keeps the binary it started with: the new one takes
 /// effect in the next session.
-fn plugin_update<W: std::io::Write>(o: &mut Out<W>, paths: &Paths, print: bool, to: Option<&str>) -> Result<()> {
+fn plugin_update<W: std::io::Write>(
+    o: &mut Out<W>,
+    paths: &Paths,
+    print: bool,
+    to: Option<&str>,
+    by: By,
+) -> Result<()> {
     let manual = |o: &mut Out<W>| -> Result<()> {
         o.blank()?;
         o.note("This adage came with the Claude Code plugin, which Claude Code updates.")?;
         o.next("/plugin", "in Claude Code: choose adage, then Update")?;
         o.also("adage update --from source", "or install a separate copy on PATH")?;
-        Ok(())
+        o.flush()?;
+        Tail::Manual { command: "/plugin", say: "In Claude Code: /plugin → adage → Update".into() }.say(by)
     };
     let Some(cli) = claude_plugin::System::on_path() else { return manual(o) };
     let installed = installed_plugin(&cli);
@@ -536,7 +659,9 @@ fn plugin_update<W: std::io::Write>(o: &mut Out<W>, paths: &Paths, print: bool, 
             detect::tilde(&paths.plugin())
         ))?;
         o.next("adage update", "in a terminal, with the adage on PATH")?;
-        return Ok(());
+        o.flush()?;
+        let say = "this plugin was staged from the adage in your terminal: run adage update there".to_string();
+        return Tail::Manual { command: "adage update", say }.say(by);
     }
     let id = installed.as_ref().map(|p| p.id.clone()).unwrap_or_else(|| "adage@adage".into());
     let market = id.split_once('@').map(|(_, m)| m.to_string()).unwrap_or_else(|| "adage".into());
@@ -563,13 +688,15 @@ fn plugin_update<W: std::io::Write>(o: &mut Out<W>, paths: &Paths, print: bool, 
     );
     if done["updateOutcome"] == "up_to_date" {
         o.kv("plugin", Line::new().text(format!("adage {now} is the latest the marketplace has")))?;
-        return Ok(());
+        o.flush()?;
+        return Tail::Latest(&now).say(by);
     }
     o.kv("plugin", Line::new().text(format!("adage {from} → {now}")))?;
     o.kv("effect", Line::new().text("next session"))?;
     o.blank()?;
     o.kv("done", Line::new().bold(Role::Ink, format!("adage {now}")).sep().quiet("takes effect in your next session"))?;
-    Ok(())
+    o.flush()?;
+    Tail::Updated { from: &from, to: &now }.say(by)
 }
 
 /// `adage update --finish <from> [--rollback] [--yes]`: run by the binary an update (or a
@@ -596,14 +723,11 @@ fn finish(from: &str, args: &[String], paths: &Paths) -> Result<()> {
     let root = std::env::current_dir().ok().and_then(|d| adage_core::repo::find_root(&d));
     let mut o = Out::stdout();
 
-    // (6) Registrations.
+    // (6) Registrations: re-pointed at a terminal; under a press (`previous.json`'s `via`) none
+    // is written, and one line says how many a terminal's `adage update` re-points.
     let found = repoint::plan(&old, &target, root.as_deref());
-    let mode = match person_at_terminal() {
-        Some(true) => repoint::Mode::Write { ask: !(has("--yes") || has("-y")) },
-        Some(false) => repoint::Mode::Write { ask: false },
-        None => repoint::Mode::Report,
-    };
-    repoint::apply(&mut o, &found, mode)?;
+    let by = if !rollback && prev.via == By::Press.via() { By::Press } else { By::Terminal };
+    repoint_or_say(&mut o, &found, by, &prev.from, has("--yes") || has("-y"))?;
     for r in detect::registrations(root.as_deref()).into_iter().filter(|r| r.kind != "plugin-data") {
         if r.binary.as_deref().is_some_and(|b| {
             same_file(b, &target) || same_file(b, &target.with_file_name(channel::exe_name("adage-exec")))
@@ -653,6 +777,49 @@ fn finish(from: &str, args: &[String], paths: &Paths) -> Result<()> {
     } else {
         o.next("adage update --rollback", &format!("if anything is wrong: puts {} back", prev.from))?;
     }
+    Ok(())
+}
+
+/// Re-point the registrations `found` names (at a terminal: each diff and a `.adage-bak`, after one
+/// question unless `yes`; inside an agent session only listed, each with its command), or, under a
+/// press, say in one line how many still need a terminal: those that run the binary the update
+/// replaced (`{n} registrations still run {have}`), and those that run the new one with the old
+/// version's hook events.
+fn repoint_or_say<W: std::io::Write>(
+    o: &mut Out<W>,
+    found: &repoint::Found,
+    by: By,
+    have: &str,
+    yes: bool,
+) -> Result<()> {
+    if by == By::Press {
+        let moved = found.changes.iter().filter(|c| !same_file(&c.was, &c.bin)).count() + found.by_hand.len();
+        let events = found.changes.len() + found.by_hand.len() - moved;
+        let terminal = |l: Line| l.sep().quiet("run ").cmd("adage update").quiet(" in a terminal");
+        if moved > 0 {
+            let what = if moved == 1 {
+                "1 registration still runs".to_string()
+            } else {
+                format!("{moved} registrations still run")
+            };
+            o.kv("hooks", terminal(Line::new().text(format!("{what} {have}"))))?;
+        }
+        if events > 0 {
+            let what = if events == 1 {
+                "1 registration still needs this version's hook events".to_string()
+            } else {
+                format!("{events} registrations still need this version's hook events")
+            };
+            o.kv("hooks", terminal(Line::new().text(what)))?;
+        }
+        return Ok(());
+    }
+    let mode = match person_at_terminal() {
+        Some(true) => repoint::Mode::Write { ask: !yes },
+        Some(false) => repoint::Mode::Write { ask: false },
+        None => repoint::Mode::Report,
+    };
+    repoint::apply(o, found, mode)?;
     Ok(())
 }
 
@@ -717,6 +884,10 @@ fn restage_plugin<W: std::io::Write>(o: &mut Out<W>, paths: &Paths, bin: &Path, 
 /// for byte, then let them finish (re-point the registrations, doctor).
 fn rollback(args: &[String], paths: &Paths) -> Result<()> {
     let has = |f: &str| args.iter().any(|a| a == f);
+    // A person's decision, at a terminal: the way back is never a press site.
+    if !has("--print") {
+        adage_app::person::require("update --rollback")?;
+    }
     let Some((dir, mut prev)) = keep::newest(paths) else {
         return Err(crate::hint(
             format!("nothing to roll back to: no update has kept binaries in {}", detect::tilde(&paths.previous())),

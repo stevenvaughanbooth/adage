@@ -4,7 +4,7 @@
 // presses since B4 (dialog.test.ts); T-B3-05 keeps the copy beside them for persona (b).
 import { describe, expect, test } from 'claude-code/testing'
 
-import { CLI, DELEGATE, GRAPH, LAPSED, LINE, PANE_PROPS, SURFACES, mountPane, shown, start, world } from '../fixtures/kit'
+import { CARD, CLI, DELEGATE, GRAPH, LAPSED, LINE, PANE_PROPS, SURFACES, begin, mountPane, shown, start, world } from '../fixtures/kit'
 
 const FEED = [LINE.learnerIdle, LINE.healthy, LINE.start, LINE.firedGen, LINE.firedLookup]
 
@@ -124,6 +124,34 @@ describe('T-B3-01 … T-B3-07 · the pane', () => {
       await ui.press({ key: 'tab-live' })
       await ui.unmount()
     }
+  })
+
+  test('T-O9-07: Health\'s version row: the pair in plain ink, the release\'s first lines, `u: update` (the press) and the command to copy', async ($, on) => {
+    const update = { current: '0.1.0', latest: '0.2.0', channel: 'npm', next: '/adage update', text: '0.2.0 is out (you have 0.1.0)', notes: 'fixes hook latency' }
+    const w = world(on, { feed: FEED, card: { ...CARD, update } })
+    await begin($, w)
+    for (const surface of SURFACES) {
+      const ui = await mountPane($, surface)
+      await ui.press({ key: 'tab-health' })
+      const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
+      expect(texts).toContain('version  adage 0.1.0 · 0.2.0 is out')
+      expect(texts).toContain('  fixes hook latency')
+      const row = (await ui.findAll({ type: 'Text' })).find(t => t.text === 'version  adage 0.1.0 · 0.2.0 is out')
+      expect(row?.props.color).toBeUndefined()
+      const buttons = (await ui.findAll({ type: 'Button' })).filter(b => /^(update|copy:update)$/.test(b.key ?? ''))
+      expect(buttons.map(b => `${b.key}=${b.text}`)).toEqual(['update=update', 'copy:update=Copy: adage update'])
+      await ui.press({ key: 'copy:update' })
+      expect(w.copies.at(-1)).toBe('adage update')
+      await ui.unmount()
+    }
+    const ui = await mountPane($, 'terminal')
+    await ui.press({ key: 'tab-health' })
+    await ui.press({ key: 'update' })
+    await w.clock.settle()
+    const pressed = w.ran.filter(r => r.argv[1] === 'update')
+    expect(pressed.map(r => r.argv)).toEqual([[CLI, 'update']])
+    expect(pressed[0]?.init?.stdin).toContain('"press"')
+    await ui.unmount()
   })
 
   test('T-B3-07: each tab empty, as the copy deck says', async ($, on) => {

@@ -43,8 +43,16 @@ pub const GLOBAL: &[Key] = &[
     k("q", "quit", "quit", false),
 ];
 
-pub const HOME: &[Key] =
-    &[k("enter", "choose", "open the selected step", true), k("j/k", "move", "select a step", true)];
+pub const HOME: &[Key] = &[
+    k("enter", "choose", "open the selected step", true),
+    k("j/k", "move", "select a step", true),
+    k(
+        "u",
+        "update",
+        "update Adage, its hooks and the plugin (adage update; the first row says when one is out)",
+        false,
+    ),
+];
 
 pub const LIVE: &[Key] = &[
     k("p", "pause", "pause or resume the feed", true),

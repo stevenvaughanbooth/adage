@@ -1,6 +1,7 @@
 // `/adage …` (ux-design §7): one registration, the verb parsed from the arguments. Every verb
 // answers with text a headless session can read; the drawn forms are draw/card.tsx's. No verb
-// runs a person-only command: `/adage on` opens the ask, whose answer is the press (plan B4).
+// runs a person-only command: `/adage on` and `/adage update` open their asks, whose answers are
+// the press (plan B4; onboarding plan O9).
 // `runCommand` answers over plain deps; `onCommand` binds them to the mod.
 import { copy, explore, openPane } from './actions'
 import { read, say } from './bridge'
@@ -10,12 +11,13 @@ import type { EventAt, Mod } from './mod'
 import { quietly } from './mod'
 import type { View } from './plugin'
 import { cardOf } from './reads'
-import type { Card } from './reads'
+import type { Card, Offer } from './reads'
 import { refresh } from './refresh'
 import { SAVINGS_ROWS, cardText, whyText } from './view/card'
+import { upToDate, updateHeadless } from './ask'
 
 /** The verbs `/adage` takes; anything else prints the card (ux-design §7). */
-const VERBS = ['status', 'watch', 'reflexes', 'health', 'doctor', 'review', 'why', 'off', 'on', 'pause', 'map', 'savings'] as const
+const VERBS = ['status', 'watch', 'reflexes', 'health', 'doctor', 'review', 'why', 'off', 'on', 'pause', 'map', 'savings', 'update'] as const
 export type Verb = (typeof VERBS)[number] | 'card'
 
 /** The hint after the name: the two verbs a person needs (ux-design §7). */
@@ -67,6 +69,8 @@ export type CommandDeps = {
   map: () => Promise<string | undefined>
   /** Opens `/adage on`'s ask; undefined where no one can be asked (headless, or the mod inert). */
   askOn: (() => void) | undefined
+  /** Opens `/adage update`'s ask; undefined where no one can be asked. */
+  askUpdate: ((u: Offer) => void) | undefined
 }
 
 const NO_CARD = 'adage is not answering here; run adage doctor in a terminal.'
@@ -105,6 +109,16 @@ export async function runCommand(args: string, deps: CommandDeps): Promise<{ tex
       deps.askOn()
       return {}
     }
+    case 'update': {
+      // The ask, never the verb (onboarding plan O9), and only when the binary says a release is
+      // newer: the card's `update`, as it words it.
+      const card = await deps.card()
+      if (card === undefined) return { text: NO_CARD }
+      if (card.update === undefined) return { text: upToDate(card.version) }
+      if (deps.askUpdate === undefined) return { text: updateHeadless(card.update.latest) }
+      deps.askUpdate(card.update)
+      return {}
+    }
     case 'pause':
       return { text: (await deps.pause()) ? PAUSED : RESUMED }
     case 'map': {
@@ -132,5 +146,6 @@ export async function onCommand(m: Mod, e: EventAt<'command.run', { command: 'ad
     pause: () => togglePause(m),
     map: () => explore(m),
     askOn: m.rt.pressBound ? pressHandlers(m).askOn : undefined,
+    askUpdate: m.rt.pressBound ? pressHandlers(m).askUpdate : undefined,
   })
 }

@@ -109,6 +109,23 @@ marker_off
 run "$R1" "$W/data1" "$BASE"
 check "marker removed: bin/hook is adage again" [ "$(target_of "$W/data1/bin/hook")" = adage ]
 
+# 2b. T-O8-04: copies an earlier plugin version installed are removed once the links move on: only
+# <name>-<64 hex> files no link names; adage's sweep never touches adage-exec's, and a name that is
+# not a digest stays.
+OLD_A="adage-$(printf 'a%.0s' $(seq 64))"; OLD_E="adage-exec-$(printf 'b%.0s' $(seq 64))"
+HELD="adage-$(printf 'c%.0s' $(seq 64))"
+for f in "$OLD_A" "$OLD_E" "$HELD" adage-notes; do printf '#!/bin/sh\n' >"$W/data1/bin/$f"; chmod 755 "$W/data1/bin/$f"; done
+ln -sfn "$HELD" "$W/data1/bin/held"
+run "$R1" "$W/data1" "$BASE"
+check "superseded: exits 0" [ "$code" = 0 ]
+check "superseded: the stale adage copy is removed" [ ! -e "$W/data1/bin/$OLD_A" ]
+check "superseded: the stale adage-exec copy is removed" [ ! -e "$W/data1/bin/$OLD_E" ]
+check "superseded: a copy a link still names is kept" [ -f "$W/data1/bin/$HELD" ]
+check "superseded: a name that is not a digest is kept" [ -f "$W/data1/bin/adage-notes" ]
+check "superseded: the linked adage is kept and runs" sh -c "'$W/data1/bin/adage' version | grep -q '^adage '"
+check "superseded: one unheld copy per name" sh -c "[ \$(ls '$W/data1/bin' | grep -c '^adage-[0-9a-f]\{64\}\$') = 2 ] && [ \$(ls '$W/data1/bin' | grep -c '^adage-exec-[0-9a-f]\{64\}\$') = 1 ] && [ \$(ls '$W/data1/bin' | grep -c '^adage-train-[0-9a-f]\{64\}\$') = 1 ]"
+rm -f "$W/data1/bin/held" "$W/data1/bin/$HELD" "$W/data1/bin/adage-notes"
+
 # 3. T-A8-02: never both. A session started with the marker records one session_start, from
 # adage-exec; without it, one from adage.
 if [ -n "$NODE" ]; then

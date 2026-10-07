@@ -5,7 +5,8 @@
 import { read } from './bridge'
 import type { Mod } from './mod'
 import { toastOnce } from './notify'
-import { checksOf, lapsedOf, optInOf, packsOf, reflexesOf, routineModelOf } from './reads'
+import { checksOf, lapsedOf, optInOf, packsOf, reflexesOf, routineModelOf, updateOf } from './reads'
+import type { Offer } from './reads'
 import { lapseToast } from './view/lines'
 
 /** At most one refresh of the `--json` reads in this long, however many learn lines arrive. */
@@ -37,12 +38,39 @@ export async function refresh(m: Mod, force = false): Promise<void> {
     const optIn = optInOf(card.json)
     await m.state.mode.update(x => ({ ...x, ...optIn }))
     m.rt.routineModel = routineModelOf(card.json)
+    await noteUpdate(m, updateOf(card.json))
   }
   if (deleg.ok) {
     const lapsed = lapsedOf(deleg.json)
     await m.state.lapsed.update(() => lapsed)
     const ascii = (await m.state.mode.read()).ascii
     for (const l of lapsed) await toastOnce(m, `lapsed:${l.route}`, lapseToast(l, ascii))
+  }
+}
+
+/**
+ * A newer Adage, as the card says it (onboarding plan O9), kept for the band, Health's version row
+ * and `/adage update`. The band's line shows it once per release per machine (`$.store` `latest`,
+ * written when a session first shows it) and only before the session's first prompt: a session
+ * that showed it keeps it until then, however often the card is read again.
+ */
+async function noteUpdate(m: Mod, u: Offer | undefined): Promise<void> {
+  const was = (await m.state.mode.read()).update
+  if (u === undefined) {
+    if (was !== null) await m.state.mode.update(x => ({ ...x, update: null }))
+    return
+  }
+  const first = (await m.state.turn.read()).submits === 0
+  let band = first && was?.latest === u.latest && was.band
+  if (was?.latest !== u.latest && first) {
+    const seen = await m.store.latest.get().catch(() => undefined)
+    if (seen !== u.latest) {
+      band = true
+      await m.store.latest.set(u.latest).catch(() => undefined)
+    }
+  }
+  if (was === null || was.latest !== u.latest || was.band !== band || was.next !== u.next || was.have !== u.have || was.notes.join('\n') !== u.notes.join('\n')) {
+    await m.state.mode.update(x => ({ ...x, update: { ...u, band } }))
   }
 }
 

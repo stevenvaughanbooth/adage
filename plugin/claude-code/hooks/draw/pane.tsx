@@ -5,12 +5,14 @@
 // only through the handlers the actions carry (`press`, dialog.ts); until a person is at the prompt
 // they are not bound and, as before a press existed, a review verb is a command to copy. The one
 // action besides is `adage condition`, which the binary marks as allowed from a session.
-import type { Check, Health, Lapse, MapState, Reflex, Row, Tick, View } from '../plugin'
+import type { Check, Health, Lapse, MapState, Reflex, Row, Tick, Update, View } from '../plugin'
+import type { Offer } from '../reads'
 import { TRUST_LINE } from '../grant'
 import { ROLES } from '../tokens'
 import type { Waiting } from '../view/pane'
 import {
   ROW_VERBS,
+  UPDATE_COMMAND,
   VERB_HOTKEYS,
   VERB_WORDS,
   checkAction,
@@ -22,6 +24,7 @@ import {
   reviewCommand,
   rowLines,
   tickText,
+  updateRowText,
   visibleReflexes,
   visibleRows,
 } from '../view/pane'
@@ -39,6 +42,10 @@ export type PressHandlers = {
   no: (item: Waiting) => void
   /** `/adage on`: opens the ask (never presses itself). */
   askOn: () => void
+  /** Health's `u: update` on the version row: `adage update` through the press (onboarding plan O9). */
+  update: () => void
+  /** `/adage update`: opens the ask (never presses itself). */
+  askUpdate: (u: Offer) => void
 }
 
 /** What a press, a pick or a keystroke in the pane does (actions.ts, and the presses from dialog.ts). */
@@ -71,6 +78,8 @@ export type PaneData = {
   waiting: readonly Waiting[]
   checks: readonly Check[]
   lapsed: readonly Lapse[]
+  /** A newer Adage, as the status card says it: Health's version row. */
+  update: Update | null
   map: MapState
   /** The shim's reason when no binary could serve (ux-design §9.1). */
   nobinary: string
@@ -305,6 +314,7 @@ function health(els: Els, d: PaneData, a: PaneActions): Tree {
   return (
     <Box flexDirection="column">
       {d.nobinary === '' ? null : <Text color={ROLES.prime} wrap="wrap">{d.nobinary}</Text>}
+      {d.update === null ? null : versionRow(els, d.update, d.ascii, a)}
       {d.checks.map((c, k) => {
         const l = checkLine(c, d.ascii)
         const act = checkAction(c)
@@ -327,6 +337,27 @@ function health(els: Els, d: PaneData, a: PaneActions): Tree {
           <Button key={`copy:lapse:${l.route}`} plain dimColor label="Copy command" onPress={e => a.copy(l.reapprove, e.surface)} />
         </Box>
       ))}
+    </Box>
+  )
+}
+
+/**
+ * Health's `version` row (onboarding plan O9): a newer Adage, in plain ink (information, never a
+ * problem), the release's first lines, `u: update` (the press, once a person is at the prompt) and
+ * the terminal command to copy.
+ */
+function versionRow(els: Els, u: Update, ascii: boolean, a: PaneActions): Tree {
+  const { Box, Text, Button } = els
+  return (
+    <Box key="version" flexDirection="column">
+      <Text wrap="truncate-end">{updateRowText(u, ascii)}</Text>
+      {u.notes.map((n, k) => (
+        <Text key={`note-${k}`} dimColor wrap="truncate-end">{`  ${n}`}</Text>
+      ))}
+      <Box flexDirection="row" gap={1}>
+        {a.press === undefined ? null : <Button key="update" plain hotkey="u" label="update" onPress={() => a.press?.update()} />}
+        <Button key="copy:update" plain dimColor label={`Copy: ${UPDATE_COMMAND}`} onPress={e => a.copy(UPDATE_COMMAND, e.surface)} />
+      </Box>
     </Box>
   )
 }

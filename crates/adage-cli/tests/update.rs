@@ -433,8 +433,9 @@ fn a_wrong_version_is_an_error_and_the_way_back_works() {
     assert_eq!(sha(&w.npm_adage()), old);
 }
 
-/// T-O7-06: registrations pinning a dead path are re-pointed at a terminal (diff, `.adage-bak`),
-/// and only reported inside an agent session.
+/// T-O7-06: registrations pinning a dead path are re-pointed at a terminal (diff, `.adage-bak`);
+/// inside an agent session without a press `adage update` is a person's decision and refuses
+/// (T-O9-03), so nothing is rewritten there (under a press: `a_press_updates_a_fetch_channel_only`).
 #[test]
 fn dead_registrations_are_repointed_at_a_terminal_only() {
     for agent in [false, true] {
@@ -458,13 +459,15 @@ fn dead_registrations_are_repointed_at_a_terminal_only() {
         }
         let o = c.output().unwrap();
         let t = text(&o);
-        assert!(o.status.success(), "{t}");
         let new = w.npm_adage().display().to_string();
         if agent {
+            assert!(!o.status.success(), "{t}");
+            assert!(t.contains("`adage update` is a decision for a person") && t.contains("CLAUDECODE is set"), "{t}");
             assert_eq!(std::fs::read_to_string(&codex).unwrap(), before, "nothing rewritten in an agent session");
-            assert!(t.contains(&format!("adage install codex --write --scope user --bin {new}")), "{t}");
+            assert!(w.npm_calls().is_empty() && !w.p("data/previous").exists(), "nothing kept or run: {t}");
             assert!(!w.p("codex/hooks.json.adage-bak").exists());
         } else {
+            assert!(o.status.success(), "{t}");
             assert!(std::fs::read_to_string(&codex).unwrap().contains(&new), "{t}");
             assert!(std::fs::read_to_string(&opencode).unwrap().contains(&new), "{t}");
             assert_eq!(std::fs::read_to_string(w.p("codex/hooks.json.adage-bak")).unwrap(), before);
@@ -611,4 +614,236 @@ fn the_card_carries_the_update() {
     );
     assert_eq!(u["text"], format!("{} is out (you have {CURRENT})", newer()));
     assert_eq!(card(&w, &["--json", "--for-session"])["update"]["next"], "/adage update");
+    // T-O6-02: absent when the cache names this version, an older one, or something malformed.
+    let now = adage_core::time::now_ms();
+    for latest in [CURRENT, "0.0.1", "not-a-version"] {
+        let cache = serde_json::json!({ "checked_at": now, "have": CURRENT, "latest": { "version": latest, "source": "npm" }, "failure": null });
+        std::fs::write(w.p("data/cache/latest.json"), cache.to_string()).unwrap();
+        assert_eq!(card(&w, &["--json"])["update"], Value::Null, "{latest}");
+        assert_eq!(
+            String::from_utf8_lossy(&w.run(Path::new(REAL), &["version"]).stdout),
+            format!("adage {CURRENT}\n"),
+            "{latest}"
+        );
+    }
+    std::fs::write(w.p("data/cache/latest.json"), "{ not json").unwrap();
+    assert_eq!(card(&w, &["--json"])["update"], Value::Null, "a cache that is not JSON");
+}
+
+/// Strips ANSI escape sequences (a colour run's lines, compared with a plain run's).
+fn plain(s: &str) -> String {
+    let mut out = String::new();
+    let mut it = s.chars().peekable();
+    while let Some(c) = it.next() {
+        if c == '\u{1b}' {
+            for d in it.by_ref() {
+                if d.is_ascii_alphabetic() {
+                    break;
+                }
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+/// T-O6-01, T-O6-03, T-O6-07: with a newer release in the cache every terminal surface says the
+/// same pair and the same command, and none turns a problem for it: the card's row (plain, ASCII,
+/// colour) with `adage update` first in `next` and the header's lamp unchanged; `adage version`;
+/// doctor's `binary` a pass naming `adage update`, its counts and exit code as before.
+#[test]
+fn every_surface_says_a_newer_release_and_none_turns_amber() {
+    let w = World::new();
+    let v = newer();
+    let out = |args: &[&str], env: &[(&str, &str)]| -> (bool, String) {
+        let mut c = w.cmd(Path::new(REAL), args);
+        for (k, val) in env {
+            c.env(k, val);
+        }
+        let o = c.output().unwrap();
+        (o.status.success(), String::from_utf8_lossy(&o.stdout).to_string())
+    };
+    let doctor = || -> Value { serde_json::from_str(&out(&["doctor", "--json"], &[]).1).unwrap() };
+    let binary = |d: &Value| d["checks"].as_array().unwrap().iter().find(|c| c["check"] == "binary").cloned().unwrap();
+    let card_before = out(&[], &[]).1;
+    let doctor_before = doctor();
+    let doctor_ok = out(&["doctor"], &[]).0;
+    assert_eq!(out(&["version"], &[]).1, format!("adage {CURRENT}\n"), "no cache: the version alone");
+    assert!(!card_before.contains("is out"), "{card_before}");
+    assert_eq!(binary(&doctor_before)["action"], Value::Null);
+
+    assert!(w.run(Path::new(REAL), &["update", "--check", "--now"]).status.success());
+    assert_eq!(out(&["version"], &[]).1, format!("adage {CURRENT} · {v} is out (adage update)\n"));
+
+    let row = |card: &str| card.lines().find(|l| l.starts_with("update ")).map(str::to_string);
+    let card = out(&[], &[]).1;
+    assert_eq!(
+        row(&card).as_deref(),
+        Some(format!("update      {v} is out (you have {CURRENT}) → adage update").as_str()),
+        "{card}"
+    );
+    assert_eq!(card.lines().next(), card_before.lines().next(), "the header and its lamp do not move");
+    assert!(card.lines().any(|l| l.starts_with("next  adage init")), "not connected: connecting stays first: {card}");
+    let ascii = out(&[], &[("ADAGE_ASCII", "1")]).1;
+    assert_eq!(
+        row(&ascii).as_deref(),
+        Some(format!("update      {v} is out (you have {CURRENT}) -> adage update").as_str()),
+        "{ascii}"
+    );
+    let colour = out(&[], &[("ADAGE_COLOR", "always")]).1;
+    assert_eq!(row(&plain(&colour)), row(&card), "{colour}");
+    // Connected (a hook has run here): `adage update` is the first `next`.
+    let key: Value = serde_json::from_str(&out(&["savings", "--json"], &[]).1).unwrap();
+    let rec = serde_json::json!({ "ts": 1_790_000_000_000u64, "event": "SessionStart", "kind": "session_start",
+                                  "arm": "treated", "repo": key["repo"], "generation": "g", "harness": "claude", "decision": {} });
+    adage_store::spool::append(&adage_store::Paths::at(w.p("data")).spool("S"), &rec).unwrap();
+    let card = out(&[], &[]).1;
+    assert_eq!(
+        row(&card).as_deref(),
+        Some(format!("update      {v} is out (you have {CURRENT}) → adage update").as_str()),
+        "{card}"
+    );
+    assert!(card.contains(&format!("next  adage update · {v} is out")), "{card}");
+
+    let after = doctor();
+    let b = binary(&after);
+    assert_eq!(b["status"], "pass", "{b}");
+    assert!(b["detail"].as_str().unwrap().ends_with(&format!(" · {v} is out")), "{b}");
+    assert_eq!(b["action"], serde_json::json!({ "kind": "run", "command": "adage update" }), "{b}");
+    assert_eq!(after["summary"], doctor_before["summary"], "the counts do not move");
+    let (ok, text) = out(&["doctor"], &[]);
+    assert_eq!(ok, doctor_ok, "nor the exit code: {text}");
+    assert!(text.lines().any(|l| l.split_whitespace().collect::<Vec<_>>() == ["update", "adage", "update"]), "{text}");
+}
+
+/// Issues a press for session `id` in this world's repository, as the mod asks for one after the
+/// command hooks' session start, then closes the window with a prompt: the token.
+fn press_for(w: &World, id: &str) -> String {
+    let repo = w.p("repo");
+    let hook = |event: &str, payload: Value| -> String {
+        let mut c = w.cmd(Path::new(REAL), &["hook", "claude", event]);
+        c.env("ADAGE_ARM", "treated").stdin(Stdio::piped()).stdout(Stdio::piped());
+        let mut child = c.spawn().unwrap();
+        child.stdin.take().unwrap().write_all(payload.to_string().as_bytes()).unwrap();
+        String::from_utf8_lossy(&child.wait_with_output().unwrap().stdout).trim().to_string()
+    };
+    let transcript = format!("/home/dev/.claude/projects/repo/{id}.jsonl");
+    hook(
+        "SessionStart",
+        serde_json::json!({ "session_id": id, "cwd": repo, "hook_event_name": "SessionStart", "source": "startup", "transcript_path": transcript }),
+    );
+    let t = hook(
+        "Press",
+        serde_json::json!({ "session_id": id, "cwd": repo, "hook_event_name": "Press", "source": "startup" }),
+    );
+    let t: Value = serde_json::from_str(&t).unwrap_or_else(|e| panic!("no press ({e}): {t}"));
+    hook(
+        "UserPromptSubmit",
+        serde_json::json!({ "session_id": id, "cwd": repo, "hook_event_name": "UserPromptSubmit", "prompt": "hello" }),
+    );
+    t["press"].as_str().unwrap().to_string()
+}
+
+/// `adage update` as the mod's press runs it: every agent marker the mod's child carries, the
+/// press on stdin, no override (unless `env` adds it).
+fn pressed_update(w: &World, exe: &Path, token: &str, env: &[(&str, &str)]) -> Output {
+    let mut c = w.cmd(exe, &["update"]);
+    c.env("CLAUDECODE", "1").env_remove("ADAGE_ALLOW_NONINTERACTIVE");
+    for (k, v) in env {
+        c.env(k, v);
+    }
+    let mut child = c.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+    let stdin = serde_json::json!({ "press": token, "session": "s" }).to_string();
+    let _ = child.stdin.take().unwrap().write_all(stdin.as_bytes());
+    child.wait_with_output().unwrap()
+}
+
+fn stdout_lines(o: &Output) -> Vec<String> {
+    String::from_utf8_lossy(&o.stdout).lines().filter(|l| !l.trim().is_empty()).map(str::to_string).collect()
+}
+
+/// T-O9-02: under a press, `adage update` updates a fetch channel (npm): the next token first on
+/// stdout and `{updated}` last, `via: press` in `previous.json`, the package manager's output on
+/// standard error, and no settings file rewritten even where one pins a dead path (one line says
+/// a terminal re-points it). A source install answers `manual` and runs nothing. The same press
+/// beside `ADAGE_ALLOW_NONINTERACTIVE=1` refuses.
+#[test]
+fn a_press_updates_a_fetch_channel_only() {
+    let w = World::new();
+    w.npm("good");
+    let v = newer();
+    let o = w
+        .run(Path::new(REAL), &["install", "codex", "--write", "--scope", "user", "--bin", "/dead/bin/adage", "--yes"]);
+    assert!(o.status.success(), "{}", text(&o));
+    let codex = std::fs::read_to_string(w.p("codex/hooks.json")).unwrap();
+
+    // The override beside a press: refused, nothing spent, nothing run.
+    let t = press_for(&w, "s");
+    let o = pressed_update(&w, &w.npm_adage(), &t, &[("ADAGE_ALLOW_NONINTERACTIVE", "1")]);
+    assert!(!o.status.success() && text(&o).contains("will not run inside an agent session"), "{}", text(&o));
+    assert!(!String::from_utf8_lossy(&o.stdout).contains("\"next\""), "{}", text(&o));
+    assert!(w.npm_calls().is_empty() && !w.p("data/previous").exists());
+
+    let o = pressed_update(&w, &w.npm_adage(), &t, &[]);
+    let lines = stdout_lines(&o);
+    assert!(o.status.success(), "{}", text(&o));
+    let first: Value = serde_json::from_str(&lines[0]).unwrap_or_else(|e| panic!("{e}: {}", text(&o)));
+    assert!(first["next"].as_str().is_some_and(|n| n.len() == 64), "{}", text(&o));
+    let last: Value = serde_json::from_str(lines.last().unwrap()).unwrap();
+    assert_eq!(last, serde_json::json!({ "updated": { "from": CURRENT, "to": v, "effect": "next session" } }));
+    assert_eq!(w.npm_calls(), vec![format!("install --global @adage-sh/cli@{v}")]);
+    let prev: Value =
+        serde_json::from_slice(&std::fs::read(w.p(&format!("data/previous/{CURRENT}/previous.json"))).unwrap())
+            .unwrap();
+    assert_eq!(prev["via"], "press");
+    assert_eq!(std::fs::read_to_string(w.p("codex/hooks.json")).unwrap(), codex, "no settings file rewritten");
+    assert!(!w.p("codex/hooks.json.adage-bak").exists());
+    assert!(text(&o).contains("run adage update in a terminal"), "{}", text(&o));
+
+    // A source install: `manual`, nothing run; the press spent, the next token first.
+    let cargo = w.p("home/.cargo/bin/adage");
+    install(&cargo);
+    write_exe(&w.p("bin/cargo"), &format!("#!/bin/sh\necho \"$*\" >> '{}'\nexit 1\n", w.p("cargo.log").display()));
+    let t = first["next"].as_str().unwrap();
+    let o = pressed_update(&w, &cargo, t, &[]);
+    assert!(o.status.success(), "{}", text(&o));
+    let lines = stdout_lines(&o);
+    assert!(serde_json::from_str::<Value>(&lines[0]).unwrap()["next"].is_string(), "{}", text(&o));
+    let last: Value = serde_json::from_str(lines.last().unwrap()).unwrap();
+    assert_eq!(last["manual"]["command"], "adage update", "{last}");
+    assert!(last["manual"]["say"].as_str().unwrap().contains("in a terminal"), "{last}");
+    assert!(!w.p("cargo.log").exists(), "a build never runs under a press");
+}
+
+/// T-O9-02's flags: only bare `adage update` is a press site. Every flag keeps the terminal's
+/// check inside an agent session, with a valid press on stdin or none, and spends nothing.
+#[test]
+fn only_bare_update_takes_a_press() {
+    let w = World::new();
+    w.npm("good");
+    let t = press_for(&w, "s");
+    for args in [
+        &["update", "--yes"][..],
+        &["update", "--from", "npm"],
+        &["update", "--rollback"],
+        &["update", "--branch", "main"],
+    ] {
+        let mut c = w.cmd(&w.npm_adage(), args);
+        c.env("CLAUDECODE", "1").env_remove("ADAGE_ALLOW_NONINTERACTIVE");
+        let mut child = c.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+        let _ = child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(serde_json::json!({ "press": t, "session": "s" }).to_string().as_bytes());
+        let o = child.wait_with_output().unwrap();
+        assert!(!o.status.success(), "{args:?}: {}", text(&o));
+        assert!(text(&o).contains("will not run inside an agent session"), "{args:?}: {}", text(&o));
+        assert!(!String::from_utf8_lossy(&o.stdout).contains("\"next\""), "{args:?}");
+    }
+    assert!(w.npm_calls().is_empty());
+    // Still valid: none of them spent it.
+    let o = pressed_update(&w, &w.npm_adage(), &t, &[]);
+    assert!(o.status.success(), "{}", text(&o));
 }

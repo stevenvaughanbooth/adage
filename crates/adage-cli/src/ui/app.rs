@@ -928,6 +928,18 @@ pub fn install_confirm(p: &Plan, t: &Theme) -> Vec<Line<'static>> {
 // ---------------------------------------------------------------------------------------------
 // Runtime
 
+/// What `Update Adage` will do, said before it is confirmed (onboarding plan O6).
+fn update_preview(paths: &adage_store::Paths) -> Vec<String> {
+    let have = env!("CARGO_PKG_VERSION");
+    vec![
+        match crate::update::newer(paths) {
+            Some(r) => format!("Update Adage {have} to {}, the way it was installed: its binaries, its hooks and the plugin.", r.version),
+            None => format!("Check for a newer Adage than {have}, and update to it if there is one: its binaries, its hooks and the plugin."),
+        },
+        "The binaries it replaces are kept; adage update --rollback puts them back.".into(),
+    ]
+}
+
 /// Carry out a command. Returns `true` to quit.
 fn execute(
     cmd: Cmd,
@@ -998,6 +1010,7 @@ fn execute(
                     },
                     Tool::Revoke { route, .. } => lines.push(format!("Withdraw the execution grant for {route}.")),
                     Tool::Pack { name, enabled } => lines.push(format!("{} pack {name} in this repository and recompile its bindings.", if *enabled {"Enable"}else{"Disable"})),
+                    Tool::Update => lines.extend(update_preview(&ctx.paths)),
                     _ => {},
                 }
                 lines.push("Enter / y confirms. Esc / n cancels.".into()); Ok(lines)

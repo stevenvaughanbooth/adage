@@ -626,6 +626,12 @@ pub fn card(paths: &Paths, cwd: Option<&Path>, for_session: bool) -> Card {
                 Line::new().quiet("No agent found: install Claude Code, Codex or OpenCode, then run adage again."),
             ));
         }
+        // A newer release is said here too (the same row as below); `adage init` stays the first
+        // step, since connecting is what this card is for.
+        let update = crate::update::card_json(paths, for_session);
+        if let (Some(cmd), Some(text)) = (update["next"].as_str(), update["text"].as_str()) {
+            rows.push(Row::Kv("update".into(), arrow(Line::new().text(text), cmd)));
+        }
         let steps = vec![
             ("adage init".into(), "connects every agent found: Claude Code through the Adage plugin".into()),
             ("adage doctor".into(), "check binary, data, hooks and model".into()),

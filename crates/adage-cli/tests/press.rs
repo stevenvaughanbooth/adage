@@ -1,7 +1,8 @@
 //! The press (mod architecture §3.12; plan A7): a token the binary issues to the Claude Code mod in
 //! the window before the agent's first act, and that a person-only verb accepts on stdin, at the
 //! listed sites only. End to end through the `adage` binary (and `adage-exec` where built), with
-//! an isolated `ADAGE_HOME`. Test-plan cases T-A7-01 … T-A7-09 and T-X-13's L2 part.
+//! an isolated `ADAGE_HOME`. Test-plan cases T-A7-01 … T-A7-09, T-X-13's L2 part, and the onboarding
+//! plan's fourteenth site, `update` (O9).
 
 use adage_hook::press;
 use adage_store::{state, Paths};
@@ -308,6 +309,15 @@ fn a_press_is_a_person_at_the_listed_sites() {
     assert!(o.status.success(), "{}", text(&o));
     assert!(!w.repo().join(".adage/disabled").exists());
     t = next(&o);
+    // `update` (onboarding plan O9), the fourteenth: this test binary is a checkout's build, whose
+    // update is a build, so under a press it answers `manual` last and runs nothing.
+    let o = w.verb(&["update"], &pressed(&t, "s"), &[]);
+    assert!(o.status.success(), "{}", text(&o));
+    let last = String::from_utf8_lossy(&o.stdout).lines().rfind(|l| !l.trim().is_empty()).unwrap_or("").to_string();
+    let last: Value = serde_json::from_str(&last).unwrap_or_else(|e| panic!("{e}: {}", text(&o)));
+    assert_eq!(last["manual"]["command"], "adage update", "{}", text(&o));
+    assert!(!w.p("adage/previous").exists(), "nothing kept, nothing run");
+    t = next(&o);
 
     // Every way a press is not valid: refused as with none, nothing recorded, nothing spent.
     std::fs::create_dir_all(w.repo().join(".adage")).unwrap();
@@ -381,6 +391,9 @@ fn a_press_is_refused_everywhere_else() {
         &["init", "--yes"],
         &["add", "../nowhere"],
         &["add", "../nowhere", "--trust"],
+        &["update", "--rollback"],
+        &["update", "--yes"],
+        &["update", "--from", "npm"],
     ] {
         let o = w.verb(args, &p, &[]);
         assert!(!o.status.success(), "{args:?} accepted a press:\n{}", text(&o));
@@ -640,6 +653,9 @@ fn the_model_cannot_press() {
         refused(&w.verb(&["review", verb, TRACK, ROUTE], "", &[]));
     }
     refused(&w.verb(&["review", "delegate", TRACK, ROUTE, "--predict"], "", &[]));
+    // `update` (onboarding plan O9): nothing kept, nothing run.
+    refused(&w.verb(&["update"], "", &[]));
+    assert!(!w.p("adage/previous").exists());
     assert_eq!(w.review_yaml(), "", "nothing recorded");
     assert!(!w.p("adage/approvals.json").exists());
     // A start written by hand while the real session is at work.

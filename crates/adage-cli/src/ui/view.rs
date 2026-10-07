@@ -1008,6 +1008,9 @@ fn header(live: &Live, health: Option<&Health>, key: Option<&str>, ctx: &Ctx, wi
     let t = &ctx.theme;
     let gen = health.and_then(|h| h.generation.as_deref()).map(|g| format!("gen {}", &g[..g.len().min(8)]));
     let harnesses = health.map(|h| h.harnesses.join(", ")).filter(|h| !h.is_empty());
+    // A newer Adage (the release check's cache; onboarding plan O6): a fact like the others, in
+    // the same ink, the first to go when the width runs short.
+    let update = crate::update::newer(&ctx.paths).map(|r| format!("{} is out{}adage update", r.version, t.sep()));
     let state: Vec<Span<'static>> = if live.paused {
         vec![Span::styled(format!("{} paused +{}", t.ch("‖", "="), live.held.len()), t.yellow().patch(t.bold()))]
     } else if live.scroll > 0 {
@@ -1055,6 +1058,8 @@ fn header(live: &Live, health: Option<&Health>, key: Option<&str>, ctx: &Ctx, wi
     };
     let w = |s: &[Span]| s.iter().map(|x| x.width()).sum::<usize>();
     let options = [
+        (left(&[&gen, &harnesses, &update]), right(true, true)),
+        (left(&[&gen, &update]), right(true, true)),
         (left(&[&gen, &harnesses]), right(true, true)),
         (left(&[&gen]), right(true, true)),
         (left(&[&gen, &harnesses]), right(false, true)),

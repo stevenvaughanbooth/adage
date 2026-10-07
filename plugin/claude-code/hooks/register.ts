@@ -138,6 +138,7 @@ export const register: Register = (on, options) => {
   on('turn.step', async function* ($, e, next) { return yield* step.onStep(mod($, options), e, next) })
   on('turn.complete', async ($, e, next) => ledger.onTurnEnd(mod($, options), e, next))
   on('tool.call', { tool: 'Bash' }, async ($, e, next) => call.onBashCall(mod($, options), e, next))
+  on('tool.call', async ($, e, next) => call.onPredictedCall(mod($, options), e, next))
   on('prompt.compose', async ($, e, next) => attach.onCompose(mod($, options), e, next))
   on('tool.describe', { tool: 'Bash' }, async ($, e, next) => attach.onDescribe(mod($, options), e, next))
   on('session.compact', async ($, e, next) => attach.onCompact(mod($, options), e, next))

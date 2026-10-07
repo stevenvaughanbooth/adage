@@ -214,10 +214,19 @@ fn sha256_file(p: &Path) -> Option<String> {
     Some(io::hex(&h.finalize()))
 }
 
-fn binary() -> (Check, Option<PathBuf>) {
+/// This binary's version and path. A newer release (from the release check's cache: no request)
+/// is information, never a problem (onboarding plan O6): the check stays `Pass`, says
+/// ` · 0.2.0 is out` and carries `adage update` as its action, which doctor's `next` names when
+/// nothing else needs fixing.
+fn binary(paths: &Paths) -> (Check, Option<PathBuf>) {
     let exe = std::env::current_exe().ok().map(|p| p.canonicalize().unwrap_or(p));
     let at = exe.as_deref().map(|p| format!(" at {}", detect::tilde(p))).unwrap_or_default();
-    (pass("binary", format!("adage {}{at}", env!("CARGO_PKG_VERSION"))), exe)
+    let mut c = pass("binary", format!("adage {}{at}", env!("CARGO_PKG_VERSION")));
+    if let Some(r) = crate::update::newer(paths) {
+        c.detail.push_str(&format!(" · {} is out", r.version));
+        c.fix = Some(Fix::run("adage update"));
+    }
+    (c, exe)
 }
 
 fn data_dir(paths: &Paths) -> Check {
@@ -1280,7 +1289,7 @@ fn hook_delivery_checks(paths: &Paths, root: Option<&Path>) -> Vec<Check> {
 /// Every check, in display order, for the repository at `repo_root` (if any). `adage watch` and
 /// `adage ui` re-run these every few seconds.
 pub fn checks(paths: &Paths, repo_root: Option<&Path>) -> Vec<Check> {
-    let (bin, exe) = binary();
+    let (bin, exe) = binary(paths);
     let scan = scan_tracks(&paths.tracks());
     let (index, idx) = index_check(paths, &scan);
     let mut checks = vec![
@@ -1338,19 +1347,27 @@ pub fn render<W: std::io::Write>(o: &mut adage_term::Out<W>, checks: &[Check]) -
                 .pad_to(10 + name_w)
                 .quiet(c.detail.clone()),
         )?;
-        // A passing check has nothing to fix; one with a switch (rewrites) says how to flip it.
+        // A passing check has nothing to fix; one with a switch (rewrites) says how to flip it,
+        // and the binary a newer release says what brings it.
         if let Some(fix) = &c.fix {
-            let lead = if c.status == Status::Pass { "switch " } else { "fix " };
+            let lead = match (c.status, c.check.as_str()) {
+                (Status::Pass, "binary") => "update ",
+                (Status::Pass, _) => "switch ",
+                _ => "fix ",
+            };
             o.line(&Line::new().pad_to(10 + name_w).faint(lead).push(Role::Command, fix.prose()))?;
         }
     }
     o.blank()?;
-    // The first failing check's fix, else the first warning's; else what to do next.
+    // The first failing check's fix, else the first warning's; else a newer release's update;
+    // else what to do next.
     let first =
         checks.iter().find(|c| c.status == Status::Fail).or_else(|| checks.iter().find(|c| c.status == Status::Warn));
-    match first.and_then(|c| c.fix.as_ref().map(|fx| (c, fx))) {
-        Some((c, fx)) => o.next(&fx.next(), &format!("fixes {}", c.label))?,
-        None => o.next("adage status", "everything checks out; see the reflexes in effect")?,
+    let update = checks.iter().find(|c| c.check == "binary" && c.status == Status::Pass).and_then(|c| c.command());
+    match (first.and_then(|c| c.fix.as_ref().map(|fx| (c, fx))), update) {
+        (Some((c, fx)), _) => o.next(&fx.next(), &format!("fixes {}", c.label))?,
+        (None, Some(cmd)) => o.next(cmd, "a newer Adage is out; everything else checks out")?,
+        (None, None) => o.next("adage status", "everything checks out; see the reflexes in effect")?,
     }
     Ok(())
 }

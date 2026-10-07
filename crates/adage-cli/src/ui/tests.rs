@@ -2640,3 +2640,45 @@ fn leaving_demo_uses_persistent_data_and_cannot_reopen_the_demo_root() {
     assert_ne!(next.paths.root, c.paths.root);
     assert_eq!(next.root.unwrap(), repo.canonicalize().unwrap());
 }
+
+/// T-O6-05: Home says a newer Adage in its first rows, in plain ink, with the key that runs
+/// `adage update` as a job (confirmed first); without a newer release Home is as before (the
+/// `app-home` snapshot). The palette's `Update Adage` is the same tool.
+#[test]
+fn home_says_a_newer_release() {
+    use super::tools::Tool;
+    let d = tempfile::tempdir().unwrap();
+    let paths = fixture(d.path());
+    let version = env!("CARGO_PKG_VERSION");
+    let latest = adage_store::release::Latest {
+        checked_at: adage_core::time::now_ms(),
+        have: version.into(),
+        latest: Some(adage_store::release::Release { version: "99.0.0".into(), ..Default::default() }),
+        failure: None,
+    };
+    latest.write(&paths).unwrap();
+    let c = ctx(paths.clone(), false);
+    let mut s = app_state();
+    s.live = live_from(&paths);
+    s.tab = Tab::Home;
+    let text = app_frame(&s, &c, 150, 35);
+    assert!(text.contains(&format!(" adage {version} · 99.0.0 is out · u update (adage update")), "{text}");
+    snap("app-home-update", &text.replace(version, "{VERSION}"));
+    // In colour the row is ink and the key the accent: never the warning colour.
+    let colour = ctx(paths.clone(), true);
+    let (_, buf) = render(150, 35, |f| app::draw(f, &s, &colour));
+    let (x, y) = find(&buf, "99.0.0 is out").unwrap();
+    assert_ne!(buf[(x, y)].fg, colour.theme.yellow().fg.unwrap_or_default(), "never amber");
+    // `u` prepares the tool; nothing runs before the confirmation.
+    assert!(matches!(s.key(KeyCode::Char('u'), NONE), Some(Cmd::PrepareTool(Tool::Update))));
+    let entry =
+        palette::matches(&s, "update adage").into_iter().map(|(e, _)| e).find(|e| e.title == "Update Adage").unwrap();
+    assert_eq!(entry.note, "adage update");
+    // `adage watch`'s header says the same pair while there is room, and drops it first.
+    let live = live_from(&paths);
+    let h = health();
+    let (wide, _) = render(160, 20, |f| view::draw_live(f, f.area(), &live, Some(&h), &c, true));
+    assert!(wide.lines().next().unwrap().contains("99.0.0 is out · adage update"), "{wide}");
+    let (narrow, _) = render(80, 20, |f| view::draw_live(f, f.area(), &live, Some(&h), &c, true));
+    assert!(!narrow.lines().next().unwrap().contains("is out"), "{narrow}");
+}

@@ -45,9 +45,9 @@ pub struct Cli {
 #[derive(Subcommand, Debug)]
 pub enum Command {
     // ------------------------------------------------------------------ start
-    /// Set Adage up in one go: find your harnesses, register hooks, condition from past traces.
+    /// Set Adage up once: connect your coding agents (Claude Code through the Adage plugin, Codex, OpenCode) and start learning from their past sessions.
     #[command(
-        after_help = "At a terminal this is a guided flow. `--print` shows every step without asking; `--yes` runs them."
+        after_help = "At a terminal it asks before each step; `--yes --hooks user` takes them all without a question, and `--print` only shows them. Later, `adage update` keeps everything current."
     )]
     Init(InitArgs),
     /// Check that this machine's Adage is set up and healthy.
@@ -122,7 +122,7 @@ pub enum Command {
     Completions(CompletionsArgs),
     /// The ledger of what sessions cost: `adage ledger note` records a harness's own figures.
     Ledger(LedgerArgs),
-    /// Update Adage, its hooks and the plugin together, the way it was installed; with a way back.
+    /// Update Adage when a newer version is out: its binaries, hooks and Claude Code plugin together, the way you installed it, with a way back.
     #[command(
         after_help = "Checks for a newer release first (--check only checks). Before anything is replaced the running binaries are kept in $ADAGE_HOME/previous/; --rollback puts them back."
     )]

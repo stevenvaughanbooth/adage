@@ -267,7 +267,7 @@ fn run(args: &[String]) -> Result<()> {
         Some("on") => switch::on(),
         Some("ledger") => ledger::run(rest, &paths),
         Some("version") => {
-            println!("adage {}", env!("CARGO_PKG_VERSION"));
+            println!("{}", update::version_line(&paths));
             Ok(())
         }
         // Bare `adage` prints the status card, wherever it runs (a terminal, a pipe, `!adage` in

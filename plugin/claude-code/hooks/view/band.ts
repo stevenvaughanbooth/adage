@@ -23,6 +23,12 @@ export type BandInput = {
   now: number
   lapsed: number
   review: number
+  /**
+   * A newer Adage, as the status card words it (`latest`, and `next`, the command that brings it),
+   * while the band's update line shows (until the first prompt, once per release per machine);
+   * null otherwise.
+   */
+  update: { latest: string; next: string } | null
   versionLine: string
   columns: number
   ascii: boolean
@@ -57,7 +63,8 @@ function learnerCell(l: Learner | null, now: number, ascii: boolean): string {
  * The band (ux-design §5), or undefined to leave the band to the engine and other mods. Cells by
  * priority: the name (1), the lamp (2), reflexes (3), steps (4), test runs (5), learning (6);
  * at a narrow width the lowest goes first and the lamp's word never does. The second line shows
- * one attention item, highest first: a lapsed grant, a problem, review waiting, the version.
+ * one attention item, highest first: a lapsed grant, a problem, an answer kept, review waiting,
+ * a newer Adage, the harness version.
  */
 export function band(i: BandInput): Band | undefined {
   const name = `${g('reflex', i.ascii)} adage`
@@ -109,7 +116,14 @@ function secondLine(i: BandInput): string {
   // the answer runs.
   if (i.kept > 0) return `${n} kept for your next session ${sep} /adage review`
   if (i.review > 0) return `${n} ${i.review} need review ${sep} /adage review`
+  // `band.update` (onboarding plan O9): the lowest of Adage's own items, and never a problem.
+  if (i.update !== null) return updateLine(i.update, i.ascii)
   return i.versionLine
+}
+
+/** `band.update`: `» adage 0.2.0 is out · /adage update`, the command as the card words it. */
+export function updateLine(u: { latest: string; next: string }, ascii: boolean): string {
+  return `${g('notice', ascii)} adage ${u.latest} is out ${g('sep', ascii)} ${u.next}`
 }
 
 /** `band.version`: a harness newer than the plugin was tested with (ux-design §9.6). */

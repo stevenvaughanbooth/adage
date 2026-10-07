@@ -200,6 +200,14 @@ export function checkAction(c: Check): { kind: 'run'; argv: string[] } | { kind:
   return m?.[1] !== undefined ? { kind: 'copy', command: m[1] } : undefined
 }
 
+/** The terminal command that updates Adage (Health's `Copy:` on the version row). */
+export const UPDATE_COMMAND = 'adage update'
+
+/** Health's `version` row (onboarding plan O9): the pair, as the status card says it. */
+export function updateRowText(u: { have: string; latest: string }, ascii: boolean): string {
+  return `version  adage ${u.have} ${g('sep', ascii)} ${u.latest} is out`
+}
+
 /** `pane.reflexes.empty`, with the status card's counts. */
 export function reflexesEmpty(instincts: number, ascii: boolean): string {
   return `No learned reflexes yet ${g('sep', ascii)} 0 of ~5 sessions needed ${g('sep', ascii)} ${plural(instincts, 'instinct', 'instincts')} active meanwhile`

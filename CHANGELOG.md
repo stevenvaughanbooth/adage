@@ -599,6 +599,9 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   a response the server never issued; before, every predicted step was followed by a 404
   `thread_not_found` and a replayed dispatch (live run 2: 12 of 12), which spent the request the
   prediction saved.
+- **A call the mod made in the model's place says so.** Its result carries one plain line: Adage
+  made the call in the model's place, from which learned reflex, and it need not be repeated.
+  Before, a model that read a predicted `make gen` in its own turn apologised for having run it.
 
 - **The Claude Code mod acts on what the binary answers.** Before a Bash call runs, the mod asks
   the binary's plan and Claude Code's own permission check: a fresh receipt answers a test run

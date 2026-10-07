@@ -5,14 +5,14 @@ import { describe, expect, test } from 'claude-code/testing'
 import { GRAPH, LINE, rowsOf as rows } from '../fixtures/kit'
 import type { Fired, Health } from '../plugin'
 import { reflexesOf } from '../reads'
-import { band, firedThisSession, newer, versionLine } from './band'
+import { band, firedThisSession, newer, updateLine, versionLine } from './band'
 import type { BandInput } from './band'
 import { markText, promptLines } from './lines'
 
 const REFLEXES = reflexesOf(GRAPH)
 const fired = (route: string, prompt = 1): Fired => ({ event: 'UserPromptSubmit', route, track: 'acme/learned@1', kind: 'run', strength: 'fire', prompt, promptText: 'fix W-2042' })
 const HEALTHY: Health = { lights: [], word: 'healthy', lamp: 'fire', check: null, off: false }
-const BASE: BandInput = { active: true, nobinary: '', paused: false, health: HEALTHY, inRepo: true, reflexes: 0, steps: 0, reused: 0, learner: null, now: 0, lapsed: 0, review: 0, versionLine: '', columns: 160, ascii: false, kept: 0, noticed: 0, paneOpen: false }
+const BASE: BandInput = { active: true, nobinary: '', paused: false, health: HEALTHY, inRepo: true, reflexes: 0, steps: 0, reused: 0, learner: null, now: 0, lapsed: 0, review: 0, update: null, versionLine: '', columns: 160, ascii: false, kept: 0, noticed: 0, paneOpen: false }
 const line1 = (i: BandInput) => {
   const b = band(i)
   return b === undefined ? undefined : b.cells.map(c => (c.glyph ? `${c.glyph} ${c.text}` : c.text)).join(' · ').replace('adage · ', 'adage  ')
@@ -52,6 +52,32 @@ describe('T-B2-07 … T-B2-09 · the band', () => {
     expect(band({ ...BASE, health: problem, review: 2, versionLine: v })?.second).toBe('» problem: hook latency · /adage health')
     expect(band({ ...BASE, review: 2, versionLine: v })?.second).toBe('» 2 need review · /adage review')
     expect(band({ ...BASE, versionLine: v })?.second).toBe('» Claude Code 2.1.300 is newer than this plugin was tested with (2.1.288) · run adage doctor')
+  })
+
+  test('T-O9-06 · the update line: lapsed > problem > kept > review > update > version, table-driven', () => {
+    const problem: Health = { lights: [], word: 'problem', lamp: 'inhibit', check: 'hook latency', off: false }
+    const v = versionLine('2.1.300', '2.1.288', false)
+    const update = { latest: '0.2.0', next: '/adage update' }
+    const all: Partial<BandInput> = { lapsed: 1, health: problem, kept: 1, review: 2, update, versionLine: v }
+    const order: [keyof BandInput, string][] = [
+      ['lapsed', '» 1 grant lapsed · /adage health'],
+      ['health', '» problem: hook latency · /adage health'],
+      ['kept', '» kept for your next session · /adage review'],
+      ['review', '» 2 need review · /adage review'],
+      ['update', '» adage 0.2.0 is out · /adage update'],
+      ['versionLine', v],
+    ]
+    // Each row is what shows once every row above it is gone.
+    let i: BandInput = { ...BASE, ...all }
+    for (const [key, want] of order) {
+      expect(band(i)?.second, key).toBe(want)
+      i = { ...i, [key]: BASE[key] }
+    }
+    expect(band(i)).toBeUndefined()
+    // Alone it is enough for a band; never a strength or lifecycle word, and the command as the card says it.
+    expect(band({ ...BASE, update })?.second).toBe('» adage 0.2.0 is out · /adage update')
+    expect(updateLine({ latest: '0.2.0', next: 'adage update' }, true)).toBe('>> adage 0.2.0 is out - adage update')
+    for (const word of ['fire', 'prime', 'inhibit', 'nascent', 'active', 'retired']) expect(updateLine(update, false).includes(word), word).toBe(false)
   })
 
   test('lamp roles and words: healthy, check, problem; the off glyph only when off', () => {

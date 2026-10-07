@@ -3,23 +3,71 @@
 // --json`'s lapsed grants, `status --json`'s packs awaiting trust and candidates, and the map's
 // address. Each keeps only what a drawing reads (never a field that would name the arm, ux-design
 // §1.7); anything malformed reads as nothing. refresh.ts makes the reads.
-import type { Candidate, Check, Lapse, Pack, Reflex } from './plugin'
+import type { Candidate, Check, Lapse, Pack, Reflex, Update } from './plugin'
 import { isRecord, records, str, strings } from './shape'
 
 /** The status card as `adage --json --for-session` gives it (A5). */
 export type Card = {
   header: string
+  /** The binary's version ('' when the card does not say). */
+  version: string
   off: boolean
   rows: { key?: string; text: string }[]
   next: { command: string; why: string }[]
+  /** A newer Adage, when the binary knows one (onboarding plan O6). */
+  update?: Offer
 }
+
+/** A newer Adage as the card offers it: the band's line is the mod's to decide (`Update.band`). */
+export type Offer = Omit<Update, 'band'>
 
 /** Reads the card JSON; undefined when it is not one. */
 export function cardOf(v: unknown): Card | undefined {
   if (!isRecord(v) || typeof v.header !== 'string') return undefined
   const rows = records(v.rows).map(r => ({ ...(typeof r.key === 'string' ? { key: r.key } : {}), text: typeof r.text === 'string' ? r.text : '' }))
   const next = records(v.next).map(n => ({ command: typeof n.command === 'string' ? n.command : '', why: typeof n.why === 'string' ? n.why : '' })).filter(n => n.command !== '')
-  return { header: v.header, off: v.off === true, rows, next }
+  const update = updateOf(v)
+  return { header: v.header, version: str(v.version), off: v.off === true, rows, next, ...(update === undefined ? {} : { update }) }
+}
+
+const VERSION = /^\d+\.\d+\.\d+[0-9A-Za-z.+-]*$/
+
+/**
+ * The card's `update` (`{ current, latest, next, notes, … }`, docs/claude-mod/impl/O5-O7-O8-notes.md):
+ * the binary decides whether a release is newer, and the mod draws what it says. Undefined when
+ * the card says none, or anything malformed (a version that is not one, no command).
+ */
+export function updateOf(card: unknown): Offer | undefined {
+  const u = isRecord(card) ? card.update : undefined
+  if (!isRecord(u)) return undefined
+  const have = str(u.current)
+  const latest = str(u.latest)
+  const next = str(u.next)
+  if (!VERSION.test(have) || !VERSION.test(latest) || next === '') return undefined
+  const notes = str(u.notes).split('\n').map(l => l.trim()).filter(l => l !== '').slice(0, 3)
+  return { have, latest, next, notes }
+}
+
+/** What `adage update` under a press came to: its last stdout line (docs/claude-mod/impl/O6-O9-notes.md). */
+export type Updated =
+  | { kind: 'updated'; from: string; to: string }
+  | { kind: 'latest'; version: string }
+  | { kind: 'manual'; command: string; say: string }
+
+/** The last line of a pressed `adage update` that is one of its answers; undefined for anything else. */
+export function updatedOf(lines: readonly string[]): Updated | undefined {
+  const last = [...lines].reverse().find(l => l.trim() !== '')
+  let v: unknown
+  try {
+    v = JSON.parse(last ?? '')
+  } catch {
+    return undefined
+  }
+  if (!isRecord(v)) return undefined
+  if (isRecord(v.updated) && str(v.updated.from) !== '' && str(v.updated.to) !== '') return { kind: 'updated', from: str(v.updated.from), to: str(v.updated.to) }
+  if (isRecord(v.latest) && str(v.latest.version) !== '') return { kind: 'latest', version: str(v.latest.version) }
+  if (isRecord(v.manual) && str(v.manual.command) !== '') return { kind: 'manual', command: str(v.manual.command), say: str(v.manual.say) }
+  return undefined
 }
 
 /** The opt-in lines the card reports on (`ui.spinner`, `ui.turn_line`, `ui.noticed`); off otherwise. */

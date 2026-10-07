@@ -5,8 +5,10 @@
 // person-only verb the binary runs is recorded with its stdin.
 import { describe, expect, test } from 'claude-code/testing'
 
-import { ASK_EVERY_MS, ON_QUESTION } from './ask'
-import { BANNED, CLI, GRAPH, GRAPH_OFFER, HOOK, LINE, NEXT_TOKEN, PACKS, SESSION, SURFACES, T0, TOKEN, TURN_END, bandText, begin, mountPane, personOnly, presses, shown, start, stdin, turnEnd, wireLine, world } from './fixtures/kit'
+import { ASK_EVERY_MS, ON_QUESTION, UPDATE_ANSWERS } from './ask'
+import { askUpdate } from './dialog'
+import { BANNED, CLI, GRAPH, GRAPH_OFFER, HOOK, LINE, NEXT_TOKEN, PACKS, SESSION, SURFACES, T0, TOKEN, TURN_END, bandText, begin, exited, fake, mountPane, personOnly, presses, shown, start, stdin, turnEnd, wireLine, world } from './fixtures/kit'
+import type { FakeOptions } from './fixtures/kit'
 
 const FEED = [LINE.learnerIdle, LINE.healthy, LINE.start, LINE.pressIssued]
 const ENABLE = 'acme/learned/test-after-acme-edit'
@@ -332,5 +334,91 @@ describe('T-B4-09 · no banned words', () => {
     for (const b of await ui.findAll({ type: 'Button' })) if (/^(yes|no|verb|details|copy):/.test(b.key ?? '')) expect(b.text).not.toMatch(BANNED)
     expect(await bandText($)).toContain('need review')
     expect(await bandText($)).not.toContain('wait')
+  })
+})
+
+describe('T-O9-07 · /adage update: the ask, its answers, the press and the toast from the last line', () => {
+  const OFFER = { have: '0.1.0', latest: '0.2.0', next: '/adage update', notes: ['fixes hook latency'] }
+  const QUESTION = 'Adage 0.2.0 is out (you have 0.1.0). Update now? It takes effect in your next session.'
+  const updated = JSON.stringify({ updated: { from: '0.1.0', to: '0.2.0', effect: 'next session' } })
+  /** A session a person is at, holding a press, whose `adage update` answers `answer`. */
+  function held(said: string | undefined, answer: () => ReturnType<typeof exited>, o: FakeOptions = {}) {
+    const f = fake({
+      ...o,
+      ask: () => said,
+      run: argv => (argv[1] === 'update' ? answer() : exited(0, '')),
+      state: { press: { session: SESSION, token: TOKEN, state: 'held', issued: 1, chain: 0 }, ...o.state },
+    })
+    f.m.rt.cli = CLI
+    f.m.rt.interactive = true
+    f.m.rt.pressBound = true
+    return f
+  }
+  const updates = (f: ReturnType<typeof fake>) => f.ran.filter(r => r.argv[1] === 'update')
+
+  test('update: exactly [cli, update] with the token on stdin; the next token held; the toast from {updated}', async () => {
+    const f = held('update', () => exited(0, `${JSON.stringify({ next: NEXT_TOKEN })}\nadage update · 0.1.0 → 0.2.0 · plugin\n${updated}\n`))
+    await askUpdate(f.m, OFFER)
+    expect(f.asked).toEqual([{ question: QUESTION, answers: UPDATE_ANSWERS }])
+    expect(updates(f).map(r => r.argv)).toEqual([[CLI, 'update']])
+    expect(JSON.parse(updates(f)[0]?.init?.stdin ?? '{}')).toEqual({ press: TOKEN, session: SESSION })
+    expect(f.state.press.token).toBe(NEXT_TOKEN)
+    expect(f.toasts).toEqual(['adage updated 0.1.0 → 0.2.0 · takes effect in your next session'])
+  })
+
+  test('manual, already the latest, a failure after the spend: each its own toast; the next token kept', async () => {
+    const manual = held('update', () => exited(0, `${JSON.stringify({ next: NEXT_TOKEN })}\n${JSON.stringify({ manual: { command: '/plugin', say: 'In Claude Code: /plugin → adage → Update' } })}\n`))
+    await askUpdate(manual.m, OFFER)
+    expect(manual.toasts).toEqual(['In Claude Code: /plugin → adage → Update'])
+    const latest = held('update', () => exited(0, `${JSON.stringify({ next: NEXT_TOKEN })}\n${JSON.stringify({ latest: { version: '0.2.0' } })}\n`))
+    await askUpdate(latest.m, OFFER)
+    expect(latest.toasts).toEqual(['adage 0.2.0 is the latest.'])
+    const failed = held('update', () => exited(1, `${JSON.stringify({ next: NEXT_TOKEN })}\n`, { stderr: 'error: npm failed (exit 1)\n' }))
+    await askUpdate(failed.m, OFFER)
+    expect(failed.toasts).toEqual(['adage could not update (npm failed (exit 1)) · run adage update in a terminal'])
+    expect(failed.state.press.token).toBe(NEXT_TOKEN)
+    // Refused before the spend (no next line): the token stays for the person's next answer.
+    const refused = held('update', () => exited(1, '', { stderr: 'error: `adage update` is a decision for a person\n' }))
+    await askUpdate(refused.m, OFFER)
+    expect(refused.state.press.token).toBe(TOKEN)
+  })
+
+  test('what changes opens Health; not now records the ask; a dismissed dialog does nothing; none runs anything', async () => {
+    const what = held('what changes', () => exited(0, ''))
+    await askUpdate(what.m, OFFER)
+    expect(what.state.view.tab).toBe('health')
+    expect(what.opened).toHaveLength(1)
+    const later = held('not now', () => exited(0, ''))
+    await askUpdate(later.m, OFFER)
+    expect(later.state.asked.map(a => a.key)).toEqual(['update:0.2.0'])
+    const dismissed = held(undefined, () => exited(0, ''))
+    await askUpdate(dismissed.m, OFFER)
+    for (const f of [what, later, dismissed]) expect(updates(f)).toEqual([])
+    expect(dismissed.state.asked).toEqual([])
+  })
+
+  test('T-O9-09 · no press held: the answer is kept for the next start here, and nothing runs', async () => {
+    const f = held('update', () => exited(0, ''), { state: { press: { session: '', token: '', state: 'none', issued: 0, chain: 0 } } })
+    await askUpdate(f.m, OFFER)
+    expect(updates(f)).toEqual([])
+    expect(f.store['adage.kept']).toEqual([{ command: 'adage update', say: 'update Adage to 0.2.0', key: 'update:0.2.0', session: SESSION, root: expect.any(String), at: expect.any(Number) }])
+  })
+})
+
+describe('T-O9-09 · a kept update is asked again at the next start, and runs only on `run it`', () => {
+  const kept = (root: string) => [{ command: 'adage update', say: 'update Adage to 0.2.0', key: 'update:0.2.0', session: 'old', root, at: T0 }]
+  const QUESTION = 'Kept from your last session: update Adage to 0.2.0 (adage update). Run it now?'
+
+  test('run it: the press of [cli, update]', async ($, on) => {
+    const w = world(on, { feed: FEED, store: { 'adage.kept': kept('/w') }, ask: (q, o) => (q === QUESTION ? 'run it' : undefined) })
+    await begin($, w)
+    expect(w.asked.map(a => a.question)).toContain(QUESTION)
+    expect(presses(w).map(r => r.argv)).toEqual([[CLI, 'update']])
+  })
+
+  test('dismissed: kept, nothing runs', async ($, on) => {
+    const w = world(on, { feed: FEED, store: { 'adage.kept': kept('/w') }, ask: () => undefined })
+    await begin($, w)
+    expect(presses(w)).toEqual([])
   })
 })

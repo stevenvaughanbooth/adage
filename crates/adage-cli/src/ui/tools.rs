@@ -27,15 +27,42 @@ pub enum Tool {
     Packs,
     Marketplace,
     HistorySources,
-    Delegate { reference: String, route: String, level: String, outputs: String, cache: String, effect: String },
-    Revoke { reference: String, route: String },
-    Pack { name: String, enabled: bool },
+    Delegate {
+        reference: String,
+        route: String,
+        level: String,
+        outputs: String,
+        cache: String,
+        effect: String,
+    },
+    Revoke {
+        reference: String,
+        route: String,
+    },
+    Pack {
+        name: String,
+        enabled: bool,
+    },
     Eval(PathBuf),
     InstallModel(PathBuf),
-    SetHistorySource { harness: String, directory: PathBuf },
+    SetHistorySource {
+        harness: String,
+        directory: PathBuf,
+    },
     ExportOpenCode,
-    AddTrack { directory: PathBuf, trust: bool, expected_digest: Option<String> },
-    ShareTrack { track: String, output: PathBuf, key: Option<PathBuf> },
+    AddTrack {
+        directory: PathBuf,
+        trust: bool,
+        expected_digest: Option<String>,
+    },
+    ShareTrack {
+        track: String,
+        output: PathBuf,
+        key: Option<PathBuf>,
+    },
+    /// `adage update`: Adage, its hooks and the plugin, the way they were installed (onboarding
+    /// plan O6). A person's decision, confirmed first, its lines shown as it runs.
+    Update,
 }
 
 impl Tool {
@@ -60,6 +87,7 @@ impl Tool {
             Tool::ExportOpenCode => "Import OpenCode history",
             Tool::AddTrack { .. } => "Import a signed pack",
             Tool::ShareTrack { .. } => "Export a signed pack",
+            Tool::Update => "Update Adage",
         }
     }
 
@@ -75,6 +103,7 @@ impl Tool {
                 | Tool::ShareTrack { .. }
                 | Tool::SetHistorySource { .. }
                 | Tool::ExportOpenCode
+                | Tool::Update
         )
     }
 
@@ -88,6 +117,7 @@ impl Tool {
             Tool::Delegate { .. } | Tool::Revoke { .. } => Some("review delegate"),
             Tool::Pack { .. } => Some("packs"),
             Tool::InstallModel(_) => Some("models install"),
+            Tool::Update => Some("update"),
             _ => None,
         }
     }
@@ -96,6 +126,7 @@ impl Tool {
         let words = |args: &[&str]| args.iter().map(OsString::from).collect::<Vec<_>>();
         Ok(match self {
             Tool::Status => words(&["status"]),
+            Tool::Update => words(&["update"]),
             Tool::Condition => vec!["condition".into(), "--repo-root".into(), base.into()],
             Tool::Report => words(&["report"]),
             Tool::Graph => words(&["graph"]),
@@ -404,9 +435,13 @@ mod tests {
             Tool::ExportOpenCode,
             Tool::Condition,
             Tool::Revoke { reference: "a/b".into(), route: "test".into() },
+            Tool::Update,
         ] {
             assert!(t.mutates());
             assert!(t.person_command().is_some());
         }
+        // `Update Adage` runs bare `adage update`: the child's own terminal check, lifted only by
+        // the override this parent sets after its own (never a press).
+        assert_eq!(Tool::Update.args(&Paths::at(d.path()), d.path()).unwrap(), vec![OsString::from("update")]);
     }
 }

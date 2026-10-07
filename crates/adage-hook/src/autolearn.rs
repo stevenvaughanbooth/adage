@@ -71,7 +71,8 @@ fn is_zero(n: &u32) -> bool {
 pub struct Notice {
     pub id: String,
     pub text: String,
-    /// `health`, `waiting`, `value` or `reflexes` (the wording priority, highest first).
+    /// `health`, `waiting`, `value`, `reflexes` or `update` (a newer Adage is out, said alone;
+    /// the wording priority, highest first).
     pub kind: String,
     pub at: u64,
     /// What the notice was composed from (the learner's; the hook ignores it).

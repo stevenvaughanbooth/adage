@@ -2,7 +2,7 @@
 // §10; T-B4-01's choice, T-B4-02's `not this one`/`later` rules, T-B4-09's words). Nothing here asks.
 import { describe, expect, test } from 'claude-code/testing'
 
-import { ANSWERS, ASK_EVERY_MS, KEPT_ANSWERS, MAX_DISMISSALS, ON_ANSWERS, ON_QUESTION, answerOf, askedOf, doneToast, keptOf, keptQuestion, nextAsk, question, record, whatOf } from './ask'
+import { ANSWERS, ASK_EVERY_MS, KEPT_ANSWERS, MAX_DISMISSALS, ON_ANSWERS, ON_QUESTION, UPDATE_ANSWERS, answerOf, askedOf, doneToast, keptOf, keptQuestion, nextAsk, question, record, upToDate, updateFailed, updateHeadless, updateQuestion, updateSay, updatedToast, whatOf } from './ask'
 import { BANNED, GRAPH, GRAPH_OFFER, GRAPH_PREDICT } from './fixtures/kit'
 import { reflexesOf } from './reads'
 import { waiting } from './view/pane'
@@ -86,5 +86,24 @@ describe('T-B4-01, T-B4-02 · the next ask', () => {
     expect(keptQuestion({ command: 'adage review approve acme/learned r', say: 'run make test after editing acme/**' })).toBe(
       'Kept from your last session: run make test after editing acme/** (adage review approve acme/learned r). Run it now?',
     )
+  })
+})
+
+describe('T-O9-07, T-O9-08 · the update words (onboarding plan §1.3, O9)', () => {
+  test('the ask, its answers, the toasts, the headless and up-to-date lines, the kept question', () => {
+    expect(updateQuestion({ have: '0.1.0', latest: '0.2.0' })).toBe('Adage 0.2.0 is out (you have 0.1.0). Update now? It takes effect in your next session.')
+    expect(UPDATE_ANSWERS).toEqual(['update', 'not now', 'what changes'])
+    expect(updatedToast({ kind: 'updated', from: '0.1.0', to: '0.2.0' })).toBe('adage updated 0.1.0 → 0.2.0 · takes effect in your next session')
+    expect(updatedToast({ kind: 'latest', version: '0.2.0' })).toBe('adage 0.2.0 is the latest.')
+    expect(updatedToast({ kind: 'manual', command: '/plugin', say: 'In Claude Code: /plugin → adage → Update' })).toBe('In Claude Code: /plugin → adage → Update')
+    expect(updateFailed('npm failed (exit 1)')).toBe('adage could not update (npm failed (exit 1)) · run adage update in a terminal')
+    expect(updateHeadless('0.2.0')).toBe('Adage 0.2.0 is out; run adage update in a terminal.')
+    expect(upToDate('0.2.0')).toBe('adage 0.2.0 is the latest.')
+    expect(keptQuestion({ command: 'adage update', say: updateSay('0.2.0') })).toBe('Kept from your last session: update Adage to 0.2.0 (adage update). Run it now?')
+    expect(whatOf('adage update')).toBe('update')
+    expect(doneToast('update', 'x')).toBeUndefined()
+    for (const t of [updateQuestion({ have: '0.1.0', latest: '0.2.0' }), updateHeadless('0.2.0'), updatedToast({ kind: 'updated', from: '0.1.0', to: '0.2.0' })]) {
+      expect(BANNED.test(t), t).toBe(false)
+    }
   })
 })

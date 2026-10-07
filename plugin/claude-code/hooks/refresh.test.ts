@@ -68,3 +68,41 @@ describe('T-B3-05, T-B2-08 · refresh', () => {
     expect(f.m.rt.routineModel).toBe('haiku')
   })
 })
+
+describe('T-O9-06 · the update line: once per release per machine, until the first prompt', () => {
+  const UPDATE = { current: '0.1.0', latest: '0.2.0', channel: 'npm', next: '/adage update', text: '0.2.0 is out (you have 0.1.0)', notes: 'fixes hook latency' }
+  const session = (store: Record<string, unknown> = {}) => {
+    const f = fake({ run: reads({ ...CARD, update: UPDATE }), store })
+    f.m.rt.cli = '/data/bin/adage'
+    f.m.rt.interactive = true
+    return f
+  }
+
+  test("the first session to read it shows the line (and the store says so); a second read keeps it; the next session does not", async () => {
+    const f = session()
+    await refresh(f.m, true)
+    expect(f.state.mode.update).toEqual({ have: '0.1.0', latest: '0.2.0', next: '/adage update', notes: ['fixes hook latency'], band: true })
+    expect(f.store['adage.latest']).toBe('0.2.0')
+    await refresh(f.m, true)
+    expect(f.state.mode.update?.band).toBe(true)
+    const next = session({ ...f.store })
+    await refresh(next.m, true)
+    expect(next.state.mode.update).toEqual({ have: '0.1.0', latest: '0.2.0', next: '/adage update', notes: ['fixes hook latency'], band: false })
+  })
+
+  test('after the first prompt the line is gone; a card with nothing newer clears it; a newer release shows again', async () => {
+    const f = session()
+    await refresh(f.m, true)
+    f.state.turn = { ...f.state.turn, submits: 1 }
+    await refresh(f.m, true)
+    expect(f.state.mode.update?.band).toBe(false)
+    const g = session()
+    await refresh(g.m, true)
+    g.m.run = fake({ run: reads(CARD) }).m.run
+    await refresh(g.m, true)
+    expect(g.state.mode.update).toBeNull()
+    const h = session({ 'adage.latest': '0.1.5' })
+    await refresh(h.m, true)
+    expect(h.state.mode.update?.band).toBe(true)
+  })
+})
