@@ -17,6 +17,9 @@ state, and stops collection when native activation, history, usage or binary obs
 not reconcile. Execution grants and custom model settings remain unsupported by this profile.
 The default legacy E0 profile still rejects mod arms instead of silently changing the treatment.
 The training coordinator pins the same complete collector source closure as frozen comparisons.
+Pilots can explicitly select that native profile at initialization; untreated training receipts
+check native request evidence before further spending, and both held-out cohorts retain the
+selected profile after operator review.
 
 External-parent PostgreSQL migration controls now support private Coder learning experiments,
 with pinned SQL inputs and separate upgrade, fresh-schema and downgrade observations, using

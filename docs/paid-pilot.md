@@ -5,10 +5,7 @@ operator review, a pinned compiled index, and held-out paired evaluation. It use
 Python maintenance tasks and independent external grader. It is an exploratory **synthetic
 paid pilot**, not evidence of customer token savings. No paid calls run until `--execute`.
 
-Until merged, use `codex/trace-learning-infrastructure` from
-[PR #31](https://github.com/stevenvaughanbooth/adage/pull/31).
-
-The treatment is learned **E0 advice** through the normal Adage hooks. It does not enable
+The default treatment is learned **E0 advice** through the normal Adage hooks. It does not enable
 automatic command execution, completion enforcement, or a different model in the treatment arm.
 Both arms use the exact model revision you name.
 
@@ -36,6 +33,20 @@ python3 evals/live/pilot.py init --root "$PILOT_ROOT" \
   --max-turns 30 --timeout-seconds 600
 python3 evals/live/pilot.py plan --root "$PILOT_ROOT"
 ```
+
+To test the native Claude mod, initialize a **new** root with the verified Linux standalone
+Claude Code 2.1.288 harness and a staged, checksummed plugin containing both binaries. Add
+`--runtime-profile native-mod-bundled-defaults-e0/v1 --plugin-dir /absolute/staged/plugin`
+to `init`, and set `--adage` to that plugin's `dist/<linux-target>/adage`. Keep the same
+reviewed allocation; a new root is not authorization for another paid study.
+
+The native profile pins the complete plugin, paired binaries, harness, managed settings and
+supported environment. Training remains untreated: no Adage module or reflex is loaded.
+Its receipts reconcile native history request IDs, debug request counts and stream usage;
+missing observations or later drift stop further dispatch while preserving the attempt.
+After operator review, both frozen cohorts use the native profile with `off` and `mod` arms.
+Custom forwarded environment and execution grants are unsupported. An observed module load
+or spool directive alone does not establish useful delivery or adequate task verification.
 
 `init` creates the complete registry and all three configurations; no unpublished input files
 are needed. It pins the binary, collector, task/grader sources, model, Claude Code version,

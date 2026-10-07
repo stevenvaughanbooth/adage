@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import platform
 import shutil
+import subprocess
 import sys
 import unittest
 from unittest.mock import patch
@@ -20,6 +21,8 @@ import frozen
 import native_runtime
 import runner
 import test_frozen
+import test_pilot
+import pilot
 
 VERSION = native_runtime.HARNESS_VERSION + ' (Claude Code)'
 
@@ -162,6 +165,131 @@ class NativeFrozenFlow(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'started without a terminal receipt'):
                     self.execute()
                 self.assertEqual(len(NativeFakeLive.runs), count)
+
+
+
+
+class NativeTrainingLive(test_pilot.TrainingLive):
+    """Untreated fixture only: native history/debug accounting, no model calls."""
+    fault = None
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.home = self.root / 'private/adage-home'
+        self.state['harness_version'] = VERSION
+        original = self.observer.event
+
+        def event(row):
+            if row.get('type') == 'system' and row.get('subtype') == 'init':
+                row['claude_code_version'] = native_runtime.HARNESS_VERSION
+                row['plugins'] = copy.deepcopy(native_runtime.BUILTIN_PLUGINS)
+            original(row)
+        self.observer.event = event
+
+    def run_one(self, run_id, phase, arm, task, prompt):
+        super().run_one(run_id, phase, arm, task, prompt)
+        directory = self.root / 'runs' / run_id
+        accounting = evidence.read_stream(directory / 'stream.jsonl')
+        history = self.root / 'private/transcripts/project' / (run_id + '.jsonl')
+        rows = [json.loads(line) for line in history.read_text().splitlines()]
+        calls = [c['id'].removeprefix('anthropic/') for c in accounting.calls]
+        assistants = [row for row in rows if row['type'] == 'assistant']
+        for i, row in enumerate(assistants):
+            row['requestId'] = calls[i % len(calls)]
+        for request in set(calls) - {row['requestId'] for row in assistants}:
+            rows.append({'type': 'assistant', 'sessionId': run_id, 'requestId': request,
+                         'message': {'role': 'assistant', 'content': []}})
+        history.write_text(''.join(json.dumps(row) + '\n' for row in rows))
+        log = ''.join(f't [DEBUG] [API REQUEST] /v1/messages x-client-request-id=client-{i} source=main\n'
+                      for i, _ in enumerate(accounting.calls))
+        if self.fault == 'unexpected-mod':
+            log += 't [DEBUG] hooks module adage@inline loaded (fixture)\n'
+        (directory / 'claude-debug.log').write_text(log)
+
+
+@unittest.skipUnless(sys.platform == 'linux', 'native pilot requires Linux')
+class NativePilotFlow(unittest.TestCase):
+    def setUp(self):
+        self.fixture = NativeFrozenFlow()
+        self.fixture.setUp()
+        self.addCleanup(self.fixture.doCleanups)
+        f = self.fixture
+        self.root = f.fixture.root / 'native-pilot'
+        self.manifest = pilot.initialize(self.root, f.adage, 'fixture-model-v1', '30', '1',
+                                        runtime_profile=native_runtime.PROFILE, plugin_dir=f.plugin)
+        NativeTrainingLive.runs, NativeTrainingLive.mode, NativeTrainingLive.fault = [], 'complete', None
+
+    def test_native_pilot_pins_profile_and_rejects_asset_drift(self):
+        self.assertEqual(self.manifest['runtime_profile'], native_runtime.PROFILE)
+        for cfg in self.manifest['configs'].values():
+            self.assertEqual(cfg['eval']['arms'], ['off', 'mod'])
+            self.assertEqual(cfg['learn_args'], [])
+            self.assertTrue(cfg['capture_debug'])
+        pilot.load(self.root)
+        (self.fixture.plugin / 'hooks/register.ts').write_text('changed fixture')
+        with self.assertRaisesRegex(ValueError, 'runtime inputs changed'):
+            pilot.load(self.root)
+
+    def test_untreated_training_native_receipt_replays_and_detects_debug_drift(self):
+        def once(*args, **kwargs):
+            if NativeTrainingLive.runs:
+                raise RuntimeError('fixture stop after one job')
+            return NativeTrainingLive(*args, **kwargs)
+        with self.assertRaisesRegex(RuntimeError, 'fixture stop'):
+            pilot.train(self.root, execute=True, live_factory=once)
+        readiness = pilot.plan(self.root, runtime=False)
+        self.assertFalse(readiness['blockers'])
+        self.assertEqual(readiness['stages']['train']['completed'], 1)
+        run_id = NativeTrainingLive.runs[0]
+        pointer = frozen.read_json(self.root / 'train/receipts' / (run_id + '.json'))
+        objects = frozen.Objects(self.root / 'objects')
+        receipt = objects.get(pointer['sha256'])
+        observed = objects.get(receipt['evidence']['native_runtime'])
+        self.assertTrue(observed['complete'])
+        self.assertEqual(observed['observations']['native_module_loads'], 0)
+        debug = self.root / 'train/runs' / run_id / 'claude-debug.log'
+        debug.write_text(debug.read_text() + 'changed fixture\n')
+        self.assertTrue(any('observations changed' in reason for reason in pilot.plan(self.root, runtime=False)['blockers']))
+        with self.assertRaisesRegex(ValueError, 'not ready'):
+            pilot.train(self.root, execute=True, live_factory=NativeTrainingLive)
+        self.assertEqual(len(NativeTrainingLive.runs), 1)
+
+    def test_production_learning_and_review_freeze_both_native_cohorts(self):
+        NativeTrainingLive.mode = 'gold'
+        collected = pilot.train(self.root, execute=True, live_factory=NativeTrainingLive)
+        self.assertEqual(collected['returncode'], 0, collected)
+        learned = pilot.learn(self.root)
+        self.assertGreater(learned['candidate_count'], 0, learned)
+        objects = frozen.Objects(self.root / 'objects')
+        # Disclosed scripted fixture only; existing setup simulates an operator for tests.
+        # The production coordinator never approves routes or clears agent markers.
+        for route in objects.get(learned['routes_sha256']):
+            if route['state'] == 'nascent':
+                proc = subprocess.run([str(self.fixture.adage), 'review', 'approve', route['reference'],
+                                       route['id'], '--by', 'synthetic-fixture-reviewer'],
+                                      env=dict(os.environ, ADAGE_HOME=str(self.root / 'learner-home'),
+                                               ADAGE_ALLOW_NONINTERACTIVE='1'), capture_output=True, text=True)
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+        readiness = pilot.freeze(self.root, 'synthetic-fixture-reviewer')
+        self.assertTrue(readiness['ready_for_paid_dispatch'], readiness)
+        for stage in ['validation', 'test']:
+            study = frozen.read_json(self.root / (stage + '-frozen.json'))
+            for side in ['baseline', 'intervention']:
+                spec = objects.get(study['protocol'][side]['configuration_sha256'])
+                self.assertEqual(spec['runtime_profile'], native_runtime.PROFILE)
+                self.assertEqual(spec['config']['eval']['arms'], ['off', 'mod'])
+                self.assertEqual(spec['native_inputs'], self.manifest['native_inputs'])
+        self.assertEqual(len(NativeTrainingLive.runs), 20)
+
+    def test_contaminated_training_retains_receipt_and_stops(self):
+        NativeTrainingLive.fault = 'unexpected-mod'
+        result = pilot.train(self.root, execute=True, live_factory=NativeTrainingLive)
+        self.assertEqual(result['returncode'], 2)
+        self.assertEqual(len(NativeTrainingLive.runs), 1)
+        self.assertEqual(len(list((self.root / 'train/receipts').glob('*.json'))), 1)
+        self.assertTrue(any('incomplete native observations' in reason for reason in result['blockers']))
+        with self.assertRaisesRegex(ValueError, 'not ready'):
+            pilot.train(self.root, execute=True, live_factory=NativeTrainingLive)
 
 
 if __name__ == '__main__':
