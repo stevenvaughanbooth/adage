@@ -2,7 +2,10 @@
 //! architecture §3.2), or the step it routes to the person's routine model (§3.5). Only what
 //! Adage already directed, only under a person's grant, and within bounds that count in both arms.
 
-use crate::{Arm, Ctx, Decision, PredictedCall, Prediction, PredictionKind, Routing, SessionState};
+use crate::{
+    Arm, Ctx, Decision, Permission, PredictedCall, Prediction, PredictionKind, Routing, SessionState, StepPhase,
+    Withheld,
+};
 use adage_core::pattern;
 use adage_tracks::{interlock, IndexedRoute, Route, Step, Strength};
 
@@ -18,8 +21,9 @@ pub(crate) fn on_turn_step(
     ending: bool,
 ) {
     predict_step(ctx, routes, st, d, turn_id, index, ending);
-    // A step Adage takes in the model's place sends no request to route.
-    if d.predicted_at.is_none() && index > 0 {
+    // A step Adage takes in the model's place sends no request to route (a dry run's prediction,
+    // not yet counted, included: its verdict routes the step if the prediction is held back).
+    if d.predicted_at.is_none() && d.predicted.is_none() && index > 0 {
         route_step(ctx, routes, st, d);
     }
 }
@@ -33,7 +37,8 @@ pub(crate) fn on_turn_step(
 /// - holds a `predict` grant ([`crate::Policy::predict_grants`]) and is in play, never an
 ///   exec-only one;
 /// - was not predicted before this session, nor carried out by adage-exec's CPU prediction
-///   ([`SessionState::predicted_routes`]);
+///   ([`SessionState::predicted_routes`]), nor held back by the person's permissions
+///   ([`SessionState::withheld_routes`]);
 /// - is not one a dead end announced this session says not to run ([`interlock::avoids`]).
 ///
 /// Never at the turn's first step (`index` 0, the prompt's own request, nor its end), never right
@@ -46,6 +51,12 @@ pub(crate) fn on_turn_step(
 /// whatever its calls): past the cap the step is recorded as `would_predict` only. The bounds
 /// count in both arms; in the control arm nothing is predicted and `would_predict` says what
 /// would have been.
+///
+/// The mod's phases ([`crate::Policy::step`]): a dry run whose step would be yielded answers
+/// `predicted` and changes nothing (no bound counts it, no `predicted_at`); a verdict other than
+/// `allow` records `would_predict` with `withheld` and the verdict, counts against no bound and
+/// holds the route for the session; `allow`, and a step with no phase, commit as described above.
+/// A verdict naming another route than the one found decides no prediction at all.
 fn predict_step(
     ctx: &Ctx,
     routes: &[&IndexedRoute],
@@ -77,7 +88,8 @@ fn predict_step(
             interlock::avoids(inhibit, &ir.route)
                 || matches!((&inhibit.step, command), (Step::Avoid { avoid, .. }, Some(c)) if pattern::directs_avoided(avoid, c))
         });
-        (granted && !ir.exec_only() && !inhibited && !st.predicted_routes.iter().any(|r| r == id)).then_some(ir)
+        let offered = !st.predicted_routes.iter().any(|r| r == id) && !st.withheld_routes.iter().any(|r| r == id);
+        (granted && !ir.exec_only() && !inhibited && offered).then_some(ir)
     };
     let bash = |command: &str| PredictedCall { tool: "Bash".into(), input: serde_json::json!({ "command": command }) };
     let mut found: Option<Prediction> = None;
@@ -130,16 +142,38 @@ fn predict_step(
         }
     }
     let Some(p) = found else { return };
+    if let StepPhase::Verdict { route: Some(r), .. } = &ctx.policy.step {
+        if r != &p.route {
+            return;
+        }
+    }
     d.would_predict = Some(p.clone());
     if st.predictions >= ctx.policy.predict_cap {
         return;
+    }
+    let yields = st.arm != Some(Arm::Control) && !ctx.policy.observe;
+    match &ctx.policy.step {
+        // Only a step that would be yielded waits for the person's permissions; the rest commit now.
+        StepPhase::DryRun if yields => {
+            d.predicted = Some(p);
+            return;
+        }
+        StepPhase::Verdict { permission, .. } if permission.decision != Permission::Allow => {
+            d.withheld = Some(Withheld::Permission);
+            d.permission = Some(permission.clone());
+            if !st.withheld_routes.contains(&p.route) {
+                st.withheld_routes.push(p.route);
+            }
+            return;
+        }
+        _ => {}
     }
     st.predictions += 1;
     st.last_step_predicted = Some((turn_id.to_string(), index));
     st.chained = in_a_row;
     st.predicted_routes.push(p.route.clone());
     d.predicted_at = Some((turn_id.to_string(), index));
-    if st.arm != Some(Arm::Control) && !ctx.policy.observe {
+    if yields {
         d.predicted = Some(p);
     }
 }

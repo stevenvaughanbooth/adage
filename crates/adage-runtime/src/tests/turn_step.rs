@@ -298,3 +298,189 @@ fn turn_step_fast_path() {
     }
     assert!(!fast::skip(&t, &ev, "/r", || None), "an unreadable state is rebuilt, never skipped past");
 }
+
+/// The mod's verdict on the calls of the step `step` found ([`StepPhase::Verdict`]).
+fn verdict(permission: Permission, route: Option<&str>) -> StepPhase {
+    StepPhase::Verdict {
+        route: route.map(str::to_string),
+        permission: PermissionVerdict {
+            decision: permission,
+            tool: Some("Bash".into()),
+            reason: Some("This command requires approval".into()),
+        },
+    }
+}
+
+/// T-C4-08: a dry run answers the step it would yield and commits nothing: the state is as it
+/// was (no bound counts it, the route stays offered), and nothing is routed while it waits.
+#[test]
+fn a_dry_run_answers_the_prediction_and_commits_nothing() {
+    let (dir, index, table) = predict_fixture(vec![]);
+    let mut ctx = predict_ctx(&dir, &index, table, &["gen"]);
+    ctx.policy.step = StepPhase::DryRun;
+    ctx.policy.routine = true;
+    let mut st = SessionState {
+        arm: Some(Arm::Treated),
+        obligations: vec![armed("gen", "make gen", table)],
+        ..Default::default()
+    };
+    let before = serde_json::to_value(&st).unwrap();
+    let d = decide(&ctx, &mut st, &step("t", 2, true));
+    assert_eq!(d.predicted.as_ref().map(|p| p.route.as_str()), Some("gen"));
+    assert!(d.predicted_at.is_none() && d.routine.is_none() && d.would_route.is_none());
+    assert_eq!(serde_json::to_value(&st).unwrap(), before, "nothing committed");
+    // Asked again, the same answer: the route was not taken.
+    assert_eq!(decide(&ctx, &mut st, &step("t", 2, true)).predicted, d.predicted);
+}
+
+/// T-C4-08: a dry run whose step would yield nothing has no verdict to wait for, so it decides
+/// and commits as a step with no phase does: the control arm and observe mode count the bound
+/// and record `would_predict`; past the cap only `would_predict`.
+#[test]
+fn a_dry_run_that_would_yield_nothing_commits_as_before() {
+    let (dir, index, table) = predict_fixture(vec![]);
+    let mut ctx = predict_ctx(&dir, &index, table, &["gen"]);
+    for (arm, observe) in [(Arm::Control, false), (Arm::Treated, true)] {
+        ctx.policy.observe = observe;
+        let fresh = || SessionState {
+            arm: Some(arm),
+            obligations: vec![armed("gen", "make gen", table)],
+            ..Default::default()
+        };
+        let (mut a, mut b) = (fresh(), fresh());
+        ctx.policy.step = StepPhase::DryRun;
+        let dry = decide(&ctx, &mut a, &step("t", 2, true));
+        ctx.policy.step = StepPhase::Commit;
+        let plain = decide(&ctx, &mut b, &step("t", 2, true));
+        assert!(dry.predicted.is_none());
+        assert_eq!(serde_json::to_value(&dry).unwrap(), serde_json::to_value(&plain).unwrap(), "{arm:?} {observe}");
+        assert_eq!(serde_json::to_value(&a).unwrap(), serde_json::to_value(&b).unwrap());
+        assert_eq!((a.predictions, a.predicted_routes.clone()), (1, vec!["gen".to_string()]));
+    }
+}
+
+/// T-C4-08: `allow` commits exactly as a step with no phase: the same decision and state.
+#[test]
+fn an_allow_verdict_commits_as_before() {
+    let (dir, index, table) = predict_fixture(vec![]);
+    let mut ctx = predict_ctx(&dir, &index, table, &["gen"]);
+    let fresh = || SessionState {
+        arm: Some(Arm::Treated),
+        obligations: vec![armed("gen", "make gen", table)],
+        ..Default::default()
+    };
+    let (mut a, mut b) = (fresh(), fresh());
+    ctx.policy.step = verdict(Permission::Allow, Some("gen"));
+    let allowed = decide(&ctx, &mut a, &step("t", 2, true));
+    ctx.policy.step = StepPhase::Commit;
+    let plain = decide(&ctx, &mut b, &step("t", 2, true));
+    assert_eq!(serde_json::to_value(&allowed).unwrap(), serde_json::to_value(&plain).unwrap());
+    assert_eq!(serde_json::to_value(&a).unwrap(), serde_json::to_value(&b).unwrap());
+    assert_eq!((allowed.predicted_at, a.predictions), (Some(("t".into(), 2)), 1));
+    assert!(allowed.withheld.is_none() && allowed.permission.is_none());
+}
+
+/// T-C4-08: any other verdict records the step as withheld with the verdict, counts against no
+/// bound (neither the cap nor the in-a-row rule), routes the step as when nothing is predicted,
+/// and never offers the route again this session; a different route still may be.
+#[test]
+fn a_verdict_other_than_allow_withholds_the_step_and_its_route() {
+    let (dir, index, table) = predict_fixture(vec![]);
+    let mut ctx = predict_ctx(&dir, &index, table, &["lookup", "gen"]);
+    ctx.policy.predict_cap = 1;
+    for permission in [Permission::Ask, Permission::Deny, Permission::None] {
+        let mut st = SessionState {
+            arm: Some(Arm::Treated),
+            pending: vec![pending("lookup", "./scripts/wi-lookup W-2042 --json", table)],
+            obligations: vec![armed("gen", "make gen", table)],
+            ..Default::default()
+        };
+        ctx.policy.step = verdict(permission, Some("lookup"));
+        let d = decide(&ctx, &mut st, &step("t", 1, false));
+        assert!(d.predicted.is_none() && d.predicted_at.is_none(), "{permission:?}");
+        assert_eq!(d.would_predict.as_ref().map(|p| p.route.as_str()), Some("lookup"));
+        assert_eq!(d.withheld, Some(Withheld::Permission));
+        let v = d.permission.clone().unwrap();
+        assert_eq!((v.decision, v.tool.as_deref()), (permission, Some("Bash")));
+        assert_eq!(v.reason.as_deref(), Some("This command requires approval"));
+        assert_eq!((st.predictions, st.last_step_predicted.clone(), st.chained), (0, None, false));
+        assert!(st.predicted_routes.is_empty());
+        assert_eq!(st.withheld_routes, vec!["lookup".to_string()]);
+        let rec = serde_json::to_value(&d).unwrap();
+        assert_eq!(rec["withheld"], "permission");
+        assert_eq!(rec["permission"]["decision"], json!(permission));
+        // The very next step is not "in a row", the cap of one is untouched, and the held route
+        // is not offered again: the finish line is.
+        ctx.policy.step = StepPhase::Commit;
+        let d = decide(&ctx, &mut st, &step("t", 1, true));
+        assert_eq!(d.predicted.map(|p| p.route), Some("gen".into()));
+        st.obligations[0].met = false;
+        st.predicted_routes.clear();
+        st.last_step_predicted = None;
+        st.predictions = 0;
+        st.obligations.clear();
+        let d = decide(&ctx, &mut st, &step("u", 3, false));
+        assert!(d.would_predict.is_none(), "the held route is not offered again this session");
+    }
+    assert_eq!(serde_json::to_value(Permission::None).unwrap(), json!("none"));
+}
+
+/// T-C4-08: a held step goes to the routine model as a step with nothing predicted does.
+#[test]
+fn a_withheld_step_is_routed_as_when_nothing_is_predicted() {
+    let (dir, index, table) = predict_fixture(vec![]);
+    let mut ctx = predict_ctx(&dir, &index, table, &["gen"]);
+    ctx.policy.routine = true;
+    ctx.policy.step = verdict(Permission::Ask, Some("gen"));
+    let mut st = SessionState {
+        arm: Some(Arm::Treated),
+        pending: vec![pending("lookup", "./scripts/wi-lookup W-2042 --json", table)],
+        obligations: vec![armed("gen", "make gen", table)],
+        ..Default::default()
+    };
+    let d = decide(&ctx, &mut st, &step("t", 2, true));
+    assert_eq!(d.withheld, Some(Withheld::Permission));
+    assert_eq!(d.routine.map(|r| r.route), Some("lookup".into()), "the delivered directive with no grant");
+}
+
+/// T-C4-08: a verdict naming another route than the one found now (the plan moved since the dry
+/// run) decides no prediction: nothing is committed, held or recorded as predicted.
+#[test]
+fn a_verdict_for_a_moved_plan_decides_no_prediction() {
+    let (dir, index, table) = predict_fixture(vec![]);
+    let mut ctx = predict_ctx(&dir, &index, table, &["gen"]);
+    for permission in [Permission::Allow, Permission::Deny] {
+        ctx.policy.step = verdict(permission, Some("lookup"));
+        let mut st = SessionState {
+            arm: Some(Arm::Treated),
+            obligations: vec![armed("gen", "make gen", table)],
+            ..Default::default()
+        };
+        let before = serde_json::to_value(&st).unwrap();
+        let d = decide(&ctx, &mut st, &step("t", 2, true));
+        assert!(d.predicted.is_none() && d.would_predict.is_none() && d.withheld.is_none(), "{permission:?}");
+        assert_eq!(serde_json::to_value(&st).unwrap(), before);
+    }
+    // No route named: the verdict is for whatever is found.
+    ctx.policy.step = verdict(Permission::Allow, None);
+    let mut st = SessionState { obligations: vec![armed("gen", "make gen", table)], ..Default::default() };
+    assert!(decide(&ctx, &mut st, &step("t", 2, true)).predicted.is_some());
+}
+
+/// T-C4-08: the held routes survive a rebuild from the spool; a held step counts nothing.
+#[test]
+fn held_routes_survive_a_rebuild() {
+    let (dir, index, table) = predict_fixture(vec![]);
+    let mut ctx = predict_ctx(&dir, &index, table, &["lookup"]);
+    ctx.policy.step = verdict(Permission::Ask, Some("lookup"));
+    let mut st = SessionState { arm: Some(Arm::Treated), repo: Some("acme".into()), ..Default::default() };
+    let mut records = Vec::new();
+    for ev in [Event::Prompt { text: "Pick up W-2042 please".into() }, step("t", 1, false)] {
+        let d = decide(&ctx, &mut st, &ev);
+        records.push(json!({ "event": "x", "kind": ev.name(), "arm": st.arm, "repo": "acme", "decision": d }));
+    }
+    assert_eq!(records[1]["decision"]["withheld"], "permission");
+    let rebuilt = rebuild::rebuild(&records, &index, "acme", table).unwrap();
+    assert_eq!(rebuilt.withheld_routes, vec!["lookup".to_string()]);
+    assert_eq!((rebuilt.predictions, rebuilt.last_step_predicted, rebuilt.predicted_routes.len()), (0, None, 0));
+}

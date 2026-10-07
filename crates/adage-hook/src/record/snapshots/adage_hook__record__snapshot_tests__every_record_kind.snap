@@ -21,6 +21,9 @@ expression: out
 ## turn_step
 {"arm":"treated","decision":{"continue_reason":null,"directives":[],"judgements":[],"observed":[],"routine":{"route":"regenerate-registry","track":"acme/finish-lines"},"would_continue":null,"would_have":[],"would_route":{"route":"regenerate-registry","track":"acme/finish-lines"}},"duration_us":[n],"event":"TurnStep","generation":"obligation-world","kind":"turn_step","propensity":0.9,"repo":"acme","ts":[n]}
 
+## turn_step: withheld
+{"arm":"treated","decision":{"continue_reason":null,"directives":[],"judgements":[],"observed":[],"permission":{"decision":"ask","reason":"This command requires approval","tool":"Bash"},"withheld":"permission","would_continue":null,"would_have":[],"would_predict":{"calls":[{"input":{"command":"make gen"},"tool":"Bash"}],"kind":"run","route":"regenerate-registry","track":"acme/finish-lines"}},"duration_us":[n],"event":"TurnStep","generation":"obligation-world","kind":"turn_step","propensity":0.9,"repo":"acme","ts":[n]}
+
 ## unrouted (claude)
 {"bin":"[bin]","duration_us":[n],"event":"SessionStart","kind":"session_start","repo":"[key]","ts":[n],"unrouted":true}
 {"duration_us":[n],"event":"UserPromptSubmit","kind":"prompt","repo":"[key]","ts":[n],"unrouted":true}

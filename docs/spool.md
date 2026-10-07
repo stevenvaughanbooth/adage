@@ -55,12 +55,16 @@ Codex or OpenCode call that reports a failure is a `failure`.
 
 | Field | What |
 | --- | --- |
-| `decision` | The `adage_runtime::Decision`: `directives`, `would_have` (both arms), `judgements` (`followed`, `ignored`, `misfired`, `obligation_met`, `predicted`, `substituted`, and `refused`: a step Adage made in the agent's place that the harness refused before it ran, which is never `predicted` and meets no obligation), `observed` call keys (a failed call's key ends ` !failed`, a call the harness refused ` !refused`), `continue_reason` / `would_continue` (a Stop request), `predicted` / `would_predict` and `predicted_at` (`turn_step`), `routine` / `would_route`, `noticed`, the context states `ctx` / `cand_ctx`, and `obligation_state` (the session's advisory obligations and Stop-request count after the event, when they changed or an edit was observed, and after an extension's action met one; never a claim that a check passed) |
+| `decision` | The `adage_runtime::Decision`: `directives`, `would_have` (both arms), `judgements` (`followed`, `ignored`, `misfired`, `obligation_met`, `predicted`, `substituted`, and `refused`: a step Adage made in the agent's place that the harness refused before it ran, which is never `predicted` and meets no obligation), `observed` call keys (a failed call's key ends ` !failed`, a call the harness refused ` !refused`), `continue_reason` / `would_continue` (a Stop request), `predicted` / `would_predict` and `predicted_at` (`turn_step`), `withheld: "permission"` and `permission` (`{ decision: "ask" \| "deny" \| "none", tool?, reason? }`: a `turn_step` whose `would_predict` the person's permissions held back; no `predicted_at`), `routine` / `would_route`, `noticed`, the context states `ctx` / `cand_ctx`, and `obligation_state` (the session's advisory obligations and Stop-request count after the event, when they changed or an edit was observed, and after an extension's action met one; never a claim that a check passed) |
 | `exec` | adage-exec's entry per attempted route (`route`, `level`, `exit`, `bytes`, `sha256`, `truncated`, `duration_ms`, `auto`; or `withheld` and why) |
 | `recovery_required` | `true` when an action's outcome could not be confirmed |
 
 A `turn_step` record is written only for a step that predicted or routed (or would have, in the
-control arm). A session end is never decided (the fast path skips it), so a decided `session_end`
+control arm). The Claude Code mod asks a step in two phases: a dry run (`dry_run: true`) that would
+yield a prediction writes nothing, and the verdict that follows writes the record, as a
+predicted step on `allow` and as a withheld one (`withheld`, `permission`, `would_predict`, no
+`predicted_at`) otherwise. A dry run that would yield nothing (nothing to predict, the cap
+reached, the control arm, observe mode) is recorded at once, as a step with no phase is. A session end is never decided (the fast path skips it), so a decided `session_end`
 does not occur; one is only seen (below).
 
 ### Seen events: `session_start`, `prompt`, `batch`, `failure`, `stop`, `session_end` with `unrouted`
@@ -115,7 +119,7 @@ The press (`adage_hook::press`). Facts, never the token:
 
 | Reader | Kinds | Fields it uses |
 | --- | --- | --- |
-| `adage_runtime::rebuild` (a session state that cannot be read) | decided kinds, `stop_gate` | `arm`, `propensity`, `repo`, `kind` (or `event`), `decision` (`observed`, `would_have`, `judgements`, `would_continue`, `predicted_at`, `would_predict`, `ctx`, `cand_ctx`, `noticed`, `obligation_state`: the obligations as recorded, in place of those the emitted routes and judgements imply; an older batch record with an edit and no `obligation_state` un-meets every met obligation) |
+| `adage_runtime::rebuild` (a session state that cannot be read) | decided kinds, `stop_gate` | `arm`, `propensity`, `repo`, `kind` (or `event`), `decision` (`observed`, `would_have`, `judgements`, `would_continue`, `predicted_at`, `would_predict`, `withheld` (the held routes), `ctx`, `cand_ctx`, `noticed`, `obligation_state`: the obligations as recorded, in place of those the emitted routes and judgements imply; an older batch record with an edit and no `obligation_state` un-meets every met obligation) |
 | `adage watch` and `--follow --json` (`adage-cli` `ui/feed.rs`, `ui/follow.rs`); the mod's feed reads that JSON | every kind | `kind`, `event`, `ts`, `arm`, `repo`, `harness`, `unrouted`, `calls`, `decision`, `pretool`, `answered`, `card`, `command`, `exec`, `recovery_required`, `tool_use_id(s)`, `withheld`; the mod counts `press_issued` rows against the tokens it holds |
 | `adage doctor`, hook latency (`doctor/latency.rs`) | `batch` | `duration_us`, `decision.would_have` (only batches with nothing to say count) |
 | `adage savings` (`adage_app::savings`) | every kind with an arm | `ts`, `arm`, `propensity`, `kind` (`session_start`, `pretool` rewrites, `stop` / `session_end`, predicted `turn_step`), `decision.directives`, `decision.judgements` |

@@ -165,6 +165,25 @@ export async function heldBy(calls: readonly PredictedCall[], check: CheckCall):
   return { tool: call.tool, decision: v.decision, reason: v.reason }
 }
 
+/**
+ * The verdict the mod sends the binary after a dry run's prediction (`TurnStep` with `verdict`,
+ * docs/claude-mod/impl/turnstep-phases-notes.md): `allow` when every call may run unasked, which
+ * commits the step; otherwise the first call held back, the engine's decision and its sentence,
+ * which the binary records as withheld. `route` names the prediction it is about.
+ */
+export type StepVerdict = { permission: 'allow' | Held['decision']; route: string; tool?: string; reason?: string }
+
+/** The verdict on prediction `p`, `held` by the first call not allowed unasked (undefined: none). */
+export function verdictOf(p: Prediction, held: Held | undefined): StepVerdict {
+  if (held === undefined) return { permission: 'allow', route: p.route }
+  return { permission: held.decision, route: p.route, tool: held.tool, ...(held.reason !== '' ? { reason: held.reason } : {}) }
+}
+
+/** Whether two predictions are the same step: the route and every call, in order. */
+export function samePrediction(a: Prediction, b: Prediction): boolean {
+  return a.kind === b.kind && a.route === b.route && JSON.stringify(a.calls) === JSON.stringify(b.calls)
+}
+
 /** The step's result for a response made wholly of the predicted calls (no request was made). */
 export function predictedResult(p: Prediction, turnId: string, index: number): TurnStepResult {
   return {

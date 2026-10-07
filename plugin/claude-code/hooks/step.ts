@@ -7,8 +7,12 @@
 // the calls, and ends the response with no stop reason. Either way a prediction is made only under
 // the person's permissions: each call is checked first (`$.tool.check`, as the Bash branches do),
 // and unless every one is allowed unasked nothing is yielded and the step goes on as if nothing
-// were predicted. `turnStep` is the step itself over plain deps; `onStep` binds it to the mod,
-// keeps the step's usage for the ledger note, and keeps a step held back for the band's line.
+// were predicted. The binary is asked in two phases, as for a Bash call: a dry run that answers
+// the prediction and commits nothing, then the verdict, which commits the step on `allow` and
+// otherwise records it as withheld and holds its route for the session
+// (docs/claude-mod/impl/turnstep-phases-notes.md). `turnStep` is the step itself over plain deps;
+// `onStep` binds it to the mod, keeps the step's usage for the ledger note, and keeps a step held
+// back for the band's line.
 import type { HookStream, TurnStepChunk, TurnStepInput, TurnStepResult } from 'claude-code'
 
 import { askBinary } from './binary'
@@ -18,8 +22,8 @@ import { record } from './marks'
 import type { Mod } from './mod'
 import { quietly } from './mod'
 import type { Predicted } from './plugin'
-import { PREDICTED_STOP, appendedStop, callChunks, heldBy, predictedResult, predictionOf } from './predict'
-import type { CheckCall, Held, PredictKind } from './predict'
+import { PREDICTED_STOP, appendedStop, callChunks, heldBy, predictedResult, predictionOf, samePrediction, verdictOf } from './predict'
+import type { CheckCall, Held, PredictKind, StepVerdict } from './predict'
 import { settings } from './refresh'
 import { isRecord } from './shape'
 
@@ -42,6 +46,10 @@ export type TurnStepPayload = {
   routine_model?: true
   /** Observe mode: the binary records what it would predict, as the control arm does. */
   observe?: true
+  /** The first phase: answer the prediction and commit nothing of it. */
+  dry_run?: true
+  /** The second phase, after a dry run's prediction: the person's permissions on its calls. */
+  verdict?: StepVerdict
 }
 
 export type StepDeps = {
@@ -115,17 +123,32 @@ export async function* turnStep(
     ...(deps.isObserving ? { observe: true as const } : {}),
   })
   let routed = false
+  const ask = (p: TurnStepPayload) => deps.ask(p).catch((): Asked => ({ ok: false }))
   const predicted = async (ending: boolean) => {
-    const asked = await deps.ask(payload(ending)).catch((): Asked => ({ ok: false }))
+    const asked = await ask({ ...payload(ending), dry_run: true })
     // A step is predicted or routed, never both; routing only changes a request that goes out.
     routed = !ending && asked.ok && isRoutine(asked.answer)
     const p = asked.ok && !deps.isObserving ? predictionOf(asked.answer) : undefined
     if (p === undefined) return undefined
-    if (p.kind === 'skill' && !(await deps.hasSkill(String(p.calls[0]?.input.skill)).catch(() => false))) return undefined
+    // A skill the session cannot run is held as a call with no verdict (it is not the person's
+    // permissions, so the band says nothing of it).
+    const unlisted =
+      p.kind === 'skill' && !(await deps.hasSkill(String(p.calls[0]?.input.skill)).catch(() => false))
+        ? ({ tool: 'Skill', decision: 'none', reason: 'This session does not list the skill' } as const)
+        : undefined
     // §3.2: the call is made only under the person's permissions. A call they would ask about,
     // refuse, or not answer is not yielded: the step goes on as if nothing were predicted.
-    const held = await heldBy(p.calls, deps.check)
-    if (held === undefined) return p
+    const held = unlisted ?? (await heldBy(p.calls, deps.check))
+    // The verdict commits the step on allow, and records it withheld otherwise; either way the
+    // binary's answer says whether the request that goes out is routed.
+    const said = await ask({ ...payload(ending), verdict: verdictOf(p, held) })
+    routed = !ending && said.ok && isRoutine(said.answer)
+    if (held === undefined) {
+      // Yielded only as the binary committed it: the same route and calls as the dry run's.
+      const q = said.ok ? predictionOf(said.answer) : undefined
+      return q !== undefined && samePrediction(p, q) ? q : undefined
+    }
+    if (unlisted !== undefined) return undefined
     const w: Withheld = { turnId: e.turnId, index: e.index, route: p.route, kind: p.kind, isEnding: ending, ...held }
     await Promise.resolve()
       .then(() => deps.withheld?.(w))
@@ -192,10 +215,10 @@ export async function* turnStep(
 const MAX_WITHHELD = 20
 
 /**
- * Keeps a step the person's permissions held back (the binary's record cannot say so yet:
- * docs/claude-mod/impl/live-fixes-2-notes.md §7), and raises the band's line once per session: the
- * first held-back step of a session sets it, at the prompt count it was raised at, and the band
- * shows it until the next prompt.
+ * Keeps a step the person's permissions held back (the binary records it too, as withheld; this
+ * is the band's copy), and raises the band's line once per session: the first held-back step of a
+ * session sets it, at the prompt count it was raised at, and the band shows it until the next
+ * prompt.
  */
 export async function keepWithheld(m: Mod, w: Withheld): Promise<void> {
   m.rt.withheld = [...m.rt.withheld, w].slice(-MAX_WITHHELD)

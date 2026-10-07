@@ -690,6 +690,19 @@ export const block = (route: string, strength = 'fire') =>
 
 /** A predicted step, as `hook claude TurnStep` answers it (the wire's `predict`: an obligation, one Bash call). */
 export const PREDICT = wireLine('predict')
+/**
+ * The binary's two phases of a step (`hook claude TurnStep`, docs/claude-mod/impl/
+ * turnstep-phases-notes.md), as a world's `answer`: the dry run, an `allow` verdict and a payload
+ * with neither answer `prediction`; any other verdict answers nothing (the step is recorded
+ * withheld). Every other event answers nothing.
+ */
+export const phasedStep =
+  (prediction: string = PREDICT) =>
+  (event: string, p: Record<string, unknown>): string | undefined => {
+    if (event !== 'TurnStep') return undefined
+    const v = p.verdict
+    return typeof v === 'object' && v !== null && (v as Record<string, unknown>).permission !== 'allow' ? undefined : prediction
+  }
 /** A predicted skill (plan D3): the Skill tool in the model's place. */
 export const PREDICT_SKILL = JSON.stringify(wireWith('predict', { kind: 'skill', route: 'release-after-bump', calls: [{ tool: 'Skill', input: { skill: 'acme-work-item' } }] }))
 export const PREDICTED_SKILL_ID = 'adage_release-after-bump_turn-1_2_0'

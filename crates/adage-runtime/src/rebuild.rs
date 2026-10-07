@@ -18,6 +18,7 @@
 //! | `stop_gates` | each `stop_gate` record (`adage-exec`'s finish-line gate ran), so the cap survives |
 //! | `intent` | the family of the last intent route emitted |
 //! | `predictions`, `last_step_predicted`, `predicted_routes` | each `turn_step` decision whose prediction counted (`predicted_at`) |
+//! | `withheld_routes` | each `turn_step` decision whose prediction the person's permissions held back (`withheld`) |
 //! | `ctx` | the last context state recorded (a decision records it when its event changed it), if it belongs to the index's alphabet for the repository |
 //! | `cand_ctx`, `noticed` | the same for the candidates' own alphabet (`Index::candidate_contexts`); every candidate any decision noticed, in order |
 //!
@@ -111,6 +112,12 @@ pub fn rebuild(records: &[Value], index: &Index, repo: &str, table: &CommandTabl
                 if !st.predicted_routes.contains(&p.route) {
                     st.predicted_routes.push(p.route.clone());
                 }
+            }
+        }
+        // A step the person's permissions held back: its route is not offered again.
+        if let (Some(crate::Withheld::Permission), Some(p)) = (d.withheld, &d.would_predict) {
+            if !st.withheld_routes.contains(&p.route) {
+                st.withheld_routes.push(p.route.clone());
             }
         }
         let legacy_edit = d.obligation_state.is_none()

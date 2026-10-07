@@ -95,7 +95,7 @@ the cross-cutting set.
 | `TurnStep` (§3.2) | C1 | T-C1-01 … 13 |
 | `predict` grant (§3.2) | C2 | T-C2-01 … 09 |
 | Receipt as result, `$.tool.check` (§3.3, §3.4) | C3 | T-C3-01 … 07 |
-| The mod's `turn.step`, sim (§3.2) | C4 | T-C4-01 … 06 |
+| The mod's `turn.step`, sim (§3.2) | C4 | T-C4-01 … 08 |
 | Standing, compaction, routing (§3.5–3.7) | C5 | T-C5-01 … 05 |
 | The dead end that never runs (§3.4, §1b.1) | C6 | T-C6-01 … 05 |
 | Chains and multi-call steps (§3.2, §1b.1) | C7 | T-C7-01 … 04 |
@@ -832,6 +832,22 @@ handlers directly and checking `$.state` and the recorded `$.ui.*` calls.
   Bash call, `{ decision: 'allow', rule: 'Read' }` for a read an allow rule names) holds a Bash step
   and yields a read chain. The band's attention line says once per session, until the next prompt,
   `» adage left a step to the agent: your permissions do not allow it unasked` (`band.withheld`).
+- **T-C4-08 · the binary's two phases of a step.** The mod asks `TurnStep` with `dry_run: true`
+  first: a step that would be yielded is answered `{ predict }` and nothing is committed (no
+  record, the state as it was: no bound counts it and the route stays offered; asked again, the
+  same answer); a dry run that would yield nothing (nothing to predict, the cap reached, the
+  control arm, observe mode) is decided and recorded at once, as a step with no phase. After a
+  prediction the mod sends `verdict: { permission, route, tool?, reason? }`: `allow` commits and
+  records exactly as a step with no phase does (the same record and state), and the mod yields only
+  the answer naming the dry run's route and calls; `ask`, `deny`, `none` or anything else answers
+  nothing (or `{ routine: true }` when the step is routed), records the `turn_step` with
+  `would_predict`, `withheld: "permission"` and `permission: { decision, tool, reason }` and no
+  `predicted_at`, counts against neither `runtime.predict_cap` nor the in-a-row rule, and adds the
+  route to `SessionState::withheld_routes` (rebuilt from the spool), so it is not offered again
+  that session while another route is. A verdict naming another route than the one found answers
+  and records nothing. A skill the session does not list is sent as `none` and raises no band line.
+  A payload with neither field (the command hook) is decided as before: the goldens and parity are
+  unchanged.
 
 ### D5 · Drawing noticed, learning and skills
 

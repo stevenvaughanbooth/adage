@@ -157,6 +157,11 @@ pub struct SessionState {
     /// prediction would run a second time.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub predicted_routes: Vec<String>,
+    /// Routes whose predicted step the person's permissions held back this session (the mod's
+    /// verdict, [`StepPhase::Verdict`](crate::StepPhase::Verdict)): never offered again this
+    /// session, though another route still may be. Rebuilt from the `withheld` records.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub withheld_routes: Vec<String>,
     /// Read-batch directives whose files are bound ([`PendingReads`]).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub reads: Vec<PendingReads>,

@@ -612,6 +612,14 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   unasked`. In `auto` mode every Bash call is the classifier's to decide, and it has no verdict for a
   call no model request produced: live, a predicted `make gen` was denied there; it is now left to
   the model, with no denial in the transcript, while a read an allow rule names is still taken.
+- **A step held back is recorded as held back, not as made.** The mod now asks the binary about a
+  step in two phases, as it does for a Bash call: a dry run (`TurnStep` with `dry_run: true`) that
+  answers the prediction and commits nothing, then a verdict carrying the permission check's answer.
+  On `allow` the step is committed as before; otherwise its `turn_step` record says
+  `withheld: "permission"` with the engine's decision and sentence, it counts against neither
+  `runtime.predict_cap` nor the rule against two predicted steps in a row, and its route is not
+  offered again that session (another route still may be). A step from a command hook carries
+  neither field and is decided exactly as before.
 - **The harness ledger counts the session's tool calls.** The mod's note to `adage ledger note`
   carries `tool_calls`, every main-loop call the engine ran (the model's, the predicted ones, those a
   receipt answered; not a subagent's, not the mod's own), so a session's line no longer reads 0

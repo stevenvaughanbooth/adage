@@ -92,6 +92,18 @@ impl Extension for Recovers {
 }
 static RECOVERS: Recovers = Recovers;
 
+/// A stand-in for adage-exec with a person's `predict` grant on the finish line's route.
+struct Granted;
+impl Extension for Granted {
+    fn deliver(&self, _: &Turn<'_>, _: &[Directive]) -> Delivery {
+        Delivery::default()
+    }
+    fn predict_grants(&self, _: &crate::Site<'_>) -> Vec<(String, String)> {
+        vec![("acme/finish-lines".into(), "regenerate-registry".into())]
+    }
+}
+static GRANTED: Granted = Granted;
+
 /// A skill `adage train` compiled and replayed in `root`'s repository, accepted by a person.
 fn accepted_skill(paths: &Paths, root: &Path) {
     use adage_pack::verified::{self, Outcome, Skill, Step, Verified};
@@ -185,6 +197,23 @@ fn every_record_kind_as_the_spool_holds_it() {
         json!({ "turn_id": "t1", "index": 1, "routine_model": "small" }),
     );
     section(&mut out, "turn_step", lines(&r.paths, "s", &r.root));
+
+    // A predicted step the person's permissions held back (the mod's verdict).
+    let h = ObligationWorld::new();
+    state::update::<SessionState, _>(&h.paths.state("s"), |st| {
+        st.pending = vec![adage_runtime::Pending {
+            route: "regenerate-registry".into(),
+            expect_key: adage_runtime::command_key("make gen", adage_core::CommandTable::load()),
+            expect_head: String::new(),
+            batches_left: 3,
+            command: "make gen".into(),
+        }];
+    })
+    .unwrap();
+    let held = json!({ "turn_id": "t1", "index": 1, "via": "mod", "verdict": { "permission": "ask",
+                       "route": "regenerate-registry", "tool": "Bash", "reason": "This command requires approval" } });
+    event(&h, "claude", &GRANTED, "s", "TurnStep", held);
+    section(&mut out, "turn_step: withheld", lines(&h.paths, "s", &h.root));
 
     // Sessions seen in a repository with no reflexes yet, from Claude Code and Codex.
     let plain = tempfile::tempdir().unwrap();

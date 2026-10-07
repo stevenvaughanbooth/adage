@@ -36,7 +36,8 @@ pub use adage_trace::{is_tool_use_error, By, Call, Event};
 pub use context::CtxState;
 pub use decide::decide;
 pub use decision::{
-    Decision, Directive, Judgement, ObligationState, PredictedCall, Prediction, PredictionKind, Routing, Substitution,
+    Decision, Directive, Judgement, ObligationState, Permission, PermissionVerdict, PredictedCall, Prediction,
+    PredictionKind, Routing, StepPhase, Substitution, Withheld,
 };
 pub use noticed::{Noticed, MAX_NOTICED};
 pub use observe::command_key;

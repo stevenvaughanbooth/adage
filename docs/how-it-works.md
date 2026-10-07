@@ -154,7 +154,10 @@ check, under the session's rules and mode, would let it run unasked: a call the 
 would ask about or refuse is left to the model, and the request goes out as if nothing were
 predicted (in `auto` mode every Bash call goes to the mode's classifier, which has no verdict for a
 call no model request produced, so a Bash step is never taken there; reads allowed by a rule
-still are). One refused anyway is recorded as `refused`, never as Adage's step taken, and meets no
+still are). The binary commits a step only after that check: the mod asks it twice, a dry run
+that answers the step and counts nothing, then the verdict, so a step left to the model is recorded
+as `withheld` (never as Adage's step), counts against no bound, and its route is not offered again
+that session. One refused anyway is recorded as `refused`, never as Adage's step taken, and meets no
 finish line (the Stop request still asks for it). Only the main loop is predicted for: a
 subagent's calls are recorded with its id (`agent`) but bind nothing the main loop's steps are
 predicted from. Without the mod, or without a grant, nothing is predicted and the hooks behave

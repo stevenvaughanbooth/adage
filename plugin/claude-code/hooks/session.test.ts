@@ -22,9 +22,9 @@ describe('T-B1-02, T-B1-03 · activation', () => {
     const { chunks } = await drain($.turn.step(STEP))
     expect(chunks.map(c => c.kind)).toEqual(['tool', 'input', 'stop'])
     expect(w.models.map(x => x.index)).toEqual([])
-    // The probe, the session's Standing and the step ask the hook binary; the routine model is read
-    // from `adage` itself.
-    expect(w.ran.filter(r => r.argv[1] !== '--json').map(r => r.argv[0])).toEqual(['/data/bin/hook', '/data/bin/hook', '/data/bin/hook'])
+    // The probe, the session's Standing and the step's two phases (the dry run, the verdict) ask
+    // the hook binary; the routine model is read from `adage` itself.
+    expect(w.ran.filter(r => r.argv[1] !== '--json').map(r => r.argv[0])).toEqual(['/data/bin/hook', '/data/bin/hook', '/data/bin/hook', '/data/bin/hook'])
     expect(w.ran.filter(r => r.argv[1] === '--json').map(r => r.argv)).toEqual([['/data/bin/adage', '--json', '--for-session']])
   })
 

@@ -537,6 +537,12 @@ predicted_at: [turn, 2]}` though nothing was yielded. The mod keeps the reason l
 With that, `step.ts` sends the dry run in place of today's ask and the verdict after `heldBy`;
 `StepDeps.withheld` stays the local record for the band.
 
+*Since built* ([turnstep-phases-notes.md](turnstep-phases-notes.md)): the verdict is
+`{ permission, route, tool?, reason? }` and the record carries `withheld: "permission"` beside
+`would_predict` and `permission`. Departure from item 3: the control arm and observe mode yield
+nothing, so their dry run is decided and recorded at once (as a step with no phase) rather than
+answered `{}` with nothing recorded, which keeps their `would_predict` records.
+
 **Kit tests (`claude plugin test`, 2.1.288).**
 
 - `step.test.ts` "T-C4-07 · a predicted call is made only under the person's permissions":
