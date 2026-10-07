@@ -90,6 +90,30 @@ class FakeLive:
 
 
 class RuntimeProfile(unittest.TestCase):
+    def test_mod_request_is_refused_before_rewriting_arms_or_preparing_inputs(self):
+        for arm in runner.PLUGIN_ARMS:
+            cfg = {"eval": {"arms": ["off", arm]}}
+            with self.subTest(arm=arm), patch.object(frozen.sys, "platform", "linux"), \
+                    patch.object(runner, "load_config", return_value=cfg), \
+                    patch.object(frozen, "artifact") as inspect, \
+                    patch.object(frozen.subprocess, "run") as launch:
+                with self.assertRaisesRegex(ValueError, "cannot freeze Claude mod"):
+                    frozen.prepare("config", "audit", "index", None, "out", "adage", [],
+                                   learner_revision="fixture")
+                inspect.assert_not_called()
+                launch.assert_not_called()
+                self.assertEqual(cfg["eval"]["arms"], ["off", arm])
+
+    def test_imported_frozen_configuration_cannot_request_an_unfrozen_mod(self):
+        for arm in runner.PLUGIN_ARMS:
+            spec = {"config": {"eval": {"arms": ["off", arm]}}}
+            sha = frozen.digest(frozen.encoded(spec))
+            protocol = {side: {"configuration_sha256": sha} for side in ("baseline", "intervention")}
+            with self.subTest(arm=arm), patch.object(frozen.Objects, "get", return_value=spec), \
+                    patch.object(frozen, "check_inputs"):
+                with self.assertRaisesRegex(ValueError, "cannot freeze Claude mod"):
+                    frozen.bindings({"protocol": protocol}, frozen.Objects("unused"), "adage")
+
     def test_only_the_bundled_model_and_matching_dimensions_can_be_delivered(self):
         bundled = {"model": "pinned-bundle", "dimensions": 256}
         for required, accepted in (([], True), ([bundled], True),

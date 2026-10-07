@@ -221,11 +221,18 @@ def prepared_spec(cfg, adage, input_paths, version):
             "inputs": {str(p): file_digest(p) for p in sorted(paths)}}
 
 
+def require_e0_config(cfg):
+    if set(cfg["eval"].get("arms", [])) & set(runner.PLUGIN_ARMS):
+        raise ValueError("the frozen v2 collector supports E0 advice only; it cannot freeze Claude mod "
+                         "plugin assets, settings or operator grants")
+
+
 def prepare(config, audit_path, index_path, objects, out, adage, inputs, *, timeout=600,
             learner_revision, policy=None, identities=None, intervention_model=None):
     if sys.platform != "linux":
         raise ValueError("frozen live preparation requires the Linux confinement profile")
     cfg = runner.load_config(config, {})
+    require_e0_config(cfg)
     if not cfg.get("confine") or cfg.get("confine_hide") or cfg.get("confine_expose"):
         raise ValueError("frozen studies require confine=true with the standard hidden directories")
     if not inputs:
@@ -388,6 +395,7 @@ def bindings(frozen, objects, adage):
             raise ValueError("adapter settings must use the canonical frozen-prepare encoding")
         check_inputs(spec, adage)
         cfg = spec["config"]
+        require_e0_config(cfg)
         budget = p["budget"]
         if (cfg["model"] != p[side]["model"] or cfg["repo_key"] != p["repo"] or cfg.get("concurrency") != 1
                 or not cfg.get("confine") or cfg.get("confine_hide") or cfg.get("confine_expose")

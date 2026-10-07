@@ -11,6 +11,9 @@ under `docs/tracks/`).
 
 ## 0.1.0 - Unreleased
 
+Frozen E0 experiments reject Claude mod arms before preparation instead of silently changing
+the requested treatment.
+
 External-parent PostgreSQL migration controls now support private Coder learning experiments,
 with pinned SQL inputs and separate upgrade, fresh-schema and downgrade observations, using
 explicit PostgreSQL 13.11 or 16.14 profiles.

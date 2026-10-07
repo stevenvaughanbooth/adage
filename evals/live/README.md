@@ -547,3 +547,7 @@ This runner support does not extend `frozen.py`'s E0-only treatment contract. A 
 needs a separately reviewed and frozen plugin, settings, stores and operator grants, plus verified
 request accounting and delivery evidence. A single cold-start Coder scout with an empty Adage home
 measures initial task cost and activation only; it cannot establish learned-reflex savings.
+
+The frozen v2 collector refuses `mod` and `mod-observe` configurations before preparing
+artifacts or checkouts. Its E0-only protocol cannot freeze the Claude mod's plugin assets,
+settings and operator grants; a mod request must not silently become an E0 comparison.
