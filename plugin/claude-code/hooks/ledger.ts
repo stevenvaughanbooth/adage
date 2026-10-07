@@ -3,8 +3,11 @@
 // The binary keeps one line per session, replaced by session id, so every note carries every step
 // of the session so far. Steps Adage took in the model's place are counted with the model that
 // would have answered them (`predicted`), so the savings estimate can price what was not asked.
+// The note also carries the session's main-loop tool calls (`tool_calls`): the binary's count came
+// from a transcript pass only, so with automatic learning off every line read 0 (O0 defect 10).
 //
-// `keepStep` collects the main loop's steps at `turn.step` (step.ts); `onTurnEnd` sends the note
+// `keepStep` collects the main loop's steps at `turn.step` (step.ts), `keepCall` its tool calls at
+// `tool.call` (call.ts); `onTurnEnd` sends the note
 // at `turn.complete`, off the hook's path, through bridge.ts `note`; a refusal changes nothing.
 import type { TurnUsage } from 'claude-code'
 
@@ -22,9 +25,9 @@ export type StepUsage = {
   predicted: boolean
 }
 
-/** The steps noted for one session, in order. */
-export type Noted = { session: string; steps: StepUsage[] }
-export const NOTED0: Noted = { session: '', steps: [] }
+/** The steps noted for one session, in order, and its main-loop tool calls so far. */
+export type Noted = { session: string; steps: StepUsage[]; tool_calls: number }
+export const NOTED0: Noted = { session: '', steps: [], tool_calls: 0 }
 
 /** The binary refuses a note of more steps; a longer session keeps its first ones. */
 export const MAX_STEPS = 20_000
@@ -48,14 +51,25 @@ export function stepOf(asked: string, usage: TurnUsage | null | undefined, predi
 }
 
 /**
- * The session's steps after a turn ended: the turn's steps appended, numbered on. A turn that ends
- * in another session (a /clear started one) starts the count again with that turn's own steps.
+ * The session's steps and tool calls after a turn ended: the turn's steps appended, numbered on,
+ * and its calls added. A turn that ends in another session (a /clear started one) starts both
+ * counts again with that turn's own.
  */
-export function accrue(noted: Noted, session: string, turn: readonly Omit<StepUsage, 'index'>[]): Noted {
-  const was = noted.session === session ? noted.steps : []
+export function accrue(noted: Noted, session: string, turn: readonly Omit<StepUsage, 'index'>[], calls = 0): Noted {
+  const same = noted.session === session
+  const was = same ? noted.steps : []
   const room = Math.max(0, MAX_STEPS - was.length)
-  return { session, steps: [...was, ...turn.slice(0, room).map((s, i) => ({ index: was.length + i, ...s }))] }
+  const counted = Number.isSafeInteger(calls) && calls > 0 ? calls : 0
+  return {
+    session,
+    steps: [...was, ...turn.slice(0, room).map((s, i) => ({ index: was.length + i, ...s }))],
+    // The binary refuses a count past u32; a session never gets near it.
+    tool_calls: Math.min(MAX_CALLS, (same ? noted.tool_calls : 0) + counted),
+  }
 }
+
+/** The most tool calls a note may carry (the binary reads a u32). */
+export const MAX_CALLS = 4_294_967_295
 
 /** The note on `adage ledger note`'s stdin. */
 export type Note = {
@@ -66,6 +80,8 @@ export type Note = {
   started_at: number
   ended_at: number
   steps: StepUsage[]
+  /** The session's main-loop tool calls so far: the model's, the predicted ones, those a receipt answered. */
+  tool_calls: number
   cost_usd?: number
 }
 
@@ -79,6 +95,7 @@ export function noteOf(n: { noted: Noted; cwd: string; version: string; startedA
     started_at: n.startedAt,
     ended_at: n.endedAt,
     steps: n.noted.steps,
+    tool_calls: n.noted.tool_calls,
     ...(typeof n.costUsd === 'number' && Number.isFinite(n.costUsd) && n.costUsd >= 0 ? { cost_usd: n.costUsd } : {}),
   }
 }
@@ -89,10 +106,21 @@ export function keepStep(m: Mod, asked: string, usage: TurnUsage | null | undefi
   if (step !== undefined) m.rt.turnSteps.push(step)
 }
 
+/**
+ * Counts one main-loop tool call for the note: every call the engine runs on the main loop, the
+ * model's own, the predicted ones and those a receipt answered, as a transcript lists them; not a
+ * subagent's, and not one a plugin raised (the mod's own `$.ui.ask`).
+ */
+export function keepCall(m: Mod, e: { agentId?: string }, origin: { plugin: string }): void {
+  if (e.agentId === undefined && origin.plugin === 'engine') m.rt.turnCalls += 1
+}
+
 /** `adage ledger note` with the session's steps so far (one line per session, replaced each turn). */
 async function noteLedger(m: Mod): Promise<void> {
   const session = await m.session.id()
-  m.rt.noted = accrue(m.rt.noted, session, m.rt.turnSteps.splice(0))
+  const calls = m.rt.turnCalls
+  m.rt.turnCalls = 0
+  m.rt.noted = accrue(m.rt.noted, session, m.rt.turnSteps.splice(0), calls)
   if (m.rt.cli === undefined || m.rt.noted.steps.length === 0) return
   const usage = await m.session.usage().catch(() => undefined)
   const { version } = await m.session.version()

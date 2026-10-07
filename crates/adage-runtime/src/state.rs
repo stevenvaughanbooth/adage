@@ -157,6 +157,11 @@ pub struct SessionState {
     /// prediction would run a second time.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub predicted_routes: Vec<String>,
+    /// Routes whose predicted step the person's permissions held back this session (the mod's
+    /// verdict, [`StepPhase::Verdict`](crate::StepPhase::Verdict)): never offered again this
+    /// session, though another route still may be. Rebuilt from the `withheld` records.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub withheld_routes: Vec<String>,
     /// Read-batch directives whose files are bound ([`PendingReads`]).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub reads: Vec<PendingReads>,
@@ -194,6 +199,14 @@ pub struct SessionState {
     /// most [`MAX_NOTICED`](crate::MAX_NOTICED).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub noticed: Vec<String>,
+    /// The run reflexes the latest prompt directed with every slot bound from its own words (a
+    /// prompt or intent route whose step is one fixed command): the only steps a `TurnStep` may
+    /// make at a turn's first step, before the model's first response
+    /// ([`crate::prediction`]). Set at the prompt; cleared by the next tool batch, failure or
+    /// Stop, so it never outlives the boundary it is for. Never rebuilt from the spool (as
+    /// [`SessionState::pending`] is not): a rebuilt state predicts nothing at the first step.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub at_prompt: Vec<String>,
 }
 
 /// The 64-bit hash a call's harness identity is kept as in the session state

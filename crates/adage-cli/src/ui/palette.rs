@@ -125,6 +125,7 @@ pub fn entries(s: &AppState) -> Vec<Entry> {
         action("Fetch the intent model", "adage models fetch", "m", Run::Key(Tab::Health, 'm')),
         action("Install hooks", "adage init", "i", Run::Key(Tab::Health, 'i')),
         action("Recheck health", "adage doctor", "R", Run::Key(Tab::Health, 'R')),
+        action("Update Adage", "adage update", "", Run::Tool(Tool::Update)),
         action("Pause or resume the live feed", "", "p", Run::Key(Tab::Live, 'p')),
         action("Filter the live feed", "", "/", Run::Key(Tab::Live, '/')),
         action("Focus the map on the selection", "", "f", Run::Key(Tab::Map, 'f')),

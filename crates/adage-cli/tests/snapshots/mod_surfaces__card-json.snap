@@ -14,14 +14,6 @@ expression: "redact(&serde_json::to_string_pretty(&v).unwrap())"
     {
       "command": "adage ui",
       "why": "review, health and settings"
-    },
-    {
-      "command": "adage map",
-      "why": "explore reflexes in the browser"
-    },
-    {
-      "command": "adage doctor",
-      "why": "check binary, data, hooks and model"
     }
   ],
   "off": false,
@@ -49,5 +41,6 @@ expression: "redact(&serde_json::to_string_pretty(&v).unwrap())"
     "spinner": false,
     "turn_line": false
   },
+  "update": null,
   "version": "{VERSION}"
 }

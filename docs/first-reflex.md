@@ -6,21 +6,24 @@ learned candidate is not automatically permission to run its command.
 
 ## Connect and learn
 
-Nothing is published yet (no release binaries, Homebrew tap, npm package or plugin marketplace),
-so build the CLI from source. The repository is private for now, so this requires access to it:
+No release has been tagged yet, so install from source. The repository is private for now, so this
+requires access to it:
 
 ```sh
-cargo install --locked --path crates/adage-cli
+cargo install --locked --git https://github.com/stevenvaughanbooth/adage adage-cli adage-exec adage-train
 cd /path/to/your/repository
 adage init
 ```
 
-Run `init` in your own terminal. Its interactive wizard shows the hook configuration before
-installing it and offers to learn this repository's existing sessions. A run inside an agent or
-with `--print` is a preview, not completed setup, and `init --yes` registers no hooks (it ends by
-saying so, with the `adage install <harness> --write` that does). If you already installed the
-Claude Code plugin, or registered the hooks for every repository (`--scope user`), Adage keeps that
-registration and does not add a second copy of the same hooks; `adage doctor` flags one made by hand.
+Run `init` in your own terminal. It installs the Claude Code plugin for you (and connects Codex or
+OpenCode if they are installed), showing each file it changes before it writes it, and offers to
+learn this repository's existing sessions. A run inside an agent or with `--print` is a preview,
+not completed setup; `init --yes` alone connects nothing (it ends by saying so, with
+`adage init --yes --hooks user`, which connects every harness found). If the plugin is already
+installed, or the hooks are registered for every repository (`--scope user`), Adage keeps that
+registration and does not add a second copy of the same hooks; `adage doctor` flags one made by
+hand. Later, `adage update` updates Adage, its hooks and the plugin together
+([usage](usage.md#installing-and-updating)).
 
 ```sh
 adage doctor
@@ -52,13 +55,9 @@ execution. `adage delegate on` connects the execution companion. It does **not**
 
 ## Enable one verification reflex
 
-Automatic execution currently requires macOS or Linux, including WSL. Build the companion beside
-the CLI if your installation does not supply it:
-
-```sh
-# Run from the Adage source checkout.
-cargo install --locked --path crates/adage-exec
-```
+Automatic execution currently requires macOS or Linux, including WSL. It runs through
+`adage-exec`, which the install above puts beside `adage` (and the Claude Code plugin carries);
+`adage init` says so if it is missing.
 
 Use your own terminal for the following decisions. Review the candidate in its target repository.
 Verification actions require an explicit E2 opt-in on this machine:
@@ -157,10 +156,13 @@ To stop automatic actions, run `adage delegate off --repo .`. To withdraw one pe
 `adage review revoke TRACK REFLEX --repo .`. Importing or sharing a reflex never transfers your
 machine's execution grants.
 
-To remove Adage's hooks, run `adage install claude-code --remove` (add `--scope user` for the
-registration in `~/.claude/settings.json`; `codex` and `opencode` work the same way). It shows the
+To remove Adage's hooks, uninstall the plugin `adage init` installed with
+`claude plugin uninstall adage@adage-local` (a plugin from the published marketplace is
+`adage@adage`), and take a settings-file or Codex or OpenCode registration out with
+`adage install <harness> --remove` (add `--scope user` for the user-wide one), which shows the
 diff, keeps the previous file as `<file>.adage-bak`, and leaves your own hooks and settings as they
-were. Adage's data stays in its data directory until you delete it. If you installed the Claude
-Code plugin (its marketplace is not published yet), use `/plugin uninstall adage@adage`.
+were.
+Adage's data stays in its data directory until you delete it
+([removing Adage](usage.md#removing-adage)).
 
 For measured results and remaining release gates, see [launch status](../evals/reflex-proof/LAUNCH-STATUS.md).

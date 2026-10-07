@@ -18,6 +18,13 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### The runtime and hooks
 
+- **An edit made through Bash is an edit.** A Bash call in a tool batch is read with the files it
+  writes: a redirection's target (`cat > f <<'EOF'`, `printf … >> f`), `tee`'s operands, and the
+  files an inline Python program opens for writing (`python3 - <<'E'`, `python3 -c`, a path held in
+  a name), each right after the action that wrote it, and the commands written after a heredoc's
+  start. So a schema rewritten by a heredoc arms the finish line, contexts and triggers as an Edit
+  does, and `make gen` in the same command meets it. Learning, the graph and the fast path read
+  commands as before.
 - **The orientation card.** A delivered procedure card no longer quotes the exemplar lines; it says
   where its files stand in the checkout instead (line counts, a Python source's last definitions,
   a test file's last lines, a changelog's first headings), read locally with no command run and
@@ -124,6 +131,14 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   an earlier build has no path and is not used until the skill is trained again.
 
 ### Conditioning (learning from traces)
+
+- **A repository script is classified from its command and its text, not from what it printed.**
+  A lookup prints a work item, and a work item says things like "generated models include it":
+  live run 2 kept `scripts/wi-lookup` an environment step on that line and so could not grant it
+  predict. Once a trace shows the script's text and the text writes nothing, its output is not
+  read for change words; without the text only a line that opens with one counts. A change a
+  `git status` lists after the agent's own command that writes (a heredoc, `make gen`) is not
+  laid on the script, and `python3 -I scripts/x` counts as a run of `scripts/x`.
 
 - **A learn run reads earlier results through its store.** It reads earlier tracks, a person's
   review decisions, proposals, route explanations, instinct bindings and installed packs through
@@ -322,6 +337,32 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   reject learning before tracks are written.
 
 ### Execution (opt-in)
+
+- **A finish line's verification says whether the tests passed.** The result of a learned
+  verification adage-exec ran after an edit used the regeneration's template ("what it generates
+  was already up to date. Nothing changed."); it now says "it passed (exit 0, 4.0 s; receipt …)"
+  with the tests the run's pytest record shows, or "it failed (exit 1; …)" with the tests that
+  failed, in place of the directive. A regeneration's result is unchanged.
+- **`.pytest_cache/**` covers the `.gitignore` pytest writes in its cache.** A wildcard still never
+  matches a leading dot, except inside a directory the glob names with its dot, so a verify grant
+  declaring the cache directory is no longer refused for the cache's own `.gitignore`; `**` still
+  matches no `.env`, `.git/…` or repository `.gitignore`.
+- **A session start no longer hashes a project Python's runtime every time.** Identifying a
+  project Python read and hashed its interpreter (28 MB) and its runtime's `lib` tree (66 MB, 1,600
+  files) at every session start, action and step that planned such a grant; one live start took
+  5.75 s of its 10 s budget. The hook keeps each file's digest in
+  `$ADAGE_HOME/cache/python-digests.json` by path, inode, size, modification and change time, and
+  reads only what changed (a debug build: 2.0 s, then 65 ms with a cold page cache). The staged run
+  still hashes the environment and its private copies in full.
+
+- **`adage-exec` reads grants under the key they were written under.** `status`, `revoke`,
+  `approve`, `run`, `completion`, `readiness` and `journal` key a checkout as the index holds its
+  reflexes (the key `adage review delegate` writes a grant under and the hooks read it by), so
+  `adage-exec status --repo .` lists a grant made for reflexes learned under a name such as
+  `acme-billing`, where it showed none.
+- **Delegating a nascent reflex says it is nascent.** `adage review delegate … --predict` on a
+  reflex that waits for review said "no reflex …"; it now says the reflex is nascent and that
+  `adage review approve <track> <reflex>` makes it eligible. Other refusals are unchanged.
 
 - **Adage owns an approved verification.** With E2 allowed and one learned verification approved,
   a treated Claude Code or Codex session starts with a short, factual contract naming the command
@@ -563,6 +604,102 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### The Claude Code mod
 
+- **The prompt's lookup is made before the model's first response.** In run 3 the lookup reflex
+  held its predict grant in every treated session and was never predicted: the model made the call
+  in its very first response, and no step at index 0 was ever predicted. At a turn's first step
+  Adage may now make one thing, a run reflex this prompt directed whose slots the prompt's own
+  words bound (`scripts/wi-lookup W-2041`), under the same grant, permission verdict, session cap,
+  once-per-route rule and dead-end interlock as any step, never for a subagent; a sequence, a
+  skill, a chain, a finish line or an earlier prompt's directive still waits for a model step. The
+  reads its result names follow at the next step, so the model's first request already holds the
+  item and its files; the directive goes with the prompt as before, and the call's result says
+  "Adage made this call in your place before your first response". The substitution's context
+  line now reads the same whatever output a filter keeps: "adage ran make test for you;
+  python3 -m pytest tests was replaced because that command fails in this repository (…). The
+  output above is from make test."
+- **A dead end piped into output filters is replaced too.** In run 3 every dead end hit was
+  `python3 -m unittest … 2>&1 | tail -5` (or `| head`), and nothing was replaced because only a
+  whole plain command was. When the dead end is a pipeline's first stage and every later stage only
+  filters its output (`tail`, `head`, `grep`, `wc`, `cat`, `tee`, `sort`, `uniq`), the first stage
+  is replaced and its own `2>&1` and the filters are kept byte for byte (`make test 2>&1 | tail
+  -5`). The mod asks the permission check about both whole pipelines, the context line names the
+  stage replaced, and the control arm and observe mode record `would_substitute` and change
+  nothing. A list, any other redirection, a subshell or an expansion is still left as written.
+- **A dead end a repository's files declare is replaced before it runs, as a learned one is.**
+  Live, the two responses the index-0 lookup saved went to `python3 -m unittest … 2>&1 | tail -5`
+  and a retry, because that dead end was a declared instinct (U1/U3: the Makefile's `test` target
+  sets what the bare runner lacks) and only learned, firm routes were replaced. An instinct's
+  `avoid` in service (an instinct is always prime and stays forming; never nascent, dormant or
+  extinguished) with a fixed, slot-free `instead` is now replaced under the same permission
+  double-check and pipeline rule, and the line gives its declared reason ("this repository's
+  Makefile declares make test in its place (…)"). An `instead` that only runs the call's own tool
+  in another environment (U11's `.venv/bin/python -m pytest`) is left to the interpreter rewrite,
+  which keeps the call's arguments. Instincts still never block Stop and never become obligations.
+  Live on W-2041: 3 requests where it was 5, no dead-end hit; the control arm records
+  `would_substitute` and runs the dead end.
+- **A predicted call is made only where the person's permissions allow it unasked.** Before it
+  yields a predicted step, the mod asks Claude Code's own permission check about each of its calls,
+  as it already did before a substitution or a rewrite, and yields only when every verdict is
+  `allow`. On `ask`, `deny` or no verdict the request goes out as if nothing were predicted, and the
+  band says once per session `» adage left a step to the agent: your permissions do not allow it
+  unasked`. In `auto` mode every Bash call is the classifier's to decide, and it has no verdict for a
+  call no model request produced: live, a predicted `make gen` was denied there; it is now left to
+  the model, with no denial in the transcript, while a read an allow rule names is still taken.
+- **A step held back is recorded as held back, not as made.** The mod now asks the binary about a
+  step in two phases, as it does for a Bash call: a dry run (`TurnStep` with `dry_run: true`) that
+  answers the prediction and commits nothing, then a verdict carrying the permission check's answer.
+  On `allow` the step is committed as before; otherwise its `turn_step` record says
+  `withheld: "permission"` with the engine's decision and sentence, it counts against neither
+  `runtime.predict_cap` nor the rule against two predicted steps in a row, and its route is not
+  offered again that session (another route still may be). A step from a command hook carries
+  neither field and is decided exactly as before.
+- **The harness ledger counts the session's tool calls.** The mod's note to `adage ledger note`
+  carries `tool_calls`, every main-loop call the engine ran (the model's, the predicted ones, those a
+  receipt answered; not a subagent's, not the mod's own), so a session's line no longer reads 0
+  calls when no transcript pass ran.
+- **The Bash tool's description carries the learned lookup conventions.** The mod asks `Standing`
+  with `conventions: true` and appends each sentence the binary answers ("In this repository, work
+  item details are looked up with …") after the environment note, once per session.
+- **A subagent's calls no longer arm a prediction in the main loop.** An Explore subagent's lookup
+  bound the read batch, and the main loop's turn end then read the files in the main thread (live
+  O0, SUB). A subagent's calls are observed and recorded, and a directive they trigger is said to
+  the subagent, but they bind no read batch, pending command or obligation, judge none of the main
+  loop's directives, meet none of its obligations and count none of its follow windows down.
+- **A predicted call the person's permission rules refuse is recorded as refused.** Claude Code
+  reports such a call only in the batch, as `<tool_use_error>`; the batch took it as made, so a
+  denied `Read` was judged `predicted` and a denied `make gen` would have met its finish line. It
+  is now a failed call, judged `refused` (never `predicted`, never `obligation_met`), observed as
+  `… !refused`, and the Stop request asks for the finish line as without the mod.
+- **Spool records name the subagent that made the calls.** Decided `batch` and `failure` records
+  and `pretool` records carry `agent` (Claude Code's `agent_id`) when a subagent made the call,
+  through the record builder, so a delegation's calls can be counted on their own
+  (`docs/spool.md`).
+- **The Bash tool's description can carry the repository's lookup conventions.** `Standing`
+  answers `conventions` (one sentence per learned prompt lookup at full strength, with its slot as
+  written: "work item details are looked up with ./scripts/wi-lookup {item} --json, …") when the
+  mod's ask carries `conventions: true`, fixed for the session and empty in control and observe
+  mode; an ask without it is answered as before. The prompt that names an item is still told the
+  bound command.
+- **A session's ledger line keeps the tool calls its note counts.** `adage ledger note` reads an
+  optional `tool_calls` and records it over a transcript's count; without it (and with no
+  transcript pass, `learn.auto` off) the line read `tool_calls: 0` for every session.
+
+- **The mod finds its binary without `CLAUDE_PLUGIN_DATA`.** Claude Code gives that variable to
+  command hooks only, so under `--plugin-dir` and after `adage init`'s local-marketplace install the
+  mod never ran its binary and stayed inert. It now derives the data directory itself: from an
+  installed plugin's cache root, from the key Claude Code registered the plugin's folder under
+  (`adage@adage-local` → `plugins/data/adage-adage-local`), or `<name>-inline` for `--plugin-dir`,
+  under `CLAUDE_CONFIG_DIR` or `~/.claude` (`USERPROFILE` on Windows, either separator), and takes
+  one only once the session-start shim has linked `bin/hook` there.
+- **A step the mod makes in the model's place no longer costs a failed request.** Its stop states
+  no reason (no request was made), so Claude Code sends the next request whole instead of naming
+  a response the server never issued; before, every predicted step was followed by a 404
+  `thread_not_found` and a replayed dispatch (live run 2: 12 of 12), which spent the request the
+  prediction saved.
+- **A call the mod made in the model's place says so.** Its result carries one plain line: Adage
+  made the call in the model's place, from which learned reflex, and it need not be repeated.
+  Before, a model that read a predicted `make gen` in its own turn apologised for having run it.
+
 - **The Claude Code mod acts on what the binary answers.** Before a Bash call runs, the mod asks
   the binary's plan and Claude Code's own permission check: a fresh receipt answers a test run
   the rules would have let run unasked (the model reads the receipt as the result, the row draws
@@ -633,6 +770,10 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   not again when the batch lists it.
 
 ### Evaluation
+
+- **A dead end piped through `| tail` is counted.** The demo's `dead_end_hits` read a failed
+  verification from its exit status, which a pipeline takes from `tail` (0); it now also reads it
+  from the command and what it printed (`No module named pytest`, `FAILED`, `make: ***`).
 
 - Evidence for this work is development-stage only: one valid development study on one task with
   development scaffolding (dev-v9b), not a launch statistic. The held-out comparison has not run.
@@ -720,6 +861,101 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   `ADAGE_COLOR`, `ADAGE_THEME` and `ADAGE_ASCII` override it) and provides the output grammar
   every command prints through. Terminal frames and printed output are pinned by insta snapshots.
 
+### Installing and updating
+
+- **One plugin carries all three binaries.** The Claude Code plugin bundles `adage`, `adage-exec`
+  and `adage-train` for every release target, each verified against `dist/SHA256SUMS`, and its
+  session-start shim links all three beside `bin/hook`, so `adage train` works for a person who
+  installed nothing but the plugin; a missing or mismatched `adage-train` only removes its own
+  link, and `adage` keeps serving. The retired `adage-exec` alias plugin is gone (nothing had been
+  published, so there was nothing to quiet): the marketplace lists `adage` alone, and its
+  description says what is bundled and that Windows is untested. When no binary can serve, the
+  shim names channels that exist: `/plugin install adage@adage`, or `npm i -g @adage-sh/cli`.
+- **One command sets a release's version.** `cargo xtask bump <version>` writes it into
+  `Cargo.toml`, the lockfile, the plugin and marketplace manifests and the npm templates, and dates
+  CHANGELOG.md's Unreleased section (the GitHub Release's notes); `cargo xtask release-check`, run
+  in CI with the pinned dist, fails while those disagree or `release.yml` is not what dist
+  generates. Homebrew is off the release until macOS signing exists, so a missing tap token can
+  never fail a tag. `docs/release.md` is the procedure and the first release's checklist.
+- **Adage knows when a newer version is out, and no hook asks.** `adage update --check` (and the
+  background learner, at most once a day after it conditions a repository) asks the npm registry,
+  then GitHub's latest release when the package is not published, with one 3-second request that
+  sends nothing but itself, and caches the answer or the failure (`offline`, `blocked`, `tls`,
+  `timeout`, `unavailable`) in `$ADAGE_HOME/cache/latest.json` for a day; `update.check = off`,
+  `ADAGE_UPDATE_CHECK=0` or `ADAGE_OFFLINE=1` stop it. A test runs every hook event against a
+  server that counts requests: zero. `adage --json` carries an `update` object (`current`,
+  `latest`, `channel`, `next`, `text`) when a newer release is known.
+- **`adage update` is a transaction with a way back.** It checks first (`… is the latest ·
+  nothing to do` runs nothing), keeps the running binaries in `$ADAGE_HOME/previous/<version>/`,
+  runs the channel's command with the version pinned (`npm install --global
+  @adage-sh/cli@0.2.0`, `cargo install … --tag v0.2.0`, the release installer and its two
+  companions; never `@latest`), verifies that the new binary answers that version (and its
+  SHA-256 against the release's `SHA256SUMS` when one is published), then lets the new binary
+  re-point the hook registrations that moved (each diff shown, the previous file kept as
+  `.adage-bak`, only at a terminal), stage the local Claude Code plugin again and print doctor's
+  summary. A failed step stops and names `adage update --rollback`, which puts the kept binaries
+  back byte for byte. From the plugin's own binary it runs `claude plugin update`, or prints the
+  `/plugin` steps.
+- **Two installed versions never diverge silently.** Doctor's new `versions` check warns when
+  `PATH`'s adage, the plugin's and the binaries hook registrations run answer different versions,
+  with `adage update` as the fix; the plugin check compares versions before digests, so two builds
+  of one release are fine and only a `--plugin-dir` checkout is sent to `plugin/build.sh`. An
+  older adage that finds the index a newer one wrote says so once a day at a session start, stays
+  quiet otherwise, and no longer conditions over it; doctor's `index` failure for it names `adage
+  update`. The plugin's session-start shim removes the `bin/<name>-<sha>` copies an earlier plugin
+  version installed once no link names them.
+- **Every surface says when a newer Adage is out, and none calls it a problem.** The card's
+  `update` row (`0.2.0 is out (you have 0.1.0) → adage update`), `adage version` (`adage 0.1.0 ·
+  0.2.0 is out (adage update)`), doctor's `binary` check (still a pass, with `update adage update`
+  and the lamp unchanged), `adage ui` Home's first rows with `u` and the palette's `Update Adage`
+  (`adage update` as a job, confirmed first), `adage watch`'s header, and the session-start notice:
+  its fifth and lowest part, `adage: 0.2.0 is out (you have 0.1.0); run adage update.` (`/adage
+  update brings it` from the plugin's binary), said once per machine and dropped first when two
+  higher parts fill the line. Notices from the plugin's binary name `/adage review` and `/adage
+  health`, never "in a terminal".
+- **Update from inside Claude Code with one answer.** `/adage update` asks `Adage 0.2.0 is out (you
+  have 0.1.0). Update now? It takes effect in your next session.`; `update` is a press (the
+  fourteenth site, `PersonVerb::Update`) that runs exactly `adage update`, which under a press
+  updates only a channel that fetches (the plugin through `claude plugin update`, npm, the release
+  installer), writes no settings file, registration or config, answers `manual` for a source
+  build, a checkout or Homebrew, and ends on one JSON line the toast reads (`adage updated 0.1.0 →
+  0.2.0 · takes effect in your next session`). `what changes` opens Health on a `version` row with
+  the release's first lines, `u: update` and `Copy: adage update`. The band's second line says `»
+  adage 0.2.0 is out · /adage update` below every other item, until the first prompt, once per
+  release per machine. With no press held the answer is kept and asked again at the next start;
+  headless, `/adage update` names the terminal. Every flag of `adage update` keeps the terminal's
+  check, and `--rollback` is never a press.
+- **`adage init` installs the Claude Code plugin itself, and connects every other harness.** With
+  `claude` on `PATH` and the plugin not installed, `adage init` stages the plugin from the binary
+  you ran (its hooks and modules travel inside `adage`; `adage`, `adage-exec` and `adage-train` are
+  copied beside them with their `SHA256SUMS`) as a one-plugin marketplace under
+  `$ADAGE_HOME/plugin/`, runs `claude plugin marketplace add` and `claude plugin install
+  adage@adage-local`, and checks `claude plugin list`: no release and no `/plugin` typing needed.
+  Claude Code reads it in place, so running `adage init` (or `adage update`) again stages the new
+  binaries for the next session. A settings-file registration beside the plugin is taken out (the
+  diff shown, the previous file kept as `.adage-bak`) so every hook runs once. Without `claude` on
+  `PATH`, or when it refuses, the settings file is the route and the two `/plugin` commands are
+  named. Codex and OpenCode get their hook files, each diffed and backed up. `adage init --yes
+  --hooks user` (or `project`) does it all without a question; `--yes` alone still registers
+  nothing and says so; `--print` runs and writes nothing; a second run writes nothing that is in
+  place.
+- **`adage init` fetches the binaries it needs, verified.** When `adage-exec` or `adage-train` is
+  not beside `adage` (the shell installer and `cargo install adage-cli` install `adage` alone), it
+  fetches them from the release of the same version, checks each archive against the `.sha256` the
+  release publishes, and refuses one that differs by a byte; a checkout build is pointed at the
+  `cargo build` that makes them. It ends on one screen: what is connected, where the binaries are,
+  what Adage learns from, the first line your next Claude Code session opens with, and at most two
+  next steps. A registration written by the plugin's own binary names the plugin's stable link, so
+  a plugin update carries it.
+- **One front door.** Bare `adage` ends with at most two next steps (`adage update` first when a
+  newer Adage is out, then what waits for review, else `adage ui`); before any agent is connected it
+  names the plugin's two slash commands and `adage init`, and each other harness found says `adage
+  init connects it`. The map words every next step for where you work: `/adage review` and `/adage
+  health` for a Claude Code plugin user, never "start `adage ui` in your terminal"; the `adage`
+  commands otherwise; its top bar shows the version. `m` in `adage ui`'s Live tab opens the map in
+  the browser, as in `adage watch`; the demo dashboard moved to port 8766 so it runs beside `adage
+  map`.
+
 ### Platforms and distribution
 
 - The teaser opens with sound by default, with an explicit play button when the browser blocks
@@ -734,28 +970,28 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   The approved 45-second dark/day teaser replaces the older duration and posters. The interactive
   walkthrough gives visitors a way to explore while early-access signup is unavailable; source
   installation clearly requires repository access before the public release.
-- The execution plugin installs its checksummed `adage` learner companion beside `adage-exec`,
-  preserving background learning when the plugin is the only installation. Release staging
-  rejects archives with missing checksums. Plugin startup latency is verified on the release
-  binary with real background learning; debug-only spawn-recorder tests remain separate.
-- **The marketplace plugin carries its binaries** (not published yet: the workflow has not run on
-  a tag, and the `marketplace` branch does not exist). The release workflow stages both Claude Code
-  plugins with checksummed binaries for all five targets (`scripts/stage-plugin.mjs`, archives
-  checked against dist's `.sha256`, binaries against `dist/SHA256SUMS`) and publishes them to the
-  `marketplace` branch (`.github/workflows/publish-marketplace.yml`); `marketplace.json` installs
-  from it (`git-subdir`, `ref: marketplace`). No `adage` on `PATH` is needed and nothing is
+- The plugin installs its checksummed binaries side by side, preserving background learning when
+  the plugin is the only installation. Release staging rejects archives with missing checksums.
+  Plugin startup latency is verified on the release binary with real background learning;
+  debug-only spawn-recorder tests remain separate.
+- **The marketplace plugin carries its binaries** (not published yet: the workflow has not run on a
+  tag, and the `marketplace` branch does not exist). The release workflow stages the Claude Code
+  plugin with its three checksummed binaries for all five targets (`scripts/stage-plugin.mjs`,
+  archives checked against dist's `.sha256`, binaries against `dist/SHA256SUMS`) and publishes it to
+  the `marketplace` branch (`.github/workflows/publish-marketplace.yml`); `marketplace.json`
+  installs from it (`git-subdir`, `ref: marketplace`). No `adage` on `PATH` is needed and nothing is
   downloaded. When no binary can serve, the session-start shim says so in one line the person sees
-  (a JSON `systemMessage`, verified against Claude Code 2.1.283: shown in the UI, never sent to
-  the model), records it in `$DATA/status`, and points the other hooks at `scripts/quiet`.
+  (a JSON `systemMessage`, verified against Claude Code 2.1.283: shown in the UI, never sent to the
+  model), records it in `$DATA/status`, and points the other hooks at `scripts/quiet`.
 - Build targets: macOS (arm64, x64), Linux (x64, arm64; static musl) and Windows (x64; execution
   is unavailable there). Pushes and pull requests run rustfmt, clippy, the Linux x64 tests and the
   DCO, cargo-deny and plugin checks; the full matrix (macOS, Windows, Linux arm64, the musl builds,
   NOTICE, the design and site suites) and the slow eval gates run weekly and on dispatch. Native
   Linux and Windows runs remain unverified for this preview.
 - A release workflow (dist) set up for every target: `adage`, `adage-exec` and `adage-train`, each
-  with shell, PowerShell and Homebrew installers, Sigstore build-provenance attestations and a
-  CycloneDX SBOM. The npm package's launcher runs the binaries from a per-platform package chosen
-  by `os`/`cpu` (all three binaries in it); nothing is downloaded at install time. None of this
-  is published yet: the workflow has not run on a tag, and the tap and npm package do not exist.
+  with shell and PowerShell installers, Sigstore build-provenance attestations and a CycloneDX
+  SBOM. The npm package's launcher runs the binaries from a per-platform package chosen by
+  `os`/`cpu` (all three binaries in it); nothing is downloaded at install time. None of this is
+  published yet: the workflow has not run on a tag, and the npm package does not exist.
 - The website (`web/site`).
 - Apache-2.0, with a generated NOTICE of third-party licenses; `SECURITY.md`, `CONTRIBUTING.md`.

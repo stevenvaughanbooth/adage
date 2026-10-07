@@ -4,10 +4,12 @@ Pure functions over text, parsed stream lines and spool records, so every one is
 offline (demo/test_run_arms.py). Nothing here calls the model or the binary.
 
 - `requests()` mirrors `evals/reflex-proof/harness/heldout_analysis.py::requests()` exactly: the same
-  `DEBUG_REQUEST` and `API_ERROR` regexes, and the same cross-check against the stream's distinct
-  explicit request ids (`probe.explicit_request_ids`: literal `request_id`/`requestId` fields only,
-  never message ids). `test_run_arms.RequestsTest.test_regexes_match_the_harness` pins the
-  patterns to the harness's own when the harness is importable.
+  `DEBUG_REQUEST` and `API_ERROR` regexes, and the same cross-check of the session's own turns
+  (`STREAMED_SOURCES`) against the stream's distinct explicit request ids
+  (`probe.explicit_request_ids`: literal `request_id`/`requestId` fields only, never message ids).
+  It adds `requests_streamed` and `requests_by_source` beside the harness's keys.
+  `test_run_arms.RequestsTest.test_mirrors_the_harness` pins the patterns and the harness's keys to
+  the harness's own when the harness is importable.
 - `read_spool()` reads an Adage session spool: CRC-framed records (`magic | len | crc | payload`,
   `crates/adage-store/src/spool.rs`), or JSON lines as a fallback. Corrupt frames are skipped.
 - `spool_metrics()` counts what the spool says Adage did, failing soft: an unknown or missing
@@ -22,6 +24,11 @@ from pathlib import Path
 # Byte-for-byte the harness's patterns (heldout_analysis.py:67-68).
 DEBUG_REQUEST = re.compile(r"^\S+ \[DEBUG\] \[API REQUEST\] /v1/messages x-client-request-id=([\w-]+) source=(\w+)$")
 API_ERROR = re.compile(r"^\S+ \[ERROR\] API error \(attempt \d+/\d+\)")
+# The dispatch sources that are the session's own turns, whose request ids stream-json carries:
+# `sdk` under -p, `repl_main_thread` interactively. Claude Code 2.1.29x also sends requests the
+# stream never shows (`generate_session_title` as the session starts, `side_query` after its last
+# turn): they are counted in `requests`, but they are not the stream's to confirm.
+STREAMED_SOURCES = ("sdk", "repl_main_thread")
 
 
 def explicit_request_ids(value):
@@ -40,22 +47,31 @@ def explicit_request_ids(value):
 
 
 def requests(debug_text, stream_observations):
-    """Debug-log dispatches (the primary count, retries included) and the per-session cross-check.
+    """Debug-log dispatches (the primary count: every source, retries included) and the
+    per-session cross-check.
 
-    Verified when the stream's distinct request ids equal the dispatches, or when the surplus of
-    dispatches is fully explained by logged `[ERROR] API error (attempt ...)` entries; and the
-    dispatch ids must be unique. `stream_observations` is [{"value": <parsed stream line>}]."""
+    Verified when the stream's distinct request ids equal the dispatches of the session's own turns
+    (`STREAMED_SOURCES`), or when their surplus is fully explained by logged `[ERROR] API error
+    (attempt ...)` entries; and the dispatch ids must be unique. Dispatches from other sources are
+    counted and never streamed, so they explain themselves. `stream_observations` is
+    [{"value": <parsed stream line>}]."""
     lines = (debug_text or "").splitlines()
-    dispatches = [m[1] for line in lines if (m := DEBUG_REQUEST.fullmatch(line))]
+    dispatches = [(m[1], m[2]) for line in lines if (m := DEBUG_REQUEST.fullmatch(line))]
+    streamed = sum(1 for _, source in dispatches if source in STREAMED_SOURCES)
     errors = sum(1 for line in lines if API_ERROR.match(line))
     ids = []
     for item in stream_observations:
         for rid in explicit_request_ids(item.get("value")):
             if rid not in ids:
                 ids.append(rid)
-    surplus = len(dispatches) - len(ids)
+    surplus = streamed - len(ids)
+    by_source = {}
+    for _, source in dispatches:
+        by_source[source] = by_source.get(source, 0) + 1
+    unique = len({rid for rid, _ in dispatches}) == len(dispatches)
     return dict(requests=len(dispatches), stream_request_ids=len(ids), api_error_entries=errors,
-                cross_check=surplus == 0, verified=0 <= surplus <= errors and len(set(dispatches)) == len(dispatches))
+                cross_check=surplus == 0, verified=0 <= surplus <= errors and unique,
+                requests_streamed=streamed, requests_by_source=by_source)
 
 
 # ------------------------------------------------------------------------------------------ spool
@@ -208,3 +224,62 @@ def stream_metrics(stream_lines):
             text = m.get("stdout") if isinstance(m.get("stdout"), str) else json.dumps(m)
             reflex += text.count("<adage-reflex")
     return {"subagent_tool_calls": sub, "directives_in_stream": reflex}
+
+
+# ------------------------------------------------------------------------------------- dead ends
+#
+# A dead end is hit when a verification runs and fails. Its exit status cannot say so: agents pipe
+# test runs through `tail` (`ls; python3 -m pytest -q 2>&1 | tail -5`), and a pipeline exits with
+# its last command's status, so the tool result is not an error (live run 2: every pytest attempt,
+# 11 of them, exited 0 and was never counted). So a hit is read from the command and what it
+# printed: a command that runs a verification, whose result is an error or carries failure text.
+
+# The verifications, as run.py's `classify` names them.
+VERIFY_COMMAND = re.compile(r"pytest|unittest|make test|make ci")
+# What a verification prints when it could not run or did not pass: the runner missing, the
+# target missing, a test failing.
+FAILURE_TEXT = re.compile(
+    r"No module named \S+"
+    r"|command not found"
+    r"|No rule to make target"
+    r"|make: \*\*\* "
+    r"|Traceback \(most recent call last\)"
+    r"|^FAILED\b|\bFAILED \("
+    r"|\b\d+ failed\b",
+    re.MULTILINE,
+)
+
+
+def _result_text(content):
+    """A tool result's text: a string, or the text blocks of a list."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "\n".join(c.get("text", "") for c in content if isinstance(c, dict) and isinstance(c.get("text"), str))
+    return ""
+
+
+def dead_end_hits(stream_lines):
+    """Each failed verification in parsed stream-json lines, as {"id", "command", "failure"}:
+    a Bash call whose command runs a verification (`VERIFY_COMMAND`) and whose result is an error
+    or carries failure text (`FAILURE_TEXT`; `failure` is the text matched, or "is_error")."""
+    commands, hits = {}, []
+    for m in stream_lines:
+        if not isinstance(m, dict):
+            continue
+        content = (m.get("message") or {}).get("content") or []
+        if not isinstance(content, list):
+            continue
+        for c in content:
+            if not isinstance(c, dict):
+                continue
+            if m.get("type") == "assistant" and c.get("type") == "tool_use" and c.get("name") == "Bash":
+                cmd = (c.get("input") or {}).get("command")
+                if isinstance(cmd, str) and VERIFY_COMMAND.search(cmd):
+                    commands[c.get("id")] = cmd
+            elif m.get("type") == "user" and c.get("type") == "tool_result" and c.get("tool_use_id") in commands:
+                found = FAILURE_TEXT.search(_result_text(c.get("content")))
+                if found or c.get("is_error"):
+                    tid = c.get("tool_use_id")
+                    hits.append({"id": tid, "command": commands.pop(tid), "failure": found[0] if found else "is_error"})
+    return hits

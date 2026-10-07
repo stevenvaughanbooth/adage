@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { Graph } from "../api/types";
 import type { Connection } from "../api/client";
 import { counts, repos } from "../lib/graph";
+import { versionText } from "../lib/setup";
 import { STRENGTHS } from "../lib/words";
 import { type View, useUrl } from "../state/url";
 import { type ThemeMode, cycleTheme, useTheme } from "../state/theme";
@@ -90,12 +91,20 @@ export function TopBar({
   const all = graph ? repos(graph) : [];
   const c = graph ? counts(graph, url.repo) : null;
   const Theme = THEME_ICON[theme];
+  // The version beside the wordmark; a newer release as text, never a warning colour.
+  const v = versionText(graph);
   return (
     <header className="flex min-h-14 shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-b border-line px-4 pt-2 md:h-14 md:flex-nowrap md:px-5 md:pt-0">
       <a href="/" className="wordmark" aria-label="Adage map, home" onClick={(e) => (e.preventDefault(), setUrl({ view: "map" }, true))}>
         Adage
       </a>
       {graph?.demo && <span className="shrink-0 whitespace-nowrap rounded border border-accent/40 px-2 py-1 font-mono text-xs text-accent-soft">Demo data</span>}
+      {v && (
+        <span className="hidden shrink-0 whitespace-nowrap font-mono text-xs text-ink-3 lg:inline" data-testid="version">
+          {v.version}
+          {v.update && <span className="text-ink-2"> · {v.update}</span>}
+        </span>
+      )}
       {all.length > 1 ? (
         <label className="relative hidden items-center sm:flex">
           <span className="sr-only">Repository</span>

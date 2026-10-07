@@ -4,6 +4,7 @@
 // holds the token around it. With no press held an answer is kept for the next session start
 // (kept.ts), and nothing runs.
 import { doneToast } from './ask'
+import { dataDir } from './binary'
 import { ask, exeSuffix, hookBinary } from './bridge'
 import { keep, noteAnswer, repoRoot } from './kept'
 import type { Mod } from './mod'
@@ -39,7 +40,7 @@ export async function issue(m: Mod, e: Started): Promise<boolean> {
   const session = typeof e.session_id === 'string' && e.session_id !== '' ? e.session_id : await m.session.id()
   const was = await m.state.press.read()
   const same = was.session === session
-  const hook = m.rt.bin ?? hookBinary(await m.env.pluginData(), m.plugin.root(), exeSuffix(await m.env.os()))
+  const hook = m.rt.bin ?? hookBinary(await dataDir(m), exeSuffix(await m.env.os()))
   const cwd = typeof e.cwd === 'string' && e.cwd !== '' ? e.cwd : await m.session.cwd()
   const asked = await ask(m.run, hook, 'Press', { session_id: session, cwd, hook_event_name: 'Press', source, via: 'mod' }, ISSUE_TIMEOUT_MS)
   const token = asked.ok ? pressOf(asked.answer) : ''

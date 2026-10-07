@@ -5,6 +5,7 @@ import { Command } from "cmdk";
 import { useState } from "react";
 import type { Graph } from "../api/types";
 import { routeKey } from "../lib/graph";
+import { paletteHint, paletteWords } from "../lib/setup";
 import { STRENGTHS, type Strength, isInstinct, lifecycle, orderedVerbs, strength, verb } from "../lib/words";
 import { type View, useUrl } from "../state/url";
 import { THEMES, setTheme } from "../state/theme";
@@ -39,6 +40,7 @@ export function Palette({ graph, open, onClose, onShortcuts }: { graph: Graph | 
     close();
   };
   const routes = (graph?.routes ?? []).filter((r) => !url.repo || r.repo === url.repo);
+  const hints = paletteWords(graph);
   const go = (view: View) => run(() => setUrl({ view }, true));
   const only = (s: Strength) => run(() => setUrl({ strengths: new Set([s]), view: "map" }));
   const decisions = q.trim().length >= 2 ? routes.flatMap((r) => orderedVerbs(r).map((v) => ({ r, v }))) : [];
@@ -90,7 +92,7 @@ export function Palette({ graph, open, onClose, onShortcuts }: { graph: Graph | 
           <Command.Group heading="Actions" className={GROUP}>
             <Command.Item value="setup connect claude code codex opencode install hooks configure history import sources get started" onSelect={go("setup")} className={ITEM}>
               <span className="grow">Set up my repository · connect an agent</span>
-              <span className="text-xs text-ink-3">terminal palette guide</span>
+              <span className="text-xs text-ink-3">{hints.guide}</span>
             </Command.Item>
             {decisions.map(({ r, v }) => (
               <Command.Item
@@ -103,7 +105,7 @@ export function Palette({ graph, open, onClose, onShortcuts }: { graph: Graph | 
                   {v[0]?.toUpperCase()}
                   {v.slice(1)} <Hl text={r.id} q={q.trim()} />…
                 </span>
-                <span className="font-mono text-xs text-ink-3">review in terminal palette</span>
+                <span className="font-mono text-xs text-ink-3">{hints.review}</span>
               </Command.Item>
             ))}
             {STRENGTHS.map((s) => (
@@ -140,7 +142,7 @@ export function Palette({ graph, open, onClose, onShortcuts }: { graph: Graph | 
             ))}
             <Command.Item value="condition learn earlier traces history sources" onSelect={go("setup")} className={ITEM}>
               <span className="grow">Condition from earlier traces</span>
-              <span className="font-mono text-xs text-ink-3">preview sources in terminal</span>
+              <span className="font-mono text-xs text-ink-3">{hints.condition}</span>
             </Command.Item>
           </Command.Group>
           <Command.Group heading="Go to" className={GROUP}>
@@ -181,7 +183,7 @@ export function Palette({ graph, open, onClose, onShortcuts }: { graph: Graph | 
             <kbd>?</kbd> all shortcuts
           </span>
           <span className="grow" />
-          <span className="hidden truncate md:inline">Use the terminal palette for changes; the map explains each step</span>
+          <span className="hidden truncate md:inline">{paletteHint(graph)}</span>
         </div>
       </Command>
     </Modal>

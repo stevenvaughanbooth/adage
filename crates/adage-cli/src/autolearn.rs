@@ -42,7 +42,11 @@
 //! off (twice the interval per failure) and say so in the notice. It holds `tracks.lock` while it writes, so it
 //! never interleaves with `adage condition`, a review decision or `adage add`. It appends the routes
 //! that changed to `learn.log` ([`crate::learnlog`]), then re-checks the queue once: a request
-//! that arrived while it ran is learned before it exits.
+//! that arrived while it ran is learned before it exits. Last, with the repository's lock released,
+//! it asks whether a newer Adage is out, at most once a day per data directory (`update.check`;
+//! `crate::update::latest`): the one network request live learning makes, and a release it finds
+//! is put in the notice at once (its lowest part, [`notice::compose`]). Over an index a newer
+//! Adage wrote it conditions nothing (that index would be replaced by one that knows less).
 
 use crate::learnlog;
 // The hook's part (the request, the queue files, starting a learner) lives with the hook, in
@@ -201,9 +205,17 @@ pub fn run_auto(args: &[String], paths: &Paths) -> Result<()> {
     }
     let repo = adage_core::repo::repo_key_cached(&root, &paths.repo_keys());
     let q = Queue::new(paths, &repo);
-    let Some(_lock) = lock::exclusive_within(&q.lock(), LOCK_PATIENCE)? else {
+    let Some(held) = lock::exclusive_within(&q.lock(), LOCK_PATIENCE)? else {
         return Ok(()); // another learner has this repository; it re-checks the queue
     };
+    // An index a newer Adage wrote (docs/live-learning.md, "two binaries on one machine"): this
+    // learner's index would replace it with one that knows less, so it conditions nothing. Its one
+    // network request still runs, so this binary learns that a newer one is out.
+    if matches!(adage_tracks::Index::try_load(&paths.index()), Err(adage_tracks::index::Unloaded::Newer(_))) {
+        drop(held);
+        release_check(paths);
+        return Ok(());
+    }
     // What was in effect before this learner ran: a first notice says only what it adds (a
     // repository set up from a terminal already has its reflexes and instincts).
     let had = notice::basis(paths, &repo, None, 0).active;
@@ -235,6 +247,9 @@ pub fn run_auto(args: &[String], paths: &Paths) -> Result<()> {
                 learnlog::append(paths, &learnlog::error_line(learnlog::now_ms(), "auto", Some(&repo), class, &msg));
         }
     }
+    // What the last round's notice was composed from, for composing it again when the release
+    // check below finds a newer Adage.
+    let mut last: Option<(Option<crate::savings::Summary>, u32, Option<&'static str>)> = None;
     for round in 0..2 {
         let req: Option<Request> = read_json(&q.request());
         let seen = req.as_ref().map(|r| r.requested_at).unwrap_or(0);
@@ -286,23 +301,74 @@ pub fn run_auto(args: &[String], paths: &Paths) -> Result<()> {
         let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             notice::update(paths, &repo, &q, summary.as_ref(), state.errors, failed, &had)
         }));
+        last = Some((summary, state.errors, failed));
         let newer = read_json::<Request>(&q.request()).is_some_and(|r| r.requested_at > seen);
         if round == 1 || !newer || result.is_err() {
             break;
         }
     }
+    // The repository is free for the next learner before the network is asked anything.
+    drop(held);
+    let known = crate::update::newer(paths).map(|r| r.version);
+    release_check(paths);
+    // A release the check just found is said at the next session start, not a learn later.
+    if let Some((summary, errors, failed)) = last {
+        if crate::update::newer(paths).map(|r| r.version) != known {
+            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                notice::update(paths, &repo, &q, summary.as_ref(), errors, failed, &had)
+            }));
+        }
+    }
     Ok(())
+}
+
+/// The daily release check (`update.check`, onboarding plan O5): after a learn, at most once a day
+/// per data directory, never on a hook. Whatever happens is cached or forgotten: a learn never
+/// fails because the network did.
+fn release_check(paths: &Paths) {
+    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| crate::update::latest::check_if_due(paths)));
 }
 
 /// The notice the next session start shows (docs/zero-config.md §3.3): composed after each learn
 /// from what is new since the last notice shown, in priority order (a health problem, something
-/// waiting for a person, value, new reflexes), in one line.
+/// waiting for a person, value, new reflexes, and last a newer Adage), in one line.
 pub mod notice {
     use super::*;
     use crate::helpers::plural;
     use crate::savings::{Summary, Verdict};
     use adage_hook::autolearn::{Notice, Shown};
     use serde::{Deserialize, Serialize};
+
+    /// How a notice words its commands: as a terminal command (`adage`, or the binary's own path
+    /// for a plugin-only user with no `adage` on `PATH`, [`crate::detect::adage_command`]), or, from
+    /// the Claude Code plugin's own binary, as the mod's `/adage` verbs (onboarding plan O9: no
+    /// notice composed for a plugin binary says `in a terminal`).
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub enum Voice {
+        Terminal(String),
+        Plugin,
+    }
+
+    impl Voice {
+        /// The voice of the running binary.
+        pub fn here() -> Voice {
+            let exe = std::env::current_exe().ok();
+            if exe.as_deref().is_some_and(adage_store::release::plugin_binary) {
+                Voice::Plugin
+            } else {
+                Voice::Terminal(crate::detect::adage_command())
+            }
+        }
+    }
+
+    /// A composed notice: its line, its kind (the highest part's), and whether the line says a
+    /// newer Adage is out (the lowest part, dropped first).
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct Composed {
+        pub text: String,
+        pub kind: String,
+        pub update: bool,
+    }
 
     /// What a notice is composed from.
     #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -323,6 +389,10 @@ pub mod notice {
         pub verdict: String,
         /// Failed runs in a row.
         pub errors: u32,
+        /// The newest Adage this repository's notices have said is out (or one already said in
+        /// another repository on this machine): a release is said once per machine.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub latest: Option<String>,
     }
 
     /// The repository's reflexes now: delivered (the index) and waiting (nascent in its tracks).
@@ -342,36 +412,39 @@ pub mod notice {
         let verdict = summary
             .and_then(|s| serde_json::to_value(s.verdict).ok().and_then(|v| v.as_str().map(str::to_string)))
             .unwrap_or_else(|| "measuring".into());
-        Basis { active, instincts, nascent, quiet, verdict, errors }
+        Basis { active, instincts, nascent, quiet, verdict, errors, latest: None }
     }
 
-    /// The line for `now` against `was` (what had been shown), or `None` if nothing is new. `adage`
-    /// is how the person runs Adage in a terminal ([`crate::detect::adage_command`]): `adage`, or,
-    /// for a plugin-only user with no `adage` on `PATH`, the plugin's own binary.
+    /// The line for `now` against `was` (what had been shown), or `None` if nothing is new, worded
+    /// in `voice`. `update` is `(have, latest)` when a newer Adage is out and was not said yet: the
+    /// fifth and lowest part (`kind` `update` only when it is the one part), dropped first when two
+    /// higher parts fill the line (onboarding plan O6).
     pub fn compose(
         was: &Basis,
         now: &Basis,
         summary: Option<&Summary>,
         failed: Option<&str>,
-        adage: &str,
-    ) -> Option<(String, String)> {
+        voice: &Voice,
+        update: Option<(&str, &str)>,
+    ) -> Option<Composed> {
+        let (review, doctor) = match voice {
+            Voice::Terminal(adage) => (format!("{adage} review"), format!("run {adage} doctor")),
+            Voice::Plugin => ("/adage review".to_string(), "/adage health".to_string()),
+        };
         let mut parts: Vec<String> = Vec::new();
         let mut kind = "";
         if now.errors >= 3 {
-            parts.push(format!(
-                "conditioning failed {}× here ({}); run {adage} doctor",
-                now.errors,
-                failed.unwrap_or("error")
-            ));
+            parts.push(format!("conditioning failed {}× here ({}); {doctor}", now.errors, failed.unwrap_or("error")));
             kind = "health";
         }
         let waiting = now.nascent.difference(&was.nascent).count();
         if waiting > 0 {
             let n = now.nascent.len();
-            parts.push(format!(
-                "{} for you: run {adage} review in a terminal",
-                if n == 1 { "1 install step waits".to_string() } else { format!("{n} install steps wait") }
-            ));
+            let steps = if n == 1 { "1 install step waits".to_string() } else { format!("{n} install steps wait") };
+            parts.push(match voice {
+                Voice::Terminal(_) => format!("{steps} for you: run {review} in a terminal"),
+                Voice::Plugin => format!("{steps} for you: {review}"),
+            });
             if kind.is_empty() {
                 kind = "waiting";
             }
@@ -379,7 +452,7 @@ pub mod notice {
         if now.quiet.difference(&was.quiet).count() > 0 {
             let n = now.quiet.len();
             parts.push(format!(
-                "{} (agents already do {}); approve with {adage} review to deliver {}",
+                "{} (agents already do {}); approve with {review} to deliver {}",
                 plural(n, "quiet reflex waits", "quiet reflexes wait"),
                 if n == 1 { "it" } else { "them" },
                 if n == 1 { "it" } else { "them" }
@@ -395,7 +468,7 @@ pub mod notice {
                     Verdict::AddsCost => line.replacen("Adage appears", "it appears", 1),
                     _ => line,
                 };
-                let line = line.replace("See adage review.", &format!("See {adage} review."));
+                let line = line.replace("See adage review.", &format!("See {review}."));
                 parts.push(line);
                 if kind.is_empty() {
                     kind = "value";
@@ -421,12 +494,39 @@ pub mod notice {
                 kind = "reflexes";
             }
         }
+        // A newer Adage: information, said last (never above a problem or something waiting).
+        if let Some((have, latest)) = update {
+            parts.push(match voice {
+                Voice::Terminal(adage) => format!("{latest} is out (you have {have}); run {adage} update"),
+                Voice::Plugin => format!("{latest} is out (you have {have}); /adage update brings it"),
+            });
+            if kind.is_empty() {
+                kind = "update";
+            }
+        }
         if parts.is_empty() {
             return None;
         }
         // One line: the two most important things.
+        let said_update = update.is_some() && parts.len() <= 2;
         parts.truncate(2);
-        Some((format!("adage: {}.", parts.join("; ")), kind.to_string()))
+        Some(Composed { text: format!("adage: {}.", parts.join("; ")), kind: kind.to_string(), update: said_update })
+    }
+
+    /// Does a notice in another repository on this machine say, or did it say, that `latest` is
+    /// out (its basis: shown, or waiting for that repository's next start; or the baseline it was
+    /// measured from)? A release is said by one repository's notice, not by every one's.
+    pub fn said_elsewhere(paths: &Paths, q: &Queue, latest: &str) -> bool {
+        let own = q.notice();
+        let Ok(entries) = std::fs::read_dir(paths.learn_queue()) else { return false };
+        entries.flatten().any(|e| {
+            let path = e.path();
+            let notice = e.file_name().to_string_lossy().ends_with(".notice.json") && path != own;
+            notice
+                && read_json::<Notice>(&path).is_some_and(|n| {
+                    [&n.basis, &n.baseline].iter().any(|b| b.get("latest").and_then(|v| v.as_str()) == Some(latest))
+                })
+        })
     }
 
     /// Recompose `<slug>.notice.json` after a learn. `had`: the reflexes in effect before this
@@ -451,9 +551,22 @@ pub mod notice {
             Some(p) => parse(&p.baseline),
             None => Basis { active: had.clone(), ..Basis::default() },
         };
-        let now = basis(paths, repo, summary, errors);
-        let adage = crate::detect::adage_command();
-        let Some((text, kind)) = compose(&baseline, &now, summary, failed, &adage) else { return };
+        let mut now = basis(paths, repo, summary, errors);
+        // A newer Adage (the release check's cache: no request), unless this repository's person,
+        // or another repository's on this machine, was told already.
+        let newer = crate::update::newer(paths).map(|r| r.version);
+        let due = newer.as_deref().filter(|v| baseline.latest.as_deref() != Some(*v) && !said_elsewhere(paths, q, v));
+        let update = due.map(|v| (adage_store::release::VERSION, v));
+        let Some(Composed { text, kind, update: said }) =
+            compose(&baseline, &now, summary, failed, &Voice::here(), update)
+        else {
+            return;
+        };
+        // What this repository's person will have been told once it is shown: a release this line
+        // says, or one said before (here or elsewhere); not one two higher parts crowded out of
+        // the line, which a later notice says.
+        let crowded = update.is_some() && !said;
+        now.latest = if crowded || newer.is_none() { baseline.latest.clone() } else { newer };
         if prev.as_ref().is_some_and(|p| p.text == text) {
             return;
         }
@@ -481,7 +594,17 @@ pub mod notice {
                 quiet: BTreeSet::new(),
                 verdict: "measuring".into(),
                 errors: 0,
+                latest: None,
             }
+        }
+
+        fn adage() -> Voice {
+            Voice::Terminal("adage".into())
+        }
+
+        /// `compose` with no newer release: its line and kind.
+        fn said(was: &Basis, now: &Basis, failed: Option<&str>, voice: &Voice) -> Option<(String, String)> {
+            compose(was, now, None, failed, voice, None).map(|c| (c.text, c.kind))
         }
 
         #[test]
@@ -489,7 +612,7 @@ pub mod notice {
             let was = b(&[], &[]);
             let mut now = b(&[], &[]);
             now.quiet.insert("lookup".into());
-            let (t, kind) = compose(&was, &now, None, None, "adage").unwrap();
+            let (t, kind) = said(&was, &now, None, &adage()).unwrap();
             assert_eq!(
                 t,
                 "adage: 1 quiet reflex waits (agents already do it); approve with adage review to deliver it."
@@ -504,17 +627,17 @@ pub mod notice {
         fn instincts_are_counted_apart_and_what_was_there_is_not_new() {
             let mut now = b(&["i1", "i2", "r1"], &[]);
             now.instincts = ["i1", "i2"].iter().map(|s| s.to_string()).collect();
-            let (t, _) = compose(&b(&[], &[]), &now, None, None, "adage").unwrap();
+            let (t, _) = said(&b(&[], &[]), &now, None, &adage()).unwrap();
             assert_eq!(t, "adage: 1 new reflex and 2 instincts active.");
-            assert_eq!(compose(&b(&["i1", "i2", "r1"], &[]), &now, None, None, "adage"), None);
-            let (t, _) = compose(&b(&["r1"], &[]), &now, None, None, "adage").unwrap();
+            assert_eq!(said(&b(&["i1", "i2", "r1"], &[]), &now, None, &adage()), None);
+            let (t, _) = said(&b(&["r1"], &[]), &now, None, &adage()).unwrap();
             assert_eq!(t, "adage: 2 instincts active.");
         }
 
         #[test]
         fn only_what_is_new_is_said_in_priority_order() {
-            assert_eq!(compose(&b(&["a"], &[]), &b(&["a"], &[]), None, None, "adage"), None);
-            let (t, k) = compose(&b(&["a"], &[]), &b(&["a", "b", "c"], &["n"]), None, None, "adage").unwrap();
+            assert_eq!(said(&b(&["a"], &[]), &b(&["a"], &[]), None, &adage()), None);
+            let (t, k) = said(&b(&["a"], &[]), &b(&["a", "b", "c"], &["n"]), None, &adage()).unwrap();
             assert_eq!(
                 t,
                 "adage: 1 install step waits for you: run adage review in a terminal; 2 new reflexes active."
@@ -522,15 +645,101 @@ pub mod notice {
             assert_eq!(k, "waiting");
             let mut failing = b(&["a"], &[]);
             failing.errors = 3;
-            // A plugin-only user has no `adage` on PATH: the notice names the plugin's binary.
-            let plugin = "~/.claude/plugins/data/adage-adage/bin/adage";
-            let (t, _) = compose(&b(&["a"], &[]), &b(&["a"], &["n"]), None, None, plugin).unwrap();
-            assert_eq!(t, format!("adage: 1 install step waits for you: run {plugin} review in a terminal."));
-            let (t, k) = compose(&b(&["a"], &[]), &failing, None, Some("lock"), "adage").unwrap();
+            // No `adage` on PATH and not the plugin's binary: the notice names the binary that ran.
+            let path = Voice::Terminal("~/tools/adage".into());
+            let (t, _) = said(&b(&["a"], &[]), &b(&["a"], &["n"]), None, &path).unwrap();
+            assert_eq!(t, "adage: 1 install step waits for you: run ~/tools/adage review in a terminal.");
+            let (t, k) = said(&b(&["a"], &[]), &failing, Some("lock"), &adage()).unwrap();
             assert_eq!(
                 (t.as_str(), k.as_str()),
                 ("adage: conditioning failed 3× here (lock); run adage doctor.", "health")
             );
+        }
+
+        /// T-O9-10: the plugin's own binary words every part as the mod's `/adage` verbs, and
+        /// never says `in a terminal`; a terminal install keeps its commands.
+        #[test]
+        fn a_plugin_binary_says_the_slash_verbs() {
+            let mut now = b(&["a"], &["n"]);
+            now.quiet.insert("q".into());
+            let (t, _) = said(&b(&["a"], &[]), &now, None, &Voice::Plugin).unwrap();
+            assert_eq!(
+                t,
+                "adage: 1 install step waits for you: /adage review; 1 quiet reflex waits (agents already do it); approve with /adage review to deliver it."
+            );
+            let mut failing = b(&["a"], &[]);
+            failing.errors = 3;
+            let (t, _) = said(&b(&["a"], &[]), &failing, Some("lock"), &Voice::Plugin).unwrap();
+            assert_eq!(t, "adage: conditioning failed 3× here (lock); /adage health.");
+            let c = compose(&b(&[], &[]), &b(&[], &[]), None, None, &Voice::Plugin, Some(("0.1.0", "0.2.0"))).unwrap();
+            assert_eq!(c.text, "adage: 0.2.0 is out (you have 0.1.0); /adage update brings it.");
+            for t in [&t, &c.text] {
+                assert!(!t.contains("in a terminal"), "{t}");
+            }
+            let (t, _) = said(&b(&["a"], &[]), &b(&["a"], &["n"]), None, &adage()).unwrap();
+            assert_eq!(t, "adage: 1 install step waits for you: run adage review in a terminal.");
+        }
+
+        /// T-O6-04: a newer Adage is the fifth and lowest part: last, worded per channel, its own
+        /// kind only alone, and dropped first when two higher parts fill the line.
+        #[test]
+        fn a_newer_release_is_said_last_and_dropped_first() {
+            let none = b(&["a"], &[]);
+            let pair = Some(("0.1.0", "0.2.0"));
+            let c = compose(&none, &none, None, None, &adage(), pair).unwrap();
+            assert_eq!(
+                (c.text.as_str(), c.kind.as_str(), c.update),
+                ("adage: 0.2.0 is out (you have 0.1.0); run adage update.", "update", true)
+            );
+            let c = compose(&none, &none, None, None, &Voice::Plugin, pair).unwrap();
+            assert_eq!(c.text, "adage: 0.2.0 is out (you have 0.1.0); /adage update brings it.");
+            // After one higher part: last, and the kind is the higher part's.
+            let c = compose(&none, &b(&["a", "b"], &[]), None, None, &adage(), pair).unwrap();
+            assert_eq!(
+                (c.text.as_str(), c.kind.as_str(), c.update),
+                ("adage: 1 new reflex active; 0.2.0 is out (you have 0.1.0); run adage update.", "reflexes", true)
+            );
+            // Two higher parts: the line is full and the release waits for a later notice.
+            let c = compose(&none, &b(&["a", "b"], &["n"]), None, None, &adage(), pair).unwrap();
+            assert_eq!(
+                (c.text.as_str(), c.kind.as_str(), c.update),
+                (
+                    "adage: 1 install step waits for you: run adage review in a terminal; 1 new reflex active.",
+                    "waiting",
+                    false
+                )
+            );
+            // Nothing newer: nothing to say.
+            assert_eq!(compose(&none, &none, None, None, &adage(), None), None);
+        }
+
+        /// T-O6-04's other half: a release is said by one repository's notice on this machine,
+        /// once; a repository whose line was full says it at its next notice.
+        #[test]
+        fn a_release_is_said_once_per_machine() {
+            let d = tempfile::tempdir().unwrap();
+            let paths = Paths::at(d.path());
+            std::fs::create_dir_all(paths.learn_queue()).unwrap();
+            let latest = adage_store::release::Latest {
+                checked_at: learnlog::now_ms(),
+                have: adage_store::release::VERSION.into(),
+                latest: Some(adage_store::release::Release { version: "99.0.0".into(), ..Default::default() }),
+                failure: None,
+            };
+            latest.write(&paths).unwrap();
+            let (qa, qb) = (Queue::new(&paths, "acme"), Queue::new(&paths, "billing"));
+            let none = BTreeSet::new();
+            update(&paths, "acme", &qa, None, 0, None, &none);
+            let a: Notice = read_json(&qa.notice()).unwrap();
+            assert!(a.text.contains("99.0.0 is out (you have "), "{}", a.text);
+            assert_eq!((a.kind.as_str(), a.basis["latest"].as_str()), ("update", Some("99.0.0")));
+            // Another repository's learner: acme's notice says it, so billing's has nothing new.
+            update(&paths, "billing", &qb, None, 0, None, &none);
+            assert!(read_json::<Notice>(&qb.notice()).is_none());
+            // acme's notice shown, then learned again: nothing new to say there either.
+            write_json(&qa.shown(), &Shown { id: a.id.clone(), at: learnlog::now_ms() }).unwrap();
+            update(&paths, "acme", &qa, None, 0, None, &none);
+            assert_eq!(read_json::<Notice>(&qa.notice()).unwrap().id, a.id);
         }
     }
 }

@@ -1,15 +1,45 @@
 // The turn.step hook (step.ts; test-plan §6 C4, C5, C7, C8): `turnStep` with a stubbed ask and a
 // stubbed stream beneath (it takes both as values): exactly the right chunks per kind, no request
-// when predicted, forwarding otherwise, the finish line at an end_turn stop; then `onStep` through
+// when predicted, forwarding otherwise, the finish line at an end_turn stop, nothing yielded unless
+// the engine allows every call unasked (T-C4-07); then `onStep` through
 // the engine, the binary answering beneath.
 import type { TurnStepChunk, TurnStepInput, TurnStepResult } from 'claude-code'
 import { describe, expect, test } from 'claude-code/testing'
 
 import type { Asked } from './bridge'
-import { PREDICT, USAGE, drain, start, wire, wireLine, wireWith, world } from './fixtures/kit'
+import {
+  AUTO_MODE_BASH,
+  AUTO_MODE_BASH_UNLISTED,
+  DEFAULT_MODE_BASH,
+  FAIL,
+  FIRST_STEP,
+  LINE,
+  PREDICT,
+  PREDICT_LOOKUP,
+  PREDICTED_LOOKUP_ID,
+  READ_ALLOWED,
+  SKILL_ASKED,
+  USAGE,
+  bandText,
+  drain,
+  engineThread,
+  forwardedResponse,
+  madeUpResponse,
+  prompt,
+  start,
+  unseenResults,
+  wire,
+  wireLine,
+  wireWith,
+  phasedStep,
+  world,
+} from './fixtures/kit'
+import type { ThreadMessage } from './fixtures/kit'
 import type { Predicted } from './plugin'
+import { PREDICTED_STOP } from './predict'
+import { heldBy, permissionOf, samePrediction, verdictOf } from './predict'
 import { isRoutine, turnStep } from './step'
-import type { StepDeps, StepNext, TurnStepPayload } from './step'
+import type { StepDeps, StepNext, TurnStepPayload, Withheld } from './step'
 
 /** The route of the wire's prediction (predict.json), which every predicted id here carries. */
 const ROUTE = String((wire('predict').predict as Record<string, unknown>).route)
@@ -36,6 +66,7 @@ function model(chunks: TurnStepChunk[], result: TurnStepResult) {
 function stub(answer: (p: TurnStepPayload) => Asked | Error, over: Partial<StepDeps> = {}) {
   const asked: TurnStepPayload[] = []
   const recorded: Predicted[] = []
+  const withheld: Withheld[] = []
   const deps: StepDeps = {
     isActive: true,
     isObserving: false,
@@ -50,9 +81,13 @@ function stub(answer: (p: TurnStepPayload) => Asked | Error, over: Partial<StepD
     record: async p => {
       recorded.push(p)
     },
+    check: async () => ({ decision: 'allow' }),
+    withheld: async w => {
+      withheld.push(w)
+    },
     ...over,
   }
-  return { deps, asked, recorded }
+  return { deps, asked, recorded, withheld }
 }
 
 const predict = (kind: string, calls: unknown[]): Asked => ({ ok: true, answer: wireWith('predict', { kind, calls }) })
@@ -74,7 +109,7 @@ describe('T-C4-01, T-C7-03 · a prediction before the request', () => {
     ],
   ]
   for (const [kind, calls] of cases) {
-    test(`${kind}: yields the calls and a tool_use stop, returns the result, sends no request`, async () => {
+    test(`${kind}: yields the calls and a stop with no reason, returns the result, sends no request`, async () => {
       const { next, requests } = model([], { turnId: 'turn-1', index: 2, answer: 'unused', toolUses: [], stopReason: 'end_turn', usage: USAGE })
       const { deps, asked, recorded } = stub(() => predict(kind, calls))
       const { chunks, result } = await drain(turnStep(STEP, next, deps))
@@ -84,25 +119,64 @@ describe('T-C4-01, T-C7-03 · a prediction before the request', () => {
           { kind: 'tool', index: k, id: ID(k), name: c.tool },
           { kind: 'input', index: k, json: JSON.stringify(c.input) },
         ]),
-        { kind: 'stop', stopReason: 'tool_use', usage: null },
+        { kind: 'stop', stopReason: null, usage: null },
       ])
       expect(result).toEqual({
         turnId: 'turn-1',
         index: 2,
         answer: '',
         toolUses: typed.map(c => ({ name: c.tool, input: c.input })),
-        stopReason: 'tool_use',
+        stopReason: null,
         usage: null,
       })
       expect(requests).toHaveLength(0)
+      // T-C4-08: the dry run, then the verdict that commits it.
+      const base = { session_id: 'sess-1', cwd: '/w', hook_event_name: 'TurnStep', turn_id: 'turn-1', index: 2, model: 'claude-x', ending: false, via: 'mod' }
       expect(asked).toEqual([
-        { session_id: 'sess-1', cwd: '/w', hook_event_name: 'TurnStep', turn_id: 'turn-1', index: 2, model: 'claude-x', ending: false, via: 'mod' },
+        { ...base, dry_run: true },
+        { ...base, verdict: { permission: 'allow', route: ROUTE } },
       ])
       expect(recorded).toEqual([
         { turnId: 'turn-1', index: 2, route: ROUTE, kind, ids: typed.map((_, k) => ID(k)), isEnding: false },
       ])
     })
   }
+})
+
+describe('T-C4-01 · a predicted step keeps the server thread whole (live run 2: a 404 after 12 of 12)', () => {
+  // The conversation up to the step: the prompt, the model's own lookup (a real response, made by
+  // a request), its result; then what the mod yields in the model's place, and the read's result.
+  const before: ThreadMessage[] = [
+    { role: 'user' },
+    { role: 'assistant', id: 'msg_01lookup', requestId: 'req_01', model: 'claude-x', stopReason: 'tool_use' },
+    { role: 'user' },
+  ]
+  const READ = [{ tool: 'Read', input: { file_path: '/w/acme/billing.py' } }]
+
+  test('the request after it starts the thread afresh instead of naming an id the server never issued', async () => {
+    const { next } = model([], { turnId: 'turn-1', index: 2, answer: '', toolUses: [], stopReason: 'end_turn', usage: USAGE })
+    const { chunks } = await drain(turnStep(STEP, next, stub(() => predict('chain', READ)).deps))
+    expect(chunks.at(-1)).toEqual(PREDICTED_STOP)
+    const after: ThreadMessage[] = [...before, madeUpResponse(chunks, STEP.model), { role: 'user' }]
+    expect(engineThread(after)).toEqual({ type: 'create', reason: 'anchor_incomplete' })
+  })
+
+  test('a stop that states tool_use (the mod before this fix) continued from the made-up id: the 404', () => {
+    const chunks: TurnStepChunk[] = [{ kind: 'stop', stopReason: 'tool_use', usage: null }]
+    const after: ThreadMessage[] = [...before, madeUpResponse(chunks, STEP.model, 'u1'), { role: 'user' }]
+    expect(engineThread(after)).toEqual({ type: 'continue', previousMessageId: 'msg_hook_u1' })
+  })
+
+  test('the next real response is a sound anchor again: the request after it continues', () => {
+    const after: ThreadMessage[] = [
+      ...before,
+      madeUpResponse([PREDICTED_STOP], STEP.model),
+      { role: 'user' },
+      { role: 'assistant', id: 'msg_01edit', requestId: 'req_02', model: 'claude-x', stopReason: 'tool_use' },
+      { role: 'user' },
+    ]
+    expect(engineThread(after)).toEqual({ type: 'continue', previousMessageId: 'msg_01edit' })
+  })
 })
 
 describe('T-C4-02 · forwarding', () => {
@@ -137,11 +211,11 @@ describe('T-C4-02 · forwarding', () => {
     }
   })
 
-  test('inert, a subagent, step 0, or no session context: forwarded without asking', async () => {
+  test('inert, a subagent (its first step too), or no session context: forwarded without asking', async () => {
     const runs: [TurnStepInput, Partial<StepDeps>][] = [
       [STEP, { isActive: false }],
       [{ ...STEP, agentId: 'agent-7' }, {}],
-      [{ ...STEP, index: 0 }, {}],
+      [{ ...STEP, index: 0, agentId: 'agent-7' }, {}],
       [STEP, { context: () => Promise.reject(new Error('no session')) }],
     ]
     for (const [e, over] of runs) {
@@ -156,8 +230,85 @@ describe('T-C4-02 · forwarding', () => {
   })
 })
 
+describe('T-C1-02, T-C4-02 · the turn\'s first step: only the prompt\'s run reflex', () => {
+  const FIRST: TurnStepInput = { ...STEP, index: 0, messageCount: 1 }
+  const FIRST_ID = (k: number) => `adage_${ROUTE}_turn-1_0_${k}`
+  const LOOKUP = { tool: 'Bash', input: { command: 'scripts/wi-lookup W-2042' } }
+  const ANSWERS = () =>
+    model([{ kind: 'text', index: 0, text: 'Hello.' }, { kind: 'stop', stopReason: 'end_turn', usage: USAGE }], { turnId: 'turn-1', index: 0, answer: 'Hello.', toolUses: [], stopReason: 'end_turn', usage: USAGE })
+
+  test('a run is asked in two phases and yielded before the model\'s first response: no request', async () => {
+    const m = ANSWERS()
+    const { deps, asked, recorded } = stub(() => predict('run', [LOOKUP]))
+    const { chunks, result } = await drain(turnStep(FIRST, m.next, deps))
+    expect(m.requests).toEqual([])
+    expect(chunks).toEqual([
+      { kind: 'tool', index: 0, id: FIRST_ID(0), name: 'Bash' },
+      { kind: 'input', index: 0, json: JSON.stringify(LOOKUP.input) },
+      PREDICTED_STOP,
+    ])
+    expect(result).toEqual({ turnId: 'turn-1', index: 0, answer: '', toolUses: [{ name: 'Bash', input: LOOKUP.input }], stopReason: null, usage: null })
+    expect(asked.map(a => [a.index, a.ending, a.dry_run, a.verdict])).toEqual([
+      [0, false, true, undefined],
+      [0, false, undefined, { permission: 'allow', route: ROUTE }],
+    ])
+    expect(recorded).toEqual([{ turnId: 'turn-1', index: 0, route: ROUTE, kind: 'run', ids: [FIRST_ID(0)], isEnding: false }])
+  })
+
+  test('any other kind there is refused before the verdict: the request goes out, nothing committed', async () => {
+    for (const kind of ['obligation', 'sequence', 'skill', 'chain']) {
+      const calls = kind === 'skill' ? [{ tool: 'Skill', input: { skill: 'notes' } }] : kind === 'chain' ? [{ tool: 'Read', input: { file_path: '/w/a.ts' } }] : [MAKE_GEN]
+      const m = ANSWERS()
+      const { deps, asked, recorded } = stub(() => predict(kind, calls))
+      const { chunks } = await drain(turnStep(FIRST, m.next, deps))
+      expect(m.requests).toEqual([FIRST])
+      expect(chunks.map(c => c.kind)).toEqual(['text', 'stop'])
+      expect(asked.map(a => a.dry_run)).toEqual([true])
+      expect(recorded).toEqual([])
+    }
+  })
+
+  test('the first step\'s end is never asked: no finish line before a model step', async () => {
+    const m = ANSWERS()
+    const { deps, asked } = stub(() => ({ ok: true, answer: undefined }))
+    const { chunks } = await drain(turnStep(FIRST, m.next, deps))
+    expect(chunks.at(-1)).toEqual({ kind: 'stop', stopReason: 'end_turn', usage: USAGE })
+    expect(asked.map(a => a.ending)).toEqual([false])
+  })
+
+  test('the permissions hold it: nothing yielded, the model\'s first request goes out', async () => {
+    const m = ANSWERS()
+    const { deps, asked, withheld } = stub(() => predict('run', [LOOKUP]), { check: async () => AUTO_MODE_BASH })
+    const { chunks } = await drain(turnStep(FIRST, m.next, deps))
+    expect(m.requests).toEqual([FIRST])
+    expect(chunks.map(c => c.kind)).toEqual(['text', 'stop'])
+    expect(asked.map(a => a.verdict?.permission)).toEqual([undefined, 'ask'])
+    expect(withheld.map(w => [w.index, w.route, w.decision])).toEqual([[0, ROUTE, 'ask']])
+  })
+
+  test('the thread: the first real request starts it afresh, the lookup and its result in it', async () => {
+    const { next } = ANSWERS()
+    const first = await drain(turnStep(FIRST, next, stub(() => predict('run', [LOOKUP])).deps))
+    const read = await drain(turnStep({ ...STEP, index: 1 }, next, stub(() => predict('chain', [{ tool: 'Read', input: { file_path: '/w/acme/billing.py' } }])).deps))
+    const chain = `adage_${ROUTE}_turn-1_1_0`
+    for (const earlier of [[], [{ role: 'user' }, { role: 'assistant', id: 'msg_00done', requestId: 'req_00', model: 'claude-x', stopReason: 'end_turn' }]] as ThreadMessage[][]) {
+      // A session's first prompt, or a later one after a real answer: either way the made-up
+      // response with no stop reason is the anchor, so the request is sent whole.
+      const atLookup: ThreadMessage[] = [...earlier, { role: 'user' }, madeUpResponse(first.chunks, STEP.model, 'u0'), { role: 'user', results: [FIRST_ID(0)] }]
+      expect(engineThread(atLookup)).toEqual({ type: 'create', reason: 'anchor_incomplete' })
+      expect(unseenResults(atLookup, new Map())).toEqual([])
+      const atRead: ThreadMessage[] = [...atLookup, madeUpResponse(read.chunks, STEP.model, 'u1'), { role: 'user', results: [chain] }]
+      expect(engineThread(atRead)).toEqual({ type: 'create', reason: 'anchor_incomplete' })
+      expect(unseenResults(atRead, new Map())).toEqual([])
+      // The model's first real response then anchors the thread again.
+      const after: ThreadMessage[] = [...atRead, { role: 'assistant', id: 'msg_01edit', requestId: 'req_01', model: 'claude-x', stopReason: 'tool_use' }, { role: 'user' }]
+      expect(engineThread(after)).toEqual({ type: 'continue', previousMessageId: 'msg_01edit' })
+    }
+  })
+})
+
 describe('T-C8-02 · the finish line (ending)', () => {
-  test("an end_turn stop asks with ending: true; a prediction keeps the model's text and replaces the stop", async () => {
+  test("an end_turn stop asks with ending: true; a prediction keeps the model's text, appends the call, and ends with no stop reason", async () => {
     const m = model(
       [
         { kind: 'text', index: 0, text: 'Done: ' },
@@ -169,20 +320,24 @@ describe('T-C8-02 · the finish line (ending)', () => {
     const { deps, asked, recorded } = stub(p => (p.ending ? predict('obligation', [MAKE_GEN]) : { ok: true, answer: undefined }))
     const { chunks, result } = await drain(turnStep(STEP, m.next, deps))
     expect(m.requests).toHaveLength(1)
-    expect(asked.map(p => p.ending)).toEqual([false, true])
+    expect(asked.map(p => [p.ending, p.dry_run, p.verdict?.permission])).toEqual([
+      [false, true, undefined],
+      [true, true, undefined],
+      [true, undefined, 'allow'],
+    ])
     expect(chunks).toEqual([
       { kind: 'text', index: 0, text: 'Done: ' },
       { kind: 'text', index: 0, text: 'schema edited.' },
       { kind: 'tool', index: 1, id: ID(0), name: 'Bash' },
       { kind: 'input', index: 1, json: '{"command":"make gen"}' },
-      { kind: 'stop', stopReason: 'tool_use', usage: USAGE },
+      { kind: 'stop', stopReason: null, usage: USAGE },
     ])
     expect(result).toEqual({
       turnId: 'turn-1',
       index: 2,
       answer: 'Done: schema edited.',
       toolUses: [{ name: 'Bash', input: { command: 'make gen' } }],
-      stopReason: 'tool_use',
+      stopReason: null,
       usage: USAGE,
     })
     expect(recorded).toEqual([
@@ -206,6 +361,57 @@ describe('T-C8-02 · the finish line (ending)', () => {
       { kind: 'stop', stopReason: 'end_turn', usage: USAGE },
     ])
     expect(result).toMatchObject({ stopReason: 'end_turn', toolUses: [] })
+  })
+})
+
+describe('T-C8-02 · the finish line keeps the server thread whole', () => {
+  // The conversation up to the last step: the prompt, the model's Edit (a real response) and its
+  // result. The model then answers with text and end_turn, which the server records as msg_01done
+  // with no call; the mod appends make gen to it, and the call's result follows.
+  const before: ThreadMessage[] = [
+    { role: 'user' },
+    { role: 'assistant', id: 'msg_01edit', requestId: 'req_01', model: 'claude-x', stopReason: 'tool_use', calls: ['toolu_edit'] },
+    { role: 'user', results: ['toolu_edit'] },
+  ]
+  const SENT = { id: 'msg_01done', requestId: 'req_02', model: 'claude-x' }
+  const HELD = new Map([['msg_01done', []]])
+  const ENDS = () =>
+    model(
+      [
+        { kind: 'text', index: 0, text: 'Done: schema edited.' },
+        { kind: 'stop', stopReason: 'end_turn', usage: USAGE },
+      ],
+      { turnId: 'turn-1', index: 2, answer: 'Done: schema edited.', toolUses: [], stopReason: 'end_turn', usage: USAGE },
+    )
+  const after = (chunks: TurnStepChunk[]): ThreadMessage[] => [...before, forwardedResponse(chunks, SENT), { role: 'user', results: [ID(0)] }]
+
+  test('the request after it starts the thread afresh and carries the call with its result', async () => {
+    const { chunks } = await drain(turnStep(STEP, ENDS().next, stub(p => (p.ending ? predict('obligation', [MAKE_GEN]) : { ok: true, answer: undefined })).deps))
+    expect(forwardedResponse(chunks, SENT)).toEqual({ role: 'assistant', ...SENT, stopReason: null, calls: [ID(0)] })
+    expect(engineThread(after(chunks))).toEqual({ type: 'create', reason: 'anchor_incomplete' })
+    expect(unseenResults(after(chunks), HELD)).toEqual([])
+  })
+
+  test("a stop that states tool_use (the mod before this fix) continued from the server's copy: a result of a call it never saw", () => {
+    const chunks: TurnStepChunk[] = [
+      { kind: 'text', index: 0, text: 'Done: schema edited.' },
+      { kind: 'tool', index: 1, id: ID(0), name: 'Bash' },
+      { kind: 'input', index: 1, json: '{"command":"make gen"}' },
+      { kind: 'stop', stopReason: 'tool_use', usage: USAGE },
+    ]
+    expect(engineThread(after(chunks))).toEqual({ type: 'continue', previousMessageId: 'msg_01done' })
+    expect(unseenResults(after(chunks), HELD)).toEqual([ID(0)])
+  })
+
+  test('the next real response is a sound anchor again: the request after it continues', async () => {
+    const { chunks } = await drain(turnStep(STEP, ENDS().next, stub(p => (p.ending ? predict('obligation', [MAKE_GEN]) : { ok: true, answer: undefined })).deps))
+    const later: ThreadMessage[] = [
+      ...after(chunks),
+      { role: 'assistant', id: 'msg_01closing', requestId: 'req_03', model: 'claude-x', stopReason: 'end_turn' },
+      { role: 'user' },
+    ]
+    expect(engineThread(later)).toEqual({ type: 'continue', previousMessageId: 'msg_01closing' })
+    expect(unseenResults(later, HELD)).toEqual([])
   })
 })
 
@@ -321,25 +527,22 @@ describe('T-C4-01 … T-C4-03 · onStep through the engine', () => {
     expect(chunks).toEqual([
       { kind: 'tool', index: 0, id: ID(0), name: 'Bash' },
       { kind: 'input', index: 0, json: '{"command":"make gen"}' },
-      { kind: 'stop', stopReason: 'tool_use', usage: null },
+      PREDICTED_STOP,
     ])
-    expect(result).toMatchObject({ stopReason: 'tool_use', toolUses: [{ name: 'Bash', input: { command: 'make gen' } }], usage: null })
+    expect(result).toMatchObject({ stopReason: null, toolUses: [{ name: 'Bash', input: { command: 'make gen' } }], usage: null })
     expect(w.models.map(x => x.index)).toEqual([])
-    const asked = w.ran.find(r => r.argv[3] === 'TurnStep')
-    expect(asked?.argv).toEqual(['/data/bin/hook', 'hook', 'claude', 'TurnStep'])
-    expect(asked?.init?.env).toEqual({ CLAUDECODE: '1' })
-    expect(asked?.init?.timeoutMs).toBe(250)
-    expect(asked?.init?.cwd).toBe('/w')
-    expect(JSON.parse(asked?.init?.stdin ?? '')).toEqual({
-      session_id: 'sess-1',
-      cwd: '/w',
-      hook_event_name: 'TurnStep',
-      turn_id: 'turn-1',
-      index: 2,
-      model: 'claude-x',
-      ending: false,
-      via: 'mod',
-    })
+    const asks = w.ran.filter(r => r.argv[3] === 'TurnStep')
+    const base = { session_id: 'sess-1', cwd: '/w', hook_event_name: 'TurnStep', turn_id: 'turn-1', index: 2, model: 'claude-x', ending: false, via: 'mod' }
+    for (const asked of asks) {
+      expect(asked.argv).toEqual(['/data/bin/hook', 'hook', 'claude', 'TurnStep'])
+      expect(asked.init?.env).toEqual({ CLAUDECODE: '1' })
+      expect(asked.init?.timeoutMs).toBe(250)
+      expect(asked.init?.cwd).toBe('/w')
+    }
+    expect(asks.map(a => JSON.parse(a.init?.stdin ?? ''))).toEqual([
+      { ...base, dry_run: true },
+      { ...base, verdict: { permission: 'allow', route: ROUTE } },
+    ])
     expect(w.sets.map(s => s.key)).toEqual(['predicted'])
   })
 
@@ -352,13 +555,14 @@ describe('T-C4-01 … T-C4-03 · onStep through the engine', () => {
     expect(result).toMatchObject({ stopReason: 'tool_use', answer: 'Reading.' })
   })
 
-  test('step 0 and a subagent step are forwarded without asking', async ($, on) => {
+  test('a subagent step is forwarded without asking; step 0 asks once and forwards anything but a run', async ($, on) => {
     const w = world(on, { hook: { TurnStep: PREDICT }, model: 'read' })
     await start($, w, null, false)
     await drain($.turn.step({ ...STEP, index: 0 }))
     await drain($.turn.step({ ...STEP, agentId: 'agent-7' }))
     expect(w.models.map(x => x.index)).toEqual([0, 2])
-    expect(w.ran.map(r => r.argv.slice(1).join(' '))).toEqual(['version', 'hook claude Standing'])
+    expect(w.ran.map(r => r.argv.slice(1).join(' '))).toEqual(['version', 'hook claude Standing', 'hook claude TurnStep'])
+    expect(JSON.parse(w.ran[2]?.init?.stdin ?? '{}')).toMatchObject({ index: 0, ending: false, dry_run: true })
   })
 
   test('T-C5-04 · a headless session reads its routine model from the card at its first step, and routes from the next', async ($, on) => {
@@ -398,5 +602,307 @@ describe('T-C4-01 … T-C4-03 · onStep through the engine', () => {
     const { chunks } = await drain($.turn.step(STEP))
     expect(chunks[0]).toEqual({ kind: 'tool', index: 0, id: 'adage_notes_turn-1_2_0', name: 'Skill' })
     expect(w.models.map(x => x.index)).toEqual([2])
+  })
+})
+
+describe('T-C4-07 · a predicted call is made only under the person\'s permissions', () => {
+  const RESULT: TurnStepResult = { turnId: 'turn-1', index: 2, answer: 'Done.', toolUses: [], stopReason: 'end_turn', usage: USAGE }
+  const ENDS = () => model([{ kind: 'text', index: 0, text: 'Done.' }, { kind: 'stop', stopReason: 'end_turn', usage: USAGE }], RESULT)
+  const READS = [
+    { tool: 'Read', input: { file_path: '/w/a.ts' } },
+    { tool: 'Read', input: { file_path: '/w/b.ts' } },
+  ]
+  /** A check that answers `verdict` for every call and keeps what it was asked. */
+  const checking = (verdict: (tool: string, input: Record<string, unknown>) => unknown) => {
+    const checked: { tool: string; input: Record<string, unknown> }[] = []
+    const check: StepDeps['check'] = async (tool, input) => {
+      checked.push({ tool, input })
+      const v = verdict(tool, input)
+      if (v instanceof Error) throw v
+      return v
+    }
+    return { check, checked }
+  }
+
+  test('allow on every call: yielded, each call checked once as the engine would decide it', async () => {
+    const m = ENDS()
+    const { check, checked } = checking(tool => (tool === 'Read' ? READ_ALLOWED : DEFAULT_MODE_BASH))
+    const { deps, recorded, withheld } = stub(() => predict('chain', READS), { check })
+    const { chunks } = await drain(turnStep(STEP, m.next, deps))
+    expect(m.requests).toHaveLength(0)
+    expect(chunks.map(c => c.kind)).toEqual(['tool', 'input', 'tool', 'input', 'stop'])
+    expect(checked).toEqual(READS)
+    expect(recorded).toHaveLength(1)
+    expect(withheld).toEqual([])
+  })
+
+  const held: [string, unknown, Withheld['decision'], string][] = [
+    ['ask (a rule or the mode asks)', { decision: 'ask', reason: 'This command requires approval' }, 'ask', 'This command requires approval'],
+    ['deny', { decision: 'deny', reason: 'Permission to use Bash with command make gen has been denied.', rule: 'Bash(make:*)' }, 'deny', 'Permission to use Bash with command make gen has been denied.'],
+    ['no verdict (the check throws)', new Error('no verdict'), 'none', ''],
+    ['no verdict (a malformed answer)', { decision: 'maybe' }, 'none', ''],
+    ['no verdict (nothing)', undefined, 'none', ''],
+  ]
+  for (const [name, verdict, decision, reason] of held) {
+    test(`${name}: nothing yielded or recorded, the request goes out and its stream passes unchanged, the reason kept`, async () => {
+      const m = ENDS()
+      const { check } = checking(() => verdict)
+      const { deps, recorded, withheld } = stub(p => (p.ending ? { ok: true, answer: undefined } : predict('obligation', [MAKE_GEN])), { check })
+      const { chunks, result } = await drain(turnStep(STEP, m.next, deps))
+      expect(m.requests).toEqual([STEP])
+      expect(chunks).toEqual([
+        { kind: 'text', index: 0, text: 'Done.' },
+        { kind: 'stop', stopReason: 'end_turn', usage: USAGE },
+      ])
+      expect(result).toEqual(RESULT)
+      expect(recorded).toEqual([])
+      expect(withheld).toEqual([{ turnId: 'turn-1', index: 2, route: ROUTE, kind: 'obligation', isEnding: false, tool: 'Bash', decision, reason }])
+    })
+  }
+
+  test("the finish line: held back, the model's response and its end_turn stop pass as they came", async () => {
+    const m = ENDS()
+    const { check } = checking(() => AUTO_MODE_BASH)
+    const { deps, asked, recorded, withheld } = stub(p => (p.ending ? predict('obligation', [MAKE_GEN]) : { ok: true, answer: undefined }), { check })
+    const { chunks, result } = await drain(turnStep(STEP, m.next, deps))
+    expect(asked.map(p => [p.ending, p.dry_run, p.verdict])).toEqual([
+      [false, true, undefined],
+      [true, true, undefined],
+      [true, undefined, { permission: 'ask', route: ROUTE, tool: 'Bash', reason: AUTO_MODE_BASH.reason }],
+    ])
+    expect(chunks).toEqual([
+      { kind: 'text', index: 0, text: 'Done.' },
+      { kind: 'stop', stopReason: 'end_turn', usage: USAGE },
+    ])
+    expect(result).toEqual(RESULT)
+    expect(recorded).toEqual([])
+    expect(withheld).toEqual([{ turnId: 'turn-1', index: 2, route: ROUTE, kind: 'obligation', isEnding: true, tool: 'Bash', decision: 'ask', reason: AUTO_MODE_BASH.reason }])
+  })
+
+  test('one call of a chain not allowed holds the whole step: the first such call, in order, is named', async () => {
+    const m = ENDS()
+    const { check, checked } = checking((_, input) => (input.file_path === '/w/b.ts' ? { decision: 'deny', reason: 'outside the project' } : READ_ALLOWED))
+    const { deps, withheld } = stub(() => predict('chain', READS), { check })
+    const { chunks } = await drain(turnStep(STEP, m.next, deps))
+    expect(m.requests).toHaveLength(1)
+    expect(chunks.map(c => c.kind)).toEqual(['text', 'stop'])
+    expect(checked).toHaveLength(4) // both reads, before the request and at the finish line
+    expect(withheld.map(w => [w.tool, w.decision, w.reason, w.isEnding])).toEqual([
+      ['Read', 'deny', 'outside the project', false],
+      ['Read', 'deny', 'outside the project', true],
+    ])
+  })
+
+  test('a skill the engine asks about is held back even when the session lists it', async () => {
+    const m = ENDS()
+    const { check } = checking((_, input) => SKILL_ASKED(String(input.skill)))
+    const { deps, withheld } = stub(() => predict('skill', [{ tool: 'Skill', input: { skill: 'release-notes' } }]), { check })
+    await drain(turnStep(STEP, m.next, deps))
+    expect(m.requests).toHaveLength(1)
+    expect(withheld[0]).toMatchObject({ kind: 'skill', tool: 'Skill', decision: 'ask', reason: 'Execute skill: release-notes' })
+  })
+
+  test('auto mode as the engine reports it: every Bash call is `ask` with no rule, so Bash steps are held; a Read chain stays allowed', async () => {
+    for (const verdict of [AUTO_MODE_BASH, AUTO_MODE_BASH_UNLISTED]) {
+      expect(permissionOf(verdict)).toEqual({ decision: 'ask', reason: verdict.reason })
+      expect(await heldBy([MAKE_GEN], async () => verdict)).toEqual({ tool: 'Bash', decision: 'ask', reason: verdict.reason })
+    }
+    const auto = async (tool: string) => (tool === 'Bash' ? AUTO_MODE_BASH : READ_ALLOWED)
+    expect(await heldBy(READS, auto)).toBeUndefined()
+    expect(await heldBy([...READS, MAKE_GEN], auto)).toEqual({ tool: 'Bash', decision: 'ask', reason: AUTO_MODE_BASH.reason })
+    expect(await heldBy([MAKE_GEN], async () => DEFAULT_MODE_BASH)).toBeUndefined()
+  })
+
+  test('a check that throws before it returns a promise is no verdict', async () => {
+    expect(
+      await heldBy([MAKE_GEN], () => {
+        throw new Error('sync')
+      }),
+    ).toEqual({ tool: 'Bash', decision: 'none', reason: '' })
+  })
+
+  test('a failing keeper of the held-back step changes nothing: the request still goes out', async () => {
+    const m = ENDS()
+    const { deps } = stub(() => predict('run', [MAKE_GEN]), {
+      check: async () => AUTO_MODE_BASH,
+      withheld: () => {
+        throw new Error('full')
+      },
+    })
+    const { chunks } = await drain(turnStep(STEP, m.next, deps))
+    expect(m.requests).toEqual([STEP])
+    expect(chunks.map(c => c.kind)).toEqual(['text', 'stop'])
+  })
+})
+
+describe('T-C4-07 · onStep through the engine, under the session\'s permission mode', () => {
+  test('default mode (the Bash rule allows): the prediction is yielded, after one check of its call', async ($, on) => {
+    const w = world(on, { hook: { TurnStep: PREDICT }, model: 'read', verdict: tool => (tool === 'Bash' ? DEFAULT_MODE_BASH : undefined) })
+    await start($, w, null, false)
+    const { chunks } = await drain($.turn.step(STEP))
+    expect(chunks.map(c => c.kind)).toEqual(['tool', 'input', 'stop'])
+    expect(w.checked).toEqual(['make gen'])
+    expect(w.models).toEqual([])
+    expect(w.sets.map(s => s.key)).toEqual(['predicted'])
+  })
+
+  test('auto mode: nothing yielded or kept as predicted, the request goes out, no call is made', async ($, on) => {
+    const w = world(on, { hook: { TurnStep: PREDICT }, model: 'read', verdict: tool => (tool === 'Bash' ? AUTO_MODE_BASH : undefined) })
+    await start($, w, null, false)
+    const { chunks, result } = await drain($.turn.step(STEP))
+    expect(chunks.map(c => c.kind)).toEqual(['text', 'tool', 'input', 'stop'])
+    expect(result).toMatchObject({ stopReason: 'tool_use', answer: 'Reading.' })
+    expect(w.checked).toEqual(['make gen'])
+    expect(w.models.map(x => x.index)).toEqual([2])
+    expect(w.sets).toEqual([])
+    expect(w.bash).toEqual([])
+  })
+
+  test('a check the engine cannot answer is no verdict: forwarded', async ($, on) => {
+    const w = world(on, { hook: { TurnStep: PREDICT }, model: 'read', verdict: () => FAIL.exit })
+    await start($, w, null, false)
+    const { chunks } = await drain($.turn.step(STEP))
+    expect(chunks.map(c => c.kind)).toEqual(['text', 'tool', 'input', 'stop'])
+    expect(w.sets).toEqual([])
+  })
+
+  test('band.withheld: the attention line says why once per session, until the next prompt', async ($, on) => {
+    const w = world(on, { feed: [LINE.learnerIdle, LINE.healthy], hook: { TurnStep: PREDICT }, model: 'read', verdict: tool => (tool === 'Bash' ? AUTO_MODE_BASH : undefined) })
+    await start($, w)
+    const before = await bandText($)
+    await drain($.turn.step(STEP))
+    const line = '» adage left a step to the agent: your permissions do not allow it unasked'
+    expect(await bandText($)).toBe(`◠ adage  ● healthy${line}`)
+    expect(await bandText($, 'desktop')).toBe(`◠ adage  ● healthy${line}`)
+    await prompt($, 'go on')
+    expect(await bandText($)).toBe(before)
+    // Held back again in the same session: said once, so not again.
+    await drain($.turn.step({ ...STEP, index: 3 }))
+    expect(await bandText($)).toBe(before)
+  })
+})
+
+describe('T-C4-08 · the two phases: a dry run commits nothing, the verdict commits or withholds', () => {
+  const RESULT: TurnStepResult = { turnId: 'turn-1', index: 2, answer: 'Done.', toolUses: [], stopReason: 'end_turn', usage: USAGE }
+  const ENDS = () => model([{ kind: 'text', index: 0, text: 'Done.' }, { kind: 'stop', stopReason: 'end_turn', usage: USAGE }], RESULT)
+  const phases = (asked: TurnStepPayload[]) => asked.map(p => (p.dry_run === true ? 'dry run' : p.verdict !== undefined ? `verdict ${p.verdict.permission}` : 'one phase'))
+  /** The binary as it answers each phase: the dry run and an allow predict; anything else, `held`. */
+  const binary =
+    (p: Asked, held: Asked = { ok: true, answer: undefined }) =>
+    (q: TurnStepPayload): Asked =>
+      q.verdict !== undefined && q.verdict.permission !== 'allow' ? held : q.ending ? { ok: true, answer: undefined } : p
+
+  test('nothing predicted: the dry run is the only ask, and no verdict follows', async () => {
+    const m = ENDS()
+    const { deps, asked } = stub(() => ({ ok: true, answer: undefined }))
+    await drain(turnStep(STEP, m.next, deps))
+    expect(phases(asked)).toEqual(['dry run', 'dry run'])
+  })
+
+  test('held: the verdict names the route, the first call held, its decision and sentence; the binary is never asked to commit', async () => {
+    const m = ENDS()
+    const { deps, asked, recorded } = stub(binary(predict('run', [MAKE_GEN])), { check: async () => AUTO_MODE_BASH })
+    await drain(turnStep(STEP, m.next, deps))
+    expect(m.requests).toEqual([STEP])
+    expect(asked[1]?.verdict).toEqual({ permission: 'ask', route: ROUTE, tool: 'Bash', reason: AUTO_MODE_BASH.reason })
+    expect(phases(asked)).toEqual(['dry run', 'verdict ask', 'dry run'])
+    expect(recorded).toEqual([])
+  })
+
+  test('a held step the binary routes goes to the routine model, as when nothing is predicted', async () => {
+    const m = ENDS()
+    const { deps } = stub(binary(predict('run', [MAKE_GEN]), { ok: true, answer: wire('routine') }), { check: async () => AUTO_MODE_BASH, routineModel: 'haiku' })
+    await drain(turnStep(STEP, m.next, deps))
+    expect(m.requests).toEqual([{ ...STEP, model: 'haiku', effort: 'low' }])
+  })
+
+  test('allow, but the verdict answers nothing, fails, or another step: nothing is yielded, the request goes out', async () => {
+    const other = predict('run', [{ tool: 'Bash', input: { command: 'make other' } }])
+    for (const said of [{ ok: true, answer: undefined }, { ok: false }, new Error('timeout'), other] as (Asked | Error)[]) {
+      const m = ENDS()
+      const { deps, recorded } = stub(q => (q.verdict !== undefined ? said : q.ending ? { ok: true, answer: undefined } : predict('run', [MAKE_GEN])))
+      const { chunks } = await drain(turnStep(STEP, m.next, deps))
+      expect(m.requests).toEqual([STEP])
+      expect(chunks.map(c => c.kind)).toEqual(['text', 'stop'])
+      expect(recorded).toEqual([])
+    }
+  })
+
+  test('a skill the session does not list is held as no verdict, and the band is not told', async () => {
+    const m = ENDS()
+    const skill = predict('skill', [{ tool: 'Skill', input: { skill: 'release-notes' } }])
+    const { deps, asked, withheld } = stub(binary(skill), { hasSkill: async () => false })
+    await drain(turnStep(STEP, m.next, deps))
+    expect(asked[1]?.verdict).toEqual({ permission: 'none', route: ROUTE, tool: 'Skill', reason: 'This session does not list the skill' })
+    expect(withheld).toEqual([])
+  })
+
+  test('observing: only the dry run is asked (the binary records it at once), never a verdict', async () => {
+    const m = ENDS()
+    const { deps, asked } = stub(() => predict('obligation', [MAKE_GEN]), { isObserving: true })
+    await drain(turnStep(STEP, m.next, deps))
+    expect(phases(asked)).toEqual(['dry run', 'dry run'])
+  })
+
+  test('verdictOf and samePrediction', () => {
+    const p = { kind: 'run' as const, route: 'r', track: 't', calls: [MAKE_GEN] }
+    expect(verdictOf(p, undefined)).toEqual({ permission: 'allow', route: 'r' })
+    expect(verdictOf(p, { tool: 'Bash', decision: 'none', reason: '' })).toEqual({ permission: 'none', route: 'r', tool: 'Bash' })
+    expect(samePrediction(p, { ...p })).toBe(true)
+    expect(samePrediction(p, { ...p, route: 's' })).toBe(false)
+    expect(samePrediction(p, { ...p, calls: [{ tool: 'Bash', input: { command: 'make' } }] })).toBe(false)
+  })
+})
+
+describe('T-C4-08 · onStep through the engine, the binary answering each phase', () => {
+  const stdins = (w: { ran: { argv: readonly string[]; init?: { stdin?: string } }[] }) =>
+    w.ran.filter(r => r.argv[3] === 'TurnStep').map(r => JSON.parse(r.init?.stdin ?? '{}') as Record<string, unknown>)
+
+  test('default mode: the dry run, then an allow verdict; the prediction is yielded', async ($, on) => {
+    const w = world(on, { answer: phasedStep(), model: 'read', verdict: tool => (tool === 'Bash' ? DEFAULT_MODE_BASH : undefined) })
+    await start($, w, null, false)
+    const { chunks } = await drain($.turn.step(STEP))
+    expect(chunks.map(c => c.kind)).toEqual(['tool', 'input', 'stop'])
+    expect(stdins(w).map(p => [p.dry_run, p.verdict])).toEqual([
+      [true, undefined],
+      [undefined, { permission: 'allow', route: ROUTE }],
+    ])
+  })
+
+  test('T-C1-02 · the first step: the prompt\'s lookup in two phases, yielded before the first request', async ($, on) => {
+    const w = world(on, { answer: phasedStep(PREDICT_LOOKUP), model: 'read', verdict: tool => (tool === 'Bash' ? DEFAULT_MODE_BASH : undefined) })
+    await start($, w, null, false)
+    const { chunks } = await drain($.turn.step({ ...STEP, ...FIRST_STEP }))
+    expect(chunks).toEqual([
+      { kind: 'tool', index: 0, id: PREDICTED_LOOKUP_ID, name: 'Bash' },
+      { kind: 'input', index: 0, json: '{"command":"scripts/wi-lookup W-2042"}' },
+      PREDICTED_STOP,
+    ])
+    expect(w.models).toEqual([])
+    expect(stdins(w).map(p => [p.index, p.dry_run, p.verdict])).toEqual([
+      [0, true, undefined],
+      [0, undefined, { permission: 'allow', route: 'lookup-work-item' }],
+    ])
+    expect(w.sets.map(s => s.key)).toEqual(['predicted'])
+  })
+
+  test('T-C1-02 · the first step in auto mode: held, the model\'s first request goes out', async ($, on) => {
+    const w = world(on, { answer: phasedStep(PREDICT_LOOKUP), model: 'read', verdict: tool => (tool === 'Bash' ? AUTO_MODE_BASH : undefined) })
+    await start($, w, null, false)
+    const { chunks } = await drain($.turn.step({ ...STEP, ...FIRST_STEP }))
+    expect(chunks.map(c => c.kind)).toEqual(['text', 'tool', 'input', 'stop'])
+    expect(w.models.map(x => x.index)).toEqual([0])
+    expect(stdins(w).map(p => p.verdict)).toEqual([undefined, { permission: 'ask', route: 'lookup-work-item', tool: 'Bash', reason: AUTO_MODE_BASH.reason }])
+  })
+
+  test('auto mode: the verdict says ask with the engine\'s sentence; nothing yielded, the request goes out', async ($, on) => {
+    const w = world(on, { answer: phasedStep(), model: 'read', verdict: tool => (tool === 'Bash' ? AUTO_MODE_BASH : undefined) })
+    await start($, w, null, false)
+    const { chunks } = await drain($.turn.step(STEP))
+    expect(chunks.map(c => c.kind)).toEqual(['text', 'tool', 'input', 'stop'])
+    expect(w.models.map(x => x.index)).toEqual([2])
+    expect(stdins(w).map(p => p.verdict)).toEqual([undefined, { permission: 'ask', route: ROUTE, tool: 'Bash', reason: AUTO_MODE_BASH.reason }])
+    expect(w.sets).toEqual([])
+    expect(w.bash).toEqual([])
   })
 })

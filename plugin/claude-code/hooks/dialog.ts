@@ -1,21 +1,38 @@
 // Asking the person in the engine's own dialog (plan B4; architecture §3.12; ux-design §4.17, §7,
 // §9.12): at a turn's end, when the model is idle, one waiting item (ask.ts picks it and words it),
-// at most one per turn end and one per reflex per day; `/adage on`'s one ask; and the answers kept
-// while no press was held, put to the person again at the next start in their repository. Each
-// answer is a press (token.ts), and so is each press in the pane (`pressHandlers`).
-import { showReflex } from './actions'
+// at most one per turn end and one per reflex per day; `/adage on`'s and `/adage update`'s asks;
+// and the answers kept while no press was held, put to the person again at the next start in their
+// repository. Each answer is a press (token.ts), and so is each press in the pane (`pressHandlers`).
+import { openPane, showReflex } from './actions'
 import { allowYes } from './allow'
-import { KEPT_ANSWERS, ON_ANSWERS, ON_QUESTION, answerOf, keptOf, keptQuestion, nextAsk, whatOf } from './ask'
+import {
+  KEPT_ANSWERS,
+  ON_ANSWERS,
+  ON_QUESTION,
+  UPDATE_ANSWERS,
+  answerOf,
+  keptOf,
+  keptQuestion,
+  nextAsk,
+  updateFailed,
+  updateKey,
+  updateQuestion,
+  updateSay,
+  updatedToast,
+  whatOf,
+} from './ask'
 import type { AskItem } from './ask'
 import type { PressHandlers } from './draw/pane'
-import { keptNow, loadStore, noteAnswer, repoRoot } from './kept'
+import { keep, keptNow, loadStore, noteAnswer, repoRoot } from './kept'
 import type { AnswerAt, EventAt, Mod, NextAt } from './mod'
 import { quietly } from './mod'
 import type { Kept } from './plugin'
 import { KEPT_MAX_AGE_MS } from './plugin'
-import { ANSWER, BUTTON, pressArgv } from './press'
-import type { Gesture } from './press'
+import { ANSWER, BUTTON, press, pressArgv } from './press'
+import type { Gesture, Pressed } from './press'
 import { recountNoticed } from './notice'
+import type { Offer } from './reads'
+import { updatedOf } from './reads'
 import { refresh } from './refresh'
 import { checkTamper, issue, pressCommand } from './token'
 import type { Started } from './token'
@@ -29,6 +46,76 @@ export function pressHandlers(m: Mod): PressHandlers {
     yes: item => quietly(answerYes(m, item, BUTTON)),
     no: item => quietly(answerNo(m, item, BUTTON)),
     askOn: () => quietly(askOn(m)),
+    update: () =>
+      quietly(
+        (async () => {
+          const u = (await m.state.mode.read()).update
+          if (u !== null) await pressUpdate(m, BUTTON, u.latest)
+        })(),
+      ),
+    askUpdate: u => quietly(askUpdate(m, u)),
+  }
+}
+
+/** The one command a press runs to update Adage (press.ts `isPressAllowed`: bare, nothing else). */
+const UPDATE = 'adage update'
+
+/**
+ * `adage update` through the press (onboarding plan O9): with no press held the answer is kept for
+ * the next start in this repository (`keepable`), and nothing runs. The binary updates only a
+ * channel whose update is a fetch, writes no settings file, and says what it came to on its last
+ * line (reads.ts `updatedOf`), which is the toast; a failure after the spend names the terminal.
+ * The token moves as token.ts `pressCommand` moves it: whatever the binary printed next is held.
+ */
+async function pressUpdate(m: Mod, gesture: Gesture, latest: string, keepable = true): Promise<Pressed | undefined> {
+  if (m.rt.cli === undefined) return undefined
+  const argv = pressArgv(m.rt.cli, UPDATE)
+  if (argv === undefined) return undefined
+  await checkTamper(m)
+  const p = await m.state.press.read()
+  const session = await m.session.id()
+  if (p.state !== 'held' || p.token === '' || p.session !== session) {
+    if (keepable) {
+      await keep(m, { command: UPDATE, say: updateSay(latest), key: updateKey(latest), session, root: await repoRoot(m), at: await m.clock.now() })
+      await noteAnswer(m, updateKey(latest), 'update')
+    }
+    return undefined
+  }
+  const pressed = await press(gesture, m.pressRun, argv, p.token, p.session, await m.session.cwd())
+  if (pressed.ok || !pressed.refused) {
+    await m.state.press.update(cur => ({
+      ...cur,
+      token: pressed.next ?? '',
+      state: pressed.next !== undefined ? ('held' as const) : ('none' as const),
+      chain: cur.chain + 1,
+    }))
+  }
+  if (pressed.ok) {
+    await noteAnswer(m, updateKey(latest), 'update')
+    const said = updatedOf(pressed.lines)
+    if (m.rt.interactive) m.ui.toast(said === undefined ? updateFailed('') : updatedToast(said))
+    quietly(refresh(m, true))
+  } else if (m.rt.interactive) {
+    m.ui.toast(updateFailed(pressed.error))
+  }
+  return pressed
+}
+
+/**
+ * `/adage update` (onboarding plan O9): the ask, opened only by the command (never unasked).
+ * `update` is the press; `what changes` opens Health, where the version row holds the release's
+ * first lines and the same press; `not now` records that it was asked.
+ */
+export async function askUpdate(m: Mod, u: Offer): Promise<void> {
+  if (m.rt.asking) return
+  m.rt.asking = true
+  try {
+    const said = answerOf({ answers: UPDATE_ANSWERS }, await m.ui.ask(updateQuestion(u), UPDATE_ANSWERS).catch(() => undefined))
+    if (said === 'update') await pressUpdate(m, ANSWER, u.latest)
+    else if (said === 'what changes') await openPane(m, 'health')
+    else if (said === 'not now') await noteAnswer(m, updateKey(u.latest), 'not now')
+  } finally {
+    m.rt.asking = false
   }
 }
 
@@ -129,7 +216,11 @@ async function askKept(m: Mod): Promise<void> {
         left.push(k)
         continue
       }
-      const pressed = await pressCommand(m, ANSWER, k.command, k.say, k.key, whatOf(k.command), undefined, false)
+      const what = whatOf(k.command)
+      const pressed =
+        what === 'update'
+          ? await pressUpdate(m, ANSWER, k.key.replace(/^update:/, ''), false)
+          : await pressCommand(m, ANSWER, k.command, k.say, k.key, what, undefined, false)
       if (pressed === undefined || (!pressed.ok && pressed.refused)) left.push(k)
     }
   } finally {

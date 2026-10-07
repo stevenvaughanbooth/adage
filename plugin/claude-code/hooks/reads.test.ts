@@ -4,7 +4,7 @@
 import { describe, expect, test } from 'claude-code/testing'
 
 import { CANDIDATE, CANDIDATE_REVIEW, CANDIDATE_SINGLE, CARD, DOCTOR, GRAPH, LAPSED } from './fixtures/kit'
-import { candidatesOf, cardOf, checksOf, lapsedOf, mapUrl, optInOf, packsOf, reflexesOf, routineModelOf } from './reads'
+import { candidatesOf, cardOf, checksOf, lapsedOf, mapUrl, optInOf, packsOf, reflexesOf, routineModelOf, updateOf, updatedOf } from './reads'
 
 const REFLEXES = reflexesOf(GRAPH)
 
@@ -50,5 +50,25 @@ describe('T-D5-01 · the candidates', () => {
       { id: 'run-single', say: 'run make lint', sequence: false },
     ])
     expect(candidatesOf({})).toEqual([])
+  })
+})
+
+describe('T-O6-02, T-O9-07 · a newer Adage, as the binary says it', () => {
+  const UPDATE = { current: '0.1.0', latest: '0.2.0', channel: 'plugin', next: '/adage update', text: '0.2.0 is out (you have 0.1.0)', published_at: null, url: null, notes: 'fixes hook latency\n\nfaster learning\nthird\nfourth' }
+
+  test("the card's update, drawn as it says it; none when absent or malformed", () => {
+    expect(updateOf({ ...CARD, update: UPDATE })).toEqual({ have: '0.1.0', latest: '0.2.0', next: '/adage update', notes: ['fixes hook latency', 'faster learning', 'third'] })
+    expect(cardOf({ ...CARD, update: UPDATE })?.update?.latest).toBe('0.2.0')
+    expect(cardOf(CARD)?.update).toBeUndefined()
+    expect(cardOf(CARD)?.version).toBe('0.1.0')
+    for (const bad of [null, 'x', { ...UPDATE, latest: 'soon' }, { ...UPDATE, current: '' }, { ...UPDATE, next: '' }]) expect(updateOf({ ...CARD, update: bad })).toBeUndefined()
+    expect(updateOf({ ...CARD, update: { ...UPDATE, notes: null } })?.notes).toEqual([])
+  })
+
+  test("a pressed update's last line: updated, latest or manual; anything else nothing", () => {
+    expect(updatedOf(['{"next":"x"}', 'adage update · 0.1.0 → 0.2.0', '{"updated":{"from":"0.1.0","to":"0.2.0","effect":"next session"}}', ''])).toEqual({ kind: 'updated', from: '0.1.0', to: '0.2.0' })
+    expect(updatedOf(['{"latest":{"version":"0.2.0"}}'])).toEqual({ kind: 'latest', version: '0.2.0' })
+    expect(updatedOf(['{"manual":{"command":"adage update","say":"run adage update in a terminal"}}'])).toEqual({ kind: 'manual', command: 'adage update', say: 'run adage update in a terminal' })
+    for (const bad of [[], ['done'], ['{"updated":{}}'], ['[1]'], ['{"updated":{"from":"0.1.0","to":"0.2.0"}}', 'trailing prose']]) expect(updatedOf(bad)).toBeUndefined()
   })
 })

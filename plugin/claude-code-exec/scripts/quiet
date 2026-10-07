@@ -1,4 +1,0 @@
-#!/bin/sh
-# What a stale bin/adage-exec runs now that this plugin is retired: read the payload, say nothing.
-cat >/dev/null
-exit 0

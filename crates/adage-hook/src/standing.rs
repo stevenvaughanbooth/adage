@@ -30,6 +30,12 @@ use std::path::Path;
 /// the standing reflexes), empty in the control arm. Read-only like the rest: what a subagent is
 /// told is not what the session was told. Each field is answered by the harness's capability
 /// ([`harness::Adapter::capabilities`], [`adage_runtime::standing_for`]).
+///
+/// **The shell tool's description** (the mod's `tool.describe`, architecture §1b.3): a payload
+/// carrying `conventions: true` is also answered `conventions`, the repository's lookup
+/// conventions one sentence each ([`adage_runtime::Standing::conventions`]), fixed for the session
+/// like the rest, empty in the control arm and in observe mode. Without it the answer has no such
+/// field.
 pub(crate) fn standing(ctx: &HookCtx<'_>) -> Result<Option<String>, Failure> {
     let HookCtx { adapter, p, session, root, paths, .. } = *ctx;
     // Only a harness whose mod keeps a cached section asks it.
@@ -65,8 +71,16 @@ pub(crate) fn standing(ctx: &HookCtx<'_>) -> Result<Option<String>, Failure> {
         let st = state::try_read::<SessionState>(&paths.state(session)).ok().flatten();
         subagent_text(agent, &key, root, index, st.as_ref(), &caps, observed(p))
     });
-    let standing =
-        ModAnswer::Standing { standing: s.standing, environment: s.environment, compact: compact.into(), subagent };
+    // A mod that places the lookup conventions in the shell tool's description says so; to one
+    // that does not, the answer is as before.
+    let conventions = (p.get("conventions").and_then(Value::as_bool) == Some(true)).then_some(s.conventions);
+    let standing = ModAnswer::Standing {
+        standing: s.standing,
+        environment: s.environment,
+        compact: compact.into(),
+        subagent,
+        conventions,
+    };
     Ok(Some(crate::answer::answer(&standing)))
 }
 
@@ -236,6 +250,34 @@ mod tests {
         });
         index.write_atomic(&w.paths.index()).unwrap();
         w
+    }
+
+    /// O0 live notes, gap 6 (T-C9-05's premise): the Bash tool's description carries the
+    /// repository's lookup convention, before the model's first call, when the mod asks for it
+    /// (`conventions: true`); a mod that does not ask gets the answer it always had. The answer is
+    /// fixed for the session, empty in the control arm and in observe mode, and the prompt that
+    /// names an item is still told the bound command.
+    #[test]
+    fn the_shell_tools_description_carries_the_lookup_convention_when_asked() {
+        let w = delegation_world(Arm::Treated);
+        let plain = standing_event(&w, "s", json!({})).unwrap();
+        assert!(plain.get("conventions").is_none(), "{plain}");
+        let asked = standing_event(&w, "s", json!({ "conventions": true })).unwrap();
+        assert_eq!(
+            asked["conventions"],
+            "In this repository, work item details are looked up with python3 scripts/wi-lookup {item}, where {item} is the work item the request names."
+        );
+        assert_eq!((&asked["standing"], &asked["environment"]), (&plain["standing"], &plain["environment"]));
+        assert_eq!(standing_event(&w, "s", json!({ "conventions": true })), Some(asked), "the same for the session");
+        let p = json!({ "session_id": "s", "cwd": w.root, "hook_event_name": "UserPromptSubmit",
+                        "prompt": "Please work on W-2041." });
+        let opts = Options { learner: None, extension: Some(&NO_EXTENSION) };
+        let told = handle("claude", "UserPromptSubmit", &p.to_string(), opts, &w.paths, Instant::now()).unwrap();
+        assert!(told.is_some_and(|t| t.contains("python3 scripts/wi-lookup W-2041")), "the prompt's own directive");
+        let c = delegation_world(Arm::Control);
+        assert_eq!(standing_event(&c, "s", json!({ "conventions": true })).unwrap()["conventions"], "");
+        let o = standing_event(&w, "o", json!({ "conventions": true, "observe": true })).unwrap();
+        assert_eq!(o["conventions"], "");
     }
 
     /// T-C9-03's binary half, T-C9-04's: the mod's `agent.spawn` asks `Standing` with the

@@ -1,30 +1,36 @@
 #!/usr/bin/env node
-// Structural checks on the Claude Code plugins and marketplace that `claude plugin validate` does
+// Structural checks on the Claude Code plugin and marketplace that `claude plugin validate` does
 // not make: versions agree with the workspace, and every hook command points at something that
-// exists. One plugin serves, `adage`, shipping both binaries (plan A8): its session-start shim
-// links bin/hook to adage-exec while the execution marker exists, else to adage, so the hooks are
-// registered once and never fire twice. `adage-exec` stays one release as a retired alias that
-// registers its SessionStart alone and quiets what an earlier version left behind.
+// exists. One plugin, `adage`, ships three binaries (plan A8, onboarding plan O1): its session-start
+// shim links bin/adage, bin/adage-exec and bin/adage-train, and bin/hook to adage-exec while the
+// execution marker exists, else to adage, so the hooks are registered once and never fire twice.
+// The marketplace lists that one plugin and nothing else (the retired `adage-exec` alias is gone:
+// nothing was ever published, so there was nothing to quiet).
 //
-// The marketplace installs each plugin from the `marketplace` branch (a `git-subdir` source), which
+// The marketplace installs the plugin from the `marketplace` branch (a `git-subdir` source), which
 // the release workflow writes with verified binaries for every target bundled
-// (scripts/stage-plugin.mjs). `--staged <dir>` checks such a staged tree: every target present,
-// every binary matching dist/SHA256SUMS.
+// (scripts/stage-plugin.mjs). `--staged <dir>` checks such a staged tree: every target present
+// with its three binaries (no adage-exec on Windows), every binary matching dist/SHA256SUMS.
 //
 // The binary's answers to the mod are pinned by crates/adage-hook/tests/wire/*.json
 // (docs/claude-mod/impl/wire.md). The mod's test runner reads nothing outside the plugin's folder,
 // so the files' bytes are mirrored into plugin/claude-code/hooks/fixtures/wire.ts, which `--wire`
 // writes and every other run compares.
 //
-//   node scripts/check-plugin.mjs [--staged <dir>] [--wire]
+//   node scripts/check-plugin.mjs [--staged <dir>] [--wire] [--root <dir>]
+//
+// `--root` checks another copy of the repository's files (scripts/test-check-plugin.mjs).
+// Release versions beyond these files (Cargo.lock, the npm templates) are `cargo xtask
+// release-check`'s; the equalities here stay so a plugin-only change fails without Rust.
 
 import { createHash } from "node:crypto"
 import { accessSync, constants, existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
-import { PLATFORMS } from "../npm/config.mjs"
+import { COMPANIONS, PLATFORMS } from "../npm/config.mjs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
-const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
+const rootAt = process.argv.indexOf("--root")
+const repo = rootAt > 0 ? path.resolve(process.argv[rootAt + 1] || "") : path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const read = (p) => readFileSync(path.join(repo, p), "utf8")
 const json = (p) => JSON.parse(read(p))
 const problems = []
@@ -44,12 +50,14 @@ expect(version, "Cargo.toml: no [workspace.package] version")
 const market = json(".claude-plugin/marketplace.json")
 expect(market.metadata?.version === version, `marketplace metadata.version ${market.metadata?.version} != ${version}`)
 const names = []
+// One plugin (G20): a second entry is a second install step with no purpose, and the retired
+// alias's directory must not come back.
+const listed = (market.plugins || []).map((p) => p.name)
+expect(listed.join() === "adage", `marketplace.json must list exactly one plugin, adage (found ${listed.join(", ") || "none"})`)
+expect(!existsSync(path.join(repo, "plugin/claude-code-exec")), "plugin/claude-code-exec: the retired adage-exec alias is gone; the adage plugin ships execution")
 
-// The plugin that serves, and the retired alias (`alias`: SessionStart alone, no module).
-for (const [pluginDir, alias] of [
-  ["plugin/claude-code", false],
-  ["plugin/claude-code-exec", true],
-]) {
+{
+  const pluginDir = "plugin/claude-code"
   const plugin = json(`${pluginDir}/.claude-plugin/plugin.json`)
   names.push(plugin.name)
   expect(plugin.version === version, `${pluginDir}: plugin.json version ${plugin.version} != workspace ${version}`)
@@ -62,6 +70,8 @@ for (const [pluginDir, alias] of [
       `marketplace source for ${plugin.name} must be {source: git-subdir, url: stevenvaughanbooth/adage, path: ${pluginDir}, ref: marketplace} (the branch with bundled binaries)`,
     )
     expect(!/on PATH/i.test(entry.description || ""), `marketplace description for ${plugin.name} still says it needs a binary on PATH`)
+    // Homebrew is off the release (dist-workspace.toml): the description names no channel that is not live.
+    expect(!/\bbrew\b|homebrew/i.test(entry.description || ""), `marketplace description for ${plugin.name} names Homebrew, which no release publishes`)
     expect(entry.version === version, `marketplace plugin ${plugin.name} version ${entry.version} != workspace ${version}`)
   }
   // A failure must reach the person: the shim prints a JSON systemMessage on stdout, and points
@@ -72,18 +82,13 @@ for (const [pluginDir, alias] of [
   for (const s of ["scripts/session-start", "scripts/quiet"]) {
     expect(executable(path.join(repo, pluginDir, s)), `${pluginDir}: ${s} is missing or not executable`)
   }
-  if (alias) {
-    // The retired adage-exec plugin: one SessionStart that runs no binary, and nothing else.
-    const h = json(`${pluginDir}/hooks/hooks.json`)
-    expect(Object.keys(h.hooks || {}).join() === "SessionStart", `${pluginDir}: the retired alias registers SessionStart alone`)
-    expect(!("modules" in h), `${pluginDir}: the retired alias loads no hooks module`)
-    expect(!("types" in plugin), `${pluginDir}: the retired alias names no types`)
-    expect(shim.includes("uninstall this one"), `${pluginDir}: the retired alias's shim does not ask to be uninstalled`)
-    expect(!/\bexec "\$DATA\/bin/.test(shim), `${pluginDir}: the retired alias's shim runs a binary`)
-    continue
-  }
   expect(shim.includes("exec/enabled"), `${pluginDir}: session-start does not read the exec marker`)
   expect(shim.includes("$DATA/bin/hook") && shim.includes("adage-exec"), `${pluginDir}: session-start does not link bin/hook to adage or adage-exec`)
+  for (const c of COMPANIONS) {
+    expect(shim.includes(`bundled ${c.name};`), `${pluginDir}: session-start does not place the bundled ${c.name} (bin/${c.name})`)
+  }
+  // The fallback names channels a person can use: the plugin itself, or npm; never Homebrew.
+  expect(!/\bbrew\b/.test(shim.replace(/^#.*$/gm, "")), `${pluginDir}: session-start's fallback names Homebrew, which no release publishes`)
 
   // The mod (docs/claude-mod/architecture.md §2): hooks.json may name one hooks module under
   // `modules` beside the command hooks; the module, the types contract plugin.json names, and the
@@ -122,6 +127,26 @@ for (const [pluginDir, alias] of [
       const shape = watch.split(",").map((v) => v.trim().replace(/^['"]|['"]$/g, "")).filter(Boolean).join(" ")
       expect(shape === "watch --follow --json --stdin ignore --repo", `${pluginDir}/hooks/bridge.ts: the watch shape must be exactly \`watch --follow --json --stdin ignore --repo …\` (found \`${shape}\`)`)
     }
+    // The mod finds its data directory (where the shim links bin/hook) without CLAUDE_PLUGIN_DATA,
+    // which the engine gives command hooks only: from an installed plugin's cache root, from the
+    // key the engine registered the plugin's folder under (`adage init`'s `adage@adage-local`),
+    // and `<name>@inline` for --plugin-dir; and only where bin/hook exists (live run 1, defect 4).
+    const binary = path.join(repo, pluginDir, "hooks/binary.ts")
+    const sources = [bridge, binary].filter((f) => existsSync(f)).map((f) => readFileSync(f, "utf8")).join("\n")
+    for (const [needle, what] of [
+      ["plugins[\\\\/]cache", "an installed plugin's cache root"],
+      ["known_marketplaces.json", "the marketplaces the engine registered (a directory marketplace's plugin is read in place)"],
+      ["installed_plugins.json", "the plugins the engine installed"],
+      ["@inline", "a --plugin-dir plugin's key"],
+      ["m.fs.exists(hook)", "the shim's bin/hook, checked before a candidate is taken"],
+    ]) {
+      expect(sources.includes(needle), `${pluginDir}/hooks/{bridge,binary}.ts: the data directory is not derived from ${what} (\`${needle}\`)`)
+    }
+    const registerTs = path.join(repo, pluginDir, "hooks/register.ts")
+    const registerSrc = existsSync(registerTs) ? readFileSync(registerTs, "utf8") : ""
+    for (const v of ["CLAUDE_PLUGIN_DATA", "CLAUDE_CONFIG_DIR", "HOME", "USERPROFILE"]) {
+      expect(registerSrc.includes(`$.env.get('${v}')`), `${pluginDir}/hooks/register.ts: the mod does not read ${v} (its data directory is derived from it)`)
+    }
     // The person-only verbs the mod runs only through a press (architecture §3.12, plan B4): a
     // second literal in hooks/press.ts, exactly these, never one the allow-list above may run and
     // never install, config, share, train, packs or init.
@@ -131,7 +156,7 @@ for (const [pluginDir, alias] of [
       const list = readFileSync(press, "utf8").match(/export const PRESS_VERBS: readonly string\[\] = \[([^\]]*)\]/)?.[1]
       expect(list !== undefined, `${pluginDir}/hooks/press.ts: no PRESS_VERBS literal`)
       const verbs = (list ?? "").split(",").map((v) => v.trim().replace(/^['"]|['"]$/g, "")).filter(Boolean)
-      expect(verbs.join(",") === "review,delegate,on,add", `${pluginDir}/hooks/press.ts: the press list changed (${verbs.join(", ")}); change scripts/check-plugin.mjs with it`)
+      expect(verbs.join(",") === "review,delegate,on,add,update", `${pluginDir}/hooks/press.ts: the press list changed (${verbs.join(", ")}); change scripts/check-plugin.mjs with it`)
       for (const v of ["install", "config", "share", "train", "packs", "init"]) {
         expect(!verbs.includes(v), `${pluginDir}/hooks/press.ts: ${v} is never a press`)
       }
@@ -183,8 +208,8 @@ for (const [pluginDir, alias] of [
   }
 }
 
-// Neither plugin runs a server: Adage acts only from the hooks it owns (Track C, revised).
-for (const dir of ["plugin/claude-code", "plugin/claude-code-exec"]) {
+// The plugin runs no server: Adage acts only from the hooks it owns (Track C, revised).
+for (const dir of ["plugin/claude-code"]) {
   let server = false
   try {
     readFileSync(path.join(repo, dir, ".mcp.json"))
@@ -200,13 +225,7 @@ const ci = read(".github/workflows/ci.yml")
 for (const m of ci.matchAll(/npm install -g @anthropic-ai\/claude-code(@\S+)?/g)) {
   expect(/^@\d+\.\d+\.\d+$/.test(m[1] || ""), `.github/workflows/ci.yml: the Claude Code CLI must be pinned to an exact version (${m[0]})`)
 }
-// One module, in the plugin that serves (A8): the retired alias ships none.
-{
-  const ts = existsSync(path.join(repo, "plugin/claude-code-exec/hooks"))
-    ? readdirSync(path.join(repo, "plugin/claude-code-exec/hooks")).filter((f) => /\.tsx?$/.test(f))
-    : []
-  expect(ts.length === 0, `plugin/claude-code-exec ships hooks module files (${ts}); the mod lives in plugin/claude-code alone`)
-}
+expect(!ci.includes("plugin/claude-code-exec"), ".github/workflows/ci.yml: still validates the retired plugin/claude-code-exec")
 
 // The mod's structure (docs/claude-mod/impl/mod-structure.md): register.ts is the only file that
 // touches `$`, and holds the state and store tables' cells and one delegating `on(...)` line per
@@ -396,13 +415,16 @@ function checkModStructure(pluginDir) {
 const stagedAt = process.argv.indexOf("--staged")
 if (stagedAt > 0) {
   const root = path.resolve(process.argv[stagedAt + 1] || "")
-  for (const [pluginDir, bins] of [["plugin/claude-code", ["adage", "adage-exec"]]]) {
+  // adage, and the companions npm's platform packages carry too (adage-exec, not on Windows, where
+  // execution has no OS sandbox; adage-train everywhere).
+  const bins = [{ name: "adage", required: () => true }, ...COMPANIONS]
+  for (const pluginDir of ["plugin/claude-code"]) {
     const dist = path.join(root, pluginDir, "dist")
     const sums = existsSync(path.join(dist, "SHA256SUMS")) ? readFileSync(path.join(dist, "SHA256SUMS"), "utf8") : ""
+    expect(!existsSync(path.join(root, "plugin/claude-code-exec")), `staged: the retired plugin/claude-code-exec is staged`)
     for (const p of PLATFORMS) {
-      for (const b of bins) {
-        // Execution needs an OS sandbox Windows does not have: no adage-exec there.
-        if (p.os === "win32" && b === "adage-exec") continue
+      for (const { name: b, required } of bins) {
+        if (!required(p)) continue
         const rel = `${p.target}/${p.os === "win32" ? `${b}.exe` : b}`
         const file = path.join(dist, rel)
         if (!existsSync(file)) {
@@ -420,4 +442,4 @@ if (problems.length) {
   for (const p of problems) console.error(`check-plugin: ${p}`)
   process.exit(1)
 }
-console.log(`plugins ${names.join(", ")} ${version}: ok`)
+console.log(`plugin ${names.join(", ")} ${version}: ok`)

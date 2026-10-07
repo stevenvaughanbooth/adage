@@ -104,19 +104,19 @@ automatically (it runs a script).
 `adage delegate on` rewrites the registrations `adage install` wrote (Claude Code settings, Codex
 `hooks.json`, the OpenCode plugin, project and user scope), swapping only the binary:
 `adage-exec hook <harness> <event>` takes `adage hook`'s arguments. For the Claude Code plugin it
-writes `$ADAGE_HOME/exec/enabled`. **One plugin** ships both binaries (`/plugin install
+writes `$ADAGE_HOME/exec/enabled`. **One plugin** ships all three binaries (`/plugin install
 adage@adage` is the only install step): its session-start shim links
-`${CLAUDE_PLUGIN_DATA}/bin/adage` (the CLI, always) and `bin/adage-exec`, each bundled and verified
-against `dist/SHA256SUMS` (else found on `PATH`, or beside the `adage` on `PATH`), and links
+`${CLAUDE_PLUGIN_DATA}/bin/adage` (the CLI, always), `bin/adage-exec` and `bin/adage-train`, each
+bundled and verified against `dist/SHA256SUMS` (else found on `PATH`, or beside the `adage` on
+`PATH`; a missing or mismatched `adage-train` only removes its link), and links
 `bin/hook`, which every other hook runs, to `adage-exec` while the marker exists and to `adage`
 otherwise (copies on Windows, made again when the marker changes). The hooks are registered once,
 so they never fire twice; the edit and Stop hooks have 30 s, for an action. With the marker and no
 `adage-exec` for the machine, `adage` serves and the session start says why. Changes take effect
-in new sessions. The `adage-exec` plugin of earlier versions is retired: for one release
-`plugin/claude-code-exec` stays as an alias that registers its `SessionStart` alone, points any
-`bin/adage-exec` it left behind at a no-op, and asks to be uninstalled. Track C chose a second
-plugin as the consent (its D2); with decisions made by a press in the session, the marker is the
-explicit act, and the second plugin was a second install step with no purpose.
+in new sessions. There is no separate `adage-exec` plugin: Track C chose a second plugin as the
+consent (its D2); with decisions made by a press in the session, the marker is the explicit act,
+and the second plugin was a second install step with no purpose. Its alias was deleted before any
+release (nothing had been published, so nothing was left to quiet; onboarding plan O1).
 
 **What `adage-exec hook` does.** The pipeline is `adage hook`'s, shared as the `adage-hook` library
 (adapters, the no-match fast path, the state lock, `decide()`, spool, render). After `decide()`,
@@ -238,26 +238,62 @@ instead of refusal) has not been re-counted.
 
 A second rewrite exists only where the Claude Code mod is installed, because only the mod can ask
 Claude Code's own permission engine about both commands. When a Bash call is a dead end this
-repository's sessions learned (`python3 -m pytest tests` fails here; `make test` works), the mod
-runs the learned command in its place, and the failure, the model's reading of it and the
-recovery request never happen.
+repository's sessions learned (`python3 -m pytest tests` fails here; `make test` works), or one
+the repository's own files declare through an instinct (its Makefile's `test` target sets what
+the bare runner lacks), the mod runs the working command in its place, and the failure, the
+model's reading of it and the recovery request never happen.
 
 ```text
 python3 -m pytest tests
-→ make test     (adage ran make test in place of python3 -m pytest tests: in this repository it fails ("No module named pytest").)
+→ make test     (adage ran make test for you; python3 -m pytest tests was replaced because that command fails in this repository ("No module named pytest"). The output above is from make test.)
 ```
 
 - **What is replaced**: one plain command (no list, pipe, redirection or substitution) whose
-  canonical key meets a learned, firm `avoid` route with a fixed `instead` (no slot), or a learned
-  run-after-failure route delivered at fire. An instinct, a forming or dormant route, a prime
-  pair and a slotted `instead` replace nothing (`adage_runtime::substitution`).
+  canonical key meets an `avoid` route (an `avoid` step, or a run step after that command's
+  failure) with a fixed `instead` (no slot) that is neither the call nor the call's own tool in
+  another environment (`.venv/bin/python -m pytest` for `python -m pytest tests -q` is the
+  interpreter rewrite's, above, which keeps the call's arguments), and that is either
+  - **learned**: firm, and a run after a failure also delivered at fire; a forming, dormant or
+    nascent route and a prime pair replace nothing; or
+  - **a declared instinct** in service. An instinct is always prime and is bound forming and kept
+    forming (approval does not firm it), so `firm` and "at fire" cannot apply to it: what stands
+    in for them is that the repository's own files declare `instead`, and the permission engine's
+    verdict on both commands guards the run either way. A nascent instinct (an environment step
+    not yet approved in `adage review`), a dormant or an extinguished one replaces nothing.
+
+  The line for an instinct gives its declared reason, not a failure, since none was seen:
+
+  ```text
+  python3 -m unittest discover -s tests
+  → make test     (adage ran make test for you; python3 -m unittest discover -s tests was replaced because this repository's Makefile declares make test in its place (a declared script runs this repository's test runner with the setup it needs). The output above is from make test.)
+  ```
+
+  Substituting is all an instinct gains here: it still never asks to continue at Stop and never
+  becomes a finish-line obligation (`adage_runtime::substitution`).
+- **In a pipeline**: the first stage of a pipeline whose later stages only filter its output
+  (`tail`, `head`, `grep`, `wc`, `cat`, `tee`, `sort`, `uniq`, with their arguments) is replaced
+  the same way. The stage's own `2>&1` and the filters are kept byte for byte, and the plan's
+  `command` is the whole new pipeline:
+
+  ```text
+  python3 -m unittest discover -s tests 2>&1 | tail -5
+  → make test 2>&1 | tail -5     (adage ran make test for you, through the rest of your pipeline as written; python3 -m unittest discover -s tests was replaced because that command fails in this repository (…). The output above is from make test.)
+  ```
+
+  The line names what ran, what it replaced and which command fails, so it reads the same
+  whatever part of the output a filter keeps: live, "in place of …: in this repository it fails"
+  over output cut by `| tail -5` was read as the replacement failing.
+
+  A list (`;`, `&&`, `||`), any other redirection, `|&`, a subshell, an expansion, an assignment
+  before the command, or a later stage that does more than read its input is never rewritten
+  (`adage_core::shell::plain_pipeline`).
 - **How**: two phases of `adage hook claude PreToolUse` that a command hook never sends. A
   `dry_run` answers the plan (`{"plan":{"substitute":{command, route, track, context}}}`) and
-  records nothing. The mod asks `$.tool.check` about the original and the replacement; only when
-  both get the same verdict does it send `verdict: {engine: "same", substitute: <route>}`, and only
-  when that answers `{"substitute":{…}}` does it run the call with the new command. The model reads
-  the one `context` line after the result; the person sees it under the permission dialog, if one
-  opens.
+  records nothing. The mod asks `$.tool.check` about the original and the replacement (each a
+  whole pipeline when the dead end heads one); only when both get the same verdict does it send
+  `verdict: {engine: "same", substitute: <route>}`, and only when that answers
+  `{"substitute":{…}}` does it run the call with the new command. The model reads the one
+  `context` line after the result; the person sees it under the permission dialog, if one opens.
 - **Recorded**: one `pretool` record at the verdict, `substituted: true` with the judgement
   `substituted` (never a follow; the dead end counts as headed off), or, in the control arm and in
   the mod's observe mode, `would_substitute: true`, withheld, and nothing printed. `adage delegate
@@ -710,9 +746,11 @@ E2 needs both the policy opt-in below and a local per-reflex grant; enabling the
 does not supply either. `adage delegate policy` shows the effective policy and the personal file's
 path; `adage delegate policy --max-level e2` (a person, at a terminal) writes the opt-in with
 `auto_approve = "off"` and `require_sandbox = true`, keeping the file's other settings, and
-`--max-level e1` turns actions off again. For pytest, declare `.pytest_cache/**` and `.pytest_cache/.gitignore`
-as caches separately: wildcards do not implicitly cover hidden files. Neither declaration
-authorizes the repository's own `.gitignore` or other hidden source outputs.
+`--max-level e1` turns actions off again. For pytest, declare `.pytest_cache/**` as a cache: a wildcard
+never matches a leading dot, except inside a directory the glob names with its dot, so this one
+covers the `.gitignore` pytest writes into its cache (declaring `.pytest_cache/.gitignore` as well,
+as earlier grants did, changes nothing). Neither authorizes the repository's own `.gitignore` or
+other hidden source outputs: `**` still matches no `.env` or `.git/…`.
 
 `$ADAGE_HOME/policy.toml` (personal) and a managed file (`/etc/adage/policy.toml`; macOS
 `/Library/Application Support/Adage/policy.toml`; or the path in `ADAGE_POLICY`):

@@ -31,8 +31,9 @@ fn after_failure_pair(strength: Strength) -> Route {
 }
 
 /// T-C6-01: a firm learned `avoid` route with a fixed `instead`, or a run after a failure at fire,
-/// answers a substitution; a prime pair, an instinct, a slotted or missing `instead`, a list, or
-/// the `instead` itself answer none.
+/// answers a substitution, and so does an instinct in service (T-C6-07); a prime or forming
+/// learned pair, a nascent instinct, a slotted or missing `instead`, a list, or the `instead`
+/// itself answer none.
 #[test]
 fn a_learned_dead_end_is_substituted_only_from_a_firm_fixed_pair() {
     let (_dir, index, table) = fixture();
@@ -42,13 +43,16 @@ fn a_learned_dead_end_is_substituted_only_from_a_firm_fixed_pair() {
     assert_eq!((s.route.as_str(), s.track.as_str(), s.command.as_str()), ("dead-unittest", "acme/t", "make test"));
     assert_eq!(
         s.context,
-        "adage ran make test in place of python3 -m unittest tests.test_billing -v: in this repository it fails (ACME_ENV is not set)."
-            .replace("(ACME", "(\"ACME")
-            .replace("set)", "set\")")
+        "adage ran make test for you; python3 -m unittest tests.test_billing -v was replaced because that command \
+         fails in this repository (\"ACME_ENV is not set\"). The output above is from make test."
     );
     assert!(sub(&index, "make test").is_none(), "the working command");
     assert!(sub(&index, "cd sub && python3 -m unittest").is_none(), "a list keeps what else it runs");
-    assert!(sub(&index, "python3 -m unittest | tail").is_none(), "a pipeline too");
+    assert_eq!(
+        sub(&index, "python3 -m unittest | tail").map(|s| s.command),
+        Some("make test | tail".into()),
+        "filters are kept"
+    );
     assert!(sub(&index, "ls").is_none());
 
     let one = |r: Route| unlocked(&[&track("acme/x", "desire-path", vec![r])]);
@@ -80,9 +84,13 @@ fn a_learned_dead_end_is_substituted_only_from_a_firm_fixed_pair() {
         Strength::Inhibit,
     );
     assert!(sub(&one(empty), "npm test").is_none(), "no instead");
+    // An instinct is replaced in service (it is bound forming and never firms); never nascent.
     let mut instinct = npm_test_dead_end();
     instinct.evidence.provenance = "instinct:core@0.1.0".into();
-    assert!(sub(&one(instinct), "npm test").is_none(), "an instinct is advice only");
+    instinct.state = RouteState::Forming;
+    assert_eq!(sub(&one(instinct.clone()), "npm test").map(|s| s.command), Some("make test".into()), "an instinct");
+    instinct.state = RouteState::Nascent;
+    assert!(sub(&one(instinct), "npm test").is_none(), "a nascent instinct");
 }
 
 /// T-C6-02, the runtime half: treated substitutes and judges it `substituted`, never a follow;

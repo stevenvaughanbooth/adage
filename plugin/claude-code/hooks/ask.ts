@@ -32,6 +32,41 @@ export const ON_QUESTION = 'Adage is off in this repository. Turn it on?'
 export const ON_ANSWERS = ['turn it on', 'leave it off'] as const
 
 /**
+ * `/adage update` (onboarding plan O9; `ask.update`): the other ask a command opens, worded from
+ * the status card's `update`. `update` is the press; `what changes` opens Health on the version
+ * row; `not now` records that it was asked.
+ */
+export const UPDATE_ANSWERS = ['update', 'not now', 'what changes'] as const
+export const updateQuestion = (u: { have: string; latest: string }): string =>
+  `Adage ${u.latest} is out (you have ${u.have}). Update now? It takes effect in your next session.`
+/** What a kept `update` answer says when it is put again (`ask.kept`). */
+export const updateSay = (latest: string): string => `update Adage to ${latest}`
+/** The asked record's key for one release. */
+export const updateKey = (latest: string): string => `update:${latest}`
+/** `cmd.update.headless`: no one can be asked here (headless, or the mod inert). */
+export const updateHeadless = (latest: string): string => `Adage ${latest} is out; run adage update in a terminal.`
+/** `/adage update` with nothing newer known. */
+export const upToDate = (version: string): string => (version === '' ? 'adage is the latest.' : `adage ${version} is the latest.`)
+/** `toast.update.failed`: the press ran and the update did not. */
+export const updateFailed = (error: string): string =>
+  `adage could not update (${error === '' ? 'the command did not succeed' : error}) · run adage update in a terminal`
+
+/**
+ * `toast.updated`, from the last line a pressed `adage update` printed (reads.ts `updatedOf`): the
+ * versions it moved between, the latest it already is, or how this install updates instead.
+ */
+export function updatedToast(t: { kind: 'updated'; from: string; to: string } | { kind: 'latest'; version: string } | { kind: 'manual'; command: string; say: string }): string {
+  switch (t.kind) {
+    case 'updated':
+      return `adage updated ${t.from} → ${t.to} · takes effect in your next session`
+    case 'latest':
+      return upToDate(t.version)
+    case 'manual':
+      return t.say !== '' ? t.say : `run ${t.command} to update`
+  }
+}
+
+/**
  * The next item to ask about at a turn's end, or undefined: the first waiting item that was not
  * answered, was dismissed fewer than twice, and was not asked in the last day. At most one per
  * turn end.
@@ -93,6 +128,7 @@ export function whatOf(command: string): string {
   const words = command.trim().split(/\s+/)
   if (words[0] !== 'adage') return ''
   if (words[1] === 'on') return 'on'
+  if (words[1] === 'update') return 'update'
   if (words[1] === 'add') return 'trust'
   if (words[1] !== 'review') return ''
   if (words[2] !== 'delegate') return words[2] ?? ''

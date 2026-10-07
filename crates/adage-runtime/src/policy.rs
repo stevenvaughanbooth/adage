@@ -72,6 +72,9 @@ pub struct Policy {
     /// a `TurnStep` may answer `routine` ([`crate::Decision::routine`]). Unset, no step is ever
     /// routed.
     pub routine: bool,
+    /// Which phase of the mod's two-phase step a `TurnStep` is ([`crate::StepPhase`]): the
+    /// default, [`StepPhase::Commit`](crate::StepPhase::Commit), decides and commits at once.
+    pub step: crate::StepPhase,
 }
 
 /// The default of [`Policy::predict_cap`]. The person's `runtime.predict_cap` (adage-store's
@@ -91,6 +94,7 @@ impl Default for Policy {
             invoke_skills: Vec::new(),
             observe: false,
             routine: false,
+            step: crate::StepPhase::Commit,
         }
     }
 }

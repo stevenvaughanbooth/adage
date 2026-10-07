@@ -1,20 +1,21 @@
 #!/usr/bin/env node
-// Stage the Claude Code plugins with their binaries bundled, for the `marketplace` branch that
+// Stage the Claude Code plugin with its binaries bundled, for the `marketplace` branch that
 // `/plugin install adage@adage` installs from (docs/zero-config.md P0-1). The marketplace plugin
 // then needs no `adage` on PATH and never downloads anything: its session-start shim picks
-// dist/<target>/adage and dist/<target>/adage-exec for the machine and verifies them against
-// dist/SHA256SUMS (one plugin, both binaries: plan A8). The retired adage-exec alias is staged
-// as it is, with no binaries.
+// dist/<target>/{adage,adage-exec,adage-train} for the machine and verifies them against
+// dist/SHA256SUMS (one plugin, three binaries: plan A8, onboarding plan O1).
 //
 //   node scripts/stage-plugin.mjs --out <dir> (--bins <dir> | --artifacts <dir>) [--allow-missing]
 //
-//   --bins <dir>       binaries laid out as <dir>/<target>/adage[.exe] (and adage-exec)
-//   --artifacts <dir>  dist's release archives (adage-cli-<target>.tar.xz / .zip, adage-exec-…)
+//   --bins <dir>       binaries laid out as <dir>/<target>/adage[.exe] (and adage-exec, adage-train)
+//   --artifacts <dir>  dist's release archives (adage-cli-<target>.tar.xz / .zip, adage-exec-…,
+//                      adage-train-…), each checked against dist's .sha256 beside it
 //   --allow-missing    stage only the targets that have binaries (local tests); a release needs all
 //
 // Writes <out>/plugin/claude-code/ (the plugin as in this repository, plus dist/<target>/… and
-// dist/SHA256SUMS), <out>/plugin/claude-code-exec/ (the alias, as it is) and <out>/README.md.
-// Every binary staged is checksummed; the one for this machine, if staged, is run (`adage
+// dist/SHA256SUMS) and <out>/README.md. Without --allow-missing it fails, naming the target, unless
+// every target in npm/config.mjs PLATFORMS has adage and adage-train, and adage-exec except on
+// Windows. Every binary staged is checksummed; the one for this machine, if staged, is run (`adage
 // version`) as a smoke test.
 
 import { execFileSync } from "node:child_process"
@@ -23,7 +24,7 @@ import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, re
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import { PLATFORMS } from "../npm/config.mjs"
+import { COMPANIONS, PLATFORMS } from "../npm/config.mjs"
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 
@@ -83,17 +84,15 @@ rmSync(out, { recursive: true, force: true })
 mkdirSync(out, { recursive: true })
 const scratch = o.artifacts ? mkdtempSync(path.join(tmpdir(), "adage-plugin-")) : null
 
-// Each plugin and the binaries it bundles. adage-exec sits beside adage (it finds the learner
-// beside itself); execution needs an OS sandbox, which Windows lacks, so it is not required there.
+// The plugin and the binaries it bundles: adage, and beside it the companions the npm platform
+// packages carry too (npm/config.mjs, one list): adage-exec (it finds the learner beside itself;
+// execution needs an OS sandbox, which Windows lacks, so it is not required there) and adage-train
+// (`adage train` hands over to it, beside the running adage), required for every target.
 const PLUGINS = [
   {
     dir: "plugin/claude-code",
-    bins: [
-      { name: "adage", app: "adage-cli", required: () => true },
-      { name: "adage-exec", app: "adage-exec", required: (p) => p.os !== "win32" },
-    ],
+    bins: [{ name: "adage", app: "adage-cli", required: () => true }, ...COMPANIONS],
   },
-  { dir: "plugin/claude-code-exec", bins: [] },
 ]
 
 const host = PLATFORMS.find((p) => p.os === process.platform && p.cpu === process.arch)
@@ -119,10 +118,6 @@ try {
         sums.push(`${sha256(to)}  ${p.target}/${exe}`)
       }
     }
-    if (plugin.bins.length === 0) {
-      console.log(`staged ${plugin.dir} (the retired alias: no binaries)`)
-      continue
-    }
     if (sums.length === 0) fail(`${plugin.dir}: no binaries staged`)
     writeFileSync(path.join(dest, "dist", "SHA256SUMS"), sums.join("\n") + "\n")
     // Verify what was written, as the shim will.
@@ -142,7 +137,7 @@ try {
   }
   writeFileSync(
     path.join(out, "README.md"),
-    "# Adage Claude Code plugins, with binaries\n\nThis branch is written by the release workflow: the plugins from the tagged commit, each with\nverified binaries for every release target under `dist/`. Install with\n`/plugin marketplace add stevenvaughanbooth/adage` then `/plugin install adage@adage`.\nSource: https://github.com/stevenvaughanbooth/adage\n",
+    "# The Adage Claude Code plugin, with binaries\n\nThis branch is written by the release workflow: the plugin from the tagged commit, with\n`adage`, `adage-exec` and `adage-train` for every release target under `dist/`, verified\nagainst `dist/SHA256SUMS`. Install with `/plugin marketplace add stevenvaughanbooth/adage`\nthen `/plugin install adage@adage`.\nSource: https://github.com/stevenvaughanbooth/adage\n",
   )
 } finally {
   if (scratch) rmSync(scratch, { recursive: true, force: true })

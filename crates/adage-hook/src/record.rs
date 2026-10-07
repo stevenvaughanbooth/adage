@@ -2,10 +2,11 @@
 //! [`RecordKind`], built here. The builder writes what every kind shares once: the wall-clock stamp
 //! (`ts`), the native event's name (`event`), the `kind`, the harness's name on records from
 //! harnesses other than Claude Code ([`Record::harness`]), the call's harness id
-//! ([`Record::tool_use_id`], [`Record::calls`]) and the hook's own time ([`Record::timed`],
-//! `duration_us`); each kind's own fields are added with [`Record::with`]. The append's failure is
-//! either returned to a caller that must report it (a decision's record) or recorded in
-//! `fail-open.log` (a lost record loses measurement, never the decision).
+//! ([`Record::tool_use_id`], [`Record::calls`]), the subagent that made it (`agent`), and the
+//! hook's own time ([`Record::timed`], `duration_us`); each kind's own fields are added with
+//! [`Record::with`]. The append's failure is either returned to a caller that must report it (a
+//! decision's record) or recorded in `fail-open.log` (a lost record loses measurement, never the
+//! decision).
 //!
 //! A record is a JSON object whose keys serialise sorted (serde_json keeps object keys in a
 //! `BTreeMap` in this workspace), so the bytes do not depend on the order the fields are added.
@@ -99,6 +100,9 @@ pub(crate) fn duration_us(started: Instant) -> u64 {
     u64::try_from(started.elapsed().as_micros()).unwrap_or(u64::MAX)
 }
 
+/// The longest subagent id a record keeps (Claude Code's are 17 characters).
+const MAX_AGENT: usize = 128;
+
 /// One spool record, being built.
 #[derive(Debug, Clone)]
 pub(crate) struct Record(Map<String, Value>);
@@ -140,24 +144,40 @@ impl Record {
     }
 
     /// `tool_use_id`: the payload's harness id for the one call this record is about, when it
-    /// carries a non-empty one (the feed draws the line under that very call).
+    /// carries a non-empty one (the feed draws the line under that very call); and `agent`, the
+    /// subagent that made the call ([`Record::agent`]).
     pub(crate) fn tool_use_id(mut self, p: &Value) -> Self {
         if let Some(id) = p["tool_use_id"].as_str().filter(|id| !id.is_empty()) {
             self.set("tool_use_id", id);
         }
-        self
+        self.agent(p["agent_id"].as_str())
     }
 
     /// `tool_use_ids`: the harness's ids of the calls an event judged, in order, when its payload
-    /// carries any (a judgement is then drawn under its call, not merely near it).
+    /// carries any (a judgement is then drawn under its call, not merely near it); and `agent`,
+    /// the subagent that made them ([`Record::agent`]).
     pub(crate) fn calls(mut self, ev: &Event) -> Self {
-        let ids: Vec<&str> = match ev {
-            Event::Batch { calls } => calls.iter().filter_map(|c| c.tool_use_id.as_deref()).collect(),
-            Event::Failure { call } => call.tool_use_id.as_deref().into_iter().collect(),
-            _ => Vec::new(),
+        let (ids, agent): (Vec<&str>, Option<&str>) = match ev {
+            Event::Batch { calls } => (
+                calls.iter().filter_map(|c| c.tool_use_id.as_deref()).collect(),
+                calls.iter().find_map(|c| c.agent.as_deref()),
+            ),
+            Event::Failure { call } => (call.tool_use_id.as_deref().into_iter().collect(), call.agent.as_deref()),
+            _ => (Vec::new(), None),
         };
         if !ids.is_empty() {
             self.set("tool_use_ids", ids);
+        }
+        self.agent(agent)
+    }
+
+    /// `agent`: the subagent that made the call(s) a record is about (Claude Code's `agent_id`,
+    /// the canonical `Call::agent`), when one did; a main-loop call's record has none, so a
+    /// delegation's calls can be counted on their own (the Claude Code mod's architecture §3.8).
+    /// Bounded: an id longer than [`MAX_AGENT`] bytes, or empty, is left out.
+    fn agent(mut self, agent: Option<&str>) -> Self {
+        if let Some(a) = agent.filter(|a| !a.is_empty() && a.len() <= MAX_AGENT) {
+            self.set("agent", a);
         }
         self
     }

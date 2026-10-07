@@ -1,0 +1,13 @@
+---
+source: crates/adage-cli/tests/onboarding.rs
+expression: card
+---
+adage {VERSION} · not connected to any agent yet
+
+claude-code in Claude Code: /plugin marketplace add stevenvaughanbooth/adage then /plugin install adage@adage
+            or, from a terminal: adage init
+opencode    found · adage init connects it
+codex       found · adage init connects it
+
+next  adage init · connects every agent found: Claude Code through the Adage plugin
+      adage doctor · check binary, data, hooks and model

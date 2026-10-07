@@ -339,6 +339,8 @@ export type WorldOptions = {
   answer?: (event: string, payload: Record<string, unknown>) => unknown
   /** False while the shim has made no link: every run cannot start. */
   linked?: () => boolean
+  /** Whether a path exists (`$.fs.exists`): the shim's link where it made one; `linked` by default. */
+  present?: (path: string) => boolean
   /** The exit of `adage ledger note` (0 otherwise). */
   ledgerExit?: number
   /** What the session's usage reads (`$.session.usage`): unanswered when undefined. */
@@ -348,12 +350,32 @@ export type WorldOptions = {
   /** The person's rules on a Bash command (`$.tool.check`), `allow` otherwise; `rulesFail` makes the read throw. */
   rules?: Record<string, 'allow' | 'ask' | 'deny'>
   rulesFail?: boolean
+  /**
+   * The engine's whole verdict on any tool's call (`$.tool.check`), before `rules`: a verdict as the
+   * engine reports it (`AUTO_MODE_BASH`, …), `FAIL.exit` to make the check throw, or undefined to
+   * fall through to `rules`.
+   */
+  verdict?: (tool: string, input: Record<string, unknown>) => { decision: 'allow' | 'ask' | 'deny'; reason?: string; rule?: string } | typeof FAIL.exit | undefined
   /** The Bash tool beneath prints `ran <command>` (else `ok`). */
   echo?: boolean
 }
 
 /** The ways `answer` makes a run fail: a non-zero exit, or a run that cannot start. */
 export const FAIL = { exit: Symbol('exit 1'), start: Symbol('cannot start') } as const
+
+/**
+ * `$.tool.check`'s answers as Claude Code 2.1.292 gave them live (`-p`, `--allowedTools Bash Read
+ * …`; docs/claude-mod/impl/live-fixes-2-notes.md §7). In `default` mode the allow rule decides
+ * (`{ decision: 'allow', rule: 'Bash' }`). In `auto` mode the broad `Bash` rule is set aside and
+ * every Bash call is put to the classifier, which a check never asks: `ask` with the engine's
+ * sentence and no rule. That is the "no verdict" a yielded call met there. A Read stays allowed by
+ * its rule in both; a Skill not in the allowed tools is `ask` in both.
+ */
+export const DEFAULT_MODE_BASH = { decision: 'allow', rule: 'Bash' } as const
+export const AUTO_MODE_BASH = { decision: 'ask', reason: 'This command requires approval' } as const
+export const AUTO_MODE_BASH_UNLISTED = { decision: 'ask', reason: "Claude requested permissions to use Bash, but you haven't granted it yet." } as const
+export const READ_ALLOWED = { decision: 'allow', rule: 'Read' } as const
+export const SKILL_ASKED = (skill: string) => ({ decision: 'ask', reason: `Execute skill: ${skill}` }) as const
 
 /** The engine's own system prompt beneath (`prompt.compose`), and the Bash tool's description (`tool.describe`). */
 export const SECTIONS = [
@@ -515,6 +537,7 @@ export function world(on: On, o: WorldOptions = {}): World {
     return { value: { code: 0, signal: null } }
   })
   on('fs.read', ($, e) => (o.status === undefined ? { deny: 'ENOENT' } : { value: `${o.status}\n` }))
+  on('fs.exists', ($, e) => ({ value: o.present === undefined ? o.linked?.() !== false : o.present(e.path) }))
   on('session.id', () => ({ value: o.session?.() ?? SESSION }))
   on('session.cwd', () => ({ value: CWD }))
   on('session.repo', () => {
@@ -530,8 +553,12 @@ export function world(on: On, o: WorldOptions = {}): World {
     return next(e)
   })
   on('tool.check', ($, e) => {
-    const command = (e.input as { command: string }).command
-    w.checked.push(command)
+    const input = (isRecord(e.input) ? e.input : {}) as Record<string, unknown>
+    const command = typeof input.command === 'string' ? input.command : ''
+    w.checked.push(e.tool === 'Bash' ? command : `${e.tool} ${JSON.stringify(input)}`)
+    const said = o.verdict?.(e.tool, input)
+    if (typeof said === 'symbol') throw new Error('no verdict')
+    if (said !== undefined) return said
     if (o.rulesFail) throw new Error('no rules')
     return { decision: o.rules?.[command] ?? 'allow' }
   })
@@ -663,10 +690,31 @@ export const block = (route: string, strength = 'fire') =>
 
 /** A predicted step, as `hook claude TurnStep` answers it (the wire's `predict`: an obligation, one Bash call). */
 export const PREDICT = wireLine('predict')
+/**
+ * The binary's two phases of a step (`hook claude TurnStep`, docs/claude-mod/impl/
+ * turnstep-phases-notes.md), as a world's `answer`: the dry run, an `allow` verdict and a payload
+ * with neither answer `prediction`; any other verdict answers nothing (the step is recorded
+ * withheld). Every other event answers nothing.
+ */
+export const phasedStep =
+  (prediction: string = PREDICT) =>
+  (event: string, p: Record<string, unknown>): string | undefined => {
+    if (event !== 'TurnStep') return undefined
+    const v = p.verdict
+    return typeof v === 'object' && v !== null && (v as Record<string, unknown>).permission !== 'allow' ? undefined : prediction
+  }
 /** A predicted skill (plan D3): the Skill tool in the model's place. */
 export const PREDICT_SKILL = JSON.stringify(wireWith('predict', { kind: 'skill', route: 'release-after-bump', calls: [{ tool: 'Skill', input: { skill: 'acme-work-item' } }] }))
 export const PREDICTED_SKILL_ID = 'adage_release-after-bump_turn-1_2_0'
 export const STEP = { turnId: 'turn-1', index: 2, model: 'm', messageCount: 4 }
+/**
+ * The turn's first step (index 0, before the model's first response; the prompt is the only
+ * message) and what the binary answers there when the prompt's run reflex fired under a grant:
+ * the lookup, its slot bound from the prompt (docs/claude-mod/impl/index0-notes.md).
+ */
+export const FIRST_STEP = { turnId: 'turn-1', index: 0, model: 'm', messageCount: 1 }
+export const PREDICT_LOOKUP = JSON.stringify(wireWith('predict', { kind: 'run', route: 'lookup-work-item', track: 'acme/learned', calls: [{ tool: 'Bash', input: { command: 'scripts/wi-lookup W-2042' } }] }))
+export const PREDICTED_LOOKUP_ID = 'adage_lookup-work-item_turn-1_0_0'
 /** The tool_use id of `PREDICT`'s call at `STEP`. */
 export const PREDICTED_ID = toolUseId(str(part(wire('predict'), 'predict', 'route')), STEP.turnId, STEP.index, 0)
 
@@ -683,6 +731,104 @@ export async function drain(stream: AsyncGenerator<TurnStepChunk, TurnStepResult
     if (r.done) return { chunks, result: r.value }
     chunks.push(r.value)
   }
+}
+
+// ------------------------------------------------------------------------ the engine's thread
+//
+// Claude Code keeps a conversation as a thread on the server: a request names the id of the last
+// response it continues from (`thread: {type: 'continue', previous_message_id}`) and sends only the
+// messages after it, or starts afresh (`{type: 'create'}`) with them all. A response a `turn.step`
+// hook made up never reached the server, so a request that continues from it is refused (404
+// `thread_not_found`) and sent again whole: one dispatch spent for nothing. A real response a hook
+// added calls to is held by the server as the model sent it, so a request that continues from it
+// carries results of calls the server never saw. These functions are the engine's rule as 2.1.292
+// runs it (read from the CLI; docs/claude-mod/impl/live-fixes-2-notes.md has the code it was read
+// from and the live runs it was checked against), so a test can see which thread the request after
+// what the mod yields names, and what the server then reads.
+
+/**
+ * A message of the conversation as the thread reads it: an assistant message with the tool_use ids
+ * the transcript holds in it (`calls`), a user message with the tool_use ids it carries results of
+ * (`results`).
+ */
+export type ThreadMessage =
+  | { role: 'user'; results?: readonly string[] }
+  | { role: 'assistant'; id: string; requestId?: string; model: string; stopReason: TurnStepResult['stopReason']; calls?: readonly string[] }
+
+/** The thread the next request names: continued from an id, or started afresh, and why. */
+export type ThreadPlan =
+  | { type: 'continue'; previousMessageId: string }
+  | { type: 'create'; reason: 'anchor_missing' | 'anchor_is_tail' | 'anchor_incomplete' }
+
+/**
+ * The thread of the next request over `messages`. The anchor is the last assistant message a
+ * request produced, or else whose id starts `msg_` and whose model is not `<synthetic>`; with none,
+ * or nothing after it, the thread starts afresh; an anchor with no stop reason is incomplete and
+ * the thread starts afresh; otherwise it continues from the anchor's id.
+ */
+export function engineThread(messages: readonly ThreadMessage[]): ThreadPlan {
+  let at = messages.length - 1
+  for (; at >= 0; at--) {
+    const m = messages[at]
+    if (m?.role === 'assistant' && (m.requestId !== undefined || (m.id.startsWith('msg_') && m.model !== '<synthetic>'))) break
+  }
+  const anchor = messages[at]
+  if (anchor?.role !== 'assistant') return { type: 'create', reason: 'anchor_missing' }
+  if (at + 1 >= messages.length) return { type: 'create', reason: 'anchor_is_tail' }
+  if (anchor.stopReason === null) return { type: 'create', reason: 'anchor_incomplete' }
+  return { type: 'continue', previousMessageId: anchor.id }
+}
+
+/**
+ * The message the engine records for a step a hook answered without the request: an id it mints,
+ * `msg_hook_<uuid>`, the step's model, no request id, and the stop reason of the hook's last stop
+ * chunk (`end_turn`, the engine's own, when the hook yielded none).
+ */
+export function madeUpResponse(chunks: readonly TurnStepChunk[], model: string, uuid = '00000000-0000-4000-8000-000000000000'): ThreadMessage {
+  return { role: 'assistant', id: `msg_hook_${uuid}`, model, ...recorded(chunks) }
+}
+
+/**
+ * The message the engine records for a response that came from a request and passed through the
+ * hooks: the id and request id the server gave it, and the calls and stop reason of the chunks that
+ * came out of the chain (what a hook added or rewrote included).
+ */
+export function forwardedResponse(chunks: readonly TurnStepChunk[], sent: { id: string; requestId: string; model: string }): ThreadMessage {
+  return { role: 'assistant', ...sent, ...recorded(chunks) }
+}
+
+/** The calls of a response's chunks and the reason of its last stop (`end_turn` when it has none). */
+function recorded(chunks: readonly TurnStepChunk[]): { stopReason: TurnStepResult['stopReason']; calls: string[] } {
+  let stopReason: TurnStepResult['stopReason'] = 'end_turn'
+  const calls: string[] = []
+  for (const c of chunks) {
+    if (c.kind === 'stop') stopReason = c.stopReason
+    if (c.kind === 'tool') calls.push(c.id)
+  }
+  return { stopReason, calls }
+}
+
+/**
+ * The tool results the next request carries whose call the server's thread does not hold. A request
+ * that continues reads the server's record up to its anchor (`held`: the calls of each real response
+ * as the model sent them; a response not listed is held as the transcript has it) and the messages
+ * after it; one that starts afresh reads the transcript whole. Empty when the thread is whole.
+ */
+export function unseenResults(messages: readonly ThreadMessage[], held: ReadonlyMap<string, readonly string[]>): string[] {
+  const plan = engineThread(messages)
+  const seen = new Set<string>()
+  let from = 0
+  if (plan.type === 'continue') {
+    const at = messages.findLastIndex(m => m.role === 'assistant' && m.id === plan.previousMessageId)
+    for (const m of messages.slice(0, at + 1)) if (m.role === 'assistant') for (const c of held.get(m.id) ?? m.calls ?? []) seen.add(c)
+    from = at + 1
+  }
+  const unseen: string[] = []
+  for (const m of messages.slice(from)) {
+    if (m.role === 'assistant') for (const c of m.calls ?? []) seen.add(c)
+    else for (const r of m.results ?? []) if (!seen.has(r)) unseen.push(r)
+  }
+  return unseen
 }
 
 /** A mounted drawing, as the tests read it. */
@@ -763,9 +909,13 @@ export type FakeOptions = {
   run?: (argv: readonly string[], init: ProcessRunInit | undefined) => ProcessRunResult | Error
   /** What a spawned child prints. */
   spawn?: (argv: readonly string[]) => readonly ProcessSpawnChunk[]
-  env?: Partial<Record<'pluginData' | 'observe' | 'ascii' | 'reducedMotion' | 'os', string>>
+  env?: Partial<Record<'pluginData' | 'configDir' | 'home' | 'userProfile' | 'observe' | 'ascii' | 'reducedMotion' | 'os', string>>
   root?: string
+  /** The plugin's manifest name (`adage` otherwise). */
+  name?: string
   files?: Record<string, string>
+  /** The paths that exist (`fs.exists`): the files' keys and these. */
+  present?: readonly string[]
   session?: string
   cwd?: string
   repo?: string | null
@@ -774,6 +924,8 @@ export type FakeOptions = {
   /** The dialog's answer to each question (undefined: dismissed). */
   ask?: (question: string, answers: readonly string[]) => string | undefined
   rules?: Record<string, string>
+  /** The engine's whole verdict on any tool's call (`checkTool`), before `rules`; see `WorldOptions.verdict`. */
+  verdict?: (tool: string, input: Record<string, unknown>) => unknown
   commands?: readonly string[]
   copies?: boolean
   state?: Partial<AdageState>
@@ -847,13 +999,19 @@ export function fake(o: FakeOptions = {}): Fake {
     },
     env: {
       pluginData: async () => o.env?.pluginData,
+      configDir: async () => o.env?.configDir,
+      home: async () => o.env?.home,
+      userProfile: async () => o.env?.userProfile,
       observe: async () => o.env?.observe,
       ascii: async () => o.env?.ascii,
       reducedMotion: async () => o.env?.reducedMotion,
       os: async () => o.env?.os,
     },
-    plugin: { root: () => o.root ?? '/plugin' },
-    fs: { read: async path => (o.files?.[path] ?? Promise.reject(new Error('ENOENT'))) },
+    plugin: { root: () => o.root ?? '/plugin', name: () => o.name ?? 'adage' },
+    fs: {
+      read: async path => (o.files?.[path] ?? Promise.reject(new Error('ENOENT'))),
+      exists: async path => o.files?.[path] !== undefined || (o.present ?? []).includes(path),
+    },
     command: {
       register: async c => void f.registered.push(c) as never,
       list: async () => (o.commands ?? []).map(name => ({ name, description: '', source: 'plugin' as const })) as never,
@@ -867,6 +1025,11 @@ export function fake(o: FakeOptions = {}): Fake {
     },
     clock: { now: async () => now, every: ms => timer('every', ms), after: ms => timer('after', ms) },
     checkBash: async command => o.rules?.[command] ?? 'allow',
+    checkTool: async (tool, input) => {
+      const said = o.verdict?.(tool, input)
+      if (typeof said === 'symbol') throw new Error('no verdict')
+      return said ?? { decision: tool === 'Bash' ? (o.rules?.[String(input.command)] ?? 'allow') : 'allow' }
+    },
     ui: {
       status: text => void f.statuses.push(text),
       toast: text => void f.toasts.push(text),

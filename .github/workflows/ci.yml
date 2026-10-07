@@ -170,11 +170,12 @@ jobs:
       - name: npm launcher
         shell: bash
         run: node npm/test/launcher.test.mjs
-      # The one plugin's shim links both binaries (plan A8): build them, whatever was affected.
+      # The one plugin's shim links its three binaries (plan A8, onboarding plan O1): build them,
+      # whatever was affected.
       - name: Claude Code session-start hook
         if: runner.os != 'Windows'
         run: |
-          cargo build --locked -p adage-cli -p adage-exec
+          cargo build --locked -p adage-cli -p adage-exec -p adage-train
           plugin/test/session-start.test.sh
       - name: release plugin startup and real background bootstrap
         if: runner.os != 'Windows' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
@@ -259,8 +260,23 @@ jobs:
           node-version: 22
       - name: structure and versions
         run: node scripts/check-plugin.mjs
-      - name: release archive checksum enforcement
+      - name: the structure check refuses a second plugin and an on-PATH description
+        run: node scripts/test-check-plugin.mjs
+      - name: release staging, three binaries per target, checksum enforcement
         run: node scripts/test-stage-plugin.mjs
+      # The release guard (onboarding plan O2): every version file agrees with Cargo.toml, and
+      # release.yml is what the pinned dist generates from dist-workspace.toml plus the one
+      # documented SBOM patch. dist is installed at the version dist-workspace.toml pins.
+      - uses: dtolnay/rust-toolchain@stable
+      - name: install dist
+        shell: bash
+        run: |
+          set -euo pipefail
+          v=$(sed -n 's/^cargo-dist-version = "\(.*\)"$/\1/p' dist-workspace.toml)
+          test -n "$v"
+          curl --proto '=https' --tlsv1.2 -LsSf "https://github.com/axodotdev/cargo-dist/releases/download/v$v/cargo-dist-installer.sh" | sh
+      - name: release check
+        run: cargo xtask release-check --require-dist
       # Pinned: the mod's API is early access and moves between releases (docs/claude-mod
       # architecture §6 invariant 10); bump it together with plugin/claude-code/VALIDATE.txt.
       - name: install the Claude Code CLI (validation and plugin tests only; no agent runs)
@@ -268,14 +284,13 @@ jobs:
       - name: claude plugin validate
         run: |
           claude plugin validate --strict plugin/claude-code
-          claude plugin validate --strict plugin/claude-code-exec
           claude plugin validate --strict .
       - name: validate output matches the committed VALIDATE.txt
         run: |
           claude plugin validate --strict plugin/claude-code 2>&1 | sed "s#$PWD/##g" > /tmp/validate.txt
           diff -u plugin/claude-code/VALIDATE.txt /tmp/validate.txt
-      # One plugin carries the mod (plan A8); the retired adage-exec alias loads no module, and
-      # its one SessionStart is exercised by plugin/test/session-start.test.sh.
+      # One plugin carries the mod and the three binaries (plan A8, onboarding plan O1); its
+      # session-start shim is exercised by plugin/test/session-start.test.sh.
       - name: claude plugin test
         run: claude plugin test plugin/claude-code
 

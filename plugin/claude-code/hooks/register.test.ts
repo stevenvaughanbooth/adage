@@ -7,7 +7,7 @@ import { describe, expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 
 import { ALLOWED_VERBS, headOf } from './bridge'
-import { BAND, GRAPH, GRAPH_OFFER, LINE, PACKS, PREDICT, SESSION, STEP, SURFACES, TOOL, TURN_END, USER, begin, block, drain, mountPane, presses, start, stdin, turnEnd, world } from './fixtures/kit'
+import { BAND, CARD, GRAPH, GRAPH_OFFER, LINE, PACKS, PREDICT, SESSION, STEP, SURFACES, TOOL, TURN_END, USER, begin, block, drain, mountPane, presses, start, stdin, turnEnd, world } from './fixtures/kit'
 import type { World, WorldOptions } from './fixtures/kit'
 
 const FEED = [LINE.learnerIdle, LINE.healthy, LINE.start, LINE.firedGen, LINE.firedLookup]
@@ -109,8 +109,10 @@ describe('T-X-04 · authority', () => {
   })
 })
 
-describe('T-X-04 · authority, with presses', () => {
-  const opts: WorldOptions = { feed: PRESS_FEED, graph: { ...GRAPH_OFFER, routes: [...GRAPH_OFFER.routes, GRAPH.routes[3]] }, status_json: { tracks: [], candidates: [], packs_awaiting_trust: PACKS }, ask: (q, o) => o[0] }
+describe('T-X-04, T-O9-04 · authority, with presses', () => {
+  // A newer Adage too (onboarding plan O9): `/adage update`'s answer is a press like the others.
+  const update = { current: '0.1.0', latest: '0.2.0', channel: 'npm', next: '/adage update', text: '0.2.0 is out (you have 0.1.0)', notes: null }
+  const opts: WorldOptions = { feed: PRESS_FEED, graph: { ...GRAPH_OFFER, routes: [...GRAPH_OFFER.routes, GRAPH.routes[3]] }, status_json: { tracks: [], candidates: [], packs_awaiting_trust: PACKS }, card: { ...CARD, update }, ask: (q, o) => o[0] }
 
   test('person-only verbs run only inside press(), with the token on stdin and never on argv', { timeoutMs: 60_000 }, async ($, on) => {
     const w = world(on, opts)
@@ -121,6 +123,8 @@ describe('T-X-04 · authority, with presses', () => {
     await w.clock.settle()
     await grant.unmount()
     await $.command.run({ command: 'adage', args: 'on' } as never)
+    await w.clock.settle()
+    await $.command.run({ command: 'adage', args: 'update' } as never)
     await w.clock.settle()
     const ui = await mountPane($)
     await ui.press({ key: 'tab-reflexes' })
@@ -133,10 +137,11 @@ describe('T-X-04 · authority, with presses', () => {
     const others = w.ran.filter(r => !pressed.includes(r))
     const allowed = new Set(['hook', 'version', 'watch', 'graph', 'doctor', 'status', 'ledger note', 'off', 'map', 'condition', 'delegate'])
     for (const r of others) expect(allowed.has(headOf(r.argv)), headOf(r.argv)).toBe(true)
-    for (const r of others) expect(['review', 'on', 'add'].includes(r.argv[1] ?? '')).toBe(false)
+    for (const r of others) expect(['review', 'on', 'add', 'update'].includes(r.argv[1] ?? '')).toBe(false)
     expect(pressed.length).toBeGreaterThanOrEqual(4)
+    expect(pressed.filter(r => r.argv[1] === 'update').map(r => r.argv.slice(1))).toEqual([['update']])
     for (const r of pressed) {
-      expect(['review', 'on', 'add'].includes(r.argv[1] ?? '')).toBe(true)
+      expect(['review', 'on', 'add', 'update'].includes(r.argv[1] ?? '')).toBe(true)
       expect(r.argv.some(a => /^[0-9a-f]{64}$/.test(a))).toBe(false)
       expect(r.init?.env?.CLAUDECODE).toBe('1')
       expect(typeof stdin(r)?.press).toBe('string')

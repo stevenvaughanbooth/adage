@@ -6,8 +6,11 @@
 //! ```text
 //! { "session_id", "repo", "harness": "claude-code", "harness_version", "started_at", "ended_at",
 //!   "steps": [{ "index", "model", "input", "output", "cache_read", "cache_write", "predicted" }],
-//!   "cost_usd"?, "hook_ms"?: [..] }
+//!   "cost_usd"?, "hook_ms"?: [..], "tool_calls"? }
 //! ```
+//!
+//! `tool_calls`: the main loop's tool calls as the harness counted them; without it the line
+//! keeps a transcript's count, or 0 when no transcript was read.
 //!
 //! `repo` is the session's working directory (resolved to its repository's key, as hooks resolve
 //! it) or the key itself. Allowed inside an agent session: it changes no reflex and no setting,

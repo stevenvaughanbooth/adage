@@ -5,9 +5,10 @@ members = ["crates/*", "xtask"]
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-# Apache-2.0 (decision D1; LICENSE, NOTICE). Releases ship through GitHub Releases, npm and
-# Homebrew; the crates are not published to crates.io yet (publish = false), so an accidental
-# `cargo publish` cannot happen. Flip this when crates.io publishing is wanted.
+# Apache-2.0 (decision D1; LICENSE, NOTICE). Releases ship through GitHub Releases, the Claude Code
+# marketplace branch and npm (docs/release.md); the crates are not published to crates.io yet
+# (publish = false), so an accidental `cargo publish` cannot happen. Flip this when crates.io
+# publishing is wanted. `cargo xtask bump <version>` changes `version` here and everywhere else.
 license = "Apache-2.0"
 publish = false
 repository = "https://github.com/stevenvaughanbooth/adage"

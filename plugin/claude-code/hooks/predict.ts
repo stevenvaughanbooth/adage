@@ -1,7 +1,8 @@
-// Pure: a `TurnStep` answer to the calls it predicts, and those calls to `turn.step` chunks. The
-// binary decides what to predict (§6 invariant 1); this file only checks the answer's shape, so a
+// Pure: a `TurnStep` answer to the calls it predicts, those calls to `turn.step` chunks, and the
+// engine's verdicts on them. The binary decides what to predict (§6 invariant 1) and the person's
+// permissions whether it is made (invariant 3); this file only checks the answer's shape, so a
 // malformed answer is "nothing" and the request goes out.
-import type { TurnStepChunk, TurnStepResult } from 'claude-code'
+import type { TurnStepChunk, TurnStepResult, TurnStepStopChunk } from 'claude-code'
 
 import { isRecord } from './shape'
 
@@ -68,6 +69,31 @@ export function toolUseId(route: string, turnId: string, index: number, k: numbe
   return `adage_${idPart(route)}_${idPart(turnId)}_${index}_${k}`
 }
 
+const PREDICTED_ID = /^adage_([A-Za-z0-9-]+)_[A-Za-z0-9-]+_(\d+)_\d+$/
+
+/** The route a predicted call's id names (`toolUseId`'s shape exactly), or undefined for any other id. */
+export function predictedRoute(toolUseId: string): string | undefined {
+  return PREDICTED_ID.exec(toolUseId)?.[1]
+}
+
+/**
+ * The one line the model reads after the result of a call Adage made in its place (§3.1–3.2:
+ * Adage's act is never counted as the agent's, and the model is told so plainly). Without it the
+ * model reads a call in its own turn it does not remember making: live, after a predicted
+ * `make gen`, it apologised for having run it. Undefined for a call the model made.
+ */
+export function madeForAgentLine(toolUseId: string): string | undefined {
+  const [, route, index] = PREDICTED_ID.exec(toolUseId) ?? []
+  if (route === undefined) return undefined
+  // At the turn's first step the call is the one the reflex delivered with the request names
+  // (docs/claude-mod/impl/index0-notes.md): the directive told the model to run it, and this says
+  // it already ran, so the model works from the result instead of running it again.
+  if (index === '0') {
+    return `Adage made this call in your place before your first response: it is the step the learned reflex ${route}, delivered with the request, names. The result above is its output. You did not make it, and it does not need repeating.`
+  }
+  return `Adage made this call in your place (learned reflex ${route}); the result above is its output. You did not make it, and it does not need repeating.`
+}
+
 /**
  * The chunks of a predicted response: per call a `tool` chunk then its whole `input`, at content
  * block `firstBlock + k`. The caller yields its own stop.
@@ -79,6 +105,93 @@ export function callChunks(p: Prediction, turnId: string, index: number, firstBl
   ])
 }
 
+/**
+ * The stop of a response made wholly of predicted calls: no request was made, so no model stopped
+ * and nothing was spent, and the stop says so as `TurnStepResult` defines it (a null reason "when
+ * no request was made"). It also keeps the conversation's server-side thread whole. The engine
+ * records a made-up response under an id it mints (`msg_hook_…`) and continues the thread from the
+ * last assistant message whose id starts `msg_` (2.1.292), so a response that stated a reason was
+ * taken as the thread's tip and the next request named an id the server never issued: a 404
+ * (`thread_not_found`) and a replayed dispatch after every predicted step (live run 2, 12 of 12).
+ * A message with no stop reason is incomplete to the engine, which then sends the next request
+ * whole, as the replay did, without the failed dispatch (docs/claude-mod/impl/live-fixes-2-notes.md).
+ */
+export const PREDICTED_STOP: TurnStepChunk = { kind: 'stop', stopReason: null, usage: null }
+
+/**
+ * The stop of a real response the finish line appended predicted calls to: the model's own stop
+ * chunk with no reason, its usage and the engine's handle on it kept. The server recorded that
+ * response under its real id as the model sent it, text and `end_turn`; the transcript holds it
+ * with the calls. A stated reason made it the thread's tip, so the next request continued from the
+ * server's copy with only the calls' results after it: results of calls the server never saw (the
+ * thread diverges, or the request is refused and replayed). With no reason the engine sends that
+ * request whole (`anchor_incomplete`), the calls included, and the server's copy is never
+ * continued. Nothing else marks it: the message id is the engine's to set, and a hook-made
+ * response is anchored by the same rule as this one.
+ */
+export function appendedStop(stop: TurnStepStopChunk): TurnStepStopChunk {
+  return { ...stop, stopReason: null }
+}
+
+/**
+ * The engine's verdict on a call as `$.tool.check` reports it, read: `allow`, `ask` or `deny`,
+ * or `none` when the check failed or answered anything else. `reason` is the engine's sentence,
+ * '' when it gave none.
+ */
+export type Permission = { decision: 'allow' | 'ask' | 'deny' | 'none'; reason: string }
+
+/** A predicted call the person's permissions do not let run unasked, and what they said of it. */
+export type Held = { tool: string; decision: 'ask' | 'deny' | 'none'; reason: string }
+
+/** The engine's check as the step is handed it: a tool and its input, nothing run. */
+export type CheckCall = (tool: string, input: Record<string, unknown>) => Promise<unknown>
+
+/** A `$.tool.check` answer read into a `Permission`; anything malformed is `none`. */
+export function permissionOf(v: unknown): Permission {
+  if (!isRecord(v)) return { decision: 'none', reason: '' }
+  const d = v.decision
+  const decision = d === 'allow' || d === 'ask' || d === 'deny' ? d : 'none'
+  return { decision, reason: typeof v.reason === 'string' ? v.reason : '' }
+}
+
+/**
+ * The first of a prediction's calls, in order, that the person's permissions do not allow
+ * unasked, or undefined when they allow every one (docs/claude-mod/architecture.md §3.2: a
+ * predicted call is made only under the person's rules and mode). Each call is checked as the
+ * engine decides it now, nothing run. Only `allow` lets the step be yielded: an `ask` goes to the
+ * mode's decider, and there a call no model request produced is refused headless and gets no
+ * verdict from auto mode's classifier (live, "the auto mode classifier gave no verdict"; in auto
+ * mode the check answers `ask` for every Bash call). A check that fails is no verdict.
+ */
+export async function heldBy(calls: readonly PredictedCall[], check: CheckCall): Promise<Held | undefined> {
+  const none = (): Permission => ({ decision: 'none', reason: '' })
+  const verdicts = await Promise.all(calls.map(c => Promise.resolve().then(() => check(c.tool, c.input)).then(permissionOf, none)))
+  const k = verdicts.findIndex(v => v.decision !== 'allow')
+  const v = verdicts[k]
+  const call = calls[k]
+  if (v === undefined || call === undefined || v.decision === 'allow') return undefined
+  return { tool: call.tool, decision: v.decision, reason: v.reason }
+}
+
+/**
+ * The verdict the mod sends the binary after a dry run's prediction (`TurnStep` with `verdict`,
+ * docs/claude-mod/impl/turnstep-phases-notes.md): `allow` when every call may run unasked, which
+ * commits the step; otherwise the first call held back, the engine's decision and its sentence,
+ * which the binary records as withheld. `route` names the prediction it is about.
+ */
+export type StepVerdict = { permission: 'allow' | Held['decision']; route: string; tool?: string; reason?: string }
+
+/** The verdict on prediction `p`, `held` by the first call not allowed unasked (undefined: none). */
+export function verdictOf(p: Prediction, held: Held | undefined): StepVerdict {
+  if (held === undefined) return { permission: 'allow', route: p.route }
+  return { permission: held.decision, route: p.route, tool: held.tool, ...(held.reason !== '' ? { reason: held.reason } : {}) }
+}
+
+/** Whether two predictions are the same step: the route and every call, in order. */
+export function samePrediction(a: Prediction, b: Prediction): boolean {
+  return a.kind === b.kind && a.route === b.route && JSON.stringify(a.calls) === JSON.stringify(b.calls)
+}
+
 /** The step's result for a response made wholly of the predicted calls (no request was made). */
 export function predictedResult(p: Prediction, turnId: string, index: number): TurnStepResult {
   return {
@@ -86,7 +199,7 @@ export function predictedResult(p: Prediction, turnId: string, index: number): T
     index,
     answer: '',
     toolUses: p.calls.map(c => ({ name: c.tool, input: c.input })),
-    stopReason: 'tool_use',
+    stopReason: null,
     usage: null,
   }
 }

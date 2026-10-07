@@ -35,6 +35,47 @@ fn exec_parity() -> bool {
 struct World {
     _world: TempWorld,
     root: PathBuf,
+    /// Where every hook's network request would go (T-O5-05).
+    net: Counter,
+}
+
+/// T-O5-05 (onboarding plan O5): a local server that counts every connection made to it. Every
+/// hook in this file runs with the release check's base URL (`ADAGE_RELEASE_URL`) and every proxy
+/// variable pointing here and the daily check on, so a request any hook made, to the release
+/// check or through a proxy to anywhere, would be counted; dropping the world asserts that none
+/// was. No hook reaches the network (`evals/launch/fresh-install.md`, "Hooks make no network
+/// calls").
+struct Counter {
+    url: String,
+    hits: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+}
+
+impl Counter {
+    fn start() -> Counter {
+        use std::sync::atomic::Ordering;
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}", l.local_addr().unwrap());
+        let hits = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let h = hits.clone();
+        std::thread::spawn(move || {
+            for mut s in l.incoming().flatten() {
+                h.fetch_add(1, Ordering::SeqCst);
+                let _ = s.write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+            }
+        });
+        Counter { url, hits }
+    }
+    fn count(&self) -> usize {
+        self.hits.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+impl Drop for World {
+    fn drop(&mut self) {
+        if !std::thread::panicking() {
+            assert_eq!(self.net.count(), 0, "a hook reached the network (T-O5-05)");
+        }
+    }
 }
 
 fn route(id: &str, trigger: Trigger, step: Step, slots: Vec<Slot>, effect: Effect, strength: Strength) -> Route {
@@ -131,7 +172,7 @@ impl World {
         world.write("acme/acme/billing.py", "x = 1\n");
         world.home("adage").compile(&[track()]);
         let root = world.root.clone();
-        World { _world: world, root }
+        World { _world: world, root, net: Counter::start() }
     }
     fn p(&self, rel: &str) -> PathBuf {
         self.root.join(rel)
@@ -158,6 +199,14 @@ impl World {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
+        // T-O5-05: every way out to the network leads to the counter.
+        c.env("ADAGE_RELEASE_URL", &self.net.url).env_remove("ADAGE_OFFLINE").env_remove("ADAGE_UPDATE_CHECK");
+        for v in ["http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "all_proxy"] {
+            c.env(v, &self.net.url);
+        }
+        for v in ["no_proxy", "NO_PROXY"] {
+            c.env_remove(v);
+        }
         for (k, v) in env {
             c.env(k, v);
         }
@@ -191,6 +240,29 @@ fn golden(name: &str, w: &World, harness: &str, steps: &[(&str, Value)]) -> Stri
             .push_str(&format!("### {event}\n{}\n", if out.is_empty() { "(nothing)\n".to_string() } else { out }));
     }
     let transcript = transcript.replace(&w.root.to_string_lossy().to_string(), "{ROOT}");
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../adage-cli/tests/golden").join(format!("{name}.txt"));
+    if std::env::var("ADAGE_BLESS").is_ok_and(|v| v == "1") {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, &transcript).unwrap();
+    }
+    let want = std::fs::read_to_string(&path)
+        .unwrap_or_else(|_| panic!("missing golden {}; run with ADAGE_BLESS=1", path.display()));
+    assert_eq!(transcript, want, "golden {name} changed");
+    transcript
+}
+
+/// [`golden`] for a transcript that names this build's version: written as `{VERSION}`, so a
+/// version bump does not change the golden.
+fn golden_versioned(name: &str, w: &World, harness: &str, steps: &[(&str, Value)]) -> String {
+    let mut transcript = String::new();
+    for (event, payload) in steps {
+        let out = w.hook(harness, event, payload);
+        transcript
+            .push_str(&format!("### {event}\n{}\n", if out.is_empty() { "(nothing)\n".to_string() } else { out }));
+    }
+    let transcript = transcript
+        .replace(&w.root.to_string_lossy().to_string(), "{ROOT}")
+        .replace(&format!("({})", env!("CARGO_PKG_VERSION")), "({VERSION})");
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../adage-cli/tests/golden").join(format!("{name}.txt"));
     if std::env::var("ADAGE_BLESS").is_ok_and(|v| v == "1") {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -345,6 +417,70 @@ fn claude_code_golden() {
     assert!(t.contains("./scripts/wi-lookup W-2042 --json"));
     assert!(t.contains("\"decision\":\"block\""));
     assert_no_injection(&t);
+}
+
+/// T-O8-01 (onboarding plan O8): an index a newer Adage wrote. The session start says so once,
+/// in the person's line only (never to the model), with this binary's version and the command
+/// that updates it; every other event, and the next session start that day, says nothing. Both
+/// binaries answer the same (adage-exec's parity test runs this golden too).
+#[test]
+fn claude_code_newer_index_golden() {
+    let w = World::new();
+    let newer = json!({ "format": adage_tracks::index::INDEX_FORMAT + 1, "generation": "from-a-newer-adage",
+        "routes": [{ "repo": "r", "track": "t", "version": "9.0.0", "route": { "step": { "do": "teleport" } } }] });
+    std::fs::write(w.p("adage/index.json"), newer.to_string()).unwrap();
+    let mut steps = claude_scenario(&w);
+    let again = steps[0].clone();
+    steps.push(again);
+    let t = golden_versioned("claude-code-newer-index", &w, "claude", &steps);
+    assert!(t.starts_with("### SessionStart\n{\"systemMessage\":\"adage: the reflexes here were written by a newer adage; this one ({VERSION}) stays quiet · adage update\"}"), "{t}");
+    assert_eq!(t.matches("systemMessage").count(), 1, "once: {t}");
+    assert!(
+        !t.contains("additionalContext") && !t.contains("decision"),
+        "nothing else from a binary that cannot read the index: {t}"
+    );
+    assert_eq!(std::fs::read_to_string(w.p("adage/index.json")).unwrap(), newer.to_string(), "never rebuilt here");
+}
+
+/// T-O5-05: every event of every harness's scenario, with the daily release check due (no cache,
+/// `update.check` on) and the learner allowed, makes no request: the counter stays at zero (the
+/// world asserts it for every test in this file), and no hook writes the release cache.
+#[test]
+fn no_hook_event_reaches_the_network() {
+    let w = World::new();
+    let cwd = w.repo();
+    let mut runs: Vec<(&str, &str, Value)> = Vec::new();
+    for (e, p) in claude_scenario(&w) {
+        runs.push(("claude", e, p));
+    }
+    let bash = json!({ "tool_name": "Bash", "tool_input": { "command": "ls" }, "tool_response": "ok" });
+    for (e, extra) in [
+        ("SessionStart", json!({ "source": "startup" })),
+        ("UserPromptSubmit", json!({ "prompt": "Pick up W-2042" })),
+        ("PostToolUse", bash),
+        ("Stop", json!({ "stop_hook_active": false })),
+    ] {
+        runs.push(("codex", e, cx(e, &cwd, extra)));
+    }
+    for (e, extra) in [
+        ("session.created", json!({})),
+        ("chat.message", json!({ "prompt": "Pick up W-2042" })),
+        ("tool.execute.after", json!({ "tool": "bash", "args": { "command": "ls" }, "output": "", "exit": 0 })),
+        ("session.idle", json!({ "stop_hook_active": false })),
+        ("session.deleted", json!({})),
+    ] {
+        runs.push(("opencode", e, oc("ses_network", &cwd, extra)));
+    }
+    for (h, e, p) in &runs {
+        let (_, err, code) = w.run(
+            &["hook", h, e],
+            p.to_string().as_bytes(),
+            &[("ADAGE_AUTO_LEARN", "1"), ("ADAGE_TEST_NO_SPAWN", "record")],
+        );
+        assert_eq!((code, err.as_str()), (0, ""), "{h} {e}");
+    }
+    assert_eq!(w.net.count(), 0, "no hook made a request");
+    assert!(!w.p("adage/cache/latest.json").exists(), "the cache is written only by the check");
 }
 
 /// The world's checkout with U11 in service and the project's environment bound

@@ -15,7 +15,7 @@
 //! <dir>`.
 //!
 //! **Failures are never silent** (docs/zero-config.md §5). A failed download is not retried by
-//! itself: it is classified from curl's exit code and message ([`classify`]) and recorded in
+//! itself: it is classified from curl's exit code and message ([`crate::net::classify`]) and recorded in
 //! `models/.fetch-failed.json` (`{class, host, at, detail}`), which `adage doctor` and the status
 //! card read, next to what the process embeds with instead (the bundled model, or the explicit
 //! hashed fallback).
@@ -274,22 +274,6 @@ fn switched(paths: &Paths, before: &str) -> String {
 /// Written under `$ADAGE_HOME/models` when a download fails; removed when one succeeds.
 pub const FETCH_FAILED: &str = ".fetch-failed.json";
 
-/// Why a download failed, from curl's exit code and message: `offline` (6, 7: no network or
-/// name resolution), `blocked` (a 403 or 407 from a proxy or policy: 22 or 56), `tls` (35, 60:
-/// TLS interception; set `CURL_CA_BUNDLE` or `SSL_CERT_FILE`), `timeout` (28), `http` (another
-/// HTTP error), or `error`.
-pub fn classify(code: Option<i32>, stderr: &str) -> &'static str {
-    let blocked = stderr.contains(" 403") || stderr.contains(" 407");
-    match code {
-        Some(6 | 7) => "offline",
-        Some(22 | 56) if blocked => "blocked",
-        Some(35 | 60) => "tls",
-        Some(28) => "timeout",
-        Some(22) => "http",
-        _ => "error",
-    }
-}
-
 /// One sentence for a classified failure, with its fix.
 pub fn explain(class: &str, host: &str, detail: &str) -> String {
     let status = if detail.contains("407") { "407" } else { "403" };
@@ -318,52 +302,11 @@ pub(crate) struct Progress<'a> {
     pub(crate) total: u64,
 }
 
-/// A failed download: (class, host, curl's message).
-struct Failed {
-    class: &'static str,
-    host: String,
-    detail: String,
-}
+use crate::net::Failed;
 
-/// Download `url` to `out` with curl (at most `max` bytes), reporting progress. The one place
-/// `adage` starts a download.
+/// Download `url` to `out` (at most `max` bytes), reporting progress: [`crate::net::download`].
 fn curl(url: &str, out: &Path, max: u64, report: &mut dyn FnMut(u64)) -> Result<Result<(), Failed>> {
-    use std::process::Stdio;
-    report(0);
-    let mut child = std::process::Command::new("curl")
-        .args(["-fsSL", "--proto", "=https", "--connect-timeout", "20", "--max-filesize"])
-        .arg((max + 4096).to_string())
-        .arg("-o")
-        .arg(out)
-        .arg(url)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .spawn()
-        .context("could not run curl; download the files yourself and use `adage models install <dir>`")?;
-    let status = loop {
-        if let Some(s) = child.try_wait()? {
-            break s;
-        }
-        let done = std::fs::metadata(out).map(|m| m.len()).unwrap_or(0);
-        report(done.max(1).min(max));
-        std::thread::sleep(std::time::Duration::from_millis(200));
-    };
-    if status.success() {
-        report(max);
-        return Ok(Ok(()));
-    }
-    let mut err = String::new();
-    if let Some(mut e) = child.stderr.take() {
-        use std::io::Read;
-        let _ = e.read_to_string(&mut err);
-    }
-    let err = err.trim().to_string();
-    Ok(Err(Failed {
-        class: classify(status.code(), &err),
-        host: model::host(url),
-        detail: if err.is_empty() { format!("{status}") } else { err },
-    }))
+    crate::net::download(url, out, max, report)
 }
 
 /// Download and install the default model, reporting progress; returns its id.
@@ -464,15 +407,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn curl_failures_are_classified() {
-        assert_eq!(classify(Some(22), "curl: (22) The requested URL returned error: 403"), "blocked");
-        assert_eq!(classify(Some(56), "curl: (56) CONNECT tunnel failed, response 407"), "blocked");
-        assert_eq!(classify(Some(22), "curl: (22) The requested URL returned error: 404"), "http");
-        assert_eq!(classify(Some(6), "Could not resolve host"), "offline");
-        assert_eq!(classify(Some(7), ""), "offline");
-        assert_eq!(classify(Some(60), "SSL certificate problem"), "tls");
-        assert_eq!(classify(Some(35), ""), "tls");
-        assert_eq!(classify(None, ""), "error");
+    fn failures_are_explained_with_their_fix() {
         assert!(explain("blocked", "huggingface.co", "403").contains("huggingface.co blocked by proxy (403)"));
     }
 }

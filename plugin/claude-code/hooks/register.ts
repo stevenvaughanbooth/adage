@@ -90,6 +90,7 @@ function mod($: EngineInterface, options: Options): Mod {
       harness: { get: () => $.store.get('adage.harness'), set: v => $.store.set('adage.harness', v) },
       asked: { get: () => $.store.get('adage.asked'), set: v => $.store.set('adage.asked', v) },
       kept: { get: () => $.store.get('adage.kept'), set: v => $.store.set('adage.kept', v) },
+      latest: { get: () => $.store.get('adage.latest'), set: v => $.store.set('adage.latest', v) },
     },
     // The only ways to a process, each behind its allow-list and CLAUDECODE=1.
     run: guard((argv, init) => $.process.run(argv, init)),
@@ -97,17 +98,21 @@ function mod($: EngineInterface, options: Options): Mod {
     pressRun: guardPress((argv, init) => $.process.run(argv, init)),
     env: {
       pluginData: () => $.env.get('CLAUDE_PLUGIN_DATA'),
+      configDir: () => $.env.get('CLAUDE_CONFIG_DIR'),
+      home: () => $.env.get('HOME'),
+      userProfile: () => $.env.get('USERPROFILE'),
       observe: () => $.env.get('ADAGE_MOD_OBSERVE'),
       ascii: () => $.env.get('ADAGE_ASCII'),
       reducedMotion: () => $.env.get('ADAGE_REDUCED_MOTION'),
       os: () => $.env.get('OS'),
     },
-    plugin: { root: () => $.plugin.root },
-    fs: { read: path => $.fs.read(path) },
+    plugin: { root: () => $.plugin.root, name: () => $.plugin.name },
+    fs: { read: path => $.fs.read(path), exists: path => $.fs.exists(path) },
     command: { register: c => $.command.register(c), list: () => $.command.list() },
     session: { id: () => $.session.id(), cwd: () => $.session.cwd(), repo: () => $.session.repo(), usage: a => $.session.usage(a), version: () => $.session.version() },
     clock: { now: () => $.clock.now(), every: (ms, fn) => $.clock.every(ms, fn), after: (ms, fn) => $.clock.after(ms, fn) },
     checkBash: async command => (await $.tool.check({ tool: 'Bash', input: { command } })).decision,
+    checkTool: (tool, input) => $.tool.check({ tool, input }),
     ui: {
       status: text => $.ui.status(text),
       toast: text => $.ui.toast(text),
@@ -134,6 +139,7 @@ export const register: Register = (on, options) => {
   on('turn.step', async function* ($, e, next) { return yield* step.onStep(mod($, options), e, next) })
   on('turn.complete', async ($, e, next) => ledger.onTurnEnd(mod($, options), e, next))
   on('tool.call', { tool: 'Bash' }, async ($, e, next) => call.onBashCall(mod($, options), e, next))
+  on('tool.call', async ($, e, next) => call.onPredictedCall(mod($, options), e, next))
   on('prompt.compose', async ($, e, next) => attach.onCompose(mod($, options), e, next))
   on('tool.describe', { tool: 'Bash' }, async ($, e, next) => attach.onDescribe(mod($, options), e, next))
   on('session.compact', async ($, e, next) => attach.onCompact(mod($, options), e, next))

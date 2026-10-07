@@ -92,6 +92,18 @@ impl Extension for Recovers {
 }
 static RECOVERS: Recovers = Recovers;
 
+/// A stand-in for adage-exec with a person's `predict` grant on the finish line's route.
+struct Granted;
+impl Extension for Granted {
+    fn deliver(&self, _: &Turn<'_>, _: &[Directive]) -> Delivery {
+        Delivery::default()
+    }
+    fn predict_grants(&self, _: &crate::Site<'_>) -> Vec<(String, String)> {
+        vec![("acme/finish-lines".into(), "regenerate-registry".into())]
+    }
+}
+static GRANTED: Granted = Granted;
+
 /// A skill `adage train` compiled and replayed in `root`'s repository, accepted by a person.
 fn accepted_skill(paths: &Paths, root: &Path) {
     use adage_pack::verified::{self, Outcome, Skill, Step, Verified};
@@ -186,6 +198,23 @@ fn every_record_kind_as_the_spool_holds_it() {
     );
     section(&mut out, "turn_step", lines(&r.paths, "s", &r.root));
 
+    // A predicted step the person's permissions held back (the mod's verdict).
+    let h = ObligationWorld::new();
+    state::update::<SessionState, _>(&h.paths.state("s"), |st| {
+        st.pending = vec![adage_runtime::Pending {
+            route: "regenerate-registry".into(),
+            expect_key: adage_runtime::command_key("make gen", adage_core::CommandTable::load()),
+            expect_head: String::new(),
+            batches_left: 3,
+            command: "make gen".into(),
+        }];
+    })
+    .unwrap();
+    let held = json!({ "turn_id": "t1", "index": 1, "via": "mod", "verdict": { "permission": "ask",
+                       "route": "regenerate-registry", "tool": "Bash", "reason": "This command requires approval" } });
+    event(&h, "claude", &GRANTED, "s", "TurnStep", held);
+    section(&mut out, "turn_step: withheld", lines(&h.paths, "s", &h.root));
+
     // Sessions seen in a repository with no reflexes yet, from Claude Code and Codex.
     let plain = tempfile::tempdir().unwrap();
     let proot = plain.path().canonicalize().unwrap().join("plain");
@@ -275,6 +304,28 @@ fn every_record_kind_as_the_spool_holds_it() {
         .unwrap();
     bash_call_in(&pw, "p", "adage hook claude Press < p.json");
     section(&mut out, "session_start, press_issued, press_spent, tripwire", lines(&pw.paths, "p", &pw.root));
+
+    // A subagent's calls (Claude Code's `agent_id`): its failure, the batch that lists the call
+    // again, and its Bash call's `pretool` name it (`agent`).
+    let sa = u11_world(Arm::Treated);
+    let agent = json!({ "agent_id": "af2d43c8c64650e89", "agent_type": "Explore" });
+    let call =
+        json!({ "tool_name": "Bash", "tool_use_id": "toolu_s1", "tool_input": { "command": "python -m pytest" } });
+    let mut failed = agent.clone();
+    for (k, v) in call.as_object().unwrap() {
+        failed[k] = v.clone();
+    }
+    failed["error"] = json!("No module named pytest");
+    sa.event(&NO_EXTENSION, "PostToolUseFailure", failed);
+    let mut listed = call;
+    listed["tool_response"] = json!("No module named pytest");
+    let mut batch = agent.clone();
+    batch["tool_calls"] = json!([listed]);
+    sa.event(&NO_EXTENSION, "PostToolBatch", batch);
+    let mut verdict = agent;
+    verdict["verdict"] = json!({ "engine": "same" });
+    bash_call(&sa, &NO_EXTENSION, "toolu_s2", PYTEST, verdict);
+    section(&mut out, "failure, batch, pretool: a subagent's calls", lines(&sa.paths, "s", &sa.root));
 
     insta::assert_snapshot!("every_record_kind", out);
 }

@@ -36,7 +36,9 @@ and `claude plugin test`; nothing here ran in a live interactive session.
 - **Observers** (`classic.UserPromptSubmit`, `PostToolBatch`, `PostToolUseFailure`, `Stop`):
   `await next(e)`, parse `additionalContext[]` and `block` for `<adage-reflex>` tags, append to
   `$.state` `fired` with `update()`, return the answer object unchanged.
-- **`turn.step`.** Skipped (`yield* next(e)`) when inert, `e.agentId` set, or `e.index === 0`.
+- **`turn.step`.** Skipped (`yield* next(e)`) when inert, `e.agentId` set, or `e.index === 0`
+  (since [impl/index0-notes.md](../impl/index0-notes.md) index 0 is asked, and only a `run`
+  answer is taken there).
   Otherwise asks `TurnStep` (250 ms) with
   `{session_id, cwd, hook_event_name:'TurnStep', turn_id, index, model, ending:false}`.
   A valid prediction → per call `{kind:'tool', index:k, id, name}` + `{kind:'input', index:k,

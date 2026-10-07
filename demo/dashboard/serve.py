@@ -14,7 +14,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = Path(os.environ.get("DEMO_ROOT", "/tmp/adage-demo"))
-PORT = int(os.environ.get("DEMO_PORT", "8765"))
+PORT = int(os.environ.get("DEMO_PORT", "8766"))  # adage map keeps 8765
 ADAGE_HOME = os.environ.get("ADAGE_HOME", str(ROOT / "adage-home"))
 ADAGE_BIN = os.environ.get("ADAGE_BIN", str(HERE.parent.parent / "target" / "release" / "adage"))
 MAP_URL = None

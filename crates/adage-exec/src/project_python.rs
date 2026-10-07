@@ -135,7 +135,10 @@ fn entries(root: &Path) -> Result<Vec<PathBuf>, String> {
     Ok(out)
 }
 
-fn tree_hash(root: &Path, executable: Option<&Path>) -> Result<String, String> {
+/// The digest of the dependency tree at `root`: every path, kind, symlink target, file content
+/// digest and execute bit. `cache` ([`Digests`]) serves a regular file's content digest when its
+/// metadata is unchanged since it was read; without one every file is read.
+fn tree_hash(root: &Path, executable: Option<&Path>, mut cache: Option<&mut Digests>) -> Result<String, String> {
     if !std::fs::symlink_metadata(root).map_err(|e| e.to_string())?.is_dir() {
         return Err("Python dependency root must be a real directory, not a symlink".into());
     }
@@ -170,9 +173,12 @@ fn tree_hash(root: &Path, executable: Option<&Path>) -> Result<String, String> {
             hash.update(target.as_os_str().as_encoded_bytes());
         } else if m.is_file() {
             remaining = remaining.checked_sub(m.len()).ok_or("Python dependencies exceed the byte bound")?;
-            let bytes = regular(&p, MAX_BYTES)?;
+            let digest = match cache.as_deref_mut() {
+                Some(c) => c.digest(&p, &m)?,
+                None => file_digest(&p)?,
+            };
             hash.update(b"file\0");
-            hash.update(crate::sha256_hex(&bytes));
+            hash.update(digest);
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
@@ -184,6 +190,142 @@ fn tree_hash(root: &Path, executable: Option<&Path>) -> Result<String, String> {
         hash.update([0]);
     }
     Ok(format!("{:x}", hash.finalize()))
+}
+
+/// A regular file's content digest, read in full.
+fn file_digest(p: &Path) -> Result<String, String> {
+    #[cfg(test)]
+    tests::READS.set(tests::READS.get() + 1);
+    Ok(crate::sha256_hex(&regular(p, MAX_BYTES)?))
+}
+
+/// Where this process keeps the digest cache ([`keep_digests_in`]).
+static DIGESTS: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+/// The digest cache's file in the directory [`keep_digests_in`] names.
+pub const DIGESTS_FILE: &str = "python-digests.json";
+
+/// At most this many files' digests are kept; past it, only the files the latest identification
+/// read are.
+const MAX_DIGESTS: usize = 4 * MAX_FILES;
+
+/// Keep the trees' file digests in `dir` ([`DIGESTS_FILE`]) for the rest of this process (the
+/// hook: `$ADAGE_HOME/cache`). Identifying a project Python hashes its environment and its
+/// runtime's whole `lib` tree (some 66 MB in 1,600 files for a standalone CPython 3.12): about
+/// 170 ms with a warm page cache and more on a cold one or a busy disk, at every session start,
+/// action and step that plans a project-Python grant. With the cache, a file whose metadata is
+/// unchanged is not read again. The first call wins; a later one changes nothing.
+pub fn keep_digests_in(dir: &Path) {
+    let _ = DIGESTS.set(dir.join(DIGESTS_FILE));
+}
+
+/// One regular file's content digest, with the metadata it was read under: a change to the file
+/// (its content, a rename onto it, a `touch`) changes its change time, size or inode, so an entry
+/// never serves a file that differs from the one hashed. Unlike the modification time, the change
+/// time cannot be set back by the file's owner.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct Stamp {
+    dev: u64,
+    ino: u64,
+    size: u64,
+    mtime: (i64, i64),
+    ctime: (i64, i64),
+    sha256: String,
+}
+
+impl Stamp {
+    #[cfg(unix)]
+    fn of(m: &std::fs::Metadata, sha256: String) -> Option<Stamp> {
+        use std::os::unix::fs::MetadataExt;
+        Some(Stamp {
+            dev: m.dev(),
+            ino: m.ino(),
+            size: m.size(),
+            mtime: (m.mtime(), m.mtime_nsec()),
+            ctime: (m.ctime(), m.ctime_nsec()),
+            sha256,
+        })
+    }
+
+    /// No change time to key on: nothing is cached.
+    #[cfg(not(unix))]
+    fn of(_: &std::fs::Metadata, _: String) -> Option<Stamp> {
+        None
+    }
+
+    fn same_file(&self, other: &Stamp) -> bool {
+        (self.dev, self.ino, self.size, self.mtime, self.ctime)
+            == (other.dev, other.ino, other.size, other.mtime, other.ctime)
+    }
+}
+
+/// The digest cache: file content digests by absolute path, kept between processes in one JSON
+/// file. It only spares reading what is unchanged, and only where a project Python is identified
+/// (the session contract, planning a grant, the check before a run); the staged run hashes the
+/// environment and its private copies without it ([`prepare`]), so an entry written by anyone
+/// else can never make an unapproved environment run. A cache that cannot be read is empty; one
+/// that cannot be written is lost, never an error.
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct Digests {
+    files: std::collections::BTreeMap<String, Stamp>,
+    #[serde(skip)]
+    path: PathBuf,
+    #[serde(skip)]
+    used: std::collections::BTreeSet<String>,
+    #[serde(skip)]
+    dirty: bool,
+}
+
+impl Digests {
+    fn open(path: &Path) -> Option<Digests> {
+        if cfg!(not(unix)) {
+            return None;
+        }
+        let read = std::fs::read(path).ok().filter(|b| b.len() <= 64 << 20);
+        let mut d: Digests = read.and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
+        d.path = path.to_path_buf();
+        Some(d)
+    }
+
+    /// The content digest of the regular file `p` whose metadata is `m`: the kept one when the
+    /// file is unchanged since it was read, else read now (and kept).
+    fn digest(&mut self, p: &Path, m: &std::fs::Metadata) -> Result<String, String> {
+        let (Some(key), Some(now)) = (p.to_str().map(str::to_string), Stamp::of(m, String::new())) else {
+            return file_digest(p);
+        };
+        self.used.insert(key.clone());
+        if let Some(kept) = self.files.get(&key).filter(|k| k.same_file(&now)) {
+            return Ok(kept.sha256.clone());
+        }
+        let sha256 = file_digest(p)?;
+        // Kept only if the file did not change while it was read: its metadata is the same after.
+        let after = std::fs::symlink_metadata(p).ok().and_then(|m| Stamp::of(&m, sha256.clone()));
+        if let Some(stamp) = after.filter(|a| a.same_file(&now)) {
+            self.files.insert(key, stamp);
+            self.dirty = true;
+        }
+        Ok(sha256)
+    }
+
+    /// Write the cache back when it changed, whole, by a rename over the old file.
+    fn save(mut self) {
+        if !self.dirty {
+            return;
+        }
+        if self.files.len() > MAX_DIGESTS {
+            let used = std::mem::take(&mut self.used);
+            self.files.retain(|k, _| used.contains(k));
+        }
+        let Some(dir) = self.path.parent() else { return };
+        if std::fs::create_dir_all(dir).is_err() {
+            return;
+        }
+        let Ok(bytes) = serde_json::to_vec(&self) else { return };
+        let tmp = dir.join(format!(".{DIGESTS_FILE}.{}.tmp", std::process::id()));
+        if std::fs::write(&tmp, bytes).is_err() || std::fs::rename(&tmp, &self.path).is_err() {
+            let _ = std::fs::remove_file(&tmp);
+        }
+    }
 }
 
 fn pth_paths(env: &Path, repo: &Path, replacement: Option<&Path>) -> Result<(), String> {
@@ -230,7 +372,23 @@ fn pth_paths(env: &Path, repo: &Path, replacement: Option<&Path>) -> Result<(), 
 }
 
 /// Only an explicitly named local venv is considered. Bare Python and pytest are never replaced.
+/// The trees' file digests come from the digest cache when the process keeps one
+/// ([`keep_digests_in`]).
 pub fn identify(repo: &Path, program: &str) -> Result<Option<ProjectPython>, String> {
+    identify_with(repo, program, DIGESTS.get().map(PathBuf::as_path))
+}
+
+/// [`identify`], with the digest cache at `cache` (none: every file is read).
+fn identify_with(repo: &Path, program: &str, cache: Option<&Path>) -> Result<Option<ProjectPython>, String> {
+    let mut digests = cache.and_then(Digests::open);
+    let found = identify_in(repo, program, digests.as_mut());
+    if let Some(d) = digests {
+        d.save();
+    }
+    found
+}
+
+fn identify_in(repo: &Path, program: &str, mut digests: Option<&mut Digests>) -> Result<Option<ProjectPython>, String> {
     let Some(dir) = environment(program) else { return Ok(None) };
     let _budget = budget(crate::limits::E2_MAX_WALL_MS);
     let repo = repo.canonicalize().map_err(|e| e.to_string())?;
@@ -277,19 +435,34 @@ pub fn identify(repo: &Path, program: &str) -> Result<Option<ProjectPython>, Str
     {
         return Err("the environment interpreter does not resolve to its declared runtime".into());
     }
-    let binary = regular(&executable, 128 << 20)?;
-    if binary.starts_with(b"#!") || binary.len() < 4 {
+    // The interpreter (some 28 MB for a standalone CPython 3.12): its first bytes say whether it
+    // is native; its digest comes from the digest cache when it is unchanged.
+    let meta = std::fs::symlink_metadata(&executable).map_err(|e| e.to_string())?;
+    if !meta.is_file() || meta.len() > 128 << 20 {
+        return Err("expected a bounded regular file".into());
+    }
+    let mut head = Vec::with_capacity(4);
+    {
+        use std::io::Read;
+        let file = std::fs::File::open(&executable).map_err(|e| e.to_string())?;
+        file.take(4).read_to_end(&mut head).map_err(|e| e.to_string())?;
+    }
+    if head.starts_with(b"#!") || head.len() < 4 {
         return Err("the Python interpreter must be a native executable, not a wrapper script".into());
     }
+    let executable_sha256 = match digests.as_deref_mut() {
+        Some(c) => c.digest(&executable, &meta)?,
+        None => file_digest(&executable)?,
+    };
     pth_paths(&env, &repo, None)?;
     Ok(Some(ProjectPython {
         adapter_version: ADAPTER_VERSION,
         program: program.into(),
         config_sha256: crate::sha256_hex(&cfg),
-        environment_sha256: tree_hash(&env, Some(&executable))?,
-        executable_sha256: crate::sha256_hex(&binary),
+        environment_sha256: tree_hash(&env, Some(&executable), digests.as_deref_mut())?,
+        executable_sha256,
         executable,
-        runtime_sha256: tree_hash(&runtime_root.join("lib"), None)?,
+        runtime_sha256: tree_hash(&runtime_root.join("lib"), None, digests)?,
         runtime_root,
         version,
     }))
@@ -338,12 +511,13 @@ pub(crate) fn prepare(req: &ExecRequest, repo: &Path, scratch: &Path, home: Opti
         return Err("Python runtime grant would expose the real home directory".into());
     }
     let env = repo.join(dir);
-    if tree_hash(&env, Some(&identity.executable))? != identity.environment_sha256 {
+    // Never from the digest cache: what runs is checked against the approval byte for byte.
+    if tree_hash(&env, Some(&identity.executable), None)? != identity.environment_sha256 {
         return Err("staged Python dependencies differ from the approved environment".into());
     }
     let dest = scratch.join("project-python");
     crate::stage::copy_tree(&env, &dest, &mut MAX_FILES.clone(), &mut MAX_BYTES.clone())?;
-    if tree_hash(&dest, Some(&identity.executable))? != identity.environment_sha256 {
+    if tree_hash(&dest, Some(&identity.executable), None)? != identity.environment_sha256 {
         return Err("copied Python dependencies differ from the approved environment".into());
     }
     // Execute only a verified private runtime snapshot. Reading the original runtime after
@@ -356,7 +530,7 @@ pub(crate) fn prepare(req: &ExecRequest, repo: &Path, scratch: &Path, home: Opti
         &mut MAX_FILES.clone(),
         &mut MAX_BYTES.clone(),
     )?;
-    if tree_hash(&runtime.join("lib"), None)? != identity.runtime_sha256 {
+    if tree_hash(&runtime.join("lib"), None, None)? != identity.runtime_sha256 {
         return Err("copied Python runtime differs from the approved runtime".into());
     }
     // Caches the digest leaves out are not executed either (`-X pycache_prefix` already keeps the
@@ -427,6 +601,41 @@ mod tests {
     use super::*;
     use crate::request::{ActionSpec, OutputSpec};
     use crate::sandbox::Profile;
+
+    thread_local! {
+        /// Files this thread read in full for a tree digest ([`file_digest`]).
+        pub(super) static READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    }
+
+    /// O0 live notes, gap 7 (defect 9): a session start that identified a project Python hashed
+    /// its runtime's whole tree every time. With the digest cache the second identification reads
+    /// no unchanged file and answers the same identity as an uncached one; a changed file is read
+    /// again and changes the identity; a cache that cannot be read is an empty one.
+    #[test]
+    fn a_second_identification_reads_no_unchanged_file() {
+        let (d, repo) = fixture();
+        let cache = d.path().join("home/cache").join(DIGESTS_FILE);
+        let identify_cached = || {
+            READS.set(0);
+            let id = identify_with(&repo, ".venv/bin/python", Some(&cache)).unwrap().unwrap();
+            (id, READS.get())
+        };
+        let (first, read) = identify_cached();
+        assert!(read >= 5 && cache.is_file(), "{read} files read, then kept");
+        let (second, again) = identify_cached();
+        assert_eq!((&second, again), (&first, 0), "nothing unchanged is read twice");
+        assert_eq!(identify_with(&repo, ".venv/bin/python", None).unwrap().as_ref(), Some(&first));
+        use std::io::Write;
+        let os = d.path().canonicalize().unwrap().join("runtime/lib/python3.12/os.py");
+        std::fs::OpenOptions::new().append(true).open(os).unwrap().write_all(b"# changed\n").unwrap();
+        let (third, changed) = identify_cached();
+        assert_eq!(changed, 1, "only the changed file is read");
+        assert_ne!(third.runtime_sha256, first.runtime_sha256);
+        assert_eq!(identify_with(&repo, ".venv/bin/python", None).unwrap(), Some(third.clone()));
+        std::fs::write(&cache, "not a cache").unwrap();
+        let (fourth, reread) = identify_cached();
+        assert_eq!((fourth, reread), (third, read), "an unreadable cache is an empty one");
+    }
 
     fn fixture() -> (tempfile::TempDir, PathBuf) {
         let dir = tempfile::tempdir().unwrap();

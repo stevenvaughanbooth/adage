@@ -1,0 +1,42 @@
+### SessionStart
+{"systemMessage":"adage: the reflexes here were written by a newer adage; this one ({VERSION}) stays quiet · adage update"}
+
+### UserPromptSubmit
+(nothing)
+
+### PostToolBatch
+(nothing)
+
+### PreToolUse
+(nothing)
+
+### PostToolUseFailure
+(nothing)
+
+### PostToolBatch
+(nothing)
+
+### TurnStep
+(nothing)
+
+### Stop
+(nothing)
+
+### Stop
+(nothing)
+
+### UserPromptSubmit
+(nothing)
+
+### PreToolUse
+(nothing)
+
+### Standing
+(nothing)
+
+### SessionEnd
+(nothing)
+
+### SessionStart
+(nothing)
+

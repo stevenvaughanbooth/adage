@@ -3,15 +3,20 @@
 
 mod algebra;
 mod attachment;
+mod bash_edits;
 mod basics;
 mod chains;
 mod contexts;
 mod dead_end;
 mod finish_line;
+mod instinct_substitution;
 mod intent;
 mod interlocking;
 mod noticed;
+mod pipeline_substitution;
 mod receipt;
+mod refused;
+mod subagent;
 mod turn_step;
 mod typed_slots;
 

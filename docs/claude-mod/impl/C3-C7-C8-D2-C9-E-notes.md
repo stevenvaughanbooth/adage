@@ -211,12 +211,14 @@ Before request `n` (`n > 0`) the mod asks `{index: n, ending: false}`. When the 
 to request `n` ends the turn (`end_turn`, no `tool` chunk), it asks again `{index: n, ending:
 true}`: a prediction there is "in a row" only with a prediction at the same `n`, which cannot
 exist (request `n` was the model's). The mod then keeps the model's text chunks, yields the calls
-at block indexes after the model's last block, and the model's stop chunk with `stopReason:
-'tool_use'` (its `usage` kept).
+at block indexes after the model's last block, and the model's stop chunk with `stopReason: null`
+(its `usage` kept; the result's `stopReason` is null too). A `tool_use` stop here made the next
+request continue the server-side thread from the server's copy of the response, which holds no
+call, and the API refused the call's result (live-fixes-2-notes.md §6).
 
 ### Live-only (Q15)
 
-That the engine records the rewritten stop (`tool_use`) from the mod's chunk, continues the loop,
+That the engine records the rewritten stop (null since live-fixes-2 §6) from the mod's chunk, continues the loop,
 and that the transcript on disk keeps the `adage_` id; 10 of 10 runs keep the text, run the call,
 continue and end with no `block` (T-C8-02, T-C8-04's live half).
 

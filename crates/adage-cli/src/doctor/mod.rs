@@ -12,7 +12,9 @@
 //!
 //! Checks: the binary; the data directory; the compiled index (present, intact, current); the
 //! installed tracks; the embedding model and its checksums; each harness's hook registrations
-//! (and that they run an adage binary that exists); the Claude Code plugin's staged binary; kill
+//! (and that they run an adage binary that exists); the Claude Code plugin's staged binary; the
+//! versions of every Adage binary installed here (`versions`: two that disagree are a warning,
+//! never silent; onboarding plan O8); kill
 //! switches and experiment settings; the size of the session spools; the hooks' p95 latency on this
 //! machine, from the spools' `duration_us` ([`latency`]); fail-open errors, if any
 //! are recorded in `$ADAGE_HOME/fail-open.log` (one JSON object per line, newest last); the
@@ -39,6 +41,10 @@ const SPOOL_WARN_BYTES: u64 = 256 << 20;
 const RECENT_DAYS: u64 = 7;
 pub use crate::failopen::FAIL_OPEN_LOG;
 
+/// A check's lamp. A newer Adage being out is information, never a problem: it stays `Pass`.
+/// Two installed Adage versions that disagree are a problem (`Warn`, `versions`), and so is an
+/// index this binary cannot read because a newer one wrote it (`Fail`, `index`); `adage update` is
+/// the fix for both.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Status {
@@ -208,10 +214,19 @@ fn sha256_file(p: &Path) -> Option<String> {
     Some(io::hex(&h.finalize()))
 }
 
-fn binary() -> (Check, Option<PathBuf>) {
+/// This binary's version and path. A newer release (from the release check's cache: no request)
+/// is information, never a problem (onboarding plan O6): the check stays `Pass`, says
+/// ` · 0.2.0 is out` and carries `adage update` as its action, which doctor's `next` names when
+/// nothing else needs fixing.
+fn binary(paths: &Paths) -> (Check, Option<PathBuf>) {
     let exe = std::env::current_exe().ok().map(|p| p.canonicalize().unwrap_or(p));
     let at = exe.as_deref().map(|p| format!(" at {}", detect::tilde(p))).unwrap_or_default();
-    (pass("binary", format!("adage {}{at}", env!("CARGO_PKG_VERSION"))), exe)
+    let mut c = pass("binary", format!("adage {}{at}", env!("CARGO_PKG_VERSION")));
+    if let Some(r) = crate::update::newer(paths) {
+        c.detail.push_str(&format!(" · {} is out", r.version));
+        c.fix = Some(Fix::run("adage update"));
+    }
+    (c, exe)
 }
 
 fn data_dir(paths: &Paths) -> Check {
@@ -367,7 +382,9 @@ fn index_check(paths: &Paths, scan: &TrackScan) -> (Check, Index) {
                         detect::tilde(&p),
                         index::INDEX_FORMAT
                     ),
-                    Fix::manual("update this adage to the version that wrote it (an adage on PATH and the Claude Code plugin's must match)"),
+                    // This binary is the older one: updating it is the fix (the index is never
+                    // rebuilt by an older binary).
+                    Fix::run_in("run {} (every adage here must be at least as new as the one that wrote it)", "adage update"),
                 ),
                 Index::default(),
             );
@@ -630,17 +647,14 @@ fn hooks_checks(repo_root: Option<&Path>, exe: Option<&Path>) -> Vec<Check> {
                 (true, false) if any_opted_in && !opted_in(d.harness) => pass(
                     &name,
                     format!(
-                        "{} is installed; Adage is not set up with it (optional: `adage install {} --write`)",
-                        d.harness, d.harness
+                        "{} is installed; Adage is not set up with it (optional: `adage init` connects it)",
+                        d.harness
                     ),
                 ),
                 (true, false) => warn(
                     &name,
                     format!("{} is installed, but Adage's hooks are not registered with it", d.harness),
-                    Fix::run_in(
-                        "{} (this repository) or add `--scope user`",
-                        format!("adage install {} --write", d.harness),
-                    ),
+                    Fix::run_in("{} connects it", "adage init --yes --hooks user"),
                 ),
                 (false, false) => pass(&name, "harness not installed; nothing to check"),
             });
@@ -803,28 +817,146 @@ fn cloud_check_with(root: &Path, offloaded: &dyn Fn(&Path) -> bool) -> Option<Ch
     ))
 }
 
-fn plugin_check(repo_root: Option<&Path>, exe: Option<&Path>) -> Option<Check> {
+/// The Claude Code plugin's staged binary (`<plugin data>/bin/adage`): there, and the same version
+/// as this binary. Versions are compared before digests: two builds of one version are expected
+/// (a release's and a `cargo install` of the same tag), and only a checkout loaded with
+/// `--plugin-dir`, which a developer restages with `plugin/build.sh`, is told so.
+fn plugin_check(paths: &Paths, repo_root: Option<&Path>, exe: Option<&Path>) -> Option<Check> {
     let regs = detect::registrations(repo_root);
     let r = regs.iter().find(|r| r.kind == "plugin-data")?;
     let name = "claude-code plugin binary";
     let bin = r.binary.as_ref()?;
+    let at = detect::tilde(bin);
     let Some(theirs) = sha256_file(bin) else {
         return Some(fail(
             name,
-            format!("{} is a broken link", detect::tilde(bin)),
-            Fix::manual("start a new Claude Code session so the plugin restages it, or rebuild with plugin/build.sh"),
+            format!("{at} is a broken link"),
+            Fix::manual("start a new Claude Code session (the plugin relinks its binary)"),
         ));
     };
     let ours = exe.and_then(sha256_file);
-    Some(if ours.as_deref() == Some(theirs.as_str()) {
-        pass(name, format!("{} matches this binary", detect::tilde(bin)))
-    } else {
-        warn(
+    if ours.as_deref() == Some(theirs.as_str()) {
+        return Some(pass(name, format!("{at} matches this binary")));
+    }
+    let version =
+        crate::update::probe::askable(bin, repo_root).then(|| crate::update::probe::version_of(bin)).flatten();
+    let me = adage_store::release::VERSION;
+    Some(match version {
+        Some(v) if v != me => warn(
             name,
-            format!("{} is a different build (sha256 {}) from this binary", detect::tilde(bin), &theirs[..12]),
+            format!("{at} is adage {v}; this binary is adage {me}"),
+            skew_fix(paths, &[Found { at: bin.clone(), version: v, plugin: true }]),
+        ),
+        Some(v) if plugin_dir_checkout() => warn(
+            name,
+            format!("{at} is another build of adage {v} (sha256 {}) than this binary", &theirs[..12]),
             Fix::manual("rebuild and restage with plugin/build.sh, then start a new Claude Code session"),
-        )
+        ),
+        Some(v) => pass(name, format!("{at} is adage {v}, as this binary (another build of it)")),
+        None => warn(
+            name,
+            format!(
+                "{at} is a different build (sha256 {}) from this binary, and did not say its version",
+                &theirs[..12]
+            ),
+            Fix::manual("start a new Claude Code session (the plugin relinks its binary)"),
+        ),
     })
+}
+
+/// No Claude Code marketplace lists Adage as installed (`plugins/installed_plugins.json`): the
+/// plugin's data comes from a checkout loaded with `--plugin-dir`.
+fn plugin_dir_checkout() -> bool {
+    let Some(file) = detect::claude_dir().map(|d| d.join("plugins/installed_plugins.json")) else { return true };
+    let Ok(bytes) = std::fs::read(file) else { return true };
+    let doc: serde_json::Value = serde_json::from_slice(&bytes).unwrap_or_default();
+    !doc["plugins"].as_object().is_some_and(|m| m.keys().any(|k| k.split('@').next() == Some("adage")))
+}
+
+/// An installed Adage binary and the version it answered.
+struct Found {
+    at: PathBuf,
+    version: String,
+    /// The Claude Code plugin's staged binary.
+    plugin: bool,
+}
+
+/// The fix when installed versions disagree: `adage update` when this binary is older than one of
+/// them (it updates this one, and with it the plugin `adage init` staged); when this binary is the
+/// newest, what updates each older one.
+fn skew_fix(paths: &Paths, others: &[Found]) -> Fix {
+    use adage_store::release::{is_newer, VERSION};
+    if others.iter().any(|f| is_newer(&f.version, VERSION)) {
+        return Fix::run("adage update");
+    }
+    let Some(old) = others.iter().find(|f| is_newer(VERSION, &f.version)) else {
+        return Fix::run("adage update");
+    };
+    if old.plugin {
+        // The plugin `adage init` staged from this install follows it; the published one is
+        // updated by Claude Code.
+        return if paths.plugin().join(".claude-plugin/marketplace.json").is_file() {
+            Fix::run_in("{} stages the plugin again from this binary", "adage update")
+        } else {
+            Fix::manual("in Claude Code: /plugin, choose adage, then Update (then start a new session)")
+        };
+    }
+    Fix::manual(format!(
+        "update the adage at {} the way it was installed (`{} update`), or remove it",
+        detect::tilde(&old.at),
+        detect::command_for(&old.at)
+    ))
+}
+
+/// `versions`: every Adage binary installed here (this one, `PATH`'s `adage`, the Claude Code
+/// plugin's, and each one a registration runs) answers the same version. Only binaries that look
+/// like Adage's, outside this repository, are asked (`update::probe::askable`).
+fn versions_check(paths: &Paths, repo_root: Option<&Path>, exe: Option<&Path>) -> Check {
+    use crate::update::probe;
+    let me = adage_store::release::VERSION;
+    let mut seen: Vec<PathBuf> = exe.map(|e| e.to_path_buf()).into_iter().collect();
+    let mut found: Vec<Found> = Vec::new();
+    let mut candidates: Vec<(PathBuf, bool)> = Vec::new();
+    candidates.extend(detect::on_path(&format!("adage{}", std::env::consts::EXE_SUFFIX)).map(|p| (p, false)));
+    for r in detect::registrations(repo_root) {
+        if let Some(b) = r.binary {
+            candidates.push((b, r.kind == "plugin-data"));
+        }
+    }
+    for (bin, plugin) in candidates {
+        let resolved = bin.canonicalize().unwrap_or_else(|_| bin.clone());
+        if seen.contains(&resolved) || !probe::askable(&bin, repo_root) {
+            continue;
+        }
+        seen.push(resolved);
+        if let Some(version) = probe::version_of(&bin) {
+            found.push(Found { at: bin, version, plugin });
+        }
+    }
+    let differ: Vec<&Found> = found.iter().filter(|f| f.version != me).collect();
+    let describe = |f: &Found| {
+        let whose = if f.plugin { " (the Claude Code plugin's)" } else { "" };
+        format!("adage {} at {}{whose}", f.version, detect::tilde(&f.at))
+    };
+    if differ.is_empty() {
+        let also = if found.is_empty() {
+            "no other adage is installed here".to_string()
+        } else {
+            format!(
+                "as is every other adage here: {}",
+                found.iter().map(|f| detect::tilde(&f.at)).collect::<Vec<_>>().join(", ")
+            )
+        };
+        return pass("versions", format!("this binary is adage {me}; {also}"));
+    }
+    warn(
+        "versions",
+        format!(
+            "this binary is adage {me}, but {}: hooks may run one version while you read another",
+            differ.iter().map(|f| describe(f)).collect::<Vec<_>>().join("; ")
+        ),
+        skew_fix(paths, &found),
+    )
 }
 
 fn kill_switches(repo_root: Option<&Path>) -> Check {
@@ -1157,7 +1289,7 @@ fn hook_delivery_checks(paths: &Paths, root: Option<&Path>) -> Vec<Check> {
 /// Every check, in display order, for the repository at `repo_root` (if any). `adage watch` and
 /// `adage ui` re-run these every few seconds.
 pub fn checks(paths: &Paths, repo_root: Option<&Path>) -> Vec<Check> {
-    let (bin, exe) = binary();
+    let (bin, exe) = binary(paths);
     let scan = scan_tracks(&paths.tracks());
     let (index, idx) = index_check(paths, &scan);
     let mut checks = vec![
@@ -1172,7 +1304,8 @@ pub fn checks(paths: &Paths, repo_root: Option<&Path>) -> Vec<Check> {
     ];
     checks.extend(hooks_checks(repo_root, exe.as_deref()));
     checks.extend(hook_delivery_checks(paths, repo_root));
-    checks.extend(plugin_check(repo_root, exe.as_deref()));
+    checks.extend(plugin_check(paths, repo_root, exe.as_deref()));
+    checks.push(versions_check(paths, repo_root, exe.as_deref()));
     checks.extend(cloud_check(repo_root));
     checks.push(kill_switches(repo_root));
     checks.push(rewrites_check(paths));
@@ -1214,19 +1347,27 @@ pub fn render<W: std::io::Write>(o: &mut adage_term::Out<W>, checks: &[Check]) -
                 .pad_to(10 + name_w)
                 .quiet(c.detail.clone()),
         )?;
-        // A passing check has nothing to fix; one with a switch (rewrites) says how to flip it.
+        // A passing check has nothing to fix; one with a switch (rewrites) says how to flip it,
+        // and the binary a newer release says what brings it.
         if let Some(fix) = &c.fix {
-            let lead = if c.status == Status::Pass { "switch " } else { "fix " };
+            let lead = match (c.status, c.check.as_str()) {
+                (Status::Pass, "binary") => "update ",
+                (Status::Pass, _) => "switch ",
+                _ => "fix ",
+            };
             o.line(&Line::new().pad_to(10 + name_w).faint(lead).push(Role::Command, fix.prose()))?;
         }
     }
     o.blank()?;
-    // The first failing check's fix, else the first warning's; else what to do next.
+    // The first failing check's fix, else the first warning's; else a newer release's update;
+    // else what to do next.
     let first =
         checks.iter().find(|c| c.status == Status::Fail).or_else(|| checks.iter().find(|c| c.status == Status::Warn));
-    match first.and_then(|c| c.fix.as_ref().map(|fx| (c, fx))) {
-        Some((c, fx)) => o.next(&fx.next(), &format!("fixes {}", c.label))?,
-        None => o.next("adage status", "everything checks out; see the reflexes in effect")?,
+    let update = checks.iter().find(|c| c.check == "binary" && c.status == Status::Pass).and_then(|c| c.command());
+    match (first.and_then(|c| c.fix.as_ref().map(|fx| (c, fx))), update) {
+        (Some((c, fx)), _) => o.next(&fx.next(), &format!("fixes {}", c.label))?,
+        (None, Some(cmd)) => o.next(cmd, "a newer Adage is out; everything else checks out")?,
+        (None, None) => o.next("adage status", "everything checks out; see the reflexes in effect")?,
     }
     Ok(())
 }
@@ -1434,10 +1575,8 @@ mod tests {
         let (c, idx) = index_check(&paths, &scan);
         assert_eq!(c.status, Status::Fail);
         assert!(c.detail.contains("is newer than this binary"), "{}", c.detail);
-        assert!(
-            c.fix.as_ref().is_some_and(|f| f.command().is_none() && f.prose().contains("update this adage")),
-            "{c:?}"
-        );
+        // T-O8-03: the fix is the command that updates this (older) binary.
+        assert_eq!(c.fix.as_ref().and_then(Fix::command), Some("adage update"), "{c:?}");
         assert!(idx.routes.is_empty());
         // The same bytes at this binary's own format are a damaged index, recompiled as before.
         let mut same = newer.clone();

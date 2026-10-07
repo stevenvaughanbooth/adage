@@ -95,9 +95,9 @@ the cross-cutting set.
 | `TurnStep` (§3.2) | C1 | T-C1-01 … 13 |
 | `predict` grant (§3.2) | C2 | T-C2-01 … 09 |
 | Receipt as result, `$.tool.check` (§3.3, §3.4) | C3 | T-C3-01 … 07 |
-| The mod's `turn.step`, sim (§3.2) | C4 | T-C4-01 … 06 |
+| The mod's `turn.step`, sim (§3.2) | C4 | T-C4-01 … 08 |
 | Standing, compaction, routing (§3.5–3.7) | C5 | T-C5-01 … 05 |
-| The dead end that never runs (§3.4, §1b.1) | C6 | T-C6-01 … 05 |
+| The dead end that never runs (§3.4, §1b.1) | C6 | T-C6-01 … 07 |
 | Chains and multi-call steps (§3.2, §1b.1) | C7 | T-C7-01 … 04 |
 | The finish line at the last step (§3.2, §1b.1) | C8 | T-C8-01 … 04 |
 | Attachment and the mod capabilities (§1b.3, §3.6, §3.8) | C9 | T-C9-01 … 05 |
@@ -273,12 +273,54 @@ the Then itself.
   `session_start` record whose `bin` is `adage-exec`, and the reverse without it.
 - **T-A8-03 · L7 · one mod.** The activation probe is a presence probe: with the binaries present
   the mod is active, with none it is inert; the two-copy logic and its tests are removed.
-- **T-A8-04 · L2 · the alias.** The retired exec plugin's `hooks.json` registers `SessionStart`
-  alone; its shim prints its one line, relinks a seeded stale `bin/adage-exec` to `scripts/quiet`
-  and exits 0; with both plugins installed no event produces two records.
+- **T-A8-04 · L2 · the alias.** *Retired by onboarding plan O1, which deleted the alias before any
+  release; T-O1-04 checks it stays gone.* The retired exec plugin's `hooks.json` registered
+  `SessionStart` alone; its shim printed its one line, relinked a seeded stale `bin/adage-exec` to
+  `scripts/quiet` and exited 0; with both plugins installed no event produced two records.
 - **T-A8-05 · L2 + L5 · timeouts and startup.** `hooks.json` carries 30 s on `PostToolBatch` and
   `Stop`; an E2 action that takes 8 s completes under the one plugin; `release_plugin_startup`'s
   thresholds hold with two binaries staged.
+
+### O1 · One plugin, three binaries (onboarding plan)
+
+- **T-O1-01 · L2 · staging needs adage-train.** `scripts/test-stage-plugin.mjs`: `stage-plugin.mjs
+  --bins` with every target's binaries but no `adage-train` for one target fails, naming it; the
+  complete set passes `check-plugin.mjs --staged`, which fails once that file is removed.
+- **T-O1-02 · L2 · the third binary.** `plugin/test/session-start.test.sh`: bundled
+  `adage-train` is verified and linked as `bin/adage-train -> adage-train-<sha>`; tampered with, or
+  absent with nothing on `PATH`, only `bin/adage-train` goes (a seeded stale link included),
+  `adage` serves and nothing is said; on `PATH`, beside a `PATH` adage, beside npm's platform
+  binary, and as a Windows copy, it is found. `plugin/build.sh --no-build` stages the fixture,
+  one `SHA256SUMS` line per binary, and refuses (writing nothing) without `adage-train`.
+- **T-O1-03 · L2 · `adage train` from the plugin.** `zero_config_plugin.rs`
+  `train_runs_from_the_plugin` (unix): a staged plugin's `bin/adage train --help` execs the
+  plugin's `bin/adage-train` with its arguments, not one on `PATH`.
+- **T-O1-04 · L2 · one plugin.** `scripts/test-check-plugin.mjs`: `check-plugin.mjs` passes as
+  committed and fails when `marketplace.json` lists a second plugin, when the description says
+  `on PATH` or names Homebrew, when `plugin/claude-code-exec/` exists, and when the shim stops
+  placing `adage-train`.
+- **T-O1-05 · L2 · the validator.** CI: `claude plugin validate --strict .` passes with one entry;
+  `VALIDATE.txt` is regenerated when a hook moves (unchanged by O1).
+
+### O2 · Release tooling (onboarding plan)
+
+- **T-O2-01 · L1 · bump round-trips.** `xtask/src/release.rs`
+  `bump_round_trips_touching_the_named_files_only`: on a scratch copy, `bump` to the next patch
+  changes exactly `Cargo.toml`, `Cargo.lock`, the plugin and marketplace manifests, the npm
+  templates and the CHANGELOG heading, only their version strings; bumping back with
+  `--no-changelog` restores every version file byte for byte. `bump_refuses_without_writing`:
+  a malformed version, no Unreleased section, or a version already released writes nothing.
+- **T-O2-02 · L1 · drift fails the check.** `release_check_fails_on_a_drifted_version`: a drifted
+  `plugin.json`, marketplace plugin entry, npm template or lockfile member is named with both
+  versions; an unlisted `"version"` key is named too. `the_release_versions_agree` holds on the
+  repository itself.
+- **T-O2-03 · L1 · a pull request plans, no Homebrew.**
+  `the_release_workflow_plans_on_a_pull_request_with_no_homebrew`: `release.yml` names no
+  Homebrew, its jobs are plan, build, host, the two custom publish jobs and announce, a pull
+  request runs `dist plan`, the SBOM patch is applied; `cargo xtask release-check --require-dist`
+  (CI) regenerates it with the pinned dist and plans no `.rb`.
+- **T-O2-04 · L2 · the publisher's smoke.** `scripts/test-stage-plugin.mjs`: the archive route
+  accepts a verified set of three archives and refuses a missing or wrong `.sha256` for each.
 
 ### C1 · `TurnStep`
 
@@ -287,9 +329,20 @@ the Then itself.
   `TurnStep { turn_id: t, index: 1 }` is decided. Then `Decision.predicted` is `{ route: R, tool:
   Bash, input.command: "make gen", kind: run }` and `last_step_predicted == (t, 1)`,
   `predictions == 1`. An armed obligation predicts with `kind: obligation`.
-- **T-C1-02 · L1 · never two in a row, never at index 0.** `TurnStep { t, 0 }` predicts nothing
-  with a pending present; the step after a prediction with no batch between predicts nothing;
-  after a `Batch` that observes `exec make gen`, the pending is cleared and nothing is pending.
+- **T-C1-02 · L1 · never two in a row; never at index 0 except a run reflex fired on this
+  prompt under grant and verdict.** `TurnStep { t, 0 }` predicts nothing with a pending present
+  that this prompt did not direct (an earlier turn's), nor an armed obligation, nor at its end;
+  the step after a prediction with no batch between predicts nothing; after a `Batch` that
+  observes `exec make gen`, the pending is cleared and nothing is pending. The one case: after
+  `Prompt "Pick up W-2042"`, `TurnStep { t, 0 }` predicts the lookup (`kind: run`, its slot
+  bound from the prompt, `predicted_at (t, 0)`), the reads its result binds follow at `{ t, 1 }`
+  as a chain's second step and nothing at `{ t, 2 }`; the control arm records `would_predict` at
+  the same step. Each refusal at index 0: no grant on it; the step's end; a batch, a failure or a
+  Stop since the prompt; a subagent's step; the cap (`would_predict` only); a route predicted
+  before; a dead end the session was told; a verdict other than `allow` (withheld, the route
+  held; the dry run commits nothing); a skill the prompt directed, a sequence, a finish line or a
+  read batch, even named as the prompt's. In process (`adage-hook`): the prompt's lookup through
+  the mod's two phases at index 0.
 - **T-C1-03 · L1 · the cap.** With `runtime.predict_cap = 2`, the third eligible step predicts
   nothing and `would_predict` is set.
 - **T-C1-04 · L1 · control.** In the control arm `predicted` is `None` and `would_predict` is
@@ -400,9 +453,9 @@ the Then itself.
 
 ### C6 · The dead end that never runs
 
-- **T-C6-01 · L1 · the plan.** A `PreToolUse` dry run for a call meeting a `fire` `avoid` route with
-  a fixed `instead` answers `substitute`; a `prime` `avoid` route, a slotted `instead`, or no
-  `instead` answers none.
+- **T-C6-01 · L1 · the plan.** A `PreToolUse` dry run for a call meeting a learned `fire` `avoid`
+  route with a fixed `instead` answers `substitute`; a learned `prime` `avoid` route, a slotted
+  `instead`, or no `instead` answers none (a declared instinct: T-C6-07).
 - **T-C6-02 · L2 · recorded as a substitution.** `verdict: { engine: "same" }` spools one record
   with `Judgement::Substituted`; the feed, `graph --json` and the savings estimate count it as
   avoided, never as a follow; the control arm spools `would_substitute` and answers nothing.
@@ -412,6 +465,28 @@ the Then itself.
   `check_graph` counts one substitution.
 - **T-C6-05 · L10 · the demo.** `dead_end_hits` in the `mod` arm is lower than in `adage` with
   `hidden_passed` unchanged.
+- **T-C6-06 · L1, L4, L7 · a dead end piped into filters.** A call whose first stage meets the
+  pair and whose later stages are only output filters (`tail`, `head`, `grep`, `wc`, `cat`, `tee`,
+  `sort`, `uniq`, with their arguments) plans the whole new pipeline: the first stage replaced, its
+  own `2>&1` and the filters byte-identical (`make test 2>&1 | tail -5`), the context line naming
+  the stage replaced. A list (`;`, `&&`, `||`, a newline), any other redirection, `|&`, a subshell
+  or group, an expansion, an assignment prefix, a quoted dead end, or a later stage that is not an
+  output filter plans nothing. The verdict is recorded as T-C6-02 records a plain one; the mod reads
+  the rules on both whole pipelines and runs the new one only on the same verdict, never in the
+  control arm or observe mode.
+- **T-C6-07 · L1, L2, L4 · a declared instinct's dead end.** An instinct `avoid` (an `avoid` step,
+  or a run step after the call's failure, as U1 binds `make test` after `python3 -m unittest`
+  fails naming `ACME_ENV`) in service (forming or firm) with a fixed, slot-free `instead` plans
+  `substitute` for the plain call and, under T-C6-06's rule, for the call piped into filters; the
+  context line gives the declared reason (`this repository's Makefile declares make test in its
+  place (…)`, or `this repository's build` when no file is named) and quotes no failure. A
+  nascent, dormant or extinguished instinct, a slotted `instead`, an `instead` that is the call,
+  and an `instead` that runs the call's own tool in another environment (U11's
+  `.venv/bin/python -m pytest`, `uv run pytest`: the rewrite's) plan nothing. Treated, the verdict
+  substitutes and judges it `substituted`; control and observe mode spool `would_substitute`. The
+  sim binds the sandbox Makefile's instincts with nothing learned and its dead-end turn, plain and
+  as run 3 piped it, is substituted through the binary in both arms. The command hook's answers
+  are unchanged.
 
 ### C7 · Chains and multi-call steps
 
@@ -430,7 +505,11 @@ the Then itself.
 - **T-C8-01 · L1 · the answer.** `TurnStep { ending: true }` with an armed, unmet obligation under
   a `predict` grant answers the obligation's call; without the grant, or with it met, nothing.
 - **T-C8-02 · L7 · the stop is replaced.** On an `end_turn` stop the hook keeps every text
-  chunk, yields the call and a `tool_use` stop; on `tool_use` stops it forwards unchanged.
+  chunk, yields the call after the model's last block, and ends the response with the model's
+  stop chunk with no reason (`stopReason: null`, its usage kept; the step's result says the
+  same). The server holds that response without the call, so the next request must start the
+  thread afresh, the call in it, never continue from the server's copy (the kit's
+  `engineThread` and `unseenResults`); on `tool_use` stops it forwards unchanged.
 - **T-C8-03 · L2 · met by the call.** The obligation is marked met when its call is observed in
   the next batch; the Stop gate then has nothing to ask; if the call failed, the gate asks as
   today.
@@ -757,13 +836,19 @@ handlers directly and checking `$.state` and the recorded `$.ui.*` calls.
 
 ### C4 · The mod's `turn.step`
 
-- **T-C4-01 · the generator.** With a stubbed `ask` answering a prediction, the hook yields
-  exactly three chunks (`tool` with an `adage_<route>_<turn>_<index>` id, `input` with the
-  prediction's JSON, `stop` with `stopReason: 'tool_use'`) and returns `{ stopReason: 'tool_use',
-  usage: null, toolUses: [...] }` without calling `next`.
-- **T-C4-02 · forwarded.** With `ask` answering nothing or `{ ok: false }`, with `e.agentId` set,
-  or with `e.index === 0`, the hook is `yield* next(e)` and asks nothing in the last two cases;
-  the ask's timeout is 250 ms.
+- **T-C4-01 · the generator.** With a stubbed `ask` answering a prediction and every call
+  allowed, the hook yields exactly three chunks (`tool` with an `adage_<route>_<turn>_<index>_<k>`
+  id, `input` with the prediction's JSON, `stop` with `stopReason: null`, `usage: null`) and
+  returns `{ stopReason: null, usage: null, toolUses: [...] }` without calling `next`.
+- **T-C4-02 · forwarded.** With `ask` answering nothing or `{ ok: false }`, or with `e.agentId`
+  set (its first step included), the hook is `yield* next(e)` and asks nothing in the last case;
+  the ask's timeout is 250 ms. At `e.index === 0` the hook asks the dry run; a `run` answer goes
+  on to the verdict and, allowed, is yielded before the model's first response (no request, a
+  null stop, the id `adage_<route>_<turn>_0_0`, the line "Adage made this call in your place
+  before your first response"); any other kind is forwarded with no verdict asked; the step's end
+  is never asked; with the kit's `engineThread`, the model's first real request after it starts
+  the thread afresh with the call and its result in it, after a session's first prompt or a later
+  one.
 - **T-C4-03 · skills and routing.** A `kind: skill` prediction yields the `Skill` tool with `{
   skill, args? }` only when `skills_invoke` is on and `$.command.list()` lists the skill; a
   `routine` answer with `routine_model` set calls `next({ ...e, model, effort: 'low' })`.
@@ -776,6 +861,32 @@ handlers directly and checking `$.state` and the recorded `$.ui.*` calls.
   shows under it, and the transcript on disk keeps the `adage_` id.
 - **T-C4-06 · L10 · end to end.** The demo's `mod` arm runs an item with one predicted step; the
   spool's `turn_step` record and the transcript agree on the id.
+- **T-C4-07 · only under the person's permissions.** Before yielding, the hook asks
+  `$.tool.check` for every call of the prediction (a chain's each read, a skill, the finish line's
+  command). Every verdict `allow`: yielded as T-C4-01. Any `ask`, `deny`, or no verdict (the check
+  throws or answers anything else): nothing is yielded or recorded as predicted, the request goes
+  out and its stream passes unchanged (at the finish line the model's `end_turn` stop too), and the
+  step, the first call not allowed, the verdict and the engine's sentence are kept. Auto mode as
+  the engine reports it (`{ decision: 'ask', reason: 'This command requires approval' }` for every
+  Bash call, `{ decision: 'allow', rule: 'Read' }` for a read an allow rule names) holds a Bash step
+  and yields a read chain. The band's attention line says once per session, until the next prompt,
+  `» adage left a step to the agent: your permissions do not allow it unasked` (`band.withheld`).
+- **T-C4-08 · the binary's two phases of a step.** The mod asks `TurnStep` with `dry_run: true`
+  first: a step that would be yielded is answered `{ predict }` and nothing is committed (no
+  record, the state as it was: no bound counts it and the route stays offered; asked again, the
+  same answer); a dry run that would yield nothing (nothing to predict, the cap reached, the
+  control arm, observe mode) is decided and recorded at once, as a step with no phase. After a
+  prediction the mod sends `verdict: { permission, route, tool?, reason? }`: `allow` commits and
+  records exactly as a step with no phase does (the same record and state), and the mod yields only
+  the answer naming the dry run's route and calls; `ask`, `deny`, `none` or anything else answers
+  nothing (or `{ routine: true }` when the step is routed), records the `turn_step` with
+  `would_predict`, `withheld: "permission"` and `permission: { decision, tool, reason }` and no
+  `predicted_at`, counts against neither `runtime.predict_cap` nor the in-a-row rule, and adds the
+  route to `SessionState::withheld_routes` (rebuilt from the spool), so it is not offered again
+  that session while another route is. A verdict naming another route than the one found answers
+  and records nothing. A skill the session does not list is sent as `none` and raises no band line.
+  A payload with neither field (the command hook) is decided as before: the goldens and parity are
+  unchanged.
 
 ### D5 · Drawing noticed, learning and skills
 
@@ -910,7 +1021,7 @@ before the question's result is committed.
 | --- | --- | --- |
 | `cargo fmt`, `clippy -D warnings`, `cargo xtask affected` (the changed packages, the readers of changed fixtures, and every dependent; a change outside every package tests everything; pushes to `main` test everything on every platform), the architecture guards `cargo test -p xtask` always (`layers`, `affected`, `hygiene`, `suites`) | every PR | merge |
 | Every new test that reads outside its crate (the sim's fixtures, `evals/sandboxes/acme-billing`, `plugin/claude-code/hooks/fixtures/`) is declared in `READS` in `xtask/src/affected.rs`; every new Python suite in `xtask/src/suites.rs`; no raw run output committed (the hygiene guard) | every PR | merge |
-| `node scripts/check-plugin.mjs` (modules, types, allow-list, pin), `test-stage-plugin.mjs`, `claude plugin validate --strict` ×2 diffed against `VALIDATE.txt`, `claude plugin test` ×2 (CLI pinned at 2.1.288) | every PR | merge |
+| `node scripts/check-plugin.mjs` (modules, types, allow-list, pin, one plugin), `test-check-plugin.mjs`, `test-stage-plugin.mjs`, `cargo xtask release-check --require-dist`, `claude plugin validate --strict` on the plugin (diffed against `VALIDATE.txt`) and the marketplace, `claude plugin test` (CLI pinned at 2.1.288) | every PR | merge |
 | `plugin/test/session-start.test.sh`, `npm/test/launcher.test.mjs` | every PR | merge |
 | `cargo test -p adage-eval --test gates` and `--test predict_gate` | weekly; required before merging C1, D1, D2, D3 | merge of those chunks |
 | `cargo build -p adage-exec` before `cargo test -p adage-cli` (`harness_sim.rs` tests the built `adage-exec` and skips when it is missing, so a stale binary would test old code) | every PR | merge |

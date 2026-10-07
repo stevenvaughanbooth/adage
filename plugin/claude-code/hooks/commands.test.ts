@@ -1,11 +1,11 @@
-// `/adage <verb>` (commands.ts; ux-design §7; T-B3-09, T-B4-04, T-B4-08): `runCommand` as a pure
+// `/adage <verb>` (commands.ts; ux-design §7; T-B3-09, T-B4-04, T-B4-08, T-O9-08): `runCommand` as a pure
 // function of its deps, then `onCommand` through the engine (the recorded `$.ui.open`, argv and ask).
 import { describe, expect, test } from 'claude-code/testing'
 
 import { ON_TEXT, OFF_TEXT, PAUSED, RESUMED, runCommand, tabOf, verbOf } from './commands'
 import type { CommandDeps } from './commands'
-import { ON_QUESTION } from './ask'
-import { BAND, CARD, CLI, LINE, SURFACES, mountPane, start, world } from './fixtures/kit'
+import { ON_QUESTION, UPDATE_ANSWERS } from './ask'
+import { BAND, CARD, CLI, LINE, SURFACES, begin, mountPane, start, world } from './fixtures/kit'
 import type { View } from './plugin'
 import { cardOf } from './reads'
 
@@ -22,6 +22,7 @@ function deps(over: Partial<CommandDeps> = {}) {
     pause: async () => true,
     map: async () => 'http://localhost:43123/',
     askOn: undefined,
+    askUpdate: undefined,
     ...over,
   }
   return { d, calls }
@@ -82,6 +83,23 @@ describe('T-B3-09, T-B4-04 · what each verb answers (ux-design §7)', () => {
     expect((await runCommand('savings', deps().d)).text).not.toContain('reflexes    ')
   })
 
+  test('T-O9-08 · update: the ask when the card says a release is newer; the latest, or the terminal where no one can be asked', async () => {
+    const offer = { have: '0.1.0', latest: '0.2.0', next: '/adage update', notes: ['fixes hook latency'] }
+    const newer = async () => cardOf({ ...CARD, update: { current: '0.1.0', latest: '0.2.0', next: '/adage update', text: '0.2.0 is out (you have 0.1.0)', notes: 'fixes hook latency', channel: 'plugin' } })
+    expect(verbOf('update')).toBe('update')
+    expect((await runCommand('update', deps().d)).text).toBe('adage 0.1.0 is the latest.')
+    expect((await runCommand('update', deps({ card: newer }).d)).text).toBe('Adage 0.2.0 is out; run adage update in a terminal.')
+    const asked: unknown[] = []
+    const { d, calls } = deps({ card: newer, askUpdate: u => void asked.push(u) })
+    expect(await runCommand('update', d)).toEqual({})
+    expect(asked).toEqual([offer])
+    expect(calls).toEqual([])
+    // A card that says nothing newer never opens it.
+    expect((await runCommand('update', { ...deps().d, askUpdate: u => void asked.push(u) })).text).toBe('adage 0.1.0 is the latest.')
+    expect(asked).toHaveLength(1)
+    expect((await runCommand('update', deps({ card: async () => undefined }).d)).text).toBe('adage is not answering here; run adage doctor in a terminal.')
+  })
+
   test('no card (the binary did not answer): one line that says what to do', async () => {
     expect((await runCommand('', deps({ card: async () => undefined }).d)).text).toBe('adage is not answering here; run adage doctor in a terminal.')
   })
@@ -114,6 +132,20 @@ describe('T-B3-09, T-B3-10, T-B4-08 · /adage through the engine', () => {
       await ui.unmount()
     }
     expect((await run('frobnicate'))?.split('\n')[0]).toBe(CARD.header)
+  })
+
+  test('T-O9-07, T-O9-08: /adage update opens the ask; its `update` answer is the press of exactly [cli, update], token on stdin', async ($, on) => {
+    const update = { current: '0.1.0', latest: '0.2.0', next: '/adage update', text: '0.2.0 is out (you have 0.1.0)', notes: null, channel: 'plugin' }
+    const w = world(on, { feed: FEED, card: { ...CARD, update }, ask: (q, o) => (q.startsWith('Adage 0.2.0 is out') ? 'update' : o[0]) })
+    await begin($, w)
+    const ran = w.ran.length
+    expect((await $.command.run({ command: 'adage', args: 'update' } as never)).text).toBeUndefined()
+    await w.clock.settle()
+    expect(w.asked).toEqual([{ question: 'Adage 0.2.0 is out (you have 0.1.0). Update now? It takes effect in your next session.', options: [...UPDATE_ANSWERS] }])
+    const pressed = w.ran.slice(ran).filter(r => r.argv[1] === 'update')
+    expect(pressed.map(r => r.argv)).toEqual([[CLI, 'update']])
+    expect(JSON.parse(pressed[0]?.init?.stdin ?? '{}').press).toMatch(/^[0-9a-f]{64}$/)
+    expect(pressed[0]?.init?.env?.CLAUDECODE).toBe('1')
   })
 
   test('T-B3-10: band off registers no band; pane auto opens unasked, manual does not', async ($, on) => {

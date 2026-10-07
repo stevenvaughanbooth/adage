@@ -15,7 +15,13 @@ normal learner and runtime operate locally on the CPU. It does not replace the m
 about a new bug or turn arbitrary observed shell commands into trusted automation.
 
 The first-use target is `adage init` in a repository, followed by learning existing sessions.
-The interactive wizard connects a detected harness and bootstraps that repository. Subsequent
+The interactive wizard connects a detected harness and bootstraps that repository. For Claude Code
+it installs the Adage plugin itself when `claude` is on `PATH`: the plugin's files travel inside the
+`adage` binary, `init` stages them with the binaries as a local marketplace under
+`$ADAGE_HOME/plugin/` and runs `claude plugin marketplace add` and `claude plugin install
+adage@adage-local`, then takes out any settings-file registration so each hook runs once; Codex and
+OpenCode get their hook files. `adage init --yes --hooks user` does the same without questions
+([usage](usage.md#commands)). Subsequent
 hooks can learn in the background. No history is a valid starting state: repository-derived
 instincts can help where applicable, and Adage learns as sessions accumulate. A repository with
 no applicable history or declared conventions must receive an honest “nothing learned yet.”
@@ -127,7 +133,7 @@ specific to reviewed actions; the pattern that nominates an action need not be a
 | Pre-call instinct | Rewrite a supported command to the repository's declared environment before its tool call executes | No additional model request for the rewrite | Narrow supported rewrite rules and runtime setting |
 | Read-only prefetch (E1) | Run an approved invocation in the execution sandbox and deliver its projected result | No model request to select or run that invocation; the next request can consume its result | Exact local execution grant or explicitly configured inert-observe policy |
 | Staged action (E2) | Run an approved verification/generation action in a disposable stage, inspect changes, then apply permitted outputs | No model request to perform the action; exceptional outcomes return to the agent | Exact local grant, execution policy, declared outputs and enforced sandbox |
-| Predicted call (the Claude Code mod) | At the boundary before a model request, make the call a directive Adage already delivered names (a command, a sequence's first step, the reads a lookup listed, an armed finish line at the turn's end) as the agent's own tool call, under Claude Code's own permission checks | No model request for that step; the model reads the call's result | A person's `predict` grant on that reflex (`adage-exec`); never in the control arm, never at a turn's first request, never twice in a row but for a chain's second step (the reads Adage's own lookup named), at most six per session |
+| Predicted call (the Claude Code mod) | At the boundary before a model request, make the call a directive Adage already delivered names (a command, a sequence's first step, the reads a lookup listed, an armed finish line at the turn's end) as the agent's own tool call, under Claude Code's own permission checks | No model request for that step; the model reads the call's result | A person's `predict` grant on that reflex (`adage-exec`); never in the control arm, never at a turn's first request but for the run reflex that turn's prompt directed (its slots bound from the prompt, such as the work-item lookup), never twice in a row but for a chain's second step (the reads Adage's own lookup named), at most six per session |
 | Skill at its step (`skill` reflex) | Say that the repository uses a skill at this point (everywhere); with the Claude Code mod, invoke an inert skill as the agent's own Skill tool call, and add to a trained skill's text, as the model reads it, what the replay in this repository verified or found stale | The model still decides whether to follow the skill; invoking it costs no request, and the added lines are plain facts | The reflex's evidence (prime at most); invoking needs a person's `predict` grant, `skills.invoke` on, and a skill `adage train` recorded as inert in a pack the person accepted |
 
 A **chain** is two steps without a model request between them: Adage makes the lookup the prompt
@@ -143,14 +149,26 @@ and the finish line it covers is met.
 A predicted call is not a CPU execution: the harness runs it exactly as if the model had asked
 for it, and Adage records it as its own (`adage_` tool-use ids, `by: adage` in the trace), so it is
 never counted as the agent following a reflex, never strengthens one, and is read by the learner
-as Adage's step, not the agent's. Without the mod, or without a grant, nothing is predicted and
-the hooks behave exactly as before. With the mod, each Bash call is decided once whoever asks (the
+as Adage's step, not the agent's. The mod makes the call only where Claude Code's own permission
+check, under the session's rules and mode, would let it run unasked: a call the rules or the mode
+would ask about or refuse is left to the model, and the request goes out as if nothing were
+predicted (in `auto` mode every Bash call goes to the mode's classifier, which has no verdict for a
+call no model request produced, so a Bash step is never taken there; reads allowed by a rule
+still are). The binary commits a step only after that check: the mod asks it twice, a dry run
+that answers the step and counts nothing, then the verdict, so a step left to the model is recorded
+as `withheld` (never as Adage's step), counts against no bound, and its route is not offered again
+that session. One refused anyway is recorded as `refused`, never as Adage's step taken, and meets no
+finish line (the Stop request still asks for it). Only the main loop is predicted for: a
+subagent's calls are recorded with its id (`agent`) but bind nothing the main loop's steps are
+predicted from. Without the mod, or without a grant, nothing is predicted and the hooks behave
+exactly as before. With the mod, each Bash call is decided once whoever asks (the
 mod's plan and verdict, then the command hook): the mod asks Claude Code's own permission check
 before it acts, so a receipt answers only a call the rules would have let run unasked, and a
 rewrite or a learned replacement runs only when the rules treat both commands alike (otherwise
 the binary's advice reaches the model beside the call as written). The repository's standing
 reflexes sit once in the session's cached system prompt instead of arriving at the first prompt,
-the project's environment note rides on the Bash tool's description, compaction is told to keep
+the project's environment note (and, when the mod asks, the repository's lookup conventions)
+rides on the Bash tool's description, compaction is told to keep
 the procedures the session followed, a subagent is told the conventions its task binds before its
 first request, and a step the model takes only to do what a delivered directive says can go to a
 smaller model the person chose (`runtime.routine_model`). Every hook record carries the hook's own
@@ -281,6 +299,13 @@ Automatic learning, matching, applicable installed instincts and advisory delive
 by the normal configuration. Supported command rewrites can avoid a procedural mistake before
 it occurs. These are the immediate-value path and must be tested without seeded benchmark rules.
 
+No hook reaches the network. The background learner makes one request a day at most, after it
+conditions a repository: whether a newer Adage is out (the npm registry, then GitHub's latest
+release), cached in `$ADAGE_HOME/cache/latest.json` for every surface to read (`update.check`,
+[usage](usage.md#updating)). Replacing the binaries is `adage update`, a person's command: it keeps
+the running binaries, runs the install's own package manager with the version pinned, verifies
+the result, re-points hook registrations with their diffs, and `adage update --rollback` undoes it.
+
 Running repository scripts automatically has an additional authority boundary. Learning a
 script does not approve it. Reviewing evidence does not approve execution. Enabling the executing
 hook does not grant every route. A person's execution grant is local and bound to repository,
@@ -307,9 +332,11 @@ replaced at every use. A decision made that way is recorded `via: press` (a term
 terminal`), and a grant for an action is two presses, stage then confirm, with what the action
 would change shown between. The press is a record and a guard against the model being steered,
 not a boundary against an agent with a shell; installing, settings that change what Adage learns
-from, sharing and every `adage-exec` verb stay a terminal's. One Claude Code plugin ships both
-binaries: its hooks run `adage-exec` while the execution marker exists (written by `delegate on`,
-or by the first confirmed action), else `adage`, from the next session; they are registered once.
+from, sharing and every `adage-exec` verb stay a terminal's. One Claude Code plugin ships all three
+binaries, verified against its checksums before they run: its hooks run `adage-exec` while the
+execution marker exists (written by `delegate on`, or by the first confirmed action), else
+`adage`, from the next session; they are registered once. `adage-train` sits beside `adage` in the
+plugin's data directory, so `adage train` works with nothing else installed.
 
 The script closure is not a complete dependency graph. An approved `make gen` can invoke
 repository code that is not individually pinned in its grant. The staged input snapshot catches

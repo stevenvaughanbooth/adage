@@ -22,9 +22,9 @@ describe('T-B1-02, T-B1-03 · activation', () => {
     const { chunks } = await drain($.turn.step(STEP))
     expect(chunks.map(c => c.kind)).toEqual(['tool', 'input', 'stop'])
     expect(w.models.map(x => x.index)).toEqual([])
-    // The probe, the session's Standing and the step ask the hook binary; the routine model is read
-    // from `adage` itself.
-    expect(w.ran.filter(r => r.argv[1] !== '--json').map(r => r.argv[0])).toEqual(['/data/bin/hook', '/data/bin/hook', '/data/bin/hook'])
+    // The probe, the session's Standing and the step's two phases (the dry run, the verdict) ask
+    // the hook binary; the routine model is read from `adage` itself.
+    expect(w.ran.filter(r => r.argv[1] !== '--json').map(r => r.argv[0])).toEqual(['/data/bin/hook', '/data/bin/hook', '/data/bin/hook', '/data/bin/hook'])
     expect(w.ran.filter(r => r.argv[1] === '--json').map(r => r.argv)).toEqual([['/data/bin/adage', '--json', '--for-session']])
   })
 
@@ -39,12 +39,40 @@ describe('T-B1-02, T-B1-03 · activation', () => {
     expect(w.sets).toEqual([])
   })
 
-  test('no CLAUDE_PLUGIN_DATA and a checkout root: nothing runs, inert, no PATH fallback', async ($, on) => {
+  test('no CLAUDE_PLUGIN_DATA, a checkout root and nowhere to derive a data directory from: nothing runs, inert, no PATH fallback', async ($, on) => {
     const w = world(on, { data: undefined, hook: { TurnStep: PREDICT }, model: 'read' })
     await start($, w, null, false)
     const { chunks } = await drain($.turn.step(STEP))
     expect(chunks).toHaveLength(4)
     expect(w.ran).toEqual([])
+  })
+
+  test('a --plugin-dir plugin (no CLAUDE_PLUGIN_DATA in the engine\'s process): the data directory the engine gives it, once the shim linked bin/hook there', async ($, on) => {
+    // `claude --plugin-dir <dir>` with CLAUDE_CONFIG_DIR=/cfg: the engine keys the plugin
+    // `adage@inline` and hands its command hooks /cfg/plugins/data/adage-inline (the live log).
+    const LINK = '/cfg/plugins/data/adage-inline/bin/hook'
+    let linked = false
+    const shim = () => {
+      linked = true
+      return {}
+    }
+    const w = world(on, { data: undefined, env: { CLAUDE_CONFIG_DIR: '/cfg', HOME: '/home/me' }, present: p => linked && p === LINK, hook: { TurnStep: PREDICT }, model: 'read', classic: { SessionStart: shim } })
+    await start($, w, null, false)
+    expect(w.ran).toEqual([]) // a first session: no link yet, nothing run
+    expect((await drain($.turn.step(STEP))).chunks).toHaveLength(4) // inert: forwarded
+    await $.classic.SessionStart({ source: 'startup' } as never)
+    expect(w.ran[0]).toEqual({ argv: [LINK, 'version'], init: { timeoutMs: 1000, env: { CLAUDECODE: '1' } } })
+    expect((await drain($.turn.step(STEP))).chunks).toHaveLength(3) // active: predicted
+    expect(w.ran.find(r => r.argv[3] === 'TurnStep')?.argv[0]).toBe(LINK)
+    expect(w.models.map(x => x.index)).toEqual([2])
+  })
+
+  test('a --plugin-dir plugin with no CLAUDE_CONFIG_DIR: `~/.claude/plugins/data/adage-inline`, by HOME', async ($, on) => {
+    const LINK = '/home/me/.claude/plugins/data/adage-inline/bin/hook'
+    const w = world(on, { data: undefined, env: { HOME: '/home/me' }, present: p => p === LINK, hook: { TurnStep: PREDICT }, model: 'read' })
+    await start($, w, null, false)
+    expect(w.ran.map(r => r.argv.slice(0, 2))).toEqual([[LINK, 'version'], [LINK, 'hook']])
+    expect((await drain($.turn.step(STEP))).chunks.map(c => c.kind)).toEqual(['tool', 'input', 'stop'])
   })
 
   test('a link the SessionStart shim makes after session.start is probed again once the shim ran', async ($, on) => {

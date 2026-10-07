@@ -1,6 +1,6 @@
 //! How a tool call is read: its canonical template keys (what triggers, follows and obligations
-//! match on), the argv of each command it ran, its command line, and the test functions an edit
-//! adds.
+//! match on; for a Bash call in a batch, with the files it wrote), the argv of each command it
+//! ran, its command line, and the test functions an edit adds.
 
 use crate::{orient, Call, Ctx};
 use adage_core::keys::{self, template_key};
@@ -38,7 +38,25 @@ pub fn command_key(command: &str, table: &CommandTable) -> String {
 
 pub(crate) fn call_keys(call: &Call, ctx: &Ctx) -> Vec<(String, adage_core::Normalized)> {
     let cwd = ctx.root.to_string_lossy();
-    keys::flatten(&normalize_tool(&call.tool, &call.input, &cwd, ctx.table))
+    keyed(normalize_tool(&call.tool, &call.input, &cwd, ctx.table), ctx)
+}
+
+/// [`call_keys`] for a call a tool batch reports as made: a Bash command's actions with what it
+/// was seen to write and run beyond them ([`adage_core::shell::normalize_shell_observed`]: each
+/// file a redirection, `tee` or an inline Python program writes, as an edit of that path right
+/// after the action that wrote it, and the commands after a heredoc's start). So an edit made
+/// through Bash arms what an edit tool's would (triggers, contexts, the finish line), and the step
+/// that meets it in the same command is seen after it. One parse, as before.
+pub(crate) fn batch_keys(call: &Call, ctx: &Ctx) -> Vec<(String, adage_core::Normalized)> {
+    let cwd = ctx.root.to_string_lossy();
+    match (call.tool.as_str(), call.input.get("command").and_then(Value::as_str)) {
+        ("Bash", Some(command)) => keyed(adage_core::shell::normalize_shell_observed(command, &cwd, ctx.table), ctx),
+        _ => call_keys(call, ctx),
+    }
+}
+
+fn keyed(normalized: Vec<adage_core::Normalized>, ctx: &Ctx) -> Vec<(String, adage_core::Normalized)> {
+    keys::flatten(&normalized)
         .into_iter()
         .map(|mut n| {
             keys::canonicalise(&mut n, ctx.root);

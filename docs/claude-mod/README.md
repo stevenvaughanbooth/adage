@@ -3,10 +3,16 @@
 Four documents, one proposal (2026-10-02, against Claude Code 2.1.287, the release that turned
 mods on by default), its implementation ([impl/README.md](impl/README.md): every chunk of the
 plan, built against 2.1.288 on the branch `claude/mods-poc-m98u3o`, with the proof of concept
-that preceded it under [poc/](poc/README.md)), and the brief for evaluating it live
-([evaluation-plan.md](evaluation-plan.md)). Nothing has run in a live Claude Code session yet;
-[spike S9](../../spikes/S9-claude-mods/SPIKE.md)'s questions are answered by that evaluation. Each document was reviewed once against the code by
-two independent readers before this revision; the header of each says what the review changed.
+that preceded it under [poc/](poc/README.md)), the brief for evaluating it live
+([evaluation-plan.md](evaluation-plan.md)), and the shorter path for configuring one machine
+([local-setup.md](local-setup.md): build, `adage init`, which installs the plugin and wires every
+hook once, then learn, grant, verify). The plan for installing and updating it,
+[onboarding-plan.md](onboarding-plan.md), is what made that path two commands, `adage init` and
+`adage update`. The evaluation's first live runs (its §5 headless comparison, twice, and one
+finish-line probe) are in [evaluation-results.md](evaluation-results.md); the rest of
+[spike S9](../../spikes/S9-claude-mods/SPIKE.md)'s questions wait for the sections not yet run.
+Each document was reviewed once against the code by two independent readers before this revision;
+the header of each says what the review changed.
 
 | Document | Answers | Read it when |
 | --- | --- | --- |
@@ -26,4 +32,4 @@ only decisions (review, delegation, trust) are made by a person's answer in the 
 dialog Claude Code uses to ask a question, bound to the session by a single-use token the model
 cannot reach by being steered (mod architecture §3.12: a provenance record and a guard against
 steering, not a boundary against a same-user agent), or at a terminal, which stays an equal path. The goal that sets the bar is in ux-design §4.18: install the plugin and never run a
-command.
+command. From a terminal the bar is two commands: `adage init` once, `adage update` later.

@@ -55,6 +55,13 @@ pub enum Judgement {
     Substituted {
         route: String,
     },
+    /// The step Adage made in the agent's place (`By::Adage`) was refused by the harness before
+    /// it ran ([`adage_trace::Call::refused`]: the person's permission rules, as for the model's
+    /// own calls): nothing ran, so it is never `Predicted`, never a follow, and meets no
+    /// obligation.
+    Refused {
+        route: String,
+    },
 }
 
 /// What a predicted step is ([`Prediction::kind`]).
@@ -112,6 +119,64 @@ pub struct Substitution {
     pub context: String,
 }
 
+/// Which phase of the Claude Code mod's two-phase step a `TurnStep` is ([`crate::Policy::step`];
+/// the mod's architecture §3.2), mirroring the two phases of its Bash calls: a dry run that says
+/// what would be yielded and commits nothing, then a verdict carrying the person's permissions on
+/// the calls. A command hook's step (and a mod without the phases) is [`StepPhase::Commit`]: it
+/// decides and commits at once, as every step did before the phases existed.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum StepPhase {
+    /// Decide and commit at once.
+    #[default]
+    Commit,
+    /// Say what would be yielded, and commit nothing of it: no bound counts it, the route stays
+    /// offered, and the decision is not recorded. A step that would yield nothing (nothing to
+    /// predict, the cap reached, the control arm, observe mode) needs no verdict, so it is decided
+    /// and committed as [`StepPhase::Commit`] decides it.
+    DryRun,
+    /// The person's permissions on the dry run's calls: `allow` commits as [`StepPhase::Commit`]
+    /// does; anything else records the step as withheld ([`Decision::withheld`]) and holds its
+    /// route for the rest of the session ([`SessionState::withheld_routes`]). A verdict naming
+    /// another route than the one found now decides no prediction (the plan moved since the dry
+    /// run).
+    Verdict {
+        /// The route the dry run answered, when the mod names it.
+        route: Option<String>,
+        permission: PermissionVerdict,
+    },
+}
+
+/// Claude Code's permission decision on a predicted call (`$.tool.check`), as the mod reads it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Permission {
+    Allow,
+    Ask,
+    Deny,
+    /// No usable answer (the check failed, or answered something unknown): never an allow.
+    #[default]
+    None,
+}
+
+/// The verdict that held a step back, as recorded ([`Decision::permission`]): the decision, and
+/// the first call not allowed unasked with the engine's sentence, when the mod gives them.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PermissionVerdict {
+    pub decision: Permission,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+/// Why a step Adage would have made in the model's place was not made ([`Decision::withheld`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Withheld {
+    /// The person's permissions would not let a call of it run unasked.
+    Permission,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Decision {
     /// What the agent receives (empty in the control arm).
@@ -158,6 +223,14 @@ pub struct Decision {
     /// The routing it would make, recorded in both arms.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub would_route: Option<Routing>,
+    /// The step [`Decision::would_predict`] names was held back (`TurnStep` with the mod's
+    /// verdict, [`StepPhase::Verdict`]): nothing was yielded, it counted against no bound, and its
+    /// route is not offered again this session.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub withheld: Option<Withheld>,
+    /// The verdict that held it back.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub permission: Option<PermissionVerdict>,
     /// Candidates this event's context completed, each once per session ([`Noticed`]), in both
     /// arms; never delivered.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

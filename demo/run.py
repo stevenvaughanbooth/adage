@@ -42,11 +42,13 @@ import hashlib
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
 import threading
 import time
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -167,12 +169,25 @@ ARMS = {
 }
 
 
+def host_session_variable(name):
+    """A variable that names the Claude Code session this runner itself runs in (when it does): its
+    markers and identity. A child `claude -p` that inherits `CLAUDE_CODE_SESSION_ID` takes the
+    host's session id as its own, so every run shares one id, one transcript name and one Adage
+    spool; the `CLAUDE_CODE_REMOTE*` and messaging variables attach it to the host's session. The
+    same rule as evals/live/runner.py's `forbidden_forward`."""
+    return (name == "CLAUDECODE" or "SESSION_ID" in name
+            or name in ("CLAUDE_CODE_CHILD_SESSION", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_PID")
+            or name.startswith("CLAUDE_CODE_MESSAGING_") or name.startswith("CLAUDE_CODE_REMOTE"))
+
+
 def arm_invocation(arm, base_env, *, settings_for=None, plugin_dir=None, adage_home=None, debug_file=None):
     """(claude flags, environment) that wire `arm`: the part of the command that differs by arm,
     plus the debug flags every arm gets. `settings_for(arm)` returns the --settings path (called
-    only for the arms that pass one); `plugin_dir` is the staged plugin for the plugin arms."""
+    only for the arms that pass one); `plugin_dir` is the staged plugin for the plugin arms. The
+    environment never carries Adage's own variables but the arm's, nor the host session's
+    (`host_session_variable`)."""
     spec = ARMS[arm]
-    env = {k: v for k, v in base_env.items() if not k.startswith("ADAGE_")}
+    env = {k: v for k, v in base_env.items() if not k.startswith("ADAGE_") and not host_session_variable(k)}
     flags = []
     if spec["adage_arm"] is not None:
         env["ADAGE_HOME"] = str(adage_home or ADAGE_HOME)
@@ -187,9 +202,27 @@ def arm_invocation(arm, base_env, *, settings_for=None, plugin_dir=None, adage_h
         if plugin_dir is None:
             raise ValueError(f"arm {arm} needs a plugin directory")
         flags += ["--plugin-dir", str(plugin_dir)]
+        # The mod finds the hook binary under its data directory, which it reads from
+        # CLAUDE_PLUGIN_DATA in the engine's environment, or derives from an installed plugin's root
+        # (plugins/cache/…). A --plugin-dir plugin has neither: the engine passes the variable to
+        # command hooks only, so without this the mod stays inert (no TurnStep is ever asked) while
+        # the command hooks run.
+        env["CLAUDE_PLUGIN_DATA"] = str(plugin_data_dir(plugin_dir, env))
     if debug_file is not None:
         flags += ["--debug", "--debug-file", str(debug_file)]
     return flags, env
+
+
+def plugin_data_dir(plugin_dir, env):
+    """The data directory Claude Code gives a --plugin-dir plugin, the one its command hooks see as
+    ${CLAUDE_PLUGIN_DATA}: `<config dir>/plugins/data/<name>-inline` (`<name>@inline`, every
+    character but a letter, a digit, `-` or `_` as `-`), the name from .claude-plugin/plugin.json."""
+    manifest = Path(plugin_dir) / ".claude-plugin" / "plugin.json"
+    try:
+        name = json.loads(manifest.read_text())["name"]
+    except (OSError, ValueError, KeyError, TypeError):
+        name = Path(plugin_dir).name
+    return claude_projects(env).parent / "plugins" / "data" / re.sub(r"[^A-Za-z0-9\-_]", "-", f"{name}@inline")
 
 
 def plugin_target():
@@ -246,8 +279,27 @@ def plugin_for_runs():
         return _STAGED["dir"]
 
 
-def transcript_for(session_id):
-    for p in (Path.home() / ".claude" / "projects").glob(f"*/{session_id}.jsonl"):
+def claude_projects(env=None):
+    """Where Claude Code writes its transcripts: $CLAUDE_CONFIG_DIR/projects, else ~/.claude/projects."""
+    env = os.environ if env is None else env
+    return Path(env["CLAUDE_CONFIG_DIR"]) / "projects" if env.get("CLAUDE_CONFIG_DIR") else Path.home() / ".claude" / "projects"
+
+
+def project_slug(cwd):
+    """The directory name Claude Code gives a working directory under projects/: every character
+    but a letter or a digit becomes `-`."""
+    return re.sub(r"[^A-Za-z0-9]", "-", str(cwd))
+
+
+def transcript_for(session_id, cwd=None, projects=None):
+    """The session's transcript: the one in its working directory's project directory, else the
+    first project directory holding that session id."""
+    projects = projects or claude_projects()
+    if cwd is not None:
+        p = projects / project_slug(cwd) / f"{session_id}.jsonl"
+        if p.is_file():
+            return p
+    for p in projects.glob(f"*/{session_id}.jsonl"):
         return p
     return None
 
@@ -269,14 +321,22 @@ def run_one(run_id, phase, arm, task, prompt_template):
     arm_flags, env = arm_invocation(arm, os.environ, settings_for=settings_file,
                                     plugin_dir=plugin_for_runs() if ARMS[arm]["hooks"] == "plugin" else None,
                                     debug_file=debug_log)
+    # Every run is its own session, named here: its transcript, its spool and its outcome are
+    # found by this id, so no two runs may share one (learn() refuses if they do).
+    session_id = str(uuid.uuid4())
     cmd = [
         "claude", "-p", prompt,
+        "--session-id", session_id,
         "--model", MODEL,
         "--max-turns", str(MAX_TURNS),
         # Partial messages carry the explicit request ids the `requests` cross-check reads.
         "--output-format", "stream-json", "--verbose", "--include-hook-events", "--include-partial-messages",
         "--setting-sources", "project,local",
         "--strict-mcp-config",
+        # Pinned: a predicted call is yielded only when the person's permissions allow it unasked
+        # (the mod's gate), and a host whose sessions start in auto mode would hold every predicted
+        # Bash step back. The evaluation compares the arms under the default mode.
+        "--permission-mode", "default",
         *arm_flags,
         "--allowedTools", "Bash", "Read", "Edit", "Write", "Glob", "Grep", "LS", "MultiEdit",
         "--disallowedTools", "WebFetch", "WebSearch", "Agent", "Task",
@@ -286,11 +346,13 @@ def run_one(run_id, phase, arm, task, prompt_template):
     events, directives = [], []
     observations, parsed = [], []
     tools_by_id = {}
-    session_id, result = None, {}
+    stream_session, result = None, {}
     raw = open(run_dir / "stream.jsonl", "w")
-    # stderr to a file, never an unread pipe: under --debug it can outgrow a pipe's buffer.
+    # stderr to a file, never an unread pipe: under --debug it can outgrow a pipe's buffer. No
+    # stdin: `claude -p` otherwise waits for it before starting.
     err = open(run_dir / "stderr.log", "w")
-    proc = subprocess.Popen(cmd, cwd=sandbox, stdout=subprocess.PIPE, stderr=err, text=True, env=env)
+    proc = subprocess.Popen(cmd, cwd=sandbox, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=err,
+                            text=True, env=env)
     assistant_turns = 0
     for line in proc.stdout:
         t = round(time.time() - t0, 2)
@@ -303,7 +365,7 @@ def run_one(run_id, phase, arm, task, prompt_template):
         parsed.append(m)
         typ = m.get("type")
         if typ == "system" and m.get("subtype") == "init":
-            session_id = m.get("session_id")
+            stream_session = m.get("session_id")
         elif typ == "system" and "hook" in str(m.get("subtype", "")):
             text = json.dumps(m)
             if "adage-reflex" in text or "finish-line check" in text:
@@ -336,6 +398,10 @@ def run_one(run_id, phase, arm, task, prompt_template):
     raw.close()
     err.close()
     elapsed = round(time.time() - t0, 2)
+    # The session Claude Code says it ran is the one its files are under; a different id than the
+    # one asked for is recorded, never papered over.
+    asked_session, session_id = session_id, stream_session or session_id
+    transcript = transcript_for(session_id, sandbox)
 
     first_edit = next((e for e in events if e["cat"] == "edit"), None)
     score = json.loads(subprocess.run([sys.executable, str(SANDBOX / "score.py"), str(sandbox), task],
@@ -351,6 +417,8 @@ def run_one(run_id, phase, arm, task, prompt_template):
                               spool_exists=bool(spool_path and spool_path.exists()))
     metrics.update({
         "session_id": session_id,
+        "session_id_as_asked": session_id == asked_session,
+        "transcript": str(transcript) if transcript else None,
         "elapsed": elapsed,
         "turns": result.get("num_turns") or assistant_turns,
         "tool_turns": assistant_turns,
@@ -381,7 +449,10 @@ def derived_metrics(arm, events, stream, observations, debug_text, spool_records
 
     requests, requests_verified   heldout_analysis.requests(): debug-log dispatches, cross-checked
                                   against the stream's distinct explicit request ids (unique)
-    dead_end_hits                 dead ends hit: a verification that failed (as before)
+    dead_end_hits                 dead ends hit: a verification that failed, by its exit status
+                                  (the timeline's verify-fail) or by its command and what it
+                                  printed (adage_metrics.dead_end_hits: a run piped through
+                                  `| tail` exits 0), each tool call once
     dead_end                      {"hit", "substituted"}: substituted = dead ends the spool says
                                   were replaced before they ran
     predicted_steps               spool turn_step records with predicted/predict set
@@ -394,7 +465,8 @@ def derived_metrics(arm, events, stream, observations, debug_text, spool_records
     rq = adage_metrics.requests(debug_text, observations)
     sp = adage_metrics.spool_metrics(spool_records)
     st = adage_metrics.stream_metrics(stream)
-    hit = sum(1 for e in events if e.get("cat") == "verify-fail")
+    failed = {e.get("id") or f"event-{i}" for i, e in enumerate(events) if e.get("cat") == "verify-fail"}
+    hit = len(failed | {h["id"] for h in adage_metrics.dead_end_hits(stream)})
     if arm == "a0":
         wired = not spool_exists
     elif ARMS.get(arm, {}).get("hooks") in ("settings", "plugin"):
@@ -404,7 +476,8 @@ def derived_metrics(arm, events, stream, observations, debug_text, spool_records
     return {
         "requests": rq["requests"],
         "requests_verified": rq["verified"],
-        "requests_check": {k: rq[k] for k in ("stream_request_ids", "api_error_entries", "cross_check")},
+        "requests_check": {k: rq[k] for k in ("stream_request_ids", "api_error_entries", "cross_check",
+                                              "requests_streamed", "requests_by_source")},
         "dead_end_hits": hit,
         "dead_end": {"hit": hit, "substituted": sp["dead_end_substituted"]},
         "dead_end_substituted": sp["dead_end_substituted"],
@@ -481,17 +554,51 @@ def train():
     phase_runs("train", plan)
 
 
+def learn_inputs(runs, find=transcript_for):
+    """(transcripts, outcomes, missing) for `adage condition` from finished runs: each run's own
+    transcript (recorded at the end of the run, else looked up by session id and sandbox) and its
+    outcome by session id; `missing` lists the runs with no transcript. Raises ValueError when two
+    runs share a session id: their transcripts would collapse into one session (or another
+    session's file be read in their place), so learning from them would be wrong, not just less."""
+    by_sid = {}
+    for r in runs:
+        sid = r["metrics"].get("session_id")
+        if sid:
+            by_sid.setdefault(sid, []).append(r.get("id") or "?")
+    shared = {sid: ids for sid, ids in by_sid.items() if len(ids) > 1}
+    if shared:
+        sid, ids = next(iter(shared.items()))
+        raise ValueError(f"{sum(len(i) for i in shared.values())} runs share {len(shared)} session id(s), e.g. "
+                         f"{sid} for {', '.join(ids[:3])}{'…' if len(ids) > 3 else ''}: run them again "
+                         "(each run passes its own --session-id)")
+    transcripts, outcomes, missing = [], {}, []
+    for r in runs:
+        m = r["metrics"]
+        sid = m.get("session_id")
+        recorded = Path(m["transcript"]).expanduser() if m.get("transcript") else None
+        p = recorded if recorded and recorded.is_file() else (
+            find(sid, ROOT / "runs" / r["id"] / "acme-billing" if r.get("id") else None) if sid else None)
+        if p:
+            transcripts.append(str(p))
+            outcomes[sid] = m["passed"]
+        else:
+            missing.append(r.get("id") or sid or "?")
+    return transcripts, outcomes, missing
+
+
 def learn():
     STATE["phase"] = "learn"
     save_state()
     runs = [r for r in STATE["runs"].values() if r.get("metrics") and (r.get("phase") == "train" or ROUND > 1)]
-    transcripts, outcomes = [], {}
-    for r in runs:
-        sid = r["metrics"]["session_id"]
-        p = transcript_for(sid) if sid else None
-        if p:
-            transcripts.append(str(p))
-            outcomes[sid] = r["metrics"]["passed"]
+    try:
+        transcripts, outcomes, missing = learn_inputs(runs)
+    except ValueError as e:
+        sys.exit(f"learn: {e}")
+    if missing:
+        print(f"learn: no transcript for {len(missing)} run(s): {', '.join(missing)}", file=sys.stderr)
+    if not transcripts:
+        sys.exit(f"learn: no transcripts under {claude_projects()} for {len(runs)} run(s)")
+    print(f"learn: {len(transcripts)} transcripts from {len(runs)} runs", flush=True)
     (ROOT / "outcomes.json").write_text(json.dumps(outcomes))
     env = dict(os.environ, ADAGE_HOME=str(ADAGE_HOME))
     if ROUND == 1:
@@ -580,9 +687,10 @@ def main(argv=None):
     if what in ("eval", "all"):
         evaluate()
     if what == "one":
-        # Smoke test: one held-out run in one arm.
+        # Smoke test: one held-out run in one arm. Its phase is `smoke`, not `eval`: report.py
+        # compares the `eval` runs, and a smoke run is not one of the interleaved repeats.
         STATE["tracks"] = read_tracks()
-        phase_runs("smoke", [(f"smoke-{args.task}-{args.arm}", "eval", args.arm, args.task, PROMPTS[0])])
+        phase_runs("smoke", [(f"smoke-{args.task}-{args.arm}", "smoke", args.arm, args.task, PROMPTS[0])])
 
 
 if __name__ == "__main__":

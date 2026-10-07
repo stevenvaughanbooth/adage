@@ -4,8 +4,8 @@
 // other kind and every malformed case made from predict.json.
 import { describe, expect, test } from 'claude-code/testing'
 
-import { wire, wireWith } from './fixtures/kit'
-import { callChunks, predictedResult, predictionOf, toolUseId } from './predict'
+import { AUTO_MODE_BASH, DEFAULT_MODE_BASH, PREDICTED_LOOKUP_ID, READ_ALLOWED, wire, wireWith } from './fixtures/kit'
+import { callChunks, heldBy, madeForAgentLine, permissionOf, predictedResult, predictionOf, toolUseId } from './predict'
 
 const P = wire('predict').predict as { route: string; track: string }
 const make = (kind: string, calls: unknown, extra: Record<string, unknown> = {}) => wireWith('predict', { kind, calls, ...extra })
@@ -101,8 +101,45 @@ describe('T-C4-01, T-C7-03 · chunks and ids', () => {
         { name: 'Bash', input: { command: 'a' } },
         { name: 'Read', input: { file_path: '/f' } },
       ],
-      stopReason: 'tool_use',
+      // No request was made: no reason, as TurnStepResult defines it (and the thread, PREDICTED_STOP).
+      stopReason: null,
       usage: null,
     })
+  })
+})
+
+describe('T-C4-07 · the engine\'s verdict on each predicted call', () => {
+  test('permissionOf: allow, ask and deny as the engine says them, with its sentence; anything else is no verdict', () => {
+    expect(permissionOf(DEFAULT_MODE_BASH)).toEqual({ decision: 'allow', reason: '' })
+    expect(permissionOf(AUTO_MODE_BASH)).toEqual({ decision: 'ask', reason: 'This command requires approval' })
+    expect(permissionOf({ decision: 'deny', reason: 'no', rule: 'Bash(make:*)' })).toEqual({ decision: 'deny', reason: 'no' })
+    for (const v of [undefined, null, 'allow', {}, { decision: 'yes' }]) expect(permissionOf(v)).toEqual({ decision: 'none', reason: '' })
+    expect(permissionOf({ decision: 'ask', reason: 7 })).toEqual({ decision: 'ask', reason: '' })
+  })
+
+  test('heldBy: undefined only when every call is allowed; else the first call, in order, that is not', async () => {
+    const calls = [bash('make gen'), { tool: 'Read', input: { file_path: '/w/a' } }]
+    expect(await heldBy(calls, async tool => (tool === 'Read' ? READ_ALLOWED : DEFAULT_MODE_BASH))).toBeUndefined()
+    expect(await heldBy(calls, async tool => (tool === 'Read' ? { decision: 'deny', reason: 'r' } : AUTO_MODE_BASH))).toEqual({ tool: 'Bash', decision: 'ask', reason: AUTO_MODE_BASH.reason })
+    expect(await heldBy(calls, async tool => (tool === 'Read' ? { decision: 'deny', reason: 'r' } : DEFAULT_MODE_BASH))).toEqual({ tool: 'Read', decision: 'deny', reason: 'r' })
+    expect(await heldBy(calls, () => Promise.reject(new Error('x')))).toEqual({ tool: 'Bash', decision: 'none', reason: '' })
+    expect(await heldBy([], async () => AUTO_MODE_BASH)).toBeUndefined()
+  })
+})
+
+
+describe('T-C1-02 · the line after a call made at the turn\'s first step', () => {
+  test('says it was made before the first response, for the reflex delivered with the request', () => {
+    expect(PREDICTED_LOOKUP_ID).toBe(toolUseId('lookup-work-item', 'turn-1', 0, 0))
+    const line = madeForAgentLine(PREDICTED_LOOKUP_ID)
+    expect(line).toBe(
+      'Adage made this call in your place before your first response: it is the step the learned reflex lookup-work-item, delivered with the request, names. The result above is its output. You did not make it, and it does not need repeating.',
+    )
+    // Any later step keeps the line it had; an index that only starts with 0 is a later one.
+    for (const index of [1, 10]) {
+      expect(madeForAgentLine(toolUseId('lookup-work-item', 'turn-1', index, 0))).toBe(
+        'Adage made this call in your place (learned reflex lookup-work-item); the result above is its output. You did not make it, and it does not need repeating.',
+      )
+    }
   })
 })

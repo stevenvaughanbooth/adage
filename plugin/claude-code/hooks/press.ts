@@ -22,7 +22,7 @@ import type { Run } from './bridge'
  * Kept apart from the bridge's `ALLOWED_VERBS`, which nothing but a press may widen with these.
  * `install`, `config`, `share`, `train`, `packs`, `init` and every `adage-exec` verb never.
  */
-export const PRESS_VERBS: readonly string[] = ['review', 'delegate', 'on', 'add']
+export const PRESS_VERBS: readonly string[] = ['review', 'delegate', 'on', 'add', 'update']
 
 /** The review verbs a reflex row offers (`review.verbs`, `ui/routes.rs`). */
 const REVIEW_VERBS: readonly string[] = ['approve', 'dismiss', 'strengthen', 'weaken', 'extinguish', 'pin']
@@ -39,13 +39,15 @@ const isName = (s: string | undefined): s is string => s !== undefined && NAME.t
  * Whether `argv` (binary first) is a person-only verb the mod may press, in one of its shapes:
  * `review <verb> <track> <id>` (the six review verbs); `review delegate <track> <id> --level e2
  * --stage --json`, `… --level e2 --confirm`, `… --predict`; `delegate on`; `on`; `add <dir>
- * --trust` (a pack directory inside the repository: relative, no `..`).
+ * --trust` (a pack directory inside the repository: relative, no `..`); `update`, bare (onboarding
+ * plan O9: never `--rollback`, `--check`, `--from` or any other flag, which keep a terminal's check).
  */
 export function isPressAllowed(argv: readonly string[]): boolean {
   const [, verb, a, b, c, ...rest] = argv
   if (verb === undefined || !PRESS_VERBS.includes(verb)) return false
   switch (verb) {
     case 'on':
+    case 'update':
       return argv.length === 2
     case 'delegate':
       return argv.length === 3 && a === 'on'

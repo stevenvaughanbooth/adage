@@ -170,8 +170,23 @@ export type AdageMode = {
   noticed: boolean
   /** `» Claude Code … is newer …`, until the first prompt; empty otherwise. */
   versionLine: string
+  /** A newer Adage, as the status card says it (`update`); null when it says none. */
+  update: AdageUpdate | null
   /** Status warnings and once-per-session toasts already shown, by id. */
   warned: string[]
+}
+
+/** A newer Adage (the status card's `update`, drawn as the binary words it; onboarding plan O9). */
+export type AdageUpdate = {
+  /** This binary's version (the card's `current`). */
+  have: string
+  latest: string
+  /** The command that brings it, as the card words it for a session (`/adage update`). */
+  next: string
+  /** The release's first lines, when the release said them. */
+  notes: string[]
+  /** Whether the band's update line shows this session, until the first prompt (once per release per machine). */
+  band: boolean
 }
 
 /** What the person did in the pane. */

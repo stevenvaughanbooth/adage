@@ -15,6 +15,7 @@ import type { StepUsage, Noted } from './ledger'
 import { NOTED0 } from './ledger'
 import type { AdageState, Skill, StoreKey } from './plugin'
 import type { Standing } from './attach'
+import type { Withheld } from './step'
 
 /** One `$.state` value: read (its initial while nothing was written) and updated (read, apply, write). */
 export type Cell<T> = { read: () => Promise<T>; update: (change: (value: T) => T) => Promise<T> }
@@ -42,14 +43,21 @@ export type Caps = {
   run: Run
   spawn: Spawn
   pressRun: Run
-  env: { pluginData: Env; observe: Env; ascii: Env; reducedMotion: Env; os: Env }
-  plugin: { root: () => string }
-  fs: { read: (path: string) => Promise<unknown> }
+  /** CLAUDE_PLUGIN_DATA; CLAUDE_CONFIG_DIR, HOME and USERPROFILE (a --plugin-dir plugin's data directory is derived from them, binary.ts `dataDir`); the mod's own switches; OS. */
+  env: { pluginData: Env; configDir: Env; home: Env; userProfile: Env; observe: Env; ascii: Env; reducedMotion: Env; os: Env }
+  /** The plugin's folder and its manifest name. */
+  plugin: { root: () => string; name: () => string }
+  fs: { read: (path: string) => Promise<unknown>; exists: (path: string) => Promise<boolean> }
   command: Pick<EngineInterface['command'], 'register' | 'list'>
   session: Pick<EngineInterface['session'], 'id' | 'cwd' | 'repo' | 'usage' | 'version'>
   clock: { now: () => Promise<number>; every: (ms: number, fn: () => void) => Timer; after: (ms: number, fn: () => void) => Timer }
   /** The person's rules on a Bash command now, as the engine decides them (`allow`, `ask`, `deny`; nothing runs). */
   checkBash: (command: string) => Promise<string>
+  /**
+   * The engine's verdict on any tool's call now (`$.tool.check`: `{ decision, reason?, rule? }`;
+   * nothing runs, no dialog opens, auto mode's classifier is not asked).
+   */
+  checkTool: (tool: string, input: Record<string, unknown>) => Promise<unknown>
   ui: {
     status: (text: string) => void
     toast: (text: string) => void
@@ -116,8 +124,9 @@ export type Runtime = {
    * prompt cache keeps it. A failed ask is the empty answer for the session.
    */
   standingFor: { session: string; answer: Promise<Standing> } | undefined
-  /** The main-loop steps of the turn under way, and the session's steps noted so far. */
+  /** The main-loop steps and tool calls of the turn under way, and the session's noted so far. */
   turnSteps: Omit<StepUsage, 'index'>[]
+  turnCalls: number
   noted: Noted
   /** One ask at a time: a second turn end while the dialog waits asks nothing. */
   asking: boolean
@@ -131,6 +140,10 @@ export type Runtime = {
   paneOpen: boolean
   /** The last skill expanded with verified steps (for `/adage why`). */
   skill: Skill | undefined
+  /** The latest predicted steps the person's permissions held back (step.ts `keepWithheld`). */
+  withheld: Withheld[]
+  /** The session whose band said why a step was held back, and the prompt count it was raised at (`band.withheld`). */
+  withheldSaid: { session: string; submits: number } | undefined
 }
 
 /** The runtime of a fresh load: inert, nothing followed, nothing asked. */
@@ -155,6 +168,7 @@ export function runtime(): Runtime {
     settled: false,
     standingFor: undefined,
     turnSteps: [],
+    turnCalls: 0,
     noted: NOTED0,
     asking: false,
     pressBound: false,
@@ -162,6 +176,8 @@ export function runtime(): Runtime {
     noticed: 0,
     paneOpen: false,
     skill: undefined,
+    withheld: [],
+    withheldSaid: undefined,
   }
 }
 

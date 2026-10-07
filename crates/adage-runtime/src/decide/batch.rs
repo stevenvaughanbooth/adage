@@ -5,12 +5,12 @@
 
 use super::failure::fire_after_failure;
 use super::prompt::card_text;
-use super::{emit_ok, fire_contexts, pending_for, pending_skill, Walk};
+use super::{emit_ok, fire_contexts, pending_for, pending_skill, MainThread, Walk};
 use crate::binding::{bind_edit_slots, bind_output_route, bind_result_route, binds_output};
 use crate::context::{self, Symbols};
 use crate::decision::directive;
 use crate::noticed::notice;
-use crate::observe::{added_tests, call_command, call_keys, cap, exec_segments};
+use crate::observe::{added_tests, batch_keys, call_command, cap, exec_segments};
 use crate::policy::{follows_call, follows_learned};
 use crate::state::push_history_capped;
 use crate::{
@@ -40,31 +40,91 @@ pub(super) fn on_batch(
     // A call the mod answered with a receipt was observed then: listed in the batch too,
     // it is not observed again. Keyed by the bare `tool_use_id` (`SessionState::answered`).
     let answered = |c: &&Call| c.tool_use_id.as_deref().is_some_and(|id| st.answered.contains(&identity_hash(id)));
+    // A subagent's batch is its own: the main loop's follow windows do not count it down.
+    let main_batch = calls.is_empty() || calls.iter().any(|c| c.agent.is_none());
     let calls: Vec<&Call> = calls.iter().filter(|c| !answered(c)).collect();
     for call in calls {
+        // A subagent's call changes nothing the main loop is predicted from (`MainThread`).
+        let main = call.agent.is_none();
+        let kept = (!main).then(|| MainThread::keep(st));
+        on_call(ctx, w, st, d, out, call, main, &mut open_failure, &mut cand_open_failure);
+        if let Some(kept) = kept {
+            kept.restore(st);
+        }
+    }
+    if !main_batch {
+        return;
+    }
+    for p in st.pending.iter_mut() {
+        p.batches_left = p.batches_left.saturating_sub(1);
+        if p.batches_left == 0 {
+            d.judgements.push(Judgement::Ignored { route: p.route.clone() });
+        }
+    }
+    st.pending.retain(|p| p.batches_left > 0);
+    for r in st.reads.iter_mut() {
+        r.batches_left = r.batches_left.saturating_sub(1);
+    }
+    st.reads.retain(|r| r.batches_left > 0);
+}
+
+/// One call of a batch. `main`: the main loop made it; a subagent's call is observed, and what it
+/// triggers is said, but it judges no directive the main loop was given and meets no obligation
+/// (the caller puts back what it bound). A call the harness refused before it ran
+/// ([`Call::refused`]) is observed as refused and triggers nothing; when Adage made it in the
+/// agent's place, its route is judged [`Judgement::Refused`].
+#[allow(clippy::too_many_arguments)]
+fn on_call(
+    ctx: &Ctx,
+    w: &Walk,
+    st: &mut SessionState,
+    d: &mut Decision,
+    out: &mut Vec<Directive>,
+    call: &Call,
+    main: bool,
+    open_failure: &mut Option<u32>,
+    cand_open_failure: &mut Option<u32>,
+) {
+    let refused = call.refused();
+    if !refused {
         for name in added_tests(call, ctx.root) {
             if st.new_tests.len() < MAX_NEW_TESTS && !st.new_tests.contains(&name) {
                 st.new_tests.push(name);
             }
         }
-        // A piped command exits with its last stage's status: `pytest … | head` exits 0
-        // when pytest could not even start. Its output still says so (`outcome`).
-        let piped = !call.failed && call_command(call).is_some_and(outcome::piped);
-        let piped_failed = piped && outcome::piped_failure(&call.output);
-        let misfire = (call.failed || piped) && outcome::misfired(&call.output);
+    }
+    // A piped command exits with its last stage's status: `pytest … | head` exits 0
+    // when pytest could not even start. Its output still says so (`outcome`).
+    let piped = !call.failed && call_command(call).is_some_and(outcome::piped);
+    let piped_failed = piped && outcome::piped_failure(&call.output);
+    let misfire = (call.failed || piped) && outcome::misfired(&call.output);
+    if main {
         retire_reads(ctx, st, call, d);
-        let keyed = call_keys(call, ctx);
-        let segs = exec_segments(&keyed);
-        // The call is the step Adage made in the agent's place, or (in the arms that only
-        // record) one it would have made: what a chain's second step may follow at once.
-        let mut stood_in = call.by == By::Adage;
-        for (key, n) in keyed {
-            let key = cap(key);
-            d.observed.push(key.clone());
-            push_history_capped(st, key.clone(), ctx.params.history);
-            // Follow / ignore judgement: the directed command, with whatever the agent
-            // added to narrow it ([`follows`]). Followed and failed without the runner
-            // reporting tests (or, piped, printing an environment failure) is a misfire.
+    }
+    let keyed = batch_keys(call, ctx);
+    let segs = exec_segments(&keyed);
+    // The call is the step Adage made in the agent's place, or (in the arms that only
+    // record) one it would have made: what a chain's second step may follow at once.
+    let mut stood_in = call.by == By::Adage;
+    for (key, n) in keyed {
+        let key = cap(key);
+        if refused {
+            // Nothing ran: observed as refused, and it triggers nothing. Only the step Adage made
+            // is judged (the person's rules refused it); the agent's own refused call leaves its
+            // directive pending.
+            d.observed.push(format!("{key} !refused"));
+            push_history_capped(st, format!("{key} !refused"), ctx.params.history);
+            if main && call.by == By::Adage {
+                judge_refused(ctx, st, d, call, &key, &segs);
+            }
+            continue;
+        }
+        d.observed.push(key.clone());
+        push_history_capped(st, key.clone(), ctx.params.history);
+        // Follow / ignore judgement: the directed command, with whatever the agent
+        // added to narrow it ([`follows`]). Followed and failed without the runner
+        // reporting tests (or, piped, printing an environment failure) is a misfire.
+        if main {
             st.pending.retain(|p| {
                 if ctx.policy.follows(&p.expect_key, &key)
                     || follows_call(&ctx.policy, &p.expect_key, &segs)
@@ -84,12 +144,14 @@ pub(super) fn on_batch(
                     true
                 }
             });
-            // Failure-triggered dead ends and instincts (never obligations) see a piped
-            // failure too, by its output; each still needs its own signature there.
-            if piped_failed {
-                fire_after_failure(ctx, w.routes, st, out, &key, &call.output);
-            }
-            // Obligations met.
+        }
+        // Failure-triggered dead ends and instincts (never obligations) see a piped
+        // failure too, by its output; each still needs its own signature there.
+        if piped_failed {
+            fire_after_failure(ctx, w.routes, st, out, &key, &call.output);
+        }
+        // Obligations met.
+        if main {
             for o in st.obligations.iter_mut().filter(|o| !o.met && ctx.policy.meets(&o.expect_key, &key)) {
                 o.met = true;
                 d.judgements.push(Judgement::ObligationMet { route: o.route.clone() });
@@ -98,45 +160,59 @@ pub(super) fn on_batch(
                     d.judgements.push(Judgement::Predicted { route: o.route.clone() });
                 }
             }
-            // Edits trigger finish-line obligations.
-            if keys::is_author(&n.action) {
-                st.first_edit_at_batch.get_or_insert(st.batches);
-                if let Some(p) = keys::action_path(&n.action) {
-                    after_edit(ctx, w.routes, st, out, &repo::relativize(ctx.root, p));
-                }
+        }
+        // Edits trigger finish-line obligations: an edit tool's, or a file a
+        // Bash command wrote (`batch_keys`), right after the action that wrote it.
+        if keys::is_author(&n.action) {
+            st.first_edit_at_batch.get_or_insert(st.batches);
+            if let Some(p) = keys::action_path(&n.action) {
+                after_edit(ctx, w.routes, st, out, &repo::relativize(ctx.root, p));
             }
-            // Routes triggered by a successful command (e.g. read the files it listed).
-            if !call.failed {
-                after_command(ctx, w.routes, st, out, call, &key, stood_in);
+        }
+        // Routes triggered by a successful command (e.g. read the files it listed).
+        if !call.failed {
+            after_command(ctx, w.routes, st, out, call, &key, stood_in);
+        }
+        // Context triggers: symbolise the call, push it if it is an alphabet event,
+        // and walk the net from it.
+        if let Some(sy) = w.syms {
+            let got = alphabet_items(sy, ctx.root, &n, &key, call, open_failure, &mut st.ctx);
+            if st.ctx.push(w.net, &got) {
+                fire_contexts(ctx, w.routes, w.net, st, out, |st, out, ir| emit_ok(ctx, st, out, &ir.route.id));
             }
-            // Context triggers: symbolise the call, push it if it is an alphabet event,
-            // and walk the net from it.
-            if let Some(sy) = w.syms {
-                let got = alphabet_items(sy, ctx.root, &n, &key, call, &mut open_failure, &mut st.ctx);
-                if st.ctx.push(w.net, &got) {
-                    fire_contexts(ctx, w.routes, w.net, st, out, |st, out, ir| emit_ok(ctx, st, out, &ir.route.id));
-                }
-            }
-            // The same for the candidates' alphabet: noticed, never directed.
-            if let Some(cs) = w.csyms {
-                let got = alphabet_items(cs, ctx.root, &n, &key, call, &mut cand_open_failure, &mut st.cand_ctx);
-                if st.cand_ctx.push(w.cnet, &got) {
-                    notice(ctx, w.cnet, st, d);
-                }
+        }
+        // The same for the candidates' alphabet: noticed, never directed.
+        if let Some(cs) = w.csyms {
+            let got = alphabet_items(cs, ctx.root, &n, &key, call, cand_open_failure, &mut st.cand_ctx);
+            if st.cand_ctx.push(w.cnet, &got) {
+                notice(ctx, w.cnet, st, d);
             }
         }
     }
-    for p in st.pending.iter_mut() {
-        p.batches_left = p.batches_left.saturating_sub(1);
-        if p.batches_left == 0 {
-            d.judgements.push(Judgement::Ignored { route: p.route.clone() });
+}
+
+/// A step Adage made in the agent's place that the harness refused (canonical key `key`): the
+/// pending directive or the armed obligation it stood in for is judged [`Judgement::Refused`].
+/// The directive is retired (its step was taken and refused; the route is not predicted again
+/// this session); the obligation stays unmet, so the Stop gate asks for it as without the mod.
+fn judge_refused(ctx: &Ctx, st: &mut SessionState, d: &mut Decision, call: &Call, key: &str, segs: &[Vec<String>]) {
+    let mut refused = |route: &str| {
+        if !d.judgements.iter().any(|j| matches!(j, Judgement::Refused { route: r } if r == route)) {
+            d.judgements.push(Judgement::Refused { route: route.to_string() });
         }
+    };
+    st.pending.retain(|p| {
+        let stood_for = ctx.policy.follows(&p.expect_key, key)
+            || follows_call(&ctx.policy, &p.expect_key, segs)
+            || follows_learned(&ctx.policy, &p.expect_key, call);
+        if stood_for {
+            refused(&p.route);
+        }
+        !stood_for
+    });
+    for o in st.obligations.iter().filter(|o| !o.met && ctx.policy.meets(&o.expect_key, key)) {
+        refused(&o.route);
     }
-    st.pending.retain(|p| p.batches_left > 0);
-    for r in st.reads.iter_mut() {
-        r.batches_left = r.batches_left.saturating_sub(1);
-    }
-    st.reads.retain(|r| r.batches_left > 0);
 }
 
 /// What an edit of the repository-relative path `rel` triggers: a procedure card waiting for it,
@@ -258,8 +334,11 @@ fn after_edit(ctx: &Ctx, routes: &[&IndexedRoute], st: &mut SessionState, out: &
             let subsumed = subsumer(ir).is_some();
             // An instinct's finish line is advice, never an obligation: no
             // Stop request can come of it. Its directive is judged like
-            // any other (followed, ignored, or misfired). A sequence that
-            // begins with its command says it instead.
+            // any other (followed, ignored, or misfired), and a predict
+            // grant on it is used while it is pending (the step after the
+            // edit), never at the turn's end, which only an obligation
+            // reaches (plan C8). A sequence that begins with its command
+            // says it instead.
             if ir.route.is_instinct() {
                 if subsumed {
                     continue;
@@ -416,9 +495,13 @@ fn alphabet_items(
 }
 
 /// A read of one of a pending read batch's files retires it ([`PendingReads`]); when Adage made
-/// the read (a predicted chain step), it is judged [`Judgement::Predicted`].
+/// the read (a predicted chain step), it is judged [`Judgement::Predicted`]. A read Adage made
+/// that the harness refused retires it too, judged [`Judgement::Refused`]: the step was taken and
+/// refused, and nothing was read. Any other failed read, the agent's refused one included, read
+/// nothing and retires nothing.
 fn retire_reads(ctx: &Ctx, st: &mut SessionState, call: &Call, d: &mut Decision) {
-    if st.reads.is_empty() || call.failed || call.tool != "Read" {
+    let refused = call.refused() && call.by == By::Adage;
+    if st.reads.is_empty() || (call.failed && !refused) || call.tool != "Read" {
         return;
     }
     let Some(path) = call.input.get("file_path").and_then(Value::as_str) else { return };
@@ -427,11 +510,31 @@ fn retire_reads(ctx: &Ctx, st: &mut SessionState, call: &Call, d: &mut Decision)
         if !r.files.iter().any(|f| f == &rel) {
             return true;
         }
-        if call.by == By::Adage
-            && !d.judgements.iter().any(|j| matches!(j, Judgement::Predicted { route } if route == &r.route))
-        {
-            d.judgements.push(Judgement::Predicted { route: r.route.clone() });
+        let judged = if refused {
+            Judgement::Refused { route: r.route.clone() }
+        } else {
+            Judgement::Predicted { route: r.route.clone() }
+        };
+        if call.by == By::Adage && !d.judgements.iter().any(|j| same_judgement(j, &judged)) {
+            d.judgements.push(judged);
         }
         false
     });
+}
+
+/// The same kind of judgement of the same route.
+fn same_judgement(a: &Judgement, b: &Judgement) -> bool {
+    std::mem::discriminant(a) == std::mem::discriminant(b) && judged_route(a) == judged_route(b)
+}
+
+fn judged_route(j: &Judgement) -> &str {
+    match j {
+        Judgement::Followed { route }
+        | Judgement::Ignored { route }
+        | Judgement::ObligationMet { route }
+        | Judgement::Misfired { route }
+        | Judgement::Predicted { route }
+        | Judgement::Substituted { route }
+        | Judgement::Refused { route } => route,
+    }
 }

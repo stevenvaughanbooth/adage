@@ -30,7 +30,7 @@ fn substitution() -> Substitution {
         route: "dead-end-pytest".into(),
         track: "acme/dead-ends".into(),
         command: "make test".into(),
-        context: "adage ran make test in place of python3 -m pytest tests: in this repository it fails (\"No module named pytest\").".into(),
+        context: "adage ran make test for you; python3 -m pytest tests was replaced because that command fails in this repository (\"No module named pytest\"). The output above is from make test.".into(),
     }
 }
 
@@ -117,6 +117,7 @@ fn cases() -> Vec<(&'static str, ModAnswer)> {
                 environment: "In this repository, Python runs in the project's environment, .venv/bin/python. Tests run with .venv/bin/python -m pytest.".into(),
                 compact: adage_runtime::render::COMPACT_INSTRUCTION.into(),
                 subagent: None,
+                conventions: None,
             },
         ),
         (
@@ -126,8 +127,20 @@ fn cases() -> Vec<(&'static str, ModAnswer)> {
                 environment: String::new(),
                 compact: adage_runtime::render::COMPACT_INSTRUCTION.into(),
                 subagent: Some("<adage-reflex route=\"lookup-work-item\" track=\"acme/lookups\">\nRun python3 scripts/wi-lookup W-2045 for what the work item asks.\n</adage-reflex>".into()),
+                conventions: None,
             },
         ),
+        (
+            "standing-conventions",
+            ModAnswer::Standing {
+                standing: String::new(),
+                environment: String::new(),
+                compact: adage_runtime::render::COMPACT_INSTRUCTION.into(),
+                subagent: None,
+                conventions: Some("In this repository, work item details are looked up with python3 scripts/wi-lookup {item}, where {item} is the work item the request names.".into()),
+            },
+        ),
+
         (
             "text",
             ModAnswer::Text {
@@ -216,6 +229,12 @@ fn an_answer_prints_as_its_json_did() {
     }
     assert_eq!(answer(&ModAnswer::Routine { routine: true }), r#"{"routine":true}"#);
     assert_eq!(answer(&ModAnswer::Press { press: "ab".into() }), r#"{"press":"ab"}"#);
-    let s = ModAnswer::Standing { standing: "s".into(), environment: "e".into(), compact: "c".into(), subagent: None };
+    let s = ModAnswer::Standing {
+        standing: "s".into(),
+        environment: "e".into(),
+        compact: "c".into(),
+        subagent: None,
+        conventions: None,
+    };
     assert_eq!(answer(&s), r#"{"compact":"c","environment":"e","standing":"s"}"#);
 }

@@ -43,11 +43,11 @@ describe('T-B2-07 … T-B2-11 · the band', () => {
   })
 
   test('T-B2-07, §9.1: no binary: the band says so, the status says why, once; nothing else is drawn', async ($, on) => {
-    const w = world(on, { version: '', status: 'no binary for darwin-arm64; install with brew install adage' })
+    const w = world(on, { version: '', status: 'no binary for darwin-arm64; reinstall with /plugin install adage@adage, or npm i -g @adage-sh/cli' })
     await start($, w)
     await $.classic.SessionStart({ source: 'startup' } as never)
     for (const surface of SURFACES) expect(await bandText($, surface)).toBe('◠ adage ○ off · run adage doctor')
-    expect(w.statuses).toEqual(['no binary for darwin-arm64; install with brew install adage'])
+    expect(w.statuses).toEqual(['no binary for darwin-arm64; reinstall with /plugin install adage@adage, or npm i -g @adage-sh/cli'])
     expect(w.spawned).toEqual([])
     expect(await texts(await $.ui.mount({ plugin: 'adage', surface: 'terminal', component: 'ToolUse', requestId: 't1', props: TOOL('t1') }))).toEqual(['ENGINE ToolUse'])
   })

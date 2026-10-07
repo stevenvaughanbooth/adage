@@ -128,12 +128,14 @@ export async function onAbovePrompt(m: Mod, e: EventAt<'ui.render', { component:
     now: await m.clock.now(),
     lapsed: (await m.state.lapsed.read()).length,
     review: waiting(await m.state.reflexes.read(), await m.state.packs.read()).length,
+    update: turn.submits === 0 && mode.update?.band === true ? { latest: mode.update.latest, next: mode.update.next } : null,
     versionLine: turn.submits === 0 ? mode.versionLine : '',
     columns: e.props.bodyColumns,
     ascii: mode.ascii,
     kept: m.rt.kept,
     noticed: m.rt.noticed,
     paneOpen: m.rt.paneOpen,
+    withheld: m.rt.withheldSaid !== undefined && m.rt.withheldSaid.submits === turn.submits && m.rt.withheldSaid.session === (await m.session.id()),
   })
   return b === undefined ? next(e) : bandTree(m.ui.resolve(e), b, mode.ascii ? '-' : '·')
 }
@@ -155,6 +157,7 @@ export async function onPane(m: Mod, e: EventAt<'ui.render', { component: 'Pane'
       waiting: waiting(reflexes, await m.state.packs.read(), mode.ascii),
       checks: await m.state.checks.read(),
       lapsed: await m.state.lapsed.read(),
+      update: mode.update,
       map: await m.state.map.read(),
       nobinary: mode.nobinary,
       noBridge: e.surface === 'desktop' && !mode.active,

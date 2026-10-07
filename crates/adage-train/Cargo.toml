@@ -12,11 +12,11 @@ homepage.workspace = true
 name = "adage-train"
 path = "src/main.rs"
 
-# Released by dist beside adage (its own archive, installer and Homebrew formula): `adage train`
-# runs it. The npm platform packages carry it beside adage (npm/config.mjs).
+# Released by dist beside adage (its own archive and installers): `adage train` runs it. The npm
+# platform packages and the Claude Code plugin carry it beside adage (npm/config.mjs). No Homebrew
+# formula until Homebrew returns to the release (dist-workspace.toml).
 [package.metadata.dist]
 dist = true
-formula = "adage-train"
 
 [dependencies]
 adage-core = { path = "../adage-core" }

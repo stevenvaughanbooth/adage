@@ -1,12 +1,15 @@
 // The Bash call (docs/claude-mod/architecture.md §3.3, §3.4; plan C3, C6): before a Bash call runs,
-// the binary is asked for its plan (`dry_run`), which names at most a receipt, a learned
-// replacement, and a rewrite or advice. The person's rules are Claude Code's: each branch asks the
-// engine what they decide (`$.tool.check`, which runs nothing) before the binary is asked for its
-// final word (`verdict`), and only that word changes what happens to the call:
+// the binary is asked for its plan (`dry_run`), which names at most a receipt, a replacement for
+// a known dead end, and a rewrite or advice. The person's rules are Claude Code's: each branch
+// asks the engine what they decide (`$.tool.check`, which runs nothing) before the binary is asked
+// for its final word (`verdict`), and only that word changes what happens to the call:
 //
 // - a fresh receipt answers the call in its place, only when the rules would have let the call as
 //   written run unasked (no dialog appears for an answered call);
-// - a learned replacement runs instead of the dead end, only when the rules treat both alike;
+// - the replacement runs instead of the dead end, only when the rules treat both alike, whether
+//   the dead end was learned or is a repository's declared instinct (the binary plans both alike; a
+//   dead end piped into output filters is replaced as the whole new pipeline the binary plans, the
+//   filters as written, and the rules are read on both whole pipelines);
 // - a rewrite runs the call on the project's interpreter when the rules treat both alike; when
 //   they do not, the binary turns it into advice, which the mod hands the model itself (the
 //   command hook that follows for the same call prints nothing once a verdict decided it).
@@ -18,8 +21,10 @@ import type { ToolCallResult } from 'claude-code'
 
 import { askBinary } from './binary'
 import type { Asked } from './bridge'
+import { keepCall } from './ledger'
 import { mark } from './marks'
 import type { AnswerAt, EventAt, Mod, NextAt } from './mod'
+import { madeForAgentLine } from './predict'
 import { answeredMark, receiptAnswerOf, receiptPlanOf, shortId } from './receipt'
 import type { ReceiptAnswer, ReceiptPlan } from './receipt'
 import { isRecord } from './shape'
@@ -127,8 +132,33 @@ function withContext(ran: ToolCallResult, context: readonly string[]): ToolCallR
 
 type BashCall = { command: string; tool_use_id: string; agentId?: string }
 
-/** The hook's body: `on('tool.call', { tool: 'Bash' }, ($, e, next) => bashCall(e, next, deps))`. */
+/**
+ * The hook's body: `on('tool.call', { tool: 'Bash' }, ($, e, next) => bashCall(e, next, deps))`.
+ * A call Adage made in the model's place (`adage_` id) is decided like any other, and its result
+ * carries the line that says whose call it was (`madeForAgentLine`).
+ */
 export async function bashCall<E extends BashCall>(e: E, next: (e: E) => Promise<ToolCallResult>, deps: CallDeps): Promise<ToolCallResult> {
+  const ran = await decided(e, next, deps)
+  const line = deps.isActive ? madeForAgentLine(e.tool_use_id) : undefined
+  return line === undefined ? ran : withContext(ran, [line])
+}
+
+/**
+ * Any other tool's call (`on('tool.call', …)`, every tool but Bash, which `bashCall` answers): a
+ * call Adage made in the model's place (the chain's reads, a skill) runs as it is, and its result
+ * carries the line that says whose call it was; every other call passes untouched.
+ */
+export async function onPredictedCall(m: Mod, e: EventAt<'tool.call'>, next: NextAt<'tool.call'>): AnswerAt<'tool.call'> {
+  // The ledger counts every main-loop call once: Bash's in its own hook, which a receipt may answer
+  // before this one is reached.
+  if (e.tool !== 'Bash') keepCall(m, e, next.origin)
+  const line = e.tool === 'Bash' ? undefined : madeForAgentLine(e.tool_use_id)
+  if (line === undefined) return next(e)
+  const ran = await next(e)
+  return ran.deny !== undefined ? ran : { ...ran, context: [...(ran.context ?? []), line] }
+}
+
+async function decided<E extends BashCall>(e: E, next: (e: E) => Promise<ToolCallResult>, deps: CallDeps): Promise<ToolCallResult> {
   if (!deps.isActive || typeof e.command !== 'string') return next(e)
   let ctx: { sessionId: string; cwd: string }
   try {
@@ -180,7 +210,9 @@ export async function bashCall<E extends BashCall>(e: E, next: (e: E) => Promise
   // covers it (T-C3-07). The command hook still delivers a fresh one's note beside the result.
   if (receipt !== undefined && receipt.operation !== '' && !deps.isObserving) await quiet(deps.beside?.(id, receipt.operation))
 
-  // §3.4 The dead end that never runs: the learned command, only on the same verdict.
+  // §3.4 The dead end that never runs: the planned command (learned, or a declared instinct's),
+  // only on the same verdict for the call and for the command the binary planned (the whole
+  // pipeline, when the dead end heads one).
   const sub = plan.substitute
   if (sub !== undefined && (await alike(sub.command)) === true) {
     const final = await ask({ ...base, verdict: { engine: 'same', substitute: sub.route } })
@@ -229,10 +261,11 @@ async function rewrote(m: Mod, id: string, from: string, to: string): Promise<vo
 
 /**
  * The hook body (`on('tool.call', { tool: 'Bash' }, …)`, §3.3, §3.4; C3, C6): a fresh receipt
- * answers the call when the rules would have let it run unasked; a learned replacement or a rewrite
+ * answers the call when the rules would have let it run unasked; a dead end's replacement or a rewrite
  * runs only on the same verdict for both commands. Each decision keeps its marker for the row.
  */
 export async function onBashCall(m: Mod, e: EventAt<'tool.call', { tool: 'Bash' }>, next: NextAt<'tool.call', { tool: 'Bash' }>): AnswerAt<'tool.call', { tool: 'Bash' }> {
+  keepCall(m, e, next.origin)
   return bashCall(e, next, {
     isActive: m.rt.bin !== undefined,
     isObserving: m.rt.observing,

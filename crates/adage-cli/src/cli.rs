@@ -45,9 +45,9 @@ pub struct Cli {
 #[derive(Subcommand, Debug)]
 pub enum Command {
     // ------------------------------------------------------------------ start
-    /// Set Adage up in one go: find your harnesses, register hooks, condition from past traces.
+    /// Set Adage up once: connect your coding agents (Claude Code through the Adage plugin, Codex, OpenCode) and start learning from their past sessions.
     #[command(
-        after_help = "At a terminal this is a guided flow. `--print` shows every step without asking; `--yes` runs them."
+        after_help = "At a terminal it asks before each step; `--yes --hooks user` takes them all without a question, and `--print` only shows them. Later, `adage update` keeps everything current."
     )]
     Init(InitArgs),
     /// Check that this machine's Adage is set up and healthy.
@@ -122,9 +122,9 @@ pub enum Command {
     Completions(CompletionsArgs),
     /// The ledger of what sessions cost: `adage ledger note` records a harness's own figures.
     Ledger(LedgerArgs),
-    /// Update Adage to the latest version, the same way it was installed.
+    /// Update Adage when a newer version is out: its binaries, hooks and Claude Code plugin together, the way you installed it, with a way back.
     #[command(
-        after_help = "Until the first release is published, this builds the main branch from source with cargo."
+        after_help = "Checks for a newer release first (--check only checks). Before anything is replaced the running binaries are kept in $ADAGE_HOME/previous/; --rollback puts them back."
     )]
     Update(UpdateArgs),
 
@@ -151,12 +151,19 @@ pub struct InitArgs {
     pub repo: Option<PathBuf>,
     #[arg(long, value_name = "PATH", hide = true)]
     pub repo_path: Option<PathBuf>,
-    /// Run every step without asking (fetches the model).
+    /// Run every step without asking (fetches the model and any missing binaries).
     #[arg(long, conflicts_with = "print")]
     pub yes: bool,
+    /// With --yes: connect every harness found, for every repository (`user`), this one
+    /// (`project`), or none. Claude Code gets the Adage plugin; the others their hook files.
+    #[arg(long, value_name = "SCOPE", value_parser = ["user", "project", "none"])]
+    pub hooks: Option<String>,
     /// Show every step and its command without doing anything.
     #[arg(long)]
     pub print: bool,
+    /// Stage the installed local Claude Code plugin again from this binary (`adage update`).
+    #[arg(long, hide = true, conflicts_with_all = ["yes", "print", "hooks"])]
+    pub restage: bool,
 }
 
 #[derive(Args, Debug)]
@@ -773,15 +780,33 @@ pub struct HooksConfigArgs {
 
 #[derive(Args, Debug)]
 pub struct UpdateArgs {
+    /// Only say whether a newer Adage is out (asks at most once a day; --now asks again).
+    #[arg(long, conflicts_with_all = ["rollback", "print"])]
+    pub check: bool,
+    /// With --check: ask now, whatever the cache says.
+    #[arg(long, requires = "check")]
+    pub now: bool,
+    /// With --check: the answer as JSON.
+    #[arg(long, requires = "check")]
+    pub json: bool,
+    /// Put back the binaries the last update replaced (kept in $ADAGE_HOME/previous/).
+    #[arg(long, visible_alias = "back")]
+    pub rollback: bool,
     /// Where to update from (default: how this adage was installed).
-    #[arg(long, value_parser = ["source", "npm", "brew"])]
+    #[arg(long, value_parser = ["source", "npm", "brew", "release"], conflicts_with = "rollback")]
     pub from: Option<String>,
-    /// The branch a source update builds.
-    #[arg(long, value_name = "NAME", default_value = "main")]
-    pub branch: String,
-    /// Print the command without running it.
+    /// Build this branch from source instead of the newest release's tag.
+    #[arg(long, value_name = "NAME", conflicts_with = "rollback")]
+    pub branch: Option<String>,
+    /// Print what it would do without doing it.
     #[arg(long)]
     pub print: bool,
+    /// Re-point hook registrations without asking first.
+    #[arg(long, short = 'y')]
+    pub yes: bool,
+    /// Finish an update as the binary it installed (run by `adage update` itself).
+    #[arg(long, value_name = "VERSION", hide = true)]
+    pub finish: Option<String>,
 }
 
 #[derive(Args, Debug)]
@@ -934,6 +959,7 @@ fn overview(t: &Theme) -> StyledStr {
             "When something is off",
             &[
                 ("doctor", "what is wrong, and the fix for each problem"),
+                ("update", "update Adage, its hooks and the plugin together"),
                 ("off", "turn Adage off in this repository (`adage on` turns it back on)"),
             ],
         ),
@@ -944,7 +970,6 @@ fn overview(t: &Theme) -> StyledStr {
                 ("install", "register Adage's hooks with one agent"),
                 ("packs", "base instincts and added packs: list, turn on, turn off"),
                 ("config", "settings"),
-                ("update", "update Adage itself"),
             ],
         ),
         (
@@ -1033,6 +1058,10 @@ mod tests {
                 if let Some(l) = a.get_long() {
                     out.insert(format!("--{l}"));
                 }
+                // `--back` is `--rollback`'s alias: a module may read either spelling.
+                for al in a.get_all_aliases().into_iter().flatten() {
+                    out.insert(format!("--{al}"));
+                }
             }
             for s in c.get_subcommands() {
                 walk(s, out);
@@ -1099,6 +1128,7 @@ mod tests {
             "--manifest-path",
             "--profile",
             "--release",
+            "--tag",
         ]
         .into();
         let table: &[(&str, &[&str])] = &[
@@ -1119,6 +1149,8 @@ mod tests {
             ("savings.rs", &["savings"]),
             ("models.rs", &["models"]),
             ("update.rs", &["update"]),
+            ("update/channel.rs", &["update"]),
+            ("update/probe.rs", &["update"]),
             ("main.rs", &["condition", "status", "report", "delegate"]),
             ("ui/mod.rs", &["watch", "ui"]),
             ("status_card.rs", &[""]),

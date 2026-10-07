@@ -1,7 +1,0 @@
-{
-  "name": "adage-exec",
-  "version": "0.1.0",
-  "description": "Retired: the adage plugin now includes execution (adage-exec ships inside it). This alias only quiets what an earlier version left behind and asks you to uninstall it.",
-  "author": { "name": "Adage" },
-  "repository": "https://github.com/stevenvaughanbooth/adage"
-}

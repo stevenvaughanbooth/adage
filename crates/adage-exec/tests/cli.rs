@@ -341,3 +341,59 @@ fn status_and_revoke_keep_grant_modes_apart() {
     assert!(modes().is_empty());
     assert!(!status().contains("Prediction grants"));
 }
+
+/// One key for a checkout's grants: `status` and `revoke` find a grant under the key the index
+/// holds the checkout's reflexes by, the key `adage review delegate --predict --repo .` writes it
+/// under (the reflex's `repo`) and a hook reads it by. Here that is the name the reflexes were
+/// learned under (`adage condition --repo acme-billing`), not the checkout's own `<dir>@…` key,
+/// under which `status` showed nothing in the first live run.
+#[test]
+fn status_and_revoke_read_grants_under_the_key_the_index_holds() {
+    use adage_exec::approvals::{Approval, ApprovalKey, Store};
+    use adage_tracks::testkit::{kinds, IndexBuilder, TempWorld};
+    let w = TempWorld::new(&[]);
+    let root = w.repo("acme-billing");
+    w.write("acme-billing/schema/invoice.json", "{}\n");
+    let paths = w.home("adage").paths;
+    let gen = kinds::finish_line("finish-line-gen", "schema/*.json", "make gen").support(5, 5).days(3);
+    let index = IndexBuilder::new("grant-key").route("acme-billing", "acme-billing/learned", gen).write(&paths.index());
+    assert_ne!(adage_core::repo::repo_key(&root), "acme-billing", "the checkout's own key is another");
+    // As `adage review delegate acme-billing/learned finish-line-gen --predict --repo .` records it.
+    let ir = &index.routes[0];
+    let req = adage_exec::route::plan_predict(ir, &root, &paths.tracks()).unwrap().request;
+    let mut store = Store::default();
+    store.approve(Approval {
+        key: ApprovalKey::for_request(&req, &ir.repo),
+        route: "acme-billing/learned/finish-line-gen".into(),
+        approved_on: "fixture-only".into(),
+        by: None,
+        basis: serde_json::Value::Null,
+        auto: false,
+        terms: None,
+        via: None,
+    });
+    store.save(&approvals_file(&paths.root)).unwrap();
+    assert_eq!(adage_exec::route::grant_key(&root, &paths), "acme-billing");
+    let run = |args: &[&str]| {
+        let mut c = Command::new(env!("CARGO_BIN_EXE_adage-exec"));
+        c.args(args)
+            .arg("--repo")
+            .arg(&root)
+            .env("ADAGE_HOME", &paths.root)
+            .env("ADAGE_POLICY", paths.root.join("managed.toml"))
+            .env("ADAGE_ALLOW_NONINTERACTIVE", "1");
+        for v in adage_exec::person::AGENT_ENV {
+            c.env_remove(v);
+        }
+        let o = c.output().unwrap();
+        assert!(o.status.success(), "{o:?}");
+        String::from_utf8(o.stdout).unwrap()
+    };
+    let out = run(&["status"]);
+    assert!(out.starts_with("Execution grants for acme-billing: 0\n"), "{out}");
+    assert!(out.contains("Prediction grants for acme-billing: 1\n  acme-billing/learned/finish-line-gen  E2"), "{out}");
+    assert!(out.contains("make gen"), "{out}");
+    let out = run(&["revoke", "--mode", "predict"]);
+    assert!(out.contains("Revoked 1 prediction grant(s) for acme-billing."), "{out}");
+    assert!(Store::load(&approvals_file(&paths.root)).unwrap().approvals.is_empty());
+}

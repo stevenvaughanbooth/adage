@@ -21,12 +21,11 @@
 | `crates/adage-cli` | The `adage` binary |
 | `crates/adage-sim` | Harness simulator: seeded mock histories (`sim/fixtures/`) and native hook payloads for Claude Code, OpenCode, and Codex |
 | `crates/adage-term` | The terminal design system: tokens, capability detection, theme, glyphs and the output grammar every command prints through |
-| `xtask` | `cargo xtask tokens [--check]`: generates the terminal palette and the web map's CSS variables from the design tokens |
+| `xtask` | `cargo xtask tokens [--check]`: generates the terminal palette and the web map's CSS variables from the design tokens; `cargo xtask bump <version>` and `release-check`: the release's versions and workflow ([releasing](release.md)) |
 | `design/` | The design tokens (`design/tokens/adage.tokens.json`, W3C DTCG), the single source for every surface ([style guide](design/style.md)) |
 | `web/map` | The map web app `adage map` serves, embedded in the binary |
 | `web/site` | The public website |
-| `plugin/claude-code` | The Claude Code plugin: both binaries, the hooks, and the mod (`hooks/*.ts`) |
-| `plugin/claude-code-exec` | The retired `adage-exec` plugin, kept one release as an alias that asks to be uninstalled |
+| `plugin/claude-code` | The Claude Code plugin: its three binaries (`adage`, `adage-exec`, `adage-train`), the hooks, and the mod (`hooks/*.ts`) |
 | `plugin/opencode` | The OpenCode plugin (installed by `adage install opencode`) |
 | `npm/` | The npm launcher and per-platform packages |
 | `demo/` | Sandbox, runner, live dashboard |

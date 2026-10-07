@@ -168,11 +168,15 @@ pub enum PersonVerb {
     On,
     /// `add <pack> --trust`, for a pack committed in the repository before the press's session.
     AddTrust,
+    /// `update`, bare (onboarding plan O9): Adage's own binaries replaced through their channel.
+    /// Under a press it runs only a channel whose update is a fetch, and edits no settings file,
+    /// registration or config; every flag of `update` keeps the terminal's check ([`require`]).
+    Update,
 }
 
 impl PersonVerb {
     /// Every press site.
-    pub const ALL: [PersonVerb; 13] = [
+    pub const ALL: [PersonVerb; 14] = [
         PersonVerb::Review(Verb::Approve),
         PersonVerb::Review(Verb::Extinguish),
         PersonVerb::Review(Verb::Weaken),
@@ -186,6 +190,7 @@ impl PersonVerb {
         PersonVerb::DelegatePredictOn,
         PersonVerb::On,
         PersonVerb::AddTrust,
+        PersonVerb::Update,
     ];
 
     /// The command as people type it after `adage`: what a refusal names and what the spent
@@ -200,6 +205,7 @@ impl PersonVerb {
             PersonVerb::DelegatePredictOn => "delegate predict on".into(),
             PersonVerb::On => "on".into(),
             PersonVerb::AddTrust => "add --trust".into(),
+            PersonVerb::Update => "update".into(),
         }
     }
 
@@ -263,6 +269,7 @@ fn what_it_changes(cmd: &str) -> &'static str {
         ["config", "set", ..] => "it changes Adage's settings",
         ["init", ..] => "it downloads into Adage's data directory and binds instincts",
         ["on", ..] => "it turns Adage back on in this repository",
+        ["update", ..] => "it replaces Adage's own binaries on this machine",
         _ => "it changes what is shared, trusted or configured",
     }
 }
@@ -285,10 +292,13 @@ mod tests {
         assert_eq!(what_it_changes("share"), "it publishes a signed pack of your reflexes");
         assert_eq!(what_it_changes("config set learn.auto"), "it changes Adage's settings");
         assert_eq!(what_it_changes("on"), "it turns Adage back on in this repository");
+        assert_eq!(what_it_changes("update"), "it replaces Adage's own binaries on this machine");
+        assert_eq!(what_it_changes("update --rollback"), "it replaces Adage's own binaries on this machine");
     }
 
-    /// The press sites are exactly the plan's list (A7; impl/A7-A8-notes.md, "Every press site"),
-    /// spelled as the commands people type, and each refusal says what that command changes.
+    /// The press sites are exactly the plan's list (A7; impl/A7-A8-notes.md, "Every press site";
+    /// onboarding plan O9 adds `update`, the fourteenth), spelled as the commands people type, and
+    /// each refusal says what that command changes. T-O9-01.
     #[test]
     fn the_press_sites_are_the_listed_commands() {
         let cmds: Vec<String> = PersonVerb::ALL.iter().map(|v| v.cmd()).collect();
@@ -308,8 +318,13 @@ mod tests {
                 "delegate predict on",
                 "on",
                 "add --trust",
+                "update",
             ]
         );
+        // Each command names one site, so a spent press records which one (`press_spent`'s verb).
+        for v in PersonVerb::ALL {
+            assert_eq!(PersonVerb::ALL.iter().filter(|w| w.cmd() == v.cmd()).collect::<Vec<_>>(), [&v], "{v:?}");
+        }
         // Every review verb is a site, so `ALL` cannot fall behind `Verb`.
         for v in Verb::ALL {
             assert!(PersonVerb::ALL.contains(&PersonVerb::Review(v)), "{v:?}");
@@ -326,6 +341,7 @@ mod tests {
                 | PersonVerb::DelegatePredictOn => runs,
                 PersonVerb::On => "it turns Adage back on in this repository",
                 PersonVerb::AddTrust => "it installs a pack and trusts its signer",
+                PersonVerb::Update => "it replaces Adage's own binaries on this machine",
             };
             assert_eq!(v.what_it_changes(), want, "{v:?}");
         }

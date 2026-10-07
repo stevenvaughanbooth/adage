@@ -25,13 +25,16 @@ pub enum ModAnswer {
     /// The call answered by a fresh receipt instead of running it.
     Receipt { receipt: ReceiptAnswer },
     /// The standing text, its environment sentence, what compaction keeps, and, for a subagent's
-    /// spawn, what the subagent is told.
+    /// spawn, what the subagent is told; the lookup conventions for the shell tool's description
+    /// only when the ask says it places them (`conventions: true`).
     Standing {
         standing: String,
         environment: String,
         compact: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         subagent: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        conventions: Option<String>,
     },
     /// A skill's text with what Adage verified appended.
     Text { text: String },

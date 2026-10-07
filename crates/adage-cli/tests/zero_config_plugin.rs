@@ -149,9 +149,9 @@ impl World {
         let o = self.adage(&a, "");
         assert!(o.status.success(), "{}", text(&o));
     }
-    /// A copy of the Claude Code plugin with this build's adage, and adage-exec when it is built
-    /// beside it, bundled and checksummed, as the release stages it for the marketplace (one
-    /// plugin, both binaries: plan A8).
+    /// A copy of the Claude Code plugin with this build's adage, and adage-exec and adage-train
+    /// when they are built beside it, bundled and checksummed, as the release stages it for the
+    /// marketplace (one plugin, three binaries: plan A8, onboarding plan O1).
     #[cfg(unix)]
     fn staged_plugin(&self) -> Option<PathBuf> {
         self.staged_plugin_with(true)
@@ -166,9 +166,9 @@ impl World {
         let _ = std::fs::remove_dir_all(root.join("dist"));
         let built = Path::new(env!("CARGO_BIN_EXE_adage"));
         let mut sums = String::new();
-        for name in ["adage", "adage-exec"] {
+        for name in ["adage", "adage-exec", "adage-train"] {
             let from = built.with_file_name(name);
-            if name == "adage-exec" && !(exec && from.is_file()) {
+            if (name != "adage" && !from.is_file()) || (name == "adage-exec" && !exec) {
                 continue;
             }
             let bin = root.join("dist").join(t).join(name);
@@ -934,6 +934,45 @@ fn exec_marker_picks_the_hook_binary() {
     assert_eq!(std::fs::read_link(data.join("bin/hook")).unwrap(), Path::new("adage-exec"));
     assert!(std::fs::read_link(data.join("bin/adage-exec")).unwrap().to_string_lossy().starts_with("adage-exec-"));
     assert_eq!(system_message(&String::from_utf8_lossy(&o.stdout)), None, "nothing to say: execution serves");
+}
+
+/// T-O1-03: a plugin-only person can run `adage train`. The plugin bundles adage-train, the shim
+/// links `bin/adage-train` beside `bin/adage`, and `adage train` (which looks beside the running
+/// adage, `<data>/bin/adage-<sha>` under the plugin) hands over to it with its arguments, never to
+/// one on `PATH`. The bundled adage-train is a stub that says where it ran from, so the test holds
+/// whether or not the real one is built.
+#[test]
+#[cfg(unix)]
+fn train_runs_from_the_plugin() {
+    use std::os::unix::fs::PermissionsExt;
+    let w = World::new();
+    let Some(plugin) = w.staged_plugin_with(false) else { return };
+    let t = target().unwrap();
+    let stub = plugin.join("dist").join(t).join("adage-train");
+    std::fs::write(&stub, "#!/bin/sh\necho \"stub adage-train at $0: $*\"\n").unwrap();
+    std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let sums = std::fs::read_to_string(plugin.join("dist/SHA256SUMS")).unwrap();
+    let mut sums: String = sums.lines().filter(|l| !l.ends_with("/adage-train")).map(|l| format!("{l}\n")).collect();
+    sums.push_str(&format!("{}  {t}/adage-train\n", sha256(&stub)));
+    std::fs::write(plugin.join("dist/SHA256SUMS"), sums).unwrap();
+    // A different adage-train on PATH must not be the one that runs.
+    std::fs::write(w.p("bin/adage-train"), "#!/bin/sh\necho 'adage-train from PATH'\n").unwrap();
+    std::fs::set_permissions(w.p("bin/adage-train"), std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    let data = w.p("plugin-data");
+    let start = json!({ "session_id": "train", "hook_event_name": "SessionStart", "source": "startup" });
+    let (o, _) = w.shim(&plugin, &data, &start);
+    assert!(o.status.success(), "{}", text(&o));
+    let link = std::fs::read_link(data.join("bin/adage-train")).unwrap();
+    assert_eq!(link, Path::new(&format!("adage-train-{}", sha256(&stub))), "the bundled copy, verified");
+
+    let o = w.run(&data.join("bin/adage"), &["train", "--help"], "", &w.root);
+    assert!(o.status.success(), "{}", text(&o));
+    assert_eq!(
+        String::from_utf8_lossy(&o.stdout).trim(),
+        format!("stub adage-train at {}: --help", data.join("bin/adage-train").display()),
+        "adage train execs the plugin's bin/adage-train with its arguments"
+    );
 }
 
 /// 8. At most one notice a day per repository, and only when something is new.

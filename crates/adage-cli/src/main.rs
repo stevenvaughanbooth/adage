@@ -17,6 +17,7 @@
 mod add;
 mod autolearn;
 mod candidates;
+mod claude_plugin;
 mod cli;
 mod condition_out;
 mod config;
@@ -40,6 +41,7 @@ mod ledger;
 mod map;
 mod marketplace_cmd;
 mod models;
+mod net;
 mod packs;
 mod packs_cmd;
 mod placement;
@@ -260,12 +262,12 @@ fn run(args: &[String]) -> Result<()> {
             );
             Ok(())
         }
-        Some("update") => update::run(rest),
+        Some("update") => update::run(rest, &paths),
         Some("off") => switch::off(),
         Some("on") => switch::on(),
         Some("ledger") => ledger::run(rest, &paths),
         Some("version") => {
-            println!("adage {}", env!("CARGO_PKG_VERSION"));
+            println!("{}", update::version_line(&paths));
             Ok(())
         }
         // Bare `adage` prints the status card, wherever it runs (a terminal, a pipe, `!adage` in

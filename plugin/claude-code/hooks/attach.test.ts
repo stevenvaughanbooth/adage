@@ -2,7 +2,8 @@
 // T-C5-02, T-C5-03, T-C5-05's offline half, T-C9-03): the binary's `Standing` answered beneath the
 // plugin by the kit's world, and the engine's own composition, tool description and subagent spawn
 // by its hooks beneath. The pure placement is checked alone. The answers are the wire's
-// (docs/claude-mod/impl/wire.md): standing.json for the session, standing-subagent.json for a spawn.
+// (docs/claude-mod/impl/wire.md): standing.json for the session, standing-subagent.json for a spawn,
+// standing-conventions.json for a session whose learned lookups are said on the Bash tool.
 import type { On, SessionMessage } from 'claude-code'
 import { describe, expect, test } from 'claude-code/testing'
 
@@ -15,6 +16,7 @@ const ENVIRONMENT = String(ANSWER.environment)
 const COMPACT = String(ANSWER.compact)
 const SPAWNED = wire('standing-subagent')
 const SUBAGENT = String(SPAWNED.subagent)
+const CONVENTIONS = wire('standing-conventions')
 const ENGINE = SECTIONS
 const BASH = BASH_TOOL
 /** A render of the system prompt, as the engine raises it. */
@@ -49,7 +51,7 @@ describe('T-C5-02 · the section', () => {
     for (const c of composed) {
       expect(c.sections).toEqual([...ENGINE, { id: SECTION_ID, text: STANDING, scope: 'session' }])
     }
-    expect(w.asked).toEqual([{ session_id: 'sess-1', cwd: '/w', hook_event_name: 'Standing', via: 'mod' }])
+    expect(w.asked).toEqual([{ session_id: 'sess-1', cwd: '/w', hook_event_name: 'Standing', via: 'mod', conventions: true }])
   })
 
   test('empty standing text: the engine\'s sections, unchanged', async ($, on) => {
@@ -86,7 +88,7 @@ describe('T-C5-02 · the section', () => {
     const w = standingWorld(on, { observe: '1' })
     await start($, w.w, null, false)
     await $.prompt.compose(COMPOSE)
-    expect(w.asked).toEqual([{ session_id: 'sess-1', cwd: '/w', hook_event_name: 'Standing', via: 'mod', observe: true }])
+    expect(w.asked).toEqual([{ session_id: 'sess-1', cwd: '/w', hook_event_name: 'Standing', via: 'mod', observe: true, conventions: true }])
   })
 
   test('a /clear is a new session: asked once for each id', async ($, on) => {
@@ -110,6 +112,25 @@ describe('T-C9-03 · the Bash tool\'s description and the subagent\'s prompt', (
     expect(await $.tool.describe(BASH)).toEqual(first)
     expect(await $.tool.describe({ ...BASH, description: first.description })).toEqual(first)
     expect(await $.tool.describe({ ...BASH, tool: 'Read', description: 'Reads a file.' })).toEqual({ description: 'Reads a file.' })
+  })
+
+  test('O0 §6 · the lookup conventions follow the environment note on the Bash tool, once; the session asks for them, a subagent does not', async ($, on) => {
+    const said = String(CONVENTIONS.conventions)
+    const w = standingWorld(on, { standing: p => (p.agent !== undefined ? SPAWNED : { ...ANSWER, conventions: said }) })
+    await start($, w.w, null, false)
+    const first = await $.tool.describe(BASH)
+    expect(first).toEqual({ description: `${BASH.description}\n\n${ENVIRONMENT}\n\n${said}` })
+    expect(await $.tool.describe({ ...BASH, description: first.description })).toEqual(first)
+    await $.agent.spawn({ prompt: 'Find W-2045', description: 'Look up', subagentType: 'Explore' } as never)
+    expect(w.asked.map(p => p.conventions)).toEqual([true, undefined])
+  })
+
+  test('O0 §6 · standing-conventions.json alone: the conventions are the whole note, the procedures and environment empty', async ($, on) => {
+    const w = standingWorld(on, { standing: () => CONVENTIONS })
+    await start($, w.w, null, false)
+    expect(standingOf(CONVENTIONS)).toEqual({ ...standingOf(undefined), compact: COMPACT, conventions: String(CONVENTIONS.conventions) })
+    expect(await $.tool.describe(BASH)).toEqual({ description: `${BASH.description}\n\n${String(CONVENTIONS.conventions)}` })
+    expect((await $.prompt.compose(COMPOSE)).sections).toEqual(ENGINE)
   })
 
   test('no environment bound: the description as the engine computed it', async ($, on) => {
@@ -195,9 +216,9 @@ describe('T-C5-02, T-C9-03 · the placement, alone', () => {
     expect(withPreamble('p', '')).toBe('p')
   })
 
-  test('standingOf reads standing.json: its three session parts (the whole answer), each there', () => {
-    expect(standingOf(ANSWER)).toEqual(ANSWER)
-    for (const v of Object.values(standingOf(ANSWER))) expect(v).not.toBe('')
+  test('standingOf reads standing.json: its three session parts (the whole answer), each there; no conventions asked of it', () => {
+    expect(standingOf(ANSWER)).toEqual({ ...ANSWER, conventions: '' })
+    for (const k of ['standing', 'environment', 'compact'] as const) expect(standingOf(ANSWER)[k]).not.toBe('')
     expect(subagentOf(ANSWER)).toBe('')
   })
 
@@ -205,7 +226,7 @@ describe('T-C5-02, T-C9-03 · the placement, alone', () => {
     expect(subagentOf(SPAWNED)).toBe(SPAWNED.subagent)
     expect(SUBAGENT).not.toBe('')
     const none = standingOf(undefined)
-    expect(Object.values(none)).toEqual(['', '', ''])
+    expect(Object.values(none)).toEqual(['', '', '', ''])
     expect(standingOf(SPAWNED)).toEqual({ ...none, compact: SPAWNED.compact })
   })
 

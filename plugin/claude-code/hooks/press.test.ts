@@ -17,9 +17,9 @@ function runner(stdout: string, code = 0, stderr = ''): { run: Run; seen: Ran[] 
   return { run: guardPress(async (argv, init) => (seen.push({ argv, init }), exited(code, stdout, { stderr }))), seen }
 }
 
-describe('T-X-04, T-B4-04 · the person-only verbs', () => {
+describe('T-X-04, T-B4-04, T-O9-04 · the person-only verbs', () => {
   test('each verb in its exact shapes; never a flag or a path out; install, config and the rest never', () => {
-    expect(PRESS_VERBS).toEqual(['review', 'delegate', 'on', 'add'])
+    expect(PRESS_VERBS).toEqual(['review', 'delegate', 'on', 'add', 'update'])
     for (const ok of [
       ['review', 'approve', 'acme/learned', 'test-after-acme-edit'],
       ['review', 'pin', 'acme/learned', 'r'],
@@ -29,6 +29,7 @@ describe('T-X-04, T-B4-04 · the person-only verbs', () => {
       ['delegate', 'on'],
       ['on'],
       ['add', '.adage/packs/acme', '--trust'],
+      ['update'],
     ]) expect(isPressAllowed([CLI, ...ok]), ok.join(' ')).toBe(true)
     for (const no of [
       ['install', 'claude-code'],
@@ -41,6 +42,12 @@ describe('T-X-04, T-B4-04 · the person-only verbs', () => {
       ['add', '.', '--trust'],
       ['on', 'now'],
       ['delegate', 'off'],
+      // T-O9-04: `update` bare, and nothing else of it.
+      ['update', '--back'],
+      ['update', '--rollback'],
+      ['update', '--check'],
+      ['update', '--yes'],
+      ['update', '--from', 'source'],
       [],
     ]) expect(isPressAllowed([CLI, ...no]), no.join(' ')).toBe(false)
   })
@@ -48,6 +55,8 @@ describe('T-X-04, T-B4-04 · the person-only verbs', () => {
   test('a terminal command as the argv a press runs; anything not an adage person-only command is none', () => {
     expect(pressArgv(CLI, 'adage review approve acme/learned r')).toEqual([CLI, 'review', 'approve', 'acme/learned', 'r'])
     expect(pressArgv(CLI, '  adage   on ')).toEqual([CLI, 'on'])
+    expect(pressArgv(CLI, 'adage update')).toEqual([CLI, 'update'])
+    expect(pressArgv(CLI, 'adage update --rollback')).toBeUndefined()
     expect(pressArgv(CLI, 'adage install claude-code --write')).toBeUndefined()
     expect(pressArgv(CLI, 'rm -rf /')).toBeUndefined()
   })

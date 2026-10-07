@@ -32,7 +32,7 @@ Design context: Design Spec §13.1 and decisions O8 and O14; Architecture §4.2,
 | Finish line at stop | Stop `decision: block` | `session.idle` → a synthetic follow-up prompt | Stop `decision: block` (becomes a user prompt) |
 | Batches | Yes (`PostToolBatch`) | No (per call) | No (per call) |
 | Learning from history | `~/.claude/projects/*.jsonl` | `opencode export <id>` JSON files | `~/.codex/sessions` rollouts (`--codex-sessions`; format from source) |
-| Install | `adage install claude-code` / plugin | `adage install opencode` | `adage install codex` |
+| Install | `adage init` (the Adage plugin), or `adage install claude-code` | `adage init`, or `adage install opencode` | `adage init`, or `adage install codex` |
 
 ## Claude Code
 
@@ -40,6 +40,15 @@ Unchanged by this slice; recorded for comparison. Hooks, payloads, and `addition
 documented at <https://code.claude.com/docs/en/hooks>. Adage's adapter is
 `crates/adage-hook/src/harness/claude.rs`; its output is pinned byte for byte by
 `crates/adage-cli/tests/golden/claude-code.txt`.
+
+**Install** — `adage init` installs the Adage plugin (`plugin/claude-code`) with Claude Code's own
+`claude plugin` command: one plugin carrying three binaries (`adage`, `adage-exec`, `adage-train`),
+which its session-start shim checks against the plugin's `SHA256SUMS` and links as
+`${CLAUDE_PLUGIN_DATA}/bin/<name>`; every other hook runs `bin/hook` (`adage`, or `adage-exec` once
+execution is on). From v0.1.0 the same plugin installs from the marketplace (`/plugin install
+adage@adage`). `adage install claude-code [--write] [--scope project|user]` writes the settings-file
+registration instead, and is never written beside the plugin: two registrations run every hook
+twice. Details: [usage](usage.md#installing-and-updating).
 
 ### Capabilities, by caller
 
@@ -134,10 +143,13 @@ done
 adage condition --transcripts exports/*.json
 ```
 
-**Install** — `adage install opencode [--write] [--scope project|user]` prints (default) or writes
-the plugin with the binary's absolute path embedded, to `.opencode/plugins/adage.js` or
-`$XDG_CONFIG_HOME/opencode/plugins/adage.js`. It replaces that file only if it is Adage's, and
-`--remove` removes it (keeping `adage.js.adage-bak`).
+**Install** — `adage init` writes it when it finds OpenCode (user scope with `--hooks user`).
+By hand, `adage install opencode [--write] [--scope project|user]` prints (default) or writes the
+plugin with the binary's absolute path embedded, to `.opencode/plugins/adage.js` or
+`$XDG_CONFIG_HOME/opencode/plugins/adage.js`. Written by the Claude Code plugin's own binary, that
+path is the plugin's stable link `${CLAUDE_PLUGIN_DATA}/bin/adage`, so a plugin update carries it;
+written by an `adage` on `PATH`, `adage update` re-points it when the binary moves. It replaces
+that file only if it is Adage's, and `--remove` removes it (keeping `adage.js.adage-bak`).
 
 ### Not possible, or not done
 
@@ -218,12 +230,15 @@ Steering is detected from `developer` messages (hook context) and from Adage's f
 Sub-agent threads are skipped; compressed `.jsonl.zst` rollouts are counted and skipped
 (decompress them with `zstd -d` to include them).
 
+`adage init` writes it when it finds Codex (user scope with `--hooks user`). By hand,
 `adage install codex [--write] [--scope project|user]` prints or merges a `hooks.json`
 registering `SessionStart`, `UserPromptSubmit`, `PostToolUse`, `Stop`, and `SessionEnd`, with the
-binary path shell-quoted. Existing hooks are kept as written; Adage's own entries are replaced, so
-reinstalling is idempotent, and `--remove` takes them out again. Codex runs both a user-scope and a
-repository `hooks.json`, so Adage registers in one of them only. Codex then asks you to review the
-hooks in `/hooks`.
+binary path shell-quoted: the Claude Code plugin's stable link `${CLAUDE_PLUGIN_DATA}/bin/adage`
+when the plugin's own binary writes it (a plugin update carries it), otherwise the `adage` that
+ran, which `adage update` re-points when it moves. Existing hooks are kept as written; Adage's own
+entries are replaced, so reinstalling is idempotent, and `--remove` takes them out again. Codex runs
+both a user-scope and a repository `hooks.json`, so Adage registers in one of them only. Codex then
+asks you to review the hooks in `/hooks`.
 
 ### Not possible, or not done
 

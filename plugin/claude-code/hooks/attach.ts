@@ -1,9 +1,9 @@
 // Pure: where Adage's standing text is attached (docs/claude-mod/architecture.md §1b.3, §3.6–§3.8;
-// plan C5, C9). The binary answers `Standing` once per session (`{ standing, environment, compact }`,
-// and `subagent` when asked about a subagent); the mod places each part where the engine keeps it:
-// the procedures as a `session` section of the system prompt (cached for the session), the
-// environment note in the Bash tool's description, the compaction instruction at compaction, and a
-// subagent's text before its prompt. Every part is the binary's words; an empty part attaches
+// plan C5, C9). The binary answers `Standing` once per session (`{ standing, environment, compact,
+// conventions }`, and `subagent` when asked about a subagent); the mod places each part where the
+// engine keeps it: the procedures as a `session` section of the system prompt (cached for the
+// session), the environment note and the learned lookup conventions in the Bash tool's
+// description, the compaction instruction at compaction, and a subagent's text before its prompt. Every part is the binary's words; an empty part attaches
 // nothing, and a failed ask is an empty answer. The answer is asked once per session id and kept
 // in the runtime, so every request of the session reads the same text (the prompt cache keeps it).
 import type { PromptComposeSection } from 'claude-code'
@@ -13,9 +13,9 @@ import type { AnswerAt, EventAt, Mod, NextAt } from './mod'
 import { isRecord, str } from './shape'
 
 /** The session's answer, kept for the session: the same text at every request (the cache holds it). */
-export type Standing = { standing: string; environment: string; compact: string }
+export type Standing = { standing: string; environment: string; compact: string; conventions: string }
 
-const NO_STANDING: Standing = { standing: '', environment: '', compact: '' }
+const NO_STANDING: Standing = { standing: '', environment: '', compact: '', conventions: '' }
 
 /** The binary's `Standing` payload (C5, C9), exactly. */
 type StandingPayload = {
@@ -27,6 +27,11 @@ type StandingPayload = {
   observe?: true
   /** A subagent about to start (`agent.spawn`): what it is and what it is asked. */
   agent?: { type: string; description: string; prompt: string }
+  /**
+   * The session's ask: the binary adds `conventions`, one sentence per learned lookup convention
+   * (O0-fixes-notes.md §6); without it the answer is as before.
+   */
+  conventions?: true
 }
 
 /** `Standing` is read-only and asked off the hot path (once a session, once a spawn). */
@@ -35,11 +40,14 @@ const STANDING_TIMEOUT_MS = 2000
 /** The section's id: a plugin's own is `<plugin>:<name>` (the engine's rule). */
 export const SECTION_ID = 'adage:procedures'
 
-/** The answer's three session parts; anything missing or malformed is empty. */
+/** The answer's four session parts; anything missing or malformed is empty. */
 export function standingOf(answer: unknown): Standing {
   if (!isRecord(answer)) return NO_STANDING
-  return { standing: str(answer.standing), environment: str(answer.environment), compact: str(answer.compact) }
+  return { standing: str(answer.standing), environment: str(answer.environment), compact: str(answer.compact), conventions: str(answer.conventions) }
 }
+
+/** What the Bash tool's description carries: the environment note, then the lookup conventions. */
+export const describedNote = (s: Standing): string => [s.environment, s.conventions].filter(t => t !== '').join('\n\n')
 
 /** What a subagent is told before it starts (the answer's `subagent`), or empty. */
 export const subagentOf = (answer: unknown): string => (isRecord(answer) ? str(answer.subagent) : '')
@@ -93,7 +101,7 @@ async function standingPayload(m: Mod, agent?: StandingPayload['agent']): Promis
     hook_event_name: 'Standing',
     via: 'mod',
     ...(m.rt.observing ? { observe: true as const } : {}),
-    ...(agent === undefined ? {} : { agent }),
+    ...(agent === undefined ? { conventions: true as const } : { agent }),
   }
 }
 
@@ -122,13 +130,14 @@ export async function onCompose(m: Mod, e: EventAt<'prompt.compose'>, next: Next
 }
 
 /**
- * The Bash tool's description carries the environment note once (§1b.3, C9): how Python and the
- * tests run here, where the tool is described rather than at each call.
+ * The Bash tool's description carries the environment note and the lookup conventions once
+ * (§1b.3, C9): how Python and the tests run here, and how work items are looked up, where the tool
+ * is described rather than at each call.
  */
 export async function onDescribe(m: Mod, e: EventAt<'tool.describe', { tool: 'Bash' }>, next: NextAt<'tool.describe', { tool: 'Bash' }>): AnswerAt<'tool.describe', { tool: 'Bash' }> {
   const described = await next(e)
   if (m.rt.bin === undefined) return described
-  const note = (await standing(m).catch(() => NO_STANDING)).environment
+  const note = describedNote(await standing(m).catch(() => NO_STANDING))
   const description = withNote(described.description, note)
   return description === described.description ? described : { ...described, description }
 }

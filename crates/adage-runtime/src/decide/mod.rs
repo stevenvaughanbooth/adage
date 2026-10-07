@@ -14,11 +14,44 @@ use crate::context::{self, Symbols};
 use crate::decision::directive;
 use crate::policy::in_play;
 use crate::{
-    command_key, prediction, render, Arm, Ctx, Decision, Directive, Event, ObligationState, Pending, SessionState,
+    command_key, prediction, render, Arm, Ctx, Decision, Directive, Event, Obligation, ObligationState, Pending,
+    PendingReads, SessionState,
 };
 use adage_core::keys;
 use adage_tracks::context::CtxNet;
 use adage_tracks::{interlock, IndexedRoute, Route, Step, Trigger};
+
+/// What the main loop's steps are predicted from ([`crate::prediction`]): the pending directives
+/// with a bound command, the bound read batches, the finish-line obligations, and the routes
+/// already predicted. A subagent's call (`Call::agent`) changes none of it (the Claude Code mod's
+/// architecture §3.8: predictions stay on the main loop): it is observed and recorded, and a
+/// directive it triggers is said to the subagent, but it binds nothing the main loop would then
+/// make, follows no directive the main loop was given, and meets no obligation the main loop's
+/// edits armed. Taken before such a call and put back after it.
+struct MainThread {
+    pending: Vec<Pending>,
+    reads: Vec<PendingReads>,
+    obligations: Vec<Obligation>,
+    predicted_routes: Vec<String>,
+}
+
+impl MainThread {
+    fn keep(st: &SessionState) -> Self {
+        MainThread {
+            pending: st.pending.clone(),
+            reads: st.reads.clone(),
+            obligations: st.obligations.clone(),
+            predicted_routes: st.predicted_routes.clone(),
+        }
+    }
+
+    fn restore(self, st: &mut SessionState) {
+        st.pending = self.pending;
+        st.reads = self.reads;
+        st.obligations = self.obligations;
+        st.predicted_routes = self.predicted_routes;
+    }
+}
 
 /// What every arm reads besides the context and the state: the routes in play here, and the two
 /// context nets (the routes', Track G §7, and the candidates', plan D2) with their symbolisers,
@@ -50,6 +83,11 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
     let mut out: Vec<Directive> = Vec::new();
     let w = Walk { routes: &routes, net: &net, syms: syms.as_ref(), cnet: &cnet, csyms: csyms.as_ref() };
 
+    // What the prompt directed for its first step is for that step only: any call, failure or
+    // turn's end since means the boundary has passed.
+    if matches!(ev, Event::Prompt { .. } | Event::Batch { .. } | Event::Failure { .. } | Event::Stop { .. }) {
+        st.at_prompt.clear();
+    }
     match ev {
         Event::SessionStart | Event::SessionEnd => {}
         Event::Prompt { text } => prompt::on_prompt(ctx, &w, st, &mut out, text),

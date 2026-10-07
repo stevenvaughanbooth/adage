@@ -41,6 +41,16 @@ pub(crate) fn session_start(
             failopen::record(&s.paths.root, s.harness, s.event, &f);
         }
     }
+    // An index a newer Adage wrote (docs/live-learning.md, "two binaries on one machine"): this
+    // binary reads it as no reflexes, starts no learner (its learn would overwrite the newer
+    // index) and says so, once a day; every other event says nothing, as with no index.
+    if let Some(format) = s.index_newer() {
+        if s.in_repo {
+            record_seen(s, &Event::SessionStart, s.repo_key());
+        }
+        return Ok(skew_notice(s.paths, s.config(), format, autolearn::now_ms())
+            .and_then(|t| s.adapter.render(s.event, Output::Notice(t))));
+    }
     // Outside a repository: nothing to learn, so no learner and nothing to say. (Not even a
     // damaged index is rebuilt from here: the next session in a repository does that.)
     if !s.in_repo {
@@ -200,6 +210,38 @@ fn unwritable_notice(paths: &Paths, e: &std::io::Error) -> Option<String> {
     ))
 }
 
+/// Where the skew notice remembers it was said (`{at, format}`): in the data directory, so it is
+/// said once a day per data directory, whichever binary or repository starts the session.
+const SKEW_SHOWN: &str = "skew-notice.json";
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct SkewShown {
+    at: u64,
+    format: u32,
+}
+
+/// The one line a session start says when the index was written by a newer Adage than this one
+/// (O8: two installed versions never diverge silently): at most once a day per data directory, with
+/// `ui.notices` on, and never again the same day if the data directory cannot remember it. The
+/// command is the plugin's `/adage update` when this binary is the Claude Code plugin's.
+fn skew_notice(paths: &Paths, cfg: &adage_store::config::Config, format: u32, now: u64) -> Option<String> {
+    if !cfg.ui_notices {
+        return None;
+    }
+    let marker = paths.cache().join(SKEW_SHOWN);
+    let shown: Option<SkewShown> = autolearn::read_json(&marker);
+    if shown.is_some_and(|m| m.at <= now && now - m.at < autolearn::NOTICE_EVERY_MS) {
+        return None;
+    }
+    autolearn::write_json(&marker, &SkewShown { at: now, format }).ok()?;
+    let plugin = std::env::current_exe().is_ok_and(|e| adage_store::release::plugin_binary(&e));
+    let update = if plugin { "/adage update" } else { "adage update" };
+    Some(format!(
+        "adage: the reflexes here were written by a newer adage; this one ({}) stays quiet · {update}",
+        adage_store::release::VERSION
+    ))
+}
+
 /// Assign the session's arm (if it has none yet) and spool one `session_start` record.
 fn record_start(s: &HookCtx<'_>, repo_key: &str) -> Result<(), Failure> {
     let arms = s.arms();
@@ -320,5 +362,58 @@ mod tests {
         }
         assert!(session_start(&start(Some(&CONTRACT)), true, &learner).unwrap().is_none());
         assert!(session_start(&start(None), false, &learner).unwrap().is_none());
+    }
+
+    /// T-O8-01 (the unit half; `adage-cli/tests/hooks.rs` pins the bytes): an index from a newer
+    /// Adage is said once a day per data directory, with this binary's version and the update
+    /// command, never with notices off, and no learner is asked for (its learn would overwrite the
+    /// newer index).
+    #[test]
+    fn a_newer_index_is_said_once_a_day_and_starts_no_learner() {
+        let temp = tempfile::tempdir().unwrap();
+        let paths = Paths::at(temp.path().join("home"));
+        std::fs::create_dir_all(&paths.root).unwrap();
+        std::fs::create_dir_all(temp.path().join(".git")).unwrap();
+        let newer = serde_json::json!({ "format": adage_tracks::index::INDEX_FORMAT + 1, "generation": "x",
+            "routes": [{ "repo": "r", "track": "t", "version": "1.0.0", "route": { "step": { "do": "teleport" } } }] });
+        std::fs::write(paths.index(), serde_json::to_vec(&newer).unwrap()).unwrap();
+        let p = Value::Null;
+        let start = || HookCtx {
+            adapter: &harness::claude::Claude,
+            harness: "claude",
+            event: "SessionStart",
+            p: &p,
+            session: "skew-test",
+            cwd: temp.path(),
+            root: temp.path(),
+            in_repo: true,
+            paths: &paths,
+            started: Instant::now(),
+            opts: Options { learner: None, extension: None },
+            reads: Reads::default(),
+        };
+        let asked = std::cell::Cell::new(0);
+        let learner = || {
+            asked.set(asked.get() + 1);
+            Err(Failure::new("test", "no learner may be asked for"))
+        };
+        let out = session_start(&start(), false, &learner).unwrap().expect("one notice");
+        let v: Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(
+            v["systemMessage"],
+            format!(
+                "adage: the reflexes here were written by a newer adage; this one ({}) stays quiet · adage update",
+                adage_store::release::VERSION
+            )
+        );
+        assert!(v.get("hookSpecificOutput").is_none(), "nothing for the model");
+        assert_eq!(asked.get(), 0, "no learner over a newer index");
+        assert_eq!(session_start(&start(), false, &learner).unwrap(), None, "once a day");
+        // A day later it is said again; with notices off, never.
+        let cfg = adage_store::config::Config::default();
+        let now = autolearn::now_ms();
+        assert!(skew_notice(&paths, &cfg, 2, now + autolearn::NOTICE_EVERY_MS).is_some());
+        let off = adage_store::config::Config { ui_notices: false, ..cfg };
+        assert_eq!(skew_notice(&paths, &off, 2, now + 3 * autolearn::NOTICE_EVERY_MS), None);
     }
 }

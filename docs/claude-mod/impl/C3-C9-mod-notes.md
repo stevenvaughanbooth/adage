@@ -95,7 +95,16 @@ As the POC built them (poc/P3-notes.md), now under the binary's `ending` rule: b
 block indexes `0..n-1` and one `tool_use` stop, and `toolUses` lists them all (T-C7-03). At an
 `end_turn` stop with no tool chunk, `{ index: n, ending: true }`; a prediction keeps the model's
 text chunks, yields the calls at block indexes after the model's last block, and the model's stop
-as `tool_use` with its `usage` kept (T-C8-02).
+with no reason (`stopReason: null`, `appendedStop`) with its `usage` kept; the step's result says
+`stopReason: null` too (T-C8-02; live-fixes-2-notes.md §6 has why: a `tool_use` stop made the
+next request continue from the server's copy, which has no call).
+
+Either way the step is yielded only under the person's permissions (T-C4-07; live-fixes-2-notes.md
+§7): `step.ts` checks each call with `$.tool.check` (`Mod.checkTool`, `predict.ts` `heldBy`) and
+yields only when every verdict is `allow`. On `ask`, `deny` or no verdict it yields nothing, records
+nothing as predicted, forwards the request (at the finish line, the model's stop as it came), keeps
+`{ turnId, index, route, kind, isEnding, tool, decision, reason }` in `rt.withheld`, and raises the
+band's `band.withheld` line once per session.
 
 ### `noticed` on the view seam (D2 → D5)
 
@@ -130,6 +139,7 @@ as `tool_use` with its `usage` kept (T-C8-02).
 | T-C5-05 | the offline half in T-C5-02 (three composes, one text); L9 below |
 | T-C7-03 | `step.test.ts` "a prediction before the request" (`chain`: two Read calls, indexes 0..1, one stop, `toolUses` lists both); `register.test.ts` end to end |
 | T-C8-02 | `step.test.ts` "the finish line (ending)" |
+| T-C4-07 | `step.test.ts` "a predicted call is made only under the person's permissions" and "onStep through the engine, under the session's permission mode" (default and auto as 2.1.292 reports them, the band's line once per session); `predict.test.ts` (`permissionOf`, `heldBy`); `view/band.test.ts` (`band.withheld`'s place and words) |
 | T-C9-03 | `attach.test.ts` "T-C9-03": the note once, another tool untouched, no environment unchanged; the subagent asked after the session's own and prepended; nothing applies or the binary fails: `next(e)` |
 | T-X-01 | L2: `hooks.rs::the_mods_events_fail_open` (new), `a_panic_in_the_hook_is_recorded_without_the_payload_and_doctor_warns`, `malformed_oversized_and_unknown_payloads_produce_nothing`; L7: `call.test.ts` "T-X-02" (garbage, exit 1, cannot start, rules unreadable, a malformed final answer, inert), `attach.test.ts` (nothing, garbage, inert), the drawing deps failing (`call.test.ts` "the hook body alone") |
 | T-X-05 | L2: `hooks.rs::standing_is_answered_once_per_session_and_spools_nothing` (control: empty text), adage-runtime `routing_is_consented_and_never_in_control`, adage-hook `the_verdict_in_the_control_arm_is_withheld_and_decided_once`, `a_receipt_is_never_the_result_in_control`; L7: the withheld cases above (the mod does nothing on an empty answer) |
@@ -180,8 +190,8 @@ as `tool_use` with its `usage` kept (T-C8-02).
    effort (`--debug` shows the request's model); the spool's `turn_step` record has
    `decision.routine`; `ADAGE_ARM=control` never routes and records `would_route`.
 6. **C7, C8 (T-C7-03 live, T-C8-02/04, Q15).** As the binary's notes list them: several yielded
-   Read calls of one response run; the engine records the rewritten `tool_use` stop and the
-   `adage_` ids on disk; ten of ten runs keep the text, run the call, continue and end with no
+   Read calls of one response run; the engine records the finish line's null stop and the
+   `adage_` ids on disk, and the request after it starts the thread afresh (`create`); ten of ten runs keep the text, run the call, continue and end with no
    `block`.
 7. **Subagents (T-C9-03 live, T-C9-04).** An Explore subagent spawned for a work item: its
    transcript opens with the `<adage-reflex>` block and it makes no lookup of its own; its Bash

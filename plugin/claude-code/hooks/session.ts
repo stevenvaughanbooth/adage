@@ -5,7 +5,8 @@
 // SessionStart command hooks ran (the shim makes the link there), and a new session id there is a
 // /clear: the session's counts start again and the follower follows the new id.
 import { standing } from './attach'
-import { cliBinary, dataDir, exeSuffix, hookBinary, probe } from './bridge'
+import { dataDir } from './binary'
+import { cliBinary, exeSuffix, hookBinary, joinPath, probe } from './bridge'
 import { ARGUMENT_HINT, DESCRIPTION } from './commands'
 import { startFeed, stopFeed } from './follower'
 import type { AnswerAt, EventAt, Mod, NextAt } from './mod'
@@ -18,17 +19,16 @@ import { versionLine } from './view/band'
 
 /** Probes the binary the shim linked; the mod is active only while it answers. */
 async function activate(m: Mod): Promise<void> {
-  const pluginData = await m.env.pluginData()
   m.rt.observing = ((await m.env.observe()) ?? '') !== ''
   const ascii = (await m.env.ascii()) === '1'
   const reducedMotion = (await m.env.reducedMotion()) === '1'
   m.rt.exe = exeSuffix(await m.env.os())
-  const data = dataDir(pluginData, m.plugin.root())
-  m.rt.bin = await probe(m.run, hookBinary(pluginData, m.plugin.root(), m.rt.exe))
-  m.rt.cli = m.rt.bin === undefined ? undefined : cliBinary(pluginData, m.plugin.root(), m.rt.exe)
+  const data = await dataDir(m)
+  m.rt.bin = await probe(m.run, hookBinary(data, m.rt.exe))
+  m.rt.cli = m.rt.bin === undefined ? undefined : cliBinary(data, m.rt.exe)
   let nobinary = ''
   if (m.rt.bin === undefined && data !== undefined) {
-    const said = await m.fs.read(`${data}/status`).catch(() => '')
+    const said = await m.fs.read(joinPath(data, 'status')).catch(() => '')
     nobinary = typeof said === 'string' ? said.trim() : ''
   }
   const was = await m.state.mode.read()

@@ -471,3 +471,105 @@ fn the_predict_switch_is_off_from_anywhere_and_on_by_a_person() {
     assert_eq!(code, 0, "{err}");
     assert!(!marker.exists());
 }
+
+/// One key for a checkout's grants (the first live run's `adage-exec status --repo .` listed none):
+/// the predict grant `adage review delegate --predict --repo .` writes is the grant `adage-exec
+/// status` lists for the checkout and the grant a `TurnStep` under adage-exec's hook predicts with,
+/// where the checkout's own key (`acme-billing@path-…`) is not the name its reflexes were learned
+/// under.
+#[test]
+fn a_predict_grant_is_read_under_the_key_review_delegate_wrote_it() {
+    let w = common::TempWorld::new(&["home", "adage", "acme-billing/.git", "acme-billing/schema"]);
+    w.write("acme-billing/schema/invoice.json", "{}\n");
+    let home = w.home("adage");
+    let gen = kinds::finish_line("finish-line-gen", "schema/*.json", "make gen").support(5, 5).days(3);
+    home.compile(&[track("acme-billing/learned", "acme-billing").route(gen).build()]);
+    std::fs::write(w.p("adage/policy.toml"), "[exec]\nmax_level = \"E2\"\n").unwrap();
+    // The treated arm always (no control share), and no learner queued by a hook.
+    std::fs::write(home.paths.config(), "[runtime]\ncontrol = 0\n\n[learn]\nauto = false\n").unwrap();
+    let root = w.p("acme-billing");
+    assert_ne!(adage_core::repo::repo_key(&root), "acme-billing", "the checkout's own key is another");
+
+    let mut c = Command::new(env!("CARGO_BIN_EXE_adage"));
+    common::scrub(&mut c);
+    let o = c
+        .args(["review", "delegate", "acme-billing/learned", "finish-line-gen", "--predict", "--repo", "."])
+        .current_dir(&root)
+        .env("ADAGE_HOME", w.p("adage"))
+        .env("ADAGE_POLICY", w.p("adage/managed.toml"))
+        .env("HOME", w.p("home"))
+        .env("ADAGE_ALLOW_NONINTERACTIVE", "1")
+        .output()
+        .unwrap();
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    let store = adage_exec::approvals::Store::load(&adage_exec::approvals::path(&home.paths.root)).unwrap();
+    assert_eq!(store.approvals[0].key.repo, "acme-billing", "written under the reflex's key");
+
+    // `adage-exec status --repo .` reads it there.
+    let key = adage_exec::route::grant_key(&root, &home.paths);
+    let status = store.status_text(&key);
+    assert!(
+        status.contains("Prediction grants for acme-billing: 1\n  acme-billing/learned/finish-line-gen"),
+        "{status}"
+    );
+
+    // And a `TurnStep` under adage-exec's hook predicts with it, at the step that ends the turn.
+    let hook = |event: &str, extra: Value| -> Option<Value> {
+        let mut p = serde_json::json!({ "session_id": "grant-key", "cwd": root });
+        for (k, v) in extra.as_object().unwrap() {
+            p[k] = v.clone();
+        }
+        let opts = adage_hook::Options { learner: None, extension: Some(&adage_exec::hook::PREFETCH) };
+        let out = adage_hook::handle("claude", event, &p.to_string(), opts, &home.paths, std::time::Instant::now());
+        out.unwrap().map(|o| serde_json::from_str(&o).unwrap())
+    };
+    let file = root.join("schema/invoice.json");
+    let edit = serde_json::json!({ "tool_name": "Edit", "tool_use_id": "e1", "tool_response": "ok", "tool_input": { "file_path": file } });
+    let armed =
+        hook("PostToolBatch", serde_json::json!({ "tool_calls": [edit] })).expect("the finish line's directive");
+    assert!(armed.to_string().contains("make gen"), "{armed}");
+    let step = serde_json::json!({ "hook_event_name": "TurnStep", "turn_id": "t1", "index": 2, "ending": true });
+    let out = hook("TurnStep", step).expect("the finish line, in the agent's place");
+    assert_eq!(out["predict"]["route"], "finish-line-gen", "{out}");
+    assert_eq!(out["predict"]["calls"][0]["input"]["command"], "make gen", "{out}");
+}
+
+/// Live run 2: `delegate … --predict` on a nascent reflex said "no reflex …", though the reflex
+/// was there, one review step from eligible. The refusal now says it is nascent and names the
+/// step; a reflex that is not there at all is refused as before, byte for byte.
+#[test]
+fn delegating_a_nascent_reflex_names_the_review_that_makes_it_eligible() {
+    let w = common::TempWorld::new(&["home", "adage", "acme-billing/.git", "acme-billing/scripts"]);
+    w.write("acme-billing/scripts/wi-lookup", "#!/usr/bin/env python3\nprint('{}')\n");
+    let firm = kinds::lookup("lookup-work-item", "python3 scripts/wi-lookup {id} --json").support(9, 10).days(3);
+    let nascent = kinds::lookup("lookup-work-item-json", "python3 scripts/wi-lookup {id}")
+        .support(9, 10)
+        .days(3)
+        .state(RouteState::Nascent);
+    let t = track("acme-billing/work-items", "acme-billing").version("0.4.0").route(firm).route(nascent).build();
+    let home = w.home("adage");
+    home.install("acme-billing/work-items", &t);
+    home.compile(&[t]);
+    let world = World { root: w.root.clone(), _w: w };
+
+    let (_, err, code) =
+        world.run(&["review", "delegate", "acme-billing/work-items", "lookup-work-item-json", "--predict"], &[]);
+    assert_eq!(code, 1, "{err}");
+    assert!(
+        err.contains("reflex lookup-work-item-json in track acme-billing/work-items is nascent: it waits for a person's review, and only a reviewed reflex can be delegated"),
+        "{err}"
+    );
+    assert!(
+        err.contains("`adage review approve acme-billing/work-items lookup-work-item-json` makes it eligible"),
+        "{err}"
+    );
+    assert!(!world.p("adage/approvals.json").exists());
+
+    let (_, err, code) =
+        world.run(&["review", "delegate", "acme-billing/work-items", "no-such-reflex", "--predict"], &[]);
+    assert_eq!(code, 1, "{err}");
+    assert!(
+        err.contains("no reflex no-such-reflex in track acme-billing/work-items for acme-billing (see `adage status`)"),
+        "{err}"
+    );
+}

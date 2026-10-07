@@ -20,6 +20,10 @@ pub const SCRUB: [&str; 5] = ["CLAUDE_CONFIG_DIR", "CODEX_HOME", "SSH_AUTH_SOCK"
 /// the agent markers (a person-only verb refuses under them), every `ADAGE_*` switch this
 /// process inherited, and [`SCRUB`]. A suite sets what it needs afterwards. The list only grows:
 /// a variable removed here cannot hide a regression, only a dependence on the machine.
+///
+/// It also sets `ADAGE_UPDATE_CHECK=0`: the learner's daily release check, the one request Adage
+/// makes by itself, never reaches the network from a test unless the suite turns it back on and
+/// points it at a fixture server (`ADAGE_RELEASE_URL`).
 pub fn scrub(c: &mut Command) -> &mut Command {
     for v in adage_app::person::AGENT_ENV.iter().chain(SCRUB.iter()) {
         c.env_remove(v);
@@ -29,7 +33,7 @@ pub fn scrub(c: &mut Command) -> &mut Command {
             c.env_remove(&k);
         }
     }
-    c
+    c.env("ADAGE_UPDATE_CHECK", "0")
 }
 
 /// `bin`, scrubbed, run in `cwd` with `adage_home` as its data directory and automatic learning

@@ -6,6 +6,7 @@ import type { ArmStats, Card, CardCommand, Graph, Route, Uplift } from "../api/t
 import { MeasurementLinks } from "./MeasurementLinks";
 import { relates } from "../lib/traces";
 import { findRoute, routeKey } from "../lib/graph";
+import { executionReviewWhy } from "../lib/setup";
 import {
   CONTROL_NOTE,
   LIVE_SOURCE,
@@ -592,7 +593,7 @@ export function Inspector({ graph }: { graph: Graph }) {
       <div className="grow" />
       <div className="flex flex-col gap-2">
         {executionOnly && r.review?.next && (
-          <CommandButton command={r.review.next} why="Review and approve the exact automatic action at your terminal." primary />
+          <CommandButton command={r.review.next} why={executionReviewWhy(graph)} primary />
         )}
         {verbs.slice(0, 1).map((v) => (
           <CommandButton key={v} command={reviewCommand(v, r)} why={executionOnly && v === "approve" ? "Accept the evidence; this does not grant execution permission." : verbWhy(v)} primary={!executionOnly} />

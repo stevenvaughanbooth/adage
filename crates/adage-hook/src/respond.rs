@@ -146,7 +146,10 @@ pub(crate) fn respond(ctx: &HookCtx<'_>, ev: Event) -> Result<Responded, Failure
         predict_cap: cfg.runtime_predict_cap,
         observe: site::observed(p),
         routine,
+        // The mod's two phases of a step; a command hook's step has none and commits at once.
+        step: if step { crate::phase::step_phase(p) } else { adage_runtime::StepPhase::Commit },
     };
+    let dry_run = policy.step == adage_runtime::StepPhase::DryRun;
     let ctx = Ctx {
         checkout: &adage_runtime::checkout::Disk,
         index,
@@ -166,6 +169,9 @@ pub(crate) fn respond(ctx: &HookCtx<'_>, ev: Event) -> Result<Responded, Failure
     };
     let (mut decision, arm, propensity, stims) =
         state::update_or_rebuild::<SessionState, _>(&state_path, rebuild, |st| {
+            // A dry run that answers a prediction leaves the state exactly as it found it, the
+            // arm's assignment included: the verdict that follows decides it again.
+            let found = dry_run.then(|| st.clone());
             arms.ensure(st, session, &repo_key);
             // A state from before propensities were recorded: the arm was drawn with (as far as can
             // be known) today's share, unless it is forced now.
@@ -177,10 +183,20 @@ pub(crate) fn respond(ctx: &HookCtx<'_>, ev: Event) -> Result<Responded, Failure
             let before: Vec<(String, bool)> =
                 st.obligations.iter().map(|o| (o.route.clone(), o.stop_requested)).collect();
             let d = decide(&ctx, st, &ev);
+            if let (Some(found), Some(_)) = (found, &d.predicted) {
+                *st = found;
+                return (d, st.arm, propensity, Vec::new());
+            }
             let stims = stimuli(&before, &st.obligations, matches!(ev, Event::Batch { .. }));
             (d, st.arm, propensity, stims)
         })
         .map_err(|e| Failure::io("state", "updating the session state", &e))?;
+
+    // The mod's dry run of a step it would yield: answered, never recorded or delivered; the
+    // verdict that follows decides and records it.
+    if dry_run && decision.predicted.is_some() {
+        return Ok(Responded { out: decision.predicted.take().map(Output::Predict), at_stop_action: false });
+    }
 
     // A step boundary where nothing would be predicted or routed leaves no record: only a step
     // that counted against the bounds, or would have, or would be routed, is replayed or shown.
@@ -330,6 +346,9 @@ pub(crate) fn respond(ctx: &HookCtx<'_>, ev: Event) -> Result<Responded, Failure
     }
     done(Some(with_lapse(text)))
 }
+
+#[cfg(test)]
+mod step_phase_tests;
 
 #[cfg(test)]
 mod tests {
@@ -486,6 +505,35 @@ mod tests {
         let again =
             json!({ "hook_event_name": "TurnStep", "turn_id": "t2", "index": 3, "model": "claude-x", "ending": true });
         assert!(w.event(granted, "TurnStep", again).is_some(), "armed again: predicted again");
+    }
+
+    /// §4.1.2 (O0 live notes, defect 2): the finish line Adage made was refused by the person's
+    /// permission rules. The engine reports it in the batch only, as `<tool_use_error>` (the live
+    /// DENY run's payload shape): the call is failed, judged `refused` in the spool (never
+    /// `predicted`, never `obligation_met`), observed as refused, and the Stop request asks for
+    /// the step as without the mod.
+    #[test]
+    fn a_finish_line_the_engine_refused_is_recorded_as_refused_and_never_met() {
+        let w = ObligationWorld::new();
+        let granted: &'static Predicts =
+            Box::leak(Box::new(Predicts(vec![("acme/finish-lines".into(), "regenerate-registry".into())])));
+        w.edit(granted).expect("the edit arms the obligation");
+        assert!(turn_step(&w, granted, 2, true).is_some(), "the finish line, in the model's place");
+        let denied = json!({ "tool_name": "Bash", "tool_use_id": "adage_regenerate-registry_t1_2_0",
+                             "tool_input": { "command": "make gen" },
+                             "tool_response": "<tool_use_error>Permission to use Bash with command make gen has been denied.</tool_use_error>" });
+        w.event(granted, "PostToolBatch", json!({ "tool_calls": [denied] }));
+        assert!(!w.state().obligations[0].met);
+        let rec = spooled(&w).pop().unwrap();
+        assert_eq!(rec["kind"], "batch");
+        let kinds: Vec<&str> =
+            rec["decision"]["judgements"].as_array().unwrap().iter().filter_map(|j| j["kind"].as_str()).collect();
+        assert_eq!(kinds, vec!["refused"], "{rec}");
+        assert_eq!(rec["decision"]["judgements"][0]["route"], "regenerate-registry");
+        let observed = rec["decision"]["observed"].as_array().unwrap();
+        assert!(!observed.is_empty() && observed.iter().all(|k| k.as_str().unwrap().ends_with(" !refused")), "{rec}");
+        let stop = w.stop(granted, false).expect("the Stop request, as without the mod");
+        assert!(stop["reason"].as_str().unwrap().contains("make gen"), "{stop}");
     }
 
     /// The control arm: nothing printed, `would_predict` spooled.

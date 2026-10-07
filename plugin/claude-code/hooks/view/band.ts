@@ -23,6 +23,12 @@ export type BandInput = {
   now: number
   lapsed: number
   review: number
+  /**
+   * A newer Adage, as the status card words it (`latest`, and `next`, the command that brings it),
+   * while the band's update line shows (until the first prompt, once per release per machine);
+   * null otherwise.
+   */
+  update: { latest: string; next: string } | null
   versionLine: string
   columns: number
   ascii: boolean
@@ -32,6 +38,11 @@ export type BandInput = {
   noticed: number
   /** Whether the pane is open: the noticed cell shows only while it is closed. */
   paneOpen: boolean
+  /**
+   * Whether a step Adage would have taken was left to the agent because the person's permissions
+   * do not allow its call unasked (`band.withheld`): raised once per session, until the next prompt.
+   */
+  withheld: boolean
 }
 
 export type Band = { cells: Cell[]; second: string }
@@ -57,7 +68,8 @@ function learnerCell(l: Learner | null, now: number, ascii: boolean): string {
  * The band (ux-design §5), or undefined to leave the band to the engine and other mods. Cells by
  * priority: the name (1), the lamp (2), reflexes (3), steps (4), test runs (5), learning (6);
  * at a narrow width the lowest goes first and the lamp's word never does. The second line shows
- * one attention item, highest first: a lapsed grant, a problem, review waiting, the version.
+ * one attention item, highest first: a lapsed grant, a problem, a step left to the agent, an
+ * answer kept, review waiting, a newer Adage, the harness version.
  */
 export function band(i: BandInput): Band | undefined {
   const name = `${g('reflex', i.ascii)} adage`
@@ -104,12 +116,31 @@ function secondLine(i: BandInput): string {
   const sep = g('sep', i.ascii)
   if (i.lapsed > 0) return `${n} ${plural(i.lapsed, 'grant', 'grants')} lapsed ${sep} /adage health`
   if (i.health?.word === 'problem' && i.health.check !== null) return `${n} problem: ${i.health.check} ${sep} /adage health`
+  // `band.withheld`: why no step was taken without a model request although one was allowed; it
+  // passes with the next prompt, so it is said before the items that wait.
+  if (i.withheld) return withheldLine(i.ascii)
   // `band.kept` (ux-design §9.12): an answer given with no press held waits for the next start;
   // it is said before `need review`, since the review it answers still waits in the graph until
   // the answer runs.
   if (i.kept > 0) return `${n} kept for your next session ${sep} /adage review`
   if (i.review > 0) return `${n} ${i.review} need review ${sep} /adage review`
+  // `band.update` (onboarding plan O9): the lowest of Adage's own items, and never a problem.
+  if (i.update !== null) return updateLine(i.update, i.ascii)
   return i.versionLine
+}
+
+/**
+ * `band.withheld`: `» adage left a step to the agent: your permissions do not allow it unasked`.
+ * The call goes to the person's own decider (a dialog, auto mode's classifier, a headless
+ * refusal) only when the model makes it; Adage makes it only where it would run unasked.
+ */
+export function withheldLine(ascii: boolean): string {
+  return `${g('notice', ascii)} adage left a step to the agent: your permissions do not allow it unasked`
+}
+
+/** `band.update`: `» adage 0.2.0 is out · /adage update`, the command as the card words it. */
+export function updateLine(u: { latest: string; next: string }, ascii: boolean): string {
+  return `${g('notice', ascii)} adage ${u.latest} is out ${g('sep', ascii)} ${u.next}`
 }
 
 /** `band.version`: a harness newer than the plugin was tested with (ux-design §9.6). */

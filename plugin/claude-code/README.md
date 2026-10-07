@@ -1,17 +1,53 @@
 # The adage plugin for Claude Code
 
-The plugin Claude Code installs from the marketplace: the command hooks (`hooks/hooks.json`, run
-through the session-start shim `scripts/session-start`, which links `bin/hook` to `adage` or
-`adage-exec`) and the mod, a hooks module of function hooks (`hooks/register.ts`) that bridges
-Claude Code to the binary and draws what the binary says. The binary decides; the mod never does
+The plugin Claude Code installs: the command hooks (`hooks/hooks.json`, run through the
+session-start shim `scripts/session-start`, which links `bin/adage`, `bin/adage-exec` and
+`bin/adage-train`, and `bin/hook` to `adage` or `adage-exec`) and the mod, a hooks module of
+function hooks (`hooks/register.ts`) that bridges Claude Code to the binary and draws what the
+binary says. The binary decides; the mod never does
 ([architecture.md](../../docs/claude-mod/architecture.md)). Built and tested against Claude Code
 2.1.288, CI's pin (`hooks/plugin.ts` `TESTED`).
 
+## Installing and updating
+
+- **From a terminal, today:** `adage init` installs this plugin for you. It stages it from the
+  `adage` you run (these files are carried inside the binary) as a one-plugin local marketplace
+  under `$ADAGE_HOME/plugin/`, with `adage`, `adage-exec` and `adage-train` and their
+  `dist/SHA256SUMS`, then runs `claude plugin marketplace add <that directory>` and
+  `claude plugin install adage@adage-local`. Claude Code reads it in place, so `adage update` (or
+  `adage init` again) stages the new binaries and modules there and the next session runs them.
+  Known until a fix lands (live, 2026-10-07): the command hooks run, but the mod does not find
+  this plugin's data directory by itself (Claude Code reads the plugin from that staged directory,
+  not from its `plugins/cache`, so `bridge.ts` `dataDirFromRoot` derives nothing), so it stays inert unless `CLAUDE_PLUGIN_DATA` is exported as
+  `<config dir>/plugins/data/adage-adage-local`.
+- **In Claude Code, once v0.1.0 is tagged:** `/plugin marketplace add stevenvaughanbooth/adage`,
+  then `/plugin install adage@adage`, with no terminal. Claude Code updates it from that
+  marketplace; `adage update` run from the plugin's own binary asks it to
+  (`claude plugin update adage@adage`), or names the steps: `/plugin`, choose adage, then Update.
+- **To develop it:** `plugin/build.sh` stages this machine's three binaries into `dist/`, and
+  `claude --plugin-dir plugin/claude-code` loads this folder for one session (disable an installed
+  `adage@adage-local` first, or every hook runs twice). Under `--plugin-dir` Claude Code passes
+  `CLAUDE_PLUGIN_DATA` to the command hooks only, so until the mod's own lookup of
+  `<config dir>/plugins/data/adage-inline` lands (in progress, `hooks/binary.ts` `dataDir`) it
+  finds its binary only with that variable exported
+  ([evaluation results](../../docs/claude-mod/evaluation-results.md), defect 4).
+- **To remove it:** `claude plugin uninstall adage@adage-local` (or `adage@adage`), which removes
+  its data directory too, then `claude plugin marketplace remove adage-local`.
+
+Whichever route, the shim links the binaries the same way: `${CLAUDE_PLUGIN_DATA}/bin/adage` is a
+stable link to the verified copy `adage-<sha256>` beside it, and so are `bin/adage-exec` and
+`bin/adage-train`. A Codex or OpenCode registration written by this plugin's `adage` names that
+stable link, not the digest-named copy, so an update of the plugin carries it. There is one
+plugin: the marketplace lists `adage` alone.
+
 ## Where it sits
 
-- One plugin ships both binaries (plan A8); `plugin/claude-code-exec` is a retired alias with no
-  module. `scripts/stage-plugin.mjs` stages this folder, with the binaries, onto the marketplace
-  branch; `scripts/test-stage-plugin.mjs` checks every module file is staged.
+- One plugin ships three binaries for each release target (plan A8, onboarding plan O1): `adage`
+  (it decides; the mod runs its verbs), `adage-exec` (it acts once execution is on; not on
+  Windows) and `adage-train` (`adage train` hands over to it). The marketplace lists this plugin
+  alone. `plugin/build.sh` stages this machine's three into `dist/`; `scripts/stage-plugin.mjs`
+  stages every target's, with this folder, onto the marketplace branch, and
+  `scripts/test-stage-plugin.mjs` checks every binary and module file is staged.
 - The mod reaches the binary only by a short list of exact argument vectors (`hooks/bridge.ts`
   `ALLOWED_VERBS`) and the person-only verbs only through a press (`hooks/press.ts`); every hook
   fails open (it answers what `next(e)` answered).
@@ -85,10 +121,12 @@ Tests, from the repository root:
 
 ```bash
 claude plugin test plugin/claude-code                     # every hooks/**/*.test.ts, each file in its own child
-claude plugin validate --strict plugin/claude-code        # and plugin/claude-code-exec, and . (the marketplace)
+claude plugin validate --strict plugin/claude-code        # and . (the marketplace)
 claude plugin validate --strict plugin/claude-code 2>&1 | sed "s#$PWD/##g" | diff plugin/claude-code/VALIDATE.txt -
 node scripts/check-plugin.mjs                             # the tables, the hooks' order, the allow-lists, the layout
-node scripts/test-stage-plugin.mjs
+node scripts/test-check-plugin.mjs                        # check-plugin refuses a second plugin, an on-PATH description
+node scripts/test-stage-plugin.mjs                        # the release staging: three binaries per target, checksums
+plugin/test/session-start.test.sh                         # the shim (needs target/debug/{adage,adage-exec,adage-train})
 ```
 
 A test sits beside its module as `<module>.test.ts`, names its test-plan id in its `describe` (or

@@ -2,10 +2,12 @@
 members = ["cargo:."]
 
 # Release configuration for dist (cargo-dist): https://axodotdev.github.io/cargo-dist/
-# After editing, regenerate the workflow with `dist generate`, then re-apply the one local patch:
-# dist 0.32's template uploads the SBOMs from `steps.cargo-cyclonedx.output.paths`, which does not
-# exist, so no `.cdx.xml` reached a release; release.yml reads `outputs.paths`. `allow-dirty`
-# keeps dist's staleness check from failing on that patch.
+# After editing, regenerate the workflow (dist refuses while `allow-dirty` names ci: remove the line,
+# run `dist generate --mode ci`, put it back), then re-apply the one local patch: dist 0.32's
+# template uploads the SBOMs from `steps.cargo-cyclonedx.output.paths`, which does not exist, so no
+# `.cdx.xml` reached a release; release.yml reads `outputs.paths`. `allow-dirty` keeps dist's
+# staleness check from failing on that patch. `cargo xtask release-check` regenerates it in a
+# scratch tree and fails while the committed file differs by more than that patch (docs/release.md).
 [dist]
 allow-dirty = ["ci"]
 cargo-dist-version = "0.32.0"
@@ -14,13 +16,18 @@ ci = "github"
 # Plan §6.2 calls for per-platform packages selected by optionalDependencies and no install-time
 # download, so the release publishes npm/ through the custom job .github/workflows/publish-npm.yml.
 # Three apps ship: adage (adage-cli), adage-exec (`adage delegate`) and adage-train (`adage train`),
-# each with its own archive, installers and formula (the per-package `formula` in their Cargo.toml).
-installers = ["shell", "powershell", "homebrew"]
-tap = "stevenvaughanbooth/homebrew-tap"
-formula = "adage"
-# ./publish-marketplace writes the `marketplace` branch: the Claude Code plugins with verified
-# binaries for every target bundled, which `/plugin install adage@adage` installs.
-publish-jobs = ["homebrew", "./publish-npm", "./publish-marketplace"]
+# each with its own archive and installers.
+#
+# Homebrew is off the release (onboarding plan O2, §5): its bottles would be quarantined until macOS
+# signing exists, and its publish job would fail a tag that has no HOMEBREW_TAP_TOKEN. To bring it
+# back once signing is on: add "homebrew" to `installers` and to the front of `publish-jobs`, set
+# `tap = "stevenvaughanbooth/homebrew-tap"` and `formula = "adage"` here and `formula = "adage-exec"`
+# / `"adage-train"` under `[package.metadata.dist]` in those crates, create the tap and the secret,
+# regenerate, and drop the Homebrew rules from xtask/src/release.rs (docs/release.md).
+installers = ["shell", "powershell"]
+# ./publish-marketplace writes the `marketplace` branch: the Claude Code plugin with its three
+# verified binaries for every target bundled, which `/plugin install adage@adage` installs.
+publish-jobs = ["./publish-npm", "./publish-marketplace"]
 targets = [
   "aarch64-apple-darwin",
   "x86_64-apple-darwin",
@@ -44,5 +51,6 @@ include = ["NOTICE"]
 # macOS Developer ID signing (decision D4: yes). Enable with `macos-sign = true` once the Apple
 # Developer Program enrolment exists and these repository secrets are set: CODESIGN_CERTIFICATE
 # (base64 .p12), CODESIGN_CERTIFICATE_PASSWORD, CODESIGN_IDENTITY; then run `dist generate`.
-# Enabling it before the secrets exist would fail every release. npm-installed binaries are not
-# quarantined; direct downloads and Homebrew bottles are, which is why D4 matters before Homebrew.
+# Enabling it before the secrets exist would fail every release. npm-installed binaries and the
+# plugin's copies are not quarantined; direct downloads and Homebrew bottles are, which is why D4
+# comes before Homebrew.

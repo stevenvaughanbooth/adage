@@ -8,7 +8,7 @@ use crate::policy::in_play;
 use crate::prediction::told_inhibits;
 use crate::{render, Arm, Ctx, Policy, SessionState};
 use adage_core::spans;
-use adage_tracks::{interlock, Index, IndexedRoute, Step, Trigger};
+use adage_tracks::{interlock, Index, IndexedRoute, Step, Strength, Trigger};
 use serde::{Deserialize, Serialize};
 
 /// What a session's standing text is (the Claude Code mod's `Standing` event, its architecture
@@ -20,6 +20,12 @@ pub struct Standing {
     pub standing: String,
     /// One sentence on the project's environment, when its instincts bound one.
     pub environment: String,
+    /// The repository's lookup conventions, one sentence each ([`render::lookup_convention`]),
+    /// for the shell tool's description: how a work item (a commit, a link) named in a request is
+    /// looked up here, before the model's first call. The prompt that names one is still told
+    /// the bound command (its directive carries the item, and the steps that follow it).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub conventions: String,
     /// The routes whose text `standing` carries: the first prompt does not announce them again.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub routes: Vec<String>,
@@ -30,9 +36,11 @@ pub struct Standing {
 /// instincts' session-start advice), each in the wrapper and fixed template a directive has,
 /// then one line per procedure card ([`render::card_line`]), in index order, whole items only and
 /// at most [`render::MAX_STANDING`] bytes together. `environment` is the hook's sentence on the
-/// project's environment ([`render::environment_note`]), when one is bound. Deterministic for an
+/// project's environment ([`render::environment_note`]), when one is bound; `conventions` the
+/// repository's lookup conventions ([`Standing::conventions`]). Deterministic for an
 /// index: the hook keeps the first answer for the session ([`SessionState::standing`]).
 pub fn standing(index: &Index, repo: &str, policy: &Policy, environment: String) -> Standing {
+    let conventions = conventions(index, repo, policy);
     let (mut text, mut routes) = (String::new(), Vec::new());
     for (item, route) in standing_items(index, repo, policy) {
         let sep = if text.is_empty() { 0 } else { 2 };
@@ -45,7 +53,39 @@ pub fn standing(index: &Index, repo: &str, policy: &Policy, environment: String)
         text.push_str(&item);
         routes.extend(route);
     }
-    Standing { standing: text, environment, routes }
+    Standing { standing: text, environment, conventions, routes }
+}
+
+/// At most this many lookup conventions are said in the shell tool's description.
+const MAX_CONVENTIONS: usize = 3;
+
+/// The repository's lookup conventions ([`Standing::conventions`]): each learned prompt route in
+/// play at full strength whose step is a command with the item's slot, in index order, one
+/// sentence each, at most [`MAX_CONVENTIONS`] and [`render::MAX_STANDING`] bytes together. Not an
+/// instinct's (its evidence is not this repository's), and not one a session-start dead end says
+/// not to run.
+fn conventions(index: &Index, repo: &str, policy: &Policy) -> String {
+    let routes: Vec<&IndexedRoute> = index.for_repo(repo).filter(|r| in_play(policy, r)).collect();
+    let dead_ends: Vec<&IndexedRoute> = routes
+        .iter()
+        .copied()
+        .filter(|r| matches!(r.route.trigger, Trigger::SessionStart) && matches!(r.route.step, Step::Avoid { .. }))
+        .collect();
+    let mut lines: Vec<String> = Vec::new();
+    for ir in routes.iter().filter(|r| matches!(r.route.trigger, Trigger::Prompt { .. })) {
+        if ir.route.is_instinct()
+            || adage_tracks::delivered_strength(&ir.route) != Strength::Fire
+            || dead_ends.iter().any(|d| interlock::avoids(&d.route, &ir.route))
+        {
+            continue;
+        }
+        let Some(line) = render::lookup_convention(&ir.route) else { continue };
+        let total: usize = lines.iter().map(|l| l.len() + 1).sum();
+        if lines.len() < MAX_CONVENTIONS && !lines.contains(&line) && total + line.len() <= render::MAX_STANDING {
+            lines.push(line);
+        }
+    }
+    lines.join("\n")
 }
 
 /// The standing text's items, in order, each with the route a directive carries (none for a
@@ -69,12 +109,14 @@ fn standing_items(index: &Index, repo: &str, policy: &Policy) -> Vec<(String, Op
 
 /// What of a session's standing text a harness can attach (the Claude Code mod's architecture
 /// §1b.3), by capability: the standing reflexes go to a cached system-prompt section only where
-/// there is one (`cached_section`), and the environment sentence to the shell tool's description
-/// only where the description can carry it (`tool_description`). Anything else is left empty.
+/// there is one (`cached_section`), and the environment sentence and the lookup conventions to the
+/// shell tool's description only where the description can carry them (`tool_description`).
+/// Anything else is left empty.
 pub fn standing_for(caps: &adage_trace::Capabilities, s: Standing) -> Standing {
     Standing {
         standing: if caps.cached_section { s.standing } else { String::new() },
         environment: if caps.tool_description { s.environment } else { String::new() },
+        conventions: if caps.tool_description { s.conventions } else { String::new() },
         routes: if caps.cached_section { s.routes } else { Vec::new() },
     }
 }

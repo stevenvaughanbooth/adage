@@ -66,6 +66,10 @@ G8_COST_MAX_RATIO = 1.05
 CACHES = (".pytest_cache/**", "tests/__pycache__/**", "src/**/__pycache__/**", ".pytest_cache/.gitignore")
 DEBUG_REQUEST = re.compile(r"^\S+ \[DEBUG\] \[API REQUEST\] /v1/messages x-client-request-id=([\w-]+) source=(\w+)$")
 API_ERROR = re.compile(r"^\S+ \[ERROR\] API error \(attempt \d+/\d+\)")
+# Dispatch sources that are the session's own turns, whose request ids the stream carries. Claude
+# Code 2.1.29x also logs requests the stream never shows (`generate_session_title`, `side_query`):
+# counted, but not the stream's to confirm.
+STREAMED_SOURCES = ("sdk", "repl_main_thread")
 GO_CRITERIA = {
     "G1": dict(applies=True, form="single repository: the frozen learned home holds the certified verification route "
                "run-175d85 (checked at freeze); the two-repository clause belongs to the cross-repository decision"),
@@ -236,20 +240,23 @@ def bash_commands(stream):
 def requests(debug_text, stream_observations):
     """Debug-log dispatches (the primary count, retries included) and the per-session cross-check.
 
-    Verified when the stream's distinct request ids equal the dispatches, or when the surplus of
-    dispatches is fully explained by logged `[ERROR] API error (attempt ...)` entries."""
+    Verified when the stream's distinct request ids equal the dispatches of the session's own turns
+    (`STREAMED_SOURCES`), or when their surplus is fully explained by logged `[ERROR] API error
+    (attempt ...)` entries. Dispatches from other sources count and are never streamed."""
     import probe
     lines = debug_text.splitlines()
-    dispatches = [m[1] for line in lines if (m := DEBUG_REQUEST.fullmatch(line))]
+    dispatches = [(m[1], m[2]) for line in lines if (m := DEBUG_REQUEST.fullmatch(line))]
+    streamed = sum(1 for _, source in dispatches if source in STREAMED_SOURCES)
     errors = sum(1 for line in lines if API_ERROR.match(line))
     ids = []
     for item in stream_observations:
         for rid in probe.explicit_request_ids(item.get("value")):
             if rid not in ids:
                 ids.append(rid)
-    surplus = len(dispatches) - len(ids)
+    surplus = streamed - len(ids)
+    unique = len({rid for rid, _ in dispatches}) == len(dispatches)
     return dict(requests=len(dispatches), stream_request_ids=len(ids), api_error_entries=errors,
-                cross_check=surplus == 0, verified=0 <= surplus <= errors and len(set(dispatches)) == len(dispatches))
+                cross_check=surplus == 0, verified=0 <= surplus <= errors and unique)
 
 
 def censored(row):

@@ -43,7 +43,9 @@ pub fn response_text(v: &Value) -> String {
 /// One call from a payload (a `PostToolBatch` entry, or a `PostToolUse(Failure)` payload): its
 /// `tool_use_id` is kept, and a call whose id Adage minted (`adage_…`, a predicted step the mod
 /// made in the agent's place) is Adage's ([`By`]). `agent` is the payload's `agent_id`: set when a
-/// subagent made the calls.
+/// subagent made the calls. A call the engine refused before it ran (a permission rule, invalid
+/// input) reaches no `PostToolUseFailure`: its result in the batch is the engine's
+/// `<tool_use_error>`, and it is failed ([`Call::refused`]).
 fn call_from(v: &Value, failed: bool, agent: Option<&str>) -> Call {
     let mut output = response_text(v.get("tool_response").unwrap_or(&Value::Null));
     if let Some(e) = v.get("error").and_then(|e| e.as_str()) {
@@ -53,8 +55,8 @@ fn call_from(v: &Value, failed: bool, agent: Option<&str>) -> Call {
     Call {
         tool: v.get("tool_name").and_then(|x| x.as_str()).unwrap_or("").to_string(),
         input: v.get("tool_input").cloned().unwrap_or(Value::Null),
+        failed: failed || adage_trace::is_tool_use_error(&output),
         output,
-        failed,
         by: tool_use_id.as_deref().map_or(By::Agent, By::of_tool_use_id),
         tool_use_id,
         agent: v.get("agent_id").and_then(Value::as_str).or(agent).filter(|a| !a.is_empty()).map(str::to_string),

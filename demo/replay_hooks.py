@@ -99,7 +99,9 @@ def replay(stream, adage, home, cwd, arm="treated", observe=False, extra_env=Non
     home, cwd = Path(home), Path(cwd)
     home.mkdir(parents=True, exist_ok=True)
     env = hook_env(home, arm, observe, extra_env)
-    out, seen = [], {}
+    # Only what the replay writes: a seeded home's spools (a learned home's earlier sessions) are
+    # not records of this stream, and two copies of a live home may hold different ones.
+    out, seen = [], _spool_counts(home)
     for i, item in enumerate(stream):
         event = item["event"]
         payload = _subst(item.get("payload") or {}, "$CWD", str(cwd))
@@ -155,7 +157,9 @@ def main(argv=None):
         print("\n".join(diff) if diff else "identical")
         return 1 if diff else 0
 
-    adage = Path(a.adage) if a.adage else default_bin()
+    # Absolute: each hook runs in the replay's own working directory, where a relative path (the
+    # documented `--adage target/release/adage`) names nothing.
+    adage = (Path(a.adage) if a.adage else default_bin()).resolve()
     if not adage.exists():
         print(f"missing adage binary {adage} (--adage, or ADAGE_BIN)", file=sys.stderr)
         return 2

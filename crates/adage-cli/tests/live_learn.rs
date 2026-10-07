@@ -334,7 +334,9 @@ fn learn_auto_logs_what_changed() {
 #[test]
 fn config_command_validates_and_refuses_agents() {
     let w = World::new();
-    let o = w.cmd(&["config", "--json"]).output().unwrap();
+    // `common::scrub` turns the release check off for every test (ADAGE_UPDATE_CHECK=0); here the
+    // shell sets nothing, so every key reads as its default.
+    let o = w.cmd(&["config", "--json"]).env_remove("ADAGE_UPDATE_CHECK").output().unwrap();
     let v: Value = serde_json::from_slice(&o.stdout).unwrap();
     let keys: Vec<&str> = v["keys"].as_array().unwrap().iter().map(|k| k["key"].as_str().unwrap()).collect();
     assert!(keys.contains(&"learn.auto") && keys.contains(&"runtime.control") && keys.contains(&"learn.thresholds"));

@@ -1,6 +1,6 @@
 {
   "name": "__PACKAGE_NAME__",
-  "version": "0.0.0-dev",
+  "version": "0.1.0",
   "description": "Adage: agent traces become reflexes. Compiles the paths coding agents take into reflexes and tells them, deterministically, what to do next.",
   "license": "__LICENSE__",
   "repository": { "type": "git", "url": "git+https://github.com/stevenvaughanbooth/adage.git" },

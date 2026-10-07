@@ -30,6 +30,7 @@ import type {
   AdageStage,
   AdageTick,
   AdageTurn,
+  AdageUpdate,
   AdageView,
 } from '../types'
 
@@ -77,6 +78,7 @@ export type Allow = AdageAllow
 export type Stage = AdageStage
 export type Skill = AdageSkill
 export type Candidate = AdageCandidate
+export type Update = AdageUpdate
 
 /** Every `$.state` value of the plugin, by key, as types/index.d.ts declares them. */
 export type AdageState = PluginState['adage']
@@ -94,6 +96,7 @@ const MODE0: Mode = {
   turnLine: false,
   noticed: false,
   versionLine: '',
+  update: null,
   warned: [],
 }
 
@@ -149,10 +152,11 @@ export const STATE0: AdageState = {
 /**
  * The store table: every `$.store` key the mod keeps across sessions (each `adage.<key>`): the
  * person's last tab, the harness version the version line was last shown for, the asks (one per
- * reflex per day) and the answers kept for the next session start. A key is added here and as one
- * cell in register.ts; `scripts/check-plugin.mjs` holds the two together.
+ * reflex per day), the answers kept for the next session start, and the newest Adage the band's
+ * update line was shown for. A key is added here and as one cell in register.ts;
+ * `scripts/check-plugin.mjs` holds the two together.
  */
-export const STORE_KEYS = ['tab', 'harness', 'asked', 'kept'] as const
+export const STORE_KEYS = ['tab', 'harness', 'asked', 'kept', 'latest'] as const
 export type StoreKey = (typeof STORE_KEYS)[number]
 
 /** The most asks remembered across sessions (`$.store`), and the most skills kept for `/adage why`. */
