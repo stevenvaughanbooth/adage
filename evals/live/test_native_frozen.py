@@ -230,6 +230,22 @@ class NativePilotFlow(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'runtime inputs changed'):
             pilot.load(self.root)
 
+    def test_native_learner_uses_bundled_model_and_retains_agent_marker(self):
+        with patch.dict(os.environ, {'ADAGE_EMBED_MODEL': 'none', 'CODEX_SANDBOX': 'fixture-agent'}):
+            with patch.object(pilot, 'subprocess_json', return_value={}) as invoke:
+                pilot.learner_command(self.root, self.manifest, 'review', '--json')
+        env = invoke.call_args.kwargs['env']
+        self.assertEqual(env['ADAGE_EMBED_MODEL'], 'auto')
+        self.assertEqual(env['CODEX_SANDBOX'], 'fixture-agent')
+        models = self.root / 'learner-home/models'
+        models.mkdir(parents=True)
+        with self.assertRaisesRegex(ValueError, 'bundled model'):
+            pilot.learner_command(self.root, self.manifest, 'review', '--json')
+        models.rmdir()
+        models.symlink_to(self.root / 'absent-models')
+        with self.assertRaisesRegex(ValueError, 'bundled model'):
+            pilot.learner_command(self.root, self.manifest, 'review', '--json')
+
     def test_untreated_training_native_receipt_replays_and_detects_debug_drift(self):
         def once(*args, **kwargs):
             if NativeTrainingLive.runs:
@@ -260,6 +276,7 @@ class NativePilotFlow(unittest.TestCase):
         self.assertEqual(collected['returncode'], 0, collected)
         learned = pilot.learn(self.root)
         self.assertGreater(learned['candidate_count'], 0, learned)
+        self.assertTrue(learned['intent_model'], 'native learning must retain bundled intent support')
         objects = frozen.Objects(self.root / 'objects')
         # Disclosed scripted fixture only; existing setup simulates an operator for tests.
         # The production coordinator never approves routes or clears agent markers.

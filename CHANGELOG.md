@@ -21,6 +21,11 @@ Pilots can explicitly select that native profile at initialization; untreated tr
 check native request evidence before further spending, and both held-out cohorts retain the
 selected profile after operator review.
 
+Native pilot learning retains the pinned binary's bundled embedding model instead of disabling
+procedure cards. Learned cards no longer describe repeated housekeeping as a finishing check
+or drop a recorded subdirectory when recommending a command. Commands outside the session
+root are omitted until cards can represent their working directory.
+
 Private repository task packs can use the pilot coordinator with explicit, pinned command
 observations and exploratory evidence labels while retaining its admission and review gates.
 

@@ -44,6 +44,13 @@ The native profile pins the complete plugin, paired binaries, harness, managed s
 supported environment. Training remains untreated: no Adage module or reflex is loaded.
 Its receipts reconcile native history request IDs, debug request counts and stream usage;
 missing observations or later drift stop further dispatch while preserving the attempt.
+Native learning uses the embedding model bundled in the pinned Adage binary, records its
+identity, and rejects installed learner models or a missing bundled model. This preserves
+production intent/procedure-card learning; the legacy profile keeps its no-embedding setting.
+Older pilot collectors forced embeddings off even for the native profile. Preserve those
+original outputs; any corrected replay belongs in a separate diagnostic study, not a rewritten
+learning record or a claim of held-out savings.
+
 After operator review, both frozen cohorts use the native profile with `off` and `mod` arms.
 Custom forwarded environment and execution grants are unsupported. An observed module load
 or spool directive alone does not establish useful delivery or adequate task verification.

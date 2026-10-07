@@ -363,7 +363,12 @@ fn view<'a>(s: &'a Session, ignore: &Ignore) -> View<'a> {
                 continue;
             }
             let norm = norm_cmd(&cmd);
-            if !norm.is_empty() {
+            // Cards currently carry a command string without a working directory. Only
+            // quote an execution known to run at the session root: dropping `cd subdir`
+            // would turn a valid generator into advice to run it in the wrong directory.
+            let at_root = matches!(&st.norm.action,
+                adage_core::CanonicalAction::Exec { cwd, .. } if Path::new(cwd) == s.root);
+            if at_root && !norm.is_empty() {
                 cmds.push(CmdView { k, norm, failed: c.failed, out: c.output.clone() });
             }
             // A file the command wrote by redirection (`go doc -all . > godoc-current.txt`) is
@@ -665,14 +670,19 @@ fn learn(views: &[&View], verdicts: Option<&BTreeMap<String, bool>>) -> Option<C
     let mut loops: BTreeSet<String> = BTreeSet::new();
     for v in views {
         let last_edit = v.edits.iter().map(|e| e.k).max().unwrap_or(0);
-        let heads: Vec<String> = v.cmds.iter().filter(|c| c.k < last_edit).map(|c| head2(&c.norm)).collect();
+        let heads: Vec<String> =
+            v.cmds.iter().filter(|c| c.k < last_edit && productive(&c.norm)).map(|c| head2(&c.norm)).collect();
         loops.extend(heads.iter().filter(|h| heads.iter().filter(|x| x == h).count() >= 2).cloned());
     }
     let mut finals: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for v in views.iter().filter(|v| v.passed) {
         let last_edit = v.edits.iter().map(|e| e.k).max().unwrap_or(0);
         let mut seen = BTreeSet::new();
-        for c in v.cmds.iter().filter(|c| c.k > last_edit && !c.failed && loops.contains(&head2(&c.norm))) {
+        for c in v
+            .cmds
+            .iter()
+            .filter(|c| c.k > last_edit && !c.failed && productive(&c.norm) && loops.contains(&head2(&c.norm)))
+        {
             if seen.insert(head2(&c.norm)) {
                 finals.entry(head2(&c.norm)).or_default().push(c.norm.clone());
             }

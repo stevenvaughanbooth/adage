@@ -462,8 +462,15 @@ def train(root, *, execute=False, live_factory=runner.Live):
 
 
 def learner_command(root, manifest, *args):
+    home = root / "learner-home"
+    native = manifest.get("runtime_profile") == native_runtime.PROFILE
+    # The native runtime uses the model bundled in the pinned binary. An installed model
+    # (or models/active selector) would silently change learning relative to that runtime.
+    if native and ((home / "models").exists() or (home / "models").is_symlink()):
+        raise ValueError("native pilot learning requires the bundled model; retain and diagnose unexpected learner models")
     return subprocess_json([manifest["adage"], *args], cwd=root,
-                           env=dict(os.environ, ADAGE_HOME=str(root / "learner-home"), ADAGE_AUTO_LEARN="0", ADAGE_EMBED_MODEL="none"))
+                           env=dict(os.environ, ADAGE_HOME=str(home), ADAGE_AUTO_LEARN="0",
+                                    ADAGE_EMBED_MODEL="auto" if native else "none"))
 
 
 def learn(root):
@@ -494,12 +501,15 @@ def learn(root):
     repo = manifest["registry"]["repo"]
     imported = learner_command(root, manifest, "corpus", "import", bundle / "corpus.jsonl", "--repo", repo)
     learned = learner_command(root, manifest, "corpus", "learn", "--repo", repo)
+    if manifest.get("runtime_profile") == native_runtime.PROFILE and not learned.get("intent_model"):
+        raise ValueError("native pilot learner did not resolve its bundled embedding model; preserve the diagnostic output")
     audit = learner_command(root, manifest, "corpus", "inspect", "--repo", repo, "--evidence")
     graph = learner_command(root, manifest, "graph", "--json", "--events", "0")
     (home / "tracks").mkdir(exist_ok=True)
     sources = frozen.adage_json(manifest["adage"], "sources", home / "tracks")
     queue = learner_command(root, manifest, "review", "--json")
     result = {"pilot_sha256": pilot_sha(manifest), "training_generation": learned["corpus_generation"],
+              "intent_model": learned.get("intent_model"),
               "import_sha256": objects.put(imported), "learn_sha256": objects.put(learned),
               "audit_sha256": objects.put(audit), "routes_sha256": objects.put(graph["routes"]),
               "sources_sha256": objects.put(sources),
@@ -560,7 +570,8 @@ def freeze(root, reviewed_by):
         else:
             frozen.prepare(root / f"{stage}-config.json", objects.root / f"{record['audit_sha256']}.json", index,
                            objects, path, Path(manifest["adage"]), [*manifest["pack_inputs"], HERE / "pilot.py", HERE / "training.py"],
-                           learner_revision=f"{manifest['adage_sha256']}:production-defaults:corpus={record['training_generation']}",
+                           learner_revision=(f"{manifest['adage_sha256']}:production-defaults:corpus={record['training_generation']}"
+                                             f":embedding={record.get('intent_model') or 'none'}"),
                            policy=manifest["policy"], identities=identities,
                            runtime_profile=manifest.get("runtime_profile", frozen.RUNTIME_PROFILE),
                            timeout=manifest["configs"][stage]["timeout_seconds"])
