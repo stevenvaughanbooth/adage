@@ -306,11 +306,13 @@ fn replay_claude_with(sb: &Sandbox, sid: &str, arm: &str, hook: Hook) {
     };
     // The mod asks before a Bash call runs, whoever made it: the plan, then the decision.
     let substitutes = scenario::substitutions(&r);
-    let mut pretools = r.pretool.iter();
-    let pretool = |pretools: &mut std::slice::Iter<scenario::Pretool>, act: &scenario::Act, id: &str| {
+    // In call order, but for a step Adage makes ahead of the turns before it (the prompt's lookup,
+    // made before the look around): each call takes the first expectation for its command.
+    let mut pretools: Vec<&scenario::Pretool> = r.pretool.iter().collect();
+    let pretool = |pretools: &mut Vec<&scenario::Pretool>, act: &scenario::Act, id: &str| {
         let scenario::Act::Shell { cmd, .. } = act else { return };
-        let want = pretools.next().unwrap_or_else(|| panic!("no pretool expectation for {cmd}"));
-        assert_eq!(&want.command, cmd, "pretool expectations follow the calls");
+        let at = pretools.iter().position(|p| &p.command == cmd);
+        let want = pretools.remove(at.unwrap_or_else(|| panic!("no pretool expectation for {cmd}")));
         let plan = send("PreToolUse", &claude::pretool_hook(sid, &cwd, cmd, id, true));
         let decision = send("PreToolUse", &claude::pretool_hook(sid, &cwd, cmd, id, false));
         match substitutes.iter().find(|s| &s.command == cmd) {
@@ -327,7 +329,7 @@ fn replay_claude_with(sb: &Sandbox, sid: &str, arm: &str, hook: Hook) {
         assert_eq!(decision, want.answer.unwrap_or(""), "PreToolUse {cmd}");
     };
     // The agent's own turn: its Bash calls checked before they run, then its batch.
-    let agent_turn = |t: &Turn, rng: &mut Rng, pretools: &mut std::slice::Iter<scenario::Pretool>| {
+    let agent_turn = |t: &Turn, rng: &mut Rng, pretools: &mut Vec<&scenario::Pretool>| {
         // The ids the batch below carries.
         let mut ids = rng.clone();
         for c in &t.calls {
@@ -346,36 +348,37 @@ fn replay_claude_with(sb: &Sandbox, sid: &str, arm: &str, hook: Hook) {
     // Adage's step: the mod yields the calls in the model's place, the harness runs them (each
     // Bash call through the same checks) and reports them with the mod's ids, drawing what the
     // agent's own turn would have drawn. Returns whether it was the finish line.
-    let adage_step =
-        |p: &scenario::Predict, route: &str, index: u32, pretools: &mut std::slice::Iter<scenario::Pretool>| {
-            let ids: Vec<(String, scenario::Act)> = p
-                .acts
-                .iter()
-                .enumerate()
-                .map(|(k, a)| (claude::predicted_tool_use_id(route, &turn_id, index, k), a.clone()))
-                .collect();
-            for (id, act) in &ids {
-                pretool(pretools, act, id);
-            }
-            let batch = claude::predicted_batch(sid, &cwd, &ids);
-            let replaced = r.work.iter().find(|t| t.calls.iter().map(|c| &c.act).eq(p.acts.iter()));
-            let want: Vec<&str> =
-                replaced.map(|t| t.calls.iter().flat_map(|c| c.expect.clone()).collect()).unwrap_or_default();
-            expect_turn(sb, &batch, &send("PostToolBatch", &batch), &want, "claude predicted batch");
-        };
+    let adage_step = |p: &scenario::Predict, route: &str, index: u32, pretools: &mut Vec<&scenario::Pretool>| {
+        let ids: Vec<(String, scenario::Act)> = p
+            .acts
+            .iter()
+            .enumerate()
+            .map(|(k, a)| (claude::predicted_tool_use_id(route, &turn_id, index, k), a.clone()))
+            .collect();
+        for (id, act) in &ids {
+            pretool(pretools, act, id);
+        }
+        let batch = claude::predicted_batch(sid, &cwd, &ids);
+        let replaced = r.work.iter().find(|t| t.calls.iter().map(|c| &c.act).eq(p.acts.iter()));
+        let want: Vec<&str> =
+            replaced.map(|t| t.calls.iter().flat_map(|c| c.expect.clone()).collect()).unwrap_or_default();
+        expect_turn(sb, &batch, &send("PostToolBatch", &batch), &want, "claude predicted batch");
+    };
     let mut index = 0u32;
-    assert!(step(index, false).is_none(), "never at the prompt's own request");
     let mut work: std::collections::VecDeque<Turn> = r.work.iter().cloned().collect();
-    while let Some(t) = work.pop_front() {
-        agent_turn(&t, &mut rng, &mut pretools);
-        index += 1;
-        // Steps Adage makes before the model's next request: each replaces the agent's next turn.
+    loop {
+        // Steps Adage makes before the model's next request, the first included (the run reflex the
+        // prompt directed): each stands for the agent's turn that made the same calls, and that
+        // turn is not replayed.
         while let Some((p, route)) = step(index, false) {
-            let next = work.pop_front().expect("a predicted step stands for an agent's turn");
-            assert!(next.calls.iter().map(|c| &c.act).eq(p.acts.iter()), "Adage makes the step the agent made");
+            let made = work.iter().position(|t| t.calls.iter().map(|c| &c.act).eq(p.acts.iter()));
+            work.remove(made.expect("Adage makes a step the agent made"));
             adage_step(p, &route, index, &mut pretools);
             index += 1;
         }
+        let Some(t) = work.pop_front() else { break };
+        agent_turn(&t, &mut rng, &mut pretools);
+        index += 1;
     }
     // The model's response to request `index` ends the turn.
     let finish: Vec<Turn> = match step(index, true) {
@@ -417,7 +420,7 @@ fn replay_claude_with(sb: &Sandbox, sid: &str, arm: &str, hook: Hook) {
         index += 1;
         assert!(step(index, false).is_none(), "nothing left to predict");
     }
-    assert_eq!(pretools.next(), None, "every Bash call was checked before it ran");
+    assert!(pretools.is_empty(), "every Bash call was checked before it ran: {pretools:?}");
     assert!(step(index, true).is_none(), "obligation met: nothing at the turn's end");
     let finish_predicted = treated && predictions.iter().any(|p| p.ending);
     assert_eq!(
@@ -481,7 +484,8 @@ fn substituted(t: &Turn, subs: &[scenario::Substitute], treated: bool) -> Turn {
 
 /// The session's `turn_step` spool records, as `demo/adage_metrics.py` reads them (`kind:
 /// "turn_step"`, `decision.predicted`): one per step Adage made or would have made, none for an
-/// empty step, in both arms at the same steps.
+/// empty step, in both arms at the same steps but for the reads after the lookup Adage made
+/// before the first request ([`scenario::Predict::control_index`]).
 fn check_turn_steps(sb: &Sandbox, sid: &str, arm: &str, predictions: &[&scenario::Predict], turn_id: &str) {
     let spool = adage_store::Paths::at(sb.root.join("adage")).spool(sid);
     let records: Vec<Value> = adage_store::spool::read_all(&spool).unwrap_or_default();
@@ -491,7 +495,8 @@ fn check_turn_steps(sb: &Sandbox, sid: &str, arm: &str, predictions: &[&scenario
         let d = &rec["decision"];
         assert_eq!(rec["event"], "TurnStep");
         assert_eq!(d["would_predict"]["kind"], p.kind, "{arm}: {rec}");
-        assert_eq!(d["predicted_at"], json!([turn_id, p.index]), "{arm}: {rec}");
+        let at = if arm == "treated" { p.index } else { p.control_index };
+        assert_eq!(d["predicted_at"], json!([turn_id, at]), "{arm}: {rec}");
         if arm == "treated" {
             assert_eq!(d["predicted"], d["would_predict"], "{arm}: {rec}");
         } else {
@@ -842,8 +847,9 @@ fn grant_predict(sb: &Sandbox, prefix: &str) {
 /// T-C4-04, T-C7-04, T-C8-04 (the sim's half): the mod's `turn.step` through `adage-exec hook`.
 /// With a `predict` grant on the finish line, the treated arm's `make gen` is Adage's step at the
 /// work turn's end (no Stop request); with grants on the lookup and the reads it names too, Adage
-/// looks the item up after the look around and reads its linked files at the very next step, one
-/// response of two calls (two model requests not made), then a model step. The control arm prints
+/// looks the item up before the model's first request (the prompt directed it, its slot bound
+/// from the prompt) and reads its linked files at the very next step, one response of two calls
+/// (two model requests not made), then the model's look around. The control arm prints
 /// nothing and spools `would_predict` at the same steps; without a grant, both arms are exactly
 /// the `adage` replay with every step silent. Under `adage hook` the same steps are silent too
 /// ([`claude_code_learn_then_replay`]).
@@ -921,6 +927,62 @@ fn claude_code_standing_and_a_subagent_told_at_spawn() {
         assert_eq!(send("PostToolBatch", &claude::subagent_batch(&sid, &cwd, "explore-1", &reads)), "");
         let skill = claude::skill_prompt_hook(&sid, &cwd, "release-checklist", "1. Bump the version.");
         assert_eq!(send("SkillPrompt", &skill), "", "{arm}: no accepted pack here");
+    }
+}
+
+/// T-C6-06 (the sim's half): the learned dead end at the head of a pipeline of output filters,
+/// as run 3's agents wrote it, through the mod's two phases. The dry run plans the whole new
+/// pipeline, the filters and the stage's own `2>&1` kept and the line naming the stage replaced;
+/// the verdict substitutes in the treated arm and spools `would_substitute` in the control arm,
+/// as the plain dead end of the replay does. A list, a file redirection, or a stage that is not an
+/// output filter plans nothing, and the command hook's own answer to each is nothing, as before.
+#[test]
+fn claude_code_substitutes_a_dead_end_piped_into_filters() {
+    let sb = Sandbox::new();
+    let projects = adage_sim::fixtures_dir().join("claude/projects");
+    assert_all_four(&sb.learn(&["--claude-projects", projects.to_str().unwrap()]), "claude", 2);
+    let cwd = sb.repo();
+    let (a, b) = ids("claude");
+    let (dead, ..) = scenario::DEAD_ENDS[0];
+    let piped = [
+        (format!("{dead} | tail -n 20"), "make test | tail -n 20"),
+        (format!("{dead} -t . 2>&1 | tail -5"), "make test 2>&1 | tail -5"),
+        (format!("{dead} 2>&1 | grep -E 'FAIL|ERROR' | head"), "make test 2>&1 | grep -E 'FAIL|ERROR' | head"),
+    ];
+    let refused = [
+        format!("ls; {dead} 2>&1 | tail -5"),
+        format!("{dead} 2>&1 | head -20; ls tests"),
+        format!("{dead} > out.txt | tail"),
+        format!("{dead} | xargs echo"),
+    ];
+    for (sid, arm) in [(a, "treated"), (b, "control")] {
+        let send = |ev: &str, p: &Value| sb.hook("claude", ev, p, arm);
+        assert_eq!(send("SessionStart", &claude::hook(&sid, &cwd, "SessionStart", json!({ "source": "startup" }))), "");
+        for (k, (cmd, instead)) in piped.iter().enumerate() {
+            let id = format!("toolu_pipe{k}");
+            let plan = send("PreToolUse", &claude::pretool_hook(&sid, &cwd, cmd, &id, true));
+            let s = scenario::Substitute {
+                command: cmd.clone(),
+                instead: scenario::Act::shell(instead, scenario::MAKE_TEST_OK, 0),
+                route: "dead-end-",
+                // The line names the stage replaced, never the filters.
+                context: format!(
+                    "adage ran make test in place of {}: in this repository it fails (\"",
+                    cmd.split(" 2>&1").next().unwrap().split(" | ").next().unwrap()
+                ),
+            };
+            check_substitute(&sb, &sid, arm, &s, &plan, |route| {
+                send(
+                    "PreToolUse",
+                    &claude::verdict_hook(&sid, &cwd, cmd, &id, json!({ "engine": "same", "substitute": route })),
+                )
+            });
+        }
+        for (k, cmd) in refused.iter().enumerate() {
+            let id = format!("toolu_list{k}");
+            assert_eq!(send("PreToolUse", &claude::pretool_hook(&sid, &cwd, cmd, &id, true)), "", "{arm}: {cmd}");
+            assert_eq!(send("PreToolUse", &claude::pretool_hook(&sid, &cwd, cmd, &id, false)), "", "{arm}: {cmd}");
+        }
     }
 }
 

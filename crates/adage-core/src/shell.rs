@@ -1593,6 +1593,143 @@ pub fn unlisted_repo_script(command: &str, table: &CommandTable) -> Option<Strin
     Some(rel.to_string())
 }
 
+/// One stage of a plain pipeline ([`plain_pipeline`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Stage {
+    /// Where the stage's command is in the string, without its `2>&1`.
+    pub range: std::ops::Range<usize>,
+    /// The words as the shell passes them (quotes removed).
+    pub argv: Vec<String>,
+    /// The stage ends with `2>&1`, its only redirection.
+    pub merges_stderr: bool,
+}
+
+/// `command` as one plain pipeline: one statement, its stages joined by `|` (never `|&`), each a
+/// simple command of literal words, the only redirection allowed being a stage's own `2>&1`.
+/// Anything else is `None`: a list (`;`, `&&`, `||`, a newline), any other redirection or a
+/// heredoc, a subshell or group, an expansion or substitution, an assignment prefix, a
+/// background `&`, a comment, or a command the grammar cannot read. A single command is a
+/// pipeline of one stage.
+///
+/// A learned dead end inside a pipeline is replaced through this: the stages are exactly what
+/// runs, so replacing one stage's range changes nothing else the command does.
+pub fn plain_pipeline(command: &str) -> Option<Vec<Stage>> {
+    if command.trim().is_empty() || command.len() > MAX_COMMAND || too_deep(command) || too_many_pipes(command) {
+        return None;
+    }
+    let shadow = ascii_shadow(command);
+    let tree = PARSER.with(|p| parse_within_budget(&mut p.borrow_mut(), shadow.as_bytes())).ok()?;
+    let root = tree.root_node();
+    if root.has_error() || root.named_child_count() != 1 || root.child_count() != 1 {
+        return None;
+    }
+    let top = root.named_child(0)?;
+    let parts: Vec<Node> = if top.kind() == "pipeline" {
+        let mut c = top.walk();
+        let all: Vec<Node> = top.children(&mut c).collect();
+        // Stages and operators alternate; `|&` also pipes stderr, which a replacement would change.
+        if all.iter().skip(1).step_by(2).any(|op| op.kind() != "|") {
+            return None;
+        }
+        all.into_iter().step_by(2).collect()
+    } else {
+        vec![top]
+    };
+    parts.into_iter().map(|n| plain_stage(n, command)).collect()
+}
+
+fn plain_stage(node: Node, src: &str) -> Option<Stage> {
+    let (cmd, merges_stderr) = match node.kind() {
+        "command" => (node, false),
+        "redirected_statement" => {
+            let body = node.child_by_field_name("body").filter(|b| b.kind() == "command")?;
+            let mut c = node.walk();
+            let redirects: Vec<Node> = node.children(&mut c).filter(|n| n.id() != body.id()).collect();
+            match redirects.as_slice() {
+                [r] if r.kind() == "file_redirect" && text(*r, src) == "2>&1" => (body, true),
+                _ => return None,
+            }
+        }
+        _ => return None,
+    };
+    let mut argv = Vec::new();
+    let mut c = cmd.walk();
+    for ch in cmd.children(&mut c) {
+        let word = match ch.kind() {
+            "command_name" => ch.named_child(0).filter(|w| ch.named_child_count() == 1 && w.kind() == "word")?,
+            "word" | "raw_string" | "number" => ch,
+            // A double-quoted string with nothing expanded inside it.
+            "string"
+                if (0..ch.named_child_count())
+                    .all(|i| ch.named_child(i).map(|n| n.kind()) == Some("string_content")) =>
+            {
+                ch
+            }
+            _ => return None,
+        };
+        argv.push(word_text(word, src));
+    }
+    if argv.is_empty() || argv.iter().any(|a| a.contains(['$', '`', '\\'])) {
+        return None;
+    }
+    Some(Stage { range: cmd.byte_range(), argv, merges_stderr })
+}
+
+#[cfg(test)]
+mod plain_pipeline_tests {
+    use super::*;
+
+    fn stages(s: &str) -> Option<Vec<(String, Vec<String>, bool)>> {
+        plain_pipeline(s).map(|v| v.into_iter().map(|t| (s[t.range].to_string(), t.argv, t.merges_stderr)).collect())
+    }
+
+    #[test]
+    fn a_plain_pipeline_is_its_stages() {
+        let s = stages("python3 -m unittest discover -s tests -t . 2>&1 | tail -5").unwrap();
+        assert_eq!(s.len(), 2);
+        assert_eq!(s[0].0, "python3 -m unittest discover -s tests -t .");
+        assert!(s[0].2 && !s[1].2);
+        assert_eq!(s[1].1, ["tail", "-5"]);
+        let s = stages("make test | grep -E 'FAIL|ERROR' | wc -l").unwrap();
+        assert_eq!(s.iter().map(|t| t.1[0].as_str()).collect::<Vec<_>>(), ["make", "grep", "wc"]);
+        assert_eq!(s[1].1, ["grep", "-E", "FAIL|ERROR"]);
+        assert_eq!(stages("grep \"a b\" f").unwrap()[0].1, ["grep", "a b", "f"]);
+        assert_eq!(stages("make test").unwrap().len(), 1);
+        // Non-ASCII words keep their bytes.
+        assert_eq!(stages("grep café | head").unwrap()[0].1, ["grep", "café"]);
+    }
+
+    #[test]
+    fn anything_but_a_plain_pipeline_is_refused() {
+        for s in [
+            "",
+            "a | b; c",
+            "a && b | c",
+            "a || b",
+            "a\nb",
+            "a |& tail",
+            "a > out | tail",
+            "a 2>/dev/null | tail",
+            "a | tail > out",
+            "a < in | tail",
+            "a 2>&1 >out | tail",
+            "(a) | tail",
+            "{ a; } | tail",
+            "a $(b) | tail",
+            "a | grep \"$X\"",
+            "a | grep `b`",
+            "X=1 a | tail",
+            "a | tail &",
+            "a | tail # note",
+            "cat <<EOF | tail\nx\nEOF",
+            "a | ",
+            "a | b\\ c",
+        ] {
+            assert_eq!(stages(s), None, "{s:?}");
+        }
+    }
+}
+
 #[cfg(test)]
 mod repo_script_tests {
     use super::*;

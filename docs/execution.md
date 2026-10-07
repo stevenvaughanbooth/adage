@@ -251,13 +251,26 @@ python3 -m pytest tests
   canonical key meets a learned, firm `avoid` route with a fixed `instead` (no slot), or a learned
   run-after-failure route delivered at fire. An instinct, a forming or dormant route, a prime
   pair and a slotted `instead` replace nothing (`adage_runtime::substitution`).
+- **In a pipeline**: the first stage of a pipeline whose later stages only filter its output
+  (`tail`, `head`, `grep`, `wc`, `cat`, `tee`, `sort`, `uniq`, with their arguments) is replaced
+  the same way. The stage's own `2>&1` and the filters are kept byte for byte, and the plan's
+  `command` is the whole new pipeline:
+
+  ```text
+  python3 -m unittest discover -s tests 2>&1 | tail -5
+  → make test 2>&1 | tail -5     (adage ran make test in place of python3 -m unittest discover -s tests: …)
+  ```
+
+  A list (`;`, `&&`, `||`), any other redirection, `|&`, a subshell, an expansion, an assignment
+  before the command, or a later stage that does more than read its input is never rewritten
+  (`adage_core::shell::plain_pipeline`).
 - **How**: two phases of `adage hook claude PreToolUse` that a command hook never sends. A
   `dry_run` answers the plan (`{"plan":{"substitute":{command, route, track, context}}}`) and
-  records nothing. The mod asks `$.tool.check` about the original and the replacement; only when
-  both get the same verdict does it send `verdict: {engine: "same", substitute: <route>}`, and only
-  when that answers `{"substitute":{…}}` does it run the call with the new command. The model reads
-  the one `context` line after the result; the person sees it under the permission dialog, if one
-  opens.
+  records nothing. The mod asks `$.tool.check` about the original and the replacement (each a
+  whole pipeline when the dead end heads one); only when both get the same verdict does it send
+  `verdict: {engine: "same", substitute: <route>}`, and only when that answers
+  `{"substitute":{…}}` does it run the call with the new command. The model reads the one
+  `context` line after the result; the person sees it under the permission dialog, if one opens.
 - **Recorded**: one `pretool` record at the verdict, `substituted: true` with the judgement
   `substituted` (never a follow; the dead end counts as headed off), or, in the control arm and in
   the mod's observe mode, `would_substitute: true`, withheld, and nothing printed. `adage delegate

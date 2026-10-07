@@ -6,7 +6,9 @@
 //
 // - a fresh receipt answers the call in its place, only when the rules would have let the call as
 //   written run unasked (no dialog appears for an answered call);
-// - a learned replacement runs instead of the dead end, only when the rules treat both alike;
+// - a learned replacement runs instead of the dead end, only when the rules treat both alike (a
+//   dead end piped into output filters is replaced as the whole new pipeline the binary plans, the
+//   filters as written, and the rules are read on both whole pipelines);
 // - a rewrite runs the call on the project's interpreter when the rules treat both alike; when
 //   they do not, the binary turns it into advice, which the mod hands the model itself (the
 //   command hook that follows for the same call prints nothing once a verdict decided it).
@@ -207,7 +209,8 @@ async function decided<E extends BashCall>(e: E, next: (e: E) => Promise<ToolCal
   // covers it (T-C3-07). The command hook still delivers a fresh one's note beside the result.
   if (receipt !== undefined && receipt.operation !== '' && !deps.isObserving) await quiet(deps.beside?.(id, receipt.operation))
 
-  // §3.4 The dead end that never runs: the learned command, only on the same verdict.
+  // §3.4 The dead end that never runs: the learned command, only on the same verdict for the call
+  // and for the command the binary planned (the whole pipeline, when the dead end heads one).
   const sub = plan.substitute
   if (sub !== undefined && (await alike(sub.command)) === true) {
     const final = await ask({ ...base, verdict: { engine: 'same', substitute: sub.route } })

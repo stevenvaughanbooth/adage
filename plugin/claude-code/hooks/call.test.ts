@@ -324,6 +324,55 @@ describe('T-C6-03 · the dead end that never runs', () => {
   })
 })
 
+// The binary replaces a dead end at the head of a pipeline of output filters (run 3's agents
+// wrote `… 2>&1 | tail -5`): the plan's `command` is the whole new pipeline, so the mod's half is
+// the plain one's, with the rules read on both whole pipelines.
+describe('T-C6-06 · a dead end piped into filters', () => {
+  const PIPED = `${DEAD_END} 2>&1 | tail -n 20`
+  const INSTEAD = 'make test 2>&1 | tail -n 20'
+  const PIPED_SUB = { command: INSTEAD, context: CONTEXT }
+  const PLANNED = wireWith('plan', { receipt: undefined, rewrite: undefined, substitute: PIPED_SUB })
+  const MADE = wireWith('substitute', PIPED_SUB)
+
+  test('the same verdict for both pipelines: the new pipeline runs, its filters as written, with the one line', async ($, on) => {
+    const w = callWorld(on, { plan: PLANNED, final: MADE })
+    await start($, w.w, null, false)
+    const r = await $.tool.call({ tool: 'Bash', command: PIPED })
+    expect(w.ran).toEqual([INSTEAD])
+    expect(w.checked).toEqual(expect.arrayContaining([PIPED, INSTEAD]))
+    expect(r.context).toEqual([CONTEXT])
+    expect(w.notices).toEqual([CONTEXT])
+    expect(verdicts(w.asked)).toEqual(['dry_run', JSON.stringify({ engine: 'same', substitute: SUB.route })])
+    expect(w.asked[0]).toMatchObject({ tool_input: { command: PIPED } })
+  })
+
+  test('the rules treat the new pipeline differently: the call runs as written', async ($, on) => {
+    const w = callWorld(on, { plan: PLANNED, final: MADE, rules: { [INSTEAD]: 'ask' } })
+    await start($, w.w, null, false)
+    const r = await $.tool.call({ tool: 'Bash', command: PIPED })
+    expect(w.ran).toEqual([PIPED])
+    expect(r.context).toBeUndefined()
+    expect(w.asked).toHaveLength(1)
+  })
+
+  test('the final word withheld (the control arm): the dead end runs as written', async ($, on) => {
+    const w = callWorld(on, { plan: PLANNED })
+    await start($, w.w, null, false)
+    await $.tool.call({ tool: 'Bash', command: PIPED })
+    expect(w.ran).toEqual([PIPED])
+    expect(w.notices).toEqual([])
+  })
+
+  test('observe mode: both phases are asked with observe, and the pipeline is never replaced', async ($, on) => {
+    const w = callWorld(on, { plan: PLANNED, final: MADE, observe: '1' })
+    await start($, w.w, null, false)
+    await $.tool.call({ tool: 'Bash', command: PIPED })
+    expect(w.ran).toEqual([PIPED])
+    expect(w.asked.map(p => p.observe)).toEqual([true, true])
+    expect(w.notices).toEqual([])
+  })
+})
+
 describe('T-C3-04, T-C3-07 · drawn: the receipt card, and the line beside a run that happened', () => {
   // The kit's binary prints one fixed answer per event, so the dry run and the final ask read the
   // same object: the dry run its `plan`, the verdict its `receipt` (the real binary prints one or

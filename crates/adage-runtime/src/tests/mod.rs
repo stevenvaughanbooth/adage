@@ -12,6 +12,7 @@ mod finish_line;
 mod intent;
 mod interlocking;
 mod noticed;
+mod pipeline_substitution;
 mod receipt;
 mod refused;
 mod subagent;

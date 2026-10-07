@@ -63,12 +63,19 @@ pub fn answered_by_receipt(ctx: &Ctx, st: &mut SessionState, command: &str, cove
 /// first route in index order, in play, learned (an instinct is advice, never a replacement),
 /// firm, with no slots, that is
 ///
-/// - an `avoid` step whose runners `command` runs ([`pattern::directs_avoided`]), or
-/// - a run step after a failure of `command`'s key (the after-failure trigger's own match)
+/// - an `avoid` step whose runners the replaced command runs ([`pattern::directs_avoided`]), or
+/// - a run step after a failure of the replaced command's key (the after-failure trigger's own match)
 ///   delivered at fire,
 ///
-/// and whose `instead` is a fixed command that is not itself avoided and not the call. Only one
-/// plain command is replaced: a list or a pipeline also runs what the replacement would drop.
+/// and whose `instead` is a fixed command that is not itself avoided and not the call.
+///
+/// What is replaced is one plain command, or the first stage of a pipeline whose other stages
+/// only filter its output ([`OUTPUT_FILTERS`]; `make test 2>&1 | tail -5` for
+/// `python3 -m unittest 2>&1 | tail -5`): the filters and the stage's own `2>&1` are kept
+/// verbatim, and the [`Substitution`]'s `command` is the whole new pipeline. A list, any other
+/// redirection, a subshell, an expansion, or a later stage that does more than read its input is
+/// never rewritten: it also runs what the replacement would drop, or changes what the
+/// replacement's output feeds.
 pub fn substitution(
     index: &Index,
     repo: &str,
@@ -76,11 +83,12 @@ pub fn substitution(
     table: &CommandTable,
     command: &str,
 ) -> Option<Substitution> {
-    let plain = !command.contains(|c: char| "|;&<>$`()\n".contains(c));
-    if !plain || keys::flatten(&adage_core::shell::normalize_shell(command, "/", table)).len() != 1 {
+    let stage = replaced_stage(command)?;
+    let (before, dead, after) = (&command[..stage.start], &command[stage.clone()], &command[stage.end..]);
+    if keys::flatten(&adage_core::shell::normalize_shell(dead, "/", table)).len() != 1 {
         return None;
     }
-    let key = command_key(command, table);
+    let key = command_key(dead, table);
     if key.is_empty() {
         return None;
     }
@@ -91,7 +99,7 @@ pub fn substitution(
         }
         let (instead, signature) = match (&r.trigger, &r.step) {
             (_, Step::Avoid { avoid, instead, signature })
-                if pattern::directs_avoided(avoid, command) && !pattern::directs_avoided(avoid, instead) =>
+                if pattern::directs_avoided(avoid, dead) && !pattern::directs_avoided(avoid, instead) =>
             {
                 (instead, signature)
             }
@@ -104,17 +112,42 @@ pub fn substitution(
             _ => return None,
         };
         let instead = instead.trim();
-        if instead.is_empty() || instead.contains('{') || pattern::same_command(instead, command) {
+        if instead.is_empty() || instead.contains('{') || pattern::same_command(instead, dead) {
             return None;
         }
+        // The line names the stage replaced, not the pipeline: the filters ran as written.
         let context = format!(
             "adage ran {} in place of {}: in this repository it fails (\"{}\").",
             render::sanitise(instead),
-            render::sanitise(command),
+            render::sanitise(dead),
             render::sanitise(signature)
         );
-        Some(Substitution { route: r.id.clone(), track: ir.track.clone(), command: instead.to_string(), context })
+        Some(Substitution {
+            route: r.id.clone(),
+            track: ir.track.clone(),
+            command: format!("{before}{instead}{after}"),
+            context,
+        })
     })
+}
+
+/// The commands a pipeline may pass a replaced stage's output through: each only reads its input
+/// and prints some of it (`tee` also keeps a copy in the file it names), so the pipeline does with
+/// the replacement's output what it would have done with the dead end's.
+pub const OUTPUT_FILTERS: &[&str] = &["tail", "head", "grep", "wc", "cat", "tee", "sort", "uniq"];
+
+/// The part of `command` a substitution may replace: the whole of a plain command (no shell
+/// syntax at all), or the first stage of a plain pipeline ([`adage_core::shell::plain_pipeline`])
+/// whose later stages are all [`OUTPUT_FILTERS`] without a redirection of their own.
+fn replaced_stage(command: &str) -> Option<std::ops::Range<usize>> {
+    if !command.contains(|c: char| "|;&<>$`()\n".contains(c)) {
+        return Some(0..command.len());
+    }
+    let stages = adage_core::shell::plain_pipeline(command)?;
+    let (first, filters) = stages.split_first()?;
+    let only_filters =
+        !filters.is_empty() && filters.iter().all(|f| !f.merges_stderr && OUTPUT_FILTERS.contains(&f.argv[0].as_str()));
+    only_filters.then(|| first.range.clone())
 }
 
 /// The decision a substitution records once the mod found the person's rules treat both commands

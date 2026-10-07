@@ -97,7 +97,7 @@ the cross-cutting set.
 | Receipt as result, `$.tool.check` (§3.3, §3.4) | C3 | T-C3-01 … 07 |
 | The mod's `turn.step`, sim (§3.2) | C4 | T-C4-01 … 08 |
 | Standing, compaction, routing (§3.5–3.7) | C5 | T-C5-01 … 05 |
-| The dead end that never runs (§3.4, §1b.1) | C6 | T-C6-01 … 05 |
+| The dead end that never runs (§3.4, §1b.1) | C6 | T-C6-01 … 06 |
 | Chains and multi-call steps (§3.2, §1b.1) | C7 | T-C7-01 … 04 |
 | The finish line at the last step (§3.2, §1b.1) | C8 | T-C8-01 … 04 |
 | Attachment and the mod capabilities (§1b.3, §3.6, §3.8) | C9 | T-C9-01 … 05 |
@@ -329,9 +329,20 @@ the Then itself.
   `TurnStep { turn_id: t, index: 1 }` is decided. Then `Decision.predicted` is `{ route: R, tool:
   Bash, input.command: "make gen", kind: run }` and `last_step_predicted == (t, 1)`,
   `predictions == 1`. An armed obligation predicts with `kind: obligation`.
-- **T-C1-02 · L1 · never two in a row, never at index 0.** `TurnStep { t, 0 }` predicts nothing
-  with a pending present; the step after a prediction with no batch between predicts nothing;
-  after a `Batch` that observes `exec make gen`, the pending is cleared and nothing is pending.
+- **T-C1-02 · L1 · never two in a row; never at index 0 except a run reflex fired on this
+  prompt under grant and verdict.** `TurnStep { t, 0 }` predicts nothing with a pending present
+  that this prompt did not direct (an earlier turn's), nor an armed obligation, nor at its end;
+  the step after a prediction with no batch between predicts nothing; after a `Batch` that
+  observes `exec make gen`, the pending is cleared and nothing is pending. The one case: after
+  `Prompt "Pick up W-2042"`, `TurnStep { t, 0 }` predicts the lookup (`kind: run`, its slot
+  bound from the prompt, `predicted_at (t, 0)`), the reads its result binds follow at `{ t, 1 }`
+  as a chain's second step and nothing at `{ t, 2 }`; the control arm records `would_predict` at
+  the same step. Each refusal at index 0: no grant on it; the step's end; a batch, a failure or a
+  Stop since the prompt; a subagent's step; the cap (`would_predict` only); a route predicted
+  before; a dead end the session was told; a verdict other than `allow` (withheld, the route
+  held; the dry run commits nothing); a skill the prompt directed, a sequence, a finish line or a
+  read batch, even named as the prompt's. In process (`adage-hook`): the prompt's lookup through
+  the mod's two phases at index 0.
 - **T-C1-03 · L1 · the cap.** With `runtime.predict_cap = 2`, the third eligible step predicts
   nothing and `would_predict` is set.
 - **T-C1-04 · L1 · control.** In the control arm `predicted` is `None` and `would_predict` is
@@ -454,6 +465,15 @@ the Then itself.
   `check_graph` counts one substitution.
 - **T-C6-05 · L10 · the demo.** `dead_end_hits` in the `mod` arm is lower than in `adage` with
   `hidden_passed` unchanged.
+- **T-C6-06 · L1, L4, L7 · a dead end piped into filters.** A call whose first stage meets the
+  pair and whose later stages are only output filters (`tail`, `head`, `grep`, `wc`, `cat`, `tee`,
+  `sort`, `uniq`, with their arguments) plans the whole new pipeline: the first stage replaced, its
+  own `2>&1` and the filters byte-identical (`make test 2>&1 | tail -5`), the context line naming
+  the stage replaced. A list (`;`, `&&`, `||`, a newline), any other redirection, `|&`, a subshell
+  or group, an expansion, an assignment prefix, a quoted dead end, or a later stage that is not an
+  output filter plans nothing. The verdict is recorded as T-C6-02 records a plain one; the mod reads
+  the rules on both whole pipelines and runs the new one only on the same verdict, never in the
+  control arm or observe mode.
 
 ### C7 · Chains and multi-call steps
 
@@ -807,9 +827,15 @@ handlers directly and checking `$.state` and the recorded `$.ui.*` calls.
   allowed, the hook yields exactly three chunks (`tool` with an `adage_<route>_<turn>_<index>_<k>`
   id, `input` with the prediction's JSON, `stop` with `stopReason: null`, `usage: null`) and
   returns `{ stopReason: null, usage: null, toolUses: [...] }` without calling `next`.
-- **T-C4-02 · forwarded.** With `ask` answering nothing or `{ ok: false }`, with `e.agentId` set,
-  or with `e.index === 0`, the hook is `yield* next(e)` and asks nothing in the last two cases;
-  the ask's timeout is 250 ms.
+- **T-C4-02 · forwarded.** With `ask` answering nothing or `{ ok: false }`, or with `e.agentId`
+  set (its first step included), the hook is `yield* next(e)` and asks nothing in the last case;
+  the ask's timeout is 250 ms. At `e.index === 0` the hook asks the dry run; a `run` answer goes
+  on to the verdict and, allowed, is yielded before the model's first response (no request, a
+  null stop, the id `adage_<route>_<turn>_0_0`, the line "Adage made this call in your place
+  before your first response"); any other kind is forwarded with no verdict asked; the step's end
+  is never asked; with the kit's `engineThread`, the model's first real request after it starts
+  the thread afresh with the call and its result in it, after a session's first prompt or a later
+  one.
 - **T-C4-03 · skills and routing.** A `kind: skill` prediction yields the `Skill` tool with `{
   skill, args? }` only when `skills_invoke` is on and `$.command.list()` lists the skill; a
   `routine` answer with `routine_model` set calls `next({ ...e, model, effort: 'low' })`.

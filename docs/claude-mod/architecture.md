@@ -144,7 +144,8 @@ step **the agent's own tool call** (§3.2). The grant, the evidence rule, the co
 Three predictions the hooks cannot make at all follow from this:
 
 - **A chain, step by step.** `lookup-work-item` then `read-linked-files` is two directives and
-  two model requests today. The mod predicts the lookup; the engine runs it; at the next step
+  two model requests today. The mod predicts the lookup, before the model's first response when
+  the prompt directed it (§3.2, "The turn's first step"); the engine runs it; at the next step
   the binary sees the lookup's result in the batch, binds the `ReadBatch` from it (the directive
   already says "read the files it names"), and predicts the reads as one response with several
   `tool` chunks (a response may carry more than one tool call). Two requests not sent, each
@@ -387,7 +388,7 @@ of the chain is no tool call: the engine records none and runs none", and the co
 
 ```ts
 on('turn.step', async function* ($, e, next) {
-  if (!active || e.agentId !== undefined || e.index === 0) return yield* next(e)   // main loop; step 0 is the prompt's
+  if (!active || e.agentId !== undefined) return yield* next(e)                     // main loop only; step 0: below
   const asked = await ask($, 'TurnStep', {
     session_id: await $.session.id(), cwd: await $.session.cwd(), hook_event_name: 'TurnStep',
     turn_id: e.turnId, index: e.index, model: e.model }, 250)
@@ -424,8 +425,10 @@ on('turn.step', async function* ($, e, next) {
   policy allows them, and never an `exec_only` route (one that exists only to be executed in the
   sandbox). Because every approval lookup in adage-exec selects by repository, route and level
   today, the mode joins every selector, so a `predict` grant and an `Execute` grant on one route
-  never see each other's keys. Three bounds the binary enforces: never two predicted steps in a
-  row (a model step must separate them, so Adage can never drive a turn alone); at most
+  never see each other's keys. Four bounds the binary enforces: at the turn's first step (index
+  0, before the model's first response) only the run reflex the prompt itself directed (below);
+  never two predicted steps in a row (a model step must separate them, so Adage can never drive a
+  turn alone, but for a chain's second step); at most
   `runtime.predict_cap` per session (default 6), like the Stop gate's two; and never for a route
   that also holds an `Execute` grant for the same step, because that action already runs inside
   the `PostToolBatch` hook and a prediction would run it twice (`delegate --predict` on such a
@@ -460,6 +463,25 @@ on('turn.step', async function* ($, e, next) {
 - **Cost accounting:** the step's `usage` is null on the engine's side; §3.9 records the step as
   Adage's with the model it replaced, so the ledger prices what was *not* spent at the same rate
   as what was.
+**The turn's first step.** `turn.step` at index 0 fires after `UserPromptSubmit`, so the
+prompt's directives are already delivered and recorded when it asks. There the binary predicts
+one thing only: a `Run` reflex this prompt directed whose every slot the prompt's own words bound
+and whose command is therefore fixed (the lookup, `scripts/wi-lookup {item}` with the work item
+the prompt names), under the same grant, two-phase verdict, cap, once-per-route rule and
+interlock as any step, never for a subagent. A sequence, a skill, a chain, a finish line, anything
+directed before this prompt or with a slot bound from a result waits for a model step, as before;
+nothing is routed at index 0, and its end is never asked (no finish line before a model step).
+The made-up first response has no stop reason, so the model's first real request starts the
+thread afresh with the prompt, the call and its result in it. The directive still goes with the
+prompt, unchanged: it is rendered by the command hook before the step's verdict exists, so it
+cannot truthfully say the call ran, and the command-hook path stays byte-identical. Instead the
+call's result carries the line that says so ("Adage made this call in your place before your
+first response: it is the step the learned reflex lookup-work-item, delivered with the request,
+names"), so the model reads the directive, then the call it names already made, and works from
+the result. Run 3 is why (evaluation-results.md): the model made the lookup in its very first
+response in 36 of 36 treated sessions, so a rule of "never at index 0" left the design's first
+lever, the lookup, never predicted.
+
 **Chains and multi-call steps.** A `Sequence` or a lookup-then-read pair is predicted one step
 at a time: the first call is yielded; the engine runs it; the batch that follows carries its
 result; the binary binds the next directive from that result (a `ReadBatch`'s files from the
@@ -556,6 +578,14 @@ context (`adage ran make test instead: pytest is not installed here`). The failu
 reading of it and the recovery request do not happen. A substitution is recorded as its own
 judgement (`Substituted`), never as a follow; in the control arm it is withheld and
 `would_substitute` is spooled.
+
+A dead end at the head of a pipeline is replaced the same way when every later stage only filters
+its output (`tail`, `head`, `grep`, `wc`, `cat`, `tee`, `sort`, `uniq`, with their arguments): the
+first stage is replaced, its own `2>&1` and the filters are kept byte for byte, and the plan's
+`command` is the whole new pipeline (`python3 -m unittest discover -s tests 2>&1 | tail -5` →
+`make test 2>&1 | tail -5`). The mod asks `$.tool.check` about both whole pipelines, and the
+context line names the stage replaced. Nothing else is rewritten: a list, any other redirection,
+a subshell or an expansion also runs or feeds something the replacement would change.
 
 - **Binary:** with `verdict.engine` present, the engine's comparison replaces the planner's own
   settings reading for this decision; the planner's reading stays as the fallback for hosts

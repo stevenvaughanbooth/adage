@@ -604,6 +604,14 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### The Claude Code mod
 
+- **A dead end piped into output filters is replaced too.** In run 3 every dead end hit was
+  `python3 -m unittest … 2>&1 | tail -5` (or `| head`), and nothing was replaced because only a
+  whole plain command was. When the dead end is a pipeline's first stage and every later stage only
+  filters its output (`tail`, `head`, `grep`, `wc`, `cat`, `tee`, `sort`, `uniq`), the first stage
+  is replaced and its own `2>&1` and the filters are kept byte for byte (`make test 2>&1 | tail
+  -5`). The mod asks the permission check about both whole pipelines, the context line names the
+  stage replaced, and the control arm and observe mode record `would_substitute` and change
+  nothing. A list, any other redirection, a subshell or an expansion is still left as written.
 - **A predicted call is made only where the person's permissions allow it unasked.** Before it
   yields a predicted step, the mod asks Claude Code's own permission check about each of its calls,
   as it already did before a substitution or a rewrite, and yields only when every verdict is

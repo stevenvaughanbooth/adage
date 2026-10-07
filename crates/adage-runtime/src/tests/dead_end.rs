@@ -48,7 +48,11 @@ fn a_learned_dead_end_is_substituted_only_from_a_firm_fixed_pair() {
     );
     assert!(sub(&index, "make test").is_none(), "the working command");
     assert!(sub(&index, "cd sub && python3 -m unittest").is_none(), "a list keeps what else it runs");
-    assert!(sub(&index, "python3 -m unittest | tail").is_none(), "a pipeline too");
+    assert_eq!(
+        sub(&index, "python3 -m unittest | tail").map(|s| s.command),
+        Some("make test | tail".into()),
+        "filters are kept"
+    );
     assert!(sub(&index, "ls").is_none());
 
     let one = |r: Route| unlocked(&[&track("acme/x", "desire-path", vec![r])]);
