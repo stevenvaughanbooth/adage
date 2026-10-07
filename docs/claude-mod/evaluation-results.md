@@ -902,3 +902,347 @@ Scripts and logs (`$S` the session's scratchpad directory): `$S/live-env3.sh`, `
 responses), `$S/replay3.out`, `$S/live-eval3-notes.md` (the full log); the run in
 `/tmp/adage-live3` (`state.json`, `runs/<id>/claude-debug.log`, `stream.jsonl`, the spools under
 `adage-home/sessions/`).
+
+## Run 4: the lookup at index 0, and the instinct dead end replaced (2026-10-07)
+
+The fourth pre-specified live comparison: the same 60 sessions (6 held-out tasks × 5 arms × 2,
+interleaved), after four changes since run 3: `TurnStep` in two phases, so a step the permissions
+hold back is recorded as withheld (`impl/turnstep-phases-notes.md`); the prompt's run reflex may be
+made at index 0 (`impl/index0-notes.md`); a dead end piped into output filters is replaced
+(`impl/pipeline-substitution-notes.md`); a declared instinct's dead end is replaced like a learned
+one (`impl/instinct-substitution-notes.md`). Training and learning were fresh.
+
+### Verdict
+
+**The M4 exit criterion's main measure is met, and the other two are lower only by point estimate.**
+`mod` sent 3.75 model requests per session against `adage`'s 6.17. The difference is −2.42, 95% CI
+[−3.42, −1.42], p 0.0003, p_holm 0.0033. Requests were lower on every one of the six tasks (the
+task-level sign flip is at its floor, 0.031). `hidden_passed` was 12/12 in both arms.
+`dead_end_hits` were 0.75 against 1.17 (−0.42, CI [−1.17, 0.42], p 0.28): lower, but not shown.
+Directives were 4.08 against 4.17 (p 1.0), in effect a tie. Cost fell too: $0.0531 against $0.0650
+(p 0.0006, p_holm 0.006).
+
+The mechanism ran as designed in every `mod` session, with no failed request:
+
+- the lookup was made at index 0 in 12 of 12 sessions, the chain read at index 1 in 12 of 12, and
+  the finish line in 3 sessions;
+- the instinct dead end was replaced by `make test` in the 4 sessions that wrote it as a plain
+  pipeline;
+- there was no 404, 400, retry or apology anywhere in the 60 sessions.
+
+On W-2041 and W-2043 a whole session took 2 or 3 requests: one response that edits and tests, and
+one answer. `mod-observe` was level with `adage` on every outcome (requests −0.17, p 0.82).
+
+### Pre-specification
+
+Written to `$S/live-eval4-notes.md` before any run-4 number. It holds:
+
+- the question: fewer requests than `adage`, with fewer dead-end hits and directives, at
+  `hidden_passed` not lower;
+- the inputs below, and fresh `train` and `learn`;
+- run 3's grants, made as a person in a fresh sandbox copy, with `adage delegate status --json`
+  listing the three;
+- the smoke on W-2041 in `adage` and `mod`. The `mod` run had to show five things:
+  1. its first assistant message is an `adage_lookup-work-item_…_0_0` call carrying the index-0
+     context line;
+  2. the chain read `adage_read-linked-files_…_1_0` follows at index 1;
+  3. the instinct dead end (`python3 -m unittest … 2>&1 | tail …`), if written, is replaced by
+     `make test …`, with a `pretool` `substituted` record and `dead_end_substituted` counted;
+  4. no 404, 400, API error or retry follows any predicted step;
+  5. no apology;
+- the 60-session comparison, the four `report.py` comparisons and the identity replay;
+- nothing about the arms, prompts or runner to change once numbers were seen.
+
+### Machine and inputs
+
+- As runs 1–3: the same container, `claude` 2.1.292, `DEMO_MODEL` `claude-sonnet-5-5`,
+  `DEMO_CONCURRENCY=3`, `DEMO_MAX_TURNS=30`, the same prompts. The runner passes
+  `--permission-mode default` (run 3's change; no runner change in run 4). All 74 run-4 sessions
+  have `permissionMode: default` in their init line.
+- Release binaries at `c06e27d`: `adage` sha256 `8faaa7bf9249…`, `adage-exec` `2dd83f78f5b9…`,
+  `adage-train` `797280e1eb3b…`. These are the same files as the tree's `plugin/claude-code/dist/`.
+- The plugin was frozen from `c06e27d` (`git archive c06e27d plugin/claude-code` plus the tree's
+  `dist/`) outside the repository, as `DEMO_PLUGIN_DIR`.
+- `DEMO_ROOT=/tmp/adage-live4` (new), `ADAGE_HOME=$DEMO_ROOT/adage-home`,
+  `CLAUDE_CONFIG_DIR=$DEMO_ROOT/claude-config`.
+- Spend: training $0.85, smoke $0.11, the comparison $3.83; $4.80 in all.
+
+### Training and learning
+
+`python3 demo/run.py train`: 12/12 passed, 12 distinct session ids. `python3 demo/run.py learn`:
+12 transcripts, `sessions_used 12`. `adage status`:
+
+```text
+acme-billing/learned@0.1.0 · acme-billing
+  PRIME      ◠ card-c096a008a1      5/5    lb 0.00 · forming
+  FIRE       ◠ lookup-work-item    11/12   lb 0.65
+                unaided: agents took this step unaided in 11 of 12 traces
+  PRIME      ◠ read-linked-files    5/6    lb 0.44
+                unaided: agents took this step unaided in 5 of 6 traces
+```
+
+This is run 3's shape. The lookup is FIRE, firm and `effect: observe`, with step `scripts/wi-lookup
+{item}`, so it needs no review. The reads come from 5 of 6 traces, and a procedure card is
+delivered at every treated prompt. The instincts are run 3's:
+
+- U3: 15 dead ends, among them `dead-end-95beff` (`python -m unittest`) and `dead-end-b8ac50`
+  (`python3 -m unittest`);
+- U1: `dead-end-d41b1e`;
+- U5: the finish line `finish-line-e7e809`;
+- U4.
+
+### The grants (as a person)
+
+The commands ran through `$S/person4.py`: no agent markers, no host-session variables,
+`ADAGE_ALLOW_NONINTERACTIVE=1`, `ADAGE_HOME=/tmp/adage-live4/adage-home`. They ran in a fresh
+sandbox copy (`/tmp/adage-live4/grant/acme-billing`). Every command exited 0, nothing was refused,
+and no `review approve` was needed.
+
+```sh
+adage delegate policy --max-level e2    # max level E2 · updated · automatic off · sandbox required
+adage delegate on --repo .              # with …/exec/enabled present its hooks call adage-exec
+adage review delegate acme-billing/learned lookup-work-item --predict --repo .
+    # predict · argv scripts/wi-lookup {item} · input {item} must match ^(?:W\-[0-9]{4})$
+    # effect observe (the classifier says environment) · script scripts/wi-lookup sha256 72f9277f…
+    # evidence 11 of 12 traces over 1 days
+adage review delegate acme-billing/learned read-linked-files --predict --repo .
+    # predict · argv Read {files} · effect observe (the classifier says observe) · evidence 5 of 6
+adage review delegate acme-billing/instincts finish-line-e7e809 --predict --repo .
+    # predict · argv make gen · effect regenerate · evidence 0 of 0 traces, by origin {"declared": 1}
+adage delegate status --json --repo .
+    # enabled true · predict "on" · lapsed [] · duplicates [] · grants under acme-billing: the three,
+    #   each mode predict, level e2
+```
+
+`adage-exec status --repo .` gives `Prediction grants for acme-billing: 3`. No grant covers the dead
+ends. Replacing a dead end needs no grant, only the engine's allow on both commands.
+
+### Smoke (`run.py one W-2041 <arm> --debug`)
+
+| run | requests (verified) | retries | directives | predicted | dead_end hit / substituted | hidden | cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| W-2041 adage | 6 (yes) | 0 | 5 | 0 | 2 / 0 | pass | 0.0692 |
+| W-2041 mod | 2 (yes) | 0 | 3 | 2 | 0 / 1 | pass | 0.0450 |
+
+Every pre-specified point held in the `mod` run:
+
+1. **The lookup at index 0.** The first assistant message is `msg_hook_…` with
+   `adage_lookup-work-item_<turn>_0_0`, Bash `scripts/wi-lookup W-2041`. The spool has `turn_step
+   predicted {kind: run, route: lookup-work-item}` with `predicted_at [turn, 0]`. The result
+   carries "Adage made this call in your place before your first response: it is the step the
+   learned reflex lookup-work-item, delivered with the request, names. …".
+2. **The chain read at index 1.** `adage_read-linked-files_<turn>_1_0`, Read `acme/billing.py`, with
+   the usual line.
+3. **The dead end replaced.** The model's first response holds two Edits and `python -m unittest
+   discover -s tests -t . 2>&1 | tail -5`.
+   - That command became `make test 2>&1 | tail -5` ("Ran 4 tests … OK").
+   - The `pretool` record has `checked_by: engine` and the judgement `substituted dead-end-95beff`;
+     `dead_end_substituted` is 1 and hits are 0.
+   - The context line reads "adage ran make test for you, through the rest of your pipeline as
+     written; python -m unittest discover -s tests -t . was replaced because this repository's
+     Makefile declares make test in its place …".
+   - The model's answer says "A hook replaced my test command …".
+4. **No failed request.** No `API error`, `thread_not_found` or tether line. The debug log has
+   `answered turn.step without next()` and `turn.step: a hook answered without the request` for
+   both steps.
+5. **No apology.**
+
+The model's own work was one response that edits and tests, then the answer: 2 requests against
+`adage`'s 6. The `adage` run looked the item up, read two files, edited and ran the same unittest
+pipeline (an `ACME_ENV` failure), tried `… | head -20; ls . tests`, then ran `make test`.
+
+### Results
+
+60 of 60 sessions finished; none left out, none censored; 74 distinct session ids, all as asked.
+
+| arm | n | requests (mean) | model responses (mean) | retries | cost USD (mean) | passed | hidden_passed | stale_generated | dead_end_hits hit / substituted | directives (mean) | predicted_steps | receipts_as_results | requests verified | hooks wired once |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| a0 | 12 | 7.17 | 7.17 | 0 | 0.0677 | 12/12 | 12/12 | 0/12 | 0 / 0 | 0.00 | 0 | 0 | 12/12 | 12/12 (no spool) |
+| control | 12 | 7.25 | 7.25 | 0 | 0.0687 | 12/12 | 12/12 | 0/12 | 0 / 0 | 0.00 | 0 | 0 | 12/12 | 12/12 |
+| adage | 12 | 6.17 | 6.17 | 0 | 0.0650 | 12/12 | 12/12 | 0/12 | 14 / 0 | 4.17 | 0 | 0 | 12/12 | 12/12 |
+| mod-observe | 12 | 6.00 | 6.00 | 0 | 0.0647 | 12/12 | 12/12 | 0/12 | 15 / 0 | 4.67 | 0 | 0 | 12/12 | 12/12 |
+| mod | 12 | 3.75 | 3.75 | 0 | 0.0531 | 12/12 | 12/12 | 0/12 | 9 / 4 | 4.08 | 27 | 0 | 12/12 | 12/12 |
+
+Model responses are the stream's request ids. They exclude the 27 responses the mod made: the
+`mod` transcripts hold 6.00 responses per session, 2.25 of them the mod's. `subagent_tool_calls` is
+0 everywhere. All 24 plugin-arm sessions were served by `adage-exec`.
+
+Requests per task (repeat 1, repeat 2; no retries, so these are also model responses):
+
+| task | a0 | control | adage | mod-observe | mod |
+| --- | --- | --- | --- | --- | --- |
+| W-2041 | 9, 8 | 9, 8 | 6, 6 | 7, 6 | 2, 2 |
+| W-2042 | 9, 6 | 8, 7 | 6, 8 | 6, 6 | 5, 6 |
+| W-2043 | 7, 7 | 7, 7 | 6, 7 | 7, 6 | 3, 2 |
+| W-2044 | 6, 7 | 9, 8 | 7, 7 | 7, 7 | 5, 5 |
+| W-2045 | 7, 7 | 6, 6 | 5, 7 | 5, 4 | 3, 4 |
+| W-2046 | 7, 6 | 6, 6 | 5, 4 | 5, 6 | 4, 4 |
+
+`demo/report.py` is used as in runs 1–3: task-stratified permutation p, task bootstrap 95%
+interval, Holm across the outcome metrics, mechanism counts unadjusted. Medians are used for the
+turn and time metrics, means otherwise. diff is a − b.
+
+| metric | `mod` − `a0` | `mod` − `adage` | `mod-observe` − `adage` | `adage` − `a0` |
+| --- | --- | --- | --- | --- |
+| requests | −3.42 [−4.83, −2.17] p 0.0001, p_holm 0.001 | −2.42 [−3.42, −1.42] p 0.0003, p_holm 0.003 | −0.17 [−0.92, 0.50] p 0.82, p_holm 1 | −1.00 [−1.83, −0.17] p 0.044, p_holm 0.35 |
+| cost_usd | −0.0146 [−0.0235, −0.0071] p 0.0008, p_holm 0.006 | −0.0119 [−0.0167, −0.0061] p 0.0006, p_holm 0.006 | −0.0004 [−0.0067, 0.0049] p 0.90, p_holm 1 | −0.0027 [−0.0085, 0.0024] p 0.32, p_holm 1 |
+| pass_rate | 0 (1 vs 1) | 0 | 0 | 0 |
+| hidden_pass_rate | 0 (1 vs 1) | 0 | 0 | 0 |
+| stale_generated_rate | 0 (0 vs 0) | 0 | 0 | 0 |
+| dead_end_hits | +0.75 [0.08, 1.42] p 0.029, p_holm 0.15 | −0.42 [−1.17, 0.42] p 0.28, p_holm 1 | +0.08 [−0.67, 0.58] p 1.0 | +1.17 [0.67, 1.67] p 0.0008, p_holm 0.007 |
+| total_turns | −1 [−2.5, 0] p 0.060 | −1 [−2, 0] p 0.035, p_holm 0.32 | 0 [−1, 1] p 1.0 | 0 [−1, 1] p 1.0 |
+| turns_to_first_edit | −4.5 [−5, −1] p 0.0004, p_holm 0.004 | −0.5 [−1, 2] p 0.25 | 0 [−0.5, 1.5] p 0.072 | −4 [−5, −2.5] p 0.0001, p_holm 0.001 |
+| explore_calls_before_edit | −1.5 [−3, 0] p 0.013, p_holm 0.077 | −0.5 [−1, 0] p 0.086, p_holm 0.60 | 0 [−0.5, 1] p 0.34 | −1 [−3, 0] p 0.061 |
+| time_to_first_edit_s | −7.40 [−9.19, −2.56] p 0.0001, p_holm 0.001 | −1.15 [−1.38, 2.93] p 0.58 | +0.44 [−0.15, 2.79] p 0.028, p_holm 0.31 | −6.24 [−8.41, −4.76] p 0.0001, p_holm 0.001 |
+| elapsed_s | −3.83 [−4.96, −1.23] p 0.0057, p_holm 0.040 | −2.16 [−3.65, −0.29] p 0.058, p_holm 0.46 | +1.17 [−1.19, 2.11] p 0.85 | −1.67 [−2.19, 0.03] p 0.26 |
+| directives | +4.08 [3.42, 4.75] p 0.0001 | −0.08 [−0.67, 0.50] p 1.0 | +0.50 [0.17, 0.83] p 0.25 | +4.17 [4.00, 4.50] p 0.0001 |
+| predicted_steps | +2.25 [2, 2.58] p 0.0001 | +2.25 [2, 2.58] p 0.0001 | 0 | 0 |
+| receipts_as_results | 0 | 0 | 0 | 0 |
+| dead_end_substituted | +0.33 [0, 0.67] p 0.056 | +0.33 [0, 0.67] p 0.056 | 0 | 0 |
+
+`p_tasks` (the task-level sign flip, floor 0.031 with six tasks) is 0.031 for `mod` − `adage`
+requests, 0.0625 for its cost and 0.5 for its dead-end hits. Report directories:
+`/tmp/adage-live4/results-mod-a0`, `results-mod-adage`, `results-observe`, `results-adage-a0`.
+
+### What the mod did at each step boundary (the spools)
+
+**`mod`: 27 `turn_step` records, all `predicted`.** None was withheld (no `withheld` record or log
+line). Each was yielded and none was followed by a failed request: no `API error`,
+`thread_not_found` or tether line in any of the 60 debug logs, 0 retries.
+
+- **12 × `predicted {kind: run, route: lookup-work-item}` at index 0**, one per session. The call is
+  `scripts/wi-lookup W-20xx`, made as `adage_lookup-work-item_<turn>_0_0` before the model's first
+  response. The result carries the index-0 line ("… before your first response: it is the step the
+  learned reflex lookup-work-item, delivered with the request, names …").
+- **12 × `predicted {kind: chain, route: read-linked-files}` at index 1**, with the same calls as
+  run 3:
+  - `Read acme/billing.py` (W-2041, W-2043);
+  - `Read acme/customers.py` (W-2042, W-2044);
+  - the schema and its module (W-2045, W-2046).
+
+  The usual line is on the result. With the lookup also made, these are the two steps in a row of
+  evaluation-plan §4.2. A third step is never asked (`chained`).
+- **3 × `predicted {kind: run, route: finish-line-e7e809, calls: [Bash make gen]}` at index 4**
+  (W-2045 r1, r2, W-2046 r1). Each followed a `cat Makefile; python[3] - <<'E' … E` that rewrote
+  the schema. The model then ran `make ci` itself in two of them. In W-2046 r2 the model ran the
+  generator in its own editing command, and nothing was due.
+- **4 dead ends replaced** (W-2041 r1, r2, W-2043 r1, r2):
+  - `python -m unittest discover -s tests -t . 2>&1 | tail -5` became `make test 2>&1 | tail -5`;
+  - the route was `dead-end-95beff` (U3, the bare-runner match on `python -m unittest`), with
+    `checked_by: engine` and the judgement `substituted`;
+  - the model took the replacement at its word ("A hook replaced my test command …"), and none of
+    the four retried a test command.
+- **9 dead-end hits not replaced**, all in Bash lists, which the pipeline rule never rewrites:
+  - W-2042 r1, r2 and W-2044 r1, r2, two hits each: a heredoc or `sed -i` edit followed by
+    `python -m unittest … | tail -5` in one command, then `python -m unittest … | head -20; ls .
+    tests`, then `make test` by the model;
+  - W-2046 r1, one hit: `python3 tools/gen.py; git status --short; …; python3 -m unittest discover
+    2>&1 | tail -5`.
+- **The context lines.** Both lines (index 0, and the chain's) are in all 12 `mod` transcripts. No
+  transcript in any arm has "apolog" or "sorry".
+
+**`mod-observe`.**
+
+- 24 `would_predict` records: the lookup at index 0 and the chain at index 1 in every session.
+- 5 `would_substitute … withheld` records on the same unittest pipeline (W-2041 r1, r2, W-2042 r2,
+  W-2043 r1, r2). Nothing was made or replaced, and the model ran the dead end and its retry.
+
+**`adage`, `control`, `a0`.** No `turn_step` record (the command hooks never ask for one).
+
+**Directives by route.**
+
+| route | `adage` | `mod-observe` | `mod` |
+| --- | --- | --- | --- |
+| lookup, card, reads | 12 each | 12 each | 12 each |
+| finish line | 4 | 4 | 4 |
+| `dead-end-95beff` + `ff691d` | 5 + 5 | 8 + 8 | 4 + 4 |
+| `d41b1e` | 0 | 0 | 1 |
+| total | 50 | 56 | 49 |
+
+The prompt and read directives are still delivered in `mod`, and then the calls they name are
+made. So directives fall only as far as dead-end failures fall.
+
+**Where the requests went.** In `adage` and `mod-observe` a W-2041 or W-2043 session spent six or
+seven responses in this order:
+
+1. the lookup;
+2. the reads;
+3. the edits, sometimes with the unittest pipeline;
+4. the dead end or its retry;
+5. `make test`;
+6. the answer.
+
+In `mod` the first two were made for the model and the dead end was replaced, leaving the edits
+with the test run, and the answer: 2 or 3 requests. On W-2042 and W-2044 the model still looked
+around once after the predicted read, and its tests ran inside lists, so the saving was one to
+three requests. On W-2045 and W-2046 the saving was one to three requests: the reads, and the
+finish line made after the schema edit.
+
+### Reading against the M4 exit criterion
+
+- **Runs end to end: yes.**
+  - 60/60 sessions, verified counts, one `session_start` per hook-arm session.
+  - The plugin arms are served by `adage-exec`.
+  - The mod predicted in every `mod` session, with no failed request.
+- **`requests` lower than `adage`: yes.** 3.75 against 6.17: −2.42, CI [−3.42, −1.42], p 0.0003,
+  p_holm 0.003, lower on all six tasks. This is the "requests fall by at least two" of
+  evaluation-plan §4.2, as a mean: the lookup and the read made as two steps in a row, plus the
+  replaced dead end where it was written plainly.
+- **`dead_end_hits` lower: by point estimate only.** 0.75 against 1.17 (−0.42, CI [−1.17, 0.42],
+  p 0.28). The 4 replacements took the dead end out of the two tasks where the model wrote it as a
+  plain pipeline. The remaining 9 hits are inside lists, which are never rewritten. `adage`'s 14
+  hits and `mod-observe`'s 15 show the rate without replacement.
+- **Directives lower: no meaningful difference.** 4.08 against 4.17 (p 1.0). Directives are
+  delivered whether or not the step is then made, so they fall only with the dead ends.
+- **`hidden_passed` not lower: yes** (12/12 everywhere).
+
+### Differences from run 3
+
+- **The lookup is made at index 0** in 12 of 12 `mod` sessions (run 3: 0 of 12; the index-0 rule).
+  With the chain read at index 1, the mod makes two steps in a row (run 3: one).
+- **Requests fall.** `mod` against `adage`: −2.42, p 0.0003 (run 3: 0, p 1.0).
+- **The instinct dead end is replaced** in 4 sessions (run 3: 0 of 33 hits). The dead end is the
+  same piped command; the rule now admits a declared instinct and a pipeline into output filters.
+  In this run the model wrote `python -m unittest` (U3, `dead-end-95beff`) where run 3's wrote
+  `python3 -m unittest`.
+- **`dead_end_hits` in `mod` are below `adage`'s** (0.75 against 1.17; run 3: 1.08 against 0.50,
+  higher).
+- **Hook-arm dead ends rose.** `adage` had 14 hits in 9 sessions (run 3: 6 in 4), so
+  `mod-observe` against `adage` is level on hits (+0.08; run 3: +0.67). Run 3's plugin-arm rise in
+  dead ends is not seen here.
+- **Predictions per session:** 2.25 (27), against run 3's 1.17 (14). There were 3 finish lines
+  against 2, and still no permission hold (the two-phase `withheld` record never appeared).
+- **Cost fell in `mod`** ($0.0531 against $0.0650, p 0.0006; run 3: +$0.0018, p 0.41).
+- **Learning:** the reads from 5 of 6 traces (run 3: 5 of 7), and a new procedure card id
+  (`card-c096a008a1`). The same lookup, instincts and grants.
+- New binaries (`c06e27d`), plugin (`c06e27d`), `DEMO_ROOT` and `CLAUDE_CONFIG_DIR`. The same
+  model, prompts, repeats, concurrency and runner.
+
+### Not produced (run 4)
+
+- **Receipts as results: none.** No grant runs through `adage-exec`; all three grants are predict
+  grants.
+- **A dead end replaced inside a Bash list:** never attempted, by design. These are the 9 remaining
+  hits.
+
+### §2.3 Observation changes nothing (replay)
+
+`python3 demo/replay_hooks.py demo/fixtures/hook-stream.jsonl --identity --adage target/release/adage
+--seed-home /tmp/adage-live4/adage-home --keep /tmp/adage-live4/replay` gives `identical: 9 events,
+observe mode changed nothing`. Run again with `--cwd` a fresh sandbox copy
+(`/tmp/adage-live4/replay-sandbox/acme-billing`), the replay delivers `card-c096a008a1`,
+`lookup-work-item`, `dead-end-b8ac50` and `dead-end-d41b1e`, and the two recordings are
+byte-identical (9,179 bytes each).
+
+Scripts and logs (`$S` is the session's scratchpad directory):
+
+- environment and grants: `$S/live-env4.sh`, `$S/person4.py`, `$S/grant4.sh`; `$S/grant4-a.txt`
+  and `grant4-b.txt` (status, review and the grant commands' output);
+- runs: `$S/train4.log`, `$S/learn4.log`, `$S/smoke4.log`, `$S/live-eval4.log`;
+- analysis: `$S/table4.out`, `$S/report4.out`, `$S/an4.py` with `steps4.out` and
+  `steps4-other.out` (the step boundaries, substitutions and dead-end commands), `$S/seq4.out`
+  (each treated session's responses), `$S/replay4.out`;
+- `$S/live-eval4-notes.md`, the full log.
+
+The run itself is in `/tmp/adage-live4`: `state.json`, `runs/<id>/claude-debug.log`,
+`stream.jsonl`, and the spools under `adage-home/sessions/`.
