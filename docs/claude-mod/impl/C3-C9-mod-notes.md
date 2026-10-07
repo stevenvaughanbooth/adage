@@ -99,6 +99,13 @@ with no reason (`stopReason: null`, `appendedStop`) with its `usage` kept; the s
 `stopReason: null` too (T-C8-02; live-fixes-2-notes.md §6 has why: a `tool_use` stop made the
 next request continue from the server's copy, which has no call).
 
+Either way the step is yielded only under the person's permissions (T-C4-07; live-fixes-2-notes.md
+§7): `step.ts` checks each call with `$.tool.check` (`Mod.checkTool`, `predict.ts` `heldBy`) and
+yields only when every verdict is `allow`. On `ask`, `deny` or no verdict it yields nothing, records
+nothing as predicted, forwards the request (at the finish line, the model's stop as it came), keeps
+`{ turnId, index, route, kind, isEnding, tool, decision, reason }` in `rt.withheld`, and raises the
+band's `band.withheld` line once per session.
+
 ### `noticed` on the view seam (D2 → D5)
 
 `feed.ts` reads `support`, `s_min` and `review` off a `noticed` act (`types/index.d.ts`), and
@@ -132,6 +139,7 @@ next request continue from the server's copy, which has no call).
 | T-C5-05 | the offline half in T-C5-02 (three composes, one text); L9 below |
 | T-C7-03 | `step.test.ts` "a prediction before the request" (`chain`: two Read calls, indexes 0..1, one stop, `toolUses` lists both); `register.test.ts` end to end |
 | T-C8-02 | `step.test.ts` "the finish line (ending)" |
+| T-C4-07 | `step.test.ts` "a predicted call is made only under the person's permissions" and "onStep through the engine, under the session's permission mode" (default and auto as 2.1.292 reports them, the band's line once per session); `predict.test.ts` (`permissionOf`, `heldBy`); `view/band.test.ts` (`band.withheld`'s place and words) |
 | T-C9-03 | `attach.test.ts` "T-C9-03": the note once, another tool untouched, no environment unchanged; the subagent asked after the session's own and prepended; nothing applies or the binary fails: `next(e)` |
 | T-X-01 | L2: `hooks.rs::the_mods_events_fail_open` (new), `a_panic_in_the_hook_is_recorded_without_the_payload_and_doctor_warns`, `malformed_oversized_and_unknown_payloads_produce_nothing`; L7: `call.test.ts` "T-X-02" (garbage, exit 1, cannot start, rules unreadable, a malformed final answer, inert), `attach.test.ts` (nothing, garbage, inert), the drawing deps failing (`call.test.ts` "the hook body alone") |
 | T-X-05 | L2: `hooks.rs::standing_is_answered_once_per_session_and_spools_nothing` (control: empty text), adage-runtime `routing_is_consented_and_never_in_control`, adage-hook `the_verdict_in_the_control_arm_is_withheld_and_decided_once`, `a_receipt_is_never_the_result_in_control`; L7: the withheld cases above (the mod does nothing on an empty answer) |

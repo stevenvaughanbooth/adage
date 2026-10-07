@@ -604,6 +604,21 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### The Claude Code mod
 
+- **A predicted call is made only where the person's permissions allow it unasked.** Before it
+  yields a predicted step, the mod asks Claude Code's own permission check about each of its calls,
+  as it already did before a substitution or a rewrite, and yields only when every verdict is
+  `allow`. On `ask`, `deny` or no verdict the request goes out as if nothing were predicted, and the
+  band says once per session `» adage left a step to the agent: your permissions do not allow it
+  unasked`. In `auto` mode every Bash call is the classifier's to decide, and it has no verdict for a
+  call no model request produced: live, a predicted `make gen` was denied there; it is now left to
+  the model, with no denial in the transcript, while a read an allow rule names is still taken.
+- **The harness ledger counts the session's tool calls.** The mod's note to `adage ledger note`
+  carries `tool_calls`, every main-loop call the engine ran (the model's, the predicted ones, those a
+  receipt answered; not a subagent's, not the mod's own), so a session's line no longer reads 0
+  calls when no transcript pass ran.
+- **The Bash tool's description carries the learned lookup conventions.** The mod asks `Standing`
+  with `conventions: true` and appends each sentence the binary answers ("In this repository, work
+  item details are looked up with …") after the environment note, once per session.
 - **A subagent's calls no longer arm a prediction in the main loop.** An Explore subagent's lookup
   bound the read batch, and the main loop's turn end then read the files in the main thread (live
   O0, SUB). A subagent's calls are observed and recorded, and a directive they trigger is said to

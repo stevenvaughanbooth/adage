@@ -112,6 +112,7 @@ function mod($: EngineInterface, options: Options): Mod {
     session: { id: () => $.session.id(), cwd: () => $.session.cwd(), repo: () => $.session.repo(), usage: a => $.session.usage(a), version: () => $.session.version() },
     clock: { now: () => $.clock.now(), every: (ms, fn) => $.clock.every(ms, fn), after: (ms, fn) => $.clock.after(ms, fn) },
     checkBash: async command => (await $.tool.check({ tool: 'Bash', input: { command } })).decision,
+    checkTool: (tool, input) => $.tool.check({ tool, input }),
     ui: {
       status: text => $.ui.status(text),
       toast: text => $.ui.toast(text),

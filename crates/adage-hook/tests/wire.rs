@@ -130,6 +130,16 @@ fn cases() -> Vec<(&'static str, ModAnswer)> {
                 conventions: None,
             },
         ),
+        (
+            "standing-conventions",
+            ModAnswer::Standing {
+                standing: String::new(),
+                environment: String::new(),
+                compact: adage_runtime::render::COMPACT_INSTRUCTION.into(),
+                subagent: None,
+                conventions: Some("In this repository, work item details are looked up with python3 scripts/wi-lookup {item}, where {item} is the work item the request names.".into()),
+            },
+        ),
 
         (
             "text",

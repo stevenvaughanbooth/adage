@@ -149,8 +149,12 @@ and the finish line it covers is met.
 A predicted call is not a CPU execution: the harness runs it exactly as if the model had asked
 for it, and Adage records it as its own (`adage_` tool-use ids, `by: adage` in the trace), so it is
 never counted as the agent following a reflex, never strengthens one, and is read by the learner
-as Adage's step, not the agent's. The call meets the person's permission rules as the model's
-own would: one they refuse is recorded as `refused`, never as Adage's step taken, and meets no
+as Adage's step, not the agent's. The mod makes the call only where Claude Code's own permission
+check, under the session's rules and mode, would let it run unasked: a call the rules or the mode
+would ask about or refuse is left to the model, and the request goes out as if nothing were
+predicted (in `auto` mode every Bash call goes to the mode's classifier, which has no verdict for a
+call no model request produced, so a Bash step is never taken there; reads allowed by a rule
+still are). One refused anyway is recorded as `refused`, never as Adage's step taken, and meets no
 finish line (the Stop request still asks for it). Only the main loop is predicted for: a
 subagent's calls are recorded with its id (`agent`) but bind nothing the main loop's steps are
 predicted from. Without the mod, or without a grant, nothing is predicted and the hooks behave

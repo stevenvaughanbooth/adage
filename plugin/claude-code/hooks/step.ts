@@ -4,8 +4,11 @@
 // the request goes out, on the person's routine model when the binary marks the step routine and
 // the person set one; its response is forwarded, and at an end_turn stop the binary is asked once
 // more with `ending: true` (the finish line): a prediction then keeps the model's text, appends
-// the calls, and ends the response with no stop reason. `turnStep` is the step itself over plain deps; `onStep` binds
-// it to the mod and keeps the step's usage for the ledger note.
+// the calls, and ends the response with no stop reason. Either way a prediction is made only under
+// the person's permissions: each call is checked first (`$.tool.check`, as the Bash branches do),
+// and unless every one is allowed unasked nothing is yielded and the step goes on as if nothing
+// were predicted. `turnStep` is the step itself over plain deps; `onStep` binds it to the mod,
+// keeps the step's usage for the ledger note, and keeps a step held back for the band's line.
 import type { HookStream, TurnStepChunk, TurnStepInput, TurnStepResult } from 'claude-code'
 
 import { askBinary } from './binary'
@@ -15,7 +18,8 @@ import { record } from './marks'
 import type { Mod } from './mod'
 import { quietly } from './mod'
 import type { Predicted } from './plugin'
-import { PREDICTED_STOP, appendedStop, callChunks, predictedResult, predictionOf } from './predict'
+import { PREDICTED_STOP, appendedStop, callChunks, heldBy, predictedResult, predictionOf } from './predict'
+import type { CheckCall, Held, PredictKind } from './predict'
 import { settings } from './refresh'
 import { isRecord } from './shape'
 
@@ -52,9 +56,22 @@ export type StepDeps = {
   context: () => Promise<{ sessionId: string; cwd: string }>
   /** Records a predicted step for drawing; a failure is ignored. */
   record: (p: Predicted) => Promise<void>
+  /**
+   * The person's permissions on one call now (`$.tool.check`: nothing runs, no dialog opens). A
+   * prediction is yielded only when every call's verdict is `allow`.
+   */
+  check: CheckCall
+  /** Keeps a prediction the permissions held back (nothing was yielded); a failure is ignored. */
+  withheld?: (w: Withheld) => Promise<void>
   /** The person's routine model (`runtime.routine_model`, as the binary reports it); '' when none. */
   routineModel?: string
 }
+
+/**
+ * A step the binary predicted and the person's permissions held back: which step, the route and
+ * kind, and the first call not allowed unasked with the engine's verdict and sentence on it.
+ */
+export type Withheld = { turnId: string; index: number; route: string; kind: PredictKind; isEnding: boolean } & Held
 
 /**
  * Whether a `TurnStep` answer marks the step routine (`{ routine: true }`, docs/claude-mod/impl/
@@ -103,9 +120,17 @@ export async function* turnStep(
     // A step is predicted or routed, never both; routing only changes a request that goes out.
     routed = !ending && asked.ok && isRoutine(asked.answer)
     const p = asked.ok && !deps.isObserving ? predictionOf(asked.answer) : undefined
-    if (p?.kind !== 'skill') return p
-    const skill = String(p.calls[0]?.input.skill)
-    return (await deps.hasSkill(skill).catch(() => false)) ? p : undefined
+    if (p === undefined) return undefined
+    if (p.kind === 'skill' && !(await deps.hasSkill(String(p.calls[0]?.input.skill)).catch(() => false))) return undefined
+    // §3.2: the call is made only under the person's permissions. A call they would ask about,
+    // refuse, or not answer is not yielded: the step goes on as if nothing were predicted.
+    const held = await heldBy(p.calls, deps.check)
+    if (held === undefined) return p
+    const w: Withheld = { turnId: e.turnId, index: e.index, route: p.route, kind: p.kind, isEnding: ending, ...held }
+    await Promise.resolve()
+      .then(() => deps.withheld?.(w))
+      .catch(() => undefined)
+    return undefined
   }
   const note = async (p: NonNullable<Awaited<ReturnType<typeof predicted>>>, isEnding: boolean, first: number) => {
     const ids = callChunks(p, e.turnId, e.index, first).flatMap(c => (c.kind === 'tool' ? [c.id] : []))
@@ -163,11 +188,28 @@ export async function* turnStep(
   }
 }
 
+/** The most held-back steps one load of the module keeps. */
+const MAX_WITHHELD = 20
+
+/**
+ * Keeps a step the person's permissions held back (the binary's record cannot say so yet:
+ * docs/claude-mod/impl/live-fixes-2-notes.md §7), and raises the band's line once per session: the
+ * first held-back step of a session sets it, at the prompt count it was raised at, and the band
+ * shows it until the next prompt.
+ */
+export async function keepWithheld(m: Mod, w: Withheld): Promise<void> {
+  m.rt.withheld = [...m.rt.withheld, w].slice(-MAX_WITHHELD)
+  const session = await m.session.id()
+  if (m.rt.withheldSaid?.session === session) return
+  m.rt.withheldSaid = { session, submits: (await m.state.turn.read()).submits }
+  if (m.rt.interactive) m.ui.invalidate()
+}
+
 /**
  * The hook body (`on('turn.step', …)`): a headless session reads its routine model when it first
  * could use it (off the step's path; it routes from the step after the read lands), the step runs
- * over the mod's binary and session, and a main-loop step's usage is kept for the ledger note at
- * the turn's end.
+ * over the mod's binary, session and the engine's permission check, and a main-loop step's usage
+ * is kept for the ledger note at the turn's end.
  */
 export async function* onStep(m: Mod, e: Readonly<TurnStepInput>, next: StepNext): AsyncGenerator<TurnStepChunk, TurnStepResult> {
   if (m.rt.bin !== undefined && !m.rt.interactive && !m.rt.settled && e.agentId === undefined && e.index > 0) {
@@ -187,6 +229,8 @@ export async function* onStep(m: Mod, e: Readonly<TurnStepInput>, next: StepNext
       return record(m, p)
     },
     routineModel: m.rt.routineModel,
+    check: (tool, input) => m.checkTool(tool, input),
+    withheld: w => keepWithheld(m, w),
   })
   if (m.rt.bin !== undefined && e.agentId === undefined) keepStep(m, e.model, result.usage, predicted)
   return result

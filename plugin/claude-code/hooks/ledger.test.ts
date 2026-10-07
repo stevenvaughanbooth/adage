@@ -3,9 +3,9 @@
 // sent at each main-loop turn's end through the engine.
 import { describe, expect, test } from 'claude-code/testing'
 
-import { PREDICT, STEP, TURN_END as END, drain, start, world } from './fixtures/kit'
+import { PREDICT, STEP, TURN_END as END, drain, start, wire, world } from './fixtures/kit'
 import type { World } from './fixtures/kit'
-import { MAX_STEPS, NOTED0, accrue, noteOf, stepOf } from './ledger'
+import { MAX_CALLS, MAX_STEPS, NOTED0, accrue, noteOf, stepOf } from './ledger'
 
 const USAGE = { input_tokens: 12, output_tokens: 340, cache_read_input_tokens: 51000, cache_creation_input_tokens: 900, model: 'model-b' }
 
@@ -26,14 +26,24 @@ describe('T-A4-02 · the ledger note', () => {
     const two = accrue(one, 's1', [a])
     expect(two.steps.map(s => `${s.index}${s.predicted ? 'p' : ''}`)).toEqual(['0', '1p', '2'])
     const cleared = accrue(two, 's2', [p])
-    expect(cleared).toEqual({ session: 's2', steps: [{ index: 0, ...p }] })
-    expect(accrue({ session: 's1', steps: Array.from({ length: MAX_STEPS }, (_, i) => ({ index: i, ...a })) }, 's1', [a]).steps).toHaveLength(MAX_STEPS)
+    expect(cleared).toEqual({ session: 's2', steps: [{ index: 0, ...p }], tool_calls: 0 })
+    expect(accrue({ session: 's1', tool_calls: 0, steps: Array.from({ length: MAX_STEPS }, (_, i) => ({ index: i, ...a })) }, 's1', [a]).steps).toHaveLength(MAX_STEPS)
+  })
+
+  test('O0 defect 10 · tool calls add up across turns; a /clear starts again; nonsense counts nothing; never past u32', () => {
+    const one = accrue(NOTED0, 's1', [], 3)
+    expect(one.tool_calls).toBe(3)
+    expect(accrue(one, 's1', [], 2).tool_calls).toBe(5)
+    expect(accrue(one, 's2', [], 1).tool_calls).toBe(1)
+    for (const bad of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) expect(accrue(one, 's1', [], bad).tool_calls).toBe(3)
+    expect(accrue({ ...one, tool_calls: MAX_CALLS }, 's1', [], 4).tool_calls).toBe(MAX_CALLS)
+    expect(accrue(one, 's1', []).tool_calls).toBe(3)
   })
 
   test("the note: the session, its directory, the harness and its version, the times, the steps; the engine's cost only when it keeps one", () => {
     const noted = accrue(NOTED0, 's1', [stepOf('m', null, true) ?? { model: 'm', input: 0, output: 0, cache_read: 0, cache_write: 0, predicted: true }])
     const base = { noted, cwd: '/w', version: '2.1.288', startedAt: 1, endedAt: 2 }
-    expect(noteOf({ ...base, costUsd: 0.04 })).toEqual({ session_id: 's1', repo: '/w', harness: 'claude-code', harness_version: '2.1.288', started_at: 1, ended_at: 2, steps: noted.steps, cost_usd: 0.04 })
+    expect(noteOf({ ...base, costUsd: 0.04 })).toEqual({ session_id: 's1', repo: '/w', harness: 'claude-code', harness_version: '2.1.288', started_at: 1, ended_at: 2, steps: noted.steps, tool_calls: 0, cost_usd: 0.04 })
     expect('cost_usd' in noteOf({ ...base, costUsd: undefined })).toBe(false)
     expect('cost_usd' in noteOf({ ...base, costUsd: Number.NaN })).toBe(false)
   })
@@ -68,12 +78,30 @@ describe('T-A4-02, M6 · adage ledger note at the turn end', () => {
         { index: 0, model: 'claude-x', input: 10, output: 5, cache_read: 0, cache_write: 0, predicted: false },
         { index: 1, model: 'm', input: 0, output: 0, cache_read: 0, cache_write: 0, predicted: true },
       ],
+      tool_calls: 0,
       cost_usd: 0.25,
     })
     await drain($.turn.step({ ...STEP, index: 0, turnId: 'turn-2' }))
     await $.turn.complete({ ...END, turnId: 'turn-2' } as never)
     await w.clock.settle()
     expect(notes(w).map(n => (n.note.steps as { index: number; predicted: boolean }[]).map(x => `${x.index}${x.predicted ? 'p' : ''}`))).toEqual([['0', '1p'], ['0', '1p', '2']])
+  })
+
+  test('O0 defect 10 · tool_calls: every main-loop call the engine ran, a Bash plan asked, a predicted one included; not a subagent\'s', async ($, on) => {
+    const w = world(on, { hook: { TurnStep: PREDICT, PreToolUse: JSON.stringify(wire('plan')) }, model: 'read', usage })
+    await start($, w, null, false)
+    await drain($.turn.step({ ...STEP, index: 0 }))
+    await $.tool.call({ tool: 'Bash', command: 'make test', tool_use_id: 't1' })
+    await $.tool.call({ tool: 'Read', file_path: '/w/a', tool_use_id: 't2' } as never)
+    await $.tool.call({ tool: 'Bash', command: 'make gen', tool_use_id: 'adage_regen_turn-1_2_0' })
+    await $.tool.call({ tool: 'Bash', command: 'ls', tool_use_id: 't3', agentId: 'agent-7' } as never)
+    await $.turn.complete(END as never)
+    await w.clock.settle()
+    await $.tool.call({ tool: 'Grep', pattern: 'x', tool_use_id: 't4' } as never)
+    await drain($.turn.step({ ...STEP, index: 0, turnId: 'turn-2' }))
+    await $.turn.complete({ ...END, turnId: 'turn-2' } as never)
+    await w.clock.settle()
+    expect(notes(w).map(n => n.note.tool_calls)).toEqual([3, 4])
   })
 
   test("a subagent's turn and steps are not the session's; nothing noted before a step; inert notes nothing", async ($, on) => {

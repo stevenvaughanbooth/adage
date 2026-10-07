@@ -627,6 +627,7 @@ lines of about 40 columns.
 | `band.lapsed` | `» {n} grant{s} lapsed · /adage health` | bodyColumns |
 | `band.review` | `» {n} need review · /adage review` | bodyColumns |
 | `band.kept` | `» kept for your next session · /adage review` | bodyColumns |
+| `band.withheld` | `» adage left a step to the agent: your permissions do not allow it unasked` (once per session, until the next prompt) | bodyColumns |
 | `ask.kept` | question `Kept from your last session: {summary} ({command}). Run it now?` (`{summary} (` and `)` left out for `adage on`) · answers `run it` / `drop it` | the dialog's |
 | `ask.enable` | question `Adage learned: {summary}. Tell the agent?` · answers `enable` / `not this one` / `why` | the dialog's |
 | `ask.enable.done` | toast `on: {summary}` | 1 × 40 |

@@ -18,6 +18,7 @@ import type { ToolCallResult } from 'claude-code'
 
 import { askBinary } from './binary'
 import type { Asked } from './bridge'
+import { keepCall } from './ledger'
 import { mark } from './marks'
 import type { AnswerAt, EventAt, Mod, NextAt } from './mod'
 import { madeForAgentLine } from './predict'
@@ -145,7 +146,9 @@ export async function bashCall<E extends BashCall>(e: E, next: (e: E) => Promise
  * carries the line that says whose call it was; every other call passes untouched.
  */
 export async function onPredictedCall(m: Mod, e: EventAt<'tool.call'>, next: NextAt<'tool.call'>): AnswerAt<'tool.call'> {
-  void m // the line is read from the call's id alone
+  // The ledger counts every main-loop call once: Bash's in its own hook, which a receipt may answer
+  // before this one is reached.
+  if (e.tool !== 'Bash') keepCall(m, e, next.origin)
   const line = e.tool === 'Bash' ? undefined : madeForAgentLine(e.tool_use_id)
   if (line === undefined) return next(e)
   const ran = await next(e)
@@ -257,6 +260,7 @@ async function rewrote(m: Mod, id: string, from: string, to: string): Promise<vo
  * runs only on the same verdict for both commands. Each decision keeps its marker for the row.
  */
 export async function onBashCall(m: Mod, e: EventAt<'tool.call', { tool: 'Bash' }>, next: NextAt<'tool.call', { tool: 'Bash' }>): AnswerAt<'tool.call', { tool: 'Bash' }> {
+  keepCall(m, e, next.origin)
   return bashCall(e, next, {
     isActive: m.rt.bin !== undefined,
     isObserving: m.rt.observing,

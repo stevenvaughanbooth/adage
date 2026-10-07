@@ -803,10 +803,10 @@ handlers directly and checking `$.state` and the recorded `$.ui.*` calls.
 
 ### C4 · The mod's `turn.step`
 
-- **T-C4-01 · the generator.** With a stubbed `ask` answering a prediction, the hook yields
-  exactly three chunks (`tool` with an `adage_<route>_<turn>_<index>` id, `input` with the
-  prediction's JSON, `stop` with `stopReason: 'tool_use'`) and returns `{ stopReason: 'tool_use',
-  usage: null, toolUses: [...] }` without calling `next`.
+- **T-C4-01 · the generator.** With a stubbed `ask` answering a prediction and every call
+  allowed, the hook yields exactly three chunks (`tool` with an `adage_<route>_<turn>_<index>_<k>`
+  id, `input` with the prediction's JSON, `stop` with `stopReason: null`, `usage: null`) and
+  returns `{ stopReason: null, usage: null, toolUses: [...] }` without calling `next`.
 - **T-C4-02 · forwarded.** With `ask` answering nothing or `{ ok: false }`, with `e.agentId` set,
   or with `e.index === 0`, the hook is `yield* next(e)` and asks nothing in the last two cases;
   the ask's timeout is 250 ms.
@@ -822,6 +822,16 @@ handlers directly and checking `$.state` and the recorded `$.ui.*` calls.
   shows under it, and the transcript on disk keeps the `adage_` id.
 - **T-C4-06 · L10 · end to end.** The demo's `mod` arm runs an item with one predicted step; the
   spool's `turn_step` record and the transcript agree on the id.
+- **T-C4-07 · only under the person's permissions.** Before yielding, the hook asks
+  `$.tool.check` for every call of the prediction (a chain's each read, a skill, the finish line's
+  command). Every verdict `allow`: yielded as T-C4-01. Any `ask`, `deny`, or no verdict (the check
+  throws or answers anything else): nothing is yielded or recorded as predicted, the request goes
+  out and its stream passes unchanged (at the finish line the model's `end_turn` stop too), and the
+  step, the first call not allowed, the verdict and the engine's sentence are kept. Auto mode as
+  the engine reports it (`{ decision: 'ask', reason: 'This command requires approval' }` for every
+  Bash call, `{ decision: 'allow', rule: 'Read' }` for a read an allow rule names) holds a Bash step
+  and yields a read chain. The band's attention line says once per session, until the next prompt,
+  `» adage left a step to the agent: your permissions do not allow it unasked` (`band.withheld`).
 
 ### D5 · Drawing noticed, learning and skills
 

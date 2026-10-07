@@ -350,12 +350,32 @@ export type WorldOptions = {
   /** The person's rules on a Bash command (`$.tool.check`), `allow` otherwise; `rulesFail` makes the read throw. */
   rules?: Record<string, 'allow' | 'ask' | 'deny'>
   rulesFail?: boolean
+  /**
+   * The engine's whole verdict on any tool's call (`$.tool.check`), before `rules`: a verdict as the
+   * engine reports it (`AUTO_MODE_BASH`, …), `FAIL.exit` to make the check throw, or undefined to
+   * fall through to `rules`.
+   */
+  verdict?: (tool: string, input: Record<string, unknown>) => { decision: 'allow' | 'ask' | 'deny'; reason?: string; rule?: string } | typeof FAIL.exit | undefined
   /** The Bash tool beneath prints `ran <command>` (else `ok`). */
   echo?: boolean
 }
 
 /** The ways `answer` makes a run fail: a non-zero exit, or a run that cannot start. */
 export const FAIL = { exit: Symbol('exit 1'), start: Symbol('cannot start') } as const
+
+/**
+ * `$.tool.check`'s answers as Claude Code 2.1.292 gave them live (`-p`, `--allowedTools Bash Read
+ * …`; docs/claude-mod/impl/live-fixes-2-notes.md §7). In `default` mode the allow rule decides
+ * (`{ decision: 'allow', rule: 'Bash' }`). In `auto` mode the broad `Bash` rule is set aside and
+ * every Bash call is put to the classifier, which a check never asks: `ask` with the engine's
+ * sentence and no rule. That is the "no verdict" a yielded call met there. A Read stays allowed by
+ * its rule in both; a Skill not in the allowed tools is `ask` in both.
+ */
+export const DEFAULT_MODE_BASH = { decision: 'allow', rule: 'Bash' } as const
+export const AUTO_MODE_BASH = { decision: 'ask', reason: 'This command requires approval' } as const
+export const AUTO_MODE_BASH_UNLISTED = { decision: 'ask', reason: "Claude requested permissions to use Bash, but you haven't granted it yet." } as const
+export const READ_ALLOWED = { decision: 'allow', rule: 'Read' } as const
+export const SKILL_ASKED = (skill: string) => ({ decision: 'ask', reason: `Execute skill: ${skill}` }) as const
 
 /** The engine's own system prompt beneath (`prompt.compose`), and the Bash tool's description (`tool.describe`). */
 export const SECTIONS = [
@@ -533,8 +553,12 @@ export function world(on: On, o: WorldOptions = {}): World {
     return next(e)
   })
   on('tool.check', ($, e) => {
-    const command = (e.input as { command: string }).command
-    w.checked.push(command)
+    const input = (isRecord(e.input) ? e.input : {}) as Record<string, unknown>
+    const command = typeof input.command === 'string' ? input.command : ''
+    w.checked.push(e.tool === 'Bash' ? command : `${e.tool} ${JSON.stringify(input)}`)
+    const said = o.verdict?.(e.tool, input)
+    if (typeof said === 'symbol') throw new Error('no verdict')
+    if (said !== undefined) return said
     if (o.rulesFail) throw new Error('no rules')
     return { decision: o.rules?.[command] ?? 'allow' }
   })
@@ -879,6 +903,8 @@ export type FakeOptions = {
   /** The dialog's answer to each question (undefined: dismissed). */
   ask?: (question: string, answers: readonly string[]) => string | undefined
   rules?: Record<string, string>
+  /** The engine's whole verdict on any tool's call (`checkTool`), before `rules`; see `WorldOptions.verdict`. */
+  verdict?: (tool: string, input: Record<string, unknown>) => unknown
   commands?: readonly string[]
   copies?: boolean
   state?: Partial<AdageState>
@@ -978,6 +1004,11 @@ export function fake(o: FakeOptions = {}): Fake {
     },
     clock: { now: async () => now, every: ms => timer('every', ms), after: ms => timer('after', ms) },
     checkBash: async command => o.rules?.[command] ?? 'allow',
+    checkTool: async (tool, input) => {
+      const said = o.verdict?.(tool, input)
+      if (typeof said === 'symbol') throw new Error('no verdict')
+      return said ?? { decision: tool === 'Bash' ? (o.rules?.[String(input.command)] ?? 'allow') : 'allow' }
+    },
     ui: {
       status: text => void f.statuses.push(text),
       toast: text => void f.toasts.push(text),

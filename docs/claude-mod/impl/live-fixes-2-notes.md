@@ -450,3 +450,241 @@ that: the act is never counted as the agent's.
 - `node scripts/check-plugin.mjs`: ok.
 - `tsc` strict (`noUncheckedIndexedAccess`) over `hooks/**/*.ts`, the fixtures included, against
   both the 2.1.288 and 2.1.292 declarations: clean.
+
+## 7. A predicted call only under the person's permissions (the coordinator's decision)
+
+**What was wrong.** §6's first *before* run started in `auto` mode, and Claude Code denied the
+predicted `make gen`: "The server-side auto mode classifier gave no verdict for Bash: the request
+that produced this action did not ask for one". The mod yielded every prediction the binary
+answered and left the permission decision to whatever met the call. Under a mode whose decider
+cannot judge a call no model request produced, that is a denial in the transcript, a model told to
+"issue the action again", and a finish line counted as Adage's step.
+
+**What the engine reports (2.1.292, probed live).** A probe plugin called `$.tool.check` at the
+first step of a `-p` session with `--allowedTools Bash Read Edit Write Glob Grep LS MultiEdit`, as
+`demo/run.py` passes them:
+
+| call | `--permission-mode default` | `--permission-mode auto` |
+| --- | --- | --- |
+| Bash `make gen` | `{ decision: 'allow', rule: 'Bash' }` | `{ decision: 'ask', reason: 'This command requires approval' }` |
+| Bash `ls` | `{ decision: 'allow', rule: 'Bash' }` | `{ decision: 'ask', reason: "Claude requested permissions to use Bash, but you haven't granted it yet." }` |
+| Bash `python3 scripts/wi-lookup W-2041` | `{ decision: 'allow', rule: 'Bash' }` | `{ decision: 'ask', reason: 'This command requires approval' }` |
+| Read a file in the sandbox | `{ decision: 'allow', rule: 'Read' }` | `{ decision: 'allow', rule: 'Read' }` |
+| Skill `x` | `{ decision: 'ask', reason: 'Execute skill: x' }` | the same |
+
+So auto mode's "no verdict" is, as the check reports it, an `ask` with the engine's sentence and no
+rule: auto mode sets the broad `Bash` allow rule aside and puts every Bash call to its classifier,
+which `$.tool.check` never asks. The kit carries these shapes as `DEFAULT_MODE_BASH`,
+`AUTO_MODE_BASH`, `AUTO_MODE_BASH_UNLISTED`, `READ_ALLOWED` and `SKILL_ASKED`.
+
+**Fix (`hooks/predict.ts`, `hooks/step.ts`).**
+
+- `predict.ts`: `permissionOf(answer)` reads a check's answer into `{ decision: 'allow' | 'ask' |
+  'deny' | 'none', reason }` (anything malformed, or a check that fails, is `none`).
+  `heldBy(calls, check)` checks every call of a prediction at once and returns the first call, in
+  order, not allowed (`{ tool, decision, reason }`), or undefined when every verdict is `allow`.
+- `step.ts`: after the binary's answer and the skill check, before the request and at the finish
+  line alike, `turnStep` calls `heldBy` with `deps.check`. Only `undefined` yields. Otherwise the
+  step is forwarded exactly as when nothing is predicted: the request goes out (on the routine
+  model if the binary marked it routine), the stream passes unchanged, the finish line's `end_turn`
+  stop is the model's own, nothing is recorded as predicted, the ledger's step is the model's. The
+  held step is handed to `deps.withheld` as `Withheld = { turnId, index, route, kind, isEnding,
+  tool, decision, reason }`.
+- `onStep` binds `check` to the new `Mod.checkTool` (`register.ts`: `$.tool.check({ tool, input })`,
+  the same call `checkBash` makes) and `withheld` to `keepWithheld`, which keeps the latest 20 in
+  `rt.withheld` and raises the band's line once per session id (`rt.withheldSaid = { session,
+  submits }`).
+- The band (`view/band.ts`, `draw/sites.ts`): `band.withheld`, `» adage left a step to the agent:
+  your permissions do not allow it unasked`, the attention line after a lapsed grant and a problem
+  and before an answer kept, review waiting, an update and the version. It shows from the held step
+  until the next prompt, in the session that held it. No `grant`, `predict` or strength word.
+
+The check runs only when the binary predicted something (a prediction is rare; the check runs in
+the engine and executes nothing), so a step with nothing predicted costs nothing more.
+
+**Contract changes.** T-C4-01 now states the null stop and the `_<k>` id; T-C4-07 is new
+(`test-plan.md`); plan C4 names the check and T-C4-07; `C3-C9-mod-notes.md` (chains and the finish
+line, the tests table); `architecture.md` §3.2's **Model** bullet (a call the rules or mode would
+put to a decider is left to the model); `ux-design.md`'s string table (`band.withheld`);
+`docs/how-it-works.md`'s predicted-call paragraph.
+
+**What the binary records today, and the request to the runtime owner.** The `TurnStep` path has no
+verdict phase: the binary commits the prediction when it answers (`predict_step`: `predictions += 1`,
+`last_step_predicted`, `chained`, `predicted_routes`, `predicted_at`) and spools `turn_step` with
+`decision.predicted`. When the mod then holds the step back, that record says predicted, the step
+counts against `runtime.predict_cap`, the route is not offered again this session, and the step is
+not routed. Live (below), `fl-auto`'s spool holds `turn_step {predicted: regen-after-schema,
+predicted_at: [turn, 2]}` though nothing was yielded. The mod keeps the reason locally
+(`rt.withheld`) until the binary can take it. The exact request, mirroring `PreToolUse`'s phases:
+
+1. `TurnStep` with `"dry_run": true`: decide as now under the state lock, but commit nothing and
+   spool nothing; answer `{ "predict": … }`, `{ "routine": true }` or `{}` exactly as today.
+2. Only after a `predict` answer, one more `TurnStep` with the same fields and `"verdict"`:
+   - `{ "permission": "allow" }`: decide again and commit as today; spool `turn_step` with
+     `predicted`; answer `{ "predict": … }`. The mod yields only if it names the same route and
+     calls as the dry run.
+   - `{ "permission": "ask" | "deny" | "none", "tool": "Bash", "reason": "This command requires
+     approval" }`: decide again; spool `turn_step` with `would_predict`, `"withheld": "permission"`
+     and `"permission": { "decision", "tool", "reason" }`; leave `predictions`,
+     `last_step_predicted`, `chained` and `predicted_at` untouched (the step does not count against
+     the cap and the next step is not "in a row"); add the route to a new
+     `SessionState::withheld_routes` (rebuilt from the `withheld` records) so it is not offered again
+     this session; route the step as when nothing is predicted (`would_route`, `routine`); answer
+     `{}` or `{ "routine": true }`.
+3. A payload with neither field behaves as today, so a mod without the phases is recorded as
+   before. The control arm and observe mode answer the dry run `{}` and never see a verdict.
+
+With that, `step.ts` sends the dry run in place of today's ask and the verdict after `heldBy`;
+`StepDeps.withheld` stays the local record for the band.
+
+**Kit tests (`claude plugin test`, 2.1.288).**
+
+- `step.test.ts` "T-C4-07 · a predicted call is made only under the person's permissions":
+  allow on every call (each call checked once, yielded, recorded); ask, deny, a throwing check, a
+  malformed answer and no answer (forwarded, the model's stream unchanged, nothing recorded, the
+  `Withheld` kept with the verdict and sentence); the finish line held (the model's `end_turn` stop
+  as it came); one read of a chain denied holds the whole step and names that read; a listed skill
+  the engine asks about is held; auto mode's shapes (Bash held, a Read chain yielded, default
+  mode's allow yields); a check that throws synchronously; a keeper that throws changes nothing.
+- `step.test.ts` "T-C4-07 · onStep through the engine": default mode yields after one check of
+  `make gen`; auto mode yields nothing, keeps nothing as predicted, makes the request and runs no
+  call; a check the engine cannot answer forwards; the band's line once per session, gone after
+  the next prompt and not raised again by a second held step.
+- `predict.test.ts` (`permissionOf`, `heldBy`) and `view/band.test.ts` (`band.withheld`'s place,
+  its ASCII form, no banned words).
+- The kit's `tool.check` fake takes `verdict(tool, input)` (any tool, a whole verdict, or
+  `FAIL.exit` to throw) before `rules`; `checked` lists a non-Bash call as `<tool> <input JSON>`.
+  The fake `Mod` has `checkTool`, with the same option.
+
+**Live proof.** `$S/wd-live/one.py <out> <plugin-src> <home> <mode> <w2041|fl>` runs one session
+the way `demo/run.py one … mod` does, in a directory of its own, with:
+
+- a COPY of the home: `/tmp/adage-live2/adage-home` for W-2041, `$S/o0n/home-FL` for the finish
+  line;
+- a fresh `CLAUDE_CONFIG_DIR`;
+- a copy of the plugin source taken after this change (`$S/wd-live/src2`), plus the repository's
+  `plugin/claude-code/dist`, with its two binaries replaced by `target/release`'s and
+  `SHA256SUMS` rewritten;
+- `CLAUDE_PLUGIN_DATA` set by `run.arm_invocation`;
+- a generated sandbox;
+- `--permission-mode <mode>`, `--allowedTools` as `demo/run.py` passes them.
+
+Claude Code was 2.1.292. `$S/wd-live/count.py` counts, and `$S/wd-live/spool.py` reads the spool's
+`turn_step` and `stop` records. Nothing under `/tmp/adage-live*` was written. The runs with the
+whole change (`*2`):
+
+| run | mode | requests | predicted (yielded) | `adage_` calls, result | denials / classifier lines | Stop blocks | result | `turn_step` record |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| w-default2 | default | 5 | 1 | Read `acme/billing.py`, ok | 0 / 0 | 0 | success, W-2041 passed | predicted `read-linked-files` |
+| w-auto2 | auto | 3 | 1 | Read `acme/billing.py`, ok | 0 / 0 | 0 | success, W-2041 passed | predicted `read-linked-files` |
+| fl-default2 | default | 4 | 1 (finish line) | Bash `make gen`, ok | 0 / 0 | 0 | success | predicted `regen-after-schema` |
+| fl-auto2 | auto | 4 | 0 | none | 0 / 0 | 1 | success | predicted `regen-after-schema` (the binary's record; nothing was yielded) |
+
+A first round on the plugin with the permission gate alone (`w-default`, `w-auto`, `fl-default`,
+`fl-auto`) gave the same picture: W-2041 passed in both modes with the read predicted, `make gen`
+predicted in default, held in auto with no denial.
+
+- **W-2041.** The chain the binary predicts for W-2041 here is the lookup's read
+  (`read-linked-files`, one Read of `acme/billing.py`). The lookup itself is the model's call, as in
+  live run 2. A Read is allowed by its rule in both modes, so the step is yielded in auto mode too,
+  and it ran (as in `live3/after*`, which ran in auto). The brief expected nothing yielded in auto
+  mode for W-2041. That holds only for a Bash step: the check allows this one, so the gate yields
+  it, by design. The step held in auto mode is the finish line's `make gen` (`fl-auto`).
+- **Finish line in auto mode.** Nothing was yielded. The model's response and its `end_turn` passed
+  as they came, and no transcript row denies anything (0 `is_error` results, 0 classifier lines).
+  The Stop gate then asked once, as it does without a prediction (the obligation is unmet). The
+  model declined, quoting the prompt's "do not run anything", and the session ended `success`. In
+  default mode `make gen` was predicted at the finish line and ran (`is_error: false`), as in §6.
+- **The binary's record.** In `fl-auto` the spool says `predicted` for a step the mod held back (the
+  request above).
+
+**Files touched (this section).**
+
+- `plugin/claude-code/hooks/predict.ts`: `Permission`, `Held`, `CheckCall`, `permissionOf`,
+  `heldBy`.
+- `plugin/claude-code/hooks/step.ts`: `StepDeps.check` and `withheld`, `Withheld`, the gate in
+  `predicted`, `keepWithheld`, `onStep`'s wiring.
+- `plugin/claude-code/hooks/mod.ts`: `Caps.checkTool`, `Runtime.withheld` and `withheldSaid`.
+- `plugin/claude-code/hooks/register.ts`: `checkTool`, one line. VALIDATE.txt is unchanged, since
+  `tool.check` was already called.
+- `plugin/claude-code/hooks/view/band.ts`: `withheld`, `withheldLine`.
+- `plugin/claude-code/hooks/draw/sites.ts`: the band's `withheld` input.
+- `plugin/claude-code/hooks/fixtures/kit.ts`: `verdict` on the world and the fake, the
+  engine-reported shapes, `checkTool`.
+- `step.test.ts`, `predict.test.ts`, `view/band.test.ts`.
+- `docs/claude-mod/test-plan.md`, `implementation-plan.md`, `architecture.md`, `ux-design.md`,
+  `impl/C3-C9-mod-notes.md`; `docs/how-it-works.md`; `CHANGELOG.md`.
+
+## 8. The ledger's tool calls and the lookup conventions (the mod halves of O0-fixes-notes.md §8, §6)
+
+**`tool_calls` (O0 §8).** `ledger.ts`:
+
+- `Noted` carries `tool_calls`.
+- `accrue(noted, session, turn, calls = 0)` adds the turn's calls. Another session starts again; a
+  count that is not a non-negative safe integer adds nothing; the total stops at `MAX_CALLS`
+  (u32::MAX, the binary's bound).
+- `Note` carries `tool_calls` and `noteOf` sets it.
+- `keepCall(m, e, origin)` counts a call when it is on the main loop (`agentId` absent) and the
+  engine raised it (`next.origin.plugin === 'engine'`: the model's calls and the yielded predicted
+  ones; never the mod's own `$.ui.ask`).
+
+`call.ts` calls `keepCall` in `onBashCall`, before anything decides, so a call a receipt answers is
+counted, and in `onPredictedCall` for every other tool. `noteLedger` takes and clears
+`rt.turnCalls` (`mod.ts`) at each main-loop turn end.
+
+The note's stdin gains `"tool_calls": n`, which a63bc2b's `harness_ledger.rs` reads.
+
+Tests (`ledger.test.ts`):
+
+- `accrue`'s counts across turns, a /clear, nonsense counts and the bound;
+- the note's `tool_calls`;
+- through the engine: three main-loop calls, one of them an `adage_` call, and one subagent call
+  give `3`; a call in the next turn gives `4`.
+
+Live (the `*2` runs above), the ledger's line for each session says `tool_calls` 6, 4, 3 and 2.
+Those are the calls each transcript lists, predicted ones included. In the first round, without this
+change, the W-2041 default session's line read 0.
+
+**Lookup conventions (O0 §6).** `attach.ts`:
+
+- The session's `Standing` ask carries `conventions: true`. A subagent's ask does not.
+- `Standing` gains `conventions`, which `standingOf` reads.
+- The Bash description's note is `describedNote`: the environment note, then the conventions,
+  joined by a blank line, appended once.
+
+The wire case `standing-conventions` was added to `crates/adage-hook/tests/wire.rs` as the notes
+give it. It was blessed into `crates/adage-hook/tests/wire/standing-conventions.json`, and
+`node scripts/check-plugin.mjs --wire` regenerated `hooks/fixtures/wire.ts`.
+
+`attach.test.ts`:
+
+- the payloads now carry `conventions: true`;
+- "the lookup conventions follow the environment note on the Bash tool, once; the session asks for
+  them, a subagent does not";
+- "standing-conventions.json alone";
+- `standingOf`'s fourth part.
+
+Live, the release binary answers the mod's ask with `"conventions": ""` for these homes. Asked by
+hand, both release and debug answer it, but neither home holds a learned lookup prompt route at
+full strength. So the Bash description was unchanged in these runs; the kit tests cover the
+placement.
+
+**Files touched (this section).**
+
+- `plugin/claude-code/hooks/ledger.ts`, `call.ts`, `mod.ts`, `attach.ts`.
+- `ledger.test.ts`, `attach.test.ts`, `fixtures/wire.ts`.
+- `crates/adage-hook/tests/wire.rs`: one case, in another agent's crate, at the coordinator's
+  request.
+- `crates/adage-hook/tests/wire/standing-conventions.json`: new.
+
+**Commands (§7 and §8).**
+
+- `claude plugin test plugin/claude-code` with the pinned 2.1.288 CLI: 409 pass, 0 fail.
+- `claude plugin validate --strict plugin/claude-code` and `claude plugin validate --strict .`:
+  passed.
+- `plugin/claude-code/VALIDATE.txt` was regenerated as CI diffs it. It is identical, so unchanged.
+- `node scripts/check-plugin.mjs`: ok. Its `--wire` mode regenerated `wire.ts`.
+- `ADAGE_BLESS=1 cargo test -p adage-hook --test wire`, then without the variable: 2 pass.
+- `tsc` strict (`noUncheckedIndexedAccess`) over `hooks/**/*.ts(x)`, the fixtures included, against
+  both the 2.1.288 and 2.1.292 declarations: clean.
+- `cargo build -p adage-cli -p adage-exec --bins` (debug) was run only to ask `Standing` by hand.

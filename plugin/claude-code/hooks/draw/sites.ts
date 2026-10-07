@@ -135,6 +135,7 @@ export async function onAbovePrompt(m: Mod, e: EventAt<'ui.render', { component:
     kept: m.rt.kept,
     noticed: m.rt.noticed,
     paneOpen: m.rt.paneOpen,
+    withheld: m.rt.withheldSaid !== undefined && m.rt.withheldSaid.submits === turn.submits && m.rt.withheldSaid.session === (await m.session.id()),
   })
   return b === undefined ? next(e) : bandTree(m.ui.resolve(e), b, mode.ascii ? '-' : '·')
 }

@@ -1,5 +1,6 @@
-// Pure: a `TurnStep` answer to the calls it predicts, and those calls to `turn.step` chunks. The
-// binary decides what to predict (§6 invariant 1); this file only checks the answer's shape, so a
+// Pure: a `TurnStep` answer to the calls it predicts, those calls to `turn.step` chunks, and the
+// engine's verdicts on them. The binary decides what to predict (§6 invariant 1) and the person's
+// permissions whether it is made (invariant 3); this file only checks the answer's shape, so a
 // malformed answer is "nothing" and the request goes out.
 import type { TurnStepChunk, TurnStepResult, TurnStepStopChunk } from 'claude-code'
 
@@ -122,6 +123,46 @@ export const PREDICTED_STOP: TurnStepChunk = { kind: 'stop', stopReason: null, u
  */
 export function appendedStop(stop: TurnStepStopChunk): TurnStepStopChunk {
   return { ...stop, stopReason: null }
+}
+
+/**
+ * The engine's verdict on a call as `$.tool.check` reports it, read: `allow`, `ask` or `deny`,
+ * or `none` when the check failed or answered anything else. `reason` is the engine's sentence,
+ * '' when it gave none.
+ */
+export type Permission = { decision: 'allow' | 'ask' | 'deny' | 'none'; reason: string }
+
+/** A predicted call the person's permissions do not let run unasked, and what they said of it. */
+export type Held = { tool: string; decision: 'ask' | 'deny' | 'none'; reason: string }
+
+/** The engine's check as the step is handed it: a tool and its input, nothing run. */
+export type CheckCall = (tool: string, input: Record<string, unknown>) => Promise<unknown>
+
+/** A `$.tool.check` answer read into a `Permission`; anything malformed is `none`. */
+export function permissionOf(v: unknown): Permission {
+  if (!isRecord(v)) return { decision: 'none', reason: '' }
+  const d = v.decision
+  const decision = d === 'allow' || d === 'ask' || d === 'deny' ? d : 'none'
+  return { decision, reason: typeof v.reason === 'string' ? v.reason : '' }
+}
+
+/**
+ * The first of a prediction's calls, in order, that the person's permissions do not allow
+ * unasked, or undefined when they allow every one (docs/claude-mod/architecture.md §3.2: a
+ * predicted call is made only under the person's rules and mode). Each call is checked as the
+ * engine decides it now, nothing run. Only `allow` lets the step be yielded: an `ask` goes to the
+ * mode's decider, and there a call no model request produced is refused headless and gets no
+ * verdict from auto mode's classifier (live, "the auto mode classifier gave no verdict"; in auto
+ * mode the check answers `ask` for every Bash call). A check that fails is no verdict.
+ */
+export async function heldBy(calls: readonly PredictedCall[], check: CheckCall): Promise<Held | undefined> {
+  const none = (): Permission => ({ decision: 'none', reason: '' })
+  const verdicts = await Promise.all(calls.map(c => Promise.resolve().then(() => check(c.tool, c.input)).then(permissionOf, none)))
+  const k = verdicts.findIndex(v => v.decision !== 'allow')
+  const v = verdicts[k]
+  const call = calls[k]
+  if (v === undefined || call === undefined || v.decision === 'allow') return undefined
+  return { tool: call.tool, decision: v.decision, reason: v.reason }
 }
 
 /** The step's result for a response made wholly of the predicted calls (no request was made). */

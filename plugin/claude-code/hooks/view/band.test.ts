@@ -5,14 +5,14 @@ import { describe, expect, test } from 'claude-code/testing'
 import { GRAPH, LINE, rowsOf as rows } from '../fixtures/kit'
 import type { Fired, Health } from '../plugin'
 import { reflexesOf } from '../reads'
-import { band, firedThisSession, newer, updateLine, versionLine } from './band'
+import { band, firedThisSession, newer, updateLine, versionLine, withheldLine } from './band'
 import type { BandInput } from './band'
 import { markText, promptLines } from './lines'
 
 const REFLEXES = reflexesOf(GRAPH)
 const fired = (route: string, prompt = 1): Fired => ({ event: 'UserPromptSubmit', route, track: 'acme/learned@1', kind: 'run', strength: 'fire', prompt, promptText: 'fix W-2042' })
 const HEALTHY: Health = { lights: [], word: 'healthy', lamp: 'fire', check: null, off: false }
-const BASE: BandInput = { active: true, nobinary: '', paused: false, health: HEALTHY, inRepo: true, reflexes: 0, steps: 0, reused: 0, learner: null, now: 0, lapsed: 0, review: 0, update: null, versionLine: '', columns: 160, ascii: false, kept: 0, noticed: 0, paneOpen: false }
+const BASE: BandInput = { active: true, nobinary: '', paused: false, health: HEALTHY, inRepo: true, reflexes: 0, steps: 0, reused: 0, learner: null, now: 0, lapsed: 0, review: 0, update: null, versionLine: '', columns: 160, ascii: false, kept: 0, noticed: 0, paneOpen: false, withheld: false }
 const line1 = (i: BandInput) => {
   const b = band(i)
   return b === undefined ? undefined : b.cells.map(c => (c.glyph ? `${c.glyph} ${c.text}` : c.text)).join(' · ').replace('adage · ', 'adage  ')
@@ -110,6 +110,17 @@ describe('T-B2-07 … T-B2-09 · the band', () => {
     expect(band({ ...BASE, kept: 1, review: 2 })?.second).toBe('» kept for your next session · /adage review')
     expect(line1({ ...BASE, noticed: 2 })).toBe('◠ adage  ● healthy · 2 patterns noticed')
     expect(band({ ...BASE, noticed: 2, paneOpen: true })).toBeUndefined()
+  })
+
+  test('T-C4-07 · band.withheld: why a step was left to the agent, after a problem and before what waits; plain words', () => {
+    const problem: Health = { ...HEALTHY, word: 'problem', lamp: 'inhibit', check: 'hook latency' }
+    const said = '» adage left a step to the agent: your permissions do not allow it unasked'
+    expect(band({ ...BASE, withheld: true })?.second).toBe(said)
+    expect(band({ ...BASE, withheld: true, kept: 1, review: 2 })?.second).toBe(said)
+    expect(band({ ...BASE, withheld: true, health: problem })?.second).toBe('» problem: hook latency · /adage health')
+    expect(band({ ...BASE, withheld: true, lapsed: 1 })?.second).toBe('» 1 grant lapsed · /adage health')
+    expect(withheldLine(true)).toBe('>> adage left a step to the agent: your permissions do not allow it unasked')
+    expect(said).not.toMatch(/\b(predict\w*|grant\w*|fire|prime|inhibit|approval|saved)\b/i)
   })
 
   test('T-B2-08, §9.6 · versions: a newer harness, and not', () => {

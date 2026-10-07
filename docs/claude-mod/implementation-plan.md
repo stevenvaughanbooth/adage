@@ -839,14 +839,16 @@ Needs S9 Q1, Q2 (Layer 1), Q3 and Q6 to have passed. Every chunk here ships behi
 - **Files.** `hooks/decide.ts` (`turn.step` generator per mod architecture §3.2: main loop only,
   `index > 0`, ask `TurnStep` with a 250 ms timeout, yield `tool`/`input`/`stop`, return the
   result; a `Skill` prediction yields the `Skill` tool with `{ skill, args? }` and checks
-  `$.command.list()` lists the skill first; `routine` → `next({ ...e, model, effort })` only when
-  `routine_model` is set); `hooks/draw/rows.tsx` (the "chose this step" marker keyed by the
+  `$.command.list()` lists the skill first; every call of a prediction is checked with
+  `$.tool.check` first and the step is yielded only when every verdict is `allow`, else forwarded
+  as if nothing were predicted and the reason kept for the band; `routine` →
+  `next({ ...e, model, effort })` only when `routine_model` is set); `hooks/draw/rows.tsx` (the "chose this step" marker keyed by the
   `adage_` id); `crates/adage-sim/src/claude.rs` (`turn_step_hook`, `pretool_hook`,
   `standing_hook`), `scenario.rs:417 Replay` (`predict` and `pretool` expectations per turn),
   `crates/adage-cli/tests/harness_sim.rs:193 replay_claude` (a prediction at the schema-edit turn
   under `adage-exec` with the grant, nothing in control, nothing without the grant, nothing from
   `adage`; `check_graph` counts `predicted`); `cargo run -p adage-sim` regenerates fixtures.
-- **Tests.** T-C4-01 … T-C4-06.
+- **Tests.** T-C4-01 … T-C4-07.
 - **Acceptance.** S9 Q9's criteria in a live session (10 of 10 runs, the permission dialog met
   for a predicted call, the `adage_` id preserved in the transcript on disk); the sim passes in
   both arms; `claude plugin test` covers the generator with a stubbed `ask`; with the binary

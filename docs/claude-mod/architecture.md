@@ -438,7 +438,10 @@ on('turn.step', async function* ($, e, next) {
 - **Model:** its next request carries an assistant turn with a tool call it did not write, and the
   tool's result. That is the API's prefill shape; models carry on from it. The call itself ran
   through every `tool.call` hook, the plugin's `PreToolUse` command hook, the person's permission
-  rules and dialog, and the tool. Adage's grant decides whether to predict; Claude Code's
+  rules, and the tool. Before yielding, the mod asks `$.tool.check` for each call and yields only
+  when every verdict is `allow`: a call the rules or the mode would put to a decider (a dialog, a
+  headless refusal, auto mode's classifier, which has no verdict for a call no model request
+  produced) is left to the model, and the request goes out as if nothing were predicted. Adage's grant decides whether to predict; Claude Code's
   permissions decide whether it runs. **This is a third execution path**, beside E1 and E2:
   nothing runs in the hook, the E2 sandbox and journal are not involved, the call is the agent's
   own Bash under the person's permission mode. Q9 must show the engine applies permission rules
