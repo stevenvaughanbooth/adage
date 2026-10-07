@@ -736,6 +736,62 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   in CI with the pinned dist, fails while those disagree or `release.yml` is not what dist
   generates. Homebrew is off the release until macOS signing exists, so a missing tap token can
   never fail a tag. `docs/release.md` is the procedure and the first release's checklist.
+- **Adage knows when a newer version is out, and no hook asks.** `adage update --check` (and the
+  background learner, at most once a day after it conditions a repository) asks the npm registry,
+  then GitHub's latest release when the package is not published, with one 3-second request that
+  sends nothing but itself, and caches the answer or the failure (`offline`, `blocked`, `tls`,
+  `timeout`, `unavailable`) in `$ADAGE_HOME/cache/latest.json` for a day; `update.check = off`,
+  `ADAGE_UPDATE_CHECK=0` or `ADAGE_OFFLINE=1` stop it. A test runs every hook event against a
+  server that counts requests: zero. `adage --json` carries an `update` object (`current`,
+  `latest`, `channel`, `next`, `text`) when a newer release is known.
+- **`adage update` is a transaction with a way back.** It checks first (`… is the latest ·
+  nothing to do` runs nothing), keeps the running binaries in `$ADAGE_HOME/previous/<version>/`,
+  runs the channel's command with the version pinned (`npm install --global
+  @adage-sh/cli@0.2.0`, `cargo install … --tag v0.2.0`, the release installer and its two
+  companions; never `@latest`), verifies that the new binary answers that version (and its
+  SHA-256 against the release's `SHA256SUMS` when one is published), then lets the new binary
+  re-point the hook registrations that moved (each diff shown, the previous file kept as
+  `.adage-bak`, only at a terminal), stage the local Claude Code plugin again and print doctor's
+  summary. A failed step stops and names `adage update --rollback`, which puts the kept binaries
+  back byte for byte. From the plugin's own binary it runs `claude plugin update`, or prints the
+  `/plugin` steps.
+- **Two installed versions never diverge silently.** Doctor's new `versions` check warns when
+  `PATH`'s adage, the plugin's and the binaries hook registrations run answer different versions,
+  with `adage update` as the fix; the plugin check compares versions before digests, so two builds
+  of one release are fine and only a `--plugin-dir` checkout is sent to `plugin/build.sh`. An
+  older adage that finds the index a newer one wrote says so once a day at a session start, stays
+  quiet otherwise, and no longer conditions over it; doctor's `index` failure for it names `adage
+  update`.
+- **`adage init` installs the Claude Code plugin itself, and connects every other harness.** With
+  `claude` on `PATH` and the plugin not installed, `adage init` stages the plugin from the binary
+  you ran (its hooks and modules travel inside `adage`; `adage`, `adage-exec` and `adage-train` are
+  copied beside them with their `SHA256SUMS`) as a one-plugin marketplace under
+  `$ADAGE_HOME/plugin/`, runs `claude plugin marketplace add` and `claude plugin install
+  adage@adage-local`, and checks `claude plugin list`: no release and no `/plugin` typing needed.
+  Claude Code reads it in place, so running `adage init` (or `adage update`) again stages the new
+  binaries for the next session. A settings-file registration beside the plugin is taken out (the
+  diff shown, the previous file kept as `.adage-bak`) so every hook runs once. Without `claude` on
+  `PATH`, or when it refuses, the settings file is the route and the two `/plugin` commands are
+  named. Codex and OpenCode get their hook files, each diffed and backed up. `adage init --yes
+  --hooks user` (or `project`) does it all without a question; `--yes` alone still registers
+  nothing and says so; `--print` runs and writes nothing; a second run writes nothing that is in
+  place.
+- **`adage init` fetches the binaries it needs, verified.** When `adage-exec` or `adage-train` is
+  not beside `adage` (the shell installer and `cargo install adage-cli` install `adage` alone), it
+  fetches them from the release of the same version, checks each archive against the `.sha256` the
+  release publishes, and refuses one that differs by a byte; a checkout build is pointed at the
+  `cargo build` that makes them. It ends on one screen: what is connected, where the binaries are,
+  what Adage learns from, the first line your next Claude Code session opens with, and at most two
+  next steps. A registration written by the plugin's own binary names the plugin's stable link, so
+  a plugin update carries it.
+- **One front door.** Bare `adage` ends with at most two next steps (`adage update` first when a
+  newer Adage is out, then what waits for review, else `adage ui`); before any agent is connected it
+  names the plugin's two slash commands and `adage init`, and each other harness found says `adage
+  init connects it`. The map words every next step for where you work: `/adage review` and `/adage
+  health` for a Claude Code plugin user, never "start `adage ui` in your terminal"; the `adage`
+  commands otherwise; its top bar shows the version. `m` in `adage ui`'s Live tab opens the map in
+  the browser, as in `adage watch`; the demo dashboard moved to port 8766 so it runs beside `adage
+  map`.
 
 ### Platforms and distribution
 

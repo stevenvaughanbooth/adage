@@ -34,8 +34,15 @@ const ALLOWED: &[(&str, usize, &str)] = &[
     // left running in `adage`). adage-train, not adage, drives the agent sessions, sandboxed, at a
     // person's request; adage-train is not one of the crates scanned here.
     ("adage-cli/src/train.rs", 1, "execs the separate adage-train binary for `adage train`"),
-    // `adage models download`: fetches a model file with curl, at a person's request.
-    ("adage-cli/src/models.rs", 1, "curl for `adage models download`"),
+    // The one place `adage` reaches the network (`net.rs`): curl for `adage models fetch`, `adage
+    // init`'s Binaries step and `adage update --check`, at a person's request or in the detached
+    // learner's daily check (never a hook); and tar, to unpack a release archive only after its
+    // SHA-256 matched the release's. Downloads of Adage's own files, never a repository command.
+    ("adage-cli/src/net.rs", 2, "curl downloads; tar unpacks a verified release archive"),
+    // `adage init` installs the Claude Code plugin it staged with Claude Code's own command line
+    // (`claude plugin marketplace add`, `install`, `list`), at a person's request (`--yes
+    // --hooks`, or the wizard's choice); `adage update` refreshes it the same way.
+    ("adage-cli/src/claude_plugin.rs", 1, "`claude plugin …` to install Adage's own plugin"),
     // Terminal mode switching for the interactive UI (stty on the controlling terminal).
     ("adage-cli/src/tty.rs", 1, "stty for the terminal UI"),
     // `adage map`: opens the person's browser on the local page (`open`, `cmd /c start` or
@@ -47,6 +54,11 @@ const ALLOWED: &[(&str, usize, &str)] = &[
     // printed first, only when a person runs it; no hook or learner calls it. A package manager
     // on Adage itself, never a repository or agent command.
     ("adage-cli/src/update.rs", 1, "the install's package manager for `adage update`"),
+    // `adage update` asks the binary it installed for its version (verify) and hands it the rest
+    // of the update (`update --finish`); `adage doctor` asks installed Adage binaries outside the
+    // repository their version. Adage's own binaries only (`probe::askable`), never a repository
+    // or agent command.
+    ("adage-cli/src/update/probe.rs", 1, "Adage's own binaries: `version`, and `update --finish`"),
 ];
 
 fn rs_files(dir: &Path, out: &mut Vec<PathBuf>) {

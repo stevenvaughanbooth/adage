@@ -13,6 +13,7 @@ Every day:
 
 When something is off:
   doctor       what is wrong, and the fix for each problem
+  update       update Adage, its hooks and the plugin together
   off          turn Adage off in this repository (`adage on` turns it back on)
 
 Set up:
@@ -20,7 +21,6 @@ Set up:
   install      register Adage's hooks with one agent
   packs        base instincts and added packs: list, turn on, turn off
   config       settings
-  update       update Adage itself
 
 Conditioning:
   sense        what your agents actually do (read-only)

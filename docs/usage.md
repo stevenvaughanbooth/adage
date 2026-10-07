@@ -149,13 +149,20 @@ mechanics are in [execution](execution.md#the-learned-finish-line-check-stop-gat
 
 ## Other ways to install
 
-Today, only building from source works (it needs access to the private repository):
+Today, only building from source works (it needs access to the private repository). Install the
+three binaries in one line, then let `adage init` do the rest in your repository:
 
 ```bash
-cargo install --locked --git https://github.com/stevenvaughanbooth/adage adage-cli
+cargo install --locked --git https://github.com/stevenvaughanbooth/adage adage-cli adage-exec adage-train
+adage init        # connects Claude Code (the Adage plugin), Codex and OpenCode; starts learning
 # or, from a checkout of this repository:
 cargo install --locked --path crates/adage-cli
 ```
+
+`adage init` checks that `adage-exec` and `adage-train` sit beside `adage`. When one is missing it
+offers to fetch it from the release of the same version (each archive checked against the `.sha256`
+the release publishes beside it, and `$ADAGE_HOME/channel.json` records that the binaries came from
+the release); a checkout build is pointed at the `cargo build` that makes them instead.
 
 **Not published yet:** everything below waits for the first tagged release; none exists yet.
 Once it is out, for macOS (arm64, x64), Linux (x64, arm64; static) and Windows (x64):
@@ -188,12 +195,70 @@ with those binaries bundled and checksummed, to the `marketplace` branch that `/
 reads. It has not run on a tag yet. The plugin checks its binary against `dist/SHA256SUMS` at every
 session start, falls back to `adage` on `PATH`, and otherwise says in one line what to install.
 
+## Updating
+
+```bash
+adage update --check     # is a newer Adage out? (asks at most once a day; --now asks again, --json as data)
+adage update             # update this adage, its hooks and the plugin together, the way it was installed
+adage update --print     # what it would run, kept and changed; runs nothing
+adage update --rollback  # put back the binaries the last update replaced
+```
+
+**The check.** One request to the npm registry (`registry.npmjs.org/@adage-sh/cli/latest`), and
+only when the package is not published there, one to GitHub's latest release; three seconds each,
+`User-Agent: adage/<version>`, nothing else sent. The answer (or why there was none: `offline`,
+`blocked`, `tls`, `timeout`, `unavailable`) is kept in `$ADAGE_HOME/cache/latest.json` for a day.
+Besides `adage update`, the background learner asks once a day after it conditions a repository;
+`adage config set update.check off` (or `ADAGE_UPDATE_CHECK=0`) stops that, and `ADAGE_OFFLINE=1`
+stops every request. No hook ever asks: hooks read the cached answer only.
+
+**The update.** With nothing newer, `adage 0.2.0 is the latest · nothing to do` and nothing runs.
+Otherwise it prints its plan, then, in order:
+
+1. **Keeps** the running `adage`, and the `adage-exec` and `adage-train` beside it, in
+   `$ADAGE_HOME/previous/<version>/` with their SHA-256 (`previous.json` says where each came from).
+2. **Runs** the channel's own command with the version pinned, with your terminal attached: npm
+   `npm install --global @adage-sh/cli@<version>` (never `@latest`); a source install `cargo
+   install --locked --git … --tag v<version> adage-cli adage-exec adage-train` (`--branch <name>`
+   builds a branch instead; without `cargo`, `--from release` switches to the release's binaries);
+   the release installer for that version, then `adage-exec` and `adage-train` from the same release,
+   each checked against its `.sha256`; a checkout `git pull --ff-only` and `cargo build` in place;
+   Homebrew `brew upgrade`.
+3. **Verifies** that the binary the channel installed answers `version` with the version asked for,
+   and, for npm and the release installer, that its SHA-256 matches the release's `SHA256SUMS` when
+   the release publishes one (npm checks its package's integrity, the installer each archive's).
+4. **Re-points** every hook registration of this install whose binary moved or whose events changed
+   (`adage install` would write it differently), each with its diff and the previous file kept as
+   `<file>.adage-bak`, after one question (`--yes` skips it). Inside an agent session it only lists
+   them, each with the `adage install` command that rewrites it.
+5. **Stages again** the Claude Code plugin `adage init` installed from this machine, and refreshes
+   Claude Code's copy of it (`claude plugin marketplace update adage-local`).
+6. Prints doctor's summary, the release's first notes, and `done`. The new binaries take effect in
+   new sessions; running ones keep the binary they started with.
+
+These steps after the package manager are run by the new binary (`adage update --finish`, which
+`adage update` runs itself), so its own registrations and checks apply. A failed step stops the
+update, leaves the kept binaries where they are and names `adage update --rollback`, which copies
+them back byte for byte (each checked against its recorded SHA-256 first) and re-points the
+registrations to them.
+
+The Claude Code plugin's own binary is updated by Claude Code: from it, `adage update` runs
+`claude plugin marketplace update` and `claude plugin update adage@adage` when `claude` is on
+`PATH` (the update takes effect in the next session), and otherwise prints the `/plugin` steps.
+
+**Two versions never diverge silently.** `adage doctor`'s `versions` check asks every Adage binary
+installed here (`PATH`'s, the plugin's, and each one a hook registration runs) for its version,
+and warns when they disagree, with `adage update` as the fix when this one is the older. An Adage
+that finds the index written by a newer one says so once a day at a session start (`adage: the
+reflexes here were written by a newer adage; this one (0.1.0) stays quiet · adage update`), stays
+quiet otherwise, and never conditions over that index.
+
 ## Commands
 
 `adage --help` lists every command; `adage <command> --help` its options.
 
 ```bash
-adage init             # guided setup at a terminal: hooks, model, which repositories, first conditioning
+adage init             # guided setup at a terminal: binaries, the Claude Code plugin and other hooks, model, repositories, first conditioning
 adage sense            # read-only: which reflexes this repository's traces would form
 adage condition        # form them: read this repository's traces, bind instincts, compile the index
 adage watch            # in a split pane: Adage's health, hook activity and conditioning, live
@@ -217,18 +282,38 @@ adage train accept x                                       # install the reviewe
 ```
 
 At a terminal, `init` is a wizard: it detects your harnesses and, one step at a time, asks before
-it registers hooks (showing the exact file and diff), offers to fetch an embedding model only when
-none is available (one is bundled in the binary, so usually there is nothing to fetch), asks which
-repositories to condition on, conditions each one ticked for the first time, and turns automatic
-conditioning on if it is off; it ends with the doctor's summary. The repositories are the ones
-Claude Code has sessions in, found from its project directories without parsing a transcript, most
-recently used first, with the current one ticked (space ticks, `a` all, `n` none); the choice is
-stored as `learn.repos`. Sessions in other repositories are still recorded where hooks are
-registered, but their history is not read. Piped, inside an agent session, or with `--print`, it
-prints the same report and writes nothing; `--yes` conditions on this repository (adding it to
-`learn.repos`, unless that is `all` on purpose), binds its instincts (and fetches the selected
-model only when none is available), but registers no hooks (it ends by saying whether they are
-registered; `adage install <harness> --write` registers them). `sense` reads the same traces
+it changes anything. **Binaries:** `adage-exec` and `adage-train` beside `adage` (fetched from this
+version's release, verified, on a yes). **Hooks,** per harness found: for Claude Code the Adage
+plugin comes first when it is not installed; `init` stages it from the `adage` you ran as a local,
+one-plugin marketplace under `$ADAGE_HOME/plugin/` (its hooks and modules, carried inside the
+binary, and `adage`, `adage-exec`, `adage-train` with their `SHA256SUMS`), then runs Claude Code's
+own `claude plugin marketplace add <that directory>` and `claude plugin install adage@adage-local`
+and checks `claude plugin list`. Without `claude` on `PATH` it names the two commands to type in
+Claude Code instead (`/plugin marketplace add stevenvaughanbooth/adage`, then `/plugin install
+adage@adage`). The settings file (`~/.claude/settings.json`, or the repository's
+`.claude/settings.local.json`) is the second choice. A settings-file registration beside the plugin
+would run every hook twice, so `init` offers to take Adage's entries out of it (the diff first, the
+previous file kept as `<file>.adage-bak`). Codex and OpenCode get their hook files, each shown as a
+diff before it is written. Then the embedding model (one is bundled, so usually nothing to fetch),
+which repositories to condition on, a first conditioning of each one ticked, and automatic
+conditioning; it ends on one screen with the doctor's summary and at most two next steps. The
+repositories are the ones Claude Code has sessions in, found from its project directories without
+parsing a transcript, most recently used first, with the current one ticked (space ticks, `a` all,
+`n` none); the choice is stored as `learn.repos`. Sessions in other repositories are still recorded
+where hooks are registered, but their history is not read.
+
+Scripted, `adage init --yes --hooks user` does every step without a question: the plugin route
+first (user scope; `--hooks project` installs it, or the settings file, for this repository alone),
+the settings file when `claude` is not on `PATH` or refuses, each harness's file diffed and backed
+up, missing binaries fetched, this repository added to `learn.repos` (unless that is `all` on
+purpose), its instincts bound, and its history conditioned in the background. It ends with what is
+connected, where the binaries are, and the first line your next Claude Code session here opens
+with. `--yes` without `--hooks` (or `--hooks none`) registers nothing and says so. A harness already
+registered for this repository, in either scope or by the plugin, is never registered again; a
+second run stages the plugin again from the binary you ran (so the next session runs it), writes
+nothing else that is already in place, and says where each harness is registered. Piped, inside an
+agent session, or with `--print`, it prints what it would do and writes and runs nothing; `--yes`
+refuses inside an agent session. `sense` reads the same traces
 `condition` does and lists the reflexes `condition` would form as candidates, with prompts shown
 only as short redacted snippets. With no history yet, plain `adage condition` inside a repository
 binds available instincts from its files; `--instincts-only` requests that explicitly. `doctor` exits
@@ -289,7 +374,7 @@ execution policy and local approval described in [execution](execution.md).
   errors; each problem names the command that fixes it.
 
 Keys: `q` quits, `p` pauses, `f` switches between this repository and all of them, `/` filters by
-trace, reflex or command, `Enter` inspects, `m` shows how to open the map, `v` hides events where
+trace, reflex or command, `Enter` inspects, `m` opens the map in your browser, `v` hides events where
 Adage said nothing, `↑`/`↓` scroll (`G` back to the newest), `?` lists every key. `NO_COLOR` is
 honoured: strengths are then spelled out (`FIRE`, `PRIME`, `INHIBIT`), and `--plain` drops glyphs
 too.
@@ -299,8 +384,8 @@ opens a command palette over every action and reflex; `?` lists the keys. Its ta
 
 | Tab | What it does |
 | --- | --- |
-| **Home** | setup progress, repository selection, history sources, conditioning, and the next useful action |
-| **Live** | the watch view, larger |
+| **Home** | setup progress, repository selection, history sources, conditioning, and the next useful action; when a newer Adage is out, its version and `adage update` first |
+| **Live** | the watch view, larger; `m` opens the map in your browser, as in `adage watch` |
 | **Reflexes** | every instinct and reflex by track, with a fuzzy `/` filter: strength, stage, trigger and step, evidence (traces, Wilson lower bound), live counts, and the exact directive text. Review decisions (`a`pprove, `e`xtinguish, `w`eaken, `s`trengthen, pi`n`, dismiss `x`) ask first, then run exactly what `adage review` runs, with the same ceilings, and show the equivalent command |
 | **Map** | stimulus → reflex → response as a layered graph in the terminal; `adage map` opens the same in the browser |
 | **Health** | every doctor check, live, including live conditioning's. `Enter` fixes the selected one where a key can: register hooks (confirming the exact file and diff), fetch the model (with progress), condition this repository now (after a source preview; uses `adage condition --repo-root` without changing the background allowlist), turn live conditioning on, open the settings, or open the fail-open log |
@@ -326,9 +411,18 @@ conditioning can still bind enabled instincts from repository files.
 
 ## Claude Code
 
-Once the marketplace is published (not yet), the plugin installed from it will need nothing else.
-Until then, try the plugin from a source checkout (it then uses the binary `plugin/build.sh`
-stages, or `adage` on `PATH`):
+From a terminal, `adage init` installs the Adage plugin into Claude Code for you: it stages the
+plugin from the `adage` you ran as a local marketplace (`$ADAGE_HOME/plugin/`, named `adage-local`)
+and runs `claude plugin marketplace add` and `claude plugin install adage@adage-local`, which
+install it at user scope and enable it; `claude plugin list` then shows `adage@adage-local`, read
+from that directory. Claude Code reads it in place, so `adage init` again (or `adage update`) stages
+the new binaries and modules there and the next session runs them. Once the marketplace is
+published (not yet), `/plugin marketplace add stevenvaughanbooth/adage` and `/plugin install
+adage@adage` in Claude Code install the released plugin with nothing else; until then that is the
+route `adage init` names when `claude` is not on `PATH`.
+
+For developing the plugin itself, run it from a source checkout (it then uses the binary
+`plugin/build.sh` stages, or `adage` on `PATH`):
 
 ```bash
 # 1. Build the binaries and stage them into the plugins
@@ -534,7 +628,7 @@ after schema edits), with twelve work items and hidden checks.
 
 ```bash
 python3 demo/run.py all                  # train (no Adage) → condition → held-out eval, two arms
-python3 demo/dashboard/serve.py          # live dashboard at http://127.0.0.1:8765
+python3 demo/dashboard/serve.py          # live dashboard at http://127.0.0.1:8766 (adage map keeps 8765)
 ```
 
 For your own repositories, `adage map` opens the live map of instincts and reflexes in the

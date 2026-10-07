@@ -42,7 +42,10 @@
 //! off (twice the interval per failure) and say so in the notice. It holds `tracks.lock` while it writes, so it
 //! never interleaves with `adage condition`, a review decision or `adage add`. It appends the routes
 //! that changed to `learn.log` ([`crate::learnlog`]), then re-checks the queue once: a request
-//! that arrived while it ran is learned before it exits.
+//! that arrived while it ran is learned before it exits. Last, with the repository's lock released,
+//! it asks whether a newer Adage is out, at most once a day per data directory (`update.check`;
+//! `crate::update::latest`): the one network request live learning makes. Over an index a newer
+//! Adage wrote it conditions nothing (that index would be replaced by one that knows less).
 
 use crate::learnlog;
 // The hook's part (the request, the queue files, starting a learner) lives with the hook, in
@@ -201,9 +204,17 @@ pub fn run_auto(args: &[String], paths: &Paths) -> Result<()> {
     }
     let repo = adage_core::repo::repo_key_cached(&root, &paths.repo_keys());
     let q = Queue::new(paths, &repo);
-    let Some(_lock) = lock::exclusive_within(&q.lock(), LOCK_PATIENCE)? else {
+    let Some(held) = lock::exclusive_within(&q.lock(), LOCK_PATIENCE)? else {
         return Ok(()); // another learner has this repository; it re-checks the queue
     };
+    // An index a newer Adage wrote (docs/live-learning.md, "two binaries on one machine"): this
+    // learner's index would replace it with one that knows less, so it conditions nothing. Its one
+    // network request still runs, so this binary learns that a newer one is out.
+    if matches!(adage_tracks::Index::try_load(&paths.index()), Err(adage_tracks::index::Unloaded::Newer(_))) {
+        drop(held);
+        release_check(paths);
+        return Ok(());
+    }
     // What was in effect before this learner ran: a first notice says only what it adds (a
     // repository set up from a terminal already has its reflexes and instincts).
     let had = notice::basis(paths, &repo, None, 0).active;
@@ -291,7 +302,17 @@ pub fn run_auto(args: &[String], paths: &Paths) -> Result<()> {
             break;
         }
     }
+    // The repository is free for the next learner before the network is asked anything.
+    drop(held);
+    release_check(paths);
     Ok(())
+}
+
+/// The daily release check (`update.check`, onboarding plan O5): after a learn, at most once a day
+/// per data directory, never on a hook. Whatever happens is cached or forgotten: a learn never
+/// fails because the network did.
+fn release_check(paths: &Paths) {
+    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| crate::update::latest::check_if_due(paths)));
 }
 
 /// The notice the next session start shows (docs/zero-config.md §3.3): composed after each learn

@@ -96,6 +96,23 @@ impl Paths {
     pub fn cache(&self) -> PathBuf {
         self.root.join("cache")
     }
+    /// The release check's answer (`crate::release::Latest`): written only by `adage update
+    /// --check` and the detached learner's daily check; read by every surface and by the hook,
+    /// which never reaches the network itself.
+    pub fn update_cache(&self) -> PathBuf {
+        self.cache().join("latest.json")
+    }
+    /// The binaries `adage update` replaced, one directory per version (`previous/<version>/`
+    /// with `previous.json`), kept for `adage update --rollback`.
+    pub fn previous(&self) -> PathBuf {
+        self.root.join("previous")
+    }
+    /// How the binaries were installed when the binary cannot tell from where it lives (the
+    /// release installer's `~/.cargo/bin` is also `cargo install`'s): written by `adage init`'s
+    /// Binaries step, read by `adage update`.
+    pub fn channel_file(&self) -> PathBuf {
+        self.root.join("channel.json")
+    }
     /// Committed canonical evidence, separate from caches that may be deleted.
     pub fn corpus(&self) -> PathBuf {
         self.root.join("corpus")
@@ -104,6 +121,11 @@ impl Paths {
     /// learning, review decisions, `adage add`), so writers never interleave.
     pub fn tracks_lock(&self) -> PathBuf {
         self.root.join("tracks.lock")
+    }
+    /// The Claude Code plugin `adage init` stages from this binary: a one-plugin marketplace
+    /// (`.claude-plugin/marketplace.json`, the plugin in `adage/`) that Claude Code reads in place.
+    pub fn plugin(&self) -> PathBuf {
+        self.root.join("plugin")
     }
 
     // The switches kept as marker files: present means the switch is thrown. Per-machine settings
@@ -162,6 +184,10 @@ mod tests {
         assert_eq!(p.delegate_marker(), Path::new("/data/exec/enabled"));
         assert_eq!(p.rewrite_off(), Path::new("/data/exec/rewrite-off"));
         assert_eq!(p.predict_off(), Path::new("/data/exec/predict-off"));
+        // The release cache is read by binaries of other versions (an older hook, a newer card).
+        assert_eq!(p.update_cache(), Path::new("/data/cache/latest.json"));
+        assert_eq!(p.previous(), Path::new("/data/previous"));
+        assert_eq!(p.channel_file(), Path::new("/data/channel.json"));
     }
 
     #[test]

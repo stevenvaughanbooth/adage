@@ -1,8 +1,10 @@
 # Adage zero-config design: "install it and it just works"
 
 For the current behavior reference, see [How Adage works](how-it-works.md); the gap tables below
-describe the original design audit, not an outstanding issue list. Current onboarding uses
-`adage init` to register hooks and condition the selected repository. Manual `sense` and
+describe the original design audit, not an outstanding issue list. Current onboarding is one
+command, `adage init`: it installs the Claude Code plugin (staged from the binary as a local
+marketplace and installed with Claude Code's own `claude plugin`), writes the Codex and OpenCode
+hook files, and conditions the selected repository. Manual `sense` and
 `condition` discover configured Claude Code, Codex and OpenCode history consistently; `condition`
 inside a repository with no default history binds available instincts from its files. An explicit
 empty history source still fails. See [First run and existing history](live-learning.md#first-run-and-existing-history)
@@ -13,8 +15,9 @@ for source overrides and the distinction between manual and automatic Codex disc
 > first-session notice reads `adage: learning from N past sessions in this repo; reflexes arrive
 > within a minute. Nothing runs without you.` (the instinct count is not known yet when the hook
 > answers); the interval is the *expanded* percentile bootstrap (plain percentiles under-cover at
-> 12 control sessions); `adage connect` (P1) is not built, and the card points to `adage install
-> <harness> --write --scope user`; the exec-plugin guard checks for the plugin's directory beside
+> 12 control sessions); `adage connect` (P1) became `adage init`'s hooks step (onboarding plan O4:
+> `adage init --yes --hooks user`, the Claude Code plugin first), and the card names the plugin's two
+> slash commands and `adage init`; the exec-plugin guard checks for the plugin's directory beside
 > this one, its data directory, or a marker its shim touches at every start. Instincts are
 > re-bound at every automatic learn, not only at bootstrap. `systemMessage` on `SessionStart` was
 > verified against Claude Code 2.1.283: it is recorded as a `hook_system_message` attachment,
@@ -50,7 +53,7 @@ Persona (a) can approve nascent reflexes, grant a step to run for them and turn 
 ### (b) CLI user (brew, npm or curl)
 
 - **`brew install` / `npm i -g`**: prints nothing Adage-specific. There are no postinstall scripts. That is correct.
-- **First bare `adage`** (not `init`) shows the status card (§3.4). With no hooks yet it says: `Not connected to any agent yet. Claude Code found → adage connect` (the wizard with user scope preselected: the diff, then `y`).
+- **First bare `adage`** (not `init`) shows the status card (§3.4). With no hooks yet it says `not connected to any agent yet`, with `claude-code  in Claude Code: /plugin marketplace add stevenvaughanbooth/adage then /plugin install adage@adage` / `or, from a terminal: adage init`, a `found · adage init connects it` row for each other harness, and `next  adage init`. Built (onboarding plan O4): `adage init` installs the Claude Code plugin itself (staged from the binary, `claude plugin install adage@adage-local`, user scope), and `adage init --yes --hooks user` does every step without a question, each file diffed and backed up.
 - **The wizard's first question**, answered with one keypress, is **user scope** ("every repo") rather than project scope. Per-repo `.claude/settings.json` edits are dirty-worktree friction.
 - **Condition step**: the wizard runs bootstrap for the current repo only. It does not run a global `adage condition` over every repo.
 - **Model download**: the wizard offers it, and it runs only on `y`.
@@ -75,7 +78,7 @@ Persona (a) can approve nascent reflexes, grant a step to run for them and turn 
 ### Must never happen silently
 
 - **Execution**: needs `delegate on` plus a per-reflex `review delegate`, made by a person: at a terminal, or with a press in the Claude Code session (a press is a person; the binary records `via: press`). The Claude Code plugin ships both binaries; the marker `delegate on` writes is what makes its hooks run `adage-exec`, from the next session.
-- **Network**: no hook and no learner ever touches the network. Model fetch happens only in response to a person's explicit action.
+- **Network**: no hook ever touches the network (T-O5-05 runs every hook event against a server that counts requests: zero). The one request Adage makes by itself is the release check: the detached learner, after it conditions a repository, at most once a day per data directory, asks the npm registry (and only when the package is not published there, GitHub's latest release) whether a newer Adage is out, with a 3 s timeout and nothing sent but the request; the answer is cached in `$ADAGE_HOME/cache/latest.json`, which is all a hook or the card reads. `update.check = off` (or `ADAGE_UPDATE_CHECK=0`) stops it; `ADAGE_OFFLINE=1` stops every request. Model fetch and the update itself happen only in response to a person's explicit action.
 - **Other repos' traces**: the bootstrap and learner read only transcripts whose recorded cwd is inside this repo's root or its worktrees. The filter uses the Claude project-dir slug and the first-line cwd (P0-5). Other repos' files are not opened at all. Today the parse-cache pass may open them.
 - **Environment-changing reflexes**: always nascent until approved.
 - **Trust-anchor changes and pack signer changes**: always require a person.
@@ -329,7 +332,7 @@ The learner writes `ledger/<slug>.summary.json` (estimate, gate status and count
 - Per-reflex indicative savings in the map.
 - Harness-version standdown.
 - Hook `duration_us` and the doctor p95 check.
-- `adage connect` alias for the wizard's hook step, with user scope preselected.
+- ~~`adage connect` alias for the wizard's hook step, with user scope preselected.~~ Built as `adage init`'s hooks step: `adage init --yes --hooks user` (onboarding plan O4), the Claude Code plugin first.
 
 ### Later
 

@@ -11,11 +11,13 @@
 //!   magic.
 //! * **Config** — `config.toml`: the person's settings ([`config`]).
 //! * **Locks** — single-flight file locks for live learning ([`lock`]).
+//! * **Release** — the last release check's answer, `cache/latest.json` ([`release`]).
 
 pub mod config;
 mod crc;
 pub mod lock;
 pub mod paths;
+pub mod release;
 pub mod spool;
 pub mod state;
 

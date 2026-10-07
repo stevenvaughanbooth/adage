@@ -12,6 +12,7 @@ use crate::Options;
 use adage_core::repo;
 use adage_store::config::Config;
 use adage_store::Paths;
+use adage_tracks::index::Unloaded;
 use adage_tracks::Index;
 use serde_json::Value;
 use std::cell::OnceCell;
@@ -47,7 +48,7 @@ pub(crate) struct HookCtx<'a> {
 #[derive(Default)]
 pub(crate) struct Reads {
     config: OnceCell<Config>,
-    index: OnceCell<(bool, Index)>,
+    index: OnceCell<(Option<Unloaded>, Index)>,
     repo_key: OnceCell<String>,
     arms: OnceCell<ArmInputs>,
 }
@@ -66,14 +67,23 @@ impl HookCtx<'_> {
 
     /// Whether the index on disk was damaged ([`HookCtx::index`]).
     pub(crate) fn index_damaged(&self) -> bool {
-        self.loaded().0
+        self.loaded().0 == Some(Unloaded::Damaged)
     }
 
-    fn loaded(&self) -> &(bool, Index) {
-        self.reads.index.get_or_init(|| {
-            let loaded = Index::try_load(&self.paths.index());
-            let damaged = matches!(loaded, Err(adage_tracks::index::Unloaded::Damaged));
-            (damaged, loaded.unwrap_or_default())
+    /// The format of an index a newer Adage wrote, which this binary cannot read: served as empty,
+    /// never rebuilt here (that would undo the newer binary's work), and said once a day at a
+    /// session start (`session_start::skew_notice`).
+    pub(crate) fn index_newer(&self) -> Option<u32> {
+        match self.loaded().0 {
+            Some(Unloaded::Newer(format)) => Some(format),
+            _ => None,
+        }
+    }
+
+    fn loaded(&self) -> &(Option<Unloaded>, Index) {
+        self.reads.index.get_or_init(|| match Index::try_load(&self.paths.index()) {
+            Ok(index) => (None, index),
+            Err(why) => (Some(why), Index::default()),
         })
     }
 

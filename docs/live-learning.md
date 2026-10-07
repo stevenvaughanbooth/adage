@@ -61,6 +61,9 @@ notices = "daily"         # one-line notices at session start (Claude Code), at 
 
 [runtime]
 control = 0.1             # share of sessions held out as the control arm (0–1)
+
+[update]
+check = "daily"           # after a learn, at most daily, ask whether a newer Adage is out; or "off"
 ```
 
 | Key | Default | Environment override |
@@ -155,6 +158,16 @@ repository is off, the status card's first line says so and its `next` leads wit
    the interval per further failure, up to 64×).
 6. **Manual learning** (`adage condition`) uses the same thresholds (unless `--demo`), the same cache
    and the same lock, and writes the same `learn.log` lines with `"trigger":"manual"`.
+7. **The release check.** Last, with the repository's lock released, a learner asks whether a
+   newer Adage is out, at most once a day per data directory (`update.check = daily`, the default;
+   one learner checks while the others skip). It is the one network request live learning makes:
+   a GET of `registry.npmjs.org/@adage-sh/cli/latest`, and only when the package is not published
+   there, of GitHub's latest release for the repository; three seconds each, `User-Agent:
+   adage/<version>` and nothing else: no identifier, token, repository, path or prompt. The answer,
+   or why there was none, goes to `$ADAGE_HOME/cache/latest.json`, which the card, doctor and the
+   session-start notice read; a failure is not retried before the next day. `update.check = off`
+   (or `ADAGE_UPDATE_CHECK=0`) stops it, `ADAGE_OFFLINE=1` stops every request, and `adage update
+   --check` asks on demand. No hook ever makes a request ([docs/usage.md](usage.md#updating)).
 
 Automatic and manual learning use the same learner and source settings. Automatic Codex discovery
 in `auto` mode additionally requires registered Codex hooks or a Codex hook request. Register its
@@ -254,7 +267,11 @@ newer than its own reads it as no reflexes and never rebuilds it (that would und
 binary's work), and `adage doctor` says the index was written by a newer Adage. The rule: every
 `adage` that hooks call on a machine (an npm install on `PATH`, the Claude Code plugin's) must be
 at least as new as the newest that learned there; update the older one rather than letting the
-two take turns. A damaged index (truncated, edited) is still rebuilt at the next session start.
+two take turns. A damaged index (truncated, edited) is still rebuilt at the next session start. The older binary also
+says so, once a day per data directory, at a session start (`adage: the reflexes here were written
+by a newer adage; this one (0.1.0) stays quiet · adage update`), starts no learner there, and its
+learner conditions nothing over that index; `adage doctor`'s `index` failure and its `versions`
+check name `adage update`.
 
 ## Streams to follow
 

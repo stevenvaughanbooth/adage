@@ -15,7 +15,13 @@ normal learner and runtime operate locally on the CPU. It does not replace the m
 about a new bug or turn arbitrary observed shell commands into trusted automation.
 
 The first-use target is `adage init` in a repository, followed by learning existing sessions.
-The interactive wizard connects a detected harness and bootstraps that repository. Subsequent
+The interactive wizard connects a detected harness and bootstraps that repository. For Claude Code
+it installs the Adage plugin itself when `claude` is on `PATH`: the plugin's files travel inside the
+`adage` binary, `init` stages them with the binaries as a local marketplace under
+`$ADAGE_HOME/plugin/` and runs `claude plugin marketplace add` and `claude plugin install
+adage@adage-local`, then takes out any settings-file registration so each hook runs once; Codex and
+OpenCode get their hook files. `adage init --yes --hooks user` does the same without questions
+([usage](usage.md#commands)). Subsequent
 hooks can learn in the background. No history is a valid starting state: repository-derived
 instincts can help where applicable, and Adage learns as sessions accumulate. A repository with
 no applicable history or declared conventions must receive an honest “nothing learned yet.”
@@ -280,6 +286,13 @@ result links, repository state and typed contracts therefore remain necessary al
 Automatic learning, matching, applicable installed instincts and advisory delivery are governed
 by the normal configuration. Supported command rewrites can avoid a procedural mistake before
 it occurs. These are the immediate-value path and must be tested without seeded benchmark rules.
+
+No hook reaches the network. The background learner makes one request a day at most, after it
+conditions a repository: whether a newer Adage is out (the npm registry, then GitHub's latest
+release), cached in `$ADAGE_HOME/cache/latest.json` for every surface to read (`update.check`,
+[usage](usage.md#updating)). Replacing the binaries is `adage update`, a person's command: it keeps
+the running binaries, runs the install's own package manager with the version pinned, verifies
+the result, re-points hook registrations with their diffs, and `adage update --rollback` undoes it.
 
 Running repository scripts automatically has an additional authority boundary. Learning a
 script does not approve it. Reviewing evidence does not approve execution. Enabling the executing

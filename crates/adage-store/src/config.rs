@@ -24,11 +24,15 @@
 //! enabled = true             # bind Adage's built-in defaults from each repository's files
 //! packs = ["auto"]           # instinct packs to bind: auto (every one installed) or their names
 //! disabled = []              # packs or instinct ids never to bind, e.g. ["adage/lockfiles", "U3"]
+//!
+//! [update]
+//! check = "daily"            # after a learn, at most daily, ask whether a newer Adage is out; or "off"
 //! ```
 //!
 //! Every key has a default, so a missing file is the default configuration. Environment
-//! variables win over the file: `ADAGE_CONTROL` for `runtime.control` and `ADAGE_AUTO_LEARN`
-//! (`0`/`1`) for `learn.auto`. A file that cannot be parsed, an unknown key, or a value that fails
+//! variables win over the file: `ADAGE_CONTROL` for `runtime.control`, `ADAGE_AUTO_LEARN`
+//! (`0`/`1`) for `learn.auto` and `ADAGE_UPDATE_CHECK` (`0`/`1`, or `off`/`daily`) for
+//! `update.check`. A file that cannot be parsed, an unknown key, or a value that fails
 //! validation is reported (`adage config`, `adage doctor`) and that key keeps its default: hooks
 //! never fail because of the configuration.
 //!
@@ -77,6 +81,9 @@ pub struct Config {
     pub learn_parse_cache: bool,
     /// `ui.notices`: one-line notices at session start (`daily`, the default) or none (`off`).
     pub ui_notices: bool,
+    /// `update.check`: the detached learner asks, at most once a day, whether a newer Adage is
+    /// out (`daily`, the default); `off` asks never (`adage update --check` still does).
+    pub update_check: bool,
     /// The control share; as with `ADAGE_CONTROL`, 1 or more is shadow mode.
     pub runtime_control: f64,
     /// `runtime.rewrite`: `PreToolUse` rewrites to the project's environment (on by default).
@@ -357,6 +364,14 @@ pub const KEYS: &[Key] = &[
         doc: "Claude Code mod: invoke a skill at the step a skill reflex names, when it holds a predict grant and adage train recorded the skill inert in a pack you accepted",
         guarded: true,
     },
+    Key {
+        name: "update.check",
+        kind: Kind::Notices,
+        default: "daily",
+        env: Some("ADAGE_UPDATE_CHECK"),
+        doc: "after a background conditioning run, at most once a day, ask whether a newer Adage is out (one request, nothing sent but the request); or off",
+        guarded: false,
+    },
 ];
 
 pub fn key(name: &str) -> Option<&'static Key> {
@@ -547,6 +562,10 @@ fn load_from(file: &Path, env: &dyn Fn(&str) -> Option<String>) -> Loaded {
                 let ok = match k.kind {
                     Kind::Share => raw.trim().parse::<f64>().ok().filter(|x| x.is_finite()).map(|x| x.to_string()),
                     Kind::Bool => parse_bool(&raw).map(|b| b.to_string()),
+                    // `ADAGE_UPDATE_CHECK=0` reads as `off`, `1` as `daily`.
+                    Kind::Notices => parse_bool(&raw)
+                        .map(|b| if b { "daily" } else { "off" }.to_string())
+                        .or_else(|| from_text(k.kind, &raw).ok().map(|_| raw.trim().to_string())),
                     _ => from_text(k.kind, &raw).ok().map(|_| raw.trim().to_string()),
                 };
                 match ok {
@@ -595,6 +614,7 @@ fn from_values<'v>(text: &dyn Fn(&str) -> &'v str) -> Config {
         learn_codex_sessions: Some(text("learn.codex_sessions")).filter(|s| *s != "auto").and_then(home_relative),
         learn_codex_auto: text("learn.codex_sessions") == "auto",
         ui_notices: text("ui.notices") != "off",
+        update_check: text("update.check") != "off",
         learn_opencode_exports: home_relative(text("learn.opencode_exports")),
         learn_parse_cache: bool_of(text, "learn.parse_cache"),
         runtime_control: number_of(text, "runtime.control"),
@@ -671,7 +691,7 @@ mod tests {
         assert_eq!(c.learn_min_interval_secs, 120);
         assert_eq!(c.learn_thresholds, Thresholds::Default);
         assert_eq!((c.learn_claude_projects.clone(), c.learn_codex_sessions.clone()), (None, None));
-        assert!(c.learn_codex_auto && c.ui_notices);
+        assert!(c.learn_codex_auto && c.ui_notices && c.update_check);
         assert!(c.learn_parse_cache);
         assert_eq!(c.runtime_control, 0.1);
         assert!(c.instincts_enabled);
@@ -715,6 +735,15 @@ mod tests {
         };
         let l = load_from(&f, &env);
         assert!(l.config.learn_auto, "ADAGE_AUTO_LEARN wins over the file");
+        // `ADAGE_UPDATE_CHECK=0` turns the daily release check off, whatever the file says.
+        for (raw, on) in [("0", false), ("off", false), ("1", true), ("daily", true)] {
+            let env = |v: &str| (v == "ADAGE_UPDATE_CHECK").then(|| raw.to_string());
+            let l = load_from(&f, &env);
+            assert_eq!(l.config.update_check, on, "ADAGE_UPDATE_CHECK={raw}");
+            assert_eq!(l.get("update.check").unwrap().1, Source::Env("ADAGE_UPDATE_CHECK"));
+        }
+        let bad = |v: &str| (v == "ADAGE_UPDATE_CHECK").then(|| "hourly".to_string());
+        assert!(load_from(&f, &bad).config.update_check, "an invalid value keeps the default");
         assert_eq!(l.config.runtime_control, 1.0, "ADAGE_CONTROL keeps shadow mode");
         assert_eq!(l.get("runtime.control").unwrap().1, Source::Env("ADAGE_CONTROL"));
         // An invalid environment value is ignored, and reported.
@@ -756,6 +785,7 @@ mod tests {
         assert_eq!(set(&paths, "instincts.disabled", "adage/lockfiles, U3").unwrap(), "adage/lockfiles,U3");
         assert_eq!(set(&paths, "instincts.disabled", "U3, N1").unwrap(), "U3,N1");
         assert_eq!(set(&paths, "instincts.enabled", "false").unwrap(), "false");
+        assert_eq!(set(&paths, "update.check", "off").unwrap(), "off");
         assert_eq!(
             set(&paths, "learn.repos", "github.com/acme/billing, notes@1a2b3c4d5e6f").unwrap(),
             "github.com/acme/billing,notes@1a2b3c4d5e6f"
@@ -777,6 +807,7 @@ mod tests {
             ("instincts.disabled", "../lockfiles"),
             ("learn.repos", "all, github.com/acme/billing"),
             ("learn.repos", "github.com/acme/my billing"),
+            ("update.check", "hourly"),
         ] {
             assert!(set(&paths, k, v).is_err(), "{k} = {v} must be refused");
         }
@@ -789,6 +820,7 @@ mod tests {
         assert!(l.config.learn_codex_sessions.as_ref().unwrap().ends_with(".codex/sessions"));
         assert_eq!(l.config.instincts_disabled, vec!["U3".to_string(), "N1".to_string()]);
         assert!(!l.config.instincts_enabled);
+        assert!(!l.config.update_check);
         let repos = vec!["github.com/acme/billing".to_string(), "notes@1a2b3c4d5e6f".to_string()];
         assert_eq!(l.config.learn_repos, Some(repos));
         assert!(l.config.learns("notes@1a2b3c4d5e6f") && !l.config.learns("github.com/acme/other"));
