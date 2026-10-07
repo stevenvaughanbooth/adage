@@ -127,6 +127,26 @@ expect(!existsSync(path.join(repo, "plugin/claude-code-exec")), "plugin/claude-c
       const shape = watch.split(",").map((v) => v.trim().replace(/^['"]|['"]$/g, "")).filter(Boolean).join(" ")
       expect(shape === "watch --follow --json --stdin ignore --repo", `${pluginDir}/hooks/bridge.ts: the watch shape must be exactly \`watch --follow --json --stdin ignore --repo …\` (found \`${shape}\`)`)
     }
+    // The mod finds its data directory (where the shim links bin/hook) without CLAUDE_PLUGIN_DATA,
+    // which the engine gives command hooks only: from an installed plugin's cache root, from the
+    // key the engine registered the plugin's folder under (`adage init`'s `adage@adage-local`),
+    // and `<name>@inline` for --plugin-dir; and only where bin/hook exists (live run 1, defect 4).
+    const binary = path.join(repo, pluginDir, "hooks/binary.ts")
+    const sources = [bridge, binary].filter((f) => existsSync(f)).map((f) => readFileSync(f, "utf8")).join("\n")
+    for (const [needle, what] of [
+      ["plugins[\\\\/]cache", "an installed plugin's cache root"],
+      ["known_marketplaces.json", "the marketplaces the engine registered (a directory marketplace's plugin is read in place)"],
+      ["installed_plugins.json", "the plugins the engine installed"],
+      ["@inline", "a --plugin-dir plugin's key"],
+      ["m.fs.exists(hook)", "the shim's bin/hook, checked before a candidate is taken"],
+    ]) {
+      expect(sources.includes(needle), `${pluginDir}/hooks/{bridge,binary}.ts: the data directory is not derived from ${what} (\`${needle}\`)`)
+    }
+    const registerTs = path.join(repo, pluginDir, "hooks/register.ts")
+    const registerSrc = existsSync(registerTs) ? readFileSync(registerTs, "utf8") : ""
+    for (const v of ["CLAUDE_PLUGIN_DATA", "CLAUDE_CONFIG_DIR", "HOME", "USERPROFILE"]) {
+      expect(registerSrc.includes(`$.env.get('${v}')`), `${pluginDir}/hooks/register.ts: the mod does not read ${v} (its data directory is derived from it)`)
+    }
     // The person-only verbs the mod runs only through a press (architecture §3.12, plan B4): a
     // second literal in hooks/press.ts, exactly these, never one the allow-list above may run and
     // never install, config, share, train, packs or init.
@@ -136,7 +156,7 @@ expect(!existsSync(path.join(repo, "plugin/claude-code-exec")), "plugin/claude-c
       const list = readFileSync(press, "utf8").match(/export const PRESS_VERBS: readonly string\[\] = \[([^\]]*)\]/)?.[1]
       expect(list !== undefined, `${pluginDir}/hooks/press.ts: no PRESS_VERBS literal`)
       const verbs = (list ?? "").split(",").map((v) => v.trim().replace(/^['"]|['"]$/g, "")).filter(Boolean)
-      expect(verbs.join(",") === "review,delegate,on,add", `${pluginDir}/hooks/press.ts: the press list changed (${verbs.join(", ")}); change scripts/check-plugin.mjs with it`)
+      expect(verbs.join(",") === "review,delegate,on,add,update", `${pluginDir}/hooks/press.ts: the press list changed (${verbs.join(", ")}); change scripts/check-plugin.mjs with it`)
       for (const v of ["install", "config", "share", "train", "packs", "init"]) {
         expect(!verbs.includes(v), `${pluginDir}/hooks/press.ts: ${v} is never a press`)
       }

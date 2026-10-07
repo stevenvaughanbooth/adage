@@ -18,6 +18,13 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### The runtime and hooks
 
+- **An edit made through Bash is an edit.** A Bash call in a tool batch is read with the files it
+  writes: a redirection's target (`cat > f <<'EOF'`, `printf … >> f`), `tee`'s operands, and the
+  files an inline Python program opens for writing (`python3 - <<'E'`, `python3 -c`, a path held in
+  a name), each right after the action that wrote it, and the commands written after a heredoc's
+  start. So a schema rewritten by a heredoc arms the finish line, contexts and triggers as an Edit
+  does, and `make gen` in the same command meets it. Learning, the graph and the fast path read
+  commands as before.
 - **The orientation card.** A delivered procedure card no longer quotes the exemplar lines; it says
   where its files stand in the checkout instead (line counts, a Python source's last definitions,
   a test file's last lines, a changelog's first headings), read locally with no command run and
@@ -124,6 +131,14 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   an earlier build has no path and is not used until the skill is trained again.
 
 ### Conditioning (learning from traces)
+
+- **A repository script is classified from its command and its text, not from what it printed.**
+  A lookup prints a work item, and a work item says things like "generated models include it":
+  live run 2 kept `scripts/wi-lookup` an environment step on that line and so could not grant it
+  predict. Once a trace shows the script's text and the text writes nothing, its output is not
+  read for change words; without the text only a line that opens with one counts. A change a
+  `git status` lists after the agent's own command that writes (a heredoc, `make gen`) is not
+  laid on the script, and `python3 -I scripts/x` counts as a run of `scripts/x`.
 
 - **A learn run reads earlier results through its store.** It reads earlier tracks, a person's
   review decisions, proposals, route explanations, instinct bindings and installed packs through
@@ -322,6 +337,15 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   reject learning before tracks are written.
 
 ### Execution (opt-in)
+
+- **`adage-exec` reads grants under the key they were written under.** `status`, `revoke`,
+  `approve`, `run`, `completion`, `readiness` and `journal` key a checkout as the index holds its
+  reflexes (the key `adage review delegate` writes a grant under and the hooks read it by), so
+  `adage-exec status --repo .` lists a grant made for reflexes learned under a name such as
+  `acme-billing`, where it showed none.
+- **Delegating a nascent reflex says it is nascent.** `adage review delegate … --predict` on a
+  reflex that waits for review said "no reflex …"; it now says the reflex is nascent and that
+  `adage review approve <track> <reflex>` makes it eligible. Other refusals are unchanged.
 
 - **Adage owns an approved verification.** With E2 allowed and one learned verification approved,
   a treated Claude Code or Codex session starts with a short, factual contract naming the command
@@ -563,6 +587,19 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### The Claude Code mod
 
+- **The mod finds its binary without `CLAUDE_PLUGIN_DATA`.** Claude Code gives that variable to
+  command hooks only, so under `--plugin-dir` and after `adage init`'s local-marketplace install the
+  mod never ran its binary and stayed inert. It now derives the data directory itself: from an
+  installed plugin's cache root, from the key Claude Code registered the plugin's folder under
+  (`adage@adage-local` → `plugins/data/adage-adage-local`), or `<name>-inline` for `--plugin-dir`,
+  under `CLAUDE_CONFIG_DIR` or `~/.claude` (`USERPROFILE` on Windows, either separator), and takes
+  one only once the session-start shim has linked `bin/hook` there.
+- **A step the mod makes in the model's place no longer costs a failed request.** Its stop states
+  no reason (no request was made), so Claude Code sends the next request whole instead of naming
+  a response the server never issued; before, every predicted step was followed by a 404
+  `thread_not_found` and a replayed dispatch (live run 2: 12 of 12), which spent the request the
+  prediction saved.
+
 - **The Claude Code mod acts on what the binary answers.** Before a Bash call runs, the mod asks
   the binary's plan and Claude Code's own permission check: a fresh receipt answers a test run
   the rules would have let run unasked (the model reads the receipt as the result, the row draws
@@ -633,6 +670,10 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   not again when the batch lists it.
 
 ### Evaluation
+
+- **A dead end piped through `| tail` is counted.** The demo's `dead_end_hits` read a failed
+  verification from its exit status, which a pipeline takes from `tail` (0); it now also reads it
+  from the command and what it printed (`No module named pytest`, `FAILED`, `make: ***`).
 
 - Evidence for this work is development-stage only: one valid development study on one task with
   development scaffolding (dev-v9b), not a launch statistic. The held-out comparison has not run.
@@ -761,7 +802,29 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   of one release are fine and only a `--plugin-dir` checkout is sent to `plugin/build.sh`. An
   older adage that finds the index a newer one wrote says so once a day at a session start, stays
   quiet otherwise, and no longer conditions over it; doctor's `index` failure for it names `adage
-  update`.
+  update`. The plugin's session-start shim removes the `bin/<name>-<sha>` copies an earlier plugin
+  version installed once no link names them.
+- **Every surface says when a newer Adage is out, and none calls it a problem.** The card's
+  `update` row (`0.2.0 is out (you have 0.1.0) → adage update`), `adage version` (`adage 0.1.0 ·
+  0.2.0 is out (adage update)`), doctor's `binary` check (still a pass, with `update adage update`
+  and the lamp unchanged), `adage ui` Home's first rows with `u` and the palette's `Update Adage`
+  (`adage update` as a job, confirmed first), `adage watch`'s header, and the session-start notice:
+  its fifth and lowest part, `adage: 0.2.0 is out (you have 0.1.0); run adage update.` (`/adage
+  update brings it` from the plugin's binary), said once per machine and dropped first when two
+  higher parts fill the line. Notices from the plugin's binary name `/adage review` and `/adage
+  health`, never "in a terminal".
+- **Update from inside Claude Code with one answer.** `/adage update` asks `Adage 0.2.0 is out (you
+  have 0.1.0). Update now? It takes effect in your next session.`; `update` is a press (the
+  fourteenth site, `PersonVerb::Update`) that runs exactly `adage update`, which under a press
+  updates only a channel that fetches (the plugin through `claude plugin update`, npm, the release
+  installer), writes no settings file, registration or config, answers `manual` for a source
+  build, a checkout or Homebrew, and ends on one JSON line the toast reads (`adage updated 0.1.0 →
+  0.2.0 · takes effect in your next session`). `what changes` opens Health on a `version` row with
+  the release's first lines, `u: update` and `Copy: adage update`. The band's second line says `»
+  adage 0.2.0 is out · /adage update` below every other item, until the first prompt, once per
+  release per machine. With no press held the answer is kept and asked again at the next start;
+  headless, `/adage update` names the terminal. Every flag of `adage update` keeps the terminal's
+  check, and `--rollback` is never a press.
 - **`adage init` installs the Claude Code plugin itself, and connects every other harness.** With
   `claude` on `PATH` and the plugin not installed, `adage init` stages the plugin from the binary
   you ran (its hooks and modules travel inside `adage`; `adage`, `adage-exec` and `adage-train` are

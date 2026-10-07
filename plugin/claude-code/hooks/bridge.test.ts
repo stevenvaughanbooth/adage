@@ -2,7 +2,7 @@
 import type { ProcessRunInit, ProcessRunResult, ProcessSpawnRequest } from 'claude-code'
 import { describe, expect, test } from 'claude-code/testing'
 
-import { ALLOWED_VERBS, NOTE_TIMEOUT_MS, ask, cliBinary, dataDirFromRoot, exeSuffix, guard, guardSpawn, headOf, hookBinary, isAllowed, note, probe, read, say } from './bridge'
+import { ALLOWED_VERBS, NOTE_TIMEOUT_MS, ask, cliBinary, configDirs, dataDirCandidates, dataDirFromRoot, exeSuffix, guard, guardSpawn, headOf, hookBinary, inlineDataDirs, isAllowed, note, probe, read, registeredKeys, say, sepOf } from './bridge'
 import type { Run } from './bridge'
 import { WIRE_NAMES, wire, wireLine } from './fixtures/kit'
 
@@ -205,30 +205,89 @@ describe('T-B1-02 · probe', () => {
 })
 
 describe('T-B1-03 · where the binary is', () => {
-  test('CLAUDE_PLUGIN_DATA first, no PATH fallback', () => {
-    expect(hookBinary('/d/', '/anywhere')).toBe('/d/bin/hook')
-    expect(hookBinary(undefined, '/home/me/src/adage/plugin/claude-code')).toBeUndefined()
-    expect(hookBinary('', '/home/me/src/adage/plugin/claude-code')).toBeUndefined()
+  test('`<data>/bin/hook` in the data directory; none without one, no PATH fallback', () => {
+    expect(hookBinary('/d/')).toBe('/d/bin/hook')
+    expect(hookBinary(undefined)).toBeUndefined()
+    expect(hookBinary('')).toBeUndefined()
   })
 
-  test('derived from an installed plugin root as Claude Code lays out plugins/data', () => {
+  test('derived from an installed plugin root as Claude Code lays out plugins/data, either separator', () => {
     expect(dataDirFromRoot('/home/me/.claude/plugins/cache/adage/adage/0.1.0')).toBe('/home/me/.claude/plugins/data/adage-adage')
     expect(dataDirFromRoot('/c/plugins/cache/my.market/adage-exec/1.2.3/')).toBe('/c/plugins/data/adage-exec-my-market')
-    expect(hookBinary(undefined, '/c/plugins/cache/adage/adage/0.1.0')).toBe('/c/plugins/data/adage-adage/bin/hook')
+    expect(dataDirFromRoot('C:\\Users\\me\\.claude\\plugins\\cache\\adage\\adage\\0.1.0')).toBe('C:\\Users\\me\\.claude\\plugins\\data\\adage-adage')
+    expect(dataDirFromRoot('C:/Users/me/.claude/plugins/cache/adage/adage/0.1.0')).toBe('C:/Users/me/.claude/plugins/data/adage-adage')
+    expect(dataDirFromRoot('/home/me/src/adage/plugin/claude-code')).toBeUndefined()
+    expect(hookBinary(dataDirFromRoot('/c/plugins/cache/adage/adage/0.1.0'))).toBe('/c/plugins/data/adage-adage/bin/hook')
+  })
+
+  test('a --plugin-dir plugin: `<config>/plugins/data/<name>-inline`, CLAUDE_CONFIG_DIR alone when set, else each home\'s .claude', () => {
+    expect(inlineDataDirs('adage', '/cfg/', ['/home/me'])).toEqual(['/cfg/plugins/data/adage-inline'])
+    expect(inlineDataDirs('adage', undefined, ['/home/me', undefined])).toEqual(['/home/me/.claude/plugins/data/adage-inline'])
+    expect(inlineDataDirs('adage', undefined, [undefined, 'C:\\Users\\me'])).toEqual(['C:\\Users\\me\\.claude\\plugins\\data\\adage-inline'])
+    expect(inlineDataDirs('adage', undefined, ['/c/Users/me', 'C:\\Users\\me'])).toEqual([
+      '/c/Users/me/.claude/plugins/data/adage-inline',
+      'C:\\Users\\me\\.claude\\plugins\\data\\adage-inline',
+    ])
+    expect(inlineDataDirs('adage', undefined, ['/home/me', '/home/me'])).toEqual(['/home/me/.claude/plugins/data/adage-inline'])
+    expect(inlineDataDirs('my.mod', '/cfg', [])).toEqual(['/cfg/plugins/data/my-mod-inline'])
+    expect(inlineDataDirs('adage', undefined, [undefined, ''])).toEqual([])
+    expect(configDirs('/cfg/', ['/home/me'])).toEqual(['/cfg'])
+  })
+
+  // What `adage init` leaves (read live from Claude Code 2.1.292): a directory marketplace,
+  // `adage-local` at $ADAGE_HOME/plugin, whose plugin the engine reads in place.
+  const KNOWN = JSON.stringify({
+    'adage-local': { source: { source: 'directory', path: '/ah/plugin' }, installLocation: '/ah/plugin', lastUpdated: '2026-10-07T00:55:18.766Z' },
+    other: { source: { source: 'github', repo: 'x/y' }, installLocation: '/cfg/plugins/marketplaces/other' },
+  })
+  const INSTALLED = JSON.stringify({
+    version: 2,
+    plugins: {
+      'adage@adage-local': [{ scope: 'user', installPath: '/cfg/plugins/cache/adage-local/adage/0.1.0', version: '0.1.0' }],
+      'adage@adage': [{ scope: 'user', installPath: '/home/me/src/adage/plugin/claude-code' }],
+      'adagex@adage': [{ scope: 'user', installPath: '/ah/plugin/adage' }],
+    },
+  })
+
+  test('the key the engine registered the plugin\'s folder under: a marketplace that holds it, or an install at it', () => {
+    expect(registeredKeys('/ah/plugin/adage', 'adage', KNOWN, INSTALLED)).toEqual(['adage@adage-local'])
+    expect(registeredKeys('/ah/plugin/adage/', 'adage', JSON.parse(KNOWN), undefined)).toEqual(['adage@adage-local'])
+    expect(registeredKeys('/home/me/src/adage/plugin/claude-code', 'adage', KNOWN, INSTALLED)).toEqual(['adage@adage'])
+    expect(registeredKeys('/elsewhere/adage', 'adage', KNOWN, INSTALLED)).toEqual([])
+    // Windows: either separator, a drive in any case.
+    const winKnown = { 'adage-local': { installLocation: 'C:\\Users\\me\\AppData\\Roaming\\Adage\\plugin' } }
+    expect(registeredKeys('c:/users/me/appdata/roaming/adage/plugin/adage', 'adage', winKnown, undefined)).toEqual(['adage@adage-local'])
+    // Unreadable or malformed files: none.
+    for (const bad of [undefined, '', 'not json', '[]', 'null', { 'adage-local': 3 }]) expect(registeredKeys('/ah/plugin/adage', 'adage', bad, bad)).toEqual([])
+  })
+
+  test('the candidates: an installed cache root alone; else each config\'s registered keys, then <name>-inline', () => {
+    expect(dataDirCandidates('/home/me/.claude/plugins/cache/adage/adage/0.1.0', 'adage', [{ config: '/cfg', known: KNOWN, installed: INSTALLED }])).toEqual(['/home/me/.claude/plugins/data/adage-adage'])
+    expect(dataDirCandidates('/home/me/src/adage/plugin/claude-code', 'adage', [{ config: '/home/me/.claude' }])).toEqual(['/home/me/.claude/plugins/data/adage-inline'])
+    expect(dataDirCandidates('/ah/plugin/adage', 'adage', [{ config: '/cfg', known: KNOWN, installed: INSTALLED }])).toEqual([
+      '/cfg/plugins/data/adage-adage-local',
+      '/cfg/plugins/data/adage-inline',
+    ])
+    expect(dataDirCandidates('C:\\ah\\plugin\\adage', 'adage', [{ config: 'C:\\Users\\me\\.claude', known: { 'adage-local': { installLocation: 'C:\\ah\\plugin' } } }])).toEqual([
+      'C:\\Users\\me\\.claude\\plugins\\data\\adage-adage-local',
+      'C:\\Users\\me\\.claude\\plugins\\data\\adage-inline',
+    ])
   })
 
   test('the CLI verbs come from `adage` beside the hook binary, never from PATH', () => {
-    expect(cliBinary('/d', '/x')).toBe('/d/bin/adage')
-    expect(cliBinary(undefined, '/home/me/src/adage/plugin/claude-code')).toBeUndefined()
+    expect(cliBinary('/d')).toBe('/d/bin/adage')
+    expect(cliBinary(undefined)).toBeUndefined()
   })
 
-  test('on Windows the entries the shim copies are hook.exe and adage.exe', () => {
+  test('on Windows the entries the shim copies are hook.exe and adage.exe, under the data directory\'s own separator', () => {
     expect(exeSuffix('Windows_NT')).toBe('.exe')
     expect(exeSuffix(undefined)).toBe('')
     expect(exeSuffix('Linux')).toBe('')
-    expect(hookBinary('C:/Users/me/.claude/plugins/data/adage-adage', '/x', exeSuffix('Windows_NT'))).toBe('C:/Users/me/.claude/plugins/data/adage-adage/bin/hook.exe')
-    expect(cliBinary('C:/Users/me/.claude/plugins/data/adage-adage', '/x', exeSuffix('Windows_NT'))).toBe('C:/Users/me/.claude/plugins/data/adage-adage/bin/adage.exe')
-    expect(hookBinary('/d', '/x', exeSuffix(undefined))).toBe('/d/bin/hook')
+    expect(hookBinary('C:/Users/me/.claude/plugins/data/adage-adage', exeSuffix('Windows_NT'))).toBe('C:/Users/me/.claude/plugins/data/adage-adage/bin/hook.exe')
+    expect(cliBinary('C:/Users/me/.claude/plugins/data/adage-adage', exeSuffix('Windows_NT'))).toBe('C:/Users/me/.claude/plugins/data/adage-adage/bin/adage.exe')
+    expect(hookBinary('C:\\Users\\me\\.claude\\plugins\\data\\adage-inline\\', '.exe')).toBe('C:\\Users\\me\\.claude\\plugins\\data\\adage-inline\\bin\\hook.exe')
+    expect(hookBinary('/d', exeSuffix(undefined))).toBe('/d/bin/hook')
+    expect([sepOf('C:\\x'), sepOf('\\\\server\\share'), sepOf('C:/x'), sepOf('/home/me')]).toEqual(['\\', '\\', '/', '/'])
   })
 })
 

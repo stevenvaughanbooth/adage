@@ -110,22 +110,120 @@ export function guardSpawn(spawn: Spawn): Spawn {
 }
 
 /**
- * The plugin's data directory derived from its root, as Claude Code lays them out for an installed
- * plugin: root `<config>/plugins/cache/<marketplace>/<plugin>/<version>`, data
- * `<config>/plugins/data/<plugin@marketplace, non [A-Za-z0-9_-] as '-'>`. Undefined for any other
- * root (a --plugin-dir checkout), where only CLAUDE_PLUGIN_DATA can say.
+ * The separator a path is spelled with: a backslash for a Windows path spelled with them (a drive,
+ * `C:\Users\me`, or a share), `/` for every other (a Unix path, or Windows spelled with `/`).
  */
-export function dataDirFromRoot(root: string): string | undefined {
-  const m = /^(.*)\/plugins\/cache\/([^/]+)\/([^/]+)\/[^/]+\/?$/.exec(root)
-  if (m === null) return undefined
-  const [, config, marketplace, plugin] = m
-  return `${config}/plugins/data/${`${plugin}@${marketplace}`.replace(/[^a-zA-Z0-9\-_]/g, '-')}`
+export const sepOf = (p: string): string => (/^(?:[A-Za-z]:\\|\\\\)/.test(p) ? '\\' : '/')
+
+/** `base` and `parts` joined with base's own separator, base's trailing separators dropped. */
+export function joinPath(base: string, ...parts: string[]): string {
+  return [base.replace(/[\\/]+$/, ''), ...parts].join(sepOf(base))
 }
 
-/** The plugin's data directory: CLAUDE_PLUGIN_DATA when the engine carries it, else derived. */
-export function dataDir(pluginData: string | undefined, pluginRoot: string): string | undefined {
-  const data = pluginData || dataDirFromRoot(pluginRoot)
-  return data ? data.replace(/\/+$/, '') : undefined
+/** A data directory's name for a plugin's key (`<plugin>@<source>`): every character but [A-Za-z0-9_-] as `-`. */
+const dataName = (key: string): string => key.replace(/[^a-zA-Z0-9\-_]/g, '-')
+
+/**
+ * The plugin's data directory derived from its root, as Claude Code lays them out for an installed
+ * plugin: root `<config>/plugins/cache/<marketplace>/<plugin>/<version>`, data
+ * `<config>/plugins/data/<plugin@marketplace, non [A-Za-z0-9_-] as '-'>`, either separator.
+ * Undefined for any other root (a --plugin-dir checkout).
+ */
+export function dataDirFromRoot(root: string): string | undefined {
+  const m = /^(.*)[\\/]plugins[\\/]cache[\\/]([^\\/]+)[\\/]([^\\/]+)[\\/][^\\/]+[\\/]?$/.exec(root)
+  if (m === null) return undefined
+  const [, config = '', marketplace = '', plugin = ''] = m
+  return joinPath(config, 'plugins', 'data', dataName(`${plugin}@${marketplace}`))
+}
+
+/**
+ * The config directories the plugin's data may be under: CLAUDE_CONFIG_DIR when set (and then only
+ * it), else `.claude` in the home directory (HOME, or USERPROFILE where Windows has no HOME; both
+ * when they differ, as under Git Bash).
+ */
+export function configDirs(configDir: string | undefined, homes: readonly (string | undefined)[]): string[] {
+  const configs = configDir ? [configDir] : homes.filter((h): h is string => !!h).map(h => joinPath(h, '.claude'))
+  return [...new Set(configs.map(c => c.replace(/[\\/]+$/, '')))]
+}
+
+/**
+ * Where the data directory of a plugin loaded with --plugin-dir may be: the engine keys it
+ * `<name>@inline`, so `<config>/plugins/data/<name>-inline` under each of `configDirs`. Each a
+ * candidate the shim may have written; the caller checks.
+ */
+export function inlineDataDirs(name: string, configDir: string | undefined, homes: readonly (string | undefined)[]): string[] {
+  return configDirs(configDir, homes).map(c => joinPath(c, 'plugins', 'data', dataName(`${name}@inline`)))
+}
+
+/** A path compared as a path: either separator, no trailing one, a Windows drive path in any case. */
+const pathKey = (p: string): string => {
+  const k = p.replace(/\\/g, '/').replace(/\/+$/, '')
+  return /^[A-Za-z]:\//.test(k) ? k.toLowerCase() : k
+}
+const isRecord = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v)
+
+/**
+ * What the engine wrote about its plugins under one config directory, as read (the JSON text or
+ * the parsed value; anything unreadable is undefined): `plugins/known_marketplaces.json` (each
+ * marketplace's `installLocation` and `source.path`) and `plugins/installed_plugins.json` (each
+ * `<plugin>@<marketplace>`'s `installPath`s).
+ */
+export type Registry = { config: string; known?: unknown; installed?: unknown }
+
+const parsed = (v: unknown): unknown => {
+  if (typeof v !== 'string') return v
+  try {
+    return JSON.parse(v)
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * The keys (`<name>@<marketplace>`) under which the engine loads the plugin whose folder is
+ * `root`: a marketplace whose folder holds it (a directory marketplace's plugin is read in place:
+ * `adage init`'s `adage@adage-local`, read from `$ADAGE_HOME/plugin/adage`), and an installed
+ * entry whose `installPath` is it. Only the plugin's own name, in the order the files list them.
+ */
+export function registeredKeys(root: string, name: string, known: unknown, installed: unknown): string[] {
+  const at = pathKey(root)
+  const keys: string[] = []
+  const k = parsed(known)
+  if (isRecord(k)) {
+    for (const [marketplace, entry] of Object.entries(k)) {
+      if (!isRecord(entry)) continue
+      const source = isRecord(entry.source) ? entry.source.path : undefined
+      const homes = [entry.installLocation, source].filter((p): p is string => typeof p === 'string' && p !== '').map(pathKey)
+      if (homes.some(h => at === h || at.startsWith(`${h}/`))) keys.push(`${name}@${marketplace}`)
+    }
+  }
+  const i = parsed(installed)
+  const plugins = isRecord(i) && isRecord(i.plugins) ? i.plugins : {}
+  for (const [key, entries] of Object.entries(plugins)) {
+    if (!key.startsWith(`${name}@`) || !Array.isArray(entries)) continue
+    if (entries.some(e => isRecord(e) && typeof e.installPath === 'string' && pathKey(e.installPath) === at)) keys.push(key)
+  }
+  return [...new Set(keys)]
+}
+
+/**
+ * Where the plugin's data directory may be when the engine's process does not carry
+ * CLAUDE_PLUGIN_DATA (it hands it to command hooks only), in order: derived from an installed
+ * plugin's root (and then only that); else, under each config directory, the data directory of
+ * each key the engine registered the plugin's folder under (`registeredKeys`), then the
+ * --plugin-dir layout's (`<name>-inline`). Each a candidate the shim may have written; the
+ * caller checks. A key the folder is not registered under is never a candidate: its link may be
+ * another install's.
+ */
+export function dataDirCandidates(root: string, name: string, registries: readonly Registry[]): string[] {
+  const installed = dataDirFromRoot(root)
+  if (installed !== undefined) return [installed]
+  const out: string[] = []
+  for (const r of registries) {
+    const data = (key: string) => joinPath(r.config, 'plugins', 'data', dataName(key))
+    out.push(...registeredKeys(root, name, r.known, r.installed).map(data), data(`${name}@inline`))
+  }
+  return [...new Set(out)]
 }
 
 /**
@@ -136,20 +234,17 @@ export function dataDir(pluginData: string | undefined, pluginRoot: string): str
 export const exeSuffix = (os: string | undefined): string => (os === 'Windows_NT' ? '.exe' : '')
 
 /**
- * `<data>/bin/<BIN>`, the link the session-start shim made, from CLAUDE_PLUGIN_DATA when the
- * engine's process carries it, else derived from the plugin root. There is no PATH fallback: when
- * the shim linked `scripts/quiet` (no binary could serve) the probe reads nothing and the mod stays
- * inert, as the command hooks do.
+ * `<data>/bin/<BIN>`, the link the session-start shim made in the plugin's data directory
+ * (binary.ts `dataDir`). There is no PATH fallback: when the shim linked `scripts/quiet` (no
+ * binary could serve) the probe reads nothing and the mod stays inert, as the command hooks do.
  */
-export function hookBinary(pluginData: string | undefined, pluginRoot: string, exe = ''): string | undefined {
-  const data = dataDir(pluginData, pluginRoot)
-  return data ? `${data}/bin/${BIN}${exe}` : undefined
+export function hookBinary(data: string | undefined, exe = ''): string | undefined {
+  return data ? joinPath(data, 'bin', `${BIN}${exe}`) : undefined
 }
 
 /** `<data>/bin/adage`, which the shim links beside `bin/hook`: the verbs the mod draws from. */
-export function cliBinary(pluginData: string | undefined, pluginRoot: string, exe = ''): string | undefined {
-  const data = dataDir(pluginData, pluginRoot)
-  return data ? `${data}/bin/${CLI}${exe}` : undefined
+export function cliBinary(data: string | undefined, exe = ''): string | undefined {
+  return data ? joinPath(data, 'bin', `${CLI}${exe}`) : undefined
 }
 
 /**

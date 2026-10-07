@@ -178,9 +178,10 @@ fn adage_home() -> PathBuf {
     adage_store::Paths::from_env().root
 }
 
+/// The key the request's repository keeps its grants under ([`adage_exec::route::grant_key`]).
 fn repo_key(req: &ExecRequest) -> Result<String> {
     let root = req.repo_root.canonicalize().with_context(|| format!("repository {}", req.repo_root.display()))?;
-    Ok(adage_core::repo::repo_key(&root))
+    Ok(adage_exec::route::grant_key(&root, &adage_store::Paths::from_env()))
 }
 
 fn cmd_run(a: &Args) -> Result<i32> {
@@ -327,7 +328,7 @@ fn cmd_revoke(a: &Args) -> Result<i32> {
     };
     person::require_person("revoke")?;
     let repo = PathBuf::from(a.one("--repo").context("--repo is required")?);
-    let key = adage_core::repo::repo_key(&repo.canonicalize()?);
+    let key = adage_exec::route::grant_key(&repo.canonicalize()?, &adage_store::Paths::from_env());
     let route = match (a.one("--track"), a.one("--route")) {
         (Some(t), Some(r)) => Some(format!("{t}/{r}")),
         (None, None) => None,
@@ -347,36 +348,17 @@ fn cmd_revoke(a: &Args) -> Result<i32> {
 fn cmd_status(a: &Args) -> Result<i32> {
     a.only(&["--repo"], &[])?;
     let repo = PathBuf::from(a.one("--repo").context("--repo is required")?);
-    let key = adage_core::repo::repo_key(&repo.canonicalize()?);
+    let key = adage_exec::route::grant_key(&repo.canonicalize()?, &adage_store::Paths::from_env());
     let store = Store::load(&approvals::path(&adage_home()))?;
-    let line = |x: &Approval| {
-        println!(
-            "  {}  {} {}  {}  (approved {}{})",
-            x.route,
-            x.key.level.as_str().to_uppercase(),
-            x.key.output_mode.as_str(),
-            x.key.argv_templates.iter().map(|v| v.join(" ")).collect::<Vec<_>>().join(" ; "),
-            x.approved_on,
-            if x.auto { ", automatic" } else { "" }
-        )
-    };
-    let key = key.as_str();
-    let of = |m: GrantMode| store.approvals.iter().filter(move |x| x.key.repo == key && x.key.mode == m);
-    println!("Execution grants for {key}: {}", of(GrantMode::Execute).count());
-    of(GrantMode::Execute).for_each(line);
-    // A prediction grant runs nothing itself: it lets the step be taken in the model's place.
-    let predict = of(GrantMode::Predict).count();
-    if predict > 0 {
-        println!("Prediction grants for {key}: {predict}");
-        of(GrantMode::Predict).for_each(line);
-    }
+    print!("{}", store.status_text(&key));
     Ok(0)
 }
 
 fn completion_repo(a: &Args) -> Result<(PathBuf, String, adage_store::Paths)> {
     let root = std::fs::canonicalize(a.one("--repo").context("--repo is required")?)?;
-    let key = adage_core::repo::repo_key(&root);
-    Ok((root, key, adage_store::Paths::from_env()))
+    let paths = adage_store::Paths::from_env();
+    let key = adage_exec::route::grant_key(&root, &paths);
+    Ok((root, key, paths))
 }
 
 fn cmd_completion(a: &Args) -> Result<i32> {
@@ -495,7 +477,7 @@ fn cmd_doctor(a: &Args) -> Result<i32> {
 fn cmd_journal(a: &Args) -> Result<i32> {
     a.only(&["--repo"], &[])?;
     let repo = a.one("--repo").map(std::fs::canonicalize).transpose()?;
-    let repo = repo.as_ref().map(|p| adage_core::repo::repo_key(p));
+    let repo = repo.as_ref().map(|p| adage_exec::route::grant_key(p, &adage_store::Paths::from_env()));
     let rows: Vec<_> = adage_exec::journal::list(&adage_home())?
         .into_iter()
         .filter(|r| repo.as_ref().is_none_or(|k| &r.repo == k))

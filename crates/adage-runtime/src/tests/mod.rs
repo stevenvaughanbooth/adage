@@ -3,6 +3,7 @@
 
 mod algebra;
 mod attachment;
+mod bash_edits;
 mod basics;
 mod chains;
 mod contexts;

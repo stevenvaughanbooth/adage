@@ -674,6 +674,21 @@ pub fn find<'a>(index: &'a Index, repo: &str, track: &str, route: &str) -> Optio
     index.routes.iter().find(|r| r.repo == repo && r.track == track && r.route.id == route)
 }
 
+/// The key the checkout at `root` keeps its grants under, for `adage-exec`'s own verbs (`status`,
+/// `revoke`, `approve`, `run`, `completion`, `readiness`, `journal`): the key the index holds its
+/// reflexes under ([`adage_core::repo::lookup_key`] over the index's repositories), which is the
+/// key `adage review delegate` writes a grant under (the found reflex's `repo`) and the key a hook
+/// reads grants by. A checkout with no reflex installed keeps its own [`adage_core::repo::repo_key`].
+/// The two differ when reflexes were learned under a key a person gave (`adage condition --repo
+/// <key>`) or under a legacy name: the root-commit key would show and revoke nothing there.
+pub fn grant_key(root: &Path, paths: &adage_store::Paths) -> String {
+    let index = Index::load(&paths.index());
+    let keys: std::collections::BTreeSet<&str> = index.routes.iter().map(|r| r.repo.as_str()).collect();
+    let cache = paths.repo_keys();
+    adage_core::repo::lookup_key(root, Some(&cache), &keys)
+        .unwrap_or_else(|| adage_core::repo::repo_key_cached(root, &cache))
+}
+
 /// Where the installed tracks live under a data directory.
 pub fn tracks_dir(home: &Path) -> PathBuf {
     adage_store::Paths::at(home).tracks()

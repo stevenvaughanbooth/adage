@@ -386,6 +386,44 @@ mod tests {
         assert!(spooled.iter().all(|r| r.get("exec").is_none()), "no execution was attempted: {spooled:?}");
     }
 
+    /// A predict grant on an instinct's finish line (the first live run's `finish-line-e7e809`,
+    /// instinct U5) holds under adage-exec's hook: `predict_grants` names it, and it is used where
+    /// the instinct is due, at the step after the edit (kind `run`), while the advice is pending.
+    /// An instinct is advice, never an obligation: the Stop gate asks nothing of it, before the
+    /// call or after.
+    #[test]
+    fn a_predict_grant_on_an_instinct_finish_line_is_used_at_the_step_after_the_edit() {
+        use adage_tracks::testkit::{kinds, IndexBuilder, LearnedHome};
+        let mut f = Fixture::new();
+        let gen = kinds::finish_line("finish-line-gen", "registry/*.csv", "make gen")
+            .support(5, 5)
+            .days(3)
+            .provenance("instinct:core@1.0.0");
+        f.index = IndexBuilder::from(std::mem::take(&mut f.index))
+            .route("fixture", "fixture/instincts", gen)
+            .write(&f.paths.index());
+        assert!(f.index.routes[1].route.is_instinct());
+        f.home = LearnedHome::at(&f.paths.root).without_auto_learn();
+        f._tmp.write("fixture/registry/currencies.csv", "EUR\n");
+        treated(&f, Arm::Treated);
+        grant_predict(&f, 1);
+        let want = vec![("fixture/instincts".to_string(), "finish-line-gen".to_string())];
+        assert_eq!(predict_grants("fixture", &f.root, &f.index, &f.paths), want);
+        let stop = || hook(&f, "Stop", json!({ "hook_event_name": "Stop", "stop_hook_active": false }));
+        let edit = edit(f.root.join("registry/currencies.csv"));
+        let advised = hook(&f, "PostToolBatch", json!({ "tool_calls": [edit] })).expect("the instinct's advice");
+        assert!(advised.to_string().contains("make gen"), "{advised}");
+        assert!(stop().is_none(), "an instinct never asks at Stop");
+        let step = json!({ "hook_event_name": "TurnStep", "turn_id": "t1", "index": 2, "ending": false });
+        let out = hook(&f, "TurnStep", step).expect("the granted step, in the agent's place");
+        assert_eq!(
+            out,
+            json!({ "predict": { "kind": "run", "route": "finish-line-gen", "track": "fixture/instincts",
+                                  "calls": [{ "tool": "Bash", "input": { "command": "make gen" } }] } })
+        );
+        assert!(crate::journal::list(&f.paths.root).unwrap().is_empty(), "adage-exec ran nothing");
+    }
+
     /// A predict grant alone never runs anything in the hook: not the learned action, not a
     /// prefetch, not the finish-line gate, and it does not bring an exec-only reflex into play.
     #[test]

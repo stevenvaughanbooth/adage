@@ -285,6 +285,33 @@ impl Store {
         });
         before - self.approvals.len()
     }
+
+    /// What `adage-exec status` prints for the repository keyed `key`
+    /// ([`crate::route::grant_key`]): its execution grants, then its prediction grants when it
+    /// holds any, one line each.
+    pub fn status_text(&self, key: &str) -> String {
+        let line = |x: &Approval| {
+            format!(
+                "  {}  {} {}  {}  (approved {}{})\n",
+                x.route,
+                x.key.level.as_str().to_uppercase(),
+                x.key.output_mode.as_str(),
+                x.key.argv_templates.iter().map(|v| v.join(" ")).collect::<Vec<_>>().join(" ; "),
+                x.approved_on,
+                if x.auto { ", automatic" } else { "" }
+            )
+        };
+        let of = |m: GrantMode| self.approvals.iter().filter(move |x| x.key.repo == key && x.key.mode == m);
+        let mut out = format!("Execution grants for {key}: {}\n", of(GrantMode::Execute).count());
+        out.extend(of(GrantMode::Execute).map(line));
+        // A prediction grant runs nothing itself: it lets the step be taken in the model's place.
+        let predict = of(GrantMode::Predict).count();
+        if predict > 0 {
+            out.push_str(&format!("Prediction grants for {key}: {predict}\n"));
+            out.extend(of(GrantMode::Predict).map(line));
+        }
+        out
+    }
 }
 
 /// Facts about this machine and repository that automatic approval depends on.

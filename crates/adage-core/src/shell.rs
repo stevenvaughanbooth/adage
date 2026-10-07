@@ -187,7 +187,24 @@ fn too_many_pipes(s: &str) -> bool {
 }
 
 pub fn normalize_shell(command: &str, cwd: &str, table: &CommandTable) -> Vec<Normalized> {
-    normalize_at(command, cwd, table, 0)
+    normalize_at(command, cwd, table, 0, false)
+}
+
+/// [`normalize_shell`], as the runtime observes a command that ran: the same actions, and with
+/// them what the command was seen to change and run beyond them, from the same parse:
+///
+/// - each file it writes, as a `Write` (an `Edit` when it appends), right after the action that
+///   wrote it: a redirection's target (`printf … > f`, `cat > f <<'EOF'`, `cat <<'EOF' >> f`),
+///   `tee`'s operands (`… | tee f`, `tee -a f <<'EOF'`), and the files an inline Python program
+///   opens for writing (`python3 - <<'EOF'`, `python3 -c '…'`; [`python_writes`]);
+/// - the commands written after a heredoc's start (`cat > f <<'EOF' && make gen`), which the
+///   grammar nests inside the heredoc, where the plain walk never looks.
+///
+/// So an edit made through Bash counts as an edit of those paths (triggers, contexts, the finish
+/// line), and the command that meets it in the same call is seen. The plain form stays what
+/// learning, the graph and the classifiers read.
+pub fn normalize_shell_observed(command: &str, cwd: &str, table: &CommandTable) -> Vec<Normalized> {
+    normalize_at(command, cwd, table, 0, true)
 }
 
 fn unknown(note: &str) -> Normalized {
@@ -200,7 +217,7 @@ fn unknown(note: &str) -> Normalized {
     }
 }
 
-fn normalize_at(command: &str, cwd: &str, table: &CommandTable, depth: usize) -> Vec<Normalized> {
+fn normalize_at(command: &str, cwd: &str, table: &CommandTable, depth: usize, observed: bool) -> Vec<Normalized> {
     let command = command.trim();
     if command.is_empty() {
         return vec![];
@@ -227,7 +244,7 @@ fn normalize_at(command: &str, cwd: &str, table: &CommandTable, depth: usize) ->
     };
     let root = tree.root_node();
 
-    let ctx = Ctx { src: command, table, depth: std::cell::Cell::new(depth) };
+    let ctx = Ctx { src: command, table, depth: std::cell::Cell::new(depth), observed };
     let mut cwd = cwd.to_string();
     let mut out = Vec::new();
     let mut cursor = root.walk();
@@ -242,6 +259,9 @@ struct Ctx<'a> {
     table: &'a CommandTable,
     /// Current depth of the recursive walk (see [`MAX_DEPTH`]).
     depth: std::cell::Cell<usize>,
+    /// The walk for [`normalize_shell_observed`]: the files written and the commands after a
+    /// heredoc's start besides.
+    observed: bool,
 }
 
 /// Holds one level of walk depth; released on drop.
@@ -696,6 +716,13 @@ fn walk_statement(node: Node, cwd: &mut String, ctx: &Ctx) -> Vec<Normalized> {
                     a.mutating = true;
                 }
             }
+            // A later stage is not an action of its own, but what it writes is a write
+            // (`… | tee schema/x.sql`, `… | sort > out.txt`).
+            if ctx.observed {
+                for stage in &stages[1..] {
+                    head_actions.extend(stage_writes(*stage, cwd, ctx));
+                }
+            }
             head_actions
         }
 
@@ -711,10 +738,13 @@ fn walk_statement(node: Node, cwd: &mut String, ctx: &Ctx) -> Vec<Normalized> {
             let inline = node
                 .children(&mut node.walk())
                 .any(|ch| matches!(ch.kind(), "heredoc_redirect" | "herestring_redirect"));
+            // Python reading its program from this heredoc: the files the program writes.
+            let mut python_fed = false;
             if inline {
                 for a in actions.iter_mut() {
                     if let CanonicalAction::Exec { argv, .. } = &mut a.action {
                         if stdin_program(argv) {
+                            python_fed |= is_python(&argv[0]);
                             argv.retain(|x| x != "-");
                             argv.push("-c".into());
                             argv.push("<stdin>".into());
@@ -757,6 +787,9 @@ fn walk_statement(node: Node, cwd: &mut String, ctx: &Ctx) -> Vec<Normalized> {
                         note: String::new(),
                     });
                 }
+            }
+            if ctx.observed {
+                observe_redirected(node, python_fed, &mut actions, cwd, ctx);
             }
             actions
         }
@@ -885,7 +918,7 @@ fn walk_statement(node: Node, cwd: &mut String, ctx: &Ctx) -> Vec<Normalized> {
             // inside it does not leak to the caller (subshell-like scoping).
             if matches!(cmd.as_str(), "bash" | "sh" | "zsh") {
                 if let Some(script) = extract_dash_c(&argv[1..]) {
-                    subs.extend(normalize_at(&script, cwd, ctx.table, ctx.depth.get()));
+                    subs.extend(normalize_at(&script, cwd, ctx.table, ctx.depth.get(), ctx.observed));
                     return subs;
                 }
             }
@@ -893,6 +926,9 @@ fn walk_statement(node: Node, cwd: &mut String, ctx: &Ctx) -> Vec<Normalized> {
             let ops = operands(&cmd, &argv, ctx.table);
             let action_result = shape_command(&cmd, &argv, &ops, cwd, ctx.table);
             subs.push(action_result);
+            if ctx.observed {
+                subs.extend(command_writes(&cmd, &argv, cwd));
+            }
             subs
         }
 
@@ -913,6 +949,232 @@ fn statements_after_keyword<'a>(node: Node<'a>, keyword: &str) -> Vec<Node<'a>> 
             out.push(ch);
         } else if ch.kind() == keyword {
             seen = true;
+        }
+    }
+    out
+}
+
+/// What a redirected statement writes and runs besides its body, for [`normalize_shell_observed`]:
+/// each file a redirection writes (one the grammar nests in a heredoc too: `cat <<'EOF' > f`), the
+/// files the Python program a heredoc feeds writes, and the commands after the heredoc's start
+/// (`cat > f <<'EOF' && make gen`), in that order, after the body's actions.
+fn observe_redirected(node: Node, python_fed: bool, actions: &mut Vec<Normalized>, cwd: &mut String, ctx: &Ctx) {
+    let at = cwd.clone();
+    let mut c = node.walk();
+    let heredocs: Vec<Node> = node.children(&mut c).filter(|ch| ch.kind() == "heredoc_redirect").collect();
+    for (path, append) in redirect_writes(node, ctx.src) {
+        let known = actions.iter().any(|a| {
+            matches!(&a.action, CanonicalAction::Write { path: p } | CanonicalAction::Edit { path: p } if *p == resolve_path(&at, &path))
+        });
+        if !known {
+            actions.push(written(&at, &path, append, "a redirection"));
+        }
+    }
+    if python_fed {
+        for h in &heredocs {
+            let mut hc = h.walk();
+            let body = h.children(&mut hc).find(|ch| ch.kind() == "heredoc_body");
+            for (path, append) in body.map(|b| python_writes(text(b, ctx.src))).unwrap_or_default() {
+                actions.push(written(&at, &path, append, "its Python program"));
+            }
+        }
+    }
+    for h in &heredocs {
+        let mut hc = h.walk();
+        let after: Vec<Node> = h
+            .named_children(&mut hc)
+            .filter(|ch| !matches!(ch.kind(), "heredoc_start" | "heredoc_body" | "heredoc_end" | "file_redirect"))
+            .collect();
+        for ch in after {
+            actions.extend(walk_statement(ch, cwd, ctx));
+        }
+    }
+}
+
+/// The files a redirected statement's redirections write (its own, and those nested in a
+/// heredoc), each with whether it appends.
+fn redirect_writes(node: Node, src: &str) -> Vec<(String, bool)> {
+    let mut out = Vec::new();
+    let mut c = node.walk();
+    for ch in node.children(&mut c) {
+        match ch.kind() {
+            "file_redirect" => out.extend(redirect_target(ch, src)),
+            "heredoc_redirect" => {
+                let mut hc = ch.walk();
+                out.extend(
+                    ch.children(&mut hc)
+                        .filter(|r| r.kind() == "file_redirect")
+                        .filter_map(|r| redirect_target(r, src)),
+                );
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// The file one redirection writes, and whether it appends: `>`, `>|`, `&>` and `>&` to a name
+/// write it, `>>` and `&>>` append; an input, a descriptor (`2>&1`) or a device writes none.
+fn redirect_target(r: Node, src: &str) -> Option<(String, bool)> {
+    let mut c = r.walk();
+    let op = r.children(&mut c).find(|ch| !ch.is_named())?;
+    let append = match op.kind() {
+        ">" | ">|" | "&>" | ">&" => false,
+        ">>" | "&>>" => true,
+        _ => return None,
+    };
+    let dest = r.child_by_field_name("destination").filter(|d| d.kind() != "number")?;
+    let path = word_text(dest, src);
+    literal_file(&path).then_some((path, append))
+}
+
+/// What a later stage of a pipeline writes ([`normalize_shell_observed`]): `tee`'s operands, an
+/// inline Python program's files, and its own redirections.
+fn stage_writes(stage: Node, cwd: &str, ctx: &Ctx) -> Vec<Normalized> {
+    let (command, redirects) = match stage.kind() {
+        "command" => (Some(stage), Vec::new()),
+        "redirected_statement" => {
+            (stage.child_by_field_name("body").filter(|b| b.kind() == "command"), redirect_writes(stage, ctx.src))
+        }
+        _ => (None, Vec::new()),
+    };
+    let mut out = Vec::new();
+    if let Some(node) = command {
+        let argv = command_argv(node, ctx.src);
+        if let Some(head) = argv.first() {
+            out.extend(command_writes(&basename(head), &argv, cwd));
+        }
+    }
+    out.extend(redirects.into_iter().map(|(path, append)| written(cwd, &path, append, "a redirection")));
+    out
+}
+
+/// What one command writes by itself ([`normalize_shell_observed`]): `tee`'s operands, and the
+/// files a Python program given with `-c` writes.
+fn command_writes(cmd: &str, argv: &[String], cwd: &str) -> Vec<Normalized> {
+    if cmd == "tee" {
+        let append = argv[1..]
+            .iter()
+            .take_while(|a| *a != "--")
+            .any(|a| a == "--append" || (a.starts_with('-') && !a.starts_with("--") && a.contains('a')));
+        let mut operands = false;
+        let mut out = Vec::new();
+        for a in &argv[1..] {
+            if !operands && a == "--" {
+                operands = true;
+            } else if (operands || !a.starts_with('-')) && literal_file(a) {
+                out.push(written(cwd, a, append, "tee"));
+            }
+        }
+        return out;
+    }
+    if is_python(cmd) {
+        if let Some(code) = argv.iter().position(|a| a == "-c").and_then(|i| argv.get(i + 1)) {
+            return python_writes(code)
+                .into_iter()
+                .map(|(p, append)| written(cwd, &p, append, "its Python program"))
+                .collect();
+        }
+    }
+    Vec::new()
+}
+
+fn is_python(head: &str) -> bool {
+    matches!(basename(head).as_str(), "python" | "python3")
+}
+
+/// A target the command names literally: not empty, not `-`, a descriptor or a device, nothing
+/// for the shell to expand (a variable, a command substitution, a glob).
+fn literal_file(p: &str) -> bool {
+    !p.is_empty()
+        && p != "-"
+        && !p.bytes().all(|b| b.is_ascii_digit())
+        && !p.starts_with("/dev/")
+        && !p.contains(['$', '`', '*', '?', '[', '\n'])
+}
+
+/// A file written, as a canonical action: `Write`, or `Edit` when it appends to the file.
+fn written(cwd: &str, path: &str, append: bool, by: &str) -> Normalized {
+    let path = resolve_path(cwd, path);
+    Normalized {
+        action: if append { CanonicalAction::Edit { path } } else { CanonicalAction::Write { path } },
+        effect: Effect::Author,
+        mutating: true,
+        confidence: 0.9,
+        note: format!("written by {by}"),
+    }
+}
+
+/// The most files one inline program is read as writing.
+const MAX_PROGRAM_WRITES: usize = 32;
+
+/// The files an inline Python program writes, in program order, each with whether it changes the
+/// file in place (opened to append, or `r+`): `open(<file>, <mode>)` with a writing mode (`mode=`
+/// too), and `Path(<file>).write_text(…)` or `.write_bytes(…)`, where `<file>` is a string literal
+/// or a name an earlier statement bound to one (`p = 'schema/invoice.json'`, `p = Path('…')`; any
+/// other assignment unbinds it). The program is read, never run: a path it computes is not
+/// followed.
+fn python_writes(code: &str) -> Vec<(String, bool)> {
+    use regex::Regex;
+    use std::sync::OnceLock;
+    const LIT: &str = r#"(?:'([^'\\\n]*)'|"([^"\\\n]*)")"#;
+    static ASSIGN: OnceLock<Regex> = OnceLock::new();
+    static RHS: OnceLock<Regex> = OnceLock::new();
+    static OPEN: OnceLock<Regex> = OnceLock::new();
+    static PATH_WRITE: OnceLock<Regex> = OnceLock::new();
+    let assign = ASSIGN.get_or_init(|| Regex::new(r"(?m)(?:^|;)[ \t]*([A-Za-z_]\w*)[ \t]*=([^=\n;][^\n;]*)").unwrap());
+    let rhs = RHS
+        .get_or_init(|| Regex::new(&format!(r"^\s*(?:(?:pathlib\.)?Path\(\s*{LIT}\s*\)|{LIT})\s*(?:#.*)?$")).unwrap());
+    let open = OPEN.get_or_init(|| {
+        Regex::new(&format!(r"\bopen\(\s*(?:{LIT}|([A-Za-z_]\w*))\s*,\s*(?:mode\s*=\s*)?{LIT}")).unwrap()
+    });
+    let path_write = PATH_WRITE.get_or_init(|| {
+        Regex::new(&format!(
+            r"(?:\b(?:pathlib\.)?Path\(\s*(?:{LIT}|([A-Za-z_]\w*))\s*\)|\b([A-Za-z_]\w*))\.write_(?:text|bytes)\("
+        ))
+        .unwrap()
+    });
+    let text = |c: &regex::Captures, i: usize| c.get(i).map(|m| m.as_str().to_string());
+    // Statements in program order: (offset, a binding or an unbinding, or a write).
+    enum Seen {
+        Bind(String, Option<String>),
+        Write(Option<String>, Option<String>, bool),
+    }
+    let mut seen: Vec<(usize, Seen)> = Vec::new();
+    for c in assign.captures_iter(code) {
+        let value = rhs.captures(&c[2]).and_then(|v| (1..=4).find_map(|i| text(&v, i)));
+        seen.push((c.get(1).map_or(0, |m| m.start()), Seen::Bind(c[1].to_string(), value)));
+    }
+    for c in open.captures_iter(code) {
+        let mode = text(&c, 4).or_else(|| text(&c, 5)).unwrap_or_default();
+        let append = mode.contains('a') || mode.contains('+');
+        if mode.contains(['w', 'x', 'a', '+']) {
+            let file = text(&c, 1).or_else(|| text(&c, 2));
+            seen.push((c.get(0).map_or(0, |m| m.start()), Seen::Write(file, text(&c, 3), append)));
+        }
+    }
+    for c in path_write.captures_iter(code) {
+        let file = text(&c, 1).or_else(|| text(&c, 2));
+        let name = text(&c, 3).or_else(|| text(&c, 4));
+        seen.push((c.get(0).map_or(0, |m| m.start()), Seen::Write(file, name, false)));
+    }
+    seen.sort_by_key(|(at, _)| *at);
+    let mut bound: std::collections::BTreeMap<String, String> = Default::default();
+    let mut out: Vec<(String, bool)> = Vec::new();
+    for (_, s) in seen {
+        match s {
+            Seen::Bind(name, Some(value)) => {
+                bound.insert(name, value);
+            }
+            Seen::Bind(name, None) => {
+                bound.remove(&name);
+            }
+            Seen::Write(file, name, append) => {
+                let Some(file) = file.or_else(|| name.and_then(|n| bound.get(&n).cloned())) else { continue };
+                if literal_file(&file) && !out.iter().any(|(f, _)| *f == file) && out.len() < MAX_PROGRAM_WRITES {
+                    out.push((file, append));
+                }
+            }
         }
     }
     out
@@ -1350,5 +1612,129 @@ mod repo_script_tests {
         assert_eq!(unlisted_repo_script("python3 scripts/update-case x", t), None);
         assert_eq!(unlisted_repo_script("python3 tools/gen.py", t), None);
         assert_eq!(unlisted_repo_script("./scripts/deploy x", t), None);
+    }
+}
+
+#[cfg(test)]
+mod observed_tests {
+    use super::{normalize_shell, normalize_shell_observed};
+    use crate::types::CanonicalAction;
+    use crate::CommandTable;
+
+    /// Each action of a command as the runtime observes it, flattened: `exec <argv>`, `write
+    /// <path>` or `edit <path>`.
+    fn seen(cmd: &str) -> Vec<String> {
+        crate::keys::flatten(&normalize_shell_observed(cmd, "/repo", CommandTable::load()))
+            .into_iter()
+            .map(|n| match n.action {
+                CanonicalAction::Exec { argv, .. } => format!("exec {}", argv.join(" ")),
+                CanonicalAction::Write { path } => format!("write {path}"),
+                CanonicalAction::Edit { path } => format!("edit {path}"),
+                CanonicalAction::List { path } => format!("list {path}"),
+                other => format!("{other:?}"),
+            })
+            .collect()
+    }
+
+    /// The shapes the first live run's agents edited files with through Bash: a heredoc into a
+    /// redirection, `tee`, `printf … >`, and a Python program fed by a heredoc. Each writes its
+    /// file as an action right after the one that wrote it, an append as an edit.
+    #[test]
+    fn redirections_tee_and_heredocs_write_their_files() {
+        let x = "/repo/schema/x.sql";
+        for (cmd, want) in [
+            ("cat > schema/x.sql <<'EOF'\nCREATE TABLE x;\nEOF", vec!["exec cat".to_string(), format!("write {x}")]),
+            ("cat <<'EOF' > schema/x.sql\nCREATE TABLE x;\nEOF", vec!["exec cat".into(), format!("write {x}")]),
+            ("cat >> schema/x.sql <<'EOF'\nCREATE TABLE y;\nEOF", vec!["exec cat".into(), format!("edit {x}")]),
+            (
+                "printf '%s\\n' 'CREATE TABLE x;' > schema/x.sql",
+                vec!["exec printf %s\\n CREATE TABLE x;".into(), format!("write {x}")],
+            ),
+            ("tee schema/x.sql <<'EOF'\nx\nEOF", vec!["exec tee schema/x.sql".into(), format!("write {x}")]),
+            (
+                "cat <<'EOF' | tee -a schema/x.sql > /dev/null\nx\nEOF",
+                vec!["exec cat".into(), "exec tee -a schema/x.sql".into(), format!("edit {x}")],
+            ),
+            (
+                "echo x | tee schema/x.sql schema/y.sql",
+                vec!["exec echo x".into(), format!("write {x}"), "write /repo/schema/y.sql".into()],
+            ),
+            ("ls | sort > out.txt", vec!["list /repo".into(), "write /repo/out.txt".into()]),
+            ("cd schema && cat > x.sql <<'EOF'\nx\nEOF", vec!["exec cat".into(), format!("write {x}")]),
+            ("bash -c 'printf x > schema/x.sql'", vec!["exec printf x".into(), format!("write {x}")]),
+        ] {
+            assert_eq!(seen(cmd), want, "{cmd}");
+        }
+    }
+
+    /// `python3 - <<'E'` with the file in a variable, as every schema edit in the live run was
+    /// made, then `make gen` in the same call: the program's write, then the commands after it.
+    #[test]
+    fn a_python_program_writes_the_files_it_opens_for_writing() {
+        let live = "python3 - <<'E'\np='schema/invoice.json'\ns=open(p).read()\ns=s.replace('a','b')\nopen(p,'w').write(s)\nE\nmake gen && make ci";
+        assert_eq!(
+            seen(live),
+            ["exec python3 -c <stdin>", "write /repo/schema/invoice.json", "exec make gen", "exec make ci"]
+        );
+        // Two files through one name, rebound; an append; `Path` writes; `-c` code.
+        let two = "python3 - <<'E'\np='schema/invoice.json'\nopen(p,'w').write(s)\np='acme/billing.py'\nwith open(p, mode='a') as f: f.write(s)\nE";
+        assert_eq!(
+            seen(two),
+            ["exec python3 -c <stdin>", "write /repo/schema/invoice.json", "edit /repo/acme/billing.py"]
+        );
+        let paths = "python3 <<'E'\nfrom pathlib import Path\nPath('schema/a.json').write_text('x')\nq = Path(\"schema/b.json\")\nq.write_bytes(b'y')\nE";
+        assert_eq!(seen(paths), ["exec python3 -c <stdin>", "write /repo/schema/a.json", "write /repo/schema/b.json"]);
+        assert_eq!(
+            seen("python3 -c \"open('schema/a.json','w').write('x')\""),
+            ["exec python3 -c open('schema/a.json','w').write('x')", "write /repo/schema/a.json"]
+        );
+        // Reads, a computed path, a name bound to anything but a literal, and another
+        // interpreter: no write.
+        for cmd in [
+            "python3 - <<'E'\np='schema/a.json'\nprint(open(p).read(), open(p, 'r').read(), open(p, 'rb').read())\nE",
+            "python3 - <<'E'\nopen('schema/' + name, 'w')\nE",
+            "python3 - <<'E'\np='schema/a.json'\np = choose()\nopen(p,'w')\nE",
+            "node - <<'E'\nrequire('fs').writeFileSync('schema/a.json', 'x')\nE",
+        ] {
+            assert!(seen(cmd).iter().all(|a| a.starts_with("exec ")), "{cmd}: {:?}", seen(cmd));
+        }
+    }
+
+    /// The commands written after a heredoc's start are seen (the grammar nests them in the
+    /// heredoc): the edit and the step that meets it, in one call.
+    #[test]
+    fn commands_after_a_heredoc_start_are_seen() {
+        assert_eq!(
+            seen("cat > schema/a.json <<'EOF' && make gen\n{}\nEOF"),
+            ["exec cat", "write /repo/schema/a.json", "exec make gen"]
+        );
+        assert_eq!(
+            seen("python3 - <<'E' && make gen\nopen('schema/a.json','w')\nE"),
+            ["exec python3 -c <stdin>", "write /repo/schema/a.json", "exec make gen"]
+        );
+    }
+
+    /// No file: a descriptor, a device, an expansion, an input; and the plain normalisation, which
+    /// learning and the graph read, is what it was for every shape above.
+    #[test]
+    fn only_literal_files_are_written_and_the_plain_form_is_unchanged() {
+        for cmd in ["make test 2>&1", "make test > /dev/null 2>&1", "echo x > \"$OUT\"", "sort < in.txt", "echo x >&2"]
+        {
+            assert!(seen(cmd).iter().all(|a| a.starts_with("exec ")), "{cmd}: {:?}", seen(cmd));
+        }
+        let t = CommandTable::load();
+        for cmd in [
+            "cat <<'EOF' > schema/x.sql\nx\nEOF",
+            "echo x | tee schema/x.sql",
+            "python3 - <<'E'\nopen('schema/a.json','w')\nE",
+            "cat > schema/a.json <<'EOF' && make gen\n{}\nEOF",
+        ] {
+            let plain = crate::keys::flatten(&normalize_shell(cmd, "/repo", t));
+            assert!(
+                plain.iter().all(|n| !matches!(n.action, CanonicalAction::Write { .. } | CanonicalAction::Edit { .. })),
+                "{cmd}: {plain:?}"
+            );
+            assert!(plain.iter().all(|n| !format!("{:?}", n.action).contains("make")), "{cmd}: {plain:?}");
+        }
     }
 }

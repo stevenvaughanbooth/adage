@@ -339,6 +339,8 @@ export type WorldOptions = {
   answer?: (event: string, payload: Record<string, unknown>) => unknown
   /** False while the shim has made no link: every run cannot start. */
   linked?: () => boolean
+  /** Whether a path exists (`$.fs.exists`): the shim's link where it made one; `linked` by default. */
+  present?: (path: string) => boolean
   /** The exit of `adage ledger note` (0 otherwise). */
   ledgerExit?: number
   /** What the session's usage reads (`$.session.usage`): unanswered when undefined. */
@@ -515,6 +517,7 @@ export function world(on: On, o: WorldOptions = {}): World {
     return { value: { code: 0, signal: null } }
   })
   on('fs.read', ($, e) => (o.status === undefined ? { deny: 'ENOENT' } : { value: `${o.status}\n` }))
+  on('fs.exists', ($, e) => ({ value: o.present === undefined ? o.linked?.() !== false : o.present(e.path) }))
   on('session.id', () => ({ value: o.session?.() ?? SESSION }))
   on('session.cwd', () => ({ value: CWD }))
   on('session.repo', () => {
@@ -685,6 +688,57 @@ export async function drain(stream: AsyncGenerator<TurnStepChunk, TurnStepResult
   }
 }
 
+// ------------------------------------------------------------------------ the engine's thread
+//
+// Claude Code keeps a conversation as a thread on the server: a request names the id of the last
+// response it continues from (`thread: {type: 'continue', previous_message_id}`) and sends only the
+// messages after it, or starts afresh (`{type: 'create'}`) with them all. A response a `turn.step`
+// hook made up never reached the server, so a request that continues from it is refused (404
+// `thread_not_found`) and sent again whole: one dispatch spent for nothing. These two functions are
+// the engine's rule as 2.1.292 runs it (read from the CLI; docs/claude-mod/impl/live-fixes-2-notes.md
+// has the code it was read from and the live runs it was checked against), so a test can see which
+// thread the request after what the mod yields names.
+
+/** A message of the conversation as the thread reads it; a user turn carries nothing it reads. */
+export type ThreadMessage =
+  | { role: 'user' }
+  | { role: 'assistant'; id: string; requestId?: string; model: string; stopReason: TurnStepResult['stopReason'] }
+
+/** The thread the next request names: continued from an id, or started afresh, and why. */
+export type ThreadPlan =
+  | { type: 'continue'; previousMessageId: string }
+  | { type: 'create'; reason: 'anchor_missing' | 'anchor_is_tail' | 'anchor_incomplete' }
+
+/**
+ * The thread of the next request over `messages`. The anchor is the last assistant message a
+ * request produced, or else whose id starts `msg_` and whose model is not `<synthetic>`; with none,
+ * or nothing after it, the thread starts afresh; an anchor with no stop reason is incomplete and
+ * the thread starts afresh; otherwise it continues from the anchor's id.
+ */
+export function engineThread(messages: readonly ThreadMessage[]): ThreadPlan {
+  let at = messages.length - 1
+  for (; at >= 0; at--) {
+    const m = messages[at]
+    if (m?.role === 'assistant' && (m.requestId !== undefined || (m.id.startsWith('msg_') && m.model !== '<synthetic>'))) break
+  }
+  const anchor = messages[at]
+  if (anchor?.role !== 'assistant') return { type: 'create', reason: 'anchor_missing' }
+  if (at + 1 >= messages.length) return { type: 'create', reason: 'anchor_is_tail' }
+  if (anchor.stopReason === null) return { type: 'create', reason: 'anchor_incomplete' }
+  return { type: 'continue', previousMessageId: anchor.id }
+}
+
+/**
+ * The message the engine records for a step a hook answered without the request: an id it mints,
+ * `msg_hook_<uuid>`, the step's model, no request id, and the stop reason of the hook's last stop
+ * chunk (`end_turn`, the engine's own, when the hook yielded none).
+ */
+export function madeUpResponse(chunks: readonly TurnStepChunk[], model: string, uuid = '00000000-0000-4000-8000-000000000000'): ThreadMessage {
+  let stopReason: TurnStepResult['stopReason'] = 'end_turn'
+  for (const c of chunks) if (c.kind === 'stop') stopReason = c.stopReason
+  return { role: 'assistant', id: `msg_hook_${uuid}`, model, stopReason }
+}
+
 /** A mounted drawing, as the tests read it. */
 export type Mounted = { findAll: (q: { type?: string; key?: string; text?: string | RegExp }) => Promise<{ type: string; key: string | undefined; text: string; props: Record<string, unknown> }[]> }
 
@@ -763,9 +817,13 @@ export type FakeOptions = {
   run?: (argv: readonly string[], init: ProcessRunInit | undefined) => ProcessRunResult | Error
   /** What a spawned child prints. */
   spawn?: (argv: readonly string[]) => readonly ProcessSpawnChunk[]
-  env?: Partial<Record<'pluginData' | 'observe' | 'ascii' | 'reducedMotion' | 'os', string>>
+  env?: Partial<Record<'pluginData' | 'configDir' | 'home' | 'userProfile' | 'observe' | 'ascii' | 'reducedMotion' | 'os', string>>
   root?: string
+  /** The plugin's manifest name (`adage` otherwise). */
+  name?: string
   files?: Record<string, string>
+  /** The paths that exist (`fs.exists`): the files' keys and these. */
+  present?: readonly string[]
   session?: string
   cwd?: string
   repo?: string | null
@@ -847,13 +905,19 @@ export function fake(o: FakeOptions = {}): Fake {
     },
     env: {
       pluginData: async () => o.env?.pluginData,
+      configDir: async () => o.env?.configDir,
+      home: async () => o.env?.home,
+      userProfile: async () => o.env?.userProfile,
       observe: async () => o.env?.observe,
       ascii: async () => o.env?.ascii,
       reducedMotion: async () => o.env?.reducedMotion,
       os: async () => o.env?.os,
     },
-    plugin: { root: () => o.root ?? '/plugin' },
-    fs: { read: async path => (o.files?.[path] ?? Promise.reject(new Error('ENOENT'))) },
+    plugin: { root: () => o.root ?? '/plugin', name: () => o.name ?? 'adage' },
+    fs: {
+      read: async path => (o.files?.[path] ?? Promise.reject(new Error('ENOENT'))),
+      exists: async path => o.files?.[path] !== undefined || (o.present ?? []).includes(path),
+    },
     command: {
       register: async c => void f.registered.push(c) as never,
       list: async () => (o.commands ?? []).map(name => ({ name, description: '', source: 'plugin' as const })) as never,

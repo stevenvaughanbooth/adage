@@ -10,7 +10,7 @@ use crate::binding::{bind_edit_slots, bind_output_route, bind_result_route, bind
 use crate::context::{self, Symbols};
 use crate::decision::directive;
 use crate::noticed::notice;
-use crate::observe::{added_tests, call_command, call_keys, cap, exec_segments};
+use crate::observe::{added_tests, batch_keys, call_command, cap, exec_segments};
 use crate::policy::{follows_call, follows_learned};
 use crate::state::push_history_capped;
 use crate::{
@@ -53,7 +53,7 @@ pub(super) fn on_batch(
         let piped_failed = piped && outcome::piped_failure(&call.output);
         let misfire = (call.failed || piped) && outcome::misfired(&call.output);
         retire_reads(ctx, st, call, d);
-        let keyed = call_keys(call, ctx);
+        let keyed = batch_keys(call, ctx);
         let segs = exec_segments(&keyed);
         // The call is the step Adage made in the agent's place, or (in the arms that only
         // record) one it would have made: what a chain's second step may follow at once.
@@ -98,7 +98,8 @@ pub(super) fn on_batch(
                     d.judgements.push(Judgement::Predicted { route: o.route.clone() });
                 }
             }
-            // Edits trigger finish-line obligations.
+            // Edits trigger finish-line obligations: an edit tool's, or a file a
+            // Bash command wrote (`batch_keys`), right after the action that wrote it.
             if keys::is_author(&n.action) {
                 st.first_edit_at_batch.get_or_insert(st.batches);
                 if let Some(p) = keys::action_path(&n.action) {
@@ -258,8 +259,11 @@ fn after_edit(ctx: &Ctx, routes: &[&IndexedRoute], st: &mut SessionState, out: &
             let subsumed = subsumer(ir).is_some();
             // An instinct's finish line is advice, never an obligation: no
             // Stop request can come of it. Its directive is judged like
-            // any other (followed, ignored, or misfired). A sequence that
-            // begins with its command says it instead.
+            // any other (followed, ignored, or misfired), and a predict
+            // grant on it is used while it is pending (the step after the
+            // edit), never at the turn's end, which only an obligation
+            // reaches (plan C8). A sequence that begins with its command
+            // says it instead.
             if ir.route.is_instinct() {
                 if subsumed {
                     continue;

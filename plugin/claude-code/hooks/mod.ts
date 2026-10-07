@@ -42,9 +42,11 @@ export type Caps = {
   run: Run
   spawn: Spawn
   pressRun: Run
-  env: { pluginData: Env; observe: Env; ascii: Env; reducedMotion: Env; os: Env }
-  plugin: { root: () => string }
-  fs: { read: (path: string) => Promise<unknown> }
+  /** CLAUDE_PLUGIN_DATA; CLAUDE_CONFIG_DIR, HOME and USERPROFILE (a --plugin-dir plugin's data directory is derived from them, binary.ts `dataDir`); the mod's own switches; OS. */
+  env: { pluginData: Env; configDir: Env; home: Env; userProfile: Env; observe: Env; ascii: Env; reducedMotion: Env; os: Env }
+  /** The plugin's folder and its manifest name. */
+  plugin: { root: () => string; name: () => string }
+  fs: { read: (path: string) => Promise<unknown>; exists: (path: string) => Promise<boolean> }
   command: Pick<EngineInterface['command'], 'register' | 'list'>
   session: Pick<EngineInterface['session'], 'id' | 'cwd' | 'repo' | 'usage' | 'version'>
   clock: { now: () => Promise<number>; every: (ms: number, fn: () => void) => Timer; after: (ms: number, fn: () => void) => Timer }
