@@ -171,7 +171,9 @@ What the design needs, against what the code has. Lines are from the tree named 
    route is in the predictable set (below), whose step is a `Run` with every slot bound, a
    `Sequence`'s first command, or a `Skill`, and whose bound command is non-empty. `Pending` gains
    `#[serde(default)] command: String`, filled where the directive is bound (`bind_prompt_route
-   :1237-1264`, `pending_for :1174-1182`). The arm answers nothing at `index == 0`, re-checks
+   :1237-1264`, `pending_for :1174-1182`). At `index == 0` the arm answers only a `Run` reflex
+   this prompt directed with every slot bound from the prompt (`SessionState::at_prompt`, set at
+   the prompt and cleared by the next batch, failure or Stop; impl/index0-notes.md), re-checks
    `interlock::avoids` against the session's inhibits (`approach_lock`, `:1009-1030`), never
    predicts a route adage-exec's own CPU prediction handled at this batch (any id in
    `Delivery.cpu_predictions`, `adage-hook/src/lib.rs:111-113`: that path ran or abstained in the
@@ -201,7 +203,7 @@ What the design needs, against what the code has. Lines are from the tree named 
 
    | Kind | Event | The binary needs | What the mod does | Bound | Judgement it leaves | POC |
    | --- | --- | --- | --- | --- | --- | --- |
-   | `run` | `TurnStep` | a `pending` `Run` directive with its command bound, a `predict` grant | yields one `Bash` call | never at index 0, never twice in a row, the session cap, not an inhibited route | `Predicted` on the batch that observes it | P1, P3 |
+   | `run` | `TurnStep` | a `pending` `Run` directive with its command bound, a `predict` grant | yields one `Bash` call | at index 0 only a run this prompt directed, its slots bound from the prompt; never twice in a row, the session cap, not an inhibited route | `Predicted` on the batch that observes it | P1, P3 |
    | `obligation` | `TurnStep` with `ending: true` | an armed, unmet obligation, a `predict` grant | yields the obligation's call in place of the model's stop (Q15) | as `run`; the Stop gate stays as the fallback | `Predicted`; the obligation is met by its call | P1 (binary); mod pending Q15 |
    | `sequence` | `TurnStep` | a `pending` `Sequence` directive | yields its first command; later steps are new `TurnStep`s with a model step between | as `run` | `Predicted` per step | P1, P3 |
    | `chain` | `TurnStep` | a `pending` `ReadBatch` whose files are bound (from the directive, or from the preceding call's result) | yields several `Read` calls in one response | as `run`, counted as one yielded response | `Predicted` | P1, P3 (binding from a result: C7) |
@@ -778,7 +780,10 @@ Needs S9 Q1, Q2 (Layer 1), Q3 and Q6 to have passed. Every chunk here ships behi
   "tool": "Bash", "input": { "command": "make gen" } } ] } }` (a pending directive's kind is
   `run` or `sequence`; an armed obligation's is `obligation`, predicted only with `ending`; a
   read batch bound from a lookup's result is a `chain` of several `Read` calls; the table in
-  §2.2 item 2b). Never at `index 0`; never two predictions in a row for one `turn_id`; at most
+  §2.2 item 2b). Never at `index 0` but for a `run` this prompt directed with every slot bound
+  from the prompt (a fixed command, under the grant and the verdict; never a sequence, skill,
+  chain or obligation there, never with `ending`); never two predictions in a row for one
+  `turn_id` but for a chain's second step; at most
   `runtime.predict_cap` per session; never a route the interlock inhibits; nothing in the control
   arm (`would_predict` spooled); nothing without a grant (so nothing from `adage hook`).
 - **Tests.** T-C1-01 … T-C1-13; T-X-01, T-X-05.
@@ -836,8 +841,9 @@ Needs S9 Q1, Q2 (Layer 1), Q3 and Q6 to have passed. Every chunk here ships behi
 
 #### C4 · The mod's `turn.step` and the simulator
 
-- **Files.** `hooks/decide.ts` (`turn.step` generator per mod architecture §3.2: main loop only,
-  `index > 0`, ask `TurnStep` with a 250 ms timeout, yield `tool`/`input`/`stop`, return the
+- **Files.** `hooks/decide.ts` (`turn.step` generator per mod architecture §3.2: main loop only;
+  at `index 0` only a `run` answer is taken, refused before the verdict otherwise, and the step's
+  end is not asked; ask `TurnStep` with a 250 ms timeout, yield `tool`/`input`/`stop`, return the
   result; a `Skill` prediction yields the `Skill` tool with `{ skill, args? }` and checks
   `$.command.list()` lists the skill first; every call of a prediction is checked with
   `$.tool.check` first and the step is yielded only when every verdict is `allow`, else forwarded
@@ -858,7 +864,7 @@ Needs S9 Q1, Q2 (Layer 1), Q3 and Q6 to have passed. Every chunk here ships behi
   both arms; `claude plugin test` covers the generator with a stubbed `ask`; with the binary
   missing the step is forwarded unchanged.
 - **Estimate.** 4 days. **Depends on.** C1, C2, B1, S9 Q2 (Layer 2), Q9.
-- **Built.** Built (`4086596`, `f7b399e`): the `turn.step` generator (main loop only, `index > 0`, every kind, the `adage_` ids), the finish line taken after an `end_turn` stop, the sim's `TurnStep` and two-phase `PreToolUse` payloads, `Replay`'s `predict` and `pretool` expectations, `replay_claude` in both arms with the grant issued through `--predict`, `check_graph` counting predicted steps. Not run: a live session (no key), so S9 Q9's criteria and T-C4-06 stand open ([poc/P4b-notes.md](poc/P4b-notes.md)).
+- **Built.** Built (`4086596`, `f7b399e`): the `turn.step` generator (main loop only, `index > 0`, every kind, the `adage_` ids; since impl/index0-notes.md also `index 0` for the prompt's own run reflex), the finish line taken after an `end_turn` stop, the sim's `TurnStep` and two-phase `PreToolUse` payloads, `Replay`'s `predict` and `pretool` expectations, `replay_claude` in both arms with the grant issued through `--predict`, `check_graph` counting predicted steps. Not run: a live session (no key), so S9 Q9's criteria and T-C4-06 stand open ([poc/P4b-notes.md](poc/P4b-notes.md)).
 
 #### C5 · Standing text, compaction, routing
 
@@ -1181,7 +1187,7 @@ own rule; `CONTRIBUTING.md` says only that hook paths fail open).
 | **M0 · Spike** | S9 | Findings for Q1–Q15 in `FINDINGS.md` with `rerun.sh`; Q1, Q2 (Layer 1), Q3, Q6 pass before B starts; Q2 (Layer 2), Q4 before C3; Q9 before C4; Q14 before B4 |
 | **M1 · Foundation** | A1–A6 | One decision per `tool_use_id`; `duration_us` on every record and the doctor check; `watch --follow --json --session` streams and resumes from a cursor, silent about the arm; `ledger note` into `harness.jsonl` with integrity; `tokens.ts` generated and checked; `adage off`/`on` and `adage-exec version`; all goldens unchanged except the added silent `PreToolUse` step |
 | **M2 · See it** | B1–B3 | `1 mod active · adage`; exactly one copy active with both plugins; the `mod-observe` replay diff empty; every site drawn on both surfaces in `plugin test`; the pane fed by the binary with no gap across a restart; the recorded argv within the allow-list; the control-arm pane identical to a treated no-match pane; T-U-01 reading and doing parts |
-| **M3 · Trust it** | C1–C3 | `TurnStep` predicts only a delivered directive with a bound command and a `predict` grant, never at index 0, never twice in a row, never an inhibited route, never a route adage-exec's own CPU prediction handled, never in control, nothing from `adage`; a route with both grant modes keeps both; a fresh receipt answers the repeated pytest run in the Python fixture with one record |
+| **M3 · Trust it** | C1–C3 | `TurnStep` predicts only a delivered directive with a bound command and a `predict` grant, never at index 0 but for a run reflex the prompt directed with its slots bound from the prompt, never twice in a row, never an inhibited route, never a route adage-exec's own CPU prediction handled, never in control, nothing from `adage`; a route with both grant modes keeps both; a fresh receipt answers the repeated pytest run in the Python fixture with one record |
 | **M4 · Skip it** | C4–C9 | S9 Q9 10 of 10 with the dialog met and the id on disk; the sim predicts at the schema-edit turn under adage-exec and nothing in control; the dead end is substituted and the chain predicted in the sim; Q15 10 of 10 and no Stop request on the finish-line turn; a subagent told at spawn makes no lookup; `adage:procedures` byte-identical across a session; the demo's `mod` arm runs end to end with `requests`, `dead_end_hits` and directives per session all lower than the `adage` arm |
 | **M5 · Notice** | D1, D2, D5 (noticed) | The `make test → make lint` candidate from the sim's history in the index; the routes unchanged; `noticed` once per session in both arms; replay gate green; the line drawn under the batch; p95 within +0.3 ms |
 | **M6 · Skills** | D3, D4, D5 (skills) | A `skill` route learned from six synthetic sessions and delivered at prime; the Skill tool predicted at `turn.step` under a `predict` grant for an accepted, inert skill; `verified.json` written by `adage train` and read back by `SkillPrompt` only after `accept`; Q13's three entry points |

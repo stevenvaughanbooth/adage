@@ -199,6 +199,14 @@ pub struct SessionState {
     /// most [`MAX_NOTICED`](crate::MAX_NOTICED).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub noticed: Vec<String>,
+    /// The run reflexes the latest prompt directed with every slot bound from its own words (a
+    /// prompt or intent route whose step is one fixed command): the only steps a `TurnStep` may
+    /// make at a turn's first step, before the model's first response
+    /// ([`crate::prediction`]). Set at the prompt; cleared by the next tool batch, failure or
+    /// Stop, so it never outlives the boundary it is for. Never rebuilt from the spool (as
+    /// [`SessionState::pending`] is not): a rebuilt state predicts nothing at the first step.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub at_prompt: Vec<String>,
 }
 
 /// The 64-bit hash a call's harness identity is kept as in the session state

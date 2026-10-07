@@ -31,12 +31,18 @@ fn a_dead_end_piped_into_filters_is_replaced_and_the_filters_kept() {
     let s = sub(&index, "python3 -m unittest discover -s tests -t . 2>&1 | tail -5").unwrap();
     assert_eq!(
         s.context,
-        "adage ran make test in place of python3 -m unittest discover -s tests -t .: in this repository it fails (\"ACME_ENV is not set\")."
+        "adage ran make test for you, through the rest of your pipeline as written; python3 -m unittest discover -s \
+         tests -t . was replaced because that command fails in this repository (\"ACME_ENV is not set\"). The output \
+         above is from make test."
     );
     // A plain command is replaced as before: the whole call, and the line names it.
     let s = sub(&index, "python3 -m unittest discover -s tests").unwrap();
     assert_eq!(s.command, "make test");
-    assert!(s.context.contains("in place of python3 -m unittest discover -s tests:"), "{}", s.context);
+    assert!(
+        s.context.starts_with("adage ran make test for you; python3 -m unittest discover -s tests was replaced"),
+        "{}",
+        s.context
+    );
 }
 
 /// T-C6-06: every other shape is left to run as written.

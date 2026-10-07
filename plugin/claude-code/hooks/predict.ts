@@ -69,9 +69,11 @@ export function toolUseId(route: string, turnId: string, index: number, k: numbe
   return `adage_${idPart(route)}_${idPart(turnId)}_${index}_${k}`
 }
 
+const PREDICTED_ID = /^adage_([A-Za-z0-9-]+)_[A-Za-z0-9-]+_(\d+)_\d+$/
+
 /** The route a predicted call's id names (`toolUseId`'s shape exactly), or undefined for any other id. */
 export function predictedRoute(toolUseId: string): string | undefined {
-  return /^adage_([A-Za-z0-9-]+)_[A-Za-z0-9-]+_\d+_\d+$/.exec(toolUseId)?.[1]
+  return PREDICTED_ID.exec(toolUseId)?.[1]
 }
 
 /**
@@ -81,8 +83,14 @@ export function predictedRoute(toolUseId: string): string | undefined {
  * `make gen`, it apologised for having run it. Undefined for a call the model made.
  */
 export function madeForAgentLine(toolUseId: string): string | undefined {
-  const route = predictedRoute(toolUseId)
+  const [, route, index] = PREDICTED_ID.exec(toolUseId) ?? []
   if (route === undefined) return undefined
+  // At the turn's first step the call is the one the reflex delivered with the request names
+  // (docs/claude-mod/impl/index0-notes.md): the directive told the model to run it, and this says
+  // it already ran, so the model works from the result instead of running it again.
+  if (index === '0') {
+    return `Adage made this call in your place before your first response: it is the step the learned reflex ${route}, delivered with the request, names. The result above is its output. You did not make it, and it does not need repeating.`
+  }
   return `Adage made this call in your place (learned reflex ${route}); the result above is its output. You did not make it, and it does not need repeating.`
 }
 

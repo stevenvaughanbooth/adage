@@ -41,10 +41,17 @@ pub(crate) fn on_turn_step(
 ///   ([`SessionState::withheld_routes`]);
 /// - is not one a dead end announced this session says not to run ([`interlock::avoids`]).
 ///
-/// Never at the turn's first step (`index` 0, the prompt's own request, nor its end), never right
-/// after a predicted step (a model step always separates two: before request `index`, a
-/// prediction at `index - 1`; at a turn's end, which the mod asks with the index of the request
-/// the model just answered, a prediction at that index) but for one case, a chain's second step:
+/// At the turn's first step (`index` 0, before the model's first response) only one thing: a run
+/// reflex this prompt directed with every slot bound from its words ([`SessionState::at_prompt`]),
+/// under the same grant, verdict, cap, once-per-route and interlock as any step; never a sequence,
+/// a skill, a chain or a finish line there, never at that step's end, and nothing routed. Its
+/// directive still went with the prompt, so the model reads the call's result knowing which reflex
+/// it came from.
+///
+/// Never right after a predicted step (a model step always separates two: before request
+/// `index`, a prediction at `index - 1`; at a turn's end, which the mod asks with the index of the
+/// request the model just answered, a prediction at that index) but for one case, a chain's
+/// second step (the step after the prompt's own lookup is one):
 /// the reads bound from the result of the lookup Adage made at the step just before
 /// ([`crate::PendingReads::after_adage`]), never followed by a third ([`SessionState::chained`]);
 /// and at most [`crate::Policy::predict_cap`] per session (each yielded response counts once,
@@ -66,17 +73,19 @@ fn predict_step(
     index: u32,
     ending: bool,
 ) {
-    if index == 0 || ctx.policy.predict_grants.is_empty() {
+    // The turn's first step: the prompt's own run reflexes only, and none at its end.
+    let first = index == 0;
+    if ctx.policy.predict_grants.is_empty() || (first && (ending || st.at_prompt.is_empty())) {
         return;
     }
     // The step just before this request was predicted: no model step between them. At the end of
     // a turn (`ending`) the model has just answered request `index` itself, so only a prediction
-    // at this very index would be "in a row".
-    let previous = if ending { index } else { index - 1 };
+    // at this very index would be "in a row". Nothing comes before a turn's first step.
+    let previous = if ending { Some(index) } else { index.checked_sub(1) };
     // In a row, only the second step of a chain may follow (plan C7): the reads bound from the
     // result of the lookup Adage made at the step just before, never at a turn's end and never as
     // a third step. Every other step needs a model step between it and the last prediction.
-    let in_a_row = st.last_step_predicted.as_ref().is_some_and(|(t, i)| t == turn_id && *i == previous);
+    let in_a_row = st.last_step_predicted.as_ref().is_some_and(|(t, i)| t == turn_id && Some(*i) == previous);
     if in_a_row && (ending || st.chained) {
         return;
     }
@@ -93,10 +102,15 @@ fn predict_step(
     };
     let bash = |command: &str| PredictedCall { tool: "Bash".into(), input: serde_json::json!({ "command": command }) };
     let mut found: Option<Prediction> = None;
-    for p in st.pending.iter().filter(|p| !p.command.is_empty() && !in_a_row) {
+    let at_first = |route: &str| !first || st.at_prompt.iter().any(|r| r == route);
+    for p in st.pending.iter().filter(|p| !p.command.is_empty() && !in_a_row && at_first(&p.route)) {
         let skill = p.expect_key.strip_prefix("control Skill ");
         let Some(ir) = eligible(&p.route, skill.is_none().then_some(p.command.as_str())) else { continue };
         let (kind, call) = match (skill, &ir.route.step) {
+            // The prompt's own step: one fixed command, nothing else (`at_prompt` holds only
+            // runs; the route may have been relearned since).
+            (None, Step::Run { .. }) if first => (PredictionKind::Run, bash(&p.command)),
+            _ if first => continue,
             (Some(_), Step::Skill { skill, args }) => match skill_call(ctx, skill, args.as_deref()) {
                 Some(call) => (PredictionKind::Skill, call),
                 None => continue,
@@ -109,7 +123,7 @@ fn predict_step(
         found = Some(Prediction { kind, route: ir.route.id.clone(), track: ir.track.clone(), calls: vec![call] });
         break;
     }
-    if found.is_none() {
+    if found.is_none() && !first {
         for r in st.reads.iter().filter(|r| !r.files.is_empty() && (r.after_adage || !in_a_row)) {
             let Some(ir) = eligible(&r.route, None) else { continue };
             let calls = r

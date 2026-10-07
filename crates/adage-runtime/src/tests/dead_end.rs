@@ -42,9 +42,8 @@ fn a_learned_dead_end_is_substituted_only_from_a_firm_fixed_pair() {
     assert_eq!((s.route.as_str(), s.track.as_str(), s.command.as_str()), ("dead-unittest", "acme/t", "make test"));
     assert_eq!(
         s.context,
-        "adage ran make test in place of python3 -m unittest tests.test_billing -v: in this repository it fails (ACME_ENV is not set)."
-            .replace("(ACME", "(\"ACME")
-            .replace("set)", "set\")")
+        "adage ran make test for you; python3 -m unittest tests.test_billing -v was replaced because that command \
+         fails in this repository (\"ACME_ENV is not set\"). The output above is from make test."
     );
     assert!(sub(&index, "make test").is_none(), "the working command");
     assert!(sub(&index, "cd sub && python3 -m unittest").is_none(), "a list keeps what else it runs");

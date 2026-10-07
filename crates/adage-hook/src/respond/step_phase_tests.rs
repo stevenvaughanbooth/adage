@@ -167,3 +167,90 @@ fn a_verdict_for_a_moved_plan_records_nothing() {
     assert_eq!(state_of(&w)["withheld_routes"], before["withheld_routes"]);
     assert_eq!(w.state().predictions, 0);
 }
+
+/// A stand-in for adage-exec with a person's `predict` grant on the lookup.
+struct LookupGranted;
+
+impl Extension for LookupGranted {
+    fn deliver(&self, _: &Turn<'_>, _: &[Directive]) -> Delivery {
+        Delivery::default()
+    }
+    fn predict_grants(&self, _: &Site<'_>) -> Vec<(String, String)> {
+        vec![("acme/learned".into(), "lookup-work-item".into())]
+    }
+}
+static LOOKUP_GRANTED: LookupGranted = LookupGranted;
+
+/// A session in `arm` whose repository's lookup reflex fired on the prompt "Pick up W-2042".
+fn prompted(arm: Arm) -> ObligationWorld {
+    use adage_tracks::testkit::{kinds, IndexBuilder};
+    let w = ObligationWorld::new();
+    std::fs::create_dir_all(w.root.join("scripts")).unwrap();
+    std::fs::write(w.root.join("scripts/wi-lookup"), "#!/bin/sh\n").unwrap();
+    IndexBuilder::new("lookup-world")
+        .route(
+            "acme",
+            "acme/learned",
+            kinds::lookup("lookup-work-item", "scripts/wi-lookup {item}").support(11, 12).days(3),
+        )
+        .write(&w.paths.index());
+    state::update::<SessionState, _>(&w.paths.state("s"), |st| st.arm = Some(arm)).unwrap();
+    let said = w.event(
+        &LOOKUP_GRANTED,
+        "UserPromptSubmit",
+        json!({ "hook_event_name": "UserPromptSubmit",
+                                                                     "prompt": "Pick up W-2042 please" }),
+    );
+    let said = said.expect("the lookup's directive, with the prompt").to_string();
+    assert!(said.contains("scripts/wi-lookup W-2042"), "{said}");
+    w
+}
+
+/// The turn's first step (`index` 0, before the model's first response), with the mod's phase
+/// fields `extra`.
+fn first_step(w: &ObligationWorld, extra: Value) -> Option<Value> {
+    let mut p = json!({ "hook_event_name": "TurnStep", "turn_id": "t1", "index": 0, "model": "m",
+                        "ending": false, "via": "mod" });
+    for (k, v) in extra.as_object().unwrap() {
+        p[k] = v.clone();
+    }
+    w.event(&LOOKUP_GRANTED, "TurnStep", p)
+}
+
+fn the_lookup() -> Value {
+    json!({ "predict": { "kind": "run", "route": "lookup-work-item", "track": "acme/learned",
+                          "calls": [{ "tool": "Bash", "input": { "command": "scripts/wi-lookup W-2042" } }] } })
+}
+
+/// T-C1-02 and T-C4-08 at index 0: the run reflex the prompt directed goes through the same two
+/// phases as any step. The dry run answers it and records nothing; `allow` commits it at index 0;
+/// another verdict holds it; a subagent's first step and a later turn's first step make nothing.
+#[test]
+fn the_prompts_run_reflex_is_made_at_the_first_step_under_the_verdict() {
+    let w = prompted(Arm::Treated);
+    let (records, before) = (spooled(&w).len(), state_of(&w));
+    assert_eq!(first_step(&w, json!({ "dry_run": true })), Some(the_lookup()));
+    assert_eq!((spooled(&w).len(), state_of(&w)), (records, before), "the dry run commits nothing");
+    let v = json!({ "verdict": { "permission": "allow", "route": "lookup-work-item" } });
+    assert_eq!(first_step(&w, v), Some(the_lookup()));
+    let rec = spooled(&w).pop().unwrap();
+    assert_eq!(rec["decision"]["predicted"]["kind"], "run");
+    assert_eq!(rec["decision"]["predicted_at"], json!(["t1", 0]));
+    assert_eq!(w.state().predicted_routes, vec!["lookup-work-item".to_string()]);
+
+    let held = prompted(Arm::Treated);
+    assert!(first_step(&held, json!({ "dry_run": true })).is_some());
+    let v = json!({ "verdict": { "permission": "ask", "route": "lookup-work-item", "tool": "Bash" } });
+    assert_eq!(first_step(&held, v), None);
+    let rec = spooled(&held).pop().unwrap();
+    assert_eq!((rec["decision"]["withheld"].as_str(), rec["decision"].get("predicted_at")), (Some("permission"), None));
+
+    let sub = prompted(Arm::Treated);
+    assert_eq!(first_step(&sub, json!({ "dry_run": true, "agent_id": "a1" })), None, "a subagent's step");
+    // The prompt's first step has passed once a call came back: the next turn's step 0 makes
+    // nothing of the same prompt.
+    let call = json!({ "tool_name": "Bash", "tool_use_id": "toolu_1", "tool_input": { "command": "ls" },
+                       "tool_response": "" });
+    sub.event(&LOOKUP_GRANTED, "PostToolBatch", json!({ "tool_calls": [call] }));
+    assert_eq!(first_step(&sub, json!({ "dry_run": true })), None);
+}

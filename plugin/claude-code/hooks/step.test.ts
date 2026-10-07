@@ -12,8 +12,11 @@ import {
   AUTO_MODE_BASH_UNLISTED,
   DEFAULT_MODE_BASH,
   FAIL,
+  FIRST_STEP,
   LINE,
   PREDICT,
+  PREDICT_LOOKUP,
+  PREDICTED_LOOKUP_ID,
   READ_ALLOWED,
   SKILL_ASKED,
   USAGE,
@@ -208,11 +211,11 @@ describe('T-C4-02 · forwarding', () => {
     }
   })
 
-  test('inert, a subagent, step 0, or no session context: forwarded without asking', async () => {
+  test('inert, a subagent (its first step too), or no session context: forwarded without asking', async () => {
     const runs: [TurnStepInput, Partial<StepDeps>][] = [
       [STEP, { isActive: false }],
       [{ ...STEP, agentId: 'agent-7' }, {}],
-      [{ ...STEP, index: 0 }, {}],
+      [{ ...STEP, index: 0, agentId: 'agent-7' }, {}],
       [STEP, { context: () => Promise.reject(new Error('no session')) }],
     ]
     for (const [e, over] of runs) {
@@ -223,6 +226,83 @@ describe('T-C4-02 · forwarding', () => {
       expect(m.requests).toEqual([e])
       expect(chunks).toHaveLength(4)
       expect(result).toMatchObject({ stopReason: 'tool_use' })
+    }
+  })
+})
+
+describe('T-C1-02, T-C4-02 · the turn\'s first step: only the prompt\'s run reflex', () => {
+  const FIRST: TurnStepInput = { ...STEP, index: 0, messageCount: 1 }
+  const FIRST_ID = (k: number) => `adage_${ROUTE}_turn-1_0_${k}`
+  const LOOKUP = { tool: 'Bash', input: { command: 'scripts/wi-lookup W-2042' } }
+  const ANSWERS = () =>
+    model([{ kind: 'text', index: 0, text: 'Hello.' }, { kind: 'stop', stopReason: 'end_turn', usage: USAGE }], { turnId: 'turn-1', index: 0, answer: 'Hello.', toolUses: [], stopReason: 'end_turn', usage: USAGE })
+
+  test('a run is asked in two phases and yielded before the model\'s first response: no request', async () => {
+    const m = ANSWERS()
+    const { deps, asked, recorded } = stub(() => predict('run', [LOOKUP]))
+    const { chunks, result } = await drain(turnStep(FIRST, m.next, deps))
+    expect(m.requests).toEqual([])
+    expect(chunks).toEqual([
+      { kind: 'tool', index: 0, id: FIRST_ID(0), name: 'Bash' },
+      { kind: 'input', index: 0, json: JSON.stringify(LOOKUP.input) },
+      PREDICTED_STOP,
+    ])
+    expect(result).toEqual({ turnId: 'turn-1', index: 0, answer: '', toolUses: [{ name: 'Bash', input: LOOKUP.input }], stopReason: null, usage: null })
+    expect(asked.map(a => [a.index, a.ending, a.dry_run, a.verdict])).toEqual([
+      [0, false, true, undefined],
+      [0, false, undefined, { permission: 'allow', route: ROUTE }],
+    ])
+    expect(recorded).toEqual([{ turnId: 'turn-1', index: 0, route: ROUTE, kind: 'run', ids: [FIRST_ID(0)], isEnding: false }])
+  })
+
+  test('any other kind there is refused before the verdict: the request goes out, nothing committed', async () => {
+    for (const kind of ['obligation', 'sequence', 'skill', 'chain']) {
+      const calls = kind === 'skill' ? [{ tool: 'Skill', input: { skill: 'notes' } }] : kind === 'chain' ? [{ tool: 'Read', input: { file_path: '/w/a.ts' } }] : [MAKE_GEN]
+      const m = ANSWERS()
+      const { deps, asked, recorded } = stub(() => predict(kind, calls))
+      const { chunks } = await drain(turnStep(FIRST, m.next, deps))
+      expect(m.requests).toEqual([FIRST])
+      expect(chunks.map(c => c.kind)).toEqual(['text', 'stop'])
+      expect(asked.map(a => a.dry_run)).toEqual([true])
+      expect(recorded).toEqual([])
+    }
+  })
+
+  test('the first step\'s end is never asked: no finish line before a model step', async () => {
+    const m = ANSWERS()
+    const { deps, asked } = stub(() => ({ ok: true, answer: undefined }))
+    const { chunks } = await drain(turnStep(FIRST, m.next, deps))
+    expect(chunks.at(-1)).toEqual({ kind: 'stop', stopReason: 'end_turn', usage: USAGE })
+    expect(asked.map(a => a.ending)).toEqual([false])
+  })
+
+  test('the permissions hold it: nothing yielded, the model\'s first request goes out', async () => {
+    const m = ANSWERS()
+    const { deps, asked, withheld } = stub(() => predict('run', [LOOKUP]), { check: async () => AUTO_MODE_BASH })
+    const { chunks } = await drain(turnStep(FIRST, m.next, deps))
+    expect(m.requests).toEqual([FIRST])
+    expect(chunks.map(c => c.kind)).toEqual(['text', 'stop'])
+    expect(asked.map(a => a.verdict?.permission)).toEqual([undefined, 'ask'])
+    expect(withheld.map(w => [w.index, w.route, w.decision])).toEqual([[0, ROUTE, 'ask']])
+  })
+
+  test('the thread: the first real request starts it afresh, the lookup and its result in it', async () => {
+    const { next } = ANSWERS()
+    const first = await drain(turnStep(FIRST, next, stub(() => predict('run', [LOOKUP])).deps))
+    const read = await drain(turnStep({ ...STEP, index: 1 }, next, stub(() => predict('chain', [{ tool: 'Read', input: { file_path: '/w/acme/billing.py' } }])).deps))
+    const chain = `adage_${ROUTE}_turn-1_1_0`
+    for (const earlier of [[], [{ role: 'user' }, { role: 'assistant', id: 'msg_00done', requestId: 'req_00', model: 'claude-x', stopReason: 'end_turn' }]] as ThreadMessage[][]) {
+      // A session's first prompt, or a later one after a real answer: either way the made-up
+      // response with no stop reason is the anchor, so the request is sent whole.
+      const atLookup: ThreadMessage[] = [...earlier, { role: 'user' }, madeUpResponse(first.chunks, STEP.model, 'u0'), { role: 'user', results: [FIRST_ID(0)] }]
+      expect(engineThread(atLookup)).toEqual({ type: 'create', reason: 'anchor_incomplete' })
+      expect(unseenResults(atLookup, new Map())).toEqual([])
+      const atRead: ThreadMessage[] = [...atLookup, madeUpResponse(read.chunks, STEP.model, 'u1'), { role: 'user', results: [chain] }]
+      expect(engineThread(atRead)).toEqual({ type: 'create', reason: 'anchor_incomplete' })
+      expect(unseenResults(atRead, new Map())).toEqual([])
+      // The model's first real response then anchors the thread again.
+      const after: ThreadMessage[] = [...atRead, { role: 'assistant', id: 'msg_01edit', requestId: 'req_01', model: 'claude-x', stopReason: 'tool_use' }, { role: 'user' }]
+      expect(engineThread(after)).toEqual({ type: 'continue', previousMessageId: 'msg_01edit' })
     }
   })
 })
@@ -475,13 +555,14 @@ describe('T-C4-01 … T-C4-03 · onStep through the engine', () => {
     expect(result).toMatchObject({ stopReason: 'tool_use', answer: 'Reading.' })
   })
 
-  test('step 0 and a subagent step are forwarded without asking', async ($, on) => {
+  test('a subagent step is forwarded without asking; step 0 asks once and forwards anything but a run', async ($, on) => {
     const w = world(on, { hook: { TurnStep: PREDICT }, model: 'read' })
     await start($, w, null, false)
     await drain($.turn.step({ ...STEP, index: 0 }))
     await drain($.turn.step({ ...STEP, agentId: 'agent-7' }))
     expect(w.models.map(x => x.index)).toEqual([0, 2])
-    expect(w.ran.map(r => r.argv.slice(1).join(' '))).toEqual(['version', 'hook claude Standing'])
+    expect(w.ran.map(r => r.argv.slice(1).join(' '))).toEqual(['version', 'hook claude Standing', 'hook claude TurnStep'])
+    expect(JSON.parse(w.ran[2]?.init?.stdin ?? '{}')).toMatchObject({ index: 0, ending: false, dry_run: true })
   })
 
   test('T-C5-04 · a headless session reads its routine model from the card at its first step, and routes from the next', async ($, on) => {
@@ -786,6 +867,32 @@ describe('T-C4-08 · onStep through the engine, the binary answering each phase'
       [true, undefined],
       [undefined, { permission: 'allow', route: ROUTE }],
     ])
+  })
+
+  test('T-C1-02 · the first step: the prompt\'s lookup in two phases, yielded before the first request', async ($, on) => {
+    const w = world(on, { answer: phasedStep(PREDICT_LOOKUP), model: 'read', verdict: tool => (tool === 'Bash' ? DEFAULT_MODE_BASH : undefined) })
+    await start($, w, null, false)
+    const { chunks } = await drain($.turn.step({ ...STEP, ...FIRST_STEP }))
+    expect(chunks).toEqual([
+      { kind: 'tool', index: 0, id: PREDICTED_LOOKUP_ID, name: 'Bash' },
+      { kind: 'input', index: 0, json: '{"command":"scripts/wi-lookup W-2042"}' },
+      PREDICTED_STOP,
+    ])
+    expect(w.models).toEqual([])
+    expect(stdins(w).map(p => [p.index, p.dry_run, p.verdict])).toEqual([
+      [0, true, undefined],
+      [0, undefined, { permission: 'allow', route: 'lookup-work-item' }],
+    ])
+    expect(w.sets.map(s => s.key)).toEqual(['predicted'])
+  })
+
+  test('T-C1-02 · the first step in auto mode: held, the model\'s first request goes out', async ($, on) => {
+    const w = world(on, { answer: phasedStep(PREDICT_LOOKUP), model: 'read', verdict: tool => (tool === 'Bash' ? AUTO_MODE_BASH : undefined) })
+    await start($, w, null, false)
+    const { chunks } = await drain($.turn.step({ ...STEP, ...FIRST_STEP }))
+    expect(chunks.map(c => c.kind)).toEqual(['text', 'tool', 'input', 'stop'])
+    expect(w.models.map(x => x.index)).toEqual([0])
+    expect(stdins(w).map(p => p.verdict)).toEqual([undefined, { permission: 'ask', route: 'lookup-work-item', tool: 'Bash', reason: AUTO_MODE_BASH.reason }])
   })
 
   test('auto mode: the verdict says ask with the engine\'s sentence; nothing yielded, the request goes out', async ($, on) => {

@@ -57,6 +57,7 @@ pub(super) fn on_prompt(ctx: &Ctx, w: &Walk, st: &mut SessionState, out: &mut Ve
             continue;
         }
         if let Some((text, key, head, command)) = bind_prompt_route(&ir.route, &spans, text, ctx) {
+            at_prompt(st, ir, &command);
             st.pending.push(Pending {
                 route: ir.route.id.clone(),
                 expect_key: key,
@@ -98,6 +99,7 @@ pub(super) fn on_prompt(ctx: &Ctx, w: &Walk, st: &mut SessionState, out: &mut Ve
         st.intent = Some(family);
         if ok(st, out, ir, inhibits_left) {
             if let Some((text, key, head, command)) = bind_prompt_route(&ir.route, &spans, text, ctx) {
+                at_prompt(st, ir, &command);
                 st.pending.push(Pending {
                     route: ir.route.id.clone(),
                     expect_key: key,
@@ -128,6 +130,15 @@ pub(super) fn on_prompt(ctx: &Ctx, w: &Walk, st: &mut SessionState, out: &mut Ve
                 out.push(directive(ir, t));
             }
         }
+    }
+}
+
+/// Keeps a run reflex this prompt directed for the turn's first step ([`SessionState::at_prompt`]):
+/// a single fixed command whose slots the prompt's words bound (`command` is empty when one was
+/// left unbound). A sequence, a skill or anything else waits for a model step, as before.
+fn at_prompt(st: &mut SessionState, ir: &IndexedRoute, command: &str) {
+    if matches!(ir.route.step, Step::Run { .. }) && !command.is_empty() && !command.contains('{') {
+        st.at_prompt.push(ir.route.id.clone());
     }
 }
 

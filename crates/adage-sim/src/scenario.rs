@@ -458,6 +458,10 @@ pub struct Predict {
     /// The step boundary: before request `index` of the work turn, or after the model's response
     /// to it ended the turn (`ending`).
     pub index: u32,
+    /// The step the control arm records it at (`would_predict`): `index`, but for the reads after
+    /// a lookup made before the first request, which the control session's agent makes itself
+    /// after its look around, so the reads it binds are due a step later than in the treated arm.
+    pub control_index: u32,
     pub ending: bool,
     /// `run`, `sequence`, `skill`, `chain` or `obligation` (the binary's `PredictionKind`).
     pub kind: &'static str,
@@ -492,19 +496,36 @@ pub struct Pretool {
     pub answer: Option<&'static str>,
 }
 
-/// The steps under `predict` grants. After the look around (request 1), the lookup the prompt
-/// directed; at the very next step, the reads its result binds, as one response of several calls
-/// (the chain's second step, the only one that may follow a prediction at once); and at the work
-/// turn's end, which the model reaches without `make gen` (request `work.len()` is its last),
-/// the finish line's call, so no Stop request follows. Each is made only for a granted route; the
-/// reads come at the same step whether Adage or the agent looked the item up.
+/// The steps under `predict` grants. Before the model's first request (step 0), the lookup the
+/// prompt directed, its slot bound from the prompt: it stands for the agent's turn after the look
+/// around (`work[1]`); at the very next step, the reads its result binds, as one response of
+/// several calls (the chain's second step, the only one that may follow a prediction at once);
+/// and at the work turn's end, which the model reaches without `make gen` (request `work.len()`
+/// is its last), the finish line's call, so no Stop request follows. Each is made only for a
+/// granted route; the sim grants the lookup and the reads together (a grant on the reads alone
+/// would make them after the agent's own lookup, at step 2).
 fn predict_expectations(work: &[Turn]) -> Vec<Predict> {
     let acts = |t: &Turn| t.calls.iter().map(|c| c.act.clone()).collect::<Vec<_>>();
     vec![
-        Predict { index: 1, ending: false, kind: "run", route: "lookup-work-item", acts: acts(&work[1]) },
-        Predict { index: 2, ending: false, kind: "chain", route: "read-linked-files", acts: acts(&work[2]) },
+        Predict {
+            index: 0,
+            control_index: 0,
+            ending: false,
+            kind: "run",
+            route: "lookup-work-item",
+            acts: acts(&work[1]),
+        },
+        Predict {
+            index: 1,
+            control_index: 2,
+            ending: false,
+            kind: "chain",
+            route: "read-linked-files",
+            acts: acts(&work[2]),
+        },
         Predict {
             index: work.len() as u32,
+            control_index: work.len() as u32,
             ending: true,
             kind: "obligation",
             route: "finish-line-",
@@ -590,7 +611,9 @@ pub fn substitutions(r: &Replay) -> Vec<Substitute> {
             command: dead.to_string(),
             instead: Act::shell("make test", MAKE_TEST_OK, 0),
             route: "dead-end-",
-            context: format!("adage ran make test in place of {dead}: in this repository it fails (\""),
+            context: format!(
+                "adage ran make test for you; {dead} was replaced because that command fails in this repository (\""
+            ),
         })
         .collect()
 }
@@ -668,18 +691,19 @@ mod tests {
         }
     }
 
-    /// The held-out session's predicted steps stand for the agent's own turns: the lookup after the
-    /// look around, the reads it names at the very next step, and `make gen` at the turn's end.
+    /// The held-out session's predicted steps stand for the agent's own turns: the lookup before
+    /// the model's first request (the agent's turn after the look around), the reads it names at
+    /// the very next step, and `make gen` at the turn's end.
     #[test]
     fn the_replays_predictions_stand_for_the_agents_turns() {
         let r = replay();
         let p = &r.predict;
         assert_eq!(
             p.iter().map(|x| (x.index, x.ending, x.kind)).collect::<Vec<_>>(),
-            vec![(1, false, "run"), (2, false, "chain"), (r.work.len() as u32, true, "obligation")]
+            vec![(0, false, "run"), (1, false, "chain"), (r.work.len() as u32, true, "obligation")]
         );
         for x in &p[..2] {
-            let t = &r.work[x.index as usize];
+            let t = &r.work[x.index as usize + 1];
             assert!(t.calls.iter().map(|c| &c.act).eq(x.acts.iter()), "{x:?}");
         }
         assert!(matches!(&p[1].acts[..], [Act::Read { .. }, Act::Read { .. }]), "one response of two reads");

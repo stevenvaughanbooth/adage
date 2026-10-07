@@ -83,6 +83,11 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
     let mut out: Vec<Directive> = Vec::new();
     let w = Walk { routes: &routes, net: &net, syms: syms.as_ref(), cnet: &cnet, csyms: csyms.as_ref() };
 
+    // What the prompt directed for its first step is for that step only: any call, failure or
+    // turn's end since means the boundary has passed.
+    if matches!(ev, Event::Prompt { .. } | Event::Batch { .. } | Event::Failure { .. } | Event::Stop { .. }) {
+        st.at_prompt.clear();
+    }
     match ev {
         Event::SessionStart | Event::SessionEnd => {}
         Event::Prompt { text } => prompt::on_prompt(ctx, &w, st, &mut out, text),

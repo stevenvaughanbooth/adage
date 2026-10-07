@@ -20,7 +20,7 @@ has no extension, so no `predict` grants); the grant itself is chunk C2 (adage-e
 | --- | --- | --- |
 | `session_id`, `cwd` | yes | as every hook payload (no session or cwd → nothing printed) |
 | `turn_id` | yes, non-empty string | the turn |
-| `index` | yes, integer `0..=u32::MAX` | the step's position in the turn; 0 is the prompt's own request |
+| `index` | yes, integer `0..=u32::MAX` | the step's position in the turn; 0 is the prompt's own request (only a run reflex the prompt directed is predicted there: [impl/index0-notes.md](../impl/index0-notes.md)) |
 | `model` | no | recorded only |
 | `agent_id` | no | set for a subagent's step: **nothing is ever predicted** for it |
 | `ending` | no, default `false` | `true`: the model's response to request `index` just ended the turn (`end_turn`, no tool call); only then is an armed finish-line obligation predicted |
@@ -81,7 +81,8 @@ read, so the binary does not care how the rest is spelled.
     obligations. The first candidate that is in play, not exec-only, granted, not in
     `predicted_routes`, and not avoided by a dead end announced this session
     (`interlock::avoids` on the route, and `pattern::directs_avoided` on the bound command) is
-    the prediction. Bounds: nothing at `index == 0`; nothing for a subagent; nothing without a
+    the prediction. Bounds: nothing at `index == 0` (since [impl/index0-notes.md](../impl/index0-notes.md):
+    but for a run reflex this prompt directed with its slots bound from the prompt); nothing for a subagent; nothing without a
     grant; nothing when the step right before was predicted (before request `index`: a
     prediction at `(turn, index-1)`; at `ending`, which the mod asks with the index of the
     request the model just answered: a prediction at `(turn, index)`); past `predict_cap`,

@@ -10,7 +10,8 @@
 // were predicted. The binary is asked in two phases, as for a Bash call: a dry run that answers
 // the prediction and commits nothing, then the verdict, which commits the step on `allow` and
 // otherwise records it as withheld and holds its route for the session
-// (docs/claude-mod/impl/turnstep-phases-notes.md). `turnStep` is the step itself over plain deps;
+// (docs/claude-mod/impl/turnstep-phases-notes.md). At the turn's first step only the run reflex
+// the prompt directed may be made (docs/claude-mod/impl/index0-notes.md). `turnStep` is the step itself over plain deps;
 // `onStep` binds it to the mod, keeps the step's usage for the ledger note, and keeps a step held
 // back for the band's line.
 import type { HookStream, TurnStepChunk, TurnStepInput, TurnStepResult } from 'claude-code'
@@ -101,7 +102,11 @@ export async function* turnStep(
   next: StepNext,
   deps: StepDeps,
 ): AsyncGenerator<TurnStepChunk, TurnStepResult> {
-  if (!deps.isActive || e.agentId !== undefined || e.index === 0) return yield* next(e)
+  if (!deps.isActive || e.agentId !== undefined) return yield* next(e)
+  // The turn's first step (before the model's first response) may be only the run reflex the
+  // prompt directed (docs/claude-mod/impl/index0-notes.md): the binary decides that, and the hook
+  // takes nothing else there, nor anything at that step's end.
+  const first = e.index === 0
 
   let ctx: { sessionId: string; cwd: string }
   try {
@@ -129,7 +134,8 @@ export async function* turnStep(
     // A step is predicted or routed, never both; routing only changes a request that goes out.
     routed = !ending && asked.ok && isRoutine(asked.answer)
     const p = asked.ok && !deps.isObserving ? predictionOf(asked.answer) : undefined
-    if (p === undefined) return undefined
+    // Refused before the verdict, so the dry run's answer commits nothing.
+    if (p === undefined || (first && (ending || p.kind !== 'run'))) return undefined
     // A skill the session cannot run is held as a call with no verdict (it is not the person's
     // permissions, so the band says nothing of it).
     const unlisted =
@@ -185,7 +191,7 @@ export async function* turnStep(
   let endedAt = 0
   for await (const chunk of stream) {
     if (chunk.kind === 'stop') {
-      if (chunk.stopReason === 'end_turn' && !hasToolCall) {
+      if (chunk.stopReason === 'end_turn' && !hasToolCall && !first) {
         ended = await predicted(true)
         if (ended !== undefined) {
           endedAt = lastBlock + 1

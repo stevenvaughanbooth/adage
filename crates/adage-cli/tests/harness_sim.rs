@@ -967,7 +967,8 @@ fn claude_code_substitutes_a_dead_end_piped_into_filters() {
                 route: "dead-end-",
                 // The line names the stage replaced, never the filters.
                 context: format!(
-                    "adage ran make test in place of {}: in this repository it fails (\"",
+                    "adage ran make test for you, through the rest of your pipeline as written; {} was replaced because \
+                     that command fails in this repository (\"",
                     cmd.split(" 2>&1").next().unwrap().split(" | ").next().unwrap()
                 ),
             };

@@ -115,19 +115,19 @@ pub fn substitution(
         if instead.is_empty() || instead.contains('{') || pattern::same_command(instead, dead) {
             return None;
         }
-        // The line names the stage replaced, not the pipeline: the filters ran as written.
+        // The line names what ran, what it replaced, and which command fails, so it reads the
+        // same whatever output follows it: live, "in place of …: it fails" over output cut by a
+        // filter was read as the replacement failing. A pipeline's filters ran as written and are
+        // not quoted (sanitising would mangle `2>&1`).
+        let through = if before.is_empty() && after.is_empty() { "" } else { ", through the rest of your pipeline as written" };
         let context = format!(
-            "adage ran {} in place of {}: in this repository it fails (\"{}\").",
-            render::sanitise(instead),
-            render::sanitise(dead),
-            render::sanitise(signature)
+            "adage ran {instead_shown} for you{through}; {dead_shown} was replaced because that command fails in this repository (\"{}\"). The output above is from {instead_shown}.",
+            render::sanitise(signature),
+            instead_shown = render::sanitise(instead),
+            dead_shown = render::sanitise(dead),
         );
-        Some(Substitution {
-            route: r.id.clone(),
-            track: ir.track.clone(),
-            command: format!("{before}{instead}{after}"),
-            context,
-        })
+        let ran = format!("{before}{instead}{after}");
+        Some(Substitution { route: r.id.clone(), track: ir.track.clone(), command: ran, context })
     })
 }
 

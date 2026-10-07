@@ -229,7 +229,7 @@ mod tests {
     fn a_dead_end_is_planned_then_substituted_on_the_same_verdict() {
         let w = dead_end_world(Arm::Treated);
         let sub = json!({ "command": "make test", "route": "dead-end-pytest", "track": "acme/dead-ends",
-            "context": "adage ran make test in place of python3 -m pytest tests: in this repository it fails (\"No module named pytest\")." });
+            "context": "adage ran make test for you; python3 -m pytest tests was replaced because that command fails in this repository (\"No module named pytest\"). The output above is from make test." });
         assert_eq!(
             pre(&w, "python3 -m pytest tests", json!({ "dry_run": true })),
             Some(json!({ "plan": { "substitute": sub } }))

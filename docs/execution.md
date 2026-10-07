@@ -244,7 +244,7 @@ recovery request never happen.
 
 ```text
 python3 -m pytest tests
-→ make test     (adage ran make test in place of python3 -m pytest tests: in this repository it fails ("No module named pytest").)
+→ make test     (adage ran make test for you; python3 -m pytest tests was replaced because that command fails in this repository ("No module named pytest"). The output above is from make test.)
 ```
 
 - **What is replaced**: one plain command (no list, pipe, redirection or substitution) whose
@@ -258,8 +258,12 @@ python3 -m pytest tests
 
   ```text
   python3 -m unittest discover -s tests 2>&1 | tail -5
-  → make test 2>&1 | tail -5     (adage ran make test in place of python3 -m unittest discover -s tests: …)
+  → make test 2>&1 | tail -5     (adage ran make test for you, through the rest of your pipeline as written; python3 -m unittest discover -s tests was replaced because that command fails in this repository (…). The output above is from make test.)
   ```
+
+  The line names what ran, what it replaced and which command fails, so it reads the same
+  whatever part of the output a filter keeps: live, "in place of …: in this repository it fails"
+  over output cut by `| tail -5` was read as the replacement failing.
 
   A list (`;`, `&&`, `||`), any other redirection, `|&`, a subshell, an expansion, an assignment
   before the command, or a later stage that does more than read its input is never rewritten

@@ -707,6 +707,14 @@ export const phasedStep =
 export const PREDICT_SKILL = JSON.stringify(wireWith('predict', { kind: 'skill', route: 'release-after-bump', calls: [{ tool: 'Skill', input: { skill: 'acme-work-item' } }] }))
 export const PREDICTED_SKILL_ID = 'adage_release-after-bump_turn-1_2_0'
 export const STEP = { turnId: 'turn-1', index: 2, model: 'm', messageCount: 4 }
+/**
+ * The turn's first step (index 0, before the model's first response; the prompt is the only
+ * message) and what the binary answers there when the prompt's run reflex fired under a grant:
+ * the lookup, its slot bound from the prompt (docs/claude-mod/impl/index0-notes.md).
+ */
+export const FIRST_STEP = { turnId: 'turn-1', index: 0, model: 'm', messageCount: 1 }
+export const PREDICT_LOOKUP = JSON.stringify(wireWith('predict', { kind: 'run', route: 'lookup-work-item', track: 'acme/learned', calls: [{ tool: 'Bash', input: { command: 'scripts/wi-lookup W-2042' } }] }))
+export const PREDICTED_LOOKUP_ID = 'adage_lookup-work-item_turn-1_0_0'
 /** The tool_use id of `PREDICT`'s call at `STEP`. */
 export const PREDICTED_ID = toolUseId(str(part(wire('predict'), 'predict', 'route')), STEP.turnId, STEP.index, 0)
 

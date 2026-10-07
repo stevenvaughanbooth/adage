@@ -4,8 +4,8 @@
 // other kind and every malformed case made from predict.json.
 import { describe, expect, test } from 'claude-code/testing'
 
-import { AUTO_MODE_BASH, DEFAULT_MODE_BASH, READ_ALLOWED, wire, wireWith } from './fixtures/kit'
-import { callChunks, heldBy, permissionOf, predictedResult, predictionOf, toolUseId } from './predict'
+import { AUTO_MODE_BASH, DEFAULT_MODE_BASH, PREDICTED_LOOKUP_ID, READ_ALLOWED, wire, wireWith } from './fixtures/kit'
+import { callChunks, heldBy, madeForAgentLine, permissionOf, predictedResult, predictionOf, toolUseId } from './predict'
 
 const P = wire('predict').predict as { route: string; track: string }
 const make = (kind: string, calls: unknown, extra: Record<string, unknown> = {}) => wireWith('predict', { kind, calls, ...extra })
@@ -127,3 +127,19 @@ describe('T-C4-07 · the engine\'s verdict on each predicted call', () => {
   })
 })
 
+
+describe('T-C1-02 · the line after a call made at the turn\'s first step', () => {
+  test('says it was made before the first response, for the reflex delivered with the request', () => {
+    expect(PREDICTED_LOOKUP_ID).toBe(toolUseId('lookup-work-item', 'turn-1', 0, 0))
+    const line = madeForAgentLine(PREDICTED_LOOKUP_ID)
+    expect(line).toBe(
+      'Adage made this call in your place before your first response: it is the step the learned reflex lookup-work-item, delivered with the request, names. The result above is its output. You did not make it, and it does not need repeating.',
+    )
+    // Any later step keeps the line it had; an index that only starts with 0 is a later one.
+    for (const index of [1, 10]) {
+      expect(madeForAgentLine(toolUseId('lookup-work-item', 'turn-1', index, 0))).toBe(
+        'Adage made this call in your place (learned reflex lookup-work-item); the result above is its output. You did not make it, and it does not need repeating.',
+      )
+    }
+  })
+})

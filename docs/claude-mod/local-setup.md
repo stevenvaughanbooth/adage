@@ -328,7 +328,7 @@ The transcript on disk shows the yielded call as a `tool_use` whose id begins `a
 
 4. In the session: `/adage why` prints the last directive as the model read it (`No reflex has spoken in this session yet.` when nothing fired). The band's `{n steps without a model request}` cell counts predicted steps.
 
-5. Reasons for "nothing predicted" (`evaluation-plan.md:250-266`): `bin/hook` is `adage` (no marker; check `ls -l` in the plugin data dir), `exec/predict-off` exists, step index 0, a subagent, two in a row, the `runtime.predict_cap`, the grant lapsed, or this is a control session (1 in 10 by default; nothing on screen says so; `ADAGE_ARM=treated` forces a treated session, section 9).
+5. Reasons for "nothing predicted" (`evaluation-plan.md:250-266`): `bin/hook` is `adage` (no marker; check `ls -l` in the plugin data dir), `exec/predict-off` exists, step index 0 for anything but a run reflex the prompt directed (a sequence, a chain, a finish line, or a directive from an earlier prompt), a subagent, two in a row, the `runtime.predict_cap`, the grant lapsed, or this is a control session (1 in 10 by default; nothing on screen says so; `ADAGE_ARM=treated` forces a treated session, section 9).
 
 6. A packaged measurement exists if you train the demo sandbox (it runs real `claude -p` sessions and costs money): `python3 demo/run.py one W-2041 mod --debug` records `requests`, `requests_verified`, `hooks_wired_once`, `predicted_steps` in `$DEMO_ROOT/state.json` (`evaluation-plan.md:354-369`).
 

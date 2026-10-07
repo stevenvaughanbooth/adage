@@ -604,6 +604,19 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### The Claude Code mod
 
+- **The prompt's lookup is made before the model's first response.** In run 3 the lookup reflex
+  held its predict grant in every treated session and was never predicted: the model made the call
+  in its very first response, and no step at index 0 was ever predicted. At a turn's first step
+  Adage may now make one thing, a run reflex this prompt directed whose slots the prompt's own
+  words bound (`scripts/wi-lookup W-2041`), under the same grant, permission verdict, session cap,
+  once-per-route rule and dead-end interlock as any step, never for a subagent; a sequence, a
+  skill, a chain, a finish line or an earlier prompt's directive still waits for a model step. The
+  reads its result names follow at the next step, so the model's first request already holds the
+  item and its files; the directive goes with the prompt as before, and the call's result says
+  "Adage made this call in your place before your first response". The substitution's context
+  line now reads the same whatever output a filter keeps: "adage ran make test for you;
+  python3 -m pytest tests was replaced because that command fails in this repository (…). The
+  output above is from make test."
 - **A dead end piped into output filters is replaced too.** In run 3 every dead end hit was
   `python3 -m unittest … 2>&1 | tail -5` (or `| head`), and nothing was replaced because only a
   whole plain command was. When the dead end is a pipeline's first stage and every later stage only
