@@ -11,12 +11,11 @@ under `docs/tracks/`).
 
 ## 0.1.0 - Unreleased
 
-Native-mod experiment preparation can fingerprint staged plugin files, verified binary pairs,
-initial runtime settings and managed policy presence. This is read-only preparation; native-mod
-frozen dispatch remains unavailable.
-
-Frozen E0 experiments reject Claude mod arms before preparation instead of silently changing
-the requested treatment.
+Frozen experiments can explicitly compare learned E0 advice through the native Claude mod on
+the verified Linux harness. The profile pins plugin and harness binaries, keeps fresh runtime
+state, and stops collection when native activation, history, usage or binary observations do
+not reconcile. Execution grants and custom model settings remain unsupported by this profile.
+The default legacy E0 profile still rejects mod arms instead of silently changing the treatment.
 
 External-parent PostgreSQL migration controls now support private Coder learning experiments,
 with pinned SQL inputs and separate upgrade, fresh-schema and downgrade observations, using

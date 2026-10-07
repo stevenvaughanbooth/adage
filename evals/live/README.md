@@ -59,8 +59,30 @@ rounds and summaries in `runner.py` remain useful for development; they are not 
 the complete plugin tree, both checksummed binaries, the complete initial Adage home, and the
 effective managed-policy file or its absence. It records bytes and permissions, and detects
 added or removed inputs. It does not validate grant authority, after-session mutable state,
-actual module activation, or delivery. It is preparation infrastructure; `frozen.py` continues
-to refuse mod arms until execution binding and observation support are implemented.
+actual module activation, or delivery. It is an input identity component. Native E0 execution uses the explicit profile below;
+the default legacy E0 profile still refuses mod arms rather than silently changing them.
+
+To compare learned **E0 advice through the native Claude mod**, explicitly select
+`--runtime-profile native-mod-bundled-defaults-e0/v1` during preparation. The config must have
+`eval.arms: ["off", "mod"]`, `capture_debug: true`, and an absolute `plugin_dir`. Pass the staged
+platform binary as `--adage` (inside that plugin's `dist/<target>/adage`); its checksummed
+`adage-exec` companion must also be staged. This profile supports the verified standalone Linux
+Claude Code **2.1.288** executable and its exact three built-in plugins. It pins and dispatches
+that executable directly, pins local managed harness settings and a digest of the selected
+runtime environment (without credentials), checks plugin and managed-policy identity before
+and after each run,
+and verifies the binary copies actually selected by the session-start shim.
+
+The native E0 treatment starts with only the previously reviewed compiled index and bundled
+runtime defaults. Custom settings, installed models, execution grants and optional prediction
+or execution treatments and custom `forward_env` settings are unsupported. Each session receives fresh harness/plugin state;
+learning and model routing are absent. The profile requires the same model in both arms and
+reconciles canonical stream usage with native history request IDs and debug dispatch counts.
+Corrupt or missing native evidence stops collection without replacing the original attempt.
+Spool counters record behavior; they do not alone prove that every directive reached the
+prompt or that the agent performed adequate verification. Retain independent grades and inspect
+actual delivery during validation before releasing the untouched test cohort. These collector
+checks are not a paid-study admission or a savings result.
 
 This collector requires Linux, Bubblewrap, a pinned Claude Code version and a current Adage
 build. Supply an existing live config with `confine: true`, the standard hidden directories

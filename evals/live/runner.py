@@ -279,7 +279,7 @@ def plan(cfg, phases, round_):
 
 def claude_command(cfg, prompt, settings, *, arm=None, debug_file=None):
     argv = [
-        "claude", "-p", prompt,
+        cfg.get("harness_binary") or "claude", "-p", prompt,
         "--model", cfg["model"],
         "--max-turns", str(cfg["max_turns"]),
         "--max-budget-usd", str(cfg["session_budget_usd"]),
@@ -1013,7 +1013,8 @@ class Live:
         cmd = claude_command(self.cfg, prompt, settings, arm=arm, debug_file=run_dir / "claude-debug.log")
         if self.cfg.get("confine"):
             rw = [env["ADAGE_HOME"]] if env.get("ADAGE_HOME") else []
-            cmd = confine_argv(self.cfg, run_dir, env, ro=[settings, self.adage, self.adage_exec, *([plugin] if plugin else [])], rw=rw) + cmd
+            cmd = confine_argv(self.cfg, run_dir, env, ro=[settings, self.adage, self.adage_exec, *([plugin] if plugin else []),
+                                                      *([self.cfg["harness_binary"]] if self.cfg.get("harness_binary") else [])], rw=rw) + cmd
         t0 = time.time()
         events, directives, uses_by_id, sid, result, turns, version = [], [], {}, None, {}, 0, None
         proc = None

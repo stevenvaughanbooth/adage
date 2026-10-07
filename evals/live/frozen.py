@@ -21,6 +21,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import evidence
 import runner
+import native_runtime
 from budget import Budget, cap_charge_valid, execution_lock, known_cost
 
 ADAPTER = "claude-code-frozen/v2"
@@ -187,7 +188,10 @@ def task_revision(identity, prompt, checkout):
 
 
 def environment_revision(spec):
-    return digest(encoded({k: spec[k] for k in ("adapter", "runtime_profile", "inputs", "private_inputs", "harness_version", "adage_sha256")}))
+    value = {k: spec[k] for k in ("adapter", "runtime_profile", "inputs", "private_inputs", "harness_version", "adage_sha256")}
+    if spec["runtime_profile"] == native_runtime.PROFILE:
+        value["native_inputs"] = spec["native_inputs"]
+    return digest(encoded(value))
 
 
 def evaluator_revision(spec):
@@ -195,19 +199,26 @@ def evaluator_revision(spec):
 
 
 def check_inputs(spec, adage):
-    if (spec.get("adapter") != ADAPTER or spec.get("runtime_profile") != RUNTIME_PROFILE
+    if (spec.get("adapter") != ADAPTER or spec.get("runtime_profile") not in (RUNTIME_PROFILE, native_runtime.PROFILE)
             or file_digest(adage) != spec["adage_sha256"]):
         raise ValueError("runner or Adage build differs from the frozen experiment")
+    if spec["runtime_profile"] == native_runtime.PROFILE:
+        native_runtime.check_version(spec["harness_version"])
+        if native_runtime.static_inputs(spec["config"], adage) != spec.get("native_inputs"):
+            raise ValueError("native plugin binaries, settings or managed policy changed")
     for path, sha in spec["inputs"].items():
         if file_digest(path) != sha:
             raise ValueError(f"frozen input changed: {path}")
 
 
-def prepared_spec(cfg, adage, input_paths, version):
+def prepared_spec(cfg, adage, input_paths, version, runtime_profile=RUNTIME_PROFILE):
     # Pin the collector itself, its shared execution/accounting code and the supplied grader/data
     # closure. Environment/container lockfiles can be declared as --input too.
     paths = {HERE / name for name in ("frozen.py", "runner.py", "evidence.py", "budget.py")}
     paths.add(runner.REPO / "demo" / "report.py")
+    # Both profiles import these modules; pin their source even when native dispatch is unused.
+    paths.update(HERE / name for name in ("native_assets.py", "native_runtime.py"))
+    paths.add(runner.REPO / "demo" / "adage_metrics.py")
     private = sorted(str(Path(p).resolve()) for p in input_paths)
     if any(not runner.under(p, runner.CONFINE_HIDE) for p in private):
         raise ValueError("grader/data inputs must live under the standard confinement's hidden directories")
@@ -216,9 +227,12 @@ def prepared_spec(cfg, adage, input_paths, version):
         for arg in runner.expand(cfg[key], dir="__future_checkout__", task="__future_task__", arm="off"):
             if Path(arg).is_file():
                 paths.add(Path(arg).resolve())
-    return {"adapter": ADAPTER, "runtime_profile": RUNTIME_PROFILE, "config": cfg, "harness_version": version,
+    spec = {"adapter": ADAPTER, "runtime_profile": runtime_profile, "config": cfg, "harness_version": version,
             "adage_sha256": file_digest(adage), "private_inputs": private,
             "inputs": {str(p): file_digest(p) for p in sorted(paths)}}
+    if runtime_profile == native_runtime.PROFILE:
+        spec["native_inputs"] = native_runtime.static_inputs(cfg, adage)
+    return spec
 
 
 def require_e0_config(cfg):
@@ -227,12 +241,27 @@ def require_e0_config(cfg):
                          "plugin assets, settings or operator grants")
 
 
+def require_profile_config(cfg, runtime_profile):
+    if runtime_profile == RUNTIME_PROFILE:
+        require_e0_config(cfg)
+    elif runtime_profile == native_runtime.PROFILE:
+        if set(cfg["eval"].get("arms", [])) != {"off", "mod"} or len(cfg["eval"]["arms"]) != 2:
+            raise ValueError("native frozen E0 profile requires exactly off/mod arms")
+        if cfg.get("capture_debug") is not True:
+            raise ValueError("native frozen E0 profile requires debug observations")
+        if cfg.get("forward_env"):
+            raise ValueError("native frozen E0 profile does not support custom forwarded settings")
+    else:
+        raise ValueError("unsupported frozen runtime profile")
+
+
 def prepare(config, audit_path, index_path, objects, out, adage, inputs, *, timeout=600,
-            learner_revision, policy=None, identities=None, intervention_model=None):
+            learner_revision, policy=None, identities=None, intervention_model=None,
+            runtime_profile=RUNTIME_PROFILE):
     if sys.platform != "linux":
         raise ValueError("frozen live preparation requires the Linux confinement profile")
     cfg = runner.load_config(config, {})
-    require_e0_config(cfg)
+    require_profile_config(cfg, runtime_profile)
     if not cfg.get("confine") or cfg.get("confine_hide") or cfg.get("confine_expose"):
         raise ValueError("frozen studies require confine=true with the standard hidden directories")
     if not inputs:
@@ -245,6 +274,11 @@ def prepare(config, audit_path, index_path, objects, out, adage, inputs, *, time
     version = runner.harness_version()
     if not version:
         raise ValueError("cannot pin the installed Claude Code version")
+    if runtime_profile == native_runtime.PROFILE:
+        native_runtime.check_version(version)
+        cfg["harness_binary"] = native_runtime.harness_identity()["resolved_path"]
+        if intervention_model and intervention_model != cfg["model"]:
+            raise ValueError("native frozen E0 profile requires the same model in both arms")
     if type(cfg["max_turns"]) is not int or cfg["max_turns"] <= 0:
         raise ValueError("max_turns must be a positive integer")
     micros = Decimal(str(cfg["session_budget_usd"])) * 1_000_000
@@ -269,8 +303,9 @@ def prepare(config, audit_path, index_path, objects, out, adage, inputs, *, time
                 cfg[key][i] = str(candidate.resolve())
             elif i == 0 and runner.shutil.which(expanded):
                 cfg[key][i] = str(Path(runner.shutil.which(expanded)).resolve())
-    cfg["eval"] = {"tasks": tasks, "repeats": 1, "arms": ["off", "adage"]}
-    spec = prepared_spec(cfg, adage, inputs, version)
+    treatment = "mod" if runtime_profile == native_runtime.PROFILE else "adage"
+    cfg["eval"] = {"tasks": tasks, "repeats": 1, "arms": ["off", treatment]}
+    spec = prepared_spec(cfg, adage, inputs, version, runtime_profile)
     test_tasks, prompts = [], {}
     with tempfile.TemporaryDirectory(prefix="adage-frozen-prepare-") as scratch:
         for i, task in enumerate(tasks):
@@ -284,6 +319,8 @@ def prepare(config, audit_path, index_path, objects, out, adage, inputs, *, time
             subprocess.run(runner.expand(cfg["sandbox"], dir=str(workdir), task=task, arm="off"),
                            check=True, capture_output=True, timeout=timeout, cwd=cfg["execution_cwd"])
             artifact(adage, index_path, cfg["repo_key"], workdir)
+            if runtime_profile == native_runtime.PROFILE:
+                native_runtime.check_checkout(workdir)
             test_tasks.append({"identity": identity, "task_revision": task_revision(identity, prompt, checkout_digest(workdir)),
                                "environment_revision": environment_revision(spec), "evaluator_revision": evaluator_revision(spec)})
     # The effective prompts, rather than rotating template positions, are the frozen inputs.
@@ -318,27 +355,42 @@ class Observer:
         p = frozen["protocol"]
         self.task = next(t for t in p["tasks"] if group_key(p["repo"], t["identity"]) == job["group"])
         self.observed, self.grade, self.grade_record, self.version = None, None, None, None
+        self.native = spec["runtime_profile"] == native_runtime.PROFILE
+        self.init, self.workdir, self.config_dir = None, None, None
 
     def prepared(self, live, run_id, task, arm, workdir, settings, env):
         check_inputs(self.spec, self.adage)
-        check_runtime_home(live.home, initial=True, intervention=arm == "adage")
+        intervention = self.job["side"] == "intervention"
+        if self.native:
+            native_runtime.check_home(live.home, initial=True, intervention=intervention)
+            native_runtime.check_checkout(workdir)
+            self.workdir, self.config_dir = Path(workdir), Path(env["CLAUDE_CONFIG_DIR"])
+            if any(path.is_symlink() for path in (self.config_dir, *self.config_dir.parents)):
+                raise ValueError("native session configuration must not use linked directories")
+            if self.config_dir.exists() and any(self.config_dir.iterdir()):
+                raise ValueError("native session configuration and plugin data must be fresh")
+        else:
+            check_runtime_home(live.home, initial=True, intervention=intervention)
         if live.cfg != self.spec["config"] or not live.isolate:
             raise ValueError("actual execution configuration changed")
         if exposed_private_inputs(self.spec, live.root.resolve(), self.objects, env):
             raise ValueError("a mounted tool/auth directory would expose independent grader/data or study evidence")
         if live.state["harness_version"] != self.spec["harness_version"]:
             raise ValueError("harness version changed")
+        treatment = "mod" if self.native else "adage"
+        if arm not in ("off", treatment):
+            raise ValueError("actual execution arm differs from the frozen runtime profile")
         expected_side = "baseline" if arm == "off" else "intervention"
         if expected_side != self.job["side"] or run_id != self.job["id"] or task != self.task["identity"]["task_id"]:
             raise ValueError("execution does not match the frozen job")
         prompt = self.spec["config"]["task_prompts"][task]
         revision = task_revision(self.task["identity"], prompt, checkout_digest(workdir))
         expected_index = self.frozen["protocol"]["intervention"]["reflex_set_sha256"]
-        index_path = live.home / "index.json" if arm == "adage" else self.objects.root / f"{expected_index}.json"
+        index_path = live.home / "index.json" if intervention else self.objects.root / f"{expected_index}.json"
         inspected = artifact(self.adage, index_path, live.cfg["repo_key"], workdir)
         if inspected["sha256"] != expected_index:
             raise ValueError("frozen reflex set changed before execution")
-        index_sha = inspected["sha256"] if arm == "adage" else None
+        index_sha = inspected["sha256"] if intervention else None
         self.observed = {"model": live.cfg["model"], "configuration_sha256": digest(encoded(self.spec)),
                          "reflex_set_sha256": index_sha, "task_revision": revision,
                          "environment_revision": environment_revision(self.spec),
@@ -348,7 +400,7 @@ class Observer:
             raise ValueError("checkout or grading inputs changed before execution")
         if any(self.observed[k] != expected[k] for k in ("model", "configuration_sha256", "reflex_set_sha256")):
             raise ValueError("model, settings or reflex set changed before execution")
-        if arm == "adage" and (env.get("ADAGE_AUTO_LEARN") != "0" or env.get("ADAGE_ARM") != "treated"):
+        if intervention and (env.get("ADAGE_AUTO_LEARN") != "0" or env.get("ADAGE_ARM") != "treated"):
             raise ValueError("frozen intervention must disable learning and deliver the treated arm")
         if any(key.startswith("ADAGE_") and key not in
                ("ADAGE_HOME", "ADAGE_ARM", "ADAGE_AUTO_LEARN", "ADAGE_DISABLE") for key in env):
@@ -358,6 +410,9 @@ class Observer:
 
     def event(self, event):
         if event.get("type") == "system" and event.get("subtype") == "init":
+            if self.native and self.init is not None:
+                raise ValueError("native session initialized more than once")
+            self.init = copy.deepcopy(event)
             self.version = event.get("claude_code_version")
 
     def graded(self, stdout, returncode, timed_out):
@@ -367,7 +422,11 @@ class Observer:
 
     def finish(self, live):
         check_inputs(self.spec, self.adage)
-        check_runtime_home(live.home)
+        if self.native:
+            native_runtime.check_home(live.home, intervention=self.job["side"] == "intervention")
+            native_runtime.check_checkout(self.workdir)
+        else:
+            check_runtime_home(live.home)
         if self.observed is None or self.version != self.spec["harness_version"].split()[0]:
             raise ValueError("actual harness version or execution observations are missing/mismatched")
         if self.job["side"] == "intervention" and file_digest(live.home / "index.json") != self.observed["reflex_set_sha256"]:
@@ -384,6 +443,15 @@ class Observer:
             "grade": self.objects.put(self.grade_record),
             "execution": self.objects.put({"observed": self.observed, "harness_version": self.version,
                                             "exit_code": metrics.get("exit_code"), "timed_out": metrics.get("timed_out")})}
+        if self.native:
+            sid = (self.init or {}).get("session_id", "")
+            history = native_runtime.history_for_session(live.transcripts, sid)
+            observations = native_runtime.observe(
+                init=self.init, accounting=accounting,
+                debug_path=live.root / "runs" / run_id / "claude-debug.log", history_path=history,
+                plugin=self.spec["native_inputs"]["plugin"], config_dir=self.config_dir, home=live.home,
+                intervention=self.job["side"] == "intervention")
+            result["evidence"]["native_runtime"] = self.objects.put(observations)
         return result
 
 
@@ -395,7 +463,7 @@ def bindings(frozen, objects, adage):
             raise ValueError("adapter settings must use the canonical frozen-prepare encoding")
         check_inputs(spec, adage)
         cfg = spec["config"]
-        require_e0_config(cfg)
+        require_profile_config(cfg, spec["runtime_profile"])
         budget = p["budget"]
         if (cfg["model"] != p[side]["model"] or cfg["repo_key"] != p["repo"] or cfg.get("concurrency") != 1
                 or not cfg.get("confine") or cfg.get("confine_hide") or cfg.get("confine_expose")
@@ -404,6 +472,10 @@ def bindings(frozen, objects, adage):
                 or cfg["timeout_seconds"] != budget["timeout_seconds"]
                 or Decimal(str(cfg["session_budget_usd"])) * 1_000_000 != budget["max_cost_microusd"]):
             raise ValueError("execution settings do not enforce the frozen protocol")
+    profiles = {spec["runtime_profile"] for spec in specs.values()}
+    if native_runtime.PROFILE in profiles and (len(profiles) != 1 or p.get("kind") != "same_model"
+            or p["baseline"]["model"] != p["intervention"]["model"]):
+        raise ValueError("native frozen E0 profile requires matching profiles and the same model")
     return specs
 
 
@@ -425,6 +497,10 @@ def confinement_probe():
 def exposed_private_inputs(spec, root, objects, env):
     exposed = [p for p in env.get("PATH", "").split(os.pathsep) if p]
     exposed += [str(Path(env[k]).parent) for k in runner.CONFINE_FILE_ENV if env.get(k)]
+    if spec.get("runtime_profile") == native_runtime.PROFILE:
+        exposed.append(spec["config"]["plugin_dir"])
+        if env.get("ADAGE_HOME"):
+            exposed.append(env["ADAGE_HOME"])
     return [path for path in (*spec["private_inputs"], str(root), str(objects.root)) if runner.under(path, exposed)]
 
 
@@ -467,7 +543,7 @@ def validate_admission_journal(frozen, objects, journaled, receipts, ledger):
             raise ValueError(f"native accounting exceeds the conservative cap charge for job {run}; reconcile the overrun")
 
 
-def receipt_evidence_issues(receipt, objects):
+def receipt_evidence_issues(receipt, objects, *, native=False):
     """Evidence failures stop admission; an independently graded task failure does not."""
     accounting = objects.get(receipt["evidence"]["accounting"])
     grade = objects.get(receipt["evidence"]["grade"])
@@ -480,6 +556,14 @@ def receipt_evidence_issues(receipt, objects):
         issues.append("model-call budget exceeded")
     if evidence.independent_grade(grade["stdout"], grade["returncode"], grade["timed_out"]) is None:
         issues.append("unknown independent grade")
+    if native:
+        sha = receipt.get("evidence", {}).get("native_runtime")
+        if not sha:
+            issues.append("missing native runtime observations")
+        else:
+            observation = objects.get(sha)
+            if observation.get("profile") != native_runtime.PROFILE or observation.get("history_matches_stream") is not True:
+                issues.append("invalid native runtime observations")
     return issues
 
 
@@ -519,7 +603,9 @@ def preflight(frozen, objects, root, adage):
                 raise ValueError("a terminal receipt does not match its scheduled job")
             for sha in value.get("evidence", {}).values():
                 objects.body(sha)
-            issues = receipt_evidence_issues(value, objects)
+            job = next(job for job in frozen["jobs"] if job["id"] == path.stem)
+            native = specs.get(job["side"], {}).get("runtime_profile") == native_runtime.PROFILE
+            issues = receipt_evidence_issues(value, objects, native=native)
             if issues:
                 block("receipt_evidence", f"Job {path.stem} has " + "; ".join(issues)
                       + "; retain and diagnose its original evidence before further paid dispatch")
@@ -670,7 +756,8 @@ def execute(frozen_path, frozen, objects, root, adage, *, live_factory=runner.Li
             task = observer.task["identity"]["task_id"]
             prompt = spec["config"]["task_prompts"][task].replace("{", "{{").replace("}", "}}")
             try:
-                live.run_one(job["id"], "eval", "off" if job["side"] == "baseline" else "adage", task, prompt)
+                treatment = "mod" if observer.native else "adage"
+                live.run_one(job["id"], "eval", "off" if job["side"] == "baseline" else treatment, task, prompt)
                 value = observer.finish(live)
                 sha = objects.put(value)
                 publish(terminal, {"protocol_sha256": frozen["protocol_sha256"], "sha256": sha})
@@ -680,7 +767,7 @@ def execute(frozen_path, frozen, objects, root, adage, *, live_factory=runner.Li
                 report(frozen_path, frozen, objects, root, adage)
                 raise
             publish(root / "submission.json", submission(frozen, root), replace=True)
-            stopped = receipt_evidence_issues(value, objects)
+            stopped = receipt_evidence_issues(value, objects, native=observer.native)
             if live.budget.data["blocked_reason"]:
                 stopped.append(live.budget.data["blocked_reason"])
             if stopped:
@@ -707,6 +794,7 @@ def main(argv=None):
     prep.add_argument("--policy", type=Path)
     prep.add_argument("--identities", type=Path)
     prep.add_argument("--intervention-model")
+    prep.add_argument("--runtime-profile", choices=(RUNTIME_PROFILE, native_runtime.PROFILE), default=RUNTIME_PROFILE)
     run = commands.add_parser("run")
     run.add_argument("frozen", type=Path)
     run.add_argument("--root", type=Path, required=True)
@@ -727,7 +815,7 @@ def main(argv=None):
                          timeout=args.timeout_seconds, learner_revision=args.learner_revision,
                          policy=read_json(args.policy) if args.policy else None,
                          identities=read_json(args.identities) if args.identities else None,
-                         intervention_model=args.intervention_model)
+                         intervention_model=args.intervention_model, runtime_profile=args.runtime_profile)
         print(json.dumps({"protocol_sha256": result["protocol_sha256"], "runs": len(result["jobs"]),
                           "max_cost_microusd": result["max_cost_microusd"]}))
         return 0

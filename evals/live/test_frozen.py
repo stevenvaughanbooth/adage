@@ -106,7 +106,7 @@ class RuntimeProfile(unittest.TestCase):
 
     def test_imported_frozen_configuration_cannot_request_an_unfrozen_mod(self):
         for arm in runner.PLUGIN_ARMS:
-            spec = {"config": {"eval": {"arms": ["off", arm]}}}
+            spec = {"runtime_profile": frozen.RUNTIME_PROFILE, "config": {"eval": {"arms": ["off", arm]}}}
             sha = frozen.digest(frozen.encoded(spec))
             protocol = {side: {"configuration_sha256": sha} for side in ("baseline", "intervention")}
             with self.subTest(arm=arm), patch.object(frozen.Objects, "get", return_value=spec), \
@@ -231,6 +231,12 @@ class FrozenFlow(unittest.TestCase):
         self.assertTrue(plan["ready_to_execute"], plan)
         self.assertEqual((plan["completed_runs"], plan["pending_runs"]), (1, 3))
         return frozen.read_json(self.run_root / "state.json")
+
+    def test_imported_native_helpers_are_pinned_even_by_the_legacy_profile(self):
+        specs = frozen.bindings(self.frozen, self.objects, ADAGE)
+        for spec in specs.values():
+            for path in [HERE / "native_assets.py", HERE / "native_runtime.py", runner.REPO / "demo/adage_metrics.py"]:
+                self.assertEqual(spec["inputs"][str(path)], frozen.file_digest(path))
 
     def test_prepare_rejects_an_unloadable_index_before_sandbox_generation(self):
         self.index.write_text("{}")
