@@ -11,6 +11,10 @@ under `docs/tracks/`).
 
 ## 0.1.0 - Unreleased
 
+Native-mod experiment preparation can fingerprint staged plugin files, verified binary pairs,
+initial runtime settings and managed policy presence. This is read-only preparation; native-mod
+frozen dispatch remains unavailable.
+
 Frozen E0 experiments reject Claude mod arms before preparation instead of silently changing
 the requested treatment.
 

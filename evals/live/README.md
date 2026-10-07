@@ -55,6 +55,13 @@ have finished. It reuses the execution and budget machinery below, with a fixed 
 and the stricter [experiment contract](../../docs/learning-experiments.md). The exploratory
 rounds and summaries in `runner.py` remain useful for development; they are not this contract.
 
+`native_assets.py` provides a read-only **pre-session identity** for staged native-mod inputs:
+the complete plugin tree, both checksummed binaries, the complete initial Adage home, and the
+effective managed-policy file or its absence. It records bytes and permissions, and detects
+added or removed inputs. It does not validate grant authority, after-session mutable state,
+actual module activation, or delivery. It is preparation infrastructure; `frozen.py` continues
+to refuse mod arms until execution binding and observation support are implemented.
+
 This collector requires Linux, Bubblewrap, a pinned Claude Code version and a current Adage
 build. Supply an existing live config with `confine: true`, the standard hidden directories
 (no `confine_hide`/`confine_expose` overrides), a resolved model revision, held-out evaluation task
