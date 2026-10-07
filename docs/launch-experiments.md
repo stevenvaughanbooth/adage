@@ -276,7 +276,20 @@ failure are retained. Successful generation does not replace the external behavi
 The remaining proposed training references (#10152, #11069 and #11204) also reproduced the
 forced schema and complete generated output without changes, using SQLC 1.20.0, 1.20.0 and
 1.24.0 respectively. They passed 1,039, 1,068 and 1,071 test/subtest events; each retained the
-same `TestPubsub_Disconnect` failure, with no skipped tests. These reference checks do not
-establish the missing task-specific semantics. Complete training admission, the other three
-semantic graders, and frozen mod treatment support remain unfinished. No additional paid
-model calls were made.
+same `TestPubsub_Disconnect` failure, with no skipped tests. These reference checks do not by themselves establish task-specific semantics.
+
+Private PostgreSQL 13.11 contracts now cover those three tasks as well: all three references
+passed, and twelve base, partial, stale-schema and forged-report controls were rejected.
+Checks exercise OAuth JSON/null storage, old and new user preference defaults, independent
+provisioner API versions, null constraints and downgrade behavior. Actual Go Store probes
+also accepted these three references and rejected their bases. Three further negatives kept
+correct schemas while breaking OAuth JSON updates, user preference reads or provisioner
+conflict updates; all were rejected by the independent probes. The final case retained API
+version `2.3` after an attempted update to `3.1`, which the parent database observation caught.
+
+Four initial Go controls for the theme and provisioner cases ran out of bounded compiler
+scratch space. Their outputs remain preserved as infrastructure failures, not quality
+rejections. New output directories with larger bounded scratch space completed the controls;
+assertions and task code were unchanged. These are component checks, not paid agent results.
+A composed candidate grader, complete requirement scope (including broader OAuth behavior),
+and frozen mod treatment support remain unfinished. No additional paid model calls were made.
