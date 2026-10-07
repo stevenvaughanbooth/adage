@@ -578,7 +578,7 @@ question, mod architecture §10).
 
 | State | What the person sees | Where |
 | --- | --- | --- |
-| **9.1 No binary** (the shim failed) | The shim's reason, read from `$DATA/status` so the engine's `⚠ adage:` prefix is not doubled: `⚠ adage: no binary for darwin-arm64; install with brew install … or npm i -g …` | `$.ui.status`, once; the band shows `◠ adage ○ off · run adage doctor` |
+| **9.1 No binary** (the shim failed) | The shim's reason, read from `$DATA/status` so the engine's `⚠ adage:` prefix is not doubled: `⚠ adage: no binary for darwin-arm64; reinstall with /plugin install adage@adage, or npm i -g @adage-sh/cli` | `$.ui.status`, once; the band shows `◠ adage ○ off · run adage doctor` |
 | **9.2 Binary refused or timed out** on one event | Nothing for that event (fail open). The bridge's answer is tagged, so a failure is distinct from "nothing to say"; after 3 failures in a row: `⚠ adage: hooks are not answering; run adage doctor` | status, once per session |
 | **9.3 A tree the engine refused** (a prop it does not take) | The engine draws its own row; a dim transcript line only while hot-reloading or under `--plugin-dir`; the debug log always | nothing for installed users; CI's `plugin test` prevents it |
 | **9.4 The feed child died** | The Live tab shows `feed stopped · reconnecting…`; the mod restarts it from the last cursor; after 3 failures `feed stopped · run adage doctor` | pane |

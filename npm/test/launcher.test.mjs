@@ -96,7 +96,7 @@ try {
     const which = run(process.execPath, [launcher, "version"], { env: { ...env, ADAGE_NPM_WHICH: "1" } })
     assert.equal(which.status, 0, which.stderr)
     assert.equal(realpathSync(which.stdout.trim()), realpathSync(path.join(nm, plat.name, "bin", host.exe)))
-    // The plugin's shim takes adage-exec from beside the binary named (one plugin, both binaries).
+    // The plugin's shim takes adage-exec and adage-train from beside the binary named (one plugin, three binaries).
     if (companions.includes(`adage-exec${ext}`)) {
       assert.ok(existsSync(path.join(path.dirname(which.stdout.trim()), `adage-exec${ext}`)), "adage-exec beside the named binary")
     }
