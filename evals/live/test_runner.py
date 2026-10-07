@@ -34,6 +34,45 @@ def dry(*args):
     return dry_with(CONFIG, *args)
 
 
+class ModWiring(unittest.TestCase):
+    def test_plugin_is_the_only_hook_registration_and_keeps_the_cap(self):
+        cfg = runner.load_config(CONFIG, {})
+        cfg.update(plugin_dir="/p/staged-plugin", capture_debug=True, capture_usage=True)
+        for arm in runner.PLUGIN_ARMS:
+            cmd = runner.claude_command(cfg, "task", "/private/settings.json", arm=arm,
+                                        debug_file="/run/claude-debug.log")
+            self.assertEqual(cmd.count("--plugin-dir"), 1)
+            self.assertNotIn("--settings", cmd)
+            self.assertEqual(cmd[cmd.index("--max-budget-usd") + 1], str(cfg["session_budget_usd"]))
+            self.assertIn("--include-partial-messages", cmd)
+            self.assertIn("/run/claude-debug.log", cmd)
+            self.assertEqual(runner.settings_kind(arm), "none")
+        self.assertEqual(runner.env_for("mod", "/h"),
+                         {"ADAGE_HOME": "/h", "ADAGE_ARM": "treated", "ADAGE_AUTO_LEARN": "0"})
+        self.assertEqual(runner.env_for("mod-observe", "/h")["ADAGE_MOD_OBSERVE"], "1")
+        baseline = runner.claude_command(cfg, "task", "/empty.json", arm="off", debug_file="/run/debug.log")
+        self.assertNotIn("--plugin-dir", baseline)
+        self.assertIn("--debug-file", baseline)
+        self.assertEqual(runner.env_for("off", "/h"), {})
+
+    def test_mod_plan_requires_an_absolute_staged_plugin_and_reports_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.json"
+            cfg = json.loads(Path(CONFIG).read_text())
+            cfg["eval"]["arms"] = ["mod"]
+            for plugin in (None, "relative/plugin"):
+                cfg["plugin_dir"] = plugin
+                path.write_text(json.dumps(cfg))
+                with self.assertRaisesRegex(SystemExit, "absolute plugin_dir"):
+                    runner.load_config(path, {})
+            cfg.update(plugin_dir="/p/staged-plugin", capture_debug=True)
+            path.write_text(json.dumps(cfg))
+            plan = json.loads(dry_with(str(path), "eval", "--json", "--root", str(Path(tmp) / "run")))
+            self.assertTrue(all("--plugin-dir" in row["command"] and "--settings" not in row["command"]
+                                for row in plan["sessions"]))
+            self.assertFalse((Path(tmp) / "run").exists())
+
+
 class DryRun(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

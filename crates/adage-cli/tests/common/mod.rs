@@ -29,7 +29,9 @@ pub fn scrub(c: &mut Command) -> &mut Command {
             c.env_remove(&k);
         }
     }
-    c
+    // Text assertions use the same glyphs in a terminal and a headless runner. A test for
+    // ASCII or another locale can still override these after scrubbing.
+    c.env("TERM", "xterm-256color").env("LC_ALL", "C.UTF-8").env("ADAGE_ASCII", "0")
 }
 
 /// `bin`, scrubbed, run in `cwd` with `adage_home` as its data directory and automatic learning

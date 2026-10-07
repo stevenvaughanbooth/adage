@@ -479,3 +479,66 @@ fn files_named_whole_after_each_task_group_by_role() {
     assert!(adage_tracks::card::touches(card, "middleware/strip_slashes.go"));
     assert!(!adage_tracks::card::touches(card, "other/strip_slashes.go"));
 }
+
+/// Repeated successful status/read commands are not evidence of a finishing check.
+#[test]
+fn a_card_finishing_check_excludes_housekeeping_even_when_it_repeats() {
+    for check in [None, Some("make check")] {
+        let d = tempfile::tempdir().unwrap();
+        let models = d.path().join("models");
+        install_fixture_model(&models);
+        let mut files = vec![];
+        let mut outcomes = BTreeMap::new();
+        for (sid, prompt) in VALIDATOR {
+            let mut t = Tx::new(sid, prompt);
+            for _ in 0..2 {
+                t.bash("git status", "clean", false).bash("ls -la", "files", false);
+                if let Some(command) = check {
+                    t.bash(command, "ok", false);
+                }
+            }
+            t.edit("src/validate.py", "old", "new");
+            t.bash("git status", "modified: src/validate.py", false).bash("ls -la", "files", false);
+            if let Some(command) = check {
+                t.bash(command, "ok", false);
+            }
+            files.push(t.write(d.path()));
+            outcomes.insert(sid.to_string(), true);
+        }
+        let (_, index) = run(&files, &outcomes, &d.path().join("home"), &models);
+        let found = cards(&index);
+        assert_eq!(found.len(), 1);
+        let Step::Card { card } = &found[0].step else { unreachable!() };
+        assert_eq!(card.finish.as_deref(), check);
+    }
+}
+
+/// A generator's name is insufficient when its recorded directory changes its meaning.
+#[test]
+fn cards_do_not_drop_the_working_directory_of_commands() {
+    for command in ["cd scripts && bash generate.sh", "cd /fixture/acme-lib/scripts && bash generate.sh"] {
+        let d = tempfile::tempdir().unwrap();
+        let models = d.path().join("models");
+        install_fixture_model(&models);
+        let mut files = vec![];
+        let mut outcomes = BTreeMap::new();
+        for (sid, prompt) in VALIDATOR {
+            let mut t = Tx::new(sid, prompt);
+            t.bash("make check", "ok", false)
+                .bash("make check", "ok", false)
+                .bash(command, "ok", false)
+                .edit("src/validate.py", "old", "new")
+                .bash(command, "ok", false)
+                .bash("make check", "ok", false);
+            files.push(t.write(d.path()));
+            outcomes.insert(sid.to_string(), true);
+        }
+        let (_, index) = run(&files, &outcomes, &d.path().join("home"), &models);
+        let found = cards(&index);
+        assert_eq!(found.len(), 1);
+        let Step::Card { card } = &found[0].step else { unreachable!() };
+        assert!(card.commands.iter().any(|c| c.command == "make check"));
+        assert!(!card.commands.iter().any(|c| c.command.contains("generate.sh")));
+        assert_eq!(card.finish.as_deref(), Some("make check"));
+    }
+}

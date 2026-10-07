@@ -85,6 +85,79 @@ class FakeLive:
         self.state["runs"][run_id] = {"metrics": {"exit_code": 0, "timed_out": False}}
         self.budget.settle(attempt, events[-1])
         self.save()
+        if self.mode == "runtime-mutation":
+            (self.home / "config.toml").write_text("[runtime]\norientation = false\n")
+
+
+class RuntimeProfile(unittest.TestCase):
+    def test_mod_request_is_refused_before_rewriting_arms_or_preparing_inputs(self):
+        for arm in runner.PLUGIN_ARMS:
+            cfg = {"eval": {"arms": ["off", arm]}}
+            with self.subTest(arm=arm), patch.object(frozen.sys, "platform", "linux"), \
+                    patch.object(runner, "load_config", return_value=cfg), \
+                    patch.object(frozen, "artifact") as inspect, \
+                    patch.object(frozen.subprocess, "run") as launch:
+                with self.assertRaisesRegex(ValueError, "cannot freeze Claude mod"):
+                    frozen.prepare("config", "audit", "index", None, "out", "adage", [],
+                                   learner_revision="fixture")
+                inspect.assert_not_called()
+                launch.assert_not_called()
+                self.assertEqual(cfg["eval"]["arms"], ["off", arm])
+
+    def test_imported_frozen_configuration_cannot_request_an_unfrozen_mod(self):
+        for arm in runner.PLUGIN_ARMS:
+            spec = {"runtime_profile": frozen.RUNTIME_PROFILE, "config": {"eval": {"arms": ["off", arm]}}}
+            sha = frozen.digest(frozen.encoded(spec))
+            protocol = {side: {"configuration_sha256": sha} for side in ("baseline", "intervention")}
+            with self.subTest(arm=arm), patch.object(frozen.Objects, "get", return_value=spec), \
+                    patch.object(frozen, "check_inputs"):
+                with self.assertRaisesRegex(ValueError, "cannot freeze Claude mod"):
+                    frozen.bindings({"protocol": protocol}, frozen.Objects("unused"), "adage")
+
+    def test_only_the_bundled_model_and_matching_dimensions_can_be_delivered(self):
+        bundled = {"model": "pinned-bundle", "dimensions": 256}
+        for required, accepted in (([], True), ([bundled], True),
+                                   ([{"model": "installed-model", "dimensions": 256}], False),
+                                   ([{"model": "pinned-bundle", "dimensions": 8}], False)):
+            with self.subTest(required=required), patch.object(frozen, "adage_json", return_value={
+                    "directive_reflexes": 1, "directive_embeddings": required, "bundled_embedding": bundled}):
+                if accepted:
+                    frozen.artifact("fixture", "index", "repo")
+                else:
+                    with self.assertRaisesRegex(ValueError, "bundled embedding model"):
+                        frozen.artifact("fixture", "index", "repo")
+        with patch.object(frozen, "adage_json", return_value={"directive_reflexes": 1,
+                "directive_embeddings": [bundled], "bundled_embedding": None}):
+            with self.assertRaisesRegex(ValueError, "bundled embedding model"):
+                frozen.artifact("fixture", "index", "repo")
+
+    def test_older_inspector_is_refused_before_preparation(self):
+        with patch.object(frozen, "adage_json", return_value={"directive_reflexes": 1}):
+            with self.assertRaisesRegex(ValueError, "rebuild the pinned binary"):
+                frozen.artifact("fixture", "index", "repo")
+
+    def test_runtime_home_keeps_binary_defaults_and_rejects_symlink_assets(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / "index.json").write_text("fixture")
+            frozen.check_runtime_home(home, initial=True, intervention=True)
+            for name in ("config.toml", "models", "tracks", "exec"):
+                with self.subTest(name=name):
+                    asset = home / name
+                    asset.symlink_to(home / "absent")
+                    with self.assertRaisesRegex(ValueError, "unsupported settings"):
+                        frozen.check_runtime_home(home)
+                    asset.unlink()
+            (home / "sessions").mkdir()
+            with self.assertRaisesRegex(ValueError, "must be fresh"):
+                frozen.check_runtime_home(home, initial=True, intervention=True)
+            frozen.check_runtime_home(home)
+
+    def test_operator_embedding_override_does_not_enter_isolated_runtime(self):
+        env = runner.session_env("adage", "/fixture/session", "/fixture/reflexes", True,
+                                 {"ADAGE_EMBED_MODEL": "none", "ADAGE_CARD_ORIENTATION": "0"})
+        self.assertNotIn("ADAGE_EMBED_MODEL", env)
+        self.assertNotIn("ADAGE_CARD_ORIENTATION", env)
 
 
 @unittest.skipUnless(sys.platform == "linux", "frozen execution uses the Linux confinement profile")
@@ -158,6 +231,12 @@ class FrozenFlow(unittest.TestCase):
         self.assertTrue(plan["ready_to_execute"], plan)
         self.assertEqual((plan["completed_runs"], plan["pending_runs"]), (1, 3))
         return frozen.read_json(self.run_root / "state.json")
+
+    def test_imported_native_helpers_are_pinned_even_by_the_legacy_profile(self):
+        specs = frozen.bindings(self.frozen, self.objects, ADAGE)
+        for spec in specs.values():
+            for path in [HERE / "native_assets.py", HERE / "native_runtime.py", runner.REPO / "demo/adage_metrics.py"]:
+                self.assertEqual(spec["inputs"][str(path)], frozen.file_digest(path))
 
     def test_prepare_rejects_an_unloadable_index_before_sandbox_generation(self):
         self.index.write_text("{}")
@@ -382,6 +461,27 @@ class FrozenFlow(unittest.TestCase):
                 self.execute()
         self.assertFalse(self.run_root.exists())
         self.assertFalse(FakeLive.runs)
+
+    def test_preexisting_runtime_settings_stop_before_paid_dispatch(self):
+        frozen.bind_root(self.frozen, self.run_root)
+        job = self.frozen["jobs"][0]
+        home = self.run_root / "private" / "reflexes" / job["id"]
+        home.mkdir(parents=True)
+        (home / "config.toml").write_text("[runtime]\norientation = false\n")
+        with patch.object(Budget, "dispatch", side_effect=AssertionError("must not dispatch")) as dispatch:
+            with self.assertRaisesRegex(ValueError, "unsupported settings"):
+                self.execute()
+        dispatch.assert_not_called()
+        self.assertTrue((home / "config.toml").is_file(), "retain evidence of the rejected home")
+
+    def test_runtime_mutation_retains_attempt_and_stops_the_remaining_cohort(self):
+        FakeLive.mode = "runtime-mutation"
+        with self.assertRaisesRegex(ValueError, "unsupported settings"):
+            self.execute()
+        self.assertEqual(len(FakeLive.runs), 1)
+        self.assertEqual(len(list((self.run_root / "started").glob("*.json"))), 1)
+        self.assertEqual(len(list((self.run_root / "errors").glob("*.json"))), 1)
+        self.assertFalse(list((self.run_root / "receipts").glob("*.json")))
 
     def test_preflight_reads_journal_counts_and_completed_study_needs_no_auth(self):
         self.execute()

@@ -22,6 +22,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import evidence
 import frozen
+import native_runtime
 import runner
 import training
 from budget import Budget, execution_lock
@@ -65,7 +66,36 @@ def selected_tasks(registry):
     return selected
 
 
-def initialize(root, adage, model, total_budget, session_budget, *, max_turns=30, timeout=600, pack=PACK):
+def pack_analysis(pack):
+    """A custom workload declares observation labels, never runtime or admission overrides."""
+    if pack == PACK.resolve():
+        return {"evidence_kind": "synthetic_paid_pilot",
+                "classify": {**runner.DEFAULTS["classify"], "lookup": [],
+                             "verify": ["make check", "tools/project.py check"],
+                             "regen": ["make generate", "tools/project.py generate"], "check_flags": [" check"]},
+                "obligation": {"paths": "src/*.py"},
+                "labels": {"lookup": "repository context", "regen": "make generate"}}
+    value = training.read_json(pack / "analysis.json")
+    if (not isinstance(value, dict) or set(value) != {"evidence_kind", "classify", "obligation", "labels"}
+            or value["evidence_kind"] not in ("synthetic_paid_pilot", "exploratory_repository_pilot")):
+        raise ValueError("custom pack analysis must declare its evidence kind and observation fields only")
+    classify, obligation, labels = value["classify"], value["obligation"], value["labels"]
+    if (not isinstance(classify, dict) or set(classify) != set(runner.DEFAULTS["classify"])
+            or any(not isinstance(v, list) or any(not isinstance(x, str) or not x.strip() for x in v)
+                   for v in classify.values())):
+        raise ValueError("custom pack classifiers must be lists of nonempty command substrings")
+    if (not isinstance(obligation, dict) or set(obligation) != {"paths"}
+            or (obligation["paths"] is not None and
+                (not isinstance(obligation["paths"], str) or not obligation["paths"].strip()))):
+        raise ValueError("custom pack obligation needs a path glob or explicit null")
+    if (not isinstance(labels, dict) or set(labels) != {"lookup", "regen"}
+            or any(not isinstance(x, str) or not x.strip() for x in labels.values())):
+        raise ValueError("custom pack labels must name lookup and regeneration observations")
+    return value
+
+
+def initialize(root, adage, model, total_budget, session_budget, *, max_turns=30, timeout=600, pack=PACK,
+               runtime_profile=frozen.RUNTIME_PROFILE, plugin_dir=None):
     root, adage, pack = Path(root).resolve(), Path(adage).resolve(), Path(pack).resolve()
     if root.exists():
         raise ValueError("pilot root already exists; use plan/train/learn/freeze/run to resume it")
@@ -73,15 +103,21 @@ def initialize(root, adage, model, total_budget, session_budget, *, max_turns=30
         raise ValueError("keep the pilot under a standard hidden root such as /tmp or /workspace")
     if not model.strip() or type(max_turns) is not int or max_turns <= 0 or type(timeout) is not int or timeout <= 0:
         raise ValueError("supply a resolved model revision and positive execution bounds")
+    if runtime_profile not in (frozen.RUNTIME_PROFILE, native_runtime.PROFILE):
+        raise ValueError("unsupported pilot runtime profile")
+    if runtime_profile == native_runtime.PROFILE and plugin_dir is None:
+        raise ValueError("native pilot requires --plugin-dir with the staged paired binaries")
+    if runtime_profile == frozen.RUNTIME_PROFILE and plugin_dir is not None:
+        raise ValueError("--plugin-dir requires the native runtime profile")
     total, cap = micros(total_budget), micros(session_budget)
+    analysis = pack_analysis(pack)
     registry = subprocess_json([sys.executable, pack / "generate.py", "--list"])
     chosen = selected_tasks(registry)
     counts = {stage: len(tasks) * (1 if stage == "train" else 2) for stage, tasks in chosen.items()}
     if sum(counts.values()) * cap > total:
         raise ValueError(f"the {sum(counts.values())} scheduled runs need at least {sum(counts.values()) * cap / 1_000_000:g} USD in reservations")
     closure = sorted(p for p in pack.rglob("*") if p.is_file() and "__pycache__" not in p.parts)
-    collector = [HERE / name for name in ("pilot.py", "training.py", "frozen.py", "runner.py", "evidence.py", "budget.py")]
-    collector += [runner.REPO / "demo" / "report.py"]
+    collector = list(frozen.collector_sources()) + [HERE / name for name in ("pilot.py", "training.py")]
     inputs = {str(path): frozen.file_digest(path) for path in sorted(set(closure + collector))}
     configs = {}
     for stage in STAGES:
@@ -94,19 +130,25 @@ def initialize(root, adage, model, total_budget, session_budget, *, max_turns=30
                    eval={"tasks": [] if stage == "train" else chosen[stage], "repeats": 1, "arms": ["off", "adage"]},
                    model=model, max_turns=max_turns, timeout_seconds=timeout, concurrency=1, rounds=1, seed=42,
                    capture_usage=True, setting_sources="", confine=True, learn_args=[],
-                   classify={**runner.DEFAULTS["classify"], "lookup": [],
-                             "verify": ["make check", "tools/project.py check"],
-                             "regen": ["make generate", "tools/project.py generate"], "check_flags": [" check"]},
-                   obligation={"paths": "src/*.py"}, labels={"lookup": "repository context", "regen": "make generate"},
+                   classify=copy.deepcopy(analysis["classify"]), obligation=copy.deepcopy(analysis["obligation"]),
+                   labels=copy.deepcopy(analysis["labels"]),
                    budget_usd=counts[stage] * cap / 1_000_000, session_budget_usd=cap / 1_000_000,
                    execution_cwd=str(runner.REPO))
+        if runtime_profile == native_runtime.PROFILE:
+            native_runtime.check_version(runner.harness_version())
+            cfg.update(plugin_dir=str(Path(plugin_dir).resolve()), capture_debug=True,
+                       harness_binary=native_runtime.harness_identity()["resolved_path"])
+            cfg["eval"]["arms"] = ["off", "mod"]
         configs[stage] = cfg
-    manifest = {"schema": 1, "evidence_kind": "synthetic_paid_pilot", "treatment": "learned_e0_advice",
+    manifest = {"schema": 1, "evidence_kind": analysis["evidence_kind"], "treatment": "learned_e0_advice",
                 "root": str(root), "adage": str(adage), "adage_sha256": frozen.file_digest(adage),
                 "harness_version": runner.harness_version(), "registry": registry, "selected": chosen,
                 "counts": counts, "configs": configs, "inputs": inputs, "pack_inputs": list(map(str, closure)),
                 "budget_microusd": total, "session_cap_microusd": cap,
                 "policy": {"min_groups": 2, "max_quality_loss": 0.02, "min_savings": 0.2, "min_baseline_success": 0.8}}
+    manifest["runtime_profile"] = runtime_profile
+    if runtime_profile == native_runtime.PROFILE:
+        manifest["native_inputs"] = native_runtime.static_inputs(configs["train"], adage)
     root.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".adage-pilot-", dir=root.parent) as temporary:
         staging = Path(temporary) / "pilot"
@@ -127,6 +169,14 @@ def load(root):
         raise ValueError("pilot manifest/root mismatch")
     if frozen.file_digest(manifest["adage"]) != manifest["adage_sha256"]:
         raise ValueError("Adage build changed; restore the pinned pilot build")
+    profile = manifest.get("runtime_profile", frozen.RUNTIME_PROFILE)
+    if profile not in (frozen.RUNTIME_PROFILE, native_runtime.PROFILE):
+        raise ValueError("unsupported pilot runtime profile")
+    if profile == native_runtime.PROFILE:
+        for cfg in manifest["configs"].values():
+            frozen.require_profile_config(cfg, profile)
+            if native_runtime.static_inputs(cfg, Path(manifest["adage"])) != manifest.get("native_inputs"):
+                raise ValueError("native pilot runtime inputs changed")
     for path, expected in manifest["inputs"].items():
         if frozen.file_digest(path) != expected:
             raise ValueError(f"pilot input changed: {path}; retain original inputs or start a new pilot")
@@ -183,6 +233,37 @@ def training_sources(root, run_id, run, stream_sha256):
     return {"complete": not reasons, "session_id": sid, "sources": sources, "reasons": reasons}
 
 
+
+def native_training_observations(manifest, root, run_id):
+    """Replay untreated native evidence; retain incomplete observations before stopping."""
+    directory = root / "train" / "runs" / run_id
+    debug = directory / "claude-debug.log"
+    result = {"complete": False, "debug_sha256": None}
+    try:
+        if debug.is_symlink():
+            raise ValueError("native debug evidence must not be linked")
+        result["debug_sha256"] = frozen.file_digest(debug)
+        events = []
+        for line in native_runtime.bounded(directory / "stream.jsonl").splitlines():
+            row = json.loads(line)
+            if isinstance(row, dict) and isinstance(row.get("line"), str):
+                row = json.loads(row["line"])
+            if isinstance(row, dict) and row.get("type") == "system" and row.get("subtype") == "init":
+                events.append(row)
+        if len(events) != 1:
+            raise ValueError("native training needs exactly one initialization event")
+        history = native_runtime.history_for_session(root / "train/private/transcripts", events[0].get("session_id", ""))
+        result["observations"] = native_runtime.observe(
+            init=events[0], accounting=evidence.read_stream(directory / "stream.jsonl"),
+            debug_path=debug, history_path=history, plugin=manifest["native_inputs"]["plugin"],
+            config_dir=Path(runner.home_dirs(directory / "home")["CLAUDE_CONFIG_DIR"]),
+            home=root / "train/private/adage-home", intervention=False)
+        result["complete"] = True
+    except (ValueError, OSError, KeyError, TypeError) as exc:
+        result["reason"] = str(exc)
+    return result
+
+
 def training_journal(manifest, root, objects):
     jobs = train_jobs(manifest)
     expected, receipt_map, started = {job["id"] for job in jobs}, {}, set()
@@ -216,6 +297,10 @@ def training_journal(manifest, root, objects):
         sources = objects.get(receipt["evidence"]["sources"])
         if training_sources(root, run, receipt["run"], accounting["stream_sha256"]) != sources:
             raise ValueError("training native history or request stream differs from its immutable receipt; restore the original evidence")
+        if manifest.get("runtime_profile") == native_runtime.PROFILE:
+            observed = native_training_observations(manifest, root, run)
+            if objects.get(receipt["evidence"]["native_runtime"]) != observed:
+                raise ValueError("native training observations changed; restore original evidence")
     if started - receipt_map.keys():
         raise ValueError("training job started without a receipt; reconcile the original attempt without rerunning")
     return jobs, receipt_map, ledger
@@ -258,6 +343,10 @@ def plan(root, *, runtime=True):
             accounting = objects.get(receipt["evidence"]["accounting"])
             grade = objects.get(receipt["evidence"]["grade"])
             sources = objects.get(receipt["evidence"]["sources"])
+            if manifest.get("runtime_profile") == native_runtime.PROFILE:
+                native = objects.get(receipt["evidence"]["native_runtime"])
+                if not native["complete"]:
+                    blockers.append(f"training {run_id} has incomplete native observations: " + native.get("reason", "unknown"))
             if not sources["complete"]:
                 blockers.append(f"training {run_id} has incomplete native histories: " + "; ".join(sources["reasons"])
                                 + "; retain the original attempt and diagnose before spending again")
@@ -303,6 +392,13 @@ class TrainingObserver:
         if frozen.exposed_private_inputs({"private_inputs": self.manifest["pack_inputs"]}, self.root,
                                          frozen.Objects(self.root / "objects"), env):
             raise ValueError("training exposes private grader or pilot evidence")
+        if self.manifest.get("runtime_profile") == native_runtime.PROFILE:
+            live.home.mkdir(parents=True, exist_ok=True)
+            native_runtime.check_home(live.home, initial=True)
+            native_runtime.check_checkout(workdir)
+            config = Path(env["CLAUDE_CONFIG_DIR"])
+            if any(p.is_symlink() for p in (config, *config.parents)) or config.exists() and any(config.iterdir()):
+                raise ValueError("native training configuration must be fresh and unlinked")
         env["ADAGE_AUTO_LEARN"], env["ADAGE_DISABLE"] = "0", "1"
 
     def event(self, value):
@@ -347,9 +443,16 @@ def train(root, *, execute=False, live_factory=runner.Live):
                        "evidence": {"accounting": objects.put({"complete": accounting.complete, "calls": accounting.calls,
                            "reasons": accounting.reasons, "terminal": accounting.terminal, "stream_sha256": accounting.stream_sha256}),
                            "grade": objects.put(observer.grade), "sources": objects.put(sources)}}
+            native_complete = True
+            if manifest.get("runtime_profile") == native_runtime.PROFILE:
+                native_runtime.check_home(live.home, initial=True)
+                native_runtime.check_checkout(root / "train/runs" / job["id"] / live.cfg["workdir"])
+                native = native_training_observations(manifest, root, job["id"])
+                receipt["evidence"]["native_runtime"] = objects.put(native)
+                native_complete = native["complete"]
             frozen.publish(root / "train" / "receipts" / f"{job['id']}.json",
                            {"pilot_sha256": pilot_sha(manifest), "sha256": objects.put(receipt)})
-            if (not sources["complete"] or not accounting.complete
+            if (not native_complete or not sources["complete"] or not accounting.complete
                     or any(call["model"] != manifest["configs"]["train"]["model"] for call in accounting.calls)
                     or evidence.independent_grade(observer.grade["stdout"], observer.grade["returncode"], observer.grade["timed_out"]) is None):
                 break
@@ -359,8 +462,15 @@ def train(root, *, execute=False, live_factory=runner.Live):
 
 
 def learner_command(root, manifest, *args):
+    home = root / "learner-home"
+    native = manifest.get("runtime_profile") == native_runtime.PROFILE
+    # The native runtime uses the model bundled in the pinned binary. An installed model
+    # (or models/active selector) would silently change learning relative to that runtime.
+    if native and ((home / "models").exists() or (home / "models").is_symlink()):
+        raise ValueError("native pilot learning requires the bundled model; retain and diagnose unexpected learner models")
     return subprocess_json([manifest["adage"], *args], cwd=root,
-                           env=dict(os.environ, ADAGE_HOME=str(root / "learner-home"), ADAGE_AUTO_LEARN="0", ADAGE_EMBED_MODEL="none"))
+                           env=dict(os.environ, ADAGE_HOME=str(home), ADAGE_AUTO_LEARN="0",
+                                    ADAGE_EMBED_MODEL="auto" if native else "none"))
 
 
 def learn(root):
@@ -391,12 +501,15 @@ def learn(root):
     repo = manifest["registry"]["repo"]
     imported = learner_command(root, manifest, "corpus", "import", bundle / "corpus.jsonl", "--repo", repo)
     learned = learner_command(root, manifest, "corpus", "learn", "--repo", repo)
+    if manifest.get("runtime_profile") == native_runtime.PROFILE and not learned.get("intent_model"):
+        raise ValueError("native pilot learner did not resolve its bundled embedding model; preserve the diagnostic output")
     audit = learner_command(root, manifest, "corpus", "inspect", "--repo", repo, "--evidence")
     graph = learner_command(root, manifest, "graph", "--json", "--events", "0")
     (home / "tracks").mkdir(exist_ok=True)
     sources = frozen.adage_json(manifest["adage"], "sources", home / "tracks")
     queue = learner_command(root, manifest, "review", "--json")
     result = {"pilot_sha256": pilot_sha(manifest), "training_generation": learned["corpus_generation"],
+              "intent_model": learned.get("intent_model"),
               "import_sha256": objects.put(imported), "learn_sha256": objects.put(learned),
               "audit_sha256": objects.put(audit), "routes_sha256": objects.put(graph["routes"]),
               "sources_sha256": objects.put(sources),
@@ -457,8 +570,10 @@ def freeze(root, reviewed_by):
         else:
             frozen.prepare(root / f"{stage}-config.json", objects.root / f"{record['audit_sha256']}.json", index,
                            objects, path, Path(manifest["adage"]), [*manifest["pack_inputs"], HERE / "pilot.py", HERE / "training.py"],
-                           learner_revision=f"{manifest['adage_sha256']}:production-defaults:corpus={record['training_generation']}",
+                           learner_revision=(f"{manifest['adage_sha256']}:production-defaults:corpus={record['training_generation']}"
+                                             f":embedding={record.get('intent_model') or 'none'}"),
                            policy=manifest["policy"], identities=identities,
+                           runtime_profile=manifest.get("runtime_profile", frozen.RUNTIME_PROFILE),
                            timeout=manifest["configs"][stage]["timeout_seconds"])
     return plan(root)
 
@@ -530,6 +645,10 @@ def main(argv=None):
     commands = parser.add_subparsers(dest="command", required=True)
     init = commands.add_parser("init")
     init.add_argument("--adage", type=Path, default=runner.REPO / "target" / "release" / "adage")
+    init.add_argument("--runtime-profile", choices=(frozen.RUNTIME_PROFILE, native_runtime.PROFILE),
+                      default=frozen.RUNTIME_PROFILE)
+    init.add_argument("--plugin-dir", type=Path)
+    init.add_argument("--pack", type=Path, default=PACK, help="trusted private task pack with generate.py, grade.py and analysis.json")
     init.add_argument("--model", required=True)
     init.add_argument("--budget-usd", required=True)
     init.add_argument("--session-budget-usd", default="1")
@@ -549,7 +668,8 @@ def main(argv=None):
     try:
         if args.command == "init":
             initialize(args.root, args.adage, args.model, args.budget_usd, args.session_budget_usd,
-                       max_turns=args.max_turns, timeout=args.timeout_seconds)
+                       max_turns=args.max_turns, timeout=args.timeout_seconds, pack=args.pack,
+                       runtime_profile=args.runtime_profile, plugin_dir=args.plugin_dir)
             result = plan(args.root)
         elif args.command == "train":
             result = train(args.root, execute=args.execute)

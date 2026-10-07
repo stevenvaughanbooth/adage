@@ -156,6 +156,12 @@ pub fn sources(root: &Path) -> Result<Sources> {
     Ok(Sources { schema: 1, tracks, index })
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+pub struct EmbeddingRequirement {
+    pub model: String,
+    pub dimensions: usize,
+}
+
 #[derive(Debug, Serialize)]
 pub struct Artifact {
     pub sha256: String,
@@ -164,6 +170,10 @@ pub struct Artifact {
     pub reflexes: usize,
     /// Reflexes the ordinary directive hook can deliver, without an execution extension.
     pub directive_reflexes: usize,
+    /// Static model identities needed by ordinary intent/card directives in this repository.
+    pub directive_embeddings: BTreeSet<EmbeddingRequirement>,
+    /// Verified model supplied by this binary to a fresh home with default settings.
+    pub bundled_embedding: Option<EmbeddingRequirement>,
     pub runtime_repo: Option<String>,
 }
 
@@ -224,6 +234,26 @@ pub fn artifact(body: &[u8], repo: &str, checkout: Option<&Path>) -> Result<Arti
         repo: repo.to_owned(),
         reflexes,
         directive_reflexes: index.for_repo(repo).filter(|r| !r.exec_only()).count(),
+        directive_embeddings: index
+            .for_repo(repo)
+            .filter(|r| !r.exec_only())
+            .flat_map(|r| match &r.route.trigger {
+                adage_tracks::Trigger::Intent { model, centroid, .. } => vec![(model, centroid.len())],
+                adage_tracks::Trigger::Context { items, .. } => items
+                    .iter()
+                    .filter_map(|item| match item {
+                        adage_tracks::CtxItem::Intent { model, centroid, .. } => Some((model, centroid.len())),
+                        _ => None,
+                    })
+                    .collect(),
+                _ => vec![],
+            })
+            .map(|(model, dimensions)| EmbeddingRequirement { model: model.clone(), dimensions })
+            .collect(),
+        bundled_embedding: adage_intent::model::bundled_verified()
+            .ok()
+            .and_then(|()| adage_intent::model::bundled())
+            .map(|model| EmbeddingRequirement { model: model.id, dimensions: model.dim }),
         runtime_repo,
     })
 }

@@ -48,6 +48,8 @@ pub fn run(matches: &clap::ArgMatches, paths: &Paths) -> Result<()> {
             let _lock = adage_store::lock::exclusive(&paths.tracks_lock())?;
             let mut cfg = if demo { LearnConfig::demo() } else { LearnConfig::default() };
             cfg.computation_cache = !no_cache;
+            let settings = adage_store::config::load(paths).config;
+            cfg.cards = crate::autolearn::card_params(&settings, paths);
             let before = adage_learn::diff::snapshot_all(&paths.tracks());
             let report = corpus::learn(&repo, Some(&paths.models()), &store, &cfg)?;
             let after = adage_learn::diff::snapshot_all(&paths.tracks());

@@ -11,12 +11,42 @@ under `docs/tracks/`).
 
 ## 0.1.0 - Unreleased
 
+Frozen experiments can explicitly compare learned E0 advice through the native Claude mod on
+the verified Linux harness. The profile pins plugin and harness binaries, keeps fresh runtime
+state, and stops collection when native activation, history, usage or binary observations do
+not reconcile. Execution grants and custom model settings remain unsupported by this profile.
+The default legacy E0 profile still rejects mod arms instead of silently changing the treatment.
+The training coordinator pins the same complete collector source closure as frozen comparisons.
+Pilots can explicitly select that native profile at initialization; untreated training receipts
+check native request evidence before further spending, and both held-out cohorts retain the
+selected profile after operator review.
+
+Native pilot learning retains the pinned binary's bundled embedding model instead of disabling
+procedure cards. Learned cards no longer describe repeated housekeeping as a finishing check
+or drop a recorded subdirectory when recommending a command. Commands outside the session
+root are omitted until cards can represent their working directory.
+
+Private repository task packs can use the pilot coordinator with explicit, pinned command
+observations and exploratory evidence labels while retaining its admission and review gates.
+
+Plugin checks recognize both recorded Claude validator markers and verify the remaining
+hook-list length when the validator truncates its report.
+
+External-parent PostgreSQL migration controls now support private Coder learning experiments,
+with pinned SQL inputs and separate upgrade, fresh-schema and downgrade observations, using
+explicit PostgreSQL 13.11 or 16.14 profiles.
+
 **Agent traces become reflexes.** Adage reads the traces coding agents leave behind, finds the
 paths that get work done, and compiles them into reflexes: small, typed, deterministic responses
 with their evidence attached. At each decision point the matching reflex tells the agent what to
 do next. Adage never runs the commands it directs; execution is a separate, opt-in binary.
 
 ### The runtime and hooks
+
+- Plugin session records resolve the serving binary through symlinks on macOS, so the record
+  identifies Adage or Adage Exec instead of the shared `hook` entry.
+- The bounded live collector can load the Claude Code mod directly and retain debug evidence;
+  the existing frozen E0 protocol remains unchanged.
 
 - **The orientation card.** A delivered procedure card no longer quotes the exemplar lines; it says
   where its files stand in the checkout instead (line counts, a Python source's last definitions,
@@ -122,6 +152,25 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   prediction read that file again first: unless it still hashes to the record, nothing is added and
   nothing is invoked, and whether it is inert is read from the file, not the record. A record from
   an earlier build has no path and is not used until the skill is trained again.
+- **Register launch experiment inputs before spending.** A free inventory auditor checks related
+  groups, prior exposure, semantic grader controls, phase budgets and readiness evidence, then
+  preserves declared inputs in a private registration. The four scenario plans retain the
+  commercial thresholds and cannot authorize paid execution or unsupported savings claims.
+
+- **Reject inert frozen treatments before paid evaluation.** Frozen Claude studies require
+  intent/card triggers to match the pinned binary's bundled embedding model and dimensions.
+  Fresh per-job homes reject unsupported runtime settings and model assets before dispatch and
+  after collection.
+
+- **Learn procedure cards from imported traces.** `adage corpus learn` now honors the same
+  procedure-card settings as ordinary conditioning, including disabling cards. Canonical imports
+  can produce learned guidance for recurring tasks with the installed or bundled embedding model.
+  Production evidence thresholds and review decisions remain in force.
+
+- **Keep paid dispatch behind current operator and evidence checks.** The pilot, frozen-study
+  and live-runner entrypoints consistently refuse Claude Code, Codex and OpenCode agent sessions.
+  Collectors recheck evidence under their dispatch lock, including cross-stage validation gates,
+  so a concurrent incomplete result cannot admit another paid job from a stale readiness plan.
 
 ### Conditioning (learning from traces)
 

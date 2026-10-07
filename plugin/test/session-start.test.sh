@@ -104,6 +104,7 @@ if [ -n "$NODE" ]; then
     PAYLOAD="{\"session_id\":\"never-both-$state\",\"cwd\":\"$W/billing\",\"hook_event_name\":\"SessionStart\",\"source\":\"startup\"}"
     run "$R1" "$W/data3" "$BASE"
     starts "never-both-$state" >"$W/starts"
+    echo "observed start ($state): $(cat "$W/starts")"
     check "never both ($state): one session_start, from the hook binary" sh -c "[ \$(wc -l <'$W/starts') = 1 ] && grep -qx '$want' '$W/starts'"
   done
   marker_off

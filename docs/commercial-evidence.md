@@ -147,3 +147,5 @@ Hosted CI availability is separate from empirical efficacy. When unavailable, re
 local source trees, commands, failures, corrections and reruns; state the unverified platform
 matrix. A documented local engineering assessment does not create a savings result or remove
 operator-only execution/approval boundaries. Merge still requires the user's authorization.
+
+The concrete four-workflow preparation and publication gates are in [launch experiments](launch-experiments.md).

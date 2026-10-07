@@ -40,6 +40,15 @@ audit and protocol. A display label like `acme/api` will not match that origin. 
 is checked again when preparing and dispatching jobs; valid bytes alone cannot establish delivery
 or that a reflex applies to every held-out task.
 
+The frozen Claude collector uses a fresh Adage home with the pinned binary's default runtime
+settings and automatic learning disabled. It copies only the index: intent/card and contextual
+intent triggers must use the binary's verified bundled embedding model and dimensions.
+Installed models, custom home settings and learned follow weights are not supported by this
+collector. Preparation rejects incompatible artifacts; dispatch and completion reject unexpected
+home configuration/model assets. The artifact report lists those model requirements. This
+establishes available dependencies, not actual delivery; retain hook/native evidence to measure
+whether each task received useful advice. Existing studies keep their original pinned collector.
+
 Export the verified audit with `adage corpus inspect --repo github.com/acme/api --evidence`. Every training
 trace must have a declared identity; inferred/unknown identities prevent freezing because they
 cannot establish separation from the test registry. Pin models, settings, tools, checkout,

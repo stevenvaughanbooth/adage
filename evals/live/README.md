@@ -1,5 +1,16 @@
 # Live evals
 
+`postgres_grade.py` runs private external-parent migration contracts in offline PostgreSQL.
+It preserves actual SQL observations and rejects candidate-authored success reports; it is a
+database-behavior component, not complete task coverage or paid-study admission. The default
+pinned PostgreSQL 16.14 profile can be replaced by `--postgres-profile 13.11` for the historical
+Coder tasks; each result records the selected image and profile. See the
+[Coder migration controls](../../docs/launch-experiments.md#coder-migration-controls).
+
+For the four proposed launch workflows, use [launch experiments](../../docs/launch-experiments.md).
+`study.py` audits and seals private preparation inventories, including related groups, prior
+exposure and grader controls. It cannot dispatch models or authorize a savings claim.
+
 For the packaged first paid run, use [the paid-pilot launch guide](../../docs/paid-pilot.md).
 `pilot.py` supplies a disjoint synthetic task pack, real-trace training bridge, production
 learning, human review checkpoint and frozen learned-E0 comparison under one explicit program
@@ -43,6 +54,35 @@ Use `frozen.py` for a prospective savings study after training, candidate review
 have finished. It reuses the execution and budget machinery below, with a fixed paired cohort
 and the stricter [experiment contract](../../docs/learning-experiments.md). The exploratory
 rounds and summaries in `runner.py` remain useful for development; they are not this contract.
+
+`native_assets.py` provides a read-only **pre-session identity** for staged native-mod inputs:
+the complete plugin tree, both checksummed binaries, the complete initial Adage home, and the
+effective managed-policy file or its absence. It records bytes and permissions, and detects
+added or removed inputs. It does not validate grant authority, after-session mutable state,
+actual module activation, or delivery. It is an input identity component. Native E0 execution uses the explicit profile below;
+the default legacy E0 profile still refuses mod arms rather than silently changing them.
+
+To compare learned **E0 advice through the native Claude mod**, explicitly select
+`--runtime-profile native-mod-bundled-defaults-e0/v1` during preparation. The config must have
+`eval.arms: ["off", "mod"]`, `capture_debug: true`, and an absolute `plugin_dir`. Pass the staged
+platform binary as `--adage` (inside that plugin's `dist/<target>/adage`); its checksummed
+`adage-exec` companion must also be staged. This profile supports the verified standalone Linux
+Claude Code **2.1.288** executable and its exact three built-in plugins. It pins and dispatches
+that executable directly, pins local managed harness settings and a digest of the selected
+runtime environment (without credentials), checks plugin and managed-policy identity before
+and after each run,
+and verifies the binary copies actually selected by the session-start shim.
+
+The native E0 treatment starts with only the previously reviewed compiled index and bundled
+runtime defaults. Custom settings, installed models, execution grants and optional prediction
+or execution treatments and custom `forward_env` settings are unsupported. Each session receives fresh harness/plugin state;
+learning and model routing are absent. The profile requires the same model in both arms and
+reconciles canonical stream usage with native history request IDs and debug dispatch counts.
+Corrupt or missing native evidence stops collection without replacing the original attempt.
+Spool counters record behavior; they do not alone prove that every directive reached the
+prompt or that the agent performed adequate verification. Retain independent grades and inspect
+actual delivery during validation before releasing the untouched test cohort. These collector
+checks are not a paid-study admission or a savings result.
 
 This collector requires Linux, Bubblewrap, a pinned Claude Code version and a current Adage
 build. Supply an existing live config with `confine: true`, the standard hidden directories
@@ -517,3 +557,26 @@ checks:
 - `tasks_by_round`: per-round pools, refused overlaps, the leaky warning, and that a round never
   learns from its own tasks;
 - that nothing under `demo/results/` names a home directory.
+
+### Claude Code mod cost scouts
+
+The `mod` and `mod-observe` arms load `plugin_dir` (an absolute path to a privately staged
+`plugin/claude-code` with both matching binaries and its `dist/SHA256SUMS`). They pass
+`--plugin-dir` without a second hook registration through `--settings`. Automatic learning stays
+off; enabling execution and approving predictions remain operator decisions. `mod-observe` sets
+`ADAGE_MOD_OBSERVE=1`; it is an identity check, not an untreated baseline.
+
+Pin the CLI to the version tested by the plugin (currently 2.1.288). Set `capture_usage: true`
+and `capture_debug: true` for every compared arm; debug evidence is retained in each run's
+`claude-debug.log`. Retain native histories, independent grades and the complete plugin source
+alongside the existing binary/configuration pins. Loading a plugin is not proof of an intervention:
+inspect actual module activation, the bridge's decisions, delivered context and native calls.
+
+This runner support does not extend `frozen.py`'s E0-only treatment contract. A mod savings study
+needs a separately reviewed and frozen plugin, settings, stores and operator grants, plus verified
+request accounting and delivery evidence. A single cold-start Coder scout with an empty Adage home
+measures initial task cost and activation only; it cannot establish learned-reflex savings.
+
+The frozen v2 collector refuses `mod` and `mod-observe` configurations before preparing
+artifacts or checkouts. Its E0-only protocol cannot freeze the Claude mod's plugin assets,
+settings and operator grants; a mod request must not silently become an E0 comparison.

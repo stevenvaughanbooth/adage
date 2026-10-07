@@ -178,6 +178,13 @@ adage corpus inspect --repo acme/api --evidence > training-evidence.json
 adage corpus learn --repo acme/api
 ```
 
+`corpus learn` uses production thresholds unless `--demo` is explicitly supplied. Like
+`condition`, it honors `learn.cards`, `learn.card_threshold` and recorded card-command verdicts;
+cards require an installed or bundled static embedding model. An explicit
+`ADAGE_EMBED_MODEL=none` disables intent/card learning. Preserve the embedding choice alongside
+the corpus generation when comparing treatments; the synthetic paid pilot deliberately pins
+that choice to `none`.
+
 Each JSONL record is `{"schema":1,"session":<canonical Session>}`. Import processes one record at
 a time, limited to 8 MiB and 50,000 steps; at most 100 line/reason diagnostics are retained while
 all rejection counts are reported. Invalid JSON, unknown schemas, malformed session structure,

@@ -8,6 +8,24 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { PLATFORMS } from "../npm/config.mjs"
+import { validatedHooks, matchesValidatedHooks } from "./plugin-validation.mjs"
+
+// Validator 2.1.288 uses a Unicode marker; older captured reports used ASCII.
+const hooks = "session.start, classic.Stop, ui.close"
+for (const marker of [">", "❯"]) {
+  const complete = validatedHooks(`  ${marker} ./register.ts hooks: ${hooks}\n`)
+  assert.ok(matchesValidatedHooks(hooks, complete))
+  assert.ok(!matchesValidatedHooks(hooks + ", new.hook", complete), "an untruncated report must match completely")
+  const truncated = validatedHooks(`  ${marker} ./register.ts hooks: session.start, classic.… [+14 chars]\n`)
+  assert.ok(matchesValidatedHooks(hooks, truncated))
+  assert.ok(!matchesValidatedHooks(hooks + ", new.hook", truncated), "truncation cannot hide an added hook")
+  assert.ok(!matchesValidatedHooks("classic.Stop, session.start, ui.close", complete), "hook reordering must fail")
+}
+assert.equal(validatedHooks("no hook report"), null)
+assert.equal(validatedHooks(`> ./register.ts hooks: ${hooks}\n❯ ./register.ts hooks: ${hooks}\n`), null)
+assert.equal(validatedHooks(`x ./register.ts hooks: ${hooks}\n`), null)
+assert.ok(!matchesValidatedHooks(hooks, validatedHooks("> ./register.ts hooks: session.start… [+0 chars]")))
+console.log("validator hook reports: ASCII and Unicode markers accepted; missing, duplicate, reordered and length-changing records rejected")
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const host = PLATFORMS.find((p) => p.os === process.platform && p.cpu === process.arch)

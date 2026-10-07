@@ -5,10 +5,7 @@ operator review, a pinned compiled index, and held-out paired evaluation. It use
 Python maintenance tasks and independent external grader. It is an exploratory **synthetic
 paid pilot**, not evidence of customer token savings. No paid calls run until `--execute`.
 
-Until merged, use `codex/trace-learning-infrastructure` from
-[PR #31](https://github.com/stevenvaughanbooth/adage/pull/31).
-
-The treatment is learned **E0 advice** through the normal Adage hooks. It does not enable
+The default treatment is learned **E0 advice** through the normal Adage hooks. It does not enable
 automatic command execution, completion enforcement, or a different model in the treatment arm.
 Both arms use the exact model revision you name.
 
@@ -37,11 +34,49 @@ python3 evals/live/pilot.py init --root "$PILOT_ROOT" \
 python3 evals/live/pilot.py plan --root "$PILOT_ROOT"
 ```
 
+To test the native Claude mod, initialize a **new** root with the verified Linux standalone
+Claude Code 2.1.288 harness and a staged, checksummed plugin containing both binaries. Add
+`--runtime-profile native-mod-bundled-defaults-e0/v1 --plugin-dir /absolute/staged/plugin`
+to `init`, and set `--adage` to that plugin's `dist/<linux-target>/adage`. Keep the same
+reviewed allocation; a new root is not authorization for another paid study.
+
+The native profile pins the complete plugin, paired binaries, harness, managed settings and
+supported environment. Training remains untreated: no Adage module or reflex is loaded.
+Its receipts reconcile native history request IDs, debug request counts and stream usage;
+missing observations or later drift stop further dispatch while preserving the attempt.
+Native learning uses the embedding model bundled in the pinned Adage binary, records its
+identity, and rejects installed learner models or a missing bundled model. This preserves
+production intent/procedure-card learning; the legacy profile keeps its no-embedding setting.
+Older pilot collectors forced embeddings off even for the native profile. Preserve those
+original outputs; any corrected replay belongs in a separate diagnostic study, not a rewritten
+learning record or a claim of held-out savings.
+
+After operator review, both frozen cohorts use the native profile with `off` and `mod` arms.
+Custom forwarded environment and execution grants are unsupported. An observed module load
+or spool directive alone does not establish useful delivery or adequate task verification.
+
 `init` creates the complete registry and all three configurations; no unpublished input files
 are needed. It pins the binary, collector, task/grader sources, model, Claude Code version,
 and settings. Keep that checkout and binary unchanged while collecting. `plan` is read-only
 and reports missing prerequisites. Resolve its blockers before execution. An absent Claude
 version at initialization requires a fresh pilot after installing the harness.
+
+A private repository workload can use `init --pack /absolute/private/pack`. The pack is
+trusted local code: `generate.py --list` returns the split/group registry, `generate.py
+--out DIR --task ID` creates a fresh checkout, and `grade.py --workdir DIR --task ID` returns
+the independent grade. Keep the pack under a hidden root outside the agent's tool paths.
+Its complete files are pinned with the collector; remote graders and tool inputs also need
+an independently pinned closure and confinement checks before admission.
+
+Custom packs must include `analysis.json` with exactly `evidence_kind`, `classify`,
+`obligation`, and `labels`. Use `exploratory_repository_pilot` (or `synthetic_paid_pilot` for
+synthetic tasks). `classify` declares string arrays for `lookup`, `regen`, `verify`,
+`bash_edit`, and `check_flags`; `obligation.paths` is a path glob or explicit null; `labels`
+contains nonempty `lookup` and `regen` names. These fields describe observed commands and
+edits. They do not establish adequate verification, override the independent grader, or
+change confinement, approval, model, budget, or learning thresholds. The bundled Python
+pack retains its existing defaults. A custom schedule needs its own reviewed allocation;
+choosing a pack never authorizes paid dispatch or a customer savings claim.
 
 The fixed schedule reserves 20 training sessions, four validation sessions, and six test
 sessions. At $1 per session the absolute admission budget is $30, allocated $20/$4/$6 across

@@ -3,6 +3,7 @@ import contextlib
 import copy
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -143,6 +144,16 @@ class PilotFlow(unittest.TestCase):
         self.manifest = pilot.initialize(self.root, ADAGE, "fixture-model-v1", "30", "1")
         TrainingLive.runs, TrainingLive.mode = [], "complete"
 
+    def test_training_pins_transitively_imported_native_helpers(self):
+        helper = str(HERE / "native_runtime.py")
+        self.assertIn(helper, self.manifest["inputs"])
+        self.assertIn(str(runner.REPO / "demo/adage_metrics.py"), self.manifest["inputs"])
+        original = frozen.file_digest
+        with patch.object(frozen, "file_digest", side_effect=lambda path:
+                          "0" * 64 if str(path) == helper else original(path)):
+            with self.assertRaisesRegex(ValueError, "pilot input changed"):
+                pilot.load(self.root)
+
     def collect_one(self):
         def stop_between_jobs(*args, **kwargs):
             if TrainingLive.runs:
@@ -167,6 +178,36 @@ class PilotFlow(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "30 scheduled runs"):
             pilot.initialize(other, ADAGE, "fixture-model-v1", "29", "1")
         self.assertFalse(other.exists())
+
+    def test_custom_pack_observations_are_explicit_pinned_and_cannot_override_admission(self):
+        pack = self.root.parent / "custom-pack"
+        shutil.copytree(pilot.PACK, pack, ignore=shutil.ignore_patterns("__pycache__"))
+        other = self.root.parent / "custom-pilot"
+        with self.assertRaises(FileNotFoundError):
+            pilot.initialize(other, ADAGE, "fixture-model-v1", "30", "1", pack=pack)
+        analysis = pilot.pack_analysis(pilot.PACK.resolve())
+        analysis.update(evidence_kind="exploratory_repository_pilot", obligation={"paths": "coderd/database/*.sql"})
+        analysis["classify"].update(verify=["go test"], regen=["sqlc generate"])
+        source = pack / "analysis.json"
+        source.write_text(json.dumps({**analysis, "budget_usd": 1000}))
+        with self.assertRaisesRegex(ValueError, "observation fields only"):
+            pilot.initialize(other, ADAGE, "fixture-model-v1", "30", "1", pack=pack)
+        self.assertFalse(other.exists())
+        source.write_text(json.dumps(analysis))
+        manifest = pilot.initialize(other, ADAGE, "fixture-model-v1", "30", "1", pack=pack)
+        self.assertEqual(manifest["evidence_kind"], "exploratory_repository_pilot")
+        self.assertIn(str(source), manifest["inputs"])
+        for cfg in manifest["configs"].values():
+            self.assertEqual(runner.classify(cfg, "Bash", {"command": "go test ./..."}), "verify")
+            self.assertEqual(runner.classify(cfg, "Bash", {"command": "sqlc generate"}), "regen")
+            self.assertEqual(cfg["obligation"], analysis["obligation"])
+            self.assertTrue(cfg["confine"])
+            self.assertEqual(cfg["forward_env"], [])
+        self.assertFalse(pilot.plan(other)["customer_savings_claim"])
+        analysis["classify"]["verify"] = ["anything"]
+        source.write_text(json.dumps(analysis))
+        with self.assertRaisesRegex(ValueError, "pilot input changed"):
+            pilot.load(other)
 
     def test_plan_and_default_train_are_read_only_and_no_receipts_are_not_complete_usage(self):
         before = sorted((str(p.relative_to(self.root)), p.read_bytes()) for p in self.root.rglob("*") if p.is_file())
