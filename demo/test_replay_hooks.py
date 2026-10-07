@@ -83,6 +83,14 @@ class ReplayTest(unittest.TestCase):
         # Nothing in a recording names the machine's temporary paths.
         self.assertNotIn(str(self.tmp), json.dumps(rec))
 
+    def test_a_seeded_homes_spools_are_not_recorded(self):
+        home = self.tmp / "home"
+        (home / "sessions").mkdir(parents=True)
+        (home / "sessions" / "earlier.spool").write_bytes(am.frame({"kind": "session_start", "earlier": True}))
+        rec = rh.replay(self.stream, BIN, home, self.cwd)
+        self.assertEqual([r["event"] for r in rec], [s["event"] for s in self.stream])
+        self.assertNotIn('"earlier"', json.dumps(rec))
+
     def test_observe_mode_changes_nothing(self):
         base = rh.replay(self.stream, BIN, self.tmp / "home-a", self.cwd)
         obs = rh.replay(self.stream, BIN, self.tmp / "home-b", self.cwd, observe=True)
@@ -118,6 +126,14 @@ class ReplayTest(unittest.TestCase):
             code = rh.main([str(FIX / "hook-stream.jsonl"), "--identity", "--adage", BIN, "--keep", str(self.tmp / "keep")])
         self.assertEqual(code, 0, out.getvalue())
         self.assertTrue((self.tmp / "keep" / "mod-observe.jsonl").exists())
+
+    def test_identity_command_takes_a_relative_binary(self):
+        # The documented command line names target/release/adage relative to the checkout, and
+        # every hook runs in the replay's own directory.
+        rel = os.path.relpath(BIN)
+        with redirect_stdout(io.StringIO()) as out:
+            code = rh.main([str(FIX / "hook-stream.jsonl"), "--identity", "--adage", rel])
+        self.assertEqual(code, 0, out.getvalue())
 
 
 if __name__ == "__main__":

@@ -112,7 +112,28 @@ unit-tested (`demo/test_run_arms.py`).
 Every arm also gets `ADAGE_HOME=$DEMO_ROOT/adage-home` and `ADAGE_AUTO_LEARN=0` (except `a0`),
 `--setting-sources project,local` (so no plugin or hook from the person's own settings loads),
 `--debug --debug-file runs/<id>/claude-debug.log` and `--include-partial-messages`. stderr goes to
-`runs/<id>/stderr.log`.
+`runs/<id>/stderr.log`; stdin is empty.
+
+**One session per run.** Every run passes its own `--session-id <uuid4>`, and no arm inherits the
+variables of a Claude Code session the runner itself runs in (`CLAUDECODE`, any `*SESSION_ID*`,
+`CLAUDE_CODE_REMOTE*`, `CLAUDE_CODE_MESSAGING_*`, `CLAUDE_CODE_ENTRYPOINT`,
+`CLAUDE_CODE_CHILD_SESSION`, `CLAUDE_PID`; the rule of `evals/live/runner.py`). A child that
+inherits `CLAUDE_CODE_SESSION_ID` takes that id as its own: every run then shares one transcript
+name and one spool, `learn` reads one foreign transcript, and `hooks_wired_once` counts every
+session's `session_start` in one file. `learn` refuses runs that share a session id. Transcripts
+are found under `$CLAUDE_CONFIG_DIR/projects` (else `~/.claude/projects`), in the sandbox's own
+project directory; set `CLAUDE_CONFIG_DIR` to a directory of the demo root to keep the plugin's data
+directory (below) to this run.
+
+**The mod under `--plugin-dir`.** The mod finds its hook binary at `<plugin data>/bin/hook`, the
+directory read from `CLAUDE_PLUGIN_DATA` in the engine's environment or derived from an installed
+plugin's root. Claude Code gives a `--plugin-dir` plugin `<config dir>/plugins/data/<name>-inline`
+but passes it to command hooks only, so the plugin arms set `CLAUDE_PLUGIN_DATA` to that directory
+in the session's environment; without it the mod stays inert (no `TurnStep` is asked) while the
+command hooks run.
+
+Smoke runs (`run.py one`) are recorded with phase `smoke`, never `eval`: `report.py` compares only
+the interleaved `eval` runs.
 
 **The plugin's binaries.** One plugin ships both binaries (plan A8). `plugin/build.sh` builds
 release binaries and stages `plugin/claude-code/dist/<host triple>/adage` and `adage-exec` with
@@ -133,8 +154,9 @@ only through `adage-exec`, so the `mod` arm predicts only with that marker in th
 | Key | Meaning |
 | --- | --- |
 | `requests` | `[DEBUG] [API REQUEST]` dispatch lines in the debug log, counted with the regex of `evals/reflex-proof/harness/heldout_analysis.py` (retries count) |
-| `requests_verified` | the harness's cross-check: dispatch ids unique, and the stream's distinct explicit request ids (`request_id`/`requestId` fields, never message ids) equal the dispatches, or the surplus is explained by `[ERROR] API error (attempt …)` lines. `report.py` treats an unverified count as missing |
-| `requests_check` | `stream_request_ids`, `api_error_entries`, `cross_check` (exact equality) |
+| `requests_verified` | the harness's cross-check: dispatch ids unique, and the stream's distinct explicit request ids (`request_id`/`requestId` fields, never message ids) equal the dispatches of the session's own turns (`source=sdk`, or `repl_main_thread`), or their surplus is explained by `[ERROR] API error (attempt …)` lines. Dispatches of other sources (Claude Code 2.1.29x in a remote session: `generate_session_title`, `side_query`) are counted in `requests` and never streamed. `report.py` treats an unverified count as missing |
+| `requests_check` | `stream_request_ids`, `api_error_entries`, `cross_check` (exact equality), `requests_streamed` (dispatches of the session's own turns), `requests_by_source` |
+| `session_id`, `session_id_as_asked`, `transcript` | the session's id (the stream's; whether it is the `--session-id` passed) and its transcript |
 | `passed`, `ci_passed`, `hidden_passed`, `hidden_tests_run`, `stale_generated`, `ci_tail`, `hidden_tail` | `score.py`'s keys, all recorded |
 | `dead_end_hits` | dead ends hit (a verification that failed), as before |
 | `dead_end` | `{"hit", "substituted"}`; `substituted` (also `dead_end_substituted`) counts spool records of a dead end replaced before it ran (a `substituted` judgement, or a `pretool` record saying so; never a withheld one) |
@@ -155,6 +177,6 @@ counts (`predicted_steps`, `receipts_as_results`, `dead_end_substituted`, `direc
 `ADAGE_MOD_OBSERVE=1`, records each event's stdout and spool records, and diffs them
 (`--identity`, or `--compare` for two recordings).
 
-**Live runs need an API key** (`ANTHROPIC_API_KEY` or a logged-in `claude`) and cost money; none of
-the arms above has been run live from this change. Everything else is unit-tested offline:
-`cargo xtask test python demo`.
+**Live runs need an API key** (`ANTHROPIC_API_KEY` or a logged-in `claude`) and cost money; the
+five arms' first live run (Claude Code 2.1.292) is in `docs/claude-mod/evaluation-results.md`.
+Everything else is unit-tested offline: `cargo xtask test python demo`.

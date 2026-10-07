@@ -79,7 +79,39 @@ class RequestsTest(unittest.TestCase):
 
     def test_empty(self):
         self.assertEqual(am.requests("", []), dict(requests=0, stream_request_ids=0, api_error_entries=0,
-                                                   cross_check=True, verified=True))
+                                                   cross_check=True, verified=True, requests_streamed=0,
+                                                   requests_by_source={}))
+
+    def test_requests_the_stream_never_shows_explain_themselves(self):
+        # A session title at the start and a side query at the end: counted, never streamed.
+        log = "\n".join([dispatch("c-0", "generate_session_title"), dispatch("c-1"), dispatch("c-2"),
+                         dispatch("c-3", "side_query")])
+        r = am.requests(log, obs("req_a", "req_b"))
+        self.assertEqual((r["requests"], r["requests_streamed"], r["stream_request_ids"]), (4, 2, 2))
+        self.assertTrue(r["cross_check"])
+        self.assertTrue(r["verified"])
+        self.assertEqual(r["requests_by_source"], {"generate_session_title": 1, "sdk": 2, "side_query": 1})
+        # An extra turn of the session's own that the stream lacks is still a mismatch.
+        self.assertFalse(am.requests(log + "\n" + dispatch("c-4"), obs("req_a", "req_b"))["verified"])
+        # So is a stream id with no dispatch of the session's own behind it.
+        self.assertFalse(am.requests(log, obs("req_a", "req_b", "req_c"))["verified"])
+
+    def test_captured_claude_2_1_292_session(self):
+        # A W-2041 session under Claude Code 2.1.292 (`run.py one W-2041 mod`, first live pass):
+        # its debug log's dispatch lines verbatim, and its stream's assistant lines reduced to ids.
+        # Nine dispatches: a title, seven turns, a side query; the stream carries the seven.
+        fx = HERE / "fixtures" / "requests-2.1.292"
+        stream = [{"value": json.loads(line)} for line in (fx / "stream.jsonl").read_text().splitlines()]
+        r = am.requests((fx / "claude-debug.log").read_text(), stream)
+        self.assertEqual(r["requests_by_source"], {"generate_session_title": 1, "sdk": 7, "side_query": 1})
+        self.assertEqual((r["requests"], r["requests_streamed"], r["stream_request_ids"]), (9, 7, 7))
+        self.assertEqual(r["api_error_entries"], 0)
+        self.assertTrue(r["cross_check"])
+        self.assertTrue(r["verified"])
+        # Message ids are never taken for request ids: the stream's assistant lines share them
+        # across a turn's content blocks, and the count stays the request ids'.
+        stripped = [{"value": {k: v for k, v in o["value"].items() if k != "request_id"}} for o in stream]
+        self.assertFalse(am.requests((fx / "claude-debug.log").read_text(), stripped)["verified"])
 
     @unittest.skipUnless((HARNESS / "heldout_analysis.py").exists(), "reflex-proof harness not present")
     def test_mirrors_the_harness(self):
@@ -90,15 +122,22 @@ class RequestsTest(unittest.TestCase):
             sys.path.remove(str(HARNESS))
         self.assertEqual(am.DEBUG_REQUEST.pattern, ha.DEBUG_REQUEST.pattern)
         self.assertEqual(am.API_ERROR.pattern, ha.API_ERROR.pattern)
+        self.assertEqual(am.STREAMED_SOURCES, ha.STREAMED_SOURCES)
+        fx = HERE / "fixtures" / "requests-2.1.292"
         cases = [
             ("\n".join([dispatch("c-1"), f"{TS} [ERROR] API error (attempt 1/10): x", dispatch("c-2")]), obs("a")),
             ("\n".join([dispatch("c-1"), dispatch("c-1")]), obs("a", "b")),
             ("\n".join([dispatch("c-1"), dispatch("c-2")]), obs("a", "a", "b")),
+            ("\n".join([dispatch("t", "generate_session_title"), dispatch("c-1"), dispatch("s", "side_query")]), obs("a")),
+            ((fx / "claude-debug.log").read_text(),
+             [{"value": json.loads(line)} for line in (fx / "stream.jsonl").read_text().splitlines()]),
         ]
         sys.path.insert(0, str(HARNESS))  # requests() imports probe lazily
         try:
             for log, o in cases:
-                self.assertEqual(am.requests(log, o), ha.requests(log, o))
+                theirs = ha.requests(log, o)
+                # The demo adds its own keys beside the harness's; the harness's are equal.
+                self.assertEqual({k: am.requests(log, o)[k] for k in theirs}, theirs)
         finally:
             sys.path.remove(str(HARNESS))
 
@@ -144,6 +183,34 @@ class ArmTableTest(unittest.TestCase):
             self.assertEqual(flags.count("--plugin-dir"), 1)
             self.assertEqual(env["ADAGE_ARM"], "treated")
             self.assertEqual(env.get("ADAGE_MOD_OBSERVE"), "1" if observe else None)
+            # The mod reads its data directory (bin/hook) from the engine's environment.
+            self.assertEqual(env["CLAUDE_PLUGIN_DATA"], str(Path.home() / ".claude/plugins/data/claude-code-inline"))
+        for arm in ("a0", "control", "adage", "train"):
+            self.assertNotIn("CLAUDE_PLUGIN_DATA", self.wire(arm)[1], arm)
+
+    def test_plugin_data_dir_is_the_engines(self):
+        # Observed under Claude Code 2.1.292: `--plugin-dir <copy of plugin/claude-code>` gives the
+        # command hooks ${CLAUDE_PLUGIN_DATA} = ~/.claude/plugins/data/adage-inline.
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp)
+        (tmp / ".claude-plugin").mkdir()
+        (tmp / ".claude-plugin" / "plugin.json").write_text('{"name": "adage"}')
+        self.assertEqual(run.plugin_data_dir(tmp, {}), Path.home() / ".claude/plugins/data/adage-inline")
+        self.assertEqual(run.plugin_data_dir(tmp, {"CLAUDE_CONFIG_DIR": "/c"}), Path("/c/plugins/data/adage-inline"))
+
+    def test_no_arm_inherits_the_host_session(self):
+        # The first live pass ran inside a Claude Code session: every child took its
+        # CLAUDE_CODE_SESSION_ID, so 17 runs shared one session id, one spool and one transcript name.
+        host = {"CLAUDE_CODE_SESSION_ID": "host", "CLAUDECODE": "1", "CLAUDE_CODE_REMOTE": "true",
+                "CLAUDE_CODE_REMOTE_SESSION_ID": "cse_x", "CLAUDE_CODE_MESSAGING_SOCKET": "/s", "CLAUDE_PID": "1",
+                "CLAUDE_CODE_ENTRYPOINT": "remote", "CLAUDE_CODE_CHILD_SESSION": "1",
+                # Kept: how the host authenticates, and the proxy.
+                "CLAUDE_SESSION_INGRESS_TOKEN_FILE": "/t", "HTTPS_PROXY": "http://p", "ANTHROPIC_BASE_URL": "https://a"}
+        for arm in run.ARMS:
+            _, env = run.arm_invocation(arm, dict(self.BASE, **host), settings_for=lambda a: Path("/s.json"),
+                                        plugin_dir=Path("/p"), adage_home=Path("/h"))
+            self.assertEqual(sorted(k for k in env if k in host),
+                             ["ANTHROPIC_BASE_URL", "CLAUDE_SESSION_INGRESS_TOKEN_FILE", "HTTPS_PROXY"], arm)
 
     def test_plugin_arm_needs_a_plugin(self):
         with self.assertRaises(ValueError):
@@ -168,6 +235,44 @@ class ArmTableTest(unittest.TestCase):
         for bad in (["one", "W-2041", "nope"], ["eval", "--arms", "a0,train"], ["one"]):
             with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
                 run.parse_args(bad)
+
+
+class LearnInputsTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp)
+
+    def test_project_slug_is_claude_codes(self):
+        self.assertEqual(run.project_slug("/tmp/adage-live/runs/train-W-1041-r1/acme-billing"),
+                         "-tmp-adage-live-runs-train-W-1041-r1-acme-billing")
+
+    def test_transcript_by_working_directory_first(self):
+        projects = self.tmp / "projects"
+        for d in ("-tmp", "-tmp-run-acme-billing"):
+            (projects / d).mkdir(parents=True)
+            (projects / d / "s1.jsonl").write_text("{}\n")
+        self.assertEqual(run.transcript_for("s1", Path("/tmp/run/acme-billing"), projects),
+                         projects / "-tmp-run-acme-billing" / "s1.jsonl")
+        self.assertIsNotNone(run.transcript_for("s1", None, projects))
+        self.assertIsNone(run.transcript_for("s2", None, projects))
+        self.assertEqual(run.claude_projects({"CLAUDE_CONFIG_DIR": "/c"}), Path("/c/projects"))
+
+    def test_shared_session_ids_are_refused(self):
+        runs = [{"id": f"train-W-104{i}-r1", "metrics": {"session_id": "host", "passed": True}} for i in range(3)]
+        with self.assertRaisesRegex(ValueError, "3 runs share 1 session id"):
+            run.learn_inputs(runs, find=lambda sid, cwd: Path("/x"))
+
+    def test_each_run_brings_its_own_transcript_and_outcome(self):
+        t = self.tmp / "a.jsonl"
+        t.write_text("{}\n")
+        runs = [{"id": "r1", "metrics": {"session_id": "s1", "passed": True, "transcript": str(t)}},
+                {"id": "r2", "metrics": {"session_id": "s2", "passed": False}},
+                {"id": "r3", "metrics": {"session_id": "s3", "passed": True}}]
+        found = {"s2": self.tmp / "b.jsonl"}
+        transcripts, outcomes, missing = run.learn_inputs(runs, find=lambda sid, cwd: found.get(sid))
+        self.assertEqual(transcripts, [str(t), str(self.tmp / "b.jsonl")])
+        self.assertEqual(outcomes, {"s1": True, "s2": False})
+        self.assertEqual(missing, ["r3"])
 
 
 class StagePluginTest(unittest.TestCase):
