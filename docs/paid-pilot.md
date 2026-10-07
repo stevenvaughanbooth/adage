@@ -54,6 +54,23 @@ and settings. Keep that checkout and binary unchanged while collecting. `plan` i
 and reports missing prerequisites. Resolve its blockers before execution. An absent Claude
 version at initialization requires a fresh pilot after installing the harness.
 
+A private repository workload can use `init --pack /absolute/private/pack`. The pack is
+trusted local code: `generate.py --list` returns the split/group registry, `generate.py
+--out DIR --task ID` creates a fresh checkout, and `grade.py --workdir DIR --task ID` returns
+the independent grade. Keep the pack under a hidden root outside the agent's tool paths.
+Its complete files are pinned with the collector; remote graders and tool inputs also need
+an independently pinned closure and confinement checks before admission.
+
+Custom packs must include `analysis.json` with exactly `evidence_kind`, `classify`,
+`obligation`, and `labels`. Use `exploratory_repository_pilot` (or `synthetic_paid_pilot` for
+synthetic tasks). `classify` declares string arrays for `lookup`, `regen`, `verify`,
+`bash_edit`, and `check_flags`; `obligation.paths` is a path glob or explicit null; `labels`
+contains nonempty `lookup` and `regen` names. These fields describe observed commands and
+edits. They do not establish adequate verification, override the independent grader, or
+change confinement, approval, model, budget, or learning thresholds. The bundled Python
+pack retains its existing defaults. A custom schedule needs its own reviewed allocation;
+choosing a pack never authorizes paid dispatch or a customer savings claim.
+
 The fixed schedule reserves 20 training sessions, four validation sessions, and six test
 sessions. At $1 per session the absolute admission budget is $30, allocated $20/$4/$6 across
 the stages. Training uses ten semantic issue groups with two variants each. Validation uses

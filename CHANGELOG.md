@@ -21,6 +21,9 @@ Pilots can explicitly select that native profile at initialization; untreated tr
 check native request evidence before further spending, and both held-out cohorts retain the
 selected profile after operator review.
 
+Private repository task packs can use the pilot coordinator with explicit, pinned command
+observations and exploratory evidence labels while retaining its admission and review gates.
+
 Plugin checks recognize both recorded Claude validator markers and verify the remaining
 hook-list length when the validator truncates its report.
 

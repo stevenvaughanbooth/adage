@@ -66,6 +66,34 @@ def selected_tasks(registry):
     return selected
 
 
+def pack_analysis(pack):
+    """A custom workload declares observation labels, never runtime or admission overrides."""
+    if pack == PACK.resolve():
+        return {"evidence_kind": "synthetic_paid_pilot",
+                "classify": {**runner.DEFAULTS["classify"], "lookup": [],
+                             "verify": ["make check", "tools/project.py check"],
+                             "regen": ["make generate", "tools/project.py generate"], "check_flags": [" check"]},
+                "obligation": {"paths": "src/*.py"},
+                "labels": {"lookup": "repository context", "regen": "make generate"}}
+    value = training.read_json(pack / "analysis.json")
+    if (not isinstance(value, dict) or set(value) != {"evidence_kind", "classify", "obligation", "labels"}
+            or value["evidence_kind"] not in ("synthetic_paid_pilot", "exploratory_repository_pilot")):
+        raise ValueError("custom pack analysis must declare its evidence kind and observation fields only")
+    classify, obligation, labels = value["classify"], value["obligation"], value["labels"]
+    if (not isinstance(classify, dict) or set(classify) != set(runner.DEFAULTS["classify"])
+            or any(not isinstance(v, list) or any(not isinstance(x, str) or not x.strip() for x in v)
+                   for v in classify.values())):
+        raise ValueError("custom pack classifiers must be lists of nonempty command substrings")
+    if (not isinstance(obligation, dict) or set(obligation) != {"paths"}
+            or (obligation["paths"] is not None and
+                (not isinstance(obligation["paths"], str) or not obligation["paths"].strip()))):
+        raise ValueError("custom pack obligation needs a path glob or explicit null")
+    if (not isinstance(labels, dict) or set(labels) != {"lookup", "regen"}
+            or any(not isinstance(x, str) or not x.strip() for x in labels.values())):
+        raise ValueError("custom pack labels must name lookup and regeneration observations")
+    return value
+
+
 def initialize(root, adage, model, total_budget, session_budget, *, max_turns=30, timeout=600, pack=PACK,
                runtime_profile=frozen.RUNTIME_PROFILE, plugin_dir=None):
     root, adage, pack = Path(root).resolve(), Path(adage).resolve(), Path(pack).resolve()
@@ -82,6 +110,7 @@ def initialize(root, adage, model, total_budget, session_budget, *, max_turns=30
     if runtime_profile == frozen.RUNTIME_PROFILE and plugin_dir is not None:
         raise ValueError("--plugin-dir requires the native runtime profile")
     total, cap = micros(total_budget), micros(session_budget)
+    analysis = pack_analysis(pack)
     registry = subprocess_json([sys.executable, pack / "generate.py", "--list"])
     chosen = selected_tasks(registry)
     counts = {stage: len(tasks) * (1 if stage == "train" else 2) for stage, tasks in chosen.items()}
@@ -101,10 +130,8 @@ def initialize(root, adage, model, total_budget, session_budget, *, max_turns=30
                    eval={"tasks": [] if stage == "train" else chosen[stage], "repeats": 1, "arms": ["off", "adage"]},
                    model=model, max_turns=max_turns, timeout_seconds=timeout, concurrency=1, rounds=1, seed=42,
                    capture_usage=True, setting_sources="", confine=True, learn_args=[],
-                   classify={**runner.DEFAULTS["classify"], "lookup": [],
-                             "verify": ["make check", "tools/project.py check"],
-                             "regen": ["make generate", "tools/project.py generate"], "check_flags": [" check"]},
-                   obligation={"paths": "src/*.py"}, labels={"lookup": "repository context", "regen": "make generate"},
+                   classify=copy.deepcopy(analysis["classify"]), obligation=copy.deepcopy(analysis["obligation"]),
+                   labels=copy.deepcopy(analysis["labels"]),
                    budget_usd=counts[stage] * cap / 1_000_000, session_budget_usd=cap / 1_000_000,
                    execution_cwd=str(runner.REPO))
         if runtime_profile == native_runtime.PROFILE:
@@ -113,7 +140,7 @@ def initialize(root, adage, model, total_budget, session_budget, *, max_turns=30
                        harness_binary=native_runtime.harness_identity()["resolved_path"])
             cfg["eval"]["arms"] = ["off", "mod"]
         configs[stage] = cfg
-    manifest = {"schema": 1, "evidence_kind": "synthetic_paid_pilot", "treatment": "learned_e0_advice",
+    manifest = {"schema": 1, "evidence_kind": analysis["evidence_kind"], "treatment": "learned_e0_advice",
                 "root": str(root), "adage": str(adage), "adage_sha256": frozen.file_digest(adage),
                 "harness_version": runner.harness_version(), "registry": registry, "selected": chosen,
                 "counts": counts, "configs": configs, "inputs": inputs, "pack_inputs": list(map(str, closure)),
@@ -610,6 +637,7 @@ def main(argv=None):
     init.add_argument("--runtime-profile", choices=(frozen.RUNTIME_PROFILE, native_runtime.PROFILE),
                       default=frozen.RUNTIME_PROFILE)
     init.add_argument("--plugin-dir", type=Path)
+    init.add_argument("--pack", type=Path, default=PACK, help="trusted private task pack with generate.py, grade.py and analysis.json")
     init.add_argument("--model", required=True)
     init.add_argument("--budget-usd", required=True)
     init.add_argument("--session-budget-usd", default="1")
@@ -629,7 +657,7 @@ def main(argv=None):
     try:
         if args.command == "init":
             initialize(args.root, args.adage, args.model, args.budget_usd, args.session_budget_usd,
-                       max_turns=args.max_turns, timeout=args.timeout_seconds,
+                       max_turns=args.max_turns, timeout=args.timeout_seconds, pack=args.pack,
                        runtime_profile=args.runtime_profile, plugin_dir=args.plugin_dir)
             result = plan(args.root)
         elif args.command == "train":
