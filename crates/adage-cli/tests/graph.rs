@@ -48,6 +48,8 @@ impl World {
             .env("ADAGE_AUTO_LEARN", "0")
             .env("HOME", self.root.join("home"))
             .env("ADAGE_ARM", arm)
+            // Measuring on (it is off by default): this world's savings are the measured kind.
+            .env("ADAGE_CONTROL", "0.1")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());

@@ -62,7 +62,7 @@ describe('T-B2-07 … T-B2-11 · the band', () => {
   test('T-B2-08: review waiting, then a problem over it', async ($, on) => {
     const w = world(on, { feed: [LINE.learnerIdle, LINE.healthy], later: [LINE.problem] })
     await start($, w)
-    expect(await bandText($, 'terminal')).toBe('◠ adage  ● healthy» 1 need review · /adage review')
+    expect(await bandText($, 'terminal')).toBe('◠ adage  ● healthy» Adage has 1 suggestion · /adage review')
     await w.deliver()
     expect(await bandText($, 'terminal')).toBe('◠ adage  ● problem: hook latency» problem: hook latency · /adage health')
   })

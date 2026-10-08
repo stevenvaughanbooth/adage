@@ -69,7 +69,7 @@ impl Default for RuntimeParams {
             max_directives_per_decision: MAX_DIRECTIVES_PER_DECISION,
             max_stop_requests: MAX_STOP_REQUESTS,
             history: HISTORY,
-            control_share: 0.1,
+            control_share: 0.0,
         }
     }
 }

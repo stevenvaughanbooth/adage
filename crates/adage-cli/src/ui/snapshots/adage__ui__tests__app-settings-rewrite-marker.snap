@@ -4,7 +4,6 @@ expression: text
 ---
  adage    1 Live   2 Reflexes   3 Map   4 Health   5 Settings   6 Home                                                         harbor-dispatch · LIVE
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-   evidence bars for `adage condition` and automatic conditioning: default, or demo (lower)
  learn.claude_projects    ""       (default)
    Claude Code traces to condition on ("" = ~/.claude/projects)
  learn.codex_sessions     auto     (default)
@@ -33,8 +32,9 @@ expression: text
    Claude Code mod: a one-line adage summary beside the turn's duration, for turns with Adage activity
  ui.noticed               false    (default)
    Claude Code mod: a line under a tool batch when Adage notices a habit it is still counting
- runtime.control          0.1      (default)
-   share of sessions held out as the control arm (Adage decides but says nothing)
+ runtime.control          0        (default)
+   share of sessions held out to measure Adage: in those Adage decides but says nothing, and `adage savings` compares them with the rest (0, off:
+   every session gets Adage; 0.1 measures)
 ▌runtime.rewrite          false    (exec/rewrite-off marker)
    point Python test runs under the system Python at the project's verified environment before they run (Claude Code PreToolUse); false: leave every
    command as the agent wrote it

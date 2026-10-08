@@ -4,7 +4,7 @@ import { describe, expect, test } from 'claude-code/testing'
 
 import { BANNED, DOCTOR, GRAPH, LINE, SESSION, rowsOf as rows } from '../fixtures/kit'
 import { checksOf, reflexesOf } from '../reads'
-import { VERB_HOTKEYS, VERB_WORDS, checkAction, inspectText, reviewCommand, visibleReflexes, visibleRows, waiting } from './pane'
+import { GROUP_TITLES, VERB_HOTKEYS, VERB_WORDS, WAITING_TITLE, checkAction, inspectText, listLabel, reflexFacts, reflexLine, reviewCommand, tickText, trackTitle, visibleReflexes, visibleRows, waiting, worthAsking } from './pane'
 
 const REFLEXES = reflexesOf(GRAPH)
 
@@ -35,8 +35,39 @@ describe('T-B3-05, T-B4-06 · the Reflexes rows and what waits', () => {
   test('what waits for the person: a reflex to enable, a grant offered, a pack to trust', () => {
     const offered = reflexesOf({ routes: [{ ...GRAPH.routes[0], review: { verbs: [], reasons: [], offers: [{ kind: 'predict', command: 'adage review delegate acme/learned codegen-after-schema --predict' }] } }] })
     const w = waiting([...REFLEXES, ...offered], [{ name: 'alice/acme', command: 'adage add x --trust' }])
-    expect(w.map(x => x.kind)).toEqual(['enable', 'allow', 'trust'])
+    expect(w.map(x => x.kind)).toEqual(['trust', 'enable', 'allow'])
+    expect(w.map(x => x.group)).toEqual(['trust', 'review', 'predict'])
     for (const x of w) expect(x.text).not.toMatch(BANNED)
+    for (const t of [WAITING_TITLE, ...Object.values(GROUP_TITLES)]) expect(t).not.toMatch(BANNED)
+  })
+
+  test('a quiet reflex waits last and is never asked about or counted; the groups keep their order', () => {
+    const quiet = reflexesOf({ routes: [{ ...GRAPH.routes[0], id: 'quiet-one', review: { verbs: ['approve'], reasons: [{ kind: 'quiet', why: 'x' }] } }] })
+    const execute = reflexesOf({ routes: [{ ...GRAPH.routes[1], review: { verbs: [], reasons: [], offers: [{ kind: 'execute', command: 'adage review delegate acme/learned lookup-work-item --level e2 --stage --json' }] } }] })
+    const w = waiting([...quiet, ...execute, ...REFLEXES], [])
+    expect(w.map(x => x.group)).toEqual(['review', 'execute', 'quiet'])
+    expect(worthAsking(w).map(x => x.group)).toEqual(['review', 'execute'])
+  })
+
+  test('the ticker names a reflex by what it tells the agent, never its id, and leaves out the index hash', () => {
+    const at = { ts: 0, tone: 'change', strength: null }
+    expect(tickText({ ...at, text: 'learned: codegen-after-schema evidence (12/16 → 13/17)' }, false, REFLEXES)).toMatch(/learned: run make gen after a schema edit evidence \(12\/16 → 13\/17\)$/)
+    expect(tickText({ ...at, text: 'auto-condition: 9/9 traces used, 0.7 s, no reflex changed, gen 21aa617d' }, false, REFLEXES)).toMatch(/no reflex changed$/)
+    expect(tickText({ ...at, text: 'learned: sequence-12fccd changed' }, false, REFLEXES)).toMatch(/sequence-12fccd changed$/)
+  })
+
+  test('a Reflexes row leads with what the reflex tells the agent; the id is in its facts; tracks in plain words', () => {
+    const [r] = REFLEXES
+    if (r === undefined) throw new Error('reflex')
+    expect(reflexLine(r, false)).toBe('◠ FIRE    run make gen after a schema edit  firm · 13/17 sessions')
+    expect(reflexLine({ ...r, gist: 'after editing crates/**/*.rs, run cargo fmt --all' }, false)).toBe('◠ FIRE    cargo fmt --all · after editing crates/**/*.rs  firm · 13/17 sessions')
+    expect(listLabel('after editing src/**, then make build, run make test', '-')).toBe('make test - after editing src/**, then make build')
+    expect(listLabel("Cargo.lock: let cargo update it; don't edit it by hand", '·')).toBe("Cargo.lock: let cargo update it; don't edit it by hand")
+    expect(reflexLine(r, false)).not.toContain(r.id)
+    expect(reflexFacts(r, false)).toBe('codegen-after-schema · when an edit touches schema/*.json → make gen · lb 0.53')
+    expect(trackTitle(r)).toBe('learned in this repository')
+    expect(trackTitle({ ...r, reference: 'acme/instincts' })).toContain('built-in defaults')
+    expect(trackTitle({ ...r, reference: 'acme/team', imported: true, signer: 'alice@acme.com' })).toBe('shared: team  alice@acme.com')
   })
 
   test('the filters: fuzzy words over id, trigger, step and track; strength; lifecycle', () => {

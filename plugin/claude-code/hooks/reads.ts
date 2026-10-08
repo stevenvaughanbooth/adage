@@ -89,12 +89,17 @@ export function routineModelOf(card: unknown): string {
 
 const label = (v: unknown): string => (isRecord(v) ? str(v.label) || str(v.kind) : str(v))
 
+/** The repository the status card is about (`repo`, `github.com/acme/billing`); '' when it names none. */
+export const repoOf = (card: unknown): string => (isRecord(card) ? str(card.repo) : '')
+
 /**
  * The reflexes of `adage graph --json`, keeping only what the pane and the lines draw: never the
  * `arms`, `live` or control counts a route also carries (ux-design §1.7: the arm is never drawn).
+ * The graph lists every repository's reflexes; with `repo` named, only that repository's are kept
+ * (a route that names no repository is kept), so a session never shows another repository's.
  */
-export function reflexesOf(graph: Record<string, unknown>): Reflex[] {
-  return records(graph.routes).map(r => {
+export function reflexesOf(graph: Record<string, unknown>, repo = ''): Reflex[] {
+  return records(graph.routes).filter(r => repo === '' || str(r.repo) === '' || str(r.repo) === repo).map(r => {
     const e = isRecord(r.evidence) ? r.evidence : {}
     const review = isRecord(r.review) ? r.review : {}
     const origin = isRecord(r.origin) ? r.origin : {}

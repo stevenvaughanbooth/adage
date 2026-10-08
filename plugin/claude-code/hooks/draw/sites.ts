@@ -15,7 +15,7 @@ import { invokedMark, verifiedMark } from '../skill'
 import { band, firedThisSession } from '../view/band'
 import { markText, openNotice, promptLines, receiptBeside, receiptCard, spinnerSuffix, turnSummary } from '../view/lines'
 import type { RowMark } from '../view/lines'
-import { inspectText, waiting } from '../view/pane'
+import { inspectText, waiting, worthAsking } from '../view/pane'
 import { allowTree } from './allow'
 import { bandTree } from './band'
 import { cardTree, whyTree } from './card'
@@ -127,7 +127,7 @@ export async function onAbovePrompt(m: Mod, e: EventAt<'ui.render', { component:
     learner,
     now: await m.clock.now(),
     lapsed: (await m.state.lapsed.read()).length,
-    review: waiting(await m.state.reflexes.read(), await m.state.packs.read()).length,
+    review: worthAsking(waiting(await m.state.reflexes.read(), await m.state.packs.read())).length,
     update: turn.submits === 0 && mode.update?.band === true ? { latest: mode.update.latest, next: mode.update.next } : null,
     versionLine: turn.submits === 0 ? mode.versionLine : '',
     columns: e.props.bodyColumns,
@@ -154,7 +154,7 @@ export async function onPane(m: Mod, e: EventAt<'ui.render', { component: 'Pane'
       health: await m.state.health.read(),
       feed: (await m.state.feed.read()).status,
       reflexes,
-      waiting: waiting(reflexes, await m.state.packs.read(), mode.ascii),
+      waiting: waiting(reflexes, await m.state.packs.read()),
       checks: await m.state.checks.read(),
       lapsed: await m.state.lapsed.read(),
       update: mode.update,

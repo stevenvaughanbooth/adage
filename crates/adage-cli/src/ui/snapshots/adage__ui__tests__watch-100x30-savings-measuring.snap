@@ -10,7 +10,7 @@ expression: text
 
 
  12:04:00  00a11c  claude     prompt   → ◠ FIRE       bin/fetch-incident INC-2045
- 12:04:01  00c4a1  claude     prompt   ○ would fire bin/fetch-incident INC-2045 (withheld)
+ 12:04:01  00c4a1  claude     prompt   ○ would fire bin/fetch-incident INC-2045 (withheld · control…
  12:04:02  00a11c  claude     tools    → ◠ PRIME      That result lists these files: read them toge…
                                        ✓ followed bin/fetch-incident INC-2045
  12:04:03  000b0b  claude     tools    · 1 call, nothing to say

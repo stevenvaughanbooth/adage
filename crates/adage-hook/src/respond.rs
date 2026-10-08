@@ -120,7 +120,7 @@ pub(crate) fn respond(ctx: &HookCtx<'_>, ev: Event) -> Result<Responded, Failure
         let v = m.embed(&normalize(text))?;
         Some((m.id, v))
     };
-    // ADAGE_CONTROL, else `runtime.control` in config.toml, else 0.1; `runtime.predict_cap`, else 6.
+    // ADAGE_CONTROL, else `runtime.control` in config.toml, else 0 (measuring off); `runtime.predict_cap`, else 6.
     let cfg = ctx.config();
     let arms = ctx.arms();
     let spool_path = paths.spool(session);

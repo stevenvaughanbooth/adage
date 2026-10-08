@@ -489,6 +489,8 @@ fn chips(s: &AppState, t: &Theme, width: usize) -> Line<'static> {
 fn tree_lines(s: &AppState, nodes: &[Node], sel: usize, t: &Theme, width: usize) -> (Vec<Line<'static>>, usize) {
     let rows = s.route_rows();
     let id_w = width.saturating_sub(3 + 4 + 9 + 7).clamp(10, 24);
+    // One evidence width for the tree, so the stage column lines up row to row.
+    let ev_w = rows.iter().map(|r| evidence_cell(r).chars().count()).max().unwrap_or(5).min(12);
     let mut out = Vec::new();
     let mut sel_line = 0;
     for (k, n) in nodes.iter().enumerate() {
@@ -526,9 +528,19 @@ fn tree_lines(s: &AppState, nodes: &[Node], sel: usize, t: &Theme, width: usize)
                 }
                 let mut spans = vec![bar, Span::raw("  ")];
                 spans.extend(lamp_spans(r, t));
-                spans.push(Span::styled(t.pad(&r.id, id_w), if chosen { t.bold() } else { Style::default() }));
+                // What it tells the agent, never its id (docs/design/everyday-ux.md, rule 4): the
+                // sentence takes the room the stage and the evidence leave; the id heads the
+                // detail pane, for commands.
+                let evidence = t.text(&evidence_cell(r));
+                let used: usize = spans.iter().map(|s| s.width()).sum();
+                let say = if r.gist.is_empty() { r.id.clone() } else { words::list_label(&r.gist, &t.sep()) };
+                let room = width.saturating_sub(used + 9 + ev_w + 3).max(id_w);
+                spans.push(Span::styled(
+                    t.pad(&t.fit(&t.text(&say), room), room + 2),
+                    if chosen { t.bold() } else { Style::default() },
+                ));
                 spans.push(Span::styled(t.pad(r.stage(), 9), t.ink2()));
-                spans.push(Span::styled(t.text(&evidence_cell(r)), t.dim()));
+                spans.push(Span::styled(evidence, t.dim()));
                 out.push(Line::from(spans));
             }
         }

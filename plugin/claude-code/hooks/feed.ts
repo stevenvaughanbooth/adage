@@ -118,9 +118,10 @@ export function parseLine(text: string, mine: string): Line | undefined {
     case 'decision':
       return { kind: 'decision', cursor, row: rowOf(v, mine) }
     case 'learn': {
+      // The short form (`learned: …`, not the track's whole key): the pane is narrower than a terminal.
       const ticks = records(v.ticks).map(t => ({
         ts: num(v.ts),
-        text: str(t.text),
+        text: str(t.short) || str(t.text),
         tone: str(t.tone),
         strength: typeof t.strength === 'string' ? t.strength : null,
       }))

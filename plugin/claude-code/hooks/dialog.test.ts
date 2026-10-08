@@ -17,20 +17,26 @@ const KEPT_Q = 'Kept from your last session: run make test after editing acme/**
 const APPROVE = [CLI, 'review', 'approve', 'acme/learned', 'test-after-acme-edit']
 
 describe('T-B4-01 · the ask', () => {
-  test('once at the turn end, the question and the three labels; nothing mid-turn; two waiting, one ask and the band line', async ($, on) => {
+  test('once at the turn end, the question and the three labels; nothing mid-turn; one ask a session, the rest in the band', async ($, on) => {
     const two = { ...GRAPH, routes: [...GRAPH.routes, { ...GRAPH.routes[3], id: 'lint-after-test', gist: 'run make lint after make test' }] }
-    const w = world(on, { feed: FEED, graph: two })
+    let id = SESSION
+    const w = world(on, { feed: FEED, graph: two, session: () => id })
     await begin($, w)
     expect(w.asked).toEqual([])
     await turnEnd($, w)
     expect(w.asked).toEqual([{ question: ENABLE_Q, options: ['enable', 'not this one', 'why'] }])
+    // One ask a session: the second item waits in the pane, and the band counts both.
     await turnEnd($, w)
-    // The second item is asked at the next turn end; the dismissed first waits a day.
+    await turnEnd($, w)
+    expect(w.asked).toHaveLength(1)
+    expect(await bandText($)).toBe('◠ adage  ● healthy» Adage has 2 suggestions · /adage review')
+    // The next session asks the second item; the dismissed first waits a day.
+    id = 'sess-2'
+    await $.classic.SessionStart({ source: 'startup', session_id: 'sess-2', cwd: '/w' } as never)
+    await w.clock.settle()
+    await turnEnd($, w)
     expect(w.asked).toHaveLength(2)
     expect(w.asked[1]?.question).toBe('Adage learned: run make lint after make test. Tell the agent?')
-    await turnEnd($, w)
-    expect(w.asked).toHaveLength(2)
-    expect(await bandText($)).toBe('◠ adage  ● healthy» 2 need review · /adage review')
     expect(personOnly(w)).toEqual([])
   })
 
@@ -96,7 +102,8 @@ describe('T-B4-02 · the answers', () => {
   })
 
   test('why opens the pane focused on the reflex with e enable and n not this one; the decision stays open', async ($, on) => {
-    const w = world(on, { feed: FEED, ask: () => 'why' })
+    let id = SESSION
+    const w = world(on, { feed: FEED, ask: () => 'why', session: () => id })
     await begin($, w)
     await turnEnd($, w)
     expect(w.opened.at(-1)).toEqual({ id: 'adage', title: 'adage', focus: true, closeOnEscape: true, holdToasts: true, rows: 20 })
@@ -107,8 +114,11 @@ describe('T-B4-02 · the answers', () => {
       await ui.unmount()
     }
     expect(personOnly(w)).toEqual([])
-    // Still open: asked again a day later.
+    // Still open: asked again a day later, in a later session.
     await w.clock.advance(ASK_EVERY_MS)
+    id = 'sess-2'
+    await $.classic.SessionStart({ source: 'startup', session_id: 'sess-2', cwd: '/w' } as never)
+    await w.clock.settle()
     await turnEnd($, w)
     expect(w.asked).toHaveLength(2)
     // Pressed in the pane: review approve through the press, and the ask is settled.
@@ -116,22 +126,38 @@ describe('T-B4-02 · the answers', () => {
     await ui.press({ key: `verb:approve:${ENABLE}` })
     await w.clock.settle()
     expect(personOnly(w).map(r => r.argv)).toEqual([APPROVE])
-    expect(stdin(personOnly(w)[0])).toEqual({ press: TOKEN, session: SESSION })
+    expect(stdin(personOnly(w)[0])).toEqual({ press: TOKEN, session: 'sess-2' })
     await w.clock.advance(ASK_EVERY_MS)
+    id = 'sess-3'
+    await $.classic.SessionStart({ source: 'startup', session_id: 'sess-3', cwd: '/w' } as never)
+    await w.clock.settle()
     await turnEnd($, w)
     expect(w.asked).toHaveLength(2)
   })
 
   test('a dismissed dialog returns once, a day later, and never again', async ($, on) => {
-    const w = world(on, { feed: FEED })
+    let id = SESSION
+    const w = world(on, { feed: FEED, session: () => id })
     await begin($, w)
     await turnEnd($, w)
     await turnEnd($, w)
     expect(w.asked).toHaveLength(1)
+    // A later session on the same day: still waiting its day.
+    id = 'sess-2'
+    await $.classic.SessionStart({ source: 'startup', session_id: 'sess-2', cwd: '/w' } as never)
+    await w.clock.settle()
+    await turnEnd($, w)
+    expect(w.asked).toHaveLength(1)
     await w.clock.advance(ASK_EVERY_MS)
+    id = 'sess-3'
+    await $.classic.SessionStart({ source: 'startup', session_id: 'sess-3', cwd: '/w' } as never)
+    await w.clock.settle()
     await turnEnd($, w)
     expect(w.asked).toHaveLength(2)
     await w.clock.advance(ASK_EVERY_MS)
+    id = 'sess-4'
+    await $.classic.SessionStart({ source: 'startup', session_id: 'sess-4', cwd: '/w' } as never)
+    await w.clock.settle()
     await turnEnd($, w)
     expect(w.asked).toHaveLength(2)
     expect(personOnly(w)).toEqual([])
@@ -267,7 +293,7 @@ describe('T-B4-05, §9.12 · the kept answers, asked again', () => {
 })
 
 describe('T-B4-06 · the pane\'s verbs', () => {
-  test('one Button per review verb, worded per pane.verb.*, lowercase hotkeys; the command dim with Copy; every pending ask under waiting for you', async ($, on) => {
+  test('one Button per review verb, worded per pane.verb.*, lowercase hotkeys; the command dim with Copy; every pending ask under suggestions, grouped', async ($, on) => {
     const w = world(on, { feed: FEED, graph: { ...GRAPH_OFFER, routes: [...GRAPH_OFFER.routes, GRAPH.routes[3]] }, status_json: { tracks: [], candidates: [], packs_awaiting_trust: PACKS } })
     await begin($, w)
     for (const surface of SURFACES) {
@@ -275,12 +301,12 @@ describe('T-B4-06 · the pane\'s verbs', () => {
       await ui.press({ key: 'tab-reflexes' })
       const waits = (await ui.findAll({ type: 'Button' })).filter(b => /^(yes|no):/.test(b.key ?? ''))
       expect(waits.map(b => `${b.key}=${b.text}`)).toEqual([
-        'yes:acme/learned/codegen-after-schema#execute=see what it would do',
-        'no:acme/learned/codegen-after-schema#execute=not now',
-        `yes:${ENABLE}=enable`,
-        `no:${ENABLE}=not this one`,
         'yes:pack:alice@acme.com=use them',
         'no:pack:alice@acme.com=not now',
+        `yes:${ENABLE}=enable`,
+        `no:${ENABLE}=not this one`,
+        'yes:acme/learned/codegen-after-schema#execute=see what it would do',
+        'no:acme/learned/codegen-after-schema#execute=not now',
       ])
       await ui.press({ key: `reflex:${ENABLE}` })
       const row = (await ui.findAll({ type: 'Button' })).filter(b => b.key?.endsWith(ENABLE) && !/^(yes|no|wait):/.test(b.key))
@@ -332,7 +358,7 @@ describe('T-B4-09 · no banned words', () => {
     const ui = await mountPane($)
     await ui.press({ key: 'tab-reflexes' })
     for (const b of await ui.findAll({ type: 'Button' })) if (/^(yes|no|verb|details|copy):/.test(b.key ?? '')) expect(b.text).not.toMatch(BANNED)
-    expect(await bandText($)).toContain('need review')
+    expect(await bandText($)).toContain('Adage has 3 suggestions')
     expect(await bandText($)).not.toContain('wait')
   })
 })

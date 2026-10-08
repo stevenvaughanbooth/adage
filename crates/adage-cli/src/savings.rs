@@ -21,16 +21,26 @@ pub fn mark(v: Verdict) -> (adage_term::Glyph, adage_term::Role) {
 /// and the counts, then what to do next.
 pub fn render<W: std::io::Write>(o: &mut adage_term::Out<W>, s: &Summary) -> std::io::Result<()> {
     use adage_term::Line;
-    o.header("savings", &[&s.repo, verdict_word(s.verdict)])?;
+    let state = if !s.gate_met && s.held_out <= 0.0 { "not measured" } else { verdict_word(s.verdict) };
+    o.header("savings", &[&s.repo, state])?;
     o.blank()?;
     let (g, role) = mark(s.verdict);
     let lead = if o.theme.color() { Line::new().glyph(role, g).text(" ") } else { Line::new() };
     o.kv("estimate", lead.text(brief(s)))?;
-    if !s.gate_met {
+    if !s.gate_met && s.held_out <= 0.0 {
+        // Measuring is off (the default): say what turning it on costs, and how.
+        o.kv(
+            "measuring",
+            Line::new().quiet(format!(
+                "off: every session gets Adage. `{MEASURE_HOW}` holds 1 in 10 sessions back, where Adage stays quiet, and compares the rest with them; dollars after {NEED_CONTROL} of those and {NEED_TREATED} with Adage"
+            )),
+        )?;
+    } else if !s.gate_met {
         o.kv(
             "gate",
             Line::new().quiet(format!(
-                "dollars after {NEED_CONTROL} control and {NEED_TREATED} treated traces; Adage stays quiet in 1 of 10 traces so its effect can be measured"
+                "dollars after {NEED_CONTROL} control and {NEED_TREATED} treated traces; Adage stays quiet in {} traces so its effect can be measured",
+                share_words(s.held_out)
             )),
         )?;
     }
@@ -155,7 +165,8 @@ mod tests {
     #[test]
     fn savings_output_at_each_verdict() {
         let below: Vec<Unit> = (0..29).map(|i| unit(i, i < 4, 0.1)).collect();
-        let s = summarise("github.com/acme/billing", &below, counts(), 0);
+        let mut s = summarise("github.com/acme/billing", &below, counts(), 0);
+        s.held_out = 0.1;
         assert_eq!(brief(&s), "measuring: 4 control / 25 treated traces");
         let text = rendered(&s, adage_term::Theme::plain());
         assert!(!text.contains('$'), "{text}");

@@ -50,7 +50,7 @@ describe('T-B2-07 … T-B2-09 · the band', () => {
     const v = versionLine('2.1.300', '2.1.288', false)
     expect(band({ ...BASE, lapsed: 1, health: problem, review: 2, versionLine: v })?.second).toBe('» 1 grant lapsed · /adage health')
     expect(band({ ...BASE, health: problem, review: 2, versionLine: v })?.second).toBe('» problem: hook latency · /adage health')
-    expect(band({ ...BASE, review: 2, versionLine: v })?.second).toBe('» 2 need review · /adage review')
+    expect(band({ ...BASE, review: 2, versionLine: v })?.second).toBe('» Adage has 2 suggestions · /adage review')
     expect(band({ ...BASE, versionLine: v })?.second).toBe('» Claude Code 2.1.300 is newer than this plugin was tested with (2.1.288) · run adage doctor')
   })
 
@@ -63,7 +63,7 @@ describe('T-B2-07 … T-B2-09 · the band', () => {
       ['lapsed', '» 1 grant lapsed · /adage health'],
       ['health', '» problem: hook latency · /adage health'],
       ['kept', '» kept for your next session · /adage review'],
-      ['review', '» 2 need review · /adage review'],
+      ['review', '» Adage has 2 suggestions · /adage review'],
       ['update', '» adage 0.2.0 is out · /adage update'],
       ['versionLine', v],
     ]

@@ -4,7 +4,7 @@
 import { describe, expect, test } from 'claude-code/testing'
 
 import { CANDIDATE, CANDIDATE_REVIEW, CANDIDATE_SINGLE, CARD, DOCTOR, GRAPH, LAPSED } from './fixtures/kit'
-import { candidatesOf, cardOf, checksOf, lapsedOf, mapUrl, optInOf, packsOf, reflexesOf, routineModelOf, updateOf, updatedOf } from './reads'
+import { candidatesOf, cardOf, checksOf, lapsedOf, mapUrl, optInOf, packsOf, reflexesOf, repoOf, routineModelOf, updateOf, updatedOf } from './reads'
 
 const REFLEXES = reflexesOf(GRAPH)
 
@@ -12,6 +12,17 @@ describe('T-X-06, T-B3-05 · reading the binary', () => {
   test('the reflexes keep nothing that would name the arm', () => {
     expect(JSON.stringify(REFLEXES)).not.toMatch(/control|would_have|arms|unaided/)
     expect(REFLEXES[0]).toMatchObject({ id: 'codegen-after-schema', reference: 'acme/learned', support: 13, opportunities: 17, lowerBound: 0.53, verbs: ['strengthen', 'pin'], uplift: 'uplift +0.30' })
+  })
+
+  test("the reflexes of this repository only: the graph lists every repository's; the card names this one", () => {
+    const other = { ...GRAPH.routes[0], id: 'elsewhere', repo: 'github.com/someone/else' }
+    const unnamed = { ...GRAPH.routes[0], id: 'unnamed', repo: '' }
+    const graph = { routes: [...GRAPH.routes, other, unnamed] }
+    expect(repoOf(CARD)).toBe(CARD.repo)
+    expect(repoOf('x')).toBe('')
+    expect(reflexesOf(graph, repoOf(CARD)).map(r => r.id)).not.toContain('elsewhere')
+    expect(reflexesOf(graph, repoOf(CARD)).map(r => r.id)).toContain('unnamed')
+    expect(reflexesOf(graph).map(r => r.id)).toContain('elsewhere')
   })
 
   test('lapsed grants, packs awaiting trust, the map address', () => {

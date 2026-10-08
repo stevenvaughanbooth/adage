@@ -8,7 +8,7 @@ expression: text
  FIRE 1  PRIME 0  INHIBIT 0  all states ▾
 
  ▾ harbor-dispatch/incidents@0.3.0
-▌  F ◠ lookup-incident         firm     24/25
+▌  F ◠ the gist of lookup-incident                     firm     24/25
 ──────────────────────────────────────────────────────────────────────
  ◠ lookup-incident
  mode     Needs recovery · Inspect the worktree before acknowledging

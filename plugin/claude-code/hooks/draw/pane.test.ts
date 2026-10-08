@@ -21,7 +21,7 @@ describe('T-B3-01 … T-B3-07 · the pane', () => {
       expect(hot.slice(0, 3)).toEqual(['l:Live', 'r:Reflexes', 't:Health'])
       expect(hot.some(h => h.startsWith('h:'))).toBe(false)
       await ui.press({ key: 'tab-reflexes' })
-      expect(await shown(ui)).toContain('acme/learned')
+      expect(await shown(ui)).toContain('learned in this repository')
       await ui.press({ key: 'tab-health' })
       expect((await shown(ui)).join('\n')).toContain('index  stale')
       await ui.press({ key: 'tab-live' })
@@ -35,7 +35,8 @@ describe('T-B3-01 … T-B3-07 · the pane', () => {
     for (const surface of SURFACES) {
       const ui = await mountPane($, surface)
       const rows = (await ui.findAll({ type: 'Button' })).filter(b => b.key?.startsWith('row:'))
-      expect(rows.map(b => b.key)).toEqual(['row:3', 'row:2', 'row:1'])
+      // row:1 is the session start, where nothing was decided: a quiet row, hidden until `v`.
+      expect(rows.map(b => b.key)).toEqual(['row:3', 'row:2'])
       expect(rows[0]?.text).toContain('→ ◠ lookup-work-item')
       expect(rows[0]?.text).toContain('FIRE')
       await ui.press({ key: 'row:2' })
@@ -63,7 +64,7 @@ describe('T-B3-01 … T-B3-07 · the pane', () => {
     await expect(ui.press({ key: 'row:2' })).rejects.toThrow()
     expect(w.opened.length).toBe(before)
     await ui.input({ key: 'filter', text: '' })
-    expect(await rowKeys()).toEqual(['row:3', 'row:2', 'row:1'])
+    expect(await rowKeys()).toEqual(['row:3', 'row:2'])
   })
 
   test('T-B3-05: Reflexes: the review verbs are presses (T-B4-06), the command stays beside them to copy, confirmed by a toast; Selects for strength and lifecycle', async ($, on) => {

@@ -88,8 +88,22 @@ export function inspectText(row: Row, reflexes: readonly Reflex[]): string {
   return parts.join('\n\n').slice(0, 10_000)
 }
 
-/** The conditioning ticker (`◆ 04:22 …`). */
-export const tickText = (t: Tick, ascii: boolean): string => `${g('active', ascii)} ${clock(t.ts).slice(0, 5)} ${t.text}`
+/** The ticker's most recent lines the Live tab draws; the rest are in `adage watch` and the map. */
+export const TICKS_DRAWN = 5
+
+/**
+ * The conditioning ticker (`◆ 04:22 …`): a reflex the tick names by id is named by what it tells
+ * the agent (ux-design §1.10), and the index generation's hash (`, gen 21aa617d`) is left out.
+ */
+export function tickText(t: Tick, ascii: boolean, reflexes: readonly Reflex[] = []): string {
+  let text = t.text.replace(/, gen [0-9a-f]{6,}\b/, '')
+  for (const r of reflexes) {
+    const say = r.gist || r.summary
+    // Ids are `[A-Za-z0-9_-]` (the binary's own); anything else is left as the tick said it.
+    if (say !== '' && /^[A-Za-z0-9_-]+$/.test(r.id)) text = text.replace(new RegExp(`(^|[\\s:])${r.id}(?=\\s|$)`), `$1${say}`)
+  }
+  return `${g('active', ascii)} ${clock(t.ts).slice(0, 5)} ${text}`
+}
 
 /** The health strip's lamp shapes (`theme.rs`: a colour-blind reader loses nothing). */
 export function lightText(lamp: string, label: string, ascii: boolean): { glyph: string; role: Role; text: string } {
@@ -105,12 +119,50 @@ export function lightText(lamp: string, label: string, ascii: boolean): { glyph:
   }
 }
 
-/** A Reflexes row's line: glyph, id, lamp and strength, lifecycle, trigger → step, support. */
+/**
+ * A Reflexes row's line: glyph, strength, what it tells the agent (ux-design §1.10: by its words,
+ * never its id; the step first, `listLabel`), then lifecycle and support, which a narrow pane cuts
+ * first. The id, the trigger
+ * and the step are in the expanded row (`reflexFacts`).
+ */
 export function reflexLine(r: Reflex, ascii: boolean): string {
   const mark = r.instinct ? g('instinct', ascii) : g('reflex', ascii)
+  const sep = g('sep', ascii)
+  const support = r.opportunities > 0 ? ` ${sep} ${r.support}/${r.opportunities} sessions` : ''
+  return `${mark} ${STRENGTH(r.strength).padEnd(7)} ${listLabel(sayOf(r), sep)}  ${r.state}${support}`.trimEnd()
+}
+
+/** What a reflex tells the agent, in its own words: the gist, else the summary, else the id. */
+const sayOf = (r: Reflex): string => r.gist || r.summary || r.id
+
+/**
+ * A reflex's sentence as a list row leads with it (`adage ui`'s `words::list_label`): the step,
+ * then when (`after editing src/**, run make test` → `make test · after editing src/**`), so rows
+ * that share a trigger still differ where a narrow pane cuts. Any other sentence is itself.
+ */
+export function listLabel(say: string, sep: string): string {
+  const at = say.lastIndexOf(', run ')
+  if (at <= 0 || at + 6 >= say.length) return say
+  return `${say.slice(at + 6)} ${sep} ${say.slice(0, at)}`
+}
+
+/** The expanded row's facts line: the id a terminal command needs, the trigger, the step, the bound. */
+export function reflexFacts(r: Reflex, ascii: boolean): string {
   const lb = r.lowerBound === null ? '' : ` ${g('sep', ascii)} lb ${r.lowerBound.toFixed(2)}`
-  const support = r.opportunities > 0 ? `${r.support}/${r.opportunities}${lb}` : ''
-  return `${mark} ${r.id.padEnd(24)} ${STRENGTH(r.strength).padEnd(8)} ${r.state.padEnd(8)} ${r.trigger} ${g('arrow', ascii)} ${r.step}  ${support}`.trimEnd()
+  return `${r.id} ${g('sep', ascii)} when ${r.trigger} ${g('arrow', ascii)} ${r.step}${lb}`
+}
+
+/**
+ * A track's heading in plain words: the repository's own learned reflexes, Adage's built-in
+ * instincts, or the track's own name (with the signer for an imported one). The track key
+ * (`github-com-acme-billing/learned@15.6.0`) is the binary's, for terminal commands.
+ */
+export function trackTitle(r: Reflex): string {
+  const name = r.reference.split('/').pop() ?? r.reference
+  if (r.imported) return r.signer === '' ? `shared: ${name}` : `shared: ${name}  ${r.signer}`
+  if (name === 'learned') return 'learned in this repository'
+  if (name === 'instincts') return "instincts: Adage's built-in defaults, until it learns better here"
+  return name
 }
 
 /** The Reflexes rows the filters leave (fuzzy on id, trigger, step, track; strength; lifecycle). */
@@ -146,12 +198,34 @@ export const VERB_HOTKEYS: Readonly<Record<string, string>> = { approve: 'e', di
 /** The terminal command for a review verb, as `review_command` forms it. */
 export const reviewCommand = (verb: string, r: Reflex): string => `adage review ${verb} ${r.reference} ${r.id}`
 
+/**
+ * Which suggestion an item is, in the order the pane lists them and the asks take them: a team's
+ * pack, a reflex held back until a person enables it, a step Adage could run itself, a step it
+ * could take without a model request, and a reflex kept quiet because agents already do it.
+ */
+export type Group = 'trust' | 'review' | 'execute' | 'predict' | 'quiet'
+export const GROUPS: readonly Group[] = ['trust', 'review', 'execute', 'predict', 'quiet']
+
+/** Each group's heading in the pane (`pane.waiting.{group}`): what saying yes would change. */
+export const GROUP_TITLES: Readonly<Record<Group, string>> = {
+  trust: 'Reflexes a teammate shared, not used until you say so',
+  review: 'Learned here, not told to the agent until you enable them',
+  execute: 'Adage can run these itself, instead of asking the agent to',
+  predict: 'Adage can take these steps without a model request',
+  quiet: 'Agents here already do these unaided, so Adage stays quiet about them',
+}
+
+/** `pane.waiting`: the group's rule. Nothing waits on a suggestion; the session goes on either way. */
+export const WAITING_TITLE = 'suggestions · optional; nothing waits on them'
+
 /** One thing that waits for the person: a reflex to enable, a step Adage could take, a pack to trust. */
 export type Waiting = {
   key: string
   kind: 'enable' | 'allow' | 'trust'
+  group: Group
   /** What the reflex tells the agent (the pack's signer for a trust). */
   say: string
+  /** The row's sentence, whole: the group's heading says what the answer changes. */
   text: string
   /** The terminal command the first answer runs. */
   command: string
@@ -164,27 +238,34 @@ export type Waiting = {
 }
 
 /**
- * What waits for the person (ux-design §4.17, the band's `» n need review`): reflexes held back
- * until a person enables them (`approval`, `quiet`), the grants the binary would offer, and team
- * packs awaiting trust. `ask.ts` words the question about each; the pane lists them under
- * **waiting for you** with a press for each answer.
+ * What waits for the person (ux-design §4.17, the band's `» Adage has n suggestions`): team packs
+ * awaiting trust, reflexes held back until a person enables them (`approval`, `quiet`), and the
+ * grants the binary would offer, in `GROUPS` order. `ask.ts` words the question about each; the
+ * pane lists them under **suggestions**, one heading per group, with a press for each answer.
  */
-export function waiting(reflexes: readonly Reflex[], packs: readonly Pack[], ascii = false): Waiting[] {
+export function waiting(reflexes: readonly Reflex[], packs: readonly Pack[]): Waiting[] {
   const out: Waiting[] = []
-  const sep = g('sep', ascii)
+  for (const p of packs) out.push({ key: `pack:${p.name}`, kind: 'trust', group: 'trust', say: p.name, text: `reflexes from ${p.name} are in this repository`, command: p.command })
   for (const r of reflexes) {
     const key = `${r.reference}/${r.id}`
     const say = r.gist || r.summary
-    if (r.reasons.includes('approval') || r.reasons.includes('quiet')) {
-      out.push({ key, kind: 'enable', say, text: `${say} ${sep} enable it to tell the agent`, command: reviewCommand('approve', r), no: reviewCommand('dismiss', r), reflex: key })
+    const quiet = r.reasons.includes('quiet')
+    if (quiet || r.reasons.includes('approval')) {
+      out.push({ key, kind: 'enable', group: quiet ? 'quiet' : 'review', say, text: say, command: reviewCommand('approve', r), no: reviewCommand('dismiss', r), reflex: key })
     }
     for (const o of r.offers) {
-      out.push({ key: `${key}#${o.kind}`, kind: 'allow', say, text: `${say} ${sep} Adage can do this for you`, command: o.command, offer: o.kind === 'predict' ? 'predict' : 'execute', reflex: key })
+      const offer = o.kind === 'predict' ? 'predict' : 'execute'
+      out.push({ key: `${key}#${o.kind}`, kind: 'allow', group: offer, say, text: say, command: o.command, offer, reflex: key })
     }
   }
-  for (const p of packs) out.push({ key: `pack:${p.name}`, kind: 'trust', say: p.name, text: `reflexes from ${p.name} are in this repository`, command: p.command })
-  return out
+  return GROUPS.flatMap(gr => out.filter(w => w.group === gr))
 }
+
+/**
+ * The suggestions the band counts and the turn-end ask may raise: every one but a quiet reflex,
+ * which agents already follow unaided and so is worth a look in the pane, never an interruption.
+ */
+export const worthAsking = (items: readonly Waiting[]): Waiting[] => items.filter(w => w.group !== 'quiet')
 
 /** A Health check's row: the lamp, the label, the detail. */
 export function checkLine(c: Check, ascii: boolean): { glyph: string; role: Role; text: string } {

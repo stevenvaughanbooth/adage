@@ -8,28 +8,28 @@ expression: text
  FIRE 3  PRIME 6  INHIBIT 1  ◌ quiet 1  all states ▾    │  mode     Suggest · No execution grant
                                                         │  when     a prompt means: add a carrier rule
  ▾ harbor-dispatch/incidents@0.3.0                      │  do       procedure card: 3 file(s), from 4 session(s)
-   F ◠ lookup-incident         firm     24/25           │  PRIME · forming · harbor-dispatch/learned@0.3.0 · procedure card
-   F ◠ read-linked-files       firm     13/17           │
-   I ◠ dead-end-npm-test       firm     11/43           │  ADVISORY PREVIEW (EXAMPLE VALUES)
+   F ◠ the gist of lookup-incident    firm     24/25    │  PRIME · forming · harbor-dispatch/learned@0.3.0 · procedure card
+   F ◠ the gist of read-linked-files  firm     13/17    │
+   I ◠ the gist of dead-end-npm-test  firm     11/43    │  ADVISORY PREVIEW (EXAMPLE VALUES)
                                                         │    (no preview: the reflex has no directive text)
  ▾ harbor-dispatch/intents@0.3.0                        │
-   P ◠ start-with-npm-check    forming  6/9             │  EVIDENCE
+   P ◠ the gist of start-with-npm-c…  forming  6/9      │  EVIDENCE
                                                         │    from conditioning: a family of 4 similar traces, 3 passed the project's checks
  ▾ harbor-dispatch/learned@0.3.0                        │    live since installed: fired 0 · followed 0 · not observed within 3 batches 0 · finish
-▌  P ▤ card-carrier-rules      forming  4 traces        │    line met 0
-   P ◠ tests-after-rules-edit  firm     value           │
+▌  P ▤ the gist of card-carrier-rul…  forming  4 traces │    line met 0
+   P ◠ the gist of tests-after-rule…  firm     value    │
                                                         │  PROCEDURE CARD
  ▾ @imported/@bound/harbor-skills@0.3.0 · pack          │    files, in the order they were first edited
-   F ◈ release-notes-s2-chang… firm     –               │      1 registry/carriers.csv      4/4 traces
+   F ◈ the gist of release-notes-s2…  firm     –        │      1 registry/carriers.csv      4/4 traces
                                                         │      2 src/dispatch/rules_<x>.ts  4/4 traces
  ▾ nascent · waits for review                           │      3 test/rules.test.ts         3/4 traces
-   ○ ◠ regen-openapi-client    nascent  3/4             │    commands
+   ○ ◠ the gist of regen-openapi-cl…  nascent  3/4      │    commands
                                                         │      ✓ npm run codegen            4/4 traces · verified on a clean checkout
  ▾ quiet · agents already do this; approve to deliver   │      ○ npm run check              3/4 traces · not replayed
-   ◌ ◠ read-before-edit-9a1c   quiet    21/23           │    avoid
+   ◌ ◠ the gist of read-before-edit…  quiet    21/23    │    avoid
                                                         │      ✗ npm test                   HARBOR_ENV is not set
  ▾ instincts · adage/finish-line@0.1.0                  │    finish with  npm run check
-   P ◉ finish-line/regenerate  firm     –               │    match  a prompt at similarity ≥ 0.81 gets it once
+   P ◉ the gist of finish-line/rege…  firm     –        │    match  a prompt at similarity ≥ 0.81 gets it once
                                                         │    grey zone  0.71–0.81: at the first edit of one of these files instead
  ▸ extinguished · 1                                     │    prime at most, never strengthened · first-hand only, never shared
                                                         │

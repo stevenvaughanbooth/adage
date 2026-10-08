@@ -157,6 +157,10 @@ pub struct Summary {
     /// Sessions whose harness reported their usage, when there are any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub harness: Option<HarnessReported>,
+    /// The share of sessions held out to measure Adage (`runtime.control`) when this was read:
+    /// the setting now, never a stored copy, since a person turns measuring on and off. 0 is off.
+    #[serde(skip)]
+    pub held_out: f64,
 }
 
 // --- The estimator ----------------------------------------------------------------------------
@@ -337,6 +341,8 @@ pub fn summarise(repo: &str, units: &[Unit], counts: Counts, now: u64) -> Summar
         asked_for_help_control: rate(true),
         counts,
         harness: None,
+        // What is configured is read where the summary is (`refresh`, `read`), not computed here.
+        held_out: 0.0,
     }
 }
 
@@ -487,6 +493,7 @@ pub fn refresh(paths: &Paths, repo: &str, ledger: &BTreeMap<String, SessionSumma
     // Every trace on an unlisted model, not only those in the population.
     s.unpriced = ledger.values().filter(|l| l.cost.usd.is_none()).count();
     s.harness = reported(paths, repo, &ledger);
+    s.held_out = held_out(paths);
     let l = Ledger::new(&paths.ledger(), repo);
     if let Ok(b) = serde_json::to_vec_pretty(&s) {
         let _ = adage_store::config::write_atomic(&l.summary_path(), &b);
@@ -529,8 +536,24 @@ pub fn read(paths: &Paths, repo: &str) -> Option<Summary> {
     if !fresh {
         return Some(refresh(paths, repo, &l.read()));
     }
-    serde_json::from_slice(&std::fs::read(l.summary_path()).ok()?).ok()
+    let mut s: Summary = serde_json::from_slice(&std::fs::read(l.summary_path()).ok()?).ok()?;
+    s.held_out = held_out(paths);
+    Some(s)
 }
+
+/// The share of sessions held out to measure Adage, as configured now (`runtime.control`, or
+/// `ADAGE_CONTROL`); 0 when measuring is off.
+pub fn held_out(paths: &Paths) -> f64 {
+    let x = adage_store::config::load(paths).config.runtime_control;
+    if x.is_finite() {
+        x.clamp(0.0, 1.0)
+    } else {
+        0.0
+    }
+}
+
+/// How to turn measuring on, as every surface says it.
+pub const MEASURE_HOW: &str = "adage config set runtime.control 0.1";
 
 // --- Wording ------------------------------------------------------------------------------------
 
@@ -549,10 +572,17 @@ pub fn usd(x: f64) -> String {
 /// always with an interval, labelled API-list equivalent.
 pub fn lines(s: &Summary) -> Vec<String> {
     if !s.gate_met {
+        // Measuring is off (the default): every session gets Adage, and nothing is compared.
+        if s.held_out <= 0.0 {
+            return vec![format!(
+                "savings: not measured (measuring is off, so every session gets Adage; `{MEASURE_HOW}` holds 1 in 10 sessions back to compare)"
+            )];
+        }
         let line = if s.n_control < NEED_CONTROL {
             format!(
-                "measuring savings: {} of {NEED_CONTROL} quiet sessions so far (Adage stays quiet in 1 of 10 sessions so its effect can be measured)",
-                s.n_control
+                "measuring savings: {} of {NEED_CONTROL} quiet sessions so far (Adage stays quiet in {} sessions so its effect can be measured)",
+                s.n_control,
+                share_words(s.held_out)
             )
         } else {
             format!("measuring savings: {} of {NEED_TREATED} sessions with Adage so far", s.n_treated)
@@ -644,10 +674,23 @@ pub fn verdict_word(v: Verdict) -> &'static str {
     }
 }
 
+/// A held-out share in words: `1 in 10`, `1 in 4`, else a percentage.
+pub fn share_words(x: f64) -> String {
+    let n = (1.0 / x).round();
+    if x > 0.0 && n >= 2.0 && ((1.0 / n) - x).abs() < 1e-9 {
+        format!("1 in {n}")
+    } else {
+        format!("{:.0}%", x * 100.0)
+    }
+}
+
 /// The estimate in one line, for `adage watch` and `adage ui`: below the gate only what is being
 /// counted (`measuring: 4 control / 25 treated traces`), never dollars; past it the figure per
 /// trace, always with its 95% interval, labelled an API-list equivalent.
 pub fn brief(s: &Summary) -> String {
+    if !s.gate_met && s.held_out <= 0.0 {
+        return "not measured (measuring is off)".to_string();
+    }
     if !s.gate_met {
         return format!("measuring: {} control / {} treated traces", s.n_control, s.n_treated);
     }
@@ -759,10 +802,26 @@ mod tests {
     #[test]
     fn below_the_gate_there_are_no_dollars() {
         let units: Vec<Unit> = (0..29).map(|i| unit(i, i < 4, 0.1)).collect();
-        let s = summarise("r", &units, Counts::default(), 0);
+        let mut s = summarise("r", &units, Counts::default(), 0);
+        s.held_out = 0.1;
         assert_eq!((s.n_control, s.n_treated, s.gate_met, s.verdict), (4, 25, false, Verdict::Measuring));
         assert!(s.cost_usd.is_none());
         let l = lines(&s).join("\n");
-        assert!(!l.contains('$') && l.contains("4 of 10 quiet sessions"), "{l}");
+        assert!(
+            !l.contains('$') && l.contains("4 of 10 quiet sessions") && l.contains("quiet in 1 in 10 sessions"),
+            "{l}"
+        );
+    }
+
+    #[test]
+    fn measuring_off_says_so_and_how_to_turn_it_on() {
+        let units: Vec<Unit> = (0..29).map(|i| unit(i, false, 0.1)).collect();
+        let s = summarise("r", &units, Counts::default(), 0);
+        assert_eq!(s.held_out, 0.0);
+        let l = lines(&s).join("\n");
+        assert!(l.starts_with("savings: not measured") && l.contains(MEASURE_HOW) && !l.contains('$'), "{l}");
+        assert_eq!(brief(&s), "not measured (measuring is off)");
+        assert_eq!(share_words(0.25), "1 in 4");
+        assert_eq!(share_words(0.15), "15%");
     }
 }

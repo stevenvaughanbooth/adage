@@ -192,7 +192,12 @@ binary already produces), the prompt line, the tool markers, the turn line and t
 The prompt line's parts, in order, each dropped from the right when `bodyColumns` is short: glyph,
 reflex id, the command or files it names (truncated with `…`). No strength word.
 
-### 4.3 A control session (1 in 10)
+### 4.3 A control session (only when measuring is on)
+
+Measuring is off by default (`runtime.control = 0`): every session is treated, because a person
+who meets a silent session takes it for a broken install (seen live, 2026-10-07). A person who
+turns it on (`adage config set runtime.control 0.1`) has chosen to have 1 in 10 sessions held
+back, and those draw as follows.
 
 Opening line: identical to §4.2's. No prompt line (the binary printed nothing). No tool
 markers. Turn line: the engine's own. Band: `◠ adage  ● healthy`, or `◠ adage  ● healthy ·
@@ -377,17 +382,24 @@ words, and the words say what the reflex tells the agent, never its id.
 **Allow** (let Adage do this for you):
 
 ```text
- Adage can run make gen for you after a schema edit, instead of asking the agent to. Allow it?
+ Adage can do this itself, instead of asking the agent: run make gen after a schema edit. See what it would do?
    1. see what it would do
    2. not now
 ```
+
+The reflex's sentence is quoted whole after a colon, so the question reads right whether the
+sentence leads with its step or its trigger (`after editing crates/**/*.rs, run cargo fmt
+--all`). A step Adage could take without a model request reads `Adage can take this step without
+a model request: {summary}. Allow it?` (`allow` / `not now` / `why`). A reflex kept quiet
+because agents already do it unaided (`quiet`) is listed in the pane and never asked about.
 
 `enable` records the decision through the press and a 2 s toast says `on: after editing
 acme/**, run make test`. `not this one` records `dismiss`; the ask never returns. `why` opens
 the pane, focused, on that reflex's evidence, with `e enable` and `n not this one`. Dismissing
 the dialog is `later`: the ask returns at most once more, a day later, and is always under
-**waiting for you** in the pane. At most one ask per turn end; when several wait, the band's
-second line says `» 3 need review · /adage review` and the pane lists them. Whether an allow
+**suggestions** in the pane. At most one ask a session (a `/clear` is a new one): an ask at every
+turn's end reads as Adage needing permission, which it never does. When several wait, the band's
+second line says `» Adage has 3 suggestions · /adage review` and the pane lists them. Whether an allow
 runs the step in a sandbox inside Adage or as the agent's own call without a model request is
 not the person's problem: the binary picks the path the grant and the evidence support, and
 `why` says which.
@@ -486,7 +498,7 @@ with the session's press token, and nothing in the pane runs `install` or a `con
    ◠ read-linked-files   prime → fire       13/17 · lb 0.53
  ─ health ────────────────────────────────────────────────────────────────
  ✓ hooks claude  ✓ 4 reflexes  ✓ auto-condition  ✓ bundled model
- p: pause · v: quiet rows · n: newest                                  (while focused)
+ p: pause · v: show quiet rows · n: newest                             (while focused)
 ```
 
 The feed is `adage watch --follow --json --session <id>`; **for the current session it omits
@@ -507,8 +519,13 @@ filter above removed.
 
 ### 6.2 Reflexes
 
-From `adage graph --json`. A **waiting for you** group first (every pending ask, §4.17), then a
-tree by track: instinct `◉`, learned `◠`, imported `◠` with the signer dim; each row: id,
+From `adage graph --json`, this repository's reflexes only (the graph lists every repository's;
+the status card's `repo` names this one). A **suggestions · optional; nothing waits on them**
+group first (every pending ask, §4.17), one dim heading per kind (a team's pack, reflexes to
+enable, steps Adage could run itself, steps without a model request, quiet reflexes), each
+sentence whole and wrapped with its answers beneath and `command` to show the terminal command;
+then a tree by track, learned first and instincts last, each headed in plain words (`learned in
+this repository`): instinct `◉`, learned `◠`, imported `◠` with the signer dim; each row: id,
 strength lamp and word, lifecycle word, trigger → step, support `13/17 · lb 0.53`. `enter`
 expands to the directive text, evidence and uplift line (`Uplift::line`, emitted as
 `evidence.uplift.line`). Filters: an `Input` (fuzzy on id, trigger, command, track), a `Select`
@@ -546,7 +563,7 @@ warning from §9.1. Live on a Desktop without `$.process`: §4.12's line.
 | `/adage why` | The last directive this session: its text as the model read it, route, track, evidence line, followed or not; for a skill, the verified steps; with nothing fired (either arm): `No reflex has spoken in this session yet.` | none |
 | `/adage off` | Runs `adage off` (plan A6): `adage is off for this repository (.adage/disabled). /adage on turns it back on.` | none |
 | `/adage on` | Opens the ask `adage is off in this repository · turn it on / leave it off`; the answer runs `adage on` through the press; then `adage is on for this repository.` | none |
-| `/adage review` | Opens the pane on **waiting for you** | none |
+| `/adage review` | Opens the pane on **suggestions** | none |
 | `/adage map` | `Explore in browser`: starts `adage map --no-open` on a free port if needed and opens the link | none |
 | `/adage pause` | `adage is paused for this session · /adage pause resumes` / `adage resumed` | none |
 
@@ -585,7 +602,7 @@ question, mod architecture §10).
 | **9.5 Lapsed grant** | §4.5 | toast, band line 2 |
 | **9.6 Harness newer than validated** | `» Claude Code 2.1.3xx is newer than this plugin was tested with (2.1.287) · run adage doctor` on the band's second line, until the first prompt is submitted, once per new harness version per machine | band |
 | **9.7 Narrow terminal, unasked pane** | Nothing; the pane waits; `/adage` opens it inline | |
-| **9.8 Review waiting** | `» 2 need review · /adage review`, while any ask is pending and not shown | band line 2 |
+| **9.8 Review waiting** | `» Adage has 2 suggestions · /adage review`, while any ask but a quiet reflex is pending | band line 2 |
 | **9.9 Recovery required** (an interrupted E2 action) | `⚠ adage: an action was interrupted; inspect the worktree, then run adage-exec recover --id … --acknowledge in a terminal` (recovery is the one act that stays at a terminal: it needs a person looking at the worktree) | status until acknowledged |
 | **9.12 No press token** (the window was missed, or the mod reloaded mid-session) | The dialog still asks; the answer is kept for the next session start in the same repository, and the band says `» kept for your next session · /adage review`; that start asks again (`ask.kept`), naming the exact command, and runs it only on `run it` (a dismissed dialog keeps it for the next start, `drop it` forgets it); the pane shows the terminal command for anyone who wants it now | dialog, band |
 | **9.10 Desktop without `$.process`** | §4.12 | pane empty state |
@@ -625,20 +642,25 @@ lines of about 40 columns.
 | `band.paused` | `◠ adage  paused · /adage pause` | bodyColumns |
 | `band.learning` | `◠ adage  learning…` (bootstrap) | bodyColumns |
 | `band.lapsed` | `» {n} grant{s} lapsed · /adage health` | bodyColumns |
-| `band.review` | `» {n} need review · /adage review` | bodyColumns |
+| `band.review` | `» Adage has {n} suggestion{s} · /adage review` | bodyColumns |
 | `band.kept` | `» kept for your next session · /adage review` | bodyColumns |
 | `band.withheld` | `» adage left a step to the agent: your permissions do not allow it unasked` (once per session, until the next prompt) | bodyColumns |
 | `ask.kept` | question `Kept from your last session: {summary} ({command}). Run it now?` (`{summary} (` and `)` left out for `adage on`) · answers `run it` / `drop it` | the dialog's |
 | `ask.enable` | question `Adage learned: {summary}. Tell the agent?` · answers `enable` / `not this one` / `why` | the dialog's |
 | `ask.enable.done` | toast `on: {summary}` | 1 × 40 |
-| `ask.allow` | question `Adage can {summary}, instead of asking the agent to. Allow it?` · answers `see what it would do` / `not now` | the dialog's |
+| `ask.enable.quiet` | question `Agents here already do this unaided, so Adage stays quiet: {summary}. Tell the agent anyway?` · answers `enable` / `not this one` / `why` (from `/adage review`; never asked unprompted) | the dialog's |
+| `ask.allow` | question `Adage can do this itself, instead of asking the agent: {summary}. See what it would do?` · answers `see what it would do` / `not now` | the dialog's |
+| `ask.predict` | question `Adage can take this step without a model request: {summary}. Allow it?` · answers `allow` / `not now` / `why` | the dialog's |
 | `ask.allow.pane` | `{summary}` · `it runs {argv}` · `it changes {outputs} ({+n −m}, shown below)` or `it reads {files}` · `it never touches anything else, or the network` · the diff as `Code` · `a: allow · n: not now · d: details` / `esc: later` | pane |
 | `ask.allow.first` | `this is the first time Adage would run something on this machine; it only ever runs steps you allow one by one` | pane |
 | `ask.allow.details` | the exact argv, scripts and their text, sandbox profile, hashes, effect, caches, `takes effect in your next session`, the terminal command with `Copy` | pane |
 | `ask.allow.done` | toast `allowed: {summary} · from your next session` | 2 × 40 |
 | `ask.trust` | question `{n} reflexes from {signer} are in this repository. Use them?` · answers `use them` / `not now` / `why` | the dialog's |
 | `ask.trust.pane` | `added in {commit} by {author} on {date}` · `key {fingerprint}` · `packs {list}` · `this is the same trust you give CLAUDE.md` · `u: use them · n: not now` | pane |
-| `pane.waiting` | `waiting for you` | |
+| `pane.waiting` | `suggestions · optional; nothing waits on them` | |
+| `pane.waiting.{group}` | `Reflexes a teammate shared, not used until you say so` · `Learned here, not told to the agent until you enable them` · `Adage can run these itself, instead of asking the agent to` · `Adage can take these steps without a model request` · `Agents here already do these unaided, so Adage stays quiet about them` | |
+| `pane.reflex.row` | `{glyph} {STRENGTH} {step} · {when}  {lifecycle} · {n}/{m} sessions` (the id, trigger → step and bound in the expanded row) | pane |
+| `pane.live.quiet` | `{n} quiet events hidden · v: show` (`Adage has had nothing to say yet · …` when none is shown) | |
 | `pane.verb.{approve\|dismiss}` | `enable` / `not this one` (the row's two buttons) | |
 | `pane.verb.more` | `more: make it a direct instruction · make it a suggestion · retire it · pin it` (behind `d: details`) | |
 | `pane.explore` | `Explore in browser` | |
@@ -657,8 +679,8 @@ lines of about 40 columns.
 | `status.unanswering` | `hooks are not answering; run adage doctor` | 1 line |
 | `status.recovery` | `an action was interrupted; inspect the worktree, then run {recover command} in a terminal` | 1 line |
 | `pane.tabs` | `l: Live   r: Reflexes   t: Health` / `esc: close` | |
-| `pane.footer` | `p: pause · v: quiet rows · n: newest` | |
-| `pane.filter` | `Filter:` / `enter: apply` | |
+| `pane.footer` | `p: pause · v: show quiet rows` (`hide quiet rows` once shown) `· n: newest` | |
+| `pane.filter` | `Filter` (the engine adds the colon, as it does a `Select`'s) / `enter: apply` | |
 | `pane.live.empty` | `Nothing yet in this repository. Reflexes appear here as Adage uses them.` | |
 | `pane.live.desktop` | `live rows need the terminal · adage watch` | |
 | `pane.reflexes.empty` | `No learned reflexes yet · {n} of ~{s_min} sessions needed · {k} instincts active meanwhile` | |

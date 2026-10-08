@@ -8,18 +8,18 @@ expression: text
  FIRE 2  PRIME 3  INHIBIT 1  all states ▾               │  mode     Suggest · No execution grant
                                                         │  when     a prompt names a ticket
  ▾ harbor-dispatch/incidents@0.3.0                      │  do       bin/fetch-incident {item}
-▌  F ◠ lookup-incident         firm    ╭ keys ───────────────────────────────────────────────────────────────╮
-   F ◠ read-linked-files       firm    │ EVERYWHERE                                                          │iewed
-   I ◠ dead-end-npm-test       firm    │           ?  this list                                              │
+▌  F ◠ the gist of lookup-incident     ╭ keys ───────────────────────────────────────────────────────────────╮
+   F ◠ the gist of read-linked-files   │ EVERYWHERE                                                          │iewed
+   I ◠ the gist of dead-end-npm-test   │           ?  this list                                              │
                                        │           :  command palette (also ctrl-k): every action and reflex │
  ▾ harbor-dispatch/intents@0.3.0       │         tab  next tab (shift-tab: previous)                         │0" reflex="lookup-incident"
-   P ◠ start-with-npm-check    forming │         1-6  Live, Reflexes, Map, Health, Settings, Home            │
+   P ◠ the gist of start-with-npm-check│         1-6  Live, Reflexes, Map, Health, Settings, Home            │
                                        │           q  quit                                                   │ next step here is:
  ▾ nascent · waits for review          │                                                                     │ser is asking for something else.
-   ○ ◠ regen-openapi-client    nascent │ REFLEXES                                                            │nt sessions; not requested by the user.
+   ○ ◠ the gist of regen-openapi-client│ REFLEXES                                                            │nt sessions; not requested by the user.
                                        │           /  fuzzy filter reflexes by id, trigger, command or track │
  ▾ instincts · adage/finish-line@0.1.0 │         j/k  move through the tree                                  │
-   P ◉ finish-line/regenerate  firm    │       enter  open or close a group                                  │
+   P ◉ the gist of finish-line/regener…│       enter  open or close a group                                  │
                                        │         tab  next tab                                               │ound 0.80 · 8 turns saved per trace
  ▸ extinguished · 1                    │           s  strengthen: prime → fire (adage review strengthen)     │observed within 3 batches 1 · finish
                                        │           w  weaken: fire → prime (adage review weaken)             │

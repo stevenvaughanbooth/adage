@@ -60,6 +60,17 @@ pub fn verb_effect(internal: &str) -> &'static str {
     }
 }
 
+/// A reflex's sentence as a list row leads with it: the step first, then when
+/// (`after editing src/**, run make test` → `make test · after editing src/**`), so rows that share
+/// a trigger still differ in the columns a narrow list keeps. A sentence of no such shape is
+/// itself. The whole sentence is the detail pane's.
+pub fn list_label(gist: &str, sep: &str) -> String {
+    match gist.rsplit_once(", run ") {
+        Some((when, what)) if !when.is_empty() && !what.is_empty() => format!("{what}{sep}{when}"),
+        _ => gist.to_string(),
+    }
+}
+
 /// `harbor-dispatch/incidents` → `incidents`, for narrow panes.
 pub fn short_track(t: &str) -> &str {
     t.rsplit('/').next().unwrap_or(t)
@@ -105,6 +116,22 @@ pub fn pad_with(s: &str, n: usize, more: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn list_label_leads_with_the_step() {
+        assert_eq!(
+            list_label("after editing crates/**/*.rs, run cargo fmt --all", " · "),
+            "cargo fmt --all · after editing crates/**/*.rs"
+        );
+        assert_eq!(
+            list_label("after editing src/**, then make build, run make test", " - "),
+            "make test - after editing src/**, then make build"
+        );
+        assert_eq!(
+            list_label("Cargo.lock: let cargo update it; don't edit it by hand", " · "),
+            "Cargo.lock: let cargo update it; don't edit it by hand"
+        );
+    }
 
     #[test]
     fn stored_states_read_as_lifecycle_words() {

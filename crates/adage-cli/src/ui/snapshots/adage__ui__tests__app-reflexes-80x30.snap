@@ -8,12 +8,12 @@ expression: text
  FIRE 2  PRIME 3  INHIBIT 1  all states ▾
 
  ▾ harbor-dispatch/incidents@0.3.0
-▌  F ◠ lookup-incident         firm     24/25
-   F ◠ read-linked-files       firm     13/17
-   I ◠ dead-end-npm-test       firm     11/43
+▌  F ◠ the gist of lookup-incident                               firm     24/25
+   F ◠ the gist of read-linked-files                             firm     13/17
+   I ◠ the gist of dead-end-npm-test                             firm     11/43
 
  ▾ harbor-dispatch/intents@0.3.0
-   P ◠ start-with-npm-check    forming  6/9
+   P ◠ the gist of start-with-npm-check                          forming  6/9
 
 ────────────────────────────────────────────────────────────────────────────────
  ◠ lookup-incident
