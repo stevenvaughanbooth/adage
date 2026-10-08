@@ -1,4 +1,5 @@
-// /how-we-tested: what we tested and how, the held-out result in both modes, the limits. The
+// /evidence: the results at a glance, what we tested and how, the held-out result in both modes, the
+// Claude Code mod, the limits. The
 // numbers are in the page from the build (public/evidence/*.json, src/evidence/tokens.ts); this file
 // adds the dots of the running example, the dotted words with their definitions (the shared
 // glossary), and redraws the held-out result from its data file.

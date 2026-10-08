@@ -87,7 +87,7 @@ a { color: inherit; }
 }
 .top { position: absolute; top: 0; left: 0; right: 0; z-index: 3; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px clamp(16px, 4vw, 48px) 28px; background: linear-gradient(var(--night) 40%, transparent); }
 .mark { font: 800 22px/1 var(--display); letter-spacing: -0.02em; text-decoration: none; }
-.nav { display: flex; align-items: center; gap: 22px; font-size: 14px; }
+.nav, .navlinks { display: flex; align-items: center; gap: 22px; font-size: 14px; }
 .nav a { color: var(--ink-2); text-decoration: none; }
 .nav a:hover { color: var(--ink-1); }
 .nav a.pill { color: var(--ink-1); border: 1px solid var(--line-strong); border-radius: 999px; padding: 5px 12px; }
@@ -131,16 +131,18 @@ h1 em { font-style: normal; background: linear-gradient(100deg, var(--memory-sof
 @media (max-width: 860px) {
   .hero { min-height: 0; display: flex; flex-direction: column; }
   .copy { display: contents; }
-  .top { position: relative; padding-bottom: 12px; }
-  .eyebrow, h1, .sub, .cta { order: 1; padding-inline: 16px; }
-  .eyebrow { padding-top: 8px; }
-  .sub, .cta { margin-bottom: 14px; }
-  h1 { margin-block: 8px 12px; }
+  .top { position: relative; padding-bottom: 52px; }
+  .hero .eyebrow, .hero h1, .hero .sub, .hero .cta { order: 1; padding-inline: 16px; }
+  .hero .eyebrow { padding-top: 8px; }
+  .hero .sub, .hero .cta { margin-bottom: 14px; }
+  .hero h1 { margin-block: 8px 12px; }
   /* The scene stays in view while the tabs below it are used. */
   .stagewrap { order: 2; position: sticky; top: 0; z-index: 2; height: min(420px, 48svh); inset: auto; background: var(--night); }
   .tabrow, .panel { order: 3; margin: 12px 16px 0; }
   .legend { order: 4; position: relative; right: auto; bottom: auto; padding: 14px 16px 24px; }
-  .nav a:not(.pill) { display: none; }
+  /* The pages sit in a row under the mark, and slide sideways when they do not fit. */
+  .navlinks { position: absolute; left: 0; right: 0; bottom: 10px; gap: 20px; padding: 6px 16px; overflow-x: auto; scrollbar-width: none; white-space: nowrap; }
+  .navlinks::-webkit-scrollbar { display: none; }
   .nogl { width: 100%; }
 }
 /* The words arrive after the film. */
@@ -390,6 +392,7 @@ code { font: 0.92em var(--mono); background: var(--raised); border: 1px solid va
 
 .top.static { position: relative; background: none; }
 .nav a[aria-current="page"] { color: var(--ink-1); }
+.navlinks a[aria-current="page"] { text-decoration: underline 2px var(--memory); text-underline-offset: 7px; }
 .howintro { padding: clamp(24px, 5vw, 56px) 0 clamp(32px, 5vw, 56px); }
 .howintro .display { max-width: 22ch; font-size: clamp(36px, 5vw, 64px); }
 .stagemap { list-style: none; margin: 36px 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; counter-reset: s; }
@@ -553,6 +556,20 @@ math { color: inherit; font-family: "STIX Two Math", "Cambria Math", "Latin Mode
 .ctarow { margin: 28px 0 0; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
 .nav a.pill[aria-current] { color: var(--ink-1); }
 
+/* ---- pages of their own: /packs, /get-started, /early-access ---- */
+/* Each opens under its header, without the rule and the room a section below another one gets. */
+.subpage main > .band:first-child { border-top: 0; padding-top: clamp(24px, 5vw, 56px); }
+@media (min-width: 861px) { .subpage main > section:first-child { min-height: calc(100svh - 80px); } }
+
+/* ---- the home page's last section: where to go next ---- */
+.next-cta { justify-content: flex-start; }
+.pagelinks .card { position: relative; }
+.pagelinks .card:hover { border-top-color: var(--memory-soft); }
+.pagelinks a { text-decoration: none; }
+.pagelinks a::after { content: ""; position: absolute; inset: 0; }
+.pagelinks h3 a > span { color: var(--memory); }
+.pagelinks .card:hover h3 a { text-decoration: underline 2px var(--memory); text-underline-offset: 5px; }
+
 @media (max-width: 960px) {
   .stagemap { grid-template-columns: 1fr 1fr; }
   .effects { grid-template-columns: repeat(3, 1fr); }
@@ -710,7 +727,7 @@ math { color: inherit; font-family: "STIX Two Math", "Cambria Math", "Latin Mode
 }
 @media (prefers-reduced-motion: reduce) { .capbtn svg, .ubar i { transition: none; } }
 
-/* ======================================================================= /how-we-tested */
+/* ======================================================================= /evidence */
 /* The evidence page. Every class is ev-*, so nothing here meets the home page's or /how's. */
 .ev-intro { padding: clamp(24px, 5vw, 56px) 0 clamp(48px, 6vw, 80px); }
 .ev-intro .display { max-width: 22ch; font-size: clamp(36px, 5vw, 64px); }
@@ -749,6 +766,7 @@ math { color: inherit; font-family: "STIX Two Math", "Cambria Math", "Latin Mode
 .ev-rules li { padding: 22px; border: 1px solid var(--line); border-radius: 16px; background: var(--raised); }
 .ev-rules h3 { margin: 10px 0 8px; font: 700 20px/1.2 var(--display); }
 .ev-rules p { margin: 0; color: var(--ink-2); font-size: 15px; }
+.ev-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .ev-callout { margin: 20px 0 0; padding: 20px 24px; border-left: 3px solid var(--memory); border-radius: 0 14px 14px 0; background: color-mix(in srgb, var(--memory) 8%, transparent); }
 .ev-callout h3 { margin: 0 0 6px; font: 700 19px var(--display); }
 .ev-callout p { margin: 0; color: var(--ink-1); font-size: 16px; max-width: 80ch; }
@@ -808,6 +826,36 @@ math { color: inherit; font-family: "STIX Two Math", "Cambria Math", "Latin Mode
 .ev-src { margin: 0; font-size: 13px; color: var(--ink-3); }
 .band.alt .ev-ho code, .ev-src code { background: var(--night); }
 
+/* The results at a glance: one card per test, the same few numbers in each, read against its own
+   agent alone. The big number wears ink; the card's edge says which is new. */
+.ev-gl-grid { margin: clamp(32px, 4vw, 48px) 0 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.ev-gl { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: clamp(20px, 3vw, 30px); border: 1px solid var(--line-strong); border-radius: 20px; background: var(--night); }
+.ev-gl.mod { border-color: color-mix(in srgb, var(--fire) 60%, transparent); }
+.ev-gl-tag { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font: 500 11.5px var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); }
+.ev-gl-new { padding: 2px 8px; border-radius: 999px; background: color-mix(in srgb, var(--fire) 22%, transparent); box-shadow: inset 0 0 0 1px var(--fire); color: var(--ink-1); font-weight: 700; letter-spacing: 0.08em; }
+.ev-gl-h { margin: 0; font: 700 clamp(21px, 2.2vw, 26px)/1.2 var(--display); letter-spacing: -0.01em; }
+.ev-gl-what { margin: 0; font-size: 15px; color: var(--ink-2); max-width: 52ch; }
+.ev-gl-big { margin: 6px 0 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; font-size: 17px; color: var(--ink-2); }
+.ev-gl-big b { font: 800 clamp(52px, 6vw, 76px)/1 var(--display); letter-spacing: -0.03em; color: var(--ink-1); }
+.ev-gl-stats { margin: 4px 0 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 18px; }
+.ev-gl-stats > div { padding: 12px 0 0; border-top: 1px solid var(--line); min-width: 0; }
+.ev-gl-stats dt { font-size: 13px; color: var(--ink-2); }
+.ev-gl-stats dd { margin: 6px 0 0; font: 600 19px var(--mono); font-variant-numeric: tabular-nums; color: var(--ink-1); }
+.ev-gl-stats small { display: block; margin-top: 2px; font: 12.5px var(--body); color: var(--ink-3); }
+.ev-gl-plain { margin: 0; display: flex; align-items: baseline; gap: 10px; color: var(--ink-1); }
+.ev-gl-exec { margin: 0; font-size: 13.5px; color: var(--ink-2); }
+.ev-gl-exec b { color: var(--ink-1); }
+.ev-gl-setting { margin: auto 0 0; padding-top: 6px; font-size: 13px; color: var(--ink-3); }
+.ev-gl-more, .ev-gl-foot a { color: var(--memory-soft); text-underline-offset: 3px; }
+.ev-gl-more { align-self: flex-start; font-size: 14.5px; font-weight: 600; }
+.ev-gl-foot { margin: 20px 0 0; font-size: 14px; color: var(--ink-3); }
+
+/* The mod: three arms, one dot per model call, and a ring for each step Adage took itself. */
+.ev-runs.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.ev-run.hooks .ev-dots i { background: var(--ink-2); }
+.ev-dots.made { margin-top: 8px; }
+.ev-run.adage .ev-dots.made i { background: transparent; box-shadow: inset 0 0 0 2px var(--fire); }
+
 .ev-limit-grid { margin: clamp(32px, 4vw, 48px) 0 0; display: grid; grid-template-columns: 1fr 1fr; gap: clamp(24px, 4vw, 56px); }
 .ev-limit-grid h3 { margin: 0 0 12px; font: 700 21px var(--display); }
 .ev-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
@@ -826,12 +874,16 @@ math { color: inherit; font-family: "STIX Two Math", "Cambria Math", "Latin Mode
 @media (min-width: 861px) { .evpage .ev-intro { min-height: calc(100svh - 80px); } }
 @media (max-width: 960px) {
   .ev-rules, .ev-repro-grid { grid-template-columns: 1fr 1fr; }
-  }
+}
+@media (max-width: 860px) {
+  .ev-gl-grid { grid-template-columns: 1fr; }
+}
 @media (max-width: 760px) {
-  .ev-runs, .ev-limit-grid { grid-template-columns: 1fr; }
+  .ev-runs, .ev-runs.three, .ev-limit-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 560px) {
-  .ev-rules, .ev-repro-grid,   .ev-dots { gap: 5px; }
+  .ev-rules, .ev-repro-grid, .ev-gl-stats { grid-template-columns: 1fr; }
+  .ev-dots { gap: 5px; }
   .ev-dots i { width: 12px; height: 12px; }
 }
 @media (prefers-reduced-motion: reduce) { .ev-dots i, .ev-pulse { animation: none; } }
@@ -840,12 +892,6 @@ math { color: inherit; font-family: "STIX Two Math", "Cambria Math", "Latin Mode
   .ev-intro-grid .ev-example { margin-top: 0; }
   .ev-intro .display { font-size: clamp(36px, 3.9vw, 60px); }
 }
-
-/* The home page's launch claim: the development result, the held-out status, the way in. */
-.launch-proof { border-color: var(--fire); }
-.launch-heldout .ev-brief { background: var(--night); }
-.launch-cta { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; }
-.launch-cta .btn { display: inline-block; }
 
 /* ======================================================================= /how: plugging into Claude Code */
 /* The opening scene: the steps scroll as the page does, and the diagram holds beside them (sticky),

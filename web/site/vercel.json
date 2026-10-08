@@ -6,6 +6,9 @@
   "outputDirectory": "dist",
   "cleanUrls": true,
   "trailingSlash": false,
+  "redirects": [
+    { "source": "/how-we-tested", "destination": "/evidence", "permanent": true }
+  ],
   "headers": [
     {
       "source": "/(.*)",

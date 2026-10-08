@@ -40,7 +40,15 @@ export default defineConfig({
     assetsInlineLimit: 0,
     chunkSizeWarningLimit: 900,
     rollupOptions: {
-      input: { main: "index.html", how: "how.html", tested: "how-we-tested.html", notfound: "404.html" },
+      input: {
+        main: "index.html",
+        how: "how.html",
+        packs: "packs.html",
+        evidence: "evidence.html",
+        start: "get-started.html",
+        access: "early-access.html",
+        notfound: "404.html",
+      },
       // Chunks (Rolldown groups): three.js is shared by the hero and /how; the hero's scene and the
       // walkthrough's chapters stay with their own pages, so the words paint before either arrives.
       output: {

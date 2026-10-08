@@ -361,7 +361,7 @@ export function renderHeldoutExample(h: Heldout): string {
 /** One line: the held-out result, for /how and the evidence page's first screen. */
 export function renderHeldoutBrief(h: Heldout): string {
   const s = h.study, r = h.result;
-  const more = `<a class="ev-brief-link" href="/how-we-tested#results">How we tested it →</a>`;
+  const more = `<a class="ev-brief-link" href="/evidence#results">How we tested it →</a>`;
   if (h.status !== "result" || !r) return `<p class="ev-brief" data-state="pending"><span class="ev-pulse" aria-hidden="true"></span><span>${esc(pendingLine(s))}</span> ${more}</p>`;
   if (!decided(r)) return `<p class="ev-brief" data-state="none"><b>Held-out result: no verdict.</b> <span>${esc(r.headline)}</span> ${more}</p>`;
   const a = r.modes!.advisory!, e = r.modes!.execution!;
@@ -369,24 +369,30 @@ export function renderHeldoutBrief(h: Heldout): string {
   return `<p class="ev-brief" data-state="${esc(a.status)}"><b>Held-out tasks, advisory mode:</b> <span>${fixed(a.mean_requests_alone, 1)} → ${fixed(a.mean_requests, 1)} model calls per session (${times(a.ratio)}), hidden tests ${of(a.hidden_test_passes, a.of)} against ${of(a.hidden_test_passes_alone, a.of)}. ${esc(exec)}</span> ${more}</p>`;
 }
 
-/** The home page's launch card: the advisory result, execution mode under it. */
-export function renderHeldoutCard(h: Heldout): string {
+/** The evidence page's first look: advisory mode's held-out result in a few numbers, beside the mod's. */
+export function renderHeldoutGlance(h: Heldout): string {
   const s = h.study, r = h.result;
-  const cta = `<p class="launch-cta"><a class="btn primary" href="/how-we-tested">How we tested</a><a class="textlink" href="/evidence/heldout.json">The numbers behind this card</a></p>`;
-  if (h.status !== "result" || !r) {
-    return `<header><p class="kicker">Held-out tasks · running</p><h3 id="launch-proof-h">${esc(pendingLine(s))}</h3></header>${cta}`;
-  }
-  if (!decided(r)) return `<header><p class="kicker">Held-out tasks · no verdict</p><h3 id="launch-proof-h">${esc(r.headline)}</h3></header>${cta}`;
+  const head = `<p class="ev-gl-tag">Registered test · real open-source repository</p>
+  <h3 class="ev-gl-h" id="gl-adv-h">Advisory mode, the default</h3>
+  <p class="ev-gl-what">Adage tells the agent what it would otherwise go looking for. Nothing runs on its behalf.</p>`;
+  const foot = `<p class="ev-gl-setting">${esc(s.repository)} · ${esc(s.model)} · ${s.tasks.length} held-out tasks × ${s.repetitions}</p>
+  <a class="ev-gl-more" href="#results">The full result ↓</a>`;
+  if (h.status !== "result" || !r) return `${head}<p class="ev-gl-plain"><span class="ev-pulse" aria-hidden="true"></span>${esc(pendingLine(s))}</p>${foot}`;
+  if (!decided(r)) return `${head}<p class="ev-gl-plain">${esc(r.headline)}</p>${foot}`;
   const a = r.modes!.advisory!, e = r.modes!.execution!;
-  const x = executionStatus(e);
-  return `<header><p class="kicker">Held-out tasks · pre-registered comparison · ${esc(s.model)} · ${esc(s.repository)}</p><h3 id="launch-proof-h">${esc(advisorySentence(a))}</h3><p>Advisory mode, the default: nothing runs on the agent's behalf, no execution approvals · ${s.tasks.length} new tasks · ${a.blocks ?? "?"} paired blocks</p></header>
-  <dl class="stats">
-    <div><dt>Model calls per session</dt><dd><span class="sr">without Adage </span><span class="was">${fixed(a.mean_requests_alone, 1)}</span><span class="arrow" aria-hidden="true">→</span><span class="sr">, with Adage </span><span class="now">${fixed(a.mean_requests, 1)}</span><small>${times(a.ratio)} · fewer in ${a.blocks_fewer ?? "?"} of ${a.blocks ?? "?"} paired blocks</small></dd></div>
-    <div><dt>Hidden tests passed</dt><dd><span class="now">${of(a.hidden_test_passes, a.of)}</span><small>with Adage · ${of(a.hidden_test_passes_alone, a.of)} without</small></dd></div>
-    <div><dt>Cost per session (API list price)</dt><dd><span class="sr">without Adage </span><span class="was">${usd(a.cost_per_session_alone_usd)}</span><span class="arrow" aria-hidden="true">→</span><span class="sr">, with Adage </span><span class="now">${usd(a.cost_per_session_usd)}</span><small>${a.cost_change_percent === null ? "" : `${fixed(Math.abs(a.cost_change_percent), 1)}% ${a.cost_change_percent < 0 ? "lower" : "higher"}`}</small></dd></div>
+  const big = a.status === "no-clear-saving" || a.fewer_requests_percent === null
+    ? `<p class="ev-gl-big"><b>${times(a.ratio)}</b> the agent alone's model calls</p>`
+    : `<p class="ev-gl-big"><b>${a.fewer_requests_percent}%</b> fewer model calls</p>`;
+  const cost = a.cost_change_percent === null ? "n/a" : `${Math.round(Math.abs(a.cost_change_percent))}% ${a.cost_change_percent < 0 ? "lower" : "higher"}`;
+  return `${head}
+  ${big}
+  <dl class="ev-gl-stats">
+    <div><dt>Model calls per session</dt><dd>${fixed(a.mean_requests_alone, 1)} → ${fixed(a.mean_requests, 1)}</dd></div>
+    <div><dt>Cost per session</dt><dd>${cost}</dd></div>
+    <div><dt>Hidden tests passed</dt><dd>${of(a.hidden_test_passes, a.of)}<small>${of(a.hidden_test_passes_alone, a.of)} alone</small></dd></div>
   </dl>
-  <p class="note"><b>Execution mode (opt-in): ${esc(x.flag.toLowerCase())}.</b> ${esc(x.line)}</p>
-  ${cta}`;
+  <p class="ev-gl-exec"><b>Execution mode, opt-in:</b> ${esc(executionStatus(e).flag.toLowerCase())}.</p>
+  ${foot}`;
 }
 
 /** /how's summary step: one session's model calls, both modes, from the held-out study. */
@@ -403,7 +409,7 @@ export function renderHeldoutPlug(h: Heldout): string {
 export const HELDOUT_KINDS: Record<string, (h: Heldout) => string> = {
   full: renderHeldout,
   brief: renderHeldoutBrief,
-  card: renderHeldoutCard,
+  glance: renderHeldoutGlance,
   headline: renderHeldoutHeadline,
   example: renderHeldoutExample,
   plug: renderHeldoutPlug,
