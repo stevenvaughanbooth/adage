@@ -1,0 +1,89 @@
+{
+  "schema": "adage-claude-mod-evidence-1",
+  "about": "Run 4 of the Claude Code mod's live headless comparison (docs/claude-mod/evaluation-plan.md §5): the same held-out work items in five arms, interleaved. Pre-specified before any run-4 number; the fourth run on these six tasks, after fixes made from runs 1 to 3.",
+  "recorded_at": "2026-10-07",
+  "source": {
+    "commit": "0b5809db",
+    "file": "docs/claude-mod/evaluation-results.md",
+    "section": "Run 4: the lookup at index 0, and the instinct dead end replaced (2026-10-07)",
+    "sha256": "80061cb0b382c2fec89c198bfbfd58bd2f542bef247a2267cf0c3577899863d3"
+  },
+  "study": {
+    "repository": "acme-billing",
+    "repository_kind": "a small sandbox repository built for the evaluation",
+    "model": "Claude Sonnet 5.5",
+    "harness": "Claude Code 2.1.292, headless",
+    "tasks": 6,
+    "repetitions": 2,
+    "sessions_per_arm": 12,
+    "arms": 5,
+    "sessions": 60,
+    "run": 4,
+    "training_sessions": 12,
+    "grants": 3
+  },
+  "arms": {
+    "a0": {
+      "label": "The agent alone (no Adage)",
+      "requests_mean": 7.17,
+      "cost_usd_mean": 0.0677,
+      "hidden_passed": 12,
+      "of": 12
+    },
+    "adage": {
+      "label": "Adage through Claude Code's command hooks (today's plugin)",
+      "requests_mean": 6.17,
+      "cost_usd_mean": 0.065,
+      "hidden_passed": 12,
+      "of": 12,
+      "dead_end_hits": 14
+    },
+    "mod": {
+      "label": "Adage as a Claude Code mod",
+      "requests_mean": 3.75,
+      "cost_usd_mean": 0.0531,
+      "hidden_passed": 12,
+      "of": 12,
+      "steps_made": 27,
+      "steps_made_per_session": 2.25,
+      "dead_end_hits": 9,
+      "dead_ends_replaced": 4,
+      "failed_requests": 0
+    }
+  },
+  "mod_vs_hooks": {
+    "requests_diff": -2.42,
+    "requests_ci95": [-3.42, -1.42],
+    "requests_p_holm": 0.0033,
+    "tasks_lower": 6,
+    "fewer_requests_percent": 39.2,
+    "cost_diff_usd": -0.0119,
+    "cost_p_holm": 0.006,
+    "cost_lower_percent": 18.3
+  },
+  "mod_vs_alone": {
+    "requests_diff": -3.42,
+    "requests_ci95": [-4.83, -2.17],
+    "requests_p_holm": 0.001,
+    "fewer_requests_percent": 47.7,
+    "cost_diff_usd": -0.0146,
+    "cost_p_holm": 0.006,
+    "cost_lower_percent": 21.6
+  },
+  "steps": {
+    "lookup_at_start": 12,
+    "read_linked_files": 12,
+    "finish_line": 3,
+    "of_sessions": 12
+  },
+  "example": {
+    "task": "W-2041",
+    "requests": { "a0": [9, 8], "adage": [6, 6], "mod": [2, 2] }
+  },
+  "limitations": [
+    "One small sandbox repository and one model (Claude Sonnet 5.5).",
+    "Six tasks, twelve sessions per arm.",
+    "The fourth run on these tasks, after fixes made from the first three: development evidence, not a registered test.",
+    "The mod's steps were three a person approved; dead-end hits fell only by point estimate (0.75 against 1.17 per session, not shown)."
+  ]
+}

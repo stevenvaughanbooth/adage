@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // The held-out result, for the site: turns the report `heldout_cohort.py report` writes
 // (reports/heldout-<time>.json, the registered analysis of evals/reflex-proof/harness/
-// heldout_analysis.py) into public/evidence/heldout.json, which /how-we-tested and the home page
+// heldout_analysis.py) into public/evidence/heldout.json, which /evidence and /how
 // read. Nothing is computed that the report does not say, except sums of the sessions' own token
 // counts (--sessions) and plain per-session means; the outcome is the report's.
 //

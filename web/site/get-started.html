@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#050507" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#ececef" media="(prefers-color-scheme: light)">
+<title>Get started · Adage</title>
+<meta name="description" content="Adage is an unreleased developer preview: how to install the Claude Code plugin once it ships, and the demos to try from source today.">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="canonical" href="__SITE_URL__/get-started">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Adage">
+<meta property="og:title" content="Get started with Adage">
+<meta property="og:description" content="The plugin comes first. Try the live pane, the control room and the local map with sample traces.">
+<meta property="og:url" content="__SITE_URL__/get-started">
+<meta property="og:image" content="__SITE_URL__/og.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<noscript><style>.reveal { opacity: 1 !important; transform: none !important; }</style></noscript>
+<script type="module" src="/src/subpage.ts"></script>
+</head>
+<body class="subpage">
+<a class="skiplink" href="#main">Skip to content</a>
+
+<header class="top static">
+  <a class="mark" href="/" aria-label="Adage, home">Adage</a>
+  <nav class="nav" aria-label="Site">
+    <div class="navlinks">
+      <a href="/how">How it works</a>
+      <a href="/packs">Packs</a>
+      <a href="/evidence">Evidence</a>
+      <a href="/get-started" aria-current="page">Get started</a>
+    </div>
+    <button class="themebtn" id="theme" type="button">Day</button>
+    <a class="pill" href="/early-access">Get early access</a>
+  </nav>
+</header>
+
+<main id="main">
+<section class="band" id="start" aria-labelledby="start-h">
+  <div class="wrap split">
+    <div>
+      <h1 class="kicker reveal">Get started</h1>
+      <h2 class="display reveal" id="start-h">Not released yet. <span class="soft">The plugin comes first.</span></h2>
+      <p class="lede reveal">Adage is an unreleased developer preview. Nothing is published yet: no plugin marketplace, release binaries, Homebrew tap or npm package. When the first release ships, install the Claude Code plugin and start a session in a repository. Adage binds instincts and learns from earlier traces in the background. The plugin bundles its binaries; it does not put <code>adage</code> on your terminal's PATH.</p>
+      <p class="reveal">Have repository access? Build the CLI from source, then try the isolated demos below. The source preview currently requires access to the private repository. Homebrew and <code>@adage-sh/cli</code> distribution are planned for the release. Codex and OpenCode adapters are in preview. Opt-in execution runs on macOS and Linux; Windows execution is unsupported.</p>
+      <p class="links reveal" id="repo-links" hidden><a href="#" data-repo="">Read the README</a><a href="#" data-repo="/blob/main/docs/lexicon.md">The lexicon</a></p>
+    </div>
+    <div class="term reveal" role="region" aria-label="Install and set up">
+      <div class="term-top" aria-hidden="true"><i></i><i></i><i></i></div>
+      <pre tabindex="0"><code><span class="c"># not published yet: in Claude Code, once the first release ships</span>
+/plugin marketplace add stevenvaughanbooth/adage
+/plugin install adage@adage
+<span class="c"># then start a coding session in your repo</span></code></pre>
+      <button class="copybtn" type="button" data-copy="/plugin marketplace add stevenvaughanbooth/adage&#10;/plugin install adage@adage">Copy</button>
+    </div>
+  </div>
+</section>
+
+<section class="band alt" id="explore" aria-labelledby="explore-h">
+  <div class="wrap">
+    <p class="kicker reveal">Look under the hood</p>
+    <h2 class="display reveal" id="explore-h">See every reflex. <span class="soft">Follow its evidence.</span></h2>
+    <p class="lede reveal">One local system, three ways in. The demos use sample traces in temporary storage and leave your real Adage data alone.</p>
+    <div class="experience-grid">
+      <article class="card reveal"><span class="kicker">01 / beside your agent</span><h3>The live pane</h3><p>Keep a small terminal split open. See hooks and reflexes as they happen.</p><code>adage watch --demo</code><button class="btn" type="button" data-copy="adage watch --demo">Copy live demo</button></article>
+      <article class="card reveal"><span class="kicker">02 / keyboard first</span><h3>The control room</h3><p>Inspect reflexes, review evidence, check health. Navigate without leaving the terminal.</p><code>adage ui --demo</code><button class="btn" type="button" data-copy="adage ui --demo">Copy TUI demo</button></article>
+      <article class="card reveal"><span class="kicker">03 / the whole picture</span><h3>The local map</h3><p>Follow traces into reflexes in your browser. Read-only, served by the binary on localhost.</p><code>adage map --demo</code><button class="btn" type="button" data-copy="adage map --demo">Copy map demo</button></article>
+    </div>
+    <details class="source-install reveal"><summary>Source preview · requires repository access, Rust and Git</summary><p>Already have repository access? From your checkout: <code>cargo install --locked --path crates/adage-cli</code>. Or install from Git:</p><pre><code>cargo install --locked --git https://github.com/stevenvaughanbooth/adage adage-cli</code></pre><button class="btn" type="button" data-copy="cargo install --locked --git https://github.com/stevenvaughanbooth/adage adage-cli">Copy source install</button><p>For a real repository, run <code>adage init</code>. Preview harness setup: <code>adage install codex --write --scope user</code> or <code>adage install opencode --write --scope user</code>. Run <code>adage doctor</code> to verify setup.</p></details>
+    <p class="ctarow reveal"><a class="btn primary" href="/early-access">Get early access</a><a class="btn" href="/how">How it works</a></p>
+  </div>
+</section>
+</main>
+
+<footer class="foot">
+  <div class="wrap footrow">
+    <span class="mark small">Adage</span>
+    <span>Agent traces become reflexes.</span>
+    <span class="muted">Apache-2.0</span>
+  </div>
+</footer>
+</body>
+</html>

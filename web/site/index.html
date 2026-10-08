@@ -40,13 +40,14 @@
 <header class="top">
   <a class="mark" href="#top" aria-label="Adage, back to the top">Adage</a>
   <nav class="nav" aria-label="Site">
-    <a href="/how">How it works</a>
-    <a href="#packs">Packs</a>
-    <a href="#evidence">Evidence</a>
-    <a href="/how-we-tested">How we tested</a>
-    <a href="#start">Get started</a>
+    <div class="navlinks">
+      <a href="/how">How it works</a>
+      <a href="/packs">Packs</a>
+      <a href="/evidence">Evidence</a>
+      <a href="/get-started">Get started</a>
+    </div>
     <button class="themebtn" id="theme" type="button">Day</button>
-    <a class="pill" href="#access">Get early access</a>
+    <a class="pill" href="/early-access">Get early access</a>
   </nav>
 </header>
 
@@ -62,7 +63,7 @@
     <h1 id="h" tabindex="-1">Agent traces become <em>reflexes.</em></h1>
     <p class="sub">A local learning layer for coding agents. Give yours <b>instincts</b> on day one, turn past work into <b>reflexes</b>, and deliver the next useful step exactly when it matters. Memories aren't enough. Train the moves.</p>
     <div class="cta">
-      <a class="btn primary" href="#access">Get early access</a>
+      <a class="btn primary" href="/early-access">Get early access</a>
       <a class="btn" href="#shortcuts">See a reflex happen</a>
       <a class="textlink" id="teaser" href="#film"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 1l9 5-9 5z"/></svg>Watch the teaser <span aria-hidden="true">· 45s</span></a>
     </div>
@@ -123,7 +124,7 @@ $ make check
       <summary>What actually moves off the model?</summary>
       <p><b>By default:</b> local CPU matching delivers guidance; supported pre-call instincts can correct a command to the repository's verified environment without another model request. The agent still executes its tools.</p>
       <p><b>With separate execution approval:</b> <code>adage-exec</code> can prefetch a read-only result or run a staged action in a sandbox and apply permitted outputs. Choosing and running that invocation needs no model request; the agent may still reason over its result.</p>
-      <p>A learned command is not automatically approved to run. A delivered directive is not proof of a saved model turn. Each behavior has its own evidence. Adage saves model calls by handling learned reflexes and instincts on your CPU; we count that in model requests, tokens and API cost. GPU use and energy are not measured. <a href="/how-we-tested">How we tested it →</a></p>
+      <p>A learned command is not automatically approved to run. A delivered directive is not proof of a saved model turn. Each behavior has its own evidence. Adage saves model calls by handling learned reflexes and instincts on your CPU; we count that in model requests, tokens and API cost. GPU use and energy are not measured. <a href="/evidence#tested">How we tested it →</a></p>
     </details>
     <div class="story-inputs">
       <p><span>Ready on day one</span><b>Instincts</b>Bind known moves to your repository's tools.</p>
@@ -190,191 +191,6 @@ $ make check
   </div>
 </section>
 
-<section class="band" id="packs" aria-labelledby="packs-h">
-  <div class="wrap">
-    <p class="kicker reveal">Packs</p>
-    <h2 class="display reveal" id="packs-h">Share what your agents learned. <span class="soft">Get instincts on day one.</span></h2>
-    <p class="lede reveal">A skill is a page of instructions your agent has to read. A reflex is a small rule Adage matches for it, with its evidence attached. Reflexes travel as <b>packs</b>: a folder of plain text files, signed, that a teammate installs with one command. Adage's built-in instincts are packs too.</p>
-
-    <div class="pack-explorer reveal" id="pack-explorer">
-      <div class="pack-pick" role="group" aria-label="Open a pack">
-        <button type="button" aria-pressed="true" aria-controls="pack-window" data-pack="reflex"><span>A reflex your team shares</span><b>acme-billing/work-items</b><small>Learned from three agent sessions. Signed by whoever shared it.</small></button>
-        <button type="button" aria-pressed="false" aria-controls="pack-window" data-pack="instinct"><span>An instinct Adage ships</span><b>adage/python-env</b><small>Built into Adage. Your repository's files fill in its blanks.</small></button>
-      </div>
-      <div class="pack-window" id="pack-window">
-        <div class="pack-files" id="pack-files" role="group" aria-label="Files in the pack"></div>
-        <div class="pack-view">
-          <p class="pack-what" id="pack-what" aria-live="polite">The label on the box: its name and version, where it applies (one repository here), what it needs, and the most it may ever ask to run (E0: advice only).</p>
-          <pre role="region" tabindex="0" aria-label="File contents"><code id="pack-code">format = "adage-pack/1"
-
-[pack]
-name = "acme-billing/work-items"
-version = "0.1.0"
-origin = "reflex"
-description = "Context gathering for prompts that name a work item"
-
-[applicability]
-kind = "repo"
-repo_keys = ["acme-billing"]
-
-[requires]
-harness = ["claude-code"]
-templates = ["read@1"]
-
-[exec]
-requested = "E0"
-
-[provenance]
-tool = "adage 0.1.0"
-
-[provenance.origins]
-organic = 3
-synthetic = 0
-declared = 0
-instinct = 0
-imported = 0</code></pre>
-          <div class="pack-fill" id="pack-fill-row" hidden>
-            <button type="button" class="capbtn" id="pack-fill" aria-pressed="false">Fill in the blanks</button>
-            <span id="pack-fill-note">As Adage filled them in for a Python project with a <code>.venv</code>.</span>
-          </div>
-        </div>
-      </div>
-    </div>
-    <p class="pack-note reveal">Real files. The reflex pack is one Adage learned in a study (acme-billing, Claude Sonnet 5) and shared with <code>adage share</code>, signed with a throwaway test key; the instinct is Adage's own <code>packs/python-env</code>, exactly as its marketplace pins it.</p>
-
-    <ol class="steps">
-      <li class="step reveal">
-        <span class="num">01 / share</span>
-        <h3>Package it</h3>
-        <p>One command builds the pack, checks every byte for secrets and machine paths, and signs it with your SSH key.</p>
-        <code>adage share work-items --out packs/work-items</code>
-      </li>
-      <li class="step reveal">
-        <span class="num">02 / add</span>
-        <h3>Hand it over</h3>
-        <p>Your teammate's Adage checks the signature, works out what the pack depends on and re-checks every command before it installs anything.</p>
-        <code>adage add packs/work-items</code>
-      </li>
-      <li class="step reveal">
-        <span class="num">03 / bind</span>
-        <h3>It binds where it fits</h3>
-        <p>Each pack says where it applies: its own repository, or any repository whose files match. Shared reflexes start as suggestions, and a reflex learned on that machine always wins.</p>
-        <code>adage packs</code>
-      </li>
-    </ol>
-
-    <h3 class="subhead reveal">Instincts come in the box</h3>
-    <p class="pack-lead reveal">Adage's own repository is its first marketplace: eight instinct packs, each pinned by its digest, the way a Claude Code marketplace lists plugins. Every copy of Adage carries it, so nothing is downloaded. Each pack names a detector that reads your repository's files (Makefile, <code>package.json</code>, <code>pyproject.toml</code>, lockfiles) and turns on only where it finds what it needs. Nothing runs, and a reflex Adage learns from your own work replaces it.</p>
-    <ul class="base-packs reveal" aria-label="Adage's base instinct packs">
-      <li><code>adage/python-env</code><span>Run tests inside the project's Python environment.</span></li>
-      <li><code>adage/test-wrapper</code><span>Use the test target that sets what the tests need.</span></li>
-      <li><code>adage/test-command</code><span>Use the repository's one declared test command.</span></li>
-      <li><code>adage/pytest-wrapper</code><span>Run pytest the way the repository runs it.</span></li>
-      <li><code>adage/package-manager</code><span>Use pnpm, yarn or bun where the repository says so.</span></li>
-      <li><code>adage/regenerate</code><span>Regenerate after editing a generator's inputs.</span></li>
-      <li><code>adage/generated-files</code><span>Don't hand-edit generated files.</span></li>
-      <li><code>adage/lockfiles</code><span>Don't hand-edit lockfiles.</span></li>
-    </ul>
-    <p class="pack-lead reveal">See the marketplace with <code>adage marketplace</code>, which packs apply with <code>adage packs</code>, and turn any off with <code>adage packs off adage/lockfiles</code>.</p>
-
-    <details class="mmore reveal">
-      <summary>More detail: skills, packs and trust</summary>
-      <div class="kinds compare" role="region" aria-label="A skill next to a pack" tabindex="0">
-        <table>
-          <thead><tr><th scope="col"></th><th scope="col">A skill</th><th scope="col">A pack</th></tr></thead>
-          <tbody>
-            <tr><th scope="row">Who decides it applies</th><td>The model, from a description</td><td>Adage, on your CPU, when its trigger matches</td></tr>
-            <tr><th scope="row">What reaches the agent</th><td>The whole text, each time it loads</td><td>One line from a fixed template, only on a match</td></tr>
-            <tr><th scope="row">Evidence</th><td>None</td><td>Per reflex: sessions seen, a confidence bound, how much telling the agent helps</td></tr>
-            <tr><th scope="row">Can it run anything?</th><td>Whatever the model does with it</td><td>No. It can ask; only a person on that machine can allow it</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <p class="caveat">A pack is trusted one of two ways: an SSH signature from someone you trust, or a digest pinned by a marketplace you trust (Adage's own, for its instincts). Where it is stored doesn't matter. Commit it to your repository, send the folder, or keep a team marketplace in a git repository. Adding a marketplace by name comes next.</p>
-    </details>
-  </div>
-</section>
-
-<section class="band alt" id="evidence" aria-labelledby="ev-h">
-  <div class="wrap">
-    <p class="kicker reveal">Evidence</p>
-    <h2 class="display reveal" id="ev-h">Measured against a control, <span class="soft">not a vibe.</span></h2>
-    <p class="lede reveal">Adage learns your repository's recurring work and gives your agent what it would otherwise go looking for, so it stops re-exploring and re-checking the same things. Adage saves model calls by handling learned reflexes and instincts on your CPU; we count that in model requests, tokens and API cost, against the same task without Adage, scored by hidden tests. GPU use and energy are not measured. It is strongest on the work a repository repeats; a novel task still needs the model.</p>
-
-    <article class="trial current-proof launch-proof reveal" aria-labelledby="launch-proof-h" data-heldout="card">{{heldout:card}}</article>
-
-    <article class="trial current-proof reveal" aria-labelledby="cold-proof-h">
-      <header><p class="kicker">Cold-start pilot + replication · September 30, 2026</p><h3 id="cold-proof-h">Cold-start value, measured twice.</h3><p>Shipped instincts · Claude Haiku 4.5 · Marshmallow · {{ev:cold-start:unique_tasks}} coding tasks, {{ev:cold-start:repetitions_per_arm_per_task}} runs per arm</p></header>
-      <dl class="stats">
-        <div><dt>Reported API cost</dt><dd><span class="now">{{ev:cold-start:cost_reduction_percent|fixed1}}% lower</span><small>{{ev:cold-start:totals.agent.reported_cost_usd|usd4}} agent alone · {{ev:cold-start:totals.instincts.reported_cost_usd|usd4}} with instincts</small></dd></div>
-        <div><dt>Observed model requests</dt><dd><span class="now">{{ev:cold-start:request_reduction_percent|fixed1}}% fewer</span><small>{{ev:cold-start:totals.agent.observed_model_requests}} agent alone · {{ev:cold-start:totals.instincts.observed_model_requests}} with instincts</small></dd></div>
-        <div><dt>Outputs passing independent checks</dt><dd><span class="now">{{ev:cold-start:totals.instincts.quality_passed}}/{{ev:cold-start:totals.instincts.assignments}}</span><small>with instincts · {{ev:cold-start:totals.agent.quality_passed}}/{{ev:cold-start:totals.agent.assignments}} agent alone</small></dd></div>
-      </dl>
-      <p class="note">No training sessions or learned routes. Shipped advisory hints point test runs toward the repository's Python environment. All {{ev:cold-start:assignment_denominator}} outcomes are included; {{ev:cold-start:cost_regression_pairs}} of {{ev:cold-start:paired_comparisons}} task pairs cost more with instincts.</p>
-      <p class="note">The first run saved {{ev:cold-start:rounds.0.cost_reduction_percent|fixed1}}%; the reversed-order repeat saved only {{ev:cold-start:rounds.1.cost_reduction_percent|fixed1}}%, with equal request counts and all tasks passing in both arms. This small, single-repository pilot is not a general savings estimate. It does not demonstrate automatic CPU action replacement or measure GPU savings.</p>
-      <p class="note"><a href="https://github.com/stevenvaughanbooth/adage/blob/0584c9e/evals/reflex-proof/harness/results/20260930-cold-start-replication/FINDINGS.md">Read the methodology and limitations →</a> <span aria-hidden="true">·</span> <a href="/evidence/cold-start.json">Inspect all {{ev:cold-start:assignment_denominator}} outcomes</a></p>
-    </article>
-    <article class="trial current-proof reveal" aria-labelledby="current-proof-h">
-      <header><p class="kicker">Learned procedure cards · shipped product validation</p><h3 id="current-proof-h">A new task family. A real repository.</h3><p>Claude Haiku 4.5 · unjs/ufo · {{ev:benchmarks:card_validation.pairs}} paired sessions in {{ev:benchmarks:card_validation.clusters}} task clusters · pre-registered protocol</p></header>
-      <dl class="stats">
-        <div><dt>Estimated cost change</dt><dd><span class="now">{{ev:benchmarks:card_validation.cost_change_percent|signed1}}%</span><small>90% interval: {{ev:benchmarks:card_validation.cost_interval_90.0|signed1}}% to {{ev:benchmarks:card_validation.cost_interval_90.1|signed1}}%</small></dd></div>
-        <div><dt>Hidden checks passed</dt><dd><span class="now">{{ev:benchmarks:card_validation.hidden_passes_adage}}/{{ev:benchmarks:card_validation.pairs}}</span><small>with Adage · {{ev:benchmarks:card_validation.hidden_passes_control}}/{{ev:benchmarks:card_validation.pairs}} without</small></dd></div>
-        <div><dt>Procedure card delivery</dt><dd><span class="now">{{ev:benchmarks:card_validation.card_delivered}}/{{ev:benchmarks:card_validation.card_sessions}}</span><small>matching tasks · {{ev:benchmarks:card_validation.unrelated_delivered}}/{{ev:benchmarks:card_validation.unrelated_prompts}} unrelated tasks</small></dd></div>
-      </dl>
-      <p class="note">The card reached the right tasks. Cost savings are plausible, not established: the interval includes no benefit. Tested at commit <code>{{ev:benchmarks:card_validation.commit}}</code> on September 29, 2026; later card-grouping and judge changes are not covered. With only {{ev:benchmarks:card_validation.clusters}} clusters, this nominal 90% interval has roughly 85% coverage. The larger numbers below and in the teaser come from earlier sandbox or prototype studies.</p>
-    </article>
-    <div class="runs">
-      <article class="trial reveal" aria-labelledby="run1">
-        <header>
-          <h3 id="run1">Claude Haiku 4.5</h3>
-          <p>Python sandbox repository · round 2 · {{ev:benchmarks:sandbox_haiku.sessions_per_arm}} sessions with Adage, {{ev:benchmarks:sandbox_haiku.sessions_per_arm}} without</p>
-        </header>
-        <dl class="stats">
-          <div><dt>Turns before the first edit (median)</dt><dd><span class="sr">without Adage </span><span class="was">{{ev:benchmarks:sandbox_haiku.first_edit_turns_median.without}}</span><span class="arrow" aria-hidden="true">→</span><span class="sr">, with Adage </span><span class="now">{{ev:benchmarks:sandbox_haiku.first_edit_turns_median.with}}</span></dd></div>
-          <div><dt>Cost per run (mean)</dt><dd><span class="sr">without Adage </span><span class="was">{{ev:benchmarks:sandbox_haiku.cost_per_run_usd.without|usd3}}</span><span class="arrow" aria-hidden="true">→</span><span class="sr">, with Adage </span><span class="now">{{ev:benchmarks:sandbox_haiku.cost_per_run_usd.with|usd3}}</span></dd></div>
-          <div><dt>Hidden checks passed</dt><dd><span class="sr">without Adage </span><span class="was">{{ev:benchmarks:sandbox_haiku.hidden_checks_percent.without}}%</span><span class="arrow" aria-hidden="true">→</span><span class="sr">, with Adage </span><span class="now">{{ev:benchmarks:sandbox_haiku.hidden_checks_percent.with}}%</span><small>not significant at n = {{ev:benchmarks:sandbox_haiku.sessions_per_arm}}</small></dd></div>
-        </dl>
-        <p class="note">The loop at work: in round 1, agents that no longer explored hit a dead end Adage had exposed (<code>pytest</code> first). Round 2 learned it as an inhibit reflex, and it disappeared.</p>
-      </article>
-      <article class="trial reveal" aria-labelledby="run2">
-        <header>
-          <h3 id="run2">Claude Sonnet 5</h3>
-          <p>TypeScript service on Node · round 2 · {{ev:benchmarks:sandbox_sonnet.sessions_per_arm}} sessions with Adage, {{ev:benchmarks:sandbox_sonnet.sessions_per_arm}} without</p>
-        </header>
-        <dl class="stats">
-          <div><dt>Turns before the first edit (median)</dt><dd><span class="sr">without Adage </span><span class="was">{{ev:benchmarks:sandbox_sonnet.first_edit_turns_median.without}}</span><span class="arrow" aria-hidden="true">→</span><span class="sr">, with Adage </span><span class="now">{{ev:benchmarks:sandbox_sonnet.first_edit_turns_median.with}}</span><small>over the sessions that made an edit</small></dd></div>
-          <div><dt>Cost per run (mean)</dt><dd><span class="sr">without Adage </span><span class="was">{{ev:benchmarks:sandbox_sonnet.cost_per_run_usd.without|usd3}}</span><span class="arrow" aria-hidden="true">→</span><span class="sr">, with Adage </span><span class="now">{{ev:benchmarks:sandbox_sonnet.cost_per_run_usd.with|usd3}}</span></dd></div>
-          <div><dt>Hidden checks passed</dt><dd><span class="sr">without Adage </span><span class="was">{{ev:benchmarks:sandbox_sonnet.hidden_checks_percent.without}}%</span><span class="arrow" aria-hidden="true">→</span><span class="sr">, with Adage </span><span class="now">{{ev:benchmarks:sandbox_sonnet.hidden_checks_percent.with}}%</span></dd></div>
-        </dl>
-        <p class="note">A stronger model found every convention on its own. Adage's effect moved from avoiding failures to skipping exploration: half the turns before the first edit, {{ev:benchmarks:sandbox_sonnet.cost_cut_percent}}% lower cost, quality unchanged.</p>
-      </article>
-      <article class="trial reveal" aria-labelledby="run3">
-        <header>
-          <h3 id="run3">Recurring work: procedure cards</h3>
-          <p>Claude Haiku 4.5 on real open-source repositories · a card learned from 4 earlier sessions · each session paired with a control on the same task</p>
-        </header>
-        <dl class="stats">
-          <div><dt>Cost per task: new parameter type (click), new validator (marshmallow)</dt><dd><span class="now">{{ev:benchmarks:card_prototype.python.cost_change_percent|signed1}}%</span><small>interval {{ev:benchmarks:card_prototype.python.cost_interval_90.0|signed1}}% to {{ev:benchmarks:card_prototype.python.cost_interval_90.1|signed1}}% · hidden tests {{ev:benchmarks:card_prototype.python.hidden_passes_with}}/{{ev:benchmarks:card_prototype.python.of}} with, {{ev:benchmarks:card_prototype.python.hidden_passes_without}}/{{ev:benchmarks:card_prototype.python.of}} without</small></dd></div>
-          <div><dt>Cost per task: new flag type (urfave/cli, Go)</dt><dd><span class="now">{{ev:benchmarks:card_prototype.go.cost_change_percent|signed1}}%</span><small>interval {{ev:benchmarks:card_prototype.go.cost_interval_90.0|signed1}}% to {{ev:benchmarks:card_prototype.go.cost_interval_90.1|signed1}}% · hidden tests {{ev:benchmarks:card_prototype.go.hidden_passes_with}}/{{ev:benchmarks:card_prototype.go.of}} in both arms</small></dd></div>
-        </dl>
-        <p class="note">Read the Go row with care: half its control sessions hit the 60-turn cap. The card was a Python prototype in these runs; the shipped card is on by default. Its completed fresh-family validation is shown above.</p>
-      </article>
-      <article class="trial reveal" aria-labelledby="run4">
-        <header>
-          <h3 id="run4">A compiled skill</h3>
-          <p>A repository workflow skill compiled by <code>adage train</code> · {{ev:benchmarks:compiled_skill.sessions_per_arm}} sessions per arm</p>
-        </header>
-        <dl class="stats">
-          <div><dt>Hidden tests passed</dt><dd><span class="sr">with neither </span><span class="was">{{ev:benchmarks:compiled_skill.hidden_passes.neither}}/{{ev:benchmarks:compiled_skill.sessions_per_arm}}</span><span class="arrow" aria-hidden="true">→</span><span class="sr">, compiled </span><span class="now">{{ev:benchmarks:compiled_skill.hidden_passes.compiled}}/{{ev:benchmarks:compiled_skill.sessions_per_arm}}</span><small>the skill in context: {{ev:benchmarks:compiled_skill.hidden_passes.in_context}}/{{ev:benchmarks:compiled_skill.sessions_per_arm}}</small></dd></div>
-          <div><dt>Cost per session</dt><dd><span class="sr">with neither </span><span class="was">{{ev:benchmarks:compiled_skill.cost_per_session_usd.neither|usd3}}</span><span class="arrow" aria-hidden="true">→</span><span class="sr">, compiled </span><span class="now">{{ev:benchmarks:compiled_skill.cost_per_session_usd.compiled|usd3}}</span><small>the skill in context: {{ev:benchmarks:compiled_skill.cost_per_session_usd.in_context|usd3}}</small></dd></div>
-        </dl>
-        <p class="note">The compiled reflexes keep the skill's effect without its text in context. The repository is a lab sandbox, and a skill that is mostly judgment stays text.</p>
-      </article>
-    </div>
-    <p class="caveat reveal">Published with their caveats. The two sandbox runs reused round 1's work items in round 2, fixed the arm order and shared the operator's auto-memory, so treat them as indicative until they are repeated under the stricter protocol. The card intervals are 90% bootstrap intervals clustered by task; with 6–12 tasks per comparison, read them as closer to 80%. On one-off bug fixes the effect is small: the <code>.venv</code> instinct took the system-Python dead end from {{ev:benchmarks:one_off_fixes.venv_dead_end_sessions.without}} of {{ev:benchmarks:one_off_fixes.venv_dead_end_sessions.of}} sessions to {{ev:benchmarks:one_off_fixes.venv_dead_end_sessions.with}} of {{ev:benchmarks:one_off_fixes.venv_dead_end_sessions.of}}, and every lever a hook can pull was worth {{ev:benchmarks:one_off_fixes.hook_levers_cost_percent.0}}–{{ev:benchmarks:one_off_fixes.hook_levers_cost_percent.1}}% of cost. Every install keeps about one session in ten as a control, and <code>adage savings</code> states what Adage saves on your own work only once 10 control and 30 treated sessions have finished.</p>
-  </div>
-</section>
-
 <section class="band" id="trust" aria-labelledby="trust-h">
   <div class="wrap">
     <p class="kicker reveal">Built to stay out of the way</p>
@@ -388,56 +204,18 @@ imported = 0</code></pre>
   </div>
 </section>
 
-<section class="band alt" id="start" aria-labelledby="start-h">
-  <div class="wrap split">
-    <div>
-      <p class="kicker reveal">Get started</p>
-      <h2 class="display reveal" id="start-h">Not released yet. <span class="soft">The plugin comes first.</span></h2>
-      <p class="lede reveal">Adage is an unreleased developer preview. Nothing is published yet: no plugin marketplace, release binaries, Homebrew tap or npm package. When the first release ships, install the Claude Code plugin and start a session in a repository. Adage binds instincts and learns from earlier traces in the background. The plugin bundles its binaries; it does not put <code>adage</code> on your terminal's PATH.</p>
-      <p class="reveal">Have repository access? Build the CLI from source, then try the isolated demos below. The source preview currently requires access to the private repository. Homebrew and <code>@adage-sh/cli</code> distribution are planned for the release. Codex and OpenCode adapters are in preview. Opt-in execution runs on macOS and Linux; Windows execution is unsupported.</p>
-      <p class="links reveal" id="repo-links" hidden><a href="#" data-repo="">Read the README</a><a href="#" data-repo="/blob/main/docs/lexicon.md">The lexicon</a></p>
-    </div>
-    <div class="term reveal" role="region" aria-label="Install and set up">
-      <div class="term-top" aria-hidden="true"><i></i><i></i><i></i></div>
-      <pre tabindex="0"><code><span class="c"># not published yet: in Claude Code, once the first release ships</span>
-/plugin marketplace add stevenvaughanbooth/adage
-/plugin install adage@adage
-<span class="c"># then start a coding session in your repo</span></code></pre>
-      <button class="copybtn" type="button" data-copy="/plugin marketplace add stevenvaughanbooth/adage&#10;/plugin install adage@adage">Copy</button>
-    </div>
-  </div>
-</section>
-
-<section class="band" id="explore" aria-labelledby="explore-h">
+<section class="band alt" id="next" aria-labelledby="next-h">
   <div class="wrap">
-    <p class="kicker reveal">Look under the hood</p>
-    <h2 class="display reveal" id="explore-h">See every reflex. <span class="soft">Follow its evidence.</span></h2>
-    <p class="lede reveal">One local system, three ways in. The demos use sample traces in temporary storage and leave your real Adage data alone.</p>
-    <div class="experience-grid">
-      <article class="card reveal"><span class="kicker">01 / beside your agent</span><h3>The live pane</h3><p>Keep a small terminal split open. See hooks and reflexes as they happen.</p><code>adage watch --demo</code><button class="btn" type="button" data-copy="adage watch --demo">Copy live demo</button></article>
-      <article class="card reveal"><span class="kicker">02 / keyboard first</span><h3>The control room</h3><p>Inspect reflexes, review evidence, check health. Navigate without leaving the terminal.</p><code>adage ui --demo</code><button class="btn" type="button" data-copy="adage ui --demo">Copy TUI demo</button></article>
-      <article class="card reveal"><span class="kicker">03 / the whole picture</span><h3>The local map</h3><p>Follow traces into reflexes in your browser. Read-only, served by the binary on localhost.</p><code>adage map --demo</code><button class="btn" type="button" data-copy="adage map --demo">Copy map demo</button></article>
-    </div>
-    <details class="source-install reveal"><summary>Source preview · requires repository access, Rust and Git</summary><p>Already have repository access? From your checkout: <code>cargo install --locked --path crates/adage-cli</code>. Or install from Git:</p><pre><code>cargo install --locked --git https://github.com/stevenvaughanbooth/adage adage-cli</code></pre><button class="btn" type="button" data-copy="cargo install --locked --git https://github.com/stevenvaughanbooth/adage adage-cli">Copy source install</button><p>For a real repository, run <code>adage init</code>. Preview harness setup: <code>adage install codex --write --scope user</code> or <code>adage install opencode --write --scope user</code>. Run <code>adage doctor</code> to verify setup.</p></details>
-  </div>
-</section>
-
-<section class="band access" id="access" aria-labelledby="access-h">
-  <div class="wrap narrow">
-    <h2 class="display reveal" id="access-h">Get early access</h2>
-    <p class="lede reveal">We'll email you once, when the first release is ready. Nothing else.</p>
-    <form class="signup reveal" id="signup" action="/api/waitlist" method="post" novalidate>
-      <fieldset class="signup-fields" id="signup-fields" hidden disabled>
-      <legend class="sr">Join early access</legend>
-      <label class="sr" for="email">Email address</label>
-      <input id="email" name="email" type="email" autocomplete="email" required placeholder="you@company.com" aria-describedby="signup-status">
-      <input class="hp" name="hp_x7" tabindex="-1" autocomplete="off" aria-hidden="true">
-      <button class="btn primary" type="submit">Join the list</button>
-      </fieldset>
-      <p class="status" id="signup-status" role="status" aria-live="polite">Enable JavaScript to check early-access availability.</p>
-      <button class="btn" id="signup-retry" type="button" hidden>Check availability again</button>
-    </form>
-    <p class="reveal">Explore now: <a href="/how">Walk through how Adage works</a>, from traces to hooks and evidence.</p>
+    <p class="kicker reveal">Keep going</p>
+    <h2 class="display reveal" id="next-h">Be first in line. <span class="soft">Or look around first.</span></h2>
+    <p class="lede reveal">Adage isn't released yet. Join the early-access list and we'll email you once, when the first release is ready.</p>
+    <p class="ctarow next-cta reveal"><a class="btn primary" href="/early-access">Get early access</a></p>
+    <ul class="grid pagelinks">
+      <li class="card reveal"><h3><a href="/how">How it works <span aria-hidden="true">→</span></a></h3><p>Follow one session from transcript to hook, step by step, with the math behind every threshold.</p></li>
+      <li class="card reveal"><h3><a href="/packs">Packs <span aria-hidden="true">→</span></a></h3><p>Share what your agents learned as signed packs, and get Adage's instincts on day one.</p></li>
+      <li class="card reveal"><h3><a href="/evidence">Evidence <span aria-hidden="true">→</span></a></h3><p>What Adage saves, measured against the same tasks without it, and exactly how we tested it.</p></li>
+      <li class="card reveal"><h3><a href="/get-started">Get started <span aria-hidden="true">→</span></a></h3><p>Install it once it ships, or try the live pane, the control room and the map with sample traces.</p></li>
+    </ul>
   </div>
 </section>
 </main>

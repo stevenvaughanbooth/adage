@@ -1,7 +1,7 @@
 // Numbers in the pages come from the data files in public/evidence, never from the HTML. At build
 // time (vite.config.ts) every `{{ev:<file>:<path>|<format>}}` in a page becomes the value at <path>
 // in public/evidence/<file>.json, and `{{heldout:<kind>}}` becomes a held-out component
-// (src/evidence/heldout.ts: full, brief, card, headline, example). A missing file, path, format or
+// (src/evidence/heldout.ts: full, brief, glance, headline, example, plug). A missing file, path, format or
 // kind fails the build.
 
 import { HELDOUT_KINDS, type Heldout } from "./heldout";
@@ -11,12 +11,14 @@ const FORMATS: Record<string, (v: number) => string> = {
   fixed0: (v) => v.toFixed(0),
   fixed1: (v) => v.toFixed(1),
   fixed2: (v) => v.toFixed(2),
+  fixed3: (v) => v.toFixed(3),
   abs1: (v) => Math.abs(v).toFixed(1),
   usd3: (v) => `$${v.toFixed(3)}`,
   usd4: (v) => `$${v.toFixed(4)}`,
   x2: (v) => `${v.toFixed(2)}×`,
   // A signed change with a real minus sign: −10.3, +2.0.
   signed1: (v) => `${v < 0 ? "−" : "+"}${Math.abs(v).toFixed(1)}`,
+  signed2: (v) => `${v < 0 ? "−" : "+"}${Math.abs(v).toFixed(2)}`,
   kilo: (v) => `${Math.round(v / 1000)}k`,
   // A ratio as "N for every 100".
   per100: (v) => String(Math.round(v * 100)),

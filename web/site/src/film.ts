@@ -103,7 +103,7 @@ export function createFilm(o: Opts) {
     /** Open the page on the film, unless it is switched off for this build. */
     start() {
       if (OFF) { el.hidden = true; document.getElementById("teaser")?.remove(); return; }
-      // The film opens a visit, once: not on a link to a section (/#evidence), not when coming from
+      // The film opens a visit, once: not on a link to a section (/#how), not when coming from
       // another page of the site, and not again later in the same visit. "Watch the teaser" still plays it.
       let seen = false;
       try { seen = sessionStorage.getItem(SEEN) === "1"; sessionStorage.setItem(SEEN, "1"); } catch { /* no storage: play it */ }

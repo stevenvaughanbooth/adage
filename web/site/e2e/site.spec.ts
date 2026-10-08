@@ -95,7 +95,7 @@ test("early access: success, a closed list, and a bad address", async ({ page })
   await films(page, "fail");
   let open = true;
   await page.route("**/api/waitlist", (r) => r.fulfill(r.request().method() === "GET" ? { status: 200, json: { available: true } } : open ? { status: 200, json: { ok: true } } : { status: 503, json: { error: "closed" } }));
-  await page.goto("/#access");
+  await page.goto("/early-access");
   const email = page.getByRole("textbox", { name: "Email address" });
   const status = page.locator("#signup-status");
   await email.fill("not-an-email");
@@ -122,7 +122,7 @@ test("closed registration asks for no address and can reopen without a reload", 
     if (route.request().method() === "POST") posts++;
     return route.fulfill({ json: { available } });
   });
-  await page.goto("/#access");
+  await page.goto("/early-access");
   await expect(page.locator("#signup-status")).toContainText("aren't open yet");
   await expect(page.getByRole("textbox", { name: "Email address" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Join the list" })).toHaveCount(0);
@@ -141,7 +141,7 @@ test("an unavailable registration check recovers and a closing list preserves th
     route.request().method() === "POST" ? { status: 503, json: { error: "closed" } }
       : healthy ? { json: { available: true } } : { status: 502, json: {} },
   ));
-  await page.goto("/#access");
+  await page.goto("/early-access");
   await expect(page.locator("#signup-status")).toContainText("Couldn't check registration");
   healthy = true;
   await page.getByRole("button", { name: "Check availability again" }).click();
@@ -164,7 +164,7 @@ test("a stalled registration request unlocks without losing the address or doubl
     posts++;
     // Keep the response pending; the client's timeout must release the form.
   });
-  await page.goto("/#access");
+  await page.goto("/early-access");
   const email = page.locator("#email");
   await email.fill("dev@example.com");
   const join = page.getByRole("button", { name: "Join the list" });
@@ -187,6 +187,90 @@ for (const scheme of ["dark", "light"] as const) {
     expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`)).toEqual([]);
   });
 }
+
+// The header's tabs, each a page of its own, in the order the header lists them.
+const TABS = [
+  { name: "How it works", path: "/how", h1: /How Adage plugs into Claude Code/ },
+  { name: "Packs", path: "/packs", h1: "Packs" },
+  { name: "Evidence", path: "/evidence", h1: /fewer model calls/ },
+  { name: "Get started", path: "/get-started", h1: "Get started" },
+];
+
+test.describe("every tab is a page of its own", () => {
+  test("the header links each page, and marks the one you are on", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await films(page, "fail");
+    for (const at of ["/", ...TABS.map((t) => t.path), "/early-access"]) {
+      await page.goto(at);
+      const nav = page.getByRole("navigation", { name: "Site" });
+      for (const t of TABS) {
+        const link = nav.getByRole("link", { name: t.name, exact: true });
+        await expect(link).toHaveAttribute("href", t.path);
+        if (t.path === at) await expect(link).toHaveAttribute("aria-current", "page");
+        else await expect(link).not.toHaveAttribute("aria-current");
+      }
+      const pill = nav.getByRole("link", { name: "Get early access" });
+      await expect(pill).toHaveAttribute("href", "/early-access");
+      if (at === "/early-access") await expect(pill).toHaveAttribute("aria-current", "page");
+      else await expect(pill).not.toHaveAttribute("aria-current");
+    }
+  });
+
+  test("a tab opens its page at the top, and the home page no longer holds it", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await films(page, "fail");
+    await page.goto("/");
+    for (const id of ["packs", "evidence", "start", "explore", "access"]) await expect(page.locator(`#${id}`)).toHaveCount(0);
+    for (const t of TABS) {
+      await page.goto("/");
+      await page.getByRole("navigation", { name: "Site" }).getByRole("link", { name: t.name, exact: true }).click();
+      await expect(page).toHaveURL(new RegExp(`${t.path}$`));
+      await expect(page.getByRole("heading", { level: 1 })).toHaveText(t.h1);
+      expect(await page.evaluate(() => scrollY)).toBe(0);
+    }
+    await page.goto("/");
+    await page.getByRole("navigation", { name: "Site" }).getByRole("link", { name: "Get early access" }).click();
+    await expect(page).toHaveURL(/\/early-access$/);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Get early access");
+  });
+
+  test("the home page ends with where to go next", async ({ page }) => {
+    await films(page, "fail");
+    await page.goto("/");
+    const next = page.locator("#next");
+    await expect(next.getByRole("link", { name: "Get early access" })).toHaveAttribute("href", "/early-access");
+    for (const t of TABS) {
+      await expect(next.getByRole("link", { name: t.name })).toHaveAttribute("href", t.path);
+    }
+  });
+
+  test("on a phone, the pages stay in the header and nothing scrolls sideways", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await films(page, "fail");
+    for (const at of ["/", "/packs", "/evidence", "/get-started", "/early-access"]) {
+      await page.goto(at);
+      await page.evaluate(() => document.querySelectorAll(".reveal").forEach((n) => n.classList.add("in")));
+      const nav = page.getByRole("navigation", { name: "Site" });
+      await expect(nav.getByRole("link", { name: "Packs", exact: true })).toBeVisible();
+      // The last tab is a sideways swipe away, never off the page.
+      await nav.getByRole("link", { name: "Get started", exact: true }).scrollIntoViewIfNeeded();
+      await expect(nav.getByRole("link", { name: "Get started", exact: true })).toBeInViewport();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(0);
+    }
+  });
+
+  for (const path of ["/packs", "/get-started", "/early-access"]) {
+    for (const scheme of ["dark", "light"] as const) {
+      test(`no axe violations on ${path} (${scheme})`, async ({ page }) => {
+        await page.route("**/api/waitlist", (r) => r.fulfill({ json: { available: true } }));
+        await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+        await page.goto(path);
+        const r = await new AxeBuilder({ page }).analyze();
+        expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`)).toEqual([]);
+      });
+    }
+  }
+});
 
 test("unknown paths get the 404 page", async ({ page }) => {
   const r = await page.goto("/no-such-page");
@@ -320,15 +404,15 @@ test.describe("/how", () => {
     const y = () => page.evaluate(() => Math.round(scrollY));
     await page.evaluate(() => scrollTo({ top: document.documentElement.scrollHeight, behavior: "instant" }));
     // Every section above is held under the last one; a link still finds where each one starts.
-    await page.locator(".top").getByRole("link", { name: "Evidence" }).evaluate((a: HTMLAnchorElement) => a.click());
-    const ev = await page.evaluate(() => {
+    await page.getByRole("link", { name: "See a reflex happen" }).evaluate((a: HTMLAnchorElement) => a.click());
+    const top = await page.evaluate(() => {
       const secs = [...document.querySelectorAll<HTMLElement>("main > section")];
       let t = document.querySelector("main")!.getBoundingClientRect().top + scrollY;
-      for (const s of secs) { if (s.id === "evidence") break; t += s.offsetHeight; }
+      for (const s of secs) { if (s.id === "shortcuts") break; t += s.offsetHeight; }
       return Math.round(t);
     });
-    await expect.poll(y).toBe(ev);
-    await expect(page).toHaveURL(/#evidence$/);
+    await expect.poll(y).toBe(top);
+    await expect(page).toHaveURL(/#shortcuts$/);
     await page.getByRole("link", { name: "Adage, back to the top" }).evaluate((a: HTMLAnchorElement) => a.click());
     await expect.poll(y).toBe(0);
   });
@@ -460,7 +544,7 @@ test.describe("/how", () => {
 test.describe("the film plays once, on a fresh visit", () => {
   test("not on a link to a section", async ({ page }) => {
     await films(page, "hang");
-    await page.goto("/#evidence");
+    await page.goto("/#how");
     await expect(page.locator("#film")).toBeHidden();
     await expect(page.locator("main")).toHaveJSProperty("inert", false);
   });
@@ -468,8 +552,8 @@ test.describe("the film plays once, on a fresh visit", () => {
   test("not when coming from /how, and not twice in a visit", async ({ page }) => {
     await films(page, "hang");
     await page.goto("/how");
-    await page.getByRole("navigation", { name: "Site" }).getByRole("link", { name: "Evidence" }).click();
-    await expect(page).toHaveURL(/\/#evidence$/);
+    await page.getByRole("link", { name: "Adage, home" }).click();
+    await expect(page).toHaveURL(/\/$/);
     await expect(page.locator("#film")).toBeHidden();
     await page.goto("about:blank");
     await page.goto("/");
@@ -557,8 +641,7 @@ test("the illustrative trace becomes a reflex, then a directive, by keyboard", a
 
 
 test("a pack, file by file: a shared reflex, and an instinct whose blanks a repository fills", async ({ page }) => {
-  await page.goto("/#packs");
-  await expect(page.locator("#film")).toBeHidden();
+  await page.goto("/packs");
   const files = page.locator("#pack-files");
   const code = page.locator("#pack-code");
   // A reflex pack, read from the repository as shared: its manifest first, then any file by keyboard.

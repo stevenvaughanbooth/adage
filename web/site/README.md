@@ -1,13 +1,21 @@
 # web/site: the public Adage website
 
-The landing page (the teaser film, the 3D hero, how it works, the evidence, getting started and the
-early-access list); `/how`, which opens on how Adage plugs into Claude Code (a diagram that follows
-the hooks as the page scrolls) and then walks the nine chapters in 3D, with the math behind every
-threshold; and `/how-we-tested`, the evidence page: what we tested and how, the held-out result in
-advisory and execution mode, and the limits. The chapters and their 3D stage are shared with `adage map`
-(`web/map/src/how`, imported through the `@how` alias), so the two never tell different stories.
-A static Vite build with one
-Vercel Function (`api/waitlist.ts`). It is separate from `web/map`, which the `adage` binary embeds.
+Every tab in the header is a page of its own, so no page scrolls forever:
+
+| Page | File | What it holds |
+| --- | --- | --- |
+| `/` | `index.html` | The teaser film, the 3D hero, a reflex happening, how it works in brief, why it stays out of the way, and where to go next |
+| `/how` | `how.html` | How Adage plugs into Claude Code (a diagram that follows the hooks as the page scrolls), then the nine chapters in 3D, with the math behind every threshold |
+| `/packs` | `packs.html` | What a pack is, file by file, sharing one, and the base instincts |
+| `/evidence` | `evidence.html` | The results at a glance, what we tested and how, the held-out result in advisory and execution mode, what the Claude Code mod changes, the limits and the data (`/how-we-tested` redirects here) |
+| `/get-started` | `get-started.html` | Installing (once released), the source preview and the demos |
+| `/early-access` | `early-access.html` | The early-access list |
+
+Every page carries the same header, with the page you are on marked; on a phone its pages slide
+sideways under the mark. `/packs`, `/get-started` and `/early-access` share one script (`src/subpage.ts`). The
+chapters and their 3D stage are shared with `adage map` (`web/map/src/how`, imported through the
+`@how` alias), so the two never tell different stories. A static Vite build with one Vercel Function
+(`api/waitlist.ts`). It is separate from `web/map`, which the `adage` binary embeds.
 
 ```bash
 pnpm install
@@ -92,7 +100,7 @@ on preview deployments; turn it off in Settings → General → Vercel Toolbar t
 
 | Path | What |
 | --- | --- |
-| `index.html` | The page: film overlay, hero, sections. |
+| `index.html` | The home page: film overlay, hero, sections, where to go next. |
 | `src/main.ts` | Theme, hero tabs and tour, film wiring, lazy scene. |
 | `src/film.ts` | The opening film. |
 | `src/hero/scene.js` | The three.js scene (ported from the hero prototype; day and night palettes). |
@@ -100,9 +108,10 @@ on preview deployments; turn it off in Settings → General → Vercel Toolbar t
 | `how.html`, `src/how-page.ts` | `/how`: the walkthrough shell around the shared chapters, and the math. |
 | `src/wilson.ts` | The Wilson calculator on `/how` (the same bound as `wilson_lower` in adage-tracks). |
 | `src/plug.ts` | `/how`'s opening scene: the diagram lights the hook of the step in the middle of the screen. |
-| `how-we-tested.html`, `src/evidence-page.ts` | `/how-we-tested`: the evidence page. |
+| `evidence.html`, `src/evidence-page.ts` | `/evidence`: the evidence page. |
+| `packs.html`, `get-started.html`, `early-access.html`, `src/subpage.ts` | `/packs` (with `src/packs.ts`), `/get-started` and `/early-access` (with `src/signup.ts`). |
 | `src/evidence/` | The held-out component (`heldout.ts`), the build-time number tokens (`tokens.ts`) and the loader that redraws the held-out result from its file (`load.ts`). |
-| `public/evidence/` | The data every number comes from: `heldout.json` (with the report and decision record it came from), `cold-start.json`, `benchmarks.json`. |
+| `public/evidence/` | The data every number comes from: `heldout.json` (with the report and decision record it came from) and `claude-mod.json` (the mod's run 4, from `docs/claude-mod/evaluation-results.md`). `cold-start.json` and `benchmarks.json` hold the earlier studies the page links to. |
 | `scripts/heldout-evidence.mjs` | Converts a held-out report into `public/evidence/heldout.json`. |
 | `e2e/fixtures/heldout/` | Synthetic held-out reports (pass, a mixed fail, a fail on savings, unverified) made with the registered analysis, for the tests; not study results. |
 | `src/theme.ts` | The Day/Night choice, shared by every page. |

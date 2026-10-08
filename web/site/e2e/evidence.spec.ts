@@ -17,18 +17,18 @@ const adv = shipped.result.modes.advisory, exe = shipped.result.modes.execution;
 async function heldout(page: Page, value: unknown) {
   await page.route("**/evidence/heldout.json", (r) => r.fulfill({ status: 200, json: value }));
 }
-const films = (page: Page) => page.route("**/*.mp4", (r) => r.abort());
 
-test.describe("/how-we-tested", () => {
+test.describe("/evidence", () => {
   test("leads with the advisory result, from the shipped data", async ({ page }) => {
-    await page.goto("/how-we-tested");
+    await page.goto("/evidence");
     await expect(page.getByRole("heading", { level: 1 })).toContainText(`About ${adv.fewer_requests_percent}% fewer model calls.`);
     await expect(page.locator(".ev-q")).toHaveText("Can Adage handle predictable steps on your CPU so the agent needs fewer model calls, without hurting correctness?");
     await expect(page.locator("#question .lede")).toContainText("Adage saves model calls by handling learned reflexes and instincts on your CPU");
     // The running example: one dot per model call, the agent alone against advisory mode.
-    await expect(page.locator(".ev-run").first()).toContainText(`${adv.mean_requests_alone.toFixed(1)} calls per session`);
-    await expect(page.locator(".ev-run.adage")).toContainText(`${adv.mean_requests.toFixed(1)} calls per session`);
-    await expect(page.locator(".ev-run.adage .ev-dots i")).toHaveCount(Math.round(adv.mean_requests));
+    const example = page.locator("#question");
+    await expect(example.locator(".ev-run").first()).toContainText(`${adv.mean_requests_alone.toFixed(1)} calls per session`);
+    await expect(example.locator(".ev-run.adage")).toContainText(`${adv.mean_requests.toFixed(1)} calls per session`);
+    await expect(example.locator(".ev-run.adage .ev-dots i")).toHaveCount(Math.round(adv.mean_requests));
     const ho = page.locator("[data-heldout='full'] .ev-ho");
     await expect(ho).toHaveAttribute("data-advisory", "clear");
     await expect(ho.locator(".ev-ho-h")).toHaveText(`About ${adv.fewer_requests_percent}% fewer model calls and a third lower cost on held-out tasks, with the same correctness.`);
@@ -58,7 +58,7 @@ test.describe("/how-we-tested", () => {
 
   test("before a result, the comparison shows as running, with its pass rule", async ({ page }) => {
     await heldout(page, pending());
-    await page.goto("/how-we-tested#results");
+    await page.goto("/evidence#results");
     const line = "Held-out comparison running: 4 new tasks, 20 paired blocks; pass rule: 95% upper bound ≤ 0.90× requests with no quality loss.";
     await expect(page.locator("[data-heldout='full'] .ev-ho")).toHaveAttribute("data-state", "pending");
     await expect(page.locator("[data-heldout='full'] .ev-ho-h")).toHaveText(line);
@@ -68,7 +68,7 @@ test.describe("/how-we-tested", () => {
   test("when both modes pass, execution mode says so", async ({ page }) => {
     const h = fixture("pass");
     await heldout(page, h);
-    await page.goto("/how-we-tested#results");
+    await page.goto("/evidence#results");
     const ho = page.locator("[data-heldout='full'] .ev-ho");
     await expect(ho).toHaveAttribute("data-advisory", "clear");
     await expect(ho.locator(".ev-exec")).toHaveAttribute("data-status", "passed");
@@ -82,7 +82,7 @@ test.describe("/how-we-tested", () => {
 
   test("a mixed result: advisory leads, execution is experimental, the verdict stays in the detail", async ({ page }) => {
     await heldout(page, fixture("fail"));
-    await page.goto("/how-we-tested#results");
+    await page.goto("/evidence#results");
     const ho = page.locator("[data-heldout='full'] .ev-ho");
     await expect(ho).toHaveAttribute("data-advisory", "clear");
     await expect(ho.locator(".ev-ho-h")).toContainText("with the same correctness");
@@ -94,7 +94,7 @@ test.describe("/how-we-tested", () => {
 
   test("when neither mode saves enough, the page says there is no clear saving", async ({ page }) => {
     await heldout(page, fixture("fail-savings"));
-    await page.goto("/how-we-tested#results");
+    await page.goto("/evidence#results");
     const ho = page.locator("[data-heldout='full'] .ev-ho");
     await expect(ho).toHaveAttribute("data-advisory", "no-clear-saving");
     await expect(ho.locator(".ev-ho-h")).toContainText("Advisory mode: no clear saving in model calls");
@@ -106,7 +106,7 @@ test.describe("/how-we-tested", () => {
 
   test("an inconclusive result shows no verdict and no headline number", async ({ page }) => {
     await heldout(page, fixture("unverified"));
-    await page.goto("/how-we-tested#results");
+    await page.goto("/evidence#results");
     const ho = page.locator("[data-heldout='full'] .ev-ho");
     await expect(ho).toHaveAttribute("data-state", "none");
     await expect(ho.locator(".ev-verdict")).toHaveText("NO VERDICT");
@@ -119,7 +119,7 @@ test.describe("/how-we-tested", () => {
   test("an invalid report (a lapsed approval) is never shown as a result", async ({ page }) => {
     const report = { ...json("./fixtures/heldout/pass.json"), valid: false, lapses: [{ order: 12, arm: "BEST", condition: "positive", problem: "withheld: approval" }] };
     await heldout(page, convert(report));
-    await page.goto("/how-we-tested#results");
+    await page.goto("/evidence#results");
     const ho = page.locator("[data-heldout='full'] .ev-ho");
     await expect(ho).toHaveAttribute("data-state", "none");
     await expect(ho.locator(".ev-ho-h")).toContainText("not evidence");
@@ -127,7 +127,7 @@ test.describe("/how-we-tested", () => {
 
   test("dotted words show their definition, in the day theme too", async ({ page }) => {
     await page.emulateMedia({ colorScheme: "light", reducedMotion: "reduce" });
-    await page.goto("/how-we-tested#tested");
+    await page.goto("/evidence#tested");
     await page.evaluate(() => document.querySelectorAll(".reveal").forEach((n) => n.classList.add("in")));
     const term = page.locator("#tested .ev-callout .gloss", { hasText: /^held-out$/i }).first();
     await term.scrollIntoViewIfNeeded();
@@ -144,7 +144,7 @@ test.describe("/how-we-tested", () => {
   for (const scheme of ["dark", "light"] as const) {
     test(`no axe violations (${scheme})`, async ({ page }) => {
       await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
-      await page.goto("/how-we-tested");
+      await page.goto("/evidence");
       await page.evaluate(() => document.querySelectorAll(".reveal").forEach((n) => n.classList.add("in")));
       await page.evaluate(() => document.querySelectorAll("details").forEach((d) => (d.open = true)));
       const r = await new AxeBuilder({ page }).analyze();
@@ -158,7 +158,7 @@ test.describe("/how-we-tested", () => {
       await heldout(page, fixture(name));
       for (const scheme of ["dark", "light"] as const) {
         await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
-        await page.goto("/how-we-tested#results");
+        await page.goto("/evidence#results");
         await expect(page.locator(".ev-ho")).toBeVisible();
         await page.evaluate(() => document.querySelectorAll(".reveal").forEach((n) => n.classList.add("in")));
         await page.evaluate(() => document.querySelectorAll("details").forEach((d) => (d.open = true)));
@@ -170,14 +170,14 @@ test.describe("/how-we-tested", () => {
 
   test("a phone never scrolls sideways", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto("/how-we-tested");
+    await page.goto("/evidence");
     await page.evaluate(() => document.querySelectorAll(".reveal").forEach((n) => n.classList.add("in")));
     await page.evaluate(() => document.querySelectorAll("details").forEach((d) => (d.open = true)));
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(0);
   });
 
   test("sections hold as scenes and nothing takes the scroll over", async ({ page }) => {
-    await page.goto("/how-we-tested");
+    await page.goto("/evidence");
     await expect(page.locator("html")).toHaveClass(/\bscenes\b/);
     // A wheel scroll moves the page by the browser's own amount, and it stays where it was left.
     await page.mouse.move(700, 500);
@@ -188,27 +188,65 @@ test.describe("/how-we-tested", () => {
   });
 });
 
-test.describe("the home page's claim", () => {
-  test("leads with the advisory held-out result from its data file, and links to how we tested", async ({ page }) => {
-    await films(page);
+// The Claude Code mod's comparison, as the site ships it.
+const mod = json("../public/evidence/claude-mod.json");
+
+test.describe("the results at a glance", () => {
+  test("two tests, the same few numbers each, from their data files", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
-    await page.goto("/#evidence");
-    const card = page.locator(".launch-proof");
-    await expect(card.locator("h3")).toHaveText(`About ${adv.fewer_requests_percent}% fewer model calls and a third lower cost on held-out tasks, with the same correctness.`);
-    await expect(card).toContainText(adv.mean_requests_alone.toFixed(1));
-    await expect(card).toContainText(adv.mean_requests.toFixed(1));
-    await expect(card.locator(".note")).toContainText("Execution mode (opt-in): experimental · quality bar not yet met.");
-    await expect(page.locator("#evidence .lede")).toContainText("Adage saves model calls by handling learned reflexes and instincts on your CPU");
-    await expect(page.locator("#evidence .lede")).toContainText("GPU use and energy are not measured");
-    await expect(card.getByRole("link", { name: "How we tested" })).toHaveAttribute("href", "/how-we-tested");
+    await page.goto("/evidence#glance");
+    const [a, m] = [page.locator(".ev-gl").first(), page.locator(".ev-gl.mod")];
+    await expect(page.locator(".ev-gl")).toHaveCount(2);
+    // Advisory mode, the registered held-out test.
+    await expect(a.locator(".ev-gl-h")).toHaveText("Advisory mode, the default");
+    await expect(a.locator(".ev-gl-big")).toHaveText(`${adv.fewer_requests_percent}% fewer model calls`);
+    await expect(a.locator(".ev-gl-stats")).toContainText(`${adv.mean_requests_alone.toFixed(1)} → ${adv.mean_requests.toFixed(1)}`);
+    await expect(a.locator(".ev-gl-stats")).toContainText(`${Math.round(Math.abs(adv.cost_change_percent))}% lower`);
+    await expect(a.locator(".ev-gl-stats")).toContainText(`${adv.hidden_test_passes}/${adv.of}`);
+    await expect(a.locator(".ev-gl-exec")).toContainText("experimental · quality bar not yet met");
+    await expect(a.getByRole("link", { name: "The full result ↓" })).toHaveAttribute("href", "#results");
+    // The mod, a development test, said as one.
+    await expect(m.locator(".ev-gl-tag")).toContainText("Development test");
+    await expect(m.locator(".ev-gl-big")).toHaveText(`${Math.round(mod.mod_vs_alone.fewer_requests_percent)}% fewer model calls`);
+    await expect(m.locator(".ev-gl-stats")).toContainText(`${mod.arms.a0.requests_mean.toFixed(1)} → ${mod.arms.mod.requests_mean.toFixed(1)}`);
+    await expect(m.locator(".ev-gl-stats")).toContainText(`${Math.round(mod.mod_vs_alone.cost_lower_percent)}% lower`);
+    await expect(m.locator(".ev-gl-stats")).toContainText(`${mod.arms.mod.hidden_passed}/${mod.arms.mod.of}`);
+    await expect(m.getByRole("link", { name: "Why the mod helps ↓" })).toHaveAttribute("href", "#mod");
+    // The old evidence section's cards are gone: one simple story.
+    await expect(page.getByText("Measured against a control")).toHaveCount(0);
+    await expect(page.locator(".trial")).toHaveCount(0);
     expect(await page.content()).not.toContain("{{");
   });
 
-  test("a new result reaches the home page without a rebuild", async ({ page }) => {
-    await films(page);
+  test("a new held-out result reaches the glance without a rebuild", async ({ page }) => {
     await heldout(page, fixture("fail-savings"));
-    await page.goto("/#evidence");
-    await expect(page.locator(".launch-proof h3")).toContainText("Advisory mode: no clear saving");
+    await page.goto("/evidence#glance");
+    await expect(page.locator(".ev-gl").first().locator(".ev-gl-big")).toContainText("the agent alone's model calls");
+  });
+
+  test("the mod: why it helps, what it did, and what it doesn't show yet", async ({ page, request }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/evidence#mod");
+    const sec = page.locator("#mod");
+    await expect(sec.getByRole("heading", { level: 2 })).toHaveText("A hook can only suggest the next step. A mod can take it.");
+    // One dot per model call in each arm, and a ring per step Adage took itself.
+    const runs = sec.locator(".ev-run");
+    await expect(runs).toHaveCount(3);
+    await expect(runs.nth(0).locator(".ev-dots:not(.made) i")).toHaveCount(Math.round(mod.arms.a0.requests_mean));
+    await expect(runs.nth(1).locator(".ev-dots:not(.made) i")).toHaveCount(Math.round(mod.arms.adage.requests_mean));
+    await expect(runs.nth(2).locator(".ev-dots:not(.made) i")).toHaveCount(Math.round(mod.arms.mod.requests_mean));
+    await expect(runs.nth(2).locator(".ev-dots.made i")).toHaveCount(Math.round(mod.arms.mod.steps_made_per_session));
+    await expect(sec.locator(".ev-steps li")).toHaveCount(4);
+    await expect(sec.locator(".ev-callout")).toContainText("A person approved the three steps beforehand");
+    // The section may sit under the next one as it slides over: open the detail as a reader would reach it.
+    await sec.locator("details.ev-more").evaluate((d: HTMLDetailsElement) => (d.open = true));
+    await expect(sec.locator(".ev-table")).toContainText(mod.arms.mod.cost_usd_mean.toFixed(4));
+    await expect(sec.locator(".ev-more-body")).toContainText("development evidence, not a registered test");
+    await expect(sec.getByRole("link", { name: "/evidence/claude-mod.json" })).toHaveAttribute("href", "/evidence/claude-mod.json");
+    // The file behind the numbers is served as shipped.
+    const r = await request.get("/evidence/claude-mod.json");
+    expect(r.ok()).toBe(true);
+    expect((await r.json()).arms.mod.requests_mean).toBe(mod.arms.mod.requests_mean);
   });
 });
 
