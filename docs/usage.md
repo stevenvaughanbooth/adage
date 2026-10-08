@@ -575,9 +575,10 @@ asks again, naming the exact command (`Kept from your last session: … Run it n
 `drop it`), and only that answer runs it.
 
 `/adage` prints the status card and opens the pane: **Live** (`l`, the feed of `adage watch`, a
-filter, `enter` to read a directive as the agent read it, `p` pause, `v` quiet rows, `n` newest),
-**Reflexes** (`r`, a **waiting for you** group first, each item with its two answers as buttons,
-then every reflex with its strength, stage and evidence; an expanded row has `e enable`, `n not
+filter, `enter` to read a directive as the agent read it, `p` pause, `v` shows the rows where nothing was decided, hidden by default, `n` newest),
+**Reflexes** (`r`, this repository's only: a **suggestions** group first, under a plain heading
+per kind, each sentence whole with its two answers beneath; then every reflex by its step and
+when, with its strength, stage and evidence; an expanded row has `e enable`, `n not
 this one` and `d details`, where the four more verbs and the equivalent `adage review` command,
 with `c Copy`, wait) and **Health** (`t`, every doctor check; `enter` conditions the repository
 when a check asks for it, any other fix is a command to copy). Every tab ends with **Explore in

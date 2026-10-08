@@ -104,7 +104,8 @@ const VIEW0: View = {
   tab: 'live',
   filter: '',
   selected: null,
-  hideQuiet: false,
+  // Rows where Adage decided nothing (`· 3 calls seen`) are most rows; they are hidden until `v`.
+  hideQuiet: true,
   paused: false,
   rfilter: '',
   strength: 'all',

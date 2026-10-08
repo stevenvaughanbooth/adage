@@ -248,7 +248,7 @@ fn savings_json(paths: &Paths, repo: &str) -> Value {
     };
     let cached: Option<savings::Summary> =
         if fresh { std::fs::read(l.summary_path()).ok().and_then(|b| serde_json::from_slice(&b).ok()) } else { None };
-    let s = cached.unwrap_or_else(|| {
+    let mut s = cached.unwrap_or_else(|| {
         let ledger = l.read();
         let now = crate::savings::now_ms();
         let (units, counts) = savings::gather(paths, repo, &ledger, now);
@@ -256,8 +256,11 @@ fn savings_json(paths: &Paths, repo: &str) -> Value {
         s.unpriced = ledger.values().filter(|x| x.cost.usd.is_none()).count();
         s
     });
+    s.held_out = savings::held_out(paths);
     let mut v = serde_json::to_value(&s).unwrap_or(Value::Null);
     v["need"] = json!({ "control": savings::NEED_CONTROL, "treated": savings::NEED_TREATED });
+    // Whether sessions are held out to measure Adage now (`runtime.control` > 0; off by default).
+    v["measuring"] = json!(s.held_out > 0.0);
     v["lines"] = json!(savings::lines(&s));
     v["guardrail"] = json!(savings::guardrail(&s));
     v

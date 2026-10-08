@@ -116,6 +116,8 @@ export type Runtime = {
   failures: number
   /** The person's routine model (`runtime.routine_model`, from the status card); '' routes nothing. */
   routineModel: string
+  /** The repository the session works in, as the status card names it (`repo`); '' until it is read. */
+  repo: string
   /** Whether a session that draws nothing has read the card for it (once, at its first step that could route). */
   settled: boolean
   /**
@@ -130,6 +132,8 @@ export type Runtime = {
   noted: Noted
   /** One ask at a time: a second turn end while the dialog waits asks nothing. */
   asking: boolean
+  /** The session that last had a suggestion put to it at a turn's end (one per session; a /clear is a new one). */
+  askedIn: string | undefined
   /** Whether presses are bound (a person is at the prompt): until then a review verb is a command to copy. */
   pressBound: boolean
   /** Answers kept for the next session start (no press was held): the band says so. */
@@ -165,12 +169,14 @@ export function runtime(): Runtime {
     lastCandidates: -Infinity,
     failures: 0,
     routineModel: '',
+    repo: '',
     settled: false,
     standingFor: undefined,
     turnSteps: [],
     turnCalls: 0,
     noted: NOTED0,
     asking: false,
+    askedIn: undefined,
     pressBound: false,
     kept: 0,
     noticed: 0,

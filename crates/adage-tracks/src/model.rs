@@ -486,7 +486,27 @@ impl Route {
             Trigger::AfterEdit { paths } => format!("after editing {paths}"),
             Trigger::SessionStart => "at the start of a session".into(),
             Trigger::Intent { .. } => "on requests like these".into(),
-            Trigger::Context { .. } => "after a sequence of steps seen before".into(),
+            // The context's own events, in order (`after editing src/**, then make build`), so a
+            // person reads which sequence it is rather than that there is one.
+            Trigger::Context { items, .. } => {
+                let event = |i: &CtxItem| match i {
+                    CtxItem::Act { keys } => {
+                        keys.first().map_or("a command", |k| k.strip_prefix("exec ").unwrap_or(k)).to_string()
+                    }
+                    CtxItem::Fail { keys, .. } => {
+                        format!("{} fails", keys.first().map_or("a command", |k| k.strip_prefix("exec ").unwrap_or(k)))
+                    }
+                    CtxItem::Edit { glob } => format!("editing {glob}"),
+                    CtxItem::PromptValue { .. } => "a prompt that names a value seen before".into(),
+                    CtxItem::Intent { .. } => "a request like these".into(),
+                };
+                let events: Vec<String> = items.iter().map(event).collect();
+                if events.is_empty() {
+                    "after a sequence of steps seen before".into()
+                } else {
+                    format!("after {}", events.join(", then "))
+                }
+            }
         };
         let what = match &self.step {
             Step::Run { command } => format!("run {command}"),
@@ -714,6 +734,19 @@ mod tests {
             (
                 r(edit("x"), Step::Sequence { commands: vec!["make gen".into(), "make check".into()] }),
                 "after editing x, run make gen, then make check",
+            ),
+            (
+                r(
+                    Trigger::Context {
+                        items: vec![
+                            CtxItem::Edit { glob: "crates/**/*.rs".into() },
+                            CtxItem::Act { keys: vec!["exec scripts/check".into()] },
+                        ],
+                        within: 8,
+                    },
+                    run("cargo build"),
+                ),
+                "after editing crates/**/*.rs, then scripts/check, run cargo build",
             ),
             (
                 r(edit("Cargo.lock"), advise("lockfile", &[("path", "Cargo.lock"), ("manager", "cargo")])),

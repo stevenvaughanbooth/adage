@@ -36,7 +36,7 @@ import { updatedOf } from './reads'
 import { refresh } from './refresh'
 import { checkTamper, issue, pressCommand } from './token'
 import type { Started } from './token'
-import { reviewCommand, waiting } from './view/pane'
+import { reviewCommand, waiting, worthAsking } from './view/pane'
 import type { Waiting } from './view/pane'
 
 /** The pane's presses and `/adage on`, for the drawings and the command to call. */
@@ -149,17 +149,24 @@ async function act(m: Mod, q: AskItem, answer: string | undefined): Promise<void
   return answerYes(m, q.item, ANSWER)
 }
 
-/** The ask at a turn's end (ux-design §4.17): one item, the dialog's answer, the press. */
+/**
+ * The ask at a turn's end (ux-design §4.17): one item, the dialog's answer, the press. At most one
+ * per session, so a person is never asked something at every turn's end: the rest wait in the
+ * pane under **suggestions**, and the band counts them. A quiet reflex is never asked about.
+ */
 async function turnEnded(m: Mod): Promise<void> {
   await recountNoticed(m)
   if (m.rt.asking) return
   m.rt.asking = true
   try {
+    const session = await m.session.id()
+    if (m.rt.askedIn === session) return
     await checkTamper(m)
     await refresh(m)
-    const items = waiting(await m.state.reflexes.read(), await m.state.packs.read())
+    const items = worthAsking(waiting(await m.state.reflexes.read(), await m.state.packs.read()))
     const q = nextAsk(items, await m.state.asked.read(), await m.clock.now())
     if (q === undefined) return
+    m.rt.askedIn = session
     const said = await m.ui.ask(q.question, q.answers).catch(() => undefined)
     const answer = answerOf(q, said)
     await noteAnswer(m, q.key, answer)

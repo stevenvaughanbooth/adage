@@ -8,28 +8,28 @@ expression: text
  FIRE 3  PRIME 6  INHIBIT 1  ◌ quiet 1  all states ▾    │  mode     Suggest · No execution grant
                                                         │  when     `bin/fetch-incident {item}` succeeds
  ▾ harbor-dispatch/incidents@0.3.0                      │  do       read ≤5 listed files at once
-   F ◠ lookup-incident         firm     24/25           │  PRIME · quiet · harbor-dispatch/learned@0.3.0
-   F ◠ read-linked-files       firm     13/17           │  ◌ quiet: uplift +0.04 < 0.10 · approve to deliver
-   I ◠ dead-end-npm-test       firm     11/43           │
+   F ◠ the gist of lookup-incident    firm     24/25    │  PRIME · quiet · harbor-dispatch/learned@0.3.0
+   F ◠ the gist of read-linked-files  firm     13/17    │  ◌ quiet: uplift +0.04 < 0.10 · approve to deliver
+   I ◠ the gist of dead-end-npm-test  firm     11/43    │
                                                         │  ADVISORY PREVIEW (EXAMPLE VALUES)
  ▾ harbor-dispatch/intents@0.3.0                        │    (no preview: the reflex has no directive text)
-   P ◠ start-with-npm-check    forming  6/9             │
+   P ◠ the gist of start-with-npm-c…  forming  6/9      │
                                                         │  EVIDENCE
  ▾ harbor-dispatch/learned@0.3.0                        │    from conditioning: 21/23 traces took it · lower bound 0.53
-   P ▤ card-carrier-rules      forming  4 traces        │    live since installed: fired 0 · followed 0 · not observed within 3 batches 0 · finish
-   P ◠ tests-after-rules-edit  firm     value           │    line met 0
+   P ▤ the gist of card-carrier-rul…  forming  4 traces │    live since installed: fired 0 · followed 0 · not observed within 3 batches 0 · finish
+   P ◠ the gist of tests-after-rule…  firm     value    │    line met 0
                                                         │    uplift: +0.04 (lower bound -0.02): followed 0.95 when told, 0.91 unaided; 20 of 22 traces
  ▾ @imported/@bound/harbor-skills@0.3.0 · pack          │    did it unaided. Quiet: agents already do this, so delivering it changes little
-   F ◈ release-notes-s2-chang… firm     –               │
+   F ◈ the gist of release-notes-s2…  firm     –        │
                                                         │  LIFECYCLE
  ▾ nascent · waits for review                           │    ○ nascent ──── ○ forming ──── ○ firm
-   ○ ◠ regen-openapi-client    nascent  3/4             │    ceiling fire · effect observe · not in the index
+   ○ ◠ the gist of regen-openapi-cl…  nascent  3/4      │    ceiling fire · effect observe · not in the index
                                                         │
  ▾ quiet · agents already do this; approve to deliver   │  ACTIONS
-▌  ◌ ◠ read-before-edit-9a1c   quiet    21/23           │    s strengthen   w weaken   x extinguish   a approve   n pin   m dismiss
+▌  ◌ ◠ the gist of read-before-edit…  quiet    21/23    │    s strengthen   w weaken   x extinguish   a approve   n pin   m dismiss
                                                         │    d delegate   t traces (0)   o open in map
  ▾ instincts · adage/finish-line@0.1.0                  │    same as adage review approve harbor-dispatch/learned read-before-edit-9a1c from any shell
-   P ◉ finish-line/regenerate  firm     –               │
+   P ◉ the gist of finish-line/rege…  firm     –        │
                                                         │
  ▸ extinguished · 1                                     │
                                                         │

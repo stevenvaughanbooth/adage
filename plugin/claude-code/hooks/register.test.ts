@@ -117,7 +117,13 @@ describe('T-X-04, T-O9-04 · authority, with presses', () => {
   test('person-only verbs run only inside press(), with the token on stdin and never on argv', { timeoutMs: 60_000 }, async ($, on) => {
     const w = world(on, opts)
     await begin($, w)
+    // The turn end asks about the team's pack first; the offer is opened from its pane row.
     await turnEnd($, w)
+    const pane = await mountPane($)
+    await pane.press({ key: 'tab-reflexes' })
+    await pane.press({ key: 'yes:acme/learned/codegen-after-schema#execute' })
+    await w.clock.settle()
+    await pane.unmount()
     const grant = await mountPane($, 'terminal', 120, 'adage-allow')
     await grant.press({ key: 'allow' })
     await w.clock.settle()

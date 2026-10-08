@@ -8,7 +8,7 @@
 //! Bare `adage` prints the status card (`status_card.rs`); `adage ui` opens the app.
 //!
 //! Environment: `ADAGE_HOME` (data directory), `ADAGE_ARM` (`treated`|`control`, overrides
-//! assignment), `ADAGE_CONTROL` (control share; overrides `runtime.control`, default 0.1),
+//! assignment), `ADAGE_CONTROL` (control share; overrides `runtime.control`, default 0: measuring off),
 //! `ADAGE_AUTO_LEARN` (`0`/`1`; overrides `learn.auto`), `ADAGE_DISABLE=1` (kill switch),
 //! `ADAGE_ALLOW_NONINTERACTIVE=1` (let `share` and `add` run without a terminal, for CI);
 //! output: `NO_COLOR`, `ADAGE_COLOR=never|16|256|truecolor`, `ADAGE_THEME=day|night`,

@@ -8,7 +8,8 @@ import { ASK_EVERY_MS } from './ask'
 import { FIRST_LINE } from './grant'
 
 const FEED = [LINE.learnerIdle, LINE.healthy, LINE.start, LINE.pressIssued]
-const ALLOW_Q = 'Adage can run make gen after a schema edit, instead of asking the agent to. Allow it?'
+const ALLOW_Q = 'Adage can do this itself, instead of asking the agent: run make gen after a schema edit. See what it would do?'
+const PREDICT_Q = 'Adage can take this step without a model request: run make gen after a schema edit. Allow it?'
 const STAGE_ARGV = [CLI, 'review', 'delegate', 'acme/learned', 'codegen-after-schema', '--level', 'e2', '--stage', '--json']
 
 describe('T-B4-03 · two acts with the facts', () => {
@@ -60,12 +61,16 @@ describe('T-B4-03 · two acts with the facts', () => {
 
   test('a prediction offer is one act: allow runs --predict; why opens the pane', async ($, on) => {
     const answers = ['why', 'allow']
-    const w = world(on, { feed: FEED, graph: GRAPH_PREDICT, ask: () => answers.shift() })
+    let id = SESSION
+    const w = world(on, { feed: FEED, graph: GRAPH_PREDICT, ask: () => answers.shift(), session: () => id })
     await begin($, w)
     await turnEnd($, w)
-    expect(w.asked[0]).toEqual({ question: ALLOW_Q, options: ['allow', 'not now', 'why'] })
+    expect(w.asked[0]).toEqual({ question: PREDICT_Q, options: ['allow', 'not now', 'why'] })
     expect(w.opened.at(-1)).toMatchObject({ id: 'adage', focus: true })
     await w.clock.advance(ASK_EVERY_MS)
+    id = 'sess-2'
+    await $.classic.SessionStart({ source: 'startup', session_id: 'sess-2', cwd: '/w' } as never)
+    await w.clock.settle()
     await turnEnd($, w)
     expect(personOnly(w).map(r => r.argv)).toEqual([[CLI, 'review', 'delegate', 'acme/learned', 'codegen-after-schema', '--predict']])
     expect(w.toasts).toContain('allowed: run make gen after a schema edit · from your next session')

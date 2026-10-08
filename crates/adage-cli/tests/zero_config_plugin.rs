@@ -738,7 +738,13 @@ fn savings_gate() {
     w.start(&repo, "connect");
     let key = key_of(&w, &repo);
 
+    // Measuring is off by default: the card says so, and how to turn it on.
     population(&w, &key, 25, 4, 0.20, 0.05, 0.5, 1);
+    let card = w.card(&repo);
+    assert!(card.contains("not measured") && card.contains("adage config set runtime.control 0.1"), "{card}");
+    assert!(!card.contains('$'), "no dollars while measuring is off:\n{card}");
+    w.adage_in(&repo, &["config", "set", "runtime.control", "0.1"]);
+
     let card = w.card(&repo);
     assert!(card.contains("measuring: 4 of 10 quiet sessions so far"), "{card}");
     assert!(!card.contains('$'), "no dollars below the gate:\n{card}");

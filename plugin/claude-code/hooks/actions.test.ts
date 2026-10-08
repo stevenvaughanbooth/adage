@@ -9,14 +9,20 @@ import { BAND, CLI, LINE, SURFACES, fake, mountPane, start, world } from './fixt
 const FEED = [LINE.learnerIdle, LINE.healthy, LINE.start, LINE.firedGen, LINE.firedLookup]
 
 describe('T-B3-04, T-B4-07 · the pane\'s actions through the engine', () => {
-  test('T-B3-04: p pauses (the band says so), v hides quiet rows, n scrolls to the newest', async ($, on) => {
+  test('T-B3-04: p pauses (the band says so), quiet rows hidden until v (said in a line), n scrolls to the newest', async ($, on) => {
     const w = world(on, { feed: FEED })
     await start($, w)
     const ui = await mountPane($, 'terminal')
+    const rowKeys = async () => (await ui.findAll({ type: 'Button' })).filter(b => b.key?.startsWith('row:')).map(b => b.key)
     const footer = (await ui.findAll({ type: 'Button' })).filter(b => ['pause', 'quiet', 'newest'].includes(b.key ?? ''))
-    expect(footer.map(b => `${b.props.hotkey}:${b.props.label}`)).toEqual(['p:pause', 'v:quiet rows', 'n:newest'])
+    expect(footer.map(b => `${b.props.hotkey}:${b.props.label}`)).toEqual(['p:pause', 'v:show quiet rows', 'n:newest'])
+    expect(await rowKeys()).toEqual(['row:3', 'row:2'])
+    expect((await ui.findAll({ type: 'Text' })).map(t => t.text)).toContain('1 quiet event hidden · v: show')
     await ui.press({ key: 'quiet' })
-    expect((await ui.findAll({ type: 'Button' })).filter(b => b.key?.startsWith('row:')).map(b => b.key)).toEqual(['row:3', 'row:2'])
+    expect(await rowKeys()).toEqual(['row:3', 'row:2', 'row:1'])
+    expect((await ui.findAll({ key: 'quiet' }))[0]?.props.label).toBe('hide quiet rows')
+    await ui.press({ key: 'quiet' })
+    expect(await rowKeys()).toEqual(['row:3', 'row:2'])
     // `n` asks the engine to scroll the pane to its newest row ($.ui.scroll); the test engine has no
     // scrolling of its own to answer it, so the press is checked to settle and change nothing else.
     await ui.press({ key: 'newest' })

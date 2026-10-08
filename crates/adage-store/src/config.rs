@@ -15,7 +15,7 @@
 //! notices = "daily"          # one-line notices at session start (Claude Code), at most daily; or "off"
 //!
 //! [runtime]
-//! control = 0.1              # share of sessions held out as the control arm
+//! control = 0                # share of sessions held out to measure Adage (off; 0.1 measures)
 //!
 //! [skills]
 //! invoke = false             # Claude Code mod: invoke an accepted, inert skill at its step
@@ -327,9 +327,11 @@ pub const KEYS: &[Key] = &[
     Key {
         name: "runtime.control",
         kind: Kind::Share,
-        default: "0.1",
+        // Off by default: a session where Adage says nothing reads as a broken install to the
+        // person in it. Measuring is a choice a person makes (`adage savings` says how).
+        default: "0",
         env: Some("ADAGE_CONTROL"),
-        doc: "share of sessions held out as the control arm (Adage decides but says nothing)",
+        doc: "share of sessions held out to measure Adage: in those Adage decides but says nothing, and `adage savings` compares them with the rest (0, off: every session gets Adage; 0.1 measures)",
         guarded: false,
     },
     Key {
@@ -693,7 +695,7 @@ mod tests {
         assert_eq!((c.learn_claude_projects.clone(), c.learn_codex_sessions.clone()), (None, None));
         assert!(c.learn_codex_auto && c.ui_notices && c.update_check);
         assert!(c.learn_parse_cache);
-        assert_eq!(c.runtime_control, 0.1);
+        assert_eq!(c.runtime_control, 0.0, "no session is held out unless a person asks");
         assert!(c.instincts_enabled);
         assert_eq!(c.instincts_packs, vec!["auto".to_string()]);
         assert!(c.instincts_disabled.is_empty());

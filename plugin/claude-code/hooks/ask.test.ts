@@ -6,35 +6,43 @@ import { ANSWERS, ASK_EVERY_MS, KEPT_ANSWERS, MAX_DISMISSALS, ON_ANSWERS, ON_QUE
 import { BANNED, GRAPH, GRAPH_OFFER, GRAPH_PREDICT } from './fixtures/kit'
 import { reflexesOf } from './reads'
 import { waiting } from './view/pane'
+import type { Waiting } from './view/pane'
 
 const PACK = [{ name: 'alice@acme.com', command: 'adage add .adage/packs/acme --trust' }]
 const items = waiting(reflexesOf(GRAPH), PACK)
 const ENABLE = 'acme/learned/test-after-acme-edit'
 
 describe('T-B4-01, T-B4-02 · the next ask', () => {
-  test('the first item not asked today, not answered, dismissed fewer than twice', () => {
-    expect(nextAsk(items, [], 0)?.key).toBe(ENABLE)
-    expect(nextAsk(items, [{ key: ENABLE, at: 0, times: 1, done: false }], 1000)?.key).toBe('pack:alice@acme.com')
-    expect(nextAsk(items, [{ key: ENABLE, at: 0, times: 1, done: false }], ASK_EVERY_MS)?.key).toBe(ENABLE)
-    expect(nextAsk(items, [{ key: ENABLE, at: 0, times: MAX_DISMISSALS, done: false }], ASK_EVERY_MS)?.key).toBe('pack:alice@acme.com')
-    expect(nextAsk(items, [{ key: ENABLE, at: 0, times: 0, done: true }], ASK_EVERY_MS)?.key).toBe('pack:alice@acme.com')
-    expect(nextAsk(items, [{ key: ENABLE, at: 0, times: 0, done: true }, { key: 'pack:alice@acme.com', at: 0, times: 0, done: true }], ASK_EVERY_MS)).toBeUndefined()
+  test('the first item not asked today, not answered, dismissed fewer than twice; a team pack first', () => {
+    const PACKED = 'pack:alice@acme.com'
+    expect(nextAsk(items, [], 0)?.key).toBe(PACKED)
+    expect(nextAsk(items, [{ key: PACKED, at: 0, times: 1, done: false }], 1000)?.key).toBe(ENABLE)
+    expect(nextAsk(items, [{ key: PACKED, at: 0, times: 1, done: false }], ASK_EVERY_MS)?.key).toBe(PACKED)
+    expect(nextAsk(items, [{ key: PACKED, at: 0, times: MAX_DISMISSALS, done: false }], ASK_EVERY_MS)?.key).toBe(ENABLE)
+    expect(nextAsk(items, [{ key: PACKED, at: 0, times: 0, done: true }], ASK_EVERY_MS)?.key).toBe(ENABLE)
+    expect(nextAsk(items, [{ key: ENABLE, at: 0, times: 0, done: true }, { key: PACKED, at: 0, times: 0, done: true }], ASK_EVERY_MS)).toBeUndefined()
   })
 
-  test("the dialog's words: two verbs, the reflex by what it tells the agent, never its id", () => {
-    const [enable] = items
+  test("the dialog's words: two verbs, the reflex's sentence whole after a colon, never its id", () => {
+    const enable = items.find(i => i.kind === 'enable')
     if (enable === undefined) throw new Error('item')
     expect(question(enable)).toMatchObject({ question: 'Adage learned: run make test after editing acme/**. Tell the agent?', answers: ['enable', 'not this one', 'why'], command: 'adage review approve acme/learned test-after-acme-edit' })
     expect(enable.no).toBe('adage review dismiss acme/learned test-after-acme-edit')
     const [execute] = waiting(reflexesOf(GRAPH_OFFER), [])
-    expect(question(execute as never)).toMatchObject({ question: 'Adage can run make gen after a schema edit, instead of asking the agent to. Allow it?', answers: ['see what it would do', 'not now'] })
+    expect(question(execute as never)).toMatchObject({ question: 'Adage can do this itself, instead of asking the agent: run make gen after a schema edit. See what it would do?', answers: ['see what it would do', 'not now'] })
     const [predict] = waiting(reflexesOf(GRAPH_PREDICT), [])
     expect(predict?.offer).toBe('predict')
-    expect(question(predict as never).answers).toEqual(['allow', 'not now', 'why'])
-    expect(question({ key: 'k', kind: 'trust', say: 'alice@acme.com', text: '', command: 'c' }).question).toBe('Reflexes from alice@acme.com are in this repository. Use them?')
+    expect(question(predict as never)).toMatchObject({ question: 'Adage can take this step without a model request: run make gen after a schema edit. Allow it?', answers: ['allow', 'not now', 'why'] })
+    // The binary's own sentences lead with the trigger (`after editing …, run …`): the question still reads.
+    const after = { ...(execute as Waiting), say: 'after editing crates/**/*.rs, run cargo fmt --all' }
+    expect(question(after).question).toBe('Adage can do this itself, instead of asking the agent: after editing crates/**/*.rs, run cargo fmt --all. See what it would do?')
+    // A quiet reflex says why it is quiet.
+    const quiet = { ...enable, group: 'quiet' as const, say: 'after editing src/**, run make test' }
+    expect(question(quiet).question).toBe('Agents here already do this unaided, so Adage stays quiet: after editing src/**, run make test. Tell the agent anyway?')
+    expect(question({ key: 'k', kind: 'trust', group: 'trust', say: 'alice@acme.com', text: '', command: 'c' }).question).toBe('Reflexes from alice@acme.com are in this repository. Use them?')
     expect(ON_QUESTION).toBe('Adage is off in this repository. Turn it on?')
     expect(ON_ANSWERS).toEqual(['turn it on', 'leave it off'])
-    for (const w of [...Object.values(ANSWERS).flat(), ...ON_ANSWERS, ON_QUESTION, ...items.map(i => question(i).question)]) expect(w).not.toMatch(BANNED)
+    for (const w of [...Object.values(ANSWERS).flat(), ...ON_ANSWERS, ON_QUESTION, ...items.map(i => question(i).question), question(quiet).question]) expect(w).not.toMatch(BANNED)
   })
 
   test('an answer is one of the labels exactly; free text is none', () => {

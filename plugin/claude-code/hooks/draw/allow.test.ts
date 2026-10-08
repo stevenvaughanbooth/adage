@@ -7,7 +7,7 @@ import { BANNED, CLI, GRAPH_OFFER, LINE, NEXT_TOKEN, SESSION, STAGE, SURFACES, T
 import { FIRST_LINE } from '../grant'
 
 const FEED = [LINE.learnerIdle, LINE.healthy, LINE.start, LINE.pressIssued]
-const ALLOW_Q = 'Adage can run make gen after a schema edit, instead of asking the agent to. Allow it?'
+const ALLOW_Q = 'Adage can do this itself, instead of asking the agent: run make gen after a schema edit. See what it would do?'
 const STAGE_ARGV = [CLI, 'review', 'delegate', 'acme/learned', 'codegen-after-schema', '--level', 'e2', '--stage', '--json']
 const CONFIRM_ARGV = [CLI, 'review', 'delegate', 'acme/learned', 'codegen-after-schema', '--level', 'e2', '--confirm']
 

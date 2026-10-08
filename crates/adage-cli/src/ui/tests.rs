@@ -491,7 +491,7 @@ fn pretool_records_and_cards_are_shown() {
     let text = lines.join("\n");
     assert!(text.contains("↪ pointed the test run at .venv/bin/python"), "a rewrite has its own mark: {text}");
     assert!(text.contains("→ ▤ "), "a card delivery has the card's mark: {text}");
-    assert!(text.contains("would have pointed the test run at x (withheld)"), "{text}");
+    assert!(text.contains("would have pointed the test run at x (withheld · control session)"), "{text}");
     assert!(text.contains("card · 2 files · 3 traces"), "{text}");
     assert!(text.contains("misfired run-tests"), "{text}");
 }
@@ -845,7 +845,7 @@ fn watch_frames_at_split_pane_and_wide_sizes_in_colour_and_no_color() {
         "● live   ● fire 1   ● prime 1   ● inhibit 1",
         "─ now ─",
         "→ ◠ ● fire     bin/fetch-incident INC-2045",
-        "○ would fire bin/fetch-incident INC-2045 (withheld)",
+        "○ would fire bin/fetch-incident INC-2045 (withheld · control session)",
         "✓ followed bin/fetch-incident INC-2045",
         // Never delivered to this session in the feed, and no reflexes loaded: its id, not
         // what another session was told.
@@ -2291,7 +2291,7 @@ fn reflexes_tab_tells_quiet_from_install_steps() {
     for want in [
         "▾ nascent · waits for review",
         "▾ quiet · agents already do this; approve to deliver",
-        "◌ ◠ read-before-edit-9a1c",
+        "◌ ◠ the gist of read-before-edit",
         "◌ quiet 1",
         "◌ quiet: uplift +0.04 < 0.10 · approve to deliver",
         "uplift: +0.04 (lower bound -0.02): followed 0.95 when told",
@@ -2370,7 +2370,7 @@ fn reflexes_tab_shows_value_evidence_obligations_and_skills() {
     tabs::reflexes::select(&mut s, "harbor-dispatch/learned", "tests-after-rules-edit");
     let text = app_frame(&s, &c, 150, 40);
     for want in [
-        "tests-after-rules-edit  firm     value",
+        "◠ the gist of tests-after-rule",
         "from conditioning: value: saves ~1.25 calls when followed",
         "enforced: after an edit to src/dispatch/rules_*.ts",
     ] {
@@ -2404,6 +2404,8 @@ fn savings_summary(saved: bool) -> crate::savings::Summary {
     };
     let mut s = crate::savings::summarise("harbor-dispatch", &units, Default::default(), 0);
     s.pricing_as_of = "2026-06-24".into();
+    // Measuring on (it is off by default): these screens are the measured ones.
+    s.held_out = 0.1;
     s
 }
 

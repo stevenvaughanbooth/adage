@@ -120,10 +120,11 @@ function secondLine(i: BandInput): string {
   // passes with the next prompt, so it is said before the items that wait.
   if (i.withheld) return withheldLine(i.ascii)
   // `band.kept` (ux-design §9.12): an answer given with no press held waits for the next start;
-  // it is said before `need review`, since the review it answers still waits in the graph until
+  // it is said before the suggestions, since the review it answers still waits in the graph until
   // the answer runs.
   if (i.kept > 0) return `${n} kept for your next session ${sep} /adage review`
-  if (i.review > 0) return `${n} ${i.review} need review ${sep} /adage review`
+  // `band.review`: suggestions, never a demand; nothing waits on them.
+  if (i.review > 0) return `${n} Adage has ${plural(i.review, 'suggestion', 'suggestions')} ${sep} /adage review`
   // `band.update` (onboarding plan O9): the lowest of Adage's own items, and never a problem.
   if (i.update !== null) return updateLine(i.update, i.ascii)
   return i.versionLine

@@ -57,8 +57,13 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   obligation).
 - Daemonless per-session storage: two-slot state files and CRC-framed spools, rebuilt from the
   spool if a state file is damaged.
-- A control arm (`runtime.control`, `ADAGE_CONTROL`, default 10%) computes what Adage would have
-  said and withholds it, so every effect is measured against a control. Kill switches:
+- **Measuring is opt-in.** A control arm (`runtime.control`, `ADAGE_CONTROL`) computes what Adage
+  would have said and withholds it, so an effect can be measured against a control. It is off by
+  default (0): a session where Adage stays silent reads as a broken install to the person in it,
+  so every session gets Adage until someone runs `adage config set runtime.control 0.1`.
+  `adage savings` says `not measured (measuring is off)` and how to turn it on; the learner's quiet
+  test reads the training traces' unaided rate alone until control sessions exist. Evaluations
+  force their arm (`ADAGE_ARM`) and are unaffected. Kill switches:
   `ADAGE_DISABLE=1` and `.adage/disabled`.
 - **Rewrites to the project's environment** (Claude Code `PreToolUse`, instinct U11): a Python
   test run or repro under the system Python is pointed at the project's verified `.venv`. The
@@ -455,6 +460,12 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### The CLI verbs
 
+- **A reflex is named by what it does, everywhere it is listed.** A reflex that fires after a
+  learned sequence says the sequence (`after editing crates/**/*.rs, then cargo build -p
+  adage-cli, run cargo build -p adage-cli`), not "after a sequence of steps seen before"; the
+  noticed patterns read the same way. `adage ui`'s Reflexes tree leads each row with the step and
+  then when, the id heading the detail pane; and `adage watch` and `adage ui` say why a directive
+  was not given in a control session (`would fire cargo fmt --all (withheld · control session)`).
 - **Breaking: one JSON shape for a reflex.** `adage status --json`, `adage review --json` and
   `adage map` (`/api/v1/graph`) render each reflex with the same fields and types, and add only
   their own. The fields:
@@ -726,13 +737,29 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   and an unasked pane. Nothing is drawn headless; a control session draws what a treated one with
   nothing fired draws; every child gets `CLAUDECODE=1` from a fixed argv allow-list, and nothing in
   the pane runs a person-only verb (docs/usage.md, "What the plugin shows in the session").
+- **The pane reads in plain words, about this repository.** The Reflexes tab lists only the
+  session's repository's reflexes (the graph holds every repository's; the status card names this
+  one). What waits for a decision is **suggestions · optional; nothing waits on them**, one heading
+  per kind (`Adage can run these itself, instead of asking the agent to`, `Adage can take these
+  steps without a model request`, `Learned here, not told to the agent until you enable them`,
+  `Agents here already do these unaided, so Adage stays quiet about them`), each sentence whole and
+  wrapped with its answers beneath and `command` to show the terminal command. A reflex row leads
+  with its step and then when (`cargo fmt --all · after editing crates/**/*.rs`), never its id,
+  which moves to the expanded row with the trigger and the bound; tracks are headed `learned in
+  this repository` and `instincts: Adage's built-in defaults…`, learned first. The band says `»
+  Adage has 4 suggestions · /adage review`. Live hides rows where nothing was decided until `v`,
+  saying how many it hides; the conditioning ticker shows its last five lines, short, a reflex by
+  its sentence and without the index hash.
 - **Adage asks in the session, and a press is a person's.** At a turn's end the mod asks, in the
-  dialog Claude Code uses to ask a question, about one reflex that waits for a decision (`Adage
-  learned: …. Tell the agent?` with `enable` / `not this one` / `why`; `Adage can … Allow it?`
-  with `see what it would do` / `not now`, which opens a pane with three plain lines and the staged
-  diff, then `allow` confirms against the stage's digest; a team pack with `use them`), at most one
-  per turn end and one per reflex per day; `/adage on` opens its own ask. Every answer, and every
-  decision pressed in the pane's **waiting for you** group or an expanded reflex row (`e enable`,
+  dialog Claude Code uses to ask a question, about one suggestion (`Adage learned: …. Tell the
+  agent?` with `enable` / `not this one` / `why`; `Adage can do this itself, instead of asking the
+  agent: …. See what it would do?` with `see what it would do` / `not now`, which opens a pane with
+  three plain lines and the staged diff, then `allow` confirms against the stage's digest; `Adage
+  can take this step without a model request: …. Allow it?`; a team pack with `use them`), the
+  reflex's sentence quoted whole after a colon so it reads right in any form. At most one ask a
+  session and one per item per day; a reflex kept quiet because agents already do it is never
+  asked about or counted in the band. `/adage on` opens its own ask. Every answer, and every
+  decision pressed in the pane's **suggestions** group or an expanded reflex row (`e enable`,
   `n not this one`, the four more verbs behind `d details` with the command to copy), runs the verb
   through the press: the single-use token `adage hook claude Press` issued at the session's start,
   held in engine memory, sent on stdin with the session id, its successor kept from the verb's

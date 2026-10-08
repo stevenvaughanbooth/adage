@@ -312,7 +312,7 @@ pub(crate) fn duplicates(regs: &[crate::detect::Registration], repo: Option<&Pat
         let mut steps = Vec::new();
         for r in at.iter().enumerate().filter(|(i, _)| *i != keep).map(|(_, r)| r) {
             match scope_of(h, &r.location, repo) {
-                Some(s) => steps.push(format!("`adage install {h} --remove --scope {s}` removes {}", place(r))),
+                Some(s) => steps.push(format!("`adage install {h} --remove --scope {s}` takes Adage's hooks out of {} (the rest of the file stays)", place(r))),
                 None => steps.push(format!("remove Adage's hook entries from {} by hand", place(r))),
             }
         }

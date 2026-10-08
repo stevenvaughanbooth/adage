@@ -144,8 +144,10 @@ fn accepted_skill(paths: &Paths, root: &Path) {
 fn every_record_kind_as_the_spool_holds_it() {
     let mut out = String::new();
 
-    // A session's decided events in a repository with a finish line, and its Stop gate.
+    // A session's decided events in a repository with a finish line, and its Stop gate. Measuring
+    // is on (it is off by default), so the spool holds both arms' records and their propensity.
     let w = ObligationWorld::new();
+    std::fs::write(w.paths.config(), "[learn]\nauto = false\n\n[runtime]\ncontrol = 0.1\n").unwrap();
     let gate = scripted(vec![StopGate::Block("Adage finish-line check: `make test` failed.".into())]);
     event(&w, "claude", gate, "s", "SessionStart", json!({ "source": "startup" }));
     w.edit(gate);

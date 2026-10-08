@@ -403,7 +403,12 @@ fn act_spans(a: &Act, t: &Theme, fit_: Fit, room: usize, hot: u8, name: &dyn Fn(
         }
         Act::Withheld { route, strength } => {
             vec![Span::styled(
-                format!("{off} would {} {} (withheld)", Theme::strength_word(*strength), name(route)),
+                format!(
+                    "{off} would {} {} (withheld{}control session)",
+                    Theme::strength_word(*strength),
+                    name(route),
+                    t.sep()
+                ),
                 t.control(),
             )]
         }
@@ -434,12 +439,15 @@ fn act_spans(a: &Act, t: &Theme, fit_: Fit, room: usize, hot: u8, name: &dyn Fn(
             Span::raw("finish line: asked the agent to continue".to_string()),
         ],
         Act::StopWithheld => {
-            vec![Span::styled(format!("{off} would ask the agent to continue (withheld)"), t.control())]
+            vec![Span::styled(
+                format!("{off} would ask the agent to continue (withheld{}control session)", t.sep()),
+                t.control(),
+            )]
         }
         Act::Pretool { rewrite, kind, interpreter, withheld } => {
             let what = pretool_words(*rewrite, kind, interpreter);
             if *withheld {
-                vec![Span::styled(format!("{off} would have {what} (withheld)"), t.control())]
+                vec![Span::styled(format!("{off} would have {what} (withheld{}control session)", t.sep()), t.control())]
             } else {
                 // A rewrite changed the command before it ran: its own mark, always shown.
                 let mark = if *rewrite { Glyph::Rewrite } else { Glyph::Arrow };

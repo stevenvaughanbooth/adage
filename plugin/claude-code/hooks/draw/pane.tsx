@@ -12,6 +12,7 @@ import { ROLES } from '../tokens'
 import type { Waiting } from '../view/pane'
 import {
   ROW_VERBS,
+  TICKS_DRAWN,
   UPDATE_COMMAND,
   VERB_HOTKEYS,
   VERB_WORDS,
@@ -19,11 +20,16 @@ import {
   checkLine,
   lapseText,
   lightText,
+  GROUP_TITLES,
+  GROUPS,
+  WAITING_TITLE,
+  reflexFacts,
   reflexLine,
   reflexesEmpty,
   reviewCommand,
   rowLines,
   tickText,
+  trackTitle,
   updateRowText,
   visibleReflexes,
   visibleRows,
@@ -89,6 +95,18 @@ export type PaneData = {
   ascii: boolean
 }
 
+/**
+ * `pane.live.quiet`: what the hidden quiet rows are, and how to show them. With none shown it says
+ * so plainly, so an empty tab never reads as a broken one.
+ */
+function quietLine(all: readonly Row[], shown: number, ascii: boolean): string {
+  const hidden = all.filter(r => r.acts.length === 0).length
+  const sep = g('sep', ascii)
+  if (hidden === 0) return ''
+  const what = `${hidden} quiet ${hidden === 1 ? 'event' : 'events'} hidden ${sep} v: show`
+  return shown === 0 ? `Adage has had nothing to say yet ${sep} ${what}` : what
+}
+
 /** The most Live rows drawn at once; the pane keeps 500 and the filter reaches all of them. */
 const DRAWN = 200
 
@@ -131,10 +149,11 @@ function live(els: Els, d: PaneData, a: PaneActions): Tree {
     : ''
   return (
     <Box flexDirection="column">
-      <Input key="filter" label="Filter:" value={d.view.filter} submitLabel="apply" onInput={v => a.filter(v, false)} onSubmit={v => a.filter(v, true)} />
+      <Input key="filter" label="Filter" value={d.view.filter} submitLabel="apply" onInput={v => a.filter(v, false)} onSubmit={v => a.filter(v, true)} />
       {status === '' ? null : <Text color={ROLES.prime}>{status}</Text>}
       {d.noBridge ? <Text dimColor>{`live rows need the terminal ${sep} adage watch`}</Text> : null}
       {!d.noBridge && d.rows.length === 0 ? <Text dimColor>Nothing yet in this repository. Reflexes appear here as Adage uses them.</Text> : null}
+      {!d.view.hideQuiet || quietLine(d.rows, rows.length, d.ascii) === '' ? null : <Text dimColor>{quietLine(d.rows, rows.length, d.ascii)}</Text>}
       {rows.map(r => {
         const [first = '', ...more] = rowLines(r, d.ascii)
         return (
@@ -149,9 +168,9 @@ function live(els: Els, d: PaneData, a: PaneActions): Tree {
         )
       })}
       {d.ticks.length === 0 ? null : rule(els, 'conditioning', d.columns)}
-      {d.ticks.map((t, k) => (
+      {d.ticks.slice(-TICKS_DRAWN).map((t, k) => (
         <Text key={`tick-${k}`} color={t.tone === 'error' ? ROLES.inhibit : ROLES.ink} wrap="truncate-end">
-          {tickText(t, d.ascii)}
+          {tickText(t, d.ascii, d.reflexes)}
         </Text>
       ))}
       {d.health === null ? null : rule(els, 'health', d.columns)}
@@ -170,7 +189,7 @@ function live(els: Els, d: PaneData, a: PaneActions): Tree {
       )}
       <Box flexDirection="row" gap={2}>
         <Button key="pause" plain hotkey="p" label={d.view.paused ? 'resume' : 'pause'} onPress={() => a.pause()} />
-        <Button key="quiet" plain hotkey="v" label={d.view.hideQuiet ? 'all rows' : 'quiet rows'} onPress={() => a.quiet()} />
+        <Button key="quiet" plain hotkey="v" label={d.view.hideQuiet ? 'show quiet rows' : 'hide quiet rows'} onPress={() => a.quiet()} />
         <Button key="newest" plain hotkey="n" label="newest" onPress={() => a.newest()} />
       </Box>
     </Box>
@@ -208,6 +227,7 @@ function reflexRow(els: Els, d: PaneData, a: PaneActions, r: Reflex): Tree {
       {!open ? null : (
         <Box flexDirection="column" paddingLeft={2}>
           {r.directive === '' ? null : <Text wrap="wrap">{r.directive}</Text>}
+          <Text dimColor wrap="wrap">{reflexFacts(r, d.ascii)}</Text>
           {r.describe === '' ? null : <Text dimColor wrap="wrap">{r.describe}</Text>}
           {r.uplift === '' ? null : <Text dimColor wrap="wrap">{r.uplift}</Text>}
           <Box flexDirection="row" gap={2}>
@@ -248,24 +268,29 @@ function yesWord(w: Waiting): string {
   }
 }
 
-/** One **waiting for you** row: the item, its two answers as presses, the terminal command dim with Copy. */
+/**
+ * One suggestion: the reflex's sentence, whole and wrapped (its group's heading says what the
+ * answer changes), then its two answers beneath, so a narrow pane never cuts the sentence to fit
+ * the buttons; `command` beside them shows the terminal command, dim with Copy.
+ */
 function waitingRow(els: Els, d: PaneData, a: PaneActions, w: Waiting): Tree {
   const { Box, Text, Button } = els
   const press = a.press
   // Expanded under its own key: an enable item's key is its reflex's, whose row expands apart.
   const open = d.view.expanded === `wait:${w.key}`
   return (
-    <Box key={`wait-${w.key}`} flexDirection="column">
-      <Box flexDirection="row" gap={1}>
-        <Button key={`wait:${w.key}`} plain label={cut(w.text, Math.max(10, d.columns - 30), d.ascii)} onPress={() => a.expand(`wait:${w.key}`)} />
+    <Box key={`wait-${w.key}`} flexDirection="column" paddingLeft={2}>
+      <Text wrap="wrap">{w.text}</Text>
+      <Box flexDirection="row" gap={3} paddingLeft={2}>
         {press === undefined ? (
           <Button key={`copy:wait:${w.key}`} plain dimColor label="Copy command" onPress={e => a.copy(w.command, e.surface)} />
         ) : (
-          <Box flexDirection="row" gap={2}>
+          <Box flexDirection="row" gap={3}>
             <Button key={`yes:${w.key}`} plain label={yesWord(w)} onPress={() => press.yes(w)} />
-            <Button key={`no:${w.key}`} plain label={w.kind === 'enable' ? 'not this one' : 'not now'} onPress={() => press.no(w)} />
+            <Button key={`no:${w.key}`} plain dimColor label={w.kind === 'enable' ? 'not this one' : 'not now'} onPress={() => press.no(w)} />
           </Box>
         )}
+        <Button key={`wait:${w.key}`} plain dimColor label={open ? 'hide command' : 'command'} onPress={() => a.expand(`wait:${w.key}`)} />
       </Box>
       {!open ? null : (
         <Box flexDirection="column" paddingLeft={2}>
@@ -281,26 +306,46 @@ function waitingRow(els: Els, d: PaneData, a: PaneActions, w: Waiting): Tree {
   )
 }
 
+/** The suggestions (`pane.waiting`): the rule, then each group under its plain heading. */
+function suggestions(els: Els, d: PaneData, a: PaneActions): Tree[] {
+  const { Box, Text } = els
+  if (d.waiting.length === 0) return []
+  const out: Tree[] = [rule(els, WAITING_TITLE, d.columns)]
+  for (const gr of GROUPS) {
+    const items = d.waiting.filter(w => w.group === gr)
+    if (items.length === 0) continue
+    out.push(
+      <Box key={`group-${gr}`} flexDirection="column">
+        <Text dimColor wrap="wrap">{GROUP_TITLES[gr]}</Text>
+        {items.map(w => waitingRow(els, d, a, w))}
+      </Box>,
+    )
+  }
+  return out
+}
+
 function reflexes(els: Els, d: PaneData, a: PaneActions): Tree {
   const { Box, Text, Input, Select } = els
   const shown = visibleReflexes(d.reflexes, d.view.rfilter, d.view.strength, d.view.lifecycle)
-  const tracks = [...new Set(shown.map(r => r.reference))]
+  // What this repository learned first, a team's next, Adage's built-in instincts last.
+  const rank = (t: string) => (shown.find(r => r.reference === t)?.instinct ? 2 : t.endsWith('/learned') ? 0 : 1)
+  const tracks = [...new Set(shown.map(r => r.reference))].sort((a, b) => rank(a) - rank(b))
   return (
     <Box flexDirection="column">
       <Box flexDirection="row" gap={2}>
-        <Input key="rfilter" label="Filter:" value={d.view.rfilter} submitLabel="apply" onInput={v => a.rfilter(v)} onSubmit={v => a.rfilter(v)} />
+        <Input key="rfilter" label="Filter" value={d.view.rfilter} submitLabel="apply" onInput={v => a.rfilter(v)} onSubmit={v => a.rfilter(v)} />
         <Select key="strength" label="strength" options={STRENGTHS} value={d.view.strength} onSelect={v => a.pick('strength', v)} />
         <Select key="lifecycle" label="lifecycle" options={LIFECYCLES} value={d.view.lifecycle} onSelect={v => a.pick('lifecycle', v)} />
       </Box>
-      {d.waiting.length === 0 ? null : rule(els, 'waiting for you', d.columns)}
-      {d.waiting.map(w => waitingRow(els, d, a, w))}
+      {suggestions(els, d, a)}
+      {d.waiting.length === 0 ? null : rule(els, 'reflexes', d.columns)}
       {d.reflexes.every(r => r.instinct) ? <Text dimColor>{reflexesEmpty(d.reflexes.filter(r => r.instinct).length, d.ascii)}</Text> : null}
       {tracks.map(t => {
         const inTrack = shown.filter(r => r.reference === t)
         const first = inTrack[0]
         return (
           <Box key={`track-${t}`} flexDirection="column">
-            <Text dimColor>{first?.imported && first.signer !== '' ? `${first.track}  ${first.signer}` : (first?.track ?? t)}</Text>
+            <Text dimColor>{first === undefined ? t : trackTitle(first)}</Text>
             {inTrack.map(r => reflexRow(els, d, a, r))}
           </Box>
         )

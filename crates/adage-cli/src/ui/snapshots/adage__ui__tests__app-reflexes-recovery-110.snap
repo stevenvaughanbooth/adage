@@ -8,7 +8,7 @@ expression: text
  FIRE 1  PRIME 0  INHIBIT 0  all states ▾   │  mode     Needs recovery · Inspect the worktree before
                                             │  acknowledging
  ▾ harbor-dispatch/incidents@0.3.0          │  when     a prompt names a ticket
-▌  F ◠ lookup-incident      firm     24/25  │  do       bin/fetch-incident {item}
+▌  F ◠ the gist of lookup-i…  firm     24/25│  do       bin/fetch-incident {item}
                                             │  last run Unknown · completion could not be recorded
                                             │  FIRE · firm · harbor-dispatch/incidents@0.3.0
                                             │  ○ waits for review: new · conditioned and never reviewed

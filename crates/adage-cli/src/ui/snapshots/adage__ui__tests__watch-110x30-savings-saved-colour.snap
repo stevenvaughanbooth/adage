@@ -10,7 +10,7 @@ expression: text
 
 
  [darkgray]12:04:00[/]  [d]00a11c[/]  [d]claude   [/]  prompt   [magenta]→ ◠ [/][green]● fire     [/][d]bin/fetch-incident INC-2045[/]
- [darkgray]12:04:01[/]  [darkgray i]00c4a1[/]  [darkgray i]claude   [/]  [darkgray i]prompt  [/] [darkgray i]○ would fire bin/fetch-incident INC-2045 (withheld)[/]
+ [darkgray]12:04:01[/]  [darkgray i]00c4a1[/]  [darkgray i]claude   [/]  [darkgray i]prompt  [/] [darkgray i]○ would fire bin/fetch-incident INC-2045 (withheld · control session)[/]
  [darkgray]12:04:02[/]  [d]00a11c[/]  [d]claude   [/]  tools    [magenta]→ ◠ [/][yellow]● prime    [/][d]That result lists these files: read them together[/]
                                        [green]✓ [/][d]followed [/]bin/fetch-incident INC-2045
  [darkgray]12:04:03[/]  [d]000b0b[/]  [d]claude   [/]  tools    [darkgray]· 1 call, nothing to say[/]

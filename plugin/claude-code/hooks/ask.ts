@@ -80,14 +80,22 @@ export function nextAsk(items: readonly Waiting[], asked: readonly AskRecord[], 
   return item === undefined ? undefined : question(item)
 }
 
-/** The dialog's words for one item (ux-design §10: `ask.enable`, `ask.allow`, `ask.trust`). */
+/**
+ * The dialog's words for one item (ux-design §10: `ask.enable`, `ask.enable.quiet`, `ask.allow`,
+ * `ask.predict`, `ask.trust`). The reflex's sentence (`after editing src/**, run make test`) is
+ * quoted after a colon, whole, so the question reads right whatever form the sentence takes.
+ */
 export function question(w: Waiting): AskItem {
   const base = { key: w.key, kind: w.kind, command: w.command, item: w }
   switch (w.kind) {
     case 'enable':
-      return { ...base, question: `Adage learned: ${w.say}. Tell the agent?`, answers: ANSWERS.enable }
+      return w.group === 'quiet'
+        ? { ...base, question: `Agents here already do this unaided, so Adage stays quiet: ${w.say}. Tell the agent anyway?`, answers: ANSWERS.enable }
+        : { ...base, question: `Adage learned: ${w.say}. Tell the agent?`, answers: ANSWERS.enable }
     case 'allow':
-      return { ...base, question: `Adage can ${w.say}, instead of asking the agent to. Allow it?`, answers: w.offer === 'predict' ? ANSWERS.predict : ANSWERS.allow }
+      return w.offer === 'predict'
+        ? { ...base, question: `Adage can take this step without a model request: ${w.say}. Allow it?`, answers: ANSWERS.predict }
+        : { ...base, question: `Adage can do this itself, instead of asking the agent: ${w.say}. See what it would do?`, answers: ANSWERS.allow }
     case 'trust':
       return { ...base, question: `Reflexes from ${w.say} are in this repository. Use them?`, answers: ANSWERS.trust }
   }
