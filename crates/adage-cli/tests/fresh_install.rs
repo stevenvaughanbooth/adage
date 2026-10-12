@@ -403,7 +403,7 @@ fn b10_a_fresh_install_is_healthy_and_counts_past_traces() {
     assert_eq!(pending.len(), 1, "only first delivery is pending: {:?}", warnings(&v));
     assert_eq!(pending[0]["check"], "hook activity: claude-code");
     assert_eq!(pending[0]["status"], "warn");
-    assert_eq!(pending[0]["detail"], "Registered; no hook has been observed in this repository yet.");
+    assert_eq!(pending[0]["detail"], "Claude Code is set up but hasn't sent anything from this repository yet.");
     assert!(pending[0]["fix"].as_str().unwrap().contains("send a prompt"), "an actionable next step: {}", pending[0]);
 
     // An actual prompt proves delivery even with no learned reflexes. It must stay quiet and
@@ -596,4 +596,45 @@ fn install_keeps_the_persons_settings_and_remove_restores_them() {
     let o = w.run_in(&w.root, &["install", "opencode", "--remove", "--scope", "user"], "", &person);
     assert!(o.status.success() && !plugin.exists(), "{}", text(&o));
     assert!(w.p("xdg/opencode/plugins/adage.js.adage-bak").exists());
+}
+
+/// A second harness's hooks that never arrive are a problem only where the person uses it: once
+/// Claude Code has delivered here, Codex registered but never run in this repository passes; a
+/// Codex session recorded here after the registration, with no hook received, warns.
+#[test]
+fn an_unused_harness_is_not_a_problem_until_it_is_used_here() {
+    let w = World::new();
+    let repo = w.repo("work/click");
+    let bin = env!("CARGO_BIN_EXE_adage");
+    for harness in ["claude-code", "codex"] {
+        let o = w.run_in(
+            &w.root,
+            &["install", harness, "--write", "--scope", "user", "--bin", bin, "--yes"],
+            "",
+            &[("ADAGE_ALLOW_NONINTERACTIVE", "1")],
+        );
+        assert!(o.status.success(), "{}", text(&o));
+    }
+    let prompt = json!({
+        "session_id": "s-claude", "cwd": repo, "hook_event_name": "UserPromptSubmit",
+        "prompt": "hello", "transcript_path": "/dev/null"
+    });
+    let o = w.run_in(&w.root, &["hook", "claude", "UserPromptSubmit"], &prompt.to_string(), &[]);
+    assert!(o.status.success(), "{}", text(&o));
+    let activity = |v: &Value| {
+        v["checks"].as_array().unwrap().iter().find(|c| c["check"] == "hook activity: codex").cloned().unwrap()
+    };
+
+    let codex = activity(&w.doctor(&repo));
+    assert_eq!(codex["status"], "pass", "Codex is not used here: {codex}");
+    assert!(codex["detail"].as_str().unwrap().contains("not used in this repository yet"), "{codex}");
+
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    let day = w.p("codex/sessions/2026/10/10");
+    std::fs::create_dir_all(&day).unwrap();
+    let head =
+        json!({ "timestamp": "2026-10-10T10:00:00Z", "type": "session_meta", "payload": { "id": "x", "cwd": repo } });
+    std::fs::write(day.join("rollout-2026-10-10T10-00-00-x.jsonl"), format!("{head}\n")).unwrap();
+    let codex = activity(&w.doctor(&repo));
+    assert_eq!(codex["status"], "warn", "Codex ran here and Adage heard nothing: {codex}");
 }

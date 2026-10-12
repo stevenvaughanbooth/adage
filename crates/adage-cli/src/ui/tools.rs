@@ -2,17 +2,20 @@
 //! Arguments are passed directly to the current executable, never through a shell. Paths are
 //! resolved before dispatch so a folder named `generate` or `--trust` remains a folder.
 
-use super::jobs::{Job, JobMsg};
+use super::conditioned::{Card, Stages};
+use super::jobs::{Job, JobMsg, Outcome};
 use adage_store::Paths;
 use anyhow::{bail, Context, Result};
 use std::ffi::OsString;
-use std::io::Read;
+use std::io::{BufRead, Read};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::mpsc::Sender;
 use std::time::{Duration, Instant};
 
 const MAX_OUTPUT: usize = 512 << 10;
+/// `adage condition --json`'s report is data, never shown as it is: a long history's can be large.
+const MAX_REPORT: usize = 64 << 20;
 const MAX_LINES: usize = 12_000;
 const REPORT_TIMEOUT: Duration = Duration::from_secs(300);
 
@@ -234,7 +237,8 @@ pub fn history_source_directory(path: &Path, root: Option<&Path>) -> Result<Path
 /// the child. No agent-session marker is removed.
 pub fn run(paths: Paths, root: Option<PathBuf>, tool: Tool) -> Job {
     let cancelable = !tool.mutates();
-    let mut job = Job::spawn(tool.title(), move |tx| {
+    let follows = tool == Tool::Condition;
+    let mut job = Job::spawn(tool.title(), move |tx| -> Result<Outcome> {
         if let Some(command) = tool.person_command() {
             crate::share::require_person(command)?;
         }
@@ -242,13 +246,13 @@ pub fn run(paths: Paths, root: Option<PathBuf>, tool: Tool) -> Job {
         let base = root.map(|p| if p.is_absolute() { p } else { cwd.join(p) }).unwrap_or_else(|| cwd.clone());
         let paths = Paths::at(if paths.root.is_absolute() { paths.root } else { cwd.join(paths.root) });
         if matches!(tool, Tool::HistorySources) {
-            return Ok(crate::history::summary(&paths, Some(&base)));
+            return Ok(crate::history::summary(&paths, Some(&base)).into());
         }
         if let Tool::SetHistorySource { harness, directory: folder } = &tool {
-            return crate::history::set_source(&paths, harness, &directory(folder, &base)?);
+            return Ok(crate::history::set_source(&paths, harness, &directory(folder, &base)?)?.into());
         }
         if matches!(tool, Tool::ExportOpenCode) {
-            return crate::history::import_opencode(&paths, &base);
+            return Ok(crate::history::import_opencode(&paths, &base)?.into());
         }
         let args = tool.args(&paths, &base)?;
         let mut cmd = Command::new(std::env::current_exe().context("Finding the Adage executable")?);
@@ -258,15 +262,94 @@ pub fn run(paths: Paths, root: Option<PathBuf>, tool: Tool) -> Job {
             // lift only its terminal check; it independently retains every agent-session check.
             cmd.env("ADAGE_ALLOW_NONINTERACTIVE", "1");
         }
+        if tool == Tool::Condition {
+            // Its result as data and its stages as they run, for the conditioning cards.
+            cmd.args(["--json", "--progress"]);
+            return condition(&mut cmd, tx);
+        }
         let _ = tx.send(JobMsg::Progress(0.05, format!("{}…", tool.title())));
         let mut lines = capture(&mut cmd, tx, !tool.mutates())?;
         if lines.is_empty() {
             lines.push("Completed successfully.".into());
         }
-        Ok(lines)
+        Ok(lines.into())
     });
     job.cancelable = cancelable;
+    if follows {
+        job.stages = Some(Stages::new(Instant::now()));
+    }
     job
+}
+
+/// `adage condition --json --progress`: each stage goes to the job as it is reported, and the
+/// report becomes the result card. Output that is not the report is shown as the text it is.
+fn condition(cmd: &mut Command, tx: &Sender<JobMsg>) -> Result<Outcome> {
+    let mut child = cmd
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .context("Starting the Adage tool")?;
+    let stdout = child.stdout.take().context("Capturing tool output")?;
+    let stderr = child.stderr.take().context("Capturing tool errors")?;
+    let output = std::thread::spawn(move || bounded_output_limit(stdout, MAX_REPORT));
+    let stages = tx.clone();
+    let errors = std::thread::spawn(move || follow_stderr(stderr, &stages));
+    let status = child.wait().context("Waiting for the tool")?;
+    let (out, out_truncated) = output.join().map_err(|_| anyhow::anyhow!("Reading tool output failed"))??;
+    let (notes, notes_truncated) = errors.join().map_err(|_| anyhow::anyhow!("Reading tool errors failed"))??;
+    if !status.success() {
+        let mut lines = clean_lines(&out);
+        lines.extend(notes);
+        if lines.is_empty() {
+            bail!("The tool exited with {status}. Please try again.");
+        }
+        bail!("{}", lines.join("\n"));
+    }
+    if !out_truncated {
+        if let Some(card) = Card::parse(&String::from_utf8_lossy(&out), notes.clone()) {
+            return Ok(Outcome::Conditioned(Box::new(card)));
+        }
+    }
+    let mut lines = clean_lines(&out);
+    if out_truncated {
+        lines.push("… Output was shortened to keep the viewer responsive.".into());
+    }
+    if !notes.is_empty() {
+        lines.extend([String::new(), "Notes".into()]);
+        lines.extend(notes);
+    }
+    if notes_truncated {
+        lines.push("… Additional notes were shortened.".into());
+    }
+    Ok(Outcome::Lines(lines))
+}
+
+/// A child's stderr, line by line: each `{"progress": …}` report is sent to the job as it comes;
+/// every other line is kept as a note, cleaned of terminal escapes, up to [`MAX_OUTPUT`] bytes.
+fn follow_stderr(stderr: impl Read, tx: &Sender<JobMsg>) -> std::io::Result<(Vec<String>, bool)> {
+    let mut reader = std::io::BufReader::new(stderr);
+    let (mut notes, mut kept, mut truncated) = (Vec::new(), 0usize, false);
+    let mut line = Vec::new();
+    loop {
+        line.clear();
+        // One line at a time, each bounded: a line with no end cannot take the memory.
+        if reader.by_ref().take(64 << 10).read_until(b'\n', &mut line)? == 0 {
+            return Ok((notes, truncated));
+        }
+        if line.starts_with(b"{\"progress\"") {
+            if let Ok(e) = serde_json::from_slice::<adage_learn::progress::Event>(line.trim_ascii()) {
+                let _ = tx.send(JobMsg::Stage(e));
+                continue;
+            }
+        }
+        kept += line.len();
+        if kept > MAX_OUTPUT {
+            truncated = true;
+            continue;
+        }
+        notes.extend(clean_lines(&line));
+    }
 }
 
 fn capture(cmd: &mut Command, tx: &Sender<JobMsg>, readonly: bool) -> Result<Vec<String>> {
@@ -422,6 +505,32 @@ mod tests {
         assert_eq!(reader.position(), (MAX_OUTPUT + 100) as u64);
         assert_eq!(clean_lines(b"\x1b[31mred\x1b[0m \x1b]8;;file:///tmp/a\x1b\\text\x1b]8;;\x1b\\"), vec!["red text"]);
     }
+    #[test]
+    fn conditioning_progress_is_followed_and_its_notes_kept() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let err = "{\"progress\":\"read\",\"done\":3,\"total\":9}\n\
+                   adage: 1 reflex not learned: its trigger matches too many different commands (run-a)\n\
+                   {\"progress\":\"mine\",\"done\":0,\"total\":0}\n\
+                   \x1b[33mwarning\x1b[0m  skipped 1 compressed Codex rollout\n";
+        let (notes, truncated) = follow_stderr(std::io::Cursor::new(err.as_bytes()), &tx).unwrap();
+        assert_eq!(
+            notes,
+            vec![
+                "adage: 1 reflex not learned: its trigger matches too many different commands (run-a)".to_string(),
+                "warning  skipped 1 compressed Codex rollout".into(),
+            ]
+        );
+        assert!(!truncated);
+        let stages: Vec<adage_learn::progress::Stage> = rx
+            .try_iter()
+            .filter_map(|m| match m {
+                JobMsg::Stage(e) => Some(e.progress),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(stages, [adage_learn::progress::Stage::Read, adage_learn::progress::Stage::Mine]);
+    }
+
     #[test]
     fn imports_carry_the_reviewed_token_and_mutations_keep_person_guards() {
         let d = tempfile::tempdir().unwrap();

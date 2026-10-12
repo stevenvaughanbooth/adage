@@ -117,6 +117,8 @@ export function reflexesOf(graph: Record<string, unknown>, repo = ''): Reflex[] 
       signer: str(origin.signer) || str(origin.label),
       trigger: label(r.trigger),
       step: label(r.step),
+      triggerKind: isRecord(r.trigger) ? str(r.trigger.kind) : '',
+      stepKind: isRecord(r.step) ? str(r.step.kind) : '',
       support: typeof e.support === 'number' ? e.support : 0,
       opportunities: typeof e.opportunities === 'number' ? e.opportunities : 0,
       lowerBound: typeof e.lower_bound === 'number' ? e.lower_bound : null,

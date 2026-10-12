@@ -1,0 +1,28 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+expression: text
+---
+ adage    1 Live   2 Reflexes  2   3 Map   4 Health  2   5 Settings   6 Home
+────────────────────────────────────────────────────────━━━━━━━━━━━━────────────
+ 24 settings · 2 changed · same as adage config · …ocal/share/adage/config.toml
+ ! 1 setting is set by environment variables, which win over the file
+
+  Learning  7 · 1 changed
+▌   Learn automatically      ● on
+    Pause between runs       10 min  • changed
+    Evidence needed          standard
+    Repositories             all repositories
+    Reuse parsed sessions    ● on
+    Procedure cards          ● on
+    Card match strictness    0.811
+
+  History sources  3
+    Claude Code history      default (~/.claude/projects)
+    Codex history            auto, once Codex hooks are on
+─ Learn automatically · learn.auto ─────────────────────────────────────────────
+ Learn from each agent session in the background, when the session stops or
+ ends.
+ accepts on or off · default ● on · now the default
+ enter turns it off (asks first) · same as adage config set learn.auto false
+────────────────────────────────────────────────────────────────────────────────
+  ?  keys   :  palette   enter  edit   space  toggle                    q  quit

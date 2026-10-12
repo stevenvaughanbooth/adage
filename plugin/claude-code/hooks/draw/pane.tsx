@@ -1,15 +1,15 @@
-// The pane (ux-design §6): three tabs as plain Buttons with lowercase hotkeys (`l` Live, `r`
-// Reflexes, `t` Health; `h` is `adage watch`'s help key), every tab ending with `Explore in
-// browser`. Strength and lifecycle words are allowed here and nowhere else (§1.3). A decision in
+// The pane (ux-design §6): four tabs as plain Buttons with lowercase hotkeys (`g` Graph, the first
+// and the default, `l` Live, `r` Reflexes, `t` Health; `h` is `adage watch`'s help key), every tab
+// ending with `Explore in browser`. Strength and lifecycle words are allowed here and nowhere else (§1.3). A decision in
 // the pane is a press (§4.17): a Button's onPress reaches `press()` with the session's token, and
 // only through the handlers the actions carry (`press`, dialog.ts); until a person is at the prompt
 // they are not bound and, as before a press existed, a review verb is a command to copy. The one
 // action besides is `adage condition`, which the binary marks as allowed from a session.
-import type { Check, Health, Lapse, MapState, Reflex, Row, Tick, Update, View } from '../plugin'
+import type { Check, Fired, GraphNode, Health, Lapse, MapState, Mark, Predicted, Reflex, Row, Tick, Update, View } from '../plugin'
 import type { Offer } from '../reads'
 import { TRUST_LINE } from '../grant'
 import { ROLES } from '../tokens'
-import type { Waiting } from '../view/pane'
+import type { Pulse, Seg, Waiting } from '../view/pane'
 import {
   ROW_VERBS,
   TICKS_DRAWN,
@@ -17,14 +17,18 @@ import {
   VERB_HOTKEYS,
   VERB_WORDS,
   checkAction,
+  actFlows,
   checkLine,
+  flowBoxes,
+  flowLine,
   lapseText,
   lightText,
+  pulseLine,
+  pulses,
   GROUP_TITLES,
   GROUPS,
   WAITING_TITLE,
   reflexFacts,
-  reflexLine,
   reflexesEmpty,
   reviewCommand,
   rowLines,
@@ -34,8 +38,10 @@ import {
   visibleReflexes,
   visibleRows,
 } from '../view/pane'
+import { graphLines } from '../view/graph'
 import { cut, g } from '../view/text'
 import type { Els, Tree } from './els'
+import { graphTree } from './graph'
 import { rule } from './rows'
 
 /** What a press in the pane or a command does (dialog.ts `pressHandlers`): each reaches the press. */
@@ -70,6 +76,8 @@ export type PaneActions = {
   copy: (command: string, surface: string) => void
   condition: () => void
   explore: () => void
+  /** The Graph tab's `a`: the whole session, or follow the newest again. */
+  history: () => void
   /** The presses, once a person is at the prompt; undefined until then (a verb is a command to copy). */
   press: PressHandlers | undefined
 }
@@ -81,6 +89,8 @@ export type PaneData = {
   health: Health | null
   feed: 'off' | 'following' | 'reconnecting' | 'stopped' | 'paused'
   reflexes: readonly Reflex[]
+  /** The reflexes the command hooks delivered in this session: with the rows, what the flow lights. */
+  fired: readonly Fired[]
   waiting: readonly Waiting[]
   checks: readonly Check[]
   lapsed: readonly Lapse[]
@@ -93,6 +103,33 @@ export type PaneData = {
   noBridge: boolean
   columns: number
   ascii: boolean
+  /**
+   * The Reflexes flow as boxes when wide enough (the terminal); the one-line flow always (the
+   * desktop, whose native Button inside a box line would break its borders).
+   */
+  boxes: boolean
+  /** This session's graph (the Graph tab), and what the rest of the state says about its nodes. */
+  dag: readonly GraphNode[]
+  predicted: readonly Predicted[]
+  marks: readonly Mark[]
+  /** The clock now, and whether the newest node may glow (not under reduced motion). */
+  now: number
+  motion: boolean
+  /** The rows the pane's body has room for (`scroll.bodyRows`): the Graph follows its newest within them. */
+  bodyRows: number
+}
+
+/** The rows besides the graph's own lines: the tabs, its summary, its footer, `Explore in browser`. */
+const GRAPH_CHROME = 4
+
+function graph(els: Els, d: PaneData, a: PaneActions): Tree {
+  const extra = (d.nobinary === '' ? 0 : 1) + (d.noBridge ? 1 : 0)
+  const height = d.view.history ? 0 : Math.max(6, d.bodyRows - GRAPH_CHROME - extra)
+  const drawn = graphLines(
+    { nodes: d.dag, predicted: d.predicted, marks: d.marks, rows: d.rows, reflexes: d.reflexes, now: d.now, motion: d.motion },
+    { columns: d.columns, ascii: d.ascii, boxes: d.boxes, height },
+  )
+  return graphTree(els, { drawn, nobinary: d.nobinary, noBridge: d.noBridge, history: d.view.history, onHistory: () => a.history(), ascii: d.ascii })
 }
 
 /**
@@ -124,6 +161,7 @@ function tabs(els: Els, d: PaneData, a: PaneActions): Tree {
   return (
     <Box flexDirection="row" justifyContent="space-between">
       <Box flexDirection="row" gap={3}>
+        {tab('graph', 'g', 'Graph')}
         {tab('live', 'l', 'Live')}
         {tab('reflexes', 'r', 'Reflexes')}
         {tab('health', 't', 'Health')}
@@ -156,14 +194,22 @@ function live(els: Els, d: PaneData, a: PaneActions): Tree {
       {!d.view.hideQuiet || quietLine(d.rows, rows.length, d.ascii) === '' ? null : <Text dimColor>{quietLine(d.rows, rows.length, d.ascii)}</Text>}
       {rows.map(r => {
         const [first = '', ...more] = rowLines(r, d.ascii)
+        // Each directive's flow in small beneath its act line (ux-design §6.1).
+        const flows = actFlows(r, d.reflexes, d.columns, d.ascii)
+        const flow = (k: number) => {
+          const f = flows[k]
+          return f === undefined ? null : flowRow(els, f, `flow-row-${r.seq}-${k}`)
+        }
         return (
           <Box key={`row-${r.seq}`} flexDirection="column">
             <Button key={`row:${r.seq}`} plain label={cut(first, d.columns, d.ascii)} dimColor={r.acts.length === 0} onPress={() => a.inspect(r.seq)} />
-            {more.map((m, k) => (
+            {flow(0)}
+            {more.flatMap((m, k) => [
               <Text key={`row-${r.seq}-${k}`} wrap="truncate-end">
                 {m}
-              </Text>
-            ))}
+              </Text>,
+              flow(k + 1),
+            ])}
           </Box>
         )
       })}
@@ -209,23 +255,42 @@ function verbButton(els: Els, a: PaneActions, r: Reflex, v: string, key: string,
   return <Button key={`verb:${v}:${key}`} plain hotkey={hotkey} label={VERB_WORDS[v] ?? v} onPress={() => press.verb(v, r)} />
 }
 
-function reflexRow(els: Els, d: PaneData, a: PaneActions, r: Reflex): Tree {
+/**
+ * One drawn line of a flow (view/pane.ts `flowBoxes`, `flowLine`): each piece a Text in its role,
+ * and the one piece marked `press` the row's Button, which expands the row.
+ */
+function flowRow(els: Els, line: readonly Seg[], key: string, button?: { key: string; onPress: () => void }): Tree {
+  const { Box, Text, Button } = els
+  return (
+    <Box key={key} flexDirection="row">
+      {line.map((s, k) =>
+        s.press && button !== undefined ? (
+          <Button key={button.key} plain label={s.text} onPress={button.onPress} />
+        ) : (
+          <Text key={`${key}-${k}`} {...(s.role === undefined ? {} : { color: ROLES[s.role] })} {...(s.dim ? { dimColor: true } : {})} {...(s.bold ? { bold: true } : {})}>
+            {s.text}
+          </Text>
+        ),
+      )}
+    </Box>
+  )
+}
+
+function reflexRow(els: Els, d: PaneData, a: PaneActions, r: Reflex, pulse: Pulse | undefined): Tree {
   const { Box, Text, Button } = els
   const key = `${r.reference}/${r.id}`
   const open = d.view.expanded === key || d.view.expanded === `${key}${DETAILS}`
   const details = d.view.expanded === `${key}${DETAILS}`
-  const role = r.strength === 'fire' ? 'fire' : r.strength === 'inhibit' ? 'inhibit' : 'prime'
+  const lines = (d.boxes ? flowBoxes(r, pulse, d.columns, d.ascii, open) : undefined) ?? [flowLine(r, pulse, d.columns, d.ascii)]
+  const button = { key: `reflex:${key}`, onPress: () => a.expand(details ? `${key}${DETAILS}` : key) }
   const onRow = r.verbs.filter(v => ROW_VERBS.includes(v))
   const more = r.verbs.filter(v => !ROW_VERBS.includes(v))
   const command = r.verbs[0] === undefined ? '' : reviewCommand(r.verbs[0], r)
   return (
     <Box key={`reflex-${key}`} flexDirection="column">
-      <Box flexDirection="row">
-        <Text color={ROLES[role]}>{`${g('lamp', d.ascii)} `}</Text>
-        <Button key={`reflex:${key}`} plain label={cut(reflexLine(r, d.ascii), Math.max(10, d.columns - 2), d.ascii)} onPress={() => a.expand(details ? `${key}${DETAILS}` : key)} />
-      </Box>
+      {lines.map((l, k) => flowRow(els, l, `flow-${key}-${k}`, button))}
       {!open ? null : (
-        <Box flexDirection="column" paddingLeft={2}>
+        <Box flexDirection="column" paddingLeft={2} marginBottom={1}>
           {r.directive === '' ? null : <Text wrap="wrap">{r.directive}</Text>}
           <Text dimColor wrap="wrap">{reflexFacts(r, d.ascii)}</Text>
           {r.describe === '' ? null : <Text dimColor wrap="wrap">{r.describe}</Text>}
@@ -330,6 +395,8 @@ function reflexes(els: Els, d: PaneData, a: PaneActions): Tree {
   // What this repository learned first, a team's next, Adage's built-in instincts last.
   const rank = (t: string) => (shown.find(r => r.reference === t)?.instinct ? 2 : t.endsWith('/learned') ? 0 : 1)
   const tracks = [...new Set(shown.map(r => r.reference))].sort((a, b) => rank(a) - rank(b))
+  const lit = pulses(d.fired, d.rows)
+  const live = pulseLine(lit, d.ascii)
   return (
     <Box flexDirection="column">
       <Box flexDirection="row" gap={2}>
@@ -339,6 +406,7 @@ function reflexes(els: Els, d: PaneData, a: PaneActions): Tree {
       </Box>
       {suggestions(els, d, a)}
       {d.waiting.length === 0 ? null : rule(els, 'reflexes', d.columns)}
+      {live === '' ? null : <Text color={ROLES.fire} wrap="truncate-end">{live}</Text>}
       {d.reflexes.every(r => r.instinct) ? <Text dimColor>{reflexesEmpty(d.reflexes.filter(r => r.instinct).length, d.ascii)}</Text> : null}
       {tracks.map(t => {
         const inTrack = shown.filter(r => r.reference === t)
@@ -346,7 +414,7 @@ function reflexes(els: Els, d: PaneData, a: PaneActions): Tree {
         return (
           <Box key={`track-${t}`} flexDirection="column">
             <Text dimColor>{first === undefined ? t : trackTitle(first)}</Text>
-            {inTrack.map(r => reflexRow(els, d, a, r))}
+            {inTrack.map(r => reflexRow(els, d, a, r, lit.get(r.id)))}
           </Box>
         )
       })}
@@ -409,7 +477,7 @@ function versionRow(els: Els, u: Update, ascii: boolean, a: PaneActions): Tree {
 
 export function paneTree(els: Els, d: PaneData, a: PaneActions): Tree {
   const { Box } = els
-  const body = d.view.tab === 'reflexes' ? reflexes(els, d, a) : d.view.tab === 'health' ? health(els, d, a) : live(els, d, a)
+  const body = d.view.tab === 'graph' ? graph(els, d, a) : d.view.tab === 'reflexes' ? reflexes(els, d, a) : d.view.tab === 'health' ? health(els, d, a) : live(els, d, a)
   return (
     <Box flexDirection="column">
       {tabs(els, d, a)}

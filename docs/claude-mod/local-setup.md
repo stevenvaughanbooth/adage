@@ -185,7 +185,7 @@ You want `adage -> adage-<sha>`, `adage-exec -> adage-exec-<sha>`, `adage-train 
 adage doctor
 ```
 
-`hooks: claude-code` should pass with `registered by the Adage plugin`; `hook activity: claude-code` may still warn `Registered; no hook has been observed in this repository yet.` until a prompt has gone through (the receipt is refreshed at most once a minute, `crates/adage-hook/src/receipt.rs`); `claude-code plugin binary` should pass with `matches this binary` if you are running `target/release/adage`.
+`hooks: claude-code` should pass with `registered by the Adage plugin`; `hook activity: claude-code` may still warn `Claude Code is set up but hasn't sent anything from this repository yet.` until a prompt has gone through (the receipt is refreshed at most once a minute, `crates/adage-hook/src/receipt.rs`); `claude-code plugin binary` should pass with `matches this binary` if you are running `target/release/adage`.
 
 8. Count hook invocations. The plan's testable proxy is exactly one `session_start` record in the session's spool (`evaluation-plan.md:108-110`; `docs/claude-mod/test-plan.md:830-832`). Spools are binary-framed, not NDJSON (`docs/spool.md:9-14`), so read them through the follower (section 7) rather than `grep`.
 

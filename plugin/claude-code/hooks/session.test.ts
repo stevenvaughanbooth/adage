@@ -3,7 +3,8 @@
 // /clear (a new session id) that starts the counts again and follows the new id.
 import { describe, expect, test } from 'claude-code/testing'
 
-import { GRAPH, LINE, PREDICT, STEP, bandText, block, drain, start, world } from './fixtures/kit'
+import { GRAPH, LINE, PREDICT, STEP, bandText, block, drain, mountPane, shown, start, world } from './fixtures/kit'
+import { GRAPH_EMPTY } from './view/graph'
 
 const FEED = [LINE.learnerIdle, LINE.healthy, LINE.start, LINE.firedGen, LINE.firedLookup]
 
@@ -100,19 +101,22 @@ describe('T-B1-02, T-B1-03 · activation', () => {
   })
 })
 
-describe('T-B3-08, §4.9 · /clear', () => {
-  test('a new session id: the follower follows it, its counts start again, the old rows are no longer its own', async ($, on) => {
+describe('T-B3-08, T-B3-13, §4.9 · /clear', () => {
+  test('a new session id: the follower follows it, its counts start again, its graph starts empty, the old rows are no longer its own', async ($, on) => {
     let id = 'sess-1'
     const w = world(on, { feed: FEED, graph: { routes: GRAPH.routes.slice(0, 3) }, session: () => id, classic: { UserPromptSubmit: { additionalContext: [block('codegen-after-schema')] } } })
     await start($, w)
     await $.classic.UserPromptSubmit({ prompt: 'go', source: 'user' } as never)
     const band = () => bandText($, 'terminal', 120, `b-${id}`)
     expect(await band()).toBe('◠ adage  2 reflexes this session · ● healthy')
+    const pane = await mountPane($, 'terminal')
+    expect(await shown(pane)).not.toContain(GRAPH_EMPTY)
     id = 'sess-2'
     await $.classic.SessionStart({ source: 'clear', session_id: 'sess-2', cwd: '/w' } as never)
     await w.clock.settle()
     expect(w.spawned.filter(a => a[1] === 'watch').at(-1)?.slice(8, 10)).toEqual(['--session', 'sess-2'])
     expect(await band()).toBe('ENGINE AbovePrompt')
+    expect(await shown(pane)).toContain(GRAPH_EMPTY)
     expect((await $.command.run({ command: 'adage', args: 'why' } as never)).text).toBe('No reflex has spoken in this session yet.')
     // The new session's press was asked for with its id.
     expect(JSON.parse(w.ran.find(r => r.argv[3] === 'Press')?.init?.stdin ?? '{}')).toMatchObject({ session_id: 'sess-2', source: 'clear' })

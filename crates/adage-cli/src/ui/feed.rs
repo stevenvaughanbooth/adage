@@ -164,11 +164,6 @@ impl FeedItem {
     }
 }
 
-/// The harness's short name for narrow panes.
-pub fn harness_short(h: &str) -> &str {
-    adage_trace::Harness::parse(h).map_or(h, |h| h.short())
-}
-
 /// The harness's name as a row shows it.
 pub fn harness_name(h: &str) -> &str {
     adage_trace::Harness::parse(h).map_or(h, |h| h.hook_name())

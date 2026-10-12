@@ -423,7 +423,10 @@ hooks are registered, and configured OpenCode exports. `--all` reads every repos
 repository they ask for it rather than read everything. The `learn.*` source settings apply to
 both; `learn.codex_sessions = ""` disables Codex discovery. Explicit `--transcripts`,
 `--claude-projects`, or `--codex-sessions` replace defaults. History is read locally;
-conditioning never executes its commands.
+conditioning never executes its commands. `adage condition --json` prints the run as data: the
+learner's report, how long it took (`elapsed_ms`), what changed with each reflex's gist
+(`changes`), and what `adage review` has waiting; `--progress` adds each stage on stderr as one
+JSON line (`{"progress": "read", "done": 12, "total": 262}`), which is how `adage ui` follows a run.
 
 See [How Adage works](how-it-works.md) for the current behavior and limits, and
 [live learning](live-learning.md) for discovery and background learning. Conditioning and
@@ -474,8 +477,13 @@ Adage said nothing, `↑`/`↓` scroll (`G` back to the newest), `?` lists every
 honoured: strengths are then spelled out (`FIRE`, `PRIME`, `INHIBIT`), and `--plain` drops glyphs
 too.
 
-`adage ui` is the full-screen app (plain `adage` prints the status card above). `:` or `ctrl-k`
-opens a command palette over every action and reflex; `?` lists the keys. Its tabs:
+`adage ui` is the full-screen app (plain `adage` prints the status card above). It opens on
+Adage's brain, the site's, turning in shaded text for about two seconds before dissolving into
+the app; any key skips it (and any key but `Enter`, `Space` and `Esc` goes on to the app).
+`ui.start_screen = false` (or `ADAGE_START_SCREEN=0`) turns it off, and it is never shown away
+from a terminal, in an agent's session, below 60×20, with `ADAGE_REDUCED_MOTION=1`, or when
+`adage watch` hands over to the app. `:` or `ctrl-k` opens a command palette over every action
+and reflex; `?` lists the keys. Its tabs:
 
 | Tab | What it does |
 | --- | --- |
@@ -483,7 +491,7 @@ opens a command palette over every action and reflex; `?` lists the keys. Its ta
 | **Live** | the watch view, larger; `m` opens the map in your browser, as in `adage watch` |
 | **Reflexes** | every instinct and reflex by track, with a fuzzy `/` filter: strength, stage, trigger and step, evidence (traces, Wilson lower bound), live counts, and the exact directive text. Review decisions (`a`pprove, `e`xtinguish, `w`eaken, `s`trengthen, pi`n`, dismiss `x`) ask first, then run exactly what `adage review` runs, with the same ceilings, and show the equivalent command |
 | **Map** | stimulus → reflex → response as a layered graph in the terminal; `adage map` opens the same in the browser |
-| **Health** | every doctor check, live, including live conditioning's. `Enter` fixes the selected one where a key can: register hooks (confirming the exact file and diff), fetch the model (with progress), condition this repository now (after a source preview; uses `adage condition --repo-root` without changing the background allowlist), turn live conditioning on, open the settings, or open the fail-open log |
+| **Health** | every doctor check, live, including live conditioning's. `Enter` fixes the selected one where a key can: register hooks (confirming the exact file and diff), fetch the model (with progress), condition this repository now (a card first shows the sources it reads and what they hold; then its stages tick as it runs, in the background if you press `esc`; then a result card says what it did in plain words, `v` for the details and `enter` for the next step; it runs `adage condition --repo-root` without changing the background allowlist), turn live conditioning on, open the settings, or open the fail-open log |
 | **Settings** | every `adage config` key with its value and where it came from (default, file, or environment); `Enter` edits, `Space` toggles, and `adage config set`'s validation and agent-session refusal apply |
 
 `adage watch --demo` and `adage ui --demo` replay a small scripted scenario (three sessions of the
@@ -657,6 +665,7 @@ adage config set learn.min_interval_secs 300  # condition each repository at mos
 | `instincts.packs` | `auto` | The instinct packs to bind: `auto` (every installed one) or pack names |
 | `instincts.disabled` | `""` | Packs (`adage/lockfiles`) or instinct ids (`U3`) never to bind; `adage packs off` writes it |
 | `ui.notices` | `daily` | One-line notices at session start (Claude Code), at most daily and only when new; `off` silences them |
+| `ui.start_screen` | `true` | `adage ui` opens on Adage's brain, turning, for about two seconds; any key skips it (`ADAGE_START_SCREEN` wins) |
 | `update.check` | `daily` | After a background conditioning run, at most once a day, ask whether a newer Adage is out (one request, nothing sent but the request); `off` stops it (`ADAGE_UPDATE_CHECK` wins) |
 | `runtime.control` | `0.1` | Control share (`ADAGE_CONTROL` wins) |
 

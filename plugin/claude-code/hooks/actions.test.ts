@@ -13,6 +13,7 @@ describe('T-B3-04, T-B4-07 · the pane\'s actions through the engine', () => {
     const w = world(on, { feed: FEED })
     await start($, w)
     const ui = await mountPane($, 'terminal')
+    await ui.press({ key: 'tab-live' })
     const rowKeys = async () => (await ui.findAll({ type: 'Button' })).filter(b => b.key?.startsWith('row:')).map(b => b.key)
     const footer = (await ui.findAll({ type: 'Button' })).filter(b => ['pause', 'quiet', 'newest'].includes(b.key ?? ''))
     expect(footer.map(b => `${b.props.hotkey}:${b.props.label}`)).toEqual(['p:pause', 'v:show quiet rows', 'n:newest'])

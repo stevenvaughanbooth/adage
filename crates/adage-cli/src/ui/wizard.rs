@@ -1408,6 +1408,7 @@ pub fn run(ctx: Ctx) -> Result<()> {
         if let Some((j, kind)) = job.as_mut() {
             match j.poll() {
                 Some(done) => {
+                    let done = done.map(jobs::Outcome::into_lines);
                     let kind = kind.clone();
                     job = None;
                     w.progress = None;

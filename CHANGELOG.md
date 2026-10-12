@@ -557,6 +557,29 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   command palette (`:` or `ctrl-k`) over every action and reflex. Under `NO_COLOR` strengths are
   spelled out (`FIRE`, `PRIME`, `INHIBIT`); `--plain` also drops glyphs, and `ADAGE_ASCII=1`
   keeps colour with ASCII glyphs.
+- **`adage ui` opens on Adage's brain.** The site hero's brain (its lobes, fissures, cerebellum
+  and stem, folded by the same seeded noise), lit as a solid in shaded text and violet, turns
+  slowly for about two seconds, seen from above and behind so both hemispheres, the fissure and
+  the cerebellum show, with fire, prime and inhibit pulses running up the cord; then it dissolves
+  into the app. Any key skips it, and every key but `Enter`, `Space` and `Esc` goes on to the
+  app. A frame takes well under a millisecond, and is the same on every platform.
+  `ui.start_screen` (on by default; `ADAGE_START_SCREEN=0`) turns it off; it never shows away
+  from a terminal, in an agent's session, below 60×20, on a dumb terminal, with
+  `ADAGE_REDUCED_MOTION=1`, or when `adage watch` hands over to the app.
+- **Conditioning in `adage ui` is three cards, not a wall of text.** Before it runs, the history
+  sources (one row per harness) and what they hold, as a bar: to learn from, already steered,
+  empty. While it runs, its stages tick as a checklist (reading traces, n of N; finding patterns;
+  compiling reflexes; settling overlaps; writing the index), followed through
+  `adage condition --progress`; `esc` hides the card and the run goes on. After, one headline
+  (`Read 122 traces · kept 7 reflexes · nothing changed`), a funnel from traces to reflexes, what
+  changed by what each reflex tells the agent, the reflex sets, overlaps settled and notes, each
+  in plain words and laid out to the width; thresholds, ids and the notes as written are under
+  `v`, and `enter` takes the next step. `adage condition --json` adds `elapsed_ms`, `changes`
+  (with each reflex's gist) and `waiting`, and each track its `reflexes`; its fields are otherwise
+  unchanged.
+- **A reflex that cannot be learned says why in one line.** `1 reflex not learned: its trigger
+  matches too many different commands (20; the limit is 16): a, b, c and 17 more (run-ce9cdb)`,
+  instead of every command it held; reflexes left out for the same reason are counted together.
 - **The map.** `adage map` serves a web app from the binary (`web/map`, embedded): the reflex
   graph, live evidence as hooks fire (server-sent events), and a "How it works" walkthrough. It
   listens on 127.0.0.1 only and is read-only.

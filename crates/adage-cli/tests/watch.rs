@@ -62,7 +62,7 @@ fn watch_demo_replays_real_hook_decisions() {
         "after bin/fetch-incident {id}, read",
         "prime → fire",
         "claude hook received",
-        ": palette",
+        ":  palette",
         "auto-condition",
     ] {
         assert!(t.contains(s), "the demo frame lacks {s:?}:\n{t}");

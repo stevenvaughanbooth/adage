@@ -6,7 +6,7 @@ import { describe, expect, test } from 'claude-code/testing'
 import { BANNED, GRAPH, LAPSED, LINE, SESSION, rowsOf as rows } from '../fixtures/kit'
 import type { Fired, Mark } from '../plugin'
 import { lapsedOf, reflexesOf } from '../reads'
-import { lapseToast, learnToast, markText, openNotice, promptLines, receiptBeside, receiptCard, receiptOf, rewriteOf, spinnerSuffix, turnSummary } from './lines'
+import { lapseToast, learnToast, markText, openNotice, firedLines, receiptBeside, receiptCard, receiptOf, rewriteOf, spinnerSuffix, turnSummary } from './lines'
 import { cols } from './text'
 
 const REFLEXES = reflexesOf(GRAPH)
@@ -25,23 +25,23 @@ describe('T-B2-01 · the opening line (open.notice)', () => {
 
 describe('T-B2-02, T-B2-03 · the line under a prompt (prompt.fired)', () => {
   test('three reflexes, three lines in delivery order, worded by what they tell the agent, no strength word', () => {
-    const lines = promptLines([fired('lookup-work-item'), fired('codegen-after-schema'), fired('dead-end-unittest')], REFLEXES, rows(LINE.firedLookup), 120, false)
+    const lines = firedLines([fired('lookup-work-item'), fired('codegen-after-schema'), fired('dead-end-unittest')], REFLEXES, rows(LINE.firedLookup), 120, false)
     expect(lines).toEqual([
-      '◠ look up the work item with scripts/wi-lookup · scripts/wi-lookup W-2042 --json',
-      '◠ run make gen after a schema edit',
-      '◠ avoid python3 -m unittest here; use make test',
+      '◠ adage: look up the work item with scripts/wi-lookup · scripts/wi-lookup W-2042 --json',
+      '◠ adage: run make gen after a schema edit',
+      '◠ adage: avoid python3 -m unittest here; use make test',
     ])
     for (const l of lines) expect(l).not.toMatch(BANNED)
   })
 
   test('at most three, each reflex once', () => {
     const many = ['lookup-work-item', 'lookup-work-item', 'codegen-after-schema', 'dead-end-unittest', 'test-after-acme-edit'].map(r => fired(r))
-    expect(promptLines(many, REFLEXES, [], 120, false)).toHaveLength(3)
+    expect(firedLines(many, REFLEXES, [], 120, false)).toHaveLength(3)
   })
 
   test('T-B2-03: at 40 columns the command goes first, then the sentence is cut', () => {
-    const [l] = promptLines([fired('lookup-work-item')], REFLEXES, rows(LINE.firedLookup), 40, false)
-    expect(l).toBe('◠ look up the work item with scripts/wi…')
+    const [l] = firedLines([fired('lookup-work-item')], REFLEXES, rows(LINE.firedLookup), 40, false)
+    expect(l).toBe('◠ adage: look up the work item with scr…')
     expect(cols(l ?? '')).toBe(40)
   })
 })

@@ -204,7 +204,7 @@ pub fn gather(paths: &Paths, root: Option<&Path>) -> Health {
         let activity = by(&format!("hook activity: {harness}"));
         let received = activity.is_some_and(|c| c.status == Status::Pass);
         lights.push(Light::new(
-            if received { format!("{name} hook received") } else { format!("{name} registered; awaiting hook") },
+            if received { format!("{name} hook received") } else { format!("{name} set up, no hook yet") },
             if received { Lamp::Ok } else { Lamp::Warn },
         ));
     }

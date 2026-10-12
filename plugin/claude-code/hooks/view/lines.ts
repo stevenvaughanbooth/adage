@@ -33,11 +33,12 @@ function detailOf(rows: readonly Row[], route: string): string {
 }
 
 /**
- * `prompt.fired`: one line per reflex fired at a prompt, in delivery order, at most three: the
- * glyph and what it tells the agent, then the command or files it names; at a narrow width the
- * command goes first (T-B2-03). No strength word.
+ * `prompt.fired` and `tool.fired`: one line per reflex fired at a prompt or after a tool batch, in
+ * delivery order, at most three: the glyph, `adage:` (so the person can tell the agent was told
+ * this by Adage, not by them), what it tells the agent, then the command or files it names; at a
+ * narrow width the command goes first (T-B2-03). No strength word.
  */
-export function promptLines(fired: readonly Fired[], reflexes: readonly Reflex[], rows: readonly Row[], columns: number, ascii: boolean): string[] {
+export function firedLines(fired: readonly Fired[], reflexes: readonly Reflex[], rows: readonly Row[], columns: number, ascii: boolean): string[] {
   const seen = new Set<string>()
   const lines: string[] = []
   for (const f of fired) {
@@ -46,7 +47,7 @@ export function promptLines(fired: readonly Fired[], reflexes: readonly Reflex[]
     const say = sayOf(reflexes, f.route, f.track)
     const detail = detailOf(rows, f.route)
     const extra = detail !== '' && !say.includes(detail) ? detail : ''
-    lines.push(fit([`${g('reflex', ascii)} ${say}`, extra], columns, ascii))
+    lines.push(fit([`${g('reflex', ascii)} adage: ${say}`, extra], columns, ascii))
     if (lines.length === MAX_PROMPT_LINES) break
   }
   return lines

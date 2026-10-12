@@ -652,20 +652,16 @@ fn validate_context(items: &[CtxItem], within: u8) -> Result<()> {
     if !(1..=CONTEXT_MAX_WITHIN).contains(&within) {
         bail!("a context's gap is 1 to {CONTEXT_MAX_WITHIN} events");
     }
-    let key_ok = |k: &str| {
-        k.len() <= 200 && k.starts_with("exec ") && !k.chars().any(|c| c.is_control() || "`<>\"\\$;|&".contains(c))
-    };
-    let keys_ok = |keys: &[String]| !keys.is_empty() && keys.len() <= 16 && keys.iter().all(|k| key_ok(k));
     for it in items {
         match it {
-            CtxItem::Act { keys } => {
-                if !keys_ok(keys) {
-                    bail!("context command keys {keys:?} are not allowed");
-                }
-            }
+            CtxItem::Act { keys } => validate_context_keys(keys, "commands")?,
             CtxItem::Fail { keys, signature } => {
-                if !keys_ok(keys) || !safe_text(signature) {
-                    bail!("context failure {keys:?} ({signature:?}) is not allowed");
+                validate_context_keys(keys, "failing commands")?;
+                if !safe_text(signature) {
+                    bail!(
+                        "its trigger's failure text has characters a trigger may not hold: {:?}",
+                        clip(signature, 60)
+                    );
                 }
             }
             CtxItem::Edit { glob } => {
@@ -680,6 +676,59 @@ fn validate_context(items: &[CtxItem], within: u8) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// At most this many different commands one context item may match.
+pub const CONTEXT_MAX_KEYS: usize = 16;
+
+/// A context item's command keys: 1 to [`CONTEXT_MAX_KEYS`] short plain `exec` keys. A refusal
+/// says why in plain words and names at most three of the commands: a learned item can hold
+/// dozens, and listing every one would bury the reason.
+fn validate_context_keys(keys: &[String], what: &str) -> Result<()> {
+    let key_ok = |k: &str| {
+        k.len() <= 200 && k.starts_with("exec ") && !k.chars().any(|c| c.is_control() || "`<>\"\\$;|&".contains(c))
+    };
+    if keys.is_empty() {
+        bail!("its trigger names none of the {what} it follows");
+    }
+    if keys.len() > CONTEXT_MAX_KEYS {
+        bail!(
+            "its trigger matches too many different {what} ({}; the limit is {CONTEXT_MAX_KEYS}): {}",
+            keys.len(),
+            sample_keys(keys, 3)
+        );
+    }
+    if let Some(k) = keys.iter().find(|k| !key_ok(k)) {
+        bail!(
+            "its trigger follows a command a trigger may not hold (too long, or with shell characters): {:?}",
+            clip(k, 60)
+        );
+    }
+    Ok(())
+}
+
+/// The first `n` command keys as people read them (`claude plugin list`, not `exec claude plugin
+/// list`), escaped, then how many more there are: `a, b, c and 17 more`.
+fn sample_keys(keys: &[String], n: usize) -> String {
+    let shown: Vec<String> = keys
+        .iter()
+        .take(n)
+        .map(|k| clip(k.strip_prefix("exec ").unwrap_or(k), 60).escape_debug().to_string())
+        .collect();
+    match keys.len().saturating_sub(n) {
+        0 => shown.join(", "),
+        more => format!("{} and {more} more", shown.join(", ")),
+    }
+}
+
+/// `s` in at most `n` characters, ending in `…` when cut.
+fn clip(s: &str, n: usize) -> String {
+    if s.chars().count() <= n {
+        return s.to_string();
+    }
+    let mut out: String = s.chars().take(n.saturating_sub(1)).collect();
+    out.push('…');
+    out
 }
 
 /// Where a route came from: each field is a short safe token from a closed set, a pack name or a
@@ -741,4 +790,36 @@ fn validate_intent(family: &str, model: &str, centroid: &[i16], threshold: f32) 
 
 pub fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn act(keys: Vec<String>) -> CtxItem {
+        CtxItem::Act { keys }
+    }
+
+    #[test]
+    fn a_context_refusal_says_why_in_plain_words_and_caps_the_commands() {
+        let many: Vec<String> = (0..20).map(|i| format!("exec claude plugin test-{i} {{path}}")).collect();
+        let edit = CtxItem::Edit { glob: "src/*.rs".into() };
+        let e = validate_context(&[act(many), edit.clone()], 2).unwrap_err().to_string();
+        assert_eq!(
+            e,
+            "its trigger matches too many different commands (20; the limit is 16): claude plugin test-0 {path}, \
+             claude plugin test-1 {path}, claude plugin test-2 {path} and 17 more"
+        );
+        assert!(!e.contains("exec "), "the commands as people read them: {e}");
+        let e = validate_context(&[act(vec![]), edit.clone()], 2).unwrap_err().to_string();
+        assert_eq!(e, "its trigger names none of the commands it follows");
+        let e = validate_context(&[act(vec!["exec a; rm -rf x\n".into()]), edit.clone()], 2).unwrap_err().to_string();
+        assert!(e.starts_with("its trigger follows a command a trigger may not hold"), "{e}");
+        assert!(e.ends_with(r#""exec a; rm -rf x\n""#), "escaped, never raw: {e}");
+        let fail = CtxItem::Fail { keys: vec!["exec make".into()], signature: "x".repeat(200) };
+        let e = validate_context(&[fail, edit.clone()], 2).unwrap_err().to_string();
+        assert!(e.starts_with("its trigger's failure text has characters") && e.chars().count() < 140, "{e}");
+        let ok: Vec<String> = (0..16).map(|i| format!("exec make t{i}")).collect();
+        assert!(validate_context(&[act(ok), edit], 2).is_ok(), "16 commands is the limit, not over it");
+    }
 }

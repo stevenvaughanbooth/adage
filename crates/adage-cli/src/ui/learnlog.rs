@@ -65,6 +65,8 @@ pub struct Run {
     pub used: Option<u64>,
     pub duration_ms: Option<u64>,
     pub changes: Option<usize>,
+    /// Candidates seen but not yet in enough traces to be a reflex: counted, not changes.
+    pub forming: usize,
     pub generation: Option<String>,
 }
 
@@ -139,6 +141,7 @@ fn run(v: &Value, ts: u64, repo: Option<String>) -> Vec<Tick> {
         used: v["sessions_used"].as_u64(),
         duration_ms: v["duration_ms"].as_u64(),
         changes: None,
+        forming: 0,
         generation: s(v, "index_generation").map(|g| short_gen(g).to_string()),
     };
     let mut parts = Vec::new();
@@ -148,7 +151,11 @@ fn run(v: &Value, ts: u64, repo: Option<String>) -> Vec<Tick> {
     if let Some(ms) = info.duration_ms {
         parts.push(duration(ms));
     }
-    let changes: Vec<&Value> = v["changes"].as_array().map(|a| a.iter().collect()).unwrap_or_default();
+    // A candidate is a pattern seen too few times to be a reflex yet: not a change to any
+    // reflex, so the run counts them apart and the ticker says them in one line.
+    let (forming, changes): (Vec<&Value>, Vec<&Value>) =
+        v["changes"].as_array().map(|a| a.iter().partition(|c| c["change"] == "candidate")).unwrap_or_default();
+    info.forming = forming.len();
     // The older summary lists tracks per repository instead of changes (newer lines keep it too,
     // beside `changes`, which then says it better).
     let mut tracks = Vec::new();
@@ -168,6 +175,9 @@ fn run(v: &Value, ts: u64, repo: Option<String>) -> Vec<Tick> {
             1 => "1 change".to_string(),
             n => format!("{n} changes"),
         });
+        if !forming.is_empty() {
+            parts.push(forming_words(forming.len()));
+        }
     } else if !tracks.is_empty() {
         parts.push(format!("{} track{}", tracks.len(), if tracks.len() == 1 { "" } else { "s" }));
     }
@@ -187,6 +197,9 @@ fn run(v: &Value, ts: u64, repo: Option<String>) -> Vec<Tick> {
     }];
     for c in changes {
         out.push(change(c, ts, repo.clone()));
+    }
+    if !forming.is_empty() {
+        out.push(candidates(&forming, ts, repo.clone()));
     }
     for (r, name, version, change, n) in tracks {
         let numbers = n.unwrap_or_default();
@@ -240,6 +253,47 @@ pub fn numbers(summary: &str, evidence: bool) -> String {
         .or_else(|| slash.find(scope).map(|m| m.as_str().to_string()));
     let bound = lb.captures(scope).map(|c| format!("lb {}", &c[1]));
     [count, bound].into_iter().flatten().collect::<Vec<_>>().join(" · ")
+}
+
+/// `1 pattern forming`, `6 patterns forming`.
+pub fn forming_words(n: usize) -> String {
+    format!("{n} pattern{} forming", if n == 1 { "" } else { "s" })
+}
+
+/// The run's candidates as one line: how many, and how far each is from being a reflex
+/// (`seen in 4 traces · a reflex needs 5`).
+fn candidates(cs: &[&Value], ts: u64, repo: Option<String>) -> Tick {
+    let support: Vec<u64> = cs.iter().filter_map(|c| c["support"].as_u64()).collect();
+    let need = cs.iter().filter_map(|c| c["s_min"].as_u64()).max();
+    let seen = match (support.iter().min(), support.iter().max()) {
+        (Some(a), Some(b)) if a == b => format!("seen in {a} trace{}", if *a == 1 { "" } else { "s" }),
+        (Some(a), Some(b)) => format!("seen in {a}–{b} traces"),
+        _ => String::new(),
+    };
+    let numbers = match need {
+        Some(n) if !seen.is_empty() => format!("{seen} · a reflex needs {n}"),
+        _ => seen,
+    };
+    let name = forming_words(cs.len());
+    let tail = if numbers.is_empty() { String::new() } else { format!(" ({numbers})") };
+    Tick {
+        ts,
+        tone: Tone::Change,
+        text: format!("{name}{tail}"),
+        short: format!("{name}{tail}"),
+        strength: None,
+        repo,
+        change: Some(Change {
+            route: String::new(),
+            track: String::new(),
+            what: "forming",
+            from: None,
+            to: None,
+            numbers,
+            gist: name,
+        }),
+        run: None,
+    }
 }
 
 fn strength_of(x: Option<&str>) -> Option<String> {

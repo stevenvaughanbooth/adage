@@ -97,6 +97,7 @@ export function paneActions(m: Mod): Omit<PaneActions, 'press'> {
       })())
     },
     explore: () => quietly(explore(m)),
+    history: () => quietly(m.state.view.update(v => ({ ...v, history: !v.history }))),
   }
 }
 

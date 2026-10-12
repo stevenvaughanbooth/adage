@@ -2,43 +2,43 @@
 source: crates/adage-cli/src/ui/tests.rs
 expression: text
 ---
- adage    1 Live   2 Reflexes (3)  3 Map   4 Health (2)  5 Settings   6 Home                                                   harbor-dispatch · LIVE
+ adage    1 Live   2 Reflexes   3   3 Map   4 Health  2   5 Settings   6 Home                                              ◆ harbor-dispatch ▾ · LIVE
+──────────────────━━━━━━━━━━━━────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ / filter reflexes, commands, files                                         │ ◠ The gist of tests-after-rules-edit
+ FIRE 3  PRIME 6  INHIBIT 1  ◌ quiet 1  all states ▾                        │    PRIME    Suggests   ○ nascent ── ● forming ── ● firm
+                                                                            │
+  ▾ incidents · v0.3.0 ──────────────────────────────────────── 3 reflexes  │ ╭─ WHEN ──────────────────╮         ╭─ DO ─────────────────────╮
+  F a prompt names a ti… → the gist of lookup-incident     ▰▰▰▰▰▱    24/25  │ │ an edit touches         │─── ◠ ──▶│ npm run check -- {tests} │
+  F bin/fetch-incident … → the gist of read-linked-files   ▰▰▰▰▰▱    13/17  │ │ src/dispatch/rules_*.ts │         │                          │
+  I npm test fails: HAR… → the gist of dead-end-npm-test   ▰▰▱▱▱▱    11/43  │ ╰─────────────────────────╯         ╰──────────────────────────╯
+                                                                            │
+  ▾ intents · v0.3.0 ──────────────────────────────────────────── 1 reflex  │ Evidence ──────────────────────────────────────────────────────────────
+  P a prompt means: run… → the gist of start-wi…  forming  ▰▰▰▰▱▱      6/9  │ Saves            ~1.25 calls when followed
+                                                                            │ Confidence       ━━━━━━━━━━━━━━━━━━━━━━━━──  0.93 · lower bound 0.40
+  ▾ Learned here · v0.3.0 ───────────────────────────────────── 2 reflexes  │ Learned from     0 of 7 triggers took it · a desire path
+  P a prompt means: add… → the gist of card-car…  forming  ▰▰▰▰▰▱ 4 traces  │ Since installed  nothing yet: it has not fired here
+▌ P edit …/rules_*.ts    → the gist of tests-after-rules…         by value  │ Finish line      adage asks for it once if the agent stops without
+                                                                            │                  running it
+  ▾ From pack · harbor-skills · v0.3.0 ────────────────────────── 1 reflex  │
+  F edit CHANGELOG.md    → the gist of release-notes-s2-…                –  │ What the agent sees · example values ──────────────────────────  r  raw
+                                                                            │ No preview: the reflex has no directive text.
+  ▾ Waiting for review ────────────────────────────────────────── 1 reflex  │
+  ○ edit api/*.yaml      → the gist of regen-openapi-cli…  ▰▰▰▰▰▱      3/4  │ Review ────────────────────────────────────────────────────────────────
+                                                                            │  s  strengthen    x  extinguish    a  approve    n  pin    d  delegate
+  ▾ Quiet · agents already do this; approve to deliver ────────── 1 reflex  │  t  traces (0)    o  open in map
+  ◌ bin/fetch-incident … → the gist of read-before-edit-…  ▰▰▰▰▰▱    21/23  │
+                                                                            │ ▸ Details ────────────────────────────────────────────────  enter  open
+  ▾ Instincts · v0.1.0 ──────────────────────────────────────── 1 instinct  │
+  P edit registry/*.csv  → the gist of finish-line/regen…         built in  │
+                                                                            │
+  ▸ Extinguished ──────────────────────────────────────────────── 1 reflex  │
+                                                                            │
+                                                                            │
+                                                                            │
+                                                                            │
+                                                                            │
+                                                                            │
+                                                                            │
+                                                                            │
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- / filter reflexes, commands, files                     │  ◠ tests-after-rules-edit
- FIRE 3  PRIME 6  INHIBIT 1  ◌ quiet 1  all states ▾    │  mode     Suggest · No execution grant
-                                                        │  when     an edit touches src/dispatch/rules_*.ts
- ▾ harbor-dispatch/incidents@0.3.0                      │  do       npm run check -- {tests}
-   F ◠ the gist of lookup-incident    firm     24/25    │  PRIME · firm · harbor-dispatch/learned@0.3.0
-   F ◠ the gist of read-linked-files  firm     13/17    │
-   I ◠ the gist of dead-end-npm-test  firm     11/43    │  ADVISORY PREVIEW (EXAMPLE VALUES)
-                                                        │    (no preview: the reflex has no directive text)
- ▾ harbor-dispatch/intents@0.3.0                        │
-   P ◠ the gist of start-with-npm-c…  forming  6/9      │  EVIDENCE
-                                                        │    from conditioning: value: saves ~1.25 calls when followed (P(saves) 0.93, 90% lower bound
- ▾ harbor-dispatch/learned@0.3.0                        │    0.40); 7 triggers, 0 ran it — a desire path: no trace took the step yet, so its strength
-   P ▤ the gist of card-carrier-rul…  forming  4 traces │    rests on the value estimate
-▌  P ◠ the gist of tests-after-rule…  firm     value    │    live since installed: fired 0 · followed 0 · not observed within 3 batches 0 · finish
-                                                        │    line met 0
- ▾ @imported/@bound/harbor-skills@0.3.0 · pack          │    enforced: after an edit to src/dispatch/rules_*.ts the agent is told to run `npm run
-   F ◈ the gist of release-notes-s2…  firm     –        │    check -- {tests}`; if it then stops without running it, Adage asks it once to run it
-                                                        │    before finishing (at most 2 such requests a session)
- ▾ nascent · waits for review                           │
-   ○ ◠ the gist of regen-openapi-cl…  nascent  3/4      │  LIFECYCLE
-                                                        │    ○ nascent ──── ● forming ──── ● firm
- ▾ quiet · agents already do this; approve to deliver   │    ceiling fire · effect observe
-   ◌ ◠ the gist of read-before-edit…  quiet    21/23    │
-                                                        │  ACTIONS
- ▾ instincts · adage/finish-line@0.1.0                  │    s strengthen   w weaken   x extinguish   a approve   n pin   m dismiss
-   P ◉ the gist of finish-line/rege…  firm     –        │    d delegate   t traces (0)   o open in map
-                                                        │    same as adage review strengthen harbor-dispatch/learned tests-after-rules-edit from any
- ▸ extinguished · 1                                     │    shell
-                                                        │
-                                                        │
-                                                        │
-                                                        │
-                                                        │
-                                                        │
-                                                        │
-                                                        │
-──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- ? keys · : palette · / filter · j/k move · enter expand · tab next tab                                                                        q quit
+  ?  keys   :  palette   /  filter   f  repository   j/k  move   enter  expand   tab  next tab                                                q  quit

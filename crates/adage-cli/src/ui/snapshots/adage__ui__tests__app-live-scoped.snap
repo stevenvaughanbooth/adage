@@ -1,0 +1,34 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+expression: text
+---
+ adage    1 Live   2 Reflexes  2   3 Map   4 Health  2   5 Settings   6 Home                 ◆ harbor-dispatch ▾ · LIVE
+─────────━━━━━━━━───────────────────────────────────────────────────────────────────────────────────────────────────────
+─ now ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+
+
+
+
+
+
+
+
+
+
+ ┄ Claude Code · 2 traces ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+ 12:04:04          ▪ tools    · 4 tool batches · 2 traces · 10 calls, nothing to say
+ 12:04:05  000b0b  ▪ tools    adage → ◠ INHIBIT    npm run check
+ 12:04:08          ▪ tools    · 2 tool batches · 2 traces · 3 calls, nothing to say
+
+─ conditioning ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Nothing conditioned yet. Runs appear here as they finish · adage condition
+   ○ 1 to look over · adage review
+
+
+
+─ health ───────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ + hooks claude    + 4 reflexes    + auto-condition    ! no model · adage models fetch
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ?  keys   :  palette   p  pause   f  repository   /  filter   enter  inspect                                  q  quit

@@ -87,11 +87,45 @@ impl Loader {
     }
 }
 
+/// What a job produced: lines to read, or what a card shows.
+pub enum Outcome {
+    Lines(Vec<String>),
+    /// The history conditioning would read, for its confirmation card (`history::preview`).
+    Sources(Box<crate::history::Preview>),
+    /// A conditioning run's result, for its card (`adage condition --json`).
+    Conditioned(Box<super::conditioned::Card>),
+}
+
+impl Outcome {
+    /// The outcome as lines of text, wherever no card is drawn.
+    pub fn into_lines(self) -> Vec<String> {
+        match self {
+            Outcome::Lines(lines) => lines,
+            Outcome::Sources(p) => p.lines(),
+            Outcome::Conditioned(c) => c.text_lines(),
+        }
+    }
+}
+
+impl From<Vec<String>> for Outcome {
+    fn from(lines: Vec<String>) -> Outcome {
+        Outcome::Lines(lines)
+    }
+}
+
+impl From<crate::history::Preview> for Outcome {
+    fn from(p: crate::history::Preview) -> Outcome {
+        Outcome::Sources(Box::new(p))
+    }
+}
+
 pub enum JobMsg {
     /// A share done (0..=1) and a line of status.
     Progress(f64, String),
-    /// The result: lines to show, or the error.
-    Done(Result<Vec<String>, String>),
+    /// A conditioning run's stage started or advanced (`adage condition --progress`).
+    Stage(adage_learn::progress::Event),
+    /// The result, or the error.
+    Done(Result<Outcome, String>),
 }
 
 /// A one-off job with progress.
@@ -101,30 +135,40 @@ pub struct Job {
     pub ratio: f64,
     pub status: String,
     pub cancelable: bool,
+    /// A conditioning run's stages, as reported so far (`None` for other jobs).
+    pub stages: Option<super::conditioned::Stages>,
 }
 
 impl Job {
-    pub fn spawn(title: &str, f: impl FnOnce(&Sender<JobMsg>) -> anyhow::Result<Vec<String>> + Send + 'static) -> Job {
+    pub fn spawn<T: Into<Outcome>>(
+        title: &str,
+        f: impl FnOnce(&Sender<JobMsg>) -> anyhow::Result<T> + Send + 'static,
+    ) -> Job {
         let (tx, rx) = mpsc::channel();
         std::thread::spawn(move || {
             let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(&tx)));
             let msg = match r {
-                Ok(Ok(lines)) => Ok(lines),
+                Ok(Ok(out)) => Ok(out.into()),
                 Ok(Err(e)) => Err(format!("{e:#}")),
                 Err(_) => Err("the job panicked".into()),
             };
             let _ = tx.send(JobMsg::Done(msg));
         });
-        Job { title: title.to_string(), rx, ratio: 0.0, status: "starting…".into(), cancelable: false }
+        Job { title: title.to_string(), rx, ratio: 0.0, status: "starting…".into(), cancelable: false, stages: None }
     }
 
     /// Drain progress; `Some` once the job is done.
-    pub fn poll(&mut self) -> Option<Result<Vec<String>, String>> {
+    pub fn poll(&mut self) -> Option<Result<Outcome, String>> {
         while let Ok(m) = self.rx.try_recv() {
             match m {
                 JobMsg::Progress(r, s) => {
                     self.ratio = r.clamp(0.0, 1.0);
                     self.status = s;
+                }
+                JobMsg::Stage(e) => {
+                    if let Some(st) = &mut self.stages {
+                        st.record(e, Instant::now());
+                    }
                 }
                 JobMsg::Done(r) => return Some(r),
             }
@@ -229,7 +273,15 @@ fn learn_one(paths: &Paths, root: &Path) -> anyhow::Result<Vec<String>> {
             anyhow::bail!("{}", e.text);
         }
         none_read |= ticks.iter().any(|t| t.run.as_ref().is_some_and(|r| r.read == Some(0)));
-        lines.extend(ticks.into_iter().map(|t| t.text));
+        // The run in the words the conditioning card uses (`Read 104 traces · 2 new`), then each
+        // change as the ticker says it.
+        lines.extend(ticks.into_iter().map(|t| {
+            if t.tone == super::learnlog::Tone::Run {
+                run_sentence(l)
+            } else {
+                t.text
+            }
+        }));
     }
     if none_read {
         // An empty run names what fills it, instead of a bare 0/0.
@@ -239,4 +291,16 @@ fn learn_one(paths: &Paths, root: &Path) -> anyhow::Result<Vec<String>> {
         );
     }
     Ok(lines)
+}
+
+/// A `learn.log` run line as one sentence: `Read 104 traces · 2 new, 1 stronger`.
+pub(super) fn run_sentence(l: &serde_json::Value) -> String {
+    let strength = |c: &serde_json::Value, k: &str| c[k].as_str().and_then(super::theme::parse_strength);
+    let changes = l["changes"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|c| (c["change"].as_str().unwrap_or(""), strength(c, "from"), strength(c, "to")));
+    let read = l["sessions_read"].as_u64().unwrap_or(0) as usize;
+    format!("Read {} · {}", crate::words::count(read, "trace"), super::conditioned::changed_words(changes))
 }

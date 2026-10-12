@@ -15,6 +15,7 @@ use super::jobs::{self, Job, Loaded, Loader, Want};
 use super::keys;
 use super::palette::{self, Palette};
 use super::routes::{RouteRow, Routes};
+use super::splash;
 use super::tabs;
 use super::term::{self, Term};
 use super::theme::Theme;
@@ -133,6 +134,13 @@ pub enum Modal {
         buffer: String,
         error: Option<String>,
     },
+    /// The repository switcher: which repository Live, Reflexes and Map show.
+    Repos {
+        query: String,
+        sel: usize,
+    },
+    /// Conditioning: what it will read, how far it has got, what it did (`conditioned`).
+    Conditioning(Box<super::conditioned::Flow>),
 }
 
 /// What the runtime must do after a key.
@@ -207,6 +215,9 @@ pub struct AppState {
     pub pending_job_action: Option<Action>,
     pub job_cancelable: bool,
     pub home_sel: usize,
+    /// The key of the repository the app was opened in (`None` outside one): the scope Live,
+    /// Reflexes and Map start with. Health's `repo_key`, computed the same way, stands in until set.
+    pub here: Option<String>,
 }
 
 impl AppState {
@@ -231,7 +242,92 @@ impl AppState {
             pending_job_action: None,
             job_cancelable: false,
             home_sel: 0,
+            here: None,
         }
+    }
+
+    /// The repository the app was opened in.
+    pub fn here(&self) -> Option<&str> {
+        self.here.as_deref().or_else(|| self.health.as_ref().and_then(|h| h.repo_key.as_deref()))
+    }
+
+    /// The repository Live, Reflexes and Map show: `None` for every repository.
+    pub fn scope_key(&self) -> Option<&str> {
+        self.live.scope(self.here())
+    }
+
+    /// Whether a reflex belongs to the repository shown. A track with no repository applies to
+    /// every one.
+    pub fn in_scope(&self, r: &RouteRow) -> bool {
+        self.scope_key().is_none_or(|k| r.repo == k || r.repo.is_empty())
+    }
+
+    /// The reflexes of the repository shown, for its counts.
+    fn scoped_routes(&self) -> Option<Routes> {
+        match &self.routes {
+            Some(Ok(r)) => {
+                Some(Routes { rows: r.rows.iter().filter(|x| self.in_scope(x)).cloned().collect(), traces: r.traces })
+            }
+            _ => None,
+        }
+    }
+
+    /// The live view's review counts, for the repository shown (its reflex names stay for every
+    /// repository: the ticker names reflexes by them).
+    pub fn refresh_counts(&mut self) {
+        if let Some(Ok(all)) = &self.routes {
+            self.live.gists = all.gists();
+        }
+        if let Some(r) = self.scoped_routes() {
+            self.live.waiting = Some(r.waiting());
+            self.live.quiet = r.quiet();
+            self.live.needs = r.needs();
+        }
+    }
+
+    /// Show one repository (`Some(key)`), or every one (`None`).
+    pub fn set_scope(&mut self, key: Option<String>) {
+        let name = key.as_deref().map_or_else(|| "every repository".to_string(), super::scope::friendly);
+        self.live.all_repos = key.is_none();
+        if key.is_some() {
+            self.live.repo = key;
+        }
+        self.live.scroll = 0;
+        self.reflexes.sel = None;
+        self.map.sel = None;
+        self.refresh_counts();
+        self.toast(format!("Live, Reflexes and Map show {name}"), true);
+    }
+
+    /// The repositories the switcher offers, most recently active first.
+    pub fn known_repos(&self) -> Vec<super::scope::Known> {
+        let feed: Vec<&super::feed::FeedItem> = self.live.feed.iter().collect();
+        let ticks: Vec<(&str, u64)> = self.live.ticks.iter().filter_map(|t| Some((t.repo.as_deref()?, t.ts))).collect();
+        super::scope::known(&feed, &ticks, self.route_rows(), self.here(), self.scope_key())
+    }
+
+    /// The switcher's choices for `query`: each repository (`Some`), then every repository (`None`).
+    pub fn repo_choices(&self, query: &str) -> Vec<Option<super::scope::Known>> {
+        let q = query.trim();
+        let mut v: Vec<Option<super::scope::Known>> = self
+            .known_repos()
+            .into_iter()
+            .filter(|k| {
+                q.is_empty() || super::fuzzy::score(q, &k.name).is_some() || super::fuzzy::score(q, &k.key).is_some()
+            })
+            .map(Some)
+            .collect();
+        if q.is_empty() || super::fuzzy::score(q, "all repositories").is_some() {
+            v.push(None);
+        }
+        v
+    }
+
+    /// Open the repository switcher, on the repository shown now.
+    pub fn open_repos(&mut self) {
+        let current = self.scope_key().map(String::from);
+        let sel = self.repo_choices("").iter().position(|c| c.as_ref().map(|k| k.key.clone()) == current).unwrap_or(0);
+        self.modal = Some(Modal::Repos { query: String::new(), sel });
     }
 
     /// The effective configuration, as `adage config` shows it.
@@ -286,7 +382,31 @@ impl AppState {
         self.toasts.retain(|t| t.ttl > 0);
     }
 
-    pub fn complete_job(&mut self, title: &str, done: Result<Vec<String>, String>) {
+    pub fn complete_job(&mut self, title: &str, done: Result<jobs::Outcome, String>) {
+        use super::conditioned::Flow;
+        // A conditioning run can end while its card is hidden and another is open: that one stays.
+        let busy = !matches!(self.modal, None | Some(Modal::Progress { .. } | Modal::Conditioning(_)));
+        let done = match done {
+            Ok(jobs::Outcome::Conditioned(card)) if busy => {
+                self.toast(format!("Conditioning done: {}", card.sentence()), true);
+                return;
+            }
+            Ok(jobs::Outcome::Conditioned(card)) => {
+                // Its sections appear in turn, unless motion is reduced (and never in tests).
+                let reveal = Theme::from_env().motion && !cfg!(test);
+                self.modal = Some(Modal::Conditioning(Box::new(Flow::result(*card, reveal))));
+                self.job_cancelable = false;
+                return;
+            }
+            Ok(jobs::Outcome::Sources(p)) if matches!(self.pending_job_action, Some(Action::LearnNow)) => {
+                self.pending_job_action = None;
+                self.job_cancelable = false;
+                let repo = self.here().unwrap_or_default().to_string();
+                self.modal = Some(Modal::Conditioning(Box::new(Flow::confirm(*p, repo))));
+                return;
+            }
+            other => other.map(jobs::Outcome::into_lines),
+        };
         self.modal = None;
         self.job_cancelable = false;
         let pending = self.pending_job_action.take();
@@ -369,6 +489,11 @@ impl AppState {
                 if code == KeyCode::Char('m') && !open {
                     return Some(Cmd::OpenWeb { focus: None, traces: false });
                 }
+                // The repository switcher (the watch pane's `f` only toggles every repository).
+                if code == KeyCode::Char('f') && !open {
+                    self.open_repos();
+                    return None;
+                }
                 watch::live_key(&mut self.live, code, mods);
                 None
             }
@@ -443,11 +568,21 @@ impl AppState {
                 }
             }
             palette::Run::Connect(harness) => self.start_fix(Fix::InstallHooks(harness.into())),
+            // Conditioning starts from the card that shows what it will read.
+            palette::Run::Tool(Tool::Condition) => Some(Cmd::PreviewLearning),
             palette::Run::Tool(tool) => {
                 Some(if tool.mutates() { Cmd::PrepareTool(tool) } else { Cmd::Do(Action::Tool(tool)) })
             }
             palette::Run::Web { traces } => Some(Cmd::OpenWeb { focus: None, traces }),
             palette::Run::Tab(t) => self.switch(t),
+            palette::Run::Repos => {
+                self.open_repos();
+                None
+            }
+            palette::Run::Scope(key) => {
+                self.set_scope(key);
+                None
+            }
             palette::Run::Setting(i) => {
                 self.setting_sel = i.min(self.settings.len().saturating_sub(1));
                 self.switch(Tab::Settings)
@@ -513,6 +648,7 @@ impl AppState {
                 self.modal = Some(Modal::Viewer { title, source, lines, scroll: s });
                 None
             }
+            Modal::Conditioning(flow) => super::conditioned::key(self, flow, code),
             Modal::Progress { .. } => {
                 if code == KeyCode::Esc && self.job_cancelable {
                     return Some(Cmd::CancelJob);
@@ -529,6 +665,30 @@ impl AppState {
                     None
                 }
             },
+            Modal::Repos { mut query, mut sel } => {
+                let n = self.repo_choices(&query).len();
+                match code {
+                    KeyCode::Esc => return None,
+                    KeyCode::Enter => {
+                        let choice = self.repo_choices(&query).into_iter().nth(sel)?;
+                        self.set_scope(choice.map(|k| k.key));
+                        return None;
+                    }
+                    KeyCode::Up => sel = sel.saturating_sub(1),
+                    KeyCode::Down => sel = (sel + 1).min(n.saturating_sub(1)),
+                    KeyCode::Backspace => {
+                        query.pop();
+                        sel = 0;
+                    }
+                    KeyCode::Char(c) if query.chars().count() < 60 => {
+                        query.push(c);
+                        sel = 0;
+                    }
+                    _ => {}
+                }
+                self.modal = Some(Modal::Repos { query, sel });
+                None
+            }
             Modal::Edit { key, mut buffer, .. } => match code {
                 KeyCode::Esc => None,
                 // Validated by `adage_store::config::set`; an error reopens the editor.
@@ -648,6 +808,26 @@ impl AppState {
 // Drawing
 
 pub fn draw(f: &mut Frame, s: &AppState, ctx: &Ctx) {
+    if draw_base(f, s, ctx).is_some() {
+        draw_overlays(f, s, ctx);
+    }
+}
+
+/// The app's rows: the tab bar, its rule, the body, the rule above the status bar, the status bar.
+fn regions(area: Rect) -> [Rect; 5] {
+    Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Min(5),
+        Constraint::Length(1),
+        Constraint::Length(1),
+    ])
+    .areas(area)
+}
+
+/// Everything but a popup or the palette. Returns the area the tab's content took (where a tab
+/// switch eases in), or `None` when the terminal is too small to draw the app at all.
+pub(super) fn draw_base(f: &mut Frame, s: &AppState, ctx: &Ctx) -> Option<Rect> {
     let t = &ctx.theme;
     let area = f.area();
     if area.width < 40 || area.height < 10 {
@@ -655,25 +835,18 @@ pub fn draw(f: &mut Frame, s: &AppState, ctx: &Ctx) {
             Paragraph::new(t.text("adage ui: make the terminal larger (40×10 at least)")).wrap(Wrap { trim: true }),
             area,
         );
-        return;
+        return None;
     }
-    let [tabs_a, rule_a, body, rule_b, status] = Layout::vertical([
-        Constraint::Length(1),
-        Constraint::Length(1),
-        Constraint::Min(5),
-        Constraint::Length(1),
-        Constraint::Length(1),
-    ])
-    .areas(area);
+    let [tabs_a, rule_a, body, rule_b, status] = regions(area);
     // Toasts never cover the tab: the newest sits on the rule above the status bar, and any
     // older ones take rows from the bottom of the tab while they last.
     let extra = (s.toasts.len() as u16).saturating_sub(1).min(body.height.saturating_sub(5));
     let [content, _] = Layout::vertical([Constraint::Min(1), Constraint::Length(extra)]).areas(body);
-    draw_tabs(f, tabs_a, s, ctx);
-    f.render_widget(Paragraph::new(view::rule("", None, area.width, t)), rule_a);
+    let active = draw_tabs(f, tabs_a, s, ctx);
+    f.render_widget(Paragraph::new(tab_rule(area.width, active, t)), rule_a);
     match s.tab {
         Tab::Home => tabs::home::draw(f, content, s, ctx),
-        Tab::Live => view::draw_live(f, content, &s.live, s.health.as_ref(), ctx, false),
+        Tab::Live => view::draw_live_in(f, content, &s.live, s.health.as_ref(), s.here(), ctx, false),
         Tab::Reflexes => tabs::reflexes::draw(f, content, s, ctx),
         Tab::Map => tabs::map::draw(f, content, s, ctx),
         Tab::Health => tabs::health::draw(f, content, s, ctx),
@@ -682,31 +855,57 @@ pub fn draw(f: &mut Frame, s: &AppState, ctx: &Ctx) {
     f.render_widget(Paragraph::new(view::rule("", None, area.width, t)), rule_b);
     draw_toasts(f, Rect { height: extra + 1, y: rule_b.y - extra, ..rule_b }, s, t);
     draw_status(f, status, s, ctx);
-    if let Some(m) = &s.modal {
-        draw_modal(f, body, m, s, t);
+    Some(content)
+}
+
+/// The open popup, then the palette, over the app.
+pub(super) fn draw_overlays(f: &mut Frame, s: &AppState, ctx: &Ctx) {
+    let t = &ctx.theme;
+    let area = f.area();
+    let [_, _, body, _, _] = regions(area);
+    match &s.modal {
+        Some(Modal::Repos { query, sel }) => draw_repos(f, body, s, query, *sel, ctx),
+        Some(m) => draw_modal(f, body, m, s, t),
+        None => {}
     }
     if let Some(p) = &s.palette {
         palette::draw(f, area, s, p, t);
     }
 }
 
-fn draw_tabs(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
+/// The rule under the tab bar, with the current tab underlined in the accent: `───━━━━━━━───`.
+fn tab_rule(width: u16, active: Option<(u16, u16)>, t: &Theme) -> Line<'static> {
+    let Some((x, w)) = active.filter(|(x, w)| x + w <= width) else { return view::rule("", None, width, t) };
+    let thin = t.ch("─", "-");
+    Line::from(vec![
+        Span::styled(thin.repeat(x as usize), t.rule()),
+        Span::styled(t.ch("━", "=").repeat(w as usize), t.accent()),
+        Span::styled(thin.repeat((width - x - w) as usize), t.rule()),
+    ])
+}
+
+/// The tab bar. Returns the current tab's columns (where its underline goes).
+fn draw_tabs(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) -> Option<(u16, u16)> {
     let t = &ctx.theme;
     // Narrow terminals name only the current tab (the others keep their number), so where you
     // are is never cut off the edge.
     let tabs = |compact: bool| {
         let mut spans = vec![Span::styled(" adage", t.title()), Span::raw(if compact { " " } else { "   " })];
+        let mut active = None;
         for (i, (tab, name)) in TABS.iter().enumerate() {
             let badge = match tab {
                 Tab::Health => s.health.as_ref().map_or(0, |h| h.count(Status::Warn) + h.count(Status::Fail)),
-                Tab::Reflexes => match &s.routes {
-                    Some(Ok(r)) => r.waiting(),
-                    _ => 0,
-                },
+                Tab::Reflexes => s.scoped_routes().map_or(0, |r| r.waiting()),
                 _ => 0,
             };
             if *tab == s.tab {
-                spans.push(Span::styled(format!(" {} {name} ", i + 1), t.accent().patch(t.selected()).patch(t.bold())));
+                let x: usize = spans.iter().map(|s| s.width()).sum();
+                let pill = format!(" {} {name} ", i + 1);
+                active = Some((x as u16, pill.chars().count() as u16));
+                spans.push(Span::styled(pill, t.accent().patch(t.selected()).patch(t.bold())));
+                if badge > 0 {
+                    spans.push(Span::raw(" "));
+                }
             } else if compact {
                 spans.push(Span::styled(format!(" {}", i + 1), t.ink2()));
             } else {
@@ -714,18 +913,28 @@ fn draw_tabs(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
                 spans.push(Span::styled(format!("{name} "), t.ink2()));
             }
             if badge > 0 {
-                spans.push(Span::styled(format!("({badge})"), t.yellow()));
+                // The same pill as a chip anywhere: what waits on this tab.
+                let tone = if *tab == Tab::Health && s.health.as_ref().is_some_and(|h| h.count(Status::Fail) > 0) {
+                    super::kit::Tone::Fail
+                } else {
+                    super::kit::Tone::Warn
+                };
+                spans.push(super::kit::badge(badge, tone, t));
             }
             if !compact {
                 spans.push(Span::raw(" "));
             }
         }
-        spans
+        (spans, active)
     };
     let full = tabs(false);
-    let mut spans =
-        if full.iter().map(|s| s.width()).sum::<usize>() <= area.width as usize { full } else { tabs(true) };
-    let mut right = vec![Span::styled(format!("{}{}", ctx.label, t.sep()), t.ink2())];
+    let (mut spans, active) =
+        if full.0.iter().map(|s| s.width()).sum::<usize>() <= area.width as usize { full } else { tabs(true) };
+    // The repository Live, Reflexes and Map show, on those tabs (`f` or the palette switches it);
+    // elsewhere, the repository the app was opened in.
+    let scoped = matches!(s.tab, Tab::Live | Tab::Reflexes | Tab::Map);
+    let mut right = if scoped { scope_chip(s, t, false) } else { vec![Span::styled(ctx.label.clone(), t.ink2())] };
+    right.push(Span::styled(t.sep(), t.ink2()));
     if ctx.demo {
         right.insert(0, Span::styled(format!("demo{}", t.sep()), t.control()));
     }
@@ -742,17 +951,116 @@ fn draw_tabs(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
     }
     right.push(Span::raw(" "));
     let lw: usize = spans.iter().map(|s| s.width()).sum();
-    let rw: usize = right.iter().map(|s| s.width()).sum();
+    let mut rw: usize = right.iter().map(|s| s.width()).sum();
+    // Short of room, the scope keeps its last name (`billing`), not the whole origin.
+    if scoped && lw + rw >= area.width as usize {
+        let long: usize = scope_chip(s, t, false).iter().map(|s| s.width()).sum();
+        let chip = scope_chip(s, t, true);
+        rw = rw - long + chip.iter().map(|s| s.width()).sum::<usize>();
+        let n = chip.len();
+        right.splice(usize::from(ctx.demo)..usize::from(ctx.demo) + n, chip);
+    }
     if lw + rw < area.width as usize {
         spans.push(Span::raw(" ".repeat(area.width as usize - lw - rw)));
         spans.extend(right);
     }
     f.render_widget(Paragraph::new(Line::from(spans)), area);
+    active.map(|(x, w)| (x + area.x, w))
+}
+
+/// The scope in the tab bar: `◆ github.com/acme/billing ▾`, or `◆ all repositories ▾`.
+fn scope_chip(s: &AppState, t: &Theme, short: bool) -> Vec<Span<'static>> {
+    let name = match s.scope_key() {
+        None if short => "all".to_string(),
+        None => "all repositories".to_string(),
+        Some(k) if short => super::scope::short(k),
+        Some(k) => super::scope::friendly(k),
+    };
+    vec![
+        Span::styled(format!("{} ", t.ch("◆", "*")), t.accent()),
+        Span::styled(t.fit(&name, 48), t.bold()),
+        Span::styled(format!(" {}", t.ch("▾", "v")), t.dim()),
+    ]
+}
+
+/// The repository switcher: a search line, each repository with what is known of it (most
+/// recently active first), then every repository.
+fn draw_repos(f: &mut Frame, area: Rect, s: &AppState, query: &str, sel: usize, ctx: &Ctx) {
+    let t = &ctx.theme;
+    let choices = s.repo_choices(query);
+    let sel = sel.min(choices.len().saturating_sub(1));
+    let current = s.scope_key();
+    let name_w = choices.iter().flatten().map(|k| k.name.chars().count()).max().unwrap_or(16).clamp(16, 44);
+    let mut lines = vec![
+        Line::from(Span::styled("Live, Reflexes and Map show one repository at a time.", t.dim())),
+        Line::raw(""),
+        Line::from(vec![
+            Span::styled("/ ", t.key()),
+            Span::styled(query.to_string(), t.bold()),
+            Span::styled(t.ch("▌", "_"), t.accent()),
+        ]),
+        Line::raw(""),
+    ];
+    let head = lines.len();
+    for (i, c) in choices.iter().enumerate() {
+        let chosen = i == sel;
+        let pointer = if chosen {
+            Span::styled(format!("{} ", t.glyph(Glyph::Pointer)), t.accent().patch(t.bold()))
+        } else {
+            Span::raw("  ")
+        };
+        let base = if chosen { t.bold() } else { Style::default() };
+        let (mark, name, facts, shown) = match c {
+            Some(k) => {
+                let mut facts = Vec::new();
+                if k.here {
+                    facts.push("opened here".to_string());
+                }
+                match k.reflexes {
+                    0 => facts.push("no reflexes yet".into()),
+                    1 => facts.push("1 reflex".into()),
+                    n => facts.push(format!("{n} reflexes")),
+                }
+                if let Some(ts) = k.last {
+                    facts.push(format!("active {}", view::clock(ts, ctx.tz, false)));
+                }
+                (t.ch("◆", "*"), k.name.clone(), facts.join(&t.sep()), current == Some(k.key.as_str()))
+            }
+            None => (
+                t.ch("◇", "o"),
+                "All repositories".to_string(),
+                "every repository's activity and reflexes".to_string(),
+                current.is_none(),
+            ),
+        };
+        let mut spans = vec![
+            pointer,
+            Span::styled(format!("{mark} "), t.accent()),
+            Span::styled(t.pad(&t.fit(&name, name_w), name_w + 2), base),
+            Span::styled(facts, t.ink2()),
+        ];
+        if shown {
+            spans.push(Span::styled(format!("  {} shown", t.glyph(Glyph::Ok)), t.green()));
+        }
+        lines.push(Line::from(spans));
+    }
+    if choices.is_empty() {
+        lines.push(Line::from(Span::styled(format!("Nothing matches {}.", t.quote(query)), t.dim())));
+    }
+    lines.push(Line::raw(""));
+    lines.push(Line::from(Span::styled(
+        format!("{} move{}enter show{}type to search{}esc close", t.arrows(), t.sep(), t.sep(), t.sep()),
+        t.dim(),
+    )));
+    // Scrolled so the selection shows above the hint lines.
+    let room = (area.height as usize).saturating_sub(4 + 2);
+    let scroll = (head + sel + 1).saturating_sub(room);
+    view::popup(f, area, "Repository", lines, t, scroll as u16);
 }
 
 fn draw_status(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
     let t = &ctx.theme;
-    let room = (area.width as usize).saturating_sub(9);
+    let room = (area.width as usize).saturating_sub(11);
     let mut spans = vec![Span::raw(" ")];
     let typing = match s.tab {
         Tab::Live if s.live.filtering => Some(&s.live.filter),
@@ -763,14 +1071,15 @@ fn draw_status(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
         spans.push(Span::styled("/ ", t.key()));
         spans.push(Span::raw(q.clone()));
         spans.push(Span::styled(t.ch("▌", "_"), t.accent()));
-        spans.push(Span::styled(format!("   enter keep{}esc clear", t.sep()), t.dim()));
+        spans.push(Span::raw("   "));
+        spans.extend(super::kit::hints(&[("enter", "keep"), ("esc", "clear")], t, room));
     } else {
         spans.extend(keys::bar(&[keys::GLOBAL, s.tab.keys()], t, room));
     }
     let used: usize = spans.iter().map(|s| s.width()).sum();
-    spans.push(Span::raw(" ".repeat((area.width as usize).saturating_sub(used + 7))));
-    spans.push(Span::styled("q", t.key()));
-    spans.push(Span::styled(" quit ", t.dim()));
+    spans.push(Span::raw(" ".repeat((area.width as usize).saturating_sub(used + 9))));
+    spans.extend(super::kit::hints(&[("q", "quit")], t, 8));
+    spans.push(Span::raw(" "));
     f.render_widget(Paragraph::new(Line::from(spans)), area);
 }
 
@@ -803,6 +1112,8 @@ fn app_help(tab: Tab, t: &Theme) -> Vec<Line<'static>> {
 
 fn draw_modal(f: &mut Frame, area: Rect, m: &Modal, s: &AppState, t: &Theme) {
     match m {
+        // Drawn by `draw_repos`, which needs the clock's offset.
+        Modal::Repos { .. } => {}
         Modal::Form(form) => forms::draw(f, area, form, t),
         Modal::Help { scroll } => view::popup_keys(f, area, app_help(s.tab, t), t, *scroll),
         Modal::Confirm { title, lines, scroll, .. } => view::popup(f, area, title, lines.clone(), t, *scroll),
@@ -825,6 +1136,7 @@ fn draw_modal(f: &mut Frame, area: Rect, m: &Modal, s: &AppState, t: &Theme) {
             ls.push(Line::from(Span::styled(format!("{} scroll{}esc closes", t.arrows(), t.sep()), t.dim())));
             view::popup(f, area, title, ls, t, *scroll)
         }
+        Modal::Conditioning(flow) => super::conditioned::draw(f, area, flow, t),
         Modal::Progress { title, status, ratio } => {
             let r = view::centered(area, 64.min(area.width.saturating_sub(2)), 5);
             f.render_widget(ratatui::widgets::Clear, r);
@@ -962,6 +1274,22 @@ fn execute(
         s.message("Demo workspace", vec!["The demo uses temporary sample data. To set up your agent or condition real history, choose Open repository from the palette first.".into()], false);
         return false;
     }
+    // A conditioning run goes on in the background with its card hidden: what would start another
+    // job shows it again instead.
+    if let Some(j) = job.as_ref().filter(|j| j.stages.is_some()) {
+        if matches!(
+            &cmd,
+            Cmd::PreviewLearning
+                | Cmd::PrepareTool(_)
+                | Cmd::Do(Action::Tool(_) | Action::FetchModel | Action::LearnNow)
+        ) {
+            s.modal = Some(Modal::Conditioning(Box::new(super::conditioned::Flow::running(
+                j,
+                s.here().unwrap_or_default().to_string(),
+            ))));
+            return false;
+        }
+    }
     match cmd {
         Cmd::OpenRepository(_) => unreachable!("handled by the event loop"),
         Cmd::CancelJob => { *job = None; s.pending_job_action = None; s.job_cancelable = false; s.modal = None; },
@@ -1033,7 +1361,7 @@ fn execute(
                 if ctx.demo && tool.mutates() { s.message("Demo workspace",vec!["Choose Open repository to work with your own data.".into()],false); return false; }
                 let j=tools::run(ctx.paths.clone(),ctx.root.clone(),tool);
                 s.job_cancelable=j.cancelable;
-                s.modal=Some(Modal::Progress{title:j.title.clone(),status:j.status.clone(),ratio:0.0}); *job=Some(j);
+                s.modal=Some(progress_modal(&j, s)); *job=Some(j);
             },
             Action::Review { verb, reference, route, expected_revision } => {
                 // `crate::review` takes the lexicon's verbs.
@@ -1072,7 +1400,7 @@ fn execute(
             Action::LearnNow => match ctx.root.clone() {
                 Some(root) => {
                     let j = tools::run(ctx.paths.clone(), Some(root), Tool::Condition);
-                    s.modal = Some(Modal::Progress { title: j.title.clone(), status: j.status.clone(), ratio: 0.0 });
+                    s.modal = Some(progress_modal(&j, s));
                     *job = Some(j);
                 }
                 None => s.message(
@@ -1110,6 +1438,15 @@ fn execute(
         },
     }
     false
+}
+
+/// The card a job shows while it runs: a conditioning run's stages, else a progress bar.
+fn progress_modal(j: &Job, s: &AppState) -> Modal {
+    if j.stages.is_some() {
+        Modal::Conditioning(Box::new(super::conditioned::Flow::running(j, s.here().unwrap_or_default().to_string())))
+    } else {
+        Modal::Progress { title: j.title.clone(), status: j.status.clone(), ratio: 0.0 }
+    }
 }
 
 /// The fail-open log, newest at the bottom: titled for what it is, the file named inside.
@@ -1154,12 +1491,15 @@ fn run_inner(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>, from_watch: bo
     loader.want(Want::Routes);
     let mut sources = Sources::new(&ctx);
     let mut s = AppState::new(ctx.paths.config());
+    s.here = here_key(&ctx);
     s.rewrite_marker = Some(ctx.paths.rewrite_off());
     s.load_settings(&config::load(&ctx.paths));
     let mut job: Option<Job> = None;
     let mut dashboard = None;
     let mut ctx = ctx;
     let mut t = Term::enter()?;
+    // The start screen (`splash`): Adage's brain for a moment, over the app it dissolves into.
+    let mut splash = t.terminal.size().ok().and_then(|z| splash::start(&ctx, (z.width, z.height), from_watch));
     if from_watch {
         s.tab = Tab::Live;
         if web {
@@ -1169,6 +1509,9 @@ fn run_inner(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>, from_watch: bo
         }
     }
     let mut ticks = 0u64;
+    // Tab switches ease in and popups grow in (`motion`), at the start screen's cadence while
+    // they run; never under ADAGE_REDUCED_MOTION.
+    let mut motion = super::motion::Motion::new(&s, ctx.theme.motion);
     loop {
         if let Some(f) = before_tick.as_mut() {
             f();
@@ -1176,19 +1519,19 @@ fn run_inner(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>, from_watch: bo
         while let Ok(m) = loader.rx.try_recv() {
             match m {
                 Loaded::Health(h) => {
+                    // The first checks select what the Health tab shows first (its first problem).
+                    let first = s.health.is_none();
                     s.health = Some(*h);
                     let n = s.checks_len();
                     s.check_sel = s.check_sel.min(n.saturating_sub(1));
+                    if first {
+                        s.check_sel = s.health.as_ref().map_or(0, tabs::health::first);
+                    }
                     ctx.tz = view::local_offset();
                 }
                 Loaded::Routes(r) => {
-                    if let Ok(rs) = &r {
-                        s.live.waiting = Some(rs.waiting());
-                        s.live.quiet = rs.quiet();
-                        s.live.needs = rs.needs();
-                        s.live.gists = rs.gists();
-                    }
                     s.routes = Some(r);
+                    s.refresh_counts();
                 }
             }
         }
@@ -1207,24 +1550,74 @@ fn run_inner(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>, from_watch: bo
                         *status = j.status.clone();
                         *ratio = j.ratio;
                     }
+                    if let Some(Modal::Conditioning(flow)) = &mut s.modal {
+                        flow.follow(j);
+                    }
                 }
             }
         }
-        let key = s.health.as_ref().and_then(|h| h.repo_key.clone());
-        sources.poll(&mut s.live, key.as_deref());
+        let here = s.here().map(String::from);
+        sources.poll(&mut s.live, here.as_deref());
+        // Opened outside a repository: the most recently active one, once there is one.
+        let unsettled = s.live.repo.is_none();
+        s.live.settle(here.as_deref());
+        if unsettled && s.live.repo.is_some() {
+            s.refresh_counts();
+        }
         s.live.tick_pulse(Instant::now(), ctx.theme.motion);
-        ticks += 1;
-        s.tick();
-        if ticks.is_multiple_of(20) {
-            s.load_settings(&config::load(&ctx.paths));
+        // The app's frames count toasts' lives and the settings reload; the start screen's
+        // faster frames do not (nothing of the app shows under it).
+        if splash.is_none() {
+            ticks += 1;
+            s.tick();
+            if ticks.is_multiple_of(20) {
+                s.load_settings(&config::load(&ctx.paths));
+            }
         }
         s.notices.extend(super::take_notices());
         if s.notices.len() > 20 {
             let extra = s.notices.len() - 20;
             s.notices.drain(..extra);
         }
-        t.terminal.draw(|f| draw(f, &s, &ctx))?;
-        if let Some(k) = term::next_key_within(watch::wait(&s.live))? {
+        let now = Instant::now();
+        if splash.as_ref().is_some_and(|sp| sp.done(now)) {
+            splash = None;
+        }
+        motion.observe(&s, now);
+        t.terminal.draw(|f| {
+            if !motion.active() {
+                draw(f, &s, &ctx);
+            } else if let Some(content) = draw_base(f, &s, &ctx) {
+                motion.tab_in(f.buffer_mut(), content, now);
+                let before = motion.growing().then(|| f.buffer_mut().clone());
+                draw_overlays(f, &s, &ctx);
+                if let Some(before) = before {
+                    motion.pop_in(f.buffer_mut(), &before, now, &ctx.theme);
+                }
+            }
+            if let Some(sp) = splash.as_mut() {
+                let area = f.area();
+                sp.draw(f.buffer_mut(), area, now, &ctx.theme);
+            }
+        })?;
+        let mut wait = if splash.is_some() { splash::FRAME } else { watch::wait(&s.live) };
+        // A conditioning card's spinner and reveal want quicker frames while they move.
+        if let Some(Modal::Conditioning(flow)) = &s.modal {
+            wait = flow.frame(Instant::now()).map_or(wait, |w| w.min(wait));
+        }
+        if motion.active() {
+            wait = wait.min(splash::FRAME);
+        }
+        // The Reflexes card's meters fill for a moment after the selection moves.
+        if s.tab == Tab::Reflexes && ctx.theme.motion && tabs::reflexes::animating(&s.reflexes, Instant::now()) {
+            wait = wait.min(tabs::reflexes::FRAME);
+        }
+        if let Some(k) = term::next_key_within(wait)? {
+            // Any key ends the start screen at once; only the keys people press to skip it stop
+            // there, and every other key acts as it would have.
+            if splash.take().is_some() && splash::swallows(k.code) {
+                continue;
+            }
             if let Some(cmd) = s.key(k.code, k.modifiers) {
                 if let Cmd::OpenRepository(directory) = cmd {
                     match repository_context(&ctx, &directory) {
@@ -1237,6 +1630,7 @@ fn run_inner(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>, from_watch: bo
                             loader.want(Want::Routes);
                             sources = Sources::new(&next);
                             s = AppState::new(next.paths.config());
+                            s.here = here_key(&next);
                             s.rewrite_marker = Some(adage_hook::rewrite_off(&next.paths));
                             s.load_settings(&config::load(&next.paths));
                             ctx = next;
@@ -1259,6 +1653,13 @@ fn run_inner(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>, from_watch: bo
     }
     drop(t);
     Ok(())
+}
+
+/// The key of the repository `ctx` is about, as health and `adage watch --follow` compute it
+/// (the index's key for the checkout, else its own).
+fn here_key(ctx: &Ctx) -> Option<String> {
+    let root = ctx.root.as_deref()?;
+    Some(super::health::repo_key(&ctx.paths, root, &adage_tracks::Index::load(&ctx.paths.index())))
 }
 
 pub(super) fn repository_context(ctx: &Ctx, directory: &std::path::Path) -> Result<Ctx> {

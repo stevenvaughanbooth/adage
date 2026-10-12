@@ -13,7 +13,7 @@ import { noticedLines, wordCandidates } from '../notice'
 import { isRecord } from '../shape'
 import { invokedMark, verifiedMark } from '../skill'
 import { band, firedThisSession } from '../view/band'
-import { markText, openNotice, promptLines, receiptBeside, receiptCard, spinnerSuffix, turnSummary } from '../view/lines'
+import { firedLines, markText, openNotice, receiptBeside, receiptCard, spinnerSuffix, turnSummary } from '../view/lines'
 import type { RowMark } from '../view/lines'
 import { inspectText, waiting, worthAsking } from '../view/pane'
 import { allowTree } from './allow'
@@ -49,11 +49,25 @@ export async function onUserMessage(m: Mod, e: EventAt<'ui.render', { component:
   const these = fired.filter(f => f.prompt === n)
   if (these.length === 0) return next(e)
   const ascii = (await m.state.mode.read()).ascii
-  const lines = promptLines(these, await m.state.reflexes.read(), await m.state.rows.read(), e.viewport?.columns ?? 80, ascii)
+  const lines = firedLines(these, await m.state.reflexes.read(), await m.state.rows.read(), e.viewport?.columns ?? 80, ascii)
   return lines.length === 0 ? next(e) : under(m.ui.resolve(e), await next(e), lines)
 }
 
-/** The marker under a tool row: a rewrite, a predicted step, a substitution, a dead end headed off. */
+/**
+ * `tool.fired`: the lines for the reflexes the command hooks delivered after a tool batch, drawn
+ * once, under the row of the batch's last call (one of `ids`), whether that row is a call's own or
+ * its group's one line.
+ */
+async function toolFired(m: Mod, ids: readonly string[], columns: number, ascii: boolean): Promise<string[]> {
+  const these = (await m.state.fired.read()).filter(f => f.ids !== undefined && f.ids.length > 0 && ids.includes(f.ids[f.ids.length - 1] ?? ''))
+  if (these.length === 0) return []
+  return firedLines(these, await m.state.reflexes.read(), await m.state.rows.read(), columns, ascii)
+}
+
+/**
+ * The marker under a tool row: a rewrite, a predicted step, a substitution, a dead end headed off;
+ * then what Adage told the agent after it (`tool.fired`).
+ */
 export async function onToolUse(m: Mod, e: EventAt<'ui.render', { component: 'ToolUse' }>, next: NextAt<'ui.render', { component: 'ToolUse' }>): AnswerAt<'ui.render', { component: 'ToolUse' }> {
   if (!drawable(m, e) || m.rt.bin === undefined) return next(e)
   const id = e.props.tool_use_id || e.requestId
@@ -61,9 +75,10 @@ export async function onToolUse(m: Mod, e: EventAt<'ui.render', { component: 'To
     (x): x is Extract<Mark, { kind: 'rewrite' | 'substituted' | 'avoided' }> => x.id === id && (x.kind === 'rewrite' || x.kind === 'substituted' || x.kind === 'avoided'),
   )
   if ((await m.state.predicted.read()).some(p => p.ids.includes(id))) marks.unshift({ kind: 'predicted' })
-  if (marks.length === 0) return next(e)
   const ascii = (await m.state.mode.read()).ascii
-  return under(m.ui.resolve(e), await next(e), marks.map(x => markText(x, ascii)))
+  const lines = [...marks.map(x => markText(x, ascii)), ...(await toolFired(m, [id], e.viewport?.columns ?? 80, ascii))]
+  if (lines.length === 0) return next(e)
+  return under(m.ui.resolve(e), await next(e), lines)
 }
 
 /** The receipt card in place of a test run's output, or one line beside a run that happened. */
@@ -140,7 +155,7 @@ export async function onAbovePrompt(m: Mod, e: EventAt<'ui.render', { component:
   return b === undefined ? next(e) : bandTree(m.ui.resolve(e), b, mode.ascii ? '-' : '·')
 }
 
-/** The pane (§6): Live, Reflexes, Health; its presses once a person is at the prompt. */
+/** The pane (§6): Graph, Live, Reflexes, Health; its presses once a person is at the prompt. */
 export async function onPane(m: Mod, e: EventAt<'ui.render', { component: 'Pane'; requestId: 'adage' }>, next: NextAt<'ui.render', { component: 'Pane'; requestId: 'adage' }>): AnswerAt<'ui.render', { component: 'Pane'; requestId: 'adage' }> {
   if (!paneSurface(e)) return next(e)
   const mode = await m.state.mode.read()
@@ -154,6 +169,7 @@ export async function onPane(m: Mod, e: EventAt<'ui.render', { component: 'Pane'
       health: await m.state.health.read(),
       feed: (await m.state.feed.read()).status,
       reflexes,
+      fired: await m.state.fired.read(),
       waiting: waiting(reflexes, await m.state.packs.read()),
       checks: await m.state.checks.read(),
       lapsed: await m.state.lapsed.read(),
@@ -163,6 +179,13 @@ export async function onPane(m: Mod, e: EventAt<'ui.render', { component: 'Pane'
       noBridge: e.surface === 'desktop' && !mode.active,
       columns: e.props.bodyColumns,
       ascii: mode.ascii,
+      boxes: e.surface === 'terminal',
+      dag: await m.state.dag.read(),
+      predicted: await m.state.predicted.read(),
+      marks: await m.state.marks.read(),
+      now: await m.clock.now(),
+      motion: !mode.reducedMotion,
+      bodyRows: e.props.scroll.bodyRows,
     },
     { ...paneActions(m), press: m.rt.pressBound ? pressHandlers(m) : undefined },
   )
@@ -192,11 +215,13 @@ export async function onCommandOutput(m: Mod, e: EventAt<'ui.render', { componen
 export async function onToolGroup(m: Mod, e: EventAt<'ui.render', { component: 'ToolGroup' }>, next: NextAt<'ui.render', { component: 'ToolGroup' }>): AnswerAt<'ui.render', { component: 'ToolGroup' }> {
   if (!drawable(m, e) || m.rt.bin === undefined) return next(e)
   const mode = await m.state.mode.read()
-  if (!mode.noticed) return next(e)
   const ids = e.props.calls.map(c => c.tool_use_id).filter((id): id is string => typeof id === 'string' && id !== '')
   if (ids.length === 0) return next(e)
+  // Expanded, each call draws its own ToolUse row, which carries `tool.fired`; collapsed, the group's line does.
+  const fired = e.props.isExpanded ? [] : await toolFired(m, ids, e.viewport?.columns ?? 80, mode.ascii)
+  if (!mode.noticed) return fired.length === 0 ? next(e) : under(m.ui.resolve(e), await next(e), fired)
   const rows = await m.state.rows.read()
-  const lines = noticedLines(rows, ids, await m.state.batches.read(), await m.state.candidates.read(), mode.ascii)
+  const lines = [...noticedLines(rows, ids, await m.state.batches.read(), await m.state.candidates.read(), mode.ascii), ...fired]
   quietly(wordCandidates(m, rows))
   if (lines.length === 0) return next(e)
   return under(m.ui.resolve(e), await next(e), lines)

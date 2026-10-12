@@ -2,9 +2,9 @@
 // their filter, the inspect text, the ticker, the health lights, the Reflexes rows and their verbs,
 // what waits for the person, the Health checks. Strength and lifecycle words are allowed here and
 // nowhere else (§1.3). Pure: draw/pane.tsx lays these out.
-import type { Act, Check, Lapse, Pack, Reflex, Row, Tick } from '../plugin'
+import type { Act, Check, Fired, Lapse, Pack, Reflex, Row, Tick } from '../plugin'
 import type { Role } from '../tokens'
-import { cols, g, plural, reflexOf } from './text'
+import { cols, cut, g, plural, reflexOf } from './text'
 
 const pad2 = (n: number) => String(n).padStart(2, '0')
 
@@ -57,9 +57,13 @@ function actText(a: Act, ascii: boolean): string {
   }
 }
 
+/** A Live row's head: time, session, harness, event. */
+const rowHead = (row: Row): string =>
+  `${clock(row.ts)} ${row.session.slice(0, 6).padEnd(6)} ${(HARNESS[row.harness] ?? row.harness.slice(0, 2)).padEnd(2)} ${row.event.padEnd(7)}`
+
 /** A Live row's lines: the head (time, session, harness, event), then one act per line. */
 export function rowLines(row: Row, ascii: boolean): string[] {
-  const head = `${clock(row.ts)} ${row.session.slice(0, 6).padEnd(6)} ${(HARNESS[row.harness] ?? row.harness.slice(0, 2)).padEnd(2)} ${row.event.padEnd(7)}`
+  const head = rowHead(row)
   if (row.acts.length === 0) return [`${head} ${g('sep', ascii)} ${row.observed > 0 ? plural(row.observed, 'call', 'calls') + ' seen' : 'seen'}`]
   return row.acts.map((a, k) => `${k === 0 ? head : ' '.repeat(cols(head))} ${actText(a, ascii)}`)
 }
@@ -296,3 +300,301 @@ export function reflexesEmpty(instincts: number, ascii: boolean): string {
 
 /** A lapsed grant's line in the Health tab. */
 export const lapseText = (l: Lapse): string => `${l.route}: ${l.changed.join(', ') || 'changed'}`
+
+// ------------------------------------------------------------------ the flow (ux-design §6.2)
+//
+// Each Reflexes row draws what the map (`adage ui`'s Map tab, `ui/tabs/map.rs`) draws: the
+// stimulus, the reflex, the response, joined by arrows. Three rounded boxes when the pane is wide
+// enough, one line when it is not, ASCII twins under `ADAGE_ASCII=1`. A reflex that fired in this
+// session glows in the fire role with the time, and its response too once the agent followed it.
+
+/** The flow's box-drawing glyphs and their ASCII twins (the map's; one column each). */
+const FLOW = { tl: ['╭', '+'], tr: ['╮', '+'], bl: ['╰', '+'], br: ['╯', '+'], h: ['─', '-'], v: ['│', '|'], head: ['▶', '>'], hook: ['╰', '`'] } as const
+const fl = (name: keyof typeof FLOW, ascii: boolean): string => FLOW[name][ascii ? 1 : 0]
+
+/** The arrow between two boxes, and between the parts of the one-line flow. */
+export const flowArrow = (ascii: boolean, long = false): string => `${fl('h', ascii).repeat(long ? 3 : 2)}${fl('head', ascii)}`
+
+/** The lamp role of a strength (`theme.rs`): fire green, prime amber, inhibit red. */
+export const strengthRole = (strength: string): Role => (strength === 'fire' ? 'fire' : strength === 'inhibit' ? 'inhibit' : 'prime')
+
+/** A flow's stimulus: its box title, its box text and its phrase on the one-line flow. */
+export type Stimulus = { title: string; text: string; phrase: string }
+
+const unquote = (s: string): string => s.replace(/`/g, '')
+
+/**
+ * The stimulus of a reflex as the map titles it (`map.rs` `stimulus`): `AFTER EDIT` /
+ * `crates/**\/*.rs changed`, and the phrase the narrow flow leads with (`after editing crates/**\/*.rs`).
+ * A sequence's (`context`) label only counts its events, so its words come from the gist.
+ */
+export function stimulusOf(r: Reflex): Stimulus {
+  const text = unquote(r.trigger)
+  const kind = r.triggerKind || (text.startsWith('an edit touches ') ? 'after_edit' : text.startsWith('a prompt means: ') ? 'intent' : text.startsWith('a prompt ') ? 'prompt' : '')
+  const strip = (prefix: string) => (text.startsWith(prefix) ? text.slice(prefix.length) : text)
+  switch (kind) {
+    case 'after_edit': {
+      const p = strip('an edit touches ')
+      return { title: 'AFTER EDIT', text: `${p} changed`, phrase: `after editing ${p}` }
+    }
+    case 'prompt': {
+      const p = strip('a prompt ')
+      return { title: 'PROMPT', text: p, phrase: `when a prompt ${p}` }
+    }
+    case 'intent': {
+      const p = strip('a prompt means: ')
+      return { title: 'INTENT', text: p, phrase: `when a prompt means ${p}` }
+    }
+    case 'after_command':
+      return { title: 'AFTER COMMAND', text, phrase: `after ${text}` }
+    case 'after_failure':
+      return { title: 'AFTER FAILURE', text, phrase: `after ${text}` }
+    case 'session_start':
+      return { title: 'SESSION START', text, phrase: 'at session start' }
+    case 'context': {
+      const say = r.gist || r.summary
+      const at = say.lastIndexOf(', run ')
+      const p = at > 0 ? say.slice(0, at) : text
+      return { title: 'SEQUENCE', text: p.replace(/^after /, ''), phrase: p }
+    }
+    default:
+      return { title: 'STIMULUS', text, phrase: text }
+  }
+}
+
+/** A flow's response: its box title, its text, and whether the text is a command (drawn as one). */
+export type Response = { title: string; text: string; command: boolean }
+
+/** The response of a reflex as the map titles it (`map.rs` `response`): `RUN` / `cargo fmt --all`. */
+export function responseOf(r: Reflex): Response {
+  const text = unquote(r.step).replace(/^In this repository, /, '')
+  switch (r.stepKind) {
+    case 'run':
+      return { title: 'RUN', text, command: true }
+    case 'read_batch':
+      return { title: 'READ TOGETHER', text, command: false }
+    case 'avoid':
+      return { title: 'RUN INSTEAD', text, command: true }
+    case 'advise':
+      return { title: 'ADVICE', text, command: false }
+    default:
+      return { title: r.stepKind === '' && r.step !== '' ? 'RUN' : 'RESPONSE', text, command: r.stepKind === '' }
+  }
+}
+
+/** What this session saw a reflex do: when it last fired (null: fired, no feed row says when), whether the agent then followed it. */
+export type Pulse = { at: number | null; followed: boolean; latest: boolean }
+
+/**
+ * The reflexes that fired in this session, by id: the command hooks' blocks (`$.state.fired`) and
+ * this session's feed rows, which carry the time (`directed`, and `predicted` for a step taken
+ * without a model request), and whether a `followed` or `met` row came after. `latest` marks the
+ * one that fired last, which the pane draws brightest.
+ */
+export function pulses(fired: readonly Fired[], rows: readonly Row[]): Map<string, Pulse> {
+  const out = new Map<string, Pulse>()
+  for (const x of fired) if (x.route !== '' && !out.has(x.route)) out.set(x.route, { at: null, followed: false, latest: false })
+  for (const row of rows) {
+    if (!row.mine) continue
+    for (const a of row.acts) {
+      if (a.route === undefined || a.route === '') continue
+      if (a.act === 'directed' || a.act === 'predicted') {
+        out.set(a.route, { at: row.ts, followed: false, latest: false })
+      } else if (a.act === 'followed' || a.act === 'met') {
+        const p = out.get(a.route)
+        if (p !== undefined) p.followed = true
+      }
+    }
+  }
+  let best: string | undefined
+  let bestAt = -Infinity
+  for (const [route, p] of out) if (p.at !== null && p.at >= bestAt) [best, bestAt] = [route, p.at]
+  if (best !== undefined) {
+    const p = out.get(best)
+    if (p !== undefined) p.latest = true
+  }
+  return out
+}
+
+/** The Reflexes tab's live line: how many fired in this session, and the last one's time. */
+export function pulseLine(ps: ReadonlyMap<string, Pulse>, ascii: boolean): string {
+  if (ps.size === 0) return ''
+  const sep = g('sep', ascii)
+  const last = [...ps.values()].find(p => p.latest)
+  const when = last?.at === undefined || last.at === null ? '' : ` ${sep} last at ${clock(last.at)}`
+  return `${g('active', ascii)} ${plural(ps.size, 'reflex', 'reflexes')} fired in this session${when}`
+}
+
+/**
+ * One piece of a drawn flow line: its text, its role (none: the terminal's own ink), dim or bold,
+ * and `press` on the one piece that is the row's Button (it expands the row).
+ */
+export type Seg = { text: string; role?: Role; dim?: boolean; bold?: boolean; press?: true }
+
+/** The arrow's width between two boxes (` ───▶ `), and the least box width the boxes take. */
+const GAP = 6
+const MIN_BOX = 20
+const MAX_BOX = 36
+/** The flow's indent under its track heading. */
+export const FLOW_INDENT = 2
+
+/** The box width at a pane width, or 0 when three boxes do not fit (the one-line flow then). */
+export function boxWidth(columns: number): number {
+  const w = Math.floor((columns - FLOW_INDENT - 2 * GAP) / 3)
+  return w < MIN_BOX ? 0 : Math.min(MAX_BOX, w)
+}
+
+type Boxed = { top: Seg[]; mid: Seg[]; bottom: Seg[] }
+
+/**
+ * One rounded box, `w` columns wide: the title set in the top border (`╭─ RUN ────╮`), the body
+ * on the one line inside, a caption set in the bottom border (`╰─ ◆ fired 14:02:11 ─╯`).
+ */
+function box(w: number, title: Seg[], body: Seg, caption: Seg[], border: Role, ascii: boolean, hot: boolean): Boxed {
+  const edge = (text: string): Seg => (hot ? { text, role: border, bold: true } : { text, role: border })
+  const h = fl('h', ascii)
+  const set = (left: string, right: string, inner: Seg[]): Seg[] => {
+    const room = w - 5
+    let used = 0
+    const kept: Seg[] = []
+    for (const s of inner) {
+      const t = cut(s.text, Math.max(0, room - used), ascii)
+      if (t === '') break
+      kept.push({ ...s, text: t })
+      used += cols(t)
+    }
+    if (kept.length === 0) return [edge(`${left}${h.repeat(w - 2)}${right}`)]
+    return [edge(`${left}${h} `), ...kept, edge(` ${h.repeat(Math.max(0, room - used))}${right}`)]
+  }
+  const inner = w - 4
+  const text = cut(body.text, inner, ascii)
+  return {
+    top: set(fl('tl', ascii), fl('tr', ascii), title),
+    // The padding is its own piece, so the body (the row's Button, for the reflex box) is its words alone.
+    mid: [edge(`${fl('v', ascii)} `), { ...body, text }, { text: ' '.repeat(Math.max(0, inner - cols(text))) }, edge(` ${fl('v', ascii)}`)],
+    bottom: set(fl('bl', ascii), fl('br', ascii), caption),
+  }
+}
+
+/** What the reflex box says inside: its glyph, its lifecycle word, its support and bound, as many as fit. */
+function reflexBody(r: Reflex, inner: number, ascii: boolean): string {
+  const sep = ` ${g('sep', ascii)} `
+  const mark = r.instinct ? g('instinct', ascii) : g('reflex', ascii)
+  const parts = [`${mark} ${r.instinct ? 'instinct' : r.state}`]
+  if (r.opportunities > 0) parts.push(`${r.support}/${r.opportunities}`)
+  if (r.lowerBound !== null) parts.push(`lb ${r.lowerBound.toFixed(2)}`)
+  let p = parts
+  while (p.length > 1 && cols(p.join(sep)) > inner) p = p.slice(0, -1)
+  return p.join(sep)
+}
+
+/**
+ * A reflex as three boxes joined by arrows, three lines (ux-design §6.2): stimulus → reflex →
+ * response, the map's picture in the pane. The reflex box's body is the row's Button (`press`).
+ * The borders are dim; the expanded row's are the accent; a reflex that fired in this session
+ * lights its stimulus, its first arrow and its own box in the fire role, captioned with the time,
+ * and, once the agent followed it, the second arrow and the response too. Undefined when the pane
+ * is too narrow for three boxes (`flowLine` then).
+ */
+export function flowBoxes(r: Reflex, pulse: Pulse | undefined, columns: number, ascii: boolean, open = false): Seg[][] | undefined {
+  const w = boxWidth(columns)
+  if (w === 0) return undefined
+  const st = stimulusOf(r)
+  const rs = responseOf(r)
+  const fired = pulse !== undefined
+  const followed = pulse?.followed === true
+  const rest: Role = open ? 'accent' : 'ink3'
+  const lit = (on: boolean): Role => (on ? 'fire' : rest)
+  const title = (t: string): Seg => ({ text: t, role: 'ink3', bold: true })
+  const stamp = pulse?.at === undefined || pulse.at === null ? 'fired' : `fired ${clock(pulse.at)}`
+  const hot = pulse?.latest === true
+  const a = box(w, [title(st.title)], { text: st.text }, [], lit(fired), ascii, false)
+  const b = box(
+    w,
+    [{ text: g('lamp', ascii), role: strengthRole(r.strength) }, { text: ' ' }, { text: STRENGTH(r.strength), role: strengthRole(r.strength), bold: true }],
+    { text: reflexBody(r, w - 4, ascii), press: true },
+    fired ? [{ text: `${g('active', ascii)} ${stamp}`, role: 'fire', bold: hot }] : [],
+    lit(fired),
+    ascii,
+    hot,
+  )
+  const c = box(w, [title(rs.title)], rs.command ? { text: rs.text, role: 'command' } : { text: rs.text }, followed ? [{ text: `${g('ok', ascii)} followed`, role: 'fire' }] : [], lit(followed), ascii, false)
+  const pad: Seg = { text: ' '.repeat(FLOW_INDENT) }
+  const space: Seg = { text: ' '.repeat(GAP) }
+  const arrow = (on: boolean): Seg => ({ text: ` ${flowArrow(ascii, true)} `, role: on ? 'fire' : rest, bold: on })
+  return [
+    [pad, ...a.top, space, ...b.top, space, ...c.top],
+    [pad, ...a.mid, arrow(fired), ...b.mid, arrow(followed), ...c.mid],
+    [pad, ...a.bottom, space, ...b.bottom, space, ...c.bottom],
+  ]
+}
+
+/**
+ * A reflex as one line, for a narrow pane (ux-design §6.2): the lamp, the time it fired in this
+ * session, then `after editing crates/**\/*.rs ──▶ ◠ ──▶ cargo fmt --all` as the row's Button, then
+ * the strength and lifecycle words while they fit. The stimulus is cut first, the response last.
+ */
+export function flowLine(r: Reflex, pulse: Pulse | undefined, columns: number, ascii: boolean): Seg[] {
+  const role = strengthRole(r.strength)
+  const out: Seg[] = [{ text: `${g('lamp', ascii)} `, role }]
+  if (pulse !== undefined) out.push({ text: `${g('active', ascii)} ${pulse.at === null ? 'fired' : clock(pulse.at).slice(0, 5)} `, role: 'fire', bold: pulse.latest })
+  const used = out.reduce((n, s) => n + cols(s.text), 0)
+  const room = Math.max(10, columns - used)
+  const mark = r.instinct ? g('instinct', ascii) : g('reflex', ascii)
+  const mid = ` ${flowArrow(ascii)} ${mark} ${flowArrow(ascii)} `
+  const st = stimulusOf(r).phrase
+  const rs = responseOf(r).text
+  const stRoom = Math.max(8, room - cols(mid) - cols(rs))
+  const flow = cut(`${cut(st, stRoom, ascii)}${mid}${rs}`, room, ascii)
+  out.push({ text: flow, press: true })
+  const tail = `  ${STRENGTH(r.strength)} ${g('sep', ascii)} ${r.instinct ? 'instinct' : r.state}`
+  if (cols(flow) + cols(tail) <= room) out.push({ text: tail, role: 'ink3', dim: true })
+  return out
+}
+
+/** The least room the small flow takes beside a Live row's head; narrower, it is not drawn. */
+const MIN_SMALL = 40
+
+/**
+ * Two ends sharing `room` columns: both whole when they fit; else the shorter whole when it takes
+ * at most half, the longer cut to the rest; else each cut to half.
+ */
+function share(a: string, b: string, room: number, ascii: boolean): [string, string] {
+  const [la, lb] = [cols(a), cols(b)]
+  if (la + lb <= room) return [a, b]
+  const half = Math.floor(room / 2)
+  if (lb <= half) return [cut(a, room - lb, ascii), b]
+  if (la <= half) return [a, cut(b, room - la, ascii)]
+  return [cut(a, half, ascii), cut(b, room - half, ascii)]
+}
+
+/**
+ * The flow in small under each directive of a Live row (ux-design §6.1), one per act, undefined
+ * for an act that is not a directive or names no reflex the graph holds: under the act, `╰ after
+ * editing schema/*.json ──▶ ◠ ──▶ make gen`, the arrows and the reflex in its lamp's role, the
+ * response as the directive named it (`detail`), else the step. The stimulus is cut first.
+ */
+export function actFlows(row: Row, reflexes: readonly Reflex[], columns: number, ascii: boolean): (Seg[] | undefined)[] {
+  const indent = ' '.repeat(cols(rowHead(row)) + 1)
+  return row.acts.map(a => {
+    if (a.act !== 'directed' || a.route === undefined) return undefined
+    const r = reflexOf(reflexes, a.route)
+    if (r === undefined) return undefined
+    const role = strengthRole(a.strength ?? r.strength)
+    const lead = `${indent}${fl('hook', ascii)} `
+    const arrow = ` ${flowArrow(ascii)} `
+    const mark = r.instinct ? g('instinct', ascii) : g('reflex', ascii)
+    const room = columns - cols(lead)
+    // Too narrow to say both ends: the act line above says enough.
+    if (room < MIN_SMALL) return undefined
+    const [st, rs] = share(stimulusOf(r).phrase, a.detail || responseOf(r).text, room - 2 * cols(arrow) - cols(mark), ascii)
+    return [
+      { text: lead, role: 'ink3' },
+      { text: st, role: 'ink3' },
+      { text: arrow, role },
+      { text: mark, role, bold: true },
+      { text: arrow, role },
+      { text: rs, role: 'command' },
+    ]
+  })
+}

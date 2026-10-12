@@ -2,38 +2,38 @@
 source: crates/adage-cli/src/ui/tests.rs
 expression: text
 ---
- adage    1 Live   2 Reflexes (2)  3 Map   4 Health (2)  5 Settings   6 Home                                                   harbor-dispatch · LIVE
+ adage    1 Live   2 Reflexes  2   3 Map   4 Health   2   5 Settings   6 Home                                                  harbor-dispatch · LIVE
+──────────────────────────────────────────━━━━━━━━━━──────────────────────────────────────────────────────────────────────────────────────────────────
+  ▄███▄   Healthy · 4 checks passed · 2 to look at
+  ██!██   ━━━━━━━━━━━━━━━━━━━━━━━━────────────  4 of 6 pass
+  ▀███▀   The same checks as adage doctor, rechecked live · R checks now
+
+ Needs a look  2 · fix them here ──────────────────────────────────────────────────   ╭─ + Adage ─────────────────────────────────────────── passes ─╮
+ ╭─ ! Embedding model ─────────────────────────────────────────────────────────────╮  │ Adage 0.1.0 at ~/bin/adage                                   │
+ │ No embedding model, so the hashed fallback is in use                            │  │                                                              │
+ │ Intent reflexes cannot fire                                                     │  │ doctor  binary                                               │
+ ╰────────────────────────────────────────────────────  m  fetch the intent model ─╯  ╰──────────────────────────  enter  read in full   R  recheck ─╯
+ ╭─ ! Codex hooks ─────────────────────────────────────────────────────────────────╮
+ │ Codex is installed, but Adage's hooks are not registered with it                │
+ │ next  adage install codex --write                                               │
+ ╰───────────────────────────────────────────────────────  i  install codex hooks ─╯
+
+ Hooks & delivery  2 ──────────────────────────────────────────────────────────────
+  + Claude Code hooks  set up in settings.local.json
+  + Hook errors        none in the last 7 days
+
+ Learning  1 ──────────────────────────────────────────────────────────────────────
+  + Reflex index       4 route(s) in 1 repository
+
+ This install  1 ──────────────────────────────────────────────────────────────────
+▌ + Adage              adage 0.1.0 at ~/bin/adage
+
+
+
+
+
+
+
+
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- 4 passed · 2 warnings · 0 failures   same checks as adage doctor
-
-▌ + binary               adage 0.1.0 at ~/bin/adage
-  + index                generation 8216e29f00, 4 route(s) in 1 repository
-  ! embedding model    ⏎ no embedding model, so the hashed fallback is in use; intent reflexes cannot fire
-  + hooks: claude-co…    ~/work/harbor-dispatch/.claude/settings.local.json runs ~/bin/adage (this binary)
-  ! hooks: codex       ⏎ codex is installed, but Adage's hooks are not registered with it
-  + fail-open errors     none in the last 7 days
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-─ check ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- binary  adage 0.1.0 at ~/bin/adage
-
-
-
-──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- ? keys · : palette · enter fix · R recheck                                                                                                    q quit
+  ?  keys   :  palette   enter  fix   R  recheck                                                                                              q  quit

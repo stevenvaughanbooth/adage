@@ -105,11 +105,14 @@ pub struct More {
     pub quiet: bool,
     /// `quiet: uplift +0.04 < 0.10 · approve to deliver` (`crate::evidence::quiet_line`).
     pub quiet_line: Option<String>,
-    /// `Uplift::line`: what delivering it changes.
-    pub uplift: Option<String>,
+    /// What delivering it changes: how often agents take the step when told, and unaided
+    /// (`Uplift::line` says it in a sentence).
+    pub uplift: Option<adage_tracks::Uplift>,
     /// `crate::evidence::describe` when the strength rests on a value estimate: a follow count
     /// (`0/7`) would say nothing about why the reflex exists.
     pub value: Option<String>,
+    /// The estimate behind `value`, for the card's meters.
+    pub saves: Option<Saves>,
     /// `crate::evidence::obligation`: a learned finish line is enforced at Stop.
     pub obligation: Option<String>,
     /// A procedure card, and the similarity a prompt needs to receive it.
@@ -117,6 +120,15 @@ pub struct More {
     pub card_threshold: Option<f32>,
     /// Compiled from a skill (`adage train`) and accepted here.
     pub skill: bool,
+}
+
+/// A value estimate (`.why.json`): the calls saved when the step is taken, and the probability
+/// that it saves any, with that probability's one-sided 90% lower bound.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Saves {
+    pub calls: f64,
+    pub p: f64,
+    pub lower: f64,
 }
 
 impl RouteRow {
@@ -293,12 +305,14 @@ pub fn more_of(r: &adage_tracks::Route, why: Option<&adage_tracks::why::Why>, sk
         (adage_tracks::Step::Card { card }, _) => (Some(Box::new(card.clone())), None),
         _ => (None, None),
     };
+    let value = crate::evidence::value_line(r, why);
     More {
+        saves: value.as_ref().and(why).map(|w| Saves { calls: w.gain, p: w.conf, lower: w.conf_lb }),
+        value,
         execution: r.evidence.execution.clone(),
         quiet: r.state == adage_tracks::RouteState::Nascent && crate::evidence::quiet_line(r).is_some(),
         quiet_line: crate::evidence::quiet_line(r),
-        uplift: r.evidence.uplift.as_ref().map(|u| u.line()),
-        value: crate::evidence::value_line(r, why),
+        uplift: r.evidence.uplift.clone(),
         obligation: crate::evidence::obligation(r),
         card,
         card_threshold,

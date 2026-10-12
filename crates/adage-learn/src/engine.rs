@@ -1005,6 +1005,7 @@ fn run_inner(
     let (num, den) = cfg.dead_end_consistency;
     p.score.consistency = num as f64 / den.max(1) as f64;
     p.candidates = cfg.candidates;
+    cfg.progress.report(crate::progress::Stage::Mine, 0, 0);
     let (learned, values, mining_cache_hit) = crate::checkpoint::mining(ss, &p, store, || {
         let learned = select::learn(&events, &p);
         // G1's value slots, learned in the discovery window as the lookup is judged there.
@@ -1013,6 +1014,7 @@ fn run_inner(
         let values = adage_graph::learn(&prefix, &adage_graph::Params { threads: threads(), ..Default::default() });
         (learned, values)
     });
+    cfg.progress.report(crate::progress::Stage::Compile, 0, 0);
     // The glob lattice's tree is what the traces touched: a pure function of the traces, whatever
     // is on this machine (see `adage_graph::compile::glob`).
     let corpus = Corpus::of(&annotated, &[]);

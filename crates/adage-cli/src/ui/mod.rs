@@ -17,6 +17,8 @@
 //! (docs/lexicon.md); older spellings in spools and learn.log are still read ([`words`]).
 
 mod app;
+mod brain;
+mod conditioned;
 pub(crate) mod demo;
 mod diff;
 mod feed;
@@ -26,9 +28,13 @@ mod fuzzy;
 pub(crate) mod health;
 mod jobs;
 mod keys;
+mod kit;
 mod learnlog;
+mod motion;
 mod palette;
 mod routes;
+mod scope;
+mod splash;
 mod tabs;
 pub(crate) mod tail;
 mod term;

@@ -4,14 +4,14 @@ expression: text
 ---
 [magenta b] adage[/][b] watch[/][d]  harbor-dispatch[/]         [green]● [/]live  [green]● [/][d]1[/]  [yellow]● [/][d]1[/]  [red]● [/][d]1[/]
 [darkgray]─ [/][b d]now[/][darkgray] ──────────────────────────────────────────────────────[/]
- [darkgray]12:04:02[/] [d]a11c[/] [d]cc [/] tools    [magenta]→ ◠ [/][yellow]● prime [/][d]That result lists t…[/]
-                            [green]✓ [/]bin/fetch-incident INC-2045
- [darkgray]12:04:03[/] [d]0b0b[/] [d]cc [/] tools    [darkgray]· 1 call, nothing to say[/]
- [darkgray]12:04:04[/] [d]0b0b[/] [d]cc [/] failure  [magenta]→ ◠ [/][red]● inhibit [/][d]npm run check[/]
- [darkgray]12:04:05[/] [d]0b0b[/] [d]cc [/] tools    [red]✗ [/]lookup-incident
- [darkgray]12:04:06[/] [darkgray i]c4a1[/] [darkgray i]cc [/] [darkgray i]tools   [/] [darkgray i]○ found bin/fetch-incident INC-…[/]
- [darkgray]12:04:07[/] [d]0b0b[/] [d]cc [/] stop     [yellow b]■ [/]finish line: asked the agent …
- [darkgray]12:04:08[/] [d]a11c[/] [d]cc [/] tools    [green]✓ [/][d]finish line met: [/]codegen-afte…
+
+[darkgray] ┄ [/][d]Claude Code · 0b0b[/] [darkgray]┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄[/]
+ [darkgray]12:04:03[/] [d]0b0b[/] [darkgray]▪ [/]tools    [darkgray]· 1 call, nothing to say[/]
+ [darkgray]12:04:04[/] [d]0b0b[/] [red]✗ [/]failure  [magenta b]adage [/][magenta]→ ◠ [/][red]● inhibit [/][d]npm run check[/]
+ [darkgray]12:04:05[/] [d]0b0b[/] [darkgray]▪ [/]tools    [red]✗ [/]lookup-incident
+ [darkgray]12:04:06[/] [darkgray i]c4a1[/] [darkgray i]▪ tools   [/] [darkgray i]○ found bin/fetch-incident INC-20…[/]
+ [darkgray]12:04:07[/] [d]0b0b[/] [yellow]□ [/]stop     [magenta b]adage [/][yellow b]■ [/]finish line: asked the ag…
+ [darkgray]12:04:08[/] [d]a11c[/] [darkgray]▪ [/]tools    [green]✓ [/][d]finish line met: [/]codegen-after-…
 [darkgray]─ [/][b d]conditioning[/][darkgray] ─────────────────────────────────────────────[/]
    [magenta]◠ [/][b]lookup-incident           [/][d]prime → [/][green b]fire       [/][d]24/25 · l…[/]
    [magenta]◠ [/][b]dead-end-npm-test         [/][d]new · [/][red b]inhibit      [/][d]6/7[/]
@@ -21,4 +21,4 @@ expression: text
  [green]✓ [/][d]hooks claude[/]    [green]✓ [/][d]4 reflexes[/]    [green]✓ [/][d]auto-condition[/]
  [yellow]! [/][d]no model[/][darkgray] · [/][lightmagenta]adage models fetch[/]
 [darkgray]────────────────────────────────────────────────────────────[/]
- [lightmagenta b]:[/][darkgray] palette · [/][lightmagenta b]p[/][darkgray] pause · [/][lightmagenta b]f[/][darkgray] scope · [/][lightmagenta b]/[/][darkgray] filter[/]            [lightmagenta b]q[/][darkgray] quit [/]
+ [d r] : [/][darkgray] palette[/]  [d r] p [/][darkgray] pause[/]  [d r] f [/][darkgray] scope[/]  [d r] / [/][darkgray] filter[/]     [d r] q [/][darkgray] quit[/]

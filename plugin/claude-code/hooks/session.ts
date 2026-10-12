@@ -45,7 +45,7 @@ async function activate(m: Mod): Promise<void> {
   const view = await m.state.view.read()
   m.rt.paused = view.paused
   const kept = await m.store.tab.get().catch(() => undefined)
-  const tab: View['tab'] | undefined = kept === 'live' || kept === 'reflexes' || kept === 'health' ? kept : undefined
+  const tab: View['tab'] | undefined = kept === 'graph' || kept === 'live' || kept === 'reflexes' || kept === 'health' ? kept : undefined
   if (tab !== undefined && tab !== view.tab) await m.state.view.update(v => ({ ...v, tab }))
 }
 
@@ -63,6 +63,7 @@ async function newSession(m: Mod): Promise<void> {
   await m.state.predicted.update(() => [])
   await m.state.marks.update(() => [])
   await m.state.batches.update(() => [])
+  await m.state.dag.update(() => [])
   await m.state.turn.update(() => TURN0)
   await m.state.rows.update(rows => rows.map(r => ({ ...r, mine: false })))
   m.rt.failures = 0

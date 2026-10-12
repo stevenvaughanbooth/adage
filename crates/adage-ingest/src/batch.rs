@@ -23,11 +23,13 @@ pub struct Options {
     /// [`crate::AsRecorded`] for traces recorded elsewhere (and for tests, which must not depend
     /// on what is checked out where they run).
     pub locator: &'static dyn Locator,
+    /// Told after each trace is read: how many of how many (for a person watching a long run).
+    pub progress: Option<std::sync::Arc<dyn Fn(usize, usize) + Send + Sync>>,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Options { repo_override: None, only_repo: None, cache: None, locator: &LocalCheckout }
+        Options { repo_override: None, only_repo: None, cache: None, locator: &LocalCheckout, progress: None }
     }
 }
 
@@ -38,6 +40,7 @@ impl std::fmt::Debug for Options {
             .field("only_repo", &self.only_repo)
             .field("cache", &self.cache)
             .field("locator", &self.locator.id())
+            .field("progress", &self.progress.is_some())
             .finish()
     }
 }
@@ -69,7 +72,10 @@ pub fn read(traces: &[PathBuf], opts: &Options) -> Batch {
     };
     let (over, only) = (opts.repo_override.as_deref(), opts.only_repo.as_deref());
     let cx = Decode { table, locator, repo_override: over, subagent: false };
-    for p in traces {
+    for (i, p) in traces.iter().enumerate() {
+        if let Some(f) = &opts.progress {
+            f(i, traces.len());
+        }
         let got = match cache.as_mut() {
             Some(c) => c.read(p, &cx, only, &mut repo_of),
             None => match read_trace(p, &cx) {
@@ -90,6 +96,9 @@ pub fn read(traces: &[PathBuf], opts: &Options) -> Batch {
                 }
             }
         }
+    }
+    if let Some(f) = &opts.progress {
+        f(traces.len(), traces.len());
     }
     // Which repository each checkout is, for when it is deleted (a removed worktree). Not under an
     // override, which is not the checkout's own key.

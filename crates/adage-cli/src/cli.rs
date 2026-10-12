@@ -451,6 +451,10 @@ pub struct ConditionArgs {
     /// Machine-readable output.
     #[arg(long)]
     pub json: bool,
+    /// Report each stage on stderr as it runs, one JSON object per line
+    /// ({"progress": "read", "done": 12, "total": 262}), for a program following the run.
+    #[arg(long, conflicts_with = "auto")]
+    pub progress: bool,
 }
 
 #[derive(Args, Debug)]

@@ -4,12 +4,15 @@
 // presses since B4 (dialog.test.ts); T-B3-05 keeps the copy beside them for persona (b).
 import { describe, expect, test } from 'claude-code/testing'
 
-import { CARD, CLI, DELEGATE, GRAPH, LAPSED, LINE, PANE_PROPS, SURFACES, begin, mountPane, shown, start, world } from '../fixtures/kit'
+import { CARD, CLI, DELEGATE, GRAPH, LAPSED, LINE, PANE_PROPS, SURFACES, begin, mountPane, rowsOf, shown, start, world } from '../fixtures/kit'
+import { ROLES } from '../tokens'
+import { GRAPH_EMPTY } from '../view/graph'
+import { clock } from '../view/pane'
 
 const FEED = [LINE.learnerIdle, LINE.healthy, LINE.start, LINE.firedGen, LINE.firedLookup]
 
 describe('T-B3-01 … T-B3-07 · the pane', () => {
-  test('T-B3-01: three tabs as lowercase hotkeys (no h); /adage opens the pane focused, as a dialog', async ($, on) => {
+  test('T-B3-01, T-B3-15: four tabs as lowercase hotkeys (no h), the Graph first and open; /adage opens the pane focused, as a dialog', async ($, on) => {
     const w = world(on, { feed: FEED })
     await start($, w)
     await $.command.run({ command: 'adage', args: '' } as never)
@@ -18,13 +21,14 @@ describe('T-B3-01 … T-B3-07 · the pane', () => {
       const ui = await mountPane($, surface)
       const tabs = await ui.findAll({ type: 'Button', key: undefined })
       const hot = tabs.filter(b => typeof b.props.hotkey === 'string').map(b => `${b.props.hotkey}:${b.props.label}`)
-      expect(hot.slice(0, 3)).toEqual(['l:Live', 'r:Reflexes', 't:Health'])
+      expect(hot.slice(0, 4)).toEqual(['g:Graph', 'l:Live', 'r:Reflexes', 't:Health'])
       expect(hot.some(h => h.startsWith('h:'))).toBe(false)
+      expect((await ui.findAll({ key: 'tab-graph' }))[0]?.props.dimColor).toBe(false)
       await ui.press({ key: 'tab-reflexes' })
       expect(await shown(ui)).toContain('learned in this repository')
       await ui.press({ key: 'tab-health' })
       expect((await shown(ui)).join('\n')).toContain('index  stale')
-      await ui.press({ key: 'tab-live' })
+      await ui.press({ key: 'tab-graph' })
       await ui.unmount()
     }
   })
@@ -34,6 +38,7 @@ describe('T-B3-01 … T-B3-07 · the pane', () => {
     await start($, w)
     for (const surface of SURFACES) {
       const ui = await mountPane($, surface)
+      await ui.press({ key: 'tab-live' })
       const rows = (await ui.findAll({ type: 'Button' })).filter(b => b.key?.startsWith('row:'))
       // row:1 is the session start, where nothing was decided: a quiet row, hidden until `v`.
       expect(rows.map(b => b.key)).toEqual(['row:3', 'row:2'])
@@ -54,6 +59,7 @@ describe('T-B3-01 … T-B3-07 · the pane', () => {
     const w = world(on, { feed: FEED })
     await start($, w)
     const ui = await mountPane($, 'terminal')
+    await ui.press({ key: 'tab-live' })
     const rowKeys = async () => (await ui.findAll({ type: 'Button' })).filter(b => b.key?.startsWith('row:')).map(b => b.key)
     await ui.input({ key: 'filter', text: 'lookup', kind: 'change' })
     expect(await rowKeys()).toEqual(['row:3'])
@@ -160,10 +166,12 @@ describe('T-B3-01 … T-B3-07 · the pane', () => {
     await start($, w)
     for (const surface of SURFACES) {
       const ui = await mountPane($, surface)
+      expect(await shown(ui)).toContain(GRAPH_EMPTY)
+      await ui.press({ key: 'tab-live' })
       expect(await shown(ui)).toContain('Nothing yet in this repository. Reflexes appear here as Adage uses them.')
       await ui.press({ key: 'tab-reflexes' })
       expect(await shown(ui)).toContain('No learned reflexes yet · 0 of ~5 sessions needed · 1 instinct active meanwhile')
-      await ui.press({ key: 'tab-live' })
+      await ui.press({ key: 'tab-graph' })
       await ui.unmount()
     }
   })
@@ -172,8 +180,71 @@ describe('T-B3-01 … T-B3-07 · the pane', () => {
     const w = world(on, { version: '', status: 'no binary for darwin-arm64' })
     await start($, w, 'desktop')
     const ui = await mountPane($, 'desktop')
+    expect(await shown(ui)).toContain('the graph needs the terminal · adage watch')
+    await ui.press({ key: 'tab-live' })
     expect(await shown(ui)).toContain('live rows need the terminal · adage watch')
     await ui.press({ key: 'tab-health' })
     expect(await shown(ui)).toContain('no binary for darwin-arm64')
+  })
+})
+
+describe('T-B3-11 · the Reflexes flow through the engine', () => {
+  test('the terminal draws the boxes, the reflex box the row\'s Button; a reflex fired in this session lit in the fire role with its time; narrow, one line', async ($, on) => {
+    const w = world(on, { feed: [...FEED, LINE.followedGen] })
+    await start($, w)
+    const at = clock(rowsOf(LINE.firedGen)[0]?.ts ?? 0)
+    const ui = await mountPane($, 'terminal', 120)
+    await ui.press({ key: 'tab-reflexes' })
+    const texts = await ui.findAll({ type: 'Text' })
+    expect(texts.find(t => t.text.startsWith('◆ 2 reflexes fired in this session'))?.props.color).toBe(ROLES.fire)
+    expect(texts.find(t => t.text === 'AFTER EDIT')).toBeDefined()
+    expect(texts.find(t => t.text === `◆ fired ${at}`)?.props.color).toBe(ROLES.fire)
+    expect(texts.find(t => t.text === '✓ followed')?.props.color).toBe(ROLES.fire)
+    const row = (await ui.findAll({ type: 'Button' })).find(b => b.key === 'reflex:acme/learned/codegen-after-schema')
+    expect(row?.text).toBe('◠ firm · 13/17 · lb 0.53')
+    // The row still expands to its directive and facts.
+    await ui.press({ key: 'reflex:acme/learned/codegen-after-schema' })
+    expect((await shown(ui)).some(t => t.startsWith('codegen-after-schema · when an edit touches schema/*.json'))).toBe(true)
+    await ui.press({ key: 'reflex:acme/learned/codegen-after-schema' })
+    await ui.press({ key: 'tab-live' })
+    await ui.unmount()
+
+    const narrow = await mountPane($, 'terminal', 60)
+    await narrow.press({ key: 'tab-reflexes' })
+    const line = (await narrow.findAll({ type: 'Button' })).find(b => b.key === 'reflex:acme/learned/codegen-after-schema')
+    expect(line?.text).toBe('after editing schema/*.json ──▶ ◠ ──▶ make gen')
+    expect((await narrow.findAll({ type: 'Text' })).find(t => t.text === `◆ ${at.slice(0, 5)} `)?.props.color).toBe(ROLES.fire)
+    await narrow.press({ key: 'tab-live' })
+    await narrow.unmount()
+  })
+
+  test('the desktop draws the one-line flow at any width: its native Button would break a box\'s borders', async ($, on) => {
+    const w = world(on, { feed: FEED })
+    await start($, w)
+    const ui = await mountPane($, 'desktop', 160)
+    await ui.press({ key: 'tab-reflexes' })
+    const line = (await ui.findAll({ type: 'Button' })).find(b => b.key === 'reflex:acme/learned/codegen-after-schema')
+    expect(line?.text).toBe('after editing schema/*.json ──▶ ◠ ──▶ make gen')
+    expect((await ui.findAll({ type: 'Text' })).some(t => t.text.includes('╭'))).toBe(false)
+    await ui.press({ key: 'tab-live' })
+    await ui.unmount()
+  })
+
+  test('Live: each directive\'s flow in small beneath its act, the arrows in its lamp\'s role; a narrow pane leaves it out', async ($, on) => {
+    const w = world(on, { feed: FEED })
+    await start($, w)
+    for (const surface of SURFACES) {
+      const ui = await mountPane($, surface, 120)
+      await ui.press({ key: 'tab-live' })
+      const texts = await ui.findAll({ type: 'Text' })
+      expect(texts.find(t => t.text === 'after editing schema/*.json')?.props.color).toBe(ROLES.ink3)
+      expect(texts.find(t => t.text === 'when a prompt names a work item')).toBeDefined()
+      expect(texts.find(t => t.text === 'scripts/wi-lookup W-2042 --json')?.props.color).toBe(ROLES.command)
+      expect(texts.filter(t => t.text === ' ──▶ ').map(t => t.props.color)).toEqual([ROLES.fire, ROLES.fire, ROLES.fire, ROLES.fire])
+      await ui.unmount()
+      const narrow = await mountPane($, surface, 60)
+      expect((await narrow.findAll({ type: 'Text' })).some(t => t.text === ' ──▶ ')).toBe(false)
+      await narrow.unmount()
+    }
   })
 })

@@ -52,6 +52,28 @@ impl Theme {
         self
     }
 
+    /// A theme at a colour depth, on a night or a day ground.
+    #[cfg(test)]
+    pub fn with_level(level: Level, day: bool) -> Theme {
+        let caps = Caps { level, day, effects: true, ..Caps::plain() };
+        Theme { color: level > Level::None, motion: true, term: adage_term::Theme::new(caps) }
+    }
+
+    /// The colour depth, for drawing that shades rather than names a role (the start screen).
+    pub fn level(&self) -> Level {
+        self.term.caps.level
+    }
+
+    /// The terminal's ground is light: shading runs the other way.
+    pub fn day(&self) -> bool {
+        self.term.caps.day
+    }
+
+    /// Whether this terminal draws Unicode glyphs (false with `ADAGE_ASCII=1`).
+    pub fn unicode(&self) -> bool {
+        self.term.caps.unicode
+    }
+
     /// No colour, with this theme's glyphs: `--once` frames honour `ADAGE_ASCII` too.
     pub fn uncoloured(&self) -> Theme {
         let mut t = Theme::with_color(false);

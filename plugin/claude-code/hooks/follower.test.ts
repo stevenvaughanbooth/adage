@@ -85,7 +85,9 @@ describe('T-B3-08, §9.4 · the follower through the engine', () => {
     const w = world(on, { feed: FEED })
     await start($, w)
     expect(w.spawned.filter(a => a[1] === 'watch').map(a => a.slice(10))).toEqual([[], ['--since', JSON.parse(LINE.firedLookup).cursor], ['--since', JSON.parse(LINE.firedLookup).cursor]])
-    expect(await shown(await mountPane($, 'terminal'))).toContain('feed stopped · run adage doctor')
+    const ui = await mountPane($, 'terminal')
+    await ui.press({ key: 'tab-live' })
+    expect(await shown(ui)).toContain('feed stopped · run adage doctor')
   })
 
   test('the follower runs `adage watch` in the session directory for this session, reading no stdin', async ($, on) => {
