@@ -201,12 +201,14 @@ pub fn gather(paths: &Paths, root: Option<&Path>) -> Health {
     }
     for harness in working.iter().copied().collect::<std::collections::BTreeSet<_>>() {
         let name = super::feed::harness_name(harness);
-        let activity = by(&format!("hook activity: {harness}"));
-        let received = activity.is_some_and(|c| c.status == Status::Pass);
-        lights.push(Light::new(
-            if received { format!("{name} hook received") } else { format!("{name} set up, no hook yet") },
-            if received { Lamp::Ok } else { Lamp::Warn },
-        ));
+        let received = root.is_some_and(|r| adage_hook::receipt::read(paths, r, harness).is_some());
+        let activity = by(&format!("hook activity: {harness}")).map(|c| c.status);
+        lights.push(match (received, activity) {
+            (true, _) => Light::new(format!("{name} hook received"), Lamp::Ok),
+            // Doctor passes a harness set up but not used here since: nothing is wrong.
+            (false, Some(Status::Pass)) => Light::new(format!("{name} not used here"), Lamp::Off),
+            (false, _) => Light::new(format!("{name} set up, no hook yet"), Lamp::Warn),
+        });
     }
     if names.is_empty() && !broken {
         lights.push(if installed {

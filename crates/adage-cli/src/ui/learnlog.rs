@@ -67,6 +67,9 @@ pub struct Run {
     pub changes: Option<usize>,
     /// Candidates seen but not yet in enough traces to be a reflex: counted, not changes.
     pub forming: usize,
+    /// The closest candidate's traces, and the traces a reflex needs.
+    pub forming_seen: Option<u64>,
+    pub forming_need: Option<u64>,
     pub generation: Option<String>,
 }
 
@@ -142,6 +145,8 @@ fn run(v: &Value, ts: u64, repo: Option<String>) -> Vec<Tick> {
         duration_ms: v["duration_ms"].as_u64(),
         changes: None,
         forming: 0,
+        forming_seen: None,
+        forming_need: None,
         generation: s(v, "index_generation").map(|g| short_gen(g).to_string()),
     };
     let mut parts = Vec::new();
@@ -156,6 +161,8 @@ fn run(v: &Value, ts: u64, repo: Option<String>) -> Vec<Tick> {
     let (forming, changes): (Vec<&Value>, Vec<&Value>) =
         v["changes"].as_array().map(|a| a.iter().partition(|c| c["change"] == "candidate")).unwrap_or_default();
     info.forming = forming.len();
+    info.forming_seen = forming.iter().filter_map(|c| c["support"].as_u64()).max();
+    info.forming_need = forming.iter().filter_map(|c| c["s_min"].as_u64()).max();
     // The older summary lists tracks per repository instead of changes (newer lines keep it too,
     // beside `changes`, which then says it better).
     let mut tracks = Vec::new();

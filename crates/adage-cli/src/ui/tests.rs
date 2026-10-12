@@ -279,6 +279,14 @@ pub(super) fn styled(b: &Buffer) -> String {
     out
 }
 
+/// The last row (from the top) where `needle` shows, and its column.
+fn find_last(buf: &Buffer, needle: &str) -> Option<(u16, u16)> {
+    (0..buf.area.height).rev().find_map(|y| {
+        let row: String = (0..buf.area.width).map(|x| buf[(x, y)].symbol().to_string()).collect();
+        row.find(needle).map(|i| (row[..i].chars().count() as u16, y))
+    })
+}
+
 fn find(buf: &Buffer, needle: &str) -> Option<(u16, u16)> {
     for y in 0..buf.area.height {
         let row: String = (0..buf.area.width).map(|x| buf[(x, y)].symbol().to_string()).collect();
@@ -287,6 +295,19 @@ fn find(buf: &Buffer, needle: &str) -> Option<(u16, u16)> {
         }
     }
     None
+}
+
+/// The live view's graph as text: one line per node (`boxes` false) or the box tier.
+fn flow_text(
+    items: &[&feed::FeedItem],
+    cx: &Ctx,
+    width: u16,
+    boxes: bool,
+    gists: &std::collections::BTreeMap<String, String>,
+) -> Vec<String> {
+    let o = super::flow::Opts { width, boxes, repo: false, gists, pulse: Default::default(), glow: false };
+    let (lines, edge) = super::flow::lines(items, cx, &o);
+    lines.iter().map(|l| l.render(edge, 0, &cx.theme).to_string().trim_end().to_string()).collect()
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -484,13 +505,9 @@ fn pretool_records_and_cards_are_shown() {
     );
     m.session = "s-misfire".into();
     let items = [&i, &w, &c, &m];
-    let lines: Vec<String> = view::feed_lines(&items, &cx, 110, &Default::default(), &Default::default())
-        .into_iter()
-        .map(|(_, l)| l.spans.iter().map(|s| s.content.to_string()).collect::<String>().trim_end().to_string())
-        .collect();
-    let text = lines.join("\n");
-    assert!(text.contains("↪ pointed the test run at .venv/bin/python"), "a rewrite has its own mark: {text}");
-    assert!(text.contains("→ ▤ "), "a card delivery has the card's mark: {text}");
+    let text = flow_text(&items, &cx, 110, false, &Default::default()).join("\n");
+    assert!(text.contains("◆ adage ↪ pointed the test run at .venv/bin/python"), "a rewrite has its own mark: {text}");
+    assert!(text.contains("◆ adage · PRIME · ▤ card"), "a card delivery has the card's mark: {text}");
     assert!(text.contains("would have pointed the test run at x (withheld · control session)"), "{text}");
     assert!(text.contains("card · 2 files · 3 traces"), "{text}");
     assert!(text.contains("misfired run-tests"), "{text}");
@@ -518,20 +535,20 @@ fn a_reflex_is_named_by_what_it_told_this_session() {
     };
     let (a, b, a2, b2, c2) =
         (delivered("s-a", "INC-24"), delivered("s-b", "INC-17"), ignored("s-a"), ignored("s-b"), ignored("s-c"));
-    let lines = |gists: &std::collections::BTreeMap<String, String>| -> Vec<String> {
-        view::feed_lines(&[&a, &b, &a2, &b2, &c2], &cx, 150, &Default::default(), gists)
-            .into_iter()
-            .map(|(_, l)| l.spans.iter().map(|s| s.content.to_string()).collect::<String>().trim_end().to_string())
-            .collect()
+    let lines = |gists: &std::collections::BTreeMap<String, String>| -> String {
+        flow_text(&[&a, &b, &a2, &b2, &c2], &cx, 150, false, gists).join("\n")
     };
     let none = lines(&Default::default());
-    assert!(none[2].ends_with("not observed bin/fetch-incident INC-24"), "{none:?}");
-    assert!(none[3].ends_with("not observed bin/fetch-incident INC-17"), "{none:?}");
-    assert!(none[4].ends_with("not observed lookup-incident"), "never told s-c: {none:?}");
+    // Each session's delivery shows what it told that session, and that it was not followed.
+    assert!(none.contains("──▶ bin/fetch-incident INC-24  ✗ not followed"), "{none}");
+    assert!(none.contains("──▶ bin/fetch-incident INC-17  ✗ not followed"), "{none}");
+    assert!(none.contains("✗ not observed lookup-incident"), "never told s-c: {none}");
     let gists =
         [("lookup-incident".to_string(), "on a prompt that names a ticket, run bin/fetch-incident {item}".to_string())]
             .into();
-    assert!(lines(&gists)[4].ends_with("not observed on a prompt that names a ticket, run bin/fetch-incident {item}"));
+    let named = lines(&gists);
+    assert!(named.contains("✗ not observed on a prompt that names a ticket, run bin/fetch-incident {item}"), "{named}");
+    assert!(named.contains("◆ adage · FIRE · on a prompt that names a ticket"), "{named}");
 }
 
 /// A session in a repository with no reflexes yet is shown as watched, with its calls counted
@@ -548,24 +565,16 @@ fn a_session_with_no_reflexes_here_is_shown_as_watched() {
     };
     let (start, batch) = (seen("session_start", "SessionStart", None), seen("batch", "PostToolBatch", Some(23)));
     assert!(batch.unrouted && batch.quiet() && batch.observed == 23);
-    let text: Vec<String> = view::feed_lines(&[&start, &batch], &cx, 110, &Default::default(), &Default::default())
-        .into_iter()
-        .map(|(_, l)| l.spans.iter().map(|s| s.content.to_string()).collect::<String>().trim_end().to_string())
-        .collect();
-    assert!(text[0].contains("start") && text[0].ends_with("watching, no reflexes here yet"), "{text:?}");
-    assert!(text[1].ends_with("23 calls, watching, no reflexes here yet"), "{text:?}");
+    let text = flow_text(&[&start, &batch], &cx, 110, false, &Default::default());
+    assert!(text[0].contains("session started 12:04 · watching, no reflexes here yet"), "{text:?}");
+    assert!(text.iter().any(|l| l.contains("├ 23 calls")), "{text:?}");
     // A repository with reflexes keeps its words.
     let routed = feed::from_record(
         "s",
-        &json!({ "ts": T0, "event": "PostToolBatch", "kind": "batch", "decision": { "observed": ["ls"] } }),
+        &json!({ "ts": T0, "event": "PostToolBatch", "kind": "batch", "decision": { "observed": ["exec ls"] } }),
     );
-    let line: String = view::feed_lines(&[&routed], &cx, 110, &Default::default(), &Default::default())[0]
-        .1
-        .spans
-        .iter()
-        .map(|s| s.content.to_string())
-        .collect();
-    assert!(line.trim_end().ends_with("1 call, nothing to say"), "{line}");
+    let text = flow_text(&[&routed], &cx, 110, false, &Default::default());
+    assert!(!text[0].contains("watching") && text.iter().any(|l| l.contains("├ Run  ls")), "{text:?}");
 }
 
 #[test]
@@ -854,34 +863,61 @@ fn watch_frames_at_split_pane_and_wide_sizes_in_colour_and_no_color() {
     }
     let c = ctx(paths.clone(), true);
     let (wide, buf) = render(110, 30, |f| view::draw_live(f, f.area(), &live, Some(&h), &c, true));
-    // Colour carries the strength: the fire lamp of the directive is green.
-    let (x, y) = find(&buf, "◠ ● fire").expect("a firing is shown");
-    assert_eq!(buf[(x + 2, y)].fg, Color::Green);
+    // Colour carries the strength: the delivered reflex's box and lamp are green.
+    let (x, y) = find(&buf, "◆ adage · ● FIRE").expect("a delivery is shown");
+    assert_eq!(buf[(x + 10, y)].fg, Color::Green);
+    assert_eq!(buf[(x - 3, y)].fg, Color::Green, "its box is drawn in its strength");
     for s in [
         "adage watch  harbor-dispatch · gen 8216e29f · claude",
-        "● live   ● fire 1   ● prime 1   ● inhibit 1",
-        "─ now ─",
-        "→ ◠ ● fire     bin/fetch-incident INC-2045",
-        "○ would fire bin/fetch-incident INC-2045 (withheld · control session)",
-        "✓ followed bin/fetch-incident INC-2045",
-        // Never delivered to this session in the feed, and no reflexes loaded: its id, not
-        // what another session was told.
-        "✗ not observed lookup-incident",
-        "→ ◠ ● inhibit  npm run check",
-        "─ conditioning ─",
-        "lookup-incident                             prime → fire       24/25 · lb 0.80",
-        "conditioning failed for harbor-dispatch (io)",
+        "● live",
+        // The band: what Adage did, counted.
+        "─ ◠ Fired ─",
+        "─ ✓ Followed ─",
+        "1 of 3",
+        // The session's graph: the turn, the delivery and its response, lit when followed.
+        "╭─ ❯ PROMPT",
+        "2 steps · Run ×2 · adage fired 2 · 1 followed",
+        "a reflex learned here",
+        "─ RUN ─",
+        "bin/fetch-incident INC-2045",
+        "─ ✓ followed ─",
+        "✓ followed adage",
+        "◆ adage ✓ finish line met: codegen-after-registry",
+        // The last conditioning, the review line, the lamps, the keys.
+        "◆ conditioned 12:04 · 24 traces · 2 changes",
+        "conditioning failed (io)",
         "1 to look over · adage review",
-        "─ health ─",
         "! no model · adage models fetch",
         "p  pause   f  scope   /  filter   enter  inspect   m  open map   ?  keys",
     ] {
         assert!(wide.contains(s), "the wide frame lacks {s:?}:\n{wide}");
     }
-    // The control arm is dimmed, whole rows of it.
-    let (x, y) = find(&buf, "would fire bin/fetch-incident").unwrap();
+    // Every conditioning run in full, with what each changed (`l`).
+    let mut runs = live_from(&paths);
+    runs.key('l');
+    let (popup, _) = render(110, 30, |f| view::draw_live(f, f.area(), &runs, Some(&h), &c, true));
+    for s in [
+        "conditioning runs",
+        "lookup-incident",
+        "prime → fire",
+        "24/25 · lb 0.80",
+        "conditioning failed for harbor-dispatch (io)",
+    ] {
+        assert!(popup.contains(s), "the runs lack {s:?}:\n{popup}");
+    }
+    // Taller, every session shows: the control arm's is dimmed, whole rows of it, and the
+    // inhibit's box is red.
+    let (tall, buf) = render(110, 60, |f| view::draw_live(f, f.area(), &live, Some(&h), &c, true));
+    let (x, y) = find(&buf, "would fire bin/fetch-incident").unwrap_or_else(|| panic!("{tall}"));
     assert_eq!(buf[(x, y)].fg, Color::DarkGray);
-    assert_eq!(buf[(x - 20, y)].fg, Color::DarkGray, "the trace id of a control row is dim too");
+    assert!(tall.contains("control: Adage holds back"), "{tall}");
+    // Never delivered to that session in the feed, and no reflexes loaded: its id, not what
+    // another session was told; and the finish line Adage held it to.
+    assert!(tall.contains("✗ not observed lookup-incident"), "{tall}");
+    assert!(tall.contains("◆ adage ■ finish line: asked the agent to go on before it stops"), "{tall}");
+    let (x, y) = find(&buf, "◆ adage · ● INHIBIT").unwrap_or_else(|| panic!("{tall}"));
+    assert_eq!(buf[(x, y)].fg, Color::Red);
+    assert!(tall.contains("npm run check") && tall.contains("after a failure"), "{tall}");
 
     // All repositories, quiet events hidden, paused.
     let mut live = live;
@@ -890,7 +926,11 @@ fn watch_frames_at_split_pane_and_wide_sizes_in_colour_and_no_color() {
     live.key('p');
     let (all, _) = render(80, 24, |f| view::draw_live(f, f.area(), &live, Some(&h), &c, true));
     assert!(all.contains("now · all repositories · quiet hidden") && all.contains("paused +0"), "{all}");
-    assert!(all.contains("Codex · ") && all.contains("❯ prompt"), "the codex trace from another repository:\n{all}");
+    assert!(all.contains("PAUSED") && all.contains("p resumes"), "a clear paused banner:\n{all}");
+    assert!(
+        all.contains("Codex  acme-billing · session, since 12:04") && all.contains("❯ PROMPT"),
+        "the codex trace from another repository:\n{all}"
+    );
     assert!(!all.contains("nothing to say"));
 }
 
@@ -903,7 +943,7 @@ fn ascii_glyphs_when_the_terminal_cannot_draw_them() {
     let c = Ctx { theme: Theme::with_color(false).ascii(), ..ctx(paths, false) };
     let (text, _) = render(110, 30, |f| view::draw_live(f, f.area(), &live, Some(&h), &c, true));
     snap("watch-110x30-ascii", &text);
-    assert!(text.contains("-> ~ FIRE       bin/fetch-incident INC-2045") && text.contains("- now -"), "{text}");
+    assert!(text.contains("* adage - FIRE") && text.contains("+- RUN -") && text.contains("--> |"), "{text}");
     assert!(!text.chars().any(|ch| matches!(ch, '●' | '◠' | '─' | '→' | '✓')), "{text}");
 }
 
@@ -1046,25 +1086,28 @@ fn the_newest_firing_pulses_once() {
     sources.poll(&mut live, Some("harbor-dispatch"));
     assert!(live.pulsing() && live.pulse.level == 3);
     let h = health();
-    let (_, buf) = render(110, 30, |f| view::draw_live(f, f.area(), &live, Some(&h), &c, true));
-    let (_, y) = find(&buf, "12:04:30").expect("the new row");
-    assert_eq!(buf[(0, y)].symbol(), "▌", "the pulsing row is marked");
-    let row: String = (0..buf.area.width).map(|x| buf[(x, y)].symbol().to_string()).collect();
-    let rx =
-        row[..row.find("bin/fetch-incident").expect("what the reflex said, on the new row")].chars().count() as u16;
-    assert!(buf[(rx, y)].modifier.contains(Modifier::BOLD), "and what it said is bright");
-    // It dims, then stops, within 900 ms.
+    // The new delivery's strength flashes (reversed), and the newest node glows: its time is now.
     let at = live.pulse.at.unwrap();
+    live.tick_pulse(at + std::time::Duration::from_millis(100), true);
+    assert!(live.anim.glow() && live.anim.beat == 3, "the heartbeat beats");
+    let (text, buf) = render(110, 30, |f| view::draw_live(f, f.area(), &live, Some(&h), &c, true));
+    let (x, y) = find_last(&buf, "● FIRE").expect("the new delivery");
+    assert!(buf[(x, y)].modifier.contains(Modifier::REVERSED), "the new delivery flashes:\n{text}");
+    assert!(text.contains("at the prompt · now"), "the newest glows:\n{text}");
+    // It dims, then stops, within 900 ms; the heartbeat settles.
     live.tick_pulse(at + std::time::Duration::from_millis(450), true);
     assert_eq!(live.pulse.level, 2);
     live.tick_pulse(at + std::time::Duration::from_millis(950), true);
-    assert!(!live.pulsing() && live.pulse.level == 0);
-    let (_, buf) = render(110, 30, |f| view::draw_live(f, f.area(), &live, Some(&h), &c, true));
-    assert_eq!(buf[(0, y)].symbol(), " ");
-    // Reduced motion: no pulse at all.
+    assert!(!live.pulsing() && live.pulse.level == 0 && !live.anim.glow());
+    let (text, buf) = render(110, 30, |f| view::draw_live(f, f.area(), &live, Some(&h), &c, true));
+    let (x, y) = find_last(&buf, "● FIRE").unwrap();
+    assert!(!buf[(x, y)].modifier.contains(Modifier::REVERSED), "{text}");
+    assert!(text.contains("at the prompt · 12:04:30"), "{text}");
+    // Reduced motion: no pulse, no heartbeat at all.
     live.pulse.at = Some(at);
     live.tick_pulse(at, false);
     assert_eq!(live.pulse.level, 0);
+    assert!(!live.anim.glow());
 }
 
 #[test]
@@ -1085,8 +1128,8 @@ fn watch_keys_filter_inspect_and_help() {
     assert_eq!((live.filter.as_str(), live.filtering), ("dead", false));
     let (text, _) = render(80, 24, |f| view::draw_live(f, f.area(), &live, Some(&h), &c, true));
     assert!(
-        text.contains("dead-end-npm-test") && !text.contains("→ ◠ lookup-incident"),
-        "only matching rows in the feed:\n{text}"
+        text.contains("INHIBIT") && text.contains("npm run check") && !text.contains("bin/fetch-incident"),
+        "only matching events in the graph:\n{text}"
     );
     assert!(text.contains("filter “dead”"), "{text}");
     // Enter inspects the newest event shown: what the agent saw, exactly.
@@ -3070,20 +3113,26 @@ fn live_shows_one_repository_and_folds_quiet_runs() {
     snap("app-live-scoped", &text);
     assert!(text.lines().next().unwrap().contains("◆ harbor-dispatch ▾"), "the scope heads the screen:\n{text}");
     assert!(!text.contains("0001") && !text.contains("0002"), "other repositories' calls are not shown:\n{text}");
-    // Runs of quiet calls fold into one line, around what Adage said.
-    assert!(text.contains("· 4 tool batches · 2 traces · 10 calls, nothing to say"), "{text}");
-    assert!(text.contains("000b0b  ▪ tools    adage → ◠ INHIBIT    npm run check"), "{text}");
-    assert!(text.contains("· 2 tool batches · 2 traces · 3 calls, nothing to say"), "{text}");
-    // Every repository: each row names its repository.
+    // Each session is one section of the graph; a run of quiet steps folds into one line, and
+    // what Adage said branches off its step.
+    assert_eq!(text.matches("Claude Code  session").count(), 2, "{text}");
+    assert!(text.contains("┊ 3 steps, nothing to say   Run ×9"), "{text}");
+    assert!(text.contains("◆ adage · INHIBIT") && text.contains("npm run check"), "{text}");
+    // Every repository: each session names its repository.
     s.live.all_repos = true;
-    let all = app_frame(&s, &c, 120, 30);
+    let all = app_frame(&s, &c, 120, 40);
     snap("app-live-all", &all);
     assert!(all.lines().next().unwrap().contains("◆ all repositories ▾"), "{all}");
-    assert!(all.contains("adage") && all.contains("acme-billing") && all.contains("now · all repositories"), "{all}");
+    assert!(
+        all.contains("adage · session")
+            && all.contains("acme-billing · session")
+            && all.contains("now · all repositories"),
+        "{all}"
+    );
     // The watch pane folds them the same way.
     s.live.all_repos = false;
     let (pane, _) = render(100, 30, |f| view::draw_live(f, f.area(), &s.live, Some(&health()), &c, true));
-    assert!(pane.contains("4 tool batches · 2 traces · 10 calls, nothing to say"), "{pane}");
+    assert!(pane.contains("3 steps, nothing to say"), "{pane}");
 }
 
 #[test]
@@ -3157,7 +3206,10 @@ fn the_repository_switcher_finds_and_shows_a_repository() {
     assert_eq!(s.live.waiting, Some(0), "the review count is acme-billing's");
     assert!(s.toasts.iter().any(|t| t.text == "Live, Reflexes and Map show acme-billing"));
     let live = app_frame(&s, &c, 120, 30);
-    assert!(live.contains("0002") && !live.contains("0b0b"), "{live}");
+    assert!(
+        live.contains("Run  ls") && !live.contains("INHIBIT"),
+        "acme-billing's one call, not harbor-dispatch's:\n{live}"
+    );
     assert!(live.contains("now · acme-billing"), "another repository than the one opened here is named:\n{live}");
     // From Reflexes, the last choice: every repository. The palette reaches the same choices.
     s.tab = Tab::Reflexes;
@@ -3274,4 +3326,285 @@ fn home_is_a_dashboard_of_tiles_and_buttons() {
     assert_eq!(s.home_sel, 1);
     s.key(KeyCode::Enter, NONE);
     assert!(s.palette.as_ref().is_some_and(|p| p.query == "connect"));
+}
+
+// ---------------------------------------------------------------------------------------------
+// The live view as a cockpit: the pulse band, the session's graph, the rail.
+
+/// Harbor-dispatch over half an hour. First a control session, where Adage held back. Then one
+/// session: a turn where a reflex fired at the prompt and was followed after a quiet stretch, a
+/// finish line was set, a dead end was headed off, the agent was asked to go on, and the finish
+/// line was met; a quiet turn; and a turn still going, with a test run pointed at the project's
+/// interpreter. Three conditioning runs, the last with a change and patterns forming.
+fn cockpit_live() -> Live {
+    const CTRL: &str = "91d5aa70-33cc-47e2-a5c3-00000000c4a1";
+    const A: &str = "7c1e04d2-11aa-4a31-9f0e-00000000a11c";
+    let at = |k: u64| T0 + k * 70_000;
+    let r = |k: u64, session: &str, arm: &str, event: &str, kind: Option<&str>, extra: Value| {
+        let mut v = json!({ "ts": at(k), "event": event, "arm": arm, "repo": "harbor-dispatch", "harness": "claude" });
+        if let Some(kind) = kind {
+            v["kind"] = json!(kind);
+        }
+        for (key, val) in extra.as_object().unwrap() {
+            v[key] = val.clone();
+        }
+        super::tail::Record { session: session.into(), value: v }
+    };
+    let lookup = || directive("lookup-incident", "fire", LOOKUP);
+    let codegen = json!({ "route": "codegen-after-registry", "track": "harbor-dispatch/incidents", "strength": "fire",
+        "text": "After editing registry/*.csv, run:\n  npm run codegen" });
+    let quiet = |k| {
+        r(
+            k,
+            A,
+            "treated",
+            "PostToolBatch",
+            Some("batch"),
+            json!({ "decision": { "observed": ["read {path}", "search:content {pattern}"] } }),
+        )
+    };
+    let mut records = vec![
+        r(0, CTRL, "control", "SessionStart", Some("session_start"), json!({})),
+        r(1, CTRL, "control", "UserPromptSubmit", Some("prompt"), json!({ "decision": { "would_have": [lookup()] } })),
+        r(
+            2,
+            CTRL,
+            "control",
+            "PostToolBatch",
+            Some("batch"),
+            json!({ "decision": { "observed": ["exec bin/fetch-incident INC-17"],
+            "judgements": [{ "kind": "followed", "route": "lookup-incident" }] } }),
+        ),
+        r(3, CTRL, "control", "SessionEnd", None, json!({})),
+        r(4, A, "treated", "SessionStart", Some("session_start"), json!({})),
+        r(5, A, "treated", "UserPromptSubmit", Some("prompt"), json!({ "decision": { "directives": [lookup()] } })),
+    ];
+    records.extend((6..=10).map(quiet));
+    records.extend([
+        r(
+            11,
+            A,
+            "treated",
+            "PostToolBatch",
+            Some("batch"),
+            json!({ "decision": { "observed": ["exec bin/fetch-incident INC-2045"],
+            "judgements": [{ "kind": "followed", "route": "lookup-incident" }] } }),
+        ),
+        r(
+            12,
+            A,
+            "treated",
+            "PostToolBatch",
+            Some("batch"),
+            json!({ "decision": { "observed": ["edit {path}"], "directives": [codegen] } }),
+        ),
+        r(
+            13,
+            A,
+            "treated",
+            "PostToolUseFailure",
+            Some("failure"),
+            json!({ "decision": { "observed": ["exec npm test !failed"],
+            "directives": [directive("dead-end-npm-test", "inhibit", DEAD_END)] } }),
+        ),
+        r(
+            14,
+            A,
+            "treated",
+            "PostToolBatch",
+            Some("batch"),
+            json!({ "decision": { "observed": ["exec npm run check"],
+            "judgements": [{ "kind": "followed", "route": "dead-end-npm-test" }] } }),
+        ),
+        r(
+            15,
+            A,
+            "treated",
+            "Stop",
+            Some("stop"),
+            json!({ "decision": { "continue_reason": "Adage finish-line check: …" } }),
+        ),
+        r(
+            16,
+            A,
+            "treated",
+            "PostToolBatch",
+            Some("batch"),
+            json!({ "decision": { "observed": ["exec npm run codegen"],
+            "judgements": [{ "kind": "obligation_met", "route": "codegen-after-registry" }] } }),
+        ),
+        r(17, A, "treated", "Stop", Some("stop"), json!({ "decision": {} })),
+        r(18, A, "treated", "UserPromptSubmit", Some("prompt"), json!({ "decision": {} })),
+        r(19, A, "treated", "PostToolBatch", Some("batch"), json!({ "decision": { "observed": ["read {path}"] } })),
+        r(
+            20,
+            A,
+            "treated",
+            "PostToolBatch",
+            Some("batch"),
+            json!({ "decision": { "observed": ["read {path}", "read {path}"] } }),
+        ),
+        r(21, A, "treated", "Stop", Some("stop"), json!({ "decision": {} })),
+        r(22, A, "treated", "UserPromptSubmit", Some("prompt"), json!({ "decision": {} })),
+        r(
+            23,
+            A,
+            "treated",
+            "PreToolUse",
+            Some("pretool"),
+            json!({ "pretool": { "rewrite": "test", "interpreter": ".venv/bin/python" } }),
+        ),
+        r(
+            24,
+            A,
+            "treated",
+            "PostToolBatch",
+            Some("batch"),
+            json!({ "decision": { "observed": ["exec pytest tests/"] } }),
+        ),
+        r(
+            25,
+            A,
+            "treated",
+            "PostToolBatch",
+            Some("batch"),
+            json!({ "decision": { "observed": ["exec npm run build", "read {path}"] } }),
+        ),
+    ]);
+    let mut live = Live::default();
+    live.push_records(records);
+    let cand = |route: &str, support: u64| json!({ "route": route, "track": "harbor-dispatch/learned", "change": "candidate", "support": support, "s_min": 5 });
+    live.push_log(vec![
+        json!({ "ts": at(1), "kind": "condition", "trigger": "auto", "repo": "harbor-dispatch", "sessions_read": 20, "sessions_used": 18, "duration_ms": 640, "changes": [] }).to_string(),
+        json!({ "ts": at(9), "kind": "condition", "trigger": "auto", "repo": "harbor-dispatch", "sessions_read": 22, "sessions_used": 21, "duration_ms": 690, "changes": [cand("run-1", 3)] }).to_string(),
+        json!({ "ts": at(26), "kind": "condition", "trigger": "manual", "repo": "harbor-dispatch", "sessions_read": 25, "sessions_used": 24, "duration_ms": 730, "changes": [
+            { "route": "lookup-incident", "track": "harbor-dispatch/incidents", "change": "strength", "from": "prime", "to": "fire",
+              "summary": "reflex prime → fire (24 of 25 traces, lower bound 0.80)", "gist": "on a prompt that names a ticket, run bin/fetch-incident {item}" },
+            cand("run-1", 4), cand("sequence-2", 3) ] }).to_string(),
+    ]);
+    live.gists = [
+        ("lookup-incident", "on a prompt that names a ticket, run bin/fetch-incident {item}"),
+        ("codegen-after-registry", "after editing registry/*.csv, run npm run codegen"),
+        ("dead-end-npm-test", "when npm test fails here, run npm run check"),
+    ]
+    .into_iter()
+    .map(|(k, v)| (k.to_string(), v.to_string()))
+    .collect();
+    (live.waiting, live.needs) = (Some(3), 1);
+    live
+}
+
+#[test]
+fn the_live_cockpit_at_its_sizes() {
+    let d = tempfile::tempdir().unwrap();
+    let c = ctx(Paths::at(d.path()), false);
+    let h = health();
+    // The watch pane in a split: the band as chips, the graph one line a node.
+    let live = cockpit_live();
+    let (pane, _) = render(80, 24, |f| view::draw_live(f, f.area(), &live, Some(&h), &c, true));
+    snap("cockpit-watch-80x24", &pane);
+    for want in [
+        "◠ 3 fired · ✓ 2 followed",
+        "■ 1 finish line",
+        "❯ PROMPT · 2 steps, 3 calls · Run ×2 · Read",
+        "◆ adage ↪ pointed the test run at .venv/bin/python",
+        "├ Run · Read",
+        "◇ turn 12:25–12:28 · 2 steps, nothing to say",
+        "◆ conditioned 12:34 · 24 traces · 1 change · 2 patterns forming",
+        "1 needs you · 2 to look over · adage review",
+    ] {
+        assert!(pane.contains(want), "the pane lacks {want:?}:\n{pane}");
+    }
+    // The app's Live tab: the band as tiles, the graph in boxes, the rail beside it.
+    let mut s = app_state();
+    s.here = Some("harbor-dispatch".into());
+    s.live = cockpit_live();
+    s.tab = Tab::Live;
+    for (w, hgt) in [(140, 46), (180, 50)] {
+        let text = app_frame(&s, &c, w, hgt);
+        snap(&format!("cockpit-app-{w}x{hgt}"), &text);
+        for want in [
+            // The band.
+            "LIVE   harbor-dispatch · 2 sessions · since 12:04 · last call 12:33:10",
+            "─ ◠ Fired ─",
+            "reflexes delivered",
+            "67%",
+            "of 3 fired",
+            "1 reminder sent",
+            // The graph: deliveries off their steps, lit when followed; the dead end headed off;
+            // the finish line asked for, then met; quiet runs and a quiet turn folded.
+            "◆ adage · FIRE",
+            // What the reflex tells any agent, in its plain words (in two lines where it needs them).
+            "│ on a prompt that names a ticket, run",
+            "│ bin/fetch-incident {item}",
+            "─ ✓ followed ─",
+            "✓ followed adage",
+            "◆ adage · INHIBIT",
+            "─ ✓ headed off ─",
+            "◆ adage ■ finish line: asked the agent to go on before it stops",
+            "◆ adage ✓ finish line met: npm run codegen",
+            "┊   5 steps, nothing to say   Read ×5 · Search ×5",
+            "◇ turn 12:25–12:28 · 2 steps, nothing to say",
+            "◆ adage ↪ pointed the test run at .venv/bin/python",
+            // The rail.
+            "Reflexes in play  3",
+            "on a prompt that names a ticket",
+            "Learning",
+            "conditioned 12:34",
+            "prime → fire",
+            "2 patterns forming",
+            "closest 4 of 5 traces",
+            "3 runs",
+            " · adage review",
+            "Health",
+        ] {
+            assert!(text.contains(want), "{w}x{hgt} lacks {want:?}:\n{text}");
+        }
+        assert!(!text.contains("a11c") && !text.contains("lookup-incident"), "no ids on first read:\n{text}");
+    }
+    // In colour: the delivery's box in its strength, the follow lit green, Adage's own lines in
+    // the accent.
+    let colour = ctx(Paths::at(d.path()), true);
+    let (_, buf) = render(140, 46, |f| app::draw(f, &s, &colour));
+    snap("cockpit-app-140x46-colour", &styled(&buf));
+    let (x, y) = find(&buf, "◆ adage · ● INHIBIT").unwrap();
+    assert_eq!(buf[(x, y)].fg, Color::Red);
+    let (x, y) = find(&buf, "✓ headed off").unwrap();
+    assert_eq!(buf[(x, y)].fg, Color::Green);
+    let (x, y) = find(&buf, "◆ adage ✓ finish line met").unwrap();
+    assert_eq!(buf[(x, y)].fg, Color::Magenta);
+    // Scrolled back: the newest is below, and a line says how to get back to it.
+    s.live.scroll = 6;
+    let back = app_frame(&s, &c, 140, 46);
+    assert!(back.contains("6 newer lines · G back to the newest") && back.contains("↑ scrolled 6"), "{back}");
+    // The control session, further up: withheld, and dimmed.
+    s.live.scroll = 40;
+    let top = app_frame(&s, &c, 140, 46);
+    assert!(
+        top.contains("control: Adage holds back") && top.contains("○ would fire bin/fetch-incident INC-2045"),
+        "{top}"
+    );
+}
+
+#[test]
+fn the_live_cockpit_waits_for_an_agent() {
+    let d = tempfile::tempdir().unwrap();
+    let c = ctx(Paths::at(d.path()), false);
+    let mut s = app_state();
+    s.here = Some("harbor-dispatch".into());
+    s.tab = Tab::Live;
+    let text = app_frame(&s, &c, 140, 46);
+    snap("cockpit-empty-140x46", &text);
+    for want in
+        ["watching harbor-dispatch", "No traces yet: waiting for your agent.", "adage init", "Nothing conditioned yet."]
+    {
+        assert!(text.contains(want), "lacks {want:?}:\n{text}");
+    }
+    let live = Live::default();
+    let (pane, _) = render(80, 24, |f| view::draw_live(f, f.area(), &live, Some(&health()), &c, true));
+    snap("cockpit-empty-watch-80x24", &pane);
+    assert!(
+        pane.contains("No traces yet") && pane.contains("adage init") && pane.contains("adage condition"),
+        "{pane}"
+    );
 }

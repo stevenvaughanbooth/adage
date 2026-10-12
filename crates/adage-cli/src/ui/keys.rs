@@ -30,6 +30,7 @@ pub const WATCH: &[Key] = &[
     k("j/k ↑↓", "scroll", "scroll the feed", false),
     k("G", "newest", "back to the newest event", false),
     k("v", "quiet", "hide or show events where Adage said nothing", false),
+    k("l", "all runs", "every conditioning run, and what each changed", false),
     k("esc", "clear", "clear the filter, close a popup; with neither, quit", false),
     k("q", "quit", "quit", false),
 ];
@@ -61,6 +62,7 @@ pub const LIVE: &[Key] = &[
     k("enter", "inspect", "what the agent saw at the newest event shown", true),
     k("j/k ↑↓", "scroll", "scroll the feed (G: back to the newest)", false),
     k("v", "quiet", "hide or show events where Adage said nothing", false),
+    k("l", "all runs", "every conditioning run, and what each changed", false),
     k("m", "open map", "open the live web map in your browser (as adage watch does)", false),
 ];
 

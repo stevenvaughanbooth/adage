@@ -566,6 +566,19 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   `ui.start_screen` (on by default; `ADAGE_START_SCREEN=0`) turns it off; it never shows away
   from a terminal, in an agent's session, below 60×20, on a dumb terminal, with
   `ADAGE_REDUCED_MOTION=1`, or when `adage watch` hands over to the app.
+- **Live is a cockpit: the session drawn as a graph while it runs.** `adage watch` and the Live
+  tab of `adage ui` open on a pulse (a heartbeat lamp, reflexes fired by strength, followed as a
+  meter, finish lines met, tool calls, and activity per minute with the minutes a reflex fired
+  marked), then the session as it grows: each turn a box, its tool steps on a trunk in plain
+  words, and each delivered reflex a `◆ adage` box branching off the step it came after and
+  pointing to the response it asked for, green once the agent follows it and red when it does
+  not. Quiet steps and quiet turns fold to one line; no session id shows until `Enter`. From 120
+  columns a rail beside it has the reflexes in play (fired and followed, as meters), the last
+  conditioning as a card with a run timeline and how close the nearest forming pattern is, and
+  the health lamps; `l` lists every conditioning run. The heartbeat, a new step sliding in and
+  a newly fired reflex flashing are off under `ADAGE_REDUCED_MOTION`, and the frame rate rises
+  only while something moves. Narrow split panes keep one line per step. A harness set up but
+  not used in a repository now shows as dimmed "not used here", not as "hook received".
 - **Conditioning in `adage ui` is three cards, not a wall of text.** Before it runs, the history
   sources (one row per harness) and what they hold, as a bar: to learn from, already steered,
   empty. While it runs, its stages tick as a checklist (reading traces, n of N; finding patterns;

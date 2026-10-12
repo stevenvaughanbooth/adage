@@ -1,27 +1,28 @@
 ---
 source: crates/adage-cli/src/ui/tests.rs
+assertion_line: 230
 expression: text
 ---
-[magenta b] adage[/][b] watch[/][d]  harbor-dispatch · gen 8216e29f · claude[/]     [green]● [/]live  [green]● [/][d]1[/]  [yellow]● [/][d]1[/]  [red]● [/][d]1[/]
+[magenta b] adage[/][b] watch[/][d]  harbor-dispatch · gen 8216e29f · claude[/]           [green]● [/]live [darkgray]▁▁▁▁▁▁▁▁[/]
+ [magenta]◠ [/][green b]3[/][d] fired[/][darkgray] · [/][green]✓ [/][green b]1[/][d] followed [/][green]━━[/][darkgray]──── · [/][yellow]■ [/][green b]1[/][d] finish line[/][darkgray] · [/][b]5[/][d] calls[/]       [darkgray]▁▁▁▁▁▁▁▁▁▁▁[/][green b]█[/]
 
-[darkgray]─ [/][b d]now[/][darkgray] ──────────────────────────────────────────────────────────────────────────[/]
- [darkgray]12:04:02[/] [d]00a11c[/] [darkgray]▪ [/]tools    [magenta b]adage [/][magenta]→ ◠ [/][yellow]● prime    [/][d]That result lists these files:…[/]
-                            [green]✓ [/][d]followed [/]bin/fetch-incident INC-2045
-[darkgray] ┄ [/][d]Claude Code · 000b0b[/] [darkgray]┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄[/]
- [darkgray]12:04:03[/] [d]000b0b[/] [darkgray]▪ [/]tools    [darkgray]· 1 call, nothing to say[/]
- [darkgray]12:04:04[/] [d]000b0b[/] [red]✗ [/]failure  [magenta b]adage [/][magenta]→ ◠ [/][red]● inhibit  [/][d]npm run check[/]
- [darkgray]12:04:05[/] [d]000b0b[/] [darkgray]▪ [/]tools    [red]✗ [/][d]not observed [/]lookup-incident
- [darkgray]12:04:06[/] [darkgray i]00c4a1[/] [darkgray i]▪ tools   [/] [darkgray i]○ found bin/fetch-incident INC-2045 unaided[/]
- [darkgray]12:04:07[/] [d]000b0b[/] [yellow]□ [/]stop     [magenta b]adage [/][yellow b]■ [/]finish line: asked the agent to continue
- [darkgray]12:04:08[/] [d]00a11c[/] [darkgray]▪ [/]tools    [green]✓ [/][d]finish line met: [/]codegen-after-registry
+  [darkgray]┊ ↑ earlier: 1 session · 1 turn · 4 steps[/]
+  [b]Claude Code[/][d]  session, since 12:04[/][darkgray] ────────────────────────────────────────────[/]
+  [darkgray]├ [/][magenta b]◆ adage [/][yellow b]■ [/]finish line: asked the agent to go on before it stops        [darkgray]12:04[/]
 
-[darkgray]─ [/][b d]conditioning[/][darkgray] ─────────────────────────────────────────────────────────────────[/]
-   [magenta]◠ [/][b]lookup-incident           [/][d]prime → [/][green b]fire       [/][d]24/25 · lb 0.80[/]
-   [magenta]◠ [/][b]dead-end-npm-test         [/][d]new · [/][red b]inhibit      [/][d]6/7[/]
-[red] ✗ [/][darkgray]12:04 [/][red]conditioning failed (io): tracks directory is not writable[/]
-[darkgray]   ○ [/][d]1 to look over · [/][lightmagenta]adage review[/]
+  [b]Claude Code[/][d]  session, since 12:04[/][darkgray] ────────────────────────────────────────────[/]
+  [magenta b]❯ [/][b d]PROMPT[/][darkgray] · [/][b]2 steps[/][darkgray] · [/][d]Run[/][darkgray] ×2 · [/][green]adage fired 2[/][darkgray] · [/][green b]1 followed[/]                 [darkgray]12:04[/]
+  [darkgray]│ [/] [green b]◆ adage[/][darkgray] · [/][green b]● FIRE[/][darkgray] · [/]a reflex learned here
+  [darkgray]│ [/]   [green b]──▶ [/][lightmagenta]bin/fetch-incident INC-2045[/]  [green b]✓ followed[/]
+  [darkgray]├ [/]Run  [lightmagenta]ls[/]                                              [green b]✓ followed adage[/]  [darkgray]12:04[/]
+  [darkgray]│ [/] [yellow b]◆ adage[/][darkgray] · [/][yellow b]● PRIME[/][darkgray] · [/]a reflex learned here
+  [darkgray]│ [/]   [darkgray]──▶ [/]That result lists these files: read them together
+  [darkgray]├ [/][b]Run[/]  [lightmagenta b]ls[/]                                                                [darkgray]12:04[/]
+  [darkgray]│ [/] [magenta b]◆ adage [/][green]✓ [/][d]finish line met: [/]codegen-after-registry
 
-[darkgray]─ [/][b d]health[/][darkgray] ───────────────────────────────────────────────────────────────────────[/]
+[darkgray]────────────────────────────────────────────────────────────────────────────────[/]
+ [magenta]◆ [/][b]conditioned 12:04[/][d] · 24 traces[/][green b] · 2 changes[/][red] · ✗ conditioning failed (io): trac…[/]
+[darkgray] ○ [/][d]1 to look over · [/][lightmagenta]adage review[/]
  [green]✓ [/][d]hooks claude[/]    [green]✓ [/][d]4 reflexes[/]    [green]✓ [/][d]auto-condition[/]
  [yellow]! [/][d]no model[/][darkgray] · [/][lightmagenta]adage models fetch[/]
 [darkgray]────────────────────────────────────────────────────────────────────────────────[/]

@@ -1,27 +1,28 @@
 ---
 source: crates/adage-cli/src/ui/tests.rs
+assertion_line: 230
 expression: text
 ---
- adage watch  harbor-dispatch                  LIVE  FIRE 1  PRIME 1  INHIBIT 1
+ adage watch  harbor-dispatch · gen 8216e29f          last call 12:04:08   LIVE
+ ◠ 3 fired · ✓ 1 followed ━━──── · ■ 1 finish line · 5 calls       ▁▁▁▁▁▁▁▁▁▁▁█
 
-─ now ──────────────────────────────────────────────────────────────────────────
- 12:04:02 00a11c ▪ tools    adage → ◠ PRIME      That result lists these files:…
-                            ✓ followed bin/fetch-incident INC-2045
- ┄ Claude Code · 000b0b ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
- 12:04:03 000b0b ▪ tools    · 1 call, nothing to say
- 12:04:04 000b0b ✗ failure  adage → ◠ INHIBIT    npm run check
- 12:04:05 000b0b ▪ tools    ✗ not observed lookup-incident
- 12:04:06 00c4a1 ▪ tools    ○ found bin/fetch-incident INC-2045 unaided
- 12:04:07 000b0b □ stop     adage ■ finish line: asked the agent to continue
- 12:04:08 00a11c ▪ tools    ✓ finish line met: codegen-after-registry
+  ┊ ↑ earlier: 1 session · 1 turn · 4 steps
+  Claude Code  session, since 12:04 ────────────────────────────────────────────
+  ├ ◆ adage ■ finish line: asked the agent to go on before it stops        12:04
 
-─ conditioning ─────────────────────────────────────────────────────────────────
-   ◠ lookup-incident           prime → fire       24/25 · lb 0.80
-   ◠ dead-end-npm-test         new · inhibit      6/7
- ✗ 12:04 conditioning failed (io): tracks directory is not writable
-   ○ 1 to look over · adage review
+  Claude Code  session, since 12:04 ────────────────────────────────────────────
+  ❯ PROMPT · 2 steps · Run ×2 · adage fired 2 · 1 followed                 12:04
+  │  ◆ adage · FIRE · a reflex learned here
+  │    ──▶ bin/fetch-incident INC-2045  ✓ followed
+  ├ Run  ls                                              ✓ followed adage  12:04
+  │  ◆ adage · PRIME · a reflex learned here
+  │    ──▶ That result lists these files: read them together
+  ├ Run  ls                                                                12:04
+  │  ◆ adage ✓ finish line met: codegen-after-registry
 
-─ health ───────────────────────────────────────────────────────────────────────
+────────────────────────────────────────────────────────────────────────────────
+ ◆ conditioned 12:04 · 24 traces · 2 changes · ✗ conditioning failed (io): trac…
+ ○ 1 to look over · adage review
  + hooks claude    + 4 reflexes    + auto-condition
  ! no model · adage models fetch
 ────────────────────────────────────────────────────────────────────────────────

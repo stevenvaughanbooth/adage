@@ -132,6 +132,7 @@ pub fn entries(s: &AppState) -> Vec<Entry> {
         action("Update Adage", "adage update", "", Run::Tool(Tool::Update)),
         action("Pause or resume the live feed", "", "p", Run::Key(Tab::Live, 'p')),
         action("Filter the live feed", "", "/", Run::Key(Tab::Live, '/')),
+        action("Conditioning runs", "Every run and what it changed (Live)", "l", Run::Key(Tab::Live, 'l')),
         action("Focus the map on the selection", "", "f", Run::Key(Tab::Map, 'f')),
         action("Choose a repository", "Which repository Live, Reflexes and Map show", "f", Run::Repos),
     ];

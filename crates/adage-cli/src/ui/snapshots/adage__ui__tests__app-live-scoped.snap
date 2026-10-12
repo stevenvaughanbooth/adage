@@ -1,34 +1,35 @@
 ---
 source: crates/adage-cli/src/ui/tests.rs
+assertion_line: 230
 expression: text
 ---
  adage    1 Live   2 Reflexes  2   3 Map   4 Health  2   5 Settings   6 Home                 ◆ harbor-dispatch ▾ · LIVE
 ─────────━━━━━━━━───────────────────────────────────────────────────────────────────────────────────────────────────────
-─ now ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ LIVE   harbor-dispatch · 2 sessions · since 12:04 · last call 12:04:08
+ ╭─ ▁▃▅ Activity ──────── peak 7/min ─╮ ╭─ ▪ Tool calls ──╮ ╭─ ◠ Fired ───────╮ ╭─ ✓ Followed ────╮ ╭─ ■ Finish ──────╮
+ │                                  █ │ │ 14              │ │ 1               │ │ 0 of 1          │ │ 0               │
+ │ ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█ │ │ in 7 steps      │ │ INHIBIT 1       │ │ ──────────── 0% │ │ met             │
+ ╰────────────────────────────────────╯ ╰─────────────────╯ ╰─────────────────╯ ╰─────────────────╯ ╰─────────────────╯
 
-
-
-
-
-
-
-
-
-
-
-
- ┄ Claude Code · 2 traces ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
- 12:04:04          ▪ tools    · 4 tool batches · 2 traces · 10 calls, nothing to say
- 12:04:05  000b0b  ▪ tools    adage → ◠ INHIBIT    npm run check
- 12:04:08          ▪ tools    · 2 tool batches · 2 traces · 3 calls, nothing to say
-
-─ conditioning ─────────────────────────────────────────────────────────────────────────────────────────────────────────
- Nothing conditioned yet. Runs appear here as they finish · adage condition
-   ○ 1 to look over · adage review
-
-
-
-─ health ───────────────────────────────────────────────────────────────────────────────────────────────────────────────
- + hooks claude    + 4 reflexes    + auto-condition    ! no model · adage models fetch
+  Claude Code  session, since 12:04 ──────────────────────────────────────────── │ Reflexes in play  1 ────────────────
+  ┬ earlier in this turn                                                         │  INHIBIT  npm run check
+  ├ Run  ls                                                                12:04 │   fired 1  ━━━━  followed 0  ────
+  ├ Tool                                                                   12:04 │
+  │  ◆ adage · INHIBIT · a reflex learned here                                   │ Learning ───────────────────────────
+  │    ──▶ npm run check                                                         │ ╭─ Conditioning ────────────────────╮
+  ├ Run ×2  ls                                                             12:04 │ │ Nothing conditioned yet.          │
+                                                                                 │ │ Runs show here as they finish.    │
+  Claude Code  session, since 12:04 ──────────────────────────────────────────── │ │ adage condition                   │
+  ┬ earlier in this turn                                                         │ ╰───────────────────────────────────╯
+  ┊ 3 steps, nothing to say   Run ×9                                       12:04 │ ○ 1 to look over · adage review
+  ├ Run  ls                                                                12:04 │
+                                                                                 │ Health ─────────────────────────────
+                                                                                 │ + hooks claude    + 4 reflexes
+                                                                                 │ + auto-condition
+                                                                                 │ ! no model · adage models fetch
+                                                                                 │
+                                                                                 │
+                                                                                 │
+                                                                                 │
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   ?  keys   :  palette   p  pause   f  repository   /  filter   enter  inspect                                  q  quit
