@@ -67,7 +67,7 @@ pub fn live_key(live: &mut Live, code: KeyCode, mods: KeyModifiers) -> bool {
         }
         return false;
     }
-    if live.help || live.inspect || live.map_hint {
+    if live.help || live.inspect || live.map_hint || live.runs {
         // A popup scrolls when it is taller than the pane; any other key closes it.
         match code {
             KeyCode::Up | KeyCode::Char('k') => live.popup_scroll = live.popup_scroll.saturating_sub(1),
@@ -78,6 +78,7 @@ pub fn live_key(live: &mut Live, code: KeyCode, mods: KeyModifiers) -> bool {
                 live.help = false;
                 live.inspect = false;
                 live.map_hint = false;
+                live.runs = false;
                 live.popup_scroll = 0;
                 return matches!(code, KeyCode::Char('q'));
             }
@@ -150,13 +151,15 @@ pub fn run(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>) -> Result<()> {
         if let Some(h) = &health {
             live.settle(h.repo_key.as_deref());
         }
-        live.tick_pulse(Instant::now(), ctx.theme.motion);
+        let here = health.as_ref().and_then(|h| h.repo_key.clone());
+        live.tick(Instant::now(), ctx.theme.motion, here.as_deref(), adage_core::time::now_ms());
         t.terminal.draw(|f| view::draw_live(f, f.area(), &live, health.as_ref(), &ctx, true))?;
         if let Some(k) = term::next_key_within(wait(&live))? {
             if !live.filtering
                 && !live.help
                 && !live.inspect
                 && !live.map_hint
+                && !live.runs
                 && (matches!(k.code, KeyCode::Char(':' | 'm'))
                     || (k.code == KeyCode::Char('k') && k.modifiers.contains(KeyModifiers::CONTROL)))
             {

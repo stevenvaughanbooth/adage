@@ -439,43 +439,63 @@ execution policy and local approval described in [execution](execution.md).
 60×20 and grows with the pane:
 
 ```text
- adage watch  harbor-dispatch · demo           LIVE  FIRE 4  PRIME 1  INHIBIT 1
-─ now ──────────────────────────────────────────────────────────────────────────
- 04:22:53 bc0c7d cc  tools    ✗ ignored lookup-incident
- 04:22:53 19b2cf cc  stop     ○ would ask the agent to continue (withheld)
- 04:22:53 d76f0f cc  tools    → ◠ codegen-after-regist… FIRE       npm run code…
- 04:22:53 bc0c7d cc  failure  → ◠ dead-end-npm-test     INHIBIT    npm run check
- 04:22:53 d76f0f cc  tools    ✓ finish line met codegen-after-registry
- 04:22:53 bc0c7d cc  stop     ■ finish line: asked the agent to continue
-─ conditioning ─────────────────────────────────────────────────────────────────
- ◆ 04:22 auto-condition · 27/28 traces used · 0.73 s · 2 changes
-   ◠ read-linked-files   prime → fire       13/17 · lb 0.53
-   ◠ lookup-incident     evidence           24/25 → 25/26
-   ○ 4 reflexes wait for review · adage review
-─ health ───────────────────────────────────────────────────────────────────────
- + hooks claude    + 4 reflexes    + auto-condition
- + embedding model bundled    + no fail-open errors
+ adage watch  harbor-dispatch · gen d103fe72 · demo   last call 06:50:35   LIVE
+ ◠ 6 fired · ✓ 1 followed ━───── · ■ 2 finish lines · 13 calls     ▁▁▁▁▁▁▁▁▁▁▁█
+
+  ┊ ↑ earlier: 2 sessions · 3 turns · 7 steps
+  Claude Code  session, since 06:50 ────────────────────────────────────────────
+  ├ List                                                                   06:50
+  ├ Read                                                                   06:50
+  ├ Run  npm test                                              ✗ 1 failed  06:50
+  │  ◆ adage · INHIBIT · when npm test fails, run npm run check, not npm test
+  │    ──▶ npm run check
+  ├ Run  npm run check                                                     06:50
+  ├ Edit                                                                   06:50
+  │  ◆ adage · FIRE · after editing registry/*.csv, run npm run codegen
+  │    ──▶ npm run codegen  ✓ finish line met
+  ├ ◆ adage ■ finish line: asked the agent to go on before it stops        06:50
+  ├ Run  npm run codegen                                                   06:50
+  │  ◆ adage ✓ finish line met: npm run codegen
 ────────────────────────────────────────────────────────────────────────────────
- p pause · f scope · / filter · enter inspect · m open map · ? keys      q quit
+ ◆ conditioned 06:50 · 27 traces · 2 changes                        l  all runs
+ ○ 4 to look over · adage review
+ + claude hook received    - codex not used here    + 4 reflexes
+ + auto-condition    + bundled model
+────────────────────────────────────────────────────────────────────────────────
+  :  palette   p  pause   f  scope   /  filter   enter  inspect         q  quit
 ```
 
-(`NO_COLOR` output, as above; in colour the strengths are lamps.)
+(`adage watch --demo --once --size 80x24` under `NO_COLOR`; in colour the strengths are lamps,
+followed responses are green and the newest step glows.)
 
-- **Now:** every hook call as it happens, from the trace spools: time, session, harness, event,
-  and what Adage did: a directive (→, with its strength: fire, prime or inhibit), withheld in a
-  control session (○), followed ✓ or ignored ✗, a finish line met, or a stop request. `Enter`
-  inspects the selected row: the exact directive text and its evidence.
-- **Conditioning:** what conditioning changed, from `learn.log`, manual or automatic, and how many
-  reflexes wait for your review.
-- **Health:** lamps re-checked every few seconds: hooks that run for this repository, its reflexes
-  in the index, live conditioning (`auto-condition`), the embedding model, recent fail-open
-  errors; each problem names the command that fixes it.
+- **Pulse:** what this session (or all of them) came to: reflexes fired, by strength; how many
+  the agent followed, as a meter; finish lines met and reminders sent; tool calls; and activity
+  per minute, the minutes a reflex fired marked. A heartbeat lamp blinks on each hook call. From
+  90×26 these are tiles, and from 120×40 their numbers are large.
+- **Session flow:** the session drawn as it grows. Each turn is a box (a prompt, its steps and
+  calls, its tool mix), its tool steps hang from a trunk in plain words (`Run ×3 · Read`, a single
+  command spelled out, failures and subagents tagged), and each reflex Adage delivers branches off
+  the step it came after as a `◆ adage · FIRE` box, pointing to the response it asked for: green
+  once the agent follows it (`✓ followed`, `✓ headed off`, `✓ finish line met`), red when it
+  does not. Finish lines, rewrites and answers from a receipt are `◆ adage` leaves. Three or more
+  quiet steps fold into one line, and so does a turn where Adage had nothing to say. Where the
+  flow is narrower than 88 columns each node is one line, as above. It follows the newest; `↑`/`↓` scroll, and `G` comes
+  back.
+- **Learning, review and health:** the last conditioning (traces used, what changed, the
+  patterns forming and how close the nearest is to becoming a reflex), how many reflexes wait for
+  your review, and lamps re-checked every few seconds: hooks that run for this repository (a
+  harness set up but not used here is dimmed), its reflexes in the index, live conditioning
+  (`auto-condition`), the embedding model, recent fail-open errors; each problem names the command
+  that fixes it. From 120 columns these are a rail beside the flow, with the reflexes in play this
+  session (fired and followed, as meters); `l` lists every conditioning run.
 
-Keys: `q` quits, `p` pauses, `f` switches between this repository and all of them, `/` filters by
-trace, reflex or command, `Enter` inspects, `m` opens the map in your browser, `v` hides events where
-Adage said nothing, `↑`/`↓` scroll (`G` back to the newest), `?` lists every key. `NO_COLOR` is
-honoured: strengths are then spelled out (`FIRE`, `PRIME`, `INHIBIT`), and `--plain` drops glyphs
-too.
+Keys: `q` quits, `p` pauses (a banner counts what arrives meanwhile), `f` switches between this
+repository and all of them, `/` filters by trace, reflex or command, `Enter` inspects (the exact
+directive text and its evidence), `m` opens the map in your browser, `v` hides events where Adage
+said nothing, `l` lists the conditioning runs, `↑`/`↓` scroll (`G` back to the newest), `?` lists
+every key. Motion (the heartbeat, a new step sliding in, a newly fired reflex flashing once) is
+off under `ADAGE_REDUCED_MOTION=1`. `NO_COLOR` is honoured: strengths are then spelled out
+(`FIRE`, `PRIME`, `INHIBIT`), and `--plain` drops glyphs too.
 
 `adage ui` is the full-screen app (plain `adage` prints the status card above). It opens on
 Adage's brain, the site's, turning in shaded text for about two seconds before dissolving into
@@ -488,7 +508,7 @@ and reflex; `?` lists the keys. Its tabs:
 | Tab | What it does |
 | --- | --- |
 | **Home** | setup progress, repository selection, history sources, conditioning, and the next useful action; when a newer Adage is out, its version and `adage update` first |
-| **Live** | the watch view, larger; `m` opens the map in your browser, as in `adage watch` |
+| **Live** | the watch view, larger: the pulse tiles, the session flow, and a rail with the reflexes in play, learning and health; `m` opens the map in your browser, as in `adage watch` |
 | **Reflexes** | every instinct and reflex by track, with a fuzzy `/` filter: strength, stage, trigger and step, evidence (traces, Wilson lower bound), live counts, and the exact directive text. Review decisions (`a`pprove, `e`xtinguish, `w`eaken, `s`trengthen, pi`n`, dismiss `x`) ask first, then run exactly what `adage review` runs, with the same ceilings, and show the equivalent command |
 | **Map** | stimulus → reflex → response as a layered graph in the terminal; `adage map` opens the same in the browser |
 | **Health** | every doctor check, live, including live conditioning's. `Enter` fixes the selected one where a key can: register hooks (confirming the exact file and diff), fetch the model (with progress), condition this repository now (a card first shows the sources it reads and what they hold; then its stages tick as it runs, in the background if you press `esc`; then a result card says what it did in plain words, `v` for the details and `enter` for the next step; it runs `adage condition --repo-root` without changing the background allowlist), turn live conditioning on, open the settings, or open the fail-open log |

@@ -101,6 +101,12 @@ pub struct FeedItem {
     /// The harness's ids for the calls this record is about, where its payload carried them: the
     /// one call of a `pretool` record, or a tool batch's calls in order.
     pub tool_use_ids: Vec<String>,
+    /// The calls a decision observed, as canonical keys (`exec cargo build -p adage-cli`,
+    /// `read {path}`; a failed call's key ends ` !failed`): what the live view's graph names a
+    /// step by. Empty for a seen-only record, which counts its calls in `observed` alone.
+    pub calls: Vec<String>,
+    /// A subagent made the calls (the record's `agent`), not the session's main loop.
+    pub agent: bool,
 }
 
 impl FeedItem {
@@ -406,6 +412,8 @@ pub fn from_record(session: &str, rec: &Value) -> FeedItem {
                 .filter_map(|x| x.as_str().map(String::from))
                 .collect(),
         },
+        calls: d["observed"].as_array().into_iter().flatten().filter_map(|x| x.as_str().map(String::from)).collect(),
+        agent: rec["agent"].as_str().is_some_and(|a| !a.is_empty()),
     }
 }
 

@@ -1,34 +1,35 @@
 ---
 source: crates/adage-cli/src/ui/tests.rs
+assertion_line: 230
 expression: text
 ---
  adage    1 Live   2 Reflexes  2   3 Map   4 Health  2   5 Settings   6 Home                 ◆ harbor-dispatch ▾ · LIVE
 ─────────━━━━━━━━───────────────────────────────────────────────────────────────────────────────────────────────────────
-─ now ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ LIVE   harbor-dispatch · 2 sessions · since 12:04 · last call 12:04:08
+ ╭─ ▁▃▅ Activity ──────── peak 7/min ─╮ ╭─ ▪ Tool calls ──╮ ╭─ ◠ Fired ───────╮ ╭─ ✓ Followed ────╮ ╭─ ■ Finish ──────╮
+ │                                  █ │ │ 14              │ │ 1               │ │ 0 of 1          │ │ 0               │
+ │ ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█ │ │ in 7 steps      │ │ INHIBIT 1       │ │ ──────────── 0% │ │ met             │
+ ╰────────────────────────────────────╯ ╰─────────────────╯ ╰─────────────────╯ ╰─────────────────╯ ╰─────────────────╯
 
-
-
-
-
-
-             ╭ Repository ───────────────────────────────────────────────────────────────────────────────╮
-             │ Live, Reflexes and Map show one repository at a time.                                     │
-             │                                                                                           │
-             │ / ▌                                                                                       │
-             │                                                                                           │
-             │ › ◆ harbor-dispatch                      opened here · 7 reflexes · active 12:04  ✓ shown │
- ┄ Claude Cod│   ◆ acme-billing                         1 reflex · active 12:04                          │
- 12:04:04    │   ◆ github.com/stevenvaughanbooth/adage  1 reflex · active 12:04                          │
- 12:04:05  00│   ◇ All repositories                     every repository's activity and reflexes         │
- 12:04:08    │                                                                                           │
-             │ ↑↓ move · enter show · type to search · esc close                                         │
-─ conditionin╰───────────────────────────────────────────────────────────────────────────────────────────╯──────────────
- Nothing conditioned yet. Runs appear here as they finish · adage condition
-   ○ 1 needs you · 1 to look over · adage review
-
-
-
-─ health ───────────────────────────────────────────────────────────────────────────────────────────────────────────────
- + hooks claude    + 4 reflexes    + auto-condition    ! no model · adage models fetch
+  Claude Code  session, since 12:04 ──────────────────────────────────────────── │ Reflexes in play  1 ────────────────
+  ┬ earlier i╭ Repository ───────────────────────────────────────────────────────────────────────────────╮ead-end-npm-t…
+  ├ Run  ls  │ Live, Reflexes and Map show one repository at a time.                                     │ed 0  ────
+  ├ Tool     │                                                                                           │
+  │  ◆ adage │ / ▌                                                                                       │─────────────
+  │    ──▶ np│                                                                                           │─────────────╮
+  ├ Run ×2  l│ › ◆ harbor-dispatch                      opened here · 7 reflexes · active 12:04  ✓ shown │et.          │
+             │   ◆ acme-billing                         1 reflex · active 12:04                          │y finish.    │
+  Claude Code│   ◆ github.com/stevenvaughanbooth/adage  1 reflex · active 12:04                          │             │
+  ┬ earlier i│   ◇ All repositories                     every repository's activity and reflexes         │─────────────╯
+  ┊ 3 steps, │                                                                                           │eview
+  ├ Run  ls  │ ↑↓ move · enter show · type to search · esc close                                         │
+             ╰───────────────────────────────────────────────────────────────────────────────────────────╯─────────────
+                                                                                 │ + hooks claude    + 4 reflexes
+                                                                                 │ + auto-condition
+                                                                                 │ ! no model · adage models fetch
+                                                                                 │
+                                                                                 │
+                                                                                 │
+                                                                                 │
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   ?  keys   :  palette   p  pause   f  repository   /  filter   enter  inspect                                  q  quit

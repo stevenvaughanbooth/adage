@@ -18,10 +18,12 @@
 
 mod app;
 mod brain;
+mod cockpit;
 mod conditioned;
 pub(crate) mod demo;
 mod diff;
 mod feed;
+mod flow;
 mod follow;
 mod forms;
 mod fuzzy;

@@ -480,8 +480,11 @@ impl AppState {
         match self.tab {
             Tab::Home => super::tabs::home::key(self, code),
             Tab::Live => {
-                let open =
-                    self.live.inspect || self.live.map_hint || self.live.filtering || !self.live.filter.is_empty();
+                let open = self.live.inspect
+                    || self.live.map_hint
+                    || self.live.runs
+                    || self.live.filtering
+                    || !self.live.filter.is_empty();
                 if code == KeyCode::Esc && !open {
                     return None;
                 }
@@ -1564,7 +1567,7 @@ fn run_inner(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>, from_watch: bo
         if unsettled && s.live.repo.is_some() {
             s.refresh_counts();
         }
-        s.live.tick_pulse(Instant::now(), ctx.theme.motion);
+        s.live.tick(Instant::now(), ctx.theme.motion, here.as_deref(), adage_core::time::now_ms());
         // The app's frames count toasts' lives and the settings reload; the start screen's
         // faster frames do not (nothing of the app shows under it).
         if splash.is_none() {
@@ -1600,7 +1603,12 @@ fn run_inner(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>, from_watch: bo
                 sp.draw(f.buffer_mut(), area, now, &ctx.theme);
             }
         })?;
-        let mut wait = if splash.is_some() { splash::FRAME } else { watch::wait(&s.live) };
+        // The live view's motion (its heartbeat, a new node sliding in) only where it shows.
+        let mut wait = match (splash.is_some(), s.tab) {
+            (true, _) => splash::FRAME,
+            (false, Tab::Live) => watch::wait(&s.live),
+            (false, _) => term::TICK,
+        };
         // A conditioning card's spinner and reveal want quicker frames while they move.
         if let Some(Modal::Conditioning(flow)) = &s.modal {
             wait = flow.frame(Instant::now()).map_or(wait, |w| w.min(wait));

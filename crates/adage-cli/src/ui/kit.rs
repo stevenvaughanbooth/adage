@@ -742,6 +742,48 @@ pub fn spark(values: &[u64], t: &Theme) -> String {
         .collect()
 }
 
+/// A sparkline `rows` cells tall, top row first: each value one column, its bar filling from the
+/// bottom row up in eighths of a cell (`▁`–`█`), or quarters in ASCII (`.:|#`). A zero draws the
+/// floor on the bottom row; any other value at least the first step.
+///
+/// ```ignore
+/// assert_eq!(kit::spark_rows(&[0, 8, 16], 2, t), ["  █", "▁██"]);
+/// ```
+pub fn spark_rows(values: &[u64], rows: usize, t: &Theme) -> Vec<String> {
+    const EIGHTHS: [char; 8] = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+    const QUARTERS: [char; 4] = ['.', ':', '|', '#'];
+    let rows = rows.max(1);
+    let unicode = t.unicode();
+    let step = if unicode { 8 } else { 4 };
+    let levels = rows * step;
+    let max = values.iter().copied().max().unwrap_or(0);
+    let level = |v: u64| -> usize {
+        if max == 0 || v == 0 {
+            0
+        } else {
+            ((v as f64 / max as f64 * levels as f64).round() as usize).clamp(1, levels)
+        }
+    };
+    (0..rows)
+        .map(|r| {
+            let below = (rows - 1 - r) * step;
+            values
+                .iter()
+                .map(|&v| {
+                    let fill = level(v).saturating_sub(below).min(step);
+                    match (fill, unicode) {
+                        (0, true) if below == 0 => '▁',
+                        (0, false) if below == 0 => '_',
+                        (0, _) => ' ',
+                        (k, true) => EIGHTHS[k - 1],
+                        (k, false) => QUARTERS[k - 1],
+                    }
+                })
+                .collect()
+        })
+        .collect()
+}
+
 /// One stat: a value and what it counts, in a tone.
 #[derive(Debug, Clone)]
 pub struct Stat {
@@ -873,6 +915,8 @@ pub struct Tile {
     pub value: String,
     pub icon: String,
     pub note: String,
+    /// The note as styled spans (a meter beside a count), in place of `note` when set.
+    pub note_spans: Vec<Span<'static>>,
     pub tone: Tone,
     /// Lines under the note (a meter, a sparkline), where the tile has rows for them.
     pub more: Vec<Line<'static>>,
@@ -890,9 +934,16 @@ impl Tile {
             value: value.to_string(),
             icon: String::new(),
             note: String::new(),
+            note_spans: Vec::new(),
             tone: Tone::Plain,
             more: Vec::new(),
         }
+    }
+
+    /// The note as styled spans: `2 of 3 ━━━━╸── 67%`.
+    pub fn note_spans(mut self, spans: Vec<Span<'static>>) -> Tile {
+        self.note_spans = spans;
+        self
     }
 
     pub fn more(mut self, lines: Vec<Line<'static>>) -> Tile {
@@ -918,6 +969,8 @@ impl Tile {
     /// Draw the tile in `area` (its height picks big digits or one bold line).
     pub fn render(&self, f: &mut Frame, area: Rect, t: &Theme) {
         let title = if self.icon.is_empty() { self.label.clone() } else { format!("{} {}", self.icon, self.label) };
+        // The title never runs into the corner.
+        let title = clip(&title, (area.width as usize).saturating_sub(5), t);
         let block = Block::default().borders(Borders::ALL).border_set(t.border()).border_style(t.rule()).title(
             Line::from(vec![
                 Span::styled(t.border().horizontal_top, t.rule()),
@@ -936,7 +989,10 @@ impl Tile {
             ),
             None => lines.push(Line::from(Span::styled(clip(&self.value, room, t), value_style))),
         }
-        if !self.note.is_empty() {
+        if !self.note_spans.is_empty() {
+            let spans = t.lines(vec![Line::from(self.note_spans.clone())]).remove(0).spans;
+            lines.push(Line::from(clip_spans(spans, room, t)));
+        } else if !self.note.is_empty() {
             lines.push(Line::from(Span::styled(clip(&t.text(&self.note), room, t), t.ink2())));
         }
         lines.extend(

@@ -46,20 +46,27 @@ fn world() -> (tempfile::TempDir, PathBuf) {
 #[test]
 fn watch_demo_replays_real_hook_decisions() {
     let (_d, root) = world();
-    let o = run(&root, &root.join("work"), &["watch", "--demo", "--once", "--size", "100x40"]);
+    // Tall and wide enough for every session, and the rail beside the graph.
+    let o = run(&root, &root.join("work"), &["watch", "--demo", "--once", "--size", "140x80"]);
     let t = text(&o);
     assert!(o.status.success(), "{t}");
     for s in [
         "adage watch  harbor-dispatch",
         "demo",
-        "→ ◠ FIRE       bin/fetch-incident INC-",
+        // Each delivery branches off its step, its response lit when the agent took it.
+        "◆ adage · FIRE",
+        "bin/fetch-incident INC-",
+        "─ ✓ followed ─",
+        "✓ followed adage",
+        "─ ✗ not followed ─",
         "○ would fire bin/fetch-incident INC-",
-        "✓ followed bin/fetch-incident INC-",
-        "✗ not observed bin/fetch-incident INC-",
-        "→ ◠ INHIBIT    npm run check",
-        "■ finish line: asked the agent to continue",
-        "✓ finish line met: npm run codegen",
+        "◆ adage · INHIBIT",
+        "npm run check",
+        "◆ adage ■ finish line: asked the agent to go on before it stops",
+        "◆ adage ✓ finish line met: npm run codegen",
         "after bin/fetch-incident {id}, read",
+        // The rail: what conditioning changed, and health.
+        "Reflexes in play",
         "prime → fire",
         "claude hook received",
         ":  palette",
@@ -79,7 +86,9 @@ fn watch_once_on_a_fresh_machine_and_doctor_watch_alias() {
     assert!(o.status.success(), "{t}");
     assert!(
         t.contains("adage watch  work")
-            && t.contains("No traces yet for work")
+            && t.contains("watching work")
+            && t.contains("No traces yet")
+            && t.contains("adage init")
             && t.contains("Nothing conditioned yet"),
         "{t}"
     );

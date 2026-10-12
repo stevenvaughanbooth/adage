@@ -3,33 +3,33 @@ source: crates/adage-cli/src/ui/tests.rs
 assertion_line: 230
 expression: text
 ---
-[magenta b] adage[/][b] watch[/][d]  harbor-dispatch · gen 8216e29f · claude[/]             [green]● [/]live   [green]● [/][d]fire 1[/]   [yellow]● [/][d]prime 1[/]   [red]● [/][d]inhibit 1[/]
+[magenta b] adage[/][b] watch[/][d]  harbor-dispatch · gen 8216e29f · claude[/]                    [darkgray]last call 12:04:08   [/][green]● [/]live [darkgray]▁▁▁▁▁▁▁▁[/]
+ [darkgray]╭─[/][darkgray d] ▁▃▅ Activity [/][darkgray]───────╮[/] [darkgray]╭─[/][darkgray d] ▪ Tool calls [/][darkgray]───╮[/] [darkgray]╭─[/][darkgray d] ◠ Fired [/][darkgray]────────╮[/] [darkgray]╭─[/][darkgray d] ✓ Followed [/][darkgray]─────╮[/] [darkgray]╭─[/][darkgray d] ■ Finish lines [/][darkgray]─╮[/]
+ [darkgray]│[/] [darkgray]                   [/][green b]█[/] [darkgray]│[/] [darkgray]│[/] [b]5[/]                [darkgray]│[/] [darkgray]│[/] [green b]3[/]                [darkgray]│[/] [darkgray]│[/] [green b]1 of 3[/]           [darkgray]│[/] [darkgray]│[/] [green b]1[/]                [darkgray]│[/]
+ [darkgray]│[/] [darkgray]▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁[/][green b]█[/] [darkgray]│[/] [darkgray]│[/] [d]in 5 steps[/]       [darkgray]│[/] [darkgray]│[/] [green]●[/][d] 1  [/][yellow]●[/][d] 1  [/][red]●[/][d] 1  [/]  [darkgray]│[/] [darkgray]│[/] [green]━━━╸[/][darkgray]───────[/][d] 33%[/]  [darkgray]│[/] [darkgray]│[/] [d]met[/]              [darkgray]│[/]
+ [darkgray]╰──────────────────────╯[/] [darkgray]╰──────────────────╯[/] [darkgray]╰──────────────────╯[/] [darkgray]╰──────────────────╯[/] [darkgray]╰──────────────────╯[/]
 
-[darkgray]─ [/][b d]now[/][darkgray] ────────────────────────────────────────────────────────────────────────────────────────────────────────[/]
+   [darkgray]┊ ↑ earlier: 1 session · 1 turn · 4 steps[/]
+  [b]Claude Code[/][d]  session, since 12:04[/][darkgray] ────────────────────────────────────────────────────────────────────────[/]
+   [darkgray]├── [/][magenta b]◆ adage [/][yellow b]■ [/]finish line: asked the agent to go on before it stops                              [darkgray]12:04:07[/]
 
-
-[darkgray] ┄ [/][d]Claude Code · 00a11c · new turn[/] [darkgray]┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄[/]
- [darkgray]12:04:00[/]  [d]00a11c[/]  [magenta b]❯ [/]prompt   [magenta b]adage [/][magenta]→ ◠ [/][green]● fire     [/][d]bin/fetch-incident INC-2045[/]
-[darkgray] ┄ [/][darkgray i]Claude Code · 00c4a1 · new turn · control: Adage holds back[/] [darkgray]┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄[/]
- [darkgray]12:04:01[/]  [darkgray i]00c4a1[/]  [darkgray i]❯ prompt  [/] [darkgray i]○ would fire bin/fetch-incident INC-2045 (withheld · control session)[/]
- [darkgray]12:04:02[/]  [d]00a11c[/]  [darkgray]▪ [/]tools    [magenta b]adage [/][magenta]→ ◠ [/][yellow]● prime    [/][d]That result lists these files: read them together[/]
-                              [green]✓ [/][d]followed [/]bin/fetch-incident INC-2045
-[darkgray] ┄ [/][d]Claude Code · 000b0b[/] [darkgray]┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄[/]
- [darkgray]12:04:03[/]  [d]000b0b[/]  [darkgray]▪ [/]tools    [darkgray]· 1 call, nothing to say[/]
- [darkgray]12:04:04[/]  [d]000b0b[/]  [red]✗ [/]failure  [magenta b]adage [/][magenta]→ ◠ [/][red]● inhibit  [/][d]npm run check[/]
- [darkgray]12:04:05[/]  [d]000b0b[/]  [darkgray]▪ [/]tools    [red]✗ [/][d]not observed [/]lookup-incident
- [darkgray]12:04:06[/]  [darkgray i]00c4a1[/]  [darkgray i]▪ tools   [/] [darkgray i]○ found bin/fetch-incident INC-2045 unaided[/]
- [darkgray]12:04:07[/]  [d]000b0b[/]  [yellow]□ [/]stop     [magenta b]adage [/][yellow b]■ [/]finish line: asked the agent to continue
- [darkgray]12:04:08[/]  [d]00a11c[/]  [darkgray]▪ [/]tools    [green]✓ [/][d]finish line met: [/]codegen-after-registry
-
-[darkgray]─ [/][b d]conditioning[/][darkgray] ───────────────────────────────────────────────────────────────────────────────────────────────[/]
-[magenta] ◆ [/][darkgray]12:04 [/]auto-condition harbor-dispatch[d] · 24/25 traces used · 0.73 s · 2 changes · gen 8216e29f[/]
-   [magenta]◠ [/][b]lookup-incident                             [/][d]prime → [/][green b]fire       [/][d]24/25 · lb 0.80[/][darkgray]   incidents[/]
-   [magenta]◠ [/][b]dead-end-npm-test                           [/][d]new · [/][red b]inhibit      [/][d]6/7[/][darkgray]   incidents[/]
-[red] ✗ [/][darkgray]12:04 [/][red]conditioning failed for harbor-dispatch (io): tracks directory is not writable[/]
-[darkgray]   ○ [/][d]1 to look over · [/][lightmagenta]adage review[/]
-
-[darkgray]─ [/][b d]health[/][darkgray] ─────────────────────────────────────────────────────────────────────────────────────────────────────[/]
+  [b]Claude Code[/][d]  session, since 12:04[/][darkgray] ────────────────────────────────────────────────────────────────────────[/]
+ [magenta]╭─ [/][magenta b]❯ [/][b d]PROMPT[/][magenta] ─────────────────────────────────────────────────────────────────────────────────── [/][darkgray]12:04:00[/][magenta] ─╮[/]
+ [magenta]│ [/][b]2 steps[/][darkgray] · [/][d]Run[/][darkgray] ×2 · [/][green]adage fired 2[/][darkgray] · [/][green b]1 followed[/]                                                          [magenta] │[/]
+ [magenta]╰─┬─┬─────────────────────────────────────────────────────────────────────────────────────────────────────╯[/]
+   [darkgray]│[/] [green]│[/]  [green]╭─ [/][green b]◆ adage[/][darkgray] · [/][green b]● FIRE[/][green] ──────────────────────────╮[/]      [green]╭─ [/][darkgray b]RUN[/][green] ───────────────────────────────────────╮[/]
+   [darkgray]│[/] [green]╰─▶│ [/]a reflex learned here                      [green] │[/][green b] ───▶ [/][green]│ [/][lightmagenta]bin/fetch-incident INC-2045[/]                [green] │[/]
+   [darkgray]│[/]    [green]╰─ [/][darkgray]at the prompt · 12:04:00[/][green] ──────────────────╯[/]      [green]╰─ [/][green b]✓ followed[/][green] ────────────────────────────────╯[/]
+   [darkgray]├─┬ [/]Run  [lightmagenta]ls[/]                                                                    [green b]✓ followed adage[/]  [darkgray]12:04:02[/]
+   [darkgray]│[/] [yellow]│[/]  [yellow]╭─ [/][yellow b]◆ adage[/][darkgray] · [/][yellow b]● PRIME[/][yellow] ─────────────────────────╮[/]      [darkgray]╭─ [/][darkgray b]SAYS[/][darkgray] ──────────────────────────────────────╮[/]
+   [darkgray]│[/] [yellow]╰─▶│ [/]a reflex learned here                      [yellow] │[/][darkgray] ───▶ │ [/]That result lists these files: read them   [darkgray] │[/]
+   [darkgray]│[/]    [yellow]│ [/]                                           [yellow] │[/]      [darkgray]│ [/]together                                   [darkgray] │[/]
+   [darkgray]│[/]    [yellow]╰─ [/][darkgray]after this step · 12:04:02[/][yellow] ────────────────╯[/]      [darkgray]╰─────────────────────────────────────────────╯[/]
+   [darkgray]├─┬ [/][b]Run[/]  [lightmagenta b]ls[/]                                                                                      [darkgray]12:04:08[/]
+   [darkgray]│ ╰─ [/][magenta b]◆ adage [/][green]✓ [/][d]finish line met: [/]codegen-after-registry
+[darkgray]──────────────────────────────────────────────────────────────────────────────────────────────────────────────[/]
+ [magenta]◆ [/][b]conditioned 12:04[/][d] · 24 traces[/][green b] · 2 changes[/][red] · ✗ conditioning failed (io): tracks directory is not writable[/]
+[darkgray] ○ [/][d]1 to look over · [/][lightmagenta]adage review[/]
  [green]✓ [/][d]hooks claude[/]    [green]✓ [/][d]4 reflexes[/]    [green]✓ [/][d]auto-condition[/]    [yellow]! [/][d]no model[/][darkgray] · [/][lightmagenta]adage models fetch[/]
 [darkgray]──────────────────────────────────────────────────────────────────────────────────────────────────────────────[/]
  [d r] : [/][darkgray] palette[/]  [d r] p [/][darkgray] pause[/]  [d r] f [/][darkgray] scope[/]  [d r] / [/][darkgray] filter[/]  [d r] enter [/][darkgray] inspect[/]  [d r] m [/][darkgray] open map[/]  [d r] ? [/][darkgray] keys[/]              [d r] q [/][darkgray] quit[/]
